@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'base.dart';
 import 'rpc_service_contract.dart';
 
@@ -99,7 +101,7 @@ class UserServiceClient extends UserServiceContract {
         )
         .call(
           request: request,
-          responseParser: UserResponse.fromJson,
+          responseParser: UserResponse.fromBuffer,
         );
   }
 
@@ -112,7 +114,7 @@ class UserServiceClient extends UserServiceContract {
         )
         .call(
           request: request,
-          responseParser: UserResponse.fromJson,
+          responseParser: UserResponse.fromBuffer,
         );
   }
 
@@ -125,7 +127,7 @@ class UserServiceClient extends UserServiceContract {
         )
         .call(
           request: request,
-          responseParser: UserResponse.fromJson,
+          responseParser: UserResponse.fromBuffer,
         );
   }
 
@@ -138,7 +140,7 @@ class UserServiceClient extends UserServiceContract {
         )
         .call(
           requests: requests,
-          responseParser: UserEventResponse.fromJson,
+          responseParser: UserEventResponse.fromBuffer,
         );
   }
 }
@@ -251,11 +253,17 @@ class GetUserRequest implements IRpcSerializableMessage {
   /// Опциональная валидация (не обязательно)
   bool isValid() => userId > 0;
 
-  /// Обязательная сериализация в JSON
+  /// Обязательная сериализация в бинарный формат
   @override
-  Map<String, dynamic> toJson() => {'userId': userId};
+  Uint8List toBuffer() {
+    final json = {'userId': userId};
+    final jsonString = jsonEncode(json);
+    return Uint8List.fromList(utf8.encode(jsonString));
+  }
 
-  static GetUserRequest fromJson(Map<String, dynamic> json) {
+  static GetUserRequest fromBuffer(Uint8List bytes) {
+    final jsonString = utf8.decode(bytes);
+    final json = jsonDecode(jsonString) as Map<String, dynamic>;
     return GetUserRequest(userId: json['userId']);
   }
 }
@@ -271,9 +279,15 @@ class CreateUserRequest implements IRpcSerializableMessage {
   bool isValid() => name.trim().isNotEmpty && email.contains('@');
 
   @override
-  Map<String, dynamic> toJson() => {'name': name, 'email': email};
+  Uint8List toBuffer() {
+    final json = {'name': name, 'email': email};
+    final jsonString = jsonEncode(json);
+    return Uint8List.fromList(utf8.encode(jsonString));
+  }
 
-  static CreateUserRequest fromJson(Map<String, dynamic> json) {
+  static CreateUserRequest fromBuffer(Uint8List bytes) {
+    final jsonString = utf8.decode(bytes);
+    final json = jsonDecode(jsonString) as Map<String, dynamic>;
     return CreateUserRequest(name: json['name'], email: json['email']);
   }
 }
@@ -287,9 +301,15 @@ class ListUsersRequest implements IRpcSerializableMessage {
   bool isValid() => limit > 0 && offset >= 0;
 
   @override
-  Map<String, dynamic> toJson() => {'limit': limit, 'offset': offset};
+  Uint8List toBuffer() {
+    final json = {'limit': limit, 'offset': offset};
+    final jsonString = jsonEncode(json);
+    return Uint8List.fromList(utf8.encode(jsonString));
+  }
 
-  static ListUsersRequest fromJson(Map<String, dynamic> json) {
+  static ListUsersRequest fromBuffer(Uint8List bytes) {
+    final jsonString = utf8.decode(bytes);
+    final json = jsonDecode(jsonString) as Map<String, dynamic>;
     return ListUsersRequest(
       limit: json['limit'] ?? 10,
       offset: json['offset'] ?? 0,
@@ -305,9 +325,15 @@ class WatchUsersRequest implements IRpcSerializableMessage {
   bool isValid() => userIds.isNotEmpty;
 
   @override
-  Map<String, dynamic> toJson() => {'userIds': userIds};
+  Uint8List toBuffer() {
+    final json = {'userIds': userIds};
+    final jsonString = jsonEncode(json);
+    return Uint8List.fromList(utf8.encode(jsonString));
+  }
 
-  static WatchUsersRequest fromJson(Map<String, dynamic> json) {
+  static WatchUsersRequest fromBuffer(Uint8List bytes) {
+    final jsonString = utf8.decode(bytes);
+    final json = jsonDecode(jsonString) as Map<String, dynamic>;
     return WatchUsersRequest(userIds: List<int>.from(json['userIds']));
   }
 }
@@ -325,19 +351,32 @@ class UserResponse implements IRpcSerializableMessage {
   });
 
   @override
-  Map<String, dynamic> toJson() => {
-        'user': user?.toJson(),
-        'isSuccess': isSuccess,
-        'errorMessage': errorMessage,
-      };
+  Uint8List toBuffer() {
+    final json = {
+      'user': user?.toJson(),
+      'isSuccess': isSuccess,
+      'errorMessage': errorMessage,
+    };
+    final jsonString = jsonEncode(json);
+    return Uint8List.fromList(utf8.encode(jsonString));
+  }
 
-  static UserResponse fromJson(Map<String, dynamic> json) {
+  static UserResponse fromBuffer(Uint8List bytes) {
+    final jsonString = utf8.decode(bytes);
+    final json = jsonDecode(jsonString) as Map<String, dynamic>;
     return UserResponse(
       user: json['user'] != null ? User.fromJson(json['user']) : null,
       isSuccess: json['isSuccess'] ?? true,
       errorMessage: json['errorMessage'],
     );
   }
+
+  // Оставляем для обратной совместимости с User.fromJson
+  Map<String, dynamic> toJson() => {
+        'user': user?.toJson(),
+        'isSuccess': isSuccess,
+        'errorMessage': errorMessage,
+      };
 }
 
 class UserEventResponse implements IRpcSerializableMessage {
@@ -347,12 +386,18 @@ class UserEventResponse implements IRpcSerializableMessage {
   const UserEventResponse({required this.event, this.isSuccess = true});
 
   @override
-  Map<String, dynamic> toJson() => {
-        'event': event.toJson(),
-        'isSuccess': isSuccess,
-      };
+  Uint8List toBuffer() {
+    final json = {
+      'event': event.toJson(),
+      'isSuccess': isSuccess,
+    };
+    final jsonString = jsonEncode(json);
+    return Uint8List.fromList(utf8.encode(jsonString));
+  }
 
-  static UserEventResponse fromJson(Map<String, dynamic> json) {
+  static UserEventResponse fromBuffer(Uint8List bytes) {
+    final jsonString = utf8.decode(bytes);
+    final json = jsonDecode(jsonString) as Map<String, dynamic>;
     return UserEventResponse(
       event: UserEvent.fromJson(json['event']),
       isSuccess: json['isSuccess'] ?? true,
@@ -373,6 +418,18 @@ class User implements IRpcSerializableMessage {
   });
 
   @override
+  Uint8List toBuffer() {
+    final json = toJson();
+    final jsonString = jsonEncode(json);
+    return Uint8List.fromList(utf8.encode(jsonString));
+  }
+
+  static User fromBuffer(Uint8List bytes) {
+    final jsonString = utf8.decode(bytes);
+    final json = jsonDecode(jsonString) as Map<String, dynamic>;
+    return User.fromJson(json);
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -403,6 +460,18 @@ class UserEvent implements IRpcSerializableMessage {
   });
 
   @override
+  Uint8List toBuffer() {
+    final json = toJson();
+    final jsonString = jsonEncode(json);
+    return Uint8List.fromList(utf8.encode(jsonString));
+  }
+
+  static UserEvent fromBuffer(Uint8List bytes) {
+    final jsonString = utf8.decode(bytes);
+    final json = jsonDecode(jsonString) as Map<String, dynamic>;
+    return UserEvent.fromJson(json);
+  }
+
   Map<String, dynamic> toJson() => {
         'userId': userId,
         'eventType': eventType,
@@ -430,22 +499,22 @@ void exampleUsage() async {
 
   // ✅ Компилируется - GetUserRequest реализует IRpcSerializableMessage
   final request = GetUserRequest(userId: 123);
-  final json = request.toJson(); // Гарантированно доступен!
+  final buffer = request.toBuffer(); // Гарантированно доступен!
 
   final response = UserResponse(
     user: User(id: 123, name: 'Тест', email: 'test@example.com'),
   );
-  final responseJson = response.toJson(); // Тоже гарантированно доступен!
+  final responseBuffer = response.toBuffer(); // Тоже гарантированно доступен!
 
   print('✅ Строгий API работает!');
-  print('Request JSON: $json');
-  print('Response JSON: $responseJson');
+  print('Request buffer size: ${buffer.length}');
+  print('Response buffer size: ${responseBuffer.length}');
 }
 
 /// Пример создания и использования клиента
 void clientUsageExample() async {
   // Предполагаем, что у нас есть endpoint
-  // final endpoint = CleanDomainRpcEndpoint(transport: someTransport);
+  // final endpoint = RpcEndpoint(transport: someTransport);
 
   // 🎯 Создаем клиент напрямую - просто и понятно!
   // final client = UserServiceClient(endpoint);

@@ -7,7 +7,6 @@
 /// Содержит строгие типы для типобезопасного RPC API
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:rpc_dart/logger.dart';
@@ -18,117 +17,13 @@ import 'rpc_service_contract.dart';
 /// Основной интерфейс для всех RPC сообщений - ОБЯЗАТЕЛЬНЫЙ!
 /// Все типы запросов и ответов должны реализовывать этот интерфейс
 abstract interface class IRpcSerializableMessage {
-  /// Сериализует в JSON - ОБЯЗАТЕЛЬНЫЙ метод!
-  Map<String, dynamic> toJson();
-}
+  /// Сериализует в бинарный формат - ОБЯЗАТЕЛЬНЫЙ метод!
+  /// Для protobuf типов используется writeToBuffer()
+  /// Для JSON типов можно использовать jsonEncode() -> utf8.encode()
+  Uint8List toBuffer();
 
-/// Внутренняя обертка для запросов (только для библиотеки)
-class RpcRequestEnvelope<T extends IRpcSerializableMessage> {
-  final T payload;
-  final String requestId;
-  final Map<String, dynamic>? metadata;
-
-  RpcRequestEnvelope({
-    required this.payload,
-    required this.requestId,
-    this.metadata,
-  });
-
-  factory RpcRequestEnvelope.auto(T payload, {Map<String, dynamic>? metadata}) {
-    return RpcRequestEnvelope(
-      payload: payload,
-      requestId: _generateRequestId(),
-      metadata: metadata,
-    );
-  }
-
-  static String _generateRequestId() {
-    return 'req_${DateTime.now().millisecondsSinceEpoch}_${_counter++}';
-  }
-
-  static int _counter = 0;
-
-  Map<String, dynamic> toJson() {
-    return {
-      'payload': payload.toJson(),
-      'requestId': requestId,
-      if (metadata != null) 'metadata': metadata,
-    };
-  }
-
-  static RpcRequestEnvelope<T> fromJson<T extends IRpcSerializableMessage>(
-    Map<String, dynamic> json,
-    T Function(dynamic) payloadParser,
-  ) {
-    return RpcRequestEnvelope<T>(
-      payload: payloadParser(json['payload']),
-      requestId: json['requestId'],
-      metadata: json['metadata'],
-    );
-  }
-}
-
-/// Внутренняя обертка для ответов (только для библиотеки)
-class RpcResponseEnvelope<T extends IRpcSerializableMessage> {
-  final T? payload;
-  final String requestId;
-  final bool isSuccess;
-  final String? errorMessage;
-  final Map<String, dynamic>? metadata;
-
-  const RpcResponseEnvelope({
-    this.payload,
-    required this.requestId,
-    this.isSuccess = true,
-    this.errorMessage,
-    this.metadata,
-  });
-
-  factory RpcResponseEnvelope.success(T payload, String requestId,
-      {Map<String, dynamic>? metadata}) {
-    return RpcResponseEnvelope(
-      payload: payload,
-      requestId: requestId,
-      isSuccess: true,
-      metadata: metadata,
-    );
-  }
-
-  factory RpcResponseEnvelope.error(String requestId, String errorMessage,
-      {Map<String, dynamic>? metadata}) {
-    return RpcResponseEnvelope<T>(
-      payload: null,
-      requestId: requestId,
-      isSuccess: false,
-      errorMessage: errorMessage,
-      metadata: metadata,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      if (payload != null) 'payload': payload!.toJson(),
-      'requestId': requestId,
-      'isSuccess': isSuccess,
-      if (errorMessage != null) 'errorMessage': errorMessage,
-      if (metadata != null) 'metadata': metadata,
-    };
-  }
-
-  static RpcResponseEnvelope<T> fromJson<T extends IRpcSerializableMessage>(
-    Map<String, dynamic> json,
-    T Function(dynamic)? payloadParser,
-  ) {
-    return RpcResponseEnvelope<T>(
-      payload: json['payload'] != null && payloadParser != null
-          ? payloadParser(json['payload'])
-          : null,
-      requestId: json['requestId'],
-      isSuccess: json['isSuccess'] ?? true,
-      errorMessage: json['errorMessage'],
-      metadata: json['metadata'],
-    );
-  }
+  /// Десериализует из бинарного формата - ОБЯЗАТЕЛЬНЫЙ статический метод!
+  /// Должен быть реализован в каждом классе как static T fromBuffer(Uint8List bytes)
 }
 
 // ============================================
@@ -263,6 +158,8 @@ final class RpcEndpoint {
   final String? debugLabel;
   late final RpcLogger logger;
   bool _isActive = true;
+
+  // Список созданных серверных обработчиков для очистки ресурсов
 
   RpcEndpoint({
     required IRpcTransport transport,
@@ -415,44 +312,29 @@ final class RpcEndpoint {
 }
 
 /// ============================================
-/// СЕРИАЛИЗАТОР ДЛЯ ТИПОБЕЗОПАСНЫХ МОДЕЛЕЙ
+/// ПРЯМОЙ СЕРИАЛИЗАТОР БЕЗ ENVELOPE
 /// ============================================
 
-/// Сериализатор с автоматическим envelope
-class RpcSerializer<T extends IRpcSerializableMessage>
+/// Прямой сериализатор для типобезопасных сообщений
+/// Работает напрямую с бинарными данными, без JSON промежуточного слоя
+class RpcBytesSerializer<T extends IRpcSerializableMessage>
     implements IRpcSerializer<T> {
-  final T Function(Map<String, dynamic>) _fromJson;
+  final T Function(Uint8List) _fromBuffer;
 
-  RpcSerializer({
-    required T Function(Map<String, dynamic>) fromJson,
-  }) : _fromJson = fromJson;
+  RpcBytesSerializer({
+    required T Function(Uint8List) fromBuffer,
+  }) : _fromBuffer = fromBuffer;
 
   @override
   Uint8List serialize(T message) {
-    final envelope = RpcRequestEnvelope(
-      payload: message,
-      requestId: RpcRequestEnvelope._generateRequestId(),
-    );
-
-    final envelopeJson = {
-      'payload': message.toJson(),
-      'requestId': envelope.requestId,
-    };
-
-    final jsonString = jsonEncode(envelopeJson);
-    return Uint8List.fromList(utf8.encode(jsonString));
+    // Прямая сериализация без envelope'ов и JSON
+    return message.toBuffer();
   }
 
   @override
   T deserialize(Uint8List bytes) {
-    final jsonString = utf8.decode(bytes);
-    final json = jsonDecode(jsonString) as Map<String, dynamic>;
-
-    if (json.containsKey('payload')) {
-      return _fromJson(json['payload']);
-    } else {
-      return _fromJson(json);
-    }
+    // Прямая десериализация без парсинга JSON
+    return _fromBuffer(bytes);
   }
 }
 
@@ -475,17 +357,18 @@ class RpcUnaryRequestBuilder {
   Future<TResponse> call<TRequest extends IRpcSerializableMessage,
       TResponse extends IRpcSerializableMessage>({
     required TRequest request,
-    required TResponse Function(Map<String, dynamic>) responseParser,
+    required TResponse Function(Uint8List) responseParser,
   }) async {
     final client = UnaryClient<TRequest, TResponse>(
       transport: endpoint.transport,
       serviceName: serviceName,
       methodName: methodName,
-      requestSerializer: RpcSerializer<TRequest>(
-        fromJson: responseParser as TRequest Function(Map<String, dynamic>),
+      requestSerializer: RpcBytesSerializer<TRequest>(
+        fromBuffer: (bytes) => throw UnsupportedError(
+            'Request deserialization not needed on client'),
       ),
-      responseSerializer: RpcSerializer<TResponse>(
-        fromJson: responseParser,
+      responseSerializer: RpcBytesSerializer<TResponse>(
+        fromBuffer: responseParser,
       ),
       logger: endpoint.logger,
     );
@@ -514,17 +397,18 @@ class RpcServerStreamBuilder {
   Stream<TResponse> call<TRequest extends IRpcSerializableMessage,
       TResponse extends IRpcSerializableMessage>({
     required TRequest request,
-    required TResponse Function(Map<String, dynamic>) responseParser,
+    required TResponse Function(Uint8List) responseParser,
   }) async* {
     final client = ServerStreamClient<TRequest, TResponse>(
       transport: endpoint.transport,
       serviceName: serviceName,
       methodName: methodName,
-      requestSerializer: RpcSerializer<TRequest>(
-        fromJson: responseParser as TRequest Function(Map<String, dynamic>),
+      requestSerializer: RpcBytesSerializer<TRequest>(
+        fromBuffer: (bytes) => throw UnsupportedError(
+            'Request deserialization not needed on client'),
       ),
-      responseSerializer: RpcSerializer<TResponse>(
-        fromJson: responseParser,
+      responseSerializer: RpcBytesSerializer<TResponse>(
+        fromBuffer: responseParser,
       ),
       logger: endpoint.logger,
     );
@@ -557,17 +441,18 @@ class RpcClientStreamBuilder {
   Future<TResponse> call<TRequest extends IRpcSerializableMessage,
       TResponse extends IRpcSerializableMessage>({
     required Stream<TRequest> requests,
-    required TResponse Function(Map<String, dynamic>) responseParser,
+    required TResponse Function(Uint8List) responseParser,
   }) async {
     final client = ClientStreamClient<TRequest, TResponse>(
       transport: endpoint.transport,
       serviceName: serviceName,
       methodName: methodName,
-      requestSerializer: RpcSerializer<TRequest>(
-        fromJson: responseParser as TRequest Function(Map<String, dynamic>),
+      requestSerializer: RpcBytesSerializer<TRequest>(
+        fromBuffer: (bytes) => throw UnsupportedError(
+            'Request deserialization not needed on client'),
       ),
-      responseSerializer: RpcSerializer<TResponse>(
-        fromJson: responseParser,
+      responseSerializer: RpcBytesSerializer<TResponse>(
+        fromBuffer: responseParser,
       ),
       logger: endpoint.logger,
     );
@@ -599,17 +484,18 @@ class RpcBidirectionalStreamBuilder {
   Stream<TResponse> call<TRequest extends IRpcSerializableMessage,
       TResponse extends IRpcSerializableMessage>({
     required Stream<TRequest> requests,
-    required TResponse Function(Map<String, dynamic>) responseParser,
+    required TResponse Function(Uint8List) responseParser,
   }) async* {
     final client = BidirectionalStreamClient<TRequest, TResponse>(
       transport: endpoint.transport,
       serviceName: serviceName,
       methodName: methodName,
-      requestSerializer: RpcSerializer<TRequest>(
-        fromJson: responseParser as TRequest Function(Map<String, dynamic>),
+      requestSerializer: RpcBytesSerializer<TRequest>(
+        fromBuffer: (bytes) => throw UnsupportedError(
+            'Request deserialization not needed on client'),
       ),
-      responseSerializer: RpcSerializer<TResponse>(
-        fromJson: responseParser,
+      responseSerializer: RpcBytesSerializer<TResponse>(
+        fromBuffer: responseParser,
       ),
       logger: endpoint.logger,
     );
