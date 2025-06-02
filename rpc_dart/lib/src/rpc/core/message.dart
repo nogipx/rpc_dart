@@ -94,7 +94,7 @@ final class RpcMetadata {
   ///
   /// Формирует заголовки-трейлеры, которые отправляются в конце потока
   /// и содержат статус выполнения операции gRPC.
-  /// [statusCode] Код завершения gRPC (см. GrpcStatus)
+  /// [statusCode] Код завершения gRPC (см. RpcStatus)
   /// [message] Дополнительное сообщение (обычно при ошибке)
   /// Возвращает метаданные-трейлеры для завершения потока.
   static RpcMetadata forTrailer(int statusCode, {String message = ''}) {

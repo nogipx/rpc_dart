@@ -137,6 +137,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     required IRpcCodec<R> responseCodec,
     required Stream<C> requests,
   }) {
+    logger.debug('Создание ClientStreamCaller для $serviceName.$methodName');
+
     final caller = ClientStreamCaller<C, R>(
       serviceName: serviceName,
       methodName: methodName,
@@ -146,43 +148,51 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       logger: logger,
     );
 
-    // Создаем подписку на поток запросов
-    StreamSubscription<C>? subscription;
-    bool isSendingFinished = false;
+    // Делаем stream broadcast'ом, чтобы можно было слушать многократно
+    final broadcastStream = requests.asBroadcastStream();
 
-    subscription = requests.listen(
-      (request) async {
-        if (isSendingFinished) return; // Игнорируем запросы после завершения
-        try {
-          // Отправляем каждый запрос через вызывающий объект
-          await caller.send(request);
-          logger.debug('Запрос отправлен через ClientStreamCaller');
-        } catch (e, stackTrace) {
-          logger.error('Ошибка при отправке запроса через ClientStreamCaller',
-              error: e, stackTrace: stackTrace);
-          // Не прерываем поток при ошибке с отдельным запросом
-        }
-      },
-      onError: (error, stackTrace) {
-        logger.error('Ошибка в потоке запросов client stream',
-            error: error, stackTrace: stackTrace);
-      },
-      onDone: () {
-        logger.debug('Поток запросов client stream завершен');
-        isSendingFinished = true;
-      },
-    );
-
-    // Возвращаем функцию, которая при вызове завершает отправку и получает ответ
+    // Возвращаем функцию, которая при вызове отправляет все запросы и получает ответ
     return () async {
-      try {
-        logger.debug('Запрос на получение ответа от client stream');
+      StreamSubscription<C>? subscription;
+      final sendingCompleted = Completer<void>();
 
-        // Ожидаем завершения отправки, если поток еще не завершен
-        if (!isSendingFinished) {
-          await subscription?.cancel();
-          isSendingFinished = true;
-        }
+      try {
+        logger.debug('Запуск client stream и отправка запросов');
+
+        // Подписываемся на broadcast stream
+        subscription = broadcastStream.listen(
+          (request) async {
+            try {
+              logger
+                  .debug('Отправка запроса через ClientStreamCaller: $request');
+              await caller.send(request);
+              logger.debug('Запрос отправлен через ClientStreamCaller');
+            } catch (e, stackTrace) {
+              logger.error(
+                  'Ошибка при отправке запроса через ClientStreamCaller',
+                  error: e,
+                  stackTrace: stackTrace);
+              // Не прерываем поток при ошибке с отдельным запросом
+            }
+          },
+          onError: (error, stackTrace) {
+            logger.error('Ошибка в потоке запросов client stream',
+                error: error, stackTrace: stackTrace);
+            if (!sendingCompleted.isCompleted) {
+              sendingCompleted.completeError(error, stackTrace);
+            }
+          },
+          onDone: () {
+            logger.debug('Поток запросов client stream завершен');
+            if (!sendingCompleted.isCompleted) {
+              sendingCompleted.complete();
+            }
+          },
+        );
+
+        // Ждем завершения отправки всех запросов
+        await sendingCompleted.future;
+        logger.debug('Все запросы отправлены, завершаем отправку');
 
         // Завершаем отправку и получаем ответ
         final response = await caller.finishSending();
@@ -192,7 +202,6 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       } finally {
         // Всегда освобождаем ресурсы
         await subscription?.cancel();
-        subscription = null;
       }
     };
   }

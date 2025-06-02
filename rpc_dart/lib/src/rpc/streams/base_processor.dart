@@ -91,6 +91,13 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
           _logger?.debug(
               'Ответ отправлен для $_methodPath [streamId: $_streamId]');
         } catch (e, stackTrace) {
+          // Проверяем, не закрыт ли транспорт
+          if (e.toString().contains('Transport is closed') ||
+              e.toString().contains('closed')) {
+            _logger?.debug(
+                'Транспорт закрыт, пропускаем отправку ответа [streamId: $_streamId]');
+            return;
+          }
           _logger?.error('Ошибка при отправке ответа [streamId: $_streamId]',
               error: e, stackTrace: stackTrace);
         }
@@ -106,6 +113,13 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
           _logger?.debug(
               'Трейлер отправлен для $_methodPath [streamId: $_streamId]');
         } catch (e, stackTrace) {
+          // Проверяем, не закрыт ли транспорт
+          if (e.toString().contains('Transport is closed') ||
+              e.toString().contains('closed')) {
+            _logger?.debug(
+                'Транспорт закрыт, пропускаем отправку трейлера [streamId: $_streamId]');
+            return;
+          }
           _logger?.error('Ошибка при отправке трейлера [streamId: $_streamId]',
               error: e, stackTrace: stackTrace);
         }
@@ -153,7 +167,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
     if (!_isActive) return;
 
     _logger?.debug(
-        'Обработка сообщения [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}]');
+        'Обработка сообщения [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}, isEndOfStream: ${message.isEndOfStream}]');
 
     // Обрабатываем сообщения с данными
     if (!message.isMetadataOnly && message.payload != null) {
@@ -246,10 +260,24 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
       _responseController.close();
     }
 
-    final trailers = RpcMetadata.forTrailer(statusCode, message: message);
-    await _transport.sendMetadata(_streamId, trailers, endStream: true);
-    _logger
-        ?.debug('Трейлер с ошибкой отправлен клиенту [streamId: $_streamId]');
+    try {
+      final trailers = RpcMetadata.forTrailer(statusCode, message: message);
+      await _transport.sendMetadata(_streamId, trailers, endStream: true);
+      _logger
+          ?.debug('Трейлер с ошибкой отправлен клиенту [streamId: $_streamId]');
+    } catch (e, stackTrace) {
+      // Проверяем, не закрыт ли транспорт
+      if (e.toString().contains('Transport is closed') ||
+          e.toString().contains('closed')) {
+        _logger?.debug(
+            'Транспорт закрыт, пропускаем отправку трейлера с ошибкой [streamId: $_streamId]');
+        return;
+      }
+      _logger?.error(
+          'Ошибка при отправке трейлера с ошибкой [streamId: $_streamId]',
+          error: e,
+          stackTrace: stackTrace);
+    }
   }
 
   /// Завершает отправку ответов

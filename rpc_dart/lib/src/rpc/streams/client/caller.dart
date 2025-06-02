@@ -132,8 +132,14 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
       onDone: () {
         _logger?.debug('Поток ответов завершен');
         if (!_responseCompleter.isCompleted) {
-          _responseCompleter
-              .completeError(Exception('Стрим закрыт без получения ответа'));
+          // Проверяем, не было ли это вызвано закрытием транспорта
+          try {
+            _responseCompleter
+                .completeError(Exception('Стрим закрыт без получения ответа'));
+          } catch (e) {
+            // Если completer уже завершен, ничего не делаем
+            _logger?.debug('Completer уже завершен, пропускаем ошибку: $e');
+          }
         }
       },
     );

@@ -101,6 +101,7 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
       (request) {
         // Собираем каждый запрос в список
         allRequests.add(request);
+        // Логируем получение запроса через logger
         _logger
             ?.debug('Получен запрос ${allRequests.length}: $request [id: $id]');
       },
@@ -109,11 +110,13 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
             'Поток запросов завершен, запускаем обработчик с ${allRequests.length} запросами [id: $id]');
 
         try {
+          _logger?.debug(
+              'Вызываем handler с ${allRequests.length} запросами [id: $id]');
           // Вызываем обработчик с потоком запросов из собранного списка
           final response = await handler(Stream.fromIterable(allRequests));
 
-          _logger
-              ?.debug('Обработчик вернул ответ, отправляем клиенту [id: $id]');
+          _logger?.debug(
+              'Обработчик вернул ответ: $response, отправляем клиенту [id: $id]');
 
           // Отправляем единственный ответ
           await _processor.send(response);

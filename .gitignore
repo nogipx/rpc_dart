@@ -1,4 +1,31 @@
+# Dart
 .dart_tool/
+.packages
+pubspec.lock
+.pub-cache/
+.pub/
 
 # FVM Version Cache
 .fvm/
+
+# Собранные бинари (в любых подпроектах)
+**/build/
+*.exe
+**/rpc_dart_router-*
+
+# Временные файлы Docker
+**/Dockerfile.temp
+**/Dockerfile.build
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

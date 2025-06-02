@@ -1,6 +1,6 @@
 name: rpc_dart
 description: gRPC-inspired library built on pure Dart, Backend-for-Domain (BFD)
-version: 1.2.0
+version: 1.2.1
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://github.com/nogipx/rpc_dart
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

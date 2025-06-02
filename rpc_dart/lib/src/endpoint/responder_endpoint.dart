@@ -31,6 +31,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   /// Сохраняем последнее сообщение с данными для каждого потока
   final Map<int, RpcTransportMessage> _streamMessages = {};
 
+  /// Буфер для накопления сообщений Client Streaming
+  final Map<int, List<RpcTransportMessage>> _clientStreamMessages = {};
+
   /// Хранилище активных респондеров стримов
   final Map<int, IRpcResponder> _streamResponders = {};
 
@@ -80,8 +83,44 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     }
 
     // Очищаем информацию о потоке при его завершении
+    // НО НЕ для RPC методов - они должны сами управлять жизненным циклом stream'а
     if (message.isEndOfStream) {
-      _cleanupStream(streamId);
+      final methodKey = _streamMethods[streamId];
+      if (methodKey != null) {
+        final method = _methods[methodKey];
+
+        // СПЕЦИАЛЬНАЯ ОБРАБОТКА для Client Streaming - создаем респондер ТОЛЬКО СЕЙЧАС
+        if (method != null && method.type == RpcMethodType.clientStream) {
+          logger.debug(
+              'Stream $streamId завершен, создаем ClientStreamResponder с накопленными сообщениями');
+          final parts = methodKey.split('.');
+          final serviceName = parts[0];
+          final methodName = parts[1];
+
+          _routeMethodCall((
+            method: method,
+            streamId: streamId,
+            serviceName: serviceName,
+            methodName: methodName,
+            message:
+                null, // Не передаем конкретное сообщение, используем накопленные
+          ));
+        }
+
+        // Для всех RPC методов отложим очистку - она произойдет в соответствующем Responder.close()
+        // Только неизвестные методы очищаем сразу
+        if (method == null) {
+          _cleanupStream(streamId);
+        }
+        // Для RPC методов очистка произойдет в:
+        // - UnaryResponder.close() для unary
+        // - ServerStreamResponder.close() для server streaming
+        // - ClientStreamResponder.close() для client streaming
+        // - BidirectionalStreamResponder.close() для bidirectional
+      } else {
+        // Если метод неизвестен, все равно очищаем
+        _cleanupStream(streamId);
+      }
     }
   }
 
@@ -155,9 +194,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Обрабатываем данные, если для этого потока определен метод
     if (_streamMethods.containsKey(streamId)) {
       final methodKey = _streamMethods[streamId]!;
-      final parts = methodKey.split(
-        '.',
-      );
+      final method = _methods[methodKey]!;
+      final parts = methodKey.split('.');
       final serviceName = parts[0];
       final methodName = parts[1];
 
@@ -165,8 +203,22 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         'Обработка данных для метода: $methodKey [streamId: $streamId]',
       );
 
+      // Для Client Streaming накапливаем сообщения в буфере
+      if (method.type == RpcMethodType.clientStream) {
+        logger.debug('Накапливаем сообщение для Client Stream $streamId');
+        _clientStreamMessages.putIfAbsent(streamId, () => []).add(message);
+        logger.debug(
+            'Всего накоплено сообщений для stream $streamId: ${_clientStreamMessages[streamId]!.length}');
+
+        // НЕ вызываем _routeMethodCall сразу для Client Streaming!
+        // Будет вызван позже в _handleIncomingMessage при isEndOfStream
+        logger.debug(
+            'Отложили создание ClientStreamResponder до завершения stream $streamId');
+        return;
+      }
+
       _routeMethodCall((
-        method: _methods[methodKey]!,
+        method: method,
         streamId: streamId,
         serviceName: serviceName,
         methodName: methodName,
@@ -196,6 +248,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     _streamMethods.remove(streamId);
     _streamMessages.remove(streamId);
+    _clientStreamMessages.remove(streamId);
 
     // Сообщаем транспорту, что этот ID больше не используется
     try {
@@ -289,7 +342,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   /// Этап 5.2: Обработка клиентского потокового метода
   void _handleClientStreamMethod(_MethodCallInfo i) {
     final streamId = i.streamId;
+    logger.debug(
+        '_handleClientStreamMethod для stream $streamId, уже есть: ${_streamResponders.containsKey(streamId)}');
+
+    // Если респондер уже существует, НЕ создаем новый
     if (_streamResponders.containsKey(streamId)) {
+      logger.debug(
+          'Респондер для stream $streamId уже существует, респондер обработает сообщение через transport.incomingMessages');
       return;
     }
 
@@ -318,17 +377,18 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     // Сохраняем респондер
     _streamResponders[responder.id] = responder;
+    logger.debug(
+        'Сохранили ClientStreamResponder для stream ${responder.id}. Всего респондеров: ${_streamResponders.length}');
 
     // Создаем поток сообщений для этого streamId
+    // Используем накопленные сообщения Client Streaming
     Stream<RpcTransportMessage> messageStream;
 
-    final savedMessage = _streamMessages[streamId];
-    if (savedMessage != null &&
-        !savedMessage.isMetadataOnly &&
-        savedMessage.payload != null) {
+    final savedMessages = _clientStreamMessages[streamId];
+    if (savedMessages != null && savedMessages.isNotEmpty) {
       logger.debug(
-          'Создание потока с сохраненным сообщением [streamId: $streamId]');
-      messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
+          'Создание потока с ${savedMessages.length} накопленными сообщениями [streamId: $streamId]');
+      messageStream = _createStreamWithSavedMessages(streamId, savedMessages);
     } else {
       logger.debug('Создание обычного потока сообщений [streamId: $streamId]');
       messageStream =
@@ -406,6 +466,47 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Затем пропускаем остальные сообщения для этого streamId
     await for (final msg
         in transport.incomingMessages.where((m) => m.streamId == streamId)) {
+      yield msg;
+    }
+  }
+
+  /// Создает поток сообщений начинающийся с сохраненных сообщений
+  Stream<RpcTransportMessage> _createStreamWithSavedMessages(
+      int streamId, List<RpcTransportMessage> savedMessages) async* {
+    logger.debug(
+        'Создание потока для stream $streamId с ${savedMessages.length} сохраненными сообщениями');
+
+    // Создаем копию списка, чтобы избежать concurrent modification
+    final messagesCopy = List<RpcTransportMessage>.from(savedMessages);
+
+    // Сначала отправляем все сохраненные сообщения
+    for (int i = 0; i < messagesCopy.length; i++) {
+      final message = messagesCopy[i];
+      final isLastMessage = i == messagesCopy.length - 1;
+
+      // Помечаем последнее сообщение как END_STREAM для Client Streaming
+      final messageToYield = isLastMessage
+          ? RpcTransportMessage(
+              streamId: message.streamId,
+              payload: message.payload,
+              metadata: message.metadata,
+              isEndOfStream: true,
+              methodPath: message.methodPath,
+            )
+          : message;
+
+      logger.debug(
+          'Отдаем сохраненное сообщение для stream $streamId${isLastMessage ? " (END_STREAM)" : ""}');
+      yield messageToYield;
+    }
+
+    logger.debug('Все сохраненные сообщения отправлены для stream $streamId');
+
+    // Затем пропускаем остальные сообщения для этого streamId
+    await for (final msg
+        in transport.incomingMessages.where((m) => m.streamId == streamId)) {
+      logger
+          .debug('Передаем новое сообщение от transport для stream $streamId');
       yield msg;
     }
   }

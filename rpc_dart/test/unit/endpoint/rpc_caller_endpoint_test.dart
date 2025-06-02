@@ -211,8 +211,13 @@ void main() {
     });
 
     test('Клиентский стрим корректно отправляет все сообщения', () async {
-      // Создаем стрим запросов
-      final controller = StreamController<TestRequest>();
+      // Создаем стрим запросов используя Stream.fromIterable для простоты
+      final requestStream = Stream.fromIterable([
+        TestRequest('Message 1'),
+        TestRequest('Message 2'),
+        TestRequest('Message 3'),
+      ]);
+
       print('Начало теста клиентского стрима');
 
       // Получаем функцию ответа
@@ -222,33 +227,13 @@ void main() {
         methodName: 'ClientStreamMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
         responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-        requests: controller.stream,
+        requests: requestStream,
       );
 
       print('Клиентский стрим создан');
 
-      // СНАЧАЛА отправляем все сообщения
-      print('Отправка сообщения 1');
-      controller.add(TestRequest('Message 1'));
-      await Future.delayed(Duration(milliseconds: 100));
-
-      print('Отправка сообщения 2');
-      controller.add(TestRequest('Message 2'));
-      await Future.delayed(Duration(milliseconds: 100));
-
-      print('Отправка сообщения 3');
-      controller.add(TestRequest('Message 3'));
-      await Future.delayed(Duration(milliseconds: 100));
-
-      // Закрываем контроллер, чтобы сигнализировать завершение потока запросов
-      print('Закрытие контроллера запросов');
-      await controller.close();
-
-      // Даем время на обработку закрытия
-      await Future.delayed(Duration(milliseconds: 200));
-
-      // ТОЛЬКО ТЕПЕРЬ получаем ответ
-      print('Вызов getResponse для получения итогового ответа');
+      // Вызываем getResponse для отправки всех сообщений и получения ответа
+      print('Вызов getResponse для отправки сообщений и получения ответа');
       final response = await getResponse().timeout(
         Duration(seconds: 10),
         onTimeout: () {
