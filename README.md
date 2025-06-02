@@ -2,464 +2,549 @@
 
 # RPC Dart
 
-> **Создавайте масштабируемые, типобезопасные приложения через чистую доменную архитектуру**
+> **Структурируйте большие Flutter приложения через изолированные домены с формальными контрактами**
 
-RPC Dart — это мощная библиотека для построения приложений с использованием архитектурного подхода **Backend-for-Domain (BFD)**, обеспечивающая кроссплатформенную коммуникацию между изолированными доменами с полной поддержкой типобезопасности и стриминга.
+RPC Dart — это библиотека для организации кода в больших Flutter приложениях через архитектурный подход **Backend-for-Domain (BFD)**. Она позволяет разделить приложение на независимые домены, которые взаимодействуют друг с другом через типобезопасные контракты.
 
-## Архитектурный подход Backend-for-Domain
+## Архитектурный подход для больших Flutter приложений
 
-Backend-for-Domain (BFD) — это современный архитектурный подход, решающий фундаментальную проблему организации кода в сложных приложениях путем четкого разделения на изолированные домены с формальными контрактами взаимодействия.
-
-### Основные принципы BFD
-
-1. **Доменная изоляция**
-   - Каждый домен представляет собой независимую бизнес-область с четкими границами
-   - Домены взаимодействуют только через формальные API-контракты
-   - Внутренняя реализация домена полностью скрыта от других частей системы
-
-2. **Контрактное взаимодействие**
-   - Все взаимодействия между доменами формализованы в виде интерфейсов-контрактов
-   - Контракты определяют типы данных, методы и потоки для коммуникации
-   - Компилятор проверяет соответствие всех взаимодействий контрактам
-
-3. **Транспортная независимость**
-   - Бизнес-логика не зависит от способа передачи данных
-   - Один и тот же код работает как для локальных, так и для удаленных вызовов
-   - Транспорты легко заменяются в зависимости от контекста использования
-
-4. **Эволюционная масштабируемость**
-   - Архитектура "растет" вместе с проектом без необходимости кардинальных изменений
-   - Локальные вызовы легко трансформируются в распределенные при необходимости
-   - Поддержка всех паттернов коммуникации: от унарных до двунаправленных стримов
-
-```
-┌───────────────────┐       ┌────────────────────┐
-│   Домен клиента   │       │   Домен сервера    │
-│                   │       │                    │
-│  ┌─────────────┐  │       │  ┌─────────────┐   │
-│  │ Caller      │◄─┼───────┼─►│ Responder   │   │
-│  │ Contract    │  │       │  │ Contract    │   │
-│  └─────────────┘  │       │  └─────────────┘   │
-│                   │       │                    │
-└───────────────────┘       └────────────────────┘
-```
-
-### Компоненты BFD архитектуры
-
-- **Contract** — интерфейсы, определяющие API взаимодействия между доменами
-- **Responder** — серверная сторона, реализующая бизнес-логику и обрабатывающая запросы
-- **Caller** — клиентская сторона, инициирующая запросы к другим доменам
-- **Transport** — механизмы передачи данных между доменами
-- **Endpoint** — точки подключения контрактов к транспортам
-- **Codec** — сериализаторы/десериализаторы для типобезопасного преобразования данных
-
-### Преимущества BFD перед традиционными подходами
-
-- **Типобезопасность от начала до конца** — ошибки обнаруживаются на этапе компиляции
-- **Чистая доменная логика** — бизнес-правила не зависят от инфраструктуры и UI
-- **Гибкое масштабирование** — эволюция от монолита к микросервисам без переписывания кода
-- **Упрощенное тестирование** — изолированные компоненты легко тестировать по отдельности
-- **Полиглотная совместимость** — возможность взаимодействия с компонентами на других языках через общие протоколы
-- **Производительность** — возможность распараллеливания через изоляты без изменения кода
-
-### Сценарии применения BFD
-
-- **Фронтенд/Бэкенд изоляция** — отделение UI от бизнес-логики даже в монолитных приложениях
-- **Многопоточная обработка** — безопасное распараллеливание через изоляты с типобезопасной коммуникацией
-- **Микрофронтенды** — организация больших приложений как набора независимых мини-приложений
-- **Распределенные системы** — единый код для локального прототипа и распределенной продакшн-системы
-- **Мультиплатформенные приложения** — единая бизнес-логика для разных платформ с разными UI
-
-## 🚀 Особенности
-
-- **Контрактная архитектура** — формальное определение API между доменами
-- **Транспортная независимость** — от in-memory для тестов до WebSockets в продакшене
-- **Полная типобезопасность** — компилятор проверяет правильность всех взаимодействий
-- **Все типы RPC** — унарный, серверный/клиентский/двунаправленный стриминг
-- **CBOR сериализация** — компактная и эффективная передача данных
-- **Изоляция уровней** — бизнес-логика не зависит от UI и транспорта
-- **Тестируемость** — легкая подмена транспортов и моков для тестирования
-
-## Использование BFD в экосистеме Flutter
-
-Backend-for-Domain отлично интегрируется в экосистему Flutter:
-
-1. **В монолитных приложениях** — для разделения UI от бизнес-логики и обеспечения чистых границ между функциональными модулями
-2. **При работе с изолятами** — для типобезопасной коммуникации между потоками
-3. **В микрофронтендах** — для коммуникации между мини-приложениями внутри одного контейнера
-4. **В распределенных системах** — один и тот же код можно использовать как для локальной, так и для удаленной коммуникации
-
-### Ключевые преимущества при эволюции проекта
-
-BFD позволяет **эволюционировать архитектуру** вместе с ростом проекта:
-
-1. **Начните с монолита** — используйте `RpcInMemoryTransport` для коммуникации между доменами
-2. **Масштабируйте с изолятами** — замените на `RpcIsolateTransport` для многопоточности
-3. **Переходите к микросервисам** — используйте сетевые транспорты для распределения
-
-**Ваш код доменов остается неизменным на всех этапах!**
-
-## Архитектура и концепции
-
-### Контракты
-
-Контракты определяют API для взаимодействия между компонентами:
+RPC Dart реализует архитектурный паттерн **Backend-for-Domain (BFD)** — структурирование приложения через **независимые домены** с **типобезопасными контрактами**:
 
 ```dart
-/// Общий интерфейс для контракта 
-abstract interface class ICalculatorContract implements IRpcContract {
-  static const methodCalculate = 'calculate';
-  static const methodStreamCalculate = 'streamCalculate';
-
-  /// Выполняет одиночную операцию
-  Future<CalculationResponse> calculate(CalculationRequest request);
-
-  /// Обрабатывает поток вычислений
-  Stream<CalculationResponse> streamCalculate(
-    Stream<CalculationRequest> requests,
-  );
+// Каждый домен работает изолированно через Caller'ы
+class UserBloc extends Bloc<UserEvent, UserState> {
+  final UserCaller _userService; // Только свой домен через Caller
+  
+  Future<void> updateProfile(UserProfile profile) async {
+    final response = await _userService.updateProfile(
+      UpdateProfileRequest(profile: profile),
+    );
+    emit(UserUpdated(response.user));
+  }
 }
 ```
 
-### Серверная и клиентская реализации
+## Ключевые компоненты
+
+### Contract (Контракт)
+Определяет API домена:
 
 ```dart
-/// Серверная реализация
-final class CalculatorResponder extends RpcResponderContract
-    implements ICalculatorContract {
+abstract interface class IUserContract implements IRpcContract {
+  Future<UserResponse> getUser(GetUserRequest request);
+  Future<UpdateProfileResponse> updateProfile(UpdateProfileRequest request);
+}
+```
+
+### Responder (Реализация)
+Содержит бизнес-логику домена:
+
+```dart
+final class UserResponder extends RpcResponderContract implements IUserContract {
+  final UserRepository _repository;
   
-  CalculatorResponder() : super('CalculatorService');
-
   @override
-  void setup() {
-    // Регистрация методов
-    addUnaryMethod<CalculationRequest, CalculationResponse>(
-      methodName: ICalculatorContract.methodCalculate,
-      handler: calculate,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-    );
-
-    addBidirectionalMethod<CalculationRequest, CalculationResponse>(
-      methodName: ICalculatorContract.methodStreamCalculate,
-      handler: streamCalculate,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-    );
-  }
-
-  @override
-  Future<CalculationResponse> calculate(CalculationRequest request) async {
-    // Реализация бизнес-логики
-    return CalculationResponse(result: performCalculation(request));
-  }
-
-  @override
-  Stream<CalculationResponse> streamCalculate(
-      Stream<CalculationRequest> requests) async* {
-    await for (final request in requests) {
-      yield CalculationResponse(result: performCalculation(request));
-    }
+  Future<UserResponse> getUser(GetUserRequest request) async {
+    final user = await _repository.findById(request.userId);
+    return UserResponse(user: user);
   }
 }
+```
 
-/// Клиентская реализация
-class CalculatorCaller extends RpcCallerContract
-    implements ICalculatorContract {
-  
-  CalculatorCaller(RpcCallerEndpoint endpoint)
-      : super('CalculatorService', endpoint);
+### Caller (Клиент)
+Вызывает методы домена:
 
+```dart
+final class UserCaller extends RpcCallerContract implements IUserContract {
   @override
-  Future<CalculationResponse> calculate(CalculationRequest request) {
-    return endpoint.unaryRequest<CalculationRequest, CalculationResponse>(
+  Future<UserResponse> getUser(GetUserRequest request) {
+    return endpoint.unaryRequest<GetUserRequest, UserResponse>(
       serviceName: serviceName,
-      methodName: ICalculatorContract.methodCalculate,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
+      methodName: 'getUser',
+      requestCodec: GetUserRequest.codec,
+      responseCodec: UserResponse.codec,
       request: request,
     );
   }
+}
+```
 
+**Архитектурный принцип:**
+- **Responder** получает Caller'ы других доменов в конструкторе
+- **BLoC** получает Caller своего домена для обращения к нему  
+- **UI** никогда не обращается к Responder'ам напрямую
+
+## Архитектурная диаграмма
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': { 
+  'darkMode': true,
+  'background': '#1e1e1e',
+  'primaryColor': '#2d2d2d',
+  'primaryTextColor': '#e0e0e0',
+  'primaryBorderColor': '#404040',
+  'lineColor': '#666666',
+  'secondaryColor': '#383838',
+  'tertiaryColor': '#424242',
+  'mainBkg': '#2d2d2d',
+  'textColor': '#ffffff'
+}}}%%
+graph TD
+    subgraph UI_LAYER [UI Layer]
+        OU[Order UI]
+        NU[Notification UI]
+    end
+    
+    subgraph BLOC_LAYER [BLoC Layer]
+        OB[OrderBloc]
+        NB[NotificationBloc]
+    end
+    
+    subgraph CALLER_LAYER [Caller Layer]
+        OC[OrderCaller]
+        PC[PaymentCaller]
+        NC1[NotificationCaller]
+        NC2[NotificationCaller]
+    end
+    
+    subgraph RESPONDER_LAYER [Responder Layer]
+        OR[OrderResponder]
+        PR[PaymentResponder]
+        NR[NotificationResponder]
+    end
+    
+    %% Call Flow Steps
+    OU -->|1.User clicks Create Order| OB
+    OB -->|2.BLoC calls domain| OC
+    OC -.->|3.RPC unary call| OR
+    
+    OR -->|4.OrderResponder uses| PC
+    PC -.->|5.RPC unary call| PR
+    PR -.->|6.Payment confirmed| PC
+    PC -->|7.Payment success| OR
+    
+    OR -->|8.OrderResponder uses| NC1  
+    NC1 -.->|9.RPC fire-and-forget| NR
+    
+    NR -.->|10.Server stream emit| NC2
+    NC2 -->|11.Stream to BLoC| NB
+    NB -->|12.Update UI| NU
+    
+    classDef ui fill:#744210,stroke:#ed8936,stroke-width:2px,color:#fbb066
+    classDef bloc fill:#22543d,stroke:#48bb78,stroke-width:2px,color:#9ae6b4
+    classDef caller fill:#44337a,stroke:#9f7aea,stroke-width:2px,color:#d6bcfa
+    classDef responder fill:#1a365d,stroke:#4299e1,stroke-width:2px,color:#90cdf4
+    
+    class OU,NU ui
+    class OB,NB bloc
+    class OC,PC,NC1,NC2 caller
+    class OR,PR,NR responder
+```
+
+### 📖 Как читать диаграмму
+
+Диаграмма показывает **конкретный сценарий** — пользователь создает заказ и получает уведомление:
+
+**🔄 Пошаговый поток:**
+
+1. **Пользователь нажимает "Создать заказ"** → Order UI
+2. **UI передает событие** → OrderBloc  
+3. **BLoC вызывает домен** → OrderCaller
+4. **RPC запрос к OrderResponder** (unary call)
+5. **OrderResponder обращается к платежам** → PaymentCaller
+6. **RPC к PaymentResponder** (unary call)
+7. **PaymentResponder подтверждает платеж** → PaymentCaller
+8. **Успешный платеж возвращается** → OrderResponder
+9. **Только после успешного платежа** → NotificationCaller (fire & forget)
+10. **NotificationResponder стримит** → NotificationCaller (server stream)
+11. **Уведомление попадает в UI** → NotificationBloc
+12. **Пользователь видит уведомление** → Notification UI
+
+### 📡 Real-time уведомления
+
+Диаграмма показывает классический паттерн real-time уведомлений:
+
+1. **OrderResponder** отправляет уведомление через `NC1` (NotificationCaller)
+2. **NotificationResponder** получает уведомление и отправляет в real-time stream 
+3. **NotificationBloc** подписывается на стрим через `NC2` (другой NotificationCaller)
+4. **Notification UI** реактивно отображает новые уведомления
+
+### 🔗 Типы RPC взаимодействий
+
+Диаграмма показывает все основные типы RPC методов:
+
+| Тип | Описание | Пример использования |
+|-----|----------|---------------------|
+| **unary call** | Запрос → Ответ | Обычные операции CRUD |
+| **unary send** | Отправка без ожидания ответа | Fire-and-forget уведомления |
+| **server stream subscribe** | Подписка на поток данных | Real-time обновления |
+| **server stream emit** | Отправка потока данных | Live уведомления, чаты |
+
+Это демонстрирует, как BFD поддерживает все паттерны RPC взаимодействий из современных фреймворков типа gRPC.
+
+## Практический пример
+
+```dart
+// 1. Order Domain дожидается платежа перед уведомлением
+class OrderResponder extends RpcResponderContract {
+  final PaymentCaller _paymentCaller;
+  final NotificationCaller _notificationCaller;
+  
   @override
-  Stream<CalculationResponse> streamCalculate(
-      Stream<CalculationRequest> requests) {
-    return endpoint.bidirectionalStream<CalculationRequest, CalculationResponse>(
-      serviceName: serviceName,
-      methodName: ICalculatorContract.methodStreamCalculate,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-      requests: requests,
+  Future<CreateOrderResponse> createOrder(CreateOrderRequest request) async {
+    final order = await _createOrder(request);
+    
+    // Сначала обрабатываем платеж
+    final paymentResponse = await _paymentCaller.processPayment(
+      ProcessPaymentRequest(
+        orderId: order.id,
+        amount: order.total,
+        userId: request.userId,
+      ),
+    );
+    
+    // После успешного платежа отправляем уведомление
+    if (paymentResponse.status == PaymentStatus.success) {
+      await _notificationCaller.sendNotification(
+        NotificationRequest(
+          userId: request.userId,
+          title: 'Заказ оплачен!',
+          message: 'Ваш заказ #${order.id} успешно оплачен и принят в обработку',
+          type: NotificationType.orderPaid,
+        ),
+      );
+    } else {
+      // В случае неудачного платежа отправляем соответствующее уведомление
+      await _notificationCaller.sendNotification(
+        NotificationRequest(
+          userId: request.userId,
+          title: 'Ошибка оплаты',
+          message: 'Не удалось оплатить заказ #${order.id}. Попробуйте еще раз.',
+          type: NotificationType.paymentFailed,
+        ),
+      );
+    }
+    
+    return CreateOrderResponse(order: order, payment: paymentResponse);
+  }
+}
+
+// 2. NotificationBloc слушает стрим уведомлений
+class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
+  final NotificationCaller _notificationCaller;
+  late final StreamSubscription _notificationSubscription;
+
+  NotificationBloc(this._notificationCaller) : super(NotificationInitial()) {
+    // Подписываемся на стрим уведомлений при создании BLoC
+    _notificationSubscription = _notificationCaller
+        .subscribeToNotifications(SubscribeRequest(userId: currentUserId))
+        .listen((notification) {
+      add(NotificationReceivedEvent(notification));
+    });
+  }
+
+  // 3. UI реактивно отображает уведомления
+  Widget build(BuildContext context) {
+    return BlocBuilder<NotificationBloc, NotificationState>(
+      builder: (context, state) {
+        if (state is NotificationReceived) {
+          return NotificationSnackBar(notification: state.notification);
+        }
+        return SizedBox.shrink();
+      },
     );
   }
 }
 ```
 
-### Типы коммуникации
 
-RPC Dart поддерживает четыре типа взаимодействия:
 
-```
-┌──────────┐                 ┌──────────┐
-│  Клиент  │                 │  Сервер  │
-└────┬─────┘                 └────┬─────┘
-     │       ──── Запрос ────▶    │     ◄── Унарный
-     │       ◀─── Ответ ─────     │
-     │                            │
-     │       ──── Запрос ────▶    │     ◄── Серверный
-     │       ◀─── Ответ1 ────     │         стриминг
-     │       ◀─── Ответ2 ────     │
-     │                            │
-     │       ──── Запрос1 ───▶    │     ◄── Клиентский
-     │       ──── Запрос2 ───▶    │         стриминг
-     │       ◀─── Ответ ─────     │
-     │                            │
-     │       ──── Запрос1 ───▶    │     ◄── Двунаправленный
-     │       ◀─── Ответ1 ────     │         стриминг
-     │       ──── Запрос2 ───▶    │
-     ▼                            ▼
-```
+## Repository vs Contract
 
-### Транспорты
+**Ключевая разница:**
 
-Транспорты абстрагируют механизм передачи данных:
+| Repository Pattern | BFD Contracts |
+|-------------------|---------------|
+| Абстракция источника данных | Абстракция целого домена |
+| BLoC может зависеть от других доменов | BLoC работает только со своим доменом |
+| Тестируется с моками репозиториев | Тестируется с моками контрактов |
 
 ```dart
-// Создание транспортов
-final transport = RpcInMemoryTransport.pair();
-
-// Создание эндпоинтов
-final serverEndpoint = RpcResponderEndpoint(
-  transport: transport.$1,
-  loggerColors: RpcLoggerColors.singleColor(AnsiColor.cyan),
-);
-final clientEndpoint = RpcCallerEndpoint(
-  transport: transport.$2,
-  loggerColors: RpcLoggerColors.singleColor(AnsiColor.magenta),
-);
-```
-
-### Важное замечание при работе со стримами
-
-Если вы создаете Responder напрямую (минуя RpcResponderEndpoint), необходимо явно привязать его к потоку сообщений:
-
-```dart
-// Создание транспортов
-final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-
-// Создание responder'а напрямую
-final server = ServerStreamResponder<RpcString, RpcString>(
-  id: 1,
-  transport: serverTransport,
-  serviceName: 'TestService',
-  methodName: 'TestMethod',
-  requestCodec: serializer,
-  responseCodec: serializer,
-  handler: (request) async* {
-    yield 'Response 1'.rpc;
-    yield 'Response 2'.rpc;
-  },
-);
-
-// ВАЖНО: Привязка к потоку сообщений
-server.bindToMessageStream(
-  serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-);
-```
-
-Без этого шага респондер не будет получать сообщения от клиента, что приведет к "мертвым" стримам.
-
-### Примитивные типы
-
-Библиотека включает базовые примитивные типы с поддержкой операторов:
-
-```dart
-// Строковый тип
-final stringMessage = RpcString("Hello World");
-
-// Целочисленный тип с операторами
-final intMessage = RpcInt(42);
-final sum = intMessage + RpcInt(10); // RpcInt(52)
-
-// Дробный тип
-final doubleMessage = RpcDouble(3.14);
-
-// Логический тип
-final boolMessage = RpcBool(true);
-
-// Пустое значение
-final nullMessage = RpcNull();
-```
-
-## Рекомендации по применению
-
-1. **Выделяйте чистые границы доменов** — определите контракты взаимодействия между компонентами
-2. **Следуйте принципу единой ответственности** — каждый контракт должен иметь четкую цель
-3. **Используйте подходящие транспорты** — `InMemoryTransport` для тестов, `IsolateTransport` для многопоточности
-4. **Документируйте контракты** — они являются основой взаимодействия между командами
-5. **Создавайте типобезопасные модели** — используйте преимущества статической типизации Dart
-6. **Разделяйте модели по слоям** — используйте DTOs, Entities и State-классы для разных уровней
-
-## Начало работы
-
-```dart
-// Создание транспортов
-final transport = RpcInMemoryTransport.pair();
-
-// Создание эндпоинтов
-final serverEndpoint = RpcResponderEndpoint(transport: transport.$1);
-final clientEndpoint = RpcCallerEndpoint(transport: transport.$2);
-
-// Регистрация на сервере
-final server = CalculatorResponder();
-serverEndpoint.registerServiceContract(server);
-
-// Использование на клиенте
-final client = CalculatorCaller(clientEndpoint);
-
-// Унарный вызов
-final response = await client.calculate(
-  CalculationRequest(a: 10, b: 5, operation: 'add')
-);
-print('Результат: ${response.result}'); // 15
-```
-
-## Обработка ошибок
-
-При работе со стримами ошибки передаются в виде сообщений с метаданными:
-
-```dart
-// Отправка запроса
-await client.send(request);
-
-// Получение и обработка ответов
-client.responses.listen((message) {
-  if (message.isMetadataOnly) {
-    // Проверка на ошибку (gRPC статус != 0 означает ошибку)
-    final status = message.metadata?.getHeaderValue('grpc-status');
-    final errorMessage = message.metadata?.getHeaderValue('grpc-message');
-    
-    if (status != null && status != '0') {
-      print('Получена ошибка: $errorMessage (код: $status)');
-      return;
-    }
-  }
-  
-  // Обработка полезной нагрузки
-  if (message.payload != null) {
-    print('Получен ответ: ${message.payload}');
-  }
-});
-```
-
-## Логирование и отладка
-
-```dart
-// Настройка уровня логирования
-RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
-
-// Создание логгера с цветовым оформлением
-final logger = RpcLogger(
-  'MyComponent',
-  colors: RpcLoggerColors.singleColor(AnsiColor.cyan),
-);
-
-// Логирование
-logger.info('Информация');
-logger.error('Ошибка', error: exception);
-```
-
-## FAQ: Ответы на частые вопросы
-
-### Не слишком ли это сложно для простых приложений?
-
-**Честный ответ**: да, для очень маленьких приложений BFD может быть избыточен. Но большинство приложений не остаются маленькими навсегда. BFD обеспечивает плавный путь роста: начните с `InMemoryTransport` в монолитном приложении, и когда придет время масштабироваться, просто замените транспорт, не меняя бизнес-логику.
-
-### Что насчет производительности? Все эти слои абстракции не замедлят работу?
-
-Влияние на производительность минимально благодаря:
-- Эффективной CBOR сериализации (компактнее JSON)
-- Возможности работать полностью в памяти для локальных вызовов
-- Поддержке изолятов, что позволяет распараллелить тяжелые вычисления
-
-На практике, возможность легко переносить вычисления в отдельные потоки даёт прирост производительности в сравнении с монолитным подходом.
-
-### Как BFD сочетается с BLoC/Provider/Riverpod?
-
-Отлично сочетается! BLoC может использоваться для управления состоянием UI, а BFD — для коммуникации между доменами:
-
-```dart
+// Contract: BLoC работает только со своим доменом через Caller
 class UserBloc extends Bloc<UserEvent, UserState> {
-  final UserServiceCaller _userService;
+  final UserCaller _userService; // Единственная зависимость через Caller
   
-  UserBloc(this._userService) : super(UserInitial()) {
-    on<LoadUserEvent>((event, emit) async {
-      emit(UserLoading());
-      try {
-        final user = await _userService.getUserById(event.userId);
-        emit(UserLoaded(user));
-      } catch (e) {
-        emit(UserError(e.toString()));
-      }
-    });
+  UserBloc(this._userService) : super(UserInitial());
+  
+  Future<void> updateProfile(UserProfile profile) async {
+    final response = await _userService.updateProfile(
+      UpdateProfileRequest(profile: profile),
+    );
+    emit(UserUpdated(response.user));
   }
 }
 ```
 
-### Как писать тесты для BFD компонентов?
+## Типы взаимодействий между доменами
 
-Тестирование упрощается благодаря чистым границам между компонентами:
-
-1. **Тестирование доменной логики**: тестируйте `Responder` классы напрямую, вызывая их методы
-2. **Интеграционное тестирование**: используйте `InMemoryTransport` для проверки взаимодействия компонентов
-3. **Мокирование**: легко создавайте моки для контрактов благодаря интерфейсам
+### 1. Прямые RPC вызовы
+Для синхронных операций:
 
 ```dart
-test('должен правильно выполнять вычисления', () async {
-  final calculator = CalculatorResponder();
-  final response = await calculator.calculate(
-    CalculationRequest(a: 5, b: 3, operation: 'add')
-  );
+class OrderResponder extends RpcResponderContract {
+  final PaymentCaller _paymentCaller;
+  final InventoryCaller _inventoryCaller;
   
-  expect(response.result, equals(8));
-});
+  @override
+  Future<CreateOrderResponse> createOrder(CreateOrderRequest request) async {
+    // Проверяем наличие товара
+    final availability = await _inventoryCaller.checkAvailability(
+      CheckAvailabilityRequest(productIds: request.productIds),
+    );
+    
+    // Обрабатываем платеж
+    final payment = await _paymentCaller.processPayment(
+      ProcessPaymentRequest(amount: request.total),
+    );
+    
+    return CreateOrderResponse(order: order, payment: payment);
+  }
+}
 ```
 
-### Не будет ли слишком много бойлерплейта?
+### 2. Реактивные стримы
+Для real-time обновлений:
 
-Немного больше, чем при обычном подходе, но этот код:
-- Типобезопасен, что снижает количество рантайм ошибок
-- Имеет предсказуемую структуру, упрощающую чтение и поддержку
-- Может быть сгенерирован инструментами для автоматизации
+```dart
+abstract interface class IChatContract implements IRpcContract {
+  Stream<ChatMessage> subscribeToMessages(SubscribeRequest request);
+  Future<SendMessageResponse> sendMessage(SendMessageRequest request);
+}
 
-Выигрыш в долгосрочной перспективе компенсирует начальные затраты на написание контрактов.
+// В BLoC подписываемся на стрим сообщений через Caller
+class ChatBloc extends Bloc<ChatEvent, ChatState> {
+  late final StreamSubscription _messagesSubscription;
+  
+  ChatBloc(ChatCaller chatService) : super(ChatInitial()) {
+    _messagesSubscription = chatService
+        .subscribeToMessages(SubscribeRequest(chatId: currentChatId))
+        .listen((message) => add(MessageReceivedEvent(message)));
+  }
+}
+```
 
-### Что если я захочу изменить API? Насколько сложно будет вносить изменения?
+### 3. UI координация через BLoC
+Для UI-специфичной логики:
 
-Изменения в API с BFD становятся более контролируемыми:
-- Контракты четко определяют, что именно меняется
-- Компилятор подсвечивает все места, требующие обновления
-- Версионирование контрактов упрощает поддержку обратной совместимости
+```dart
+class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
+  final CartCaller _cartService;
+  final OrderCaller _orderService;
+  
+  Future<void> _handleCheckout(CheckoutEvent event, Emitter emit) async {
+    // UI координирует работу двух доменов через Caller'ы
+    final cart = await _cartService.getCurrentCart(GetCartRequest());
+    final order = await _orderService.createOrder(CreateOrderRequest(items: cart.items));
+    await _cartService.clearCart(ClearCartRequest());
+    
+    emit(CheckoutCompleted(order));
+  }
+}
+```
 
-### Стоит ли использовать BFD для веб-приложений на Flutter?
+## Заключение
 
-Да, особенно если:
-- Вы планируете повторно использовать логику между мобильной и веб-версиями
-- У вас есть компоненты с интенсивными вычислениями (можно выносить в Web Workers)
-- Вы строите прогрессивное веб-приложение с оффлайн-функциональностью
+Backend-for-Domain позволяет структурировать большие Flutter приложения через:
 
-### Можно ли частично внедрять BFD в существующий проект?
+- **Четкое разделение доменов** с формальными границами
+- **Типобезопасное взаимодействие** между компонентами  
+- **Упрощенное тестирование** каждого домена в изоляции
+- **Модульную архитектуру** для больших команд
+- **Гибкость выбора деплоя** - от InMemory до HTTP/gRPC
 
-Абсолютно! Начните с изоляции одного домена через BFD, сохраняя остальную архитектуру нетронутой. Постепенно расширяйте применение подхода по мере роста выгоды от его использования.
+**Ключевой инсайт:** BFD наиболее эффективен, когда используется реактивный подход - домены взаимодействуют напрямую через контракты, а BLoC применяется только для UI-специфичной логики.
 
-### Почему мой стрим не получает сообщения или зависает?
+Этот подход особенно ценен для приложений, которые планируется развивать и поддерживать длительное время.
 
-Наиболее распространенная причина - отсутствие привязки responder'а к потоку сообщений через `bindToMessageStream()`. 
+## FAQ
 
-- При использовании `RpcResponderEndpoint` и регистрации контрактов эта привязка происходит автоматически
-- При прямом создании responder'ов (`ServerStreamResponder`, `ClientStreamResponder`, `BidirectionalStreamResponder`) необходимо явно вызывать метод `bindToMessageStream(stream)`
-- При обработке ошибок проверяйте gRPC статусы в метаданных (`response.metadata?.getHeaderValue('grpc-status')`) вместо использования `onError` в потоках
+<details>
+<summary><h3>В чем основное отличие от Repository Pattern?</h3></summary>
 
-## Лицензия
+**Repository Pattern** абстрагирует источники данных, но BLoC все равно может зависеть от множества репозиториев разных доменов. **BFD Contracts** изолируют целые домены — каждый BLoC работает только со своим доменом через Caller.
 
-LGPL-3.0-or-later
+```dart
+// Repository Pattern - BLoC зависит от многих репозиториев
+class OrderBloc {
+  final OrderRepository _orders;
+  final PaymentRepository _payments;     // Прямая зависимость от другого домена
+  final InventoryRepository _inventory;  // Прямая зависимость от другого домена
+  final UserRepository _users;          // Прямая зависимость от другого домена
+}
+
+// BFD Contracts - BLoC работает только со своим доменом
+class OrderBloc {
+  final OrderCaller _orderService; // Единственная зависимость через Caller
+}
+```
+
+</details>
+
+<details>
+<summary><h3>Не слишком ли это сложно для небольших проектов?</h3></summary>
+
+Для простых CRUD приложений (<5 экранов) BFD может быть избыточным. Однако если планируется рост функциональности или команды, BFD упрощает масштабирование.
+
+**Критерии применения:**
+- ✅ Приложения с 5+ экранами и сложной логикой
+- ✅ Планируется рост команды разработки  
+- ✅ Множественные бизнес-домены (пользователи, заказы, платежи)
+- ❌ Простые CRUD операции без междоменной логики
+- ❌ Прототипы и MVP с коротким циклом жизни
+
+</details>
+
+<details>
+<summary><h3>Как это влияет на производительность?</h3></summary>
+
+При использовании `InMemoryTransport` накладные расходы минимальны — добавляется только сериализация CBOR, которая очень быстрая. При переходе на HTTP/gRPC появляется сетевая задержка, но код доменов остается неизменным.
+
+**Бенчмарки:**
+- `InMemoryTransport`: ~0.1мс дополнительной задержки
+- `IsolateTransport`: ~1-5мс (зависит от размера данных)  
+- `HttpTransport`: зависит от сети (10-100мс+)
+
+</details>
+
+<details>
+<summary><h3>Сложно ли тестировать такую архитектуру?</h3></summary>
+
+Наоборот, тестирование становится проще — каждый домен тестируется изолированно с моками Caller'ов. Нет необходимости мокать десятки зависимостей.
+
+```dart
+// Тестируем домен с простыми моками
+void main() {
+  test('Order creation with payment failure', () async {
+    final mockPayments = MockPaymentCaller(shouldFail: true);
+    final orderResponder = OrderResponder(payments: mockPayments);
+    
+    expect(
+      () => orderResponder.createOrder(CreateOrderRequest(...)),
+      throwsA(isA<PaymentFailedException>()),
+    );
+  });
+}
+```
+
+</details>
+
+<details>
+<summary><h3>Как обеспечивается типобезопасность?</h3></summary>
+
+Все RPC вызовы типизированы через Request/Response объекты. Ошибки несовместимости контрактов выявляются на этапе компиляции.
+
+```dart
+// Компилятор проверит типы в compile-time
+Future<UserResponse> getUser(GetUserRequest request) {
+  return endpoint.unaryRequest<GetUserRequest, UserResponse>(
+    // Если типы не совпадают - ошибка компиляции
+    requestCodec: GetUserRequest.codec,
+    responseCodec: UserResponse.codec,
+    request: request,
+  );
+}
+```
+
+</details>
+
+<details>
+<summary><h3>Можно ли использовать с другими state management решениями?</h3></summary>
+
+Да, BFD не привязан к BLoC. Можно использовать с Riverpod, Provider, MobX или любым другим решением для управления состоянием.
+
+```dart
+// Riverpod
+final userServiceProvider = Provider<UserCaller>((ref) => UserCaller(endpoint));
+
+// Provider  
+ChangeNotifierProvider<UserNotifier>(
+  create: (_) => UserNotifier(UserCaller(endpoint)),
+)
+
+// MobX
+class UserStore = _UserStore with _$UserStore;
+abstract class _UserStore with Store {
+  final UserCaller _userService;
+}
+```
+
+</details>
+
+<details>
+<summary><h3>Как организовать работу команды при такой архитектуре?</h3></summary>
+
+Каждая команда может владеть своими доменами и разрабатывать их независимо. Контракты служат формальными API между командами.
+
+**Пример организации:**
+- **Team A**: User + Profile домены
+- **Team B**: Order + Payment домены  
+- **Team C**: Notification + Analytics домены
+
+Команды взаимодействуют только через контракты, могут работать в разных темпах и делать релизы независимо.
+
+</details>
+
+<details>
+<summary><h3>Можно ли внедрить BFD частично в существующий проект?</h3></summary>
+
+Да! Одно из главных преимуществ BFD — возможность постепенного внедрения без переписывания всего приложения.
+
+**Стратегии частичного внедрения:**
+
+1. **Новые домены сразу через BFD**
+```dart
+// Старый код остается нетронутым
+class UserBloc {
+  final UserRepository _userRepository; // Старая архитектура
+}
+
+// Новые фичи делаем через BFD
+class NotificationBloc {
+  final NotificationCaller _notificationService; // Новая архитектура
+}
+```
+
+2. **Обертка существующих репозиториев**
+```dart
+// Оборачиваем старый Repository в новый Contract
+final class UserResponder extends RpcResponderContract {
+  final UserRepository _repository; // Переиспользуем старый код
+  
+  @override
+  Future<UserResponse> getUser(GetUserRequest request) async {
+    final user = await _repository.getUser(request.userId);
+    return UserResponse(user: user);
+  }
+}
+```
+
+3. **Гибридный подход**
+```dart
+class OrderBloc {
+  final OrderRepository _orderRepository;      // Старое для простых операций
+  final PaymentCaller _paymentService;         // BFD для сложных взаимодействий
+  final NotificationCaller _notificationService; // BFD для новых фич
+}
+```
+
+</details>
+
+---
+
+**Ссылки:**
+- [RPC Dart на pub.dev](https://pub.dev/packages/rpc_dart)
+- [Исходный код на GitHub](https://github.com/nogipx/rpc_dart)
+- [Подробнее о BFD](https://github.com/nogipx/rpc_dart/tree/main/docs/backend_for_domain.md)
+- [Domain Driven Design: The Bounded Context](https://medium.com/@johnboldt_53034/domain-driven-design-the-bounded-context-1a5ea7bcb4a4)
+
+*Есть вопросы по применению BFD в вашем проекте? Создавайте issue в GitHub!*

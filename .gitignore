@@ -11,3 +11,4 @@ coverage/
 *.bin
 *.pem
 .vscode/
+.docs/

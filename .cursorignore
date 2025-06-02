@@ -2,7 +2,6 @@
 **/coverage/html/
 **/coverage/test/
 .vscode/
-docs/
 LICENSES/
 LICENSE
 REUSE.toml
