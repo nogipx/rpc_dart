@@ -72,7 +72,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         logger.debug('Запрос отправлен, начинаем получать ответы');
 
         // Небольшая задержка, чтобы дать серверу время на обработку запроса
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Обрабатываем ответы
         int count = 0;

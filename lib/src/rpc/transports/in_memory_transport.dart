@@ -338,7 +338,7 @@ class RpcInMemoryTransport implements IRpcTransport {
           'InMemoryTransport: отправлен сигнал END_STREAM для stream $streamId');
 
       // Добавляем небольшую задержку для гарантии доставки сообщения
-      await Future.delayed(Duration(milliseconds: 20));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Освобождаем ID, так как мы закончили с этим потоком
       if (_idManager.isActive(streamId)) {
