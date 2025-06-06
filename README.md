@@ -4,7 +4,25 @@
 
 > **RPC библиотека на чистом Dart для типобезопасного взаимодействия между компонентами**
 
-RPC Dart — это RPC библиотека, построенная на чистом Dart, которая обеспечивает типобезопасное взаимодействие между компонентами через различные транспорты. В основной библиотеке включен InMemory транспорт, дополнительные транспорты (Isolate, HTTP) доступны в отдельной библиотеке `rpc_dart_transports`. Идеально подходит для организации больших Flutter приложений через архитектурный подход **CORD**.
+RPC Dart — это RPC библиотека, построенная на чистом Dart, которая обеспечивает типобезопасное взаимодействие между компонентами через различные транспорты. В основной библиотеке включен InMemory транспорт для разработки, тестирования и большинства production случаев. Идеально подходит для организации больших Flutter приложений через архитектурный подход **CORD**.
+
+## Содержание
+
+- [Основные концепции](#основные-концепции)
+- [Ключевые возможности](#ключевые-возможности)
+- [CORD архитектура](#cord-архитектура)
+- [Quick Start](#quick-start)
+- [Транспорты](#транспорты)
+- [Типы RPC взаимодействий](#типы-rpc-взаимодействий)
+- [Встроенные примитивы](#встроенные-примитивы)
+- [StreamDistributor](#streamdistributor)
+- [Производительность](#производительность)
+- [Использование без контрактов](#использование-без-контрактов)
+- [Тестирование](#тестирование)
+- [Интеграция с Flutter](#интеграция-с-flutter)
+- [FAQ](#faq)
+
+---
 
 ## Основные концепции
 
@@ -234,10 +252,28 @@ final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 ```
 
 ### Дополнительные транспорты
-Доступны в отдельной библиотеке `rpc_dart_transports`:
 
+RPC Dart поддерживает создание кастомных транспортов через интерфейс `RpcTransport`:
+
+```dart
+// Пример кастомного транспорта
+class CustomHttpTransport implements RpcTransport {
+  @override
+  Future<void> send(RpcMessage message) async {
+    // Реализация отправки через HTTP
+  }
+  
+  @override
+  Stream<RpcMessage> get messageStream => _messageController.stream;
+}
+
+final endpoint = RpcCallerEndpoint(transport: CustomHttpTransport());
+```
+
+**Возможные варианты расширения:**
 - **Isolate Transport** — для CPU-интенсивных задач и изоляции сбоев
 - **HTTP Transport** — для микросервисов и распределенных систем
+- **WebSocket Transport** — для real-time приложений
 
 **Ключевое преимущество:** код домена остается неизменным при смене транспорта!
 
@@ -268,9 +304,13 @@ final count = 42.rpc;            // RpcInt
 final price = 19.99.rpc;         // RpcDouble
 final enabled = true.rpc;        // RpcBool
 
-// Все примитивы поддерживают операторы
-final sum = RpcInt(10) + RpcInt(20);  // RpcInt(30)
-final text = RpcString('Hello ') + RpcString('World'); // Ошибка - используйте .value
+// Числовые примитивы поддерживают арифметические операторы
+final sum = RpcInt(10) + RpcInt(20);      // RpcInt(30)
+final product = RpcDouble(3.14) * RpcDouble(2.0);  // RpcDouble(6.28)
+
+// Доступ к значению через свойство .value
+final greeting = RpcString('Hello ') + RpcString('World'); 
+print(greeting.value); // "Hello World"
 ```
 
 ## StreamDistributor
@@ -516,17 +556,16 @@ dart run benchmark/main.dart
 - ✅ Монолитные Flutter приложения
 - ✅ Unit и integration тесты
 - ✅ Быстрая разработка и прототипирование
+- ✅ Большинство production случаев с простой архитектурой
 - ❌ Изоляция CPU-интенсивных задач
+- ❌ Распределенные системы
 
-**Isolate Transport (из rpc_dart_transports):**
-- ✅ CPU-интенсивные вычисления без блокировки UI
-- ✅ Изоляция критичного кода от сбоев
-- ✅ Параллельная обработка данных
-
-**HTTP Transport (из rpc_dart_transports):**
-- ✅ Микросервисная архитектура
-- ✅ Распределенные системы
-- ✅ Взаимодействие с внешними сервисами
+**Кастомные транспорты (создаваемые через RpcTransport интерфейс):**
+- ✅ CPU-интенсивные вычисления без блокировки UI (Isolate)
+- ✅ Изоляция критичного кода от сбоев (Isolate)
+- ✅ Микросервисная архитектура (HTTP/gRPC)
+- ✅ Распределенные системы (HTTP/gRPC)
+- ✅ Real-time взаимодействие (WebSocket)
 
 </details>
 
