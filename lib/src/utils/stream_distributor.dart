@@ -337,19 +337,6 @@ class StreamDistributor<T extends IRpcSerializable> {
       }
     }
 
-    // Если сообщение имеет bundleId, проверяем, что оно соответствует нашему клиенту
-    if (wrappedEvent.metadata != null &&
-        wrappedEvent.metadata!.containsKey('bundleId')) {
-      if (wrappedEvent.metadata!['bundleId'] == clientId) {
-        return true;
-      }
-
-      // Если bundleId не соответствует и сообщение не для этого клиента
-      if (wrappedEvent.streamId != clientId) {
-        return false;
-      }
-    }
-
     return false;
   }
 
@@ -433,7 +420,7 @@ class StreamDistributor<T extends IRpcSerializable> {
       final wrappedEvent = _StreamMessage<T>(
         message: event,
         streamId: clientId,
-        metadata: metadata ?? {'bundleId': clientId},
+        metadata: metadata,
       );
 
       // Добавляем в основной контроллер для логирования и передачи конкретному клиенту
