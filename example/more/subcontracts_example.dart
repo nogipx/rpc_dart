@@ -41,6 +41,10 @@ void main() async {
   final mainContract = MainServiceContract();
   serverEndpoint.registerServiceContract(mainContract);
 
+  // Запускаем серверный эндпоинт
+  logger.info('Запуск серверного эндпоинта');
+  serverEndpoint.start();
+
   // Создаем клиентский контракт
   final caller = MainServiceCallerContract(clientEndpoint);
 

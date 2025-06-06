@@ -144,6 +144,7 @@ void main() {
     test('Регистрация контракта работает корректно', () {
       // Регистрируем сервис
       responderEndpoint.registerServiceContract(testService);
+      responderEndpoint.start();
 
       // Проверяем, что сервис был зарегистрирован
       expect(responderEndpoint.registeredContracts, contains('TestService'));
@@ -157,6 +158,7 @@ void main() {
       // Создаем и регистрируем сервис с подконтрактом
       final parentService = ParentService();
       responderEndpoint.registerServiceContract(parentService);
+      responderEndpoint.start();
 
       // Проверяем, что оба сервиса зарегистрированы
       expect(responderEndpoint.registeredContracts, contains('ParentService'));
@@ -170,6 +172,7 @@ void main() {
     test('Обработка унарного запроса работает корректно', () async {
       // Регистрируем сервис
       responderEndpoint.registerServiceContract(testService);
+      responderEndpoint.start();
 
       // Отправляем запрос через caller
       final response =
@@ -189,6 +192,7 @@ void main() {
     test('Ошибка при дублировании сервиса', () {
       // Регистрируем сервис первый раз
       responderEndpoint.registerServiceContract(testService);
+      responderEndpoint.start();
 
       // Второй раз должна быть ошибка
       expect(
@@ -200,6 +204,7 @@ void main() {
     test('Проверка существования метода', () {
       // Регистрируем сервис
       responderEndpoint.registerServiceContract(testService);
+      responderEndpoint.start();
 
       // Проверяем существующий метод
       responderEndpoint.validateMethodExists(
@@ -223,6 +228,7 @@ void main() {
     test('Закрытие эндпоинта очищает зарегистрированные сервисы', () async {
       // Регистрируем сервис
       responderEndpoint.registerServiceContract(testService);
+      responderEndpoint.start();
       expect(responderEndpoint.registeredContracts, isNotEmpty);
       expect(responderEndpoint.registeredMethods, isNotEmpty);
 
@@ -239,6 +245,7 @@ void main() {
       // Регистрируем сервис с подконтрактом
       final parentService = ParentService();
       responderEndpoint.registerServiceContract(parentService);
+      responderEndpoint.start();
 
       // Отправляем запрос к методу подконтракта
       final response =
@@ -254,6 +261,20 @@ void main() {
       expect(response.message, equals('SubService reply to: Subcontract test'));
       expect(parentService.subService.callLog,
           contains('SubUnaryMethod: Subcontract test'));
+    });
+
+    test('Регистрация без запуска работает корректно', () {
+      // Регистрируем сервис но НЕ запускаем эндпоинт
+      responderEndpoint.registerServiceContract(testService);
+
+      // Проверяем что сервис зарегистрирован
+      expect(responderEndpoint.registeredContracts, contains('TestService'));
+
+      // Проверяем что эндпоинт активен но не слушает
+      expect(responderEndpoint.isActive, isTrue);
+
+      // Примечание: Предупреждение о незапущенном эндпоинте появится
+      // только при получении реального сообщения от транспорта
     });
   });
 }

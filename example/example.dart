@@ -35,6 +35,9 @@ Future<void> runCalculatorDemo() async {
   final server = CalculatorResponder(simulatedDelayMs: 50);
   serverEndpoint.registerServiceContract(server);
 
+  // Запускаем серверный эндпоинт
+  serverEndpoint.start();
+
   // Создаем клиента
   final client = CalculatorCaller(clientEndpoint);
 

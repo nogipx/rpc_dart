@@ -67,6 +67,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
   /// Этап 2: Обрабатывает входящее сообщение от транспорта
   void _handleIncomingMessage(RpcTransportMessage message) {
+    if (!_isListening) {
+      logger.warning(
+        'Получено сообщение, но эндпоинт не запущен. Вызовите start() после регистрации контрактов.',
+      );
+      return;
+    }
+
     final streamId = message.streamId;
 
     // Обработка метаданных (заголовков) сообщения
@@ -670,11 +677,6 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       logger.info(
         'Регистрация подконтрактов для $serviceName завершена',
       );
-    }
-
-    // Автоматически запускаем прослушивание после регистрации первого контракта
-    if (!_isListening) {
-      start();
     }
   }
 
