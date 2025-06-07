@@ -4,26 +4,6 @@
 
 > **RPC библиотека на чистом Dart для типобезопасного взаимодействия между компонентами**
 
-RPC Dart — это RPC библиотека, построенная на чистом Dart, которая обеспечивает типобезопасное взаимодействие между компонентами через различные транспорты. В основной библиотеке включен InMemory транспорт для разработки, тестирования и большинства production случаев. Идеально подходит для организации больших Flutter приложений через архитектурный подход **CORD**.
-
-## Содержание
-
-- [Основные концепции](#основные-концепции)
-- [Ключевые возможности](#ключевые-возможности)
-- [CORD архитектура](#cord-архитектура)
-- [Quick Start](#quick-start)
-- [Транспорты](#транспорты)
-- [Типы RPC взаимодействий](#типы-rpc-взаимодействий)
-- [Встроенные примитивы](#встроенные-примитивы)
-- [StreamDistributor](#streamdistributor)
-- [Производительность](#производительность)
-- [Использование без контрактов](#использование-без-контрактов)
-- [Тестирование](#тестирование)
-- [Интеграция с Flutter](#интеграция-с-flutter)
-- [FAQ](#faq)
-
----
-
 ## Основные концепции
 
 **RPC Dart** построен на следующих ключевых концепциях:
@@ -37,44 +17,24 @@ RPC Dart — это RPC библиотека, построенная на чис
 
 ## Ключевые возможности
 
-- **🔄 Полная поддержка RPC паттернов** — unary calls, server streams, client streams, bidirectional streams
-- **🚀 Встроенный InMemory транспорт** — для разработки и тестирования
-- **🔒 Типобезопасность** — все запросы/ответы строго типизированы
-- **⚡ Высокая производительность** — быстрая CBOR сериализация
-- **🧪 Простое тестирование** — с InMemory транспортом и моками
-- **📦 Нулевые внешние зависимости** — только чистый Dart
-- **🎯 Встроенные примитивы** — готовые обертки для String, Int, Double, Bool, List
+- **Полная поддержка RPC паттернов** — unary calls, server streams, client streams, bidirectional streams
+- **Встроенный InMemory транспорт** — для разработки и тестирования
+- **Типобезопасность** — все запросы/ответы строго типизированы
+- **Без внешних зависимостей** — только чистый Dart
+- **Встроенные примитивы** — готовые обертки для String, Int, Double, Bool, List
+- **Простое тестирование** — с InMemory транспортом и моками
 
-## CORD архитектура
+## CORD
 
-RPC Dart поддерживает **CORD (Contract-Oriented Remote Domains)** — архитектурный подход для структурирования больших приложений через изолированные домены с типобезопасными RPC контрактами.
+RPC Dart предлагает **CORD (Contract-Oriented Remote Domains)** — архитектурный подход для структурирования бизнес-логики через изолированные домены с типобезопасными RPC контрактами.
 
-```dart
-// Домены взаимодействуют через RPC контракты
-class OrderBloc extends Bloc<OrderEvent, OrderState> {
-  final OrderCaller _orderService; // RPC клиент домена
-  
-  Future<void> createOrder(CreateOrderEvent event) async {
-    final response = await _orderService.createOrder(
-      CreateOrderRequest(items: event.items),
-    );
-    emit(OrderCreated(response.order));
-  }
-}
-```
-
-**📚 Подробнее об архитектуре:** [CORD Architecture Guide](docs/cord_architecture_overview.md)
+**📚 [Подробнее](docs/cord.md)**
 
 ## Quick Start
 
-### 1. Установка
+### [Готовые примеры использования](example/)
 
-```yaml
-dependencies:
-  rpc_dart: ^1.3.1
-```
-
-### 2. Определите контракт и модели
+### 1. Определите контракт и модели
 
 ```dart
 // Request/Response объекты реализуют IRpcSerializable
@@ -116,7 +76,7 @@ class CalculationResponse implements IRpcSerializable {
 }
 ```
 
-### 3. Создайте сервер (Responder)
+### 2. Создайте сервер (Responder)
 
 ```dart
 class CalculatorResponder extends RpcResponderContract {
@@ -165,7 +125,7 @@ class CalculatorResponder extends RpcResponderContract {
 }
 ```
 
-### 4. Создайте клиент (Caller)
+### 3. Создайте клиент (Caller)
 
 ```dart
 class CalculatorCaller extends RpcCallerContract {
@@ -200,7 +160,7 @@ class CalculatorCaller extends RpcCallerContract {
 }
 ```
 
-### 5. Запустите сервер и клиент
+### 4. Запустите сервер и клиент
 
 ```dart
 void main() async {
@@ -365,52 +325,7 @@ print('Отправлено сообщений: ${metrics.totalMessages}');
 
 **Применение:** Идеально для реализации real-time уведомлений, чатов, live обновлений и других pub/sub сценариев в серверных стримах.
 
-## Производительность
-
-**⚠️ Важно:** Производительность сильно зависит от среды выполнения, размера данных и паттернов использования. Рекомендуем запустить бенчмарки самостоятельно:
-
-```bash
-dart run benchmark/main.dart
-```
-
-Примерные результаты (могут сильно отличаться в вашей среде):
-
-| Размер данных | Сериализация | Латентность RPC | Throughput |
-|---------------|--------------|-----------------|-------------|
-| 1KB | ~0.03мс | ~150мс | ~700 RPS |
-| 10KB | ~0.05мс | ~150мс | ~580 RPS |
-| 100KB | ~0.65мс | ~150мс | ~95 RPS |
-| 1MB | ~4.3мс | ~590мс | ~6 RPS |
-
-**Примечание:** Эти цифры получены в конкретной тестовой среде и могут не отражать реальную производительность вашего приложения.
-
-## Использование без контрактов
-
-RPC методы можно использовать напрямую через Endpoint без создания контрактов:
-
-```dart
-// Прямой вызов через endpoint
-final response = await callerEndpoint.unaryRequest<AddRequest, AddResponse>(
-  serviceName: 'Calculator',
-  methodName: 'add',
-  requestCodec: AddRequest.codec,
-  responseCodec: AddResponse.codec,
-  request: AddRequest(a: 5, b: 3),
-);
-
-// Создание стрима напрямую
-final stream = callerEndpoint.serverStream<CountRequest, CountResponse>(
-  serviceName: 'Calculator', 
-  methodName: 'countTo',
-  requestCodec: CountRequest.codec,
-  responseCodec: CountResponse.codec,
-  request: CountRequest(target: 10),
-);
-```
-
 ## Тестирование
-
-RPC Dart упрощает тестирование:
 
 ```dart
 // Unit тест с моком (используйте любую мок-библиотеку)
@@ -444,63 +359,17 @@ test('full integration test', () async {
 });
 ```
 
-## Интеграция с Flutter
-
-RPC Dart отлично интегрируется с BLoC — популярным решением для Flutter state management:
-
-```dart
-class UserBloc extends Bloc<UserEvent, UserState> {
-  final UserCaller _userService;
-  
-  UserBloc(this._userService) : super(UserInitial()) {
-    on<LoadUserEvent>(_onLoadUser);
-  }
-  
-  Future<void> _onLoadUser(LoadUserEvent event, Emitter emit) async {
-    try {
-      emit(UserLoading());
-      final response = await _userService.getUser(GetUserRequest(id: event.id));
-      emit(UserLoaded(response.user));
-    } catch (e) {
-      emit(UserError(e.toString()));
-    }
-  }
-}
-```
-
-RPC Dart также совместим с другими популярными state management решениями — Provider, Riverpod, MobX и т.д.
-
 ## FAQ
-
-<details>
-<summary><strong>Чем отличается от обычных HTTP клиентов?</strong></summary>
-
-RPC Dart обеспечивает:
-- **Типобезопасность** на уровне компиляции — все ошибки выявляются до runtime
-- **Множественные транспорты** без изменения кода — можно переключаться между InMemory, Isolate, HTTP
-- **Streaming support** из коробки — server/client/bidirectional streams
-- **Унифицированный API** для различных типов взаимодействий
-- **Встроенную обработку ошибок** через gRPC-подобные статусы
-
-</details>
 
 <details>
 <summary><strong>Подходит ли для production?</strong></summary>
 
-RPC Dart предоставляет инструменты для production использования:
-- **Строгая типизация** помогает избежать runtime ошибок
-- **Обработка ошибок** через gRPC-статусы
-- **Логирование и метрики** для мониторинга
-- **Поддержка таймаутов** и graceful degradation
-
-Однако рекомендуем тщательно протестировать библиотеку в вашей конкретной среде перед production деплоем.
+Рекомендуем тщательно протестировать библиотеку в вашей конкретной среде перед production деплоем.
 
 </details>
 
 <details>
 <summary><strong>Как тестировать RPC код?</strong></summary>
-
-RPC Dart упрощает тестирование:
 
 ```dart
 // Unit тесты с моками
@@ -542,30 +411,8 @@ dart run benchmark/main.dart
 **Общие наблюдения:**
 - InMemory транспорт имеет минимальные накладные расходы
 - CBOR сериализация обычно быстрее JSON
-- HTTP транспорт добавляет сетевую латентность
+- HTTP транспорт добавляет сетевую задержку
 - Для больших данных рассмотрите streaming или chunking
-
-**Важно:** Всегда измеряйте производительность в своей конкретной среде, так как результаты могут сильно отличаться.
-
-</details>
-
-<details>
-<summary><strong>Когда использовать InMemory vs другие транспорты?</strong></summary>
-
-**InMemory Transport:**
-- ✅ Монолитные Flutter приложения
-- ✅ Unit и integration тесты
-- ✅ Быстрая разработка и прототипирование
-- ✅ Большинство production случаев с простой архитектурой
-- ❌ Изоляция CPU-интенсивных задач
-- ❌ Распределенные системы
-
-**Кастомные транспорты (создаваемые через RpcTransport интерфейс):**
-- ✅ CPU-интенсивные вычисления без блокировки UI (Isolate)
-- ✅ Изоляция критичного кода от сбоев (Isolate)
-- ✅ Микросервисная архитектура (HTTP/gRPC)
-- ✅ Распределенные системы (HTTP/gRPC)
-- ✅ Real-time взаимодействие (WebSocket)
 
 </details>
 
@@ -628,9 +475,9 @@ class OrderBloc {
 ---
 
 **Полезные ссылки:**
+- [CORD Architecture](docs/contract_oriented_remote_domains.md)
 - [RPC Dart на pub.dev](https://pub.dev/packages/rpc_dart)
 - [Исходный код на GitHub](https://github.com/nogipx/rpc_dart)
-- [CORD Architecture Guide](docs/cord_architecture_overview.md)
 - [Примеры кода](example/)
 - [Issues и поддержка](https://github.com/nogipx/rpc_dart/issues)
 
