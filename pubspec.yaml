@@ -1,6 +1,6 @@
 name: rpc_dart
-description: gRPC-inspired library built on pure Dart, Backend-for-Domain (BFD)
-version: 1.3.1
+description: gRPC-inspired library built on pure Dart
+version: 1.3.2
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://github.com/nogipx/rpc_dart
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -10,9 +10,9 @@ funding:
 topics:
   - rpc
   - grpc
-  - streaming
-  - bidirectional
-  - backend-for-domain
+  - cord
+  - contract-oriented-remote-domains
+  - streams
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
