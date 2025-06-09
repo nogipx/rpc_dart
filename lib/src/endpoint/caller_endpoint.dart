@@ -28,6 +28,12 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     required C request,
     RpcContext? context,
   }) {
+    // Проверяем активность эндпоинта
+    if (!isActive) {
+      throw StateError(
+          'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
+    }
+
     return UnaryCaller<C, R>(
       serviceName: serviceName,
       methodName: methodName,
@@ -48,6 +54,12 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     required C request,
     RpcContext? context,
   }) {
+    // Проверяем активность эндпоинта
+    if (!isActive) {
+      throw StateError(
+          'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
+    }
+
     logger.debug('Создание server stream для $serviceName/$methodName');
 
     // Создаем server stream caller с контекстом

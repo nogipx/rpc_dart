@@ -16,11 +16,7 @@ void main() async {
   logger.info('Запуск примера подконтрактов');
 
   // Создаем пару InMemoryTransport
-  final transportLogger = RpcLogger('Transport');
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair(
-    clientLogger: transportLogger,
-    serverLogger: transportLogger,
-  );
+  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
   // Создаем серверный эндпоинт
   final serverEndpoint = RpcResponderEndpoint(

@@ -80,6 +80,159 @@ class BenchmarkTestData implements IRpcSerializable {
       RpcCodec<BenchmarkTestData>(BenchmarkTestData.fromJson);
 }
 
+// --- НОВЫЕ БЕНЧМАРКИ ТОЛЬКО ДЛЯ ТРАНСПОРТА ---
+
+/// 🚀 Изолированный бенчмарк транспорта InMemory
+/// Измеряет ТОЛЬКО скорость передачи данных без сериализации
+class PureInMemoryTransportBenchmark extends benchmark.AsyncBenchmarkBase {
+  late RpcInMemoryTransport clientTransport;
+  late RpcInMemoryTransport serverTransport;
+  late Uint8List testData;
+
+  final int payloadSize;
+  final int messageCount;
+
+  PureInMemoryTransportBenchmark(this.payloadSize, this.messageCount)
+      : super('PureTransport-${_getSizeLabel(payloadSize)}',
+            emitter: TransportEmitter(payloadSize, messageCount));
+
+  @override
+  Future<void> setup() async {
+    final (client, server) = RpcInMemoryTransport.pair();
+    clientTransport = client;
+    serverTransport = server;
+
+    // Создаем тестовые данные без сериализации
+    testData = Uint8List.fromList(List.generate(payloadSize, (i) => i % 256));
+  }
+
+  @override
+  Future<void> run() async {
+    final completer = Completer<void>();
+    int receivedCount = 0;
+
+    // Подписываемся на входящие сообщения
+    final subscription = serverTransport.incomingMessages.listen((message) {
+      receivedCount++;
+      if (receivedCount >= messageCount) {
+        completer.complete();
+      }
+    });
+
+    // Отправляем сообщения максимально быстро
+    for (int i = 0; i < messageCount; i++) {
+      final streamId = clientTransport.createStream();
+      clientTransport.sendMessage(streamId, testData, endStream: true);
+    }
+
+    // Ждем получения всех сообщений
+    await completer.future;
+    await subscription.cancel();
+  }
+
+  @override
+  Future<void> teardown() async {
+    await clientTransport.close();
+    await serverTransport.close();
+  }
+
+  static String _getSizeLabel(int size) {
+    if (size < 1024) return '${size}B';
+    if (size < 1024 * 1024) return '${(size / 1024).round()}KB';
+    return '${(size / (1024 * 1024)).round()}MB';
+  }
+}
+
+/// 🔥 Микро-бенчмарк для измерения базовой задержки транспорта
+class TransportLatencyMicroBenchmark extends benchmark.AsyncBenchmarkBase {
+  late RpcInMemoryTransport clientTransport;
+  late RpcInMemoryTransport serverTransport;
+  late Uint8List testData;
+
+  TransportLatencyMicroBenchmark()
+      : super('TransportLatency-1KB', emitter: LatencyEmitter());
+
+  @override
+  Future<void> setup() async {
+    final (client, server) = RpcInMemoryTransport.pair();
+    clientTransport = client;
+    serverTransport = server;
+
+    // Минимальные тестовые данные для чистого измерения задержки
+    testData = Uint8List.fromList(List.generate(1024, (i) => i % 256));
+  }
+
+  @override
+  Future<void> run() async {
+    // Измеряем задержку одного round-trip
+    final completer = Completer<void>();
+
+    final subscription = serverTransport.incomingMessages.listen((message) {
+      completer.complete();
+    });
+
+    final streamId = clientTransport.createStream();
+    clientTransport.sendMessage(streamId, testData, endStream: true);
+
+    await completer.future;
+    await subscription.cancel();
+  }
+
+  @override
+  Future<void> teardown() async {
+    await clientTransport.close();
+    await serverTransport.close();
+  }
+}
+
+/// 📊 Эмиттер для транспортных бенчмарков
+class TransportEmitter extends benchmark.ScoreEmitter {
+  final int payloadSize;
+  final int messageCount;
+
+  TransportEmitter(this.payloadSize, this.messageCount);
+
+  @override
+  void emit(String testName, double valueUs) {
+    final valueSec = valueUs / 1000000.0;
+    final totalBytes = payloadSize * messageCount;
+    final totalMB = totalBytes / (1024 * 1024);
+    final throughputMBps = totalMB / valueSec;
+    final messagesPerSec = messageCount / valueSec;
+
+    print('🚀 === ИЗОЛИРОВАННЫЙ ТРАНСПОРТ: $testName ===');
+    print(
+        '   ⏱️  Время выполнения: ${valueUs.toStringAsFixed(0)} µs (${(valueUs / 1000).toStringAsFixed(2)} ms)');
+    print('   📦 Размер сообщения: ${_formatSize(payloadSize)}');
+    print('   📊 Количество сообщений: $messageCount');
+    print(
+        '   🚀 Пропускная способность: ${throughputMBps.toStringAsFixed(1)} MB/s');
+    print(
+        '   📈 Сообщений в секунду: ${messagesPerSec.toStringAsFixed(0)} msg/s');
+    print(
+        '   ⚡ Средняя задержка на сообщение: ${(valueUs / messageCount).toStringAsFixed(1)} µs');
+    print('');
+  }
+
+  String _formatSize(int bytes) {
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).round()}KB';
+    return '${(bytes / (1024 * 1024)).round()}MB';
+  }
+}
+
+/// ⚡ Эмиттер для латентности
+class LatencyEmitter extends benchmark.ScoreEmitter {
+  @override
+  void emit(String testName, double valueUs) {
+    print('⚡ === БАЗОВАЯ ЗАДЕРЖКА ТРАНСПОРТА: $testName ===');
+    print(
+        '   🎯 Задержка round-trip: ${valueUs.toStringAsFixed(1)} µs (${(valueUs / 1000).toStringAsFixed(3)} ms)');
+    print('   📊 Это ЧИСТАЯ задержка InMemory транспорта без сериализации');
+    print('');
+  }
+}
+
 // --- Эмиттер остается тот же, что и в предыдущем файле ---
 class MyScoreEmitter extends benchmark.ScoreEmitter {
   final String benchmarkName;
@@ -238,6 +391,33 @@ class FullStackRpcBenchmarkSuite {
 
     print('=== СТРЕСС-ТЕСТЫ RPC СТЕКА ===\n');
 
+    // 🚀 НОВЫЕ ИЗОЛИРОВАННЫЕ ТЕСТЫ ТРАНСПОРТА
+    print('🔬 === ИЗОЛИРОВАННЫЕ ТЕСТЫ InMemory ТРАНСПОРТА ===\n');
+
+    // Тест базовой задержки транспорта
+    print('⚡ Тест базовой задержки транспорта...');
+    final latencyBench = TransportLatencyMicroBenchmark();
+    latencyBench.report();
+
+    // Тесты пропускной способности транспорта для разных размеров
+    final transportSizes = [
+      (1024, 1000), // 1KB x 1000 = 1MB
+      (10 * 1024, 500), // 10KB x 500 = 5MB
+      (100 * 1024, 100), // 100KB x 100 = 10MB
+      (1024 * 1024, 50), // 1MB x 50 = 50MB
+    ];
+
+    for (final (size, count) in transportSizes) {
+      print(
+          '🚀 Тест транспорта: ${PureInMemoryTransportBenchmark._getSizeLabel(size)} x $count сообщений...');
+      final transportBench = PureInMemoryTransportBenchmark(size, count);
+      transportBench.report();
+    }
+
+    print('🔬 === КОНЕЦ ИЗОЛИРОВАННЫХ ТЕСТОВ ===\n');
+
+    print('📊 === ПОЛНЫЕ RPC ТЕСТЫ (с сериализацией) ===\n');
+
     // Разумные размеры для стресс-тестирования
     final testSizes = [
       (1 * 1024, 'Small (1KB)'), // Базовый
@@ -270,9 +450,15 @@ class FullStackRpcBenchmarkSuite {
         final deserializeOnlyBench = DeserializeOnlyBenchmark(size, label);
         deserializeOnlyBench.report();
 
+        // Тест одиночной RPC задержки (более точный)
+        print('  🎯 Тест одиночной RPC задержки...');
+        final singleLatencyBench = SingleRpcLatencyBenchmark(size, label);
+        singleLatencyBench.report();
+
         // Тест задержки (меньше запросов для больших размеров)
         final latencyRequestCount = size > 512 * 1024 ? 5 : 10;
-        print('  ⚡ Тест задержки ($latencyRequestCount запросов)...');
+        print(
+            '  ⚡ Тест множественной задержки ($latencyRequestCount запросов)...');
         final latencyBench = LatencyBenchmark(size, label, latencyRequestCount);
         latencyBench.report();
 
@@ -371,12 +557,7 @@ abstract class BaseBenchmark extends benchmark.AsyncBenchmarkBase {
   @override
   Future<void> setup() async {
     // Создаем транспорты с увеличенными буферами для больших данных
-    final maxBufferSize =
-        math.max(payloadSize * 2, 100 * 1024 * 1024); // Минимум 100MB
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair(
-      initialFlowControlWindow: maxBufferSize,
-      maxFlowControlWindow: maxBufferSize,
-    );
+    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
     // Создаем эндпоинты
     clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
@@ -436,6 +617,19 @@ class LatencyBenchmark extends BaseBenchmark {
     for (int i = 0; i < _requestCount; i++) {
       await client.echo(testData);
     }
+  }
+}
+
+/// 🎯 Корректный бенчмарк RPC задержки (один запрос)
+/// Измеряет реальную задержку RPC call'а включая сериализацию
+class SingleRpcLatencyBenchmark extends BaseBenchmark {
+  SingleRpcLatencyBenchmark(int payloadSize, String sizeLabel)
+      : super('SingleRPC-$sizeLabel', payloadSize, sizeLabel);
+
+  @override
+  Future<void> run() async {
+    // Измеряем один RPC call для получения реальной latency
+    await client.echo(testData);
   }
 }
 
@@ -574,6 +768,10 @@ class BenchmarkEmitter extends benchmark.ScoreEmitter {
           '      🚀 Пропускная способность: ${throughputMBps.toStringAsFixed(1)} MB/s');
       print('      📈 Запросов в секунду: ${rps.toStringAsFixed(0)} RPS');
       print('      📊 Общий объем: ${totalDataMB.toStringAsFixed(1)} MB');
+    } else if (benchmarkType.startsWith('SingleRPC')) {
+      print(
+          '      🎯 Одиночная RPC задержка: ${valueMs.toStringAsFixed(2)} ms');
+      print('      📊 Включает сериализацию + транспорт + десериализацию');
     } else if (benchmarkType.startsWith('Latency')) {
       final requestCount = _getLatencyRequestCount();
       final avgLatencyMs = valueMs / requestCount;

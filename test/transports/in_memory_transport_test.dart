@@ -402,4 +402,54 @@ void main() {
       });
     });
   });
+
+  group('Автоматическое закрытие партнера', () {
+    test('при закрытии клиентского транспорта закрывается серверный', () async {
+      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+
+      // Проверяем, что оба транспорта активны
+      expect(clientTransport.isClosed, isFalse);
+      expect(serverTransport.isClosed, isFalse);
+
+      // Закрываем клиентский транспорт
+      await clientTransport.close();
+
+      // Проверяем, что оба транспорта закрыты
+      expect(clientTransport.isClosed, isTrue);
+      expect(serverTransport.isClosed, isTrue);
+    });
+
+    test('при закрытии серверного транспорта закрывается клиентский', () async {
+      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+
+      // Проверяем, что оба транспорта активны
+      expect(clientTransport.isClosed, isFalse);
+      expect(serverTransport.isClosed, isFalse);
+
+      // Закрываем серверный транспорт
+      await serverTransport.close();
+
+      // Проверяем, что оба транспорта закрыты
+      expect(clientTransport.isClosed, isTrue);
+      expect(serverTransport.isClosed, isTrue);
+    });
+
+    test('повторное закрытие не вызывает ошибок', () async {
+      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+
+      // Закрываем оба транспорта одновременно
+      await Future.wait([
+        clientTransport.close(),
+        serverTransport.close(),
+      ]);
+
+      // Проверяем, что оба транспорта закрыты
+      expect(clientTransport.isClosed, isTrue);
+      expect(serverTransport.isClosed, isTrue);
+
+      // Повторное закрытие не должно вызывать ошибок
+      await clientTransport.close();
+      await serverTransport.close();
+    });
+  });
 }

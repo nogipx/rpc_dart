@@ -25,16 +25,7 @@ class UnaryRpcExample {
 
     // Создаем одну пару соединенных транспортов для всех методов
     print('ИНИЦИАЛИЗАЦИЯ: Создание транспортов и регистрация сервисов');
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair(
-      clientLogger: RpcLogger(
-        "ClientTransport",
-        colors: RpcLoggerColors.singleColor(AnsiColor.brightBlue),
-      ),
-      serverLogger: RpcLogger(
-        "ServerTransport",
-        colors: RpcLoggerColors.singleColor(AnsiColor.brightYellow),
-      ),
-    );
+    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
     // Создаем сериализатор для строк
     final stringSerializer = RpcCodec(RpcString.fromJson);
