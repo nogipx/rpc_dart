@@ -19,13 +19,14 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     super.loggerColors,
   });
 
-  /// Создает унарный request builder
+  /// Создает унарный request builder с поддержкой контекста
   Future<R> unaryRequest<C, R>({
     required String serviceName,
     required String methodName,
     required IRpcCodec<C> requestCodec,
     required IRpcCodec<R> responseCodec,
     required C request,
+    RpcContext? context,
   }) {
     return UnaryCaller<C, R>(
       serviceName: serviceName,
@@ -33,6 +34,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       transport: transport,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
+      context: context,
     ).call(request);
   }
 

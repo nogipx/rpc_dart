@@ -44,6 +44,9 @@ final class UnaryCaller<TRequest, TResponse> {
   /// Сериализатор ответов
   final IRpcCodec<TResponse> _responseSerializer;
 
+  /// RPC контекст для передачи метаданных, таймаутов и отмены
+  final RpcContext? _context;
+
   /// Логгер
   late final RpcLogger? _logger;
 
@@ -57,6 +60,7 @@ final class UnaryCaller<TRequest, TResponse> {
   /// [methodName] Имя метода (например, "SayHello")
   /// [requestCodec] Кодек для сериализации запроса
   /// [responseCodec] Кодек для десериализации ответа
+  /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
   /// [logger] Опциональный логгер
   UnaryCaller({
     required IRpcTransport transport,
@@ -64,25 +68,37 @@ final class UnaryCaller<TRequest, TResponse> {
     required String methodName,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
+    RpcContext? context,
     RpcLogger? logger,
   })  : _transport = transport,
         _serviceName = serviceName,
         _methodName = methodName,
         _requestSerializer = requestCodec,
-        _responseSerializer = responseCodec {
+        _responseSerializer = responseCodec,
+        _context = context {
     _logger = logger?.child('UnaryCaller');
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
-    _logger?.info('Создан унарный клиент для $_methodPath');
+    _logger?.info(
+        'Создан унарный клиент для $_methodPath${_context != null ? ' с контекстом' : ''}');
   }
 
   /// Выполняет унарный вызов
   ///
   /// [request] Объект запроса
-  /// [timeout] Таймаут вызова (опционально)
+  /// [timeout] Таймаут вызова (опционально, если не задан - использует из контекста)
   /// Возвращает ответ сервера
-  Future<TResponse> call(TRequest request,
-      {Duration timeout = const Duration(seconds: 30)}) async {
+  Future<TResponse> call(TRequest request, {Duration? timeout}) async {
+    // Проверяем отмену и deadline в контексте
+    _checkContextBeforeCall();
+
+    // Определяем timeout: из параметра, контекста или по умолчанию
+    final remainingTime = _context?.remainingTime;
+    final effectiveTimeout = timeout ??
+        (remainingTime != null && !remainingTime.isNegative
+            ? remainingTime
+            : null) ??
+        const Duration(seconds: 30);
     // Создаем новый stream для этого вызова
     final streamId = _transport.createStream();
 
@@ -163,12 +179,32 @@ final class UnaryCaller<TRequest, TResponse> {
         },
       );
 
-      // Отправляем метаданные инициализации
+      // Отправляем метаданные инициализации с заголовками из контекста
       _logger?.debug('Отправка начальных метаданных [streamId: $streamId]');
-      await _transport.sendMetadata(
-        streamId,
-        RpcMetadata.forClientRequest(_serviceName, _methodName),
-      );
+      final baseMetadata =
+          RpcMetadata.forClientRequest(_serviceName, _methodName);
+
+      // Создаем новые метаданные с заголовками из контекста
+      final headers = List<RpcHeader>.from(baseMetadata.headers);
+
+      if (_context != null) {
+        // Добавляем пользовательские заголовки из контекста
+        for (final entry in _context!.headers.entries) {
+          headers.add(RpcHeader(entry.key, entry.value));
+        }
+
+        // Добавляем специальные заголовки RPC
+        if (_context!.traceId != null) {
+          headers.add(RpcHeader('x-trace-id', _context!.traceId!));
+        }
+        headers.add(RpcHeader('x-request-id', _context!.requestId));
+
+        _logger?.debug(
+            'Добавлены заголовки контекста: ${_context!.headers.length} пользовательских + системные');
+      }
+
+      final metadata = RpcMetadata(headers);
+      await _transport.sendMetadata(streamId, metadata);
 
       // Сериализуем и отправляем запрос
       _logger?.debug('Сериализация запроса [streamId: $streamId]');
@@ -186,15 +222,16 @@ final class UnaryCaller<TRequest, TResponse> {
 
       // Ждем ответ с таймаутом, если указан
       _logger?.debug(
-        'Установлен таймаут ожидания ответа: $timeout [streamId: $streamId]',
+        'Установлен таймаут ожидания ответа: $effectiveTimeout [streamId: $streamId]',
       );
       return await completer.future.timeout(
-        timeout,
+        effectiveTimeout,
         onTimeout: () {
           _logger?.error(
-            'Тайм-аут ожидания ответа: $timeout [streamId: $streamId]',
+            'Тайм-аут ожидания ответа: $effectiveTimeout [streamId: $streamId]',
           );
-          throw TimeoutException('Call timeout: $timeout', timeout);
+          throw TimeoutException(
+              'Call timeout: $effectiveTimeout', effectiveTimeout);
         },
       );
     } catch (e, stackTrace) {
@@ -217,5 +254,24 @@ final class UnaryCaller<TRequest, TResponse> {
   Future<void> close() async {
     // Клиент не владеет транспортом, поэтому не закрываем его
     _logger?.info('Унарный клиент $_methodPath закрыт');
+  }
+
+  /// Проверяет контекст перед выполнением вызова
+  void _checkContextBeforeCall() {
+    if (_context == null) return;
+
+    // Проверяем отмену
+    _context!.cancellationToken?.throwIfCancelled();
+
+    // Проверяем deadline
+    if (_context!.isExpired) {
+      throw RpcDeadlineExceededException(
+        _context!.deadline!,
+        Duration.zero,
+      );
+    }
+
+    _logger?.debug(
+        'Контекст проверен: requestId=${_context!.requestId}, traceId=${_context!.traceId}');
   }
 }

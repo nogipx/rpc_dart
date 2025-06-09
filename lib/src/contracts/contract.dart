@@ -167,8 +167,7 @@ abstract base class RpcCallerContract implements IRpcContract {
   /// Получает endpoint, используемый для отправки запросов
   RpcCallerEndpoint get endpoint => _endpoint;
 
-  /// Выполняет унарный вызов с контекстом (будет реализовано после обновления endpoint)
-  /*
+  /// Выполняет унарный вызов с контекстом
   Future<TResponse> callUnary<TRequest extends IRpcSerializable,
       TResponse extends IRpcSerializable>({
     required String methodName,
@@ -186,5 +185,4 @@ abstract base class RpcCallerContract implements IRpcContract {
       context: context,
     );
   }
-  */
 }

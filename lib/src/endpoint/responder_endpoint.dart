@@ -326,9 +326,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: i.method.requestCodec,
       responseCodec: i.method.responseCodec,
       handler: (request) async {
+        // Создаем контекст из метаданных запроса
+        final context = _createContextFromMessage(i.message ??
+            RpcTransportMessage(
+              streamId: i.streamId,
+              methodPath: '/${i.serviceName}/${i.methodName}',
+            ));
+
         // Используем типизированный wrapper для безопасного вызова
         final typedRequest = request as dynamic; // Dart runtime cast
-        final response = await i.method.callUnaryHandler(typedRequest);
+        final response = await i.method.callUnaryHandler(context, typedRequest);
         return i.method.castResponse(response);
       },
       logger: logger,
@@ -374,9 +381,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: i.method.requestCodec,
       responseCodec: i.method.responseCodec,
       handler: (Stream<IRpcSerializable> requests) async {
+        // Создаем контекст из метаданных запроса
+        final context = _createContextFromMessage(i.message ??
+            RpcTransportMessage(
+              streamId: i.streamId,
+              methodPath: '/${i.serviceName}/${i.methodName}',
+            ));
+
         // Используем типизированные wrapper'ы для безопасного вызова
         final typedRequests = i.method.castRequestStream(requests);
-        final response = await i.method.callClientStreamHandler(typedRequests);
+        final response =
+            await i.method.callClientStreamHandler(context, typedRequests);
         return i.method.castResponse(response);
       },
       logger: logger,
@@ -429,9 +444,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: i.method.requestCodec,
       responseCodec: i.method.responseCodec,
       handler: (request) {
+        // Создаем контекст из метаданных запроса
+        final context = _createContextFromMessage(i.message ??
+            RpcTransportMessage(
+              streamId: i.streamId,
+              methodPath: '/${i.serviceName}/${i.methodName}',
+            ));
+
         // Используем типизированный wrapper для безопасного вызова
         final typedRequest = request as dynamic; // Dart runtime cast
-        final responseStream = i.method.callServerStreamHandler(typedRequest);
+        final responseStream =
+            i.method.callServerStreamHandler(context, typedRequest);
         // Кастим поток ответов к базовому типу
         return responseStream
             .map((response) => i.method.castResponse(response));
@@ -583,10 +606,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         logger
             .debug('Вызов пользовательского обработчика [id: ${responder.id}]');
 
+        // Создаем контекст для bidirectional stream (будет обновлен позже с метаданными)
+        final context = RpcContext.empty();
+
         // Используем типизированные wrapper'ы для безопасного вызова
         final typedRequests = method.castRequestStream(responder.requests);
         final responseStream =
-            method.callBidirectionalStreamHandler(typedRequests);
+            method.callBidirectionalStreamHandler(context, typedRequests);
 
         logger.debug(
             'Получен поток ответов от обработчика [id: ${responder.id}]');
@@ -701,6 +727,35 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         'а ожидается ${expectedType.name}',
       );
     }
+  }
+
+  /// Создает RpcContext из входящего сообщения
+  RpcContext _createContextFromMessage(RpcTransportMessage message) {
+    final headers = <String, String>{};
+
+    // Извлекаем заголовки из метаданных, если они есть
+    if (message.metadata != null) {
+      for (final header in message.metadata!.headers) {
+        // Пропускаем системные HTTP/2 заголовки
+        if (!header.name.startsWith(':') &&
+            header.name != 'content-type' &&
+            header.name != 'te') {
+          headers[header.name] = header.value;
+        }
+      }
+    }
+
+    // Создаем контекст с заголовками
+    final context = RpcContext.withHeaders(headers);
+
+    // Извлекаем специальные заголовки
+    final traceId = headers['x-trace-id'];
+
+    if (traceId != null) {
+      return context.withTraceId(traceId);
+    }
+
+    return context;
   }
 
   @override
