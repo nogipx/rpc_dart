@@ -237,7 +237,7 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
       await Future.delayed(Duration(milliseconds: 10));
 
       if (i % 20 == 0) {
-        logger.debug('📊 Прогресс: ${i}%');
+        logger.debug('📊 Прогресс: $i%');
       }
     }
 

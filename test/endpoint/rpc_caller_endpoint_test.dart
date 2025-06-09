@@ -49,7 +49,7 @@ final class TestService extends RpcResponderContract {
   void setup() {
     addUnaryMethod<TestRequest, TestResponse>(
       methodName: 'UnaryMethod',
-      handler: (request) async {
+      handler: (context, request) async {
         callLog.add('UnaryMethod: ${request.message}');
         return TestResponse('Reply to: ${request.message}');
       },
@@ -59,7 +59,7 @@ final class TestService extends RpcResponderContract {
 
     addServerStreamMethod<TestRequest, TestResponse>(
       methodName: 'ServerStreamMethod',
-      handler: (request) async* {
+      handler: (context, request) async* {
         callLog.add('ServerStreamMethod: ${request.message}');
         for (int i = 0; i < 3; i++) {
           yield TestResponse('Reply ${i + 1} to: ${request.message}');
@@ -72,7 +72,7 @@ final class TestService extends RpcResponderContract {
 
     addClientStreamMethod<TestRequest, TestResponse>(
       methodName: 'ClientStreamMethod',
-      handler: (Stream<TestRequest> requests) async {
+      handler: (context, Stream<TestRequest> requests) async {
         final messages = <String>[];
 
         await for (final request in requests) {
@@ -88,7 +88,7 @@ final class TestService extends RpcResponderContract {
 
     addBidirectionalMethod<TestRequest, TestResponse>(
       methodName: 'BidirectionalMethod',
-      handler: (Stream<TestRequest> requests) async* {
+      handler: (context, Stream<TestRequest> requests) async* {
         callLog.add('BidirectionalMethod: начат');
 
         await for (final request in requests) {

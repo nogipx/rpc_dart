@@ -41,10 +41,6 @@ void main() async {
   final mainContract = MainServiceContract();
   serverEndpoint.registerServiceContract(mainContract);
 
-  // Запускаем серверный эндпоинт
-  logger.info('Запуск серверного эндпоинта');
-  serverEndpoint.start();
-
   // Создаем клиентский контракт
   final caller = MainServiceCallerContract(clientEndpoint);
 
@@ -77,13 +73,8 @@ void main() async {
 // СЕРВЕРНЫЕ КОНТРАКТЫ
 //
 
-abstract interface class IMainServiceContract implements IRpcContract {
-  Future<RpcString> getMessage(RpcString message);
-}
-
 /// Основной контракт сервиса
-final class MainServiceContract extends RpcResponderContract
-    implements IMainServiceContract {
+final class MainServiceContract extends RpcResponderContract {
   final UserServiceContract user;
   final NotificationServiceContract notification;
 
@@ -101,17 +92,18 @@ final class MainServiceContract extends RpcResponderContract
     // Регистрируем методы основного контракта
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'GetMessage',
-      handler: getMessage,
+      handler: _getMessage,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Получает сообщение',
     );
   }
 
-  @override
-  Future<RpcString> getMessage(RpcString message) async {
+  Future<RpcString> _getMessage(RpcContext context, RpcString message) async {
     final logger = RpcLogger('MainServiceHandler');
     logger.info('Получен запрос: ${message.value}');
+    logger.info(
+        'Контекст: trace=${context.traceId}, request=${context.requestId}');
 
     final response = RpcString('Вы отправили: ${message.value}');
     logger.info('Отправляем ответ: ${response.value}');
@@ -119,13 +111,8 @@ final class MainServiceContract extends RpcResponderContract
   }
 }
 
-abstract interface class IUserServiceContract implements IRpcContract {
-  Future<UserResponse> getUser(RpcInt id);
-}
-
 /// Подконтракт для работы с пользователями
-final class UserServiceContract extends RpcResponderContract
-    implements IUserServiceContract {
+final class UserServiceContract extends RpcResponderContract {
   UserServiceContract() : super('UserService');
 
   @override
@@ -133,18 +120,19 @@ final class UserServiceContract extends RpcResponderContract
     // Регистрируем методы подконтракта пользователей
     addUnaryMethod<RpcInt, UserResponse>(
       methodName: 'GetUser',
-      handler: getUser,
+      handler: _getUser,
       requestCodec: RpcInt.codec,
       responseCodec: RpcCodec(UserResponse.fromJson),
       description: 'Получает информацию о пользователе по ID',
     );
   }
 
-  @override
-  Future<UserResponse> getUser(RpcInt id) async {
+  Future<UserResponse> _getUser(RpcContext context, RpcInt id) async {
     final logger = RpcLogger('UserServiceHandler');
     final idValue = id.value;
     logger.info('Получен запрос на информацию о пользователе $idValue');
+    logger.info(
+        'Контекст: trace=${context.traceId}, request=${context.requestId}');
 
     // Имитируем получение данных из БД
     final response = UserResponse(id: idValue, name: 'Пользователь #$idValue');
@@ -154,13 +142,8 @@ final class UserServiceContract extends RpcResponderContract
   }
 }
 
-abstract interface class INotificationServiceContract implements IRpcContract {
-  Future<RpcBool> sendNotification(RpcString message);
-}
-
 /// Подконтракт для отправки уведомлений
-final class NotificationServiceContract extends RpcResponderContract
-    implements INotificationServiceContract {
+final class NotificationServiceContract extends RpcResponderContract {
   NotificationServiceContract() : super('NotificationService');
 
   @override
@@ -168,17 +151,19 @@ final class NotificationServiceContract extends RpcResponderContract
     // Регистрируем методы подконтракта уведомлений
     addUnaryMethod<RpcString, RpcBool>(
       methodName: 'SendNotification',
-      handler: sendNotification,
+      handler: _sendNotification,
       requestCodec: RpcString.codec,
       responseCodec: RpcBool.codec,
       description: 'Отправляет уведомление',
     );
   }
 
-  @override
-  Future<RpcBool> sendNotification(RpcString message) async {
+  Future<RpcBool> _sendNotification(
+      RpcContext context, RpcString message) async {
     final logger = RpcLogger('NotificationServiceHandler');
     logger.info('Отправка уведомления: ${message.value}');
+    logger.info(
+        'Контекст: trace=${context.traceId}, request=${context.requestId}');
     return const RpcBool(true);
   }
 }
@@ -188,8 +173,7 @@ final class NotificationServiceContract extends RpcResponderContract
 //
 
 /// Основной клиентский контракт
-final class MainServiceCallerContract extends RpcCallerContract
-    implements IMainServiceContract {
+final class MainServiceCallerContract extends RpcCallerContract {
   final UserServiceCallerContract user;
   final NotificationServiceCallerContract notification;
 
@@ -198,52 +182,48 @@ final class MainServiceCallerContract extends RpcCallerContract
         notification = NotificationServiceCallerContract(endpoint),
         super('MainService', endpoint);
 
-  @override
-  Future<RpcString> getMessage(RpcString message) async {
-    return await endpoint.unaryRequest<RpcString, RpcString>(
-      serviceName: serviceName,
+  Future<RpcString> getMessage(RpcString message, {RpcContext? context}) async {
+    return await callUnary<RpcString, RpcString>(
       methodName: 'GetMessage',
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       request: message,
+      context: context,
     );
   }
 }
 
 /// Клиентский подконтракт для работы с пользователями
-final class UserServiceCallerContract extends RpcCallerContract
-    implements IUserServiceContract {
+final class UserServiceCallerContract extends RpcCallerContract {
   UserServiceCallerContract(RpcCallerEndpoint endpoint)
       : super('UserService', endpoint);
 
   /// Получает информацию о пользователе по ID
-  @override
-  Future<UserResponse> getUser(RpcInt userId) async {
-    return await endpoint.unaryRequest<RpcInt, UserResponse>(
-      serviceName: serviceName,
+  Future<UserResponse> getUser(RpcInt userId, {RpcContext? context}) async {
+    return await callUnary<RpcInt, UserResponse>(
       methodName: 'GetUser',
       requestCodec: RpcInt.codec,
       responseCodec: RpcCodec(UserResponse.fromJson),
       request: userId,
+      context: context,
     );
   }
 }
 
 /// Клиентский подконтракт для отправки уведомлений
-final class NotificationServiceCallerContract extends RpcCallerContract
-    implements INotificationServiceContract {
+final class NotificationServiceCallerContract extends RpcCallerContract {
   NotificationServiceCallerContract(RpcCallerEndpoint endpoint)
       : super('NotificationService', endpoint);
 
   /// Отправляет уведомление
-  @override
-  Future<RpcBool> sendNotification(RpcString message) async {
-    return await endpoint.unaryRequest<RpcString, RpcBool>(
-      serviceName: serviceName,
+  Future<RpcBool> sendNotification(RpcString message,
+      {RpcContext? context}) async {
+    return await callUnary<RpcString, RpcBool>(
       methodName: 'SendNotification',
       requestCodec: RpcString.codec,
       responseCodec: RpcBool.codec,
       request: message,
+      context: context,
     );
   }
 }

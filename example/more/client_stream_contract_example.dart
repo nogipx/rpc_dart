@@ -4,28 +4,26 @@
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-/// Пример использования Client Stream через контракты
+/// Пример использования Client Stream RPC
 ///
-/// Демонстрирует правильный способ создания Client Stream
-/// методов с использованием RpcResponderContract и RpcCallerContract
+/// Демонстрирует, как клиент может отправлять поток данных серверу,
+/// а сервер обрабатывает их и возвращает единственный результат.
 void main() async {
-  RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+  print('=== Пример Client Stream RPC ===\n');
 
-  print('\n=== Client Stream через контракты ===\n');
-
-  // Создаем транспорты
+  // Создаем пару InMemoryTransport для тестирования
   final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-  // Создаем серверный эндпоинт и регистрируем контракт
+  // Создаем серверный эндпоинт
   final serverEndpoint = RpcResponderEndpoint(
     transport: serverTransport,
     debugLabel: 'Server',
     loggerColors: RpcLoggerColors.singleColor(AnsiColor.cyan),
   );
 
-  final serverContract = DataAggregatorResponder();
-  serverEndpoint.registerServiceContract(serverContract);
-  serverEndpoint.start(); // Явно запускаем!
+  // Создаем серверный контракт и регистрируем его
+  final server = DataAggregatorResponder();
+  serverEndpoint.registerServiceContract(server);
 
   // Создаем клиентский эндпоинт
   final clientEndpoint = RpcCallerEndpoint(
@@ -48,8 +46,13 @@ void main() async {
 
     print('КЛИЕНТ: Отправляем поток данных для агрегации...');
 
+    // Создаем контекст с trace ID для отслеживания
+    final context = RpcContext.empty()
+        .withTraceId('client-stream-trace-123')
+        .withValue('user-id', 'user-456');
+
     // Вызываем client stream метод через контракт
-    final result = await client.aggregateData(dataChunks);
+    final result = await client.aggregateData(dataChunks, context: context);
 
     print('КЛИЕНТ: Результат агрегации:');
     print('  - Обработано чанков: ${result.processedCount}');
@@ -70,42 +73,42 @@ void main() async {
 }
 
 //
-// ИНТЕРФЕЙС КОНТРАКТА
-//
-
-abstract interface class IDataAggregatorContract implements IRpcContract {
-  /// Client Stream метод: получает поток данных и возвращает агрегированный результат
-  Future<AggregationResult> aggregateData(Stream<DataChunk> dataChunks);
-}
-
-//
 // СЕРВЕРНЫЙ КОНТРАКТ
 //
 
-final class DataAggregatorResponder extends RpcResponderContract
-    implements IDataAggregatorContract {
+final class DataAggregatorResponder extends RpcResponderContract {
   DataAggregatorResponder() : super('DataAggregatorService');
 
   @override
   void setup() {
     addClientStreamMethod<DataChunk, AggregationResult>(
       methodName: 'aggregateData',
-      handler: aggregateData,
+      handler: _aggregateData,
       requestCodec: DataChunk.codec,
       responseCodec: AggregationResult.codec,
       description: 'Агрегирует поток данных в один результат',
     );
   }
 
-  @override
-  Future<AggregationResult> aggregateData(Stream<DataChunk> dataChunks) async {
+  Future<AggregationResult> _aggregateData(
+      RpcContext context, Stream<DataChunk> dataChunks) async {
     print('СЕРВЕР: Начинаем агрегацию данных...');
+    print(
+        'СЕРВЕР: Контекст - trace: ${context.traceId}, request: ${context.requestId}');
+
+    final userId = context.getValue<String>('user-id');
+    if (userId != null) {
+      print('СЕРВЕР: Обрабатываем данные для пользователя: $userId');
+    }
 
     final chunks = <DataChunk>[];
     int totalDataSize = 0;
 
     // Обрабатываем поток данных
     await for (final chunk in dataChunks) {
+      // Проверяем не отменен ли запрос
+      context.cancellationToken?.throwIfCancelled();
+
       print('СЕРВЕР: Получен чанк #${chunk.id}: "${chunk.data}"');
       chunks.add(chunk);
       totalDataSize += chunk.data.length;
@@ -132,14 +135,12 @@ final class DataAggregatorResponder extends RpcResponderContract
 // КЛИЕНТСКИЙ КОНТРАКТ
 //
 
-final class DataAggregatorCaller extends RpcCallerContract
-    implements IDataAggregatorContract {
+final class DataAggregatorCaller extends RpcCallerContract {
   DataAggregatorCaller(RpcCallerEndpoint endpoint)
       : super('DataAggregatorService', endpoint);
 
-  @override
-  Future<AggregationResult> aggregateData(Stream<DataChunk> dataChunks) async {
-    // Используем clientStream метод эндпоинта
+  Future<AggregationResult> aggregateData(Stream<DataChunk> dataChunks,
+      {RpcContext? context}) async {
     final clientStreamBuilder =
         endpoint.clientStream<DataChunk, AggregationResult>(
       serviceName: serviceName,
@@ -149,7 +150,6 @@ final class DataAggregatorCaller extends RpcCallerContract
       requests: dataChunks,
     );
 
-    // Выполняем запрос
     return await clientStreamBuilder();
   }
 }

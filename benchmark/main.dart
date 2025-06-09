@@ -136,7 +136,10 @@ final class BenchmarkResponderContract extends RpcResponderContract {
     );
   }
 
-  Future<BenchmarkTestData> _echoHandler(BenchmarkTestData request) async {
+  Future<BenchmarkTestData> _echoHandler(
+    RpcContext context,
+    BenchmarkTestData request,
+  ) async {
     // Просто возвращаем то, что пришло
     return request;
   }
