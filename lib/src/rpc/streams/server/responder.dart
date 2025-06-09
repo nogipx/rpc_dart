@@ -102,9 +102,6 @@ final class ServerStreamResponder<TRequest extends IRpcSerializable,
               await _processor.send(response);
               _logger?.debug(
                   'Ответ #$responseCount успешно отправлен клиенту [id: $id]');
-
-              // Небольшая задержка для стабильности передачи данных
-              await Future.delayed(Duration(milliseconds: 1));
             } catch (e, stackTrace) {
               _logger?.error(
                 'Ошибка при отправке ответа #$responseCount клиенту [id: $id]',

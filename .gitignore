@@ -12,3 +12,4 @@ coverage/
 *.pem
 .vscode/
 .docs/
+*.json
