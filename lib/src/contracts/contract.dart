@@ -43,12 +43,13 @@ abstract base class RpcResponderContract implements IRpcContract {
   List<RpcResponderContract> get subcontracts =>
       List.unmodifiable(_subcontracts);
 
-  /// Регистрирует унарный метод
+  /// Регистрирует унарный метод с поддержкой контекста
   /// TRequest и TResponse должны реализовывать IRpcSerializable!
+  /// Handler принимает RpcContext как первый параметр
   void addUnaryMethod<TRequest extends IRpcSerializable,
       TResponse extends IRpcSerializable>({
     required String methodName,
-    required Future<TResponse> Function(TRequest) handler,
+    required Future<TResponse> Function(RpcContext, TRequest) handler,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     String description = '',
@@ -63,12 +64,37 @@ abstract base class RpcResponderContract implements IRpcContract {
     );
   }
 
-  /// Регистрирует серверный стрим
+  /// Регистрирует унарный метод БЕЗ контекста (для обратной совместимости)
   /// TRequest и TResponse должны реализовывать IRpcSerializable!
+  void addUnaryMethodLegacy<TRequest extends IRpcSerializable,
+      TResponse extends IRpcSerializable>({
+    required String methodName,
+    required Future<TResponse> Function(TRequest) handler,
+    required IRpcCodec<TRequest> requestCodec,
+    required IRpcCodec<TResponse> responseCodec,
+    String description = '',
+  }) {
+    // Оборачиваем старый handler в новый формат
+    Future<TResponse> wrappedHandler(RpcContext context, TRequest request) {
+      return handler(request);
+    }
+
+    addUnaryMethod<TRequest, TResponse>(
+      methodName: methodName,
+      handler: wrappedHandler,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      description: description,
+    );
+  }
+
+  /// Регистрирует серверный стрим с поддержкой контекста
+  /// TRequest и TResponse должны реализовывать IRpcSerializable!
+  /// Handler принимает RpcContext как первый параметр
   void addServerStreamMethod<TRequest extends IRpcSerializable,
       TResponse extends IRpcSerializable>({
     required String methodName,
-    required Stream<TResponse> Function(TRequest) handler,
+    required Stream<TResponse> Function(RpcContext, TRequest) handler,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     String description = '',
@@ -83,12 +109,13 @@ abstract base class RpcResponderContract implements IRpcContract {
     );
   }
 
-  /// Регистрирует клиентский стрим
+  /// Регистрирует клиентский стрим с поддержкой контекста
   /// TRequest и TResponse должны реализовывать IRpcSerializable!
+  /// Handler принимает RpcContext как первый параметр
   void addClientStreamMethod<TRequest extends IRpcSerializable,
       TResponse extends IRpcSerializable>({
     required String methodName,
-    required Future<TResponse> Function(Stream<TRequest>) handler,
+    required Future<TResponse> Function(RpcContext, Stream<TRequest>) handler,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     String description = '',
@@ -103,12 +130,13 @@ abstract base class RpcResponderContract implements IRpcContract {
     );
   }
 
-  /// Регистрирует двунаправленный стрим
+  /// Регистрирует двунаправленный стрим с поддержкой контекста
   /// TRequest и TResponse должны реализовывать IRpcSerializable!
+  /// Handler принимает RpcContext как первый параметр
   void addBidirectionalMethod<TRequest extends IRpcSerializable,
       TResponse extends IRpcSerializable>({
     required String methodName,
-    required Stream<TResponse> Function(Stream<TRequest>) handler,
+    required Stream<TResponse> Function(RpcContext, Stream<TRequest>) handler,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     String description = '',
@@ -138,4 +166,25 @@ abstract base class RpcCallerContract implements IRpcContract {
 
   /// Получает endpoint, используемый для отправки запросов
   RpcCallerEndpoint get endpoint => _endpoint;
+
+  /// Выполняет унарный вызов с контекстом (будет реализовано после обновления endpoint)
+  /*
+  Future<TResponse> callUnary<TRequest extends IRpcSerializable,
+      TResponse extends IRpcSerializable>({
+    required String methodName,
+    required IRpcCodec<TRequest> requestCodec,
+    required IRpcCodec<TResponse> responseCodec,
+    required TRequest request,
+    RpcContext? context,
+  }) {
+    return _endpoint.unaryRequest<TRequest, TResponse>(
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      request: request,
+      context: context,
+    );
+  }
+  */
 }
