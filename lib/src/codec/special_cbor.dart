@@ -48,23 +48,19 @@ abstract interface class CborCodec {
     return reader.readMap();
   }
 
-  /// Кодирует любое значение в байты CBOR
+  /// Небезопасное кодирование любого значения в байты CBOR
+  /// НЕ проверяет типы Map - принимает любые Map типы
+  /// Используется для тестирования и специальных случаев
   static Uint8List encodeUnsafe(dynamic value) {
     return _encode(value, strictMapTypes: false);
   }
 
-  /// Декодирует CBOR байты в Dart объекты (небезопасная версия)
+  /// Небезопасное декодирование CBOR байтов
+  /// Возвращает dynamic вместо строго типизированного Map(String, dynamic)
+  /// Используется для тестирования и специальных случаев
   static dynamic decodeUnsafe(Uint8List bytes) {
-    // Для unsafe версии используем старый универсальный декодер
     final reader = _CborReader(bytes);
-    final value = reader.readValue();
-
-    // Если результат карта, убеждаемся что ключи строковые
-    if (value is Map) {
-      return _ensureStringKeys(value);
-    }
-
-    return value;
+    return reader.readValue();
   }
 
   /// Кодирует любое значение в байты CBOR
