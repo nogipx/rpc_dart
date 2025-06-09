@@ -28,6 +28,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   /// Сохраняем информацию о методах для потоков
   final Map<int, String> _streamMethods = {};
 
+  /// Сохраняем метаданные для каждого streamId
+  final Map<int, RpcTransportMessage> _streamMetadata = {};
+
   /// Сохраняем последнее сообщение с данными для каждого потока
   final Map<int, RpcTransportMessage> _streamMessages = {};
 
@@ -154,6 +157,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Сохраняем метод для этого потока
     _streamMethods[streamId] = methodKey;
 
+    // Сохраняем метаданные для создания контекста
+    _streamMetadata[streamId] = message;
+
     // Проверяем наличие метода
     if (!_methods.containsKey(methodKey)) {
       logger.error(
@@ -254,6 +260,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     }
 
     _streamMethods.remove(streamId);
+    _streamMetadata.remove(streamId);
     _streamMessages.remove(streamId);
     _clientStreamMessages.remove(streamId);
 
@@ -327,7 +334,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       responseCodec: i.method.responseCodec,
       handler: (request) async {
         // Создаем контекст из метаданных запроса
-        final context = _createContextFromMessage(i.message ??
+        final context = _createContextFromMessage(_streamMetadata[i.streamId] ??
             RpcTransportMessage(
               streamId: i.streamId,
               methodPath: '/${i.serviceName}/${i.methodName}',
@@ -382,7 +389,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       responseCodec: i.method.responseCodec,
       handler: (Stream<IRpcSerializable> requests) async {
         // Создаем контекст из метаданных запроса
-        final context = _createContextFromMessage(i.message ??
+        final context = _createContextFromMessage(_streamMetadata[i.streamId] ??
             RpcTransportMessage(
               streamId: i.streamId,
               methodPath: '/${i.serviceName}/${i.methodName}',
@@ -445,7 +452,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       responseCodec: i.method.responseCodec,
       handler: (request) {
         // Создаем контекст из метаданных запроса
-        final context = _createContextFromMessage(i.message ??
+        final context = _createContextFromMessage(_streamMetadata[i.streamId] ??
             RpcTransportMessage(
               streamId: i.streamId,
               methodPath: '/${i.serviceName}/${i.methodName}',
@@ -589,13 +596,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     responder.bindToMessageStream(messageStream);
 
     // Подключаем пользовательский обработчик к потоку запросов
-    _setupBidirectionalHandler(responder, i.method);
+    _setupBidirectionalHandler(
+        responder, i.method, i.serviceName, i.methodName, i.streamId);
   }
 
   /// Настраивает обработчик для двунаправленного стрима
   void _setupBidirectionalHandler(
     BidirectionalStreamResponder<IRpcSerializable, IRpcSerializable> responder,
     RpcMethodRegistration method,
+    String serviceName,
+    String methodName,
+    int streamId,
   ) {
     logger.debug(
         'Настройка обработчика двунаправленного стрима [id: ${responder.id}]');
@@ -606,8 +617,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         logger
             .debug('Вызов пользовательского обработчика [id: ${responder.id}]');
 
-        // Создаем контекст для bidirectional stream (будет обновлен позже с метаданными)
-        final context = RpcContext.empty();
+        // Создаем контекст из метаданных для bidirectional stream
+        // Получаем метаданные из первого сообщения потока или создаем пустой контекст
+        final metadataMessage = _streamMetadata[streamId];
+        final context = _createContextFromMessage(metadataMessage ??
+            RpcTransportMessage(
+              streamId: streamId,
+              methodPath: '/$serviceName/$methodName',
+            ));
 
         // Используем типизированные wrapper'ы для безопасного вызова
         final typedRequests = method.castRequestStream(responder.requests);
@@ -745,14 +762,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       }
     }
 
+    logger.debug('Создание контекста: ${headers.length} заголовков');
+
     // Создаем контекст с заголовками
-    final context = RpcContext.withHeaders(headers);
+    var context = RpcContext.withHeaders(headers);
 
     // Извлекаем специальные заголовки
     final traceId = headers['x-trace-id'];
 
     if (traceId != null) {
-      return context.withTraceId(traceId);
+      context = context.withTraceId(traceId);
     }
 
     return context;

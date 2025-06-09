@@ -94,11 +94,9 @@ final class UnaryCaller<TRequest, TResponse> {
 
     // Определяем timeout: из параметра, контекста или по умолчанию
     final remainingTime = _context?.remainingTime;
-    final effectiveTimeout = timeout ??
-        (remainingTime != null && !remainingTime.isNegative
-            ? remainingTime
-            : null) ??
-        const Duration(seconds: 30);
+    final effectiveTimeout =
+        timeout ?? remainingTime ?? const Duration(seconds: 30);
+
     // Создаем новый stream для этого вызова
     final streamId = _transport.createStream();
 
@@ -108,8 +106,23 @@ final class UnaryCaller<TRequest, TResponse> {
 
     final completer = Completer<TResponse>();
     StreamSubscription? subscription;
+    StreamSubscription? cancellationSubscription;
 
     try {
+      // Если есть токен отмены, подписываемся на него
+      if (_context?.cancellationToken != null) {
+        cancellationSubscription =
+            _context!.cancellationToken!.cancelled.asStream().listen((_) {
+          if (!completer.isCompleted) {
+            _logger?.warning(
+                'Операция отменена по cancellation token [streamId: $streamId]');
+            completer.completeError(RpcCancelledException(
+                _context!.cancellationToken!.reason ??
+                    'Operation was cancelled'));
+          }
+        });
+      }
+
       // Подписываемся на ответы для этого stream
       _logger?.debug('Настройка подписки на ответы [streamId: $streamId]');
       subscription = _transport.getMessagesForStream(streamId).listen(
@@ -244,6 +257,7 @@ final class UnaryCaller<TRequest, TResponse> {
       // В любом случае отписываемся от потока ответов
       _logger?.debug('Отмена подписки на ответы [streamId: $streamId]');
       await subscription?.cancel();
+      await cancellationSubscription?.cancel();
     }
   }
 

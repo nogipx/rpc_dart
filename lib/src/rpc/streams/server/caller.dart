@@ -18,6 +18,7 @@ part of '../_index.dart';
 ///   methodName: "GetData",
 ///   requestCodec: stringCodec,
 ///   responseCodec: stringCodec,
+///   context: context, // Опциональный контекст
 /// );
 ///
 /// // Отправляем ОДИН запрос (больше нельзя!)
@@ -45,6 +46,7 @@ final class ServerStreamCaller<TRequest extends IRpcSerializable,
   /// [methodName] Имя метода (например, "GetData")
   /// [requestCodec] Кодек для сериализации запроса
   /// [responseCodec] Кодек для десериализации ответов
+  /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
   /// [logger] Опциональный логгер
   ServerStreamCaller({
     required IRpcTransport transport,
@@ -52,6 +54,7 @@ final class ServerStreamCaller<TRequest extends IRpcSerializable,
     required String methodName,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
+    RpcContext? context,
     RpcLogger? logger,
   }) {
     _logger = logger?.child('ServerCaller');
@@ -63,6 +66,7 @@ final class ServerStreamCaller<TRequest extends IRpcSerializable,
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
+      context: context,
       logger: _logger,
     );
   }

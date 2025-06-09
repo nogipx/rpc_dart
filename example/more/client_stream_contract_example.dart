@@ -147,10 +147,9 @@ final class DataAggregatorCaller extends RpcCallerContract {
       methodName: 'aggregateData',
       requestCodec: DataChunk.codec,
       responseCodec: AggregationResult.codec,
-      requests: dataChunks,
     );
 
-    return await clientStreamBuilder();
+    return await clientStreamBuilder(dataChunks);
   }
 }
 

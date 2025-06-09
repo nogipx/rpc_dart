@@ -333,6 +333,9 @@ final class CallProcessor<TRequest extends IRpcSerializable,
   final IRpcCodec<TRequest> _requestCodec;
   final IRpcCodec<TResponse> _responseCodec;
 
+  /// RPC контекст для передачи метаданных, таймаутов и отмены
+  final RpcContext? _context;
+
   /// Парсер для обработки фрагментированных сообщений
   late final RpcMessageParser _parser;
 
@@ -365,6 +368,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
     required String methodName,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
+    RpcContext? context,
     RpcLogger? logger,
   })  : _transport = transport,
         _streamId = transport.createStream(),
@@ -372,12 +376,17 @@ final class CallProcessor<TRequest extends IRpcSerializable,
         _methodName = methodName,
         _requestCodec = requestCodec,
         _responseCodec = responseCodec,
+        _context = context,
         _logger = logger?.child('CallProcessor') {
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
 
     _logger
         ?.debug('Создан CallProcessor для $_methodPath [streamId: $_streamId]');
+
+    // Проверяем контекст перед началом работы
+    _checkContextBeforeCall();
+
     _setupRequestHandler();
     _setupResponseHandler();
   }
@@ -472,17 +481,68 @@ final class CallProcessor<TRequest extends IRpcSerializable,
     );
   }
 
-  /// Отправляет начальные метаданные
+  /// Отправляет начальные метаданные с поддержкой контекста
   Future<void> _sendInitialMetadata() async {
     _logger?.debug(
         'Отправка начальных метаданных для $_methodPath [streamId: $_streamId]');
 
-    final initialMetadata =
+    final baseMetadata =
         RpcMetadata.forClientRequest(_serviceName, _methodName);
-    await _transport.sendMetadata(_streamId, initialMetadata);
+
+    // Создаем новые метаданные с заголовками из контекста
+    final headers = List<RpcHeader>.from(baseMetadata.headers);
+
+    if (_context != null) {
+      // Добавляем пользовательские заголовки из контекста
+      for (final entry in _context!.headers.entries) {
+        headers.add(RpcHeader(entry.key, entry.value));
+      }
+
+      // Добавляем специальные заголовки RPC
+      if (_context!.traceId != null) {
+        headers.add(RpcHeader('x-trace-id', _context!.traceId!));
+      }
+      headers.add(RpcHeader('x-request-id', _context!.requestId));
+
+      // Context values остаются ЛОКАЛЬНЫМИ - не передаются через сеть (соответствует стандарту gRPC)
+      // Только headers передаются через HTTP/2 заголовки
+
+      _logger?.debug(
+          'Добавлены заголовки контекста: ${_context!.headers.length} пользовательских + системные [streamId: $_streamId]');
+    } else {
+      // Даже для null контекста добавляем базовый request-id
+      final requestId =
+          RpcContext.empty().requestId; // Генерируем базовый request-id
+      headers.add(RpcHeader('x-request-id', requestId));
+
+      _logger?.debug(
+          'Добавлен базовый request-id для null контекста [streamId: $_streamId]');
+    }
+
+    final metadata = RpcMetadata(headers);
+    await _transport.sendMetadata(_streamId, metadata);
 
     _logger?.debug(
         'Начальные метаданные отправлены для $_methodPath [streamId: $_streamId]');
+  }
+
+  /// Проверяет состояние контекста перед вызовом
+  void _checkContextBeforeCall() {
+    if (_context == null) return;
+
+    // Проверяем отмену
+    _context!.cancellationToken?.throwIfCancelled();
+
+    // Проверяем deadline
+    if (_context!.isExpired) {
+      throw RpcDeadlineExceededException(
+        _context!.deadline!,
+        Duration.zero,
+      );
+    }
+
+    _logger?.debug(
+        'Контекст проверен: requestId=${_context!.requestId}, traceId=${_context!.traceId} [streamId: $_streamId]');
   }
 
   /// Обрабатывает входящий ответ

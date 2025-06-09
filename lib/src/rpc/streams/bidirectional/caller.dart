@@ -16,6 +16,7 @@ part of '../_index.dart';
 /// - Потоковый интерфейс для отправки и получения (через Stream)
 /// - Автоматическая сериализация/десериализация сообщений
 /// - Корректная обработка заголовков и трейлеров gRPC
+/// - Поддержка RPC контекста для метаданных, таймаутов и отмены
 final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
     TResponse extends IRpcSerializable> {
   late final RpcLogger? _logger;
@@ -41,6 +42,7 @@ final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
   /// [methodName] Имя метода (например, "Connect")
   /// [requestCodec] Кодек для сериализации запросов
   /// [responseCodec] Кодек для десериализации ответов
+  /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
   /// [logger] Опциональный логгер
   BidirectionalStreamCaller({
     required IRpcTransport transport,
@@ -48,6 +50,7 @@ final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
     required String methodName,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
+    RpcContext? context,
     RpcLogger? logger,
   }) {
     _logger = logger?.child('BidirectionalCaller');
@@ -60,6 +63,7 @@ final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
+      context: context,
       logger: _logger,
     );
   }

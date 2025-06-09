@@ -185,4 +185,61 @@ abstract base class RpcCallerContract implements IRpcContract {
       context: context,
     );
   }
+
+  /// Выполняет server stream вызов с контекстом
+  Stream<TResponse> callServerStream<TRequest extends IRpcSerializable,
+      TResponse extends IRpcSerializable>({
+    required String methodName,
+    required IRpcCodec<TRequest> requestCodec,
+    required IRpcCodec<TResponse> responseCodec,
+    required TRequest request,
+    RpcContext? context,
+  }) {
+    return _endpoint.serverStream<TRequest, TResponse>(
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      request: request,
+      context: context,
+    );
+  }
+
+  /// Выполняет client stream вызов с контекстом
+  Future<TResponse> callClientStream<TRequest extends IRpcSerializable,
+      TResponse extends IRpcSerializable>({
+    required String methodName,
+    required IRpcCodec<TRequest> requestCodec,
+    required IRpcCodec<TResponse> responseCodec,
+    required Stream<TRequest> requests,
+    RpcContext? context,
+  }) {
+    final builder = _endpoint.clientStream<TRequest, TResponse>(
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      context: context,
+    );
+    return builder(requests);
+  }
+
+  /// Выполняет bidirectional stream вызов с контекстом
+  Stream<TResponse> callBidirectionalStream<TRequest extends IRpcSerializable,
+      TResponse extends IRpcSerializable>({
+    required String methodName,
+    required IRpcCodec<TRequest> requestCodec,
+    required IRpcCodec<TResponse> responseCodec,
+    required Stream<TRequest> requests,
+    RpcContext? context,
+  }) {
+    return _endpoint.bidirectionalStream<TRequest, TResponse>(
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      requests: requests,
+      context: context,
+    );
+  }
 }

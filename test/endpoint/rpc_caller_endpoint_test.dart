@@ -227,14 +227,13 @@ void main() {
         methodName: 'ClientStreamMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
         responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-        requests: requestStream,
       );
 
       print('Клиентский стрим создан');
 
       // Вызываем getResponse для отправки всех сообщений и получения ответа
       print('Вызов getResponse для отправки сообщений и получения ответа');
-      final response = await getResponse().timeout(
+      final response = await getResponse(requestStream).timeout(
         Duration(seconds: 10),
         onTimeout: () {
           print('Таймаут при ожидании ответа');

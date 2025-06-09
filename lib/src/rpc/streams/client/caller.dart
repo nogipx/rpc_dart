@@ -18,6 +18,7 @@ part of '../_index.dart';
 ///   methodName: "ProcessData",
 ///   requestCodec: stringCodec,
 ///   responseCodec: stringCodec,
+///   context: context, // Опциональный контекст
 /// );
 ///
 /// // Отправляем несколько запросов
@@ -52,6 +53,7 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
   /// [methodName] Имя метода (например, "ProcessData")
   /// [requestCodec] Кодек для сериализации запросов
   /// [responseCodec] Кодек для десериализации ответа
+  /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
   /// [logger] Опциональный логгер
   ClientStreamCaller({
     required IRpcTransport transport,
@@ -59,6 +61,7 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
     required String methodName,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
+    RpcContext? context,
     RpcLogger? logger,
   }) {
     _logger = logger?.child('ClientCaller');
@@ -70,6 +73,7 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
+      context: context,
       logger: _logger,
     );
 

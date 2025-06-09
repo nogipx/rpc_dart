@@ -46,28 +46,36 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     required IRpcCodec<C> requestCodec,
     required IRpcCodec<R> responseCodec,
     required C request,
+    RpcContext? context,
   }) {
     logger.debug('Создание server stream для $serviceName/$methodName');
 
-    // Создаем контроллер, который будет использоваться для передачи сообщений из потока
+    // Создаем server stream caller с контекстом
+    final caller = ServerStreamCaller<C, R>(
+      transport: transport,
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      context: context,
+      logger: logger,
+    );
+
+    // Создаем поток и отправляем единственный запрос
+    return _createServerStreamFromCaller(caller, request);
+  }
+
+  /// Создает поток ответов из ServerStreamCaller
+  Stream<R> _createServerStreamFromCaller<C extends IRpcSerializable,
+      R extends IRpcSerializable>(
+    ServerStreamCaller<C, R> caller,
+    C request,
+  ) {
     final controller = StreamController<R>();
 
-    // Запускаем асинхронную обработку в отдельной зоне, чтобы обеспечить
-    // корректную обработку ошибок и освобождение ресурсов
+    // Запускаем асинхронную обработку
     () async {
-      late ServerStreamCaller<C, R> caller;
-
       try {
-        // Создаем вызывающий объект
-        caller = ServerStreamCaller<C, R>(
-          serviceName: serviceName,
-          methodName: methodName,
-          transport: transport,
-          requestCodec: requestCodec,
-          responseCodec: responseCodec,
-          logger: logger,
-        );
-
         // Отправляем запрос серверу
         logger.debug('Отправка запроса серверу');
         await caller.send(request);
@@ -130,73 +138,53 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     return controller.stream;
   }
 
-  /// Создает client stream builder
-  Future<R> Function()
+  /// Создает client stream для отправки множественных запросов и получения одного ответа
+  Future<R> Function(Stream<C>)
       clientStream<C extends IRpcSerializable, R extends IRpcSerializable>({
     required String serviceName,
     required String methodName,
     required IRpcCodec<C> requestCodec,
     required IRpcCodec<R> responseCodec,
-    required Stream<C> requests,
+    RpcContext? context,
   }) {
-    logger.debug('Создание ClientStreamCaller для $serviceName.$methodName');
+    logger.debug('Создание client stream builder для $serviceName/$methodName');
 
-    final caller = ClientStreamCaller<C, R>(
-      serviceName: serviceName,
-      methodName: methodName,
-      transport: transport,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
-      logger: logger,
-    );
+    return (Stream<C> requests) async {
+      logger.debug('Выполнение client stream для $serviceName/$methodName');
 
-    // Делаем stream broadcast'ом, чтобы можно было слушать многократно
-    final broadcastStream = requests.asBroadcastStream();
+      // Создаем client stream caller с контекстом
+      final caller = ClientStreamCaller<C, R>(
+        transport: transport,
+        serviceName: serviceName,
+        methodName: methodName,
+        requestCodec: requestCodec,
+        responseCodec: responseCodec,
+        context: context,
+        logger: logger,
+      );
 
-    // Возвращаем функцию, которая при вызове отправляет все запросы и получает ответ
-    return () async {
-      StreamSubscription<C>? subscription;
-      final sendingCompleted = Completer<void>();
-
+      // Подписываемся на поток запросов
+      StreamSubscription? subscription;
       try {
-        logger.debug('Запуск client stream и отправка запросов');
-
-        // Подписываемся на broadcast stream
-        subscription = broadcastStream.listen(
+        subscription = requests.listen(
           (request) async {
-            try {
-              logger
-                  .debug('Отправка запроса через ClientStreamCaller: $request');
-              await caller.send(request);
-              logger.debug('Запрос отправлен через ClientStreamCaller');
-            } catch (e, stackTrace) {
-              logger.error(
-                  'Ошибка при отправке запроса через ClientStreamCaller',
-                  error: e,
-                  stackTrace: stackTrace);
-              // Не прерываем поток при ошибке с отдельным запросом
-            }
+            logger.debug('Отправка запроса в client stream: $request');
+            await caller.send(request);
           },
           onError: (error, stackTrace) {
             logger.error('Ошибка в потоке запросов client stream',
                 error: error, stackTrace: stackTrace);
-            if (!sendingCompleted.isCompleted) {
-              sendingCompleted.completeError(error, stackTrace);
-            }
           },
           onDone: () {
             logger.debug('Поток запросов client stream завершен');
-            if (!sendingCompleted.isCompleted) {
-              sendingCompleted.complete();
-            }
           },
         );
 
-        // Ждем завершения отправки всех запросов
-        await sendingCompleted.future;
-        logger.debug('Все запросы отправлены, завершаем отправку');
+        // Ждем завершения потока запросов
+        await subscription.asFuture();
+        logger.debug('Поток запросов обработан, завершаем отправку');
 
-        // Завершаем отправку и получаем ответ
+        // Завершаем отправку и получаем единственный ответ
         final response = await caller.finishSending();
         logger.debug('Получен ответ от client stream');
 
@@ -216,131 +204,58 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     required IRpcCodec<C> requestCodec,
     required IRpcCodec<R> responseCodec,
     required Stream<C> requests,
+    RpcContext? context,
   }) {
     logger.debug('Создание bidirectional stream для $serviceName/$methodName');
 
     // Создаем контроллер для передачи сообщений
     final controller = StreamController<R>();
 
-    // Запускаем асинхронную обработку в отдельной зоне
-    () async {
-      late BidirectionalStreamCaller<C, R> caller;
-      StreamSubscription<C>? requestSubscription;
+    // Создаем bidirectional stream caller с контекстом
+    final caller = BidirectionalStreamCaller<C, R>(
+      transport: transport,
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      context: context,
+      logger: logger,
+    );
 
-      try {
-        // Создаем вызывающий объект
-        caller = BidirectionalStreamCaller<C, R>(
-          serviceName: serviceName,
-          methodName: methodName,
-          transport: transport,
-          requestCodec: requestCodec,
-          responseCodec: responseCodec,
-          logger: logger,
-        );
-
-        // Создаем комплиттер для уведомления о завершении отправки запросов
-        final sendingCompleted = Completer<void>();
-
-        // Создаем подписку на поток запросов
-        requestSubscription = requests.listen(
-          (request) async {
-            try {
-              await caller.send(request);
-              logger.debug('Запрос отправлен через BidirectionalStreamCaller');
-            } catch (e, stackTrace) {
-              logger.error(
-                  'Ошибка при отправке запроса через BidirectionalStreamCaller',
-                  error: e,
-                  stackTrace: stackTrace);
-              // Не прерываем поток при ошибке с отдельным запросом
-            }
-          },
-          onError: (error, stackTrace) {
-            logger.error('Ошибка в потоке запросов bidirectional stream',
-                error: error, stackTrace: stackTrace);
-            if (!sendingCompleted.isCompleted) {
-              sendingCompleted.completeError(error, stackTrace);
-            }
-
-            if (!controller.isClosed) {
-              controller.addError(error, stackTrace);
-            }
-          },
-          onDone: () async {
-            logger.debug(
-                'Поток запросов bidirectional stream завершен, вызываем finishSending');
-            try {
-              await caller.finishSending();
-              logger.debug('finishSending выполнен успешно');
-              if (!sendingCompleted.isCompleted) {
-                sendingCompleted.complete();
-              }
-            } catch (e, stackTrace) {
-              logger.error('Ошибка при finishSending в bidirectional stream',
-                  error: e, stackTrace: stackTrace);
-              if (!sendingCompleted.isCompleted) {
-                sendingCompleted.completeError(e, stackTrace);
-              }
-
-              if (!controller.isClosed) {
-                controller.addError(e, stackTrace);
-              }
-            }
-          },
-        );
-
-        // Обрабатываем ответы от сервера
-        try {
-          await for (final message in caller.responses) {
-            if (controller.isClosed) break;
-
-            if (!message.isMetadataOnly && message.payload != null) {
-              logger.debug('Получено сообщение от bidirectional stream');
-              controller.add(message.payload!);
-            }
-          }
-
-          logger.debug('Поток ответов от bidirectional stream завершен');
-        } catch (e, stackTrace) {
-          logger.error('Ошибка при обработке ответов в bidirectional stream',
-              error: e, stackTrace: stackTrace);
-
-          if (!controller.isClosed) {
-            controller.addError(e, stackTrace);
-          }
+    // Подписываемся на входящие ответы
+    final responseSubscription = caller.responses.listen(
+      (rpcMessage) {
+        if (!rpcMessage.isMetadataOnly && rpcMessage.payload != null) {
+          controller.add(rpcMessage.payload!);
         }
-      } catch (e, stackTrace) {
-        logger.error('Ошибка при создании bidirectional stream',
-            error: e, stackTrace: stackTrace);
+      },
+      onError: controller.addError,
+      onDone: () => controller.close(),
+    );
 
-        if (!controller.isClosed) {
-          controller.addError(e, stackTrace);
-        }
-      } finally {
-        // Очищаем ресурсы
-        logger.debug('Завершение bidirectional stream, освобождение ресурсов');
+    // Подписываемся на исходящие запросы
+    final requestSubscription = requests.listen(
+      (request) => caller.send(request),
+      onError: (error, stackTrace) {
+        logger.error('Ошибка при отправке запроса в bidirectional stream',
+            error: error, stackTrace: stackTrace);
+        controller.addError(error, stackTrace);
+      },
+      onDone: () async {
+        logger.debug('Поток запросов bidirectional stream завершен');
+        await caller.close();
+      },
+    );
 
-        try {
-          await requestSubscription?.cancel();
-        } catch (e) {
-          logger.error('Ошибка при отмене подписки на запросы', error: e);
-        }
-
-        try {
-          await caller.close();
-        } catch (e) {
-          logger.error('Ошибка при закрытии caller в bidirectional stream',
-              error: e);
-        }
-
-        // Закрываем контроллер, если он еще открыт
-        if (!controller.isClosed) {
-          await controller.close();
-        }
-      }
-    }();
-
-    // Возвращаем стрим из контроллера
-    return controller.stream;
+    // Возвращаем поток с автоматической очисткой
+    return controller.stream.transform(
+      StreamTransformer.fromHandlers(
+        handleDone: (sink) {
+          responseSubscription.cancel();
+          requestSubscription.cancel();
+          sink.close();
+        },
+      ),
+    );
   }
 }
