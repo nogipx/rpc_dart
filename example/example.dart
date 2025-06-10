@@ -6,6 +6,130 @@ import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
+void main() async {
+  print(
+      '\n🚀 === RPC DART - Комплексная демонстрация автоматической трассировки ===\n');
+
+  // Создаем InMemory транспорт
+  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+
+  // Настраиваем сервер
+  final serverEndpoint = RpcResponderEndpoint(
+    transport: serverTransport,
+    debugLabel: 'Calculator Server',
+  );
+  serverEndpoint.registerServiceContract(CalculatorResponder());
+  serverEndpoint.start();
+
+  // Настраиваем клиент
+  final clientEndpoint = RpcCallerEndpoint(
+    transport: clientTransport,
+    debugLabel: 'Calculator Client',
+  );
+  final calculator = CalculatorCaller(clientEndpoint);
+
+  try {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    print('📋 === 1. UNARY CALLS (один запрос → один ответ) ===\n');
+
+    // 1. UNARY без контекста - автоматическая генерация trace ID
+    print('🔹 Без контекста (автогенерация trace ID):');
+    final result1 = await calculator.add(10, 20);
+    print('   10 + 20 = $result1\n');
+
+    // 2. UNARY с пользовательским контекстом
+    print('🔹 С пользовательским trace ID:');
+    final customContext =
+        RpcContextUtils.withTracing(traceId: 'user_trace_123');
+    final result2 = await calculator.multiply(5, 7, context: customContext);
+    print('   5 × 7 = $result2\n');
+
+    print('📊 === 2. SERVER STREAMING (один запрос → поток ответов) ===\n');
+
+    print('🔹 Сложное вычисление с прогрессом:');
+    await for (final progress in calculator.calculateWithProgress(
+        CalculationRequest(a: 100, b: 25, operation: 'divide'))) {
+      print('   📈 $progress');
+    }
+    print('');
+
+    print('📥 === 3. CLIENT STREAMING (поток запросов → один ответ) ===\n');
+
+    print('🔹 Батчевая обработка нескольких вычислений:');
+    final batchRequests = Stream.fromIterable([
+      CalculationRequest(a: 10, b: 5, operation: 'add'),
+      CalculationRequest(a: 20, b: 4, operation: 'multiply'),
+      CalculationRequest(a: 100, b: 10, operation: 'divide'),
+      CalculationRequest(a: 50, b: 15, operation: 'subtract'),
+      CalculationRequest(a: 7, b: 3, operation: 'add'),
+    ]);
+
+    final batchResult = await calculator.processBatch(batchRequests);
+    print('   📊 $batchResult\n');
+
+    print('🔄 === 4. BIDIRECTIONAL STREAMING (поток ↔ поток) ===\n');
+
+    print('🔹 Интерактивные вычисления в реальном времени:');
+
+    // Создаем поток запросов для bidirectional streaming
+    final controller = StreamController<CalculationRequest>();
+    final liveResults = calculator.liveCalculate(controller.stream);
+
+    // Подписываемся на результаты
+    final subscription = liveResults.listen((response) {
+      if (response.success) {
+        print('   ✅ Результат: ${response.result}');
+      } else {
+        print('   ❌ Ошибка: ${response.errorMessage}');
+      }
+    });
+
+    // Отправляем запросы в реальном времени
+    await Future.delayed(Duration(milliseconds: 100));
+    controller.add(CalculationRequest(a: 15, b: 3, operation: 'multiply'));
+    await Future.delayed(Duration(milliseconds: 200));
+
+    controller.add(CalculationRequest(a: 100, b: 7, operation: 'divide'));
+    await Future.delayed(Duration(milliseconds: 200));
+
+    controller.add(CalculationRequest(a: 25, b: 15, operation: 'add'));
+    await Future.delayed(Duration(milliseconds: 200));
+
+    // Попробуем ошибочную операцию
+    controller.add(CalculationRequest(a: 10, b: 0, operation: 'divide'));
+    await Future.delayed(Duration(milliseconds: 200));
+
+    // Закрываем поток запросов
+    await controller.close();
+    await subscription.asFuture();
+
+    print('\n🎯 === ДЕМОНСТРАЦИЯ АВТОМАТИЧЕСКОЙ ТРАССИРОВКИ ===\n');
+
+    print('✨ Trace ID автоматически:');
+    print('   • Генерируется в CallerEndpoint если не указан');
+    print('   • Генерируется в ResponderEndpoint если клиент не передал');
+    print('   • Передается во все дочерние компоненты (Responders, Callers)');
+    print('   • Появляется в логах всех операций автоматически');
+    print('   • Работает через RpcLoggerFactory с контекстом');
+
+    print('\n🔥 === ВСЕ ТИПЫ RPC ПРОДЕМОНСТРИРОВАНЫ ===');
+    print('   ✅ Unary Calls - простые запрос/ответ операции');
+    print('   ✅ Server Streaming - прогресс и live обновления');
+    print('   ✅ Client Streaming - батчевая обработка данных');
+    print('   ✅ Bidirectional Streaming - интерактивное взаимодействие');
+    print('   ✅ Автоматическая трассировка во всех сценариях\n');
+  } catch (e, stackTrace) {
+    print('❌ Ошибка: $e');
+    print('Stack trace: $stackTrace');
+  } finally {
+    // Закрываем ресурсы
+    await serverEndpoint.close();
+    await clientEndpoint.close();
+    print('🔚 Демонстрация завершена!');
+  }
+}
+
 /// Простая модель сообщения для демонстрации
 class CalculationRequest implements IRpcSerializable {
   final double a, b;
@@ -28,7 +152,8 @@ class CalculationRequest implements IRpcSerializable {
       RpcCodec(CalculationRequest.fromJson);
 
   @override
-  String toString() => 'CalculationRequest($a $operation $b)';
+  String toString() =>
+      'CalculationRequest(a: $a, b: $b, operation: $operation)';
 }
 
 class CalculationResponse implements IRpcSerializable {
@@ -56,15 +181,90 @@ class CalculationResponse implements IRpcSerializable {
       RpcCodec(CalculationResponse.fromJson);
 
   @override
-  String toString() => success ? 'Result: $result' : 'Error: $errorMessage';
+  String toString() => success
+      ? 'CalculationResponse(result: $result)'
+      : 'CalculationResponse(error: $errorMessage)';
 }
 
-/// Респондер для демонстрации автоматической трассировки
+/// Модель для прогресса вычислений (server streaming)
+class CalculationProgress implements IRpcSerializable {
+  final String step;
+  final double progress; // 0.0 to 1.0
+  final String? currentOperation;
+
+  CalculationProgress(
+      {required this.step, required this.progress, this.currentOperation});
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'step': step,
+        'progress': progress,
+        'currentOperation': currentOperation,
+      };
+
+  static CalculationProgress fromJson(Map<String, dynamic> json) =>
+      CalculationProgress(
+        step: json['step'],
+        progress: json['progress'],
+        currentOperation: json['currentOperation'],
+      );
+
+  static RpcCodec<CalculationProgress> get codec =>
+      RpcCodec(CalculationProgress.fromJson);
+
+  @override
+  String toString() =>
+      'CalculationProgress(step: $step, progress: ${(progress * 100).toInt()}%)';
+}
+
+/// Модель для статистики батча (client streaming)
+class BatchStatistics implements IRpcSerializable {
+  final int totalRequests;
+  final int successfulRequests;
+  final int failedRequests;
+  final double averageResult;
+  final List<String> operations;
+
+  BatchStatistics({
+    required this.totalRequests,
+    required this.successfulRequests,
+    required this.failedRequests,
+    required this.averageResult,
+    required this.operations,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'totalRequests': totalRequests,
+        'successfulRequests': successfulRequests,
+        'failedRequests': failedRequests,
+        'averageResult': averageResult,
+        'operations': operations,
+      };
+
+  static BatchStatistics fromJson(Map<String, dynamic> json) => BatchStatistics(
+        totalRequests: json['totalRequests'],
+        successfulRequests: json['successfulRequests'],
+        failedRequests: json['failedRequests'],
+        averageResult: json['averageResult'],
+        operations: List<String>.from(json['operations']),
+      );
+
+  static RpcCodec<BatchStatistics> get codec =>
+      RpcCodec(BatchStatistics.fromJson);
+
+  @override
+  String toString() =>
+      'BatchStatistics(total: $totalRequests, success: $successfulRequests, failed: $failedRequests, avg: $averageResult)';
+}
+
+/// Респондер с демонстрацией всех типов RPC методов
 final class CalculatorResponder extends RpcResponderContract {
   CalculatorResponder() : super('CalculatorService');
 
   @override
   void setup() {
+    // 1. UNARY CALL - один запрос → один ответ
     addUnaryMethod<CalculationRequest, CalculationResponse>(
       methodName: 'calculate',
       handler: calculate,
@@ -72,82 +272,142 @@ final class CalculatorResponder extends RpcResponderContract {
       responseCodec: CalculationResponse.codec,
     );
 
-    addServerStreamMethod<CalculationRequest, CalculationResponse>(
-      methodName: 'batchCalculate',
-      handler: batchCalculate,
+    // 2. SERVER STREAMING - один запрос → поток ответов
+    addServerStreamMethod<CalculationRequest, CalculationProgress>(
+      methodName: 'calculateWithProgress',
+      handler: calculateWithProgress,
+      requestCodec: CalculationRequest.codec,
+      responseCodec: CalculationProgress.codec,
+    );
+
+    // 3. CLIENT STREAMING - поток запросов → один ответ
+    addClientStreamMethod<CalculationRequest, BatchStatistics>(
+      methodName: 'processBatch',
+      handler: processBatch,
+      requestCodec: CalculationRequest.codec,
+      responseCodec: BatchStatistics.codec,
+    );
+
+    // 4. BIDIRECTIONAL STREAMING - поток запросов ↔ поток ответов
+    addBidirectionalMethod<CalculationRequest, CalculationResponse>(
+      methodName: 'liveCalculate',
+      handler: liveCalculate,
       requestCodec: CalculationRequest.codec,
       responseCodec: CalculationResponse.codec,
     );
   }
 
-  /// Unary вычисление - демонстрирует автоматическую трассировку
+  /// UNARY: Простое вычисление
   Future<CalculationResponse> calculate(CalculationRequest request,
       {RpcContext? context}) async {
-    // Логгер автоматически получает trace ID из контекста через factory!
-    final logger = RpcLogger('Calculator.compute', context: context);
-
-    logger.info('Начинаем вычисление: $request');
-
     try {
-      await Future.delayed(Duration(milliseconds: 10)); // Имитация работы
-
-      double result;
-      switch (request.operation) {
-        case 'add':
-          result = request.a + request.b;
-        case 'subtract':
-          result = request.a - request.b;
-        case 'multiply':
-          result = request.a * request.b;
-        case 'divide':
-          if (request.b == 0) throw Exception('Division by zero');
-          result = request.a / request.b;
-        default:
-          throw Exception('Unknown operation: ${request.operation}');
-      }
-
-      logger.info('Вычисление завершено: $result');
+      final result = _performOperation(request.a, request.b, request.operation);
       return CalculationResponse(result: result);
     } catch (e) {
-      logger.error('Ошибка при вычислении', error: e);
       return CalculationResponse(success: false, errorMessage: e.toString());
     }
   }
 
-  /// Server stream - демонстрирует трассировку через несколько ответов
-  Stream<CalculationResponse> batchCalculate(CalculationRequest request,
+  /// SERVER STREAMING: Вычисление с отправкой прогресса
+  Stream<CalculationProgress> calculateWithProgress(CalculationRequest request,
       {RpcContext? context}) async* {
-    final logger = RpcLogger('Calculator.batch', context: context);
+    yield CalculationProgress(
+        step: 'Initializing',
+        progress: 0.0,
+        currentOperation: request.operation);
 
-    logger.info('Начинаем batch вычисление для операции: ${request.operation}');
+    await Future.delayed(Duration(milliseconds: 200));
+    yield CalculationProgress(
+        step: 'Validating input',
+        progress: 0.25,
+        currentOperation: request.operation);
 
-    // Генерируем несколько результатов с разными значениями
-    for (int i = 1; i <= 3; i++) {
-      final modifiedRequest = CalculationRequest(
-        a: request.a * i,
-        b: request.b,
-        operation: request.operation,
-      );
+    await Future.delayed(Duration(milliseconds: 200));
+    yield CalculationProgress(
+        step: 'Performing calculation',
+        progress: 0.50,
+        currentOperation: request.operation);
 
-      logger.info('Обрабатываем iteration $i: $modifiedRequest');
+    await Future.delayed(Duration(milliseconds: 200));
+    final result = _performOperation(request.a, request.b, request.operation);
+    yield CalculationProgress(
+        step: 'Calculation complete',
+        progress: 0.75,
+        currentOperation: request.operation);
 
-      final response = await calculate(modifiedRequest, context: context);
-      yield response;
+    await Future.delayed(Duration(milliseconds: 200));
+    yield CalculationProgress(
+        step: 'Finalizing result: $result',
+        progress: 1.0,
+        currentOperation: request.operation);
+  }
 
-      // Небольшая задержка между результатами
-      await Future.delayed(Duration(milliseconds: 50));
+  /// CLIENT STREAMING: Обработка батча запросов
+  Future<BatchStatistics> processBatch(Stream<CalculationRequest> requests,
+      {RpcContext? context}) async {
+    int total = 0;
+    int successful = 0;
+    int failed = 0;
+    double sum = 0.0;
+    final operations = <String>{};
+
+    await for (final request in requests) {
+      total++;
+      operations.add(request.operation);
+
+      try {
+        final result =
+            _performOperation(request.a, request.b, request.operation);
+        sum += result;
+        successful++;
+      } catch (e) {
+        failed++;
+      }
     }
 
-    logger.info('Batch вычисление завершено');
+    final averageResult = successful > 0 ? sum / successful : 0.0;
+
+    return BatchStatistics(
+      totalRequests: total,
+      successfulRequests: successful,
+      failedRequests: failed,
+      averageResult: averageResult,
+      operations: operations.toList(),
+    );
+  }
+
+  /// BIDIRECTIONAL STREAMING: Интерактивные вычисления в реальном времени
+  Stream<CalculationResponse> liveCalculate(Stream<CalculationRequest> requests,
+      {RpcContext? context}) async* {
+    await for (final request in requests) {
+      try {
+        final result =
+            _performOperation(request.a, request.b, request.operation);
+        yield CalculationResponse(result: result);
+      } catch (e) {
+        yield CalculationResponse(success: false, errorMessage: e.toString());
+      }
+    }
+  }
+
+  /// Вспомогательный метод для выполнения операций
+  double _performOperation(double a, double b, String operation) {
+    return switch (operation) {
+      'add' => a + b,
+      'subtract' => a - b,
+      'multiply' => a * b,
+      'divide' => b != 0 ? a / b : throw Exception('Division by zero'),
+      _ => throw Exception('Unknown operation: $operation'),
+    };
   }
 }
 
-/// Клиентский caller с автоматической трассировкой
+/// Клиент с демонстрацией всех типов RPC вызовов
 final class CalculatorCaller extends RpcCallerContract {
   CalculatorCaller(RpcCallerEndpoint endpoint)
       : super('CalculatorService', endpoint);
 
-  /// Простое вычисление
+  /// UNARY: Простое вычисление
   Future<CalculationResponse> calculate(CalculationRequest request,
       {RpcContext? context}) {
     return callUnary<CalculationRequest, CalculationResponse>(
@@ -159,19 +419,43 @@ final class CalculatorCaller extends RpcCallerContract {
     );
   }
 
-  /// Batch вычисление
-  Stream<CalculationResponse> batchCalculate(CalculationRequest request,
+  /// SERVER STREAMING: Вычисление с прогрессом
+  Stream<CalculationProgress> calculateWithProgress(CalculationRequest request,
       {RpcContext? context}) {
-    return callServerStream<CalculationRequest, CalculationResponse>(
-      methodName: 'batchCalculate',
+    return callServerStream<CalculationRequest, CalculationProgress>(
+      methodName: 'calculateWithProgress',
       requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
+      responseCodec: CalculationProgress.codec,
       request: request,
       context: context,
     );
   }
 
-  /// Удобный метод для сложения
+  /// CLIENT STREAMING: Батчевая обработка
+  Future<BatchStatistics> processBatch(Stream<CalculationRequest> requests,
+      {RpcContext? context}) {
+    return callClientStream<CalculationRequest, BatchStatistics>(
+      methodName: 'processBatch',
+      requestCodec: CalculationRequest.codec,
+      responseCodec: BatchStatistics.codec,
+      requests: requests,
+      context: context,
+    );
+  }
+
+  /// BIDIRECTIONAL STREAMING: Интерактивные вычисления
+  Stream<CalculationResponse> liveCalculate(Stream<CalculationRequest> requests,
+      {RpcContext? context}) {
+    return callBidirectionalStream<CalculationRequest, CalculationResponse>(
+      methodName: 'liveCalculate',
+      requestCodec: CalculationRequest.codec,
+      responseCodec: CalculationResponse.codec,
+      requests: requests,
+      context: context,
+    );
+  }
+
+  /// Удобные методы для конкретных операций
   Future<double> add(double a, double b, {RpcContext? context}) async {
     final response = await calculate(
         CalculationRequest(a: a, b: b, operation: 'add'),
@@ -179,137 +463,12 @@ final class CalculatorCaller extends RpcCallerContract {
     if (!response.success) throw Exception(response.errorMessage);
     return response.result!;
   }
-}
 
-void main() async {
-  print('🚀 RPC Dart - Демонстрация автоматической трассировки\n');
-
-  // Создаем InMemory транспорт
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-
-  // Настраиваем сервер
-  final serverEndpoint = RpcResponderEndpoint(transport: serverTransport);
-  serverEndpoint.registerServiceContract(CalculatorResponder());
-  serverEndpoint.start();
-
-  // Настраиваем клиент
-  final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
-  final calculator = CalculatorCaller(clientEndpoint);
-
-  print('═══════════════════════════════════════════════════════════════');
-  print('📌 ДЕМОНСТРАЦИЯ 1: Автоматическая генерация trace ID');
-  print('═══════════════════════════════════════════════════════════════\n');
-
-  // Обычный вызов БЕЗ контекста - trace ID создается автоматически
-  print('🔸 Вызов БЕЗ контекста (автогенерация trace ID):');
-  final result1 = await calculator.add(10, 20);
-  print('  ✅ Результат: 10 + 20 = $result1\n');
-
-  print('═══════════════════════════════════════════════════════════════');
-  print('📌 ДЕМОНСТРАЦИЯ 2: Использование существующего trace ID');
-  print('═══════════════════════════════════════════════════════════════\n');
-
-  // Создаем контекст с custom trace ID
-  final customContext = RpcContextUtils.withTracing(traceId: 'DEMO_TRACE_123');
-  print('🔸 Вызов С пользовательским trace ID: ${customContext.traceId}');
-  final result2 = await calculator.calculate(
-    CalculationRequest(a: 15, b: 3, operation: 'multiply'),
-    context: customContext,
-  );
-  print('  ✅ Результат: $result2\n');
-
-  print('═══════════════════════════════════════════════════════════════');
-  print('📌 ДЕМОНСТРАЦИЯ 3: Server Stream с трассировкой');
-  print('═══════════════════════════════════════════════════════════════\n');
-
-  // Вызов server stream - trace ID наследуется через все ответы
-  final streamContext = RpcContextUtils.withTracing(traceId: 'BATCH_TRACE_456');
-  print('🔸 Batch вычисление с trace ID: ${streamContext.traceId}');
-
-  int responseCount = 0;
-  await for (final response in calculator.batchCalculate(
-    CalculationRequest(a: 5, b: 2, operation: 'add'),
-    context: streamContext,
-  )) {
-    responseCount++;
-    print('  ✅ Ответ $responseCount: $response');
+  Future<double> multiply(double a, double b, {RpcContext? context}) async {
+    final response = await calculate(
+        CalculationRequest(a: a, b: b, operation: 'multiply'),
+        context: context);
+    if (!response.success) throw Exception(response.errorMessage);
+    return response.result!;
   }
-  print('\n');
-
-  print('═══════════════════════════════════════════════════════════════');
-  print('📌 ДЕМОНСТРАЦИЯ 4: RpcLoggerFactory с контекстом');
-  print('═══════════════════════════════════════════════════════════════\n');
-
-  // Демонстрируем как можно создать логгер с контекстом напрямую
-  final demoContext = RpcContextUtils.withTracing(traceId: 'LOGGER_DEMO_789');
-  print('🔸 Создаем логгер с контекстом через RpcLoggerFactory:');
-
-  // Создаем логгер с контекстом через новый factory
-  final contextLogger = RpcLogger('DemoLogger', context: demoContext);
-
-  contextLogger.info('Этот лог автоматически содержит trace ID!');
-  contextLogger.debug('Debug сообщение с автоматической трассировкой');
-  contextLogger.warning('Warning с trace ID');
-
-  // Создаем child логгер - он тоже наследует контекст!
-  final childLogger = contextLogger.child('ChildModule');
-  childLogger.info('Child логгер тоже автоматически имеет trace ID!');
-
-  print('\n');
-
-  print('═══════════════════════════════════════════════════════════════');
-  print('📌 ДЕМОНСТРАЦИЯ 5: Цепочка вызовов с наследованием trace ID');
-  print('═══════════════════════════════════════════════════════════════\n');
-
-  // Создаем parent контекст
-  final parentContext = RpcContextUtils.withTracing(traceId: 'CHAIN_TRACE_999');
-  print('🔸 Parent context trace ID: ${parentContext.traceId}');
-
-  // Используем parent контекст для первого вызова
-  final firstResult = await calculator.calculate(
-    CalculationRequest(a: 100, b: 25, operation: 'divide'),
-    context: parentContext,
-  );
-  print('  ✅ Первый результат: $firstResult');
-
-  // Создаем child контекст из parent'а (наследует trace ID, новый request ID)
-  final childContext = parentContext.createChild();
-  print('  🔗 Child context trace ID: ${childContext.traceId} (наследован)');
-  print('  🔗 Child context request ID: ${childContext.requestId} (новый)');
-
-  final secondResult = await calculator.calculate(
-    CalculationRequest(a: firstResult.result!, b: 10, operation: 'add'),
-    context: childContext,
-  );
-  print('  ✅ Второй результат: $secondResult\n');
-
-  print('═══════════════════════════════════════════════════════════════');
-  print('✨ РЕЗЮМЕ ВОЗМОЖНОСТЕЙ');
-  print('═══════════════════════════════════════════════════════════════\n');
-
-  print('🎯 CallerEndpoint:');
-  print('   ✅ Автоматически создает trace ID если контекст не передан');
-  print('   ✅ Использует существующий trace ID если контекст передан');
-  print('   ✅ Дополняет частичный контекст trace ID\'ом\n');
-
-  print('🎯 ResponderEndpoint:');
-  print('   ✅ Автоматически создает trace ID если клиент не передал');
-  print('   ✅ Использует trace ID от клиента если передан');
-  print('   ✅ Все child логгеры автоматически наследуют trace ID\n');
-
-  print('🎯 RpcLoggerFactory:');
-  print('   ✅ Поддерживает создание контекстно-осведомленных логгеров');
-  print('   ✅ Автоматически инжектит trace ID и request ID в логи');
-  print('   ✅ Child логгеры наследуют контекст от parent\'а\n');
-
-  print('🎯 RpcContext:');
-  print('   ✅ Удобные factory методы для создания с trace ID');
-  print('   ✅ Методы createChild() для наследования trace ID');
-  print('   ✅ Поддержка metadata, timeout, cancellation\n');
-
-  // Закрываем ресурсы
-  await serverEndpoint.close();
-  await clientEndpoint.close();
-
-  print('🏁 Демонстрация завершена!');
 }
