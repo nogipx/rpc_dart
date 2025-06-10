@@ -140,7 +140,6 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
 
   /// Закрывает стрим и освобождает ресурсы
   Future<void> close() async {
-    _logger?.debug('Закрытие ClientStreamResponder [id: $id]');
     await _subscription?.cancel();
     await _processor.close();
   }

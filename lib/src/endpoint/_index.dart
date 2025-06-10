@@ -27,7 +27,7 @@ abstract base class RpcEndpointBase {
 
   void addMiddleware(IRpcMiddleware middleware) {
     _middlewares.add(middleware);
-    logger.info('Добавлен middleware: ${middleware.toString()}');
+    logger.debug('Добавлен middleware: ${middleware.toString()}');
   }
 
   bool get isActive => _isActive;
@@ -36,18 +36,18 @@ abstract base class RpcEndpointBase {
 
   /// Запускает эндпоинт
   void start() {
-    logger.info('Запуск RPC эндпоинта');
+    logger.debug('Запуск RPC эндпоинта');
   }
 
   /// Останавливает эндпоинт
   void stop() {
-    logger.info('Остановка RPC эндпоинта');
+    logger.debug('Остановка RPC эндпоинта');
   }
 
   Future<void> close() async {
     if (!_isActive) return;
 
-    logger.info('Закрытие RpcEndpoint');
+    logger.debug('Закрытие RpcEndpoint');
     _isActive = false;
     _middlewares.clear();
 
@@ -71,7 +71,7 @@ abstract base class RpcEndpointBase {
     } finally {
       // Гарантируем, что эндпоинт помечен как неактивный
       _isActive = false;
-      logger.info('RpcEndpoint закрыт');
+      logger.debug('RpcEndpoint закрыт');
     }
   }
 }

@@ -105,7 +105,6 @@ final class ServerStreamCaller<TRequest extends IRpcSerializable,
       // Автоматически завершаем отправку, чтобы сигнализировать серверу
       // что у нас только один запрос (семантика серверного стрима)
       await _processor.finishSending();
-      _logger?.debug('Отправка автоматически завершена для серверного стрима');
     } catch (e, stackTrace) {
       _logger?.error('Ошибка при отправке запроса в серверный стрим',
           error: e, stackTrace: stackTrace);

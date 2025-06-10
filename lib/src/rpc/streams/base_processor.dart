@@ -105,8 +105,6 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
       onDone: () async {
         if (!_isActive) return;
 
-        _logger?.info(
-            'Завершение отправки ответов для $_methodPath [streamId: $_streamId]');
         try {
           final trailers = RpcMetadata.forTrailer(RpcStatus.OK);
           await _transport.sendMetadata(_streamId, trailers, endStream: true);
@@ -284,7 +282,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
   Future<void> finishSending() async {
     if (!_isActive) return;
 
-    _logger?.info(
+    _logger?.debug(
         'Завершение отправки ответов для $_methodPath [streamId: $_streamId]');
 
     if (!_responseController.isClosed) {
@@ -296,7 +294,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
   Future<void> close() async {
     if (!_isActive) return;
 
-    _logger?.info(
+    _logger?.debug(
         'Закрытие StreamProcessor для $_methodPath [streamId: $_streamId]');
     _isActive = false;
 
@@ -435,8 +433,6 @@ final class CallProcessor<TRequest extends IRpcSerializable,
       onDone: () async {
         if (!_isActive) return;
 
-        _logger?.info(
-            'Завершение отправки запросов для $_methodPath [streamId: $_streamId]');
         try {
           await _transport.finishSending(_streamId);
           _logger?.debug(
@@ -656,7 +652,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
   Future<void> finishSending() async {
     if (!_isActive) return;
 
-    _logger?.info(
+    _logger?.debug(
         'Завершение отправки запросов для $_methodPath [streamId: $_streamId]');
 
     if (!_requestController.isClosed) {
@@ -668,7 +664,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
   Future<void> close() async {
     if (!_isActive) return;
 
-    _logger?.info(
+    _logger?.debug(
         'Закрытие CallProcessor для $_methodPath [streamId: $_streamId]');
     _isActive = false;
 

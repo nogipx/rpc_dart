@@ -178,7 +178,6 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
     }
 
     _sendingFinished = true;
-    _logger?.debug('Завершение отправки в ClientStreamCaller');
 
     try {
       // Завершаем отправку запросов

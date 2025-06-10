@@ -59,7 +59,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   }) {
     final logMessage = _formatLogMessage(message,
         context: context, streamId: streamId, methodKey: methodKey);
-    logger.info(logMessage, rpcContext: context);
+    logger.debug(logMessage, rpcContext: context);
   }
 
   void _logDebugWithContext(
@@ -519,9 +519,6 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final serviceName = i.serviceName;
     final methodName = i.methodName;
 
-    logger.debug(
-        'Создание ClientStreamResponder для $serviceName.$methodName [streamId: $streamId]');
-
     // Создаем контекст из метаданных
     final context = _createContextFromMessage(_streamMetadata[streamId] ??
         RpcTransportMessage(
@@ -584,9 +581,6 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     final serviceName = i.serviceName;
     final methodName = i.methodName;
-
-    logger.debug(
-        'Создание ServerStreamResponder для $serviceName.$methodName [streamId: $streamId]');
 
     // Создаем контекст из метаданных
     final context = _createContextFromMessage(_streamMetadata[streamId] ??
@@ -707,9 +701,6 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final serviceName = i.serviceName;
     final methodName = i.methodName;
 
-    logger.debug(
-        'Создание BidirectionalStreamResponder для $serviceName.$methodName [streamId: $streamId]');
-
     // Создаем контекст из метаданных
     final context = _createContextFromMessage(_streamMetadata[streamId] ??
         RpcTransportMessage(
@@ -794,7 +785,6 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         }
 
         // Завершаем отправку ответов
-        logger.debug('Завершение отправки ответов [id: ${responder.id}]');
         await responder.finishReceiving();
       } catch (e, stackTrace) {
         logger.error(
@@ -819,7 +809,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       );
     }
 
-    logger.info(
+    logger.debug(
       'Регистрируем контракт сервиса: $serviceName',
     );
     _contracts[serviceName] = contract;
@@ -841,20 +831,20 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         );
       }
 
-      logger.info(
+      logger.debug(
         'Регистрируем метод: $methodKey (${method.type.name})',
       );
       _methods[methodKey] = method;
     }
 
-    logger.info(
+    logger.debug(
       'Контракт $serviceName зарегистрирован с ${methods.length} методами',
     );
 
     // Регистрируем подконтракты
     final subcontracts = contract.subcontracts;
     if (subcontracts.isNotEmpty) {
-      logger.info(
+      logger.debug(
         'Обнаружено ${subcontracts.length} подконтрактов для $serviceName, начинаем регистрацию',
       );
 
@@ -870,7 +860,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         }
       }
 
-      logger.info(
+      logger.debug(
         'Регистрация подконтрактов для $serviceName завершена',
       );
     }

@@ -89,7 +89,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     _logger = logger?.child('UnaryResponder');
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
-    _logger?.info('Создан унарный сервер для $_methodPath');
+    _logger?.debug('Создан унарный сервер для $_methodPath');
 
     // Регистрируем поток как принадлежащий этому методу
     _streamBelongsToThisMethod[id] = true;
@@ -200,7 +200,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
     // Сразу помечаем запрос как обрабатываемый, чтобы предотвратить повторную обработку
     _streamRequestHandled[streamId] = true;
-    _logger?.info('Обработка запроса для $_methodPath [streamId: $streamId]');
+    _logger?.debug('Обработка запроса для $_methodPath [streamId: $streamId]');
 
     try {
       // Отправляем начальные заголовки, если еще не отправляли
@@ -256,7 +256,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         endStream: true,
       );
 
-      _logger?.info(
+      _logger?.debug(
           'Ответ успешно отправлен для $_methodPath [streamId: $streamId]');
     } catch (e, stackTrace) {
       _logger?.error(
@@ -298,7 +298,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// ВНИМАНИЕ: Не закрывает транспорт, так как он может использоваться
   /// другими серверами. Транспорт должен закрываться явно.
   Future<void> close() async {
-    _logger?.info('Закрытие унарного сервера $_methodPath');
+    _logger?.debug('Закрытие унарного сервера $_methodPath');
     await _subscription?.cancel();
     _logger?.debug('Отменена подписка на входящие сообщения');
   }

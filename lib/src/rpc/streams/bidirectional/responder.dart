@@ -99,7 +99,6 @@ final class BidirectionalStreamResponder<TRequest extends IRpcSerializable,
   Future<void> finishReceiving() async {
     if (!_isActive) return;
 
-    _logger?.debug('Завершение отправки ответов [id: $id]');
     await _processor.finishSending();
   }
 
@@ -107,7 +106,6 @@ final class BidirectionalStreamResponder<TRequest extends IRpcSerializable,
   Future<void> close() async {
     if (!_isActive) return;
 
-    _logger?.debug('Закрытие BidirectionalStreamResponder [id: $id]');
     _isActive = false;
     await _processor.close();
   }

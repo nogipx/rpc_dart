@@ -83,7 +83,6 @@ final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
   /// После вызова этого метода новые запросы отправлять нельзя.
   /// Поток ответов продолжает работать до завершения сервером.
   Future<void> finishSending() async {
-    _logger?.debug('Завершение отправки запросов в двунаправленный стрим');
     await _processor.finishSending();
   }
 

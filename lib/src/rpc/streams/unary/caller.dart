@@ -79,7 +79,7 @@ final class UnaryCaller<TRequest, TResponse> {
     _logger = logger?.child('UnaryCaller');
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
-    _logger?.info(
+    _logger?.debug(
         'Создан унарный клиент для $_methodPath${_context != null ? ' с контекстом' : ''}');
   }
 
@@ -100,7 +100,7 @@ final class UnaryCaller<TRequest, TResponse> {
     // Создаем новый stream для этого вызова
     final streamId = _transport.createStream();
 
-    _logger?.info(
+    _logger?.debug(
       'Унарный вызов $_methodPath начат [streamId: $streamId]',
     );
 
@@ -143,7 +143,7 @@ final class UnaryCaller<TRequest, TResponse> {
                     'Десериализация ответа размером ${msgBytes.length} байт [streamId: $streamId]');
                 final response = _responseSerializer.deserialize(msgBytes);
                 if (!completer.isCompleted) {
-                  _logger?.info(
+                  _logger?.debug(
                       'Унарный вызов $_methodPath успешно завершен [streamId: $streamId]');
                   completer.complete(response);
                   break; // Для унарного вызова нужен только первый ответ
@@ -267,7 +267,7 @@ final class UnaryCaller<TRequest, TResponse> {
   /// другими клиентами. Транспорт должен закрываться явно.
   Future<void> close() async {
     // Клиент не владеет транспортом, поэтому не закрываем его
-    _logger?.info('Унарный клиент $_methodPath закрыт');
+    _logger?.debug('Унарный клиент $_methodPath закрыт');
   }
 
   /// Проверяет контекст перед выполнением вызова
