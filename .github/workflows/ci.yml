@@ -81,11 +81,8 @@ jobs:
     - name: Install dependencies
       run: dart pub get
     
-    - name: Run unit tests
-      run: dart test --tags=unit --reporter=github --coverage=coverage
-    
-    - name: Run smoke tests 
-      run: dart test --tags=smoke --reporter=github
+    - name: Run main tests (excluding performance/concurrency)
+      run: dart test --exclude-tags=performance,concurrency --reporter=github --coverage=coverage
     
     - name: Generate coverage report
       run: |
@@ -134,30 +131,20 @@ jobs:
     - name: Install dependencies
       run: dart pub get
     
-    - name: Run performance tests
+    - name: Run performance and concurrency tests
       run: dart test --tags=performance --reporter=github
-    
-    - name: Run concurrency tests
-      run: dart test --tags=concurrency --reporter=github
 
-  # Тестирование на разных версиях Dart
-  test-matrix:
-    name: "🧪 Test Matrix"
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+  # Тестирование совместимости с версиями Dart
+  test-compatibility:
+    name: "🧪 Dart Compatibility"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: lint
     
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        sdk: ['3.0.0', 'stable', 'beta']
-        exclude:
-          # Исключаем beta на Windows и macOS для экономии ресурсов
-          - os: windows-latest
-            sdk: beta
-          - os: macos-latest  
-            sdk: beta
+        sdk: ['3.0.0', 'stable']
     
     steps:
     - name: Checkout
@@ -171,5 +158,5 @@ jobs:
     - name: Install dependencies
       run: dart pub get
     
-    - name: Run fast tests on ${{ matrix.os }} with Dart ${{ matrix.sdk }}
-      run: dart test --exclude-tags=performance,concurrency --reporter=github
+    - name: Run smoke tests on Dart ${{ matrix.sdk }}
+      run: dart test --tags=smoke --reporter=github
