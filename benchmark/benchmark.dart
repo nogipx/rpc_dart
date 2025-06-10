@@ -265,8 +265,8 @@ final class TestRpcContract extends RpcResponderContract {
     );
   }
 
-  Future<TestResponse> _processRequest(
-      RpcContext context, TestRequest request) async {
+  Future<TestResponse> _processRequest(TestRequest request,
+      {RpcContext? context}) async {
     final start = DateTime.now();
 
     // Симулируем обработку
@@ -281,13 +281,13 @@ final class TestRpcContract extends RpcResponderContract {
       processingTimeMs: processingTime,
       metadata: {
         'server_time': end.toIso8601String(),
-        'context_headers': context.headers.length,
+        'context_headers': (context?.headers.length ?? 0),
       },
     );
   }
 
-  Stream<TestResponse> _streamResponses(
-      RpcContext context, TestRequest request) async* {
+  Stream<TestResponse> _streamResponses(TestRequest request,
+      {RpcContext? context}) async* {
     for (int i = 0; i < 5; i++) {
       yield TestResponse(
         requestId: request.id,
@@ -298,8 +298,8 @@ final class TestRpcContract extends RpcResponderContract {
     }
   }
 
-  Future<TestResponse> _collectRequests(
-      RpcContext context, Stream<TestRequest> requests) async {
+  Future<TestResponse> _collectRequests(Stream<TestRequest> requests,
+      {RpcContext? context}) async {
     final start = DateTime.now();
     final collected = <String>[];
 
@@ -318,8 +318,8 @@ final class TestRpcContract extends RpcResponderContract {
     );
   }
 
-  Stream<TestResponse> _processStream(
-      RpcContext context, Stream<TestRequest> requests) async* {
+  Stream<TestResponse> _processStream(Stream<TestRequest> requests,
+      {RpcContext? context}) async* {
     await for (final request in requests) {
       await Future.delayed(Duration(microseconds: 25));
 

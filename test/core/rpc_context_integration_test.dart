@@ -454,8 +454,9 @@ final class _TestServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _getUserData(RpcContext context, RpcString userId) async {
-    final authHeader = context.getHeader('authorization');
+  Future<RpcString> _getUserData(RpcString userId,
+      {RpcContext? context}) async {
+    final authHeader = context?.getHeader('authorization');
     return 'User data for ${userId.value} (auth: $authHeader)'.rpc;
   }
 }
@@ -474,11 +475,11 @@ final class _TracingServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _tracedOperation(
-      RpcContext context, RpcString request) async {
-    final traceId = context.traceId;
-    final spanId = context.getHeader('x-span-id');
-    final parentSpanId = context.getHeader('x-parent-span-id');
+  Future<RpcString> _tracedOperation(RpcString request,
+      {RpcContext? context}) async {
+    final traceId = context?.traceId;
+    final spanId = context?.getHeader('x-span-id');
+    final parentSpanId = context?.getHeader('x-parent-span-id');
 
     return 'Traced ${request.value} [trace=$traceId, span=$spanId, parent=$parentSpanId]'
         .rpc;
@@ -499,11 +500,11 @@ final class _CombinedContextServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _processWithFullContext(
-      RpcContext context, RpcString request) async {
-    final auth = context.getHeader('authorization');
-    final traceId = context.traceId;
-    final userId = context.getHeader('user-id');
+  Future<RpcString> _processWithFullContext(RpcString request,
+      {RpcContext? context}) async {
+    final auth = context?.getHeader('authorization');
+    final traceId = context?.traceId;
+    final userId = context?.getHeader('user-id');
 
     return 'Processed ${request.value} [auth=$auth, trace=$traceId, user=$userId]'
         .rpc;
@@ -524,11 +525,11 @@ final class _StreamServiceContract extends RpcResponderContract {
     );
   }
 
-  Stream<RpcString> _generateStream(
-      RpcContext context, RpcString request) async* {
-    final mode = context.getHeader('streaming-mode');
-    final userId = context.getHeader('user-id');
-    final countHeader = context.getHeader('stream-count');
+  Stream<RpcString> _generateStream(RpcString request,
+      {RpcContext? context}) async* {
+    final mode = context?.getHeader('streaming-mode');
+    final userId = context?.getHeader('user-id');
+    final countHeader = context?.getHeader('stream-count');
     final count = int.tryParse(countHeader ?? '3') ?? 3;
 
     for (int i = 1; i <= count; i++) {
@@ -551,12 +552,12 @@ final class _AggregationServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _aggregateData(
-      RpcContext context, Stream<RpcString> requests) async {
-    final aggregationType = context.getHeader('aggregation-type');
-    final userId = context.getHeader('user-id');
-    final auth = context.getHeader('authorization');
-    final processorId = context.getHeader('processor-id');
+  Future<RpcString> _aggregateData(Stream<RpcString> requests,
+      {RpcContext? context}) async {
+    final aggregationType = context?.getHeader('aggregation-type');
+    final userId = context?.getHeader('user-id');
+    final auth = context?.getHeader('authorization');
+    final processorId = context?.getHeader('processor-id');
 
     final allRequests = await requests.toList();
     return 'Aggregated ${allRequests.length} элементов [type=$aggregationType, user=$userId, auth=$auth, processor=$processorId]'
@@ -578,11 +579,11 @@ final class _EchoServiceContract extends RpcResponderContract {
     );
   }
 
-  Stream<RpcString> _echoStream(
-      RpcContext context, Stream<RpcString> requests) async* {
-    final prefix = context.getHeader('echo-prefix');
-    final sessionId = context.getHeader('session-id');
-    final uppercaseHeader = context.getHeader('echo-uppercase');
+  Stream<RpcString> _echoStream(Stream<RpcString> requests,
+      {RpcContext? context}) async* {
+    final prefix = context?.getHeader('echo-prefix');
+    final sessionId = context?.getHeader('session-id');
+    final uppercaseHeader = context?.getHeader('echo-uppercase');
     final uppercase = uppercaseHeader?.toLowerCase() == 'true';
 
     await for (final request in requests) {
@@ -606,8 +607,9 @@ final class _ErrorServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _throwError(RpcContext context, RpcString request) async {
-    final traceId = context.traceId;
+  Future<RpcString> _throwError(RpcString request,
+      {RpcContext? context}) async {
+    final traceId = context?.traceId;
     throw Exception('Service error for ${request.value} [trace=$traceId]');
   }
 }

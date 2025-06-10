@@ -126,7 +126,7 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
   void setup() {
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'GetPublicData',
-      handler: _getPublicData,
+      handler: getPublicData,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Получает публичные данные без аутентификации',
@@ -134,7 +134,7 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
 
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'GetPrivateData',
-      handler: _getPrivateData,
+      handler: getPrivateData,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Получает приватные данные с проверкой токена',
@@ -142,7 +142,7 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
 
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'GetSlowData',
-      handler: _getSlowData,
+      handler: getSlowData,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Медленная операция для тестирования таймаутов',
@@ -150,7 +150,7 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
 
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'GetLongRunningData',
-      handler: _getLongRunningData,
+      handler: getLongRunningData,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Долгая операция для тестирования отмены',
@@ -158,15 +158,16 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
 
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'GetComplexData',
-      handler: _getComplexData,
+      handler: getComplexData,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Сложная операция с множественными проверками контекста',
     );
   }
 
-  Future<RpcString> _getPublicData(
-      RpcContext context, RpcString message) async {
+  @override
+  Future<RpcString> getPublicData(RpcString message,
+      {RpcContext? context}) async {
     final logger = RpcLogger('PublicData');
     logger.info('📂 Получение публичных данных: $message');
     logger.info('🔍 Context: $context');
@@ -175,14 +176,15 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
     return 'PUBLIC: ${message.value}'.rpc;
   }
 
-  Future<RpcString> _getPrivateData(
-      RpcContext context, RpcString message) async {
+  @override
+  Future<RpcString> getPrivateData(RpcString message,
+      {RpcContext? context}) async {
     final logger = RpcLogger('PrivateData');
     logger.info('🔒 Получение приватных данных: $message');
     logger.info('🔍 Context: $context');
 
     // Проверяем аутентификацию
-    final authHeader = context.getHeader('authorization');
+    final authHeader = context?.getHeader('authorization');
     if (authHeader == null || !authHeader.startsWith('Bearer ')) {
       throw RpcException(
           'Unauthorized: Missing or invalid authorization header');
@@ -198,33 +200,36 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
     return 'PRIVATE: ${message.value}'.rpc;
   }
 
-  Future<RpcString> _getSlowData(RpcContext context, RpcString message) async {
+  @override
+  Future<RpcString> getSlowData(RpcString message,
+      {RpcContext? context}) async {
     final logger = RpcLogger('SlowData');
     logger.info('🐌 Получение медленных данных: $message');
     logger.info('🔍 Context: $context');
 
     // Проверяем deadline
-    final remaining = context.remainingTime;
+    final remaining = context?.remainingTime;
     if (remaining != null && remaining < Duration(milliseconds: 200)) {
       logger.warning('⏰ Недостаточно времени: ${remaining.inMilliseconds}мс');
       throw RpcDeadlineExceededException(
-          context.deadline!, Duration(milliseconds: 200));
+          context!.deadline!, Duration(milliseconds: 200));
     }
 
     // Имитируем медленную операцию
     await Future.delayed(Duration(milliseconds: 200));
 
     // Проверяем не истек ли deadline
-    if (context.isExpired) {
+    if (context?.isExpired == true) {
       throw RpcDeadlineExceededException(
-          context.deadline!, Duration(milliseconds: 200));
+          context!.deadline!, Duration(milliseconds: 200));
     }
 
     return 'SLOW: ${message.value}'.rpc;
   }
 
-  Future<RpcString> _getLongRunningData(
-      RpcContext context, RpcString message) async {
+  @override
+  Future<RpcString> getLongRunningData(RpcString message,
+      {RpcContext? context}) async {
     final logger = RpcLogger('LongRunningData');
     logger.info('⏳ Получение данных с долгой обработкой: $message');
     logger.info('🔍 Context: $context');
@@ -232,7 +237,7 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
     // Выполняем операцию с проверкой отмены
     for (int i = 0; i < 100; i++) {
       // Проверяем не отменена ли операция
-      context.cancellationToken?.throwIfCancelled();
+      context?.cancellationToken?.throwIfCancelled();
 
       await Future.delayed(Duration(milliseconds: 10));
 
@@ -244,24 +249,25 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
     return 'LONG_RUNNING: ${message.value}'.rpc;
   }
 
-  Future<RpcString> _getComplexData(
-      RpcContext context, RpcString message) async {
+  @override
+  Future<RpcString> getComplexData(RpcString message,
+      {RpcContext? context}) async {
     final logger = RpcLogger('ComplexData');
     logger.info('🎛️ Получение сложных данных: $message');
     logger.info('🔍 Context: $context');
 
     // Проверяем различные части контекста
-    final userId = context.getHeader('user-id');
-    final sessionId = context.getHeader('session-id');
-    final correlationId = context.getHeader('correlation-id');
-    final featureFlags = context.getValue<List<String>>('feature-flags');
+    final userId = context?.getHeader('user-id');
+    final sessionId = context?.getHeader('session-id');
+    final correlationId = context?.getHeader('correlation-id');
+    final featureFlags = context?.getValue<List<String>>('feature-flags');
 
     logger.info('👤 User ID: $userId');
     logger.info('🎯 Session ID: $sessionId');
     logger.info('🔗 Correlation ID: $correlationId');
     logger.info('🚩 Feature flags: $featureFlags');
-    logger.info('🆔 Trace ID: ${context.traceId}');
-    logger.info('📝 Request ID: ${context.requestId}');
+    logger.info('🆔 Trace ID: ${context?.traceId}');
+    logger.info('📝 Request ID: ${context?.requestId}');
 
     await Future.delayed(Duration(milliseconds: 30));
 
@@ -271,32 +277,11 @@ final class AuthenticatedServiceResponder extends RpcResponderContract
       'session': sessionId,
       'correlation': correlationId,
       'features': featureFlags?.join(','),
-      'trace': context.traceId,
+      'trace': context?.traceId,
     };
 
     return 'COMPLEX: ${result.toString()}'.rpc;
   }
-
-  // Реализуем интерфейсные методы (они не будут вызываться напрямую)
-  @override
-  Future<RpcString> getPublicData(RpcString message) =>
-      throw UnimplementedError();
-
-  @override
-  Future<RpcString> getPrivateData(RpcString message) =>
-      throw UnimplementedError();
-
-  @override
-  Future<RpcString> getSlowData(RpcString message) =>
-      throw UnimplementedError();
-
-  @override
-  Future<RpcString> getLongRunningData(RpcString message) =>
-      throw UnimplementedError();
-
-  @override
-  Future<RpcString> getComplexData(RpcString message) =>
-      throw UnimplementedError();
 }
 
 //

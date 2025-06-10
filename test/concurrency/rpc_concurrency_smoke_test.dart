@@ -225,18 +225,18 @@ final class TestConcurrencyResponderContract extends RpcResponderContract {
   }
 
   Future<TestProcessResult> _handleProcessSimple(
-    RpcContext context,
-    TestProcessRequest request,
-  ) async {
+    TestProcessRequest request, {
+    RpcContext? context,
+  }) async {
     // Минимальная симуляция обработки
     await Future.delayed(Duration(microseconds: 100));
     return TestProcessResult('Processed: ${request.input}');
   }
 
   Future<TestProcessResult> _handleProcessWithError(
-    RpcContext context,
-    TestProcessRequest request,
-  ) async {
+    TestProcessRequest request, {
+    RpcContext? context,
+  }) async {
     throw Exception('Simulated error for: ${request.input}');
   }
 }

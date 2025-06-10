@@ -82,7 +82,7 @@ final class DataAggregatorResponder extends RpcResponderContract {
   @override
   void setup() {
     addClientStreamMethod<DataChunk, AggregationResult>(
-      methodName: 'aggregateData',
+      methodName: 'AggregateData',
       handler: _aggregateData,
       requestCodec: DataChunk.codec,
       responseCodec: AggregationResult.codec,
@@ -90,13 +90,13 @@ final class DataAggregatorResponder extends RpcResponderContract {
     );
   }
 
-  Future<AggregationResult> _aggregateData(
-      RpcContext context, Stream<DataChunk> dataChunks) async {
+  Future<AggregationResult> _aggregateData(Stream<DataChunk> dataChunks,
+      {RpcContext? context}) async {
     print('СЕРВЕР: Начинаем агрегацию данных...');
     print(
-        'СЕРВЕР: Контекст - trace: ${context.traceId}, request: ${context.requestId}');
+        'СЕРВЕР: Контекст - trace: ${context?.traceId}, request: ${context?.requestId}');
 
-    final userId = context.getValue<String>('user-id');
+    final userId = context?.getValue<String>('user-id');
     if (userId != null) {
       print('СЕРВЕР: Обрабатываем данные для пользователя: $userId');
     }
@@ -107,7 +107,7 @@ final class DataAggregatorResponder extends RpcResponderContract {
     // Обрабатываем поток данных
     await for (final chunk in dataChunks) {
       // Проверяем не отменен ли запрос
-      context.cancellationToken?.throwIfCancelled();
+      context?.cancellationToken?.throwIfCancelled();
 
       print('СЕРВЕР: Получен чанк #${chunk.id}: "${chunk.data}"');
       chunks.add(chunk);
@@ -141,15 +141,13 @@ final class DataAggregatorCaller extends RpcCallerContract {
 
   Future<AggregationResult> aggregateData(Stream<DataChunk> dataChunks,
       {RpcContext? context}) async {
-    final clientStreamBuilder =
-        endpoint.clientStream<DataChunk, AggregationResult>(
-      serviceName: serviceName,
-      methodName: 'aggregateData',
+    return await callClientStream<DataChunk, AggregationResult>(
+      methodName: 'AggregateData',
       requestCodec: DataChunk.codec,
       responseCodec: AggregationResult.codec,
+      requests: dataChunks,
+      context: context,
     );
-
-    return await clientStreamBuilder(dataChunks);
   }
 }
 

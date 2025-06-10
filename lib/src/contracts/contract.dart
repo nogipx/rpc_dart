@@ -49,7 +49,8 @@ abstract base class RpcResponderContract implements IRpcContract {
   void addUnaryMethod<TRequest extends IRpcSerializable,
       TResponse extends IRpcSerializable>({
     required String methodName,
-    required Future<TResponse> Function(RpcContext, TRequest) handler,
+    required Future<TResponse> Function(TRequest, {RpcContext? context})
+        handler,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     String description = '',
@@ -70,7 +71,8 @@ abstract base class RpcResponderContract implements IRpcContract {
   void addServerStreamMethod<TRequest extends IRpcSerializable,
       TResponse extends IRpcSerializable>({
     required String methodName,
-    required Stream<TResponse> Function(RpcContext, TRequest) handler,
+    required Stream<TResponse> Function(TRequest, {RpcContext? context})
+        handler,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     String description = '',
@@ -91,7 +93,8 @@ abstract base class RpcResponderContract implements IRpcContract {
   void addClientStreamMethod<TRequest extends IRpcSerializable,
       TResponse extends IRpcSerializable>({
     required String methodName,
-    required Future<TResponse> Function(RpcContext, Stream<TRequest>) handler,
+    required Future<TResponse> Function(Stream<TRequest>, {RpcContext? context})
+        handler,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     String description = '',
@@ -112,7 +115,8 @@ abstract base class RpcResponderContract implements IRpcContract {
   void addBidirectionalMethod<TRequest extends IRpcSerializable,
       TResponse extends IRpcSerializable>({
     required String methodName,
-    required Stream<TResponse> Function(RpcContext, Stream<TRequest>) handler,
+    required Stream<TResponse> Function(Stream<TRequest>, {RpcContext? context})
+        handler,
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     String description = '',

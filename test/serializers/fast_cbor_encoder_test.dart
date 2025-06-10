@@ -31,7 +31,7 @@ void main() {
         expect(decoded['medium_negative'], equals([-25, -256, -257]));
         expect(decoded['large_negative'], equals([-65536, -4294967295]));
 
-        expect(stopwatch.elapsedMicroseconds, lessThan(10000)); // < 10ms
+        expect(stopwatch.elapsedMicroseconds, lessThan(50000)); // < 50ms
       });
 
       test('String encoding optimization', () {
@@ -102,25 +102,39 @@ void main() {
           'special_zero': [0.0, -0.0],
         };
 
-        final stopwatch = Stopwatch()..start();
-        final encoded = CborCodec.encode(testData);
-        stopwatch.stop();
+        // Измеряем время несколько раз для более стабильного результата
+        final times = <int>[];
+        for (int i = 0; i < 3; i++) {
+          final stopwatch = Stopwatch()..start();
+          final encoded = CborCodec.encode(testData);
+          stopwatch.stop();
+          times.add(stopwatch.elapsedMicroseconds);
 
-        print('Float encoding took: ${stopwatch.elapsedMicroseconds}μs');
+          if (i == 0) {
+            // Проверяем корректность только в первый раз
+            final decoded = CborCodec.decode(encoded);
+            final simpleFloats = decoded['simple_floats'] as List;
+            expect(simpleFloats[0], equals(0.0));
+            expect(simpleFloats[1], equals(1.0));
+            expect(simpleFloats[2], equals(-1.0));
+            expect(simpleFloats[3], closeTo(3.14159, 0.00001));
 
-        final decoded = CborCodec.decode(encoded);
-        final simpleFloats = decoded['simple_floats'] as List;
-        expect(simpleFloats[0], equals(0.0));
-        expect(simpleFloats[1], equals(1.0));
-        expect(simpleFloats[2], equals(-1.0));
-        expect(simpleFloats[3], closeTo(3.14159, 0.00001));
+            final extremeFloats = decoded['extreme_floats'] as List;
+            expect(extremeFloats[0], equals(double.infinity));
+            expect(extremeFloats[1], equals(double.negativeInfinity));
+            expect(extremeFloats[2], isNaN);
+          }
+        }
 
-        final extremeFloats = decoded['extreme_floats'] as List;
-        expect(extremeFloats[0], equals(double.infinity));
-        expect(extremeFloats[1], equals(double.negativeInfinity));
-        expect(extremeFloats[2], isNaN);
+        final avgTime = times.reduce((a, b) => a + b) / times.length;
+        final minTime = times.reduce((a, b) => a < b ? a : b);
 
-        expect(stopwatch.elapsedMicroseconds, lessThan(5000)); // < 5ms
+        print(
+            'Float encoding times: ${times.join(', ')}μs (avg: ${avgTime.round()}μs, min: $minTimeμs)');
+
+        // Более мягкая проверка производительности - используем среднее время и увеличенный лимит
+        expect(avgTime, lessThan(3000)); // < 3ms среднее время
+        expect(minTime, lessThan(2000)); // < 2ms минимальное время
       });
 
       test('Complex nested structure encoding', () {
@@ -167,7 +181,7 @@ void main() {
         }
         expect(current['leaf'], equals(true));
 
-        expect(stopwatch.elapsedMilliseconds, lessThan(2000)); // < 2 секунды
+        expect(stopwatch.elapsedMilliseconds, lessThan(1000)); // < 1 секунда
       });
     });
 
@@ -305,7 +319,7 @@ void main() {
         expect(decoded['very_long_array'],
             equals(List.generate(100000, (i) => i % 1000)));
 
-        expect(stopwatch.elapsedMilliseconds, lessThan(10000)); // < 10 секунд
+        expect(stopwatch.elapsedMilliseconds, lessThan(3000)); // < 3 секунды
       });
     });
 

@@ -177,7 +177,7 @@ final class StreamServiceResponder extends RpcResponderContract
     // Унарный метод
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'ProcessData',
-      handler: _processData,
+      handler: processData,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Обрабатывает данные с контекстом',
@@ -186,7 +186,7 @@ final class StreamServiceResponder extends RpcResponderContract
     // Server streaming
     addServerStreamMethod<RpcString, RpcString>(
       methodName: 'GenerateData',
-      handler: _generateData,
+      handler: generateData,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Генерирует поток данных с контекстом',
@@ -195,7 +195,7 @@ final class StreamServiceResponder extends RpcResponderContract
     // Client streaming
     addClientStreamMethod<RpcString, RpcString>(
       methodName: 'AggregateData',
-      handler: _aggregateData,
+      handler: aggregateData,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Агрегирует поток данных с контекстом',
@@ -204,7 +204,7 @@ final class StreamServiceResponder extends RpcResponderContract
     // Bidirectional streaming
     addBidirectionalMethod<RpcString, RpcString>(
       methodName: 'ProcessStream',
-      handler: _processStream,
+      handler: processStream,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Обрабатывает двунаправленный поток с контекстом',
@@ -213,38 +213,46 @@ final class StreamServiceResponder extends RpcResponderContract
     // Долгая операция для демонстрации отмены
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'LongRunningOperation',
-      handler: _longRunningOperation,
+      handler: longRunningOperation,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       description: 'Долгая операция для демонстрации отмены',
     );
   }
 
-  Future<RpcString> _processData(RpcContext context, RpcString data) async {
+  // Реализуем интерфейсные методы
+  @override
+  Future<RpcString> processData(
+    RpcString data, {
+    RpcContext? context,
+  }) async {
     final logger = RpcLogger('ProcessData');
     logger.info('🔧 Обработка данных: ${data.value}');
     logger.info('🔍 Context: $context');
 
-    final userId = context.getHeader('user-id');
-    final traceId = context.traceId;
+    final userId = context?.getHeader('user-id');
+    final traceId = context?.traceId;
 
     await Future.delayed(Duration(milliseconds: 100));
 
     return 'Обработано: ${data.value} [user: $userId, trace: $traceId]'.rpc;
   }
 
-  Stream<RpcString> _generateData(
-      RpcContext context, RpcString request) async* {
+  @override
+  Stream<RpcString> generateData(
+    RpcString request, {
+    RpcContext? context,
+  }) async* {
     final logger = RpcLogger('GenerateData');
     logger.info('📊 Генерация данных для: ${request.value}');
     logger.info('🔍 Context: $context');
 
-    final streamType = context.getValue<String>('stream-type');
-    final userId = context.getHeader('user-id');
+    final streamType = context?.getValue<String>('stream-type');
+    final userId = context?.getHeader('user-id');
 
     for (int i = 1; i <= 3; i++) {
       // Проверяем отмену перед каждой итерацией
-      context.cancellationToken?.throwIfCancelled();
+      context?.cancellationToken?.throwIfCancelled();
 
       await Future.delayed(Duration(milliseconds: 200));
       yield 'Данные #$i [$streamType] [user: $userId]'.rpc;
@@ -253,19 +261,22 @@ final class StreamServiceResponder extends RpcResponderContract
     logger.info('✅ Генерация данных завершена');
   }
 
-  Future<RpcString> _aggregateData(
-      RpcContext context, Stream<RpcString> dataStream) async {
+  @override
+  Future<RpcString> aggregateData(
+    Stream<RpcString> dataStream, {
+    RpcContext? context,
+  }) async {
     final logger = RpcLogger('AggregateData');
     logger.info('📥 Агрегация потока данных');
     logger.info('🔍 Context: $context');
 
-    final streamType = context.getValue<String>('stream-type');
-    final userId = context.getHeader('user-id');
+    final streamType = context?.getValue<String>('stream-type');
+    final userId = context?.getHeader('user-id');
     final items = <String>[];
 
     await for (final item in dataStream) {
       // Проверяем отмену при получении каждого элемента
-      context.cancellationToken?.throwIfCancelled();
+      context?.cancellationToken?.throwIfCancelled();
 
       logger.info('📥 Получен item: ${item.value}');
       items.add(item.value);
@@ -278,19 +289,20 @@ final class StreamServiceResponder extends RpcResponderContract
     return result.rpc;
   }
 
-  Stream<RpcString> _processStream(
-      RpcContext context, Stream<RpcString> dataStream) async* {
+  @override
+  Stream<RpcString> processStream(Stream<RpcString> dataStream,
+      {RpcContext? context}) async* {
     final logger = RpcLogger('ProcessStream');
     logger.info('🔄 Обработка двунаправленного потока');
     logger.info('🔍 Context: $context');
 
-    final streamType = context.getValue<String>('stream-type');
-    final mode = context.getHeader('streaming-mode') ?? 'echo';
-    final userId = context.getHeader('user-id');
+    final streamType = context?.getValue<String>('stream-type');
+    final mode = context?.getHeader('streaming-mode') ?? 'echo';
+    final userId = context?.getHeader('user-id');
 
     await for (final item in dataStream) {
       // Проверяем отмену
-      context.cancellationToken?.throwIfCancelled();
+      context?.cancellationToken?.throwIfCancelled();
 
       logger.info('🔄 Обрабатываем: ${item.value}');
 
@@ -302,17 +314,18 @@ final class StreamServiceResponder extends RpcResponderContract
     logger.info('✅ Обработка потока завершена');
   }
 
-  Future<RpcString> _longRunningOperation(
-      RpcContext context, RpcString data) async {
+  @override
+  Future<RpcString> longRunningOperation(RpcString data,
+      {RpcContext? context}) async {
     final logger = RpcLogger('LongRunning');
     logger.info('⏳ Запуск долгой операции: ${data.value}');
     logger.info('🔍 Context: $context');
 
-    final operation = context.getValue<String>('operation');
+    final operation = context?.getValue<String>('operation');
 
     for (int i = 0; i < 100; i++) {
       // Проверяем отмену каждые 100мс
-      context.cancellationToken?.throwIfCancelled();
+      context?.cancellationToken?.throwIfCancelled();
 
       await Future.delayed(Duration(milliseconds: 100));
 
@@ -323,26 +336,6 @@ final class StreamServiceResponder extends RpcResponderContract
 
     return 'Долгая операция [$operation] завершена: ${data.value}'.rpc;
   }
-
-  // Реализуем интерфейсные методы (не используются напрямую)
-  @override
-  Future<RpcString> processData(RpcString data) => throw UnimplementedError();
-
-  @override
-  Stream<RpcString> generateData(RpcString request) =>
-      throw UnimplementedError();
-
-  @override
-  Future<RpcString> aggregateData(Stream<RpcString> dataStream) =>
-      throw UnimplementedError();
-
-  @override
-  Stream<RpcString> processStream(Stream<RpcString> dataStream) =>
-      throw UnimplementedError();
-
-  @override
-  Future<RpcString> longRunningOperation(RpcString data) =>
-      throw UnimplementedError();
 }
 
 //

@@ -110,13 +110,13 @@ Future<void> _demoContextUsage(CalculatorCaller client) async {
     print('DEBUG: Начало демонстрации контекста');
 
     // Создаем контекст с различными заголовками и значениями
-    final context = RpcContext.empty()
-        .withTraceId('demo-trace-${DateTime.now().millisecondsSinceEpoch}')
+    final context = RpcContextUtils.withBearerToken('calc-token-abc123')
         .withAdditionalHeaders({
           'user-id': 'user-123',
           'session-id': 'session-abc',
           'correlation-id': 'corr-xyz',
         })
+        .withTraceId('calc-demo-${DateTime.now().millisecondsSinceEpoch}')
         .withValue('calculation-type', 'demo')
         .withTimeout(Duration(seconds: 5));
 
@@ -131,8 +131,7 @@ Future<void> _demoContextUsage(CalculatorCaller client) async {
     final request = CalculationRequest(a: 10, b: 5, operation: 'multiply');
     print('\nВыполняем умножение с контекстом...');
 
-    final response =
-        await client.calculateWithContext(request, context: context);
+    final response = await client.calculate(request, context: context);
 
     if (response.success) {
       print('Результат с контекстом: ${response.result}');
@@ -150,10 +149,20 @@ Future<void> _demoContextUsage(CalculatorCaller client) async {
 Future<void> _demoBidirectionalStream(CalculatorCaller client) async {
   final random = Random();
 
+  // Создаем контекст для стрима
+  final streamContext =
+      RpcContextUtils.withApiKey('stream-api-key-xyz').withAdditionalHeaders({
+    'stream-type': 'calculator',
+    'batch-id': 'batch-${DateTime.now().millisecondsSinceEpoch}',
+  }).withTraceId('stream-${DateTime.now().millisecondsSinceEpoch}');
+
   // Создаем контроллер для отправки запросов
   final requestController = StreamController<CalculationRequest>();
 
-  final calculateStream = client.streamCalculate(requestController.stream);
+  final calculateStream = client.streamCalculate(
+    requestController.stream,
+    context: streamContext,
+  );
 
   // Подписываемся на стрим ответов
   final responseSubscription = calculateStream.listen(
@@ -197,63 +206,24 @@ Future<void> _demoBidirectionalStream(CalculatorCaller client) async {
 }
 
 /// Общий интерфейс для контракта калькулятора
-/// Определяет методы, которые должны быть реализованы
-/// как на сервере, так и на клиенте
-/// Базовый интерфейс с общими константами
 abstract interface class ICalculatorContract implements IRpcContract {
-  // Имена методов
-  static const methodCalculate = 'calculate';
-  static const methodStreamCalculate = 'streamCalculate';
-}
-
-/// Клиентский интерфейс (без контекста - контекст передается отдельно)
-abstract interface class ICalculatorCallerContract extends ICalculatorContract {
-  /// Выполняет одиночную операцию
   Future<CalculationResponse> calculate(CalculationRequest request);
-
-  /// Обрабатывает поток вычислений
   Stream<CalculationResponse> streamCalculate(
       Stream<CalculationRequest> requests);
 }
 
-/// Серверный интерфейс (с контекстом как первый параметр)
-abstract interface class ICalculatorResponderContract
-    extends ICalculatorContract {
-  /// Выполняет одиночную операцию
-  Future<CalculationResponse> calculate(
-      RpcContext context, CalculationRequest request);
-
-  /// Обрабатывает поток вычислений
-  Stream<CalculationResponse> streamCalculate(
-    RpcContext context,
-    Stream<CalculationRequest> requests,
-  );
-}
-
 /// Клиентская реализация калькулятора
 final class CalculatorCaller extends RpcCallerContract
-    implements ICalculatorCallerContract {
+    implements ICalculatorContract {
   /// Создает клиента с указанным эндпоинтом
   CalculatorCaller(RpcCallerEndpoint endpoint)
       : super('CalculatorService', endpoint);
 
   @override
-  Future<CalculationResponse> calculate(CalculationRequest request) {
-    return endpoint.unaryRequest<CalculationRequest, CalculationResponse>(
-      serviceName: serviceName,
-      methodName: ICalculatorContract.methodCalculate,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-      request: request,
-    );
-  }
-
-  /// Выполняет вычисление с контекстом
-  Future<CalculationResponse> calculateWithContext(CalculationRequest request,
+  Future<CalculationResponse> calculate(CalculationRequest request,
       {RpcContext? context}) {
-    return endpoint.unaryRequest<CalculationRequest, CalculationResponse>(
-      serviceName: serviceName,
-      methodName: ICalculatorContract.methodCalculate,
+    return callUnary<CalculationRequest, CalculationResponse>(
+      methodName: 'Calculate',
       requestCodec: CalculationRequest.codec,
       responseCodec: CalculationResponse.codec,
       request: request,
@@ -263,21 +233,21 @@ final class CalculatorCaller extends RpcCallerContract
 
   @override
   Stream<CalculationResponse> streamCalculate(
-      Stream<CalculationRequest> requests) {
-    return endpoint
-        .bidirectionalStream<CalculationRequest, CalculationResponse>(
-      serviceName: serviceName,
-      methodName: ICalculatorContract.methodStreamCalculate,
+      Stream<CalculationRequest> requests,
+      {RpcContext? context}) {
+    return callBidirectionalStream<CalculationRequest, CalculationResponse>(
+      methodName: 'StreamCalculate',
       requestCodec: CalculationRequest.codec,
       responseCodec: CalculationResponse.codec,
       requests: requests,
+      context: context,
     );
   }
 
   /// Удобный метод для сложения
-  Future<double> add(double a, double b) async {
+  Future<double> add(double a, double b, {RpcContext? context}) async {
     final request = CalculationRequest(a: a, b: b, operation: 'add');
-    final response = await calculate(request);
+    final response = await calculate(request, context: context);
     if (!response.success || response.result == null) {
       throw Exception(response.errorMessage ?? 'Failed to calculate');
     }
@@ -285,9 +255,9 @@ final class CalculatorCaller extends RpcCallerContract
   }
 
   /// Удобный метод для вычитания
-  Future<double> subtract(double a, double b) async {
+  Future<double> subtract(double a, double b, {RpcContext? context}) async {
     final request = CalculationRequest(a: a, b: b, operation: 'subtract');
-    final response = await calculate(request);
+    final response = await calculate(request, context: context);
     if (!response.success || response.result == null) {
       throw Exception(response.errorMessage ?? 'Failed to calculate');
     }
@@ -295,9 +265,9 @@ final class CalculatorCaller extends RpcCallerContract
   }
 
   /// Удобный метод для умножения
-  Future<double> multiply(double a, double b) async {
+  Future<double> multiply(double a, double b, {RpcContext? context}) async {
     final request = CalculationRequest(a: a, b: b, operation: 'multiply');
-    final response = await calculate(request);
+    final response = await calculate(request, context: context);
     if (!response.success || response.result == null) {
       throw Exception(response.errorMessage ?? 'Failed to calculate');
     }
@@ -305,9 +275,9 @@ final class CalculatorCaller extends RpcCallerContract
   }
 
   /// Удобный метод для деления
-  Future<double> divide(double a, double b) async {
+  Future<double> divide(double a, double b, {RpcContext? context}) async {
     final request = CalculationRequest(a: a, b: b, operation: 'divide');
-    final response = await calculate(request);
+    final response = await calculate(request, context: context);
     if (!response.success || response.result == null) {
       throw Exception(response.errorMessage ?? 'Failed to calculate');
     }
@@ -317,7 +287,7 @@ final class CalculatorCaller extends RpcCallerContract
 
 /// Серверная реализация калькулятора
 final class CalculatorResponder extends RpcResponderContract
-    implements ICalculatorResponderContract {
+    implements ICalculatorContract {
   /// Настраиваемая задержка (мс) для имитации вычислений
   final int simulatedDelayMs;
 
@@ -328,7 +298,7 @@ final class CalculatorResponder extends RpcResponderContract
   void setup() {
     // Унарный метод для простых вычислений
     addUnaryMethod<CalculationRequest, CalculationResponse>(
-      methodName: ICalculatorContract.methodCalculate,
+      methodName: 'Calculate',
       handler: calculate,
       description: 'Выполняет одиночную операцию',
       requestCodec: CalculationRequest.codec,
@@ -337,7 +307,7 @@ final class CalculatorResponder extends RpcResponderContract
 
     // Двунаправленный стрим для непрерывных вычислений
     addBidirectionalMethod<CalculationRequest, CalculationResponse>(
-      methodName: ICalculatorContract.methodStreamCalculate,
+      methodName: 'StreamCalculate',
       handler: streamCalculate,
       description: 'Обрабатывает поток вычислений',
       requestCodec: CalculationRequest.codec,
@@ -346,8 +316,15 @@ final class CalculatorResponder extends RpcResponderContract
   }
 
   @override
-  Future<CalculationResponse> calculate(
-      RpcContext context, CalculationRequest request) async {
+  Future<CalculationResponse> calculate(CalculationRequest request,
+      {RpcContext? context}) async {
+    final logger = RpcLogger('Calculator');
+    logger.info('🔧 Выполнение операции: ${request.operation}');
+    logger.info('🔍 Context: $context');
+
+    final userId = context?.getHeader('user-id');
+    final traceId = context?.traceId;
+
     // Имитация задержки обработки на сервере
     if (simulatedDelayMs > 0) {
       await Future.delayed(Duration(milliseconds: simulatedDelayMs));
@@ -364,6 +341,7 @@ final class CalculatorResponder extends RpcResponderContract
     try {
       final result =
           _performCalculation(request.a, request.b, request.operation);
+      logger.info('✅ Результат для user $userId (trace: $traceId): $result');
       return CalculationResponse(result: result);
     } catch (e) {
       return CalculationResponse(
@@ -375,9 +353,20 @@ final class CalculatorResponder extends RpcResponderContract
 
   @override
   Stream<CalculationResponse> streamCalculate(
-      RpcContext context, Stream<CalculationRequest> requests) async* {
+      Stream<CalculationRequest> requests,
+      {RpcContext? context}) async* {
+    final logger = RpcLogger('CalculatorStream');
+    logger.info('🔄 Начало обработки потока вычислений');
+    logger.info('🔍 Context: $context');
+
+    final batchId = context?.getHeader('batch-id');
+    final userId = context?.getHeader('user-id');
+
     // Обрабатываем каждый запрос в потоке
     await for (final request in requests) {
+      // Проверяем отмену
+      context?.cancellationToken?.throwIfCancelled();
+
       // Имитация задержки обработки на сервере
       if (simulatedDelayMs > 0) {
         await Future.delayed(Duration(milliseconds: simulatedDelayMs));
@@ -395,6 +384,8 @@ final class CalculatorResponder extends RpcResponderContract
       try {
         final result =
             _performCalculation(request.a, request.b, request.operation);
+        logger.info(
+            '📊 Batch $batchId, User $userId: ${request.operation} = $result');
         yield CalculationResponse(result: result);
       } catch (e) {
         yield CalculationResponse(
@@ -403,6 +394,8 @@ final class CalculatorResponder extends RpcResponderContract
         );
       }
     }
+
+    logger.info('✅ Поток вычислений завершен');
   }
 
   /// Внутренний метод для выполнения вычисления

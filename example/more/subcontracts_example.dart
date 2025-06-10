@@ -37,6 +37,9 @@ void main() async {
   final mainContract = MainServiceContract();
   serverEndpoint.registerServiceContract(mainContract);
 
+  // Запускаем сервер
+  serverEndpoint.start();
+
   // Создаем клиентский контракт
   final caller = MainServiceCallerContract(clientEndpoint);
 
@@ -95,11 +98,12 @@ final class MainServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _getMessage(RpcContext context, RpcString message) async {
+  Future<RpcString> _getMessage(RpcString message,
+      {RpcContext? context}) async {
     final logger = RpcLogger('MainServiceHandler');
     logger.info('Получен запрос: ${message.value}');
     logger.info(
-        'Контекст: trace=${context.traceId}, request=${context.requestId}');
+        'Контекст: trace=${context?.traceId}, request=${context?.requestId}');
 
     final response = RpcString('Вы отправили: ${message.value}');
     logger.info('Отправляем ответ: ${response.value}');
@@ -123,12 +127,12 @@ final class UserServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<UserResponse> _getUser(RpcContext context, RpcInt id) async {
+  Future<UserResponse> _getUser(RpcInt id, {RpcContext? context}) async {
     final logger = RpcLogger('UserServiceHandler');
     final idValue = id.value;
     logger.info('Получен запрос на информацию о пользователе $idValue');
     logger.info(
-        'Контекст: trace=${context.traceId}, request=${context.requestId}');
+        'Контекст: trace=${context?.traceId}, request=${context?.requestId}');
 
     // Имитируем получение данных из БД
     final response = UserResponse(id: idValue, name: 'Пользователь #$idValue');
@@ -154,12 +158,12 @@ final class NotificationServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcBool> _sendNotification(
-      RpcContext context, RpcString message) async {
+  Future<RpcBool> _sendNotification(RpcString message,
+      {RpcContext? context}) async {
     final logger = RpcLogger('NotificationServiceHandler');
     logger.info('Отправка уведомления: ${message.value}');
     logger.info(
-        'Контекст: trace=${context.traceId}, request=${context.requestId}');
+        'Контекст: trace=${context?.traceId}, request=${context?.requestId}');
     return const RpcBool(true);
   }
 }

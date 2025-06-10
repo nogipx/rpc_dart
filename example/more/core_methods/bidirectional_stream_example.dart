@@ -8,134 +8,249 @@ void main() async {
   await BidirectionalStreamExample.run();
 }
 
-/// Пример использования двунаправленного стриминга (обмен сообщениями в обе стороны)
-///
-/// Демонстрирует, как клиент и сервер могут обмениваться сообщениями в реальном времени
+/// Пример использования двунаправленного стриминга с контрактами и RpcContext
 class BidirectionalStreamExample {
-  /// Запускает демонстрацию двунаправленного стриминга
   static Future<void> run() async {
     RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+    print('\n=== Пример двунаправленного стриминга с контрактами ===\n');
 
-    print(
-        '\n=== Пример двунаправленного стриминга (N запросов <-> N ответов) ===\n');
-
-    // Создаем пару соединенных транспортов для клиента и сервера
+    // Создаем транспорты
     final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-    // Создаем сериализаторы для строк
-    final stringSerializer = RpcCodec(RpcString.fromJson);
-
-    // Инициализируем серверную часть
-    final server = BidirectionalStreamResponder<RpcString, RpcString>(
-      id: 1,
+    // Создаем серверный эндпоинт и регистрируем контракт
+    final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
-      serviceName: 'ChatService',
-      methodName: 'Connect',
-      requestCodec: stringSerializer,
-      responseCodec: stringSerializer,
-      logger: RpcLogger(
-        'BidirectionalStreamExample',
-        colors: RpcLoggerColors.singleColor(AnsiColor.brightYellow),
-      ),
+      debugLabel: 'Server',
+      loggerColors: RpcLoggerColors.singleColor(AnsiColor.cyan),
     );
 
-    // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
-    server.bindToMessageStream(
-      serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-    );
+    final service = ChatServiceResponder();
+    serverEndpoint.registerServiceContract(service);
+    serverEndpoint.start();
 
-    // Настраиваем обработку запросов на сервере
-    final serverSubscription = server.requests.listen((request) {
-      print('СЕРВЕР: Получен запрос: "$request"');
-
-      // Эхо-обработчик с некоторой логикой
-      switch (request.value) {
-        case 'ping':
-          print('СЕРВЕР: Отправляем pong');
-          server.send('pong'.rpc);
-          break;
-        case 'время':
-          final timeResponse = 'Текущее время: ${DateTime.now()}';
-          print('СЕРВЕР: Отправляем: "$timeResponse"');
-          server.send(timeResponse.rpc);
-          break;
-        case 'случайное число':
-          final random = (DateTime.now().millisecondsSinceEpoch % 100) + 1;
-          final randomResponse = 'Случайное число от 1 до 100: $random';
-          print('СЕРВЕР: Отправляем: "$randomResponse"');
-          server.send(randomResponse.rpc);
-          break;
-        case 'завершить':
-          final goodbyeMessage = 'Сервер завершает работу...';
-          print('СЕРВЕР: Отправляем: "$goodbyeMessage"');
-          server.send(goodbyeMessage.rpc);
-          // Завершаем отправку с успешным статусом
-          print('СЕРВЕР: Завершаем двунаправленный поток');
-          server.finishReceiving();
-          break;
-        default:
-          final echoResponse = 'Эхо: $request';
-          print('СЕРВЕР: Отправляем: "$echoResponse"');
-          server.send(echoResponse.rpc);
-      }
-    });
-
-    // Инициализируем клиентскую часть
-    final client = BidirectionalStreamCaller<RpcString, RpcString>(
+    // Создаем клиентский эндпоинт
+    final clientEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
-      serviceName: 'ChatService',
-      methodName: 'Connect',
-      requestCodec: stringSerializer,
-      responseCodec: stringSerializer,
-      logger: RpcLogger(
-        'BidirectionalStreamExample',
-        colors: RpcLoggerColors.singleColor(AnsiColor.brightBlue),
-      ),
+      debugLabel: 'Client',
+      loggerColors: RpcLoggerColors.singleColor(AnsiColor.brightGreen),
     );
 
-    // Подписываемся на ответы сервера
-    final clientSubscription = client.responses.listen((message) {
-      if (!message.isMetadataOnly) {
-        print('КЛИЕНТ: Получен ответ: "${message.payload}"');
-      } else if (message.metadata != null) {
-        final statusCode =
-            message.metadata!.getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
+    final client = ChatServiceCaller(clientEndpoint);
 
-        if (statusCode != null && message.isEndOfStream) {
-          print('КЛИЕНТ: Соединение завершено со статусом: $statusCode');
-        }
+    try {
+      // Пример 1: Простой чат
+      print('\n--- Пример 1: Простой чат ---');
+
+      final context1 = RpcContext.empty()
+          .withTraceId('chat-trace-123')
+          .withValue('user-id', 'user-456')
+          .withValue('session-id', 'session-789');
+
+      final messagesToSend = [
+        'ping',
+        'время',
+        'случайное число',
+        'привет, мир!',
+        'завершить'
+      ];
+
+      final responses = <String>[];
+
+      await client
+          .chatWithServer(
+        Stream.fromIterable(messagesToSend.map((m) => m.rpc)),
+        context: context1,
+      )
+          .forEach((response) {
+        responses.add(response.value);
+        print('КЛИЕНТ: Получен ответ: "${response.value}"');
+      });
+
+      print('КЛИЕНТ: Получено всего ответов: ${responses.length}');
+
+      // Пример 2: Чат с аутентификацией
+      print('\n--- Пример 2: Чат с аутентификацией ---');
+
+      final authContext = RpcContextUtils.withBearerToken('secret-token-123')
+          .withAdditionalHeaders({'user-role': 'admin'}).withTraceId(
+              'auth-chat-trace-456');
+
+      final secureMessages = [
+        'admin:получить статус',
+        'admin:получить пользователей',
+        'admin:выход'
+      ];
+
+      await client
+          .chatWithServer(
+        Stream.fromIterable(secureMessages.map((m) => m.rpc)),
+        context: authContext,
+      )
+          .forEach((response) {
+        print('КЛИЕНТ: Защищенный ответ: "${response.value}"');
+      });
+
+      // Пример 3: Чат с отменой
+      print('\n--- Пример 3: Чат с отменой ---');
+
+      final cancellationToken = CancellationToken();
+      final cancelContext = RpcContext.withCancellation(cancellationToken)
+          .withValue('chat-type', 'long-running');
+
+      // Отменяем через 300мс
+      Future.delayed(Duration(milliseconds: 300), () {
+        print('КЛИЕНТ: Отменяем чат');
+        cancellationToken.cancel('User left chat');
+      });
+
+      final longMessages = Stream.periodic(
+        Duration(milliseconds: 100),
+        (i) => 'Сообщение #$i'.rpc,
+      ).take(10);
+
+      try {
+        await client
+            .chatWithServer(longMessages, context: cancelContext)
+            .forEach((response) {
+          print('КЛИЕНТ: Долгий ответ: "${response.value}"');
+        });
+      } catch (e) {
+        print('КЛИЕНТ: Чат отменен: $e');
       }
-    });
-
-    // Отправляем несколько запросов с небольшой задержкой
-    final requests = [
-      'ping',
-      'время',
-      'случайное число',
-      'привет, мир!',
-      'завершить'
-    ];
-
-    for (final request in requests) {
-      print('КЛИЕНТ: Отправляем запрос: "$request"');
-      client.send(request.rpc);
-      await Future.delayed(Duration(milliseconds: 100));
+    } catch (e, stackTrace) {
+      print('ОШИБКА: $e');
+      print('StackTrace: $stackTrace');
+    } finally {
+      await serverEndpoint.close();
+      await clientEndpoint.close();
     }
 
-    // Завершаем отправку запросов с клиента
-    print('КЛИЕНТ: Завершаем отправку запросов');
-    client.finishSending();
+    print('\n=== Пример завершен ===\n');
+  }
+}
 
-    // Ждем завершения обработки всех сообщений
-    print('КЛИЕНТ: Ждем завершения обработки...');
-    await Future.delayed(Duration(milliseconds: 500));
+//
+// СЕРВЕРНЫЙ КОНТРАКТ
+//
 
-    // Закрываем подписки и освобождаем ресурсы
-    await clientSubscription.cancel();
-    await serverSubscription.cancel();
-    await client.close();
-    await server.close();
+abstract interface class IChatServiceContract implements IRpcContract {
+  Stream<RpcString> chatWithServer(Stream<RpcString> messages);
+}
 
-    print('\n=== Пример двунаправленного стриминга завершен ===\n');
+final class ChatServiceResponder extends RpcResponderContract
+    implements IChatServiceContract {
+  ChatServiceResponder() : super('ChatService');
+
+  @override
+  void setup() {
+    addBidirectionalMethod<RpcString, RpcString>(
+      methodName: 'ChatWithServer',
+      handler: chatWithServer,
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+      description: 'Двунаправленный чат с сервером',
+    );
+  }
+
+  @override
+  Stream<RpcString> chatWithServer(Stream<RpcString> messages,
+      {RpcContext? context}) async* {
+    final logger = RpcLogger('ChatWithServer');
+    logger.info('🔧 Начинаем чат-сессию');
+    logger.info('🔍 Context: $context');
+
+    final userId = context?.getValue<String>('user-id');
+    final sessionId = context?.getValue<String>('session-id');
+    final userRole = context?.getHeader('user-role');
+    final authToken = context?.getHeader('authorization');
+
+    logger.info('👤 User: $userId, Session: $sessionId, Role: $userRole');
+
+    // Проверяем аутентификацию для защищенных команд
+    final isAuthenticated =
+        authToken != null && authToken.startsWith('Bearer ');
+
+    await for (final message in messages) {
+      context?.cancellationToken?.throwIfCancelled();
+
+      logger.info('📨 Получено сообщение: "${message.value}"');
+
+      final messageText = message.value;
+      String response;
+
+      // Обрабатываем различные типы сообщений
+      if (messageText.startsWith('admin:')) {
+        if (!isAuthenticated || userRole != 'admin') {
+          response = 'Ошибка: Недостаточно прав для выполнения команды';
+        } else {
+          final command = messageText.substring(6);
+          response = _handleAdminCommand(command);
+        }
+      } else {
+        response = _handleRegularMessage(messageText);
+      }
+
+      logger.debug('📤 Отправляем ответ: "$response"');
+      yield response.rpc;
+
+      // Выходим из чата если получили команду завершения
+      if (messageText == 'завершить' || messageText == 'admin:выход') {
+        logger.info('✅ Завершаем чат-сессию');
+        break;
+      }
+
+      await Future.delayed(Duration(milliseconds: 10));
+    }
+  }
+
+  String _handleAdminCommand(String command) {
+    switch (command) {
+      case 'получить статус':
+        return 'Статус системы: ОК, активных пользователей: 42';
+      case 'получить пользователей':
+        return 'Активные пользователи: Alice, Bob, Charlie';
+      case 'выход':
+        return 'Админ-сессия завершена';
+      default:
+        return 'Неизвестная админ-команда: $command';
+    }
+  }
+
+  String _handleRegularMessage(String message) {
+    switch (message) {
+      case 'ping':
+        return 'pong';
+      case 'время':
+        return 'Текущее время: ${DateTime.now()}';
+      case 'случайное число':
+        final random = (DateTime.now().millisecondsSinceEpoch % 100) + 1;
+        return 'Случайное число от 1 до 100: $random';
+      case 'завершить':
+        return 'До свидания! Чат завершен.';
+      default:
+        return 'Эхо: $message';
+    }
+  }
+}
+
+//
+// КЛИЕНТСКИЙ КОНТРАКТ
+//
+
+final class ChatServiceCaller extends RpcCallerContract
+    implements IChatServiceContract {
+  ChatServiceCaller(RpcCallerEndpoint endpoint)
+      : super('ChatService', endpoint);
+
+  @override
+  Stream<RpcString> chatWithServer(Stream<RpcString> messages,
+      {RpcContext? context}) {
+    return callBidirectionalStream<RpcString, RpcString>(
+      methodName: 'ChatWithServer',
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+      requests: messages,
+      context: context,
+    );
   }
 }

@@ -454,66 +454,66 @@ final class ValidationServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _validateHeaders(
-      RpcContext context, RpcString request) async {
-    final headers = context.headers;
+  Future<RpcString> _validateHeaders(RpcString request,
+      {RpcContext? context}) async {
+    final headers = context?.headers ?? <String, String>{};
     final result = headers.entries.map((e) => '${e.key}:${e.value}').join('|');
     return result.rpc;
   }
 
-  Future<RpcString> _validateSystemHeaders(
-      RpcContext context, RpcString request) async {
-    final traceId = context.traceId ?? '';
-    final requestId = context.requestId;
+  Future<RpcString> _validateSystemHeaders(RpcString request,
+      {RpcContext? context}) async {
+    final traceId = context?.traceId ?? '';
+    final requestId = context?.requestId;
     return 'trace-id:$traceId|request-id:$requestId'.rpc;
   }
 
-  Future<RpcString> _slowOperation(
-      RpcContext context, RpcString request) async {
+  Future<RpcString> _slowOperation(RpcString request,
+      {RpcContext? context}) async {
     await Future.delayed(Duration(seconds: 5)); // Превышает timeout в тесте
     return 'slow-result'.rpc;
   }
 
-  Future<RpcString> _fastOperation(
-      RpcContext context, RpcString request) async {
+  Future<RpcString> _fastOperation(RpcString request,
+      {RpcContext? context}) async {
     return 'fast-result'.rpc;
   }
 
-  Future<RpcString> _longOperation(
-      RpcContext context, RpcString request) async {
+  Future<RpcString> _longOperation(RpcString request,
+      {RpcContext? context}) async {
     // Проверяем отмену каждые 10мс
     for (int i = 0; i < 1000; i++) {
-      context.cancellationToken?.throwIfCancelled();
+      context?.cancellationToken?.throwIfCancelled();
       await Future.delayed(Duration(milliseconds: 10));
     }
     return 'long-result'.rpc;
   }
 
-  Future<RpcString> _checkContextValues(
-      RpcContext context, RpcString request) async {
-    final headers = context.headers;
-    final values = context.values;
+  Future<RpcString> _checkContextValues(RpcString request,
+      {RpcContext? context}) async {
+    final headers = context?.headers ?? <String, String>{};
+    final values = context?.values ?? <Object, Object>{};
     final headersList =
         headers.entries.map((e) => '${e.key}:${e.value}').join('|');
     return '$headersList|context-values-count:${values.length}'.rpc;
   }
 
-  Stream<RpcString> _generateWithContext(
-      RpcContext context, RpcString request) async* {
-    final size = int.parse(context.getHeader('stream-size') ?? '1');
-    final prefix = context.getHeader('stream-prefix') ?? 'default';
-    final traceId = context.traceId ?? 'no-trace';
+  Stream<RpcString> _generateWithContext(RpcString request,
+      {RpcContext? context}) async* {
+    final size = int.parse(context?.getHeader('stream-size') ?? '1');
+    final prefix = context?.getHeader('stream-prefix') ?? 'default';
+    final traceId = context?.traceId ?? 'no-trace';
 
     for (int i = 0; i < size; i++) {
       yield '$prefix-$i-$traceId'.rpc;
     }
   }
 
-  Future<RpcString> _aggregateWithContext(
-      RpcContext context, Stream<RpcString> requests) async {
-    final aggregationType = context.getHeader('aggregation-type') ?? 'concat';
-    final multiplier = int.parse(context.getHeader('multiplier') ?? '1');
-    final traceId = context.traceId ?? 'no-trace';
+  Future<RpcString> _aggregateWithContext(Stream<RpcString> requests,
+      {RpcContext? context}) async {
+    final aggregationType = context?.getHeader('aggregation-type') ?? 'concat';
+    final multiplier = int.parse(context?.getHeader('multiplier') ?? '1');
+    final traceId = context?.traceId ?? 'no-trace';
 
     final items = await requests.toList();
 
@@ -525,11 +525,11 @@ final class ValidationServiceContract extends RpcResponderContract {
     return 'concat:${items.map((i) => i.value).join(',')}|trace:$traceId'.rpc;
   }
 
-  Stream<RpcString> _processWithContext(
-      RpcContext context, Stream<RpcString> requests) async* {
-    final prefix = context.getHeader('echo-prefix') ?? 'ECHO';
-    final transform = context.getHeader('transform') ?? 'none';
-    final traceId = context.traceId ?? 'no-trace';
+  Stream<RpcString> _processWithContext(Stream<RpcString> requests,
+      {RpcContext? context}) async* {
+    final prefix = context?.getHeader('echo-prefix') ?? 'ECHO';
+    final transform = context?.getHeader('transform') ?? 'none';
+    final traceId = context?.traceId ?? 'no-trace';
 
     await for (final request in requests) {
       var processed = request.value;

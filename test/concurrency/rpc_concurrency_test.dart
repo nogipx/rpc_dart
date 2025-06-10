@@ -704,15 +704,15 @@ final class TestConcurrencyResponderContract extends RpcResponderContract {
     );
   }
 
-  Future<TestResponse> _processSimple(
-      RpcContext context, TestRequest request) async {
+  Future<TestResponse> _processSimple(TestRequest request,
+      {RpcContext? context}) async {
     // Simulate light processing
     await Future.delayed(Duration(microseconds: 50));
     return TestResponse('Processed: ${request.data}');
   }
 
-  Future<TestResponse> _processComplex(
-      RpcContext context, TestRequest request) async {
+  Future<TestResponse> _processComplex(TestRequest request,
+      {RpcContext? context}) async {
     // Simulate heavy processing
     await Future.delayed(Duration(milliseconds: 5));
     var result = request.data;
@@ -722,13 +722,13 @@ final class TestConcurrencyResponderContract extends RpcResponderContract {
     return TestResponse('Complex: $result');
   }
 
-  Future<TestResponse> _processWithError(
-      RpcContext context, TestRequest request) async {
+  Future<TestResponse> _processWithError(TestRequest request,
+      {RpcContext? context}) async {
     throw Exception('Simulated error for: ${request.data}');
   }
 
-  Stream<TestResponse> _getStream(
-      RpcContext context, TestRequest request) async* {
+  Stream<TestResponse> _getStream(TestRequest request,
+      {RpcContext? context}) async* {
     for (int i = 0; i < 3; i++) {
       await Future.delayed(Duration(milliseconds: 10));
       yield TestResponse('Stream item $i for: ${request.data}');

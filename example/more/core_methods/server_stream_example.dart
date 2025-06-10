@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 import 'package:rpc_dart/rpc_dart.dart';
 
 void main() async {
@@ -5,102 +9,254 @@ void main() async {
 }
 
 /// Пример использования серверного стриминга (один запрос, много ответов)
-///
-/// Демонстрирует, как клиент отправляет один запрос и получает поток ответов
+/// с использованием новых контрактов и RpcContext
 class ServerStreamingExample {
-  /// Запускает демонстрацию серверного стриминга (один запрос, много ответов)
   static Future<void> run() async {
     RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+    print('\n=== Пример серверного стриминга с контрактами ===\n');
 
-    print('\n=== Пример серверного стриминга (1 запрос -> N ответов) ===\n');
-
-    // Создаем пару соединенных транспортов
+    // Создаем транспорты
     final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-    // Создаем сериализаторы для строк
-    final stringSerializer = RpcCodec(RpcString.fromJson);
-
-    // Инициализируем серверную часть с обработчиком
-    final server = ServerStreamResponder<RpcString, RpcString>(
-      id: 1,
+    // Создаем серверный эндпоинт и регистрируем контракт
+    final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
-      serviceName: 'DataService',
-      methodName: 'GetServerStream',
-      requestCodec: stringSerializer,
-      responseCodec: stringSerializer,
-      logger: RpcLogger(
-        'ServerStreamingExample',
-        colors: RpcLoggerColors.singleColor(AnsiColor.brightGreen),
-      ),
-      handler: (request) async* {
-        print('СЕРВЕР: Получен запрос: "$request"');
-
-        // Отправляем несколько ответов с задержкой
-        for (int i = 1; i <= 5; i++) {
-          final response = 'Ответ #$i на запрос "$request"';
-          print('СЕРВЕР: Отправляем: "$response"');
-          yield response.rpc;
-
-          // Делаем реальную задержку между ответами
-          await Future.delayed(Duration(milliseconds: 50));
-        }
-
-        // Завершаем поток ответов
-        print('СЕРВЕР: Завершаем поток ответов');
-      },
+      debugLabel: 'Server',
+      loggerColors: RpcLoggerColors.singleColor(AnsiColor.cyan),
     );
 
-    // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
-    server.bindToMessageStream(
-      serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-    );
+    final service = DataStreamServiceResponder();
+    serverEndpoint.registerServiceContract(service);
+    serverEndpoint.start();
 
-    // Инициализируем клиентскую часть
-    final client = ServerStreamCaller<RpcString, RpcString>(
+    // Создаем клиентский эндпоинт
+    final clientEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
-      serviceName: 'DataService',
+      debugLabel: 'Client',
+      loggerColors: RpcLoggerColors.singleColor(AnsiColor.brightGreen),
+    );
+
+    final client = DataStreamServiceCaller(clientEndpoint);
+
+    try {
+      // Пример 1: Простой server stream
+      print('\n--- Пример 1: Простой server stream ---');
+
+      final context1 = RpcContext.empty()
+          .withTraceId('server-stream-trace-123')
+          .withValue('stream-type', 'simple');
+
+      await for (final response
+          in client.getServerStream('Дай мне данные'.rpc, context: context1)) {
+        print('КЛИЕНТ: Получен ответ: "$response"');
+      }
+
+      // Пример 2: Server stream с числовой последовательностью
+      print('\n--- Пример 2: Server stream с числами ---');
+
+      final context2 = RpcContext.empty()
+          .withTraceId('numbers-stream-trace-456')
+          .withAdditionalHeaders({'count': '10', 'delay': '100'});
+
+      await for (final number
+          in client.getNumberStream(5.rpc, context: context2)) {
+        print('КЛИЕНТ: Получено число: $number');
+      }
+
+      // Пример 3: Server stream с отменой
+      print('\n--- Пример 3: Server stream с отменой ---');
+
+      final cancellationToken = CancellationToken();
+      final cancelContext = RpcContext.withCancellation(cancellationToken)
+          .withValue('stream-type', 'long-running');
+
+      // Отменяем через 200мс
+      Future.delayed(Duration(milliseconds: 200), () {
+        print('КЛИЕНТ: Отменяем stream');
+        cancellationToken.cancel('User cancelled');
+      });
+
+      try {
+        await for (final response in client.getLongRunningStream(
+            'Долгий stream'.rpc,
+            context: cancelContext)) {
+          print('КЛИЕНТ: Получен ответ: "$response"');
+        }
+      } catch (e) {
+        print('КЛИЕНТ: Stream отменен: $e');
+      }
+    } catch (e, stackTrace) {
+      print('ОШИБКА: $e');
+      print('StackTrace: $stackTrace');
+    } finally {
+      await serverEndpoint.close();
+      await clientEndpoint.close();
+    }
+
+    print('\n=== Пример завершен ===\n');
+  }
+}
+
+//
+// СЕРВЕРНЫЙ КОНТРАКТ
+//
+
+abstract interface class IDataStreamServiceContract implements IRpcContract {
+  Stream<RpcString> getServerStream(RpcString request);
+  Stream<RpcInt> getNumberStream(RpcInt count);
+  Stream<RpcString> getLongRunningStream(RpcString request);
+}
+
+final class DataStreamServiceResponder extends RpcResponderContract
+    implements IDataStreamServiceContract {
+  DataStreamServiceResponder() : super('DataStreamService');
+
+  @override
+  void setup() {
+    addServerStreamMethod<RpcString, RpcString>(
       methodName: 'GetServerStream',
-      requestCodec: stringSerializer,
-      responseCodec: stringSerializer,
-      logger: RpcLogger(
-        'ServerStreamingExample',
-        colors: RpcLoggerColors.singleColor(AnsiColor.brightGreen),
-      ),
+      handler: getServerStream,
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+      description: 'Отправляет поток строк в ответ на один запрос',
     );
 
-    // Подписываемся на поток ответов
-    final subscription = client.responses.listen(
-      (message) {
-        if (!message.isMetadataOnly) {
-          print('КЛИЕНТ: Получен ответ: "${message.payload}"');
-        }
-      },
-      onError: (error, stackTrace) {
-        if (error.toString().contains('Cannot add event after closing')) {
-          print('КЛИЕНТ: Игнорируем ожидаемую ошибку при закрытии потока');
-        } else {
-          print('КЛИЕНТ: Ошибка: $error');
-        }
-      },
-      onDone: () {
-        print('КЛИЕНТ: Поток ответов завершен');
-      },
+    addServerStreamMethod<RpcInt, RpcInt>(
+      methodName: 'GetNumberStream',
+      handler: getNumberStream,
+      requestCodec: RpcInt.codec,
+      responseCodec: RpcInt.codec,
+      description: 'Отправляет поток чисел',
     );
 
-    // Отправляем единственный запрос
-    print('КЛИЕНТ: Отправляем запрос: "Дай мне данные"');
-    await client.send('Дай мне данные'.rpc);
+    addServerStreamMethod<RpcString, RpcString>(
+      methodName: 'GetLongRunningStream',
+      handler: getLongRunningStream,
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+      description: 'Долгий поток для тестирования отмены',
+    );
+  }
 
-    // Ждем завершения обработки всех ответов
-    print('КЛИЕНТ: Ждем завершения обработки...');
-    await Future.delayed(Duration(milliseconds: 1000));
+  @override
+  Stream<RpcString> getServerStream(RpcString request,
+      {RpcContext? context}) async* {
+    final logger = RpcLogger('GetServerStream');
+    logger.info('🔧 Получен запрос: ${request.value}');
+    logger.info('🔍 Context: $context');
 
-    print('КЛИЕНТ: Поток ответов должен уже завершиться...');
-    // Закрываем ресурсы
-    await subscription.cancel();
-    await client.close();
-    await server.close();
+    final streamType = context?.getValue<String>('stream-type');
+    logger.info('📡 Stream type: $streamType');
 
-    print('\n=== Пример серверного стриминга завершен ===\n');
+    // Отправляем несколько ответов с задержкой
+    for (int i = 1; i <= 5; i++) {
+      context?.cancellationToken?.throwIfCancelled();
+
+      final response = 'Ответ #$i на запрос "${request.value}"';
+      logger.debug('🎯 Отправляем: $response');
+      yield response.rpc;
+
+      await Future.delayed(Duration(milliseconds: 50));
+    }
+
+    logger.info('✅ Завершен поток ответов');
+  }
+
+  @override
+  Stream<RpcInt> getNumberStream(RpcInt count, {RpcContext? context}) async* {
+    final logger = RpcLogger('GetNumberStream');
+    logger.info('🔧 Получен запрос на числа: ${count.value}');
+    logger.info('🔍 Context: $context');
+
+    final requestedCount = count.value;
+    final countHeader = context?.getHeader('count');
+    final delayHeader = context?.getHeader('delay');
+
+    final actualCount =
+        countHeader != null ? int.parse(countHeader) : requestedCount;
+    final delay = delayHeader != null ? int.parse(delayHeader) : 50;
+
+    logger.info('🔢 Отправляем $actualCount чисел с задержкой $delay мс');
+
+    for (int i = 0; i < actualCount; i++) {
+      context?.cancellationToken?.throwIfCancelled();
+
+      logger.debug('🎯 Отправляем число: $i');
+      yield i.rpc;
+
+      await Future.delayed(Duration(milliseconds: delay));
+    }
+
+    logger.info('✅ Завершен поток чисел');
+  }
+
+  @override
+  Stream<RpcString> getLongRunningStream(RpcString request,
+      {RpcContext? context}) async* {
+    final logger = RpcLogger('GetLongRunningStream');
+    logger.info('🔧 Начинаем долгий поток: ${request.value}');
+    logger.info('🔍 Context: $context');
+
+    try {
+      // Отправляем 20 сообщений с интервалом 100мс (2 секунды общее время)
+      for (int i = 1; i <= 20; i++) {
+        context?.cancellationToken?.throwIfCancelled();
+
+        final response = 'Долгий ответ #$i для "${request.value}"';
+        logger.debug('🎯 Отправляем: $response');
+        yield response.rpc;
+
+        await Future.delayed(Duration(milliseconds: 100));
+      }
+
+      logger.info('✅ Завершен долгий поток');
+    } catch (e) {
+      logger.warning('⚠️ Долгий поток отменен: $e');
+      rethrow;
+    }
+  }
+}
+
+//
+// КЛИЕНТСКИЙ КОНТРАКТ
+//
+
+final class DataStreamServiceCaller extends RpcCallerContract
+    implements IDataStreamServiceContract {
+  DataStreamServiceCaller(RpcCallerEndpoint endpoint)
+      : super('DataStreamService', endpoint);
+
+  @override
+  Stream<RpcString> getServerStream(RpcString request, {RpcContext? context}) {
+    return callServerStream<RpcString, RpcString>(
+      methodName: 'GetServerStream',
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+      request: request,
+      context: context,
+    );
+  }
+
+  @override
+  Stream<RpcInt> getNumberStream(RpcInt count, {RpcContext? context}) {
+    return callServerStream<RpcInt, RpcInt>(
+      methodName: 'GetNumberStream',
+      requestCodec: RpcInt.codec,
+      responseCodec: RpcInt.codec,
+      request: count,
+      context: context,
+    );
+  }
+
+  @override
+  Stream<RpcString> getLongRunningStream(RpcString request,
+      {RpcContext? context}) {
+    return callServerStream<RpcString, RpcString>(
+      methodName: 'GetLongRunningStream',
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+      request: request,
+      context: context,
+    );
   }
 }

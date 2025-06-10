@@ -49,7 +49,7 @@ final class TestService extends RpcResponderContract {
   void setup() {
     addUnaryMethod<TestRequest, TestResponse>(
       methodName: 'UnaryMethod',
-      handler: (context, request) async {
+      handler: (request, {context}) async {
         callLog.add('UnaryMethod: ${request.message}');
         return TestResponse('Reply to: ${request.message}');
       },
@@ -59,7 +59,7 @@ final class TestService extends RpcResponderContract {
 
     addServerStreamMethod<TestRequest, TestResponse>(
       methodName: 'ServerStreamMethod',
-      handler: (context, request) async* {
+      handler: (request, {context}) async* {
         callLog.add('ServerStreamMethod: ${request.message}');
         for (int i = 0; i < 3; i++) {
           yield TestResponse('Reply ${i + 1} to: ${request.message}');
@@ -82,7 +82,7 @@ final class SubService extends RpcResponderContract {
   void setup() {
     addUnaryMethod<TestRequest, TestResponse>(
       methodName: 'SubUnaryMethod',
-      handler: (context, request) async {
+      handler: (request, {context}) async {
         callLog.add('SubUnaryMethod: ${request.message}');
         return TestResponse('SubService reply to: ${request.message}');
       },
@@ -105,7 +105,7 @@ final class ParentService extends RpcResponderContract {
   void setup() {
     addUnaryMethod<TestRequest, TestResponse>(
       methodName: 'ParentMethod',
-      handler: (context, request) async {
+      handler: (request, {context}) async {
         callLog.add('ParentMethod: ${request.message}');
         return TestResponse('ParentService reply to: ${request.message}');
       },
