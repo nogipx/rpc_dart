@@ -7,9 +7,11 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 
 void main() async {
+  RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.internal);
+
   // 🔧 Настройка уровня логирования библиотеки
   // По умолчанию INFO - показывает только важные события
-  // Для отладки можно установить DEBUG - покажет все внутренние операции
+  // Для отладки можно установить INTERNAL - покажет все внутренние операции
   print('🔧 Уровень логирования: INFO (скрыты внутренние детали библиотеки)');
 
   print(
