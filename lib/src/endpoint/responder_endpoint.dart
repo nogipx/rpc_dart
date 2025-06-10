@@ -40,6 +40,88 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   /// Хранилище активных респондеров стримов
   final Map<int, IRpcResponder> _streamResponders = {};
 
+  /// Создает контекстный логгер для данного RpcContext
+  RpcLogger _createContextLogger(RpcContext context) {
+    return RpcLogger(
+      logger.name,
+      colors: loggerColors,
+      label: debugLabel,
+      context: context, // Используем новый factory с контекстом
+    );
+  }
+
+  /// Helper методы для логирования с контекстом
+  void _logWithContext(
+    String message, {
+    RpcContext? context,
+    int? streamId,
+    String? methodKey,
+  }) {
+    final logMessage = _formatLogMessage(message,
+        context: context, streamId: streamId, methodKey: methodKey);
+    logger.info(logMessage, rpcContext: context);
+  }
+
+  void _logDebugWithContext(
+    String message, {
+    RpcContext? context,
+    int? streamId,
+    String? methodKey,
+  }) {
+    final logMessage = _formatLogMessage(message,
+        context: context, streamId: streamId, methodKey: methodKey);
+    logger.debug(logMessage, rpcContext: context);
+  }
+
+  void _logErrorWithContext(
+    String message, {
+    RpcContext? context,
+    int? streamId,
+    String? methodKey,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    final logMessage = _formatLogMessage(message,
+        context: context, streamId: streamId, methodKey: methodKey);
+    logger.error(logMessage,
+        rpcContext: context, error: error, stackTrace: stackTrace);
+  }
+
+  String _formatLogMessage(
+    String message, {
+    RpcContext? context,
+    int? streamId,
+    String? methodKey,
+  }) {
+    final parts = <String>[message];
+
+    if (methodKey != null) {
+      parts.add('[method: $methodKey]');
+    }
+
+    if (streamId != null) {
+      parts.add('[streamId: $streamId]');
+    }
+
+    return parts.join(' ');
+  }
+
+  /// Получает контекст для stream ID (создает если нужно)
+  RpcContext _getOrCreateContextForStream(int streamId) {
+    final metadataMessage = _streamMetadata[streamId];
+    if (metadataMessage != null) {
+      return _createContextFromMessage(metadataMessage);
+    }
+
+    // Создаем контекст с автогенерацией trace ID
+    return _createContextFromMessage(RpcTransportMessage(
+      streamId: streamId,
+      methodPath: _streamMethods[streamId] != null
+          ? '/${_streamMethods[streamId]!.replaceAll('.', '/')}'
+          : '/UnknownService/UnknownMethod',
+    ));
+  }
+
   Map<String, dynamic> get registeredContracts => Map.unmodifiable(_contracts);
 
   Map<String, RpcMethodRegistration> get registeredMethods =>
@@ -134,7 +216,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     }
   }
 
-  /// Этап 2.1: Обрабатывает метаданные сообщения (заголовки)
+  /// Этап 2.1: Обрабатывает сообщение с метаданными (заголовками)
   void _handleMetadataMessage(int streamId, RpcTransportMessage message) {
     final methodPath = message.methodPath!;
     final methodInfo = _parseMethodPath(methodPath);
@@ -150,8 +232,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final methodName = methodInfo.$2;
     final methodKey = '$serviceName.$methodName';
 
-    logger.info(
-      'Получено сообщение метаданных: $methodKey [streamId: $streamId]',
+    // Создаем контекст из метаданных для логирования
+    final context = _createContextFromMessage(message);
+
+    _logWithContext(
+      'Получено сообщение метаданных',
+      context: context,
+      streamId: streamId,
+      methodKey: methodKey,
     );
 
     // Сохраняем метод для этого потока
@@ -162,8 +250,11 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     // Проверяем наличие метода
     if (!_methods.containsKey(methodKey)) {
-      logger.error(
-        'Метод $methodKey не зарегистрирован',
+      _logErrorWithContext(
+        'Метод не зарегистрирован',
+        context: context,
+        streamId: streamId,
+        methodKey: methodKey,
       );
       return;
     }
@@ -188,8 +279,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       final methodName = methodInfo.$2;
       final methodKey = '$serviceName.$methodName';
 
-      logger.info(
-        'Получено сообщение с данными и методом: $methodKey [streamId: $streamId]',
+      // Создаем контекст для логирования
+      final context = _createContextFromMessage(message);
+
+      _logWithContext(
+        'Получено сообщение с данными и методом',
+        context: context,
+        streamId: streamId,
+        methodKey: methodKey,
       );
 
       // Сохраняем метод для этого потока
@@ -197,8 +294,11 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
       // Проверяем наличие метода
       if (!_methods.containsKey(methodKey)) {
-        logger.error(
-          'Метод $methodKey не зарегистрирован',
+        _logErrorWithContext(
+          'Метод не зарегистрирован',
+          context: context,
+          streamId: streamId,
+          methodKey: methodKey,
         );
         return;
       }
@@ -207,26 +307,58 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Обрабатываем данные, если для этого потока определен метод
     if (_streamMethods.containsKey(streamId)) {
       final methodKey = _streamMethods[streamId]!;
+
+      // Проверяем существование метода перед обработкой
+      if (!_methods.containsKey(methodKey)) {
+        final context = _getOrCreateContextForStream(streamId);
+        _logErrorWithContext(
+          'Метод не найден при обработке данных',
+          context: context,
+          streamId: streamId,
+          methodKey: methodKey,
+        );
+        return;
+      }
+
       final method = _methods[methodKey]!;
       final parts = methodKey.split('.');
       final serviceName = parts[0];
       final methodName = parts[1];
 
-      logger.info(
-        'Обработка данных для метода: $methodKey [streamId: $streamId]',
+      // Получаем контекст для логирования
+      final context = _getOrCreateContextForStream(streamId);
+
+      _logWithContext(
+        'Обработка данных для метода',
+        context: context,
+        streamId: streamId,
+        methodKey: methodKey,
       );
 
       // Для Client Streaming накапливаем сообщения в буфере
       if (method.type == RpcMethodType.clientStream) {
-        logger.debug('Накапливаем сообщение для Client Stream $streamId');
+        _logDebugWithContext(
+          'Накапливаем сообщение для Client Stream',
+          context: context,
+          streamId: streamId,
+          methodKey: methodKey,
+        );
         _clientStreamMessages.putIfAbsent(streamId, () => []).add(message);
-        logger.debug(
-            'Всего накоплено сообщений для stream $streamId: ${_clientStreamMessages[streamId]!.length}');
+        _logDebugWithContext(
+          'Всего накоплено сообщений: ${_clientStreamMessages[streamId]!.length}',
+          context: context,
+          streamId: streamId,
+          methodKey: methodKey,
+        );
 
         // НЕ вызываем _routeMethodCall сразу для Client Streaming!
         // Будет вызван позже в _handleIncomingMessage при isEndOfStream
-        logger.debug(
-            'Отложили создание ClientStreamResponder до завершения stream $streamId');
+        _logDebugWithContext(
+          'Отложили создание ClientStreamResponder до завершения stream',
+          context: context,
+          streamId: streamId,
+          methodKey: methodKey,
+        );
         return;
       }
 
@@ -238,8 +370,10 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         message: message,
       ));
     } else {
-      logger.warning(
-        'Получены данные для неизвестного метода [streamId: $streamId]',
+      _logWithContext(
+        'Получены данные для неизвестного метода',
+        context: _getOrCreateContextForStream(streamId),
+        streamId: streamId,
       );
     }
   }
@@ -295,9 +429,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final serviceName = i.serviceName;
     final methodName = i.methodName;
     final streamId = i.streamId;
+    final methodKey = '$serviceName.$methodName';
 
-    logger.info(
-      'Обработка вызова метода $serviceName.$methodName [streamId: $streamId]',
+    // Получаем контекст для логирования
+    final context = _getOrCreateContextForStream(streamId);
+
+    _logWithContext(
+      'Обработка вызова метода',
+      context: context,
+      streamId: streamId,
+      methodKey: methodKey,
     );
 
     try {
@@ -310,8 +451,11 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
       handler(i);
     } catch (e, stackTrace) {
-      logger.error(
-        'Ошибка при создании обработчика для метода $serviceName.$methodName: $e',
+      _logErrorWithContext(
+        'Ошибка при создании обработчика для метода',
+        context: context,
+        streamId: streamId,
+        methodKey: methodKey,
         error: e,
         stackTrace: stackTrace,
       );
@@ -325,6 +469,12 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       return;
     }
 
+    // Создаем контекст для передачи в респондер
+    final context = _getOrCreateContextForStream(streamId);
+
+    // Создаем контекстный логгер для респондера
+    final contextLogger = _createContextLogger(context);
+
     final responder = UnaryResponder(
       id: i.streamId,
       transport: transport,
@@ -333,19 +483,12 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: i.method.requestCodec,
       responseCodec: i.method.responseCodec,
       handler: (request) async {
-        // Создаем контекст из метаданных запроса
-        final context = _createContextFromMessage(_streamMetadata[i.streamId] ??
-            RpcTransportMessage(
-              streamId: i.streamId,
-              methodPath: '/${i.serviceName}/${i.methodName}',
-            ));
-
         // Используем типизированный wrapper для безопасного вызова
         final typedRequest = request as dynamic; // Dart runtime cast
         final response = await i.method.callUnaryHandler(context, typedRequest);
         return i.method.castResponse(response);
       },
-      logger: logger,
+      logger: contextLogger, // Передаем контекстный логгер
     );
 
     // Сохраняем респондер в реестре
@@ -379,6 +522,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     logger.debug(
         'Создание ClientStreamResponder для $serviceName.$methodName [streamId: $streamId]');
 
+    // Создаем контекст из метаданных
+    final context = _createContextFromMessage(_streamMetadata[streamId] ??
+        RpcTransportMessage(
+          streamId: streamId,
+          methodPath: '/$serviceName/$methodName',
+        ));
+
+    // Создаем контекстный логгер
+    final contextLogger = _createContextLogger(context);
+
     // Создаем новый респондер с explicit типами
     final responder = ClientStreamResponder<IRpcSerializable, IRpcSerializable>(
       id: streamId,
@@ -388,20 +541,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: i.method.requestCodec,
       responseCodec: i.method.responseCodec,
       handler: (Stream<IRpcSerializable> requests) async {
-        // Создаем контекст из метаданных запроса
-        final context = _createContextFromMessage(_streamMetadata[i.streamId] ??
-            RpcTransportMessage(
-              streamId: i.streamId,
-              methodPath: '/${i.serviceName}/${i.methodName}',
-            ));
-
         // Используем типизированные wrapper'ы для безопасного вызова
         final typedRequests = i.method.castRequestStream(requests);
         final response =
             await i.method.callClientStreamHandler(context, typedRequests);
         return i.method.castResponse(response);
       },
-      logger: logger,
+      logger: contextLogger, // Передаем контекстный логгер
     );
 
     // Сохраняем респондер
@@ -442,6 +588,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     logger.debug(
         'Создание ServerStreamResponder для $serviceName.$methodName [streamId: $streamId]');
 
+    // Создаем контекст из метаданных
+    final context = _createContextFromMessage(_streamMetadata[streamId] ??
+        RpcTransportMessage(
+          streamId: streamId,
+          methodPath: '/$serviceName/$methodName',
+        ));
+
+    // Создаем контекстный логгер
+    final contextLogger = _createContextLogger(context);
+
     // Создаем обработчик серверного потока
     final responder = ServerStreamResponder(
       id: streamId,
@@ -451,13 +607,6 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: i.method.requestCodec,
       responseCodec: i.method.responseCodec,
       handler: (request) {
-        // Создаем контекст из метаданных запроса
-        final context = _createContextFromMessage(_streamMetadata[i.streamId] ??
-            RpcTransportMessage(
-              streamId: i.streamId,
-              methodPath: '/${i.serviceName}/${i.methodName}',
-            ));
-
         // Используем типизированный wrapper для безопасного вызова
         final typedRequest = request as dynamic; // Dart runtime cast
         final responseStream =
@@ -466,7 +615,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         return responseStream
             .map((response) => i.method.castResponse(response));
       },
-      logger: logger,
+      logger: contextLogger, // Передаем контекстный логгер
     );
 
     _streamResponders[responder.id] = responder;
@@ -561,6 +710,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     logger.debug(
         'Создание BidirectionalStreamResponder для $serviceName.$methodName [streamId: $streamId]');
 
+    // Создаем контекст из метаданных
+    final context = _createContextFromMessage(_streamMetadata[streamId] ??
+        RpcTransportMessage(
+          streamId: streamId,
+          methodPath: '/$serviceName/$methodName',
+        ));
+
+    // Создаем контекстный логгер
+    final contextLogger = _createContextLogger(context);
+
     // Создаем обработчик двунаправленного потока с explicit типами
     final responder =
         BidirectionalStreamResponder<IRpcSerializable, IRpcSerializable>(
@@ -570,7 +729,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       methodName: methodName,
       requestCodec: i.method.requestCodec,
       responseCodec: i.method.responseCodec,
-      logger: logger,
+      logger: contextLogger, // Передаем контекстный логгер
     );
 
     _streamResponders[responder.id] = responder;
@@ -597,7 +756,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     // Подключаем пользовательский обработчик к потоку запросов
     _setupBidirectionalHandler(
-        responder, i.method, i.serviceName, i.methodName, i.streamId);
+        responder, i.method, i.serviceName, i.methodName, i.streamId, context);
   }
 
   /// Настраивает обработчик для двунаправленного стрима
@@ -607,6 +766,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     String serviceName,
     String methodName,
     int streamId,
+    RpcContext context,
   ) {
     logger.debug(
         'Настройка обработчика двунаправленного стрима [id: ${responder.id}]');
@@ -617,14 +777,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         logger
             .debug('Вызов пользовательского обработчика [id: ${responder.id}]');
 
-        // Создаем контекст из метаданных для bidirectional stream
-        // Получаем метаданные из первого сообщения потока или создаем пустой контекст
-        final metadataMessage = _streamMetadata[streamId];
-        final context = _createContextFromMessage(metadataMessage ??
-            RpcTransportMessage(
-              streamId: streamId,
-              methodPath: '/$serviceName/$methodName',
-            ));
+        // Используем переданный контекст (уже создан из метаданных)
 
         // Используем типизированные wrapper'ы для безопасного вызова
         final typedRequests = method.castRequestStream(responder.requests);
@@ -747,6 +900,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   }
 
   /// Создает RpcContext из входящего сообщения
+  /// Автоматически генерирует trace ID, если клиент его не передал
   RpcContext _createContextFromMessage(RpcTransportMessage message) {
     final headers = <String, String>{};
 
@@ -767,11 +921,19 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Создаем контекст с заголовками
     var context = RpcContext.withHeaders(headers);
 
-    // Извлекаем специальные заголовки
-    final traceId = headers['x-trace-id'];
+    // Извлекаем или создаем trace ID
+    final clientTraceId = headers['x-trace-id'];
 
-    if (traceId != null) {
-      context = context.withTraceId(traceId);
+    if (clientTraceId != null) {
+      // Используем trace ID от клиента
+      context = context.withTraceId(clientTraceId);
+      logger.debug('Используем trace ID от клиента: $clientTraceId');
+    } else {
+      // Автоматически генерируем новый trace ID для этого запроса
+      final tracingContext = RpcContextUtils.withTracing();
+      final generatedTraceId = tracingContext.traceId!;
+      context = context.withTraceId(generatedTraceId);
+      logger.debug('Создан новый trace ID сервером: $generatedTraceId');
     }
 
     return context;

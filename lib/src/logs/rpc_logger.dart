@@ -26,6 +26,7 @@ typedef RpcLoggerFactory = RpcLogger Function(
   String loggerName, {
   RpcLoggerColors? colors,
   String? label,
+  RpcContext? context,
 });
 
 /// Интерфейс для фильтрации логов
@@ -50,7 +51,7 @@ abstract interface class IRpcLoggerFormatter {
   /// Форматирует сообщение лога, возвращая заголовок и содержимое раздельно
   LogFormattingResult format(
       DateTime timestamp, RpcLoggerLevel level, String source, String message,
-      {String? context});
+      {String? context, String? requestId, String? traceId});
 }
 
 /// {@template rpc_logger}
@@ -69,11 +70,13 @@ abstract interface class RpcLogger {
     String loggerName, {
     RpcLoggerColors? colors,
     String? label,
+    RpcContext? context,
   }) {
     return _RpcLoggerRegistry.instance.get(
       loggerName,
       colors: colors,
       label: label,
+      context: context,
     );
   }
 
@@ -85,10 +88,12 @@ abstract interface class RpcLogger {
     required String message,
     String? context,
     String? requestId,
+    String? traceId,
     Object? error,
     StackTrace? stackTrace,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   });
 
   /// Отправляет лог уровня debug
@@ -96,8 +101,10 @@ abstract interface class RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   });
 
   /// Отправляет лог уровня info
@@ -105,8 +112,10 @@ abstract interface class RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   });
 
   /// Отправляет лог уровня warning
@@ -114,8 +123,10 @@ abstract interface class RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   });
 
   /// Отправляет лог уровня error
@@ -123,10 +134,12 @@ abstract interface class RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Object? error,
     StackTrace? stackTrace,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   });
 
   /// Отправляет лог уровня critical
@@ -134,9 +147,11 @@ abstract interface class RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Object? error,
     StackTrace? stackTrace,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   });
 }

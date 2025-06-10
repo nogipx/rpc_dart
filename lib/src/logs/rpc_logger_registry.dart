@@ -26,19 +26,32 @@ final class _RpcLoggerRegistry {
   /// Получает логгер с указанным именем
   ///
   /// Если логгер с таким именем не найден, создает новый
-  RpcLogger get(String name, {RpcLoggerColors? colors, String? label}) {
+  /// Если передан context, создает контекстно-осведомленный логгер
+  RpcLogger get(String name,
+      {RpcLoggerColors? colors, String? label, RpcContext? context}) {
+    // Создаем базовый логгер
+    RpcLogger baseLogger;
+
     if (_factory == null) {
-      return _loggers[name] ??= DefaultRpcLogger(
+      baseLogger = _loggers[name] ??= DefaultRpcLogger(
+        name,
+        colors: colors ?? const RpcLoggerColors(),
+        label: label,
+      );
+    } else {
+      baseLogger = _loggers[name] ??= _factory!(
         name,
         colors: colors ?? const RpcLoggerColors(),
         label: label,
       );
     }
-    return _loggers[name] ??= _factory!(
-      name,
-      colors: colors ?? const RpcLoggerColors(),
-      label: label,
-    );
+
+    // Если передан контекст, оборачиваем в контекстно-осведомленный логгер
+    if (context != null) {
+      return RpcContextAwareLogger(baseLogger, context);
+    }
+
+    return baseLogger;
   }
 
   /// Удаляет логгер с указанным именем

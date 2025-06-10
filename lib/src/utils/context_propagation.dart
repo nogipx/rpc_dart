@@ -255,4 +255,35 @@ mixin RpcContextAware {
       print('[$serviceName] Context: $metadata');
     }
   }
+
+  /// Создает логгер для домена с автоматическим подхватыванием trace ID
+  RpcLogger get logger => RpcLogger(serviceName);
+
+  /// Удобный метод для логирования с автоматическим trace/request ID из контекста
+  Future<void> logInfo(String message, {String? context}) async {
+    await logger.info(message, context: context, rpcContext: _currentContext);
+  }
+
+  /// Удобный метод для логирования ошибок с автоматическим trace/request ID
+  Future<void> logError(String message,
+      {Object? error, StackTrace? stackTrace, String? context}) async {
+    await logger.error(
+      message,
+      error: error,
+      stackTrace: stackTrace,
+      context: context,
+      rpcContext: _currentContext,
+    );
+  }
+
+  /// Удобный метод для debug логирования с автоматическим trace/request ID
+  Future<void> logDebug(String message, {String? context}) async {
+    await logger.debug(message, context: context, rpcContext: _currentContext);
+  }
+
+  /// Удобный метод для логирования предупреждений с автоматическим trace/request ID
+  Future<void> logWarning(String message, {String? context}) async {
+    await logger.warning(message,
+        context: context, rpcContext: _currentContext);
+  }
 }

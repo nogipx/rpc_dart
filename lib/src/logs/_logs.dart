@@ -2,6 +2,11 @@
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+import '../contracts/_index.dart';
+import 'context_aware_logger.dart';
+
+export 'context_aware_logger.dart';
+
 part 'rpc_logger.dart';
 part 'rpc_logger_colors.dart';
 part 'default_rpc_logger.dart';

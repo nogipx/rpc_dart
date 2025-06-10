@@ -19,6 +19,30 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     super.loggerColors,
   });
 
+  /// Создает или дополняет RpcContext для клиентского запроса
+  /// Автоматически генерирует trace ID если контекст не передан или не содержит trace ID
+  RpcContext _ensureContext(RpcContext? context) {
+    if (context?.traceId != null) {
+      // Контекст уже содержит trace ID - используем как есть
+      logger.debug('Используем существующий trace ID: ${context!.traceId}');
+      return context;
+    }
+
+    if (context != null) {
+      // Контекст есть, но нет trace ID - добавляем его
+      final tracingContext = RpcContextUtils.withTracing();
+      final enhancedContext = context.withTraceId(tracingContext.traceId!);
+      logger.debug(
+          'Добавлен trace ID к существующему контексту: ${enhancedContext.traceId}');
+      return enhancedContext;
+    }
+
+    // Контекста нет - создаем новый с trace ID
+    final newContext = RpcContextUtils.withTracing();
+    logger.debug('Создан новый контекст с trace ID: ${newContext.traceId}');
+    return newContext;
+  }
+
   /// Создает унарный request builder с поддержкой контекста
   Future<R> unaryRequest<C, R>({
     required String serviceName,
@@ -34,13 +58,16 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
           'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
     }
 
+    // Автоматически создаем или дополняем контекст с trace ID
+    final ensuredContext = _ensureContext(context);
+
     return UnaryCaller<C, R>(
       serviceName: serviceName,
       methodName: methodName,
       transport: transport,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
-      context: context,
+      context: ensuredContext, // Передаем обогащенный контекст
     ).call(request);
   }
 
@@ -62,6 +89,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
     logger.debug('Создание server stream для $serviceName/$methodName');
 
+    // Автоматически создаем или дополняем контекст с trace ID
+    final ensuredContext = _ensureContext(context);
+
     // Создаем server stream caller с контекстом
     final caller = ServerStreamCaller<C, R>(
       transport: transport,
@@ -69,7 +99,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
-      context: context,
+      context: ensuredContext, // Передаем обогащенный контекст
       logger: logger,
     );
 
@@ -161,6 +191,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
   }) {
     logger.debug('Создание client stream builder для $serviceName/$methodName');
 
+    // Автоматически создаем или дополняем контекст с trace ID
+    final ensuredContext = _ensureContext(context);
+
     return (Stream<C> requests) async {
       logger.debug('Выполнение client stream для $serviceName/$methodName');
 
@@ -171,7 +204,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         methodName: methodName,
         requestCodec: requestCodec,
         responseCodec: responseCodec,
-        context: context,
+        context: ensuredContext, // Передаем обогащенный контекст
         logger: logger,
       );
 
@@ -220,6 +253,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
   }) {
     logger.debug('Создание bidirectional stream для $serviceName/$methodName');
 
+    // Автоматически создаем или дополняем контекст с trace ID
+    final ensuredContext = _ensureContext(context);
+
     // Создаем контроллер для передачи сообщений
     final controller = StreamController<R>();
 
@@ -230,7 +266,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
-      context: context,
+      context: ensuredContext, // Передаем обогащенный контекст
       logger: logger,
     );
 

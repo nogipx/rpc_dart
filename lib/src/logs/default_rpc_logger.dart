@@ -25,7 +25,7 @@ class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
   @override
   LogFormattingResult format(
       DateTime timestamp, RpcLoggerLevel level, String source, String message,
-      {String? context}) {
+      {String? context, String? requestId, String? traceId}) {
     final formattedTime =
         '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}';
 
@@ -60,9 +60,11 @@ class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
     }
 
     final contextStr = context != null ? ' [$context]' : '';
+    final traceStr = traceId != null ? ' [trace:$traceId]' : '';
+    final requestStr = requestId != null ? ' [req:$requestId]' : '';
     final labelStr = label != null ? '($label) ' : '';
     final header =
-        '[$formattedTime] ${prefix.padRight(5)} $emoji • $labelStr$source$contextStr';
+        '[$formattedTime] ${prefix.padRight(5)} $emoji • $labelStr$source$contextStr$traceStr$requestStr';
 
     // Разбиваем длинное сообщение на строки с отступами
     final messageLines = message.split('\n');
@@ -127,15 +129,21 @@ class DefaultRpcLogger implements RpcLogger {
     required String message,
     String? context,
     String? requestId,
+    String? traceId,
     Object? error,
     StackTrace? stackTrace,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   }) async {
     // Проверяем, нужно ли логировать это сообщение
     if (!_filter.shouldLog(level, name)) {
       return;
     }
+
+    // Извлекаем trace ID из контекста, если он не указан явно
+    final actualTraceId = traceId ?? rpcContext?.traceId;
+    final actualRequestId = requestId ?? rpcContext?.requestId;
 
     // Выводим в консоль, если включено
     if (_consoleLoggingEnabled) {
@@ -143,6 +151,8 @@ class DefaultRpcLogger implements RpcLogger {
         level: level,
         message: message,
         context: context,
+        requestId: actualRequestId,
+        traceId: actualTraceId,
         error: error,
         stackTrace: stackTrace,
         color: color,
@@ -155,6 +165,8 @@ class DefaultRpcLogger implements RpcLogger {
     required RpcLoggerLevel level,
     required String message,
     String? context,
+    String? requestId,
+    String? traceId,
     Object? error,
     StackTrace? stackTrace,
     AnsiColor? color,
@@ -173,7 +185,7 @@ class DefaultRpcLogger implements RpcLogger {
     }
 
     final formattedLog = _formatter.format(timestamp, level, name, fullMessage,
-        context: context);
+        context: context, requestId: requestId, traceId: traceId);
 
     // Если включен цветной вывод, используем цвет только для заголовка
     if (_coloredLoggingEnabled) {
@@ -222,16 +234,20 @@ class DefaultRpcLogger implements RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   }) async {
     await log(
       level: RpcLoggerLevel.debug,
       message: message,
       context: context,
       requestId: requestId,
+      traceId: traceId,
       data: data,
       color: color,
+      rpcContext: rpcContext,
     );
   }
 
@@ -240,16 +256,20 @@ class DefaultRpcLogger implements RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   }) async {
     await log(
       level: RpcLoggerLevel.info,
       message: message,
       context: context,
       requestId: requestId,
+      traceId: traceId,
       data: data,
       color: color,
+      rpcContext: rpcContext,
     );
   }
 
@@ -258,16 +278,20 @@ class DefaultRpcLogger implements RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   }) async {
     await log(
       level: RpcLoggerLevel.warning,
       message: message,
       context: context,
       requestId: requestId,
+      traceId: traceId,
       data: data,
       color: color,
+      rpcContext: rpcContext,
     );
   }
 
@@ -276,20 +300,24 @@ class DefaultRpcLogger implements RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Object? error,
     StackTrace? stackTrace,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   }) async {
     await log(
       level: RpcLoggerLevel.error,
       message: message,
       context: context,
       requestId: requestId,
+      traceId: traceId,
       error: error,
       stackTrace: stackTrace,
       data: data,
       color: color,
+      rpcContext: rpcContext,
     );
   }
 
@@ -298,20 +326,24 @@ class DefaultRpcLogger implements RpcLogger {
     String message, {
     String? context,
     String? requestId,
+    String? traceId,
     Object? error,
     StackTrace? stackTrace,
     Map<String, dynamic>? data,
     AnsiColor? color,
+    RpcContext? rpcContext,
   }) async {
     await log(
       level: RpcLoggerLevel.critical,
       message: message,
       context: context,
       requestId: requestId,
+      traceId: traceId,
       error: error,
       stackTrace: stackTrace,
       data: data,
       color: color,
+      rpcContext: rpcContext,
     );
   }
 

@@ -2,469 +2,41 @@
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-// ignore_for_file: unused_element
-
 import 'dart:async';
-import 'dart:math';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-void main(List<String> args) async {
-  await runCalculatorDemo();
-}
-
-/// Демонстрация использования калькулятора
-Future<void> runCalculatorDemo() async {
-  print('===== Запуск демонстрации калькулятора =====');
-
-  // Создаем транспорт в памяти для демонстрации
-  final transport = RpcInMemoryTransport.pair();
-  RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
-
-  // Создаем эндпоинты для клиента и сервера
-  final serverEndpoint = RpcResponderEndpoint(
-    transport: transport.$1,
-    loggerColors: RpcLoggerColors.singleColor(AnsiColor.cyan),
-  );
-  final clientEndpoint = RpcCallerEndpoint(
-    transport: transport.$2,
-    loggerColors: RpcLoggerColors.singleColor(AnsiColor.magenta),
-  );
-
-  // Создаем сервер и регистрируем его
-  final server = CalculatorResponder(simulatedDelayMs: 50);
-  serverEndpoint.registerServiceContract(server);
-
-  // Запускаем серверный эндпоинт
-  serverEndpoint.start();
-
-  // Создаем клиента
-  final client = CalculatorCaller(clientEndpoint);
-
-  // Проверка типобезопасности: теперь клиентский контракт нельзя зарегистрировать
-  // Раскомментируйте строку ниже, чтобы увидеть ошибку компиляции:
-  // serverEndpoint.registerServiceContract(client); // ❌ Ошибка компиляции!
-
-  // 1. Демонстрация унарного метода
-  print('\n--- Унарный метод: calculate ---');
-  await _demoUnaryCalculation(client);
-
-  // 2. Демонстрация работы с контекстом
-  print('\n--- Демонстрация RpcContext ---');
-  await _demoContextUsage(client);
-
-  // 3. Демонстрация двунаправленного стрима
-  print('\n--- Двунаправленный стрим: streamCalculate ---');
-  await _demoBidirectionalStream(client);
-
-  // Закрываем эндпоинты
-  await serverEndpoint.close();
-  await clientEndpoint.close();
-
-  print('\n===== Демонстрация калькулятора завершена =====');
-}
-
-/// Демонстрация унарных вычислений
-Future<void> _demoUnaryCalculation(CalculatorCaller client) async {
-  try {
-    print('DEBUG: Начало _demoUnaryCalculation');
-
-    // Сложение
-    print('DEBUG: Вызов client.add(5, 3)');
-    final sum = await client.add(5, 3);
-    print('5 + 3 = $sum');
-
-    // Вычитание
-    print('DEBUG: Вызов client.subtract(10, 4)');
-    final diff = await client.subtract(10, 4);
-    print('10 - 4 = $diff');
-
-    // Умножение
-    print('DEBUG: Вызов client.multiply(6, 7)');
-    final product = await client.multiply(6, 7);
-    print('6 * 7 = $product');
-
-    // Деление
-    print('DEBUG: Вызов client.divide(20, 4)');
-    final quotient = await client.divide(20, 4);
-    print('20 / 4 = $quotient');
-
-    // Обработка ошибки
-    try {
-      print('DEBUG: Вызов client.divide(5, 0)');
-      await client.divide(5, 0);
-    } catch (e) {
-      print('Ошибка деления на ноль: $e');
-    }
-
-    print('DEBUG: Завершение _demoUnaryCalculation');
-  } catch (e) {
-    print('Ошибка при выполнении унарных вычислений: $e');
-    print('DEBUG: Stack trace: ${StackTrace.current}');
-  }
-}
-
-/// Демонстрация использования RpcContext
-Future<void> _demoContextUsage(CalculatorCaller client) async {
-  try {
-    print('DEBUG: Начало демонстрации контекста');
-
-    // Создаем контекст с различными заголовками и значениями
-    final context = RpcContextUtils.withBearerToken('calc-token-abc123')
-        .withAdditionalHeaders({
-          'user-id': 'user-123',
-          'session-id': 'session-abc',
-          'correlation-id': 'corr-xyz',
-        })
-        .withTraceId('calc-demo-${DateTime.now().millisecondsSinceEpoch}')
-        .withValue('calculation-type', 'demo')
-        .withTimeout(Duration(seconds: 5));
-
-    print('Создан контекст:');
-    print('  - Trace ID: ${context.traceId}');
-    print('  - Request ID: ${context.requestId}');
-    print('  - User ID: ${context.getHeader('user-id')}');
-    print('  - Session: ${context.getHeader('session-id')}');
-    print('  - Remaining time: ${context.remainingTime}');
-
-    // Выполняем вычисление с контекстом
-    final request = CalculationRequest(a: 10, b: 5, operation: 'multiply');
-    print('\nВыполняем умножение с контекстом...');
-
-    final response = await client.calculate(request, context: context);
-
-    if (response.success) {
-      print('Результат с контекстом: ${response.result}');
-    } else {
-      print('Ошибка: ${response.errorMessage}');
-    }
-
-    print('DEBUG: Завершение демонстрации контекста');
-  } catch (e) {
-    print('Ошибка при демонстрации контекста: $e');
-  }
-}
-
-/// Демонстрация двунаправленного стрима
-Future<void> _demoBidirectionalStream(CalculatorCaller client) async {
-  final random = Random();
-
-  // Создаем контекст для стрима
-  final streamContext =
-      RpcContextUtils.withApiKey('stream-api-key-xyz').withAdditionalHeaders({
-    'stream-type': 'calculator',
-    'batch-id': 'batch-${DateTime.now().millisecondsSinceEpoch}',
-  }).withTraceId('stream-${DateTime.now().millisecondsSinceEpoch}');
-
-  // Создаем контроллер для отправки запросов
-  final requestController = StreamController<CalculationRequest>();
-
-  final calculateStream = client.streamCalculate(
-    requestController.stream,
-    context: streamContext,
-  );
-
-  // Подписываемся на стрим ответов
-  final responseSubscription = calculateStream.listen(
-    (response) {
-      if (response.success) {
-        print('Результат: ${response.result}');
-      } else {
-        print('Ошибка: ${response.errorMessage}');
-      }
-    },
-    onError: (e) => print('Ошибка стрима: $e'),
-    onDone: () => print('Стрим завершен'),
-  );
-
-  // Отправляем серию случайных операций
-  final operations = ['add', 'subtract', 'multiply', 'divide'];
-
-  for (int i = 0; i < 5; i++) {
-    final a = random.nextDouble() * 10;
-    final b = random.nextDouble() * 5;
-    final operation = operations[random.nextInt(operations.length)];
-
-    print('Отправка: $a $operation $b');
-
-    requestController.add(CalculationRequest(
-      a: a,
-      b: b,
-      operation: operation,
-    ));
-
-    // Небольшая пауза между запросами
-    await Future.delayed(Duration(milliseconds: 1000));
-  }
-
-  // Завершаем стрим запросов
-  await requestController.close();
-
-  // Ждем завершения всех ответов
-  await responseSubscription.asFuture();
-  await responseSubscription.cancel();
-}
-
-/// Общий интерфейс для контракта калькулятора
-abstract interface class ICalculatorContract implements IRpcContract {
-  Future<CalculationResponse> calculate(CalculationRequest request);
-  Stream<CalculationResponse> streamCalculate(
-      Stream<CalculationRequest> requests);
-}
-
-/// Клиентская реализация калькулятора
-final class CalculatorCaller extends RpcCallerContract
-    implements ICalculatorContract {
-  /// Создает клиента с указанным эндпоинтом
-  CalculatorCaller(RpcCallerEndpoint endpoint)
-      : super('CalculatorService', endpoint);
-
-  @override
-  Future<CalculationResponse> calculate(CalculationRequest request,
-      {RpcContext? context}) {
-    return callUnary<CalculationRequest, CalculationResponse>(
-      methodName: 'Calculate',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-      request: request,
-      context: context,
-    );
-  }
-
-  @override
-  Stream<CalculationResponse> streamCalculate(
-      Stream<CalculationRequest> requests,
-      {RpcContext? context}) {
-    return callBidirectionalStream<CalculationRequest, CalculationResponse>(
-      methodName: 'StreamCalculate',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-      requests: requests,
-      context: context,
-    );
-  }
-
-  /// Удобный метод для сложения
-  Future<double> add(double a, double b, {RpcContext? context}) async {
-    final request = CalculationRequest(a: a, b: b, operation: 'add');
-    final response = await calculate(request, context: context);
-    if (!response.success || response.result == null) {
-      throw Exception(response.errorMessage ?? 'Failed to calculate');
-    }
-    return response.result!;
-  }
-
-  /// Удобный метод для вычитания
-  Future<double> subtract(double a, double b, {RpcContext? context}) async {
-    final request = CalculationRequest(a: a, b: b, operation: 'subtract');
-    final response = await calculate(request, context: context);
-    if (!response.success || response.result == null) {
-      throw Exception(response.errorMessage ?? 'Failed to calculate');
-    }
-    return response.result!;
-  }
-
-  /// Удобный метод для умножения
-  Future<double> multiply(double a, double b, {RpcContext? context}) async {
-    final request = CalculationRequest(a: a, b: b, operation: 'multiply');
-    final response = await calculate(request, context: context);
-    if (!response.success || response.result == null) {
-      throw Exception(response.errorMessage ?? 'Failed to calculate');
-    }
-    return response.result!;
-  }
-
-  /// Удобный метод для деления
-  Future<double> divide(double a, double b, {RpcContext? context}) async {
-    final request = CalculationRequest(a: a, b: b, operation: 'divide');
-    final response = await calculate(request, context: context);
-    if (!response.success || response.result == null) {
-      throw Exception(response.errorMessage ?? 'Failed to calculate');
-    }
-    return response.result!;
-  }
-}
-
-/// Серверная реализация калькулятора
-final class CalculatorResponder extends RpcResponderContract
-    implements ICalculatorContract {
-  /// Настраиваемая задержка (мс) для имитации вычислений
-  final int simulatedDelayMs;
-
-  /// Конструктор с опциональной настройкой задержки
-  CalculatorResponder({this.simulatedDelayMs = 0}) : super('CalculatorService');
-
-  @override
-  void setup() {
-    // Унарный метод для простых вычислений
-    addUnaryMethod<CalculationRequest, CalculationResponse>(
-      methodName: 'Calculate',
-      handler: calculate,
-      description: 'Выполняет одиночную операцию',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-    );
-
-    // Двунаправленный стрим для непрерывных вычислений
-    addBidirectionalMethod<CalculationRequest, CalculationResponse>(
-      methodName: 'StreamCalculate',
-      handler: streamCalculate,
-      description: 'Обрабатывает поток вычислений',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-    );
-  }
-
-  @override
-  Future<CalculationResponse> calculate(CalculationRequest request,
-      {RpcContext? context}) async {
-    final logger = RpcLogger('Calculator');
-    logger.info('🔧 Выполнение операции: ${request.operation}');
-    logger.info('🔍 Context: $context');
-
-    final userId = context?.getHeader('user-id');
-    final traceId = context?.traceId;
-
-    // Имитация задержки обработки на сервере
-    if (simulatedDelayMs > 0) {
-      await Future.delayed(Duration(milliseconds: simulatedDelayMs));
-    }
-
-    // Проверяем валидность операции
-    if (!request.isValid()) {
-      return CalculationResponse(
-        success: false,
-        errorMessage: 'Invalid operation: ${request.operation}',
-      );
-    }
-
-    try {
-      final result =
-          _performCalculation(request.a, request.b, request.operation);
-      logger.info('✅ Результат для user $userId (trace: $traceId): $result');
-      return CalculationResponse(result: result);
-    } catch (e) {
-      return CalculationResponse(
-        success: false,
-        errorMessage: e.toString(),
-      );
-    }
-  }
-
-  @override
-  Stream<CalculationResponse> streamCalculate(
-      Stream<CalculationRequest> requests,
-      {RpcContext? context}) async* {
-    final logger = RpcLogger('CalculatorStream');
-    logger.info('🔄 Начало обработки потока вычислений');
-    logger.info('🔍 Context: $context');
-
-    final batchId = context?.getHeader('batch-id');
-    final userId = context?.getHeader('user-id');
-
-    // Обрабатываем каждый запрос в потоке
-    await for (final request in requests) {
-      // Проверяем отмену
-      context?.cancellationToken?.throwIfCancelled();
-
-      // Имитация задержки обработки на сервере
-      if (simulatedDelayMs > 0) {
-        await Future.delayed(Duration(milliseconds: simulatedDelayMs));
-      }
-
-      // Проверяем валидность операции
-      if (!request.isValid()) {
-        yield CalculationResponse(
-          success: false,
-          errorMessage: 'Invalid operation: ${request.operation}',
-        );
-        continue;
-      }
-
-      try {
-        final result =
-            _performCalculation(request.a, request.b, request.operation);
-        logger.info(
-            '📊 Batch $batchId, User $userId: ${request.operation} = $result');
-        yield CalculationResponse(result: result);
-      } catch (e) {
-        yield CalculationResponse(
-          success: false,
-          errorMessage: e.toString(),
-        );
-      }
-    }
-
-    logger.info('✅ Поток вычислений завершен');
-  }
-
-  /// Внутренний метод для выполнения вычисления
-  double _performCalculation(double a, double b, String operation) {
-    switch (operation) {
-      case 'add':
-        return a + b;
-      case 'subtract':
-        return a - b;
-      case 'multiply':
-        return a * b;
-      case 'divide':
-        if (b == 0) {
-          throw Exception('Division by zero');
-        }
-        return a / b;
-      default:
-        throw Exception('Unsupported operation: $operation');
-    }
-  }
-}
-
-/// Запрос на вычисление
+/// Простая модель сообщения для демонстрации
 class CalculationRequest implements IRpcSerializable {
-  final double a;
-  final double b;
-  final String operation;
+  final double a, b;
+  final String operation; // 'add', 'subtract', 'multiply', 'divide'
 
-  CalculationRequest({
-    required this.a,
-    required this.b,
-    required this.operation,
-  });
-
-  /// Валидация операции
-  bool isValid() {
-    return ['add', 'subtract', 'multiply', 'divide'].contains(operation);
-  }
+  CalculationRequest(
+      {required this.a, required this.b, required this.operation});
 
   @override
-  Map<String, dynamic> toJson() => {
-        'a': a,
-        'b': b,
-        'operation': operation,
-      };
+  Map<String, dynamic> toJson() => {'a': a, 'b': b, 'operation': operation};
 
-  static CalculationRequest fromJson(Map<String, dynamic> json) {
-    return CalculationRequest(
-      a: json['a'] is int ? (json['a'] as int).toDouble() : json['a'],
-      b: json['b'] is int ? (json['b'] as int).toDouble() : json['b'],
-      operation: json['operation'],
-    );
-  }
+  static CalculationRequest fromJson(Map<String, dynamic> json) =>
+      CalculationRequest(
+        a: json['a'] is int ? (json['a'] as int).toDouble() : json['a'],
+        b: json['b'] is int ? (json['b'] as int).toDouble() : json['b'],
+        operation: json['operation'],
+      );
 
   static RpcCodec<CalculationRequest> get codec =>
       RpcCodec(CalculationRequest.fromJson);
+
+  @override
+  String toString() => 'CalculationRequest($a $operation $b)';
 }
 
-/// Ответ на вычисление
 class CalculationResponse implements IRpcSerializable {
   final double? result;
   final bool success;
   final String? errorMessage;
 
-  CalculationResponse({
-    this.result,
-    this.success = true,
-    this.errorMessage,
-  });
+  CalculationResponse({this.result, this.success = true, this.errorMessage});
 
   @override
   Map<String, dynamic> toJson() => {
@@ -473,14 +45,271 @@ class CalculationResponse implements IRpcSerializable {
         'errorMessage': errorMessage,
       };
 
-  static CalculationResponse fromJson(Map<String, dynamic> json) {
-    return CalculationResponse(
-      result: json['result'],
-      success: json['success'] ?? true,
-      errorMessage: json['errorMessage'],
-    );
-  }
+  static CalculationResponse fromJson(Map<String, dynamic> json) =>
+      CalculationResponse(
+        result: json['result'],
+        success: json['success'] ?? true,
+        errorMessage: json['errorMessage'],
+      );
 
   static RpcCodec<CalculationResponse> get codec =>
       RpcCodec(CalculationResponse.fromJson);
+
+  @override
+  String toString() => success ? 'Result: $result' : 'Error: $errorMessage';
+}
+
+/// Респондер для демонстрации автоматической трассировки
+final class CalculatorResponder extends RpcResponderContract {
+  CalculatorResponder() : super('CalculatorService');
+
+  @override
+  void setup() {
+    addUnaryMethod<CalculationRequest, CalculationResponse>(
+      methodName: 'calculate',
+      handler: calculate,
+      requestCodec: CalculationRequest.codec,
+      responseCodec: CalculationResponse.codec,
+    );
+
+    addServerStreamMethod<CalculationRequest, CalculationResponse>(
+      methodName: 'batchCalculate',
+      handler: batchCalculate,
+      requestCodec: CalculationRequest.codec,
+      responseCodec: CalculationResponse.codec,
+    );
+  }
+
+  /// Unary вычисление - демонстрирует автоматическую трассировку
+  Future<CalculationResponse> calculate(CalculationRequest request,
+      {RpcContext? context}) async {
+    // Логгер автоматически получает trace ID из контекста через factory!
+    final logger = RpcLogger('Calculator.compute', context: context);
+
+    logger.info('Начинаем вычисление: $request');
+
+    try {
+      await Future.delayed(Duration(milliseconds: 10)); // Имитация работы
+
+      double result;
+      switch (request.operation) {
+        case 'add':
+          result = request.a + request.b;
+        case 'subtract':
+          result = request.a - request.b;
+        case 'multiply':
+          result = request.a * request.b;
+        case 'divide':
+          if (request.b == 0) throw Exception('Division by zero');
+          result = request.a / request.b;
+        default:
+          throw Exception('Unknown operation: ${request.operation}');
+      }
+
+      logger.info('Вычисление завершено: $result');
+      return CalculationResponse(result: result);
+    } catch (e) {
+      logger.error('Ошибка при вычислении', error: e);
+      return CalculationResponse(success: false, errorMessage: e.toString());
+    }
+  }
+
+  /// Server stream - демонстрирует трассировку через несколько ответов
+  Stream<CalculationResponse> batchCalculate(CalculationRequest request,
+      {RpcContext? context}) async* {
+    final logger = RpcLogger('Calculator.batch', context: context);
+
+    logger.info('Начинаем batch вычисление для операции: ${request.operation}');
+
+    // Генерируем несколько результатов с разными значениями
+    for (int i = 1; i <= 3; i++) {
+      final modifiedRequest = CalculationRequest(
+        a: request.a * i,
+        b: request.b,
+        operation: request.operation,
+      );
+
+      logger.info('Обрабатываем iteration $i: $modifiedRequest');
+
+      final response = await calculate(modifiedRequest, context: context);
+      yield response;
+
+      // Небольшая задержка между результатами
+      await Future.delayed(Duration(milliseconds: 50));
+    }
+
+    logger.info('Batch вычисление завершено');
+  }
+}
+
+/// Клиентский caller с автоматической трассировкой
+final class CalculatorCaller extends RpcCallerContract {
+  CalculatorCaller(RpcCallerEndpoint endpoint)
+      : super('CalculatorService', endpoint);
+
+  /// Простое вычисление
+  Future<CalculationResponse> calculate(CalculationRequest request,
+      {RpcContext? context}) {
+    return callUnary<CalculationRequest, CalculationResponse>(
+      methodName: 'calculate',
+      requestCodec: CalculationRequest.codec,
+      responseCodec: CalculationResponse.codec,
+      request: request,
+      context: context,
+    );
+  }
+
+  /// Batch вычисление
+  Stream<CalculationResponse> batchCalculate(CalculationRequest request,
+      {RpcContext? context}) {
+    return callServerStream<CalculationRequest, CalculationResponse>(
+      methodName: 'batchCalculate',
+      requestCodec: CalculationRequest.codec,
+      responseCodec: CalculationResponse.codec,
+      request: request,
+      context: context,
+    );
+  }
+
+  /// Удобный метод для сложения
+  Future<double> add(double a, double b, {RpcContext? context}) async {
+    final response = await calculate(
+        CalculationRequest(a: a, b: b, operation: 'add'),
+        context: context);
+    if (!response.success) throw Exception(response.errorMessage);
+    return response.result!;
+  }
+}
+
+void main() async {
+  print('🚀 RPC Dart - Демонстрация автоматической трассировки\n');
+
+  // Создаем InMemory транспорт
+  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+
+  // Настраиваем сервер
+  final serverEndpoint = RpcResponderEndpoint(transport: serverTransport);
+  serverEndpoint.registerServiceContract(CalculatorResponder());
+  serverEndpoint.start();
+
+  // Настраиваем клиент
+  final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
+  final calculator = CalculatorCaller(clientEndpoint);
+
+  print('═══════════════════════════════════════════════════════════════');
+  print('📌 ДЕМОНСТРАЦИЯ 1: Автоматическая генерация trace ID');
+  print('═══════════════════════════════════════════════════════════════\n');
+
+  // Обычный вызов БЕЗ контекста - trace ID создается автоматически
+  print('🔸 Вызов БЕЗ контекста (автогенерация trace ID):');
+  final result1 = await calculator.add(10, 20);
+  print('  ✅ Результат: 10 + 20 = $result1\n');
+
+  print('═══════════════════════════════════════════════════════════════');
+  print('📌 ДЕМОНСТРАЦИЯ 2: Использование существующего trace ID');
+  print('═══════════════════════════════════════════════════════════════\n');
+
+  // Создаем контекст с custom trace ID
+  final customContext = RpcContextUtils.withTracing(traceId: 'DEMO_TRACE_123');
+  print('🔸 Вызов С пользовательским trace ID: ${customContext.traceId}');
+  final result2 = await calculator.calculate(
+    CalculationRequest(a: 15, b: 3, operation: 'multiply'),
+    context: customContext,
+  );
+  print('  ✅ Результат: $result2\n');
+
+  print('═══════════════════════════════════════════════════════════════');
+  print('📌 ДЕМОНСТРАЦИЯ 3: Server Stream с трассировкой');
+  print('═══════════════════════════════════════════════════════════════\n');
+
+  // Вызов server stream - trace ID наследуется через все ответы
+  final streamContext = RpcContextUtils.withTracing(traceId: 'BATCH_TRACE_456');
+  print('🔸 Batch вычисление с trace ID: ${streamContext.traceId}');
+
+  int responseCount = 0;
+  await for (final response in calculator.batchCalculate(
+    CalculationRequest(a: 5, b: 2, operation: 'add'),
+    context: streamContext,
+  )) {
+    responseCount++;
+    print('  ✅ Ответ $responseCount: $response');
+  }
+  print('\n');
+
+  print('═══════════════════════════════════════════════════════════════');
+  print('📌 ДЕМОНСТРАЦИЯ 4: RpcLoggerFactory с контекстом');
+  print('═══════════════════════════════════════════════════════════════\n');
+
+  // Демонстрируем как можно создать логгер с контекстом напрямую
+  final demoContext = RpcContextUtils.withTracing(traceId: 'LOGGER_DEMO_789');
+  print('🔸 Создаем логгер с контекстом через RpcLoggerFactory:');
+
+  // Создаем логгер с контекстом через новый factory
+  final contextLogger = RpcLogger('DemoLogger', context: demoContext);
+
+  contextLogger.info('Этот лог автоматически содержит trace ID!');
+  contextLogger.debug('Debug сообщение с автоматической трассировкой');
+  contextLogger.warning('Warning с trace ID');
+
+  // Создаем child логгер - он тоже наследует контекст!
+  final childLogger = contextLogger.child('ChildModule');
+  childLogger.info('Child логгер тоже автоматически имеет trace ID!');
+
+  print('\n');
+
+  print('═══════════════════════════════════════════════════════════════');
+  print('📌 ДЕМОНСТРАЦИЯ 5: Цепочка вызовов с наследованием trace ID');
+  print('═══════════════════════════════════════════════════════════════\n');
+
+  // Создаем parent контекст
+  final parentContext = RpcContextUtils.withTracing(traceId: 'CHAIN_TRACE_999');
+  print('🔸 Parent context trace ID: ${parentContext.traceId}');
+
+  // Используем parent контекст для первого вызова
+  final firstResult = await calculator.calculate(
+    CalculationRequest(a: 100, b: 25, operation: 'divide'),
+    context: parentContext,
+  );
+  print('  ✅ Первый результат: $firstResult');
+
+  // Создаем child контекст из parent'а (наследует trace ID, новый request ID)
+  final childContext = parentContext.createChild();
+  print('  🔗 Child context trace ID: ${childContext.traceId} (наследован)');
+  print('  🔗 Child context request ID: ${childContext.requestId} (новый)');
+
+  final secondResult = await calculator.calculate(
+    CalculationRequest(a: firstResult.result!, b: 10, operation: 'add'),
+    context: childContext,
+  );
+  print('  ✅ Второй результат: $secondResult\n');
+
+  print('═══════════════════════════════════════════════════════════════');
+  print('✨ РЕЗЮМЕ ВОЗМОЖНОСТЕЙ');
+  print('═══════════════════════════════════════════════════════════════\n');
+
+  print('🎯 CallerEndpoint:');
+  print('   ✅ Автоматически создает trace ID если контекст не передан');
+  print('   ✅ Использует существующий trace ID если контекст передан');
+  print('   ✅ Дополняет частичный контекст trace ID\'ом\n');
+
+  print('🎯 ResponderEndpoint:');
+  print('   ✅ Автоматически создает trace ID если клиент не передал');
+  print('   ✅ Использует trace ID от клиента если передан');
+  print('   ✅ Все child логгеры автоматически наследуют trace ID\n');
+
+  print('🎯 RpcLoggerFactory:');
+  print('   ✅ Поддерживает создание контекстно-осведомленных логгеров');
+  print('   ✅ Автоматически инжектит trace ID и request ID в логи');
+  print('   ✅ Child логгеры наследуют контекст от parent\'а\n');
+
+  print('🎯 RpcContext:');
+  print('   ✅ Удобные factory методы для создания с trace ID');
+  print('   ✅ Методы createChild() для наследования trace ID');
+  print('   ✅ Поддержка metadata, timeout, cancellation\n');
+
+  // Закрываем ресурсы
+  await serverEndpoint.close();
+  await clientEndpoint.close();
+
+  print('🏁 Демонстрация завершена!');
 }
