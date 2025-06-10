@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 6 * * 1'  # Каждый понедельник в 6:00 UTC
+  workflow_dispatch:  # Возможность ручного запуска
+
+# Отменяем предыдущие запуски workflow'а если новый коммит пушится в ту же ветку
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Быстрая проверка форматирования и анализа кода
+  lint:
+    name: "🔍 Lint & Format"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Dart
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: stable
+    
+    - name: Cache pub dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.PUB_CACHE }}
+          .dart_tool/package_config.json
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pub-
+    
+    - name: Install dependencies
+      run: dart pub get
+    
+    - name: Verify formatting
+      run: dart format --output=none --set-exit-if-changed .
+    
+    - name: Analyze project source
+      run: dart analyze --fatal-infos --fatal-warnings
+    
+    - name: Check pub dependencies
+      run: dart pub deps
+
+  # Быстрые unit тесты
+  test-fast:
+    name: "🚀 Fast Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Dart
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: stable
+    
+    - name: Cache pub dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.PUB_CACHE }}
+          .dart_tool/package_config.json
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pub-
+    
+    - name: Install dependencies
+      run: dart pub get
+    
+    - name: Run unit tests
+      run: dart test --tags=unit --reporter=github --coverage=coverage
+    
+    - name: Run smoke tests 
+      run: dart test --tags=smoke --reporter=github
+    
+    - name: Generate coverage report
+      run: |
+        dart pub global activate coverage
+        dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: coverage/lcov.info
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+
+  # Полные тесты производительности (только на main/develop или по расписанию)
+  test-performance:
+    name: "🏋️ Performance Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Запускаем только на main/develop ветках или при ручном запуске
+    if: |
+      github.ref == 'refs/heads/main' || 
+      github.ref == 'refs/heads/develop' || 
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    needs: test-fast
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Dart
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: stable
+    
+    - name: Cache pub dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.PUB_CACHE }}
+          .dart_tool/package_config.json
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pub-
+    
+    - name: Install dependencies
+      run: dart pub get
+    
+    - name: Run performance tests
+      run: dart test --tags=performance --reporter=github
+    
+    - name: Run concurrency tests
+      run: dart test --tags=concurrency --reporter=github
+
+  # Тестирование на разных версиях Dart
+  test-matrix:
+    name: "🧪 Test Matrix"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    needs: lint
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        sdk: ['3.0.0', 'stable', 'beta']
+        exclude:
+          # Исключаем beta на Windows и macOS для экономии ресурсов
+          - os: windows-latest
+            sdk: beta
+          - os: macos-latest  
+            sdk: beta
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Dart ${{ matrix.sdk }}
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: ${{ matrix.sdk }}
+    
+    - name: Install dependencies
+      run: dart pub get
+    
+    - name: Run fast tests on ${{ matrix.os }} with Dart ${{ matrix.sdk }}
+      run: dart test --exclude-tags=performance,concurrency --reporter=github

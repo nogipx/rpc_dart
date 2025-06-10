@@ -16,5 +16,6 @@ build/
 packages/
 example/more/
 benchmark/
+benchmark_results/
 lib/diagnostics/
 lib/diagnostics.dart

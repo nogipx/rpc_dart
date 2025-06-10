@@ -1,4 +1,6 @@
 [![Pub Version](https://img.shields.io/pub/v/rpc_dart.svg)](https://pub.dev/packages/rpc_dart)
+[![CI](https://github.com/nogipx/rpc_dart/workflows/CI/badge.svg)](https://github.com/nogipx/rpc_dart/actions/workflows/ci.yml)
+[![Benchmarks](https://github.com/nogipx/rpc_dart/workflows/Continuous%20Benchmarking/badge.svg)](https://github.com/nogipx/rpc_dart/actions/workflows/benchmark.yml)
 
 # RPC Dart
 
