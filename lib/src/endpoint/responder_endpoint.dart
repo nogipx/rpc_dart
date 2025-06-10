@@ -59,7 +59,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   }) {
     final logMessage = _formatLogMessage(message,
         context: context, streamId: streamId, methodKey: methodKey);
-    logger.debug(logMessage, rpcContext: context);
+    logger.internal(logMessage, rpcContext: context);
   }
 
   void _logDebugWithContext(
@@ -70,7 +70,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   }) {
     final logMessage = _formatLogMessage(message,
         context: context, streamId: streamId, methodKey: methodKey);
-    logger.debug(logMessage, rpcContext: context);
+    logger.internal(logMessage, rpcContext: context);
   }
 
   void _logErrorWithContext(
@@ -183,7 +183,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
         // СПЕЦИАЛЬНАЯ ОБРАБОТКА для Client Streaming - создаем респондер ТОЛЬКО СЕЙЧАС
         if (method != null && method.type == RpcMethodType.clientStream) {
-          logger.debug(
+          logger.internal(
               'Stream $streamId завершен, создаем ClientStreamResponder с накопленными сообщениями');
           final parts = methodKey.split('.');
           final serviceName = parts[0];
@@ -380,7 +380,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
   /// Этап 2.3: Очищает информацию о потоке при его завершении
   void _cleanupStream(int streamId) {
-    logger.debug(
+    logger.internal(
       'Поток завершен [streamId: $streamId]',
     );
 
@@ -401,7 +401,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Сообщаем транспорту, что этот ID больше не используется
     try {
       transport.releaseStreamId(streamId);
-      logger.debug(
+      logger.internal(
         'ID стрима освобожден [streamId: $streamId]',
       );
     } catch (e) {
@@ -506,12 +506,12 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   /// Этап 5.2: Обработка клиентского потокового метода
   void _handleClientStreamMethod(_MethodCallInfo i) {
     final streamId = i.streamId;
-    logger.debug(
+    logger.internal(
         '_handleClientStreamMethod для stream $streamId, уже есть: ${_streamResponders.containsKey(streamId)}');
 
     // Если респондер уже существует, НЕ создаем новый
     if (_streamResponders.containsKey(streamId)) {
-      logger.debug(
+      logger.internal(
           'Респондер для stream $streamId уже существует, респондер обработает сообщение через transport.incomingMessages');
       return;
     }
@@ -549,7 +549,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     // Сохраняем респондер
     _streamResponders[responder.id] = responder;
-    logger.debug(
+    logger.internal(
         'Сохранили ClientStreamResponder для stream ${responder.id}. Всего респондеров: ${_streamResponders.length}');
 
     // Создаем поток сообщений для этого streamId
@@ -558,16 +558,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     final savedMessages = _clientStreamMessages[streamId];
     if (savedMessages != null && savedMessages.isNotEmpty) {
-      logger.debug(
+      logger.internal(
           'Создание потока с ${savedMessages.length} накопленными сообщениями [streamId: $streamId]');
       messageStream = _createStreamWithSavedMessages(streamId, savedMessages);
     } else {
-      logger.debug('Создание обычного потока сообщений [streamId: $streamId]');
+      logger
+          .internal('Создание обычного потока сообщений [streamId: $streamId]');
       messageStream =
           transport.incomingMessages.where((msg) => msg.streamId == streamId);
     }
 
-    logger.debug(
+    logger.internal(
         'Привязка потока сообщений к ClientStreamResponder [streamId: $streamId]');
     responder.bindToMessageStream(messageStream);
   }
@@ -621,18 +622,19 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     if (savedMessage != null &&
         !savedMessage.isMetadataOnly &&
         savedMessage.payload != null) {
-      logger.debug(
+      logger.internal(
           'Создание потока с сохраненным сообщением [streamId: $streamId]');
       // Создаем поток который начинается с сохраненного сообщения
       messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
     } else {
-      logger.debug('Создание обычного потока сообщений [streamId: $streamId]');
+      logger
+          .internal('Создание обычного потока сообщений [streamId: $streamId]');
       // Обычный поток сообщений для этого streamId
       messageStream =
           transport.incomingMessages.where((msg) => msg.streamId == streamId);
     }
 
-    logger.debug(
+    logger.internal(
         'Привязка потока сообщений к ServerStreamResponder [streamId: $streamId]');
     responder.bindToMessageStream(messageStream);
   }
@@ -653,7 +655,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   /// Создает поток сообщений начинающийся с сохраненных сообщений
   Stream<RpcTransportMessage> _createStreamWithSavedMessages(
       int streamId, List<RpcTransportMessage> savedMessages) async* {
-    logger.debug(
+    logger.internal(
         'Создание потока для stream $streamId с ${savedMessages.length} сохраненными сообщениями');
 
     // Создаем копию списка, чтобы избежать concurrent modification
@@ -675,18 +677,19 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
             )
           : message;
 
-      logger.debug(
+      logger.internal(
           'Отдаем сохраненное сообщение для stream $streamId${isLastMessage ? " (END_STREAM)" : ""}');
       yield messageToYield;
     }
 
-    logger.debug('Все сохраненные сообщения отправлены для stream $streamId');
+    logger
+        .internal('Все сохраненные сообщения отправлены для stream $streamId');
 
     // Затем пропускаем остальные сообщения для этого streamId
     await for (final msg
         in transport.incomingMessages.where((m) => m.streamId == streamId)) {
-      logger
-          .debug('Передаем новое сообщение от transport для stream $streamId');
+      logger.internal(
+          'Передаем новое сообщение от transport для stream $streamId');
       yield msg;
     }
   }
@@ -732,16 +735,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     if (savedMessage != null &&
         !savedMessage.isMetadataOnly &&
         savedMessage.payload != null) {
-      logger.debug(
+      logger.internal(
           'Создание потока с сохраненным сообщением [streamId: $streamId]');
       messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
     } else {
-      logger.debug('Создание обычного потока сообщений [streamId: $streamId]');
+      logger
+          .internal('Создание обычного потока сообщений [streamId: $streamId]');
       messageStream =
           transport.incomingMessages.where((msg) => msg.streamId == streamId);
     }
 
-    logger.debug(
+    logger.internal(
         'Привязка потока сообщений к BidirectionalStreamResponder [streamId: $streamId]');
     responder.bindToMessageStream(messageStream);
 
@@ -759,14 +763,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     int streamId,
     RpcContext context,
   ) {
-    logger.debug(
+    logger.internal(
         'Настройка обработчика двунаправленного стрима [id: ${responder.id}]');
 
     // Подписываемся на поток запросов и связываем с пользовательским обработчиком
     unawaited(() async {
       try {
-        logger
-            .debug('Вызов пользовательского обработчика [id: ${responder.id}]');
+        logger.internal(
+            'Вызов пользовательского обработчика [id: ${responder.id}]');
 
         // Используем переданный контекст (уже создан из метаданных)
 
@@ -775,12 +779,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         final responseStream =
             method.callBidirectionalStreamHandler(context, typedRequests);
 
-        logger.debug(
+        logger.internal(
             'Получен поток ответов от обработчика [id: ${responder.id}]');
 
         // Подписываемся на поток ответов от обработчика и отправляем их клиенту
         await for (final response in responseStream) {
-          logger.debug('Отправка ответа от обработчика [id: ${responder.id}]');
+          logger
+              .internal('Отправка ответа от обработчика [id: ${responder.id}]');
           await responder.send(method.castResponse(response));
         }
 
@@ -809,7 +814,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       );
     }
 
-    logger.debug(
+    logger.internal(
       'Регистрируем контракт сервиса: $serviceName',
     );
     _contracts[serviceName] = contract;
@@ -831,20 +836,20 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         );
       }
 
-      logger.debug(
+      logger.internal(
         'Регистрируем метод: $methodKey (${method.type.name})',
       );
       _methods[methodKey] = method;
     }
 
-    logger.debug(
+    logger.internal(
       'Контракт $serviceName зарегистрирован с ${methods.length} методами',
     );
 
     // Регистрируем подконтракты
     final subcontracts = contract.subcontracts;
     if (subcontracts.isNotEmpty) {
-      logger.debug(
+      logger.internal(
         'Обнаружено ${subcontracts.length} подконтрактов для $serviceName, начинаем регистрацию',
       );
 
@@ -860,7 +865,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         }
       }
 
-      logger.debug(
+      logger.internal(
         'Регистрация подконтрактов для $serviceName завершена',
       );
     }
@@ -906,7 +911,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       }
     }
 
-    logger.debug('Создание контекста: ${headers.length} заголовков');
+    logger.internal('Создание контекста: ${headers.length} заголовков');
 
     // Создаем контекст с заголовками
     var context = RpcContext.withHeaders(headers);
@@ -917,13 +922,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     if (clientTraceId != null) {
       // Используем trace ID от клиента
       context = context.withTraceId(clientTraceId);
-      logger.debug('Используем trace ID от клиента: $clientTraceId');
+      logger.internal('Используем trace ID от клиента: $clientTraceId');
     } else {
       // Автоматически генерируем новый trace ID для этого запроса
       final tracingContext = RpcContextUtils.withTracing();
       final generatedTraceId = tracingContext.traceId!;
       context = context.withTraceId(generatedTraceId);
-      logger.debug('Создан новый trace ID сервером: $generatedTraceId');
+      logger.internal('Создан новый trace ID сервером: $generatedTraceId');
     }
 
     return context;

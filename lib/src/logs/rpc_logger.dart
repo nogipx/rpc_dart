@@ -6,6 +6,7 @@ part of '_logs.dart';
 
 /// Уровни логирования
 enum RpcLoggerLevel {
+  internal,
   debug,
   info,
   warning,
@@ -91,6 +92,17 @@ abstract interface class RpcLogger {
     String? traceId,
     Object? error,
     StackTrace? stackTrace,
+    Map<String, dynamic>? data,
+    AnsiColor? color,
+    RpcContext? rpcContext,
+  });
+
+  /// Отправляет лог уровня debug
+  Future<void> internal(
+    String message, {
+    String? context,
+    String? requestId,
+    String? traceId,
     Map<String, dynamic>? data,
     AnsiColor? color,
     RpcContext? rpcContext,

@@ -38,6 +38,9 @@ enum AnsiColor {
 
 /// Настройки цветов для разных уровней логирования
 class RpcLoggerColors {
+  /// Цвет для логов уровня internal
+  final AnsiColor internal;
+
   /// Цвет для логов уровня debug
   final AnsiColor debug;
 
@@ -55,6 +58,7 @@ class RpcLoggerColors {
 
   /// Создаёт настройки цветов с указанными значениями
   const RpcLoggerColors({
+    this.internal = AnsiColor.brightBlack,
     this.debug = AnsiColor.cyan,
     this.info = AnsiColor.green,
     this.warning = AnsiColor.yellow,
@@ -63,7 +67,8 @@ class RpcLoggerColors {
   });
 
   const RpcLoggerColors.singleColor(AnsiColor color)
-      : debug = color,
+      : internal = color,
+        debug = color,
         info = color,
         warning = color,
         error = color,
@@ -72,6 +77,8 @@ class RpcLoggerColors {
   /// Получает цвет для указанного уровня логирования
   AnsiColor colorForLevel(RpcLoggerLevel level) {
     switch (level) {
+      case RpcLoggerLevel.internal:
+        return internal;
       case RpcLoggerLevel.debug:
         return debug;
       case RpcLoggerLevel.info:

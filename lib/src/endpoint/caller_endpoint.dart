@@ -24,7 +24,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
   RpcContext _ensureContext(RpcContext? context) {
     if (context?.traceId != null) {
       // Контекст уже содержит trace ID - используем как есть
-      logger.debug('Используем существующий trace ID: ${context!.traceId}');
+      logger.internal('Используем существующий trace ID: ${context!.traceId}');
       return context;
     }
 
@@ -32,14 +32,14 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       // Контекст есть, но нет trace ID - добавляем его
       final tracingContext = RpcContextUtils.withTracing();
       final enhancedContext = context.withTraceId(tracingContext.traceId!);
-      logger.debug(
+      logger.internal(
           'Добавлен trace ID к существующему контексту: ${enhancedContext.traceId}');
       return enhancedContext;
     }
 
     // Контекста нет - создаем новый с trace ID
     final newContext = RpcContextUtils.withTracing();
-    logger.debug('Создан новый контекст с trace ID: ${newContext.traceId}');
+    logger.internal('Создан новый контекст с trace ID: ${newContext.traceId}');
     return newContext;
   }
 
@@ -87,7 +87,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
           'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
     }
 
-    logger.debug('Создание server stream для $serviceName/$methodName');
+    logger.internal('Создание server stream для $serviceName/$methodName');
 
     // Автоматически создаем или дополняем контекст с trace ID
     final ensuredContext = _ensureContext(context);
@@ -119,9 +119,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     () async {
       try {
         // Отправляем запрос серверу
-        logger.debug('Отправка запроса серверу');
+        logger.internal('Отправка запроса серверу');
         await caller.send(request);
-        logger.debug('Запрос отправлен, начинаем получать ответы');
+        logger.internal('Запрос отправлен, начинаем получать ответы');
 
         // Небольшая задержка, чтобы дать серверу время на обработку запроса
         await Future.delayed(Duration(milliseconds: 1));
@@ -133,11 +133,12 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
           if (!message.isMetadataOnly && message.payload != null) {
             count++;
-            logger.debug(
+            logger.internal(
                 'Получена полезная нагрузка #$count: ${message.payload}');
             controller.add(message.payload!);
           } else if (message.isMetadataOnly) {
-            logger.debug('Получены метаданные: ${message.metadata?.headers}');
+            logger
+                .internal('Получены метаданные: ${message.metadata?.headers}');
 
             // Проверяем, если это финальные метаданные с кодом ошибки
             final statusCode = message.metadata
@@ -151,8 +152,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
           }
         }
 
-        logger
-            .debug('Поток ответов завершен, всего получено сообщений: $count');
+        logger.internal(
+            'Поток ответов завершен, всего получено сообщений: $count');
       } catch (e, stackTrace) {
         logger.error('Ошибка при обработке серверного стрима',
             error: e, stackTrace: stackTrace);
@@ -163,7 +164,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       } finally {
         // Освобождаем ресурсы
         try {
-          logger.debug('Закрытие ServerStreamCaller');
+          logger.internal('Закрытие ServerStreamCaller');
           await caller.close();
         } catch (e) {
           logger.error('Ошибка при закрытии caller', error: e);
@@ -189,13 +190,14 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     required IRpcCodec<R> responseCodec,
     RpcContext? context,
   }) {
-    logger.debug('Создание client stream builder для $serviceName/$methodName');
+    logger.internal(
+        'Создание client stream builder для $serviceName/$methodName');
 
     // Автоматически создаем или дополняем контекст с trace ID
     final ensuredContext = _ensureContext(context);
 
     return (Stream<C> requests) async {
-      logger.debug('Выполнение client stream для $serviceName/$methodName');
+      logger.internal('Выполнение client stream для $serviceName/$methodName');
 
       // Создаем client stream caller с контекстом
       final caller = ClientStreamCaller<C, R>(
@@ -213,7 +215,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       try {
         subscription = requests.listen(
           (request) async {
-            logger.debug('Отправка запроса в client stream: $request');
+            logger.internal('Отправка запроса в client stream: $request');
             await caller.send(request);
           },
           onError: (error, stackTrace) {
@@ -221,17 +223,17 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
                 error: error, stackTrace: stackTrace);
           },
           onDone: () {
-            logger.debug('Поток запросов client stream завершен');
+            logger.internal('Поток запросов client stream завершен');
           },
         );
 
         // Ждем завершения потока запросов
         await subscription.asFuture();
-        logger.debug('Поток запросов обработан, завершаем отправку');
+        logger.internal('Поток запросов обработан, завершаем отправку');
 
         // Завершаем отправку и получаем единственный ответ
         final response = await caller.finishSending();
-        logger.debug('Получен ответ от client stream');
+        logger.internal('Получен ответ от client stream');
 
         return response;
       } finally {
@@ -251,7 +253,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     required Stream<C> requests,
     RpcContext? context,
   }) {
-    logger.debug('Создание bidirectional stream для $serviceName/$methodName');
+    logger
+        .internal('Создание bidirectional stream для $serviceName/$methodName');
 
     // Автоматически создаем или дополняем контекст с trace ID
     final ensuredContext = _ensureContext(context);
@@ -290,7 +293,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         controller.addError(error, stackTrace);
       },
       onDone: () async {
-        logger.debug('Поток запросов bidirectional stream завершен');
+        logger.internal('Поток запросов bidirectional stream завершен');
         await caller.close();
       },
     );

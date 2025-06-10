@@ -89,7 +89,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     _logger = logger?.child('UnaryResponder');
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
-    _logger?.debug('Создан унарный сервер для $_methodPath');
+    _logger?.internal('Создан унарный сервер для $_methodPath');
 
     // Регистрируем поток как принадлежащий этому методу
     _streamBelongsToThisMethod[id] = true;
@@ -98,7 +98,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   }
 
   void _setupRequestHandler() {
-    _logger?.debug('Настройка обработчика запросов для $_methodPath');
+    _logger?.internal('Настройка обработчика запросов для $_methodPath');
 
     _subscription = _transport.incomingMessages.listen(
       (message) async {
@@ -114,7 +114,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         if (message.isMetadataOnly && message.metadata != null) {
           if (message.methodPath == _methodPath) {
             _streamBelongsToThisMethod[streamId] = true;
-            _logger?.debug(
+            _logger?.internal(
                 'Унарный сервер: stream $streamId привязан к методу $_methodPath');
           }
           return; // Метаданные только регистрируем, но не обрабатываем
@@ -127,7 +127,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
         if (_streamRequestHandled[streamId] == true) {
           // Игнорируем дополнительные сообщения после обработки первого запроса
-          _logger?.debug(
+          _logger?.internal(
               'Игнорируем дополнительное сообщение для stream $streamId (запрос уже обработан)');
           return;
         }
@@ -182,30 +182,32 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     // Проверяем, что сообщение предназначено для этого экземпляра респондера
     // Для id=0 (значение по умолчанию) принимаем любые сообщения, это нужно для тестов
     if (id != 0 && streamId != id) {
-      _logger?.debug(
+      _logger?.internal(
           'Сообщение для stream $streamId не принадлежит этому респондеру (id=$id), пропускаем');
       return;
     }
 
     if (_streamRequestHandled[streamId] == true) {
-      _logger
-          ?.debug('Сообщение для stream $streamId уже обработано, пропускаем');
+      _logger?.internal(
+          'Сообщение для stream $streamId уже обработано, пропускаем');
       return;
     }
 
     if (message.isMetadataOnly || message.payload == null) {
-      _logger?.debug('Получено сообщение без данных, пропускаем');
+      _logger?.internal('Получено сообщение без данных, пропускаем');
       return;
     }
 
     // Сразу помечаем запрос как обрабатываемый, чтобы предотвратить повторную обработку
     _streamRequestHandled[streamId] = true;
-    _logger?.debug('Обработка запроса для $_methodPath [streamId: $streamId]');
+    _logger
+        ?.internal('Обработка запроса для $_methodPath [streamId: $streamId]');
 
     try {
       // Отправляем начальные заголовки, если еще не отправляли
       if (_streamInitialHeadersSent[streamId] != true) {
-        _logger?.debug('Отправка начальных заголовков [streamId: $streamId]');
+        _logger
+            ?.internal('Отправка начальных заголовков [streamId: $streamId]');
         await _transport.sendMetadata(
           streamId,
           RpcMetadata.forServerInitialResponse(),
@@ -215,7 +217,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
       // Десериализуем запрос
       // Используем парсер для извлечения сообщений из фрейма с префиксом
-      _logger?.debug(
+      _logger?.internal(
           'Парсинг фрейма запроса размером ${message.payload!.length} байт [streamId: $streamId]');
       final messages = _parser(message.payload!);
       if (messages.isEmpty) {
@@ -224,31 +226,31 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         throw Exception('Не удалось извлечь сообщение из payload');
       }
 
-      _logger?.debug('Десериализация запроса [streamId: $streamId]');
+      _logger?.internal('Десериализация запроса [streamId: $streamId]');
       final request = _requestSerializer.deserialize(messages.first);
 
-      _logger
-          ?.debug('Обработка запроса для $_methodPath [streamId: $streamId]');
+      _logger?.internal(
+          'Обработка запроса для $_methodPath [streamId: $streamId]');
 
       // Обрабатываем запрос
       final response = await _handler(request);
-      _logger
-          ?.debug('Запрос обработан, подготовка ответа [streamId: $streamId]');
+      _logger?.internal(
+          'Запрос обработан, подготовка ответа [streamId: $streamId]');
 
       // Сериализуем и отправляем ответ
-      _logger?.debug('Сериализация ответа [streamId: $streamId]');
+      _logger?.internal('Сериализация ответа [streamId: $streamId]');
       final serializedResponse = _responseSerializer.serialize(response);
-      _logger?.debug(
+      _logger?.internal(
           'Ответ сериализован, размер: ${serializedResponse.length} байт [streamId: $streamId]');
       final framedResponse = RpcMessageFrame.encode(serializedResponse);
-      _logger?.debug('Отправка ответа [streamId: $streamId]');
+      _logger?.internal('Отправка ответа [streamId: $streamId]');
       await _transport.sendMessage(
         streamId,
         framedResponse,
       );
 
       // Отправляем трейлер с успешным статусом
-      _logger?.debug(
+      _logger?.internal(
           'Отправка трейлера с успешным статусом [streamId: $streamId]');
       await _transport.sendMetadata(
         streamId,
@@ -256,7 +258,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         endStream: true,
       );
 
-      _logger?.debug(
+      _logger?.internal(
           'Ответ успешно отправлен для $_methodPath [streamId: $streamId]');
     } catch (e, stackTrace) {
       _logger?.error(
@@ -275,7 +277,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // При ошибке отправляем трейлер с кодом ошибки
-      _logger?.debug('Отправка трейлера с ошибкой [streamId: $streamId]');
+      _logger?.internal('Отправка трейлера с ошибкой [streamId: $streamId]');
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(
@@ -286,7 +288,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
     } finally {
       // Очищаем состояние для этого stream
-      _logger?.debug('Очистка состояния для stream $streamId');
+      _logger?.internal('Очистка состояния для stream $streamId');
       _streamRequestHandled.remove(streamId);
       _streamInitialHeadersSent.remove(streamId);
       _streamBelongsToThisMethod.remove(streamId);
@@ -298,8 +300,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// ВНИМАНИЕ: Не закрывает транспорт, так как он может использоваться
   /// другими серверами. Транспорт должен закрываться явно.
   Future<void> close() async {
-    _logger?.debug('Закрытие унарного сервера $_methodPath');
+    _logger?.internal('Закрытие унарного сервера $_methodPath');
     await _subscription?.cancel();
-    _logger?.debug('Отменена подписка на входящие сообщения');
+    _logger?.internal('Отменена подписка на входящие сообщения');
   }
 }

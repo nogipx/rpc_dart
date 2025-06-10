@@ -278,7 +278,8 @@ mixin RpcContextAware {
 
   /// Удобный метод для debug логирования с автоматическим trace/request ID
   Future<void> logDebug(String message, {String? context}) async {
-    await logger.debug(message, context: context, rpcContext: _currentContext);
+    await logger.internal(message,
+        context: context, rpcContext: _currentContext);
   }
 
   /// Удобный метод для логирования предупреждений с автоматическим trace/request ID

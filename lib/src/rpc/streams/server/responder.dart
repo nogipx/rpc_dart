@@ -45,7 +45,7 @@ final class ServerStreamResponder<TRequest extends IRpcSerializable,
     RpcLogger? logger,
   }) {
     _logger = logger?.child('ServerResponder');
-    _logger?.debug(
+    _logger?.internal(
         'Создание ServerStreamResponder для $serviceName.$methodName [id: $id]');
 
     _processor = StreamProcessor<TRequest, TResponse>(
@@ -63,7 +63,7 @@ final class ServerStreamResponder<TRequest extends IRpcSerializable,
 
   /// Привязывает респондер к потоку сообщений от endpoint'а
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger?.debug('Привязка к потоку сообщений [id: $id]');
+    _logger?.internal('Привязка к потоку сообщений [id: $id]');
     _processor.bindToMessageStream(messageStream);
   }
 
@@ -71,36 +71,36 @@ final class ServerStreamResponder<TRequest extends IRpcSerializable,
   void _setupRequestHandler(
     Stream<TResponse> Function(TRequest request) handler,
   ) {
-    _logger?.debug(
+    _logger?.internal(
         'Настройка обработчика запросов для серверного стрима [id: $id]');
 
     _subscription = _processor.requests.listen((request) async {
-      _logger
-          ?.debug('Получен запрос для серверного стрима: $request [id: $id]');
+      _logger?.internal(
+          'Получен запрос для серверного стрима: $request [id: $id]');
 
       if (!_requestHandled) {
-        _logger?.debug(
+        _logger?.internal(
             'Обработка первого запроса для серверного стрима [id: $id]');
         _requestHandled = true;
 
         try {
-          _logger?.debug('Вызов обработчика запроса [id: $id]');
+          _logger?.internal('Вызов обработчика запроса [id: $id]');
           final handlerStream = handler(request);
-          _logger?.debug(
+          _logger?.internal(
               'Обработчик успешно вызван, получен стрим ответов [id: $id]');
 
-          _logger?.debug(
+          _logger?.internal(
               'Начинаем обработку потока ответов от обработчика [id: $id]');
 
           int responseCount = 0;
           await for (var response in handlerStream) {
             responseCount++;
-            _logger?.debug(
+            _logger?.internal(
                 'Получен ответ #$responseCount от обработчика: $response [id: $id]');
 
             try {
               await _processor.send(response);
-              _logger?.debug(
+              _logger?.internal(
                   'Ответ #$responseCount успешно отправлен клиенту [id: $id]');
             } catch (e, stackTrace) {
               _logger?.error(
@@ -111,12 +111,12 @@ final class ServerStreamResponder<TRequest extends IRpcSerializable,
             }
           }
 
-          _logger?.debug(
+          _logger?.internal(
               'Поток ответов от обработчика завершен, всего ответов: $responseCount [id: $id]');
 
           // Завершаем отправку ответов
           await _processor.finishSending();
-          _logger?.debug('Отправка ответов завершена [id: $id]');
+          _logger?.internal('Отправка ответов завершена [id: $id]');
         } catch (error, trace) {
           _logger?.error(
             'Ошибка при обработке запроса [id: $id]',
@@ -126,14 +126,14 @@ final class ServerStreamResponder<TRequest extends IRpcSerializable,
           await _processor.sendError(RpcStatus.INTERNAL, error.toString());
         }
       } else {
-        _logger?.debug(
+        _logger?.internal(
             'Игнорирование дополнительного запроса (первый уже обработан) [id: $id]');
       }
     }, onError: (error, stackTrace) {
       _logger?.error('Ошибка в потоке запросов [id: $id]',
           error: error, stackTrace: stackTrace);
     }, onDone: () {
-      _logger?.debug('Поток запросов завершен [id: $id]');
+      _logger?.internal('Поток запросов завершен [id: $id]');
     });
   }
 

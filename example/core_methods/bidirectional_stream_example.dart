@@ -190,7 +190,7 @@ final class ChatServiceResponder extends RpcResponderContract
         response = _handleRegularMessage(messageText);
       }
 
-      logger.debug('📤 Отправляем ответ: "$response"');
+      logger.internal('📤 Отправляем ответ: "$response"');
       yield response.rpc;
 
       // Выходим из чата если получили команду завершения

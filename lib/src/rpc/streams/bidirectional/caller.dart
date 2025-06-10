@@ -54,7 +54,7 @@ final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
     RpcLogger? logger,
   }) {
     _logger = logger?.child('BidirectionalCaller');
-    _logger?.debug(
+    _logger?.internal(
         'Создание BidirectionalStreamCaller для $serviceName.$methodName');
 
     _processor = CallProcessor<TRequest, TResponse>(
@@ -73,7 +73,7 @@ final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
   /// ✅ Можно вызывать МНОГО раз (нет ограничений)
   /// [request] Объект запроса для отправки
   Future<void> send(TRequest request) async {
-    _logger?.debug('Отправка запроса в двунаправленный стрим: $request');
+    _logger?.internal('Отправка запроса в двунаправленный стрим: $request');
     await _processor.send(request);
   }
 
@@ -90,7 +90,7 @@ final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
   ///
   /// Полностью завершает стрим, освобождая все ресурсы.
   Future<void> close() async {
-    _logger?.debug('Закрытие BidirectionalStreamCaller');
+    _logger?.internal('Закрытие BidirectionalStreamCaller');
     await _processor.close();
   }
 }

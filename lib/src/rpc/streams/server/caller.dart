@@ -58,7 +58,8 @@ final class ServerStreamCaller<TRequest extends IRpcSerializable,
     RpcLogger? logger,
   }) {
     _logger = logger?.child('ServerCaller');
-    _logger?.debug('Создание ServerStreamCaller для $serviceName.$methodName');
+    _logger
+        ?.internal('Создание ServerStreamCaller для $serviceName.$methodName');
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,
@@ -91,8 +92,8 @@ final class ServerStreamCaller<TRequest extends IRpcSerializable,
           'Запрос уже был отправлен.');
     }
 
-    _logger
-        ?.debug('Отправка единственного запроса в серверный стрим: $request');
+    _logger?.internal(
+        'Отправка единственного запроса в серверный стрим: $request');
 
     try {
       _requestSent =
@@ -100,7 +101,7 @@ final class ServerStreamCaller<TRequest extends IRpcSerializable,
 
       // Отправляем запрос через процессор
       await _processor.send(request);
-      _logger?.debug('Запрос успешно отправлен через CallProcessor');
+      _logger?.internal('Запрос успешно отправлен через CallProcessor');
 
       // Автоматически завершаем отправку, чтобы сигнализировать серверу
       // что у нас только один запрос (семантика серверного стрима)
@@ -114,7 +115,7 @@ final class ServerStreamCaller<TRequest extends IRpcSerializable,
 
   /// Закрывает стрим и освобождает ресурсы
   Future<void> close() async {
-    _logger?.debug('Закрытие ServerStreamCaller');
+    _logger?.internal('Закрытие ServerStreamCaller');
     await _processor.close();
   }
 }

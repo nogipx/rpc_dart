@@ -79,7 +79,7 @@ final class UnaryCaller<TRequest, TResponse> {
     _logger = logger?.child('UnaryCaller');
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
-    _logger?.debug(
+    _logger?.internal(
         'Создан унарный клиент для $_methodPath${_context != null ? ' с контекстом' : ''}');
   }
 
@@ -100,7 +100,7 @@ final class UnaryCaller<TRequest, TResponse> {
     // Создаем новый stream для этого вызова
     final streamId = _transport.createStream();
 
-    _logger?.debug(
+    _logger?.internal(
       'Унарный вызов $_methodPath начат [streamId: $streamId]',
     );
 
@@ -124,26 +124,26 @@ final class UnaryCaller<TRequest, TResponse> {
       }
 
       // Подписываемся на ответы для этого stream
-      _logger?.debug('Настройка подписки на ответы [streamId: $streamId]');
+      _logger?.internal('Настройка подписки на ответы [streamId: $streamId]');
       subscription = _transport.getMessagesForStream(streamId).listen(
         (message) async {
           if (!message.isMetadataOnly && message.payload != null) {
             // Получили данные ответа
-            _logger?.debug(
+            _logger?.internal(
               'Получено сообщение от транспорта размером: ${message.payload!.length} байт [streamId: $streamId]',
             );
             try {
               // Используем парсер для извлечения сообщений из фрейма с префиксом
               final messages = _parser(message.payload!);
-              _logger?.debug(
+              _logger?.internal(
                   'Парсер извлек ${messages.length} сообщений из фрейма [streamId: $streamId]');
 
               for (final msgBytes in messages) {
-                _logger?.debug(
+                _logger?.internal(
                     'Десериализация ответа размером ${msgBytes.length} байт [streamId: $streamId]');
                 final response = _responseSerializer.deserialize(msgBytes);
                 if (!completer.isCompleted) {
-                  _logger?.debug(
+                  _logger?.internal(
                       'Унарный вызов $_methodPath успешно завершен [streamId: $streamId]');
                   completer.complete(response);
                   break; // Для унарного вызова нужен только первый ответ
@@ -163,13 +163,13 @@ final class UnaryCaller<TRequest, TResponse> {
             }
           } else if (message.isMetadataOnly && message.metadata != null) {
             // Получили метаданные (возможно трейлеры)
-            _logger?.debug('Получены метаданные [streamId: $streamId]');
+            _logger?.internal('Получены метаданные [streamId: $streamId]');
             final statusCode = message.metadata!
                 .getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
 
             if (statusCode != null && message.isEndOfStream) {
               final code = int.parse(statusCode);
-              _logger?.debug(
+              _logger?.internal(
                   'Получен статус завершения: $code [streamId: $streamId]');
               if (code != RpcStatus.OK && !completer.isCompleted) {
                 final errorMessage = message.metadata!
@@ -193,7 +193,7 @@ final class UnaryCaller<TRequest, TResponse> {
       );
 
       // Отправляем метаданные инициализации с заголовками из контекста
-      _logger?.debug('Отправка начальных метаданных [streamId: $streamId]');
+      _logger?.internal('Отправка начальных метаданных [streamId: $streamId]');
       final baseMetadata =
           RpcMetadata.forClientRequest(_serviceName, _methodName);
 
@@ -212,7 +212,7 @@ final class UnaryCaller<TRequest, TResponse> {
         }
         headers.add(RpcHeader('x-request-id', _context!.requestId));
 
-        _logger?.debug(
+        _logger?.internal(
             'Добавлены заголовки контекста: ${_context!.headers.length} пользовательских + системные');
       }
 
@@ -220,12 +220,12 @@ final class UnaryCaller<TRequest, TResponse> {
       await _transport.sendMetadata(streamId, metadata);
 
       // Сериализуем и отправляем запрос
-      _logger?.debug('Сериализация запроса [streamId: $streamId]');
+      _logger?.internal('Сериализация запроса [streamId: $streamId]');
       final serializedRequest = _requestSerializer.serialize(request);
-      _logger?.debug(
+      _logger?.internal(
           'Запрос сериализован, размер: ${serializedRequest.length} байт [streamId: $streamId]');
       final framedRequest = RpcMessageFrame.encode(serializedRequest);
-      _logger?.debug(
+      _logger?.internal(
           'Отправка запроса и закрытие потока запросов [streamId: $streamId]');
       await _transport.sendMessage(
         streamId,
@@ -234,7 +234,7 @@ final class UnaryCaller<TRequest, TResponse> {
       );
 
       // Ждем ответ с таймаутом, если указан
-      _logger?.debug(
+      _logger?.internal(
         'Установлен таймаут ожидания ответа: $effectiveTimeout [streamId: $streamId]',
       );
       return await completer.future.timeout(
@@ -255,7 +255,7 @@ final class UnaryCaller<TRequest, TResponse> {
       rethrow;
     } finally {
       // В любом случае отписываемся от потока ответов
-      _logger?.debug('Отмена подписки на ответы [streamId: $streamId]');
+      _logger?.internal('Отмена подписки на ответы [streamId: $streamId]');
       await subscription?.cancel();
       await cancellationSubscription?.cancel();
     }
@@ -267,7 +267,7 @@ final class UnaryCaller<TRequest, TResponse> {
   /// другими клиентами. Транспорт должен закрываться явно.
   Future<void> close() async {
     // Клиент не владеет транспортом, поэтому не закрываем его
-    _logger?.debug('Унарный клиент $_methodPath закрыт');
+    _logger?.internal('Унарный клиент $_methodPath закрыт');
   }
 
   /// Проверяет контекст перед выполнением вызова
@@ -285,7 +285,7 @@ final class UnaryCaller<TRequest, TResponse> {
       );
     }
 
-    _logger?.debug(
+    _logger?.internal(
         'Контекст проверен: requestId=${_context!.requestId}, traceId=${_context!.traceId}');
   }
 }

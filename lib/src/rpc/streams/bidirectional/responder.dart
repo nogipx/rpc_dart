@@ -42,7 +42,7 @@ final class BidirectionalStreamResponder<TRequest extends IRpcSerializable,
     RpcLogger? logger,
   }) {
     _logger = logger?.child('BidirectionalResponder');
-    _logger?.debug(
+    _logger?.internal(
         'Создание BidirectionalStreamResponder для $serviceName.$methodName [id: $id]');
 
     _processor = StreamProcessor<TRequest, TResponse>(
@@ -65,7 +65,7 @@ final class BidirectionalStreamResponder<TRequest extends IRpcSerializable,
 
   /// Привязывает респондер к потоку сообщений от endpoint'а
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger?.debug('Привязка к потоку сообщений [id: $id]');
+    _logger?.internal('Привязка к потоку сообщений [id: $id]');
     _processor.bindToMessageStream(messageStream);
   }
 

@@ -111,7 +111,7 @@ final class RpcMessageParser {
       }
     }
 
-    _logger?.debug(
+    _logger?.internal(
       'Обработка завершена, извлечено сообщений: ${result.length}',
     );
     return result;

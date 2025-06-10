@@ -153,7 +153,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
       context?.cancellationToken?.throwIfCancelled();
 
       final response = 'Ответ #$i на запрос "${request.value}"';
-      logger.debug('🎯 Отправляем: $response');
+      logger.internal('🎯 Отправляем: $response');
       yield response.rpc;
 
       await Future.delayed(Duration(milliseconds: 50));
@@ -181,7 +181,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
     for (int i = 0; i < actualCount; i++) {
       context?.cancellationToken?.throwIfCancelled();
 
-      logger.debug('🎯 Отправляем число: $i');
+      logger.internal('🎯 Отправляем число: $i');
       yield i.rpc;
 
       await Future.delayed(Duration(milliseconds: delay));
@@ -203,7 +203,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
         context?.cancellationToken?.throwIfCancelled();
 
         final response = 'Долгий ответ #$i для "${request.value}"';
-        logger.debug('🎯 Отправляем: $response');
+        logger.internal('🎯 Отправляем: $response');
         yield response.rpc;
 
         await Future.delayed(Duration(milliseconds: 100));

@@ -89,7 +89,7 @@ class StreamDistributor<T extends IRpcSerializable> {
       metadata: metadata,
     );
 
-    _logger?.debug(
+    _logger?.internal(
       'Публикация данных в основной контроллер: размер=${event.toString().length} символов',
     );
     _mainController.add(wrappedEvent);
@@ -103,7 +103,7 @@ class StreamDistributor<T extends IRpcSerializable> {
         .where((wrapper) => !wrapper.isPaused && !wrapper.controller.isClosed)
         .length;
 
-    _logger?.debug(
+    _logger?.internal(
       'Опубликовано сообщение всем клиентам (доступно: $activeClients)',
     );
     return activeClients;
@@ -142,7 +142,7 @@ class StreamDistributor<T extends IRpcSerializable> {
       metadata: enrichedMetadata,
     );
 
-    _logger?.debug(
+    _logger?.internal(
       'Публикация фильтрованных данных: $wrappedEvent',
     );
     _mainController.add(wrappedEvent);
@@ -170,7 +170,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     // Проверяем, существует ли уже стрим с таким ID
     final existingWrapper = _clientStreams[clientId];
     if (existingWrapper != null) {
-      _logger?.debug(
+      _logger?.internal(
         'Использование существующего стрима для клиента: $clientId',
       );
       existingWrapper.updateLastActivity();
@@ -207,7 +207,7 @@ class StreamDistributor<T extends IRpcSerializable> {
 
         // Автоматически удаляем стрим при отмене подписки, если включено
         if (_config.autoRemoveOnCancel) {
-          _logger?.debug(
+          _logger?.internal(
             'Автоматическое закрытие стрима при отмене подписки: $clientId',
           );
           closeClientStream(clientId);
@@ -230,7 +230,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     // Обновляем метрики
     _metrics.incrementTotalStreams();
     _metrics.incrementCurrentStreams();
-    _logger?.debug(
+    _logger?.internal(
       'Создан новый стрим для клиента: $clientId (всего: ${_clientStreams.length})',
     );
 
@@ -261,7 +261,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     _StreamMessage<T> wrappedEvent,
   ) {
     if (clientController.isClosed) {
-      _logger?.debug(
+      _logger?.internal(
         'Попытка отправки сообщения в закрытый контроллер: $clientId',
       );
       return;
@@ -278,7 +278,7 @@ class StreamDistributor<T extends IRpcSerializable> {
 
     // Пропускаем сообщения, если клиент на паузе
     if (wrapper.isPaused) {
-      _logger?.debug(
+      _logger?.internal(
         'Клиент $clientId на паузе, сообщение пропущено',
       );
       return;
@@ -286,7 +286,7 @@ class StreamDistributor<T extends IRpcSerializable> {
 
     // Проверяем, относится ли сообщение к этому клиенту
     if (!_isMessageForClient(clientId, wrappedEvent)) {
-      _logger?.debug(
+      _logger?.internal(
         'Сообщение не предназначено для клиента $clientId',
       );
       return;
@@ -295,7 +295,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     try {
       // Извлекаем оригинальное сообщение из обертки
       clientController.add(wrappedEvent.message);
-      _logger?.debug(
+      _logger?.internal(
         'Отправка данных клиенту $clientId: размер=${wrappedEvent.message.toString().length} символов',
       );
 
@@ -376,7 +376,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     if (wrapper == null || wrapper.controller.isClosed) return false;
 
     wrapper.isPaused = true;
-    _logger?.debug(
+    _logger?.internal(
       'Клиентский стрим $clientId поставлен на паузу',
     );
     return true;
@@ -389,7 +389,7 @@ class StreamDistributor<T extends IRpcSerializable> {
 
     wrapper.isPaused = false;
     wrapper.updateLastActivity();
-    _logger?.debug(
+    _logger?.internal(
       'Клиентский стрим $clientId возобновлен',
     );
     return true;
@@ -409,7 +409,7 @@ class StreamDistributor<T extends IRpcSerializable> {
 
     // Пропускаем сообщения, если клиент на паузе
     if (wrapper.isPaused) {
-      _logger?.debug(
+      _logger?.internal(
         'Клиент $clientId на паузе, публикация пропущена',
       );
       return false;
@@ -455,7 +455,7 @@ class StreamDistributor<T extends IRpcSerializable> {
       );
       return;
     }
-    _logger?.debug(
+    _logger?.internal(
       'Публикация обернутого сообщения: streamId=${wrappedEvent.streamId}',
     );
     _mainController.add(wrappedEvent);
@@ -516,7 +516,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     if (wrapper != null) {
       await wrapper.dispose();
       _metrics.decrementCurrentStreams();
-      _logger?.debug(
+      _logger?.internal(
         'Клиентский стрим $clientId закрыт',
       );
       return true;
@@ -535,7 +535,7 @@ class StreamDistributor<T extends IRpcSerializable> {
       await closeClientStream(clientId);
     }
 
-    _logger?.debug(
+    _logger?.internal(
       'Закрыты все клиентские стримы ($clientCount)',
     );
   }
@@ -553,7 +553,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     }
 
     if (inactiveIds.isNotEmpty) {
-      _logger?.debug(
+      _logger?.internal(
         'Закрыто ${inactiveIds.length} неактивных стримов',
       );
     }
@@ -570,14 +570,14 @@ class StreamDistributor<T extends IRpcSerializable> {
 
     _cleanupTimer = Timer.periodic(_config.cleanupInterval, (_) async {
       if (_isDisposed) {
-        _logger?.debug(
+        _logger?.internal(
           'Дистрибьютор закрыт, очистка отменена',
         );
         return;
       }
 
       try {
-        _logger?.debug(
+        _logger?.internal(
           'Запуск периодической очистки неактивных стримов',
         );
         final removedCount =
@@ -587,7 +587,7 @@ class StreamDistributor<T extends IRpcSerializable> {
             'Автоматическая очистка удалила $removedCount неактивных стримов (осталось: ${_clientStreams.length})',
           );
         } else {
-          _logger?.debug(
+          _logger?.internal(
             'Очистка не обнаружила неактивных стримов (всего: ${_clientStreams.length})',
           );
         }
@@ -613,7 +613,7 @@ class StreamDistributor<T extends IRpcSerializable> {
   /// Освобождение всех ресурсов менеджера
   Future<void> dispose() async {
     if (_isDisposed) {
-      _logger?.debug(
+      _logger?.internal(
         'Повторный вызов dispose() игнорируется',
       );
       return;
@@ -631,7 +631,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     // Закрываем все клиентские контроллеры
     final clientCount = _clientStreams.length;
     await closeAllClientStreams();
-    _logger?.debug(
+    _logger?.internal(
       'Закрыты все клиентские стримы ($clientCount)',
     );
 
@@ -639,7 +639,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     try {
       if (!_mainController.isClosed) {
         await _mainController.close();
-        _logger?.debug(
+        _logger?.internal(
           'Основной контроллер закрыт',
         );
       }

@@ -27,6 +27,29 @@ final class RpcContextAwareLogger implements RpcLogger {
 
   // Все методы логирования автоматически используют _context
   @override
+  Future<void> internal(
+    String message, {
+    String? context,
+    String? requestId,
+    String? traceId,
+    Map<String, dynamic>? data,
+    AnsiColor? color,
+    RpcContext? rpcContext,
+  }) {
+    return _baseLogger.internal(
+      message,
+      context: context,
+      requestId: requestId,
+      traceId: traceId,
+      data: data,
+      color: color,
+      rpcContext:
+          rpcContext ?? _context, // Автоматически используем наш контекст
+    );
+  }
+
+  /// Отправляет лог уровня debug
+  @override
   Future<void> debug(
     String message, {
     String? context,
@@ -43,8 +66,7 @@ final class RpcContextAwareLogger implements RpcLogger {
       traceId: traceId,
       data: data,
       color: color,
-      rpcContext:
-          rpcContext ?? _context, // Автоматически используем наш контекст
+      rpcContext: rpcContext ?? _context,
     );
   }
 

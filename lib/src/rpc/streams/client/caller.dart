@@ -65,7 +65,8 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
     RpcLogger? logger,
   }) {
     _logger = logger?.child('ClientCaller');
-    _logger?.debug('Создание ClientStreamCaller для $serviceName.$methodName');
+    _logger
+        ?.internal('Создание ClientStreamCaller для $serviceName.$methodName');
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,
@@ -84,14 +85,14 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
   void _setupResponseHandler() {
     _subscription = _processor.responses.listen(
       (rpcMessage) {
-        _logger?.debug(
+        _logger?.internal(
             'Получен ответ от сервера: isMetadataOnly=${rpcMessage.isMetadataOnly}, isEndOfStream=${rpcMessage.isEndOfStream}');
 
         // Проверяем на ошибки в метаданных (трейлерах)
         if (rpcMessage.isMetadataOnly && rpcMessage.metadata != null) {
           final statusCode = rpcMessage.metadata!
               .getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
-          _logger?.debug('Статус-код из метаданных: $statusCode');
+          _logger?.internal('Статус-код из метаданных: $statusCode');
 
           if (statusCode != null && statusCode != '0') {
             final errorMessage = rpcMessage.metadata!
@@ -122,7 +123,8 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
-          _logger?.debug('Получена полезная нагрузка: ${rpcMessage.payload}');
+          _logger
+              ?.internal('Получена полезная нагрузка: ${rpcMessage.payload}');
           _responseCompleter.complete(rpcMessage.payload!);
         }
       },
@@ -134,7 +136,7 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
         }
       },
       onDone: () {
-        _logger?.debug('Поток ответов завершен');
+        _logger?.internal('Поток ответов завершен');
         if (!_responseCompleter.isCompleted) {
           // Проверяем, не было ли это вызвано закрытием транспорта
           try {
@@ -142,7 +144,7 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
                 .completeError(Exception('Стрим закрыт без получения ответа'));
           } catch (e) {
             // Если completer уже завершен, ничего не делаем
-            _logger?.debug('Completer уже завершен, пропускаем ошибку: $e');
+            _logger?.internal('Completer уже завершен, пропускаем ошибку: $e');
           }
         }
       },
@@ -160,7 +162,7 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
           'Вызовите finishSending() для получения ответа.');
     }
 
-    _logger?.debug('Отправка запроса в клиентский стрим: $request');
+    _logger?.internal('Отправка запроса в клиентский стрим: $request');
     await _processor.send(request);
   }
 
@@ -182,7 +184,7 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
     try {
       // Завершаем отправку запросов
       await _processor.finishSending();
-      _logger?.debug('Отправка завершена, ожидание ответа');
+      _logger?.internal('Отправка завершена, ожидание ответа');
 
       // Ожидаем единственный ответ с таймаутом
       return await _responseCompleter.future.timeout(
@@ -211,7 +213,7 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
 
   /// Закрывает стрим и освобождает ресурсы
   Future<void> close() async {
-    _logger?.debug('Закрытие ClientStreamCaller');
+    _logger?.internal('Закрытие ClientStreamCaller');
     await _subscription?.cancel();
     await _processor.close();
   }

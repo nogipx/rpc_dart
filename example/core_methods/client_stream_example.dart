@@ -204,7 +204,7 @@ final class DataAggregatorResponder extends RpcResponderContract
 
         count++;
         receivedMessages.add(message.value);
-        logger.debug('📨 Получено сообщение #$count: "${message.value}"');
+        logger.internal('📨 Получено сообщение #$count: "${message.value}"');
 
         // Имитируем обработку
         await Future.delayed(Duration(milliseconds: 10));
@@ -228,7 +228,7 @@ final class DataAggregatorResponder extends RpcResponderContract
         result = _aggregateRegularMessages(receivedMessages, aggregationType);
       }
 
-      logger.debug('📤 Отправляем результат: "$result"');
+      logger.internal('📤 Отправляем результат: "$result"');
       return result.rpc;
     } catch (e) {
       logger.warning('⚠️ Агрегация отменена: $e');

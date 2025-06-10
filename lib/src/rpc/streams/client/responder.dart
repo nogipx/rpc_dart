@@ -59,7 +59,7 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
     RpcLogger? logger,
   }) {
     _logger = logger?.child('ClientResponder');
-    _logger?.debug(
+    _logger?.internal(
         'Создание ClientStreamResponder для $serviceName.$methodName [id: $id]');
 
     _processor = StreamProcessor<TRequest, TResponse>(
@@ -77,7 +77,7 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
 
   /// Привязывает респондер к потоку сообщений от endpoint'а
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger?.debug('Привязка к потоку сообщений [id: $id]');
+    _logger?.internal('Привязка к потоку сообщений [id: $id]');
     _processor.bindToMessageStream(messageStream);
   }
 
@@ -90,7 +90,7 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
     }
 
     _handlerStarted = true;
-    _logger?.debug(
+    _logger?.internal(
         'Настройка обработчика запросов для клиентского стрима [id: $id]');
 
     // Собираем все запросы в список по мере их поступления
@@ -102,20 +102,20 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
         // Собираем каждый запрос в список
         allRequests.add(request);
         // Логируем получение запроса через logger
-        _logger
-            ?.debug('Получен запрос ${allRequests.length}: $request [id: $id]');
+        _logger?.internal(
+            'Получен запрос ${allRequests.length}: $request [id: $id]');
       },
       onDone: () async {
-        _logger?.debug(
+        _logger?.internal(
             'Поток запросов завершен, запускаем обработчик с ${allRequests.length} запросами [id: $id]');
 
         try {
-          _logger?.debug(
+          _logger?.internal(
               'Вызываем handler с ${allRequests.length} запросами [id: $id]');
           // Вызываем обработчик с потоком запросов из собранного списка
           final response = await handler(Stream.fromIterable(allRequests));
 
-          _logger?.debug(
+          _logger?.internal(
               'Обработчик вернул ответ: $response, отправляем клиенту [id: $id]');
 
           // Отправляем единственный ответ
@@ -124,7 +124,7 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
           // Завершаем отправку
           await _processor.finishSending();
 
-          _logger?.debug('Ответ успешно отправлен [id: $id]');
+          _logger?.internal('Ответ успешно отправлен [id: $id]');
         } catch (e, stackTrace) {
           _logger?.error('Ошибка в обработчике клиентского стрима [id: $id]',
               error: e, stackTrace: stackTrace);

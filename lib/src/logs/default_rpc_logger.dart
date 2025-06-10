@@ -33,6 +33,10 @@ class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
     String emoji;
     String connector;
     switch (level) {
+      case RpcLoggerLevel.internal:
+        prefix = 'INTRN';
+        emoji = '🔧';
+        connector = '⤷ ';
       case RpcLoggerLevel.debug:
         prefix = 'DEBUG';
         emoji = '🔍';
@@ -229,6 +233,29 @@ class DefaultRpcLogger implements RpcLogger {
     }
   }
 
+  @override
+  Future<void> internal(
+    String message, {
+    String? context,
+    String? requestId,
+    String? traceId,
+    Map<String, dynamic>? data,
+    AnsiColor? color,
+    RpcContext? rpcContext,
+  }) async {
+    await log(
+      level: RpcLoggerLevel.internal,
+      message: message,
+      context: context,
+      requestId: requestId,
+      traceId: traceId,
+      data: data,
+      color: color,
+      rpcContext: rpcContext,
+    );
+  }
+
+  /// Отправляет лог уровня debug
   @override
   Future<void> debug(
     String message, {

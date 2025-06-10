@@ -61,7 +61,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
 
-    _logger?.debug(
+    _logger?.internal(
         'Создан StreamProcessor для $_methodPath [streamId: $_streamId]');
     _setupResponseHandler();
   }
@@ -78,23 +78,23 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
       (response) async {
         if (!_isActive) return;
 
-        _logger
-            ?.debug('Отправка ответа для $_methodPath [streamId: $_streamId]');
+        _logger?.internal(
+            'Отправка ответа для $_methodPath [streamId: $_streamId]');
         try {
           final serialized = _responseCodec.serialize(response);
-          _logger?.debug(
+          _logger?.internal(
               'Ответ сериализован, размер: ${serialized.length} байт [streamId: $_streamId]');
 
           final framedMessage = RpcMessageFrame.encode(serialized);
           await _transport.sendMessage(_streamId, framedMessage);
 
-          _logger?.debug(
+          _logger?.internal(
               'Ответ отправлен для $_methodPath [streamId: $_streamId]');
         } catch (e, stackTrace) {
           // Проверяем, не закрыт ли транспорт
           if (e.toString().contains('Transport is closed') ||
               e.toString().contains('closed')) {
-            _logger?.debug(
+            _logger?.internal(
                 'Транспорт закрыт, пропускаем отправку ответа [streamId: $_streamId]');
             return;
           }
@@ -108,13 +108,13 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
         try {
           final trailers = RpcMetadata.forTrailer(RpcStatus.OK);
           await _transport.sendMetadata(_streamId, trailers, endStream: true);
-          _logger?.debug(
+          _logger?.internal(
               'Трейлер отправлен для $_methodPath [streamId: $_streamId]');
         } catch (e, stackTrace) {
           // Проверяем, не закрыт ли транспорт
           if (e.toString().contains('Transport is closed') ||
               e.toString().contains('closed')) {
-            _logger?.debug(
+            _logger?.internal(
                 'Транспорт закрыт, пропускаем отправку трейлера [streamId: $_streamId]');
             return;
           }
@@ -138,7 +138,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
       return;
     }
 
-    _logger?.debug(
+    _logger?.internal(
         'Привязка к потоку сообщений для $_methodPath [streamId: $_streamId]');
 
     _messageSubscription = messageStream.listen(
@@ -151,7 +151,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
         }
       },
       onDone: () {
-        _logger?.debug(
+        _logger?.internal(
             'Поток сообщений завершен для $_methodPath [streamId: $_streamId]');
         if (!_requestController.isClosed) {
           _requestController.close();
@@ -164,7 +164,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
   void _handleMessage(RpcTransportMessage message) {
     if (!_isActive) return;
 
-    _logger?.debug(
+    _logger?.internal(
         'Обработка сообщения [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}, isEndOfStream: ${message.isEndOfStream}]');
 
     // Обрабатываем сообщения с данными
@@ -174,7 +174,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
 
     // Обрабатываем конец потока
     if (message.isEndOfStream) {
-      _logger?.debug(
+      _logger?.internal(
           'Получен END_STREAM, закрываем поток запросов [streamId: $_streamId]');
       if (!_requestController.isClosed) {
         _requestController.close();
@@ -184,7 +184,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
 
   /// Обрабатывает сообщение с данными
   void _processDataMessage(List<int> messageBytes) {
-    _logger?.debug(
+    _logger?.internal(
         'Получено сообщение размером: ${messageBytes.length} байт [streamId: $_streamId]');
 
     try {
@@ -194,18 +194,18 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
           : Uint8List.fromList(messageBytes);
 
       final messages = _parser(uint8Message);
-      _logger?.debug(
+      _logger?.internal(
           'Парсер извлек ${messages.length} сообщений из фрейма [streamId: $_streamId]');
 
       for (var msgBytes in messages) {
         try {
-          _logger?.debug(
+          _logger?.internal(
               'Десериализация запроса размером ${msgBytes.length} байт [streamId: $_streamId]');
           final request = _requestCodec.deserialize(msgBytes);
 
           if (!_requestController.isClosed) {
             _requestController.add(request);
-            _logger?.debug(
+            _logger?.internal(
                 'Запрос десериализован и добавлен в поток запросов [streamId: $_streamId]');
           } else {
             _logger?.warning(
@@ -261,13 +261,13 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
     try {
       final trailers = RpcMetadata.forTrailer(statusCode, message: message);
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
-      _logger
-          ?.debug('Трейлер с ошибкой отправлен клиенту [streamId: $_streamId]');
+      _logger?.internal(
+          'Трейлер с ошибкой отправлен клиенту [streamId: $_streamId]');
     } catch (e, stackTrace) {
       // Проверяем, не закрыт ли транспорт
       if (e.toString().contains('Transport is closed') ||
           e.toString().contains('closed')) {
-        _logger?.debug(
+        _logger?.internal(
             'Транспорт закрыт, пропускаем отправку трейлера с ошибкой [streamId: $_streamId]');
         return;
       }
@@ -282,7 +282,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
   Future<void> finishSending() async {
     if (!_isActive) return;
 
-    _logger?.debug(
+    _logger?.internal(
         'Завершение отправки ответов для $_methodPath [streamId: $_streamId]');
 
     if (!_responseController.isClosed) {
@@ -294,7 +294,7 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
   Future<void> close() async {
     if (!_isActive) return;
 
-    _logger?.debug(
+    _logger?.internal(
         'Закрытие StreamProcessor для $_methodPath [streamId: $_streamId]');
     _isActive = false;
 
@@ -379,8 +379,8 @@ final class CallProcessor<TRequest extends IRpcSerializable,
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
 
-    _logger
-        ?.debug('Создан CallProcessor для $_methodPath [streamId: $_streamId]');
+    _logger?.internal(
+        'Создан CallProcessor для $_methodPath [streamId: $_streamId]');
 
     // Проверяем контекст перед началом работы
     _checkContextBeforeCall();
@@ -410,17 +410,17 @@ final class CallProcessor<TRequest extends IRpcSerializable,
           _initialMetadataSent = true;
         }
 
-        _logger
-            ?.debug('Отправка запроса для $_methodPath [streamId: $_streamId]');
+        _logger?.internal(
+            'Отправка запроса для $_methodPath [streamId: $_streamId]');
         try {
           final serialized = _requestCodec.serialize(request);
-          _logger?.debug(
+          _logger?.internal(
               'Запрос сериализован, размер: ${serialized.length} байт [streamId: $_streamId]');
 
           final framedMessage = RpcMessageFrame.encode(serialized);
           await _transport.sendMessage(_streamId, framedMessage);
 
-          _logger?.debug(
+          _logger?.internal(
               'Запрос отправлен для $_methodPath [streamId: $_streamId]');
         } catch (e, stackTrace) {
           _logger?.error('Ошибка при отправке запроса [streamId: $_streamId]',
@@ -435,7 +435,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
 
         try {
           await _transport.finishSending(_streamId);
-          _logger?.debug(
+          _logger?.internal(
               'finishSending выполнен для $_methodPath [streamId: $_streamId]');
         } catch (e, stackTrace) {
           _logger?.error(
@@ -468,7 +468,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
         }
       },
       onDone: () {
-        _logger?.debug(
+        _logger?.internal(
             'Поток ответов завершен для $_methodPath [streamId: $_streamId]');
         if (!_responseController.isClosed) {
           _responseController.close();
@@ -479,7 +479,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
 
   /// Отправляет начальные метаданные с поддержкой контекста
   Future<void> _sendInitialMetadata() async {
-    _logger?.debug(
+    _logger?.internal(
         'Отправка начальных метаданных для $_methodPath [streamId: $_streamId]');
 
     final baseMetadata =
@@ -503,7 +503,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
       // Context values остаются ЛОКАЛЬНЫМИ - не передаются через сеть (соответствует стандарту gRPC)
       // Только headers передаются через HTTP/2 заголовки
 
-      _logger?.debug(
+      _logger?.internal(
           'Добавлены заголовки контекста: ${_context!.headers.length} пользовательских + системные [streamId: $_streamId]');
     } else {
       // Даже для null контекста добавляем базовый request-id
@@ -511,14 +511,14 @@ final class CallProcessor<TRequest extends IRpcSerializable,
           RpcContext.empty().requestId; // Генерируем базовый request-id
       headers.add(RpcHeader('x-request-id', requestId));
 
-      _logger?.debug(
+      _logger?.internal(
           'Добавлен базовый request-id для null контекста [streamId: $_streamId]');
     }
 
     final metadata = RpcMetadata(headers);
     await _transport.sendMetadata(_streamId, metadata);
 
-    _logger?.debug(
+    _logger?.internal(
         'Начальные метаданные отправлены для $_methodPath [streamId: $_streamId]');
   }
 
@@ -537,7 +537,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
       );
     }
 
-    _logger?.debug(
+    _logger?.internal(
         'Контекст проверен: requestId=${_context!.requestId}, traceId=${_context!.traceId} [streamId: $_streamId]');
   }
 
@@ -545,7 +545,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
   void _handleResponse(RpcTransportMessage message) {
     if (!_isActive) return;
 
-    _logger?.debug(
+    _logger?.internal(
         'Обработка ответа [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}]');
 
     try {
@@ -558,7 +558,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
 
         if (!_responseController.isClosed) {
           _responseController.add(rpcMessage);
-          _logger?.debug(
+          _logger?.internal(
               'Метаданные добавлены в поток ответов [streamId: $_streamId]');
         }
       }
@@ -570,7 +570,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
 
       // Завершаем поток при получении END_STREAM
       if (message.isEndOfStream) {
-        _logger?.debug(
+        _logger?.internal(
             'Получен END_STREAM, закрываем поток ответов [streamId: $_streamId]');
         if (!_responseController.isClosed) {
           _responseController.close();
@@ -587,7 +587,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
 
   /// Обрабатывает данные ответа
   void _processResponseData(List<int> messageBytes) {
-    _logger?.debug(
+    _logger?.internal(
         'Получен ответ размером: ${messageBytes.length} байт [streamId: $_streamId]');
 
     try {
@@ -596,12 +596,12 @@ final class CallProcessor<TRequest extends IRpcSerializable,
           : Uint8List.fromList(messageBytes);
 
       final messages = _parser(uint8Message);
-      _logger?.debug(
+      _logger?.internal(
           'Парсер извлек ${messages.length} сообщений из фрейма [streamId: $_streamId]');
 
       for (var msgBytes in messages) {
         try {
-          _logger?.debug(
+          _logger?.internal(
               'Десериализация ответа размером ${msgBytes.length} байт [streamId: $_streamId]');
           final response = _responseCodec.deserialize(msgBytes);
 
@@ -609,7 +609,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
 
           if (!_responseController.isClosed) {
             _responseController.add(rpcMessage);
-            _logger?.debug(
+            _logger?.internal(
                 'Ответ десериализован и добавлен в поток ответов [streamId: $_streamId]');
           } else {
             _logger?.warning(
@@ -652,7 +652,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
   Future<void> finishSending() async {
     if (!_isActive) return;
 
-    _logger?.debug(
+    _logger?.internal(
         'Завершение отправки запросов для $_methodPath [streamId: $_streamId]');
 
     if (!_requestController.isClosed) {
@@ -664,7 +664,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
   Future<void> close() async {
     if (!_isActive) return;
 
-    _logger?.debug(
+    _logger?.internal(
         'Закрытие CallProcessor для $_methodPath [streamId: $_streamId]');
     _isActive = false;
 

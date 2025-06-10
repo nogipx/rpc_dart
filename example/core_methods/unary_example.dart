@@ -219,7 +219,7 @@ final class MultiServiceResponder extends RpcResponderContract
       await Future.delayed(Duration(milliseconds: 10));
 
       if (i % 20 == 0) {
-        logger.debug('📊 Прогресс: $i%');
+        logger.internal('📊 Прогресс: $i%');
       }
     }
 
