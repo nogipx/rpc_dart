@@ -1,12 +1,10 @@
 // SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
-
-// part of '../../contracts/_index.dart';
-
 import 'dart:convert';
+import 'dart:typed_data';
 
-import '../../rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart' show IRpcSerializable;
 
 /// Реализация CBOR (Concise Binary Object Representation) для RPC
 /// Формат описан в RFC 7049: https://tools.ietf.org/html/rfc7049

@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-import '../../rpc_dart.dart';
 import 'dart:async';
+
+import 'package:rpc_dart/rpc_dart.dart';
 
 part 'caller_endpoint.dart';
 part 'responder_endpoint.dart';

@@ -4,7 +4,7 @@
 
 import 'dart:async';
 
-import '../../../rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 
 part 'base_processor.dart';
 

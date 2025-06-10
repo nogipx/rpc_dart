@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-import '../../rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 
 part 'bool.dart';
 part 'list.dart';

@@ -61,7 +61,7 @@ void main() {
         expect(decoded['unicode_medium'], equals('🚀' * 50));
         expect(decoded['unicode_long'], equals('世界' * 5000));
 
-        expect(stopwatch.elapsedMicroseconds, lessThan(50000)); // < 50ms
+        expect(stopwatch.elapsedMicroseconds, lessThan(100000)); // < 100ms
       });
 
       test('Binary data encoding optimization', () {

@@ -5,7 +5,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import '../../rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart'
+    show IRpcCodec, IRpcSerializable, RpcCallerEndpoint;
 
 export 'dart:typed_data';
 
