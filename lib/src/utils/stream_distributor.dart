@@ -90,7 +90,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     );
 
     _logger?.debug(
-      'Публикация данных в основной контроллер: тип=${event.runtimeType}',
+      'Публикация данных в основной контроллер: размер=${event.toString().length} символов',
     );
     _mainController.add(wrappedEvent);
 
@@ -296,7 +296,7 @@ class StreamDistributor<T extends IRpcSerializable> {
       // Извлекаем оригинальное сообщение из обертки
       clientController.add(wrappedEvent.message);
       _logger?.debug(
-        'Отправка данных клиенту $clientId: ${wrappedEvent.message.runtimeType}',
+        'Отправка данных клиенту $clientId: размер=${wrappedEvent.message.toString().length} символов',
       );
 
       // Обновляем метрики

@@ -47,6 +47,6 @@ abstract class RpcPrimitiveMessage<T> implements IRpcSerializable {
     required Object other,
   }) =>
       RpcException(
-        'Unsupported operand type: ${other.runtimeType}',
+        'Unsupported operand type for operation "$op" with $type: ${other.toString()}',
       );
 }

@@ -67,7 +67,7 @@ abstract interface class CborCodec {
     // Проверяем, что если передана Map, то она имеет тип Map<String, dynamic>
     if (strictMapTypes && value is Map && value is! Map<String, dynamic>) {
       throw ArgumentError(
-        'CborCodec.encode принимает только Map<String, dynamic>, получено: ${value.runtimeType}',
+        'CborCodec.encode принимает только Map<String, dynamic>, получено несовместимый тип Map',
       );
     }
 

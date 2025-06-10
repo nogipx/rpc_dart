@@ -294,3 +294,153 @@ abstract final class RpcContextUtils {
     );
   }
 }
+
+/// Builder для explicit создания и propagation RPC контекстов
+/// Убирает boilerplate при создании сложных контекстов с наследованием
+class RpcContextBuilder {
+  RpcContext _context;
+
+  /// Создает builder с пустым контекстом
+  RpcContextBuilder() : _context = RpcContext.empty();
+
+  /// Создает builder на основе существующего контекста (для propagation)
+  RpcContextBuilder.from(RpcContext context) : _context = context;
+
+  /// Создает builder с auto-наследованием trace ID от родительского контекста
+  /// Если parent == null или traceId == null, генерирует новый trace ID
+  factory RpcContextBuilder.inheritFrom(RpcContext? parent) {
+    if (parent?.traceId != null) {
+      // Наследуем trace ID и базовые заголовки
+      return RpcContextBuilder.from(parent!)
+          .withGeneratedRequestId(); // Генерируем новый request ID для нового вызова
+    }
+
+    // Создаем новый контекст с новым trace ID
+    return RpcContextBuilder().withGeneratedTraceId().withGeneratedRequestId();
+  }
+
+  /// Устанавливает заголовки
+  RpcContextBuilder withHeaders(Map<String, String> headers) {
+    _context = _context.withAdditionalHeaders(headers);
+    return this;
+  }
+
+  /// Добавляет один заголовок
+  RpcContextBuilder withHeader(String key, String value) {
+    _context = _context.withAdditionalHeaders({key: value});
+    return this;
+  }
+
+  /// Устанавливает trace ID
+  RpcContextBuilder withTraceId(String traceId) {
+    _context = _context.withTraceId(traceId);
+    return this;
+  }
+
+  /// Генерирует новый trace ID
+  RpcContextBuilder withGeneratedTraceId() {
+    _context = _context.withTraceId(RpcContextUtils._generateTraceId());
+    return this;
+  }
+
+  /// Генерирует новый request ID (для chain вызовов)
+  RpcContextBuilder withGeneratedRequestId() {
+    // Создаем новый контекст с новым request ID
+    _context = RpcContext._(
+      headers: _context._headers,
+      deadline: _context.deadline,
+      cancellationToken: _context.cancellationToken,
+      traceId: _context.traceId,
+      requestId: null, // Передаем null, чтобы _generateRequestId() создал новый
+      values: _context._values,
+    );
+    return this;
+  }
+
+  /// Устанавливает deadline
+  RpcContextBuilder withDeadline(DateTime deadline) {
+    _context = _context.withDeadline(deadline);
+    return this;
+  }
+
+  /// Устанавливает timeout
+  RpcContextBuilder withTimeout(Duration timeout) {
+    _context = _context.withTimeout(timeout);
+    return this;
+  }
+
+  /// Устанавливает cancellation token
+  RpcContextBuilder withCancellation(CancellationToken token) {
+    _context = _context.withCancellation(token);
+    return this;
+  }
+
+  /// Добавляет значение в контекст
+  RpcContextBuilder withValue(Object key, Object value) {
+    _context = _context.withValue(key, value);
+    return this;
+  }
+
+  /// Устанавливает Bearer аутентификацию
+  RpcContextBuilder withBearerAuth(String token) {
+    return withHeader('authorization', 'Bearer $token');
+  }
+
+  /// Устанавливает Basic аутентификацию
+  RpcContextBuilder withBasicAuth(String username, String password) {
+    final credentials = base64Encode(utf8.encode('$username:$password'));
+    return withHeader('authorization', 'Basic $credentials');
+  }
+
+  /// Устанавливает API ключ
+  RpcContextBuilder withApiKey(String key, {String headerName = 'x-api-key'}) {
+    return withHeader(headerName, key);
+  }
+
+  /// Добавляет пользовательские метаданные для CORD доменов
+  RpcContextBuilder withDomainMetadata({
+    String? userId,
+    String? sessionId,
+    String? tenantId,
+    String? correlationId,
+  }) {
+    if (userId != null) withHeader('x-user-id', userId);
+    if (sessionId != null) withHeader('x-session-id', sessionId);
+    if (tenantId != null) withHeader('x-tenant-id', tenantId);
+    if (correlationId != null) withHeader('x-correlation-id', correlationId);
+    return this;
+  }
+
+  /// Возвращает готовый контекст
+  RpcContext build() => _context;
+}
+
+/// Extension для удобной работы с propagation
+extension RpcContextExtensions on RpcContext {
+  /// Создает дочерний контекст для нового вызова (наследует trace ID, новый request ID)
+  RpcContext createChild() {
+    return RpcContextBuilder.inheritFrom(this).build();
+  }
+
+  /// Создает дочерний контекст с дополнительными заголовками
+  RpcContext createChildWith({
+    Map<String, String>? headers,
+    Duration? timeout,
+    String? userId,
+    String? sessionId,
+  }) {
+    var builder = RpcContextBuilder.inheritFrom(this);
+
+    if (headers != null) builder = builder.withHeaders(headers);
+    if (timeout != null) builder = builder.withTimeout(timeout);
+    if (userId != null) builder = builder.withHeader('x-user-id', userId);
+    if (sessionId != null) {
+      builder = builder.withHeader('x-session-id', sessionId);
+    }
+
+    return builder.build();
+  }
+
+  /// Алиас для correlation ID (совместимость)
+  String? get correlationId => traceId;
+}

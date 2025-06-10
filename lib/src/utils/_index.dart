@@ -3,3 +3,4 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 export 'stream_distributor.dart';
+export 'context_propagation.dart';

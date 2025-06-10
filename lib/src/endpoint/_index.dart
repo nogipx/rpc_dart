@@ -27,7 +27,7 @@ abstract base class RpcEndpointBase {
 
   void addMiddleware(IRpcMiddleware middleware) {
     _middlewares.add(middleware);
-    logger.info('Добавлен middleware: ${middleware.runtimeType}');
+    logger.info('Добавлен middleware: ${middleware.toString()}');
   }
 
   bool get isActive => _isActive;
