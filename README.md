@@ -22,6 +22,7 @@
 - **Полная поддержка RPC паттернов** — unary calls, server streams, client streams, bidirectional streams
 - **Встроенный InMemory транспорт** — для разработки и тестирования
 - **Типобезопасность** — все запросы/ответы строго типизированы
+- **Автоматическая трассировка** — trace ID генерируется автоматически, передается через RpcContext
 - **Без внешних зависимостей** — только чистый Dart
 - **Встроенные примитивы** — готовые обертки для String, Int, Double, Bool, List
 - **Простое тестирование** — с InMemory транспортом и моками
@@ -101,7 +102,7 @@ class CalculatorResponder extends RpcResponderContract {
     );
   }
   
-  Future<CalculationResponse> calculate(CalculationRequest request) async {
+  Future<CalculationResponse> calculate(CalculationRequest request, {RpcContext? context}) async {
     try {
       double result;
       switch (request.operation) {
@@ -119,9 +120,9 @@ class CalculatorResponder extends RpcResponderContract {
     }
   }
   
-  Stream<CalculationResponse> streamCalculate(Stream<CalculationRequest> requests) async* {
+  Stream<CalculationResponse> streamCalculate(Stream<CalculationRequest> requests, {RpcContext? context}) async* {
     await for (final request in requests) {
-      yield await calculate(request);
+      yield await calculate(request, context: context);
     }
   }
 }
@@ -178,9 +179,16 @@ void main() async {
   final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
   final calculator = CalculatorCaller(clientEndpoint);
   
-  // Делаем RPC вызовы
+  // Делаем RPC вызовы с автоматической генерацией trace ID
   final result = await calculator.add(10, 20);
   print('10 + 20 = $result'); // 10 + 20 = 30.0
+  
+  // Или с пользовательским контекстом
+  final context = RpcContextUtils.withTracing(traceId: 'user_operation_123');
+  final resultWithContext = await calculator.calculate(
+    CalculationRequest(a: 5, b: 3, operation: 'multiply'),
+    context: context,
+  );
   
   // Работаем со стримом вычислений
   final requests = Stream.fromIterable([
@@ -427,16 +435,11 @@ RPC Dart использует gRPC-статусы для унифицирова�
 try {
   final result = await userService.getUser(request);
 } on RpcException catch (e) {
-  switch (e.code) {
-    case RpcStatus.NOT_FOUND:
-      showError('Пользователь не найден');
-    case RpcStatus.PERMISSION_DENIED:
-      redirectToLogin();
-    case RpcStatus.DEADLINE_EXCEEDED:
-      showError('Таймаут запроса');
-    default:
-      showError('Неизвестная ошибка: ${e.message}');
-  }
+  showError('RPC ошибка: ${e.message}');
+} on RpcDeadlineExceededException catch (e) {
+  showError('Таймаут запроса: ${e.timeout}');
+} on RpcCancelledException catch (e) {
+  showError('Операция отменена: ${e.message}');
 } catch (e) {
   // Обработка неожиданных ошибок
   logError('Unexpected error', error: e);
