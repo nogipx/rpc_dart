@@ -15,7 +15,7 @@ void main() {
     late TestConcurrencyContract testContract;
 
     setUpAll(() async {
-      RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.error);
+      RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.error);
     });
 
     setUp(() async {

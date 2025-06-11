@@ -75,7 +75,7 @@ void main() {
 
       test('создает_контекст_с_токеном_отмены', () {
         // Arrange
-        final cancellationToken = CancellationToken();
+        final cancellationToken = RpcCancellationToken();
 
         // Act
         final sut = RpcContext.withCancellation(cancellationToken);
@@ -172,7 +172,7 @@ void main() {
 
       test('устанавливает_токен_отмены', () {
         // Arrange
-        final cancellationToken = CancellationToken();
+        final cancellationToken = RpcCancellationToken();
 
         // Act
         final sut = baseSut.withCancellation(cancellationToken);
@@ -236,7 +236,7 @@ void main() {
 
       test('определяет_отмененный_контекст', () {
         // Arrange
-        final cancellationToken = CancellationToken();
+        final cancellationToken = RpcCancellationToken();
         final sut = RpcContext.withCancellation(cancellationToken);
 
         // Act
@@ -248,7 +248,7 @@ void main() {
 
       test('определяет_неотмененный_контекст', () {
         // Arrange
-        final cancellationToken = CancellationToken();
+        final cancellationToken = RpcCancellationToken();
         final sut = RpcContext.withCancellation(cancellationToken);
 
         // Act & Assert
@@ -348,7 +348,7 @@ void main() {
 
       test('отображает_все_установленные_поля', () {
         // Arrange
-        final cancellationToken = CancellationToken();
+        final cancellationToken = RpcCancellationToken();
         final deadline = DateTime.now().add(Duration(hours: 1));
         final sut = RpcContext.withHeaders({'auth': 'token'})
             .withDeadline(deadline)
@@ -370,7 +370,7 @@ void main() {
 
       test('отображает_статус_отмены', () {
         // Arrange
-        final cancellationToken = CancellationToken();
+        final cancellationToken = RpcCancellationToken();
         final sut = RpcContext.withCancellation(cancellationToken);
 
         // Act
@@ -399,7 +399,7 @@ void main() {
     group('создание_токена', () {
       test('создает_активный_токен', () {
         // Arrange & Act
-        final sut = CancellationToken();
+        final sut = RpcCancellationToken();
 
         // Assert
         expect(sut.isCancelled, isFalse);
@@ -411,7 +411,7 @@ void main() {
         const reason = 'Предварительно отменен';
 
         // Act
-        final sut = CancellationToken.cancelled(reason);
+        final sut = RpcCancellationToken.cancelled(reason);
 
         // Assert
         expect(sut.isCancelled, isTrue);
@@ -420,7 +420,7 @@ void main() {
 
       test('создает_отмененный_токен_без_причины', () {
         // Arrange & Act
-        final sut = CancellationToken.cancelled();
+        final sut = RpcCancellationToken.cancelled();
 
         // Assert
         expect(sut.isCancelled, isTrue);
@@ -431,7 +431,7 @@ void main() {
     group('отмена_токена', () {
       test('отменяет_активный_токен', () {
         // Arrange
-        final sut = CancellationToken();
+        final sut = RpcCancellationToken();
         const reason = 'Пользователь отменил';
 
         // Act
@@ -444,7 +444,7 @@ void main() {
 
       test('отменяет_токен_без_причины', () {
         // Arrange
-        final sut = CancellationToken();
+        final sut = RpcCancellationToken();
 
         // Act
         sut.cancel();
@@ -456,7 +456,7 @@ void main() {
 
       test('игнорирует_повторную_отмену', () {
         // Arrange
-        final sut = CancellationToken();
+        final sut = RpcCancellationToken();
         sut.cancel('Первая причина');
 
         // Act
@@ -470,7 +470,7 @@ void main() {
 
       test('уведомляет_о_отмене_через_future', () async {
         // Arrange
-        final sut = CancellationToken();
+        final sut = RpcCancellationToken();
         bool notified = false;
 
         // Act
@@ -488,7 +488,7 @@ void main() {
     group('проверка_отмены', () {
       test('не_выбрасывает_исключение_для_активного_токена', () {
         // Arrange
-        final sut = CancellationToken();
+        final sut = RpcCancellationToken();
 
         // Act & Assert
         expect(() => sut.throwIfCancelled(), returnsNormally);
@@ -496,7 +496,7 @@ void main() {
 
       test('выбрасывает_исключение_для_отмененного_токена', () {
         // Arrange
-        final sut = CancellationToken();
+        final sut = RpcCancellationToken();
         const reason = 'Токен отменен';
         sut.cancel(reason);
 
@@ -510,7 +510,7 @@ void main() {
 
       test('выбрасывает_исключение_с_дефолтным_сообщением', () {
         // Arrange
-        final sut = CancellationToken();
+        final sut = RpcCancellationToken();
         sut.cancel(); // Без причины
 
         // Act & Assert
@@ -665,8 +665,8 @@ void main() {
         // Arrange
         final leftDeadline = DateTime.now().add(Duration(hours: 1));
         final rightDeadline = DateTime.now().add(Duration(hours: 2));
-        final leftToken = CancellationToken();
-        final rightToken = CancellationToken();
+        final leftToken = RpcCancellationToken();
+        final rightToken = RpcCancellationToken();
 
         final leftSut = RpcContext.withDeadline(leftDeadline)
             .withCancellation(leftToken)
@@ -688,7 +688,7 @@ void main() {
       test('использует_левые_значения_если_правые_null', () {
         // Arrange
         final deadline = DateTime.now().add(Duration(hours: 1));
-        final token = CancellationToken();
+        final token = RpcCancellationToken();
         const traceId = 'left-trace';
 
         final leftSut = RpcContext.withDeadline(deadline)

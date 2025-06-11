@@ -8,7 +8,6 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 /// Полные интеграционные тесты Router'а со всеми типами стриминга
 void main() {
-  RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.internal);
   group('🚌🔄 Transport Router Streaming Tests', () {
     // Транспорты для тестирования
     late RpcInMemoryTransport userClientTransport, userServerTransport;

@@ -89,7 +89,7 @@ void main() {
 
   group('CancellationToken', () {
     test('создает неотмененный токен', () {
-      final token = CancellationToken();
+      final token = RpcCancellationToken();
 
       expect(token.isCancelled, isFalse);
       expect(token.reason, isNull);
@@ -97,14 +97,14 @@ void main() {
 
     test('создает уже отмененный токен', () {
       final reason = 'User cancelled';
-      final token = CancellationToken.cancelled(reason);
+      final token = RpcCancellationToken.cancelled(reason);
 
       expect(token.isCancelled, isTrue);
       expect(token.reason, equals(reason));
     });
 
     test('отменяет токен с причиной', () {
-      final token = CancellationToken();
+      final token = RpcCancellationToken();
       final reason = 'Timeout exceeded';
 
       token.cancel(reason);
@@ -114,7 +114,7 @@ void main() {
     });
 
     test('выбрасывает исключение при проверке отмененного токена', () {
-      final token = CancellationToken.cancelled('Test cancellation');
+      final token = RpcCancellationToken.cancelled('Test cancellation');
 
       expect(
         () => token.throwIfCancelled(),
@@ -123,7 +123,7 @@ void main() {
     });
 
     test('не выбрасывает исключение для неотмененного токена', () {
-      final token = CancellationToken();
+      final token = RpcCancellationToken();
 
       expect(() => token.throwIfCancelled(), returnsNormally);
     });
@@ -319,12 +319,12 @@ void main() {
     });
   });
 
-  group('RpcContextPropagation', () {
+  group('RpcContext', () {
     test('создает контекст для бизнес-операции', () {
       final userId = '123';
       final operationType = 'CreateOrder';
 
-      final context = RpcContextPropagation.forBusinessOperation(
+      final context = RpcContext.forBusinessOperation(
         operationType: operationType,
         userId: userId,
       );
@@ -340,7 +340,7 @@ void main() {
       final parent = RpcContext.withTraceId(parentTraceId)
           .withAdditionalHeaders({'x-user-id': '456'});
 
-      final context = RpcContextPropagation.forDomainCall(
+      final context = RpcContext.forDomainCall(
         parentContext: parent,
         fromDomain: 'OrderDomain',
         toDomain: 'UserService',
@@ -366,7 +366,7 @@ void main() {
         'x-operation-type': 'Payment',
       }).withTraceId('trace-456');
 
-      final metadata = RpcContextPropagation.extractDomainMetadata(context);
+      final metadata = RpcContext.extractDomainMetadata(context);
 
       expect(metadata.userId, equals('123'));
       expect(metadata.sessionId, equals('session-abc'));
@@ -382,20 +382,20 @@ void main() {
       final validContext = RpcContext.empty();
       final expiredContext = RpcContext.withDeadline(
           DateTime.now().subtract(Duration(minutes: 1)));
-      final cancelledToken = CancellationToken.cancelled();
+      final cancelledToken = RpcCancellationToken.cancelled();
       final cancelledContext = RpcContext.withCancellation(cancelledToken);
 
-      expect(RpcContextPropagation.isContextValid(validContext), isTrue);
-      expect(RpcContextPropagation.isContextValid(expiredContext), isFalse);
-      expect(RpcContextPropagation.isContextValid(cancelledContext), isFalse);
-      expect(RpcContextPropagation.isContextValid(null), isFalse);
+      expect(RpcContext.isContextValid(validContext), isTrue);
+      expect(RpcContext.isContextValid(expiredContext), isFalse);
+      expect(RpcContext.isContextValid(cancelledContext), isFalse);
+      expect(RpcContext.isContextValid(null), isFalse);
     });
 
     test('создает цепочку контекстов', () {
       final baseContext = RpcContext.withTraceId('base-trace-123');
       final steps = ['OrderDomain', 'UserDomain', 'PaymentDomain'];
 
-      final chain = RpcContextPropagation.createChain(
+      final chain = RpcContext.createChain(
         baseContext,
         steps: steps,
         stepTimeout: Duration(seconds: 5),
@@ -429,7 +429,7 @@ void main() {
         'x-public-data': 'safe-value',
       }).withTraceId('trace-123');
 
-      final sanitized = RpcContextPropagation.sanitize(context);
+      final sanitized = RpcContext.sanitize(context);
 
       expect(sanitized.getHeader('authorization'), isNull);
       expect(sanitized.getHeader('x-api-key'), isNull);
@@ -525,13 +525,13 @@ void main() {
   group('Интеграционные тесты', () {
     test('полный цикл propagation через несколько доменов', () {
       // Создаем начальный контекст операции
-      final initialContext = RpcContextPropagation.forBusinessOperation(
+      final initialContext = RpcContext.forBusinessOperation(
         operationType: 'CreateOrder',
         userId: '123',
       );
 
       // OrderDomain делает вызов в UserDomain
-      final orderToUserContext = RpcContextPropagation.forDomainCall(
+      final orderToUserContext = RpcContext.forDomainCall(
         parentContext: initialContext,
         fromDomain: 'OrderDomain',
         toDomain: 'UserDomain',
@@ -539,7 +539,7 @@ void main() {
       );
 
       // UserDomain делает вызов в PaymentDomain
-      final userToPaymentContext = RpcContextPropagation.forDomainCall(
+      final userToPaymentContext = RpcContext.forDomainCall(
         parentContext: orderToUserContext,
         fromDomain: 'UserDomain',
         toDomain: 'PaymentDomain',
@@ -562,7 +562,7 @@ void main() {
 
       // Проверяем метаданные последнего вызова
       final paymentMetadata =
-          RpcContextPropagation.extractDomainMetadata(userToPaymentContext);
+          RpcContext.extractDomainMetadata(userToPaymentContext);
       expect(paymentMetadata.userId, equals('123'));
       expect(paymentMetadata.toDomain, equals('PaymentDomain'));
       expect(paymentMetadata.operation, equals('ValidateCard'));
@@ -570,7 +570,7 @@ void main() {
     });
 
     test('работа с таймаутами и отменой в цепочке', () {
-      final cancellationToken = CancellationToken();
+      final cancellationToken = RpcCancellationToken();
       final timeout = Duration(seconds: 30);
 
       final context = RpcContextBuilder()

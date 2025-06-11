@@ -14,7 +14,7 @@ final class RpcContext {
   final DateTime? deadline;
 
   /// Токен отмены
-  final CancellationToken? cancellationToken;
+  final RpcCancellationToken? cancellationToken;
 
   /// Trace ID для распределенной трассировки
   final String? traceId;
@@ -52,7 +52,7 @@ final class RpcContext {
       RpcContext._(deadline: DateTime.now().add(timeout));
 
   /// Создает контекст с токеном отмены
-  factory RpcContext.withCancellation(CancellationToken token) =>
+  factory RpcContext.withCancellation(RpcCancellationToken token) =>
       RpcContext._(cancellationToken: token);
 
   /// Создает контекст с trace ID
@@ -89,7 +89,7 @@ final class RpcContext {
       withDeadline(DateTime.now().add(timeout));
 
   /// Создает копию контекста с токеном отмены
-  RpcContext withCancellation(CancellationToken token) => RpcContext._(
+  RpcContext withCancellation(RpcCancellationToken token) => RpcContext._(
         headers: _headers,
         deadline: deadline,
         cancellationToken: token,
@@ -172,18 +172,191 @@ final class RpcContext {
 
     return 'RpcContext(${parts.join(', ')})';
   }
+
+  // ============================================================================
+  // CORD Context Propagation - перенесено из RpcContext
+  // ============================================================================
+
+  /// Создает цепочку контекстов для последовательных междоменных вызовов
+  ///
+  /// Пример:
+  /// ```dart
+  /// final chain = RpcContext.createChain(
+  ///   baseContext,
+  ///   steps: ['OrderDomain', 'UserDomain', 'PaymentDomain']
+  /// );
+  ///
+  /// final userCtx = chain['UserDomain']!;
+  /// final paymentCtx = chain['PaymentDomain']!;
+  /// ```
+  static Map<String, RpcContext> createChain(
+    RpcContext baseContext, {
+    required List<String> steps,
+    Duration? stepTimeout,
+  }) {
+    final chain = <String, RpcContext>{};
+    var currentContext = baseContext;
+
+    for (final step in steps) {
+      // Создаем дочерний контекст для каждого шага
+      currentContext = RpcContextBuilder.inheritFrom(currentContext).build();
+
+      // Добавляем метаданные о текущем шаге
+      currentContext = currentContext.withValue('cord.step', step);
+
+      // Устанавливаем timeout для шага, если указан
+      if (stepTimeout != null) {
+        currentContext = currentContext.withTimeout(stepTimeout);
+      }
+
+      chain[step] = currentContext;
+    }
+
+    return chain;
+  }
+
+  /// Создает контекст для бизнес-операции с автоматическим trace ID
+  ///
+  /// Пример:
+  /// ```dart
+  /// final opContext = RpcContext.forBusinessOperation(
+  ///   operationType: 'CreateOrder',
+  ///   userId: 'user123',
+  ///   sessionId: 'session456'
+  /// );
+  /// ```
+  static RpcContext forBusinessOperation({
+    required String operationType,
+    String? userId,
+    String? sessionId,
+    String? tenantId,
+    Duration? timeout,
+    RpcContext? parentContext,
+  }) {
+    var builder = parentContext != null
+        ? RpcContextBuilder.inheritFrom(parentContext)
+        : RpcContextBuilder().withGeneratedTraceId();
+
+    return builder
+        .withHeader('x-operation-type', operationType)
+        .withDomainMetadata(
+          userId: userId,
+          sessionId: sessionId,
+          tenantId: tenantId,
+        )
+        .withTimeout(timeout ?? Duration(seconds: 30))
+        .build();
+  }
+
+  /// Создает контекст для CORD междоменного вызова
+  ///
+  /// Пример:
+  /// ```dart
+  /// final domainCtx = RpcContext.forDomainCall(
+  ///   parentContext: currentContext,
+  ///   fromDomain: 'OrderDomain',
+  ///   toDomain: 'UserDomain',
+  ///   operation: 'GetUser'
+  /// );
+  /// ```
+  static RpcContext forDomainCall({
+    required RpcContext parentContext,
+    required String fromDomain,
+    required String toDomain,
+    required String operation,
+    Duration? callTimeout,
+  }) {
+    return RpcContextBuilder.inheritFrom(parentContext)
+        .withHeader('x-from-domain', fromDomain)
+        .withHeader('x-to-domain', toDomain)
+        .withHeader('x-domain-operation', operation)
+        .withTimeout(callTimeout ?? Duration(seconds: 10))
+        .build();
+  }
+
+  /// Проверяет, является ли контекст истекшим или отмененным
+  static bool isContextValid(RpcContext? context) {
+    if (context == null) return false;
+    return !context.isExpired && !context.isCancelled;
+  }
+
+  /// Извлекает метаданные домена из контекста
+  static DomainMetadata extractDomainMetadata(RpcContext context) {
+    return DomainMetadata(
+      userId: context.getHeader('x-user-id'),
+      sessionId: context.getHeader('x-session-id'),
+      tenantId: context.getHeader('x-tenant-id'),
+      fromDomain: context.getHeader('x-from-domain'),
+      toDomain: context.getHeader('x-to-domain'),
+      operation: context.getHeader('x-domain-operation'),
+      operationType: context.getHeader('x-operation-type'),
+      traceId: context.traceId,
+      correlationId: context.getHeader('x-correlation-id'),
+    );
+  }
+
+  /// Создает "безопасную" копию контекста без чувствительных данных
+  static RpcContext sanitize(RpcContext context) {
+    final sanitizedHeaders = Map<String, String>.from(context.headers);
+
+    // Удаляем чувствительные заголовки
+    sanitizedHeaders.remove('authorization');
+    sanitizedHeaders.remove('x-api-key');
+    sanitizedHeaders.remove('cookie');
+
+    return RpcContextBuilder()
+        .withHeaders(sanitizedHeaders)
+        .withTraceId(context.traceId ?? 'sanitized-trace')
+        .build();
+  }
+}
+
+/// Метаданные домена, извлеченные из RPC контекста
+class DomainMetadata {
+  final String? userId;
+  final String? sessionId;
+  final String? tenantId;
+  final String? fromDomain;
+  final String? toDomain;
+  final String? operation;
+  final String? operationType;
+  final String? traceId;
+  final String? correlationId;
+
+  const DomainMetadata({
+    this.userId,
+    this.sessionId,
+    this.tenantId,
+    this.fromDomain,
+    this.toDomain,
+    this.operation,
+    this.operationType,
+    this.traceId,
+    this.correlationId,
+  });
+
+  @override
+  String toString() {
+    final parts = <String>[
+      if (traceId != null) 'trace:$traceId',
+      if (fromDomain != null && toDomain != null) '$fromDomain→$toDomain',
+      if (operation != null) 'op:$operation',
+      if (userId != null) 'user:$userId',
+    ];
+    return 'DomainMetadata(${parts.join(', ')})';
+  }
 }
 
 /// Токен отмены операции (аналог context.CancelFunc в Go)
-final class CancellationToken {
+final class RpcCancellationToken {
   final Completer<void> _completer = Completer<void>();
   String? _reason;
 
   /// Создает новый токен отмены
-  CancellationToken();
+  RpcCancellationToken();
 
   /// Создает уже отмененный токен
-  CancellationToken.cancelled([String? reason]) {
+  RpcCancellationToken.cancelled([String? reason]) {
     _reason = reason;
     if (!_completer.isCompleted) {
       _completer.complete();
@@ -370,7 +543,7 @@ class RpcContextBuilder {
   }
 
   /// Устанавливает cancellation token
-  RpcContextBuilder withCancellation(CancellationToken token) {
+  RpcContextBuilder withCancellation(RpcCancellationToken token) {
     _context = _context.withCancellation(token);
     return this;
   }
@@ -443,4 +616,59 @@ extension RpcContextExtensions on RpcContext {
 
   /// Алиас для correlation ID (совместимость)
   String? get correlationId => traceId;
+}
+
+/// Mixin для компонентов, которые хотят автоматически наследовать и создавать RPC контексты
+///
+/// Предоставляет методы для создания контекстов для междоменных вызовов
+/// с правильным наследованием trace ID и метаданных.
+mixin RpcContextAware {
+  /// Имя сервиса (должно быть реализовано)
+  String get serviceName;
+
+  /// Текущий контекст компонента
+  RpcContext? _currentContext;
+
+  /// Получает текущий контекст
+  RpcContext? get currentContext => _currentContext;
+
+  /// Обновляет текущий контекст
+  void updateCurrentContext(RpcContext? context) {
+    _currentContext = context;
+  }
+
+  /// Создает контекст для вызова другого домена
+  ///
+  /// Автоматически наследует trace ID и метаданные от текущего контекста
+  RpcContext createCallContext({
+    required String targetDomain,
+    required String operation,
+    Duration? callTimeout,
+  }) {
+    return RpcContext.forDomainCall(
+      parentContext: _currentContext ?? RpcContextUtils.withTracing(),
+      fromDomain: serviceName,
+      toDomain: targetDomain,
+      operation: operation,
+      callTimeout: callTimeout,
+    );
+  }
+
+  /// Создает контекст для бизнес-операции
+  RpcContext createBusinessContext({
+    required String operationType,
+    String? userId,
+    String? sessionId,
+    String? tenantId,
+    Duration? timeout,
+  }) {
+    return RpcContext.forBusinessOperation(
+      operationType: operationType,
+      userId: userId,
+      sessionId: sessionId,
+      tenantId: tenantId,
+      timeout: timeout,
+      parentContext: _currentContext,
+    );
+  }
 }

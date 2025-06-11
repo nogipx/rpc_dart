@@ -18,7 +18,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// - Endpoint processing
 /// - Реальные контракты и сценарии
 void main(List<String> args) async {
-  RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.none);
+  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.none);
 
   // Парсинг аргументов командной строки
   String? outputPath;
@@ -455,7 +455,7 @@ class RealRpcBenchmark {
     print('');
 
     if (config.enableLogging) {
-      RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.info);
+      RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info);
     }
 
     // Настройка RPC инфраструктуры

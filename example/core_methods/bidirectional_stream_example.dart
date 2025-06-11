@@ -11,7 +11,7 @@ void main() async {
 /// Пример использования двунаправленного стриминга с контрактами и RpcContext
 class BidirectionalStreamExample {
   static Future<void> run() async {
-    RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+    RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
     print('\n=== Пример двунаправленного стриминга с контрактами ===\n');
 
     // Создаем транспорты
@@ -93,7 +93,7 @@ class BidirectionalStreamExample {
       // Пример 3: Чат с отменой
       print('\n--- Пример 3: Чат с отменой ---');
 
-      final cancellationToken = CancellationToken();
+      final cancellationToken = RpcCancellationToken();
       final cancelContext = RpcContext.withCancellation(cancellationToken)
           .withValue('chat-type', 'long-running');
 

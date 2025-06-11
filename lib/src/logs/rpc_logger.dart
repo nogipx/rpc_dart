@@ -166,4 +166,33 @@ abstract interface class RpcLogger {
     AnsiColor? color,
     RpcContext? rpcContext,
   });
+
+  // ============================================================================
+  // Logger Settings - перенесено из RpcLogger
+  // ============================================================================
+
+  static RpcLoggerLevel _defaultMinLogLevel = RpcLoggerLevel.info;
+
+  /// Устанавливает минимальный уровень логирования по умолчанию
+  static void setDefaultMinLogLevel(RpcLoggerLevel level) {
+    _defaultMinLogLevel = level;
+  }
+
+  /// Получает текущий минимальный уровень логирования по умолчанию
+  static RpcLoggerLevel get defaultMinLogLevel => _defaultMinLogLevel;
+
+  /// Устанавливает пользовательскую фабрику логгеров
+  static void setLoggerFactory(RpcLoggerFactory factory) {
+    _RpcLoggerRegistry._factory = factory;
+  }
+
+  /// Удаляет логгер по имени из реестра
+  static void removeLogger(String loggerName) {
+    _RpcLoggerRegistry.instance.remove(loggerName);
+  }
+
+  /// Очищает все логгеры из реестра
+  static void clearLoggers() {
+    _RpcLoggerRegistry.instance.clear();
+  }
 }

@@ -14,7 +14,7 @@ void main() async {
 class ClientStreamingExample {
   /// Запускает демонстрацию клиентского стриминга
   static Future<void> run() async {
-    RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+    RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
 
     print('\n=== Пример клиентского стриминга (N запросов -> 1 ответ) ===\n');
 
@@ -101,7 +101,7 @@ class ClientStreamingExample {
       // Пример 3: Агрегация с отменой
       print('\n--- Пример 3: Агрегация с отменой ---');
 
-      final cancellationToken = CancellationToken();
+      final cancellationToken = RpcCancellationToken();
       final cancelContext = RpcContext.withCancellation(cancellationToken)
           .withValue('batch-size', 100)
           .withTraceId('cancel-aggregate-789');

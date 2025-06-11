@@ -12,7 +12,7 @@ void main() async {
 /// с использованием новых контрактов и RpcContext
 class UnaryRpcExample {
   static Future<void> run() async {
-    RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+    RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
     print('\n=== Пример унарного RPC с контрактами и контекстом ===\n');
 
     // Создаем транспорты
@@ -74,7 +74,7 @@ class UnaryRpcExample {
       // Пример 5: Вызов с отменой
       print('\n--- Пример 5: Отмена операции ---');
       try {
-        final cancellationToken = CancellationToken();
+        final cancellationToken = RpcCancellationToken();
         final cancelContext = RpcContext.withCancellation(cancellationToken);
 
         // Отменяем через 100мс

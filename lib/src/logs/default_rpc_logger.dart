@@ -124,7 +124,7 @@ class DefaultRpcLogger implements RpcLogger {
         _formatter = formatter ?? const DefaultRpcLoggerFormatter(),
         _filter = filter ??
             DefaultRpcLoggerFilter(
-              minLogLevel ?? RpcLoggerSettings.defaultMinLogLevel,
+              minLogLevel ?? RpcLogger.defaultMinLogLevel,
             );
 
   @override
@@ -385,7 +385,7 @@ class DefaultRpcLogger implements RpcLogger {
               : null),
       minLogLevel: _filter is DefaultRpcLoggerFilter
           ? (_filter as DefaultRpcLoggerFilter).minLogLevel
-          : RpcLoggerSettings.defaultMinLogLevel,
+          : RpcLogger.defaultMinLogLevel,
       consoleLoggingEnabled: _consoleLoggingEnabled,
       coloredLoggingEnabled: _coloredLoggingEnabled,
       filter: _filter,

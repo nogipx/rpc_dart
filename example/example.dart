@@ -7,7 +7,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 
 void main() async {
-  RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.internal);
+  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.internal);
 
   // 🔧 Настройка уровня логирования библиотеки
   // По умолчанию INFO - показывает только важные события

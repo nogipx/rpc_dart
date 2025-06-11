@@ -12,7 +12,7 @@ void main() async {
 /// с использованием новых контрактов и RpcContext
 class ServerStreamingExample {
   static Future<void> run() async {
-    RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+    RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
     print('\n=== Пример серверного стриминга с контрактами ===\n');
 
     // Создаем транспорты
@@ -66,7 +66,7 @@ class ServerStreamingExample {
       // Пример 3: Server stream с отменой
       print('\n--- Пример 3: Server stream с отменой ---');
 
-      final cancellationToken = CancellationToken();
+      final cancellationToken = RpcCancellationToken();
       final cancelContext = RpcContext.withCancellation(cancellationToken)
           .withValue('stream-type', 'long-running');
 

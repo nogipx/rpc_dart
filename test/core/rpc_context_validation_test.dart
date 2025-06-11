@@ -131,7 +131,7 @@ void main() {
     group('Cancellation Token', () {
       test('отмена_до_вызова_выбрасывает_исключение', () async {
         // Arrange
-        final token = CancellationToken.cancelled('Pre-cancelled');
+        final token = RpcCancellationToken.cancelled('Pre-cancelled');
         final context = RpcContext.withCancellation(token);
 
         // Act & Assert
@@ -150,7 +150,7 @@ void main() {
 
       test('отмена_во_время_выполнения_прерывает_операцию', () async {
         // Arrange
-        final token = CancellationToken();
+        final token = RpcCancellationToken();
         final context = RpcContext.withCancellation(token);
 
         // Отменяем через 100мс (после начала выполнения)

@@ -106,9 +106,6 @@ final class TestService extends RpcResponderContract {
 }
 
 void main() {
-  // Включаем подробное логирование для отладки
-  RpcLoggerSettings.setDefaultMinLogLevel(RpcLoggerLevel.debug);
-
   group('RpcCallerEndpoint Тесты', () {
     late RpcInMemoryTransport clientTransport;
     late RpcInMemoryTransport serverTransport;
