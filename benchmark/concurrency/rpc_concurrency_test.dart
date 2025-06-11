@@ -1,4 +1,4 @@
-@Tags(['performance', 'concurrency'])
+@Tags(['performance', 'concurrency', 'stress'])
 library;
 
 import 'dart:async';

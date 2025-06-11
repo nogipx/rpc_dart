@@ -2,11 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
-  schedule:
-    - cron: '0 6 * * 1'  # Каждый понедельник в 6:00 UTC
+    branches: [main]
   workflow_dispatch:  # Возможность ручного запуска
 
 # Отменяем предыдущие запуски workflow'а если новый коммит пушится в ту же ветку
@@ -52,9 +50,9 @@ jobs:
     - name: Check pub dependencies
       run: dart pub deps
 
-  # Быстрые unit тесты
+  # Быстрые unit тесты (только test/ папка)
   test-fast:
-    name: "🚀 Fast Tests"
+    name: "🚀 Unit Tests"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: lint
@@ -81,8 +79,8 @@ jobs:
     - name: Install dependencies
       run: dart pub get
     
-    - name: Run main tests (excluding performance/concurrency)
-      run: dart test --exclude-tags=performance,concurrency --reporter=github --coverage=coverage
+    - name: Run unit tests (fast)
+      run: dart test test/ --reporter=github --coverage=coverage
     
     - name: Generate coverage report
       run: |
@@ -95,9 +93,9 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         path-to-lcov: coverage/lcov.info
 
-  # Полные тесты производительности (только на main/develop или по расписанию)
+  # Тесты производительности и конкуренции (benchmark/concurrency/)
   test-performance:
-    name: "🏋️ Performance Tests"
+    name: "🏋️ Concurrency Tests"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Запускаем только на main/develop ветках или при ручном запуске
@@ -131,7 +129,51 @@ jobs:
       run: dart pub get
     
     - name: Run performance and concurrency tests
-      run: dart test --tags=performance --reporter=github
+      run: dart test benchmark/concurrency/ --reporter=github
+
+  # Полные бенчмарки (только на main или по расписанию)
+  benchmark:
+    name: "📊 Full Benchmarks"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Запускаем только на main ветке или при ручном запуске
+    if: |
+      github.ref == 'refs/heads/main' || 
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    needs: test-fast
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Dart
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: stable
+    
+    - name: Cache pub dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.PUB_CACHE }}
+          .dart_tool/package_config.json
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pub-
+    
+    - name: Install dependencies
+      run: dart pub get
+    
+    - name: Run full RPC benchmarks
+      run: dart run benchmark/benchmark.dart --output=benchmark_results/ci_results.json
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: benchmark_results/
+        retention-days: 30
 
   # Тестирование совместимости с версиями Dart
   test-compatibility:
@@ -158,4 +200,4 @@ jobs:
       run: dart pub get
     
     - name: Run smoke tests on Dart ${{ matrix.sdk }}
-      run: dart test --tags=smoke --reporter=github
+      run: dart test benchmark/concurrency/rpc_concurrency_smoke_test.dart --reporter=github

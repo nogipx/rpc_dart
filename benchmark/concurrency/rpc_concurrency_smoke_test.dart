@@ -1,4 +1,4 @@
-@Tags(['unit', 'smoke'])
+@Tags(['smoke', 'performance'])
 library;
 
 import 'dart:async';

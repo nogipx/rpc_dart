@@ -78,8 +78,8 @@ if [[ ! -f "pubspec.yaml" ]]; then
     exit 1
 fi
 
-# Переходим в директорию проекта
-cd "$(dirname "$(dirname "$(dirname "$0")")")"
+# Переходим в директорию проекта  
+cd "$(dirname "$(dirname "$0")")"
 
 echo -e "${YELLOW}📋 Configuration:${NC}"
 echo "  Verbose: $VERBOSE"
@@ -93,7 +93,7 @@ echo ""
 DART_TEST_CMD="dart test"
 
 # Добавляем путь к тестам
-DART_TEST_CMD="$DART_TEST_CMD test/concurrency/rpc_concurrency_test.dart"
+DART_TEST_CMD="$DART_TEST_CMD benchmark/concurrency/rpc_concurrency_test.dart"
 
 # Добавляем verbose флаг если нужен
 if [[ "$VERBOSE" == "true" ]]; then
