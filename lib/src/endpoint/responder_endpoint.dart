@@ -131,7 +131,35 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     required super.transport,
     super.debugLabel,
     super.loggerColors,
-  });
+  }) {
+    _validateServerTransport();
+  }
+
+  /// Проверяет, что транспорт является серверным (генерирует четные Stream ID)
+  void _validateServerTransport() {
+    try {
+      // Проверяем роль транспорта через интерфейс
+      if (transport.isClient) {
+        throw ArgumentError(
+            '🚨 КРИТИЧЕСКАЯ ОШИБКА: RpcResponderEndpoint требует СЕРВЕРНЫЙ транспорт!\n'
+            'Получен клиентский транспорт (isClient: true).\n'
+            'Серверные эндпоинты должны использовать транспорты с четными Stream ID (2, 4, 6...).\n\n'
+            'Правильное использование:\n'
+            '  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();\n'
+            '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport); // ✅\n'
+            '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport); // ✅\n\n'
+            'НЕПРАВИЛЬНО:\n'
+            '  final responderEndpoint = RpcResponderEndpoint(transport: clientTransport); // ❌\n');
+      }
+
+      logger.internal('✅ Транспорт валиден: серверный (isClient: false)');
+    } catch (e) {
+      if (e is ArgumentError) rethrow;
+
+      logger.warning('Не удалось проверить роль транспорта: $e');
+      // В случае ошибки при проверке продолжаем работу с предупреждением
+    }
+  }
 
   @override
   void start() {

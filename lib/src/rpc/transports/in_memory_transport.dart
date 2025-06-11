@@ -45,6 +45,9 @@ class RpcInMemoryTransport implements IRpcTransport {
   }) : _idManager = RpcStreamIdManager(isClient: isClient);
 
   @override
+  bool get isClient => _idManager.isClient;
+
+  @override
   Stream<RpcTransportMessage> get incomingMessages =>
       _incomingController.stream;
 

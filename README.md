@@ -247,6 +247,59 @@ final endpoint = RpcCallerEndpoint(transport: CustomHttpTransport());
 
 **Ключевое преимущество:** код домена остается неизменным при смене транспорта!
 
+## Transport Router
+
+**Transport Router** — умный прокси для маршрутизации RPC вызовов между транспортами по правилам с приоритетами.
+
+### Основные возможности
+
+- **Роутинг по сервисам** — направляет запросы к разным сервисам на разные транспорты
+- **Условный роутинг** — сложная логика маршрутизации с доступом к контексту
+- **Приоритеты правил** — точный контроль порядка проверки условий
+- **Автоматический роутинг** — использует заголовки из `RpcCallerEndpoint`
+
+### Пример использования
+
+```dart
+// Создаем транспорты для разных сервисов
+final (userClient, userServer) = RpcInMemoryTransport.pair();
+final (orderClient, orderServer) = RpcInMemoryTransport.pair();
+final (paymentClient, paymentServer) = RpcInMemoryTransport.pair();
+
+// Создаем роутер с правилами
+final router = RpcTransportRouterBuilder()
+  .routeCall(
+    calledServiceName: 'UserService',
+    toTransport: userClient,
+    priority: 100,
+  )
+  .routeCall(
+    calledServiceName: 'OrderService', 
+    toTransport: orderClient,
+    priority: 100,
+  )
+  .routeWhen(
+    toTransport: paymentClient,
+    whenCondition: (service, method, context) => 
+      service == 'PaymentService' && 
+      context?.getHeader('x-payment-method') == 'premium',
+    priority: 150,
+    description: 'Premium платежи на отдельный сервис',
+  )
+  .build();
+
+// Используем роутер как обычный транспорт
+final callerEndpoint = RpcCallerEndpoint(transport: router);
+final userService = UserCaller(callerEndpoint);
+final orderService = OrderCaller(callerEndpoint);
+
+// Запросы автоматически направляются в нужные транспорты
+final user = await userService.getUser(request);     // → userClient
+final order = await orderService.createOrder(data); // → orderClient
+```
+
+**Применение:** Микросервисная архитектура, A/B тестирование, маршрутизация нагрузки, изоляция сервисов.
+
 ## Типы RPC взаимодействий
 
 | Тип | Описание | Пример использования |

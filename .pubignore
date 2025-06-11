@@ -14,7 +14,8 @@ bin/
 build/
 **/examples
 packages/
-example/core_methods/
+example/*
+!example/example.dart
 benchmark/
 benchmark_results/
 lib/diagnostics/

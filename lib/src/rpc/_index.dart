@@ -14,3 +14,4 @@ part 'core/rpc.dart';
 part 'core/transport.dart';
 
 part 'transports/in_memory_transport.dart';
+part 'transports/transport_router.dart';

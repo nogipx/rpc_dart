@@ -404,15 +404,15 @@ final class CallProcessor<TRequest extends IRpcSerializable,
       (request) async {
         if (!_isActive) return;
 
-        // Отправляем начальные метаданные при первом запросе
-        if (!_initialMetadataSent) {
-          await _sendInitialMetadata();
-          _initialMetadataSent = true;
-        }
-
-        _logger?.internal(
-            'Отправка запроса для $_methodPath [streamId: $_streamId]');
         try {
+          // Отправляем начальные метаданные при первом запросе
+          if (!_initialMetadataSent) {
+            await _sendInitialMetadata();
+            _initialMetadataSent = true;
+          }
+
+          _logger?.internal(
+              'Отправка запроса для $_methodPath [streamId: $_streamId]');
           final serialized = _requestCodec.serialize(request);
           _logger?.internal(
               'Запрос сериализован, размер: ${serialized.length} байт [streamId: $_streamId]');
@@ -427,6 +427,12 @@ final class CallProcessor<TRequest extends IRpcSerializable,
               error: e, stackTrace: stackTrace);
           if (!_responseController.isClosed) {
             _responseController.addError(e, stackTrace);
+          }
+
+          // 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке роутинга немедленно завершаем обработку
+          // Это предотвратит дальнейшую отправку запросов и заставит stream завершиться с ошибкой
+          if (!_requestController.isClosed) {
+            _requestController.close();
           }
         }
       },

@@ -17,7 +17,35 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     required super.transport,
     super.debugLabel,
     super.loggerColors,
-  });
+  }) {
+    _validateClientTransport();
+  }
+
+  /// Проверяет, что транспорт является клиентским (генерирует нечетные Stream ID)
+  void _validateClientTransport() {
+    try {
+      // Проверяем роль транспорта через интерфейс
+      if (!transport.isClient) {
+        throw ArgumentError(
+            '🚨 КРИТИЧЕСКАЯ ОШИБКА: RpcCallerEndpoint требует КЛИЕНТСКИЙ транспорт!\n'
+            'Получен серверный транспорт (isClient: false).\n'
+            'Клиентские эндпоинты должны использовать транспорты с нечетными Stream ID (1, 3, 5...).\n\n'
+            'Правильное использование:\n'
+            '  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();\n'
+            '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport); // ✅\n'
+            '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport); // ✅\n\n'
+            'НЕПРАВИЛЬНО:\n'
+            '  final callerEndpoint = RpcCallerEndpoint(transport: serverTransport); // ❌\n');
+      }
+
+      logger.internal('✅ Транспорт валиден: клиентский (isClient: true)');
+    } catch (e) {
+      if (e is ArgumentError) rethrow;
+
+      logger.warning('Не удалось проверить роль транспорта: $e');
+      // В случае ошибки при проверке продолжаем работу с предупреждением
+    }
+  }
 
   /// Создает или дополняет RpcContext для клиентского запроса
   /// Автоматически генерирует trace ID если контекст не передан или не содержит trace ID
@@ -43,6 +71,24 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     return newContext;
   }
 
+  /// Обогащает контекст роутинговыми заголовками для Transport Router
+  RpcContext _enhanceContextForRouting(
+      RpcContext? userContext, String serviceName) {
+    final routingHeaders = {
+      'x-route-service': serviceName, // 👈 Ключевой заголовок для роутинга!
+      'x-caller-type': runtimeType.toString(),
+    };
+
+    if (userContext != null) {
+      return userContext.withAdditionalHeaders(routingHeaders);
+    } else {
+      return RpcContextBuilder()
+          .withHeaders(routingHeaders)
+          .withGeneratedTraceId()
+          .build();
+    }
+  }
+
   /// Создает унарный request builder с поддержкой контекста
   Future<R> unaryRequest<C, R>({
     required String serviceName,
@@ -58,8 +104,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
           'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
     }
 
-    // Автоматически создаем или дополняем контекст с trace ID
-    final ensuredContext = _ensureContext(context);
+    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
+    final baseContext = _ensureContext(context);
+    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
 
     return UnaryCaller<C, R>(
       serviceName: serviceName,
@@ -67,7 +114,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       transport: transport,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
-      context: ensuredContext, // Передаем обогащенный контекст
+      context: enhancedContext, // Передаем обогащенный контекст
     ).call(request);
   }
 
@@ -89,8 +136,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
     logger.internal('Создание server stream для $serviceName/$methodName');
 
-    // Автоматически создаем или дополняем контекст с trace ID
-    final ensuredContext = _ensureContext(context);
+    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
+    final baseContext = _ensureContext(context);
+    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
 
     // Создаем server stream caller с контекстом
     final caller = ServerStreamCaller<C, R>(
@@ -99,7 +147,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
-      context: ensuredContext, // Передаем обогащенный контекст
+      context: enhancedContext, // Передаем обогащенный контекст
       logger: logger,
     );
 
@@ -120,7 +168,11 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       try {
         // Отправляем запрос серверу
         logger.internal('Отправка запроса серверу');
+
+        // 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Сразу отправляем запрос СИНХРОННО
+        // Это позволит ошибкам роутинга немедленно проагирать в controller
         await caller.send(request);
+
         logger.internal('Запрос отправлен, начинаем получать ответы');
 
         // Небольшая задержка, чтобы дать серверу время на обработку запроса
@@ -161,8 +213,20 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         if (!controller.isClosed) {
           controller.addError(e, stackTrace);
         }
+
+        // 🔥 ИСПРАВЛЕНИЕ: Освобождаем ресурсы при ошибке
+        try {
+          logger.internal('Закрытие ServerStreamCaller после ошибки');
+          await caller.close();
+        } catch (closeError) {
+          logger.error('Ошибка при закрытии caller', error: closeError);
+        }
+
+        // ❌ НЕ ЗАКРЫВАЕМ КОНТРОЛЛЕР ЗДЕСЬ! Ошибка уже добавлена
+        // Контроллер закроется автоматически после проагирования ошибки
+        return; // Выходим из catch блока
       } finally {
-        // Освобождаем ресурсы
+        // Освобождаем ресурсы только в случае успешного завершения
         try {
           logger.internal('Закрытие ServerStreamCaller');
           await caller.close();
@@ -193,8 +257,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     logger.internal(
         'Создание client stream builder для $serviceName/$methodName');
 
-    // Автоматически создаем или дополняем контекст с trace ID
-    final ensuredContext = _ensureContext(context);
+    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
+    final baseContext = _ensureContext(context);
+    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
 
     return (Stream<C> requests) async {
       logger.internal('Выполнение client stream для $serviceName/$methodName');
@@ -206,7 +271,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         methodName: methodName,
         requestCodec: requestCodec,
         responseCodec: responseCodec,
-        context: ensuredContext, // Передаем обогащенный контекст
+        context: enhancedContext, // Передаем обогащенный контекст
         logger: logger,
       );
 
@@ -256,8 +321,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     logger
         .internal('Создание bidirectional stream для $serviceName/$methodName');
 
-    // Автоматически создаем или дополняем контекст с trace ID
-    final ensuredContext = _ensureContext(context);
+    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
+    final baseContext = _ensureContext(context);
+    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
 
     // Создаем контроллер для передачи сообщений
     final controller = StreamController<R>();
@@ -269,7 +335,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
-      context: ensuredContext, // Передаем обогащенный контекст
+      context: enhancedContext, // Передаем обогащенный контекст
       logger: logger,
     );
 

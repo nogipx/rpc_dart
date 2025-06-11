@@ -44,6 +44,10 @@ final class RpcTransportMessage {
 /// (HTTP/2, WebSockets, изоляты и др.). Поддерживает мультиплексирование
 /// по уникальным Stream ID согласно спецификации gRPC.
 abstract class IRpcTransport {
+  /// Возвращает true, если это клиентский транспорт (генерирует нечетные Stream ID),
+  /// false - если серверный транспорт (генерирует четные Stream ID)
+  bool get isClient;
+
   /// Создает новый HTTP/2 stream для RPC вызова.
   ///
   /// Возвращает уникальный Stream ID, который будет использоваться
