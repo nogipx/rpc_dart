@@ -190,3 +190,113 @@ final class RpcContextAwareLogger implements RpcLogger {
     );
   }
 }
+
+/// Mixin для компонентов, которые хотят автоматически использовать контекстное логирование
+///
+/// Автоматически создает и обновляет контекстные логгеры при изменении RpcContext
+///
+/// Пример использования:
+/// ```dart
+/// class MyService with RpcContextualLogging {
+///   @override
+///   String get loggerName => 'MyService';
+///
+///   void processRequest(RpcContext context) {
+///     updateContext(context); // Обновляем контекст
+///     contextLogger.info('Processing request'); // Автоматически использует context
+///   }
+/// }
+/// ```
+mixin RpcContextualLogging {
+  /// Название логгера (должно быть переопределено)
+  String get loggerName;
+
+  /// Базовый логгер
+  RpcLogger? _baseLogger;
+
+  /// Текущий контекст
+  RpcContext? _currentContext;
+
+  /// Контекстный логгер
+  RpcLogger? _contextLogger;
+
+  /// Получает базовый логгер (создает если нужно)
+  RpcLogger get baseLogger {
+    return _baseLogger ??= RpcLogger(loggerName);
+  }
+
+  /// Получает контекстный логгер (создает если нужно)
+  RpcLogger get contextLogger {
+    if (_currentContext != null) {
+      // Если есть контекст - возвращаем контекстный логгер
+      return _contextLogger ??= baseLogger.withContext(_currentContext!);
+    }
+
+    // Если контекста нет - возвращаем базовый логгер
+    return baseLogger;
+  }
+
+  /// Обновляет контекст и пересоздает контекстный логгер
+  void updateContext(RpcContext? context) {
+    if (_currentContext == context) return; // Нет изменений
+
+    _currentContext = context;
+    _contextLogger = null; // Пересоздадим при следующем обращении
+  }
+
+  /// Создает дочерний контекстный логгер
+  RpcLogger createChildLogger(String childName) {
+    return contextLogger.child(childName);
+  }
+
+  /// Логирует с автоматическим использованием контекста
+  Future<void> logWithContext(
+    RpcLoggerLevel level,
+    String message, {
+    String? context,
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, dynamic>? data,
+  }) {
+    return contextLogger.log(
+      level: level,
+      message: message,
+      context: context,
+      error: error,
+      stackTrace: stackTrace,
+      data: data,
+    );
+  }
+
+  /// Удобные методы для логирования с контекстом
+  Future<void> infoWithContext(String message,
+          {String? context, Map<String, dynamic>? data}) =>
+      logWithContext(RpcLoggerLevel.info, message,
+          context: context, data: data);
+
+  Future<void> debugWithContext(String message,
+          {String? context, Map<String, dynamic>? data}) =>
+      logWithContext(RpcLoggerLevel.debug, message,
+          context: context, data: data);
+
+  Future<void> warningWithContext(String message,
+          {String? context, Map<String, dynamic>? data}) =>
+      logWithContext(RpcLoggerLevel.warning, message,
+          context: context, data: data);
+
+  Future<void> errorWithContext(
+    String message, {
+    String? context,
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, dynamic>? data,
+  }) =>
+      logWithContext(
+        RpcLoggerLevel.error,
+        message,
+        context: context,
+        error: error,
+        stackTrace: stackTrace,
+        data: data,
+      );
+}

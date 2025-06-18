@@ -4,21 +4,18 @@
 
 part of '../_index.dart';
 
-/// Клиентская часть двунаправленного стриминга на основе CallProcessor.
+/// 🚀 Универсальная клиентская часть двунаправленного стриминга
+///
+/// Автоматически определяет режим работы:
+/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
+/// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
 ///
 /// Обеспечивает полную реализацию клиентской стороны двунаправленного
 /// стриминга (Bidirectional Streaming RPC). Позволяет клиенту отправлять
 /// поток запросов серверу и одновременно получать поток ответов.
 /// НЕТ ограничений - полная свобода отправки и получения.
-///
-/// Особенности:
-/// - Асинхронный обмен сообщениями в обоих направлениях
-/// - Потоковый интерфейс для отправки и получения (через Stream)
-/// - Автоматическая сериализация/десериализация сообщений
-/// - Корректная обработка заголовков и трейлеров gRPC
-/// - Поддержка RPC контекста для метаданных, таймаутов и отмены
-final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
-    TResponse extends IRpcSerializable> {
+final class BidirectionalStreamCaller<TRequest extends Object,
+    TResponse extends Object> {
   late final RpcLogger? _logger;
 
   /// Внутренний процессор стрима
@@ -35,27 +32,41 @@ final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
   /// или при возникновении ошибки.
   Stream<RpcMessage<TResponse>> get responses => _processor.responses;
 
-  /// Создает новый клиентский двунаправленный стрим.
+  /// Создает универсальный клиентский двунаправленный стрим
   ///
   /// [transport] Транспортный уровень
   /// [serviceName] Имя сервиса (например, "ChatService")
   /// [methodName] Имя метода (например, "Connect")
-  /// [requestCodec] Кодек для сериализации запросов
-  /// [responseCodec] Кодек для десериализации ответов
+  /// [requestCodec] Кодек для сериализации запросов (null для zero-copy)
+  /// [responseCodec] Кодек для десериализации ответов (null для zero-copy)
   /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
   /// [logger] Опциональный логгер
   BidirectionalStreamCaller({
     required IRpcTransport transport,
     required String serviceName,
     required String methodName,
-    required IRpcCodec<TRequest> requestCodec,
-    required IRpcCodec<TResponse> responseCodec,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     RpcLogger? logger,
   }) {
+    final isZeroCopy = requestCodec == null && responseCodec == null;
+
+    // Zero-copy режим: требуется RpcInMemoryTransport
+    if (isZeroCopy && transport is! RpcInMemoryTransport) {
+      throw ArgumentError('Zero-copy режим требует RpcInMemoryTransport. '
+          'Для сетевых транспортов передайте кодеки.');
+    }
+
+    // Режим сериализации: кодеки обязательны
+    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
+      throw ArgumentError('Кодеки обязательны для режима сериализации. '
+          'Для zero-copy не передавайте кодеки (null).');
+    }
+
     _logger = logger?.child('BidirectionalCaller');
     _logger?.internal(
-        'Создание BidirectionalStreamCaller для $serviceName.$methodName');
+        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamCaller для $serviceName.$methodName');
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,
@@ -86,11 +97,67 @@ final class BidirectionalStreamCaller<TRequest extends IRpcSerializable,
     await _processor.finishSending();
   }
 
+  /// Поток ответов с автоматическим извлечением payload (удобный для zero-copy)
+  Stream<TResponse> get payloadResponses async* {
+    await for (final response in responses) {
+      if (response.payload != null) {
+        _logger?.internal('Получен ответ в bidirectional стриме');
+        yield response.payload!;
+      }
+
+      // Проверяем статус в метаданных
+      if (response.metadata != null) {
+        final statusStr =
+            response.metadata!.getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
+        if (statusStr != null) {
+          final status = int.tryParse(statusStr) ?? RpcStatus.UNKNOWN;
+          if (status != RpcStatus.OK) {
+            final message = response.metadata!
+                    .getHeaderValue(RpcConstants.GRPC_MESSAGE_HEADER) ??
+                'Unknown error';
+            _logger?.error(
+                'Bidirectional стрим завершился с ошибкой: $status - $message');
+            throw Exception('gRPC error $status: $message');
+          }
+        }
+      }
+    }
+  }
+
+  /// Поток запросов для отправки серверу (удобный интерфейс для zero-copy)
+  StreamSink<TRequest>? _requestSink;
+
+  StreamSink<TRequest> get requestSink {
+    if (_requestSink == null) {
+      final controller = StreamController<TRequest>();
+      controller.stream.listen(
+        (request) async {
+          _logger
+              ?.internal('Отправка запроса в bidirectional стриме: $request');
+          await send(request);
+        },
+        onDone: () async {
+          _logger?.internal('Поток запросов завершен');
+          await finishSending();
+        },
+        onError: (error, stackTrace) {
+          _logger?.error('Ошибка в потоке запросов',
+              error: error, stackTrace: stackTrace);
+        },
+      );
+      _requestSink = controller.sink;
+    }
+    return _requestSink!;
+  }
+
   /// Закрывает стрим и освобождает ресурсы
   ///
   /// Полностью завершает стрим, освобождая все ресурсы.
   Future<void> close() async {
     _logger?.internal('Закрытие BidirectionalStreamCaller');
+    if (_requestSink != null) {
+      _requestSink!.close(); // НЕ ждём завершения
+    }
     await _processor.close();
   }
 }

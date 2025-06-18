@@ -4,12 +4,16 @@
 
 part of '../_index.dart';
 
-/// Серверная часть серверного стриминга на основе StreamProcessor.
+/// 🚀 Универсальная серверная часть серверного стриминга
+///
+/// Автоматически определяет режим работы:
+/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
+/// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
 ///
 /// Получает один запрос и отправляет поток ответов.
-/// Использует новый StreamProcessor для обработки без race condition.
-final class ServerStreamResponder<TRequest extends IRpcSerializable,
-    TResponse extends IRpcSerializable> implements IRpcResponder {
+/// Использует универсальный StreamProcessor для обработки без race condition.
+final class ServerStreamResponder<TRequest extends Object,
+    TResponse extends Object> implements IRpcResponder {
   late final RpcLogger? _logger;
 
   @override
@@ -24,14 +28,14 @@ final class ServerStreamResponder<TRequest extends IRpcSerializable,
   /// Флаг обработки первого запроса
   bool _requestHandled = false;
 
-  /// Создает сервер серверного стриминга
+  /// Создает универсальный сервер серверного стриминга
   ///
   /// [id] Идентификатор стрима
   /// [transport] Транспортный уровень
   /// [serviceName] Имя сервиса (например, "DataService")
   /// [methodName] Имя метода (например, "GetData")
-  /// [requestCodec] Кодек для десериализации запроса
-  /// [responseCodec] Кодек для сериализации ответов
+  /// [requestCodec] Кодек для десериализации запроса (null для zero-copy)
+  /// [responseCodec] Кодек для сериализации ответов (null для zero-copy)
   /// [handler] Функция-обработчик, вызываемая для обработки запроса
   /// [logger] Опциональный логгер
   ServerStreamResponder({
@@ -39,14 +43,28 @@ final class ServerStreamResponder<TRequest extends IRpcSerializable,
     required IRpcTransport transport,
     required String serviceName,
     required String methodName,
-    required IRpcCodec<TRequest> requestCodec,
-    required IRpcCodec<TResponse> responseCodec,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     required Stream<TResponse> Function(TRequest request) handler,
     RpcLogger? logger,
   }) {
+    final isZeroCopy = requestCodec == null && responseCodec == null;
+
+    // Zero-copy режим: требуется RpcInMemoryTransport
+    if (isZeroCopy && transport is! RpcInMemoryTransport) {
+      throw ArgumentError('Zero-copy режим требует RpcInMemoryTransport. '
+          'Для сетевых транспортов передайте кодеки.');
+    }
+
+    // Режим сериализации: кодеки обязательны
+    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
+      throw ArgumentError('Кодеки обязательны для режима сериализации. '
+          'Для zero-copy не передавайте кодеки (null).');
+    }
+
     _logger = logger?.child('ServerResponder');
     _logger?.internal(
-        'Создание ServerStreamResponder для $serviceName.$methodName [id: $id]');
+        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamResponder для $serviceName.$methodName [id: $id]');
 
     _processor = StreamProcessor<TRequest, TResponse>(
       transport: transport,

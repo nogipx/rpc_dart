@@ -10,6 +10,9 @@ part of '../_index.dart';
 /// Убраны все ненужные проверки и операции из горячих путей.
 /// Поддерживает мультиплексирование по уникальным Stream ID согласно gRPC спецификации.
 ///
+/// ZERO-COPY SUPPORT: Поддерживает передачу объектов напрямую без сериализации
+/// через метод sendDirectObject() - максимальная производительность для inmemory!
+///
 /// ВНИМАНИЕ: Эта реализация оптимизирована для скорости, а не для безопасности.
 /// Предполагается корректное использование API без ошибок программиста.
 class RpcInMemoryTransport implements IRpcTransport {
@@ -52,6 +55,7 @@ class RpcInMemoryTransport implements IRpcTransport {
       _incomingController.stream;
 
   /// Возвращает true, если транспорт закрыт
+  @override
   bool get isClosed => _closed;
 
   @override
@@ -145,6 +149,32 @@ class RpcInMemoryTransport implements IRpcTransport {
   }
 
   @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {
+    // ZERO-COPY IMPLEMENTATION! 🚀
+    // Быстрая проверка закрытия для предотвращения ошибок
+    if (_closed || _outgoingController.isClosed) return;
+
+    final message = RpcTransportMessage(
+      directPayload: object,
+      isEndOfStream: endStream,
+      streamId: streamId,
+    );
+
+    // Прямая отправка объекта по ссылке - никакой сериализации!
+    _outgoingController.add(message);
+
+    // Быстрая очистка при endStream
+    if (endStream) {
+      _activeStreams.remove(streamId);
+      _idManager.releaseId(streamId);
+    }
+  }
+
+  @override
   Future<void> finishSending(int streamId) async {
     // Упрощенная версия с проверкой закрытия
     if (_closed || _outgoingController.isClosed) return;
@@ -202,7 +232,7 @@ class RpcInMemoryTransport implements IRpcTransport {
   /// Возвращает кортеж (клиентский транспорт, серверный транспорт)
   ///
   /// ВАЖНО: При закрытии одного транспорта автоматически закрывается второй
-  static (RpcInMemoryTransport, RpcInMemoryTransport) pair() {
+  static (IRpcTransport, IRpcTransport) pair() {
     // Создаем НЕ broadcast контроллеры для максимальной скорости
     final clientToServerController = StreamController<RpcTransportMessage>();
     final serverToClientController = StreamController<RpcTransportMessage>();

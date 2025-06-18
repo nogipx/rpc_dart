@@ -132,7 +132,10 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           return;
         }
 
-        if (!message.isMetadataOnly && message.payload != null) {
+        if (message.isDirect && message.directPayload != null) {
+          // Zero-copy: обрабатываем объект напрямую
+          await handleDirectMessage(message);
+        } else if (!message.isMetadataOnly && message.payload != null) {
           await handleMessage(message);
         }
 
@@ -289,6 +292,112 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     } finally {
       // Очищаем состояние для этого stream
       _logger?.internal('Очистка состояния для stream $streamId');
+      _streamRequestHandled.remove(streamId);
+      _streamInitialHeadersSent.remove(streamId);
+      _streamBelongsToThisMethod.remove(streamId);
+    }
+  }
+
+  /// Zero-copy: Обрабатывает сообщение с прямым объектом
+  Future<void> handleDirectMessage(RpcTransportMessage message) async {
+    final streamId = message.streamId;
+
+    // Проверяем, что сообщение предназначено для этого экземпляра респондера
+    if (id != 0 && streamId != id) {
+      _logger?.internal(
+          'Zero-copy сообщение для stream $streamId не принадлежит этому респондеру (id=$id), пропускаем');
+      return;
+    }
+
+    if (_streamRequestHandled[streamId] == true) {
+      _logger?.internal(
+          'Zero-copy сообщение для stream $streamId уже обработано, пропускаем');
+      return;
+    }
+
+    // Сразу помечаем запрос как обрабатываемый
+    _streamRequestHandled[streamId] = true;
+    _logger?.internal(
+        'Zero-copy request processing for $_methodPath [streamId: $streamId]');
+
+    try {
+      // Отправляем начальные заголовки, если еще не отправляли
+      if (_streamInitialHeadersSent[streamId] != true) {
+        _logger
+            ?.internal('Отправка начальных заголовков [streamId: $streamId]');
+        await _transport.sendMetadata(
+          streamId,
+          RpcMetadata.forServerInitialResponse(),
+        );
+        _streamInitialHeadersSent[streamId] = true;
+      }
+
+      // Zero-copy: получаем объект напрямую без десериализации
+      _logger?.internal('Zero-copy object access [streamId: $streamId]');
+      final request = message.directPayload as TRequest;
+
+      _logger?.internal(
+          'Zero-copy request handling for $_methodPath [streamId: $streamId]');
+
+      // Обрабатываем запрос
+      final response = await _handler(request);
+      _logger?.internal(
+          'Zero-copy request completed, preparing response [streamId: $streamId]');
+
+      // Zero-copy: отправляем ответ напрямую если транспорт поддерживает
+      if (_transport is RpcInMemoryTransport) {
+        _logger?.internal('Zero-copy response sending [streamId: $streamId]');
+        await (_transport as RpcInMemoryTransport).sendDirectObject(
+          streamId,
+          response as Object,
+        );
+      } else {
+        // Fallback на стандартную сериализацию для других транспортов
+        _logger?.internal('Fallback сериализация ответа [streamId: $streamId]');
+        final serializedResponse = _responseSerializer.serialize(response);
+        final framedResponse = RpcMessageFrame.encode(serializedResponse);
+        await _transport.sendMessage(streamId, framedResponse);
+      }
+
+      // Отправляем трейлер с успешным статусом
+      _logger
+          ?.internal('Zero-copy sending success trailer [streamId: $streamId]');
+      await _transport.sendMetadata(
+        streamId,
+        RpcMetadata.forTrailer(RpcStatus.OK),
+        endStream: true,
+      );
+
+      _logger?.internal(
+          'Zero-copy response completed for $_methodPath [streamId: $streamId]');
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Zero-copy request processing error [streamId: $streamId]',
+        error: e,
+        stackTrace: stackTrace,
+      );
+
+      // Отправляем начальные заголовки, если еще не отправляли
+      if (_streamInitialHeadersSent[streamId] != true) {
+        await _transport.sendMetadata(
+          streamId,
+          RpcMetadata.forServerInitialResponse(),
+        );
+        _streamInitialHeadersSent[streamId] = true;
+      }
+
+      // При ошибке отправляем трейлер с кодом ошибки
+      await _transport.sendMetadata(
+        streamId,
+        RpcMetadata.forTrailer(
+          RpcStatus.INTERNAL,
+          message: 'Zero-copy request processing error: $e',
+        ),
+        endStream: true,
+      );
+    } finally {
+      // Очищаем состояние для этого stream
+      _logger?.internal('Zero-copy cleanup for stream $streamId');
       _streamRequestHandled.remove(streamId);
       _streamInitialHeadersSent.remove(streamId);
       _streamBelongsToThisMethod.remove(streamId);

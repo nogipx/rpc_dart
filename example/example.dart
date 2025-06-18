@@ -7,7 +7,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 
 void main() async {
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.internal);
+  // RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.internal);
 
   // 🔧 Настройка уровня логирования библиотеки
   // По умолчанию INFO - показывает только важные события
@@ -138,7 +138,7 @@ void main() async {
 }
 
 /// Простая модель сообщения для демонстрации
-class CalculationRequest implements IRpcSerializable {
+class CalculationRequest {
   final double a, b;
   final String operation; // 'add', 'subtract', 'multiply', 'divide'
 
@@ -146,46 +146,16 @@ class CalculationRequest implements IRpcSerializable {
       {required this.a, required this.b, required this.operation});
 
   @override
-  Map<String, dynamic> toJson() => {'a': a, 'b': b, 'operation': operation};
-
-  static CalculationRequest fromJson(Map<String, dynamic> json) =>
-      CalculationRequest(
-        a: json['a'] is int ? (json['a'] as int).toDouble() : json['a'],
-        b: json['b'] is int ? (json['b'] as int).toDouble() : json['b'],
-        operation: json['operation'],
-      );
-
-  static RpcCodec<CalculationRequest> get codec =>
-      RpcCodec(CalculationRequest.fromJson);
-
-  @override
   String toString() =>
       'CalculationRequest(a: $a, b: $b, operation: $operation)';
 }
 
-class CalculationResponse implements IRpcSerializable {
+class CalculationResponse {
   final double? result;
   final bool success;
   final String? errorMessage;
 
   CalculationResponse({this.result, this.success = true, this.errorMessage});
-
-  @override
-  Map<String, dynamic> toJson() => {
-        'result': result,
-        'success': success,
-        'errorMessage': errorMessage,
-      };
-
-  static CalculationResponse fromJson(Map<String, dynamic> json) =>
-      CalculationResponse(
-        result: json['result'],
-        success: json['success'] ?? true,
-        errorMessage: json['errorMessage'],
-      );
-
-  static RpcCodec<CalculationResponse> get codec =>
-      RpcCodec(CalculationResponse.fromJson);
 
   @override
   String toString() => success
@@ -194,7 +164,7 @@ class CalculationResponse implements IRpcSerializable {
 }
 
 /// Модель для прогресса вычислений (server streaming)
-class CalculationProgress implements IRpcSerializable {
+class CalculationProgress {
   final String step;
   final double progress; // 0.0 to 1.0
   final String? currentOperation;
@@ -203,29 +173,12 @@ class CalculationProgress implements IRpcSerializable {
       {required this.step, required this.progress, this.currentOperation});
 
   @override
-  Map<String, dynamic> toJson() => {
-        'step': step,
-        'progress': progress,
-        'currentOperation': currentOperation,
-      };
-
-  static CalculationProgress fromJson(Map<String, dynamic> json) =>
-      CalculationProgress(
-        step: json['step'],
-        progress: json['progress'],
-        currentOperation: json['currentOperation'],
-      );
-
-  static RpcCodec<CalculationProgress> get codec =>
-      RpcCodec(CalculationProgress.fromJson);
-
-  @override
   String toString() =>
       'CalculationProgress(step: $step, progress: ${(progress * 100).toInt()}%)';
 }
 
 /// Модель для статистики батча (client streaming)
-class BatchStatistics implements IRpcSerializable {
+class BatchStatistics {
   final int totalRequests;
   final int successfulRequests;
   final int failedRequests;
@@ -239,26 +192,6 @@ class BatchStatistics implements IRpcSerializable {
     required this.averageResult,
     required this.operations,
   });
-
-  @override
-  Map<String, dynamic> toJson() => {
-        'totalRequests': totalRequests,
-        'successfulRequests': successfulRequests,
-        'failedRequests': failedRequests,
-        'averageResult': averageResult,
-        'operations': operations,
-      };
-
-  static BatchStatistics fromJson(Map<String, dynamic> json) => BatchStatistics(
-        totalRequests: json['totalRequests'],
-        successfulRequests: json['successfulRequests'],
-        failedRequests: json['failedRequests'],
-        averageResult: json['averageResult'],
-        operations: List<String>.from(json['operations']),
-      );
-
-  static RpcCodec<BatchStatistics> get codec =>
-      RpcCodec(BatchStatistics.fromJson);
 
   @override
   String toString() =>
@@ -275,32 +208,24 @@ final class CalculatorResponder extends RpcResponderContract {
     addUnaryMethod<CalculationRequest, CalculationResponse>(
       methodName: 'calculate',
       handler: calculate,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
     );
 
     // 2. SERVER STREAMING - один запрос → поток ответов
     addServerStreamMethod<CalculationRequest, CalculationProgress>(
       methodName: 'calculateWithProgress',
       handler: calculateWithProgress,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationProgress.codec,
     );
 
     // 3. CLIENT STREAMING - поток запросов → один ответ
     addClientStreamMethod<CalculationRequest, BatchStatistics>(
       methodName: 'processBatch',
       handler: processBatch,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: BatchStatistics.codec,
     );
 
     // 4. BIDIRECTIONAL STREAMING - поток запросов ↔ поток ответов
     addBidirectionalMethod<CalculationRequest, CalculationResponse>(
       methodName: 'liveCalculate',
       handler: liveCalculate,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
     );
   }
 
@@ -417,10 +342,8 @@ final class CalculatorCaller extends RpcCallerContract {
   /// UNARY: Простое вычисление
   Future<CalculationResponse> calculate(CalculationRequest request,
       {RpcContext? context}) {
-    return callUnary<CalculationRequest, CalculationResponse>(
+    return callUnary(
       methodName: 'calculate',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
       request: request,
       context: context,
     );
@@ -429,10 +352,8 @@ final class CalculatorCaller extends RpcCallerContract {
   /// SERVER STREAMING: Вычисление с прогрессом
   Stream<CalculationProgress> calculateWithProgress(CalculationRequest request,
       {RpcContext? context}) {
-    return callServerStream<CalculationRequest, CalculationProgress>(
+    return callServerStream(
       methodName: 'calculateWithProgress',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationProgress.codec,
       request: request,
       context: context,
     );
@@ -441,22 +362,18 @@ final class CalculatorCaller extends RpcCallerContract {
   /// CLIENT STREAMING: Батчевая обработка
   Future<BatchStatistics> processBatch(Stream<CalculationRequest> requests,
       {RpcContext? context}) {
-    return callClientStream<CalculationRequest, BatchStatistics>(
+    return callClientStream(
       methodName: 'processBatch',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: BatchStatistics.codec,
-      requests: requests,
       context: context,
+      requests: requests,
     );
   }
 
   /// BIDIRECTIONAL STREAMING: Интерактивные вычисления
   Stream<CalculationResponse> liveCalculate(Stream<CalculationRequest> requests,
       {RpcContext? context}) {
-    return callBidirectionalStream<CalculationRequest, CalculationResponse>(
+    return callBidirectionalStream(
       methodName: 'liveCalculate',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
       requests: requests,
       context: context,
     );

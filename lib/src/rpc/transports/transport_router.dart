@@ -99,6 +99,8 @@ final class RpcTransportRouter implements IRpcTransport {
           isEndOfStream: message.isEndOfStream,
           methodPath: message.methodPath,
           streamId: clientStreamId, // 👈 Подменяем stream ID!
+          // ИСПРАВЛЕНИЕ: Сохраняем zero-copy данные
+          directPayload: message.directPayload,
         );
 
         _logger.internal(
@@ -115,7 +117,8 @@ final class RpcTransportRouter implements IRpcTransport {
         _cleanupStream(clientStreamId, serverStreamId);
       },
       onDone: () {
-        _logger.internal('✅ Поток ответов ЗАВЕРШЕН для stream $serverStreamId');
+        _logger
+            .internal('Response stream completed for stream $serverStreamId');
         _cleanupStream(clientStreamId, serverStreamId);
       },
     );
@@ -123,7 +126,7 @@ final class RpcTransportRouter implements IRpcTransport {
     _responseSubscriptions[clientStreamId] = subscription;
 
     _logger.internal(
-        '✅ Подписка создана: клиент[$clientStreamId] -> сервер[$serverStreamId]');
+        'Subscription created: client[$clientStreamId] -> server[$serverStreamId]');
   }
 
   /// Очищает ресурсы для завершенного stream'а
@@ -133,12 +136,12 @@ final class RpcTransportRouter implements IRpcTransport {
         !_clientToServerStreamMapping.containsKey(clientStreamId) &&
         !_responseSubscriptions.containsKey(clientStreamId)) {
       _logger.debug(
-          '🧹 ПРОПУСК ОЧИСТКИ: stream клиент[$clientStreamId] уже очищен');
+          'Cleanup skipped: client stream [$clientStreamId] already cleaned');
       return;
     }
 
     _logger.internal(
-        '🧹 НАЧАЛО ОЧИСТКИ: клиент[$clientStreamId] -> сервер[$serverStreamId]');
+        'Starting cleanup: client[$clientStreamId] -> server[$serverStreamId]');
 
     _streamTransports.remove(clientStreamId);
     _clientToServerStreamMapping.remove(clientStreamId);
@@ -146,12 +149,12 @@ final class RpcTransportRouter implements IRpcTransport {
     final subscription = _responseSubscriptions.remove(clientStreamId);
     if (subscription != null) {
       _logger.internal(
-          '🧹 Отменяем подписку на ответы для клиент[$clientStreamId]');
+          'Cancelling response subscription for client[$clientStreamId]');
       subscription.cancel();
     }
 
     _logger.internal(
-        '🧹 ЗАВЕРШЕНА ОЧИСТКА для stream: клиент[$clientStreamId] -> сервер[$serverStreamId]');
+        'Cleanup completed for stream: client[$clientStreamId] -> server[$serverStreamId]');
   }
 
   /// Извлекает RpcContext из метаданных сообщения
@@ -219,10 +222,10 @@ final class RpcTransportRouter implements IRpcTransport {
     if (_closed) throw StateError('TransportRouter is closed');
 
     _logger
-        .internal('📤 sendMetadata: streamId=$streamId, endStream=$endStream');
-    _logger.internal('📤 metadata.methodPath: ${metadata.methodPath}');
+        .internal('Sending metadata: streamId=$streamId, endStream=$endStream');
+    _logger.internal('Metadata method path: ${metadata.methodPath}');
     _logger.internal(
-        '📤 metadata.headers: ${metadata.headers.map((h) => '${h.name}=${h.value}').join(', ')}');
+        'Metadata headers: ${metadata.headers.map((h) => '${h.name}=${h.value}').join(', ')}');
 
     // Создаем временное сообщение для роутинга
     final routingMessage = RpcTransportMessage(
@@ -232,36 +235,36 @@ final class RpcTransportRouter implements IRpcTransport {
       isEndOfStream: endStream,
     );
 
-    _logger.internal('🔀 Выбираем транспорт для роутинга...');
+    _logger.internal('Selecting transport for routing...');
 
     // Выбираем транспорт
     final transport = _selectTransport(routingMessage);
 
-    _logger.internal('🔀 Выбран транспорт: $transport');
+    _logger.internal('Selected transport: $transport');
 
     // 🔄 ВАЖНО: Создаем новый stream ID на целевом транспорте
     final serverStreamId = transport.createStream();
 
     _logger.internal(
-        '🆔 Созданы stream ID: клиент[$streamId] -> сервер[$serverStreamId]');
+        'Created stream IDs: client[$streamId] -> server[$serverStreamId]');
 
     // Сохраняем все маппинги
     _streamTransports[streamId] = transport;
     _clientToServerStreamMapping[streamId] = serverStreamId;
 
     _logger.internal(
-        '🔄 Маппинг stream ID: клиент[$streamId] -> сервер[$serverStreamId]');
+        'Stream ID mapping: client[$streamId] -> server[$serverStreamId]');
 
-    // 🔥 НОВАЯ ЛОГИКА: Подписываемся на ответы для этого конкретного stream'а
-    _logger.internal('🔔 Создаем подписку на ответы...');
+    // Подписываемся на ответы для этого конкретного stream'а
+    _logger.internal('Creating response subscription...');
     _subscribeToResponsesForStream(streamId, serverStreamId, transport);
 
     // Перенаправляем вызов с НОВЫМ stream ID
-    _logger.internal('📤 Отправляем metadata в целевой транспорт...');
+    _logger.internal('Sending metadata to target transport...');
     await transport.sendMetadata(serverStreamId, metadata,
         endStream: endStream);
 
-    _logger.internal('✅ sendMetadata завершен успешно');
+    _logger.internal('sendMetadata completed successfully');
   }
 
   @override
@@ -290,6 +293,33 @@ final class RpcTransportRouter implements IRpcTransport {
 
     // ❌ НЕ ОЧИЩАЕМ здесь! Очистка должна происходить только при получении END_STREAM ответа
     // Для унарных запросов endStream=true означает завершение отправки, но ответ еще не получен
+  }
+
+  @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {
+    if (_closed) throw StateError('TransportRouter is closed');
+
+    // Используем сохраненный транспорт для данного stream
+    final transport = _streamTransports[streamId];
+    if (transport == null) {
+      throw StateError('Транспорт не найден для stream $streamId. '
+          'Возможно, метаданные не были отправлены сначала.');
+    }
+
+    // Получаем серверный stream ID
+    final serverStreamId = _clientToServerStreamMapping[streamId];
+    if (serverStreamId == null) {
+      throw StateError(
+          'Серверный stream ID не найден для клиентского stream $streamId');
+    }
+
+    // Проксируем zero-copy вызов в целевой транспорт
+    await transport.sendDirectObject(serverStreamId, object,
+        endStream: endStream);
   }
 
   @override
@@ -349,6 +379,9 @@ final class RpcTransportRouter implements IRpcTransport {
 
   @override
   bool get isClient => _idManager.isClient;
+
+  @override
+  bool get isClosed => _closed;
 }
 
 /// Builder для создания Transport Router с приоритетами

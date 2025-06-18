@@ -4,26 +4,15 @@
 
 part of '../_index.dart';
 
-/// Серверная часть клиентского стриминга на основе StreamProcessor.
+/// 🚀 Универсальная серверная часть клиентского стриминга
+///
+/// Автоматически определяет режим работы:
+/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
+/// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
 ///
 /// Получает поток запросов и отправляет один ответ.
-/// Использует новый StreamProcessor для обработки без race condition.
-///
-/// Пример использования:
-/// ```dart
-/// final server = ClientStreamServer<String, String>(
-///   transport: serverTransport,
-///   requestSerializer: stringSerializer,
-///   responseSerializer: stringSerializer,
-///   handler: (requests) async {
-///     // Собираем все запросы
-///     final allRequests = await requests.toList();
-///     return "Обработано ${allRequests.length} запросов";
-///   }
-/// );
-/// ```
-final class ClientStreamResponder<TRequest extends IRpcSerializable,
-    TResponse extends IRpcSerializable> implements IRpcResponder {
+final class ClientStreamResponder<TRequest extends Object,
+    TResponse extends Object> implements IRpcResponder {
   late final RpcLogger? _logger;
 
   @override
@@ -32,20 +21,17 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
   /// Внутренний процессор стрима
   late final StreamProcessor<TRequest, TResponse> _processor;
 
-  /// Подписка на входящие запросы
-  StreamSubscription? _subscription;
-
   /// Флаг, указывающий, что обработчик запущен
   bool _handlerStarted = false;
 
-  /// Создает сервер клиентского стриминга
+  /// Создает универсальный сервер клиентского стриминга
   ///
   /// [id] Идентификатор стрима
   /// [transport] Транспортный уровень
   /// [serviceName] Имя сервиса (например, "DataService")
   /// [methodName] Имя метода (например, "ProcessData")
-  /// [requestCodec] Кодек для десериализации запросов
-  /// [responseCodec] Кодек для сериализации ответа
+  /// [requestCodec] Кодек для десериализации запросов (null для zero-copy)
+  /// [responseCodec] Кодек для сериализации ответа (null для zero-copy)
   /// [handler] Функция-обработчик, вызываемая для обработки потока запросов
   /// [logger] Опциональный логгер
   ClientStreamResponder({
@@ -53,14 +39,28 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
     required IRpcTransport transport,
     required String serviceName,
     required String methodName,
-    required IRpcCodec<TRequest> requestCodec,
-    required IRpcCodec<TResponse> responseCodec,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     required Future<TResponse> Function(Stream<TRequest> requests) handler,
     RpcLogger? logger,
   }) {
+    final isZeroCopy = requestCodec == null && responseCodec == null;
+
+    // Zero-copy режим: требуется RpcInMemoryTransport
+    if (isZeroCopy && transport is! RpcInMemoryTransport) {
+      throw ArgumentError('Zero-copy режим требует RpcInMemoryTransport. '
+          'Для сетевых транспортов передайте кодеки.');
+    }
+
+    // Режим сериализации: кодеки обязательны
+    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
+      throw ArgumentError('Кодеки обязательны для режима сериализации. '
+          'Для zero-copy не передавайте кодеки (null).');
+    }
+
     _logger = logger?.child('ClientResponder');
     _logger?.internal(
-        'Создание ClientStreamResponder для $serviceName.$methodName [id: $id]');
+        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamResponder для $serviceName.$methodName [id: $id]');
 
     _processor = StreamProcessor<TRequest, TResponse>(
       transport: transport,
@@ -93,54 +93,34 @@ final class ClientStreamResponder<TRequest extends IRpcSerializable,
     _logger?.internal(
         'Настройка обработчика запросов для клиентского стрима [id: $id]');
 
-    // Собираем все запросы в список по мере их поступления
-    final allRequests = <TRequest>[];
+    // Вызываем обработчик напрямую с потоком запросов
+    handler(_processor.requests).then((response) async {
+      _logger?.internal(
+          'Обработчик завершен, отправляем ответ: $response [id: $id]');
 
-    // Подписываемся на поток запросов и агрегируем их
-    _subscription = _processor.requests.listen(
-      (request) {
-        // Собираем каждый запрос в список
-        allRequests.add(request);
-        // Логируем получение запроса через logger
-        _logger?.internal(
-            'Получен запрос ${allRequests.length}: $request [id: $id]');
-      },
-      onDone: () async {
-        _logger?.internal(
-            'Поток запросов завершен, запускаем обработчик с ${allRequests.length} запросами [id: $id]');
-
-        try {
-          _logger?.internal(
-              'Вызываем handler с ${allRequests.length} запросами [id: $id]');
-          // Вызываем обработчик с потоком запросов из собранного списка
-          final response = await handler(Stream.fromIterable(allRequests));
-
-          _logger?.internal(
-              'Обработчик вернул ответ: $response, отправляем клиенту [id: $id]');
-
-          // Отправляем единственный ответ
-          await _processor.send(response);
-
-          // Завершаем отправку
-          await _processor.finishSending();
-
-          _logger?.internal('Ответ успешно отправлен [id: $id]');
-        } catch (e, stackTrace) {
-          _logger?.error('Ошибка в обработчике клиентского стрима [id: $id]',
-              error: e, stackTrace: stackTrace);
-          await _processor.sendError(RpcStatus.INTERNAL, e.toString());
-        }
-      },
-      onError: (e, stackTrace) {
-        _logger?.error('Ошибка в потоке запросов [id: $id]',
-            error: e, stackTrace: stackTrace);
-      },
-    );
+      try {
+        await _processor.send(response);
+        await _processor.finishSending();
+        _logger?.internal('Ответ успешно отправлен клиенту [id: $id]');
+      } catch (e, stackTrace) {
+        _logger?.error(
+          'Ошибка при отправке ответа клиенту [id: $id]',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      }
+    }).catchError((error, stackTrace) async {
+      _logger?.error(
+        'Ошибка при обработке клиентского стрима [id: $id]',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      await _processor.sendError(RpcStatus.INTERNAL, error.toString());
+    });
   }
 
   /// Закрывает стрим и освобождает ресурсы
   Future<void> close() async {
-    await _subscription?.cancel();
     await _processor.close();
   }
 }

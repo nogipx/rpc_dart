@@ -141,18 +141,18 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       // Проверяем роль транспорта через интерфейс
       if (transport.isClient) {
         throw ArgumentError(
-            '🚨 КРИТИЧЕСКАЯ ОШИБКА: RpcResponderEndpoint требует СЕРВЕРНЫЙ транспорт!\n'
-            'Получен клиентский транспорт (isClient: true).\n'
-            'Серверные эндпоинты должны использовать транспорты с четными Stream ID (2, 4, 6...).\n\n'
-            'Правильное использование:\n'
+            'CRITICAL ERROR: RpcResponderEndpoint requires SERVER transport!\n'
+            'Received client transport (isClient: true).\n'
+            'Server endpoints must use transports with even Stream IDs (2, 4, 6...).\n\n'
+            'Correct usage:\n'
             '  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();\n'
-            '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport); // ✅\n'
-            '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport); // ✅\n\n'
-            'НЕПРАВИЛЬНО:\n'
-            '  final responderEndpoint = RpcResponderEndpoint(transport: clientTransport); // ❌\n');
+            '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
+            '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
+            'INCORRECT:\n'
+            '  final responderEndpoint = RpcResponderEndpoint(transport: clientTransport);\n');
       }
 
-      logger.internal('✅ Транспорт валиден: серверный (isClient: false)');
+      logger.internal('Transport validated: server (isClient: false)');
     } catch (e) {
       if (e is ArgumentError) rethrow;
 
@@ -196,8 +196,10 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     }
 
     // Обработка сообщения с данными
-    if (!message.isMetadataOnly && message.payload != null) {
-      // Сохраняем сообщение с данными
+    if (!message.isMetadataOnly &&
+        (message.payload != null ||
+            (message.isDirect && message.directPayload != null))) {
+      // Сохраняем сообщение с данными (включая direct payload)
       _streamMessages[streamId] = message;
       _handleDataMessage(streamId, message);
     }
@@ -503,31 +505,109 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Создаем контекстный логгер для респондера
     final contextLogger = _createContextLogger(context);
 
-    final responder = UnaryResponder(
-      id: i.streamId,
-      transport: transport,
-      serviceName: i.serviceName,
-      methodName: i.methodName,
-      requestCodec: i.method.requestCodec,
-      responseCodec: i.method.responseCodec,
-      handler: (request) async {
-        // Используем типизированный wrapper для безопасного вызова
-        final typedRequest = request as dynamic; // Dart runtime cast
-        final response = await i.method.callUnaryHandler(context, typedRequest);
-        return i.method.castResponse(response);
-      },
-      logger: contextLogger, // Передаем контекстный логгер
-    );
+    // 🚀 Проверяем является ли метод zero-copy
+    final serviceName = i.serviceName;
+    final methodName = i.methodName;
+    final contract = _contracts[serviceName];
+    final isZeroCopyMethod =
+        contract?.zeroCopyMethods.containsKey(methodName) ?? false;
 
-    // Сохраняем респондер в реестре
-    _streamResponders[responder.id] = responder;
+    if (isZeroCopyMethod && transport is RpcInMemoryTransport) {
+      // 🚀 Создаем zero-copy унарный респондер используя ZeroCopyStreamProcessor
+      contextLogger.internal(
+          'Создание zero-copy унарного респондера [streamId: $streamId]');
 
-    // Проверяем, есть ли уже сообщение с данными для этого потока
-    final savedMessage = _streamMessages[streamId];
-    if (savedMessage != null &&
-        !savedMessage.isMetadataOnly &&
-        savedMessage.payload != null) {
-      await (responder as UnaryResponder).handleMessage(savedMessage);
+      final zeroCopyMethod = contract!.zeroCopyMethods[methodName]!;
+
+      final processor = StreamProcessor<Object, Object>(
+        transport: transport as RpcInMemoryTransport,
+        streamId: streamId,
+        serviceName: serviceName,
+        methodName: methodName,
+        // Кодеки не указываем для zero-copy режима
+        logger: contextLogger,
+      );
+
+      // Создаем wrapper который реализует IRpcResponder
+      final responder = _ZeroCopyUnaryResponderWrapper(
+        processor: processor,
+        id: streamId,
+      );
+
+      // Обрабатываем запрос через zero-copy процессор
+      processor.requests.listen((request) async {
+        try {
+          contextLogger.internal(
+              'Обработка zero-copy унарного запроса [streamId: $streamId]');
+          final response =
+              await zeroCopyMethod.callUnaryHandler(context, request);
+          await processor.send(response);
+          await processor.finishSending();
+        } catch (e, stackTrace) {
+          contextLogger.error(
+            'Ошибка в zero-copy унарном методе [streamId: $streamId]',
+            error: e,
+            stackTrace: stackTrace,
+          );
+          await processor.sendError(RpcStatus.INTERNAL, e.toString());
+        }
+      });
+
+      _streamResponders[streamId] = responder;
+
+      // 🚀 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем есть ли сохраненное direct сообщение
+      final savedMessage = _streamMessages[streamId];
+      Stream<RpcTransportMessage> messageStream;
+
+      if (savedMessage != null &&
+          savedMessage.isDirect &&
+          savedMessage.directPayload != null) {
+        contextLogger.internal(
+            'Создаем zero-copy поток с сохраненным direct сообщением [streamId: $streamId]');
+        // Создаем поток который начинается с сохраненного direct сообщения
+        messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
+      } else {
+        contextLogger.internal(
+            'Создаем обычный zero-copy поток сообщений [streamId: $streamId]');
+        messageStream =
+            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+      }
+
+      // Привязываем процессор к потоку сообщений
+      processor.bindToMessageStream(messageStream);
+    } else {
+      // Обычный унарный респондер
+      final responder = UnaryResponder(
+        id: i.streamId,
+        transport: transport,
+        serviceName: i.serviceName,
+        methodName: i.methodName,
+        requestCodec: i.method.requestCodec,
+        responseCodec: i.method.responseCodec,
+        handler: (request) async {
+          // Используем типизированный wrapper для безопасного вызова
+          final typedRequest = request as dynamic; // Dart runtime cast
+          final response =
+              await i.method.callUnaryHandler(context, typedRequest);
+          return i.method.castResponse(response);
+        },
+        logger: contextLogger, // Передаем контекстный логгер
+      );
+
+      // Сохраняем респондер в реестре
+      _streamResponders[responder.id] = responder;
+
+      // Проверяем, есть ли уже сообщение с данными для этого потока
+      final savedMessage = _streamMessages[streamId];
+      if (savedMessage != null) {
+        if (savedMessage.isDirect && savedMessage.directPayload != null) {
+          // Zero-copy: обрабатываем прямой объект
+          await (responder as UnaryResponder).handleDirectMessage(savedMessage);
+        } else if (!savedMessage.isMetadataOnly &&
+            savedMessage.payload != null) {
+          await (responder as UnaryResponder).handleMessage(savedMessage);
+        }
+      }
     }
   }
 
@@ -557,48 +637,98 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Создаем контекстный логгер
     final contextLogger = _createContextLogger(context);
 
-    // Создаем новый респондер с explicit типами
-    final responder = ClientStreamResponder<IRpcSerializable, IRpcSerializable>(
-      id: streamId,
-      transport: transport,
-      serviceName: serviceName,
-      methodName: methodName,
-      requestCodec: i.method.requestCodec,
-      responseCodec: i.method.responseCodec,
-      handler: (Stream<IRpcSerializable> requests) async {
-        // Используем типизированные wrapper'ы для безопасного вызова
-        final typedRequests = i.method.castRequestStream(requests);
-        final response =
-            await i.method.callClientStreamHandler(context, typedRequests);
-        return i.method.castResponse(response);
-      },
-      logger: contextLogger, // Передаем контекстный логгер
-    );
+    // 🚀 Проверяем является ли метод zero-copy
+    final contract = _contracts[serviceName];
+    final isZeroCopyMethod =
+        contract?.zeroCopyMethods.containsKey(methodName) ?? false;
 
-    // Сохраняем респондер
-    _streamResponders[responder.id] = responder;
-    logger.internal(
-        'Сохранили ClientStreamResponder для stream ${responder.id}. Всего респондеров: ${_streamResponders.length}');
+    if (isZeroCopyMethod && transport is RpcInMemoryTransport) {
+      // 🚀 Создаем zero-copy клиентский стрим респондер
+      contextLogger.internal(
+          'Создание zero-copy клиентского стрим респондера [streamId: $streamId]');
 
-    // Создаем поток сообщений для этого streamId
-    // Используем накопленные сообщения Client Streaming
-    Stream<RpcTransportMessage> messageStream;
+      final zeroCopyMethod = contract!.zeroCopyMethods[methodName]!;
 
-    final savedMessages = _clientStreamMessages[streamId];
-    if (savedMessages != null && savedMessages.isNotEmpty) {
-      logger.internal(
-          'Создание потока с ${savedMessages.length} накопленными сообщениями [streamId: $streamId]');
-      messageStream = _createStreamWithSavedMessages(streamId, savedMessages);
+      final responder = ClientStreamResponder<Object, Object>(
+        id: streamId,
+        transport: transport as RpcInMemoryTransport,
+        serviceName: serviceName,
+        methodName: methodName,
+        handler: (Stream<Object> requests) async {
+          contextLogger.internal(
+              'Обработка zero-copy клиентского стрим запроса [streamId: $streamId]');
+          // Вызываем zero-copy handler (типы уже адаптированы в контракте)
+          return await zeroCopyMethod.callClientStreamHandler(
+              context, requests);
+        },
+        logger: contextLogger,
+      );
+
+      _streamResponders[responder.id] = responder;
+      contextLogger.internal(
+          'Сохранили zero-copy ClientStreamResponder для stream ${responder.id}');
+
+      // 🚀 Создаем поток сообщений для zero-copy клиентского стрима
+      Stream<RpcTransportMessage> messageStream;
+
+      final savedMessages = _clientStreamMessages[streamId];
+      if (savedMessages != null && savedMessages.isNotEmpty) {
+        contextLogger.internal(
+            'Создание zero-copy потока с ${savedMessages.length} накопленными сообщениями [streamId: $streamId]');
+        messageStream = _createStreamWithSavedMessages(streamId, savedMessages);
+      } else {
+        contextLogger.internal(
+            'Создание zero-copy потока сообщений [streamId: $streamId]');
+        messageStream =
+            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+      }
+
+      responder.bindToMessageStream(messageStream);
     } else {
-      logger
-          .internal('Создание обычного потока сообщений [streamId: $streamId]');
-      messageStream =
-          transport.incomingMessages.where((msg) => msg.streamId == streamId);
-    }
+      // Обычный клиентский стрим респондер
+      final responder =
+          ClientStreamResponder<IRpcSerializable, IRpcSerializable>(
+        id: streamId,
+        transport: transport,
+        serviceName: serviceName,
+        methodName: methodName,
+        requestCodec: i.method.requestCodec,
+        responseCodec: i.method.responseCodec,
+        handler: (Stream<IRpcSerializable> requests) async {
+          // Используем типизированные wrapper'ы для безопасного вызова
+          final typedRequests = i.method.castRequestStream(requests);
+          final response =
+              await i.method.callClientStreamHandler(context, typedRequests);
+          return i.method.castResponse(response);
+        },
+        logger: contextLogger, // Передаем контекстный логгер
+      );
 
-    logger.internal(
-        'Привязка потока сообщений к ClientStreamResponder [streamId: $streamId]');
-    responder.bindToMessageStream(messageStream);
+      // Сохраняем респондер
+      _streamResponders[responder.id] = responder;
+      logger.internal(
+          'Сохранили ClientStreamResponder для stream ${responder.id}. Всего респондеров: ${_streamResponders.length}');
+
+      // Создаем поток сообщений для этого streamId
+      // Используем накопленные сообщения Client Streaming
+      Stream<RpcTransportMessage> messageStream;
+
+      final savedMessages = _clientStreamMessages[streamId];
+      if (savedMessages != null && savedMessages.isNotEmpty) {
+        logger.internal(
+            'Создание потока с ${savedMessages.length} накопленными сообщениями [streamId: $streamId]');
+        messageStream = _createStreamWithSavedMessages(streamId, savedMessages);
+      } else {
+        logger.internal(
+            'Создание обычного потока сообщений [streamId: $streamId]');
+        messageStream =
+            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+      }
+
+      logger.internal(
+          'Привязка потока сообщений к ClientStreamResponder [streamId: $streamId]');
+      responder.bindToMessageStream(messageStream);
+    }
   }
 
   /// Этап 5.3: Обработка серверного потокового метода
@@ -621,50 +751,98 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Создаем контекстный логгер
     final contextLogger = _createContextLogger(context);
 
-    // Создаем обработчик серверного потока
-    final responder = ServerStreamResponder(
-      id: streamId,
-      transport: transport,
-      serviceName: serviceName,
-      methodName: methodName,
-      requestCodec: i.method.requestCodec,
-      responseCodec: i.method.responseCodec,
-      handler: (request) {
-        // Используем типизированный wrapper для безопасного вызова
-        final typedRequest = request as dynamic; // Dart runtime cast
-        final responseStream =
-            i.method.callServerStreamHandler(context, typedRequest);
-        // Кастим поток ответов к базовому типу
-        return responseStream
-            .map((response) => i.method.castResponse(response));
-      },
-      logger: contextLogger, // Передаем контекстный логгер
-    );
+    // 🚀 Проверяем является ли метод zero-copy
+    final contract = _contracts[serviceName];
+    final isZeroCopyMethod =
+        contract?.zeroCopyMethods.containsKey(methodName) ?? false;
 
-    _streamResponders[responder.id] = responder;
+    if (isZeroCopyMethod && transport is RpcInMemoryTransport) {
+      // 🚀 Создаем zero-copy серверный стрим респондер
+      contextLogger.internal(
+          'Создание zero-copy серверного стрим респондера [streamId: $streamId]');
 
-    // Создаем поток сообщений для этого streamId
-    Stream<RpcTransportMessage> messageStream;
+      final zeroCopyMethod = contract!.zeroCopyMethods[methodName]!;
 
-    final savedMessage = _streamMessages[streamId];
-    if (savedMessage != null &&
-        !savedMessage.isMetadataOnly &&
-        savedMessage.payload != null) {
-      logger.internal(
-          'Создание потока с сохраненным сообщением [streamId: $streamId]');
-      // Создаем поток который начинается с сохраненного сообщения
-      messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
+      final responder = ServerStreamResponder<Object, Object>(
+        id: streamId,
+        transport: transport as RpcInMemoryTransport,
+        serviceName: serviceName,
+        methodName: methodName,
+        handler: (request) {
+          contextLogger.internal(
+              'Обработка zero-copy серверного стрим запроса [streamId: $streamId]');
+          // Вызываем zero-copy handler который возвращает Stream<Object>
+          return zeroCopyMethod.callServerStreamHandler(context, request);
+        },
+        logger: contextLogger,
+      );
+
+      _streamResponders[responder.id] = responder;
+
+      // 🚀 Проверяем есть ли сохраненное direct сообщение
+      final savedMessage = _streamMessages[streamId];
+      Stream<RpcTransportMessage> messageStream;
+
+      if (savedMessage != null &&
+          savedMessage.isDirect &&
+          savedMessage.directPayload != null) {
+        contextLogger.internal(
+            'Создаем zero-copy серверный стрим поток с сохраненным direct сообщением [streamId: $streamId]');
+        messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
+      } else {
+        contextLogger.internal(
+            'Создаем обычный zero-copy серверный стрим поток сообщений [streamId: $streamId]');
+        messageStream =
+            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+      }
+
+      responder.bindToMessageStream(messageStream);
     } else {
-      logger
-          .internal('Создание обычного потока сообщений [streamId: $streamId]');
-      // Обычный поток сообщений для этого streamId
-      messageStream =
-          transport.incomingMessages.where((msg) => msg.streamId == streamId);
-    }
+      // Обычный серверный стрим респондер
+      final responder = ServerStreamResponder(
+        id: streamId,
+        transport: transport,
+        serviceName: serviceName,
+        methodName: methodName,
+        requestCodec: i.method.requestCodec,
+        responseCodec: i.method.responseCodec,
+        handler: (request) {
+          // Используем типизированный wrapper для безопасного вызова
+          final typedRequest = request as dynamic; // Dart runtime cast
+          final responseStream =
+              i.method.callServerStreamHandler(context, typedRequest);
+          // Кастим поток ответов к базовому типу
+          return responseStream
+              .map((response) => i.method.castResponse(response));
+        },
+        logger: contextLogger, // Передаем контекстный логгер
+      );
 
-    logger.internal(
-        'Привязка потока сообщений к ServerStreamResponder [streamId: $streamId]');
-    responder.bindToMessageStream(messageStream);
+      _streamResponders[responder.id] = responder;
+
+      // Создаем поток сообщений для этого streamId
+      Stream<RpcTransportMessage> messageStream;
+
+      final savedMessage = _streamMessages[streamId];
+      if (savedMessage != null &&
+          !savedMessage.isMetadataOnly &&
+          (savedMessage.payload != null || savedMessage.isDirect)) {
+        logger.internal(
+            'Создание потока с сохраненным сообщением [streamId: $streamId]${savedMessage.isDirect ? " (zero-copy)" : ""}');
+        // Создаем поток который начинается с сохраненного сообщения
+        messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
+      } else {
+        logger.internal(
+            'Создание обычного потока сообщений [streamId: $streamId]');
+        // Обычный поток сообщений для этого streamId
+        messageStream =
+            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+      }
+
+      logger.internal(
+          'Привязка потока сообщений к ServerStreamResponder [streamId: $streamId]');
+      responder.bindToMessageStream(messageStream);
+    }
   }
 
   /// Создает поток сообщений начинающийся с сохраненного сообщения
@@ -699,6 +877,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           ? RpcTransportMessage(
               streamId: message.streamId,
               payload: message.payload,
+              directPayload:
+                  message.directPayload, // Важно! Сохраняем directPayload
               metadata: message.metadata,
               isEndOfStream: true,
               methodPath: message.methodPath,
@@ -742,44 +922,90 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Создаем контекстный логгер
     final contextLogger = _createContextLogger(context);
 
-    // Создаем обработчик двунаправленного потока с explicit типами
-    final responder =
-        BidirectionalStreamResponder<IRpcSerializable, IRpcSerializable>(
-      id: streamId,
-      transport: transport,
-      serviceName: serviceName,
-      methodName: methodName,
-      requestCodec: i.method.requestCodec,
-      responseCodec: i.method.responseCodec,
-      logger: contextLogger, // Передаем контекстный логгер
-    );
+    // 🚀 Проверяем является ли метод zero-copy
+    final contract = _contracts[serviceName];
+    final isZeroCopyMethod =
+        contract?.zeroCopyMethods.containsKey(methodName) ?? false;
 
-    _streamResponders[responder.id] = responder;
+    if (isZeroCopyMethod && transport is RpcInMemoryTransport) {
+      // 🚀 Создаем zero-copy двунаправленный стрим респондер
+      contextLogger.internal(
+          'Создание zero-copy двунаправленного стрим респондера [streamId: $streamId]');
 
-    // Создаем поток сообщений для этого streamId
-    Stream<RpcTransportMessage> messageStream;
+      final zeroCopyMethod = contract!.zeroCopyMethods[methodName]!;
 
-    final savedMessage = _streamMessages[streamId];
-    if (savedMessage != null &&
-        !savedMessage.isMetadataOnly &&
-        savedMessage.payload != null) {
-      logger.internal(
-          'Создание потока с сохраненным сообщением [streamId: $streamId]');
-      messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
+      final responder = BidirectionalStreamResponder<Object, Object>(
+        id: streamId,
+        transport: transport as RpcInMemoryTransport,
+        serviceName: serviceName,
+        methodName: methodName,
+        logger: contextLogger,
+      );
+
+      _streamResponders[responder.id] = responder;
+
+      // 🚀 Создаем поток сообщений для zero-copy двунаправленного стрима
+      Stream<RpcTransportMessage> messageStream;
+
+      final savedMessage = _streamMessages[streamId];
+      if (savedMessage != null &&
+          !savedMessage.isMetadataOnly &&
+          (savedMessage.payload != null || savedMessage.isDirect)) {
+        contextLogger.internal(
+            'Создание zero-copy потока с сохраненным сообщением [streamId: $streamId]${savedMessage.isDirect ? " (zero-copy)" : ""}');
+        messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
+      } else {
+        contextLogger.internal(
+            'Создание zero-copy потока сообщений [streamId: $streamId]');
+        messageStream =
+            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+      }
+
+      responder.bindToMessageStream(messageStream);
+
+      // 🚀 Настраиваем zero-copy обработчик
+      _setupZeroCopyBidirectionalHandler(responder, zeroCopyMethod, serviceName,
+          methodName, streamId, context);
     } else {
-      logger
-          .internal('Создание обычного потока сообщений [streamId: $streamId]');
-      messageStream =
-          transport.incomingMessages.where((msg) => msg.streamId == streamId);
+      // Обычный двунаправленный стрим респондер
+      final responder =
+          BidirectionalStreamResponder<IRpcSerializable, IRpcSerializable>(
+        id: streamId,
+        transport: transport,
+        serviceName: serviceName,
+        methodName: methodName,
+        requestCodec: i.method.requestCodec,
+        responseCodec: i.method.responseCodec,
+        logger: contextLogger, // Передаем контекстный логгер
+      );
+
+      _streamResponders[responder.id] = responder;
+
+      // Создаем поток сообщений для этого streamId
+      Stream<RpcTransportMessage> messageStream;
+
+      final savedMessage = _streamMessages[streamId];
+      if (savedMessage != null &&
+          !savedMessage.isMetadataOnly &&
+          (savedMessage.payload != null || savedMessage.isDirect)) {
+        logger.internal(
+            'Создание потока с сохраненным сообщением [streamId: $streamId]${savedMessage.isDirect ? " (zero-copy)" : ""}');
+        messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
+      } else {
+        logger.internal(
+            'Создание обычного потока сообщений [streamId: $streamId]');
+        messageStream =
+            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+      }
+
+      logger.internal(
+          'Привязка потока сообщений к BidirectionalStreamResponder [streamId: $streamId]');
+      responder.bindToMessageStream(messageStream);
+
+      // Подключаем пользовательский обработчик к потоку запросов
+      _setupBidirectionalHandler(responder, i.method, i.serviceName,
+          i.methodName, i.streamId, context);
     }
-
-    logger.internal(
-        'Привязка потока сообщений к BidirectionalStreamResponder [streamId: $streamId]');
-    responder.bindToMessageStream(messageStream);
-
-    // Подключаем пользовательский обработчик к потоку запросов
-    _setupBidirectionalHandler(
-        responder, i.method, i.serviceName, i.methodName, i.streamId, context);
   }
 
   /// Настраивает обработчик для двунаправленного стрима
@@ -832,6 +1058,53 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     }());
   }
 
+  /// 🚀 Настраивает zero-copy обработчик для двунаправленного стрима
+  void _setupZeroCopyBidirectionalHandler(
+    BidirectionalStreamResponder<Object, Object> responder,
+    RpcZeroCopyMethodRegistration<Object, Object> zeroCopyMethod,
+    String serviceName,
+    String methodName,
+    int streamId,
+    RpcContext context,
+  ) {
+    logger.internal(
+        'Настройка zero-copy обработчика двунаправленного стрима [id: ${responder.id}]');
+
+    // Подписываемся на поток запросов и связываем с пользовательским обработчиком
+    unawaited(() async {
+      try {
+        logger.internal(
+            'Вызов zero-copy пользовательского обработчика [id: ${responder.id}]');
+
+        // Вызываем zero-copy handler (типы уже адаптированы в контракте)
+        final responseStream = zeroCopyMethod.callBidirectionalStreamHandler(
+            context, responder.requests);
+
+        logger.internal(
+            'Получен поток ответов от zero-copy обработчика [id: ${responder.id}]');
+
+        // Подписываемся на поток ответов от обработчика и отправляем их клиенту
+        await for (final response in responseStream) {
+          logger.internal(
+              'Отправка ответа от zero-copy обработчика [id: ${responder.id}]');
+          await responder.send(response);
+        }
+
+        // Завершаем отправку ответов
+        await responder.finishReceiving();
+      } catch (e, stackTrace) {
+        logger.error(
+          'Ошибка в zero-copy обработчике двунаправленного стрима [id: ${responder.id}]',
+          error: e,
+          stackTrace: stackTrace,
+        );
+
+        // Отправляем ошибку клиенту
+        await responder.sendError(RpcStatus.INTERNAL, e.toString());
+      }
+    }());
+  }
+
   /// Регистрирует контракт сервиса
   void registerServiceContract(RpcResponderContract contract) {
     final serviceName = contract.serviceName;
@@ -850,7 +1123,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Вызываем setup для регистрации методов в контракте
     contract.setup();
 
-    // Регистрируем методы контракта
+    // Регистрируем обычные методы контракта
     final methods = contract.methods;
     for (final entry in methods.entries) {
       final methodName = entry.key;
@@ -870,33 +1143,90 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       _methods[methodKey] = method;
     }
 
-    logger.internal(
-      'Контракт $serviceName зарегистрирован с ${methods.length} методами',
-    );
+    // 🚀 Регистрируем zero-copy методы контракта
+    final zeroCopyMethods = contract.zeroCopyMethods;
+    for (final entry in zeroCopyMethods.entries) {
+      final methodName = entry.key;
+      final zeroCopyMethod = entry.value;
 
-    // Регистрируем подконтракты
-    final subcontracts = contract.subcontracts;
-    if (subcontracts.isNotEmpty) {
-      logger.internal(
-        'Обнаружено ${subcontracts.length} подконтрактов для $serviceName, начинаем регистрацию',
-      );
+      final methodKey = '$serviceName.$methodName';
 
-      for (final subcontract in subcontracts) {
-        try {
-          registerServiceContract(subcontract);
-        } catch (e, stackTrace) {
-          logger.error(
-            'Ошибка при регистрации подконтракта ${subcontract.serviceName}',
-            error: e,
-            stackTrace: stackTrace,
-          );
-        }
+      if (_methods.containsKey(methodKey)) {
+        throw RpcException(
+          'Метод $methodKey уже зарегистрирован (конфликт с zero-copy)',
+        );
       }
 
+      // Конвертируем zero-copy метод в обычный RpcMethodRegistration для совместимости
+      final convertedMethod = _convertZeroCopyToRegularMethod(zeroCopyMethod);
+
       logger.internal(
-        'Регистрация подконтрактов для $serviceName завершена',
+        'Регистрируем zero-copy метод: $methodKey (${zeroCopyMethod.type.name}) [ZERO-COPY]',
       );
+      _methods[methodKey] = convertedMethod;
     }
+
+    logger.internal(
+      'Контракт $serviceName зарегистрирован с ${methods.length} методами и ${zeroCopyMethods.length} zero-copy методами',
+    );
+  }
+
+  /// 🚀 Конвертирует zero-copy метод в обычный RpcMethodRegistration для совместимости
+  /// Zero-copy методы не используют кодеки и работают с Object типами
+  RpcMethodRegistration<IRpcSerializable, IRpcSerializable>
+      _convertZeroCopyToRegularMethod(
+    RpcZeroCopyMethodRegistration<Object, Object> zeroCopyMethod,
+  ) {
+    // Создаем dummy кодеки которые не используются в zero-copy режиме
+    final dummyRequestCodec = _ZeroCopyDummyCodec<IRpcSerializable>();
+    final dummyResponseCodec = _ZeroCopyDummyCodec<IRpcSerializable>();
+
+    // 🚀 КЛЮЧЕВОЕ ОТЛИЧИЕ: zero-copy методы работают напрямую с directPayload
+    // и НЕ используют сериализацию. Объекты передаются как есть.
+    Function wrappedHandler;
+
+    switch (zeroCopyMethod.type) {
+      case RpcMethodType.unaryRequest:
+        wrappedHandler = (dynamic request, {RpcContext? context}) async {
+          // Для zero-copy directPayload приходит как есть, без каста к IRpcSerializable
+          final result =
+              await zeroCopyMethod.callUnaryHandler(context!, request);
+          return result; // Возвращаем как есть, без каста
+        };
+        break;
+      case RpcMethodType.serverStream:
+        wrappedHandler = (dynamic request, {RpcContext? context}) {
+          return zeroCopyMethod.callServerStreamHandler(context!, request);
+          // .map не нужен - возвращаем объекты как есть
+        };
+        break;
+      case RpcMethodType.clientStream:
+        wrappedHandler =
+            (Stream<dynamic> requests, {RpcContext? context}) async {
+          final objectStream = requests.cast<Object>();
+          final result = await zeroCopyMethod.callClientStreamHandler(
+              context!, objectStream);
+          return result; // Возвращаем как есть
+        };
+        break;
+      case RpcMethodType.bidirectionalStream:
+        wrappedHandler = (Stream<dynamic> requests, {RpcContext? context}) {
+          final objectStream = requests.cast<Object>();
+          return zeroCopyMethod.callBidirectionalStreamHandler(
+              context!, objectStream);
+          // .map не нужен - возвращаем объекты как есть
+        };
+        break;
+    }
+
+    return RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
+      name: zeroCopyMethod.name,
+      type: zeroCopyMethod.type,
+      handler: wrappedHandler,
+      description: zeroCopyMethod.description,
+      requestCodec: dummyRequestCodec,
+      responseCodec: dummyResponseCodec,
+    );
   }
 
   /// Проверяет существование метода и его тип
@@ -970,4 +1300,31 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     _isListening = false;
     await super.close();
   }
+}
+
+/// 🚀 Dummy кодек для zero-copy методов - не используется но нужен для совместимости типов
+final class _ZeroCopyDummyCodec<T extends IRpcSerializable>
+    implements IRpcCodec<T> {
+  @override
+  T deserialize(Uint8List data) {
+    throw UnsupportedError('Zero-copy методы не используют сериализацию');
+  }
+
+  @override
+  Uint8List serialize(T object) {
+    throw UnsupportedError('Zero-copy методы не используют сериализацию');
+  }
+}
+
+/// 🚀 Wrapper для универсального StreamProcessor чтобы он реализовал IRpcResponder
+final class _ZeroCopyUnaryResponderWrapper implements IRpcResponder {
+  final StreamProcessor<Object, Object> processor;
+
+  @override
+  final int id;
+
+  _ZeroCopyUnaryResponderWrapper({
+    required this.processor,
+    required this.id,
+  });
 }

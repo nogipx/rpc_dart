@@ -9,9 +9,17 @@ part of '../_index.dart';
 /// Представляет различные типы сообщений, которые могут передаваться
 /// через транспортный уровень, включая метаданные и полезную нагрузку.
 /// Каждое сообщение привязано к конкретному HTTP/2 stream (RPC вызову).
+///
+/// ZERO-COPY OPTIMIZATION: Поддерживает передачу объектов напрямую
+/// без сериализации для inmemory транспорта.
 final class RpcTransportMessage {
-  /// Полезная нагрузка сообщения (данные)
+  /// Полезная нагрузка сообщения (сериализованные данные)
   final Uint8List? payload;
+
+  /// ZERO-COPY: Прямая ссылка на объект (для inmemory транспорта)
+  /// ⚠️ Используется только внутри одного процесса!
+  /// ⚠️ Объект должен быть immutable или клонирован!
+  final Object? directPayload;
 
   /// Связанные метаданные
   final RpcMetadata? metadata;
@@ -26,16 +34,74 @@ final class RpcTransportMessage {
   final int streamId;
 
   /// Флаг, указывающий, что сообщение содержит только метаданные
-  bool get isMetadataOnly => metadata != null && payload == null;
+  bool get isMetadataOnly =>
+      metadata != null && payload == null && directPayload == null;
+
+  /// Флаг, указывающий что передается объект напрямую (ZERO-COPY оптимизация)
+  bool get isDirect => directPayload != null;
+
+  /// Флаг, указывающий что передаются сериализованные байты
+  bool get isSerialized => payload != null;
 
   /// Создает сообщение транспортного уровня
   RpcTransportMessage({
     this.payload,
+    this.directPayload,
     this.metadata,
     this.isEndOfStream = false,
     this.methodPath,
     required this.streamId,
-  });
+  }) : assert(
+          (payload != null) ^ (directPayload != null) ||
+              (payload == null && directPayload == null),
+          'Можно указать либо payload, либо directPayload, но не оба одновременно',
+        );
+
+  /// Фабрика для создания сообщения с сериализованными данными (обычный режим)
+  factory RpcTransportMessage.withPayload({
+    required Uint8List payload,
+    RpcMetadata? metadata,
+    bool isEndOfStream = false,
+    String? methodPath,
+    required int streamId,
+  }) =>
+      RpcTransportMessage(
+        payload: payload,
+        metadata: metadata,
+        isEndOfStream: isEndOfStream,
+        methodPath: methodPath,
+        streamId: streamId,
+      );
+
+  /// Фабрика для создания сообщения с прямым объектом (ZERO-COPY режим)
+  factory RpcTransportMessage.withDirectObject({
+    required Object directPayload,
+    RpcMetadata? metadata,
+    bool isEndOfStream = false,
+    String? methodPath,
+    required int streamId,
+  }) =>
+      RpcTransportMessage(
+        directPayload: directPayload,
+        metadata: metadata,
+        isEndOfStream: isEndOfStream,
+        methodPath: methodPath,
+        streamId: streamId,
+      );
+
+  /// Фабрика для создания сообщения только с метаданными
+  factory RpcTransportMessage.withMetadata({
+    required RpcMetadata metadata,
+    bool isEndOfStream = false,
+    String? methodPath,
+    required int streamId,
+  }) =>
+      RpcTransportMessage(
+        metadata: metadata,
+        isEndOfStream: isEndOfStream,
+        methodPath: methodPath,
+        streamId: streamId,
+      );
 }
 
 /// Абстрактный интерфейс транспортного уровня с поддержкой мультиплексирования по Stream ID.
@@ -47,6 +113,8 @@ abstract class IRpcTransport {
   /// Возвращает true, если это клиентский транспорт (генерирует нечетные Stream ID),
   /// false - если серверный транспорт (генерирует четные Stream ID)
   bool get isClient;
+
+  bool get isClosed;
 
   /// Создает новый HTTP/2 stream для RPC вызова.
   ///
@@ -82,6 +150,26 @@ abstract class IRpcTransport {
     Uint8List data, {
     bool endStream = false,
   });
+
+  /// ZERO-COPY: Отправляет объект напрямую без сериализации (опционально).
+  ///
+  /// ⚠️ По умолчанию НЕ поддерживается! Только специализированные транспорты
+  /// (например, optimized inmemory) переопределяют этот метод для реальной
+  /// zero-copy передачи объектов по ссылке.
+  ///
+  /// [streamId] Уникальный идентификатор HTTP/2 stream
+  /// [object] Объект для отправки
+  /// [endStream] Флаг завершения потока данных
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {
+    throw UnsupportedError(
+      'Транспорт не поддерживает прямую передачу объектов. '
+      'Используйте sendMessage() с сериализацией или оптимизированный inmemory транспорт.',
+    );
+  }
 
   /// Поток всех входящих сообщений от удаленной стороны.
   ///

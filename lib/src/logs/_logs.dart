@@ -11,3 +11,4 @@ part 'rpc_logger.dart';
 part 'rpc_logger_colors.dart';
 part 'default_rpc_logger.dart';
 part 'rpc_logger_registry.dart';
+part 'rpc_logger_extensions.dart';

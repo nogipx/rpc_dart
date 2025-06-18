@@ -127,8 +127,32 @@ final class UnaryCaller<TRequest, TResponse> {
       _logger?.internal('Настройка подписки на ответы [streamId: $streamId]');
       subscription = _transport.getMessagesForStream(streamId).listen(
         (message) async {
-          if (!message.isMetadataOnly && message.payload != null) {
-            // Получили данные ответа
+          if (message.isDirect && message.directPayload != null) {
+            // Zero-copy: получили объект напрямую
+            _logger?.internal(
+              'Zero-copy ответ получен [streamId: $streamId]',
+            );
+            try {
+              final response = message.directPayload as TResponse;
+              if (!completer.isCompleted) {
+                _logger?.internal(
+                    'Zero-copy унарный вызов $_methodPath успешно завершен [streamId: $streamId]');
+                completer.complete(response);
+              } else {
+                _logger?.warning(
+                    'Получен лишний zero-copy ответ после завершения вызова [streamId: $streamId]');
+              }
+            } catch (e, stackTrace) {
+              if (!completer.isCompleted) {
+                _logger?.error(
+                    'Ошибка при обработке zero-copy ответа [streamId: $streamId]',
+                    error: e,
+                    stackTrace: stackTrace);
+                completer.completeError(e);
+              }
+            }
+          } else if (!message.isMetadataOnly && message.payload != null) {
+            // Получили данные ответа (стандартная сериализация)
             _logger?.internal(
               'Получено сообщение от транспорта размером: ${message.payload!.length} байт [streamId: $streamId]',
             );
@@ -219,19 +243,29 @@ final class UnaryCaller<TRequest, TResponse> {
       final metadata = RpcMetadata(headers);
       await _transport.sendMetadata(streamId, metadata);
 
-      // Сериализуем и отправляем запрос
-      _logger?.internal('Сериализация запроса [streamId: $streamId]');
-      final serializedRequest = _requestSerializer.serialize(request);
-      _logger?.internal(
-          'Запрос сериализован, размер: ${serializedRequest.length} байт [streamId: $streamId]');
-      final framedRequest = RpcMessageFrame.encode(serializedRequest);
-      _logger?.internal(
-          'Отправка запроса и закрытие потока запросов [streamId: $streamId]');
-      await _transport.sendMessage(
-        streamId,
-        framedRequest,
-        endStream: true,
-      );
+      // Zero-copy оптимизация для inmemory транспорта
+      if (_transport is RpcInMemoryTransport) {
+        _logger?.internal('Zero-copy отправка запроса [streamId: $streamId]');
+        await (_transport as RpcInMemoryTransport).sendDirectObject(
+          streamId,
+          request as Object,
+          endStream: true,
+        );
+      } else {
+        // Стандартная сериализация для других транспортов
+        _logger?.internal('Сериализация запроса [streamId: $streamId]');
+        final serializedRequest = _requestSerializer.serialize(request);
+        _logger?.internal(
+            'Запрос сериализован, размер: ${serializedRequest.length} байт [streamId: $streamId]');
+        final framedRequest = RpcMessageFrame.encode(serializedRequest);
+        _logger?.internal(
+            'Отправка запроса и закрытие потока запросов [streamId: $streamId]');
+        await _transport.sendMessage(
+          streamId,
+          framedRequest,
+          endStream: true,
+        );
+      }
 
       // Ждем ответ с таймаутом, если указан
       _logger?.internal(

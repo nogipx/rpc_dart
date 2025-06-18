@@ -27,18 +27,18 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       // Проверяем роль транспорта через интерфейс
       if (!transport.isClient) {
         throw ArgumentError(
-            '🚨 КРИТИЧЕСКАЯ ОШИБКА: RpcCallerEndpoint требует КЛИЕНТСКИЙ транспорт!\n'
-            'Получен серверный транспорт (isClient: false).\n'
-            'Клиентские эндпоинты должны использовать транспорты с нечетными Stream ID (1, 3, 5...).\n\n'
-            'Правильное использование:\n'
+            'CRITICAL ERROR: RpcCallerEndpoint requires CLIENT transport!\n'
+            'Received server transport (isClient: false).\n'
+            'Client endpoints must use transports with odd Stream IDs (1, 3, 5...).\n\n'
+            'Correct usage:\n'
             '  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();\n'
-            '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport); // ✅\n'
-            '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport); // ✅\n\n'
-            'НЕПРАВИЛЬНО:\n'
-            '  final callerEndpoint = RpcCallerEndpoint(transport: serverTransport); // ❌\n');
+            '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
+            '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
+            'INCORRECT:\n'
+            '  final callerEndpoint = RpcCallerEndpoint(transport: serverTransport);\n');
       }
 
-      logger.internal('✅ Транспорт валиден: клиентский (isClient: true)');
+      logger.internal('Transport validated: client (isClient: true)');
     } catch (e) {
       if (e is ArgumentError) rethrow;
 
@@ -89,13 +89,38 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     }
   }
 
-  /// Создает унарный request builder с поддержкой контекста
-  Future<R> unaryRequest<C, R>({
+  /// 🚀 Универсальный унарный request
+  ///
+  /// Автоматически определяет режим работы:
+  /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  ///
+  /// Примеры:
+  /// ```dart
+  /// // Сериализация
+  /// final result = await endpoint.unaryRequest<MyRequest, MyResponse>(
+  ///   serviceName: 'Service',
+  ///   methodName: 'Method',
+  ///   requestCodec: myRequestCodec,
+  ///   responseCodec: myResponseCodec,
+  ///   request: MyRequest('data'),
+  /// );
+  ///
+  /// // Zero-copy (только для RpcInMemoryTransport)
+  /// final result = await endpoint.unaryRequest<String, String>(
+  ///   serviceName: 'Service',
+  ///   methodName: 'Method',
+  ///   request: 'hello',
+  ///   // кодеки не указываем → zero-copy
+  /// );
+  /// ```
+  Future<TResponse>
+      unaryRequest<TRequest extends Object, TResponse extends Object>({
     required String serviceName,
     required String methodName,
-    required IRpcCodec<C> requestCodec,
-    required IRpcCodec<R> responseCodec,
-    required C request,
+    required TRequest request,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
     // Проверяем активность эндпоинта
@@ -104,154 +129,176 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
           'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
     }
 
-    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
-    final baseContext = _ensureContext(context);
-    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
+    final isZeroCopy = requestCodec == null && responseCodec == null;
 
-    return UnaryCaller<C, R>(
-      serviceName: serviceName,
-      methodName: methodName,
-      transport: transport,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
-      context: enhancedContext, // Передаем обогащенный контекст
-    ).call(request);
-  }
-
-  /// Создает server stream для отправки одного запроса и получения множественных ответов
-  Stream<R>
-      serverStream<C extends IRpcSerializable, R extends IRpcSerializable>({
-    required String serviceName,
-    required String methodName,
-    required IRpcCodec<C> requestCodec,
-    required IRpcCodec<R> responseCodec,
-    required C request,
-    RpcContext? context,
-  }) {
-    // Проверяем активность эндпоинта
-    if (!isActive) {
-      throw StateError(
-          'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
+    // Zero-copy режим: требуется RpcInMemoryTransport
+    if (isZeroCopy && transport is! RpcInMemoryTransport) {
+      throw ArgumentError('Zero-copy режим требует RpcInMemoryTransport. '
+          'Для сетевых транспортов передайте кодеки.');
     }
 
-    logger.internal('Создание server stream для $serviceName/$methodName');
+    // Режим сериализации: кодеки обязательны
+    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
+      throw ArgumentError('Кодеки обязательны для режима сериализации. '
+          'Для zero-copy не передавайте кодеки (null).');
+    }
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
     final baseContext = _ensureContext(context);
     final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
 
-    // Создаем server stream caller с контекстом
-    final caller = ServerStreamCaller<C, R>(
-      transport: transport,
-      serviceName: serviceName,
-      methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
-      context: enhancedContext, // Передаем обогащенный контекст
-      logger: logger,
-    );
+    if (isZeroCopy) {
+      // Zero-copy путь с универсальным процессором
+      final processor = CallProcessor<TRequest, TResponse>(
+        transport: transport,
+        serviceName: serviceName,
+        methodName: methodName,
+        // Кодеки не указываем для zero-copy режима
+        context: enhancedContext,
+        logger: logger,
+      );
 
-    // Создаем поток и отправляем единственный запрос
-    return _createServerStreamFromCaller(caller, request);
+      return _executeUniversalUnaryCall(processor, request);
+    } else {
+      // Сериализация с обычным UnaryCaller
+      return UnaryCaller<TRequest, TResponse>(
+        serviceName: serviceName,
+        methodName: methodName,
+        transport: transport,
+        requestCodec: requestCodec!,
+        responseCodec: responseCodec!,
+        context: enhancedContext,
+      ).call(request);
+    }
   }
 
-  /// Создает поток ответов из ServerStreamCaller
-  Stream<R> _createServerStreamFromCaller<C extends IRpcSerializable,
-      R extends IRpcSerializable>(
-    ServerStreamCaller<C, R> caller,
-    C request,
-  ) {
-    final controller = StreamController<R>();
+  /// Внутренняя реализация универсального унарного вызова
+  Future<TResponse> _executeUniversalUnaryCall<TRequest extends Object,
+      TResponse extends Object>(
+    CallProcessor<TRequest, TResponse> processor,
+    TRequest request,
+  ) async {
+    try {
+      // Отправляем запрос
+      await processor.send(request);
+      await processor.finishSending();
 
-    // Запускаем асинхронную обработку
-    () async {
-      try {
-        // Отправляем запрос серверу
-        logger.internal('Отправка запроса серверу');
+      // Ожидаем единственный ответ
+      await for (final response in processor.responses) {
+        if (response.payload != null) {
+          return response.payload!;
+        }
 
-        // 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Сразу отправляем запрос СИНХРОННО
-        // Это позволит ошибкам роутинга немедленно проагирать в controller
-        await caller.send(request);
-
-        logger.internal('Запрос отправлен, начинаем получать ответы');
-
-        // Небольшая задержка, чтобы дать серверу время на обработку запроса
-        await Future.delayed(Duration(milliseconds: 1));
-
-        // Обрабатываем ответы
-        int count = 0;
-        await for (final message in caller.responses) {
-          if (controller.isClosed) break;
-
-          if (!message.isMetadataOnly && message.payload != null) {
-            count++;
-            logger.internal(
-                'Получена полезная нагрузка #$count: ${message.payload}');
-            controller.add(message.payload!);
-          } else if (message.isMetadataOnly) {
-            logger
-                .internal('Получены метаданные: ${message.metadata?.headers}');
-
-            // Проверяем, если это финальные метаданные с кодом ошибки
-            final statusCode = message.metadata
-                ?.getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
-            if (statusCode != null && statusCode != '0') {
-              final errorMessage = message.metadata
-                      ?.getHeaderValue(RpcConstants.GRPC_MESSAGE_HEADER) ??
+        // Проверяем статус в метаданных
+        if (response.metadata != null) {
+          final statusStr = response.metadata!
+              .getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
+          if (statusStr != null) {
+            final status = int.tryParse(statusStr) ?? RpcStatus.UNKNOWN;
+            if (status != RpcStatus.OK) {
+              final message = response.metadata!
+                      .getHeaderValue(RpcConstants.GRPC_MESSAGE_HEADER) ??
                   'Unknown error';
-              throw Exception('RPC error: $statusCode - $errorMessage');
+              throw Exception('gRPC error $status: $message');
             }
           }
         }
-
-        logger.internal(
-            'Поток ответов завершен, всего получено сообщений: $count');
-      } catch (e, stackTrace) {
-        logger.error('Ошибка при обработке серверного стрима',
-            error: e, stackTrace: stackTrace);
-
-        if (!controller.isClosed) {
-          controller.addError(e, stackTrace);
-        }
-
-        // 🔥 ИСПРАВЛЕНИЕ: Освобождаем ресурсы при ошибке
-        try {
-          logger.internal('Закрытие ServerStreamCaller после ошибки');
-          await caller.close();
-        } catch (closeError) {
-          logger.error('Ошибка при закрытии caller', error: closeError);
-        }
-
-        // ❌ НЕ ЗАКРЫВАЕМ КОНТРОЛЛЕР ЗДЕСЬ! Ошибка уже добавлена
-        // Контроллер закроется автоматически после проагирования ошибки
-        return; // Выходим из catch блока
-      } finally {
-        // Освобождаем ресурсы только в случае успешного завершения
-        try {
-          logger.internal('Закрытие ServerStreamCaller');
-          await caller.close();
-        } catch (e) {
-          logger.error('Ошибка при закрытии caller', error: e);
-        }
-
-        // Закрываем контроллер, если он еще открыт
-        if (!controller.isClosed) {
-          await controller.close();
-        }
       }
-    }();
 
-    // Возвращаем стрим из контроллера
-    return controller.stream;
+      throw Exception(
+          'gRPC error ${RpcStatus.UNAVAILABLE}: No response received');
+    } finally {
+      await processor.close();
+    }
+  }
+
+  /// 🚀 Универсальный server stream
+  ///
+  /// Автоматически определяет режим работы:
+  /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  ///
+  /// Примеры:
+  /// ```dart
+  /// // Сериализация
+  /// await for (final response in endpoint.serverStream<MyRequest, MyResponse>(
+  ///   serviceName: 'Service',
+  ///   methodName: 'StreamMethod',
+  ///   requestCodec: myRequestCodec,
+  ///   responseCodec: myResponseCodec,
+  ///   request: MyRequest('data'),
+  /// )) {
+  ///   print(response.value);
+  /// }
+  ///
+  /// // Zero-copy (только для RpcInMemoryTransport)
+  /// await for (final response in endpoint.serverStream<String, String>(
+  ///   serviceName: 'Service',
+  ///   methodName: 'StreamMethod',
+  ///   request: 'hello',
+  ///   // кодеки не указываем → zero-copy
+  /// )) {
+  ///   print(response);
+  /// }
+  /// ```
+  Stream<TResponse>
+      serverStream<TRequest extends Object, TResponse extends Object>({
+    required String serviceName,
+    required String methodName,
+    required TRequest request,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+    RpcContext? context,
+  }) {
+    // Проверяем активность эндпоинта
+    if (!isActive) {
+      throw StateError(
+          'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
+    }
+
+    final isZeroCopy = requestCodec == null && responseCodec == null;
+
+    // Zero-copy режим: требуется RpcInMemoryTransport
+    if (isZeroCopy && transport is! RpcInMemoryTransport) {
+      throw ArgumentError('Zero-copy режим требует RpcInMemoryTransport. '
+          'Для сетевых транспортов передайте кодеки.');
+    }
+
+    // Режим сериализации: кодеки обязательны
+    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
+      throw ArgumentError('Кодеки обязательны для режима сериализации. '
+          'Для zero-copy не передавайте кодеки (null).');
+    }
+
+    logger.internal(
+        'Создание ${isZeroCopy ? "zero-copy" : "serialized"} server stream для $serviceName/$methodName');
+
+    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
+    final baseContext = _ensureContext(context);
+    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
+
+    // Используем универсальный ServerStreamCaller
+    final caller = ServerStreamCaller<TRequest, TResponse>(
+      transport: transport,
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      context: enhancedContext,
+      logger: logger,
+    );
+
+    // Используем удобный метод call для автоматического управления ресурсами
+    return caller.call(request);
   }
 
   /// Создает client stream для отправки множественных запросов и получения одного ответа
   Future<R> Function(Stream<C>)
-      clientStream<C extends IRpcSerializable, R extends IRpcSerializable>({
+      clientStream<C extends Object, R extends Object>({
     required String serviceName,
     required String methodName,
-    required IRpcCodec<C> requestCodec,
-    required IRpcCodec<R> responseCodec,
+    IRpcCodec<C>? requestCodec,
+    IRpcCodec<R>? responseCodec,
     RpcContext? context,
   }) {
     logger.internal(
@@ -309,13 +356,12 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
   }
 
   /// Создает bidirectional stream builder
-  Stream<R> bidirectionalStream<C extends IRpcSerializable,
-      R extends IRpcSerializable>({
+  Stream<R> bidirectionalStream<C extends Object, R extends Object>({
     required String serviceName,
     required String methodName,
-    required IRpcCodec<C> requestCodec,
-    required IRpcCodec<R> responseCodec,
     required Stream<C> requests,
+    IRpcCodec<C>? requestCodec,
+    IRpcCodec<R>? responseCodec,
     RpcContext? context,
   }) {
     logger

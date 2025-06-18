@@ -4,27 +4,32 @@
 
 part of '_index.dart';
 
-/// Базовый процессор для обработки стримов без прямой зависимости от транспорта.
+/// Универсальный процессор для обработки стримов.
 ///
-/// Принимает поток входящих сообщений от endpoint'а и обрабатывает их,
-/// предоставляя унифицированный интерфейс для всех типов RPC стримов.
+/// Автоматически определяет режим работы:
+/// - Zero-copy для RpcInMemoryTransport (кодеки не нужны)
+/// - Сериализация для сетевых транспортов (кодеки обязательны)
 ///
 /// Преимущества:
 /// - Нет race condition с транспортом
 /// - Переиспользование логики между типами стримов
 /// - Четкое разделение ответственности
-final class StreamProcessor<TRequest extends IRpcSerializable,
-    TResponse extends IRpcSerializable> {
+/// - Работа с любыми типами объектов (не только IRpcSerializable)
+/// - Автоматическая оптимизация для in-memory транспорта
+final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final RpcLogger? _logger;
   final IRpcTransport _transport;
   final int _streamId;
   final String _serviceName;
   final String _methodName;
-  final IRpcCodec<TRequest> _requestCodec;
-  final IRpcCodec<TResponse> _responseCodec;
+  final IRpcCodec<TRequest>? _requestCodec;
+  final IRpcCodec<TResponse>? _responseCodec;
 
-  /// Парсер для обработки фрагментированных сообщений
-  late final RpcMessageParser _parser;
+  /// Парсер для обработки фрагментированных сообщений (только для сериализации)
+  RpcMessageParser? _parser;
+
+  /// Режим работы процессора
+  final bool _isZeroCopy;
 
   /// Контроллер потока входящих запросов
   final StreamController<TRequest> _requestController =
@@ -40,6 +45,9 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
   /// Флаг активности процессора
   bool _isActive = true;
 
+  /// Флаг отправки начальных метаданных
+  bool _initialMetadataSent = false;
+
   /// Путь метода в формате /ServiceName/MethodName
   late final String _methodPath;
 
@@ -48,21 +56,40 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
     required int streamId,
     required String serviceName,
     required String methodName,
-    required IRpcCodec<TRequest> requestCodec,
-    required IRpcCodec<TResponse> responseCodec,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     RpcLogger? logger,
   })  : _transport = transport,
         _streamId = streamId,
         _serviceName = serviceName,
         _methodName = methodName,
+        _isZeroCopy = requestCodec == null && responseCodec == null,
         _requestCodec = requestCodec,
         _responseCodec = responseCodec,
         _logger = logger?.child('StreamProcessor') {
-    _parser = RpcMessageParser(logger: _logger);
+    // Валидация: для режима сериализации кодеки обязательны
+    if (!_isZeroCopy) {
+      if (_requestCodec == null || _responseCodec == null) {
+        throw ArgumentError(
+          'Кодеки обязательны для режима сериализации. '
+          'Для zero-copy не передавайте кодеки (null).',
+        );
+      }
+      _parser = RpcMessageParser(logger: _logger);
+    } else {
+      // Zero-copy режим: требуется RpcInMemoryTransport
+      if (transport is! RpcInMemoryTransport) {
+        throw ArgumentError(
+          'Zero-copy режим требует RpcInMemoryTransport. '
+          'Для сетевых транспортов передайте кодеки.',
+        );
+      }
+    }
+
     _methodPath = '/$_serviceName/$_methodName';
 
     _logger?.internal(
-        'Создан StreamProcessor для $_methodPath [streamId: $_streamId]');
+        'Создан ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor для $_methodPath [streamId: $_streamId]');
     _setupResponseHandler();
   }
 
@@ -71,6 +98,9 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
 
   /// Активен ли процессор
   bool get isActive => _isActive;
+
+  /// Режим zero-copy
+  bool get isZeroCopy => _isZeroCopy;
 
   /// Настраивает обработку исходящих ответов
   void _setupResponseHandler() {
@@ -81,15 +111,28 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
         _logger?.internal(
             'Отправка ответа для $_methodPath [streamId: $_streamId]');
         try {
-          final serialized = _responseCodec.serialize(response);
-          _logger?.internal(
-              'Ответ сериализован, размер: ${serialized.length} байт [streamId: $_streamId]');
+          if (_isZeroCopy) {
+            // Zero-copy путь
+            _logger
+                ?.internal('Zero-copy отправка ответа [streamId: $_streamId]');
+            await (_transport as RpcInMemoryTransport).sendDirectObject(
+              _streamId,
+              response,
+            );
+            _logger?.internal(
+                'Zero-copy ответ отправлен для $_methodPath [streamId: $_streamId]');
+          } else {
+            // Сериализация для сетевых транспортов
+            final serialized = _responseCodec!.serialize(response);
+            _logger?.internal(
+                'Ответ сериализован, размер: ${serialized.length} байт [streamId: $_streamId]');
 
-          final framedMessage = RpcMessageFrame.encode(serialized);
-          await _transport.sendMessage(_streamId, framedMessage);
+            final framedMessage = RpcMessageFrame.encode(serialized);
+            await _transport.sendMessage(_streamId, framedMessage);
 
-          _logger?.internal(
-              'Ответ отправлен для $_methodPath [streamId: $_streamId]');
+            _logger?.internal(
+                'Ответ отправлен для $_methodPath [streamId: $_streamId]');
+          }
         } catch (e, stackTrace) {
           // Проверяем, не закрыт ли транспорт
           if (e.toString().contains('Transport is closed') ||
@@ -134,58 +177,133 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
   /// Привязывает процессор к потоку сообщений от endpoint'а
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
     if (_messageSubscription != null) {
-      _logger?.warning('StreamProcessor уже привязан к потоку сообщений');
+      _logger?.logRpcWarning(
+        message: 'Stream processor already bound to message stream',
+        methodPath: _methodPath,
+        streamId: _streamId,
+      );
       return;
     }
 
-    _logger?.internal(
-        'Привязка к потоку сообщений для $_methodPath [streamId: $_streamId]');
+    _logger?.logStreamBound(
+      methodPath: _methodPath,
+      streamId: _streamId,
+    );
 
     _messageSubscription = messageStream.listen(
       _handleMessage,
       onError: (error, stackTrace) {
-        _logger?.error('Ошибка в потоке сообщений',
-            error: error, stackTrace: stackTrace);
+        _logger?.logRpcError(
+          operation: 'message_stream_listen',
+          error: error,
+          stackTrace: stackTrace,
+          methodPath: _methodPath,
+          streamId: _streamId,
+        );
         if (!_requestController.isClosed) {
           _requestController.addError(error, stackTrace);
         }
       },
       onDone: () {
-        _logger?.internal(
-            'Поток сообщений завершен для $_methodPath [streamId: $_streamId]');
+        _logger?.logStreamFinished(
+          methodPath: _methodPath,
+          streamId: _streamId,
+          reason: 'message_stream_completed',
+        );
         if (!_requestController.isClosed) {
           _requestController.close();
         }
       },
     );
+
+    // НЕ отправляем начальные метаданные при подключении
+    // Они будут отправлены при первом успешном ответе
+    // или пропущены при ошибке (error response отправляется напрямую)
   }
 
   /// Обрабатывает входящее сообщение
   void _handleMessage(RpcTransportMessage message) {
     if (!_isActive) return;
 
-    _logger?.internal(
-        'Обработка сообщения [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}, isEndOfStream: ${message.isEndOfStream}]');
+    _logger?.logMessageReceived(
+      streamId: message.streamId,
+      messageType: message.isMetadataOnly
+          ? 'metadata'
+          : message.isDirect
+              ? 'zero_copy'
+              : 'serialized',
+      payloadSize: message.payload?.length,
+      isDirectPayload: message.isDirect,
+    );
 
-    // Обрабатываем сообщения с данными
-    if (!message.isMetadataOnly && message.payload != null) {
+    // Zero-copy: обрабатываем прямой объект
+    if (message.isDirect && message.directPayload != null) {
+      _processDirectMessage(message.directPayload!);
+    }
+    // Обрабатываем сообщения с данными (стандартная сериализация)
+    else if (!message.isMetadataOnly && message.payload != null) {
       _processDataMessage(message.payload!);
     }
 
     // Обрабатываем конец потока
     if (message.isEndOfStream) {
-      _logger?.internal(
-          'Получен END_STREAM, закрываем поток запросов [streamId: $_streamId]');
+      _logger?.logStreamFinished(
+        methodPath: _methodPath,
+        streamId: _streamId,
+        reason: 'end_of_stream_received',
+      );
       if (!_requestController.isClosed) {
         _requestController.close();
       }
     }
   }
 
-  /// Обрабатывает сообщение с данными
+  /// Zero-copy: обрабатывает прямой объект без сериализации
+  void _processDirectMessage(Object directPayload) {
+    try {
+      final request = directPayload as TRequest;
+
+      if (!_requestController.isClosed) {
+        _requestController.add(request);
+      } else {
+        _logger?.logRpcWarning(
+          message: 'Cannot add request to closed controller (zero-copy)',
+          methodPath: _methodPath,
+          streamId: _streamId,
+          metadata: {'transport_type': 'zero_copy'},
+        );
+      }
+    } catch (e, stackTrace) {
+      _logger?.logRpcError(
+        operation: 'zero_copy_direct_object_processing',
+        error: e,
+        stackTrace: stackTrace,
+        methodPath: _methodPath,
+        streamId: _streamId,
+        metadata: {'object_type': directPayload.runtimeType.toString()},
+      );
+      if (!_requestController.isClosed) {
+        _requestController.addError(e, stackTrace);
+      }
+    }
+  }
+
+  /// Обрабатывает сообщение с данными (только для режима сериализации)
   void _processDataMessage(List<int> messageBytes) {
-    _logger?.internal(
-        'Получено сообщение размером: ${messageBytes.length} байт [streamId: $_streamId]');
+    if (_isZeroCopy) {
+      _logger?.logRpcWarning(
+        message: 'Serialized message received in zero-copy mode, ignoring',
+        methodPath: _methodPath,
+        streamId: _streamId,
+      );
+      return;
+    }
+
+    _logger?.logMessageReceived(
+      streamId: _streamId,
+      messageType: 'serialized_data',
+      payloadSize: messageBytes.length,
+    );
 
     try {
       // Конвертируем List<int> в Uint8List для парсера
@@ -193,37 +311,45 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
           ? messageBytes
           : Uint8List.fromList(messageBytes);
 
-      final messages = _parser(uint8Message);
-      _logger?.internal(
-          'Парсер извлек ${messages.length} сообщений из фрейма [streamId: $_streamId]');
+      final messages = _parser!(uint8Message);
 
       for (var msgBytes in messages) {
         try {
-          _logger?.internal(
-              'Десериализация запроса размером ${msgBytes.length} байт [streamId: $_streamId]');
-          final request = _requestCodec.deserialize(msgBytes);
+          final request = _requestCodec!.deserialize(msgBytes);
 
           if (!_requestController.isClosed) {
             _requestController.add(request);
-            _logger?.internal(
-                'Запрос десериализован и добавлен в поток запросов [streamId: $_streamId]');
           } else {
-            _logger?.warning(
-                'Не могу добавить запрос в закрытый контроллер [streamId: $_streamId]');
+            _logger?.logRpcWarning(
+              message: 'Cannot add request to closed controller',
+              methodPath: _methodPath,
+              streamId: _streamId,
+              metadata: {'message_size': msgBytes.length},
+            );
           }
         } catch (e, stackTrace) {
-          _logger?.error(
-              'Ошибка при десериализации запроса [streamId: $_streamId]',
-              error: e,
-              stackTrace: stackTrace);
+          _logger?.logRpcError(
+            operation: 'request_deserialization',
+            error: e,
+            stackTrace: stackTrace,
+            methodPath: _methodPath,
+            streamId: _streamId,
+            metadata: {'message_size': msgBytes.length},
+          );
           if (!_requestController.isClosed) {
             _requestController.addError(e, stackTrace);
           }
         }
       }
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при парсинге сообщения [streamId: $_streamId]',
-          error: e, stackTrace: stackTrace);
+      _logger?.logRpcError(
+        operation: 'message_parsing',
+        error: e,
+        stackTrace: stackTrace,
+        methodPath: _methodPath,
+        streamId: _streamId,
+        metadata: {'message_size': messageBytes.length},
+      );
       if (!_requestController.isClosed) {
         _requestController.addError(e, stackTrace);
       }
@@ -259,20 +385,44 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
     }
 
     try {
-      final trailers = RpcMetadata.forTrailer(statusCode, message: message);
-      await _transport.sendMetadata(_streamId, trailers, endStream: true);
-      _logger?.internal(
-          'Трейлер с ошибкой отправлен клиенту [streamId: $_streamId]');
+      // Если начальные метаданные не были отправлены, отправляем error response сразу
+      if (!_initialMetadataSent) {
+        _logger?.internal(
+            'Отправка ошибки без начальных метаданных [streamId: $_streamId]');
+        // Создаем комбинированные метаданные: начальный response + error trailer
+        final errorHeaders = [
+          RpcHeader(':status', '200'), // HTTP 200 для gRPC
+          RpcHeader(
+              RpcConstants.CONTENT_TYPE_HEADER, RpcConstants.GRPC_CONTENT_TYPE),
+          RpcHeader(RpcConstants.GRPC_STATUS_HEADER, statusCode.toString()),
+        ];
+
+        if (message.isNotEmpty) {
+          errorHeaders
+              .add(RpcHeader(RpcConstants.GRPC_MESSAGE_HEADER, message));
+        }
+
+        final errorMetadata = RpcMetadata(errorHeaders);
+        await _transport.sendMetadata(_streamId, errorMetadata,
+            endStream: true);
+        _initialMetadataSent = true;
+      } else {
+        // Начальные метаданные уже отправлены, отправляем только trailer
+        final trailers = RpcMetadata.forTrailer(statusCode, message: message);
+        await _transport.sendMetadata(_streamId, trailers, endStream: true);
+      }
+
+      _logger?.internal('Ошибка отправлена клиенту [streamId: $_streamId]');
     } catch (e, stackTrace) {
       // Проверяем, не закрыт ли транспорт
       if (e.toString().contains('Transport is closed') ||
           e.toString().contains('closed')) {
         _logger?.internal(
-            'Транспорт закрыт, пропускаем отправку трейлера с ошибкой [streamId: $_streamId]');
+            'Транспорт закрыт, пропускаем отправку ошибки [streamId: $_streamId]');
         return;
       }
       _logger?.error(
-          'Ошибка при отправке трейлера с ошибкой [streamId: $_streamId]',
+          'Ошибка при отправке ошибки клиенту [streamId: $_streamId]',
           error: e,
           stackTrace: stackTrace);
     }
@@ -311,31 +461,36 @@ final class StreamProcessor<TRequest extends IRpcSerializable,
   }
 }
 
-/// Базовый процессор для клиентских вызовов RPC стримов.
+/// Универсальный процессор для клиентских вызовов RPC стримов.
 ///
-/// Предоставляет единую основу для всех типов клиентских стримов,
-/// избегая дублирования логики и inner dependencies.
+/// Автоматически определяет режим работы:
+/// - Zero-copy для RpcInMemoryTransport (кодеки не нужны)
+/// - Сериализация для сетевых транспортов (кодеки обязательны)
 ///
 /// Преимущества:
 /// - Переиспользование кода между типами стримов
 /// - Отсутствие race condition
 /// - Четкое разделение ответственности
 /// - Тестируемость без внепроцессных зависимостей
-final class CallProcessor<TRequest extends IRpcSerializable,
-    TResponse extends IRpcSerializable> {
+/// - Работа с любыми типами объектов (не только IRpcSerializable)
+/// - Автоматическая оптимизация для in-memory транспорта
+final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   final RpcLogger? _logger;
   final IRpcTransport _transport;
   final int _streamId;
   final String _serviceName;
   final String _methodName;
-  final IRpcCodec<TRequest> _requestCodec;
-  final IRpcCodec<TResponse> _responseCodec;
+  final IRpcCodec<TRequest>? _requestCodec;
+  final IRpcCodec<TResponse>? _responseCodec;
 
   /// RPC контекст для передачи метаданных, таймаутов и отмены
   final RpcContext? _context;
 
-  /// Парсер для обработки фрагментированных сообщений
-  late final RpcMessageParser _parser;
+  /// Парсер для обработки фрагментированных сообщений (только для сериализации)
+  RpcMessageParser? _parser;
+
+  /// Режим работы процессора
+  final bool _isZeroCopy;
 
   /// Контроллер потока исходящих запросов
   final StreamController<TRequest> _requestController =
@@ -364,23 +519,42 @@ final class CallProcessor<TRequest extends IRpcSerializable,
     required IRpcTransport transport,
     required String serviceName,
     required String methodName,
-    required IRpcCodec<TRequest> requestCodec,
-    required IRpcCodec<TResponse> responseCodec,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     RpcLogger? logger,
   })  : _transport = transport,
         _streamId = transport.createStream(),
         _serviceName = serviceName,
         _methodName = methodName,
+        _isZeroCopy = requestCodec == null && responseCodec == null,
         _requestCodec = requestCodec,
         _responseCodec = responseCodec,
         _context = context,
         _logger = logger?.child('CallProcessor') {
-    _parser = RpcMessageParser(logger: _logger);
+    // Валидация: для режима сериализации кодеки обязательны
+    if (!_isZeroCopy) {
+      if (_requestCodec == null || _responseCodec == null) {
+        throw ArgumentError(
+          'Кодеки обязательны для режима сериализации. '
+          'Для zero-copy не передавайте кодеки (null).',
+        );
+      }
+      _parser = RpcMessageParser(logger: _logger);
+    } else {
+      // Zero-copy режим: требуется RpcInMemoryTransport
+      if (transport is! RpcInMemoryTransport) {
+        throw ArgumentError(
+          'Zero-copy режим требует RpcInMemoryTransport. '
+          'Для сетевых транспортов передайте кодеки.',
+        );
+      }
+    }
+
     _methodPath = '/$_serviceName/$_methodName';
 
     _logger?.internal(
-        'Создан CallProcessor для $_methodPath [streamId: $_streamId]');
+        'Создан ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor для $_methodPath [streamId: $_streamId]');
 
     // Проверяем контекст перед началом работы
     _checkContextBeforeCall();
@@ -398,6 +572,9 @@ final class CallProcessor<TRequest extends IRpcSerializable,
   /// ID стрима
   int get streamId => _streamId;
 
+  /// Режим zero-copy
+  bool get isZeroCopy => _isZeroCopy;
+
   /// Настраивает обработку исходящих запросов
   void _setupRequestHandler() {
     _requestSubscription = _requestController.stream.listen(
@@ -413,15 +590,29 @@ final class CallProcessor<TRequest extends IRpcSerializable,
 
           _logger?.internal(
               'Отправка запроса для $_methodPath [streamId: $_streamId]');
-          final serialized = _requestCodec.serialize(request);
-          _logger?.internal(
-              'Запрос сериализован, размер: ${serialized.length} байт [streamId: $_streamId]');
 
-          final framedMessage = RpcMessageFrame.encode(serialized);
-          await _transport.sendMessage(_streamId, framedMessage);
+          if (_isZeroCopy) {
+            // Zero-copy путь
+            _logger
+                ?.internal('Zero-copy отправка запроса [streamId: $_streamId]');
+            await (_transport as RpcInMemoryTransport).sendDirectObject(
+              _streamId,
+              request,
+            );
+            _logger?.internal(
+                'Zero-copy запрос отправлен для $_methodPath [streamId: $_streamId]');
+          } else {
+            // Сериализация для сетевых транспортов
+            final serialized = _requestCodec!.serialize(request);
+            _logger?.internal(
+                'Запрос сериализован, размер: ${serialized.length} байт [streamId: $_streamId]');
 
-          _logger?.internal(
-              'Запрос отправлен для $_methodPath [streamId: $_streamId]');
+            final framedMessage = RpcMessageFrame.encode(serialized);
+            await _transport.sendMessage(_streamId, framedMessage);
+
+            _logger?.internal(
+                'Запрос отправлен для $_methodPath [streamId: $_streamId]');
+          }
         } catch (e, stackTrace) {
           _logger?.error('Ошибка при отправке запроса [streamId: $_streamId]',
               error: e, stackTrace: stackTrace);
@@ -552,7 +743,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
     if (!_isActive) return;
 
     _logger?.internal(
-        'Обработка ответа [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}]');
+        'Обработка ответа [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}, isDirect: ${message.isDirect}]');
 
     try {
       // Обрабатываем метаданные
@@ -569,8 +760,12 @@ final class CallProcessor<TRequest extends IRpcSerializable,
         }
       }
 
-      // Обрабатываем сообщения с данными
-      if (!message.isMetadataOnly && message.payload != null) {
+      // Zero-copy: обрабатываем прямой объект
+      if (message.isDirect && message.directPayload != null) {
+        _processDirectResponse(message.directPayload!);
+      }
+      // Обрабатываем сообщения с данными (стандартная сериализация)
+      else if (!message.isMetadataOnly && message.payload != null) {
         _processResponseData(message.payload!);
       }
 
@@ -591,8 +786,45 @@ final class CallProcessor<TRequest extends IRpcSerializable,
     }
   }
 
-  /// Обрабатывает данные ответа
+  /// Zero-copy: обрабатывает прямой объект ответа без сериализации
+  void _processDirectResponse(Object directPayload) {
+    _logger?.internal(
+        'Zero-copy обработка прямого ответа [streamId: $_streamId, type: ${directPayload.runtimeType}]');
+
+    try {
+      final response = directPayload as TResponse;
+      final rpcMessage = RpcMessage.withPayload<TResponse>(response);
+
+      if (!_responseController.isClosed) {
+        _responseController.add(rpcMessage);
+        _logger?.internal(
+            'Zero-copy ответ добавлен в поток ответов [streamId: $_streamId]');
+      } else {
+        _logger?.warning(
+            'Zero-copy: не могу добавить ответ в закрытый контроллер [streamId: $_streamId]');
+      }
+    } catch (e, stackTrace) {
+      _logger?.error(
+          'Zero-copy ошибка при обработке прямого ответа [streamId: $_streamId]',
+          error: e,
+          stackTrace: stackTrace);
+      if (!_responseController.isClosed) {
+        _responseController.addError(e, stackTrace);
+      }
+    }
+  }
+
+  /// Обрабатывает данные ответа (только для режима сериализации)
   void _processResponseData(List<int> messageBytes) {
+    if (_isZeroCopy) {
+      _logger?.logRpcWarning(
+        message: 'Serialized response received in zero-copy mode, ignoring',
+        methodPath: _methodPath,
+        streamId: _streamId,
+      );
+      return;
+    }
+
     _logger?.internal(
         'Получен ответ размером: ${messageBytes.length} байт [streamId: $_streamId]');
 
@@ -601,7 +833,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
           ? messageBytes
           : Uint8List.fromList(messageBytes);
 
-      final messages = _parser(uint8Message);
+      final messages = _parser!(uint8Message);
       _logger?.internal(
           'Парсер извлек ${messages.length} сообщений из фрейма [streamId: $_streamId]');
 
@@ -609,7 +841,7 @@ final class CallProcessor<TRequest extends IRpcSerializable,
         try {
           _logger?.internal(
               'Десериализация ответа размером ${msgBytes.length} байт [streamId: $_streamId]');
-          final response = _responseCodec.deserialize(msgBytes);
+          final response = _responseCodec!.deserialize(msgBytes);
 
           final rpcMessage = RpcMessage.withPayload<TResponse>(response);
 

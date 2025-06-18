@@ -84,6 +84,54 @@ class RpcException implements Exception {
   String toString() => 'RpcException: $message';
 }
 
+/// 🚀 ZERO-COPY: Регистрация метода без IRpcSerializable ограничений
+final class RpcZeroCopyMethodRegistration<TRequest extends Object,
+    TResponse extends Object> {
+  final String name;
+  final RpcMethodType type;
+  final Function handler;
+  final String description;
+
+  const RpcZeroCopyMethodRegistration({
+    required this.name,
+    required this.type,
+    required this.handler,
+    required this.description,
+  });
+
+  /// Безопасный вызов unary handler'а с типизацией и контекстом
+  Future<TResponse> callUnaryHandler(
+      RpcContext context, TRequest request) async {
+    final typedHandler =
+        handler as Future<TResponse> Function(TRequest, {RpcContext? context});
+    return await typedHandler(request, context: context);
+  }
+
+  /// Безопасный вызов server stream handler'а с типизацией и контекстом
+  Stream<TResponse> callServerStreamHandler(
+      RpcContext context, TRequest request) {
+    final typedHandler =
+        handler as Stream<TResponse> Function(TRequest, {RpcContext? context});
+    return typedHandler(request, context: context);
+  }
+
+  /// Безопасный вызов client stream handler'а с типизацией и контекстом
+  Future<TResponse> callClientStreamHandler(
+      RpcContext context, Stream<TRequest> requests) async {
+    final typedHandler = handler as Future<TResponse> Function(Stream<TRequest>,
+        {RpcContext? context});
+    return await typedHandler(requests, context: context);
+  }
+
+  /// Безопасный вызов bidirectional stream handler'а с типизацией и контекстом
+  Stream<TResponse> callBidirectionalStreamHandler(
+      RpcContext context, Stream<TRequest> requests) {
+    final typedHandler = handler as Stream<TResponse> Function(Stream<TRequest>,
+        {RpcContext? context});
+    return typedHandler(requests, context: context);
+  }
+}
+
 /// Интерфейс для middleware
 abstract class IRpcMiddleware {
   Future<dynamic> processRequest(

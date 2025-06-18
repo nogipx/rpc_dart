@@ -52,9 +52,6 @@ abstract base class RpcEndpointBase {
     _middlewares.clear();
 
     try {
-      // Даем небольшую задержку для завершения обработки текущих запросов
-      await Future.delayed(Duration(milliseconds: 1));
-
       // Закрываем транспорт и ожидаем завершения с таймаутом
       await _transport.close().timeout(
         Duration(seconds: 5),

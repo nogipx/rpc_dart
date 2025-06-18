@@ -4,34 +4,39 @@
 
 part of '../_index.dart';
 
-/// Клиентская часть клиентского стриминга на основе CallProcessor.
+/// 🚀 Универсальная клиентская часть клиентского стриминга
+///
+/// Автоматически определяет режим работы:
+/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
+/// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
 ///
 /// Позволяет отправить поток запросов и получить ОДИН ответ.
 /// Соблюдает семантику клиентского стрима - можно отправлять много запросов,
 /// но ответ только один после завершения отправки.
 ///
-/// Пример использования:
+/// Примеры использования:
 /// ```dart
-/// final client = ClientStreamCaller<String, String>(
+/// // Сериализация
+/// final client = ClientStreamCaller<MyRequest, MyResponse>(
 ///   transport: clientTransport,
 ///   serviceName: "DataService",
 ///   methodName: "ProcessData",
-///   requestCodec: stringCodec,
-///   responseCodec: stringCodec,
-///   context: context, // Опциональный контекст
+///   requestCodec: myRequestCodec,
+///   responseCodec: myResponseCodec,
+///   context: context,
 /// );
 ///
-/// // Отправляем несколько запросов
-/// for (int i = 0; i < 5; i++) {
-///   await client.send("Часть данных #$i");
-/// }
-///
-/// // Завершаем отправку и получаем ОДИН итоговый ответ
-/// final response = await client.finishSending();
-/// print("Получен итоговый ответ: $response");
+/// // Zero-copy (только для RpcInMemoryTransport)
+/// final client = ClientStreamCaller<String, String>(
+///   transport: inMemoryTransport,
+///   serviceName: "DataService",
+///   methodName: "ProcessData",
+///   // кодеки не указываем → автоматически zero-copy
+///   context: context,
+/// );
 /// ```
-final class ClientStreamCaller<TRequest extends IRpcSerializable,
-    TResponse extends IRpcSerializable> {
+final class ClientStreamCaller<TRequest extends Object,
+    TResponse extends Object> {
   late final RpcLogger? _logger;
 
   /// Внутренний процессор стрима
@@ -46,27 +51,41 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
   /// Флаг завершения отправки
   bool _sendingFinished = false;
 
-  /// Создает клиент клиентского стриминга
+  /// Создает универсальный клиент клиентского стриминга
   ///
   /// [transport] Транспортный уровень
   /// [serviceName] Имя сервиса (например, "DataService")
   /// [methodName] Имя метода (например, "ProcessData")
-  /// [requestCodec] Кодек для сериализации запросов
-  /// [responseCodec] Кодек для десериализации ответа
+  /// [requestCodec] Кодек для сериализации запросов (null для zero-copy)
+  /// [responseCodec] Кодек для десериализации ответа (null для zero-copy)
   /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
   /// [logger] Опциональный логгер
   ClientStreamCaller({
     required IRpcTransport transport,
     required String serviceName,
     required String methodName,
-    required IRpcCodec<TRequest> requestCodec,
-    required IRpcCodec<TResponse> responseCodec,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     RpcLogger? logger,
   }) {
+    final isZeroCopy = requestCodec == null && responseCodec == null;
+
+    // Zero-copy режим: требуется RpcInMemoryTransport
+    if (isZeroCopy && transport is! RpcInMemoryTransport) {
+      throw ArgumentError('Zero-copy режим требует RpcInMemoryTransport. '
+          'Для сетевых транспортов передайте кодеки.');
+    }
+
+    // Режим сериализации: кодеки обязательны
+    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
+      throw ArgumentError('Кодеки обязательны для режима сериализации. '
+          'Для zero-copy не передавайте кодеки (null).');
+    }
+
     _logger = logger?.child('ClientCaller');
-    _logger
-        ?.internal('Создание ClientStreamCaller для $serviceName.$methodName');
+    _logger?.internal(
+        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamCaller для $serviceName.$methodName');
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,
@@ -208,6 +227,35 @@ final class ClientStreamCaller<TRequest extends IRpcSerializable,
       // Освобождаем ресурсы и закрываем транспорт
       unawaited(close());
       rethrow;
+    }
+  }
+
+  /// Выполняет клиентский стрим вызов (удобный метод для zero-copy)
+  ///
+  /// Отправляет поток запросов и возвращает единственный ответ.
+  /// Автоматически закрывает ресурсы после завершения.
+  ///
+  /// [requests] Поток запросов для отправки
+  /// Возвращает единственный [TResponse] ответ
+  Future<TResponse> call(Stream<TRequest> requests) async {
+    _logger?.internal('Выполнение клиентского стрим вызова');
+
+    try {
+      // Отправляем поток запросов
+      await for (final request in requests) {
+        _logger?.internal('Отправка запроса: $request');
+        await send(request);
+      }
+
+      _logger?.internal('Поток запросов завершен, ожидаем ответ');
+
+      // Завершаем отправку и получаем ответ
+      return await finishSending();
+    } catch (e) {
+      _logger?.error('Ошибка при клиентском стрим вызове', error: e);
+      rethrow;
+    } finally {
+      await close();
     }
   }
 
