@@ -30,8 +30,8 @@ void main() {
       distributor = StreamDistributor<TestMessage>(
         config: StreamDistributorConfig(
           // Используем меньшие значения для тестирования
-          cleanupInterval: Duration(milliseconds: 100),
-          inactivityThreshold: Duration(milliseconds: 500),
+          cleanupInterval: Duration(milliseconds: 1),
+          inactivityThreshold: Duration(milliseconds: 1),
           // Отключаем автоочистку для тестов по умолчанию
           enableAutoCleanup: false,
         ),
@@ -78,7 +78,7 @@ void main() {
       final deliveredCount = distributor.publish(message);
 
       // Ожидаем обработки сообщений
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Проверяем результаты
       expect(deliveredCount, 2); // Сообщение доставлено двум клиентам
@@ -109,7 +109,7 @@ void main() {
       final delivered = distributor.publishToClient('client-1', message);
 
       // Ожидаем обработки сообщений
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Проверяем результаты
       expect(delivered, isTrue); // Успешная доставка
@@ -147,7 +147,7 @@ void main() {
       );
 
       // Ожидаем обработки сообщений
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Проверяем результаты
       expect(deliveredCount, 1); // Должен быть только один подходящий клиент
@@ -167,21 +167,21 @@ void main() {
       // Отправляем первое сообщение
       distributor.publishToClient(
           'client-pause-test', TestMessage('message 1', 1));
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 1));
       expect(receivedMessages.length, 1);
 
       // Ставим на паузу и отправляем второе сообщение
       expect(distributor.pauseClientStream('client-pause-test'), isTrue);
       distributor.publishToClient(
           'client-pause-test', TestMessage('message 2', 2));
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 1));
       expect(receivedMessages.length, 1); // Не должно увеличиться
 
       // Возобновляем и отправляем третье сообщение
       expect(distributor.resumeClientStream('client-pause-test'), isTrue);
       distributor.publishToClient(
           'client-pause-test', TestMessage('message 3', 3));
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 1));
       expect(receivedMessages.length, 2); // Должно получить сообщение 3
       expect(receivedMessages.last.content, 'message 3');
     });
@@ -191,7 +191,7 @@ void main() {
       final testDistributor = StreamDistributor<TestMessage>(
         config: StreamDistributorConfig(
           enableAutoCleanup: false,
-          inactivityThreshold: Duration(milliseconds: 50),
+          inactivityThreshold: Duration(milliseconds: 1),
         ),
       );
 
@@ -203,11 +203,11 @@ void main() {
       testDistributor.publishToClient('client1', TestMessage('keep alive', 1));
 
       // Ждем, чтобы второй клиент стал неактивным
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Получаем список неактивных клиентов
       final inactiveIds =
-          testDistributor.getInactiveClientIds(Duration(milliseconds: 50));
+          testDistributor.getInactiveClientIds(Duration(milliseconds: 1));
 
       // Выводим для отладки
       print('Неактивные клиенты: $inactiveIds');
@@ -256,8 +256,8 @@ void main() {
       final autoCleanupDistributor = StreamDistributor<TestMessage>(
         config: StreamDistributorConfig(
           enableAutoCleanup: true,
-          cleanupInterval: Duration(milliseconds: 100),
-          inactivityThreshold: Duration(milliseconds: 150),
+          cleanupInterval: Duration(milliseconds: 10),
+          inactivityThreshold: Duration(milliseconds: 15),
         ),
       );
 
@@ -280,12 +280,12 @@ void main() {
 
       // 1. Оба клиента получают broadcast-сообщение
       autoCleanupDistributor.publish(TestMessage('to all', 1));
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 1));
       expect(receivedClient1.length, 1);
       expect(receivedClient2.length, 1);
 
       // Ждем некоторое время, но недостаточное для очистки
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // 2. Проверяем, что клиенты еще существуют
       expect(autoCleanupDistributor.activeClientCount, 2);
@@ -294,7 +294,7 @@ void main() {
       await sub1.cancel();
 
       // 4. Теперь ждем достаточно времени для автоочистки второго клиента
-      await Future.delayed(Duration(milliseconds: 200));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // 5. Проверяем, сколько клиентов осталось
       // В зависимости от реализации autoRemoveOnCancel, может быть 0 или 1

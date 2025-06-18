@@ -63,7 +63,7 @@ final class TestService extends RpcResponderContract {
         callLog.add('ServerStreamMethod: ${request.message}');
         for (int i = 0; i < 3; i++) {
           yield TestResponse('Reply ${i + 1} to: ${request.message}');
-          await Future.delayed(Duration(milliseconds: 10));
+          await Future.delayed(Duration(milliseconds: 1));
         }
       },
       requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -94,7 +94,7 @@ final class TestService extends RpcResponderContract {
         await for (final request in requests) {
           callLog.add('BidirectionalMethod: ${request.message}');
           yield TestResponse('Echo: ${request.message}');
-          await Future.delayed(Duration(milliseconds: 10));
+          await Future.delayed(Duration(milliseconds: 1));
         }
 
         callLog.add('BidirectionalMethod: завершен');
@@ -107,8 +107,8 @@ final class TestService extends RpcResponderContract {
 
 void main() {
   group('RpcCallerEndpoint Тесты', () {
-    late RpcInMemoryTransport clientTransport;
-    late RpcInMemoryTransport serverTransport;
+    late IRpcTransport clientTransport;
+    late IRpcTransport serverTransport;
     late RpcResponderEndpoint responderEndpoint;
     late RpcCallerEndpoint callerEndpoint;
     late TestService testService;
@@ -170,18 +170,18 @@ void main() {
       print('Подписка на стрим...');
       final subscription = stream.listen(
         (response) {
-          print('✅ Получен ответ: ${response.message}');
+          print('Получен ответ: ${response.message}');
           responses.add(response);
           if (responses.length >= 3) {
             completer.complete();
           }
         },
         onError: (e, stack) {
-          print('❌ Ошибка в стриме: $e');
+          print('Ошибка в стриме: $e');
           completer.completeError(e, stack);
         },
         onDone: () {
-          print('✅ Стрим завершен, получено ответов: ${responses.length}');
+          print('Стрим завершен, получено ответов: ${responses.length}');
           if (!completer.isCompleted) {
             completer.complete();
           }
@@ -202,7 +202,7 @@ void main() {
         }
       } catch (e) {
         await subscription.cancel();
-        print('❌ Тест не прошел: $e');
+        print('Тест не прошел: $e');
         expect(false, isTrue, reason: 'Тест упал с ошибкой: $e');
       }
     });
@@ -297,27 +297,27 @@ void main() {
       );
 
       // Небольшая задержка перед отправкой запросов для стабильности
-      await Future.delayed(Duration(milliseconds: 200));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Отправляем запросы с увеличенными интервалами
       print('Отправка запроса 1');
       controller.add(TestRequest('Bi Message 1'));
-      await Future.delayed(Duration(milliseconds: 200));
+      await Future.delayed(Duration(milliseconds: 1));
 
       print('Отправка запроса 2');
       controller.add(TestRequest('Bi Message 2'));
-      await Future.delayed(Duration(milliseconds: 200));
+      await Future.delayed(Duration(milliseconds: 1));
 
       print('Отправка запроса 3');
       controller.add(TestRequest('Bi Message 3'));
-      await Future.delayed(Duration(milliseconds: 200));
+      await Future.delayed(Duration(milliseconds: 1));
 
       print('Закрытие потока запросов');
       // Закрываем контроллер, сигнализируя конец потока запросов
       await controller.close();
 
       // Даем больше времени на получение всех ответов
-      await Future.delayed(Duration(milliseconds: 500));
+      await Future.delayed(Duration(milliseconds: 1));
       print('Ожидание получения всех ответов...');
 
       try {
@@ -393,7 +393,7 @@ void main() {
       }, throwsA(isA<StateError>()));
 
       // Выделяем время для завершения всех асинхронных операций
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future.delayed(Duration(milliseconds: 1));
     });
   });
 }

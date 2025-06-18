@@ -9,10 +9,10 @@ import 'package:rpc_dart/rpc_dart.dart';
 void main() {
   group('🚌 Transport Router Tests', () {
     // Транспорты для тестирования
-    late RpcInMemoryTransport userClientTransport, userServerTransport;
-    late RpcInMemoryTransport paymentClientTransport, paymentServerTransport;
-    late RpcInMemoryTransport premiumClientTransport, premiumServerTransport;
-    late RpcInMemoryTransport auditClientTransport, auditServerTransport;
+    late IRpcTransport userClientTransport, userServerTransport;
+    late IRpcTransport paymentClientTransport, paymentServerTransport;
+    late IRpcTransport premiumClientTransport, premiumServerTransport;
+    late IRpcTransport auditClientTransport, auditServerTransport;
 
     setUp(() {
       // Создаем пары транспортов (клиент <-> сервер)
@@ -107,7 +107,7 @@ void main() {
       });
     });
 
-    group('🎯 Priority-Based Routing', () {
+    group('Priority-Based Routing', () {
       test('должен применять правила в порядке приоритета', () async {
         // Arrange - создаем роутер с конфликтующими правилами
         final router = RpcTransportRouterBuilder.client()
@@ -140,7 +140,7 @@ void main() {
         ]);
         await router.sendMetadata(streamId, metadata);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert - должен попасть в premium транспорт (высший приоритет)
         expect(premiumMessages.length, equals(1));
@@ -178,7 +178,7 @@ void main() {
         ]);
         await router.sendMetadata(streamId, metadata);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert - должен попасть в обычный транспорт
         expect(userMessages.length, equals(1));
@@ -221,7 +221,7 @@ void main() {
         ]);
         await router.sendMetadata(paymentStreamId, paymentMetadata);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(userMessages.length, equals(1));
@@ -237,7 +237,7 @@ void main() {
       });
     });
 
-    group('🔍 Advanced Conditional Routing', () {
+    group('Advanced Conditional Routing', () {
       test('должен роутить админ методы в отдельный транспорт', () async {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
@@ -276,7 +276,7 @@ void main() {
         ]);
         await router.sendMetadata(userStreamId, userMetadata);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert - админ метод должен попасть в audit транспорт (через условный роутинг)
         expect(auditMessages.length, equals(1));
@@ -329,7 +329,7 @@ void main() {
         ]);
         await router.sendMetadata(oddStreamId, oddMetadata);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(premiumMessages.length, equals(1)); // user_1 → premium
@@ -401,7 +401,7 @@ void main() {
               RpcHeader('x-tier', 'regular'),
             ]));
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(auditMessages.length, equals(1)); // Premium Admin
@@ -412,7 +412,7 @@ void main() {
       });
     });
 
-    group('❌ Error Cases', () {
+    group('Error Cases', () {
       test('должен выбрасывать ошибку для неизвестного сервиса', () async {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
@@ -542,7 +542,7 @@ void main() {
       });
     });
 
-    group('📊 Message Forwarding', () {
+    group('Message Forwarding', () {
       test('должен корректно перенаправлять полный цикл сообщений', () async {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
@@ -571,7 +571,7 @@ void main() {
         // 3. Завершаем поток
         await router.finishSending(streamId);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert - минимум должно быть 2 сообщения (metadata + data),
         // finishSending может добавить третье если поток активен
@@ -628,7 +628,7 @@ void main() {
         await router.sendMessage(
             paymentStreamId, Uint8List.fromList('payment data'.codeUnits));
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert - каждый поток должен попасть в свой транспорт
         expect(userMessages.length, equals(2)); // metadata + data
@@ -643,7 +643,7 @@ void main() {
       });
     });
 
-    group('🧹 Resource Management', () {
+    group('Resource Management', () {
       test('должен корректно закрываться с активными потоками', () async {
         // Arrange
         final router = RpcTransportRouterBuilder.client()

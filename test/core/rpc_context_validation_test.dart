@@ -92,7 +92,7 @@ void main() {
     group('Deadline и Timeout', () {
       test('контекст_с_timeout_работает_правильно', () async {
         // Arrange
-        final context = RpcContext.withTimeout(Duration(milliseconds: 100));
+        final context = RpcContext.withTimeout(Duration(milliseconds: 10));
 
         // Act & Assert
         expect(
@@ -154,7 +154,7 @@ void main() {
         final context = RpcContext.withCancellation(token);
 
         // Отменяем через 100мс (после начала выполнения)
-        Timer(Duration(milliseconds: 100), () {
+        Timer(Duration(milliseconds: 1), () {
           token.cancel('Operation cancelled during execution');
         });
 
@@ -267,14 +267,14 @@ void main() {
 
         requestController.add('hello'.rpc);
         await Future.delayed(
-            Duration(milliseconds: 100)); // Даем время для обработки
+            Duration(milliseconds: 1)); // Даем время для обработки
         requestController.add('world'.rpc);
         await Future.delayed(
-            Duration(milliseconds: 100)); // Даем время для обработки
+            Duration(milliseconds: 1)); // Даем время для обработки
         await requestController.close();
 
         // Ждем больше времени для получения ответов
-        await Future.delayed(Duration(milliseconds: 1000));
+        await Future.delayed(Duration(milliseconds: 1));
         await subscription.cancel();
 
         // Assert
@@ -484,7 +484,7 @@ final class ValidationServiceContract extends RpcResponderContract {
     // Проверяем отмену каждые 10мс
     for (int i = 0; i < 1000; i++) {
       context?.cancellationToken?.throwIfCancelled();
-      await Future.delayed(Duration(milliseconds: 10));
+      await Future.delayed(Duration(milliseconds: 1));
     }
     return 'long-result'.rpc;
   }

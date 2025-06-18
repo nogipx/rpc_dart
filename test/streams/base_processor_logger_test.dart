@@ -94,7 +94,7 @@ void main() {
           isEndOfStream: false,
         ));
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         expect(receivedRequests, hasLength(1));
         expect(receivedRequests.first.value, equals('logged request'));
@@ -105,7 +105,7 @@ void main() {
       });
     });
 
-    group('🚀 CallProcessor with Logger', () {
+    group('CallProcessor with Logger', () {
       test('creates processor with custom logger', () async {
         final logger = RpcLogger('CallLogger');
 
@@ -162,7 +162,7 @@ void main() {
         // Отправляем запрос с логированием
         await processor.send('logged request'.rpc);
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         expect(processor.isActive, isTrue);
 
@@ -193,7 +193,7 @@ void main() {
 
         await serverTransport.sendMessage(processor.streamId, framedMessage);
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         expect(responses, isNotEmpty);
 
@@ -222,7 +222,7 @@ void main() {
         // Попытка отправить ответ должна быть залогирована как ошибка
         await processor.send('will fail'.rpc);
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         expect(processor.isActive, isTrue);
 
@@ -247,7 +247,7 @@ void main() {
         // Попытка отправить запрос должна быть залогирована
         await processor.send('will fail transport'.rpc);
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         await processor.close();
       });
@@ -255,7 +255,7 @@ void main() {
       test('logs parser errors with context', () async {
         final logger = RpcLogger('ParserErrorLogger');
 
-        // 🔥 ИСПРАВЛЕНИЕ: Используем failing codec для request'ов
+        // ИСПРАВЛЕНИЕ: Используем failing codec для request'ов
         final failingCodec = _FailingRequestCodec<RpcString>();
 
         final processor = StreamProcessor<RpcString, RpcString>(
@@ -288,7 +288,7 @@ void main() {
           isEndOfStream: false,
         ));
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         expect(errors, isNotEmpty);
 

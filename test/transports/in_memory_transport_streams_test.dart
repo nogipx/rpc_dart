@@ -9,8 +9,8 @@ import 'package:test/test.dart';
 
 void main() {
   group('RpcInMemoryTransport с управлением Stream ID', () {
-    late RpcInMemoryTransport clientTransport;
-    late RpcInMemoryTransport serverTransport;
+    late IRpcTransport clientTransport;
+    late IRpcTransport serverTransport;
 
     setUp(() {
       final pair = RpcInMemoryTransport.pair();
@@ -69,7 +69,7 @@ void main() {
       );
 
       // Даем время на обработку сообщений
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Создаем новый клиентский поток - должен иметь ID 3
       final streamId2 = clientTransport.createStream();
@@ -86,7 +86,7 @@ void main() {
       );
 
       // Даем время на обработку
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Создаем еще один поток - должен быть ID 7, т.к. 5 еще не успел освободиться
       final streamId4 = clientTransport.createStream();

@@ -29,7 +29,7 @@ void main() {
         await transport1.sendMessage(streamId, testData);
 
         // Give time for async processing
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(receivedMessages.length, equals(1));
@@ -99,7 +99,7 @@ void main() {
         await transport1.sendMessage(streamId, testData);
 
         // Give time for async processing
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(receivedMessages.length, equals(1));
@@ -122,7 +122,7 @@ void main() {
         await transport1.sendMetadata(streamId, metadata);
 
         // Give time for async processing
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(receivedMessages.length, equals(1));
@@ -147,7 +147,7 @@ void main() {
         );
 
         // Give time for async processing
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(receivedMessages.length, equals(1));
@@ -173,7 +173,7 @@ void main() {
             streamId2, Uint8List.fromList('from2'.codeUnits));
 
         // Give time for async processing
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(messages1.length, equals(1));
@@ -196,7 +196,7 @@ void main() {
         await transport1.finishSending(streamId);
 
         // Give time for async processing
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(receivedMessages.length, equals(1));
@@ -247,7 +247,7 @@ void main() {
             streamId1, Uint8List.fromList('message3'.codeUnits));
 
         // Give time for async processing
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(stream1Messages.length, equals(2));
@@ -342,7 +342,7 @@ void main() {
             endStream: true);
 
         // Give time for async processing
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(
@@ -388,7 +388,7 @@ void main() {
         }
 
         // Give time for async processing
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(receivedMessages.length, equals(3));

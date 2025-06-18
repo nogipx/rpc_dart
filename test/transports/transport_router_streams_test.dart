@@ -10,9 +10,9 @@ import 'package:rpc_dart/rpc_dart.dart';
 void main() {
   group('🚌🔄 Transport Router Streaming Tests', () {
     // Транспорты для тестирования
-    late RpcInMemoryTransport userClientTransport, userServerTransport;
-    late RpcInMemoryTransport paymentClientTransport, paymentServerTransport;
-    late RpcInMemoryTransport premiumClientTransport, premiumServerTransport;
+    late IRpcTransport userClientTransport, userServerTransport;
+    late IRpcTransport paymentClientTransport, paymentServerTransport;
+    late IRpcTransport premiumClientTransport, premiumServerTransport;
 
     setUp(() {
       // Создаем пары транспортов (клиент <-> сервер)
@@ -39,7 +39,7 @@ void main() {
       await premiumServerTransport.close();
     });
 
-    group('📤 Server Stream через Router', () {
+    group('Server Stream через Router', () {
       test('должен корректно роутить server stream по сервису', () async {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
@@ -150,7 +150,7 @@ void main() {
       });
     });
 
-    group('📥 Client Stream через Router', () {
+    group('Client Stream через Router', () {
       test('должен корректно роутить client stream запрос', () async {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
@@ -275,13 +275,13 @@ void main() {
         final subscription = responseStream.listen(responses.add);
 
         requestController.add('ping 1'.rpc);
-        await Future.delayed(Duration(milliseconds: 50));
+        await Future.delayed(Duration(milliseconds: 1));
 
         requestController.add('hello world'.rpc);
-        await Future.delayed(Duration(milliseconds: 50));
+        await Future.delayed(Duration(milliseconds: 1));
 
         await requestController.close();
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(responses.length, greaterThanOrEqualTo(2));
@@ -345,12 +345,12 @@ void main() {
         stream1Controller.add('stream1_msg'.rpc);
         stream2Controller.add('stream2_msg'.rpc);
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Закрываем потоки
         await stream1Controller.close();
         await stream2Controller.close();
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Assert - оба потока должны получить ответы
         expect(responses1.length, greaterThanOrEqualTo(1));
@@ -457,9 +457,9 @@ void main() {
                 .listen(responses.add);
 
             requestController.add('chat_test'.rpc);
-            await Future.delayed(Duration(milliseconds: 50));
+            await Future.delayed(Duration(milliseconds: 1));
             await requestController.close();
-            await Future.delayed(Duration(milliseconds: 50));
+            await Future.delayed(Duration(milliseconds: 1));
 
             expect(responses.length, greaterThanOrEqualTo(1));
             await subscription.cancel();
@@ -476,7 +476,7 @@ void main() {
       }, timeout: Timeout(Duration(seconds: 15))); // Увеличиваем общий таймаут
     });
 
-    group('🚫 Error Handling в Streaming', () {
+    group('Error Handling в Streaming', () {
       test('должен обрабатывать ошибки роутинга в streams', () async {
         // Arrange - роутер без правил для несуществующего сервиса
         final router = RpcTransportRouterBuilder.client()
@@ -500,17 +500,17 @@ void main() {
             request: '3'.rpc,
           );
 
-          // 🔥 УПРОЩЕННЫЙ ПОДХОД: Просто пытаемся получить первый элемент
+          // SIMPLIFIED APPROACH: Просто пытаемся получить первый элемент
           // И увеличиваем таймаут до 2 секунд для ожидания ошибки роутинга
           await stream.timeout(Duration(seconds: 2)).first;
           fail('Expected RpcException for non-existent service');
         } catch (e) {
-          print('🔍 ПОЙМАНА ОШИБКА Server Stream: $e (${e.runtimeType})');
+          print('CAUGHT ERROR Server Stream: $e (${e.runtimeType})');
           // Принимаем любую ошибку, связанную с роутингом - она может быть завернута
           if (e.toString().contains('NonExistentService') ||
               e.toString().contains('роутинга') ||
               e is RpcException) {
-            // ✅ Это ожидаемая ошибка роутинга
+            // Это ожидаемая ошибка роутинга
             expect(true, isTrue); // Проходим тест
           } else {
             fail('Unexpected error: $e'); // Не ожидаемая ошибка
@@ -530,12 +530,12 @@ void main() {
               .timeout(Duration(seconds: 2));
           fail('Expected RpcException for non-existent service');
         } catch (e) {
-          print('🔍 ПОЙМАНА ОШИБКА Client Stream: $e (${e.runtimeType})');
+          print('CAUGHT ERROR Client Stream: $e (${e.runtimeType})');
           // Принимаем любую ошибку, связанную с роутингом - она может быть завернута
           if (e.toString().contains('NonExistentService') ||
               e.toString().contains('роутинга') ||
               e is RpcException) {
-            // ✅ Это ожидаемая ошибка роутинга
+            // Это ожидаемая ошибка роутинга
             expect(true, isTrue); // Проходим тест
           } else {
             fail('Unexpected error: $e'); // Не ожидаемая ошибка
@@ -553,19 +553,18 @@ void main() {
             requests: Stream.empty(),
           );
 
-          // 🔥 УПРОЩЕННЫЙ ПОДХОД: Просто пытаемся получить первый элемент
+          // SIMPLIFIED APPROACH: Просто пытаемся получить первый элемент
           await stream.timeout(Duration(seconds: 2)).first;
           fail('Expected RpcException for non-existent service');
         } catch (e) {
-          print(
-              '🔍 ПОЙМАНА ОШИБКА Bidirectional Stream: $e (${e.runtimeType})');
+          print('CAUGHT ERROR Bidirectional Stream: $e (${e.runtimeType})');
           // Принимаем любую ошибку, связанную с роутингом - она может быть завернута
           if (e.toString().contains('NonExistentService') ||
               e.toString().contains('роутинга') ||
               e is RpcException ||
               e is StateError) {
-            // 🔥 Также принимаем StateError для bidirectional streams
-            // ✅ Это ожидаемая ошибка роутинга (или её следствие)
+            // Также принимаем StateError для bidirectional streams
+            // Это ожидаемая ошибка роутинга (или её следствие)
             expect(true, isTrue); // Проходим тест
           } else {
             fail('Unexpected error: $e'); // Не ожидаемая ошибка
@@ -609,7 +608,7 @@ final class _TestStreamingService extends RpcResponderContract {
         final count = int.tryParse(request.value) ?? 3;
         for (int i = 1; i <= count; i++) {
           yield '${prefix.isNotEmpty ? '$prefix ' : ''}Number $i'.rpc;
-          await Future.delayed(Duration(milliseconds: 10));
+          await Future.delayed(Duration(milliseconds: 1));
         }
       },
       requestCodec: RpcString.codec,
@@ -647,7 +646,7 @@ final class _TestStreamingService extends RpcResponderContract {
                 .rpc;
           }
 
-          await Future.delayed(Duration(milliseconds: 5));
+          await Future.delayed(Duration(milliseconds: 1));
         }
       },
       requestCodec: RpcString.codec,

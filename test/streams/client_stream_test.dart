@@ -18,12 +18,12 @@ void main() {
           requestCodec: codec,
           responseCodec: codec,
           handler: (requests) async {
-            print('⭐ Сервер: Начата обработка запросов');
+            print('Сервер: Начата обработка запросов');
             final allRequests = await requests.toList();
             print(
-                '⭐ Сервер: Получено ${allRequests.length} запросов: $allRequests');
+                'Сервер: Получено ${allRequests.length} запросов: $allRequests');
             final joinedRequests = allRequests.join(', ');
-            print('⭐ Сервер: Отправляю ответ "Received: $joinedRequests"');
+            print('Сервер: Отправляю ответ "Received: $joinedRequests"');
             return 'Received: $joinedRequests'.rpc;
           },
         );
@@ -42,21 +42,21 @@ void main() {
         );
 
         // Act
-        print('⭐ Клиент: Отправляю первый запрос');
+        print('Клиент: Отправляю первый запрос');
         await client.send('request1'.rpc);
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
-        print('⭐ Клиент: Отправляю второй запрос');
+        print('Клиент: Отправляю второй запрос');
         await client.send('request2'.rpc);
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
-        print('⭐ Клиент: Отправляю третий запрос');
+        print('Клиент: Отправляю третий запрос');
         await client.send('request3'.rpc);
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 1));
 
-        print('⭐ Клиент: Завершаю отправку и жду ответ');
+        print('Клиент: Завершаю отправку и жду ответ');
         final response = await client.finishSending();
-        print('⭐ Клиент: Получен ответ: $response');
+        print('Клиент: Получен ответ: $response');
 
         // Assert
         expect(

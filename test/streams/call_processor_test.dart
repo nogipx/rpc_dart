@@ -152,7 +152,7 @@ void main() {
       // Отправляем запросы
       for (final request in requests) {
         await processor.send(request);
-        await Future.delayed(Duration(milliseconds: 50));
+        await Future.delayed(Duration(milliseconds: 1));
       }
 
       // Проверяем наблюдаемое поведение - все операции завершились без ошибок
@@ -186,7 +186,7 @@ void main() {
       await serverTransport.close();
 
       // Ждем обработки
-      await Future.delayed(Duration(milliseconds: 500));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Проверяем наблюдаемое поведение - процессор продолжает работать
       expect(processor.isActive, isTrue);

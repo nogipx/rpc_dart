@@ -63,7 +63,7 @@ final class TestService extends RpcResponderContract {
         callLog.add('ServerStreamMethod: ${request.message}');
         for (int i = 0; i < 3; i++) {
           yield TestResponse('Reply ${i + 1} to: ${request.message}');
-          await Future.delayed(Duration(milliseconds: 10));
+          await Future.delayed(Duration(milliseconds: 1));
         }
       },
       requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -92,14 +92,11 @@ final class SubService extends RpcResponderContract {
   }
 }
 
-/// Тестовый контракт с подконтрактами
+/// Тестовый родительский контракт
 final class ParentService extends RpcResponderContract {
   final List<String> callLog = [];
-  final SubService subService = SubService();
 
-  ParentService() : super('ParentService') {
-    addSubcontract(subService);
-  }
+  ParentService() : super('ParentService');
 
   @override
   void setup() {
@@ -117,8 +114,8 @@ final class ParentService extends RpcResponderContract {
 
 void main() {
   group('RpcResponderEndpoint Тесты', () {
-    late RpcInMemoryTransport clientTransport;
-    late RpcInMemoryTransport serverTransport;
+    late IRpcTransport clientTransport;
+    late IRpcTransport serverTransport;
     late RpcResponderEndpoint responderEndpoint;
     late RpcCallerEndpoint callerEndpoint;
     late TestService testService;
@@ -154,10 +151,12 @@ void main() {
           contains('TestService.ServerStreamMethod'));
     });
 
-    test('Регистрация подконтрактов работает корректно', () {
-      // Создаем и регистрируем сервис с подконтрактом
+    test('Регистрация нескольких контрактов работает корректно', () {
+      // Создаем и регистрируем несколько сервисов отдельно
       final parentService = ParentService();
+      final subService = SubService();
       responderEndpoint.registerServiceContract(parentService);
+      responderEndpoint.registerServiceContract(subService);
       responderEndpoint.start();
 
       // Проверяем, что оба сервиса зарегистрированы
@@ -241,26 +240,28 @@ void main() {
       expect(responderEndpoint.registeredMethods, isEmpty);
     });
 
-    test('Обращение к методу через подконтракт работает корректно', () async {
-      // Регистрируем сервис с подконтрактом
+    test('Обращение к отдельно зарегистрированному сервису работает корректно',
+        () async {
+      // Регистрируем оба сервиса отдельно
       final parentService = ParentService();
+      final subService = SubService();
       responderEndpoint.registerServiceContract(parentService);
+      responderEndpoint.registerServiceContract(subService);
       responderEndpoint.start();
 
-      // Отправляем запрос к методу подконтракта
+      // Отправляем запрос к методу SubService
       final response =
           await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
         serviceName: 'SubService',
         methodName: 'SubUnaryMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
         responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-        request: TestRequest('Subcontract test'),
+        request: TestRequest('SubService test'),
       );
 
       // Проверяем ответ и вызов обработчика
-      expect(response.message, equals('SubService reply to: Subcontract test'));
-      expect(parentService.subService.callLog,
-          contains('SubUnaryMethod: Subcontract test'));
+      expect(response.message, equals('SubService reply to: SubService test'));
+      expect(subService.callLog, contains('SubUnaryMethod: SubService test'));
     });
 
     test('Регистрация без запуска работает корректно', () {

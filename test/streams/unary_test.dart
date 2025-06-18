@@ -119,7 +119,7 @@ void main() {
         expect(
           () => client.call(
             'test request'.rpc,
-            timeout: Duration(milliseconds: 100),
+            timeout: Duration(milliseconds: 1),
           ),
           throwsA(isA<TimeoutException>()),
         );

@@ -26,10 +26,10 @@ void main() {
             // Отправляем несколько ответов
             print('Yielding response 1');
             yield 'Response 1 for: $request'.rpc;
-            await Future.delayed(Duration(milliseconds: 20));
+            await Future.delayed(Duration(milliseconds: 1));
             print('Yielding response 2');
             yield 'Response 2 for: $request'.rpc;
-            await Future.delayed(Duration(milliseconds: 20));
+            await Future.delayed(Duration(milliseconds: 1));
             print('Yielding response 3');
             yield 'Response 3 for: $request'.rpc;
             print('Handler done');

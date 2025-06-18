@@ -146,7 +146,7 @@ void main() {
       ));
 
       // Ждем обработки
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future.delayed(Duration(milliseconds: 1));
 
       // Проверяем результат
       expect(receivedRequests, hasLength(1));

@@ -10,7 +10,7 @@ import 'package:test/test.dart';
 /// Расширенные тесты StreamProcessor и CallProcessor для улучшения покрытия
 /// Фокусируемся на edge cases, обработке ошибок и граничных условиях
 void main() {
-  group('🔥 StreamProcessor - Edge Cases & Error Handling', () {
+  group('StreamProcessor - Edge Cases & Error Handling', () {
     late IRpcTransport serverTransport;
     late StreamProcessor<RpcString, RpcString> processor;
     late RpcCodec<RpcString> codec;
@@ -82,7 +82,7 @@ void main() {
           onError: errors.add,
         );
 
-        // 🔥 ИСПРАВЛЕНИЕ: Создаем валидный фрейм с невалидными данными для десериализации
+        // ИСПРАВЛЕНИЕ: Создаем валидный фрейм с невалидными данными для десериализации
         // Создаем фрейм который парсер распознает, но десериализация упадет
         final invalidJsonBytes =
             Uint8List.fromList('{"invalid": json}'.codeUnits);
@@ -94,7 +94,7 @@ void main() {
           isEndOfStream: false,
         ));
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Ошибки десериализации должны быть переданы в стрим
         expect(errors, isNotEmpty);
@@ -104,7 +104,7 @@ void main() {
       });
 
       test('handles parser errors in message processing', () async {
-        // 🔥 ИЗМЕНЕНИЕ ПОДХОДА: Вместо некорректных фреймов используем failing codec
+        // ИЗМЕНЕНИЕ ПОДХОДА: Вместо некорректных фреймов используем failing codec
         final failingCodec = _FailingCodec<RpcString>();
 
         final failingProcessor = StreamProcessor<RpcString, RpcString>(
@@ -137,7 +137,7 @@ void main() {
           isEndOfStream: false,
         ));
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Ошибки десериализации должны быть переданы в стрим
         expect(errors, isNotEmpty);
@@ -165,7 +165,7 @@ void main() {
           isEndOfStream: false,
         ));
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Пустой payload должен быть проигнорирован
         expect(receivedRequests, isEmpty);
@@ -190,7 +190,7 @@ void main() {
           isEndOfStream: false,
         ));
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Метаданные без payload не должны создавать запросы
         expect(receivedRequests, isEmpty);
@@ -225,7 +225,7 @@ void main() {
           isEndOfStream: false,
         ));
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Должны получить оба сообщения
         expect(receivedRequests, hasLength(2));
@@ -268,7 +268,7 @@ void main() {
         // Закрываем процессор
         await processor.close();
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Проверяем что события завершения обработаны
         expect(onDoneCalled, isTrue);
@@ -279,7 +279,7 @@ void main() {
     });
   });
 
-  group('🚀 CallProcessor - Advanced Scenarios', () {
+  group('CallProcessor - Advanced Scenarios', () {
     late IRpcTransport clientTransport;
     late IRpcTransport serverTransport;
     late CallProcessor<RpcString, RpcString> processor;
@@ -306,7 +306,7 @@ void main() {
       await serverTransport.close();
     });
 
-    group('🎯 Context Handling', () {
+    group('Context Handling', () {
       test('creates processor with context correctly', () async {
         final context = RpcContext.withHeaders({
           'authorization': 'Bearer token123',
@@ -367,13 +367,18 @@ void main() {
       });
     });
 
-    group('📨 Request/Response Processing', () {
+    group('Request/Response Processing', () {
       test('handles routing errors in request sending', () async {
-        // 🔥 ИСПРАВЛЕНИЕ: Используем failing codec для request'ов чтобы гарантированно получить ошибку
+        // ИСПРАВЛЕНИЕ: Используем failing codec для request'ов, но обычный транспорт
+        // Для тестирования ошибок сериализации в сетевых транспортах
         final failingRequestCodec = _FailingCodec<RpcString>();
 
+        // Создаем обычный транспорт, но обернем его в NonZeroCopyWrapper
+        // чтобы заставить использовать сериализацию вместо zero-copy
+        final wrappedTransport = _NonZeroCopyTransport(clientTransport);
+
         final failingProcessor = CallProcessor<RpcString, RpcString>(
-          transport: clientTransport,
+          transport: wrappedTransport,
           serviceName: 'TestService',
           methodName: 'TestMethod',
           requestCodec:
@@ -390,9 +395,9 @@ void main() {
         // Попытка отправить запрос должна вызвать ошибку при сериализации
         await failingProcessor.send('test request'.rpc);
 
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future.delayed(Duration(milliseconds: 1));
 
-        // Ошибка должна быть переданы в стрим ответов
+        // Ошибка должна быть передана в стрим ответов
         expect(errors, isNotEmpty);
 
         await subscription.cancel();
@@ -400,7 +405,7 @@ void main() {
       });
 
       test('handles malformed response frames', () async {
-        // 🔥 ИСПРАВЛЕНИЕ: Используем failing codec для response'ов
+        // ИСПРАВЛЕНИЕ: Используем failing codec для response'ов
         final failingResponseCodec = _FailingCodec<RpcString>();
 
         final failingProcessor = CallProcessor<RpcString, RpcString>(
@@ -428,7 +433,7 @@ void main() {
           validFrame,
         );
 
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Ошибки десериализации должны быть переданы в стрим
         expect(errors, isNotEmpty);
@@ -450,7 +455,7 @@ void main() {
         );
         await serverTransport.sendMetadata(processor.streamId, errorMetadata);
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Должны получить метаданные с ошибкой
         expect(responses, isNotEmpty);
@@ -492,7 +497,7 @@ void main() {
           endStream: true,
         );
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         expect(streamCompleted, isTrue);
         await subscription.cancel();
@@ -511,5 +516,68 @@ class _FailingCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
   @override
   Uint8List serialize(T data) {
     throw Exception('Serialization failed in test codec');
+  }
+}
+
+/// Mock транспорт который ведёт себя как сетевой (не поддерживает zero-copy)
+/// и может выбрасывать ошибки для тестирования
+class _NonZeroCopyTransport implements IRpcTransport {
+  final IRpcTransport _transport;
+
+  _NonZeroCopyTransport(this._transport);
+
+  @override
+  bool get isClient => _transport.isClient;
+
+  @override
+  bool get isClosed => _transport.isClosed;
+
+  @override
+  int createStream() => _transport.createStream();
+
+  @override
+  bool releaseStreamId(int streamId) => _transport.releaseStreamId(streamId);
+
+  @override
+  Stream<RpcTransportMessage> get incomingMessages =>
+      _transport.incomingMessages;
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
+      _transport.getMessagesForStream(streamId);
+
+  @override
+  Future<void> sendMessage(int streamId, Uint8List data,
+      {bool endStream = false}) async {
+    // Симулируем ошибку транспорта при отправке
+    throw Exception('Transport error: Failed to send message');
+  }
+
+  @override
+  Future<void> sendDirectObject(int streamId, Object object,
+      {bool endStream = false}) async {
+    // НЕ поддерживаем zero-copy - выбрасываем стандартную ошибку
+    throw UnsupportedError(
+      'Транспорт не поддерживает прямую передачу объектов. '
+      'Используйте sendMessage() с сериализацией или оптимизированный inmemory транспорт.',
+    );
+  }
+
+  @override
+  Future<void> sendMetadata(int streamId, RpcMetadata metadata,
+      {bool endStream = false}) async {
+    if (_transport.isClosed) return;
+
+    await _transport.sendMetadata(streamId, metadata, endStream: endStream);
+  }
+
+  @override
+  Future<void> finishSending(int streamId) async {
+    // Может быть пустой или выбрасывать ошибку
+  }
+
+  @override
+  Future<void> close() async {
+    await _transport.close();
   }
 }

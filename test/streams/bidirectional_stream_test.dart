@@ -279,14 +279,14 @@ void main() {
         // Act
         await correctClient.send('correct request'.rpc);
         // Добавляем задержку, чтобы запрос успел обработаться
-        await Future.delayed(Duration(milliseconds: 50));
+        await Future.delayed(Duration(milliseconds: 1));
 
         await incorrectClient.send('incorrect request'.rpc);
         // Добавляем задержку, чтобы запрос успел обработаться
-        await Future.delayed(Duration(milliseconds: 50));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Ждем обработки всех запросов
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
         print('Количество обработанных запросов: $handlerCallCount');
 
         // Assert

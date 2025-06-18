@@ -298,13 +298,13 @@ void main() {
         requestsController.add('msg2'.rpc);
 
         // Ждем немного для обработки
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Закрываем поток запросов
         await requestsController.close();
 
         // Ждем завершения
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
         await responseSubscription.cancel();
 
         // Assert
@@ -352,11 +352,11 @@ void main() {
         requestsController.add('secure-msg'.rpc);
 
         // Ждем обработки
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
 
         // Закрываем поток
         await requestsController.close();
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 1));
         await responseSubscription.cancel();
 
         // Assert
