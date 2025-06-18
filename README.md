@@ -465,17 +465,15 @@ test('полный интеграционный тест', () async {
 <details>
 <summary><strong>Какую производительность ожидать?</strong></summary>
 
-Производительность зависит от многих факторов: среды выполнения, размера данных, типа транспорта. Для получения точных цифр запустите бенчмарки в вашей среде:
+RPC Dart оптимизирован для реальных приложений. В типичных сценариях производительность более чем достаточная:
 
-```bash
-dart run benchmark/main.dart
-```
-
-**Общие наблюдения:**
+**Практические наблюдения:**
 - InMemory транспорт имеет минимальные накладные расходы
-- CBOR сериализация обычно быстрее JSON
+- CBOR сериализация эффективнее JSON
 - HTTP транспорт добавляет сетевую задержку
-- Для больших данных рассмотрите streaming или chunking
+- Streaming эффективен для больших объемов данных
+
+Для большинства приложений важнее удобство разработки и архитектурная чистота, чем микрооптимизации.
 
 </details>
 
@@ -532,7 +530,7 @@ class OrderBloc {
 
 ---
 
-#### [Benchmark](https://bencher.dev/perf/rpc-dart?lower_value=false&upper_value=false&lower_boundary=false&upper_boundary=false&x_axis=version&branches=336e550c-b07f-4a22-9a82-8ec26eb358de&testbeds=c793799b-60f0-408a-832f-0afad9807be8&benchmarks=e99c2168-aa9a-410f-b5d3-53be26e8aba2%2Ca139d61d-6327-4c37-9309-acb50a135912%2C46ba5e12-ef65-4255-bdc5-4fff6b1ac8c4%2Ccb8a8f66-581b-445a-8c3b-dbe7d0d70847&measures=cac9b185-2af3-4ffe-a992-d3e3139d3e95&start_time=1744834338076&end_time=1749672738076&tab=plots&plots_search=a271874c-7479-4152-b94e-54db025f6abf&key=true&reports_per_page=4&branches_per_page=8&testbeds_per_page=8&benchmarks_per_page=8&plots_per_page=8&reports_page=1&branches_page=1&testbeds_page=1&benchmarks_page=1&plots_page=1&utm_medium=share&utm_source=bencher&utm_content=img&utm_campaign=perf%2Bimg&utm_term=rpc-dart)
+#### [Benchmark](https://bencher.dev/perf/rpc-dart?x_axis=version)
 
 **Полезные ссылки:**
 - [CORD Architecture](docs/cord.md)
