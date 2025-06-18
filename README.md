@@ -20,7 +20,7 @@
 ## Ключевые возможности
 
 - **Полная поддержка RPC паттернов** — unary calls, server streams, client streams, bidirectional streams
-- **Встроенный InMemory транспорт** — для разработки и тестирования
+- **Zero-Copy InMemory транспорт** — транспорт для передачи объектов без сериализации в одном процессе
 - **Типобезопасность** — все запросы/ответы строго типизированы
 - **Автоматическая трассировка** — trace ID генерируется автоматически, передается через RpcContext
 - **Без внешних зависимостей** — только чистый Dart
@@ -35,179 +35,95 @@ RPC Dart предлагает **CORD (Contract-Oriented Remote Domains)** — а
 
 ## Quick Start
 
-### [Готовые примеры использования](example/)
+**📚 [Полные примеры использования](example/)**
 
 ### 1. Определите контракт и модели
 
 ```dart
-// Request/Response объекты реализуют IRpcSerializable
-class CalculationRequest implements IRpcSerializable {
-  final double a, b;
-  final String operation; // 'add', 'subtract', 'multiply', 'divide'
-  
-  CalculationRequest({required this.a, required this.b, required this.operation});
-  
-  @override
-  Map<String, dynamic> toJson() => {'a': a, 'b': b, 'operation': operation};
-  
-  static CalculationRequest fromJson(Map<String, dynamic> json) => CalculationRequest(
-    a: json['a'] is int ? (json['a'] as int).toDouble() : json['a'],
-    b: json['b'] is int ? (json['b'] as int).toDouble() : json['b'],
-    operation: json['operation'],
-  );
-  
-  static RpcCodec<CalculationRequest> get codec => RpcCodec(CalculationRequest.fromJson);
+// Контракт с константами
+abstract interface class ICalculatorContract {
+  static const name = 'Calculator';
+  static const methodCalculate = 'calculate';
 }
 
-class CalculationResponse implements IRpcSerializable {
-  final double? result;
-  final bool success;
-  final String? errorMessage;
-  
-  CalculationResponse({this.result, this.success = true, this.errorMessage});
-  
-  @override
-  Map<String, dynamic> toJson() => {
-    'result': result, 'success': success, 'errorMessage': errorMessage,
-  };
-  
-  static CalculationResponse fromJson(Map<String, dynamic> json) => CalculationResponse(
-    result: json['result'], success: json['success'] ?? true, errorMessage: json['errorMessage'],
-  );
-      
-  static RpcCodec<CalculationResponse> get codec => RpcCodec(CalculationResponse.fromJson);
+// Zero-copy модели — обычные классы
+class Request {
+  final double a, b;
+  final String op;
+  Request(this.a, this.b, this.op);
+}
+
+class Response {
+  final double result;
+  Response(this.result);
 }
 ```
 
-### 2. Создайте сервер (Responder)
+### 2. Сервер (Responder)
 
 ```dart
-class CalculatorResponder extends RpcResponderContract {
-  CalculatorResponder() : super('CalculatorService');
-  
+final class CalculatorResponder extends RpcResponderContract {
+  CalculatorResponder() : super(ICalculatorContract.name);
+
   @override
   void setup() {
-    addUnaryMethod<CalculationRequest, CalculationResponse>(
-      methodName: 'calculate',
+    // Zero-copy метод — кодеки НЕ указываем
+    addUnaryMethod<Request, Response>(
+      methodName: ICalculatorContract.methodCalculate,
       handler: calculate,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-    );
-    
-    addBidirectionalMethod<CalculationRequest, CalculationResponse>(
-      methodName: 'streamCalculate',
-      handler: streamCalculate,
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
     );
   }
-  
-  Future<CalculationResponse> calculate(CalculationRequest request, {RpcContext? context}) async {
-    try {
-      double result;
-      switch (request.operation) {
-        case 'add': result = request.a + request.b; break;
-        case 'subtract': result = request.a - request.b; break;
-        case 'multiply': result = request.a * request.b; break;
-        case 'divide':
-          if (request.b == 0) throw Exception('Division by zero');
-          result = request.a / request.b; break;
-        default: throw Exception('Unknown operation: ${request.operation}');
-      }
-      return CalculationResponse(result: result);
-    } catch (e) {
-      return CalculationResponse(success: false, errorMessage: e.toString());
-    }
-  }
-  
-  Stream<CalculationResponse> streamCalculate(Stream<CalculationRequest> requests, {RpcContext? context}) async* {
-    await for (final request in requests) {
-      yield await calculate(request, context: context);
-    }
+
+  Future<Response> calculate(Request req, {RpcContext? context}) async {
+    final result = switch (req.op) {
+      'add' => req.a + req.b,
+      _ => 0.0,
+    };
+    return Response(result);
   }
 }
 ```
 
-### 3. Создайте клиент (Caller)
+### 3. Клиент (Caller)
 
 ```dart
-class CalculatorCaller extends RpcCallerContract {
-  CalculatorCaller(RpcCallerEndpoint endpoint) : super('CalculatorService', endpoint);
-  
-  Future<CalculationResponse> calculate(CalculationRequest request) {
-    return endpoint.unaryRequest<CalculationRequest, CalculationResponse>(
-      serviceName: serviceName,
-      methodName: 'calculate',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
+final class CalculatorCaller extends RpcCallerContract {
+  CalculatorCaller(RpcCallerEndpoint endpoint) 
+    : super(ICalculatorContract.name, endpoint);
+
+  Future<Response> calculate(Request request) {
+    return callUnary<Request, Response>(
+      methodName: ICalculatorContract.methodCalculate,
       request: request,
     );
   }
-  
-  Stream<CalculationResponse> streamCalculate(Stream<CalculationRequest> requests) {
-    return endpoint.bidirectionalStream<CalculationRequest, CalculationResponse>(
-      serviceName: serviceName,
-      methodName: 'streamCalculate',
-      requestCodec: CalculationRequest.codec,
-      responseCodec: CalculationResponse.codec,
-      requests: requests,
-    );
-  }
-  
-  // Удобный метод для сложения
-  Future<double> add(double a, double b) async {
-    final response = await calculate(CalculationRequest(a: a, b: b, operation: 'add'));
-    if (!response.success) throw Exception(response.errorMessage);
-    return response.result!;
-  }
 }
 ```
 
-### 4. Запустите сервер и клиент
+### 4. Запуск
 
 ```dart
 void main() async {
-  // Создаем InMemory транспорт
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  // Создаем inmemory транспорт
+  final (client, server) = RpcInMemoryTransport.pair();
   
-  // Настраиваем сервер
-  final serverEndpoint = RpcResponderEndpoint(transport: serverTransport);
-  serverEndpoint.registerServiceContract(CalculatorResponder());
-  serverEndpoint.start(); // Важно: явно запускаем эндпоинт!
+  // Настраиваем endpoints
+  final responder = RpcResponderEndpoint(transport: server);
+  final caller = RpcCallerEndpoint(transport: client);
   
-  // Настраиваем клиент
-  final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
-  final calculator = CalculatorCaller(clientEndpoint);
+  // Регистрируем сервис
+  responder.registerServiceContract(CalculatorResponder());
+  responder.start();
   
-  // Делаем RPC вызовы с автоматической генерацией trace ID
-  final result = await calculator.add(10, 20);
-  print('10 + 20 = $result'); // 10 + 20 = 30.0
+  final calculator = CalculatorCaller(caller);
   
-  // Или с пользовательским контекстом
-  final context = RpcContextUtils.withTracing(traceId: 'user_operation_123');
-  final resultWithContext = await calculator.calculate(
-    CalculationRequest(a: 5, b: 3, operation: 'multiply'),
-    context: context,
-  );
+  // Вызываем RPC метод
+  final result = await calculator.calculate(Request(10, 5, 'add'));
+  print('10 + 5 = ${result.result}'); // 10 + 5 = 15.0
   
-  // Работаем со стримом вычислений
-  final requests = Stream.fromIterable([
-    CalculationRequest(a: 5, b: 3, operation: 'add'),
-    CalculationRequest(a: 10, b: 2, operation: 'multiply'),
-    CalculationRequest(a: 15, b: 3, operation: 'divide'),
-  ]);
-  
-  await for (final response in calculator.streamCalculate(requests)) {
-    if (response.success) {
-      print('Result: ${response.result}');
-    } else {
-      print('Error: ${response.errorMessage}');
-    }
-  }
-  
-  // Закрываем ресурсы
-  await serverEndpoint.close();
-  await clientEndpoint.close();
+  // Закрываем
+  await caller.close();
+  await responder.close();
 }
 ```
 
@@ -221,13 +137,28 @@ final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 // Использование: разработка, unit-тесты, простые приложения
 ```
 
+#### 🚀 Zero-Copy 
+
+Для максимальной производительности RPC Dart поддерживает **zero-copy** передачу объектов без сериализации (только для `RpcInMemoryTransport`):
+
+```dart
+// Zero-copy контракт — просто не указывайте кодеки!
+addUnaryMethod<UserRequest, UserResponse>(
+  methodName: 'GetUser',
+  handler: (request, {context}) async {
+    return UserResponse(id: request.id, name: 'User ${request.id}');
+  },
+  // Кодеки НЕ указываем = автоматически zero-copy
+);
+```
+
 ### Дополнительные транспорты
 
-RPC Dart поддерживает создание кастомных транспортов через интерфейс `RpcTransport`:
+RPC Dart поддерживает создание кастомных транспортов через интерфейс `IRpcTransport`:
 
 ```dart
 // Пример кастомного транспорта
-class CustomHttpTransport implements RpcTransport {
+class CustomHttpTransport implements IRpcTransport {
   @override
   Future<void> send(RpcMessage message) async {
     // Реализация отправки через HTTP

@@ -6,393 +6,233 @@ import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
+/// 🚀 Демонстрация всех 4 RPC паттернов с Zero-Copy
 void main() async {
+  print('🚀 RPC Dart - Все 4 паттерна с Zero-Copy\n');
   // RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.internal);
 
-  // 🔧 Настройка уровня логирования библиотеки
-  // По умолчанию INFO - показывает только важные события
-  // Для отладки можно установить INTERNAL - покажет все внутренние операции
-  print('🔧 Уровень логирования: INFO (скрыты внутренние детали библиотеки)');
+  // Создаем inmemory транспорт
+  final (client, server) = RpcInMemoryTransport.pair();
 
-  print(
-      '\n🚀 === RPC DART - Комплексная демонстрация автоматической трассировки ===\n');
+  // Настраиваем endpoints
+  final responder = RpcResponderEndpoint(transport: server);
+  final caller = RpcCallerEndpoint(transport: client);
 
-  // Создаем InMemory транспорт
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  // Регистрируем сервис
+  responder.registerServiceContract(CalculatorResponder());
+  responder.start();
 
-  // Настраиваем сервер
-  final serverEndpoint = RpcResponderEndpoint(
-    transport: serverTransport,
-    debugLabel: 'Calculator Server',
-  );
-  serverEndpoint.registerServiceContract(CalculatorResponder());
-  serverEndpoint.start();
-
-  // Настраиваем клиент
-  final clientEndpoint = RpcCallerEndpoint(
-    transport: clientTransport,
-    debugLabel: 'Calculator Client',
-  );
-  final calculator = CalculatorCaller(clientEndpoint);
+  final calculator = CalculatorCaller(caller);
 
   try {
-    await Future.delayed(Duration(milliseconds: 100));
+    // 1. Unary Call
+    print('1️⃣ Unary: один запрос → один ответ');
+    final result1 = await calculator.calculate(Request(10, 5, 'add'));
+    print('   10 + 5 = ${result1.result}\n');
 
-    print('📋 === 1. UNARY CALLS (один запрос → один ответ) ===\n');
-
-    // 1. UNARY без контекста - автоматическая генерация trace ID
-    print('🔹 Без контекста (автогенерация trace ID):');
-    final result1 = await calculator.add(10, 20);
-    print('   10 + 20 = $result1\n');
-
-    // 2. UNARY с пользовательским контекстом
-    print('🔹 С пользовательским trace ID:');
-    final customContext =
-        RpcContextUtils.withTracing(traceId: 'user_trace_123');
-    final result2 = await calculator.multiply(5, 7, context: customContext);
-    print('   5 × 7 = $result2\n');
-
-    print('📊 === 2. SERVER STREAMING (один запрос → поток ответов) ===\n');
-
-    print('🔹 Сложное вычисление с прогрессом:');
-    await for (final progress in calculator.calculateWithProgress(
-        CalculationRequest(a: 100, b: 25, operation: 'divide'))) {
-      print('   📈 $progress');
+    // 2. Server Streaming
+    print('2️⃣ Server Stream: один запрос → поток ответов');
+    await for (final step
+        in calculator.calculateSteps(Request(20, 4, 'multiply'))) {
+      print('   📤 ${step.message}');
     }
     print('');
 
-    print('📥 === 3. CLIENT STREAMING (поток запросов → один ответ) ===\n');
-
-    print('🔹 Батчевая обработка нескольких вычислений:');
-    final batchRequests = Stream.fromIterable([
-      CalculationRequest(a: 10, b: 5, operation: 'add'),
-      CalculationRequest(a: 20, b: 4, operation: 'multiply'),
-      CalculationRequest(a: 100, b: 10, operation: 'divide'),
-      CalculationRequest(a: 50, b: 15, operation: 'subtract'),
-      CalculationRequest(a: 7, b: 3, operation: 'add'),
+    // 3. Client Streaming
+    print('3️⃣ Client Stream: поток запросов → один ответ');
+    final requests = Stream.fromIterable([
+      Request(10, 2, 'add'),
+      Request(15, 3, 'multiply'),
+      Request(100, 10, 'divide'),
     ]);
+    final summary = await calculator.processBatch(requests);
+    print('   📥 Обработано: ${summary.count}, Сумма: ${summary.total}\n');
 
-    final batchResult = await calculator.processBatch(batchRequests);
-    print('   📊 $batchResult\n');
-
-    print('🔄 === 4. BIDIRECTIONAL STREAMING (поток ↔ поток) ===\n');
-
-    print('🔹 Интерактивные вычисления в реальном времени:');
-
-    // Создаем поток запросов для bidirectional streaming
-    final controller = StreamController<CalculationRequest>();
-    final liveResults = calculator.liveCalculate(controller.stream);
+    // 4. Bidirectional Streaming
+    print('4️⃣ Bidirectional: поток запросов ↔ поток ответов');
+    final controller = StreamController<Request>();
+    final results = calculator.liveCalculate(controller.stream);
 
     // Подписываемся на результаты
-    final subscription = liveResults.listen((response) {
-      if (response.success) {
-        print('   ✅ Результат: ${response.result}');
-      } else {
-        print('   ❌ Ошибка: ${response.errorMessage}');
-      }
-    });
+    final subscription = results.listen((r) => print('   🔄 ${r.result}'));
 
-    // Отправляем запросы в реальном времени
-    await Future.delayed(Duration(milliseconds: 100));
-    controller.add(CalculationRequest(a: 15, b: 3, operation: 'multiply'));
-    await Future.delayed(Duration(milliseconds: 200));
+    // Отправляем данные
+    controller.add(Request(5, 3, 'multiply'));
+    await Future.delayed(Duration(milliseconds: 50));
+    controller.add(Request(20, 4, 'divide'));
+    await Future.delayed(Duration(milliseconds: 50));
 
-    controller.add(CalculationRequest(a: 100, b: 7, operation: 'divide'));
-    await Future.delayed(Duration(milliseconds: 200));
-
-    controller.add(CalculationRequest(a: 25, b: 15, operation: 'add'));
-    await Future.delayed(Duration(milliseconds: 200));
-
-    // Попробуем ошибочную операцию
-    controller.add(CalculationRequest(a: 10, b: 0, operation: 'divide'));
-    await Future.delayed(Duration(milliseconds: 200));
-
-    // Закрываем поток запросов
     await controller.close();
     await subscription.asFuture();
 
-    print('\n🎯 === ДЕМОНСТРАЦИЯ АВТОМАТИЧЕСКОЙ ТРАССИРОВКИ ===\n');
-
-    print('✨ Trace ID автоматически:');
-    print('   • Генерируется в CallerEndpoint если не указан');
-    print('   • Генерируется в ResponderEndpoint если клиент не передал');
-    print('   • Передается во все дочерние компоненты (Responders, Callers)');
-    print('   • Появляется в логах всех операций автоматически');
-    print('   • Работает через RpcLoggerFactory с контекстом');
-
-    print('\n🔥 === ВСЕ ТИПЫ RPC ПРОДЕМОНСТРИРОВАНЫ ===');
-    print('   ✅ Unary Calls - простые запрос/ответ операции');
-    print('   ✅ Server Streaming - прогресс и live обновления');
-    print('   ✅ Client Streaming - батчевая обработка данных');
-    print('   ✅ Bidirectional Streaming - интерактивное взаимодействие');
-    print('   ✅ Автоматическая трассировка во всех сценариях\n');
-  } catch (e, stackTrace) {
-    print('❌ Ошибка: $e');
-    print('Stack trace: $stackTrace');
+    print('\n✅ Все 4 RPC паттерна продемонстрированы!');
   } finally {
-    // Закрываем ресурсы
-    await serverEndpoint.close();
-    await clientEndpoint.close();
-    print('🔚 Демонстрация завершена!');
+    await caller.close();
+    await responder.close();
   }
 }
 
-/// Простая модель сообщения для демонстрации
-class CalculationRequest {
+//
+// КОНТРАКТ И МОДЕЛИ
+//
+
+abstract interface class ICalculatorContract {
+  static const name = 'Calculator';
+
+  // Константы для всех методов
+  static const methodCalculate = 'calculate';
+  static const methodCalculateSteps = 'calculateSteps';
+  static const methodProcessBatch = 'processBatch';
+  static const methodLiveCalculate = 'liveCalculate';
+}
+
+// Zero-copy модели - обычные классы без кодеков
+class Request {
   final double a, b;
-  final String operation; // 'add', 'subtract', 'multiply', 'divide'
-
-  CalculationRequest(
-      {required this.a, required this.b, required this.operation});
-
-  @override
-  String toString() =>
-      'CalculationRequest(a: $a, b: $b, operation: $operation)';
+  final String op;
+  Request(this.a, this.b, this.op);
 }
 
-class CalculationResponse {
-  final double? result;
-  final bool success;
-  final String? errorMessage;
-
-  CalculationResponse({this.result, this.success = true, this.errorMessage});
-
-  @override
-  String toString() => success
-      ? 'CalculationResponse(result: $result)'
-      : 'CalculationResponse(error: $errorMessage)';
+class Response {
+  final double result;
+  Response(this.result);
 }
 
-/// Модель для прогресса вычислений (server streaming)
-class CalculationProgress {
-  final String step;
-  final double progress; // 0.0 to 1.0
-  final String? currentOperation;
-
-  CalculationProgress(
-      {required this.step, required this.progress, this.currentOperation});
-
-  @override
-  String toString() =>
-      'CalculationProgress(step: $step, progress: ${(progress * 100).toInt()}%)';
+class Step {
+  final String message;
+  Step(this.message);
 }
 
-/// Модель для статистики батча (client streaming)
-class BatchStatistics {
-  final int totalRequests;
-  final int successfulRequests;
-  final int failedRequests;
-  final double averageResult;
-  final List<String> operations;
-
-  BatchStatistics({
-    required this.totalRequests,
-    required this.successfulRequests,
-    required this.failedRequests,
-    required this.averageResult,
-    required this.operations,
-  });
-
-  @override
-  String toString() =>
-      'BatchStatistics(total: $totalRequests, success: $successfulRequests, failed: $failedRequests, avg: $averageResult)';
+class Summary {
+  final int count;
+  final double total;
+  Summary(this.count, this.total);
 }
 
-/// Респондер с демонстрацией всех типов RPC методов
-final class CalculatorResponder extends RpcResponderContract {
-  CalculatorResponder() : super('CalculatorService');
+//
+// СЕРВЕР (RESPONDER)
+//
+
+final class CalculatorResponder extends RpcResponderContract
+    implements ICalculatorContract {
+  CalculatorResponder() : super(ICalculatorContract.name);
 
   @override
   void setup() {
-    // 1. UNARY CALL - один запрос → один ответ
-    addUnaryMethod<CalculationRequest, CalculationResponse>(
-      methodName: 'calculate',
+    // Zero-copy методы - кодеки НЕ указываем
+    addUnaryMethod<Request, Response>(
+      methodName: ICalculatorContract.methodCalculate,
       handler: calculate,
     );
 
-    // 2. SERVER STREAMING - один запрос → поток ответов
-    addServerStreamMethod<CalculationRequest, CalculationProgress>(
-      methodName: 'calculateWithProgress',
-      handler: calculateWithProgress,
+    addServerStreamMethod<Request, Step>(
+      methodName: ICalculatorContract.methodCalculateSteps,
+      handler: calculateSteps,
     );
 
-    // 3. CLIENT STREAMING - поток запросов → один ответ
-    addClientStreamMethod<CalculationRequest, BatchStatistics>(
-      methodName: 'processBatch',
+    addClientStreamMethod<Request, Summary>(
+      methodName: ICalculatorContract.methodProcessBatch,
       handler: processBatch,
     );
 
-    // 4. BIDIRECTIONAL STREAMING - поток запросов ↔ поток ответов
-    addBidirectionalMethod<CalculationRequest, CalculationResponse>(
-      methodName: 'liveCalculate',
+    addBidirectionalMethod<Request, Response>(
+      methodName: ICalculatorContract.methodLiveCalculate,
       handler: liveCalculate,
     );
   }
 
-  /// UNARY: Простое вычисление
-  Future<CalculationResponse> calculate(CalculationRequest request,
+  // 1. Unary
+  Future<Response> calculate(Request req, {RpcContext? context}) async {
+    final result = _calc(req.a, req.b, req.op);
+    return Response(result);
+  }
+
+  // 2. Server Streaming
+  Stream<Step> calculateSteps(Request req, {RpcContext? context}) async* {
+    yield Step('Начинаем: ${req.a} ${req.op} ${req.b}');
+    await Future.delayed(Duration(milliseconds: 100));
+
+    yield Step('Вычисляем...');
+    await Future.delayed(Duration(milliseconds: 100));
+
+    final result = _calc(req.a, req.b, req.op);
+    yield Step('Результат: $result');
+  }
+
+  // 3. Client Streaming
+  Future<Summary> processBatch(Stream<Request> reqs,
       {RpcContext? context}) async {
-    try {
-      final result = _performOperation(request.a, request.b, request.operation);
-      return CalculationResponse(result: result);
-    } catch (e) {
-      return CalculationResponse(success: false, errorMessage: e.toString());
+    int count = 0;
+    double total = 0;
+
+    await for (final req in reqs) {
+      count++;
+      total += _calc(req.a, req.b, req.op);
+    }
+
+    return Summary(count, total);
+  }
+
+  // 4. Bidirectional Streaming
+  Stream<Response> liveCalculate(
+    Stream<Request> reqs, {
+    RpcContext? context,
+  }) async* {
+    await for (final req in reqs) {
+      final result = _calc(req.a, req.b, req.op);
+      yield Response(result);
     }
   }
 
-  /// SERVER STREAMING: Вычисление с отправкой прогресса
-  Stream<CalculationProgress> calculateWithProgress(CalculationRequest request,
-      {RpcContext? context}) async* {
-    yield CalculationProgress(
-        step: 'Initializing',
-        progress: 0.0,
-        currentOperation: request.operation);
-
-    await Future.delayed(Duration(milliseconds: 200));
-    yield CalculationProgress(
-        step: 'Validating input',
-        progress: 0.25,
-        currentOperation: request.operation);
-
-    await Future.delayed(Duration(milliseconds: 200));
-    yield CalculationProgress(
-        step: 'Performing calculation',
-        progress: 0.50,
-        currentOperation: request.operation);
-
-    await Future.delayed(Duration(milliseconds: 200));
-    final result = _performOperation(request.a, request.b, request.operation);
-    yield CalculationProgress(
-        step: 'Calculation complete',
-        progress: 0.75,
-        currentOperation: request.operation);
-
-    await Future.delayed(Duration(milliseconds: 200));
-    yield CalculationProgress(
-        step: 'Finalizing result: $result',
-        progress: 1.0,
-        currentOperation: request.operation);
-  }
-
-  /// CLIENT STREAMING: Обработка батча запросов
-  Future<BatchStatistics> processBatch(Stream<CalculationRequest> requests,
-      {RpcContext? context}) async {
-    int total = 0;
-    int successful = 0;
-    int failed = 0;
-    double sum = 0.0;
-    final operations = <String>{};
-
-    await for (final request in requests) {
-      total++;
-      operations.add(request.operation);
-
-      try {
-        final result =
-            _performOperation(request.a, request.b, request.operation);
-        sum += result;
-        successful++;
-      } catch (e) {
-        failed++;
-      }
-    }
-
-    final averageResult = successful > 0 ? sum / successful : 0.0;
-
-    return BatchStatistics(
-      totalRequests: total,
-      successfulRequests: successful,
-      failedRequests: failed,
-      averageResult: averageResult,
-      operations: operations.toList(),
-    );
-  }
-
-  /// BIDIRECTIONAL STREAMING: Интерактивные вычисления в реальном времени
-  Stream<CalculationResponse> liveCalculate(Stream<CalculationRequest> requests,
-      {RpcContext? context}) async* {
-    await for (final request in requests) {
-      try {
-        final result =
-            _performOperation(request.a, request.b, request.operation);
-        yield CalculationResponse(result: result);
-      } catch (e) {
-        yield CalculationResponse(success: false, errorMessage: e.toString());
-      }
-    }
-  }
-
-  /// Вспомогательный метод для выполнения операций
-  double _performOperation(double a, double b, String operation) {
-    return switch (operation) {
+  double _calc(double a, double b, String op) {
+    return switch (op) {
       'add' => a + b,
-      'subtract' => a - b,
       'multiply' => a * b,
-      'divide' => b != 0 ? a / b : throw Exception('Division by zero'),
-      _ => throw Exception('Unknown operation: $operation'),
+      'divide' => a / b,
+      'subtract' => a - b,
+      _ => 0,
     };
   }
 }
 
-/// Клиент с демонстрацией всех типов RPC вызовов
-final class CalculatorCaller extends RpcCallerContract {
+//
+// КЛИЕНТ (CALLER)
+//
+
+final class CalculatorCaller extends RpcCallerContract
+    implements ICalculatorContract {
   CalculatorCaller(RpcCallerEndpoint endpoint)
-      : super('CalculatorService', endpoint);
+      : super(ICalculatorContract.name, endpoint);
 
-  /// UNARY: Простое вычисление
-  Future<CalculationResponse> calculate(CalculationRequest request,
-      {RpcContext? context}) {
-    return callUnary(
-      methodName: 'calculate',
+  Future<Response> calculate(Request request) {
+    return callUnary<Request, Response>(
+      methodName: ICalculatorContract.methodCalculate,
       request: request,
-      context: context,
     );
   }
 
-  /// SERVER STREAMING: Вычисление с прогрессом
-  Stream<CalculationProgress> calculateWithProgress(CalculationRequest request,
-      {RpcContext? context}) {
-    return callServerStream(
-      methodName: 'calculateWithProgress',
+  Stream<Step> calculateSteps(Request request) {
+    return callServerStream<Request, Step>(
+      methodName: ICalculatorContract.methodCalculateSteps,
       request: request,
-      context: context,
     );
   }
 
-  /// CLIENT STREAMING: Батчевая обработка
-  Future<BatchStatistics> processBatch(Stream<CalculationRequest> requests,
-      {RpcContext? context}) {
-    return callClientStream(
-      methodName: 'processBatch',
-      context: context,
+  Future<Summary> processBatch(Stream<Request> requests) {
+    return callClientStream<Request, Summary>(
+      methodName: ICalculatorContract.methodProcessBatch,
       requests: requests,
     );
   }
 
-  /// BIDIRECTIONAL STREAMING: Интерактивные вычисления
-  Stream<CalculationResponse> liveCalculate(Stream<CalculationRequest> requests,
-      {RpcContext? context}) {
-    return callBidirectionalStream(
-      methodName: 'liveCalculate',
+  Stream<Response> liveCalculate(
+    Stream<Request> requests, {
+    RpcContext? context,
+  }) {
+    return callBidirectionalStream<Request, Response>(
+      methodName: ICalculatorContract.methodLiveCalculate,
       requests: requests,
-      context: context,
+      context: context?.withTraceId('some_trace'),
     );
-  }
-
-  /// Удобные методы для конкретных операций
-  Future<double> add(double a, double b, {RpcContext? context}) async {
-    final response = await calculate(
-        CalculationRequest(a: a, b: b, operation: 'add'),
-        context: context);
-    if (!response.success) throw Exception(response.errorMessage);
-    return response.result!;
-  }
-
-  Future<double> multiply(double a, double b, {RpcContext? context}) async {
-    final response = await calculate(
-        CalculationRequest(a: a, b: b, operation: 'multiply'),
-        context: context);
-    if (!response.success) throw Exception(response.errorMessage);
-    return response.result!;
   }
 }
