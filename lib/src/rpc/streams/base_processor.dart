@@ -77,10 +77,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       }
       _parser = RpcMessageParser(logger: _logger);
     } else {
-      // Zero-copy режим: требуется RpcInMemoryTransport
-      if (transport is! RpcInMemoryTransport) {
+      // Zero-copy режим: требуется поддержка zero-copy транспортом
+      if (!transport.supportsZeroCopy) {
         throw ArgumentError(
-          'Zero-copy режим требует RpcInMemoryTransport. '
+          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
           'Для сетевых транспортов передайте кодеки.',
         );
       }
@@ -115,7 +115,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
             // Zero-copy путь
             _logger
                 ?.internal('Zero-copy отправка ответа [streamId: $_streamId]');
-            await (_transport as RpcInMemoryTransport).sendDirectObject(
+            await _transport.sendDirectObject(
               _streamId,
               response,
             );
@@ -542,10 +542,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       }
       _parser = RpcMessageParser(logger: _logger);
     } else {
-      // Zero-copy режим: требуется RpcInMemoryTransport
-      if (transport is! RpcInMemoryTransport) {
+      // Zero-copy режим: требуется поддержка zero-copy транспортом
+      if (!transport.supportsZeroCopy) {
         throw ArgumentError(
-          'Zero-copy режим требует RpcInMemoryTransport. '
+          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
           'Для сетевых транспортов передайте кодеки.',
         );
       }
@@ -595,7 +595,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             // Zero-copy путь
             _logger
                 ?.internal('Zero-copy отправка запроса [streamId: $_streamId]');
-            await (_transport as RpcInMemoryTransport).sendDirectObject(
+            await _transport.sendDirectObject(
               _streamId,
               request,
             );

@@ -8,7 +8,7 @@ part of '../_index.dart';
 ///
 /// Автоматически определяет режим работы:
 /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-/// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+/// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
 ///
 /// Позволяет отправить поток запросов и получить ОДИН ответ.
 /// Соблюдает семантику клиентского стрима - можно отправлять много запросов,
@@ -72,8 +72,8 @@ final class ClientStreamCaller<TRequest extends Object,
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
     // Zero-copy режим: требуется RpcInMemoryTransport
-    if (isZeroCopy && transport is! RpcInMemoryTransport) {
-      throw ArgumentError('Zero-copy режим требует RpcInMemoryTransport. '
+    if (isZeroCopy && !transport.supportsZeroCopy) {
+      throw ArgumentError('Zero-copy режим требует транспорт с поддержкой zero-copy. '
           'Для сетевых транспортов передайте кодеки.');
     }
 

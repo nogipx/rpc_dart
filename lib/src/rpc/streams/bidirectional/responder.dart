@@ -8,7 +8,7 @@ part of '../_index.dart';
 ///
 /// Автоматически определяет режим работы:
 /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-/// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+/// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
 ///
 /// Обеспечивает полную реализацию серверной стороны двунаправленного
 /// стриминга RPC. Обрабатывает входящие запросы от клиента и позволяет
@@ -47,8 +47,8 @@ final class BidirectionalStreamResponder<TRequest extends Object,
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
     // Zero-copy режим: требуется RpcInMemoryTransport
-    if (isZeroCopy && transport is! RpcInMemoryTransport) {
-      throw ArgumentError('Zero-copy режим требует RpcInMemoryTransport. '
+    if (isZeroCopy && !transport.supportsZeroCopy) {
+      throw ArgumentError('Zero-copy режим требует транспорт с поддержкой zero-copy. '
           'Для сетевых транспортов передайте кодеки.');
     }
 

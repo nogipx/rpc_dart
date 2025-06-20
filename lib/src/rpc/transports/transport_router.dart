@@ -382,6 +382,12 @@ final class RpcTransportRouter implements IRpcTransport {
 
   @override
   bool get isClosed => _closed;
+
+  /// Router поддерживает zero-copy, если его поддерживает хотя бы один из роутируемых транспортов
+  @override
+  bool get supportsZeroCopy {
+    return _routingRules.any((rule) => rule.transport.supportsZeroCopy);
+  }
 }
 
 /// Builder для создания Transport Router с приоритетами

@@ -345,9 +345,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           'Zero-copy request completed, preparing response [streamId: $streamId]');
 
       // Zero-copy: отправляем ответ напрямую если транспорт поддерживает
-      if (_transport is RpcInMemoryTransport) {
+      if (_transport.supportsZeroCopy) {
         _logger?.internal('Zero-copy response sending [streamId: $streamId]');
-        await (_transport as RpcInMemoryTransport).sendDirectObject(
+        await _transport.sendDirectObject(
           streamId,
           response as Object,
         );

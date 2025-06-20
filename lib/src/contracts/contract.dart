@@ -27,7 +27,7 @@ abstract base class RpcResponderContract implements IRpcContract {
   ///
   /// Автоматически определяет режим работы:
   /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
   ///
   /// Примеры:
   /// ```dart
@@ -97,7 +97,7 @@ abstract base class RpcResponderContract implements IRpcContract {
   ///
   /// Автоматически определяет режим работы:
   /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
   void
       addServerStreamMethod<TRequest extends Object, TResponse extends Object>({
     required String methodName,
@@ -152,7 +152,7 @@ abstract base class RpcResponderContract implements IRpcContract {
   ///
   /// Автоматически определяет режим работы:
   /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
   void
       addClientStreamMethod<TRequest extends Object, TResponse extends Object>({
     required String methodName,
@@ -212,7 +212,7 @@ abstract base class RpcResponderContract implements IRpcContract {
   ///
   /// Автоматически определяет режим работы:
   /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
   void addBidirectionalMethod<TRequest extends Object,
       TResponse extends Object>({
     required String methodName,
@@ -297,7 +297,7 @@ abstract base class RpcCallerContract implements IRpcContract {
   ///
   /// Автоматически определяет режим работы:
   /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
   ///
   /// Примеры:
   /// ```dart
@@ -338,7 +338,7 @@ abstract base class RpcCallerContract implements IRpcContract {
   ///
   /// Автоматически определяет режим работы:
   /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
   Stream<TResponse>
       callServerStream<TRequest extends Object, TResponse extends Object>({
     required String methodName,
@@ -361,7 +361,7 @@ abstract base class RpcCallerContract implements IRpcContract {
   ///
   /// Автоматически определяет режим работы:
   /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
   Future<TResponse>
       callClientStream<TRequest extends Object, TResponse extends Object>({
     required String methodName,
@@ -384,7 +384,7 @@ abstract base class RpcCallerContract implements IRpcContract {
   ///
   /// Автоматически определяет режим работы:
   /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только RpcInMemoryTransport)
+  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
   Stream<TResponse> callBidirectionalStream<TRequest extends Object,
       TResponse extends Object>({
     required String methodName,

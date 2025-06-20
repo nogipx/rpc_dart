@@ -195,7 +195,7 @@ void main() {
       final request = TestRequest('Direct object', ['zero', 'copy', 'test']);
 
       // Прямое использование zero-copy на транспортном уровне
-      if (clientTransport is RpcInMemoryTransport) {
+      if (clientTransport.supportsZeroCopy) {
         final transport = clientTransport as RpcInMemoryTransport;
         final streamId = transport.createStream();
 

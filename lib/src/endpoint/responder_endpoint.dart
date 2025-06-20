@@ -512,7 +512,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final isZeroCopyMethod =
         contract?.zeroCopyMethods.containsKey(methodName) ?? false;
 
-    if (isZeroCopyMethod && transport is RpcInMemoryTransport) {
+    if (isZeroCopyMethod && transport.supportsZeroCopy) {
       // 🚀 Создаем zero-copy унарный респондер используя ZeroCopyStreamProcessor
       contextLogger.internal(
           'Создание zero-copy унарного респондера [streamId: $streamId]');
@@ -520,7 +520,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       final zeroCopyMethod = contract!.zeroCopyMethods[methodName]!;
 
       final processor = StreamProcessor<Object, Object>(
-        transport: transport as RpcInMemoryTransport,
+        transport: transport,
         streamId: streamId,
         serviceName: serviceName,
         methodName: methodName,
@@ -642,7 +642,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final isZeroCopyMethod =
         contract?.zeroCopyMethods.containsKey(methodName) ?? false;
 
-    if (isZeroCopyMethod && transport is RpcInMemoryTransport) {
+    if (isZeroCopyMethod && transport.supportsZeroCopy) {
       // 🚀 Создаем zero-copy клиентский стрим респондер
       contextLogger.internal(
           'Создание zero-copy клиентского стрим респондера [streamId: $streamId]');
@@ -651,7 +651,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
       final responder = ClientStreamResponder<Object, Object>(
         id: streamId,
-        transport: transport as RpcInMemoryTransport,
+        transport: transport,
         serviceName: serviceName,
         methodName: methodName,
         handler: (Stream<Object> requests) async {
@@ -756,7 +756,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final isZeroCopyMethod =
         contract?.zeroCopyMethods.containsKey(methodName) ?? false;
 
-    if (isZeroCopyMethod && transport is RpcInMemoryTransport) {
+    if (isZeroCopyMethod && transport.supportsZeroCopy) {
       // 🚀 Создаем zero-copy серверный стрим респондер
       contextLogger.internal(
           'Создание zero-copy серверного стрим респондера [streamId: $streamId]');
@@ -765,7 +765,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
       final responder = ServerStreamResponder<Object, Object>(
         id: streamId,
-        transport: transport as RpcInMemoryTransport,
+        transport: transport,
         serviceName: serviceName,
         methodName: methodName,
         handler: (request) {
@@ -927,7 +927,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final isZeroCopyMethod =
         contract?.zeroCopyMethods.containsKey(methodName) ?? false;
 
-    if (isZeroCopyMethod && transport is RpcInMemoryTransport) {
+    if (isZeroCopyMethod && transport.supportsZeroCopy) {
       // 🚀 Создаем zero-copy двунаправленный стрим респондер
       contextLogger.internal(
           'Создание zero-copy двунаправленного стрим респондера [streamId: $streamId]');
@@ -936,7 +936,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
       final responder = BidirectionalStreamResponder<Object, Object>(
         id: streamId,
-        transport: transport as RpcInMemoryTransport,
+        transport: transport,
         serviceName: serviceName,
         methodName: methodName,
         logger: contextLogger,

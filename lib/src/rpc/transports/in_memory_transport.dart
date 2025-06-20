@@ -58,6 +58,10 @@ class RpcInMemoryTransport implements IRpcTransport {
   @override
   bool get isClosed => _closed;
 
+  /// RpcInMemoryTransport поддерживает zero-copy операции! 🚀
+  @override
+  bool get supportsZeroCopy => true;
+
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
     // Простейшая фильтрация С broadcast поддержкой для множественных подписок

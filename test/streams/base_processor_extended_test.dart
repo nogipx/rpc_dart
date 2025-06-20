@@ -532,6 +532,10 @@ class _NonZeroCopyTransport implements IRpcTransport {
   @override
   bool get isClosed => _transport.isClosed;
 
+  /// Mock транспорт НЕ поддерживает zero-copy (имитирует сетевой транспорт)
+  @override
+  bool get supportsZeroCopy => false;
+
   @override
   int createStream() => _transport.createStream();
 

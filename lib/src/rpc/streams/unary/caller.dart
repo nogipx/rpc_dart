@@ -243,10 +243,10 @@ final class UnaryCaller<TRequest, TResponse> {
       final metadata = RpcMetadata(headers);
       await _transport.sendMetadata(streamId, metadata);
 
-      // Zero-copy оптимизация для inmemory транспорта
-      if (_transport is RpcInMemoryTransport) {
+      // Zero-copy оптимизация для поддерживающих транспортов
+      if (_transport.supportsZeroCopy) {
         _logger?.internal('Zero-copy отправка запроса [streamId: $streamId]');
-        await (_transport as RpcInMemoryTransport).sendDirectObject(
+        await _transport.sendDirectObject(
           streamId,
           request as Object,
           endStream: true,
