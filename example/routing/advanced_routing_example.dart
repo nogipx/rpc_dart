@@ -123,7 +123,7 @@ Future<void> _setupDomainServers(
     );
 
     server.registerServiceContract(
-      _createMockServiceContract(serviceName, label),
+      _createDemoServiceContract(serviceName, label),
     );
 
     server.start();
@@ -131,10 +131,10 @@ Future<void> _setupDomainServers(
   }
 }
 
-/// Создает mock контракт для тестирования
-RpcResponderContract _createMockServiceContract(
+/// Создает demo контракт для примера роутинга
+RpcResponderContract _createDemoServiceContract(
     String serviceName, String label) {
-  return _MockServiceContract(serviceName, label);
+  return _DemoServiceContract(serviceName, label);
 }
 
 /// Тестирует реальные сценарии роутинга
@@ -245,11 +245,11 @@ bool _isInABTestGroup(String? userId) {
   return userId.hashCode % 2 == 0; // 50% пользователей
 }
 
-/// Mock контракт для тестирования различных сервисов
-final class _MockServiceContract extends RpcResponderContract {
+/// Demo контракт для демонстрации различных сервисов в routing примере
+final class _DemoServiceContract extends RpcResponderContract {
   final String _label;
 
-  _MockServiceContract(super.serviceName, this._label);
+  _DemoServiceContract(super.serviceName, this._label);
 
   @override
   void setup() {

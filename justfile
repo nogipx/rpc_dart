@@ -1,7 +1,7 @@
 #!/usr/bin/env just --justfile
 
 test:
-    fvm dart test
+    fvm dart test --concurrency=1
 
 gen:
     fvm dart pub global run packo runner -r
@@ -14,7 +14,7 @@ prepare:
     fvm dart format -l 80 .
     reuse annotate -c "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>" -l "LGPL-3.0-or-later" --skip-unrecognised -r lib
     rm -rf coverage
-    fvm dart test test/ --coverage=coverage --reporter=compact
+    fvm dart test test/ --coverage=coverage --reporter=compact --concurrency=5
     fvm dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
     genhtml coverage/lcov.info -o coverage/html
     open coverage/html/index.html
