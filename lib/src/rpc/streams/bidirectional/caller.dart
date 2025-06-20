@@ -54,7 +54,8 @@ final class BidirectionalStreamCaller<TRequest extends Object,
 
     // Zero-copy режим: требуется RpcInMemoryTransport
     if (isZeroCopy && !transport.supportsZeroCopy) {
-      throw ArgumentError('Zero-copy режим требует транспорт с поддержкой zero-copy. '
+      throw ArgumentError(
+          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
           'Для сетевых транспортов передайте кодеки.');
     }
 
