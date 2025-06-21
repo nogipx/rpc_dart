@@ -4,6 +4,21 @@
 
 part of '_index.dart';
 
+/// Режимы передачи данных в RPC контрактах
+enum RpcDataTransferMode {
+  /// Zero-copy режим - прямая передача объектов без сериализации
+  /// Работает только с InMemoryTransport
+  zeroCopy,
+
+  /// Режим с кодеками - сериализация через IRpcCodec
+  /// Работает с любыми транспортами
+  codec,
+
+  /// Автоматический режим - определение на основе наличия кодеков
+  /// Если кодеки указаны → codec, иначе → zeroCopy
+  auto,
+}
+
 /// Типы RPC методов
 enum RpcMethodType {
   unaryRequest,

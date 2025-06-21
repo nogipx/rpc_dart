@@ -15,13 +15,81 @@ abstract interface class IRpcContract {
 abstract base class RpcResponderContract implements IRpcContract {
   @override
   final String serviceName;
+  final RpcDataTransferMode dataTransferMode;
   final Map<String, RpcMethodRegistration> _methods = {};
   final Map<String, RpcZeroCopyMethodRegistration> _zeroCopyMethods = {};
 
-  RpcResponderContract(this.serviceName);
+  RpcResponderContract(
+    this.serviceName, {
+    this.dataTransferMode = RpcDataTransferMode.auto,
+  });
 
   /// Декларативная регистрация методов
   void setup() {}
+
+  /// Проверяет, разрешено ли использование zero-copy режима
+  bool _isZeroCopyAllowed<TRequest, TResponse>(
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    switch (dataTransferMode) {
+      case RpcDataTransferMode.zeroCopy:
+        // В zeroCopy режиме всегда используем zero-copy, даже если кодеки указаны
+        return true;
+      case RpcDataTransferMode.codec:
+        return false;
+      case RpcDataTransferMode.auto:
+        // Автоматический режим - если кодеки не указаны, используем zero-copy
+        return requestCodec == null && responseCodec == null;
+    }
+  }
+
+  /// Возвращает фактически используемые кодеки с учетом режима передачи данных
+  (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?)
+      _getEffectiveCodecs<TRequest, TResponse>(
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
+
+    if (isZeroCopy) {
+      // В zero-copy режиме игнорируем переданные кодеки
+      return (null, null);
+    } else {
+      // В codec режиме используем переданные кодеки
+      return (requestCodec, responseCodec);
+    }
+  }
+
+  /// Валидирует, что для codec режима переданы необходимые кодеки
+  void _validateCodecsForCodecMode<TRequest, TResponse>(
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
+
+    if (!isZeroCopy) {
+      // Для codec режима требуются оба кодека
+      if (requestCodec == null || responseCodec == null) {
+        throw ArgumentError(
+            'Для режима сериализации требуются оба кодека (requestCodec и responseCodec). '
+            'Текущий режим контракта: $dataTransferMode. '
+            'Получено: requestCodec=${requestCodec != null ? 'указан' : 'null'}, '
+            'responseCodec=${responseCodec != null ? 'указан' : 'null'}');
+      }
+    }
+
+    // В zeroCopy режиме кодеки могут быть указаны, но будут проигнорированы
+    // В auto режиме тоже валидируем только если не zero-copy
+    if (dataTransferMode == RpcDataTransferMode.auto && !isZeroCopy) {
+      if ((requestCodec == null) != (responseCodec == null)) {
+        throw ArgumentError(
+            'В auto режиме для сериализации требуются оба кодека. '
+            'Получено: requestCodec=${requestCodec != null ? 'указан' : 'null'}, '
+            'responseCodec=${responseCodec != null ? 'указан' : 'null'}');
+      }
+    }
+  }
 
   /// 🚀 Универсальная регистрация унарного метода с автоматическим определением режима
   ///
@@ -54,7 +122,14 @@ abstract base class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    final isZeroCopy = requestCodec == null && responseCodec == null;
+    // Валидируем кодеки для codec режима
+    _validateCodecsForCodecMode(requestCodec, responseCodec);
+
+    // Получаем фактически используемые кодеки
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _getEffectiveCodecs(requestCodec, responseCodec);
+    final isZeroCopy =
+        effectiveRequestCodec == null && effectiveResponseCodec == null;
 
     if (isZeroCopy) {
       // Zero-copy регистрация
@@ -66,13 +141,6 @@ abstract base class RpcResponderContract implements IRpcContract {
         description: '$description [ZERO-COPY]',
       );
     } else {
-      // Проверяем что оба кодека указаны для сериализации
-      if (requestCodec == null || responseCodec == null) {
-        throw ArgumentError(
-            'Для режима сериализации требуются оба кодека (requestCodec и responseCodec). '
-            'Для zero-copy не передавайте кодеки (null).');
-      }
-
       // Сериализация регистрация с обёрткой для корректного приведения типов
       Future<IRpcSerializable> wrappedHandler(IRpcSerializable request,
           {RpcContext? context}) async {
@@ -87,8 +155,8 @@ abstract base class RpcResponderContract implements IRpcContract {
         type: RpcMethodType.unaryRequest,
         handler: wrappedHandler,
         description: description,
-        requestCodec: requestCodec as IRpcCodec<IRpcSerializable>,
-        responseCodec: responseCodec as IRpcCodec<IRpcSerializable>,
+        requestCodec: effectiveRequestCodec as IRpcCodec<IRpcSerializable>,
+        responseCodec: effectiveResponseCodec as IRpcCodec<IRpcSerializable>,
       );
     }
   }
@@ -107,7 +175,14 @@ abstract base class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    final isZeroCopy = requestCodec == null && responseCodec == null;
+    // Валидируем кодеки для codec режима
+    _validateCodecsForCodecMode(requestCodec, responseCodec);
+
+    // Получаем фактически используемые кодеки
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _getEffectiveCodecs(requestCodec, responseCodec);
+    final isZeroCopy =
+        effectiveRequestCodec == null && effectiveResponseCodec == null;
 
     if (isZeroCopy) {
       // Zero-copy регистрация
@@ -119,13 +194,6 @@ abstract base class RpcResponderContract implements IRpcContract {
         description: '$description [ZERO-COPY]',
       );
     } else {
-      // Проверяем что оба кодека указаны для сериализации
-      if (requestCodec == null || responseCodec == null) {
-        throw ArgumentError(
-            'Для режима сериализации требуются оба кодека (requestCodec и responseCodec). '
-            'Для zero-copy не передавайте кодеки (null).');
-      }
-
       // Сериализация регистрация с обёрткой для корректного приведения типов
       Stream<IRpcSerializable> wrappedHandler(IRpcSerializable request,
           {RpcContext? context}) async* {
@@ -142,8 +210,8 @@ abstract base class RpcResponderContract implements IRpcContract {
         type: RpcMethodType.serverStream,
         handler: wrappedHandler,
         description: description,
-        requestCodec: requestCodec as IRpcCodec<IRpcSerializable>,
-        responseCodec: responseCodec as IRpcCodec<IRpcSerializable>,
+        requestCodec: effectiveRequestCodec as IRpcCodec<IRpcSerializable>,
+        responseCodec: effectiveResponseCodec as IRpcCodec<IRpcSerializable>,
       );
     }
   }
@@ -162,7 +230,14 @@ abstract base class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    final isZeroCopy = requestCodec == null && responseCodec == null;
+    // Валидируем кодеки для codec режима
+    _validateCodecsForCodecMode(requestCodec, responseCodec);
+
+    // Получаем фактически используемые кодеки
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _getEffectiveCodecs(requestCodec, responseCodec);
+    final isZeroCopy =
+        effectiveRequestCodec == null && effectiveResponseCodec == null;
 
     if (isZeroCopy) {
       // Zero-copy регистрация с адаптером типов
@@ -181,13 +256,6 @@ abstract base class RpcResponderContract implements IRpcContract {
         description: '$description [ZERO-COPY]',
       );
     } else {
-      // Проверяем что оба кодека указаны для сериализации
-      if (requestCodec == null || responseCodec == null) {
-        throw ArgumentError(
-            'Для режима сериализации требуются оба кодека (requestCodec и responseCodec). '
-            'Для zero-copy не передавайте кодеки (null).');
-      }
-
       // Сериализация регистрация с обёрткой для корректного приведения типов
       Future<IRpcSerializable> wrappedHandler(Stream<IRpcSerializable> requests,
           {RpcContext? context}) async {
@@ -202,8 +270,8 @@ abstract base class RpcResponderContract implements IRpcContract {
         type: RpcMethodType.clientStream,
         handler: wrappedHandler,
         description: description,
-        requestCodec: requestCodec as IRpcCodec<IRpcSerializable>,
-        responseCodec: responseCodec as IRpcCodec<IRpcSerializable>,
+        requestCodec: effectiveRequestCodec as IRpcCodec<IRpcSerializable>,
+        responseCodec: effectiveResponseCodec as IRpcCodec<IRpcSerializable>,
       );
     }
   }
@@ -222,7 +290,14 @@ abstract base class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    final isZeroCopy = requestCodec == null && responseCodec == null;
+    // Валидируем кодеки для codec режима
+    _validateCodecsForCodecMode(requestCodec, responseCodec);
+
+    // Получаем фактически используемые кодеки
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _getEffectiveCodecs(requestCodec, responseCodec);
+    final isZeroCopy =
+        effectiveRequestCodec == null && effectiveResponseCodec == null;
 
     if (isZeroCopy) {
       // Zero-copy регистрация с адаптером типов
@@ -244,13 +319,6 @@ abstract base class RpcResponderContract implements IRpcContract {
         description: '$description [ZERO-COPY]',
       );
     } else {
-      // Проверяем что оба кодека указаны для сериализации
-      if (requestCodec == null || responseCodec == null) {
-        throw ArgumentError(
-            'Для режима сериализации требуются оба кодека (requestCodec и responseCodec). '
-            'Для zero-copy не передавайте кодеки (null).');
-      }
-
       // Сериализация регистрация с обёрткой для корректного приведения типов
       Stream<IRpcSerializable> wrappedHandler(Stream<IRpcSerializable> requests,
           {RpcContext? context}) async* {
@@ -267,8 +335,8 @@ abstract base class RpcResponderContract implements IRpcContract {
         type: RpcMethodType.bidirectionalStream,
         handler: wrappedHandler,
         description: description,
-        requestCodec: requestCodec as IRpcCodec<IRpcSerializable>,
-        responseCodec: responseCodec as IRpcCodec<IRpcSerializable>,
+        requestCodec: effectiveRequestCodec as IRpcCodec<IRpcSerializable>,
+        responseCodec: effectiveResponseCodec as IRpcCodec<IRpcSerializable>,
       );
     }
   }
@@ -286,22 +354,93 @@ abstract base class RpcResponderContract implements IRpcContract {
 abstract base class RpcCallerContract implements IRpcContract {
   @override
   final String serviceName;
+  final RpcDataTransferMode dataTransferMode;
   final RpcCallerEndpoint _endpoint;
 
-  RpcCallerContract(this.serviceName, this._endpoint);
+  RpcCallerContract(
+    this.serviceName,
+    this._endpoint, {
+    this.dataTransferMode = RpcDataTransferMode.auto,
+  });
 
   /// Получает endpoint, используемый для отправки запросов
   RpcCallerEndpoint get endpoint => _endpoint;
 
-  /// 🚀 Универсальный унарный вызов с автоматическим определением режима
+  /// Определяет режим передачи данных на основе настроек контракта и наличия кодеков
+  bool _isZeroCopyAllowed<TRequest, TResponse>(
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    switch (dataTransferMode) {
+      case RpcDataTransferMode.zeroCopy:
+        // В zeroCopy режиме всегда используем zero-copy, даже если кодеки указаны
+        return true;
+      case RpcDataTransferMode.codec:
+        return false;
+      case RpcDataTransferMode.auto:
+        // Автоматический режим - если кодеки не указаны, используем zero-copy
+        return requestCodec == null && responseCodec == null;
+    }
+  }
+
+  /// Возвращает фактически используемые кодеки с учетом режима передачи данных
+  (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?)
+      _getEffectiveCodecs<TRequest, TResponse>(
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
+
+    if (isZeroCopy) {
+      // В zero-copy режиме игнорируем переданные кодеки
+      return (null, null);
+    } else {
+      // В codec режиме используем переданные кодеки
+      return (requestCodec, responseCodec);
+    }
+  }
+
+  /// Валидирует, что для codec режима переданы необходимые кодеки
+  void _validateCodecsForCodecMode<TRequest, TResponse>(
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
+
+    if (!isZeroCopy) {
+      // Для codec режима требуются оба кодека
+      if (requestCodec == null || responseCodec == null) {
+        throw ArgumentError(
+            'Для режима сериализации требуются оба кодека (requestCodec и responseCodec). '
+            'Текущий режим контракта: $dataTransferMode. '
+            'Получено: requestCodec=${requestCodec != null ? 'указан' : 'null'}, '
+            'responseCodec=${responseCodec != null ? 'указан' : 'null'}');
+      }
+    }
+
+    // В zeroCopy режиме кодеки могут быть указаны, но будут проигнорированы
+    // В auto режиме тоже валидируем только если не zero-copy
+    if (dataTransferMode == RpcDataTransferMode.auto && !isZeroCopy) {
+      if ((requestCodec == null) != (responseCodec == null)) {
+        throw ArgumentError(
+            'В auto режиме для сериализации требуются оба кодека. '
+            'Получено: requestCodec=${requestCodec != null ? 'указан' : 'null'}, '
+            'responseCodec=${responseCodec != null ? 'указан' : 'null'}');
+      }
+    }
+  }
+
+  /// 🚀 Универсальный унарный вызов с централизованным управлением режимом
   ///
-  /// Автоматически определяет режим работы:
-  /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
+  /// Режим работы определяется настройкой dataTransferMode контракта:
+  /// - RpcDataTransferMode.zeroCopy → Принудительно zero-copy (только InMemoryTransport)
+  /// - RpcDataTransferMode.codec → Принудительно сериализация (любые транспорты)
+  /// - RpcDataTransferMode.auto → Автоматически (кодеки указаны → codec, иначе → zeroCopy)
   ///
   /// Примеры:
   /// ```dart
-  /// // Сериализация (для сетевых транспортов)
+  /// // Контракт с принудительной сериализацией
+  /// final contract = MyCallerContract(endpoint, dataTransferMode: RpcDataTransferMode.codec);
   /// final result = await contract.callUnary<MyRequest, MyResponse>(
   ///   methodName: 'Method',
   ///   requestCodec: myRequestCodec,
@@ -309,11 +448,11 @@ abstract base class RpcCallerContract implements IRpcContract {
   ///   request: MyRequest('data'),
   /// );
   ///
-  /// // Zero-copy (только для RpcInMemoryTransport)
+  /// // Контракт с принудительным zero-copy
+  /// final contract = MyCallerContract(endpoint, dataTransferMode: RpcDataTransferMode.zeroCopy);
   /// final result = await contract.callUnary<String, String>(
   ///   methodName: 'Method',
   ///   request: 'hello',
-  ///   // кодеки не указываем → автоматически zero-copy
   /// );
   /// ```
   Future<TResponse>
@@ -324,21 +463,26 @@ abstract base class RpcCallerContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
+    // Валидируем кодеки для codec режима
+    _validateCodecsForCodecMode(requestCodec, responseCodec);
+
+    // Получаем фактически используемые кодеки
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _getEffectiveCodecs(requestCodec, responseCodec);
+
     return _endpoint.unaryRequest<TRequest, TResponse>(
       serviceName: serviceName,
       methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
+      requestCodec: effectiveRequestCodec,
+      responseCodec: effectiveResponseCodec,
       request: request,
       context: context,
     );
   }
 
-  /// 🚀 Универсальный server stream вызов с автоматическим определением режима
+  /// 🚀 Универсальный server stream вызов с централизованным управлением режимом
   ///
-  /// Автоматически определяет режим работы:
-  /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
+  /// Режим работы определяется настройкой dataTransferMode контракта
   Stream<TResponse>
       callServerStream<TRequest extends Object, TResponse extends Object>({
     required String methodName,
@@ -347,21 +491,26 @@ abstract base class RpcCallerContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
+    // Валидируем кодеки для codec режима
+    _validateCodecsForCodecMode(requestCodec, responseCodec);
+
+    // Получаем фактически используемые кодеки
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _getEffectiveCodecs(requestCodec, responseCodec);
+
     return _endpoint.serverStream<TRequest, TResponse>(
       serviceName: serviceName,
       methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
+      requestCodec: effectiveRequestCodec,
+      responseCodec: effectiveResponseCodec,
       request: request,
       context: context,
     );
   }
 
-  /// 🚀 Универсальный client stream вызов с автоматическим определением режима
+  /// 🚀 Универсальный client stream вызов с централизованным управлением режимом
   ///
-  /// Автоматически определяет режим работы:
-  /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
+  /// Режим работы определяется настройкой dataTransferMode контракта
   Future<TResponse>
       callClientStream<TRequest extends Object, TResponse extends Object>({
     required String methodName,
@@ -370,21 +519,26 @@ abstract base class RpcCallerContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
+    // Валидируем кодеки для codec режима
+    _validateCodecsForCodecMode(requestCodec, responseCodec);
+
+    // Получаем фактически используемые кодеки
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _getEffectiveCodecs(requestCodec, responseCodec);
+
     final builder = _endpoint.clientStream<TRequest, TResponse>(
       serviceName: serviceName,
       methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
+      requestCodec: effectiveRequestCodec,
+      responseCodec: effectiveResponseCodec,
       context: context,
     );
     return builder(requests);
   }
 
-  /// 🚀 Универсальный bidirectional stream вызов с автоматическим определением режима
+  /// 🚀 Универсальный bidirectional stream вызов с централизованным управлением режимом
   ///
-  /// Автоматически определяет режим работы:
-  /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
+  /// Режим работы определяется настройкой dataTransferMode контракта
   Stream<TResponse> callBidirectionalStream<TRequest extends Object,
       TResponse extends Object>({
     required String methodName,
@@ -393,11 +547,18 @@ abstract base class RpcCallerContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
+    // Валидируем кодеки для codec режима
+    _validateCodecsForCodecMode(requestCodec, responseCodec);
+
+    // Получаем фактически используемые кодеки
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _getEffectiveCodecs(requestCodec, responseCodec);
+
     return _endpoint.bidirectionalStream<TRequest, TResponse>(
       serviceName: serviceName,
       methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
+      requestCodec: effectiveRequestCodec,
+      responseCodec: effectiveResponseCodec,
       requests: requests,
       context: context,
     );
