@@ -152,6 +152,41 @@ addUnaryMethod<UserRequest, UserResponse>(
 );
 ```
 
+### Режимы передачи данных
+
+RPC Dart поддерживает три режима передачи данных в контрактах:
+
+| Режим | Описание | Использование |
+|-------|----------|---------------|
+| **`zeroCopy`** | Принудительно zero-copy, кодеки игнорируются | Максимальная производительность |
+| **`codec`** | Принудительная сериализация, кодеки обязательны | Универсальная совместимость |
+| **`auto`** | **Умный выбор**: нет кодеков → zero-copy, есть кодеки → сериализация | Гибкая разработка |
+
+**Режим `auto` (рекомендуется)** автоматически определяет оптимальный способ передачи:
+
+```dart
+final class SmartService extends RpcResponderContract {
+  SmartService() : super('SmartService', 
+    dataTransferMode: RpcDataTransferMode.auto); // ← Умный режим
+
+  void setup() {
+    // Автоматически выберет zero-copy (кодеки не указаны)
+    addUnaryMethod<FastRequest, FastResponse>(
+      'fastMethod', 
+      handler: fastHandler,
+    );
+    
+    // Автоматически выберет сериализацию (кодеки указаны)  
+    addUnaryMethod<JsonRequest, JsonResponse>(
+      'universalMethod',
+      handler: universalHandler,
+      requestCodec: jsonRequestCodec,   // ← Указаны кодеки
+      responseCodec: jsonResponseCodec,
+    );
+  }
+}
+```
+
 ### Дополнительные транспорты
 
 RPC Dart поддерживает создание кастомных транспортов через интерфейс `IRpcTransport`:
