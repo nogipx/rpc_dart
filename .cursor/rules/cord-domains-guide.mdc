@@ -1,0 +1,1182 @@
+---
+description: when uses rpc_dart or cord
+globs: 
+alwaysApply: false
+---
+# CORD (Contract-Oriented Remote Domains) - Полное руководство
+
+> **Contract-Oriented Remote Domains** — архитектурный подход для Flutter/Dart приложений с изоляцией бизнес-доменов через типизированные RPC контракты.
+
+## 🎯 Основные принципы CORD
+
+1. **Contract-First**: Все взаимодействия определяются через типизированные контракты
+2. **Domain Isolation**: Домены не имеют прямых зависимостей друг от друга  
+3. **Transport Agnostic**: Код доменов не зависит от способа их выполнения (локально/удаленно)
+
+## 📐 Архитектура CORD домена
+
+Каждый CORD домен состоит из **3 основных компонентов**:
+
+```
+[Contract Interface] ←→ [Responder] ←→ [Caller]
+        ↕                   ↕              ↕
+  API определение      Реализация    Клиентский
+   (абстракция)      (бизнес-логика)   доступ
+```
+
+## 🔧 Пошаговое создание CORD домена
+
+### 1. Создание Contract Interface
+
+```dart
+// Определяем интерфейс домена
+abstract interface class IUserContract implements IRpcContract {
+  static const name = 'UserService';
+  
+  // Унарные методы (один запрос → один ответ)
+  Future<GetUserResponse> getUser(GetUserRequest request, {RpcContext? context});
+  Future<UpdateUserResponse> updateUser(UpdateUserRequest request, {RpcContext? context});
+  
+  // Серверные стримы (один запрос → множество ответов)
+  Stream<UserEvent> subscribeToUserEvents(UserEventsRequest request, {RpcContext? context});
+  
+  // Клиентские стримы (множество запросов → один ответ)
+  Future<BulkUpdateResponse> bulkUpdate(Stream<UpdateUserRequest> requests, {RpcContext? context});
+}
+```
+
+### 2. Создание Request/Response моделей
+
+```dart
+// Request модели - всегда расширяют IRpcSerializable
+class GetUserRequest implements IRpcSerializable {
+  final String userId;
+  
+  const GetUserRequest({required this.userId});
+  
+  factory GetUserRequest.fromJson(Map<String, dynamic> json) =>
+      GetUserRequest(userId: json['userId'] as String);
+  
+  @override
+  Map<String, dynamic> toJson() => {'userId': userId};
+  
+  // Создаем статический кодек для сериализации
+  static final codec = RpcCodec<GetUserRequest>(GetUserRequest.fromJson);
+}
+
+class GetUserResponse implements IRpcSerializable {
+  final User user;
+  final UserSettings? settings;
+  
+  const GetUserResponse({required this.user, this.settings});
+  
+  factory GetUserResponse.fromJson(Map<String, dynamic> json) =>
+      GetUserResponse(
+        user: User.fromJson(json['user'] as Map<String, dynamic>),
+        settings: json['settings'] != null 
+          ? UserSettings.fromJson(json['settings'] as Map<String, dynamic>)
+          : null,
+      );
+  
+  @override
+  Map<String, dynamic> toJson() => {
+    'user': user.toJson(),
+    if (settings != null) 'settings': settings!.toJson(),
+  };
+  
+  static final codec = RpcCodec<GetUserResponse>(GetUserResponse.fromJson);
+}
+```
+
+**💡 Важно о кодеках:** Система автоматически валидирует кодеки в зависимости от режима передачи данных:
+- **Auto режим**: Либо оба кодека указаны (→ codec), либо ни одного (→ zero-copy)
+- **Codec режим**: Оба кодека обязательны, иначе ошибка валидации
+- **Zero-copy режим**: Кодеки игнорируются, даже если указаны
+
+### 3. Создание Responder (серверная реализация)
+
+```dart
+// Responder содержит бизнес-логику домена
+final class UserResponder extends RpcResponderContract implements IUserContract {
+  // Зависимости от других доменов через Caller'ы
+  final PaymentCaller _paymentCaller;
+  final NotificationCaller _notificationCaller;
+  
+  // Локальные зависимости (репозитории, сервисы)
+  final UserRepository _userRepository;
+  final UserValidator _userValidator;
+  
+  UserResponder({
+    required PaymentCaller paymentCaller,
+    required NotificationCaller notificationCaller,
+    required UserRepository userRepository,
+    required UserValidator userValidator,
+  }) : _paymentCaller = paymentCaller,
+       _notificationCaller = notificationCaller,
+       _userRepository = userRepository,
+       _userValidator = userValidator,
+       super(IUserContract.name); // Используем константу из интерфейса
+       
+  // Можно также явно указать режим передачи данных:
+  // super(IUserContract.name, dataTransferMode: RpcDataTransferMode.auto);
+  
+  @override
+  void setup() {
+    // Регистрируем методы с кодеками для сериализации
+    addUnaryMethod<GetUserRequest, GetUserResponse>(
+      methodName: 'GetUser',
+      handler: getUser,
+      requestCodec: GetUserRequest.codec,
+      responseCodec: GetUserResponse.codec,
+      description: 'Получает пользователя по ID',
+    );
+    
+    addUnaryMethod<UpdateUserRequest, UpdateUserResponse>(
+      methodName: 'UpdateUser', 
+      handler: updateUser,
+      requestCodec: UpdateUserRequest.codec,
+      responseCodec: UpdateUserResponse.codec,
+      description: 'Обновляет данные пользователя',
+    );
+    
+    addServerStreamMethod<UserEventsRequest, UserEvent>(
+      methodName: 'SubscribeToUserEvents',
+      handler: subscribeToUserEvents,
+      requestCodec: UserEventsRequest.codec,
+      responseCodec: UserEvent.codec,
+      description: 'Подписка на события пользователя',
+    );
+    
+    addClientStreamMethod<UpdateUserRequest, BulkUpdateResponse>(
+      methodName: 'BulkUpdate',
+      handler: bulkUpdate,
+      requestCodec: UpdateUserRequest.codec,
+      responseCodec: BulkUpdateResponse.codec,
+      description: 'Массовое обновление пользователей',
+    );
+  }
+  
+  @override
+  Future<GetUserResponse> getUser(GetUserRequest request, {RpcContext? context}) async {
+    // Валидация входных данных
+    if (request.userId.isEmpty) {
+      throw RpcException('User ID не может быть пустым');
+    }
+    
+    try {
+      // Основная бизнес-логика
+      final user = await _userRepository.findById(request.userId);
+      if (user == null) {
+        throw RpcException('Пользователь не найден: ${request.userId}');
+      }
+      
+      // Междоменный вызов с наследованием трассировки
+      final paymentContext = RpcContext.forDomainCall(
+        parentContext: context,
+        fromDomain: IUserContract.name,
+        toDomain: IPaymentContract.name,
+        operation: 'getUserPaymentInfo',
+      );
+      
+      final paymentInfo = await _paymentCaller.getUserPaymentInfo(
+        GetPaymentInfoRequest(userId: request.userId),
+        context: paymentContext,
+      );
+      
+      return GetUserResponse(
+        user: user,
+        paymentInfo: paymentInfo.info,
+      );
+      
+    } catch (e) {
+      // Логирование ошибок
+      RpcLogger('UserResponder').error('Ошибка при получении пользователя', error: e);
+      rethrow;
+    }
+  }
+  
+  @override
+  Future<UpdateUserResponse> updateUser(UpdateUserRequest request, {RpcContext? context}) async {
+    // Валидация через доменные правила
+    final validationResult = await _userValidator.validate(request.userData);
+    if (!validationResult.isValid) {
+      throw RpcException('Данные не прошли валидацию: ${validationResult.errors}');
+    }
+    
+    // Обновление с проверкой конкурентных изменений
+    final updatedUser = await _userRepository.updateWithOptimisticLocking(
+      request.userId,
+      request.userData,
+      request.version,
+    );
+    
+    // Уведомление других доменов об изменении
+    await _notificationCaller.sendUserUpdatedNotification(
+      UserUpdatedNotificationRequest(
+        userId: request.userId,
+        changes: request.userData,
+      ),
+      context: context,
+    );
+    
+    return UpdateUserResponse(user: updatedUser);
+  }
+  
+  @override
+  Future<BulkUpdateResponse> bulkUpdate(Stream<UpdateUserRequest> requests, {RpcContext? context}) async {
+    final updatedUsers = <User>[];
+    final errors = <String>[];
+    
+    await for (final request in requests) {
+      try {
+        context?.cancellationToken?.throwIfCancelled();
+        
+        // Валидация каждого запроса
+        final validationResult = await _userValidator.validate(request.userData);
+        if (!validationResult.isValid) {
+          errors.add('User ${request.userId}: ${validationResult.errors.join(", ")}');
+          continue;
+        }
+        
+        // Обновление пользователя
+        final updatedUser = await _userRepository.updateWithOptimisticLocking(
+          request.userId,
+          request.userData,
+          request.version,
+        );
+        
+        updatedUsers.add(updatedUser);
+        
+      } catch (e) {
+        errors.add('User ${request.userId}: $e');
+      }
+    }
+    
+    return BulkUpdateResponse(
+      updatedUsers: updatedUsers,
+      errors: errors,
+      totalProcessed: updatedUsers.length + errors.length,
+    );
+  }
+  
+  @override
+  Stream<UserEvent> subscribeToUserEvents(UserEventsRequest request, {RpcContext? context}) async* {
+    // Стрим событий пользователя
+    await for (final event in _userRepository.watchUserEvents(request.userId)) {
+      // Фильтрация событий по типам в запросе
+      if (request.eventTypes.contains(event.type)) {
+        yield UserEvent.fromDomainEvent(event);
+      }
+      
+      // Проверка отмены контекста
+      context?.cancellationToken?.throwIfCancelled();
+    }
+  }
+}
+```
+
+### 4. Создание Caller (клиентский доступ)
+
+```dart
+// Caller предоставляет типобезопасный доступ к домену
+final class UserCaller extends RpcCallerContract implements IUserContract {
+  UserCaller(RpcCallerEndpoint endpoint) 
+    : super(IUserContract.name, endpoint);
+    
+  // Можно также указать режим передачи данных:
+  // super(IUserContract.name, endpoint, dataTransferMode: RpcDataTransferMode.auto);
+  
+  @override
+  Future<GetUserResponse> getUser(GetUserRequest request, {RpcContext? context}) {
+    return callUnary<GetUserRequest, GetUserResponse>(
+      methodName: 'GetUser',
+      request: request,
+      requestCodec: GetUserRequest.codec,
+      responseCodec: GetUserResponse.codec,
+      context: context,
+    );
+  }
+  
+  @override
+  Future<UpdateUserResponse> updateUser(UpdateUserRequest request, {RpcContext? context}) {
+    return callUnary<UpdateUserRequest, UpdateUserResponse>(
+      methodName: 'UpdateUser',
+      request: request,
+      requestCodec: UpdateUserRequest.codec,
+      responseCodec: UpdateUserResponse.codec,
+      context: context,
+    );
+  }
+  
+  @override
+  Stream<UserEvent> subscribeToUserEvents(UserEventsRequest request, {RpcContext? context}) {
+    return callServerStream<UserEventsRequest, UserEvent>(
+      methodName: 'SubscribeToUserEvents',
+      request: request,
+      requestCodec: UserEventsRequest.codec,
+      responseCodec: UserEvent.codec,
+      context: context,
+    );
+  }
+  
+  @override
+  Future<BulkUpdateResponse> bulkUpdate(Stream<UpdateUserRequest> requests, {RpcContext? context}) {
+    return callClientStream<UpdateUserRequest, BulkUpdateResponse>(
+      methodName: 'BulkUpdate',
+      requests: requests,
+      requestCodec: UpdateUserRequest.codec,
+      responseCodec: BulkUpdateResponse.codec,
+      context: context,
+    );
+  }
+}
+```
+
+## 🏗️ Инициализация и связывание доменов
+
+### Создание транспортов и эндпоинтов
+
+```dart
+// 1. Создаем парные транспорты для локального взаимодействия
+final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+
+// 2. Создаем серверный эндпоинт для Responder'ов
+final serverEndpoint = RpcResponderEndpoint(
+  transport: serverTransport,
+  debugLabel: 'DomainServer',
+  loggerColors: RpcLoggerColors.singleColor(AnsiColor.cyan),
+);
+
+// 3. Создаем клиентский эндпоинт для Caller'ов
+final clientEndpoint = RpcCallerEndpoint(
+  transport: clientTransport,
+  debugLabel: 'DomainClient',
+  loggerColors: RpcLoggerColors.singleColor(AnsiColor.brightGreen),
+);
+
+// 4. Создаем Caller'ы для зависимостей
+final paymentCaller = PaymentCaller(clientEndpoint);
+final notificationCaller = NotificationCaller(clientEndpoint);
+
+// 5. Создаем Responder с зависимостями
+final userResponder = UserResponder(
+  paymentCaller: paymentCaller,
+  notificationCaller: notificationCaller,
+  userRepository: UserRepository(),
+  userValidator: UserValidator(),
+);
+
+// 6. Регистрируем Responder и запускаем сервер
+serverEndpoint.registerServiceContract(userResponder);
+serverEndpoint.start();
+
+// 7. Создаем Caller для использования в UI
+final userCaller = UserCaller(clientEndpoint);
+```
+
+## 🎭 Режимы передачи данных
+
+### Auto режим (рекомендуемый)
+
+```dart
+// Auto режим автоматически выбирает оптимальный способ
+final class AutoUserResponder extends RpcResponderContract {
+  AutoUserResponder() : super(IUserContract.name, dataTransferMode: RpcDataTransferMode.auto);
+  
+  @override
+  void setup() {
+    // С кодеками → сериализация (для сетевых транспортов)
+    addUnaryMethod<GetUserRequest, GetUserResponse>(
+      methodName: 'GetUser',
+      handler: getUser,
+      requestCodec: GetUserRequest.codec,
+      responseCodec: GetUserResponse.codec,
+    );
+    
+    // Без кодеков → zero-copy (только для InMemoryTransport)
+    addUnaryMethod<String, String>(
+      methodName: 'Ping',
+      handler: (request, {context}) async => 'Pong: $request',
+      // кодеки не указываем → автоматически zero-copy
+    );
+  }
+}
+```
+
+### Zero-copy режим (максимальная производительность)
+
+```dart
+// Zero-copy для максимальной производительности (только InMemoryTransport)
+final class ZeroCopyUserResponder extends RpcResponderContract {
+  ZeroCopyUserResponder() : super(IUserContract.name, dataTransferMode: RpcDataTransferMode.zeroCopy);
+  
+  @override
+  void setup() {
+    // Прямая передача объектов без сериализации
+    addUnaryMethod<UserQuery, UserData>(
+      methodName: 'QueryUser',
+      handler: (query, {context}) async {
+        return UserData(name: 'User ${query.id}', email: 'user@example.com');
+      },
+      // Кодеки не указываем в zero-copy режиме
+    );
+  }
+}
+```
+
+## 📊 Классификация доменов
+
+### Бизнес-домены
+Содержат предметную логику и бизнес-правила:
+
+```dart
+// Примеры бизнес-доменов
+abstract interface class IOrderContract implements IRpcContract {
+  static const name = 'OrderService';
+  Future<CreateOrderResponse> createOrder(CreateOrderRequest request);
+  Future<CancelOrderResponse> cancelOrder(CancelOrderRequest request);
+}
+
+abstract interface class IPaymentContract implements IRpcContract {
+  static const name = 'PaymentService';
+  Future<ProcessPaymentResponse> processPayment(ProcessPaymentRequest request);
+  Future<RefundPaymentResponse> refundPayment(RefundPaymentRequest request);
+}
+
+abstract interface class IInventoryContract implements IRpcContract {
+  static const name = 'InventoryService';
+  Future<CheckAvailabilityResponse> checkAvailability(CheckAvailabilityRequest request);
+  Future<ReserveItemsResponse> reserveItems(ReserveItemsRequest request);
+}
+```
+
+### Инфраструктурные домены
+Предоставляют техническую функциональность:
+
+```dart
+// Примеры инфраструктурных доменов
+abstract interface class INotificationContract implements IRpcContract {
+  static const name = 'NotificationService';
+  Future<SendNotificationResponse> sendNotification(SendNotificationRequest request);
+  Future<ScheduleNotificationResponse> scheduleNotification(ScheduleNotificationRequest request);
+}
+
+abstract interface class ICacheContract implements IRpcContract {
+  static const name = 'CacheService';
+  Future<SetCacheResponse> set(SetCacheRequest request);
+  Future<GetCacheResponse> get(GetCacheRequest request);
+  Future<ClearCacheResponse> clear(ClearCacheRequest request);
+}
+
+abstract interface class INavigationContract implements IRpcContract {
+  static const name = 'NavigationService';
+  Future<NavigateToResponse> navigateTo(NavigateToRequest request);
+  Future<GoBackResponse> goBack(GoBackRequest request);
+}
+```
+
+## 🧪 Тестирование CORD доменов
+
+### Unit тестирование Responder'ов
+
+```dart
+void main() {
+  group('UserResponder Tests', () {
+    late UserResponder userResponder;
+    late MockPaymentCaller mockPaymentCaller;
+    late MockUserRepository mockUserRepository;
+    
+    setUp(() {
+      mockPaymentCaller = MockPaymentCaller();
+      mockUserRepository = MockUserRepository();
+      
+      userResponder = UserResponder(
+        paymentCaller: mockPaymentCaller,
+        notificationCaller: MockNotificationCaller(),
+        userRepository: mockUserRepository,
+        userValidator: UserValidator(),
+      );
+    });
+    
+    test('getUser возвращает пользователя с платежной информацией', () async {
+      // Arrange
+      final user = User(id: 'user1', name: 'John Doe');
+      final paymentInfo = PaymentInfo(balance: 100.0);
+      
+      when(mockUserRepository.findById('user1')).thenAnswer((_) async => user);
+      when(mockPaymentCaller.getUserPaymentInfo(any)).thenAnswer(
+        (_) async => GetPaymentInfoResponse(info: paymentInfo),
+      );
+      
+      // Act
+      final response = await userResponder.getUser(
+        GetUserRequest(userId: 'user1'),
+      );
+      
+      // Assert
+      expect(response.user.id, equals('user1'));
+      expect(response.user.paymentInfo, equals(paymentInfo));
+    });
+  });
+}
+```
+
+### Integration тестирование с реальными RPC вызовами
+
+```dart
+void main() {
+  group('User Domain Integration Tests', () {
+    late RpcResponderEndpoint serverEndpoint;
+    late RpcCallerEndpoint clientEndpoint;
+    late UserCaller userCaller;
+    
+    setUp(() async {
+      // Создаем реальные транспорты и эндпоинты
+      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      
+      serverEndpoint = RpcResponderEndpoint(transport: serverTransport);
+      clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
+      
+      // Регистрируем реальный Responder
+      final userResponder = UserResponder(
+        paymentCaller: PaymentCaller(clientEndpoint),
+        notificationCaller: NotificationCaller(clientEndpoint),
+        userRepository: InMemoryUserRepository(),
+        userValidator: UserValidator(),
+      );
+      
+      serverEndpoint.registerServiceContract(userResponder);
+      serverEndpoint.start();
+      
+      userCaller = UserCaller(clientEndpoint);
+    });
+    
+    tearDown(() async {
+      await serverEndpoint.close();
+      await clientEndpoint.close();
+    });
+    
+    test('полный цикл создания и получения пользователя', () async {
+      // Создаем пользователя
+      final createResponse = await userCaller.createUser(
+        CreateUserRequest(name: 'Alice', email: 'alice@example.com'),
+      );
+      
+      // Получаем созданного пользователя
+      final getResponse = await userCaller.getUser(
+        GetUserRequest(userId: createResponse.user.id),
+      );
+      
+      expect(getResponse.user.name, equals('Alice'));
+      expect(getResponse.user.email, equals('alice@example.com'));
+    });
+  });
+}
+```
+
+## 🌐 Продвинутые возможности RpcContext
+
+**RpcContext** предоставляет мощные возможности для трассировки и передачи метаданных между доменами:
+
+### Автоматическое наследование trace ID
+
+```dart
+// Создание контекста для бизнес-операции
+final businessContext = RpcContext.forBusinessOperation(
+  operationType: 'CreateOrder',
+  userId: request.userId,
+  sessionId: request.sessionId,
+  timeout: Duration(seconds: 30),
+);
+
+// Междоменные вызовы автоматически наследуют трассировку
+final inventoryContext = RpcContext.forDomainCall(
+  parentContext: businessContext,
+  fromDomain: IOrderContract.name,
+  toDomain: IInventoryContract.name,
+  operation: 'checkAvailability',
+);
+
+// Все вызовы в цепочке будут иметь общий trace ID
+await _inventoryCaller.checkAvailability(checkRequest, context: inventoryContext);
+```
+
+### Передача пользовательских метаданных
+
+```dart
+// В Responder'е можно добавлять кастомные заголовки
+final enrichedContext = context?.withHeaders({
+  'x-user-tier': user.tier,
+  'x-feature-flags': user.featureFlags.join(','),
+  'x-analytics-enabled': user.analyticsEnabled.toString(),
+});
+
+await _paymentCaller.processPayment(paymentRequest, context: enrichedContext);
+```
+
+### Отмена операций (Cancellation Token)
+
+```dart
+@override
+Future<BulkUpdateResponse> bulkUpdate(Stream<UpdateUserRequest> requests, {RpcContext? context}) async {
+  await for (final request in requests) {
+    // Проверка отмены операции
+    context?.cancellationToken?.throwIfCancelled();
+    
+    // Обработка запроса...
+  }
+}
+```
+
+## 🔥 Best Practices
+
+### 1. Именование и структура
+
+```dart
+// ✅ Правильно: четкие доменные границы
+abstract interface class IUserContract implements IRpcContract {
+  static const name = 'UserService';
+}
+abstract interface class IOrderContract implements IRpcContract {
+  static const name = 'OrderService';
+}
+abstract interface class IPaymentContract implements IRpcContract {
+  static const name = 'PaymentService';
+}
+
+// ❌ Неправильно: смешанные ответственности  
+abstract interface class IUserOrderPaymentContract implements IRpcContract { }
+```
+
+### 2. Request/Response дизайн
+
+```dart
+// ✅ Правильно: описательные имена, иммутабельные данные
+class CreateOrderRequest implements IRpcSerializable {
+  final String userId;
+  final List<OrderItem> items;
+  final DeliveryAddress deliveryAddress;
+  
+  const CreateOrderRequest({
+    required this.userId,
+    required this.items,
+    required this.deliveryAddress,
+  });
+}
+
+// ❌ Неправильно: общие имена, мутабельные объекты
+class Request implements IRpcSerializable {
+  final Map<String, dynamic> data;
+  final List<dynamic> items; // Мутабельный список
+}
+```
+
+### 3. Обработка ошибок
+
+```dart
+@override
+Future<CreateOrderResponse> createOrder(CreateOrderRequest request, {RpcContext? context}) async {
+  try {
+    // Ранняя валидация
+    if (request.items.isEmpty) {
+      throw RpcException('Order items cannot be empty');
+    }
+    
+    // Междоменные вызовы с обработкой специфических ошибок
+    final payment = await _payments.processPayment(
+      ProcessPaymentRequest(amount: request.totalAmount),
+    );
+    
+  } on RpcException catch (e) {
+    // Технические ошибки RPC
+    throw OrderCreationException('Payment service unavailable: $e');
+  } on PaymentException catch (e) {
+    // Доменные ошибки
+    throw OrderCreationException('Payment validation failed: $e');
+  }
+}
+```
+
+### 4. Производительность и кэширование
+
+```dart
+class UserCaller extends RpcCallerContract {
+  final Map<String, UserProfile> _profileCache = {};
+  
+  @override
+  Future<GetProfileResponse> getProfile(GetProfileRequest request) async {
+    // Проверяем кэш перед RPC вызовом
+    if (_profileCache.containsKey(request.userId)) {
+      return GetProfileResponse(profile: _profileCache[request.userId]!);
+    }
+    
+    final response = await callUnary<GetProfileRequest, GetProfileResponse>(
+      methodName: 'GetProfile',
+      request: request,
+      requestCodec: GetProfileRequest.codec,
+      responseCodec: GetProfileResponse.codec,
+    );
+    
+    _profileCache[request.userId] = response.profile;
+    return response;
+  }
+  
+  @override
+  Future<UpdateProfileResponse> updateProfile(UpdateProfileRequest request) async {
+    final response = await callUnary<UpdateProfileRequest, UpdateProfileResponse>(
+      methodName: 'UpdateProfile',
+      request: request,
+      requestCodec: UpdateProfileRequest.codec,
+      responseCodec: UpdateProfileResponse.codec,
+    );
+    
+    // Инвалидация кэша при изменениях
+    _profileCache.remove(request.userId);
+    return response;
+  }
+}
+```
+
+## 🚨 Типичные ошибки (анти-паттерны)
+
+### ❌ Прямые зависимости между доменами
+```dart
+// НЕПРАВИЛЬНО: прямая зависимость
+class OrderResponder {
+  final PaymentResponder _paymentResponder; // Прямая связь!
+}
+
+// ПРАВИЛЬНО: зависимость через Caller
+class OrderResponder {
+  final PaymentCaller _paymentCaller; // RPC взаимодействие
+}
+```
+
+### ❌ Утечка реализации в контракты
+```dart
+// НЕПРАВИЛЬНО: зависимость от конкретной реализации
+abstract interface class IUserContract implements IRpcContract {
+  Future<GetUserResponse> getUser(GetUserRequest request);
+  UserRepository get repository; // Утечка реализации!
+}
+
+// ПРАВИЛЬНО: только API методы
+abstract interface class IUserContract implements IRpcContract {
+  static const name = 'UserService';
+  Future<GetUserResponse> getUser(GetUserRequest request);
+}
+```
+
+### ❌ Смешивание режимов передачи данных
+```dart
+// НЕПРАВИЛЬНО: inconsistent подход к кодекам
+addUnaryMethod<GetUserRequest, GetUserResponse>(
+  methodName: 'GetUser',
+  handler: getUser,
+  requestCodec: GetUserRequest.codec,
+  // responseCodec забыли указать!
+);
+
+// ПРАВИЛЬНО: либо оба кодека, либо ни одного
+addUnaryMethod<GetUserRequest, GetUserResponse>(
+  methodName: 'GetUser', 
+  handler: getUser,
+  requestCodec: GetUserRequest.codec,
+  responseCodec: GetUserResponse.codec,
+);
+```
+
+## 📋 Чек-лист для создания CORD домена
+
+### Планирование
+- [ ] Определена четкая доменная граница (что входит, что не входит)
+- [ ] Выявлены зависимости от других доменов
+- [ ] Определены типы операций (unary, server stream, client stream, bidirectional)
+
+### Contract Interface
+- [ ] Наследует от `IRpcContract`  
+- [ ] Содержит только методы API (без деталей реализации)
+- [ ] Методы имеют описательные имена
+- [ ] Все параметры и возвращаемые типы типизированы
+
+### Request/Response модели
+- [ ] Все модели наследуют от `IRpcSerializable`
+- [ ] Реализованы `fromJson()` и `toJson()`
+- [ ] Созданы статические кодеки (`static final codec = RpcCodec<T>(T.fromJson)`)
+- [ ] Данные иммутабельные (final поля, const конструкторы)
+
+### Responder
+- [ ] Наследует от `RpcResponderContract`
+- [ ] Реализует доменный интерфейс
+- [ ] Зависимости от других доменов только через Caller'ы
+- [ ] Методы зарегистрированы в `setup()` с правильными кодеками
+- [ ] Валидация входных данных на раннем этапе
+- [ ] Обработка ошибок с типизированными исключениями
+
+### Caller  
+- [ ] Наследует от `RpcCallerContract`
+- [ ] Реализует доменный интерфейс
+- [ ] Все вызовы используют `callUnary`, `callServerStream` и т.д.
+- [ ] Переданы правильные кодеки для сериализации
+- [ ] Реализовано кэширование где необходимо
+
+### Тестирование
+- [ ] Unit тесты для Responder'а с моками зависимостей
+- [ ] Integration тесты с реальными RPC вызовами
+- [ ] Тесты обработки ошибок и граничных случаев
+- [ ] Тесты производительности для критических операций
+
+### Расширенные возможности (по необходимости)
+- [ ] **Transport Router**: Настроена маршрутизация для распределения доменов
+- [ ] **Stream Distributor**: Используется для управления серверными стримами
+- [ ] **Приоритетные правила**: Определены приоритеты маршрутизации
+- [ ] **Мониторинг**: Настроено отслеживание метрик и статистики
+- [ ] **Автоочистка**: Включена автоматическая очистка неактивных ресурсов
+
+---
+
+## 📖 Связанные файлы
+
+**Основная документация:**
+- [docs/cord.md](mdc:docs/cord.md) - Основная документация CORD
+- [docs/cord_best_practices.md](mdc:docs/cord_best_practices.md) - Детальные best practices
+- [docs/cord_general_practices.md](mdc:docs/cord_general_practices.md) - Общие практики программирования
+
+**Базовые компоненты:**
+- [lib/src/contracts/contract.dart](mdc:lib/src/contracts/contract.dart) - Базовые классы контрактов
+- [lib/src/contracts/models.dart](mdc:lib/src/contracts/models.dart) - Модели для контрактов
+- [lib/src/endpoint/caller_endpoint.dart](mdc:lib/src/endpoint/caller_endpoint.dart) - Клиентские эндпоинты
+- [lib/src/endpoint/responder_endpoint.dart](mdc:lib/src/endpoint/responder_endpoint.dart) - Серверные эндпоинты
+
+**Расширенные возможности:**
+- [lib/src/rpc/transports/transport_router.dart](mdc:lib/src/rpc/transports/transport_router.dart) - Transport Router для маршрутизации
+- [lib/src/utils/stream_distributor.dart](mdc:lib/src/utils/stream_distributor.dart) - Stream Distributor для управления стримами
+
+**Примеры использования:**
+- [example/more/contract_modes_example.dart](mdc:example/more/contract_modes_example.dart) - Примеры режимов передачи данных
+- [example/core_methods/unary_example.dart](mdc:example/core_methods/unary_example.dart) - Базовые примеры
+
+## 🌐 Transport Router - Умная маршрутизация доменов
+
+**Transport Router** позволяет направлять вызовы разных CORD доменов в различные транспорты на основе декларативных правил с приоритетами.
+
+### Основные возможности
+- **Декларативная маршрутизация** по имени сервиса, методу или заголовкам
+- **Система приоритетов** правил (высший приоритет проверяется первым)
+- **Автоматическое извлечение** serviceName из заголовка `x-route-service`
+- **Прозрачность для доменов** - код доменов не знает о роутинге
+
+### Создание Transport Router
+
+```dart
+// 1. Создаем транспорты для разных доменов/сервисов
+final (userClientTransport, userServerTransport) = RpcInMemoryTransport.pair();
+final (paymentClientTransport, paymentServerTransport) = RpcInMemoryTransport.pair();
+final (analyticsClientTransport, analyticsServerTransport) = RpcInMemoryTransport.pair();
+
+// 2. Создаем роутер с правилами маршрутизации
+final transportRouter = RpcTransportRouterBuilder.client()
+  .logger(RpcLogger('TransportRouter'))
+  
+  // Направляем сервисы в соответствующие транспорты
+  .routeCall(
+    calledServiceName: 'UserService',
+    toTransport: userClientTransport,
+    priority: 100,
+  )
+  .routeCall(
+    calledServiceName: 'PaymentService', 
+    toTransport: paymentClientTransport,
+    priority: 100,
+  )
+  .routeCall(
+    calledServiceName: 'AnalyticsService',
+    toTransport: analyticsClientTransport,
+    priority: 90,
+  )
+  
+  // Условная маршрутизация на основе заголовков
+  .routeWhen(
+    toTransport: analyticsClientTransport,
+    whenCondition: (service, method, context) =>
+      service == 'UserService' && 
+      context?.getHeader('x-analytics-enabled') == 'true',
+    priority: 110, // Более высокий приоритет
+    description: 'User operations с аналитикой',
+  )
+  
+  .build();
+
+// 3. Создаем единый эндпоинт через роутер
+final callerEndpoint = RpcCallerEndpoint(
+  transport: transportRouter,
+  debugLabel: 'RoutedClient',
+);
+
+// 4. Все Caller'ы используют один эндпоинт, но роутер направляет в нужные места
+final userCaller = UserCaller(callerEndpoint);
+final paymentCaller = PaymentCaller(callerEndpoint);
+final analyticsCaller = AnalyticsCaller(callerEndpoint);
+```
+
+### Продвинутые сценарии маршрутизации
+
+```dart
+// Маршрутизация на основе пользовательских данных
+final router = RpcTransportRouterBuilder.client()
+  // Premium пользователи используют отдельный транспорт
+  .routeWhen(
+    toTransport: premiumTransport,
+    whenCondition: (service, method, context) {
+      final userTier = context?.getHeader('x-user-tier');
+      return service == 'UserService' && userTier == 'premium';
+    },
+    priority: 150,
+    description: 'Premium users routing',
+  )
+  
+  // Тестовые вызовы направляем в mock транспорт
+  .routeWhen(
+    toTransport: mockTransport,
+    whenCondition: (service, method, context) =>
+      context?.getHeader('x-environment') == 'test',
+    priority: 200,
+    description: 'Test environment routing',
+  )
+  
+  // Fallback для всех остальных вызовов
+  .routeCall(
+    calledServiceName: 'UserService',
+    toTransport: defaultTransport,
+    priority: 50,
+  )
+  .build();
+```
+
+### Статистика и мониторинг
+
+```dart
+// Получение статистики роутера
+final stats = transportRouter.statistics;
+print('Всего правил: ${stats['totalRules']}');
+print('Активных стримов: ${stats['activeStreams']}');
+print('Правила по приоритетам: ${stats['rulesByPriority']}');
+```
+
+## 📡 Stream Distributor - Управление серверными стримами
+
+**Stream Distributor** предоставляет мощный механизм управления серверными стримами с поддержкой множественных подписчиков, фильтрации и управления жизненным циклом.
+
+### Основные возможности
+- **Широковещательная публикация** сообщений всем клиентам
+- **Фильтрованная публикация** только определенным клиентам
+- **Управление подписками** (пауза/возобновление, закрытие)
+- **Автоматическая очистка** неактивных стримов
+- **Метрики и мониторинг** активности стримов
+
+### Интеграция с CORD Responder
+
+```dart
+final class UserResponder extends RpcResponderContract implements IUserContract {
+  // Stream Distributor для управления событиями пользователей
+  final StreamDistributor<UserEvent> _userEventDistributor;
+  
+  UserResponder({
+    required UserRepository userRepository,
+  }) : _userRepository = userRepository,
+       _userEventDistributor = StreamDistributor<UserEvent>(
+         config: StreamDistributorConfig(
+           enableAutoCleanup: true,
+           cleanupInterval: Duration(minutes: 5),
+           inactivityThreshold: Duration(minutes: 30),
+         ),
+         logger: RpcLogger('UserEventDistributor'),
+       ),
+       super(IUserContract.name);
+  
+  @override
+  void setup() {
+    addServerStreamMethod<UserEventsRequest, UserEvent>(
+      methodName: 'SubscribeToUserEvents',
+      handler: subscribeToUserEvents,
+      requestCodec: UserEventsRequest.codec,
+      responseCodec: UserEvent.codec,
+    );
+    
+    // Настраиваем слушатель изменений в репозитории
+    _setupUserEventListening();
+  }
+  
+  @override
+  Stream<UserEvent> subscribeToUserEvents(UserEventsRequest request, {RpcContext? context}) {
+    // Создаем персональный стрим для клиента
+    final clientId = context?.traceId ?? 'client_${DateTime.now().millisecondsSinceEpoch}';
+    
+    // Фильтруем события по пользователю и типам
+    return _userEventDistributor.createClientStreamWithId(
+      clientId,
+      onCancel: () {
+        RpcLogger('UserResponder').info('Клиент $clientId отписался от событий');
+      },
+    ).where((event) => 
+      event.userId == request.userId && 
+      request.eventTypes.contains(event.type)
+    );
+  }
+  
+  void _setupUserEventListening() {
+    // Слушаем изменения в репозитории и публикуем события
+    _userRepository.watchAllUserEvents().listen((domainEvent) {
+      final userEvent = UserEvent.fromDomainEvent(domainEvent);
+      
+      // Публикуем всем подписчикам
+      final deliveredCount = _userEventDistributor.publish(userEvent);
+      
+      RpcLogger('UserResponder').internal(
+        'Опубликовано событие ${userEvent.type} для пользователя ${userEvent.userId} '
+        '(доставлено $deliveredCount клиентам)',
+      );
+    });
+  }
+  
+  // Дополнительные методы для управления подписками
+  Future<void> pauseUserNotifications(String userId) async {
+    // Приостанавливаем уведомления для конкретного пользователя
+    final pausedCount = _userEventDistributor.publishFiltered(
+      UserEvent.pauseNotifications(userId),
+      (client) => client.clientId.contains(userId),
+    );
+    
+    RpcLogger('UserResponder').info('Приостановлены уведомления для $userId ($pausedCount клиентов)');
+  }
+  
+  Future<void> dispose() async {
+    await _userEventDistributor.dispose();
+  }
+}
+```
+
+### Продвинутое использование Stream Distributor
+
+```dart
+// Создание распределителя с настройками и коллбэками
+final distributor = StreamDistributor<NotificationEvent>(
+  config: StreamDistributorConfig(
+    enableAutoCleanup: true,
+    cleanupInterval: Duration(minutes: 2),
+    inactivityThreshold: Duration(minutes: 10),
+    autoRemoveOnCancel: true,
+  ),
+  logger: RpcLogger('NotificationDistributor'),
+  onSubscriptionCreated: (distributorId, subscriberId) {
+    // Логирование новых подписок с аналитикой
+    RpcLogger('StreamDistributor').info('Новая подписка: $subscriberId на $distributorId');
+    _analyticsService.trackSubscription(subscriberId, distributorId);
+  },
+  onSubscriptionCancelled: (distributorId, subscriberId) {
+    // Логирование отписок и очистка ресурсов
+    RpcLogger('StreamDistributor').info('Отписка: $subscriberId от $distributorId');
+    _analyticsService.trackUnsubscription(subscriberId, distributorId);
+    _cleanupUserResources(subscriberId);
+  },
+);
+
+// Широковещательная публикация
+final deliveredCount = distributor.publish(
+  SystemMaintenanceEvent(
+    message: 'Плановое обслуживание системы через 10 минут',
+    startTime: DateTime.now().add(Duration(minutes: 10)),
+  ),
+);
+
+// Фильтрованная публикация только premium пользователям
+distributor.publishFiltered(
+  PremiumFeatureUnlockedEvent(feature: 'advanced_analytics'),
+  (client) {
+    // Проверяем клиента по ID или другим характеристикам
+    return client.clientId.contains('premium');
+  },
+);
+
+// Публикация конкретному клиенту
+distributor.publishToClient(
+  'user_12345_stream',
+  PersonalizedRecommendationEvent(
+    userId: '12345',
+    recommendations: ['item1', 'item2', 'item3'],
+  ),
+);
+
+// Управление подписками
+distributor.pauseClientStream('user_12345_stream');
+await Future.delayed(Duration(seconds: 30));
+distributor.resumeClientStream('user_12345_stream');
+
+// Мониторинг активности
+final metrics = distributor.metrics;
+print('Активных стримов: ${metrics.currentStreams}');
+print('Всего сообщений: ${metrics.totalMessages}');
+print('Средний размер сообщения: ${metrics.averageMessageSize} байт');
+
+// Получение информации о клиентах
+final activeClients = distributor.getActiveClientIds();
+final inactiveClients = distributor.getInactiveClientIds(Duration(minutes: 5));
+final pausedClients = distributor.getPausedClientIds();
+
+print('Активные клиенты: $activeClients');
+print('Неактивные клиенты: $inactiveClients');
+print('Приостановленные клиенты: $pausedClients');
+
+// Очистка неактивных соединений
+final removedCount = await distributor.closeInactiveStreams(Duration(minutes: 15));
+print('Удалено неактивных соединений: $removedCount');
+```
+
+### Паттерн Event Sourcing с Stream Distributor
+
+```dart
+final class OrderResponder extends RpcResponderContract implements IOrderContract {
+  final StreamDistributor<OrderEvent> _orderEventDistributor;
+  final OrderEventStore _eventStore;
+  
+  OrderResponder({
+    required OrderEventStore eventStore,
+  }) : _eventStore = eventStore,
+       _orderEventDistributor = StreamDistributor<OrderEvent>(),
+       super(IOrderContract.name);
+  
+  @override
+  Future<CreateOrderResponse> createOrder(CreateOrderRequest request, {RpcContext? context}) async {
+    // Создаем заказ
+    final order = Order.create(request);
+    
+    // Сохраняем событие в Event Store
+    final event = OrderCreatedEvent(
+      orderId: order.id,
+      userId: request.userId,
+      items: request.items,
+      timestamp: DateTime.now(),
+    );
+    
+    await _eventStore.appendEvent(event);
+    
+    // Публикуем событие всем заинтересованным сторонам
+    _orderEventDistributor.publish(event, metadata: {
+      'source': 'order_creation',
+      'version': order.version,
+    });
+    
+    return CreateOrderResponse(order: order);
+  }
+  
+  @override
+  Stream<OrderEvent> subscribeToOrderEvents(OrderEventsRequest request, {RpcContext? context}) {
+    // Создаем персонализированный стрим событий заказов
+    return _orderEventDistributor.createClientStream()
+        .where((event) => event.userId == request.userId);
+  }
+}
+```
+
+---
+**Используй этот гайд как основу для создания надежных, масштабируемых и тестируемых CORD доменов! 🚀**
