@@ -4,6 +4,7 @@ version: 1.8.1
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://github.com/nogipx/rpc_dart
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
+license: MIT
 funding:
   - https://liberapay.com/nogipx
 
