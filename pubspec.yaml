@@ -1,10 +1,9 @@
 name: rpc_dart
 description: gRPC-inspired library built on pure Dart
-version: 1.8.1
+version: 2.0.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://github.com/nogipx/rpc_dart
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
-license: MIT
 funding:
   - https://liberapay.com/nogipx
 

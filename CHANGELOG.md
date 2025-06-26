@@ -1,3 +1,8 @@
+## 2.0.0
+- Updated license to MIT
+- Added logo to the package
+- Added readme translations (RU, EN)
+
 ## 1.8.0
 - Добавлена возможность указать режим передачи данных в контракте (zero-copy, codec, auto)
 
