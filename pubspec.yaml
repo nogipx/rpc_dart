@@ -14,6 +14,10 @@ topics:
   - contract-oriented-remote-domains
   - streams
 
+screenshots:
+  - description: "RPC Dart logo - Transport-agnostic RPC framework"
+    path: logo/logo.webp
+
 environment:
   sdk: ">=3.0.0 <4.0.0"
   

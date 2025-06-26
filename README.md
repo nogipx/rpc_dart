@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/icon/logo.svg" alt="RPC Dart Logo" width="80" height="80">
+  <img src="logo/logo.svg" alt="RPC Dart Logo" width="80" height="80">
   <h1>RPC Dart</h1>
   <p><strong>Pure Dart RPC library for type-safe communication between components</strong></p>
   

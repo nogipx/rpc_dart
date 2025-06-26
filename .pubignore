@@ -4,6 +4,7 @@ test/
 .fvmrc
 .vscode/
 justfile
+README_RU.md
 REUSE.toml
 **/coverage/
 docs/
@@ -20,3 +21,4 @@ benchmark/
 benchmark_results/
 lib/diagnostics/
 lib/diagnostics.dart
+logo/logo.svg
