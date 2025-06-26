@@ -12,7 +12,7 @@ get:
 prepare:
     fvm dart fix --apply
     fvm dart format -l 80 .
-    reuse annotate -c "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>" -l "MIT" --skip-unrecognised -r lib
+    reuse annotate -c "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>" -l "MIT" --skip-unrecognised
     rm -rf coverage
     fvm dart test test/ --coverage=coverage --reporter=compact --concurrency=5
     fvm dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
