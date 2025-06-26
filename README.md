@@ -1,56 +1,62 @@
 <div align="center">
   <img src="docs/icon/logo.svg" alt="RPC Dart Logo" width="80" height="80">
   <h1>RPC Dart</h1>
-  <p><strong>RPC библиотека на чистом Dart для типобезопасного взаимодействия между компонентами</strong></p>
+  <p><strong>Pure Dart RPC library for type-safe communication between components</strong></p>
   
   <p>
     <a href="https://pub.dev/packages/rpc_dart"><img src="https://img.shields.io/pub/v/rpc_dart.svg" alt="Pub Version"></a>
     <a href="https://github.com/nogipx/rpc_dart/actions/workflows/ci.yml"><img src="https://github.com/nogipx/rpc_dart/workflows/CI/badge.svg" alt="CI"></a>
     <a href="https://coveralls.io/github/nogipx/rpc_dart?branch=main"><img src="https://coveralls.io/repos/github/nogipx/rpc_dart/badge.svg?branch=main" alt="Coverage Status"></a>
   </p>
+  
+  <p>
+    <a href="README.md">🇺🇸 English</a> | 
+    <a href="README_RU.md">🇷🇺 Русский</a>
+  </p>
 </div>
 
-## Основные концепции
 
-**RPC Dart** построен на следующих ключевых концепциях:
+## Core Concepts
 
-- **Контракты (Contracts)** — определяют API сервиса через интерфейсы и методы
-- **Responder** — серверная часть, обрабатывает входящие запросы
-- **Caller** — клиентская часть, отправляет запросы  
-- **Endpoint** — точка подключения, управляет транспортом
-- **Transport** — уровень передачи данных (InMemory, Isolate, HTTP)
-- **Codec** — сериализация/десериализация сообщений
+**RPC Dart** is built on the following key concepts:
 
-## Ключевые возможности
+- **Contracts** — define service APIs through interfaces and methods
+- **Responder** — server side, handles incoming requests
+- **Caller** — client side, sends requests  
+- **Endpoint** — connection point, manages transport
+- **Transport** — data transmission layer (InMemory, Isolate, HTTP)
+- **Codec** — message serialization/deserialization
 
-- **Полная поддержка RPC паттернов** — unary calls, server streams, client streams, bidirectional streams
-- **Zero-Copy InMemory транспорт** — транспорт для передачи объектов без сериализации в одном процессе
-- **Типобезопасность** — все запросы/ответы строго типизированы
-- **Автоматическая трассировка** — trace ID генерируется автоматически, передается через RpcContext
-- **Без внешних зависимостей** — только чистый Dart
-- **Встроенные примитивы** — готовые обертки для String, Int, Double, Bool, List
-- **Простое тестирование** — с InMemory транспортом и моками
+## Key Features
+
+- **Full RPC pattern support** — unary calls, server streams, client streams, bidirectional streams
+- **Zero-Copy InMemory transport** — object transport without serialization in single process
+- **Type safety** — all requests/responses are strictly typed
+- **Automatic tracing** — trace ID generated automatically, passed through RpcContext
+- **No external dependencies** — pure Dart only
+- **Built-in primitives** — ready wrappers for String, Int, Double, Bool, List
+- **Easy testing** — with InMemory transport and mocks
 
 ## CORD
 
-RPC Dart предлагает **CORD (Contract-Oriented Remote Domains)** — архитектурный подход для структурирования бизнес-логики через изолированные домены с типобезопасными RPC контрактами.
+RPC Dart offers **CORD (Contract-Oriented Remote Domains)** — an architectural approach for structuring business logic through isolated domains with type-safe RPC contracts.
 
-**📚 [Подробнее](docs/cord.md)**
+**📚 [Learn more](docs/en/cord.md)**
 
 ## Quick Start
 
-**📚 [Полные примеры использования](example/)**
+**📚 [Full usage examples](example/)**
 
-### 1. Определите контракт и модели
+### 1. Define contract and models
 
 ```dart
-// Контракт с константами
+// Contract with constants
 abstract interface class ICalculatorContract {
   static const name = 'Calculator';
   static const methodCalculate = 'calculate';
 }
 
-// Zero-copy модели — обычные классы
+// Zero-copy models — regular classes
 class Request {
   final double a, b;
   final String op;
@@ -63,7 +69,7 @@ class Response {
 }
 ```
 
-### 2. Сервер (Responder)
+### 2. Server (Responder)
 
 ```dart
 final class CalculatorResponder extends RpcResponderContract {
@@ -71,7 +77,7 @@ final class CalculatorResponder extends RpcResponderContract {
 
   @override
   void setup() {
-    // Zero-copy метод — кодеки НЕ указываем
+    // Zero-copy method — DON'T specify codecs
     addUnaryMethod<Request, Response>(
       methodName: ICalculatorContract.methodCalculate,
       handler: calculate,
@@ -88,7 +94,7 @@ final class CalculatorResponder extends RpcResponderContract {
 }
 ```
 
-### 3. Клиент (Caller)
+### 3. Client (Caller)
 
 ```dart
 final class CalculatorCaller extends RpcCallerContract {
@@ -104,139 +110,124 @@ final class CalculatorCaller extends RpcCallerContract {
 }
 ```
 
-### 4. Запуск
+### 4. Usage
 
 ```dart
 void main() async {
-  // Создаем inmemory транспорт
+  // Create inmemory transport
   final (client, server) = RpcInMemoryTransport.pair();
   
-  // Настраиваем endpoints
+  // Setup endpoints
   final responder = RpcResponderEndpoint(transport: server);
   final caller = RpcCallerEndpoint(transport: client);
   
-  // Регистрируем сервис
+  // Register service
   responder.registerServiceContract(CalculatorResponder());
   responder.start();
   
   final calculator = CalculatorCaller(caller);
   
-  // Вызываем RPC метод
+  // Call RPC method
   final result = await calculator.calculate(Request(10, 5, 'add'));
   print('10 + 5 = ${result.result}'); // 10 + 5 = 15.0
   
-  // Закрываем
+  // Cleanup
   await caller.close();
   await responder.close();
 }
 ```
 
-## Транспорты
+## Transports
 
-### InMemory Transport (включен в основную библиотеку)
-Идеально для разработки, тестирования и монолитных приложений:
+### InMemory Transport (included in main library)
+Perfect for development, testing, and monolith applications:
 
 ```dart
 final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-// Использование: разработка, unit-тесты, простые приложения
+// Usage: development, unit tests, simple applications
 ```
 
 #### 🚀 Zero-Copy 
 
-Для максимальной производительности RPC Dart поддерживает **zero-copy** передачу объектов без сериализации (только для `RpcInMemoryTransport`):
+For maximum performance, RPC Dart supports **zero-copy** object transfer without serialization (only for `RpcInMemoryTransport`):
 
 ```dart
-// Zero-copy контракт — просто не указывайте кодеки!
+// Zero-copy contract — just don't specify codecs!
 addUnaryMethod<UserRequest, UserResponse>(
   methodName: 'GetUser',
   handler: (request, {context}) async {
     return UserResponse(id: request.id, name: 'User ${request.id}');
   },
-  // Кодеки НЕ указываем = автоматически zero-copy
+  // DON'T specify codecs = automatic zero-copy
 );
 ```
 
-### Режимы передачи данных
+### Data Transfer Modes
 
-RPC Dart поддерживает три режима передачи данных в контрактах:
+RPC Dart supports three data transfer modes in contracts:
 
-| Режим | Описание | Использование |
-|-------|----------|---------------|
-| **`zeroCopy`** | Принудительно zero-copy, кодеки игнорируются | Максимальная производительность |
-| **`codec`** | Принудительная сериализация, кодеки обязательны | Универсальная совместимость |
-| **`auto`** | **Умный выбор**: нет кодеков → zero-copy, есть кодеки → сериализация | Гибкая разработка |
+| Mode | Description | Usage |
+|------|-------------|-------|
+| **`zeroCopy`** | Force zero-copy, codecs ignored | Maximum performance |
+| **`codec`** | Force serialization, codecs required | Universal compatibility |
+| **`auto`** | **Smart choice**: no codecs → zero-copy, has codecs → serialization | Flexible development |
 
-**Режим `auto` (рекомендуется)** автоматически определяет оптимальный способ передачи:
+**`auto` mode (recommended)** automatically determines optimal transfer method:
 
 ```dart
 final class SmartService extends RpcResponderContract {
   SmartService() : super('SmartService', 
-    dataTransferMode: RpcDataTransferMode.auto); // ← Умный режим
+    dataTransferMode: RpcDataTransferMode.auto); // ← Smart mode
 
   void setup() {
-    // Автоматически выберет zero-copy (кодеки не указаны)
+    // Will automatically choose zero-copy (no codecs specified)
     addUnaryMethod<FastRequest, FastResponse>(
       'fastMethod', 
       handler: fastHandler,
     );
     
-    // Автоматически выберет сериализацию (кодеки указаны)  
+    // Will automatically choose serialization (codecs specified)  
     addUnaryMethod<JsonRequest, JsonResponse>(
       'universalMethod',
       handler: universalHandler,
-      requestCodec: jsonRequestCodec,   // ← Указаны кодеки
+      requestCodec: jsonRequestCodec,   // ← Codecs specified
       responseCodec: jsonResponseCodec,
     );
   }
 }
 ```
 
-### Дополнительные транспорты
+### Additional Transports
 
-RPC Dart поддерживает создание кастомных транспортов через интерфейс `IRpcTransport`:
+You can use ready-made transports from **[rpc_dart_transports](https://pub.dev/packages/rpc_dart_transports)** package or implement your own via `IRpcTransport` interface.
 
-```dart
-// Пример кастомного транспорта
-class CustomHttpTransport implements IRpcTransport {
-  @override
-  Future<void> send(RpcMessage message) async {
-    // Реализация отправки через HTTP
-  }
-  
-  @override
-  Stream<RpcMessage> get messageStream => _messageController.stream;
-}
+**Available transports:**
+- **Isolate Transport** — for CPU-intensive tasks and failure isolation
+- **HTTP Transport** — for microservices and distributed systems
+- **WebSocket Transport** — for real-time applications
 
-final endpoint = RpcCallerEndpoint(transport: CustomHttpTransport());
-```
-
-**Возможные варианты расширения:**
-- **Isolate Transport** — для CPU-интенсивных задач и изоляции сбоев
-- **HTTP Transport** — для микросервисов и распределенных систем
-- **WebSocket Transport** — для real-time приложений
-
-**Ключевое преимущество:** код домена остается неизменным при смене транспорта!
+**Key advantage:** domain code remains unchanged when switching transports!
 
 ## Transport Router
 
-**Transport Router** — умный прокси для маршрутизации RPC вызовов между транспортами по правилам с приоритетами.
+**Transport Router** — smart proxy for routing RPC calls between transports using priority-based rules.
 
-### Основные возможности
+### Main Features
 
-- **Роутинг по сервисам** — направляет запросы к разным сервисам на разные транспорты
-- **Условный роутинг** — сложная логика маршрутизации с доступом к контексту
-- **Приоритеты правил** — точный контроль порядка проверки условий
-- **Автоматический роутинг** — использует заголовки из `RpcCallerEndpoint`
+- **Service-based routing** — directs requests to different services on different transports
+- **Conditional routing** — complex routing logic with context access
+- **Rule priorities** — precise control over condition checking order
+- **Automatic routing** — uses headers from `RpcCallerEndpoint`
 
-### Пример использования
+### Usage Example
 
 ```dart
-// Создаем транспорты для разных сервисов
+// Create transports for different services
 final (userClient, userServer) = RpcInMemoryTransport.pair();
 final (orderClient, orderServer) = RpcInMemoryTransport.pair();
 final (paymentClient, paymentServer) = RpcInMemoryTransport.pair();
 
-// Создаем роутер с правилами
+// Create router with rules
 final router = RpcTransportRouterBuilder()
   .routeCall(
     calledServiceName: 'UserService',
@@ -254,74 +245,74 @@ final router = RpcTransportRouterBuilder()
       service == 'PaymentService' && 
       context?.getHeader('x-payment-method') == 'premium',
     priority: 150,
-    description: 'Premium платежи на отдельный сервис',
+    description: 'Premium payments to separate service',
   )
   .build();
 
-// Используем роутер как обычный транспорт
+// Use router as regular transport
 final callerEndpoint = RpcCallerEndpoint(transport: router);
 final userService = UserCaller(callerEndpoint);
 final orderService = OrderCaller(callerEndpoint);
 
-// Запросы автоматически направляются в нужные транспорты
+// Requests automatically routed to appropriate transports
 final user = await userService.getUser(request);     // → userClient
 final order = await orderService.createOrder(data); // → orderClient
 ```
 
-**Применение:** Микросервисная архитектура, A/B тестирование, маршрутизация нагрузки, изоляция сервисов.
+**Use cases:** Microservice architecture, A/B testing, load balancing, service isolation.
 
-## Типы RPC взаимодействий
+## RPC Interaction Types
 
-| Тип | Описание | Пример использования |
-|-----|----------|---------------------|
-| **Unary Call** | Запрос → Ответ | CRUD операции, валидация |
-| **Server Stream** | Запрос → Поток ответов | Live обновления, прогресс |
-| **Client Stream** | Поток запросов → Ответ | Batch upload, агрегация |
-| **Bidirectional Stream** | Поток ↔ Поток | Чаты, real-time коллаборация |
+| Type | Description | Example Usage |
+|------|-------------|---------------|
+| **Unary Call** | Request → Response | CRUD operations, validation |
+| **Server Stream** | Request → Stream of responses | Live updates, progress |
+| **Client Stream** | Stream of requests → Response | Batch upload, aggregation |
+| **Bidirectional Stream** | Stream ↔ Stream | Chats, real-time collaboration |
 
-## Встроенные примитивы
+## Built-in Primitives
 
-RPC Dart предоставляет готовые обертки для примитивных типов:
+RPC Dart provides ready wrappers for primitive types:
 
 ```dart
-// Встроенные примитивы с кодеками
-final name = RpcString('John');       // Строки
-final age = RpcInt(25);              // Целые числа  
-final height = RpcDouble(175.5);      // Дробные числа
-final isActive = RpcBool(true);       // Булевы значения
-final tags = RpcList<RpcString>([...]);  // Списки
+// Built-in primitives with codecs
+final name = RpcString('John');       // Strings
+final age = RpcInt(25);              // Integers  
+final height = RpcDouble(175.5);      // Doubles
+final isActive = RpcBool(true);       // Booleans
+final tags = RpcList<RpcString>([...]);  // Lists
 
-// Удобные расширения
+// Convenient extensions
 final message = 'Hello'.rpc;     // RpcString
 final count = 42.rpc;            // RpcInt
 final price = 19.99.rpc;         // RpcDouble
 final enabled = true.rpc;        // RpcBool
 
-// Числовые примитивы поддерживают арифметические операторы
+// Numeric primitives support arithmetic operators
 final sum = RpcInt(10) + RpcInt(20);      // RpcInt(30)
 final product = RpcDouble(3.14) * RpcDouble(2.0);  // RpcDouble(6.28)
 
-// Доступ к значению через свойство .value
+// Access value through .value property
 final greeting = RpcString('Hello ') + RpcString('World'); 
 print(greeting.value); // "Hello World"
 ```
 
 ## StreamDistributor
 
-**StreamDistributor** — это мощный менеджер для управления серверными стримами, который превращает обычный `StreamController` в брокер сообщений с расширенными возможностями:
+**StreamDistributor** — powerful manager for server streams that turns regular `StreamController` into message broker with advanced capabilities:
 
-### Основные возможности
+### Main Features
 
-- **Широковещательная публикация** — отправка сообщений всем подключенным клиентам
-- **Фильтрованная публикация** — отправка по условию только определенным клиентам  
-- **Управление жизненным циклом** — автоматическое создание/удаление стримов
-- **Автоматическая очистка** — удаление неактивных стримов по таймеру
-- **Метрики и мониторинг** — отслеживание активности и производительности
+- **Broadcast publishing** — send messages to all connected clients
+- **Filtered publishing** — send conditionally to specific clients  
+- **Lifecycle management** — automatic stream creation/deletion
+- **Automatic cleanup** — remove inactive streams by timer
+- **Metrics and monitoring** — track activity and performance
 
-### Пример использования
+### Usage Example
 
 ```dart
-// Создаем дистрибьютор для уведомлений
+// Create distributor for notifications
 final distributor = StreamDistributor<NotificationEvent>(
   config: StreamDistributorConfig(
     enableAutoCleanup: true,
@@ -329,39 +320,39 @@ final distributor = StreamDistributor<NotificationEvent>(
   ),
 );
 
-// Создаем клиентские стримы для разных пользователей
+// Create client streams for different users
 final userStream1 = distributor.createClientStreamWithId('user_123');
 final userStream2 = distributor.createClientStreamWithId('user_456');
 
-// Слушаем уведомления
+// Listen to notifications
 userStream1.listen((notification) {
-  print('User 123 получил: ${notification.message}');
+  print('User 123 received: ${notification.message}');
 });
 
-// Отправляем всем клиентам
+// Send to all clients
 distributor.publish(NotificationEvent(
-  message: 'Системное уведомление для всех',
+  message: 'System notification for everyone',
   priority: Priority.normal,
 ));
 
-// Отправляем только клиентам с определенными ID
+// Send only to clients with specific IDs
 distributor.publishFiltered(
-  NotificationEvent(message: 'VIP уведомление'),
+  NotificationEvent(message: 'VIP notification'),
   (client) => ['user_123', 'premium_user_789'].contains(client.clientId),
 );
 
-// Получаем метрики
+// Get metrics
 final metrics = distributor.metrics;
-print('Активных клиентов: ${metrics.currentStreams}');
-print('Отправлено сообщений: ${metrics.totalMessages}');
+print('Active clients: ${metrics.currentStreams}');
+print('Messages sent: ${metrics.totalMessages}');
 ```
 
-**Применение:** Идеально для реализации real-time уведомлений, чатов, live обновлений и других pub/sub сценариев в серверных стримах.
+**Use cases:** Perfect for implementing real-time notifications, chats, live updates and other pub/sub scenarios in server streams.
 
-## Тестирование
+## Testing
 
 ```dart
-// Unit тест с моком (используйте любую мок-библиотеку)
+// Unit test with mock (use any mock library)
 class MockUserService extends Mock implements UserCaller {}
 
 test('should handle user not found', () async {
@@ -377,7 +368,7 @@ test('should handle user not found', () async {
   );
 });
 
-// Integration тест с InMemory транспортом
+// Integration test with InMemory transport
 test('full integration test', () async {
   final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
   
@@ -395,20 +386,20 @@ test('full integration test', () async {
 ## FAQ
 
 <details>
-<summary><strong>Подходит ли для production?</strong></summary>
+<summary><strong>Is it production ready?</strong></summary>
 
-Рекомендуем тщательно протестировать библиотеку в вашей конкретной среде перед production деплоем.
+We recommend thoroughly testing the library in your specific environment before production deployment.
 
 </details>
 
 <details>
-<summary><strong>Как тестировать RPC код?</strong></summary>
+<summary><strong>How to test RPC code?</strong></summary>
 
 ```dart
-// Unit тесты с моками
+// Unit tests with mocks
 class MockUserService extends Mock implements UserCaller {}
 
-test('должен обработать ошибку "пользователь не найден"', () async {
+test('should handle user not found error', () async {
   final mockService = MockUserService();
   when(() => mockService.getUser(any()))
       .thenThrow(RpcException(code: RpcStatus.NOT_FOUND));
@@ -417,8 +408,8 @@ test('должен обработать ошибку "пользователь �
   expect(() => bloc.loadUser('123'), throwsA(isA<UserNotFoundException>()));
 });
 
-// Integration тесты с InMemory транспортом
-test('полный интеграционный тест', () async {
+// Integration tests with InMemory transport
+test('full integration test', () async {
   final (client, server) = RpcInMemoryTransport.pair();
   final endpoint = RpcResponderEndpoint(transport: server);
   endpoint.registerServiceContract(TestService());
@@ -433,36 +424,36 @@ test('полный интеграционный тест', () async {
 </details>
 
 <details>
-<summary><strong>Какую производительность ожидать?</strong></summary>
+<summary><strong>What performance to expect?</strong></summary>
 
-RPC Dart оптимизирован для реальных приложений. В типичных сценариях производительность более чем достаточная:
+RPC Dart is optimized for real applications. In typical scenarios performance is more than sufficient:
 
-**Практические наблюдения:**
-- InMemory транспорт имеет минимальные накладные расходы
-- CBOR сериализация эффективнее JSON
-- HTTP транспорт добавляет сетевую задержку
-- Streaming эффективен для больших объемов данных
+**Practical observations:**
+- InMemory transport has minimal overhead
+- CBOR serialization is more efficient than JSON
+- HTTP transport adds network latency
+- Streaming is efficient for large data volumes
 
-Для большинства приложений важнее удобство разработки и архитектурная чистота, чем микрооптимизации.
+For most applications, development convenience and architectural clarity are more important than micro-optimizations.
 
 </details>
 
 <details>
-<summary><strong>Как обрабатывать ошибки?</strong></summary>
+<summary><strong>How to handle errors?</strong></summary>
 
-RPC Dart использует gRPC-статусы для унифицированной обработки ошибок:
+RPC Dart uses gRPC statuses for unified error handling:
 
 ```dart
 try {
   final result = await userService.getUser(request);
 } on RpcException catch (e) {
-  showError('RPC ошибка: ${e.message}');
+  showError('RPC error: ${e.message}');
 } on RpcDeadlineExceededException catch (e) {
-  showError('Таймаут запроса: ${e.timeout}');
+  showError('Request timeout: ${e.timeout}');
 } on RpcCancelledException catch (e) {
-  showError('Операция отменена: ${e.message}');
+  showError('Operation cancelled: ${e.message}');
 } catch (e) {
-  // Обработка неожиданных ошибок
+  // Handle unexpected errors
   logError('Unexpected error', error: e);
 }
 ```
@@ -470,25 +461,25 @@ try {
 </details>
 
 <details>
-<summary><strong>Как масштабировать RPC архитектуру?</strong></summary>
+<summary><strong>How to scale RPC architecture?</strong></summary>
 
-**CORD принципы масштабирования:**
+**CORD scaling principles:**
 
-1. **Разделяйте домены** — каждый домен должен иметь четкую ответственность
-2. **Используйте контракты** — для типобезопасного взаимодействия
-3. **Минимизируйте связи** — домены общаются только через RPC
-4. **Централизуйте логику** — бизнес-логика в Responder'ах
-5. **Кэшируйте результаты** — в Caller'ах для UI оптимизации
+1. **Separate domains** — each domain should have clear responsibility
+2. **Use contracts** — for type-safe communication
+3. **Minimize coupling** — domains communicate only through RPC
+4. **Centralize logic** — business logic in Responders
+5. **Cache results** — in Callers for UI optimization
 
 ```dart
-// ❌ Плохо - прямые зависимости
+// ❌ Bad - direct dependencies
 class OrderBloc {
   final UserRepository userRepo;
   final PaymentRepository paymentRepo;
   final NotificationRepository notificationRepo;
 }
 
-// ✅ Хорошо - через RPC контракты
+// ✅ Good - through RPC contracts
 class OrderBloc {
   final UserCaller userService;
   final PaymentCaller paymentService;
@@ -502,13 +493,11 @@ class OrderBloc {
 
 #### [Benchmark](https://bencher.dev/perf/rpc-dart?x_axis=version)
 
-**Полезные ссылки:**
-- [CORD Architecture](docs/cord.md)
-- [RPC Dart на pub.dev](https://pub.dev/packages/rpc_dart)
-- [Исходный код на GitHub](https://github.com/nogipx/rpc_dart)
-- [Примеры кода](example/)
-- [Issues и поддержка](https://github.com/nogipx/rpc_dart/issues)
+**Useful Links:**
+- [CORD Architecture](docs/en/cord.md)
+- [RPC Dart on pub.dev](https://pub.dev/packages/rpc_dart)
+- [Source code on GitHub](https://github.com/nogipx/rpc_dart)
+- [Code examples](example/)
+- [Issues and support](https://github.com/nogipx/rpc_dart/issues)
 
-*Создавайте масштабируемые Flutter приложения с RPC Dart!*
-
-
+*Build scalable Flutter applications with RPC Dart!* 
