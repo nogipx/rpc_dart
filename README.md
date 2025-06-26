@@ -1,10 +1,14 @@
-[![Pub Version](https://img.shields.io/pub/v/rpc_dart.svg)](https://pub.dev/packages/rpc_dart)
-[![CI](https://github.com/nogipx/rpc_dart/workflows/CI/badge.svg)](https://github.com/nogipx/rpc_dart/actions/workflows/ci.yml)
-[![Coverage Status](https://coveralls.io/repos/github/nogipx/rpc_dart/badge.svg?branch=main)](https://coveralls.io/github/nogipx/rpc_dart?branch=main)
-
-# RPC Dart
-
-> **RPC библиотека на чистом Dart для типобезопасного взаимодействия между компонентами**
+<div align="center">
+  <img src="docs/icon/logo.svg" alt="RPC Dart Logo" width="80" height="80">
+  <h1>RPC Dart</h1>
+  <p><strong>RPC библиотека на чистом Dart для типобезопасного взаимодействия между компонентами</strong></p>
+  
+  <p>
+    <a href="https://pub.dev/packages/rpc_dart"><img src="https://img.shields.io/pub/v/rpc_dart.svg" alt="Pub Version"></a>
+    <a href="https://github.com/nogipx/rpc_dart/actions/workflows/ci.yml"><img src="https://github.com/nogipx/rpc_dart/workflows/CI/badge.svg" alt="CI"></a>
+    <a href="https://coveralls.io/github/nogipx/rpc_dart?branch=main"><img src="https://coveralls.io/repos/github/nogipx/rpc_dart/badge.svg?branch=main" alt="Coverage Status"></a>
+  </p>
+</div>
 
 ## Основные концепции
 
