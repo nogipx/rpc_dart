@@ -1171,6 +1171,60 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     );
   }
 
+  /// Разрегистрирует контракт сервиса и все его методы
+  void unregisterServiceContract(String serviceName) {
+    if (!_contracts.containsKey(serviceName)) {
+      throw RpcException(
+        'Контракт для сервиса $serviceName не зарегистрирован',
+      );
+    }
+
+    logger.internal(
+      'Разрегистрируем контракт сервиса: $serviceName',
+    );
+
+    // Получаем контракт для вызова dispose()
+    final contract = _contracts[serviceName]!;
+
+    // 🆕 Освобождаем ресурсы контракта ПЕРЕД удалением
+    try {
+      contract.dispose();
+      logger.internal(
+        'Ресурсы контракта $serviceName освобождены',
+      );
+    } catch (e, stackTrace) {
+      logger.error(
+        'Ошибка при освобождении ресурсов контракта $serviceName: $e',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      // Продолжаем разрегистрацию даже если dispose() завершился с ошибкой
+    }
+
+    // Удаляем все методы данного сервиса
+    final methodsToRemove = <String>[];
+    for (final methodKey in _methods.keys) {
+      if (methodKey.startsWith('$serviceName.')) {
+        methodsToRemove.add(methodKey);
+      }
+    }
+
+    for (final methodKey in methodsToRemove) {
+      final method = _methods[methodKey]!;
+      logger.internal(
+        'Разрегистрируем метод: $methodKey (${method.type.name})',
+      );
+      _methods.remove(methodKey);
+    }
+
+    // Удаляем контракт
+    _contracts.remove(serviceName);
+
+    logger.internal(
+      'Контракт $serviceName разрегистрирован с ${methodsToRemove.length} методами',
+    );
+  }
+
   /// 🚀 Конвертирует zero-copy метод в обычный RpcMethodRegistration для совместимости
   /// Zero-copy методы не используют кодеки и работают с Object типами
   RpcMethodRegistration<IRpcSerializable, IRpcSerializable>
@@ -1295,6 +1349,27 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   @override
   Future<void> close() async {
     if (!isActive) return;
+
+    // 🆕 Освобождаем ресурсы всех зарегистрированных контрактов
+    for (final entry in _contracts.entries) {
+      final serviceName = entry.key;
+      final contract = entry.value;
+
+      try {
+        contract.dispose();
+        logger.internal(
+          'Ресурсы контракта $serviceName освобождены при закрытии endpoint',
+        );
+      } catch (e, stackTrace) {
+        logger.error(
+          'Ошибка при освобождении ресурсов контракта $serviceName при закрытии: $e',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        // Продолжаем закрытие даже если dispose() завершился с ошибкой
+      }
+    }
+
     _contracts.clear();
     _methods.clear();
     _isListening = false;

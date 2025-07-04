@@ -347,6 +347,33 @@ abstract base class RpcResponderContract implements IRpcContract {
   /// Получает зарегистрированные zero-copy методы
   Map<String, RpcZeroCopyMethodRegistration> get zeroCopyMethods =>
       Map.unmodifiable(_zeroCopyMethods);
+
+  /// Освобождает ресурсы контракта при разрегистрации
+  ///
+  /// Переопределите этот метод для освобождения ресурсов:
+  /// - Database connections
+  /// - StreamController'ов
+  /// - StreamSubscription'ов
+  /// - Timer'ов
+  /// - File handles
+  /// - HTTP clients
+  /// - Кеш-соединений
+  ///
+  /// Пример:
+  /// ```dart
+  /// @override
+  /// void dispose() {
+  ///   _timer?.cancel();
+  ///   _subscription?.cancel();
+  ///   _controller?.close();
+  ///   _database?.close();
+  ///   super.dispose(); // Вызовите родительский dispose
+  /// }
+  /// ```
+  void dispose() {
+    // Базовая реализация - ничего не делаем
+    // Дочерние классы переопределяют при необходимости
+  }
 }
 
 /// Клиентский контракт сервиса
