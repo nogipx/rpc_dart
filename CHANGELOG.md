@@ -1,106 +1,108 @@
+## 2.1.0
+- Added dispose base method to responder to cleanup resources
+
 ## 2.0.0
 - Updated license to MIT
 - Added logo to the package
 - Added readme translations (RU, EN)
 
 ## 1.8.0
-- Добавлена возможность указать режим передачи данных в контракте (zero-copy, codec, auto)
+- Added ability to specify data transfer mode in contract (zero-copy, codec, auto)
 
 ## 1.7.0
-- Добавлена возможность указать поддерживает ли транспорт Zero-Copy
+- Added ability to specify whether transport supports Zero-Copy
 
 ## 1.6.0
-- Добавлена оптимизация Zero-Copy для `RpcInMemoryTransport` - передача объектов без сериализации/десериализации
+- Added Zero-Copy optimization for `RpcInMemoryTransport` - object transfer without serialization/deserialization
 
 ## 1.5.0
-- Добавлен Transport Router для умной маршрутизации RPC вызовов между транспортами
-- Добавлен typedef RpcRoutingCondition для типизации функций условий роутинга
-- Добавлена поддержка правил роутинга с приоритетами (routeCall, routeWhen)
-- Добавлена возможность условного роутинга с доступом к RpcContext
-- Добавлена автоматическая валидация ролей транспортов (клиент/сервер)
-- Реализована корректная маршрутизация Stream ID между транспортами
-- Добавлена статистика роутера и подробное логирование
-- Обновлена документация с примерами использования Transport Router
+- Added Transport Router for smart routing of RPC calls between transports
+- Added typedef RpcRoutingCondition for typing routing condition functions
+- Added support for routing rules with priorities (routeCall, routeWhen)
+- Added conditional routing capability with access to RpcContext
+- Added automatic validation of transport roles (client/server)
+- Implemented correct Stream ID routing between transports
+- Added router statistics and detailed logging
+- Updated documentation with Transport Router usage examples
 - `RpcLoggerSettings` -> `RpcLogger`
 - `RpcContextPropagation` -> `RpcContext`
 
 ## 1.4.0
-- Добавлен RpcContext API с полной поддержкой контекста в стиле gRPC
-- Добавлена поддержка заголовков, метаданных, deadline и timeout
-- Добавлена поддержка distributed tracing с trace ID
-- Добавлен уровень логирования `internal` для внутренних деталей библиотеки
-- Устранено дублирование логов, библиотека "молчит" по умолчанию
-- Оптимизирован InMemoryTransport для улучшения производительности
-- Исправлены race conditions и deadlock ситуации
-- Увеличена надежность тестов и CI/CD пайплайна
+- Added RpcContext API with full gRPC-style context support
+- Added support for headers, metadata, deadline and timeout
+- Added distributed tracing support with trace ID
+- Added `internal` logging level for library internal details
+- Eliminated log duplication, library is "silent" by default
+- Optimized InMemoryTransport for improved performance
+- Fixed race conditions and deadlock situations
+- Increased reliability of tests and CI/CD pipeline
 
 ## 1.3.2
-- Удален автостарт Responder'ов
-- Удален bundleId из `StreamDistributor`
-- Обновлена документация
+- Removed auto-start of Responders
+- Removed bundleId from `StreamDistributor`
+- Updated documentation
 
 ## 1.3.1
-- Оптимизированы CBOR сериализатор и десериализатор
-- Добавлены бенчмарки для тестирования производительности
+- Optimized CBOR serializer and deserializer
+- Added benchmarks for performance testing
 
 ## 1.3.0
-- Обновлена документация
+- Updated documentation
 
 ## 1.2.2
-- Добавлена задержка в 1 мс для стабильности передачи данных
+- Added 1ms delay for data transfer stability
 
 ## 1.2.1
-- Исправлены специфичные ошибки в работе rpc-методов (таймауты)
+- Fixed specific errors in rpc-method operations (timeouts)
 
 ## 1.2.0
-- Исправлен критический баг с обработкой потоков в Stream Processor
-- Добавлена явная поддержка метода `bindToMessageStream()` для ручной привязки потоков
-- Улучшена обработка ошибок в стримах через gRPC статусы в метаданных
-- Исправлены deadlock-ситуации в client, server и bidirectional стримах
-- Оптимизированы таймауты в тестах для более быстрого выполнения
-- Улучшена документация по работе со стримами и обработке ошибок
-- Исправлена проблема с двойным прослушиванием потоков в ClientStreamResponder
+- Fixed critical bug with stream processing in Stream Processor
+- Added explicit support for `bindToMessageStream()` method for manual stream binding
+- Improved error handling in streams through gRPC statuses in metadata
+- Fixed deadlock situations in client, server and bidirectional streams
+- Optimized timeouts in tests for faster execution
+- Improved documentation on working with streams and error handling
+- Fixed issue with double stream listening in ClientStreamResponder
 
 ## 1.1.0
-- Добавлен `RpcStreamIdManager` для управления ID стримов
+- Added `RpcStreamIdManager` for stream ID management
 
 ## 1.0.3
-- CBOR сериализатор теперь работает только с `Map<String, dynamic>`
+- CBOR serializer now works only with `Map<String, dynamic>`
 
 ## 1.0.2
-- Добавлен `StreamDistributor`
-- Исправлены замечания линтера
+- Added `StreamDistributor`
+- Fixed linter issues
 
 ## 1.0.1
-- Добавлена регистрация подконтрактов
-- Исправлена работа унарных методов
+- Added subcontract registration
+- Fixed unary method operations
 
 ## 1.0.0
-- Первый стабильный релиз
-- Реализована контрактная архитектура Backend-for-Domain (BFD)
-- Добавлена поддержка всех типов RPC: унарные вызовы, серверный стриминг, клиентский стриминг, двунаправленный стриминг
-- Добавлена эффективная CBOR сериализация
-- Добавлены примитивные типы (String, Int, Double, Bool, Null) с поддержкой операторов
-- Реализована расширяемая система логирования с поддержкой цветов и уровней
-- Добавлены универсальные транспорты: InMemoryTransport и IsolateTransport
-- Реализована обработка таймаутов и информативных ошибок
-- Основной пакет содержит только платформонезависимые транспорты, платформозависимые будут доступны в отдельных пакетах
+- First stable release
+- Implemented contract-based Backend-for-Domain (BFD) architecture
+- Added support for all RPC types: unary calls, server streaming, client streaming, bidirectional streaming
+- Added efficient CBOR serialization
+- Added primitive types (String, Int, Double, Bool, Null) with operator support
+- Implemented extensible logging system with color and level support
+- Added universal transports: InMemoryTransport and IsolateTransport
+- Implemented timeout handling and informative errors
+- Main package contains only platform-independent transports, platform-specific ones will be available in separate packages
 
 ## 0.2.0
-
-- Улучшена работа со стримами (BidiStream, ClientStreamingBidiStream, ServerStreamingBidiStream)
-- Добавлена поддержка диагностических метрик и мониторинга
-- Улучшена обработка маркеров в стримах для более надежного взаимодействия
-- Добавлены типизированные маркеры для различных операций (завершение стрима, таймауты и др.)
-- Улучшена обработка ошибок и передача статусов между клиентом и сервером
-- Оптимизирована работа с метаданными в запросах и ответах
-- Улучшена работа с дедлайнами и таймаутами в RPC операциях
-- Добавлен механизм отмены операций
+- Improved stream handling (BidiStream, ClientStreamingBidiStream, ServerStreamingBidiStream)
+- Added support for diagnostic metrics and monitoring
+- Improved marker handling in streams for more reliable interaction
+- Added typed markers for various operations (stream completion, timeouts, etc.)
+- Improved error handling and status transfer between client and server
+- Optimized metadata handling in requests and responses
+- Improved deadline and timeout handling in RPC operations
+- Added operation cancellation mechanism
 
 ## 0.1.1
 
-- Исправлена ошибка при регистрации контрактов
-- Добавлен MsgPack сериализатор
+- Fixed error when registering contracts
+- Added MsgPack serializer
 
 ## 0.1.0
 

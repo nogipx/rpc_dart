@@ -13,6 +13,7 @@ LICENSES/
 *.bin
 bin/
 build/
+.idea/
 **/examples
 packages/
 example/*
