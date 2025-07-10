@@ -26,4 +26,18 @@ publish:
     fvm dart pub publish
 
 gen-logo:
-    magick logo/logo.svg -resize 1000x1000 -background transparent logo/logo.webp 
+    magick logo/logo.svg \
+        -resize 100x100 \
+        -background none \
+        -colorspace sRGB \
+        -filter Lanczos \
+        -unsharp 0x0.75+0.75+0.001 \
+        -quality 100 \
+        -define webp:method=3 \
+        -define webp:alpha-quality=100 \
+        -define webp:alpha-compression=0 \
+        -define webp:auto-filter=true \
+        -define webp:pass=10 \
+        -define webp:show-compressed=true \
+        -strip \
+        logo/logo.webp
