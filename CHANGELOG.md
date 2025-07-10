@@ -1,3 +1,6 @@
+## 2.1.1
+- Update logo
+
 ## 2.1.0
 - Added dispose base method to responder to cleanup resources
 
