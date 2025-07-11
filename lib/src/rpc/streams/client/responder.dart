@@ -33,6 +33,7 @@ final class ClientStreamResponder<TRequest extends Object,
   /// [requestCodec] Кодек для десериализации запросов (null для zero-copy)
   /// [responseCodec] Кодек для сериализации ответа (null для zero-copy)
   /// [handler] Функция-обработчик, вызываемая для обработки потока запросов
+  /// [context] RPC контекст с токеном отмены
   /// [logger] Опциональный логгер
   ClientStreamResponder({
     required this.id,
@@ -42,6 +43,7 @@ final class ClientStreamResponder<TRequest extends Object,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     required Future<TResponse> Function(Stream<TRequest> requests) handler,
+    RpcContext? context,
     RpcLogger? logger,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
@@ -70,6 +72,7 @@ final class ClientStreamResponder<TRequest extends Object,
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
+      context: context,
       logger: _logger,
     );
 

@@ -37,6 +37,7 @@ final class ServerStreamResponder<TRequest extends Object,
   /// [requestCodec] Кодек для десериализации запроса (null для zero-copy)
   /// [responseCodec] Кодек для сериализации ответов (null для zero-copy)
   /// [handler] Функция-обработчик, вызываемая для обработки запроса
+  /// [context] RPC контекст с токеном отмены
   /// [logger] Опциональный логгер
   ServerStreamResponder({
     required this.id,
@@ -46,6 +47,7 @@ final class ServerStreamResponder<TRequest extends Object,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     required Stream<TResponse> Function(TRequest request) handler,
+    RpcContext? context,
     RpcLogger? logger,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
@@ -74,6 +76,7 @@ final class ServerStreamResponder<TRequest extends Object,
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
+      context: context,
       logger: _logger,
     );
 

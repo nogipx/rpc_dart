@@ -16,6 +16,7 @@ part of '_index.dart';
 /// - Четкое разделение ответственности
 /// - Работа с любыми типами объектов (не только IRpcSerializable)
 /// - Автоматическая оптимизация для in-memory транспорта
+/// - Поддержка cancellation token для прерывания операций
 final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final RpcLogger? _logger;
   final IRpcTransport _transport;
@@ -24,6 +25,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final String _methodName;
   final IRpcCodec<TRequest>? _requestCodec;
   final IRpcCodec<TResponse>? _responseCodec;
+
+  /// RPC контекст с токеном отмены и метаданными
+  final RpcContext? _context;
+
+  /// Подписка на отмену операции
+  StreamSubscription? _cancellationSubscription;
 
   /// Парсер для обработки фрагментированных сообщений (только для сериализации)
   RpcMessageParser? _parser;
@@ -58,6 +65,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     required String methodName,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
+    RpcContext? context,
     RpcLogger? logger,
   })  : _transport = transport,
         _streamId = streamId,
@@ -66,6 +74,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         _isZeroCopy = requestCodec == null && responseCodec == null,
         _requestCodec = requestCodec,
         _responseCodec = responseCodec,
+        _context = context,
         _logger = logger?.child('StreamProcessor') {
     // Валидация: для режима сериализации кодеки обязательны
     if (!_isZeroCopy) {
@@ -89,7 +98,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     _methodPath = '/$_serviceName/$_methodName';
 
     _logger?.internal(
-        'Создан ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor для $_methodPath [streamId: $_streamId]');
+        'Создан ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor для $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " с cancellation token" : ""}');
+
+    _setupCancellationMonitoring();
     _setupResponseHandler();
   }
 
@@ -221,9 +232,24 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     // или пропущены при ошибке (error response отправляется напрямую)
   }
 
+  /// Проверяет токен отмены и выбрасывает исключение если отменен
+  void _checkCancellation() {
+    _context?.cancellationToken?.throwIfCancelled();
+  }
+
   /// Обрабатывает входящее сообщение
   void _handleMessage(RpcTransportMessage message) {
     if (!_isActive) return;
+
+    // Проверяем отмену перед обработкой каждого сообщения
+    try {
+      _checkCancellation();
+    } catch (e) {
+      _logger?.internal(
+        'Сообщение пропущено из-за отмены [streamId: $_streamId]',
+      );
+      return;
+    }
 
     _logger?.logMessageReceived(
       streamId: message.streamId,
@@ -363,6 +389,16 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       return;
     }
 
+    // Проверяем отмену перед отправкой ответа
+    try {
+      _checkCancellation();
+    } catch (e) {
+      _logger?.internal(
+        'Ответ не отправлен из-за отмены [streamId: $_streamId]',
+      );
+      return;
+    }
+
     if (!_responseController.isClosed) {
       _responseController.add(response);
     } else {
@@ -448,8 +484,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         'Закрытие StreamProcessor для $_methodPath [streamId: $_streamId]');
     _isActive = false;
 
+    // Отменяем все подписки
     await _messageSubscription?.cancel();
     _messageSubscription = null;
+
+    await _cancellationSubscription?.cancel();
+    _cancellationSubscription = null;
 
     if (!_requestController.isClosed) {
       _requestController.close();
@@ -457,6 +497,43 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
     if (!_responseController.isClosed) {
       _responseController.close();
+    }
+  }
+
+  /// Настраивает мониторинг отмены операции
+  void _setupCancellationMonitoring() {
+    if (_context?.cancellationToken != null) {
+      _cancellationSubscription =
+          _context!.cancellationToken!.cancelled.asStream().listen(
+        (_) {
+          _logger?.internal(
+            'Операция отменена, закрываем процессор [streamId: $_streamId]',
+          );
+          _isActive = false;
+
+          final reason =
+              _context!.cancellationToken!.reason ?? 'Operation was cancelled';
+          final cancelledException = RpcCancelledException(reason);
+
+          if (!_requestController.isClosed) {
+            _requestController.addError(cancelledException);
+          }
+          if (!_responseController.isClosed) {
+            _responseController.addError(cancelledException);
+          }
+
+          // Отменяем подписки
+          _messageSubscription?.cancel();
+          _cancellationSubscription?.cancel();
+        },
+        onError: (error, stackTrace) {
+          _logger?.error(
+            'Ошибка при мониторинге отмены [streamId: $_streamId]',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        },
+      );
     }
   }
 }
@@ -485,6 +562,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// RPC контекст для передачи метаданных, таймаутов и отмены
   final RpcContext? _context;
+
+  /// Подписка на отмену операции
+  StreamSubscription? _cancellationSubscription;
 
   /// Парсер для обработки фрагментированных сообщений (только для сериализации)
   RpcMessageParser? _parser;
@@ -554,11 +634,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     _methodPath = '/$_serviceName/$_methodName';
 
     _logger?.internal(
-        'Создан ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor для $_methodPath [streamId: $_streamId]');
+        'Создан ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor для $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " с cancellation token" : ""}');
 
     // Проверяем контекст перед началом работы
     _checkContextBeforeCall();
 
+    _setupCancellationMonitoring();
     _setupRequestHandler();
     _setupResponseHandler();
   }
@@ -717,6 +798,88 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
     _logger?.internal(
         'Начальные метаданные отправлены для $_methodPath [streamId: $_streamId]');
+  }
+
+  /// Настраивает мониторинг отмены операции для CallProcessor
+  void _setupCancellationMonitoring() {
+    if (_context?.cancellationToken != null) {
+      _cancellationSubscription =
+          _context!.cancellationToken!.cancelled.asStream().listen(
+        (_) async {
+          _logger?.internal(
+            'Операция отменена клиентом, отправляем уведомление серверу [streamId: $_streamId]',
+          );
+
+          try {
+            // Отправляем специальное сообщение отмены серверу
+            final reason = _context!.cancellationToken!.reason ??
+                'Operation cancelled by client';
+            await _sendCancellationToServer(reason);
+          } catch (e, stackTrace) {
+            _logger?.error(
+              'Ошибка при отправке уведомления об отмене [streamId: $_streamId]',
+              error: e,
+              stackTrace: stackTrace,
+            );
+          }
+
+          _isActive = false;
+          final cancelledException = RpcCancelledException(
+              _context!.cancellationToken!.reason ?? 'Operation was cancelled');
+
+          if (!_requestController.isClosed) {
+            _requestController.addError(cancelledException);
+          }
+          if (!_responseController.isClosed) {
+            _responseController.addError(cancelledException);
+          }
+
+          // Отменяем подписки
+          await _requestSubscription?.cancel();
+          await _responseSubscription?.cancel();
+          _cancellationSubscription?.cancel();
+        },
+        onError: (error, stackTrace) {
+          _logger?.error(
+            'Ошибка при мониторинге отмены [streamId: $_streamId]',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        },
+      );
+    }
+  }
+
+  /// Отправляет уведомление об отмене серверу
+  Future<void> _sendCancellationToServer(String reason) async {
+    try {
+      // Создаем специальные метаданные с уведомлением об отмене
+      final cancellationHeaders = [
+        RpcHeader('x-client-cancelled', 'true'),
+        RpcHeader('x-cancellation-reason', reason),
+        RpcHeader(
+            RpcConstants.GRPC_STATUS_HEADER, RpcStatus.CANCELLED.toString()),
+      ];
+
+      final cancellationMetadata = RpcMetadata(cancellationHeaders);
+
+      _logger?.internal(
+        'Отправка уведомления об отмене серверу [streamId: $_streamId]',
+      );
+
+      await _transport.sendMetadata(_streamId, cancellationMetadata,
+          endStream: true);
+
+      _logger?.internal(
+        'Уведомление об отмене отправлено серверу [streamId: $_streamId]',
+      );
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Ошибка при отправке метаданных отмены [streamId: $_streamId]',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Проверяет состояние контекста перед вызовом
@@ -911,6 +1074,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
     await _responseSubscription?.cancel();
     _responseSubscription = null;
+
+    await _cancellationSubscription?.cancel();
+    _cancellationSubscription = null;
 
     if (!_requestController.isClosed) {
       _requestController.close();

@@ -248,6 +248,19 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
   /// Этап 2.1: Обрабатывает сообщение с метаданными (заголовками)
   void _handleMetadataMessage(int streamId, RpcTransportMessage message) {
+    // Проверяем, является ли это уведомлением об отмене от клиента
+    if (message.metadata != null) {
+      final isCancelled =
+          message.metadata!.getHeaderValue('x-client-cancelled');
+      if (isCancelled == 'true') {
+        final reason =
+            message.metadata!.getHeaderValue('x-cancellation-reason') ??
+                'Cancelled by client';
+        _handleClientCancellation(streamId, reason);
+        return;
+      }
+    }
+
     final methodPath = message.methodPath!;
     final methodInfo = _parseMethodPath(methodPath);
 
@@ -288,6 +301,41 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       );
       return;
     }
+  }
+
+  /// Обрабатывает отмену от клиента
+  void _handleClientCancellation(int streamId, String reason) {
+    logger.internal(
+      'Получено уведомление об отмене от клиента [streamId: $streamId]: $reason',
+    );
+
+    // Находим и отменяем активный респондер для данного stream
+    final responder = _streamResponders[streamId];
+    if (responder != null) {
+      logger.internal(
+        'Отменяем активный респондер [streamId: $streamId]',
+      );
+
+      // Отменяем респондер (он сам должен очистить ресурсы)
+      if (responder is UnaryResponder) {
+        responder.close();
+      } else if (responder is ClientStreamResponder) {
+        responder.close();
+      } else if (responder is ServerStreamResponder) {
+        responder.close();
+      } else if (responder is BidirectionalStreamResponder) {
+        responder.close();
+      }
+
+      _streamResponders.remove(streamId);
+    }
+
+    // Очищаем все данные для этого stream
+    _cleanupStream(streamId);
+
+    logger.internal(
+      'Обработка отмены завершена [streamId: $streamId]',
+    );
   }
 
   /// Этап 2.2: Обрабатывает сообщение с данными
@@ -525,6 +573,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         serviceName: serviceName,
         methodName: methodName,
         // Кодеки не указываем для zero-copy режима
+        context: context,
         logger: contextLogger,
       );
 
@@ -593,6 +642,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
               await i.method.callUnaryHandler(context, typedRequest);
           return i.method.castResponse(response);
         },
+        context: context, // Передаем контекст для мониторинга отмены
         logger: contextLogger, // Передаем контекстный логгер
       );
 
@@ -663,6 +713,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           return await zeroCopyMethod.callClientStreamHandler(
               context, requests);
         },
+        context: context, // Передаем контекст для мониторинга отмены
         logger: contextLogger,
       );
 
@@ -703,6 +754,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
               await i.method.callClientStreamHandler(context, typedRequests);
           return i.method.castResponse(response);
         },
+        context: context, // Передаем контекст для мониторинга отмены
         logger: contextLogger, // Передаем контекстный логгер
       );
 
@@ -776,6 +828,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           // Вызываем zero-copy handler который возвращает Stream<Object>
           return zeroCopyMethod.callServerStreamHandler(context, request);
         },
+        context: context, // Передаем контекст для мониторинга отмены
         logger: contextLogger,
       );
 
@@ -817,6 +870,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           return responseStream
               .map((response) => i.method.castResponse(response));
         },
+        context: context, // Передаем контекст для мониторинга отмены
         logger: contextLogger, // Передаем контекстный логгер
       );
 
@@ -941,6 +995,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         transport: transport,
         serviceName: serviceName,
         methodName: methodName,
+        context: context, // Передаем контекст для мониторинга отмены
         logger: contextLogger,
       );
 
@@ -978,6 +1033,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         methodName: methodName,
         requestCodec: i.method.requestCodec,
         responseCodec: i.method.responseCodec,
+        context: context, // Передаем контекст для мониторинга отмены
         logger: contextLogger, // Передаем контекстный логгер
       );
 

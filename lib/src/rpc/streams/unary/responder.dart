@@ -48,6 +48,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Логгер
   late final RpcLogger? _logger;
 
+  /// RPC контекст с токеном отмены и метаданными
+  final RpcContext? _context;
+
+  /// Подписка на отмену операции
+  StreamSubscription? _cancellationSubscription;
+
   /// Парсер для обработки фрагментированных сообщений
   late final RpcMessageParser _parser;
 
@@ -70,6 +76,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// [requestCodec] Кодек для десериализации запроса
   /// [responseCodec] Кодек для сериализации ответа
   /// [handler] Функция-обработчик, вызываемая при получении запроса
+  /// [context] RPC контекст с токеном отмены
   /// [logger] Опциональный логгер
   UnaryResponder({
     this.id = 0,
@@ -79,22 +86,55 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     required FutureOr<TResponse> Function(TRequest request) handler,
+    RpcContext? context,
     RpcLogger? logger,
   })  : _transport = transport,
         _serviceName = serviceName,
         _methodName = methodName,
         _requestSerializer = requestCodec,
-        _responseSerializer = responseCodec {
+        _responseSerializer = responseCodec,
+        _context = context {
     _handler = handler;
     _logger = logger?.child('UnaryResponder');
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
-    _logger?.internal('Создан унарный сервер для $_methodPath');
+    _logger?.internal(
+        'Создан унарный сервер для $_methodPath${_context?.cancellationToken != null ? " с cancellation token" : ""}');
 
     // Регистрируем поток как принадлежащий этому методу
     _streamBelongsToThisMethod[id] = true;
 
+    _setupCancellationMonitoring();
     _setupRequestHandler();
+  }
+
+  /// Настраивает мониторинг отмены операции
+  void _setupCancellationMonitoring() {
+    if (_context?.cancellationToken != null) {
+      _cancellationSubscription =
+          _context!.cancellationToken!.cancelled.asStream().listen(
+        (_) {
+          _logger?.internal(
+            'Операция отменена, прекращаем обработку запросов [id: $id]',
+          );
+
+          // Отменяем подписку на входящие сообщения
+          _subscription?.cancel();
+        },
+        onError: (error, stackTrace) {
+          _logger?.error(
+            'Ошибка при мониторинге отмены [id: $id]',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        },
+      );
+    }
+  }
+
+  /// Проверяет токен отмены и выбрасывает исключение если отменен
+  void _checkCancellation() {
+    _context?.cancellationToken?.throwIfCancelled();
   }
 
   void _setupRequestHandler() {
@@ -129,6 +169,16 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           // Игнорируем дополнительные сообщения после обработки первого запроса
           _logger?.internal(
               'Игнорируем дополнительное сообщение для stream $streamId (запрос уже обработан)');
+          return;
+        }
+
+        // Проверяем отмену перед обработкой сообщения
+        try {
+          _checkCancellation();
+        } catch (e) {
+          _logger?.internal(
+            'Сообщение пропущено из-за отмены [streamId: $streamId]',
+          );
           return;
         }
 
@@ -181,6 +231,16 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// [message] Сообщение с данными для обработки
   Future<void> handleMessage(RpcTransportMessage message) async {
     final streamId = message.streamId;
+
+    // Проверяем отмену перед обработкой
+    try {
+      _checkCancellation();
+    } catch (e) {
+      _logger?.internal(
+        'Обработка сообщения отменена [streamId: $streamId]',
+      );
+      return;
+    }
 
     // Проверяем, что сообщение предназначено для этого экземпляра респондера
     // Для id=0 (значение по умолчанию) принимаем любые сообщения, это нужно для тестов
@@ -302,6 +362,16 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   Future<void> handleDirectMessage(RpcTransportMessage message) async {
     final streamId = message.streamId;
 
+    // Проверяем отмену перед обработкой
+    try {
+      _checkCancellation();
+    } catch (e) {
+      _logger?.internal(
+        'Zero-copy обработка сообщения отменена [streamId: $streamId]',
+      );
+      return;
+    }
+
     // Проверяем, что сообщение предназначено для этого экземпляра респондера
     if (id != 0 && streamId != id) {
       _logger?.internal(
@@ -411,6 +481,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   Future<void> close() async {
     _logger?.internal('Закрытие унарного сервера $_methodPath');
     await _subscription?.cancel();
-    _logger?.internal('Отменена подписка на входящие сообщения');
+    await _cancellationSubscription?.cancel();
+    _logger?.internal('Отменены все подписки');
   }
 }

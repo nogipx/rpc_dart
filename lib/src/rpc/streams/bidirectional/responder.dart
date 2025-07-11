@@ -34,6 +34,7 @@ final class BidirectionalStreamResponder<TRequest extends Object,
   /// [methodName] Имя метода (например, "Connect")
   /// [requestCodec] Кодек для десериализации запросов (null для zero-copy)
   /// [responseCodec] Кодек для сериализации ответов (null для zero-copy)
+  /// [context] RPC контекст с токеном отмены
   /// [logger] Опциональный логгер
   BidirectionalStreamResponder({
     required this.id,
@@ -42,6 +43,7 @@ final class BidirectionalStreamResponder<TRequest extends Object,
     required String methodName,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
+    RpcContext? context,
     RpcLogger? logger,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
@@ -70,6 +72,7 @@ final class BidirectionalStreamResponder<TRequest extends Object,
       methodName: methodName,
       requestCodec: requestCodec,
       responseCodec: responseCodec,
+      context: context,
       logger: _logger,
     );
 

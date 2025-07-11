@@ -393,6 +393,28 @@ abstract base class RpcCallerContract implements IRpcContract {
   /// Получает endpoint, используемый для отправки запросов
   RpcCallerEndpoint get endpoint => _endpoint;
 
+  /// Получает токен отмены для указанного метода этого сервиса
+  /// Возвращает null, если токен не найден
+  RpcCancellationToken? getCancellationToken(String methodName) {
+    return _endpoint.getCancellationToken(serviceName, methodName);
+  }
+
+  /// Отменяет вызов указанного метода этого сервиса
+  /// Возвращает true, если токен был найден и отменен
+  bool cancelMethod(String methodName, [String? reason]) {
+    return _endpoint.cancelMethod(serviceName, methodName, reason);
+  }
+
+  /// Отменяет все активные методы этого сервиса
+  void cancelAllMethods([String? reason]) {
+    _endpoint.cancelServiceMethods(serviceName, reason);
+  }
+
+  /// Проверяет, активен ли указанный метод (есть ли для него токен отмены)
+  bool isMethodActive(String methodName) {
+    return getCancellationToken(methodName) != null;
+  }
+
   /// Определяет режим передачи данных на основе настроек контракта и наличия кодеков
   bool _isZeroCopyAllowed<TRequest, TResponse>(
     IRpcCodec<TRequest>? requestCodec,

@@ -6,6 +6,10 @@ part of '_index.dart';
 
 /// Клиентский RPC эндпоинт для отправки запросов
 final class RpcCallerEndpoint extends RpcEndpointBase {
+  /// Реестр токенов отмены для активных вызовов
+  /// Ключ: "serviceName/methodName", Значение: токен отмены
+  final Map<String, RpcCancellationToken> _cancellationTokens = {};
+
   @override
   RpcLogger get logger => RpcLogger(
         'RpcCallerEndpoint',
@@ -19,6 +23,67 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     super.loggerColors,
   }) {
     _validateClientTransport();
+  }
+
+  /// Создает ключ для реестра токенов из имени сервиса и метода
+  String _createMethodKey(String serviceName, String methodName) {
+    return '$serviceName/$methodName';
+  }
+
+  /// Получает токен отмены для указанного метода
+  /// Возвращает null, если токен не найден
+  RpcCancellationToken? getCancellationToken(
+    String serviceName,
+    String methodName,
+  ) {
+    final key = _createMethodKey(serviceName, methodName);
+    return _cancellationTokens[key];
+  }
+
+  /// Отменяет вызов для указанного метода
+  /// Возвращает true, если токен был найден и отменен
+  bool cancelMethod(String serviceName, String methodName, [String? reason]) {
+    final key = _createMethodKey(serviceName, methodName);
+    final token = _cancellationTokens[key];
+    if (token != null) {
+      token.cancel(reason ?? 'Method cancelled by user');
+      _cancellationTokens.remove(key);
+      logger.internal('Отменен вызов метода: $key');
+      return true;
+    }
+    return false;
+  }
+
+  /// Отменяет все активные вызовы
+  void cancelAllMethods([String? reason]) {
+    final methodKeys = _cancellationTokens.keys.toList();
+    for (final key in methodKeys) {
+      final token = _cancellationTokens[key];
+      if (token != null) {
+        token.cancel(reason ?? 'All methods cancelled');
+        _cancellationTokens.remove(key);
+      }
+    }
+    logger.internal('Отменены все активные вызовы (${methodKeys.length})');
+  }
+
+  /// Отменяет все методы указанного сервиса
+  void cancelServiceMethods(String serviceName, [String? reason]) {
+    final servicePrefix = '$serviceName/';
+    final methodKeys = _cancellationTokens.keys
+        .where((key) => key.startsWith(servicePrefix))
+        .toList();
+
+    for (final key in methodKeys) {
+      final token = _cancellationTokens[key];
+      if (token != null) {
+        token.cancel(reason ?? 'Service methods cancelled');
+        _cancellationTokens.remove(key);
+      }
+    }
+    logger.internal(
+      'Отменены все методы сервиса $serviceName (${methodKeys.length})',
+    );
   }
 
   /// Проверяет, что транспорт является клиентским (генерирует нечетные Stream ID)
@@ -61,7 +126,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       final tracingContext = RpcContextUtils.withTracing();
       final enhancedContext = context.withTraceId(tracingContext.traceId!);
       logger.internal(
-          'Добавлен trace ID к существующему контексту: ${enhancedContext.traceId}');
+        'Добавлен trace ID к существующему контексту: ${enhancedContext.traceId}',
+      );
       return enhancedContext;
     }
 
@@ -87,6 +153,44 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
           .withGeneratedTraceId()
           .build();
     }
+  }
+
+  /// Обогащает контекст роутинговыми заголовками для Transport Router
+  RpcContext _enhanceContextForCancellation(
+    RpcContext? userContext,
+    String serviceName,
+    String methodName,
+  ) {
+    final key = _createMethodKey(serviceName, methodName);
+    if (userContext != null) {
+      final token = userContext.cancellationToken ?? RpcCancellationToken();
+      _cancellationTokens[key] = token;
+      return userContext.withCancellation(token);
+    } else {
+      final token = RpcCancellationToken();
+      _cancellationTokens[key] = token;
+      return RpcContextBuilder()
+          .withCancellation(token)
+          .withGeneratedTraceId()
+          .build();
+    }
+  }
+
+  RpcContext _effectiveContext(
+    RpcContext? userContext,
+    String serviceName,
+    String methodName,
+  ) {
+    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
+    final enhancedContext = _enhanceContextForCancellation(
+      _enhanceContextForRouting(
+        _ensureContext(userContext),
+        serviceName,
+      ),
+      serviceName,
+      methodName,
+    );
+    return enhancedContext;
   }
 
   /// 🚀 Универсальный унарный request
@@ -145,8 +249,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     }
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
-    final baseContext = _ensureContext(context);
-    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
+    final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
     if (isZeroCopy) {
       // Zero-copy путь с универсальным процессором
@@ -276,8 +379,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         'Создание ${isZeroCopy ? "zero-copy" : "serialized"} server stream для $serviceName/$methodName');
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
-    final baseContext = _ensureContext(context);
-    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
+    final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
     // Используем универсальный ServerStreamCaller
     final caller = ServerStreamCaller<TRequest, TResponse>(
@@ -307,8 +409,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         'Создание client stream builder для $serviceName/$methodName');
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
-    final baseContext = _ensureContext(context);
-    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
+    final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
     return (Stream<C> requests) async {
       logger.internal('Выполнение client stream для $serviceName/$methodName');
@@ -370,8 +471,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         .internal('Создание bidirectional stream для $serviceName/$methodName');
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
-    final baseContext = _ensureContext(context);
-    final enhancedContext = _enhanceContextForRouting(baseContext, serviceName);
+    final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
     // Создаем контроллер для передачи сообщений
     final controller = StreamController<R>();
