@@ -3,35 +3,43 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
 /// 🚀 Демонстрация всех 4 RPC паттернов с Zero-Copy + Cancellation
 void main() async {
   print('🚀 RPC Dart - Все 4 паттерна с Zero-Copy + Cancellation\n');
-  // RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.internal);
+  await runZonedGuarded<Future>(
+    () async {
+      final (client, server) = RpcInMemoryTransport.pair();
+      // RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.internal);
 
-  // Создаем inmemory транспорт
-  final (client, server) = RpcInMemoryTransport.pair();
+      // Создаем inmemory транспорт
 
-  // Настраиваем endpoints
-  final responder = RpcResponderEndpoint(transport: server);
-  final caller = RpcCallerEndpoint(transport: client);
+      // Настраиваем endpoints
+      final responder = RpcResponderEndpoint(transport: server);
+      final caller = RpcCallerEndpoint(transport: client);
 
-  // Регистрируем сервис
-  responder.registerServiceContract(CalculatorResponder());
+      // Регистрируем сервис
+      responder.registerServiceContract(CalculatorResponder());
 
-  responder.start();
+      responder.start();
 
-  final calculator = CalculatorCaller(caller);
+      final calculator = CalculatorCaller(caller);
 
-  try {
-    await _demonstrateMethods(calculator);
-    await _demonstrateCancellation(calculator);
-  } finally {
-    await caller.close();
-    await responder.close();
-  }
+      await _demonstrateMethods(calculator);
+      await _demonstrateCancellation(calculator);
+
+      await server.close();
+      await client.close();
+    },
+    (error, trace) {
+      print('❌ Ошибка: $error');
+      print('📜 Trace: $trace');
+    },
+  );
+  exit(0);
 }
 
 Future<void> _demonstrateMethods(CalculatorCaller calculator) async {

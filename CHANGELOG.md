@@ -1,3 +1,7 @@
+## 2.2.0
+- Added support for cancellation in caller/responder
+- Fix timeout passing through headers
+
 ## 2.1.1
 - Update logo
 
