@@ -391,7 +391,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         streamId,
         RpcMetadata.forTrailer(
           RpcStatus.INTERNAL,
-          message: 'Zero-copy request processing error: $e',
+          message: e.toString(),
         ),
         endStream: true,
       );

@@ -549,7 +549,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
             error: e,
             stackTrace: stackTrace,
           );
-          await processor.sendError(RpcStatus.INTERNAL, e.toString());
+
+          final errorMessage = e is RpcException ? e.message : e.toString();
+          await processor.sendError(RpcStatus.INTERNAL, errorMessage);
         }
       });
 

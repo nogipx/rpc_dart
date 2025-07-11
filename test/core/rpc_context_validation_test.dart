@@ -95,8 +95,8 @@ void main() {
         final context = RpcContext.withTimeout(Duration(milliseconds: 10));
 
         // Act & Assert
-        expect(
-          () => clientEndpoint.unaryRequest<RpcString, RpcString>(
+        await expectLater(
+          clientEndpoint.unaryRequest<RpcString, RpcString>(
             serviceName: 'ValidationService',
             methodName: 'SlowOperation',
             requestCodec: RpcString.codec,
