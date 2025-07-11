@@ -7,8 +7,8 @@ part of '_index.dart';
 /// Клиентский RPC эндпоинт для отправки запросов
 final class RpcCallerEndpoint extends RpcEndpointBase {
   /// Реестр токенов отмены для активных вызовов
-  /// Ключ: "serviceName/methodName", Значение: токен отмены
-  final Map<String, RpcCancellationToken> _cancellationTokens = {};
+  /// Ключ: "serviceName/methodName", Значение: мапа requestId -> токен отмены
+  final Map<String, Map<String, RpcCancellationToken>> _cancellationTokens = {};
 
   @override
   RpcLogger get logger => RpcLogger(
@@ -30,41 +30,79 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     return '$serviceName/$methodName';
   }
 
-  /// Получает токен отмены для указанного метода
+  /// Получает токен отмены для указанного метода и requestId
   /// Возвращает null, если токен не найден
   RpcCancellationToken? getCancellationToken(
     String serviceName,
     String methodName,
+    String requestId,
   ) {
     final key = _createMethodKey(serviceName, methodName);
-    return _cancellationTokens[key];
+    return _cancellationTokens[key]?[requestId];
   }
 
-  /// Отменяет вызов для указанного метода
-  /// Возвращает true, если токен был найден и отменен
-  bool cancelMethod(String serviceName, String methodName, [String? reason]) {
+  /// Получает все токены отмены для указанного метода
+  /// Возвращает пустую мапу, если метод не найден
+  Map<String, RpcCancellationToken> getCancellationTokensForMethod(
+    String serviceName,
+    String methodName,
+  ) {
     final key = _createMethodKey(serviceName, methodName);
-    final token = _cancellationTokens[key];
-    if (token != null) {
-      token.cancel(reason ?? 'Method cancelled by user');
-      _cancellationTokens.remove(key);
-      logger.internal('Отменен вызов метода: $key');
-      return true;
+    return Map.unmodifiable(_cancellationTokens[key] ?? {});
+  }
+
+  /// Отменяет конкретный вызов по requestId
+  /// Возвращает true, если токен был найден и отменен
+  bool cancelRequest(String serviceName, String methodName, String requestId,
+      [String? reason]) {
+    final key = _createMethodKey(serviceName, methodName);
+    final methodTokens = _cancellationTokens[key];
+    if (methodTokens != null) {
+      final token = methodTokens[requestId];
+      if (token != null) {
+        token.cancel(reason ?? 'Request cancelled by user');
+        methodTokens.remove(requestId);
+
+        // Если больше нет токенов для этого метода, удаляем весь ключ
+        if (methodTokens.isEmpty) {
+          _cancellationTokens.remove(key);
+        }
+
+        logger.internal('Отменен запрос: $key[$requestId]');
+        return true;
+      }
     }
     return false;
   }
 
+  /// Отменяет вызов для указанного метода (все активные вызовы этого метода)
+  /// Возвращает количество отмененных токенов
+  int cancelMethod(String serviceName, String methodName, [String? reason]) {
+    final key = _createMethodKey(serviceName, methodName);
+    final methodTokens = _cancellationTokens[key];
+    if (methodTokens != null) {
+      final cancelledCount = methodTokens.length;
+      for (final token in methodTokens.values) {
+        token.cancel(reason ?? 'Method cancelled by user');
+      }
+      _cancellationTokens.remove(key);
+      logger.internal('Отменены все вызовы метода: $key ($cancelledCount)');
+      return cancelledCount;
+    }
+    return 0;
+  }
+
   /// Отменяет все активные вызовы
   void cancelAllMethods([String? reason]) {
-    final methodKeys = _cancellationTokens.keys.toList();
-    for (final key in methodKeys) {
-      final token = _cancellationTokens[key];
-      if (token != null) {
+    int totalCancelled = 0;
+    for (final methodTokens in _cancellationTokens.values) {
+      for (final token in methodTokens.values) {
         token.cancel(reason ?? 'All methods cancelled');
-        _cancellationTokens.remove(key);
+        totalCancelled++;
       }
     }
-    logger.internal('Отменены все активные вызовы (${methodKeys.length})');
+    _cancellationTokens.clear();
+    logger.internal('Отменены все активные вызовы ($totalCancelled)');
   }
 
   /// Отменяет все методы указанного сервиса
@@ -74,15 +112,18 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         .where((key) => key.startsWith(servicePrefix))
         .toList();
 
+    int totalCancelled = 0;
     for (final key in methodKeys) {
-      final token = _cancellationTokens[key];
-      if (token != null) {
+      final methodTokens = _cancellationTokens[key]!;
+      for (final token in methodTokens.values) {
         token.cancel(reason ?? 'Service methods cancelled');
-        _cancellationTokens.remove(key);
+        totalCancelled++;
       }
+      _cancellationTokens.remove(key);
     }
+
     logger.internal(
-      'Отменены все методы сервиса $serviceName (${methodKeys.length})',
+      'Отменены все методы сервиса $serviceName ($totalCancelled вызовов)',
     );
   }
 
@@ -137,61 +178,36 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     return newContext;
   }
 
-  /// Обогащает контекст роутинговыми заголовками для Transport Router
-  RpcContext _enhanceContextForRouting(
-      RpcContext? userContext, String serviceName) {
-    final routingHeaders = {
-      'x-route-service': serviceName, // 👈 Ключевой заголовок для роутинга!
-      'x-caller-type': runtimeType.toString(),
-    };
-
-    if (userContext != null) {
-      return userContext.withAdditionalHeaders(routingHeaders);
-    } else {
-      return RpcContextBuilder()
-          .withHeaders(routingHeaders)
-          .withGeneratedTraceId()
-          .build();
-    }
-  }
-
-  /// Обогащает контекст роутинговыми заголовками для Transport Router
-  RpcContext _enhanceContextForCancellation(
-    RpcContext? userContext,
+  /// Обогащает контекст токеном отмены для Transport Router
+  RpcContext _enhanceContext(
+    RpcContext userContext,
     String serviceName,
     String methodName,
   ) {
+    final routingHeaders = {
+      'x-route-service': serviceName,
+    };
+
     final key = _createMethodKey(serviceName, methodName);
-    if (userContext != null) {
-      final token = userContext.cancellationToken ?? RpcCancellationToken();
-      _cancellationTokens[key] = token;
-      return userContext.withCancellation(token);
-    } else {
-      final token = RpcCancellationToken();
-      _cancellationTokens[key] = token;
-      return RpcContextBuilder()
-          .withCancellation(token)
-          .withGeneratedTraceId()
-          .build();
-    }
+
+    final token = userContext.cancellationToken ?? RpcCancellationToken();
+    final requestId = userContext.requestId;
+
+    // Инициализируем мапу для метода, если её нет
+    _cancellationTokens[key] ??= <String, RpcCancellationToken>{};
+    _cancellationTokens[key]![requestId] = token;
+
+    return userContext
+        .withCancellation(token)
+        .withAdditionalHeaders(routingHeaders);
   }
 
   RpcContext _effectiveContext(
     RpcContext? userContext,
     String serviceName,
     String methodName,
-  ) {
-    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
-    final enhancedContext = _enhanceContextForCancellation(
-      _enhanceContextForRouting(
-        _ensureContext(userContext),
-        serviceName,
-      ),
-      serviceName,
-      methodName,
-    );
-    return enhancedContext;
-  }
+  ) =>
+      _enhanceContext(_ensureContext(userContext), serviceName, methodName);
 
   /// 🚀 Универсальный унарный request
   ///

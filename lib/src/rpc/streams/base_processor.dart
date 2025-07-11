@@ -778,6 +778,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       }
       headers.add(RpcHeader('x-request-id', _context!.requestId));
 
+      // Передаем deadline серверу
+      if (_context!.deadline != null) {
+        headers.add(RpcHeader('x-deadline',
+            _context!.deadline!.millisecondsSinceEpoch.toString()));
+      }
+
       // Context values остаются ЛОКАЛЬНЫМИ - не передаются через сеть (соответствует стандарту gRPC)
       // Только headers передаются через HTTP/2 заголовки
 

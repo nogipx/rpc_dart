@@ -1386,6 +1386,19 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Создаем контекст с заголовками
     var context = RpcContext.withHeaders(headers);
 
+    // Извлекаем deadline из заголовков
+    final deadlineHeader = headers['x-deadline'];
+    if (deadlineHeader != null) {
+      try {
+        final deadlineMs = int.parse(deadlineHeader);
+        final deadline = DateTime.fromMillisecondsSinceEpoch(deadlineMs);
+        context = context.withDeadline(deadline);
+        logger.internal('Установлен deadline из заголовков: $deadline');
+      } catch (e) {
+        logger.warning('Некорректный deadline в заголовках: $deadlineHeader');
+      }
+    }
+
     // Извлекаем или создаем trace ID
     final clientTraceId = headers['x-trace-id'];
 
@@ -1414,7 +1427,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       final contract = entry.value;
 
       try {
-        contract.dispose();
+        if (contract is RpcResponderContract) {
+          contract.dispose();
+        }
         logger.internal(
           'Ресурсы контракта $serviceName освобождены при закрытии endpoint',
         );

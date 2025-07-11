@@ -393,15 +393,16 @@ abstract base class RpcCallerContract implements IRpcContract {
   /// Получает endpoint, используемый для отправки запросов
   RpcCallerEndpoint get endpoint => _endpoint;
 
-  /// Получает токен отмены для указанного метода этого сервиса
-  /// Возвращает null, если токен не найден
-  RpcCancellationToken? getCancellationToken(String methodName) {
-    return _endpoint.getCancellationToken(serviceName, methodName);
+  /// Получает все токены отмены для указанного метода
+  /// Возвращает пустую мапу, если метод не найден
+  Map<String, RpcCancellationToken> getCancellationTokensForMethod(
+      String methodName) {
+    return _endpoint.getCancellationTokensForMethod(serviceName, methodName);
   }
 
-  /// Отменяет вызов указанного метода этого сервиса
-  /// Возвращает true, если токен был найден и отменен
-  bool cancelMethod(String methodName, [String? reason]) {
+  /// Отменяет все активные вызовы указанного метода
+  /// Возвращает количество отмененных вызовов
+  int cancelMethod(String methodName, [String? reason]) {
     return _endpoint.cancelMethod(serviceName, methodName, reason);
   }
 
@@ -410,9 +411,14 @@ abstract base class RpcCallerContract implements IRpcContract {
     _endpoint.cancelServiceMethods(serviceName, reason);
   }
 
-  /// Проверяет, активен ли указанный метод (есть ли для него токен отмены)
+  /// Проверяет, активен ли указанный метод (есть ли для него токены отмены)
   bool isMethodActive(String methodName) {
-    return getCancellationToken(methodName) != null;
+    return getCancellationTokensForMethod(methodName).isNotEmpty;
+  }
+
+  /// Получает количество активных вызовов для указанного метода
+  int getActiveCallsCount(String methodName) {
+    return getCancellationTokensForMethod(methodName).length;
   }
 
   /// Определяет режим передачи данных на основе настроек контракта и наличия кодеков

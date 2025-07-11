@@ -20,59 +20,62 @@ void main() async {
 
   // Регистрируем сервис
   responder.registerServiceContract(CalculatorResponder());
+
   responder.start();
 
   final calculator = CalculatorCaller(caller);
 
   try {
-    // 1. Unary Call
-    print('1️⃣ Unary: один запрос → один ответ');
-    final result1 = await calculator.calculate(Request(10, 5, 'add'));
-    print('   10 + 5 = ${result1.result}\n');
-
-    // 2. Server Streaming
-    print('2️⃣ Server Stream: один запрос → поток ответов');
-    await for (final step
-        in calculator.calculateSteps(Request(20, 4, 'multiply'))) {
-      print('   📤 ${step.message}');
-    }
-    print('');
-
-    // 3. Client Streaming
-    print('3️⃣ Client Stream: поток запросов → один ответ');
-    final requests = Stream.fromIterable([
-      Request(10, 2, 'add'),
-      Request(15, 3, 'multiply'),
-      Request(100, 10, 'divide'),
-    ]);
-    final summary = await calculator.processBatch(requests);
-    print('   📥 Обработано: ${summary.count}, Сумма: ${summary.total}\n');
-
-    // 4. Bidirectional Streaming
-    print('4️⃣ Bidirectional: поток запросов ↔ поток ответов');
-    final controller = StreamController<Request>();
-    final results = calculator.liveCalculate(controller.stream);
-
-    // Подписываемся на результаты
-    final subscription = results.listen((r) => print('   🔄 ${r.result}'));
-
-    // Отправляем данные
-    controller.add(Request(5, 3, 'multiply'));
-    await Future.delayed(Duration(milliseconds: 50));
-    controller.add(Request(20, 4, 'divide'));
-    await Future.delayed(Duration(milliseconds: 50));
-
-    await controller.close();
-    await subscription.asFuture();
-
-    print('\n✅ Все 4 RPC паттерна продемонстрированы!');
-
-    print('\n🚫 ========== CANCELLATION ПРИМЕРЫ ==========');
+    await _demonstrateMethods(calculator);
     await _demonstrateCancellation(calculator);
   } finally {
     await caller.close();
     await responder.close();
   }
+}
+
+Future<void> _demonstrateMethods(CalculatorCaller calculator) async {
+  // 1. Unary Call
+  print('1️⃣ Unary: один запрос → один ответ');
+  final result1 = await calculator.calculate(Request(10, 5, 'add'));
+  print('   10 + 5 = ${result1.result}\n');
+
+  // 2. Server Streaming
+  print('2️⃣ Server Stream: один запрос → поток ответов');
+  await for (final step
+      in calculator.calculateSteps(Request(20, 4, 'multiply'))) {
+    print('   📤 ${step.message}');
+  }
+  print('');
+
+  // 3. Client Streaming
+  print('3️⃣ Client Stream: поток запросов → один ответ');
+  final requests = Stream.fromIterable([
+    Request(10, 2, 'add'),
+    Request(15, 3, 'multiply'),
+    Request(100, 10, 'divide'),
+  ]);
+  final summary = await calculator.processBatch(requests);
+  print('   📥 Обработано: ${summary.count}, Сумма: ${summary.total}\n');
+
+  // 4. Bidirectional Streaming
+  print('4️⃣ Bidirectional: поток запросов ↔ поток ответов');
+  final controller = StreamController<Request>();
+  final results = calculator.liveCalculate(controller.stream);
+
+  // Подписываемся на результаты
+  final subscription = results.listen((r) => print('   🔄 ${r.result}'));
+
+  // Отправляем данные
+  controller.add(Request(5, 3, 'multiply'));
+  await Future.delayed(Duration(milliseconds: 50));
+  controller.add(Request(20, 4, 'divide'));
+  await Future.delayed(Duration(milliseconds: 50));
+
+  await controller.close();
+  await subscription.asFuture();
+
+  print('\n✅ Все 4 RPC паттерна продемонстрированы!');
 }
 
 /// Демонстрирует различные сценарии отмены операций
@@ -99,7 +102,7 @@ Future<void> _demonstrateCancellation(CalculatorCaller calculator) async {
   // 2. Отмена через timeout
   print('2️⃣ Отмена через timeout');
   try {
-    final context = RpcContext.withTimeout(Duration(milliseconds: 1));
+    final context = RpcContext.withTimeout(Duration(milliseconds: 100));
     await calculator.slowCalculation(
       Request(1000, 1, 'slow'),
       context: context,
@@ -108,7 +111,6 @@ Future<void> _demonstrateCancellation(CalculatorCaller calculator) async {
     print('   ⏰ Timeout сработал: $e\n');
   }
 
-  // 3. Отмена stream операции
   print('3️⃣ Отмена streaming операции');
   try {
     final cancellationToken = RpcCancellationToken();
@@ -130,14 +132,13 @@ Future<void> _demonstrateCancellation(CalculatorCaller calculator) async {
     print('   ❌ Stream отменен: $e\n');
   }
 
-  // 4. Отмена через контракт (по методу)
   print('4️⃣ Отмена через контракт');
   try {
     // Запускаем операцию
-    final future = calculator.slowCalculation(Request(3000, 1, 'slow'));
+    final future = calculator.slowCalculation(Request(3000, 2, 'slow'));
 
     // Отменяем через контракт
-    Timer(Duration(milliseconds: 10), () {
+    Timer(Duration(milliseconds: 30), () {
       print('   🎯 Отменяем через контракт');
       final cancelled = calculator.cancelMethod(
         ICalculatorContract.methodSlowCalculation,
@@ -151,17 +152,17 @@ Future<void> _demonstrateCancellation(CalculatorCaller calculator) async {
     print('   ❌ Операция отменена через контракт: $e\n');
   }
 
-  // 5. Отмена всех операций сервиса
   print('5️⃣ Отмена всех операций сервиса');
   try {
-    // Запускаем несколько операций
-    final futures = [
+    // Запускаем несколько операций разных методов
+    final futures = <Future<dynamic>>[
       calculator.slowCalculation(Request(1000, 1, 'slow')),
-      calculator.slowCalculation(Request(2000, 2, 'slow')),
-      calculator.slowCalculation(Request(3000, 3, 'slow')),
+      calculator.slowCalculation(Request(1000, 1, 'slow')),
+      calculator.slowCalculation(Request(700, 3, 'slow')),
     ];
+    calculator.slowSteps(Request(1000, 1, 'slow')).toList();
 
-    Timer(Duration(milliseconds: 1), () {
+    Timer(Duration(milliseconds: 10), () {
       print('   💥 Отменяем все методы сервиса');
       calculator.cancelAllMethods('Глобальная отмена всех операций');
     });
@@ -304,9 +305,29 @@ final class CalculatorResponder extends RpcResponderContract
     final iterations = req.a.toInt();
 
     for (int i = 0; i < iterations; i++) {
+      // Проверяем отмену перед каждой итерацией
+      context?.cancellationToken?.throwIfCancelled();
+
+      // Проверяем deadline
+      if (context?.isExpired == true) {
+        throw RpcDeadlineExceededException(
+          context!.deadline!,
+          context.deadline!.difference(DateTime.now()),
+        );
+      }
+
       // Симулируем работу с более частыми проверками отмены
       for (int j = 0; j < 10; j++) {
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future.delayed(Duration(microseconds: 800));
+        context?.cancellationToken?.throwIfCancelled();
+
+        // Проверяем deadline чаще
+        if (context?.isExpired == true) {
+          throw RpcDeadlineExceededException(
+            context!.deadline!,
+            context.deadline!.difference(DateTime.now()),
+          );
+        }
       }
 
       if (i % 100 == 0) {
@@ -323,11 +344,15 @@ final class CalculatorResponder extends RpcResponderContract
     final steps = req.a.toInt();
 
     for (int i = 0; i < steps; i++) {
+      // Проверяем отмену перед каждой итерацией
+      context?.cancellationToken?.throwIfCancelled();
+
       yield Step('Медленный шаг ${i + 1}/$steps');
 
       // Разбиваем задержку на меньшие части с проверками отмены
       for (int j = 0; j < 10; j++) {
         await Future.delayed(Duration(milliseconds: 10));
+        context?.cancellationToken?.throwIfCancelled();
       }
     }
 

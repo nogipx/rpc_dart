@@ -236,6 +236,12 @@ final class UnaryCaller<TRequest, TResponse> {
         }
         headers.add(RpcHeader('x-request-id', _context!.requestId));
 
+        // Передаем deadline серверу
+        if (_context!.deadline != null) {
+          headers.add(RpcHeader('x-deadline',
+              _context!.deadline!.millisecondsSinceEpoch.toString()));
+        }
+
         _logger?.internal(
             'Добавлены заголовки контекста: ${_context!.headers.length} пользовательских + системные');
       }
