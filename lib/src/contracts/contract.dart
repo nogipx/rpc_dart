@@ -12,7 +12,7 @@ abstract interface class IRpcContract {
 
 /// Серверный контракт сервиса
 /// Регистрирует и обрабатывает методы
-abstract base class RpcResponderContract implements IRpcContract {
+abstract class RpcResponderContract implements IRpcContract {
   @override
   final String serviceName;
   final RpcDataTransferMode dataTransferMode;
@@ -378,7 +378,7 @@ abstract base class RpcResponderContract implements IRpcContract {
 
 /// Клиентский контракт сервиса
 /// Только вызывает методы, не регистрирует их
-abstract base class RpcCallerContract implements IRpcContract {
+abstract class RpcCallerContract implements IRpcContract {
   @override
   final String serviceName;
   final RpcDataTransferMode dataTransferMode;
