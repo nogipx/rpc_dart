@@ -1,0 +1,113 @@
+/* RPC Dart theme - subtle colors inspired by logo */
+:root {
+  /* Мягкие акцентные цвета на основе логотипа */
+  --sl-color-accent-low: #e6f3ff;
+  --sl-color-accent: #3c69aa;
+  --sl-color-accent-high: #1a365d;
+  
+  /* Дополнительные оттенки для улучшения читаемости */
+  --sl-hue-blue: 210;
+  --sl-color-blue-low: hsl(var(--sl-hue-blue), 54%, 92%);
+  --sl-color-blue: hsl(var(--sl-hue-blue), 50%, 58%);
+  --sl-color-blue-high: hsl(var(--sl-hue-blue), 76%, 20%);
+}
+
+/* Темная тема с мягкими цветами */
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #1a365d;
+  --sl-color-accent: #86c3f4;
+  --sl-color-accent-high: #e6f3ff;
+}
+
+/* Уменьшаем размер логотипа на главной странице */
+[data-has-hero] .hero > img {
+  max-width: 200px !important;
+  width: 200px !important;
+  height: auto !important;
+}
+
+/* Адаптивные размеры логотипа */
+@media (max-width: 768px) {
+  [data-has-hero] .hero > img {
+    max-width: 160px !important;
+    width: 160px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  [data-has-hero] .hero > img {
+    max-width: 140px !important;
+    width: 140px !important;
+  }
+}
+
+/* Мягкие эффекты наведения для карточек */
+.sl-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(60, 105, 170, 0.1);
+  transition: all 0.2s ease;
+}
+
+/* Улучшенные кнопки */
+.sl-link-button {
+  transition: all 0.2s ease;
+}
+
+.sl-link-button:hover {
+  transform: translateY(-1px);
+}
+
+/* Специальные стили для кнопки GitHub */
+.sl-link-button[href*="github"] {
+  background: linear-gradient(135deg, #24292e 0%, #1b1f23 100%) !important;
+  border: 1px solid #444d56 !important;
+  color: white !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.sl-link-button[href*="github"]:hover {
+  background: linear-gradient(135deg, #2f363d 0%, #24292e 100%) !important;
+  border-color: #586069 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(36, 41, 46, 0.3);
+}
+
+.sl-link-button[href*="github"]:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  transition: left 0.5s;
+}
+
+.sl-link-button[href*="github"]:hover:before {
+  left: 100%;
+}
+
+/* Стили для badges в hero секции */
+[data-has-hero] .hero img[alt*="Badge"] {
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+[data-has-hero] .hero img[alt*="Badge"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Адаптивность для badges */
+@media (max-width: 480px) {
+  [data-has-hero] .hero div {
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+  
+  [data-has-hero] .hero img[alt*="Badge"] {
+    width: auto !important;
+    max-width: 200px !important;
+  }
+}

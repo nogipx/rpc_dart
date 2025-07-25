@@ -1,0 +1,13 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+const code = `
+# Добавить RPC Dart в ваш проект
+dart pub add rpc_dart
+
+# Для дополнительных транспортов (опционально)
+dart pub add rpc_dart_transports
+`;
+---
+
+<Code code={code} lang="bash" title="Установка" />

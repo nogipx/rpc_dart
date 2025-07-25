@@ -1,0 +1,14 @@
+---
+import { Card as StarlightCard } from '@astrojs/starlight/components';
+
+interface Props {
+  title: string;
+  icon?: any;
+}
+
+const { title, icon } = Astro.props;
+---
+
+<StarlightCard title={title} icon={icon as any}>
+  <slot />
+</StarlightCard>

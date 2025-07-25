@@ -11,8 +11,8 @@
   </p>
   
   <p>
-    <a href="README.md">🇺🇸 English</a> | 
-    <a href="README_RU.md">🇷🇺 Русский</a>
+    <a href="README.md">🇺🇸 English</a> |
+    <a href="README_RU.md"><b>🇷🇺 Русский</b></a>
   </p>
 </div>
 
@@ -140,6 +140,7 @@ void main() async {
 ## Транспорты
 
 ### InMemory Transport (включен в основную библиотеку)
+
 Идеально для разработки, тестирования и монолитных приложений:
 
 ```dart
@@ -147,7 +148,7 @@ final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 // Использование: разработка, unit-тесты, простые приложения
 ```
 
-#### 🚀 Zero-Copy 
+#### 🚀 Zero-Copy
 
 Для максимальной производительности RPC Dart поддерживает **zero-copy** передачу объектов без сериализации (только для `RpcInMemoryTransport`):
 
@@ -202,11 +203,10 @@ final class SmartService extends RpcResponderContract {
 Вы можете использовать готовые транспорты из пакета **[rpc_dart_transports](https://pub.dev/packages/rpc_dart_transports)** или реализовать свои через интерфейс `IRpcTransport`.
 
 **Доступные транспорты:**
+
 - **Isolate Transport** — для CPU-интенсивных задач и изоляции сбоев
 - **HTTP Transport** — для микросервисов и распределенных систем  
 - **WebSocket Transport** — для real-time приложений
-
-**Ключевое преимущество:** код домена остается неизменным при смене транспорта!
 
 ## Transport Router
 
@@ -429,6 +429,7 @@ test('полный интеграционный тест', () async {
 RPC Dart оптимизирован для реальных приложений. В типичных сценариях производительность более чем достаточная:
 
 **Практические наблюдения:**
+
 - InMemory транспорт имеет минимальные накладные расходы
 - CBOR сериализация эффективнее JSON
 - HTTP транспорт добавляет сетевую задержку
@@ -461,45 +462,15 @@ try {
 </details>
 
 <details>
-<summary><strong>Как масштабировать RPC архитектуру?</strong></summary>
-
-**CORD принципы масштабирования:**
-
-1. **Разделяйте домены** — каждый домен должен иметь четкую ответственность
-2. **Используйте контракты** — для типобезопасного взаимодействия
-3. **Минимизируйте связи** — домены общаются только через RPC
-4. **Централизуйте логику** — бизнес-логика в Responder'ах
-5. **Кэшируйте результаты** — в Caller'ах для UI оптимизации
-
-```dart
-// ❌ Плохо - прямые зависимости
-class OrderBloc {
-  final UserRepository userRepo;
-  final PaymentRepository paymentRepo;
-  final NotificationRepository notificationRepo;
-}
-
-// ✅ Хорошо - через RPC контракты
-class OrderBloc {
-  final UserCaller userService;
-  final PaymentCaller paymentService;
-  final NotificationCaller notificationService;
-}
-```
-
-</details>
-
 ---
 
 #### [Benchmark](https://bencher.dev/perf/rpc-dart?x_axis=version)
 
 **Полезные ссылки:**
-- [CORD Architecture](docs/ru/cord.md)
+
 - [RPC Dart на pub.dev](https://pub.dev/packages/rpc_dart)
 - [Исходный код на GitHub](https://github.com/nogipx/rpc_dart)
 - [Примеры кода](example/)
 - [Issues и поддержка](https://github.com/nogipx/rpc_dart/issues)
 
 *Создавайте масштабируемые Flutter приложения с RPC Dart!*
-
-

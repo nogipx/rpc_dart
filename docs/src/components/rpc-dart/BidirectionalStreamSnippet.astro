@@ -1,0 +1,69 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+const code = `
+// Двунаправленный стрим - чат между клиентом и сервером
+Stream<ChatMessage> chat(Stream<ChatMessage> messages) async* {
+  await for (final message in messages) {
+    print('Сервер получил: \${message.text}');
+    
+    // Обработка сообщения и ответ
+    if (message.text.toLowerCase().contains('привет')) {
+      yield ChatMessage(
+        text: 'Привет! Как дела?',
+        sender: 'Сервер',
+        timestamp: DateTime.now(),
+      );
+    } else if (message.text.toLowerCase().contains('пока')) {
+      yield ChatMessage(
+        text: 'До свидания!',
+        sender: 'Сервер', 
+        timestamp: DateTime.now(),
+      );
+      break; // Завершаем чат
+    } else {
+      yield ChatMessage(
+        text: 'Эхо: \${message.text}',
+        sender: 'Сервер',
+        timestamp: DateTime.now(),
+      );
+    }
+  }
+}
+
+// Использование на клиенте
+void main() async {
+  final transport = RpcInMemoryTransport();
+  final caller = RpcCallerEndpoint(transport: transport);
+  final chatService = ChatCaller(caller);
+  
+  // Создаем контроллер для отправки сообщений
+  final messageController = StreamController<ChatMessage>();
+  
+  // Начинаем чат
+  final responseStream = chatService.chat(messageController.stream);
+  
+  // Слушаем ответы сервера
+  responseStream.listen((response) {
+    print('Клиент получил: \${response.text}');
+  });
+  
+  // Отправляем сообщения
+  messageController.add(ChatMessage(
+    text: 'Привет, сервер!',
+    sender: 'Клиент',
+    timestamp: DateTime.now(),
+  ));
+  
+  await Future.delayed(Duration(seconds: 1));
+  
+  messageController.add(ChatMessage(
+    text: 'Как дела?',
+    sender: 'Клиент',
+    timestamp: DateTime.now(),
+  ));
+}
+`;
+---
+
+<Code code={code} lang="dart" title="bidirectional_stream_example.dart" />

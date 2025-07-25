@@ -1,0 +1,171 @@
+---
+title: Getting Started
+description: Learn how to get started with RPC Dart in just a few minutes.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Welcome to **RPC Dart**! This guide will help you get up and running with RPC Dart in your Dart or Flutter project.
+
+## Installation
+
+Add RPC Dart to your project by running the following command:
+
+<Tabs>
+  <TabItem label="Dart">
+    ```bash
+    dart pub add rpc_dart
+    ```
+  </TabItem>
+  <TabItem label="Flutter">
+    ```bash
+    flutter pub add rpc_dart
+    ```
+  </TabItem>
+</Tabs>
+
+For additional transport types (HTTP, WebSocket, Isolate), also add:
+
+```bash
+dart pub add rpc_dart_transports
+```
+
+## Your First RPC Service
+
+Let's create a simple calculator service to demonstrate the core concepts of RPC Dart.
+
+### 1. Define the Contract
+
+First, define the service contract with constants for service and method names:
+
+```dart
+// calculator_contract.dart
+abstract interface class ICalculatorContract {
+  static const name = 'Calculator';
+  static const methodAdd = 'add';
+}
+```
+
+### 2. Create Request/Response Models
+
+Define the data models for your RPC calls:
+
+```dart
+// models.dart
+class AddRequest {
+  final double a;
+  final double b;
+  
+  AddRequest(this.a, this.b);
+}
+
+class AddResponse {
+  final double result;
+  
+  AddResponse(this.result);
+}
+```
+
+### 3. Implement the Server (Responder)
+
+Create a responder that handles incoming RPC calls:
+
+```dart
+// calculator_responder.dart
+import 'package:rpc_dart/rpc_dart.dart';
+
+final class CalculatorResponder extends RpcResponderContract {
+  CalculatorResponder() : super(ICalculatorContract.name);
+
+  @override
+  void setup() {
+    // Register unary method handler
+    addUnaryMethod<AddRequest, AddResponse>(
+      methodName: ICalculatorContract.methodAdd,
+      handler: _add,
+    );
+  }
+
+  Future<AddResponse> _add(AddRequest request, {RpcContext? context}) async {
+    final result = request.a + request.b;
+    return AddResponse(result);
+  }
+}
+```
+
+### 4. Create the Client (Caller)
+
+Implement a client that calls the RPC methods:
+
+```dart
+// calculator_caller.dart
+import 'package:rpc_dart/rpc_dart.dart';
+
+final class CalculatorCaller extends RpcCallerContract {
+  CalculatorCaller(RpcCallerEndpoint endpoint) 
+    : super(ICalculatorContract.name, endpoint);
+
+  Future<AddResponse> add(AddRequest request) {
+    return callUnary<AddRequest, AddResponse>(
+      methodName: ICalculatorContract.methodAdd,
+      request: request,
+    );
+  }
+}
+```
+
+### 5. Put It All Together
+
+Now let's create a complete example that sets up the transport, endpoints, and makes an RPC call:
+
+```dart
+// main.dart
+import 'package:rpc_dart/rpc_dart.dart';
+
+void main() async {
+  // Create InMemory transport pair
+  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  
+  // Setup responder endpoint
+  final responder = RpcResponderEndpoint(transport: serverTransport);
+  responder.registerServiceContract(CalculatorResponder());
+  responder.start();
+  
+  // Setup caller endpoint
+  final caller = RpcCallerEndpoint(transport: clientTransport);
+  
+  // Create calculator client
+  final calculator = CalculatorCaller(caller);
+  
+  // Make RPC call
+  final result = await calculator.add(AddRequest(10, 5));
+  print('10 + 5 = ${result.result}'); // Output: 10 + 5 = 15.0
+  
+  // Cleanup
+  await caller.close();
+  await responder.close();
+}
+```
+
+## Key Benefits
+
+🚀 **Zero-Copy Performance**: With InMemory transport, objects are passed directly without serialization overhead.
+
+🔒 **Type Safety**: All RPC calls are strongly typed, catching errors at compile time.
+
+🧪 **Easy Testing**: InMemory transport makes unit and integration testing straightforward.
+
+🔌 **Transport Agnostic**: Switch between InMemory, HTTP, WebSocket without changing your business logic.
+
+## Next Steps
+
+- Learn about [Core Concepts](/core-concepts) to understand RPC Dart's architecture
+- Explore different [Transport Types](/transports/inmemory) for various use cases
+- Check out [RPC Types](/rpc-types/unary) for streaming and bidirectional communication
+- Try the [CORD architecture](/cord) for structuring larger applications
+
+## Need Help?
+
+- Check out the [FAQs](/faqs) for common questions
+- Browse [examples on GitHub](https://github.com/nogipx/rpc_dart/tree/main/example)
+- Open an issue on [GitHub](https://github.com/nogipx/rpc_dart/issues) if you find bugs or have questions

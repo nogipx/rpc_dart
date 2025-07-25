@@ -11,11 +11,10 @@
   </p>
   
   <p>
-    <a href="README.md">🇺🇸 English</a> | 
+    <a href="README.md"><b>🇺🇸 English</b></a> |
     <a href="README_RU.md">🇷🇺 Русский</a>
   </p>
 </div>
-
 
 ## Core Concepts
 
@@ -141,6 +140,7 @@ void main() async {
 ## Transports
 
 ### InMemory Transport (included in main library)
+
 Perfect for development, testing, and monolith applications:
 
 ```dart
@@ -148,7 +148,7 @@ final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 // Usage: development, unit tests, simple applications
 ```
 
-#### 🚀 Zero-Copy 
+#### 🚀 Zero-Copy
 
 For maximum performance, RPC Dart supports **zero-copy** object transfer without serialization (only for `RpcInMemoryTransport`):
 
@@ -203,11 +203,10 @@ final class SmartService extends RpcResponderContract {
 You can use ready-made transports from **[rpc_dart_transports](https://pub.dev/packages/rpc_dart_transports)** package or implement your own via `IRpcTransport` interface.
 
 **Available transports:**
+
 - **Isolate Transport** — for CPU-intensive tasks and failure isolation
 - **HTTP Transport** — for microservices and distributed systems
 - **WebSocket Transport** — for real-time applications
-
-**Key advantage:** domain code remains unchanged when switching transports!
 
 ## Transport Router
 
@@ -430,6 +429,7 @@ test('full integration test', () async {
 RPC Dart is optimized for real applications. In typical scenarios performance is more than sufficient:
 
 **Practical observations:**
+
 - InMemory transport has minimal overhead
 - CBOR serialization is more efficient than JSON
 - HTTP transport adds network latency
@@ -464,41 +464,15 @@ try {
 <details>
 <summary><strong>How to scale RPC architecture?</strong></summary>
 
-**CORD scaling principles:**
-
-1. **Separate domains** — each domain should have clear responsibility
-2. **Use contracts** — for type-safe communication
-3. **Minimize coupling** — domains communicate only through RPC
-4. **Centralize logic** — business logic in Responders
-5. **Cache results** — in Callers for UI optimization
-
-```dart
-// ❌ Bad - direct dependencies
-class OrderBloc {
-  final UserRepository userRepo;
-  final PaymentRepository paymentRepo;
-  final NotificationRepository notificationRepo;
-}
-
-// ✅ Good - through RPC contracts
-class OrderBloc {
-  final UserCaller userService;
-  final PaymentCaller paymentService;
-  final NotificationCaller notificationService;
-}
-```
-
-</details>
-
 ---
 
 #### [Benchmark](https://bencher.dev/perf/rpc-dart?x_axis=version)
 
 **Useful Links:**
-- [CORD Architecture](docs/en/cord.md)
+
 - [RPC Dart on pub.dev](https://pub.dev/packages/rpc_dart)
 - [Source code on GitHub](https://github.com/nogipx/rpc_dart)
 - [Code examples](example/)
 - [Issues and support](https://github.com/nogipx/rpc_dart/issues)
 
-*Build scalable Flutter applications with RPC Dart!* 
+*Build scalable Flutter applications with RPC Dart!*

@@ -1,0 +1,39 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+const code = `
+// Унарные вызовы - один запрос, один ответ
+Future<CalculatorResult> add(AddRequest request) async {
+  return await call<CalculatorResult>(
+    methodName: 'add',
+    request: request,
+  );
+}
+
+// Server Stream - один запрос, поток ответов
+Stream<NumberData> countTo(CountRequest request) {
+  return callServerStream<NumberData>(
+    methodName: 'countTo',
+    request: request,
+  );
+}
+
+// Client Stream - поток запросов, один ответ  
+Future<SumResult> sumNumbers(Stream<NumberData> numbers) {
+  return callClientStream<SumResult>(
+    methodName: 'sumNumbers',
+    requestStream: numbers,
+  );
+}
+
+// Bidirectional Stream - поток запросов и ответов
+Stream<ChatMessage> chat(Stream<ChatMessage> messages) {
+  return callBidirectionalStream<ChatMessage>(
+    methodName: 'chat',
+    requestStream: messages,
+  );
+}
+`;
+---
+
+<Code code={code} lang="dart" title="rpc_types_example.dart" />

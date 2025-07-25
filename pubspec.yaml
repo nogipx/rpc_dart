@@ -2,7 +2,7 @@ name: rpc_dart
 description: Transport-agnostic RPC framework with type-safe contracts, streaming support, zero-copy transport, and CORD architecture for Dart applications.
 version: 2.2.1
 repository: https://github.com/nogipx/rpc_dart.git
-homepage: https://github.com/nogipx/rpc_dart
+homepage: https://nogipx.github.io/rpc_dart
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
 funding:
   - https://liberapay.com/nogipx

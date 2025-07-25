@@ -1,0 +1,530 @@
+---
+title: Architecture
+description: Understanding RPC Dart's architecture and design patterns.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+RPC Dart follows a layered architecture that separates concerns and provides flexibility in how components communicate. Understanding this architecture will help you build better applications and make informed decisions about transport selection and service design.
+
+## Architecture Overview
+
+RPC Dart's architecture consists of several layers, each with specific responsibilities:
+
+<CardGrid>
+  <Card title="Application Layer" icon="star">
+    Your business logic and service implementations that use RPC contracts.
+  </Card>
+  <Card title="RPC Layer" icon="setting">
+    Contracts, callers, responders, and routing logic.
+  </Card>
+  <Card title="Transport Layer" icon="rocket">
+    Network communication, serialization, and message delivery.
+  </Card>
+  <Card title="Core Layer" icon="puzzle">
+    Base classes, utilities, and framework fundamentals.
+  </Card>
+</CardGrid>
+
+## Layered Architecture
+
+```
+┌─────────────────────────────────────────┐
+│           Application Layer             │
+│   ┌─────────────┐   ┌─────────────┐    │
+│   │   Service   │   │   Client    │    │
+│   │     A       │   │Application  │    │
+│   └─────────────┘   └─────────────┘    │
+└─────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│             RPC Layer                   │
+│   ┌─────────────┐   ┌─────────────┐    │
+│   │ Responder   │   │   Caller    │    │
+│   │ Endpoint    │   │ Endpoint    │    │
+│   └─────────────┘   └─────────────┘    │
+│   ┌─────────────────────────────────┐   │
+│   │         Contracts               │   │
+│   └─────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│           Transport Layer               │
+│   ┌─────────┐ ┌─────────┐ ┌─────────┐  │
+│   │InMemory │ │  HTTP   │ │WebSocket│  │
+│   └─────────┘ └─────────┘ └─────────┘  │
+└─────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│             Core Layer                  │
+│   ┌─────────────────────────────────┐   │
+│   │    Base Classes & Utilities     │   │
+│   └─────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. Contracts
+
+Contracts define the interface between services. They specify:
+
+- Service names and method names
+- Request and response types
+- Supported RPC patterns (unary, streaming)
+
+```dart
+abstract interface class IUserServiceContract {
+  static const name = 'UserService';
+  static const methodGetUser = 'getUser';
+  static const methodUpdateUser = 'updateUser';
+  static const methodStreamNotifications = 'streamNotifications';
+}
+```
+
+### 2. Endpoints
+
+#### RpcResponderEndpoint
+
+Handles incoming RPC requests:
+
+```dart
+final responder = RpcResponderEndpoint(transport: serverTransport);
+
+// Register service implementations
+responder.registerServiceContract(UserServiceResponder());
+responder.registerServiceContract(PaymentServiceResponder());
+
+// Start handling requests
+responder.start();
+```
+
+#### RpcCallerEndpoint
+
+Initiates RPC calls to remote services:
+
+```dart
+final caller = RpcCallerEndpoint(transport: clientTransport);
+
+// Create service clients
+final userService = UserServiceCaller(caller);
+final paymentService = PaymentServiceCaller(caller);
+
+// Make RPC calls
+final user = await userService.getUser(userId);
+```
+
+### 3. Transport Abstraction
+
+The transport layer handles message delivery between endpoints:
+
+```dart
+abstract class RpcTransport {
+  Stream<RpcMessage> get messageStream;
+  Future<void> sendMessage(RpcMessage message);
+  Future<void> close();
+}
+```
+
+This abstraction allows switching between different transport implementations without changing application code.
+
+## Design Patterns
+
+### 1. Contract Pattern
+
+Services are defined using contracts that specify the interface:
+
+```dart
+// Contract definition
+abstract interface class ICalculatorContract {
+  static const name = 'Calculator';
+  static const methodAdd = 'add';
+  static const methodSubtract = 'subtract';
+}
+
+// Responder implementation
+class CalculatorResponder extends RpcResponderContract {
+  CalculatorResponder() : super(ICalculatorContract.name);
+  
+  @override
+  void setup() {
+    addUnaryMethod<AddRequest, AddResponse>(
+      methodName: ICalculatorContract.methodAdd,
+      handler: _add,
+    );
+  }
+  
+  Future<AddResponse> _add(AddRequest request, {RpcContext? context}) async {
+    return AddResponse(request.a + request.b);
+  }
+}
+
+// Caller implementation
+class CalculatorCaller extends RpcCallerContract {
+  CalculatorCaller(RpcCallerEndpoint endpoint) 
+    : super(ICalculatorContract.name, endpoint);
+  
+  Future<AddResponse> add(AddRequest request) {
+    return callUnary<AddRequest, AddResponse>(
+      methodName: ICalculatorContract.methodAdd,
+      request: request,
+    );
+  }
+}
+```
+
+### 2. Transport Router Pattern
+
+For complex applications, you can route different services through different transports:
+
+```dart
+final router = RpcTransportRouter();
+
+// Route UserService through HTTP
+router.addRoute(
+  serviceName: 'UserService',
+  transport: httpTransport,
+);
+
+// Route NotificationService through WebSocket
+router.addRoute(
+  serviceName: 'NotificationService', 
+  transport: webSocketTransport,
+);
+
+// Route internal services through InMemory
+router.addRoute(
+  serviceName: 'CacheService',
+  transport: inMemoryTransport,
+);
+
+final caller = RpcCallerEndpoint(transport: router);
+```
+
+### 3. Middleware Pattern
+
+Implement cross-cutting concerns using middleware:
+
+```dart
+class AuthenticationMiddleware extends RpcMiddleware {
+  @override
+  Future<T> call<T>(RpcCall call, RpcNext next) async {
+    // Check authentication
+    final token = call.context?.metadata['auth-token'];
+    if (token == null || !isValidToken(token)) {
+      throw RpcException(code: 'UNAUTHORIZED');
+    }
+    
+    return next(call);
+  }
+}
+
+class LoggingMiddleware extends RpcMiddleware {
+  @override
+  Future<T> call<T>(RpcCall call, RpcNext next) async {
+    final start = DateTime.now();
+    try {
+      final result = await next(call);
+      final duration = DateTime.now().difference(start);
+      log('${call.service}.${call.method} completed in ${duration.inMilliseconds}ms');
+      return result;
+    } catch (e) {
+      log('${call.service}.${call.method} failed: $e');
+      rethrow;
+    }
+  }
+}
+
+// Register middleware
+responder.addMiddleware(AuthenticationMiddleware());
+responder.addMiddleware(LoggingMiddleware());
+```
+
+## Message Flow
+
+### 1. Unary Call Flow
+
+```
+Client                    Transport                    Server
+  │                          │                          │
+  │ 1. callUnary()           │                          │
+  ├─────────────────────────▶│                          │
+  │                          │ 2. RpcMessage            │
+  │                          ├─────────────────────────▶│
+  │                          │                          │ 3. processRequest()
+  │                          │                          ├──────────────┐
+  │                          │                          │              │
+  │                          │                          │◀─────────────┘
+  │                          │ 4. RpcMessage            │
+  │                          │◀─────────────────────────┤
+  │ 5. Response              │                          │
+  │◀─────────────────────────┤                          │
+```
+
+### 2. Streaming Flow
+
+```
+Client                    Transport                    Server
+  │                          │                          │
+  │ 1. callServerStream()    │                          │
+  ├─────────────────────────▶│                          │
+  │                          │ 2. RpcMessage            │
+  │                          ├─────────────────────────▶│
+  │                          │                          │ 3. processStreamRequest()
+  │                          │                          ├──────────────┐
+  │                          │ 4. Stream messages       │              │
+  │                          │◀─────────────────────────┤              │
+  │ 5. Stream<Response>      │                          │              │
+  │◀─────────────────────────┤                          │              │
+  │                          │                          │◀─────────────┘
+```
+
+## Error Handling Architecture
+
+RPC Dart implements a structured error handling system:
+
+### 1. Exception Hierarchy
+
+```dart
+abstract class RpcException implements Exception {
+  final String code;
+  final String message;
+  final Map<String, dynamic>? details;
+}
+
+class RpcTimeoutException extends RpcException {
+  RpcTimeoutException(String message, Duration timeout);
+}
+
+class RpcCancelledException extends RpcException {
+  RpcCancelledException(String message);
+}
+
+class RpcTransportException extends RpcException {
+  RpcTransportException(String message, Exception cause);
+}
+```
+
+### 2. Error Propagation
+
+Errors are automatically serialized and propagated across transport boundaries:
+
+```dart
+// Server side
+Future<UserResponse> getUser(UserRequest request) async {
+  if (request.userId.isEmpty) {
+    throw RpcException(
+      code: 'INVALID_USER_ID',
+      message: 'User ID cannot be empty',
+      details: {'field': 'userId'},
+    );
+  }
+  // ... implementation
+}
+
+// Client side
+try {
+  final user = await userService.getUser(UserRequest(userId: ''));
+} on RpcException catch (e) {
+  // Handle structured RPC errors
+  print('Error: ${e.code} - ${e.message}');
+  if (e.details != null) {
+    print('Field error: ${e.details!['field']}');
+  }
+}
+```
+
+## Performance Considerations
+
+### 1. Zero-Copy with InMemory Transport
+
+For single-process applications, InMemory transport provides maximum performance:
+
+```dart
+class LargeDataService extends RpcResponderContract {
+  @override
+  void setup() {
+    addUnaryMethod<LargeData, ProcessedData>(
+      methodName: 'processLargeData',
+      handler: _processLargeData,
+    );
+  }
+  
+  Future<ProcessedData> _processLargeData(LargeData data) async {
+    // Direct object access - no serialization overhead
+    return ProcessedData(data.processDirectly());
+  }
+}
+```
+
+### 2. Serialization with Network Transports
+
+Network transports automatically handle serialization:
+
+```dart
+// Uses CBOR encoding for efficient serialization
+final httpTransport = RpcHttpTransport(
+  url: 'https://api.example.com',
+  codec: CborCodec(), // Efficient binary encoding
+);
+```
+
+### 3. Connection Pooling
+
+HTTP transport includes connection pooling:
+
+```dart
+final httpTransport = RpcHttpTransport(
+  url: 'https://api.example.com',
+  maxConnections: 10,
+  keepAlive: true,
+);
+```
+
+## Scalability Patterns
+
+### 1. Service Decomposition
+
+Break large applications into focused services:
+
+```dart
+// User management service
+abstract interface class IUserServiceContract {
+  static const name = 'UserService';
+  // User CRUD operations
+}
+
+// Payment processing service  
+abstract interface class IPaymentServiceContract {
+  static const name = 'PaymentService';
+  // Payment operations
+}
+
+// Notification service
+abstract interface class INotificationServiceContract {
+  static const name = 'NotificationService';
+  // Real-time notifications
+}
+```
+
+### 2. Transport Selection by Service
+
+Use appropriate transports for different service types:
+
+```dart
+// Real-time services use WebSocket
+final notificationService = NotificationServiceCaller(
+  RpcCallerEndpoint(transport: webSocketTransport)
+);
+
+// CRUD services use HTTP
+final userService = UserServiceCaller(
+  RpcCallerEndpoint(transport: httpTransport)
+);
+
+// Internal cache uses InMemory
+final cacheService = CacheServiceCaller(
+  RpcCallerEndpoint(transport: inMemoryTransport)
+);
+```
+
+### 3. Load Balancing
+
+Distribute load across multiple service instances:
+
+```dart
+final loadBalancer = RpcLoadBalancingTransport([
+  RpcHttpTransport(url: 'https://api1.example.com'),
+  RpcHttpTransport(url: 'https://api2.example.com'),
+  RpcHttpTransport(url: 'https://api3.example.com'),
+]);
+
+final userService = UserServiceCaller(
+  RpcCallerEndpoint(transport: loadBalancer)
+);
+```
+
+## Testing Architecture
+
+RPC Dart's architecture makes testing straightforward:
+
+### 1. Mock Services
+
+```dart
+class MockUserService extends RpcResponderContract {
+  MockUserService() : super(IUserServiceContract.name);
+  
+  @override
+  void setup() {
+    addUnaryMethod<GetUserRequest, UserResponse>(
+      methodName: IUserServiceContract.methodGetUser,
+      handler: _getMockUser,
+    );
+  }
+  
+  Future<UserResponse> _getMockUser(GetUserRequest request) async {
+    return UserResponse(
+      user: User(id: request.userId, name: 'Test User'),
+    );
+  }
+}
+```
+
+### 2. Integration Testing
+
+```dart
+void main() {
+  group('UserService Integration', () {
+    late RpcResponderEndpoint responder;
+    late RpcCallerEndpoint caller;
+    
+    setUp(() async {
+      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      
+      responder = RpcResponderEndpoint(transport: serverTransport);
+      responder.registerServiceContract(MockUserService());
+      responder.start();
+      
+      caller = RpcCallerEndpoint(transport: clientTransport);
+    });
+    
+    tearDown(() async {
+      await caller.close();
+      await responder.close();
+    });
+    
+    test('should get user successfully', () async {
+      final userService = UserServiceCaller(caller);
+      final response = await userService.getUser(GetUserRequest(userId: '123'));
+      
+      expect(response.user.id, equals('123'));
+      expect(response.user.name, equals('Test User'));
+    });
+  });
+}
+```
+
+## Best Practices
+
+### 1. Service Design
+
+- **Single Responsibility**: Each service should have one clear purpose
+- **Interface Segregation**: Keep contracts focused and minimal
+- **Dependency Inversion**: Depend on contracts, not implementations
+
+### 2. Error Handling
+
+- **Structured Errors**: Use RpcException with codes and details
+- **Graceful Degradation**: Handle errors at appropriate levels
+- **Circuit Breaker**: Implement timeouts and retries
+
+### 3. Performance
+
+- **Transport Selection**: Choose the right transport for each use case
+- **Streaming**: Use streaming for large datasets and real-time updates
+- **Caching**: Implement caching where appropriate
+
+### 4. Testing
+
+- **Unit Tests**: Test contracts and implementations separately
+- **Integration Tests**: Test with real transports
+- **Mock Services**: Use InMemory transport for fast, isolated tests
+
+The architecture of RPC Dart provides flexibility, performance, and maintainability while keeping the complexity manageable. By understanding these patterns and principles, you can build robust, scalable applications that are easy to test and maintain.

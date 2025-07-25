@@ -1,0 +1,46 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+const code = `
+import 'package:test/test.dart';
+import 'package:rpc_dart/rpc_dart.dart';
+
+void main() {
+  group('Calculator Tests', () {
+    late RpcCallerEndpoint caller;
+    late RpcResponderEndpoint responder;
+    late CalculatorCaller calculator;
+    
+    setUp(() async {
+      final transport = RpcInMemoryTransport();
+      
+      // Настройка mock сервера
+      responder = RpcResponderEndpoint(transport: transport);
+      responder.registerServiceContract(CalculatorResponder());
+      await responder.start();
+      
+      // Настройка клиента
+      caller = RpcCallerEndpoint(transport: transport);
+      calculator = CalculatorCaller(caller);
+    });
+    
+    tearDown(() async {
+      await caller.close();
+      await responder.close();
+    });
+    
+    test('should add two numbers correctly', () async {
+      final result = await calculator.add(AddRequest(a: 5, b: 3));
+      expect(result.result, equals(8));
+    });
+    
+    test('should multiply two numbers correctly', () async {
+      final result = await calculator.multiply(MultiplyRequest(x: 4, y: 6));
+      expect(result.result, equals(24));
+    });
+  });
+}
+`;
+---
+
+<Code code={code} lang="dart" title="calculator_test.dart" />

@@ -1,0 +1,35 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+const code = `
+// Клиент стрим - получает поток чисел и возвращает их сумму
+Future<SumResult> sumNumbers(Stream<NumberData> numbers) async {
+  int sum = 0;
+  await for (final number in numbers) {
+    sum += number.value;
+    print('Добавляем \${number.value}, текущая сумма: \$sum');
+  }
+  return SumResult(total: sum);
+}
+
+// Использование на клиенте
+void main() async {
+  final transport = RpcInMemoryTransport();
+  final caller = RpcCallerEndpoint(transport: transport);
+  final calculator = CalculatorCaller(caller);
+  
+  // Создаем поток чисел
+  final numbersStream = Stream.fromIterable([
+    NumberData(value: 10),
+    NumberData(value: 20), 
+    NumberData(value: 30),
+  ]);
+  
+  // Отправляем поток и получаем результат
+  final result = await calculator.sumNumbers(numbersStream);
+  print('Итоговая сумма: \${result.total}'); // 60
+}
+`;
+---
+
+<Code code={code} lang="dart" title="client_stream_example.dart" />

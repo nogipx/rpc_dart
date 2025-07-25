@@ -1,0 +1,34 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+const code = `
+// lib/services/calculator_responder.dart
+import 'package:rpc_dart/rpc_dart.dart';
+import '../contracts/calculator_contract.dart';
+
+class CalculatorResponder extends RpcResponder implements CalculatorContract {
+  @override
+  String get contractName => 'CalculatorContract';
+
+  @override
+  Future<CalculatorResult> add(AddRequest request) async {
+    // Имитация некоторой обработки
+    await Future.delayed(Duration(milliseconds: 100));
+    
+    final result = request.a + request.b;
+    return CalculatorResult(result: result);
+  }
+
+  @override
+  Future<CalculatorResult> multiply(MultiplyRequest request) async {
+    // Имитация некоторой обработки  
+    await Future.delayed(Duration(milliseconds: 150));
+    
+    final result = request.x * request.y;
+    return CalculatorResult(result: result);
+  }
+}
+`;
+---
+
+<Code code={code} lang="dart" title="calculator_responder.dart" />
