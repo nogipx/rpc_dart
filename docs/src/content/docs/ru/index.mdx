@@ -1,8 +1,7 @@
 ---
 template: splash
 title: RPC Dart - Чистая библиотека RPC для Dart
-description:
-  Официальная документация для библиотеки RPC Dart. Чистая библиотека RPC для Dart с типобезопасной коммуникацией между компонентами.
+description: Официальная документация для библиотеки RPC Dart.
 editUrl: false
 lastUpdated: false
 hero:
@@ -10,11 +9,17 @@ hero:
     RPC Dart
     <br />
     <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-      <img src="https://img.shields.io/pub/v/rpc_dart.svg?style=for-the-badge&logo=dart&logoColor=white&color=3c69aa" alt="Badge версии" style="border-radius: 8px;" />
-      <img src="https://img.shields.io/github/stars/nogipx/rpc_dart?style=for-the-badge&logo=github&logoColor=white&color=24292e" alt="Звезды GitHub" style="border-radius: 8px;" />
-      <img src="https://img.shields.io/pub/likes/rpc_dart?style=for-the-badge&logo=dart&logoColor=white&color=86c3f4" alt="Лайки Pub" style="border-radius: 8px;" />
+      <a href="https://pub.dev/packages/rpc_dart" target="_blank" rel="noopener noreferrer">
+        <img src="https://img.shields.io/pub/v/rpc_dart.svg?style=for-the-badge&logo=dart&logoColor=white&color=3c69aa" alt="Version Badge" style="border-radius: 8px;" />
+      </a>
+      <a href="https://github.com/nogipx/rpc_dart" target="_blank" rel="noopener noreferrer">
+        <img src="https://img.shields.io/github/stars/nogipx/rpc_dart?style=for-the-badge&logo=github&logoColor=white&color=24292e" alt="GitHub Stars" style="border-radius: 8px;" />
+      </a>
+      <a href="https://pub.dev/packages/rpc_dart" target="_blank" rel="noopener noreferrer">
+        <img src="https://img.shields.io/pub/likes/rpc_dart?style=for-the-badge&logo=dart&logoColor=white&color=86c3f4" alt="Pub Likes" style="border-radius: 8px;" />
+      </a>
     </div>
-  tagline: Чистая библиотека RPC для Dart с типобезопасной коммуникацией
+  tagline: Транспортонезависимая библиотека RPC для Dart.
   image:
     alt: Логотип RPC Dart
     file: ~/assets/rpc-dart-logo.svg
@@ -34,7 +39,6 @@ import Card from '~/components/landing/Card.astro';
 import ListCard from '~/components/landing/ListCard.astro';
 import SplitCard from '~/components/landing/SplitCard.astro';
 
-<CardGrid>
 
 <SplitCard title="Начать работу" icon="rocket">
 	```sh
@@ -43,34 +47,26 @@ import SplitCard from '~/components/landing/SplitCard.astro';
 	```
 
 Наше [руководство по началу работы](/ru/getting-started) содержит пошаговые инструкции для начала использования RPC Dart всего за несколько минут.
-
 </SplitCard>
 
-<Card title="Производительность без копирования" icon="star">
-	RPC Dart поддерживает передачу объектов **без копирования** без сериализации с использованием InMemory транспорта для максимальной производительности в одно-процессных приложениях.
+---
+
+<CardGrid>
+
+<Card title="Независимость от транспорта" icon="laptop">
+	Пишите RPC логику один раз и легко переключайтесь между различными транспортами. Никакой привязки к конкретному транспорту или специфичного кода.
 </Card>
 
-<Card title="Типобезопасная коммуникация" icon="laptop">
-	Все RPC вызовы строго типизированы с поддержкой автоматической генерации кода. Создавайте надёжные приложения с безопасностью на этапе компиляции.
+<Card title="Множественные транспорты" icon="seti:config">
+	Встроенная поддержка InMemory, HTTP/2, WebSocket и Isolate транспортов. Легко расширяется пользовательскими реализациями транспортов.
 </Card>
 
-<ListCard title="Основные возможности" icon="open-book">
+<Card title="Все паттерны RPC" icon="information">
+	Поддержка унарных вызовов, клиентских потоков, серверных потоков и двунаправленной потоковой коммуникации.
+</Card>
 
-    - [Архитектура CORD](/ru/cord) - Контрактно-ориентированные удалённые домены
-    - [Множественные транспорты](/ru/transports/inmemory) - InMemory, HTTP, WebSocket
-    - [Все типы RPC](/ru/rpc-types/unary) - Унарные, потоковые, двунаправленные
-    - [Маршрутизатор транспортов](/ru/transports/router) - Умная маршрутизация между сервисами
-    - [Встроенное тестирование](/ru/testing) - Лёгкое создание моков и интеграционных тестов
-    - [Без зависимостей](/ru/core-concepts) - Чистая реализация на Dart
+<Card title="Чистая реализация на Dart" icon="seti:dart">
+	Без внешних зависимостей. Работает на всех платформах Dart: мобильных, веб, десктопных и серверных приложениях.
+</Card>
 
-</ListCard>
-
-  <ListCard title="Быстрые ссылки" icon="puzzle">
-    - [Основные концепции](/ru/core-concepts)
-    - [Руководство по архитектуре](/ru/architecture)
-    - [Типы транспортов](/ru/transports/inmemory)
-    - [Справочник API](https://pub.dev/documentation/rpc_dart/latest/)
-    - [Примеры на GitHub](https://github.com/nogipx/rpc_dart/tree/main/example)
-    - [Проблемы и поддержка](https://github.com/nogipx/rpc_dart/issues)
-  </ListCard>
 </CardGrid>

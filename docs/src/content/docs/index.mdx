@@ -1,8 +1,7 @@
 ---
 template: splash
 title: RPC Dart - Pure Dart RPC Library
-description:
-  Official documentation for the RPC Dart library. Pure Dart RPC library for type-safe communication between components.
+description: Official documentation for the RPC Dart library.
 editUrl: false
 lastUpdated: false
 hero:
@@ -10,11 +9,17 @@ hero:
     RPC Dart
     <br />
     <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-      <img src="https://img.shields.io/pub/v/rpc_dart.svg?style=for-the-badge&logo=dart&logoColor=white&color=3c69aa" alt="Version Badge" style="border-radius: 8px;" />
-      <img src="https://img.shields.io/github/stars/nogipx/rpc_dart?style=for-the-badge&logo=github&logoColor=white&color=24292e" alt="GitHub Stars" style="border-radius: 8px;" />
-      <img src="https://img.shields.io/pub/likes/rpc_dart?style=for-the-badge&logo=dart&logoColor=white&color=86c3f4" alt="Pub Likes" style="border-radius: 8px;" />
+      <a href="https://pub.dev/packages/rpc_dart" target="_blank" rel="noopener noreferrer">
+        <img src="https://img.shields.io/pub/v/rpc_dart.svg?style=for-the-badge&logo=dart&logoColor=white&color=3c69aa" alt="Version Badge" style="border-radius: 8px;" />
+      </a>
+      <a href="https://github.com/nogipx/rpc_dart" target="_blank" rel="noopener noreferrer">
+        <img src="https://img.shields.io/github/stars/nogipx/rpc_dart?style=for-the-badge&logo=github&logoColor=white&color=24292e" alt="GitHub Stars" style="border-radius: 8px;" />
+      </a>
+      <a href="https://pub.dev/packages/rpc_dart" target="_blank" rel="noopener noreferrer">
+        <img src="https://img.shields.io/pub/likes/rpc_dart?style=for-the-badge&logo=dart&logoColor=white&color=86c3f4" alt="Pub Likes" style="border-radius: 8px;" />
+      </a>
     </div>
-  tagline: Pure Dart RPC library for type-safe communication
+  tagline: A transport-independent RPC library for Dart.
   image:
     alt: RPC Dart logo
     file: ~/assets/rpc-dart-logo.svg
@@ -34,8 +39,6 @@ import Card from '~/components/landing/Card.astro';
 import ListCard from '~/components/landing/ListCard.astro';
 import SplitCard from '~/components/landing/SplitCard.astro';
 
-<CardGrid>
-
 <SplitCard title="Get Started" icon="rocket">
 	```sh
 	# Add RPC Dart to your project
@@ -44,34 +47,26 @@ import SplitCard from '~/components/landing/SplitCard.astro';
 
 Our [getting started guide](/getting-started) has step-by-step instructions on
 how to start using RPC Dart in just a few minutes.
-
 </SplitCard>
 
-<Card title="Zero-Copy Performance" icon="star">
-	RPC Dart supports **zero-copy** object transfer without serialization using InMemory transport for maximum performance in single-process applications.
+---
+
+<CardGrid>
+
+<Card title="Transport Independence" icon="laptop">
+	Write your RPC logic once and switch between different transports seamlessly. No vendor lock-in or transport-specific code.
 </Card>
 
-<Card title="Type-Safe Communication" icon="laptop">
-	All RPC calls are strongly typed with automatic code generation support. Build reliable applications with compile-time safety.
+<Card title="Multiple Transports" icon="seti:config">
+	Built-in support for InMemory, HTTP/2, WebSocket, and Isolate transports. Easy to extend with custom transport implementations.
 </Card>
 
-<ListCard title="Core Features" icon="open-book">
+<Card title="All RPC Patterns" icon="information">
+	Support for unary calls, client streaming, server streaming, and bidirectional streaming communication patterns.
+</Card>
 
-    - [CORD Architecture](/cord) - Contract-Oriented Remote Domains
-    - [Multiple Transports](/transports/inmemory) - InMemory, HTTP, WebSocket
-    - [All RPC Types](/rpc-types/unary) - Unary, streams, bidirectional
-    - [Transport Router](/transports/router) - Smart routing between services
-    - [Built-in Testing](/testing) - Easy mocking and integration tests
-    - [Zero Dependencies](/core-concepts) - Pure Dart implementation
+<Card title="Pure Dart Implementation" icon="seti:dart">
+	Zero external dependencies. Works on all Dart platforms: mobile, web, desktop, and server applications.
+</Card>
 
-</ListCard>
-
-  <ListCard title="Quick Links" icon="puzzle">
-    - [Core Concepts](/core-concepts)
-    - [Architecture Guide](/architecture)
-    - [Transport Types](/transports/inmemory)
-    - [API Reference](https://pub.dev/documentation/rpc_dart/latest/)
-    - [Examples on GitHub](https://github.com/nogipx/rpc_dart/tree/main/example)
-    - [Issues & Support](https://github.com/nogipx/rpc_dart/issues)
-  </ListCard>
 </CardGrid>

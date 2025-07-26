@@ -29,23 +29,109 @@
 /* Адаптивные размеры логотипа */
 @media (max-width: 768px) {
   [data-has-hero] .hero > img {
-    max-width: 160px !important;
-    width: 160px !important;
+    max-width: 120px !important;
+    width: 120px !important;
   }
 }
 
 @media (max-width: 480px) {
   [data-has-hero] .hero > img {
-    max-width: 140px !important;
-    width: 140px !important;
+    max-width: 100px !important;
+    width: 100px !important;
+  }
+}
+
+@media (max-width: 320px) {
+  [data-has-hero] .hero > img {
+    max-width: 80px !important;
+    width: 80px !important;
   }
 }
 
 /* Мягкие эффекты наведения для карточек */
-.sl-card:hover {
+.card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(60, 105, 170, 0.1);
   transition: all 0.2s ease;
+}
+
+/* Общие улучшенные стили для всех карточек */
+.card {
+  background: var(--sl-color-bg-sidebar) !important;
+  border: 1px solid var(--sl-color-hairline) !important;
+  border-radius: 12px !important;
+  transition: all 0.2s ease !important;
+}
+
+.card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 24px rgba(60, 105, 170, 0.15) !important;
+  border-color: var(--sl-color-accent) !important;
+}
+
+/* Стили иконок для всех карточек */
+.card .icon {
+  color: var(--sl-color-accent) !important;
+  background-color: transparent !important;
+  border: 1px solid var(--sl-color-accent) !important;
+  border-radius: 8px !important;
+  padding: 8px !important;
+  width: 40px !important;
+  height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.2s ease !important;
+}
+
+.card:hover .icon {
+  background-color: var(--sl-color-accent) !important;
+  color: var(--sl-color-bg) !important;
+}
+
+/* Стили заголовков для всех карточек */
+.card h3 {
+  color: var(--sl-color-white) !important;
+  font-weight: 600 !important;
+}
+
+/* Дополнительные стили специально для главной страницы */
+[data-has-hero] .card {
+  background: var(--sl-color-bg-sidebar) !important;
+  border: 1px solid var(--sl-color-hairline) !important;
+  border-radius: 12px !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-has-hero] .card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(60, 105, 170, 0.15) !important;
+  border-color: var(--sl-color-accent) !important;
+}
+
+[data-has-hero] .card .icon {
+  color: var(--sl-color-accent) !important;
+  background-color: transparent !important;
+  border: 1px solid var(--sl-color-accent) !important;
+  border-radius: 8px !important;
+  padding: 8px !important;
+  width: 40px !important;
+  height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-has-hero] .card:hover .icon {
+  background-color: var(--sl-color-accent) !important;
+  color: var(--sl-color-bg) !important;
+}
+
+/* Единый стиль заголовков карточек */
+[data-has-hero] .card h3 {
+  color: var(--sl-color-white) !important;
+  font-weight: 600 !important;
 }
 
 /* Улучшенные кнопки */
