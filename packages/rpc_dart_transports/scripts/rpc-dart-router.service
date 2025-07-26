@@ -1,0 +1,44 @@
+[Unit]
+Description=RPC Dart Router - High-performance HTTP/2 gRPC router
+Documentation=https://github.com/nogipx/rpc_dart_transports
+After=network.target
+Wants=network.target
+
+[Service]
+Type=forking
+User=rpc-router
+Group=rpc-router
+WorkingDirectory=/opt/rpc-dart-router
+ExecStart=/opt/rpc-dart-router/bin/rpc_dart_router --daemon-start --config /etc/rpc-dart-router/config.yaml
+ExecReload=/opt/rpc-dart-router/bin/rpc_dart_router --daemon-reload
+ExecStop=/opt/rpc-dart-router/bin/rpc_dart_router --daemon-stop
+PIDFile=/var/run/rpc-dart-router/rpc_dart_router.pid
+TimeoutStartSec=30
+TimeoutStopSec=30
+Restart=always
+RestartSec=5
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/rpc-dart-router /var/run/rpc-dart-router /var/lib/rpc-dart-router
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryMax=1G
+CPUQuota=200%
+
+# Environment
+Environment=ROUTER_LOG_FILE=/var/log/rpc-dart-router/router.log
+Environment=ROUTER_PID_FILE=/var/run/rpc-dart-router/rpc_dart_router.pid
+Environment=ROUTER_LOG_LEVEL=info
+Environment=ROUTER_ENABLE_STATS=true
+Environment=ROUTER_ENABLE_METRICS=true
+
+[Install]
+WantedBy=multi-user.target 
