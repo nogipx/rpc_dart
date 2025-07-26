@@ -1,4 +1,4 @@
-name: CI
+name: Test & Benchmark RPC Dart
 
 on:
   push:
@@ -12,12 +12,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Глобальная переменная для рабочей директории
+  # Измените это значение, если переместите библиотеку в подпапку
+  WORKING_DIRECTORY: "rpc_dart"
+
 jobs:
   # Быстрая проверка форматирования и анализа кода
   lint:
     name: "Lint & Format"
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIRECTORY }}
     
     steps:
     - name: Checkout
@@ -33,8 +41,8 @@ jobs:
       with:
         path: |
           ${{ env.PUB_CACHE }}
-          .dart_tool/package_config.json
-        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          ${{ env.WORKING_DIRECTORY }}/.dart_tool/package_config.json
+        key: ${{ runner.os }}-pub-${{ hashFiles(format('{0}/**/pubspec.lock', env.WORKING_DIRECTORY)) }}
         restore-keys: |
           ${{ runner.os }}-pub-
     
@@ -56,6 +64,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: lint
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIRECTORY }}
     
     steps:
     - name: Checkout
@@ -71,8 +82,8 @@ jobs:
       with:
         path: |
           ${{ env.PUB_CACHE }}
-          .dart_tool/package_config.json
-        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          ${{ env.WORKING_DIRECTORY }}/.dart_tool/package_config.json
+        key: ${{ runner.os }}-pub-${{ hashFiles(format('{0}/**/pubspec.lock', env.WORKING_DIRECTORY)) }}
         restore-keys: |
           ${{ runner.os }}-pub-
     
@@ -91,7 +102,7 @@ jobs:
       uses: coverallsapp/github-action@v2
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        path-to-lcov: coverage/lcov.info
+        path-to-lcov: ${{ env.WORKING_DIRECTORY }}/coverage/lcov.info
 
 
   # Тестирование совместимости с версиями Dart
@@ -100,6 +111,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: test
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIRECTORY }}
     
     strategy:
       fail-fast: false
@@ -126,6 +140,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: test
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIRECTORY }}
     
     steps:
     - uses: actions/checkout@v4
@@ -173,5 +190,5 @@ jobs:
       if: always()
       with:
         name: benchmark-results
-        path: benchmark_results/
+        path: ${{ env.WORKING_DIRECTORY }}/benchmark_results/
         retention-days: 30
