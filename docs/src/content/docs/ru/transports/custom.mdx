@@ -24,31 +24,272 @@ import { Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
   </Card>
 </CardGrid>
 
+## Инструментарий разработки транспортов
+
+RPC Dart предоставляет богатый набор утилит и базовых классов для упрощения создания пользовательских транспортов. Этот инструментарий включает готовые решения для управления соединениями, сериализации сообщений, буферизации и других общих задач транспортного уровня.
+
+### Базовые классы транспортов
+
+#### RpcBaseTransport
+
+Абстрактный базовый класс, который предоставляет стандартную реализацию управления жизненным циклом транспорта:
+
+```dart
+import 'package:rpc_dart/rpc_dart.dart';
+
+class MyCustomTransport extends RpcBaseTransport {
+  @override
+  bool get supportsZeroCopy => false;
+
+  @override
+  Future<void> doConnect() async {
+    // Ваша логика подключения
+  }
+
+  @override
+  Future<void> doSendMetadata(int streamId, RpcMetadata metadata, {bool endStream = false}) async {
+    // Ваша логика отправки метаданных
+  }
+
+  @override
+  Future<void> doSendMessage(int streamId, Uint8List data, {bool endStream = false}) async {
+    // Ваша логика отправки сообщений
+  }
+
+  @override
+  Future<void> doFinishSending(int streamId) async {
+    // Ваша логика завершения отправки
+  }
+
+  @override
+  Future<void> doClose() async {
+    // Ваша логика закрытия соединения
+  }
+}
+```
+
+### Утилиты транспорта
+
+#### RpcTransportUtils
+
+Набор статических утилит для работы с транспортными сообщениями:
+
+```dart
+// Создание сообщений
+final message = RpcTransportUtils.createMessage(
+  streamId: 123,
+  payload: data,
+  metadata: metadata,
+);
+
+// Работа с метаданными
+final authMetadata = RpcTransportUtils.createMetadata([
+  RpcHeader('authorization', 'Bearer token123'),
+  RpcHeader('content-type', 'application/protobuf'),
+]);
+
+// Фрейминг сообщений для потоковых протоколов
+final framedData = RpcTransportUtils.frameMessage(data);
+final unframedData = RpcTransportUtils.unframeMessage(framedData);
+
+// Валидация
+if (RpcTransportUtils.isValidStreamId(streamId, isClient: true)) {
+  // Отправка сообщения
+}
+```
+
+### Миксины для расширения функциональности
+
+#### RpcZeroCopySupport
+
+Добавляет поддержку zero-copy операций:
+
+```dart
+class MyInMemoryTransport extends RpcBaseTransport with RpcZeroCopySupport {
+  @override
+  bool get supportsZeroCopy => true;
+
+  @override
+  Future<void> doSendDirectObject(int streamId, Object object, {bool endStream = false}) async {
+    // Прямая передача объекта без сериализации
+    incomingController.add(RpcTransportMessage.withDirectObject(
+      streamId: streamId,
+      directPayload: object,
+      isEndOfStream: endStream,
+    ));
+  }
+}
+```
+
+#### RpcMessageBuffering
+
+Добавляет буферизацию сообщений для оптимизации производительности:
+
+```dart
+class MyBufferedTransport extends RpcBaseTransport with RpcMessageBuffering {
+  MyBufferedTransport() {
+    configureBuffering(
+      maxBufferSize: 1024 * 1024, // 1MB
+      flushInterval: Duration(milliseconds: 100),
+      enableBatching: true,
+    );
+  }
+
+  @override
+  Future<void> doSendBufferedMessages(List<BufferedMessage> messages) async {
+    // Отправка пакета сообщений за один раз
+    for (final message in messages) {
+      await _actualSend(message.streamId, message.data);
+    }
+  }
+}
+```
+
+#### RpcAutoReconnect
+
+Добавляет автоматическое переподключение:
+
+```dart
+class MyReliableTransport extends RpcBaseTransport with RpcAutoReconnect {
+  MyReliableTransport() {
+    configureReconnection(
+      maxAttempts: 5,
+      initialDelay: Duration(seconds: 1),
+      maxDelay: Duration(seconds: 30),
+      backoffMultiplier: 2.0,
+    );
+  }
+
+  @override
+  Future<bool> checkConnection() async {
+    // Проверка состояния соединения
+    return _socket?.isConnected ?? false;
+  }
+
+  @override
+  Future<void> attemptReconnection() async {
+    // Логика переподключения
+    await doConnect();
+  }
+}
+```
+
+### Сериализация сообщений
+
+#### RpcMessageSerialization
+
+Утилиты для сериализации транспортных сообщений в различные форматы:
+
+```dart
+// Сериализация в JSON (для текстовых протоколов)
+final jsonData = RpcMessageSerialization.toJson(message);
+final restoredMessage = RpcMessageSerialization.fromJson(jsonData);
+
+// Сериализация в бинарный формат (для производительности)
+final binaryData = RpcMessageSerialization.toBinary(message);
+final restoredMessage = RpcMessageSerialization.fromBinary(binaryData);
+```
+
+#### RpcMetadataConverter
+
+Конвертер метаданных для различных протоколов:
+
+```dart
+// Конвертация в HTTP headers
+final httpHeaders = RpcMetadataConverter.toStringMap(metadata);
+
+// Создание из gRPC metadata
+final grpcMetadata = RpcMetadataConverter.fromPairList(grpcHeaders);
+
+// Фильтрация по префиксу
+final authHeaders = RpcMetadataConverter.filterByPrefix(metadata, 'auth-');
+
+// Добавление префикса для избежания конфликтов
+final prefixedMetadata = RpcMetadataConverter.addPrefix(metadata, 'rpc-');
+```
+
+### Конфигурация транспортов
+
+#### RpcTransportConfigBuilder
+
+Fluent API для создания конфигураций транспортов:
+
+```dart
+final config = RpcTransportConfigBuilder()
+  .role(isClient: true)
+  .buffering(
+    maxBufferSize: 1024 * 1024,
+    flushInterval: Duration(milliseconds: 50),
+    enableBatching: true,
+  )
+  .reconnection(
+    enabled: true,
+    maxAttempts: 3,
+    initialDelay: Duration(seconds: 1),
+    backoffMultiplier: 1.5,
+  )
+  .timeouts(
+    connectionTimeout: Duration(seconds: 30),
+    requestTimeout: Duration(seconds: 60),
+  )
+  .performance(
+    enableZeroCopy: true,
+    enableCompression: false,
+    maxConcurrentStreams: 100,
+  )
+  .custom('encryption', {'algorithm': 'AES256', 'keySize': 256})
+  .build();
+
+// Использование конфигурации
+if (config.has('buffering')) {
+  final bufferConfig = config['buffering'] as Map<String, dynamic>;
+  // Настройка буферизации
+}
+```
+
 ## Интерфейс транспорта
 
 ### Базовый контракт транспорта
 
-Все пользовательские транспорты должны реализовывать интерфейс `RpcTransport`:
+Все пользовательские транспорты должны реализовывать интерфейс `IRpcTransport`:
 
 ```dart
-abstract class RpcTransport {
-  /// Отправить сообщение через транспорт
-  Future<void> sendMessage(RpcMessage message);
+abstract class IRpcTransport {
+  /// Возвращает true, если это клиентский транспорт
+  bool get isClient;
   
-  /// Получить сообщения от транспорта
-  Stream<RpcMessage> get messageStream;
+  /// Возвращает true, если транспорт закрыт
+  bool get isClosed;
   
-  /// Инициализировать и подключить транспорт
-  Future<void> connect();
+  /// Возвращает true, если транспорт поддерживает zero-copy операции
+  bool get supportsZeroCopy => false;
   
-  /// Закрыть транспорт и очистить ресурсы
+  /// Создает новый HTTP/2 stream для RPC вызова
+  int createStream();
+  
+  /// Освобождает ID стрима
+  bool releaseStreamId(int streamId);
+  
+  /// Отправляет метаданные для конкретного stream
+  Future<void> sendMetadata(int streamId, RpcMetadata metadata, {bool endStream = false});
+  
+  /// Отправляет сообщение для конкретного stream
+  Future<void> sendMessage(int streamId, Uint8List data, {bool endStream = false});
+  
+  /// Отправляет объект напрямую без сериализации (zero-copy)
+  Future<void> sendDirectObject(int streamId, Object object, {bool endStream = false});
+  
+  /// Поток всех входящих сообщений от удаленной стороны
+  Stream<RpcTransportMessage> get incomingMessages;
+  
+  /// Создает отфильтрованный поток сообщений для конкретного stream
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId);
+  
+  /// Завершает отправку данных для конкретного stream
+  Future<void> finishSending(int streamId);
+  
+  /// Закрывает транспортное соединение
   Future<void> close();
-  
-  /// Проверить, подключен ли транспорт
-  bool get isConnected;
-  
-  /// Специфичная для транспорта конфигурация
-  Map<String, dynamic> get configuration;
 }
 ```
 
@@ -57,34 +298,33 @@ abstract class RpcTransport {
 RPC сообщения следуют стандартизированной структуре:
 
 ```dart
-class RpcMessage {
-  final String id;                    // Уникальный идентификатор сообщения
-  final String contractName;          // Название сервисного контракта
-  final String methodName;           // Вызываемый метод
-  final RpcMessageType type;         // Тип сообщения (запрос, ответ, ошибка и т.д.)
-  final Map<String, String> headers; // Заголовки транспорта
-  final dynamic payload;             // Полезная нагрузка сообщения
-  final RpcContext? context;         // RPC контекст
-  
-  RpcMessage({
-    required this.id,
-    required this.contractName,
-    required this.methodName,
-    required this.type,
-    this.headers = const {},
-    this.payload,
-    this.context,
-  });
-}
+final class RpcTransportMessage {
+  /// Полезная нагрузка сообщения (сериализованные данные)
+  final Uint8List? payload;
 
-enum RpcMessageType {
-  request,
-  response,
-  streamStart,
-  streamData,
-  streamEnd,
-  error,
-  cancel,
+  /// ZERO-COPY: Прямая ссылка на объект (для inmemory транспорта)
+  final Object? directPayload;
+
+  /// Связанные метаданные
+  final RpcMetadata? metadata;
+
+  /// Флаг, указывающий, что это последнее сообщение в потоке
+  final bool isEndOfStream;
+
+  /// Путь метода в формате /ServiceName/MethodName
+  final String? methodPath;
+
+  /// Уникальный идентификатор HTTP/2 stream для этого RPC вызова
+  final int streamId;
+
+  /// Флаг, указывающий, что сообщение содержит только метаданные
+  bool get isMetadataOnly => metadata != null && payload == null && directPayload == null;
+
+  /// Флаг, указывающий что передается объект напрямую (ZERO-COPY оптимизация)
+  bool get isDirect => directPayload != null;
+
+  /// Флаг, указывающий что передаются сериализованные байты
+  bool get isSerialized => payload != null;
 }
 ```
 

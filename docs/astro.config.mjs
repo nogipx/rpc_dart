@@ -111,10 +111,10 @@ export default defineConfig({
 							translations: { ru: 'WebSocket Транспорт' },
 						},
 						{
-							label: 'Custom Transport',
-							link: '/transports/custom/',
-							translations: { ru: 'Пользовательский транспорт' },
-						},
+              label: 'Custom Transport Toolkit',
+              link: '/transports/transport-toolkit/',
+              translations: { ru: 'Иструментарий для создания транспортов' },
+            },
 					],
 				},
 				// {

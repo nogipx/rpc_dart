@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
@@ -15,3 +16,4 @@ part 'core/transport.dart';
 
 part 'transports/in_memory_transport.dart';
 part 'transports/transport_router.dart';
+part 'transports/transport_toolkit.dart';
