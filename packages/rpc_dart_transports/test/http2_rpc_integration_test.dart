@@ -3,20 +3,22 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:test/test.dart';
-import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 void main() {
   group('HTTP/2 RPC Integration Tests (High-Level API)', () {
-    late Http2RpcTestServer testServer;
+    late IRpcServer testServer;
     late RpcHttp2CallerTransport clientTransport;
     late RpcCallerEndpoint callerEndpoint;
 
     setUpAll(() async {
-      testServer = Http2RpcTestServer();
+      testServer = RpcHttp2Server(
+        port: 10101,
+        onEndpointCreated: (endpoint) =>
+            endpoint.registerServiceContract(TestServiceContract()),
+      );
       await testServer.start();
 
       // Создаем одно долгоживущее соединение для всех тестов
@@ -255,83 +257,6 @@ void main() {
           '✅ Все параллельные RPC вызовы через Caller/Responder завершены успешно!');
     });
   });
-}
-
-/// HTTP/2 RPC тестовый сервер с полноценным RpcResponderEndpoint
-class Http2RpcTestServer {
-  ServerSocket? _serverSocket;
-  int _port = 0;
-  final List<StreamSubscription> _subscriptions = [];
-  final List<RpcResponderEndpoint> _responderEndpoints = [];
-
-  int get port => _port;
-
-  Future<void> start() async {
-    _serverSocket = await ServerSocket.bind('localhost', 0);
-    _port = _serverSocket!.port;
-
-    print('🚀 HTTP/2 RPC тестовый сервер запущен на порту $_port');
-
-    final subscription = _serverSocket!.listen((socket) {
-      _handleConnection(socket);
-    });
-
-    _subscriptions.add(subscription);
-  }
-
-  Future<void> stop() async {
-    // Даем время на завершение всех активных RPC операций
-    await Future.delayed(Duration(milliseconds: 100));
-
-    for (final subscription in _subscriptions) {
-      await subscription.cancel();
-    }
-    _subscriptions.clear();
-
-    for (final endpoint in _responderEndpoints) {
-      await endpoint.close();
-    }
-    _responderEndpoints.clear();
-
-    await _serverSocket?.close();
-    _serverSocket = null;
-
-    print('🛑 HTTP/2 RPC тестовый сервер остановлен');
-  }
-
-  void _handleConnection(Socket socket) {
-    print(
-        '📞 Новое RPC подключение от ${socket.remoteAddress}:${socket.remotePort}');
-
-    try {
-      // Создаем HTTP/2 соединение и серверный транспорт
-      final connection = http2.ServerTransportConnection.viaSocket(socket);
-      final serverTransport =
-          RpcHttp2ResponderTransport(connection: connection);
-
-      // Создаем RpcResponderEndpoint с HTTP/2 транспортом
-      final responderEndpoint =
-          RpcResponderEndpoint(transport: serverTransport);
-      _responderEndpoints.add(responderEndpoint);
-
-      // Регистрируем тестовый сервис
-      _registerTestService(responderEndpoint);
-
-      // Запускаем endpoint
-      responderEndpoint.start();
-    } catch (e) {
-      print('❌ Ошибка при создании RPC соединения: $e');
-      socket.destroy();
-    }
-  }
-
-  /// Регистрирует тестовый сервис с различными типами RPC методов
-  void _registerTestService(RpcResponderEndpoint endpoint) {
-    final contract = TestServiceContract();
-    endpoint.registerServiceContract(contract);
-    print(
-        '📋 Зарегистрирован TestService с ${contract.methods.length} методами');
-  }
 }
 
 /// Контракт тестового сервиса
