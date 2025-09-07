@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1
+
+- deps: update rpc_dart
+
 ## 1.0.0
 
 - Docs: simplify everything
