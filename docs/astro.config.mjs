@@ -40,11 +40,6 @@ export default defineConfig({
 					showLineNumbers: true,
 				}
 			},
-			logo: {
-				light: 'src/assets/light-rpc-dart-logo.svg',
-				dark: 'src/assets/dark-rpc-dart-logo.svg',
-				replacesTitle: false,
-			},
 			title: 'RPC Dart',
 			editLink: { baseUrl: 'https://github.com/nogipx/rpc_dart/edit/main/docs/' },
 			tagline: 'Pure Dart RPC library for type-safe communication',
