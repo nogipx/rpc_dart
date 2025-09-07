@@ -30,37 +30,29 @@ class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
         '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}';
 
     String prefix;
-    String emoji;
     String connector;
     switch (level) {
       case RpcLoggerLevel.internal:
-        prefix = 'INTRN';
-        emoji = '🔧';
-        connector = '⤷ ';
+        prefix = 'INTR';
+        connector = '⤷';
       case RpcLoggerLevel.debug:
-        prefix = 'DEBUG';
-        emoji = '🔍';
-        connector = '⤷ ';
+        prefix = 'DEBG';
+        connector = '⤷';
       case RpcLoggerLevel.info:
         prefix = 'INFO';
-        emoji = '📌';
-        connector = '⤷ ';
+        connector = '⤷';
       case RpcLoggerLevel.warning:
         prefix = 'WARN';
-        emoji = '⚠️ ';
-        connector = '⤷ ';
+        connector = '⤷';
       case RpcLoggerLevel.error:
-        prefix = 'ERROR';
-        emoji = '❌';
-        connector = '⤷ ';
+        prefix = 'ERRO';
+        connector = '⤷';
       case RpcLoggerLevel.critical:
         prefix = 'CRIT';
-        emoji = '🔥';
-        connector = '⤷ ';
+        connector = '⤷';
       default:
         prefix = '';
-        emoji = '';
-        connector = '⤷ ';
+        connector = '⤷';
     }
 
     final contextStr = context != null ? ' [$context]' : '';
@@ -68,7 +60,7 @@ class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
     final requestStr = requestId != null ? ' [req:$requestId]' : '';
     final labelStr = label != null ? '($label) ' : '';
     final header =
-        '[$formattedTime] ${prefix.padRight(5)} $emoji • $labelStr$source$contextStr$traceStr$requestStr';
+        '[$formattedTime] ${prefix.padRight(4)} • $labelStr$source$contextStr$traceStr$requestStr';
 
     // Разбиваем длинное сообщение на строки с отступами
     final messageLines = message.split('\n');

@@ -1027,7 +1027,7 @@ class ProfessionalRpcBenchmark {
       // Professional results format
       final exportData = {
         'benchmark_info': {
-          'suite': 'Professional RPC Dart Performance Benchmark',
+          'suite': ' RPC Dart Performance Benchmark',
           'version': '2.0.0',
           'timestamp': DateTime.now().toIso8601String(),
           'execution_time_seconds': _totalStopwatch.elapsedMilliseconds / 1000,

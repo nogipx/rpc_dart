@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.2
+
+- Docs: simplify everything
+
 ## 2.2.1
 
 - Fix: remove base class modifier to allow mock contracts

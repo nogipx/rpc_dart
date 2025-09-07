@@ -24,6 +24,3 @@ dry:
 
 publish:
     fvm dart pub publish
-
-gen-logo:
-    magick logo/logo.svg -resize 1000x1000 -background transparent logo/logo.webp 

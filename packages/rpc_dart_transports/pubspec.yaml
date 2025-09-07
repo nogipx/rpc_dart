@@ -1,25 +1,19 @@
 name: rpc_dart_transports
 description: RPC Dart Transports library
-version: 0.1.0
-repository: https://github.com/nogipx/rpc_dart_transports.git
-homepage: https://github.com/nogipx/rpc_dart_transports
-issue_tracker: https://github.com/nogipx/rpc_dart_transports/issues
-funding:
-  - https://liberapay.com/nogipx
+version: 1.0.0
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
 
 topics:
   - rpc
-  - grpc
-  - streams
+  - isolate
+  - network
 
-screenshots:
-  - description: "RPC Dart Transports logo - Transport for RPC Dart"
-    path: logo/logo.webp
-
-dependencies: 
+dependencies:
   rpc_dart: ^2.0.0
   uuid: ^4.5.1
   web_socket_channel: ^3.0.3
