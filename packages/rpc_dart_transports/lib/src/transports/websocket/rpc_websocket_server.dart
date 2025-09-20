@@ -3,39 +3,40 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:web_socket_channel/io.dart';
 
-/// Высокоуровневый WebSocket RPC сервер
+/// Высокоуровневый WebSocket RPC сервер БЕЗ использования dart:io
 ///
-/// Инкапсулирует создание WebSocket сервера и автоматическую настройку транспортов.
-/// Для каждого нового WebSocket подключения создает отдельный RpcResponderEndpoint.
+/// Сервер НЕ занимается сетевым биндингом и HTTP→WebSocket upgrade.
+/// Он потребляет уже установленные WebSocket-подключения из переданного
+/// потока [connections] и на каждое подключение поднимает RpcResponderEndpoint.
 class RpcWebSocketServer implements IRpcServer {
   final String _host;
   final int _port;
   final RpcLogger? _logger;
+
+  /// Поток входящих уже-открытых WebSocket-подключений.
+  final Stream<WebSocketChannel> _connections;
+
+  /// Коллбеки жизненного цикла
   final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
   final void Function(WebSocketChannel channel)? _onConnectionOpened;
   final void Function(WebSocketChannel channel)? _onConnectionClosed;
 
-  HttpServer? _httpServer;
+  StreamSubscription<WebSocketChannel>? _connectionsSub;
   bool _isRunning = false;
   final List<RpcResponderEndpoint> _endpoints = [];
+  int _connCounter = 0;
 
-  /// Создает WebSocket RPC сервер
+  /// Создает WebSocket RPC сервер поверх [connections] (без io).
   ///
-  /// [host] - хост для привязки (по умолчанию 'localhost')
-  /// [port] - порт для привязки
-  /// [logger] - логгер для отладки
-  /// [onEndpointCreated] - вызывается при создании нового RPC endpoint'а
-  /// [onConnectionError] - вызывается при ошибке соединения
-  /// [onConnectionOpened] - вызывается при открытии нового соединения
-  /// [onConnectionClosed] - вызывается при закрытии соединения
+  /// [host]/[port] носят информативный характер (для логов/совместимости с интерфейсом),
+  /// фактический сетевой листенер/апгрейд выполняется на стороне поставщика [connections].
   RpcWebSocketServer({
+    required Stream<WebSocketChannel> connections,
     String host = 'localhost',
     required int port,
     RpcLogger? logger,
@@ -43,7 +44,8 @@ class RpcWebSocketServer implements IRpcServer {
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(WebSocketChannel channel)? onConnectionOpened,
     void Function(WebSocketChannel channel)? onConnectionClosed,
-  })  : _host = host,
+  })  : _connections = connections,
+        _host = host,
         _port = port,
         _logger = logger?.child('WebSocketServer'),
         _onEndpointCreated = onEndpointCreated,
@@ -51,19 +53,18 @@ class RpcWebSocketServer implements IRpcServer {
         _onConnectionOpened = onConnectionOpened,
         _onConnectionClosed = onConnectionClosed;
 
-  /// Создает простой WebSocket сервер с автоматической регистрацией контрактов
+  /// Упрощённая фабрика с автогенерацией эндпоинтов под контракты.
   ///
-  /// [port] - порт для привязки
-  /// [contracts] - список контрактов для регистрации на каждом endpoint'е
-  /// [host] - хост для привязки (по умолчанию 'localhost')
-  /// [logger] - логгер для отладки
+  /// ВАЖНО: здесь также требуется внешний поток [connections].
   factory RpcWebSocketServer.createWithContracts({
+    required Stream<WebSocketChannel> connections,
     required int port,
     required List<RpcResponderContract> contracts,
     String host = 'localhost',
     RpcLogger? logger,
   }) {
     return RpcWebSocketServer(
+      connections: connections,
       host: host,
       port: port,
       logger: logger,
@@ -101,27 +102,30 @@ class RpcWebSocketServer implements IRpcServer {
       return;
     }
 
-    _logger?.info('Запуск WebSocket сервера на $_host:$_port');
+    _logger?.info('Запуск WebSocket сервера (без io) на $_host:$_port');
 
-    try {
-      // Создаем HTTP сервер для WebSocket upgrade
-      _httpServer = await HttpServer.bind(_host, _port);
-      _isRunning = true;
+    _isRunning = true;
 
-      // Обрабатываем входящие HTTP запросы для WebSocket upgrade
-      _httpServer!.listen(_handleHttpRequest, onError: (error, stackTrace) {
-        _logger?.error('Ошибка WebSocket сервера',
-            error: error, stackTrace: stackTrace);
-        _onConnectionError?.call(error, stackTrace);
-      });
+    // Подписываемся на поток вновь пришедших WebSocket-подключений.
+    _connectionsSub = _connections.listen(
+      (WebSocketChannel channel) {
+        final label = _nextPeerLabel();
+        _logger?.debug('Новое WebSocket подключение: $label');
+        _handleWebSocketConnection(channel, label);
+      },
+      onError: (Object error, StackTrace st) {
+        _logger?.error('Ошибка потока подключений',
+            error: error, stackTrace: st);
+        _onConnectionError?.call(error, st);
+      },
+      onDone: () {
+        _logger?.info('Поток подключений завершён');
+        // Не останавливаем сервер автоматически: даём пользователю решать, когда вызывать stop().
+      },
+      cancelOnError: false,
+    );
 
-      _logger?.info('WebSocket сервер запущен на $_host:$_port');
-    } catch (e, stackTrace) {
-      _logger?.error('Не удалось запустить WebSocket сервер',
-          error: e, stackTrace: stackTrace);
-      _isRunning = false;
-      rethrow;
-    }
+    _logger?.info('WebSocket сервер запущен (источник подключений активен)');
   }
 
   @override
@@ -141,90 +145,55 @@ class RpcWebSocketServer implements IRpcServer {
     }
     _endpoints.clear();
 
-    // Закрываем HTTP сервер
-    await _httpServer?.close();
-    _httpServer = null;
+    // Отписываемся от источника подключений
+    try {
+      await _connectionsSub?.cancel();
+    } catch (e) {
+      _logger?.warning('Ошибка при отмене подписки на подключения: $e');
+    } finally {
+      _connectionsSub = null;
+    }
 
     _logger?.info('WebSocket сервер остановлен');
   }
 
-  /// Обрабатывает HTTP запросы для WebSocket upgrade
-  void _handleHttpRequest(HttpRequest request) {
-    try {
-      // Проверяем, что это WebSocket upgrade запрос
-      if (WebSocketTransformer.isUpgradeRequest(request)) {
-        _handleWebSocketUpgrade(request);
-      } else {
-        // Отклоняем не-WebSocket запросы
-        request.response.statusCode = HttpStatus.badRequest;
-        request.response.write('WebSocket connection required');
-        request.response.close();
-      }
-    } catch (e, stackTrace) {
-      _logger?.error('Ошибка при обработке HTTP запроса',
-          error: e, stackTrace: stackTrace);
-      request.response.statusCode = HttpStatus.internalServerError;
-      request.response.close();
-    }
-  }
-
-  /// Обрабатывает WebSocket upgrade
-  void _handleWebSocketUpgrade(HttpRequest request) async {
-    try {
-      // Выполняем WebSocket upgrade
-      final webSocket = await WebSocketTransformer.upgrade(request);
-      final channel = IOWebSocketChannel(webSocket);
-
-      final clientAddress =
-          '${request.connectionInfo?.remoteAddress}:${request.connectionInfo?.remotePort}';
-      _logger?.debug('Новое WebSocket подключение от $clientAddress');
-
-      _handleWebSocketConnection(channel, clientAddress);
-    } catch (e, stackTrace) {
-      _logger?.error('Ошибка при WebSocket upgrade',
-          error: e, stackTrace: stackTrace);
-      _onConnectionError?.call(e, stackTrace);
-    }
-  }
-
-  /// Обрабатывает новое WebSocket соединение
+  /// Обрабатывает новое WebSocket соединение (общая RPC-логика).
   void _handleWebSocketConnection(
-      WebSocketChannel channel, String clientAddress) {
+      WebSocketChannel channel, String clientLabel) {
     _onConnectionOpened?.call(channel);
 
     try {
-      // Создаем серверный транспорт для WebSocket
+      // Серверный транспорт для WebSocket
       final serverTransport = RpcWebSocketResponderTransport(
         channel,
         logger: _logger,
       );
 
-      // Создаем RPC endpoint
+      // RPC endpoint
       final endpoint = RpcResponderEndpoint(
         transport: serverTransport,
-        debugLabel: 'WebSocketEndpoint-$clientAddress',
+        debugLabel: 'WebSocketEndpoint-$clientLabel',
         loggerColors: RpcLoggerColors.singleColor(AnsiColor.magenta),
       );
 
       _endpoints.add(endpoint);
 
-      // Уведомляем о создании endpoint'а
+      // Уведомляем о создании endpoint
       _onEndpointCreated?.call(endpoint);
 
       // Запускаем endpoint
       endpoint.start();
 
-      _logger?.debug(
-          'RPC endpoint создан для WebSocket соединения $clientAddress');
+      _logger?.debug('RPC endpoint создан для соединения $clientLabel');
 
-      // Обрабатываем закрытие соединения
+      // Закрытие соединения
       channel.sink.done.then((_) {
-        _logger?.debug('WebSocket соединение $clientAddress закрыто');
+        _logger?.debug('WebSocket соединение $clientLabel закрыто');
         _endpoints.remove(endpoint);
         _onConnectionClosed?.call(channel);
       }).catchError((error) {
         _logger?.warning(
-            'Ошибка при закрытии WebSocket соединения $clientAddress: $error');
+            'Ошибка при закрытии WebSocket соединения $clientLabel: $error');
         _endpoints.remove(endpoint);
         _onConnectionClosed?.call(channel);
       });
@@ -235,11 +204,18 @@ class RpcWebSocketServer implements IRpcServer {
       channel.sink.close();
     }
   }
+
+  String _nextPeerLabel() => 'peer-${++_connCounter}';
 }
 
-/// Фабрика для создания WebSocket RPC серверов
+/// Фабрика для создания WebSocket RPC серверов (без io).
+///
+/// Поскольку в этом варианте сервер не биндится сам, фабрика
+/// принимает поток [connections] в конструкторе и передает его в сервер.
 class RpcWebSocketServerFactory implements IRpcServerFactory {
-  const RpcWebSocketServerFactory();
+  final Stream<WebSocketChannel> connections;
+
+  const RpcWebSocketServerFactory(this.connections);
 
   @override
   IRpcServer create({
@@ -249,6 +225,7 @@ class RpcWebSocketServerFactory implements IRpcServerFactory {
     RpcLogger? logger,
   }) {
     return RpcWebSocketServer.createWithContracts(
+      connections: connections,
       port: port,
       contracts: contracts,
       host: host,

@@ -3,59 +3,73 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
+import 'package:universal_io/io.dart';
 import 'package:web_socket_channel/io.dart';
 
 void main() {
-  group('RpcWebSocketTransport тесты', () {
+  group('RpcWebSocketTransport тесты (реальный сервер, ephemeral port)', () {
     late HttpServer server;
-    late List<WebSocket> serverSockets;
+    late StreamController<WebSocket> socketEvents;
+    late StreamSubscription<HttpRequest> serverSub;
 
     setUpAll(() async {
-      // Устанавливаем уровень логирования DEBUG для тестов
+      // Детальное логирование для тестов
       RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
     });
 
     setUp(() async {
-      serverSockets = [];
-      // Создаем HTTP сервер для WebSocket соединений
+      // Эфемерный порт (0) — ОС выдаст свободный
       server = await HttpServer.bind('localhost', 0);
+      socketEvents = StreamController<WebSocket>.broadcast();
 
-      // Обрабатываем WebSocket соединения
-      server.listen((request) async {
-        if (WebSocketTransformer.isUpgradeRequest(request)) {
-          final socket = await WebSocketTransformer.upgrade(request);
-          serverSockets.add(socket);
+      // Обрабатываем WebSocket upgrade
+      serverSub = server.listen((request) async {
+        try {
+          if (WebSocketTransformer.isUpgradeRequest(request)) {
+            final ws = await WebSocketTransformer.upgrade(request);
+            socketEvents.add(ws);
+          } else {
+            request.response.statusCode = HttpStatus.badRequest;
+            request.response.write('WebSocket connection required');
+            await request.response.close();
+          }
+        } catch (e, st) {
+          // Если апгрейд/ответ упал — стараемся закрыть ответ, шлём событие об ошибке
+          try {
+            request.response.statusCode = HttpStatus.internalServerError;
+            await request.response.close();
+          } catch (_) {}
+          socketEvents.addError(e, st);
         }
       });
     });
 
     tearDown(() async {
-      for (final socket in serverSockets) {
-        if (socket.readyState == WebSocket.open) {
-          await socket.close();
-        }
-      }
-      await server.close();
+      await serverSub.cancel();
+      await server.close(force: true);
+      await socketEvents.close();
     });
 
+    /// Удобный хелпер: ждём первое входящее WS-подключение
+    Future<WebSocket> nextServerSocket(
+        {Duration timeout = const Duration(seconds: 2)}) {
+      return socketEvents.stream.first.timeout(timeout);
+    }
+
     test('создание caller и responder транспортов', () async {
-      // Создаем клиентский транспорт
+      // Клиент коннектится к реальному серверу
       final clientTransport = RpcWebSocketCallerTransport.connect(
         Uri.parse('ws://localhost:${server.port}'),
         logger: RpcLogger('TestClient'),
       );
 
-      // Ждем подключения
-      await Future.delayed(Duration(milliseconds: 300));
-      expect(serverSockets.length, equals(1));
-
-      // Создаем серверный транспорт
+      // Ждём, когда сервер примет сокет, и оборачиваем его в канал
+      final serverSocket = await nextServerSocket();
       final serverTransport = RpcWebSocketResponderTransport(
-        IOWebSocketChannel(serverSockets.first),
+        IOWebSocketChannel(serverSocket),
         logger: RpcLogger('TestServer'),
       );
 
@@ -71,27 +85,25 @@ void main() {
         Uri.parse('ws://localhost:${server.port}'),
         logger: RpcLogger('TestClient'),
       );
-
-      await Future.delayed(Duration(milliseconds: 100));
-
+      final serverSocket = await nextServerSocket();
       final serverTransport = RpcWebSocketResponderTransport(
-        IOWebSocketChannel(serverSockets.first),
+        IOWebSocketChannel(serverSocket),
         logger: RpcLogger('TestServer'),
       );
 
-      // Клиент должен генерировать нечетные ID
-      final clientStream1 = clientTransport.createStream();
-      final clientStream2 = clientTransport.createStream();
-      expect(clientStream1 % 2, equals(1)); // нечетный
-      expect(clientStream2 % 2, equals(1)); // нечетный
-      expect(clientStream2, greaterThan(clientStream1));
+      // Клиент должен генерировать нечетные
+      final c1 = clientTransport.createStream();
+      final c2 = clientTransport.createStream();
+      expect(c1 % 2, 1);
+      expect(c2 % 2, 1);
+      expect(c2, greaterThan(c1));
 
-      // Сервер должен генерировать четные ID
-      final serverStream1 = serverTransport.createStream();
-      final serverStream2 = serverTransport.createStream();
-      expect(serverStream1 % 2, equals(0)); // четный
-      expect(serverStream2 % 2, equals(0)); // четный
-      expect(serverStream2, greaterThan(serverStream1));
+      // Сервер — четные
+      final s1 = serverTransport.createStream();
+      final s2 = serverTransport.createStream();
+      expect(s1 % 2, 0);
+      expect(s2 % 2, 0);
+      expect(s2, greaterThan(s1));
 
       await clientTransport.close();
       await serverTransport.close();
@@ -102,42 +114,31 @@ void main() {
         Uri.parse('ws://localhost:${server.port}'),
         logger: RpcLogger('TestClient'),
       );
-
-      await Future.delayed(Duration(milliseconds: 100));
-
+      final serverSocket = await nextServerSocket();
       final serverTransport = RpcWebSocketResponderTransport(
-        IOWebSocketChannel(serverSockets.first),
+        IOWebSocketChannel(serverSocket),
         logger: RpcLogger('TestServer'),
       );
 
       final streamId = clientTransport.createStream();
 
-      // Подписываемся на входящие сообщения на сервере
       final serverMessages = <RpcTransportMessage>[];
-      final serverSubscription = serverTransport.incomingMessages.listen(
-        (message) => serverMessages.add(message),
-      );
+      final sub = serverTransport.incomingMessages.listen(serverMessages.add);
 
-      // Отправляем метаданные с клиента - используем готовый метод
       final metadata =
           RpcMetadata.forClientRequestWithPath('/test.Service/TestMethod');
-
       await clientTransport.sendMetadata(streamId, metadata);
 
-      // Ждем получения сообщения
-      await Future.delayed(Duration(milliseconds: 100));
+      // Дадим очереди событий обработаться
+      await pump();
 
-      expect(serverMessages.length, equals(1));
-      final receivedMessage = serverMessages.first;
-      expect(receivedMessage.streamId, equals(streamId));
-      expect(receivedMessage.metadata, isNotNull);
+      expect(serverMessages.length, 1);
+      final received = serverMessages.first;
+      expect(received.streamId, streamId);
+      expect(received.metadata, isNotNull);
+      expect(received.metadata!.methodPath, '/test.Service/TestMethod');
 
-      // Проверяем путь метода
-      expect(receivedMessage.metadata!.methodPath,
-          equals('/test.Service/TestMethod'));
-
-      // Проверяем заголовки
-      final headers = receivedMessage.metadata!.headers;
+      final headers = received.metadata!.headers;
       expect(
           headers.any(
               (h) => h.name == 'content-type' && h.value == 'application/grpc'),
@@ -147,7 +148,7 @@ void main() {
               h.name == ':path' && h.value == '/test.Service/TestMethod'),
           isTrue);
 
-      await serverSubscription.cancel();
+      await sub.cancel();
       await clientTransport.close();
       await serverTransport.close();
     });
@@ -157,36 +158,28 @@ void main() {
         Uri.parse('ws://localhost:${server.port}'),
         logger: RpcLogger('TestClient'),
       );
-
-      await Future.delayed(Duration(milliseconds: 100));
-
+      final serverSocket = await nextServerSocket();
       final serverTransport = RpcWebSocketResponderTransport(
-        IOWebSocketChannel(serverSockets.first),
+        IOWebSocketChannel(serverSocket),
         logger: RpcLogger('TestServer'),
       );
 
       final streamId = clientTransport.createStream();
 
-      // Подписываемся на входящие сообщения на сервере
       final serverMessages = <RpcTransportMessage>[];
-      final serverSubscription = serverTransport.incomingMessages.listen(
-        (message) => serverMessages.add(message),
-      );
+      final sub = serverTransport.incomingMessages.listen(serverMessages.add);
 
-      // Отправляем данные
       final testData = Uint8List.fromList([1, 2, 3, 4, 5]);
       await clientTransport.sendMessage(streamId, testData);
 
-      // Ждем получения сообщения
-      await Future.delayed(Duration(milliseconds: 100));
+      await pump();
 
-      expect(serverMessages.length, equals(1));
-      final receivedMessage = serverMessages.first;
-      expect(receivedMessage.streamId, equals(streamId));
-      expect(receivedMessage.payload, isNotNull);
-      expect(receivedMessage.payload, equals(testData));
+      expect(serverMessages.length, 1);
+      final m = serverMessages.first;
+      expect(m.streamId, streamId);
+      expect(m.payload, equals(testData));
 
-      await serverSubscription.cancel();
+      await sub.cancel();
       await clientTransport.close();
       await serverTransport.close();
     });
@@ -196,53 +189,41 @@ void main() {
         Uri.parse('ws://localhost:${server.port}'),
         logger: RpcLogger('TestClient'),
       );
-
-      await Future.delayed(Duration(milliseconds: 100));
-
+      final serverSocket = await nextServerSocket();
       final serverTransport = RpcWebSocketResponderTransport(
-        IOWebSocketChannel(serverSockets.first),
+        IOWebSocketChannel(serverSocket),
         logger: RpcLogger('TestServer'),
       );
 
       final clientStreamId = clientTransport.createStream();
       final serverStreamId = serverTransport.createStream();
 
-      // Подписываемся на входящие сообщения
-      final clientMessages = <RpcTransportMessage>[];
-      final serverMessages = <RpcTransportMessage>[];
+      final clientMsgs = <RpcTransportMessage>[];
+      final serverMsgs = <RpcTransportMessage>[];
 
-      final clientSubscription = clientTransport.incomingMessages.listen(
-        (message) => clientMessages.add(message),
-      );
-      final serverSubscription = serverTransport.incomingMessages.listen(
-        (message) => serverMessages.add(message),
-      );
+      final cSub = clientTransport.incomingMessages.listen(clientMsgs.add);
+      final sSub = serverTransport.incomingMessages.listen(serverMsgs.add);
 
-      // Клиент отправляет данные серверу
       final clientData = Uint8List.fromList([10, 20, 30]);
       await clientTransport.sendMessage(clientStreamId, clientData);
 
-      // Сервер отправляет данные клиенту
       final serverData = Uint8List.fromList([40, 50, 60]);
       await serverTransport.sendMessage(serverStreamId, serverData);
 
-      // Ждем получения сообщений
-      await Future.delayed(Duration(milliseconds: 100));
+      await pump();
 
-      // Проверяем, что сервер получил данные от клиента
-      expect(serverMessages.length, equals(1));
-      final serverReceivedMessage = serverMessages.first;
-      expect(serverReceivedMessage.streamId, equals(clientStreamId));
-      expect(serverReceivedMessage.payload, equals(clientData));
+      // Сервер получил от клиента
+      expect(serverMsgs.length, 1);
+      expect(serverMsgs.first.streamId, clientStreamId);
+      expect(serverMsgs.first.payload, equals(clientData));
 
-      // Проверяем, что клиент получил данные от сервера
-      expect(clientMessages.length, equals(1));
-      final clientReceivedMessage = clientMessages.first;
-      expect(clientReceivedMessage.streamId, equals(serverStreamId));
-      expect(clientReceivedMessage.payload, equals(serverData));
+      // Клиент получил от сервера
+      expect(clientMsgs.length, 1);
+      expect(clientMsgs.first.streamId, serverStreamId);
+      expect(clientMsgs.first.payload, equals(serverData));
 
-      await clientSubscription.cancel();
-      await serverSubscription.cancel();
+      await cSub.cancel();
+      await sSub.cancel();
       await clientTransport.close();
       await serverTransport.close();
     });
@@ -252,41 +233,33 @@ void main() {
         Uri.parse('ws://localhost:${server.port}'),
         logger: RpcLogger('TestClient'),
       );
-
-      await Future.delayed(Duration(milliseconds: 100));
-
+      final serverSocket = await nextServerSocket();
       final serverTransport = RpcWebSocketResponderTransport(
-        IOWebSocketChannel(serverSockets.first),
+        IOWebSocketChannel(serverSocket),
         logger: RpcLogger('TestServer'),
       );
 
       final streamId = clientTransport.createStream();
 
-      // Подписываемся на входящие сообщения на сервере
       final serverMessages = <RpcTransportMessage>[];
-      final serverSubscription = serverTransport.incomingMessages.listen(
-        (message) => serverMessages.add(message),
-      );
+      final sub = serverTransport.incomingMessages.listen(serverMessages.add);
 
-      // Отправляем данные, затем завершаем поток
-      final testData = Uint8List.fromList([1, 2, 3]);
-      await clientTransport.sendMessage(streamId, testData);
+      final data = Uint8List.fromList([1, 2, 3]);
+      await clientTransport.sendMessage(streamId, data);
       await clientTransport.finishSending(streamId);
 
-      // Ждем получения сообщений
-      await Future.delayed(Duration(milliseconds: 100));
+      await pump();
 
-      // Должно быть 2 сообщения: одно с данными, одно с флагом завершения
-      expect(serverMessages.length, equals(2));
+      expect(serverMessages.length, 2);
+      final dataMsg = serverMessages[0];
+      final endMsg = serverMessages[1];
 
-      final dataMessage = serverMessages[0];
-      expect(dataMessage.payload, equals(testData));
-      expect(dataMessage.isEndOfStream, isFalse);
+      expect(dataMsg.payload, equals(data));
+      expect(dataMsg.isEndOfStream, isFalse);
 
-      final endMessage = serverMessages[1];
-      expect(endMessage.isEndOfStream, isTrue);
+      expect(endMsg.isEndOfStream, isTrue);
 
-      await serverSubscription.cancel();
+      await sub.cancel();
       await clientTransport.close();
       await serverTransport.close();
     });
@@ -296,40 +269,32 @@ void main() {
         Uri.parse('ws://localhost:${server.port}'),
         logger: RpcLogger('TestClient'),
       );
-
-      await Future.delayed(Duration(milliseconds: 100));
-
+      final serverSocket = await nextServerSocket();
       final serverTransport = RpcWebSocketResponderTransport(
-        IOWebSocketChannel(serverSockets.first),
+        IOWebSocketChannel(serverSocket),
         logger: RpcLogger('TestServer'),
       );
 
-      final streamId1 = clientTransport.createStream();
-      final streamId2 = clientTransport.createStream();
+      final id1 = clientTransport.createStream();
+      final id2 = clientTransport.createStream();
 
-      // Подписываемся на сообщения для конкретного потока
-      final stream1Messages = <RpcTransportMessage>[];
-      final stream1Subscription =
-          serverTransport.getMessagesForStream(streamId1).listen(
-                (message) => stream1Messages.add(message),
-              );
+      final stream1Msgs = <RpcTransportMessage>[];
+      final sub =
+          serverTransport.getMessagesForStream(id1).listen(stream1Msgs.add);
 
-      // Отправляем данные в разные потоки
       final data1 = Uint8List.fromList([1, 1, 1]);
       final data2 = Uint8List.fromList([2, 2, 2]);
 
-      await clientTransport.sendMessage(streamId1, data1);
-      await clientTransport.sendMessage(streamId2, data2);
+      await clientTransport.sendMessage(id1, data1);
+      await clientTransport.sendMessage(id2, data2);
 
-      // Ждем получения сообщений
-      await Future.delayed(Duration(milliseconds: 100));
+      await pump();
 
-      // Должно быть получено только сообщение для streamId1
-      expect(stream1Messages.length, equals(1));
-      expect(stream1Messages.first.streamId, equals(streamId1));
-      expect(stream1Messages.first.payload, equals(data1));
+      expect(stream1Msgs.length, 1);
+      expect(stream1Msgs.first.streamId, id1);
+      expect(stream1Msgs.first.payload, equals(data1));
 
-      await stream1Subscription.cancel();
+      await sub.cancel();
       await clientTransport.close();
       await serverTransport.close();
     });
@@ -339,29 +304,29 @@ void main() {
         Uri.parse('ws://localhost:${server.port}'),
         logger: RpcLogger('TestClient'),
       );
+      final _ = await nextServerSocket(); // серверный сокет нам тут не нужен
 
-      await Future.delayed(Duration(milliseconds: 100));
+      final id1 = clientTransport.createStream();
+      final id2 = clientTransport.createStream();
 
-      final streamId1 = clientTransport.createStream();
-      final streamId2 = clientTransport.createStream();
-
-      // Проверяем, что ID активны
-      expect(clientTransport.idManager.isActive(streamId1), isTrue);
-      expect(clientTransport.idManager.isActive(streamId2), isTrue);
+      expect(clientTransport.idManager.isActive(id1), isTrue);
+      expect(clientTransport.idManager.isActive(id2), isTrue);
       expect(clientTransport.idManager.activeCount, equals(2));
 
-      // Освобождаем один ID
-      final released = clientTransport.releaseStreamId(streamId1);
+      final released = clientTransport.releaseStreamId(id1);
       expect(released, isTrue);
-      expect(clientTransport.idManager.isActive(streamId1), isFalse);
-      expect(clientTransport.idManager.isActive(streamId2), isTrue);
+      expect(clientTransport.idManager.isActive(id1), isFalse);
+      expect(clientTransport.idManager.isActive(id2), isTrue);
       expect(clientTransport.idManager.activeCount, equals(1));
 
-      // Попытка освободить уже освобожденный ID
-      final releasedAgain = clientTransport.releaseStreamId(streamId1);
+      final releasedAgain = clientTransport.releaseStreamId(id1);
       expect(releasedAgain, isFalse);
 
       await clientTransport.close();
     });
   });
 }
+
+/// Микро-хелпер: даём микротакт event-loop’у
+Future<void> pump([Duration d = const Duration(milliseconds: 50)]) =>
+    Future<void>.delayed(d);

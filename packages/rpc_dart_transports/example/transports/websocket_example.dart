@@ -3,132 +3,104 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
-import 'package:web_socket_channel/io.dart';
+import 'package:shelf/shelf.dart';
+import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:shelf_web_socket/shelf_web_socket.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// Простой пример использования WebSocket транспорта
-void main() async {
-  // Устанавливаем уровень логирования INFO
+/// Пример: реальный WebSocket-сервер + клиент.
+/// Серверная часть: shelf_web_socket -> Stream<WebSocketChannel> -> RpcWebSocketServer.
+/// Клиент: WebSocketChannel.connect -> RpcWebSocketCallerTransport.
+Future<void> main() async {
+  // 1) Логирование
   RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info);
 
-  // Запускаем сервер
-  final server = await HttpServer.bind('localhost', 8081);
-  print('Сервер запущен на http://localhost:8081');
+  // 2) Контроллер входящих подключений для RpcWebSocketServer
+  final incomingConnections = StreamController<WebSocketChannel>.broadcast();
 
-  // Создаем контракт серверной стороны
+  // 3) Контракты сервера
   final serverContract = EchoResponderContract();
 
-  // Обрабатываем соединения от клиентов
-  server.listen((request) async {
-    if (WebSocketTransformer.isUpgradeRequest(request)) {
-      try {
-        // Преобразуем HTTP запрос в WebSocket
-        final socket = await WebSocketTransformer.upgrade(request);
-        print('Новое WebSocket соединение');
+  // 4) Поднимаем RpcWebSocketServer поверх входящего стрима каналов
+  final rpcServer = RpcWebSocketServer.createWithContracts(
+    connections: incomingConnections.stream,
+    host: '0.0.0.0',
+    port: 8081, // информативно (биндинг делает shelf)
+    contracts: [serverContract],
+    logger: RpcLogger('RPC-Server'),
+  );
+  await rpcServer.start();
 
-        // Создаем WebSocket канал из сокета
-        final channel = IOWebSocketChannel(socket);
-
-        // Создаем транспорт на основе канала
-        final transport = RpcWebSocketResponderTransport(
-          channel,
-          logger: RpcLogger('ServerWebSocket'),
-        );
-
-        // Создаем серверный эндпоинт
-        final endpoint = RpcResponderEndpoint(
-            transport: transport, debugLabel: 'ServerEndpoint');
-
-        // Регистрируем контракт
-        endpoint.registerServiceContract(serverContract);
-
-        // Запускаем эндпоинт
-        endpoint.start();
-
-        // Обрабатываем закрытие соединения
-        socket.done.then((_) {
-          print('WebSocket соединение закрыто');
-          endpoint.close();
-        });
-      } catch (e) {
-        print('Ошибка при обработке WebSocket подключения: $e');
-      }
-    }
+  // 5) Настраиваем shelf WebSocket handler: каждое подключение отправляем серверу
+  final wsHandler = webSocketHandler((WebSocketChannel ch, str) {
+    print('[shelf] Новое WebSocket соединение ($str)');
+    incomingConnections.add(ch);
   });
 
-  // Запускаем клиент
-  Timer(Duration(seconds: 1), () => runClient());
+  // (опционально) логируем HTTP-запросы
+  final handler = const Pipeline().addHandler(wsHandler);
+
+  // 6) Реальный HTTP биндинг (без прямого импорта dart:io в этом файле)
+  final shelfServer = await shelf_io.serve(handler, '127.0.0.1', 8081);
+  print('✅ WebSocket сервер слушает ws://127.0.0.1:8081');
+
+  // 7) Запускаем клиента
+  await runClient();
+
+  // 8) Грейсфул-шатдаун
+  await rpcServer.stop();
+  await incomingConnections.close();
+  await shelfServer.close(force: true);
+  print('👋 Завершено.');
 }
 
-/// Запускает клиентскую часть примера
-void runClient() async {
-  print('\nЗапуск клиента...');
+/// Клиентский запуск: коннект к реальному ws:// и тест двух методов
+Future<void> runClient() async {
+  print('\n— Клиент: подключение к серверу...');
 
-  // Создаем клиентский транспорт
-  final transport = RpcWebSocketCallerTransport.connect(
-    Uri.parse('ws://localhost:8081'),
-    logger: RpcLogger('ClientWebSocket'),
-  );
-
-  // Создаем клиентский эндпоинт
   final endpoint = RpcCallerEndpoint(
-    transport: transport,
+    transport: RpcWebSocketCallerTransport.connect(
+      Uri.parse('ws://127.0.0.1:8081'),
+    ),
     debugLabel: 'ClientEndpoint',
   );
 
-  // Создаем контракт клиентской стороны
   final contract = EchoCallerContract(endpoint);
 
   try {
-    // Отправляем унарный запрос
-    print('\nОтправка унарного запроса...');
-    print('Ждем соединения...');
-
-    // Даем время на установку соединения
-    await Future.delayed(Duration(milliseconds: 500));
-
-    print('Отправляем запрос echo...');
-    final response = await contract.echo('Привет, WebSocket RPC!').timeout(
-      Duration(seconds: 10),
-      onTimeout: () {
-        print('TIMEOUT: Унарный запрос превысил время ожидания');
-        throw TimeoutException('Unary request timeout', Duration(seconds: 10));
-      },
-    );
+    print('— Клиент: унарный запрос');
+    final response = await contract
+        .echo('Привет, WebSocket RPC!')
+        .timeout(const Duration(seconds: 10));
     print('Ответ от сервера: $response');
     print('✅ Унарный запрос успешен');
-  } catch (e, stack) {
-    print('❌ Ошибка в унарном запросе: $e');
-    print('Stack trace: $stack');
+  } catch (e, st) {
+    print('❌ Ошибка унарного запроса: $e');
+    print(st);
+    await endpoint.close();
     return;
   }
 
   try {
-    // Тестируем стрим от сервера
-    print('\nТестирование серверного стрима...');
-    final serverStream = contract.countTo(5);
-    await for (final number in serverStream) {
-      print('Получено из серверного стрима: $number');
+    print('\n— Клиент: серверный стрим');
+    await for (final n in contract.countTo(5)) {
+      print('Получено из стрима: $n');
     }
-    print('✅ Серверный стрим успешен');
-  } catch (e) {
-    print('❌ Ошибка в серверном стриме: $e');
+    print('✅ Стрим успешен');
+  } catch (e, st) {
+    print('❌ Ошибка стрима: $e');
+    print(st);
   }
 
-  // Пока убираем остальные стримы для отладки
-  print('Все тесты завершены успешно!');
-
-  // Закрываем соединение
-  print('\nЗавершение работы...');
+  print('\n— Клиент: закрытие соединения');
   await endpoint.close();
-  exit(0);
 }
 
 // --- Контракты для примера ---
 
-/// Серверный контракт для примера
+/// Серверный контракт
 base class EchoResponderContract extends RpcResponderContract {
   EchoResponderContract() : super('echo') {
     // Унарный метод
@@ -137,47 +109,45 @@ base class EchoResponderContract extends RpcResponderContract {
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       handler: (request, {context}) async {
-        print('Сервер получил запрос: ${request.value}');
+        print('[server] echo: ${request.value}');
         return RpcString(request.value);
       },
     );
 
-    // Серверный стрим (проверяем исправление)
+    // Серверный стрим
     addServerStreamMethod<RpcInt, RpcInt>(
       methodName: 'countTo',
       requestCodec: RpcInt.codec,
       responseCodec: RpcInt.codec,
       handler: (request, {context}) {
         final count = request.value;
-        print('Сервер запускает стрим до $count');
+        print('[server] stream countTo: $count');
         return Stream.periodic(
-          Duration(milliseconds: 500),
+          const Duration(milliseconds: 400),
           (i) => RpcInt(i + 1),
         ).take(count);
       },
     );
 
-    print('Регистрация контракта завершена');
+    print('[server] Контракт зарегистрирован');
   }
 }
 
-/// Клиентский контракт для примера
+/// Клиентский контракт
 base class EchoCallerContract extends RpcCallerContract {
   EchoCallerContract(RpcCallerEndpoint endpoint) : super('echo', endpoint);
 
-  /// Унарный запрос
   Future<String> echo(String message) async {
-    final response = await endpoint.unaryRequest<RpcString, RpcString>(
+    final resp = await endpoint.unaryRequest<RpcString, RpcString>(
       serviceName: serviceName,
       methodName: 'echo',
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       request: RpcString(message),
     );
-    return response.value;
+    return resp.value;
   }
 
-  /// Серверный стрим
   Stream<int> countTo(int count) {
     return endpoint
         .serverStream<RpcInt, RpcInt>(
@@ -187,6 +157,6 @@ base class EchoCallerContract extends RpcCallerContract {
           responseCodec: RpcInt.codec,
           request: RpcInt(count),
         )
-        .map((msg) => msg.value);
+        .map((m) => m.value);
   }
 }

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:rpc_dart/rpc_dart.dart';
-import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'websocket_base_transport.dart';
 
@@ -40,13 +40,11 @@ class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
   static RpcWebSocketCallerTransport connect(
     Uri uri, {
     Iterable<String>? protocols,
-    Map<String, dynamic>? headers,
     RpcLogger? logger,
   }) {
-    final channel = IOWebSocketChannel.connect(
+    final channel = WebSocketChannel.connect(
       uri,
       protocols: protocols,
-      headers: headers,
     );
     return RpcWebSocketCallerTransport(channel, logger: logger);
   }
