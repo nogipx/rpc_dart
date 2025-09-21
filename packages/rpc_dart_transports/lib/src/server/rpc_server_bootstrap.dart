@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'package:universal_io/io.dart';
 
 import 'package:args/args.dart';
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:universal_io/io.dart';
 
 import 'rpc_server_interface.dart';
 
@@ -38,9 +38,9 @@ class RpcServerBootstrap {
   final String appName;
   final String version;
   final String description;
-  final List<RpcResponderContract> contracts;
   final IRpcServer server;
   final RpcLogger? logger;
+  final Future<void> Function()? onClose;
 
   // Внутренние компоненты
   late final _SignalHandler _signalHandler;
@@ -51,9 +51,9 @@ class RpcServerBootstrap {
     required this.appName,
     this.version = _defaultVersion,
     this.description = '',
-    required this.contracts,
     required this.server,
     this.logger,
+    this.onClose,
   });
 
   /// Главный entry point - запускает сервер с full production обвязкой
@@ -137,6 +137,7 @@ class RpcServerBootstrap {
       // 10. Graceful shutdown
       await _gracefulShutdown();
     } catch (e, stackTrace) {
+      await onClose?.call();
       await _errorHandler.handleError(e, stackTrace);
       exit(1);
     }
@@ -147,17 +148,7 @@ class RpcServerBootstrap {
     print('🚀 Запуск $appName v$version');
     print('📡 ${server.runtimeType} сервер на ${server.host}:${server.port}');
 
-    if (contracts.isEmpty) {
-      throw ArgumentError('Не указано ни одного RPC контракта');
-    }
-
-    // Контракты уже зарегистрированы в сервере при его создании
-    // (например, через RpcHttp2Server.createWithContracts)
-
     await server.start();
-
-    final contractNames = contracts.map((c) => c.serviceName).join(', ');
-    print('✅ Сервер запущен! Контракты: $contractNames');
 
     if (_config.isDaemonChild) {
       await _logDaemonReady();
@@ -199,6 +190,7 @@ class RpcServerBootstrap {
     print('🔄 Graceful shutdown...');
 
     try {
+      await onClose?.call();
       await server.stop().timeout(
         Duration(seconds: 10),
         onTimeout: () {
