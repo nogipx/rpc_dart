@@ -55,19 +55,23 @@ final class ServerStreamResponder<TRequest extends Object,
     // Zero-copy режим: требуется RpcInMemoryTransport
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.');
+        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
+        'Для сетевых транспортов передайте кодеки.',
+      );
     }
 
     // Режим сериализации: кодеки обязательны
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).');
+      throw ArgumentError(
+        'Кодеки обязательны для режима сериализации. '
+        'Для zero-copy не передавайте кодеки (null).',
+      );
     }
 
     _logger = logger?.child('ServerResponder');
     _logger?.internal(
-        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamResponder для $serviceName.$methodName [id: $id]');
+      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamResponder для $serviceName.$methodName [id: $id]',
+    );
 
     _processor = StreamProcessor<TRequest, TResponse>(
       transport: transport,
@@ -94,69 +98,85 @@ final class ServerStreamResponder<TRequest extends Object,
     Stream<TResponse> Function(TRequest request) handler,
   ) {
     _logger?.internal(
-        'Настройка обработчика запросов для серверного стрима [id: $id]');
+      'Настройка обработчика запросов для серверного стрима [id: $id]',
+    );
 
-    _subscription = _processor.requests.listen((request) async {
-      _logger?.internal(
-          'Получен запрос для серверного стрима: $request [id: $id]');
-
-      if (!_requestHandled) {
+    _subscription = _processor.requests.listen(
+      (request) async {
         _logger?.internal(
-            'Обработка первого запроса для серверного стрима [id: $id]');
-        _requestHandled = true;
+          'Получен запрос для серверного стрима: $request [id: $id]',
+        );
 
-        try {
-          _logger?.internal('Вызов обработчика запроса [id: $id]');
-          final handlerStream = handler(request);
+        if (!_requestHandled) {
           _logger?.internal(
-              'Обработчик успешно вызван, получен стрим ответов [id: $id]');
-
-          _logger?.internal(
-              'Начинаем обработку потока ответов от обработчика [id: $id]');
-
-          int responseCount = 0;
-          await for (var response in handlerStream) {
-            responseCount++;
-            _logger?.internal(
-                'Получен ответ #$responseCount от обработчика: $response [id: $id]');
-
-            try {
-              await _processor.send(response);
-              _logger?.internal(
-                  'Ответ #$responseCount успешно отправлен клиенту [id: $id]');
-            } catch (e, stackTrace) {
-              _logger?.error(
-                'Ошибка при отправке ответа #$responseCount клиенту [id: $id]',
-                error: e,
-                stackTrace: stackTrace,
-              );
-            }
-          }
-
-          _logger?.internal(
-              'Поток ответов от обработчика завершен, всего ответов: $responseCount [id: $id]');
-
-          // Завершаем отправку ответов
-          await _processor.finishSending();
-          _logger?.internal('Отправка ответов завершена [id: $id]');
-        } catch (error, trace) {
-          _logger?.error(
-            'Ошибка при обработке запроса [id: $id]',
-            error: error,
-            stackTrace: trace,
+            'Обработка первого запроса для серверного стрима [id: $id]',
           );
-          await _processor.sendError(RpcStatus.INTERNAL, error.toString());
+          _requestHandled = true;
+
+          try {
+            _logger?.internal('Вызов обработчика запроса [id: $id]');
+            final handlerStream = handler(request);
+            _logger?.internal(
+              'Обработчик успешно вызван, получен стрим ответов [id: $id]',
+            );
+
+            _logger?.internal(
+              'Начинаем обработку потока ответов от обработчика [id: $id]',
+            );
+
+            int responseCount = 0;
+            await for (var response in handlerStream) {
+              responseCount++;
+              _logger?.internal(
+                'Получен ответ #$responseCount от обработчика: $response [id: $id]',
+              );
+
+              try {
+                await _processor.send(response);
+                _logger?.internal(
+                  'Ответ #$responseCount успешно отправлен клиенту [id: $id]',
+                );
+              } catch (e, stackTrace) {
+                _logger?.error(
+                  'Ошибка при отправке ответа #$responseCount клиенту [id: $id]',
+                  error: e,
+                  stackTrace: stackTrace,
+                );
+              }
+            }
+
+            _logger?.internal(
+              'Поток ответов от обработчика завершен, всего ответов: $responseCount [id: $id]',
+            );
+
+            // Завершаем отправку ответов
+            await _processor.finishSending();
+            _logger?.internal('Отправка ответов завершена [id: $id]');
+          } catch (error, trace) {
+            _logger?.error(
+              'Ошибка при обработке запроса [id: $id]',
+              error: error,
+              stackTrace: trace,
+            );
+            await _processor.sendError(RpcStatus.INTERNAL, error.toString());
+          }
+        } else {
+          _logger?.internal(
+            'Игнорирование дополнительного запроса (первый уже обработан) [id: $id]',
+          );
         }
-      } else {
-        _logger?.internal(
-            'Игнорирование дополнительного запроса (первый уже обработан) [id: $id]');
-      }
-    }, onError: (error, stackTrace) {
-      _logger?.error('Ошибка в потоке запросов [id: $id]',
-          error: error, stackTrace: stackTrace);
-    }, onDone: () {
-      _logger?.internal('Поток запросов завершен [id: $id]');
-    });
+      },
+      onError: (error, stackTrace) {
+        _logger?.error(
+          'Ошибка в потоке запросов [id: $id]',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      },
+      onDone: () {
+        _logger?.internal('Поток запросов завершен [id: $id]');
+      },
+    );
   }
 
   /// Закрывает стрим и освобождает ресурсы

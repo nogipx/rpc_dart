@@ -37,14 +37,15 @@ class TestDataModel {
         'size': size,
         'generatedAt': DateTime.now().toIso8601String(),
         'complexData': List.generate(
-            100,
-            (i) => {
-                  'index': i,
-                  'value': random.nextDouble(),
-                  'nested': {
-                    'level1': {'level2': 'value_$i'}
-                  },
-                }),
+          100,
+          (i) => {
+            'index': i,
+            'value': random.nextDouble(),
+            'nested': {
+              'level1': {'level2': 'value_$i'},
+            },
+          },
+        ),
       },
     );
   }
@@ -109,10 +110,14 @@ void processingServer(IRpcTransport transport, Map<String, dynamic> params) {
         );
 
         print(
-            '✅ [Processing Server] Обработка завершена за ${stopwatch.elapsedMilliseconds}мс');
+          '✅ [Processing Server] Обработка завершена за ${stopwatch.elapsedMilliseconds}мс',
+        );
 
-        await transport.sendDirectObject(message.streamId, result,
-            endStream: true);
+        await transport.sendDirectObject(
+          message.streamId,
+          result,
+          endStream: true,
+        );
       }
     }
   });
@@ -143,7 +148,8 @@ void main() {
         final responsesFuture = transport
             .getMessagesForStream(streamId)
             .where(
-                (msg) => msg.isDirect && msg.directPayload is ProcessingResult)
+              (msg) => msg.isDirect && msg.directPayload is ProcessingResult,
+            )
             .first;
 
         await transport.sendDirectObject(streamId, testData);
@@ -162,7 +168,8 @@ void main() {
         print('   📈 Сумма: ${processingResult.sum.toStringAsFixed(2)}');
         print('   📈 Среднее: ${processingResult.average.toStringAsFixed(2)}');
         print(
-            '   ⏱️ Время: ${processingResult.processingTime.inMilliseconds}мс');
+          '   ⏱️ Время: ${processingResult.processingTime.inMilliseconds}мс',
+        );
       } finally {
         await transport.close();
         result.kill();
@@ -186,7 +193,8 @@ void main() {
         final responsesFuture = transport
             .getMessagesForStream(streamId)
             .where(
-                (msg) => msg.isDirect && msg.directPayload is ProcessingResult)
+              (msg) => msg.isDirect && msg.directPayload is ProcessingResult,
+            )
             .first;
 
         final stopwatch = Stopwatch()..start();
@@ -199,18 +207,23 @@ void main() {
         // Assert
         expect(processingResult.originalId, equals(largeData.id));
         expect(processingResult.processedCount, equals(5000));
-        expect(stopwatch.elapsedMilliseconds,
-            lessThan(1000)); // Максимум 1 секунда
+        expect(
+          stopwatch.elapsedMilliseconds,
+          lessThan(1000),
+        ); // Максимум 1 секунда
 
         print('🚀 Performance тест пройден:');
         print('   📊 Размер: 5000 чисел + сложные метаданные');
         print('   ⏱️ Время клиент-сервер: ${stopwatch.elapsedMilliseconds}мс');
         print(
-            '   ⚙️ Время обработки в изоляте: ${processingResult.processingTime.inMilliseconds}мс');
+          '   ⚙️ Время обработки в изоляте: ${processingResult.processingTime.inMilliseconds}мс',
+        );
         print(
-            '   📈 Результат: sum=${processingResult.sum.toStringAsFixed(2)}, avg=${processingResult.average.toStringAsFixed(2)}');
+          '   📈 Результат: sum=${processingResult.sum.toStringAsFixed(2)}, avg=${processingResult.average.toStringAsFixed(2)}',
+        );
         print(
-            '   ⚡ Zero-copy эффективность: ${(processingResult.processingTime.inMilliseconds / stopwatch.elapsedMilliseconds * 100).toStringAsFixed(1)}%');
+          '   ⚡ Zero-copy эффективность: ${(processingResult.processingTime.inMilliseconds / stopwatch.elapsedMilliseconds * 100).toStringAsFixed(1)}%',
+        );
       } finally {
         await transport.close();
         result.kill();

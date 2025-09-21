@@ -50,8 +50,9 @@ void main() {
         // Act
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'TestService',
-                toTransport: userClientTransport)
+              calledServiceName: 'TestService',
+              toTransport: userClientTransport,
+            )
             .build();
 
         // Assert
@@ -74,25 +75,29 @@ void main() {
         // Act
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 100)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 100,
+            )
             .routeCall(
-                calledServiceName: 'PaymentService',
-                toTransport: paymentClientTransport,
-                priority: 90)
+              calledServiceName: 'PaymentService',
+              toTransport: paymentClientTransport,
+              priority: 90,
+            )
             .routeWhen(
-                toTransport: auditClientTransport,
-                whenCondition: (service, method, context) =>
-                    method?.startsWith('/admin/') == true,
-                priority: 80,
-                description: 'Admin methods routing')
+              toTransport: auditClientTransport,
+              whenCondition: (service, method, context) =>
+                  method?.startsWith('/admin/') == true,
+              priority: 80,
+              description: 'Admin methods routing',
+            )
             .routeWhen(
-                toTransport: premiumClientTransport,
-                whenCondition: (service, method, context) =>
-                    context?.getHeader('x-tier') == 'premium',
-                priority: 110,
-                description: 'Premium routing')
+              toTransport: premiumClientTransport,
+              whenCondition: (service, method, context) =>
+                  context?.getHeader('x-tier') == 'premium',
+              priority: 110,
+              description: 'Premium routing',
+            )
             .build();
 
         // Assert - проверяем статистику
@@ -113,17 +118,19 @@ void main() {
         final router = RpcTransportRouterBuilder.client()
             // Низкий приоритет - общий сервис
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 50)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 50,
+            )
             // Высокий приоритет - premium пользователи
             .routeWhen(
-                toTransport: premiumClientTransport,
-                whenCondition: (service, method, context) =>
-                    service == 'UserService' &&
-                    context?.getHeader('x-tier') == 'premium',
-                priority: 100,
-                description: 'Premium UserService override')
+              toTransport: premiumClientTransport,
+              whenCondition: (service, method, context) =>
+                  service == 'UserService' &&
+                  context?.getHeader('x-tier') == 'premium',
+              priority: 100,
+              description: 'Premium UserService override',
+            )
             .build();
 
         final userMessages = <RpcTransportMessage>[];
@@ -153,15 +160,17 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeWhen(
-                toTransport: premiumClientTransport,
-                whenCondition: (service, method, context) =>
-                    context?.getHeader('x-tier') == 'premium',
-                priority: 100,
-                description: 'Premium routing')
+              toTransport: premiumClientTransport,
+              whenCondition: (service, method, context) =>
+                  context?.getHeader('x-tier') == 'premium',
+              priority: 100,
+              description: 'Premium routing',
+            )
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 50)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 50,
+            )
             .build();
 
         final userMessages = <RpcTransportMessage>[];
@@ -193,13 +202,15 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 100)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 100,
+            )
             .routeCall(
-                calledServiceName: 'PaymentService',
-                toTransport: paymentClientTransport,
-                priority: 100)
+              calledServiceName: 'PaymentService',
+              toTransport: paymentClientTransport,
+              priority: 100,
+            )
             .build();
 
         final userMessages = <RpcTransportMessage>[];
@@ -227,11 +238,14 @@ void main() {
         expect(userMessages.length, equals(1));
         expect(paymentMessages.length, equals(1));
 
-        expect(userMessages.first.metadata?.getHeaderValue('x-route-service'),
-            equals('UserService'));
         expect(
-            paymentMessages.first.metadata?.getHeaderValue('x-route-service'),
-            equals('PaymentService'));
+          userMessages.first.metadata?.getHeaderValue('x-route-service'),
+          equals('UserService'),
+        );
+        expect(
+          paymentMessages.first.metadata?.getHeaderValue('x-route-service'),
+          equals('PaymentService'),
+        );
 
         await router.close();
       });
@@ -242,15 +256,17 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeWhen(
-                toTransport: auditClientTransport,
-                whenCondition: (service, method, context) =>
-                    method?.startsWith('/admin/') == true,
-                priority: 100,
-                description: 'Admin methods routing')
+              toTransport: auditClientTransport,
+              whenCondition: (service, method, context) =>
+                  method?.startsWith('/admin/') == true,
+              priority: 100,
+              description: 'Admin methods routing',
+            )
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 50)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 50,
+            )
             .build();
 
         final auditMessages = <RpcTransportMessage>[];
@@ -263,8 +279,10 @@ void main() {
         final adminStreamId = router.createStream();
         final adminMetadata = RpcMetadata([
           RpcHeader('x-route-service', 'UserService'),
-          RpcHeader(':path',
-              '/admin/deleteUser'), // Указываем method path через :path заголовок
+          RpcHeader(
+            ':path',
+            '/admin/deleteUser',
+          ), // Указываем method path через :path заголовок
         ]);
         await router.sendMetadata(adminStreamId, adminMetadata);
 
@@ -292,19 +310,21 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeWhen(
-                toTransport: premiumClientTransport,
-                whenCondition: (service, method, context) {
-                  final userId = context?.getHeader('x-user-id');
-                  if (userId == null) return false;
-                  // Четный хэш → premium, нечетный → regular
-                  return userId.hashCode % 2 == 0;
-                },
-                priority: 100,
-                description: 'A/B тестирование по hash пользователя')
+              toTransport: premiumClientTransport,
+              whenCondition: (service, method, context) {
+                final userId = context?.getHeader('x-user-id');
+                if (userId == null) return false;
+                // Четный хэш → premium, нечетный → regular
+                return userId.hashCode % 2 == 0;
+              },
+              priority: 100,
+              description: 'A/B тестирование по hash пользователя',
+            )
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 50)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 50,
+            )
             .build();
 
         final premiumMessages = <RpcTransportMessage>[];
@@ -343,24 +363,27 @@ void main() {
         final router = RpcTransportRouterBuilder.client()
             // Приоритет 1: Premium + Admin → Audit
             .routeWhen(
-                toTransport: auditClientTransport,
-                whenCondition: (service, method, context) =>
-                    context?.getHeader('x-tier') == 'premium' &&
-                    context?.getHeader('x-role') == 'admin',
-                priority: 100,
-                description: 'Premium Admin users')
+              toTransport: auditClientTransport,
+              whenCondition: (service, method, context) =>
+                  context?.getHeader('x-tier') == 'premium' &&
+                  context?.getHeader('x-role') == 'admin',
+              priority: 100,
+              description: 'Premium Admin users',
+            )
             // Приоритет 2: Premium → Premium транспорт
             .routeWhen(
-                toTransport: premiumClientTransport,
-                whenCondition: (service, method, context) =>
-                    context?.getHeader('x-tier') == 'premium',
-                priority: 90,
-                description: 'Premium users')
+              toTransport: premiumClientTransport,
+              whenCondition: (service, method, context) =>
+                  context?.getHeader('x-tier') == 'premium',
+              priority: 90,
+              description: 'Premium users',
+            )
             // Приоритет 3: Все остальные → Regular
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 50)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 50,
+            )
             .build();
 
         final auditMessages = <RpcTransportMessage>[];
@@ -375,31 +398,34 @@ void main() {
         // 1. Premium Admin → должен попасть в Audit
         final adminStreamId = router.createStream();
         await router.sendMetadata(
-            adminStreamId,
-            RpcMetadata([
-              RpcHeader('x-route-service', 'UserService'),
-              RpcHeader('x-tier', 'premium'),
-              RpcHeader('x-role', 'admin'),
-            ]));
+          adminStreamId,
+          RpcMetadata([
+            RpcHeader('x-route-service', 'UserService'),
+            RpcHeader('x-tier', 'premium'),
+            RpcHeader('x-role', 'admin'),
+          ]),
+        );
 
         // 2. Premium User → должен попасть в Premium
         final premiumStreamId = router.createStream();
         await router.sendMetadata(
-            premiumStreamId,
-            RpcMetadata([
-              RpcHeader('x-route-service', 'UserService'),
-              RpcHeader('x-tier', 'premium'),
-              RpcHeader('x-role', 'user'),
-            ]));
+          premiumStreamId,
+          RpcMetadata([
+            RpcHeader('x-route-service', 'UserService'),
+            RpcHeader('x-tier', 'premium'),
+            RpcHeader('x-role', 'user'),
+          ]),
+        );
 
         // 3. Regular User → должен попасть в Regular
         final regularStreamId = router.createStream();
         await router.sendMetadata(
-            regularStreamId,
-            RpcMetadata([
-              RpcHeader('x-route-service', 'UserService'),
-              RpcHeader('x-tier', 'regular'),
-            ]));
+          regularStreamId,
+          RpcMetadata([
+            RpcHeader('x-route-service', 'UserService'),
+            RpcHeader('x-tier', 'regular'),
+          ]),
+        );
 
         await Future.delayed(Duration(milliseconds: 1));
 
@@ -417,8 +443,9 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+            )
             .build();
 
         // Act & Assert
@@ -435,65 +462,68 @@ void main() {
         await router.close();
       });
 
-      test('должен выбрасывать ошибку при отсутствии x-route-service',
-          () async {
-        // Arrange
-        final router = RpcTransportRouterBuilder.client()
-            .routeCall(
+      test(
+        'должен выбрасывать ошибку при отсутствии x-route-service',
+        () async {
+          // Arrange
+          final router = RpcTransportRouterBuilder.client()
+              .routeCall(
                 calledServiceName: 'UserService',
-                toTransport: userClientTransport)
-            .build();
+                toTransport: userClientTransport,
+              )
+              .build();
 
-        // Act & Assert
-        final streamId = router.createStream();
-        final metadata = RpcMetadata([]);
+          // Act & Assert
+          final streamId = router.createStream();
+          final metadata = RpcMetadata([]);
 
-        expect(
-          () => router.sendMetadata(streamId, metadata),
-          throwsA(isA<RpcException>()),
-        );
+          expect(
+            () => router.sendMetadata(streamId, metadata),
+            throwsA(isA<RpcException>()),
+          );
 
-        await router.close();
-      });
+          await router.close();
+        },
+      );
 
-      test('должен выбрасывать ошибку при работе с закрытым роутером',
-          () async {
-        // Arrange
-        final router = RpcTransportRouterBuilder.client()
-            .routeCall(
+      test(
+        'должен выбрасывать ошибку при работе с закрытым роутером',
+        () async {
+          // Arrange
+          final router = RpcTransportRouterBuilder.client()
+              .routeCall(
                 calledServiceName: 'UserService',
-                toTransport: userClientTransport)
-            .build();
+                toTransport: userClientTransport,
+              )
+              .build();
 
-        await router.close();
+          await router.close();
 
-        // Act & Assert
-        expect(
-          () => router.createStream(),
-          throwsStateError,
-        );
-      });
+          // Act & Assert
+          expect(() => router.createStream(), throwsStateError);
+        },
+      );
 
-      test('должен выбрасывать ошибку при отправке данных без метаданных',
-          () async {
-        // Arrange
-        final router = RpcTransportRouterBuilder.client()
-            .routeCall(
+      test(
+        'должен выбрасывать ошибку при отправке данных без метаданных',
+        () async {
+          // Arrange
+          final router = RpcTransportRouterBuilder.client()
+              .routeCall(
                 calledServiceName: 'UserService',
-                toTransport: userClientTransport)
-            .build();
+                toTransport: userClientTransport,
+              )
+              .build();
 
-        // Act & Assert
-        final streamId = router.createStream();
-        final data = Uint8List.fromList('test data'.codeUnits);
+          // Act & Assert
+          final streamId = router.createStream();
+          final data = Uint8List.fromList('test data'.codeUnits);
 
-        expect(
-          () => router.sendMessage(streamId, data),
-          throwsStateError,
-        );
+          expect(() => router.sendMessage(streamId, data), throwsStateError);
 
-        await router.close();
-      });
+          await router.close();
+        },
+      );
     });
 
     group('🔧 Stream ID Management', () {
@@ -501,8 +531,9 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'TestService',
-                toTransport: userClientTransport)
+              calledServiceName: 'TestService',
+              toTransport: userClientTransport,
+            )
             .build();
 
         // Act
@@ -523,8 +554,9 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'TestService',
-                toTransport: userClientTransport)
+              calledServiceName: 'TestService',
+              toTransport: userClientTransport,
+            )
             .build();
 
         // Act
@@ -547,8 +579,9 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+            )
             .build();
 
         final messages = <RpcTransportMessage>[];
@@ -559,14 +592,15 @@ void main() {
 
         // 1. Отправляем метаданные
         await router.sendMetadata(
-            streamId,
-            RpcMetadata([
-              RpcHeader('x-route-service', 'UserService'),
-            ]));
+          streamId,
+          RpcMetadata([RpcHeader('x-route-service', 'UserService')]),
+        );
 
         // 2. Отправляем данные
         await router.sendMessage(
-            streamId, Uint8List.fromList('test data'.codeUnits));
+          streamId,
+          Uint8List.fromList('test data'.codeUnits),
+        );
 
         // 3. Завершаем поток
         await router.finishSending(streamId);
@@ -591,13 +625,15 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 100)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 100,
+            )
             .routeCall(
-                calledServiceName: 'PaymentService',
-                toTransport: paymentClientTransport,
-                priority: 100)
+              calledServiceName: 'PaymentService',
+              toTransport: paymentClientTransport,
+              priority: 100,
+            )
             .build();
 
         final userMessages = <RpcTransportMessage>[];
@@ -612,21 +648,23 @@ void main() {
 
         // Отправляем в UserService
         await router.sendMetadata(
-            userStreamId,
-            RpcMetadata([
-              RpcHeader('x-route-service', 'UserService'),
-            ]));
+          userStreamId,
+          RpcMetadata([RpcHeader('x-route-service', 'UserService')]),
+        );
         await router.sendMessage(
-            userStreamId, Uint8List.fromList('user data'.codeUnits));
+          userStreamId,
+          Uint8List.fromList('user data'.codeUnits),
+        );
 
         // Отправляем в PaymentService
         await router.sendMetadata(
-            paymentStreamId,
-            RpcMetadata([
-              RpcHeader('x-route-service', 'PaymentService'),
-            ]));
+          paymentStreamId,
+          RpcMetadata([RpcHeader('x-route-service', 'PaymentService')]),
+        );
         await router.sendMessage(
-            paymentStreamId, Uint8List.fromList('payment data'.codeUnits));
+          paymentStreamId,
+          Uint8List.fromList('payment data'.codeUnits),
+        );
 
         await Future.delayed(Duration(milliseconds: 1));
 
@@ -634,10 +672,14 @@ void main() {
         expect(userMessages.length, equals(2)); // metadata + data
         expect(paymentMessages.length, equals(2)); // metadata + data
 
-        expect(userMessages[0].metadata?.getHeaderValue('x-route-service'),
-            equals('UserService'));
-        expect(paymentMessages[0].metadata?.getHeaderValue('x-route-service'),
-            equals('PaymentService'));
+        expect(
+          userMessages[0].metadata?.getHeaderValue('x-route-service'),
+          equals('UserService'),
+        );
+        expect(
+          paymentMessages[0].metadata?.getHeaderValue('x-route-service'),
+          equals('PaymentService'),
+        );
 
         await router.close();
       });
@@ -648,8 +690,9 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+            )
             .build();
 
         // Act - создаем активные потоки и сразу закрываем роутер
@@ -661,23 +704,26 @@ void main() {
         expect(router.statistics['closed'], isTrue);
       });
 
-      test('должен предотвращать утечки памяти при множественных операциях',
-          () async {
-        // Arrange & Act
-        for (int i = 0; i < 100; i++) {
-          final router = RpcTransportRouterBuilder.client()
-              .routeCall(
+      test(
+        'должен предотвращать утечки памяти при множественных операциях',
+        () async {
+          // Arrange & Act
+          for (int i = 0; i < 100; i++) {
+            final router = RpcTransportRouterBuilder.client()
+                .routeCall(
                   calledServiceName: 'TestService$i',
-                  toTransport: userClientTransport)
-              .build();
+                  toTransport: userClientTransport,
+                )
+                .build();
 
-          router.createStream();
-          await router.close();
-        }
+            router.createStream();
+            await router.close();
+          }
 
-        // Assert - если нет утечек памяти, тест должен завершиться успешно
-        expect(true, isTrue);
-      });
+          // Assert - если нет утечек памяти, тест должен завершиться успешно
+          expect(true, isTrue);
+        },
+      );
     });
 
     group('📈 Statistics and Monitoring', () {
@@ -685,13 +731,15 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 100)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 100,
+            )
             .routeCall(
-                calledServiceName: 'PaymentService',
-                toTransport: paymentClientTransport,
-                priority: 90)
+              calledServiceName: 'PaymentService',
+              toTransport: paymentClientTransport,
+              priority: 90,
+            )
             .build();
 
         // Act - создаем активный поток
@@ -699,10 +747,9 @@ void main() {
 
         // Чтобы поток стал активным, нужно отправить метаданные
         await router.sendMetadata(
-            streamId,
-            RpcMetadata([
-              RpcHeader('x-route-service', 'UserService'),
-            ]));
+          streamId,
+          RpcMetadata([RpcHeader('x-route-service', 'UserService')]),
+        );
 
         // Assert - проверяем статистику
         final stats = router.statistics;
@@ -722,17 +769,20 @@ void main() {
         // Arrange & Act
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'LowPriority',
-                toTransport: userClientTransport,
-                priority: 10)
+              calledServiceName: 'LowPriority',
+              toTransport: userClientTransport,
+              priority: 10,
+            )
             .routeCall(
-                calledServiceName: 'HighPriority',
-                toTransport: paymentClientTransport,
-                priority: 100)
+              calledServiceName: 'HighPriority',
+              toTransport: paymentClientTransport,
+              priority: 100,
+            )
             .routeCall(
-                calledServiceName: 'MediumPriority',
-                toTransport: premiumClientTransport,
-                priority: 50)
+              calledServiceName: 'MediumPriority',
+              toTransport: premiumClientTransport,
+              priority: 50,
+            )
             .build();
 
         // Assert - правила должны быть отсортированы по убыванию приоритета
@@ -747,18 +797,22 @@ void main() {
     });
 
     group('🛡️ Role Validation', () {
-      test('должен автоматически устанавливать роль через factory constructor',
-          () {
-        // Act - factory constructor автоматически устанавливает клиентскую роль
-        final builder = RpcTransportRouterBuilder.client();
+      test(
+        'должен автоматически устанавливать роль через factory constructor',
+        () {
+          // Act - factory constructor автоматически устанавливает клиентскую роль
+          final builder = RpcTransportRouterBuilder.client();
 
-        // Assert - должен успешно создавать правила без ошибок
-        expect(
+          // Assert - должен успешно создавать правила без ошибок
+          expect(
             () => builder.routeCall(
-                calledServiceName: 'TestService',
-                toTransport: userClientTransport),
-            returnsNormally);
-      });
+              calledServiceName: 'TestService',
+              toTransport: userClientTransport,
+            ),
+            returnsNormally,
+          );
+        },
+      );
 
       test('должен запрещать смену роли после добавления правил', () {
         // Arrange
@@ -766,7 +820,9 @@ void main() {
 
         // Act - добавляем правило с правильным клиентским транспортом
         builder.routeCall(
-            calledServiceName: 'TestService', toTransport: userClientTransport);
+          calledServiceName: 'TestService',
+          toTransport: userClientTransport,
+        );
 
         // Assert - после добавления правил роль зафиксирована (это нормально для factory approach)
         expect(builder.build().statistics['totalRules'], equals(1));
@@ -774,17 +830,19 @@ void main() {
 
       test('должен требовать правил для сборки', () {
         // Act & Assert - пустой builder должен выбрасывать ArgumentError
-        expect(() => RpcTransportRouterBuilder.client().build(),
-            throwsArgumentError);
+        expect(
+          () => RpcTransportRouterBuilder.client().build(),
+          throwsArgumentError,
+        );
       });
 
       test('должен проверять соответствие транспорта роли Router\'а', () {
         // Act & Assert - роутер требует клиентские транспорты
         expect(
           () => RpcTransportRouterBuilder.client().routeCall(
-              calledServiceName: 'TestService',
-              toTransport:
-                  userServerTransport), // НЕПРАВИЛЬНО: серверный транспорт
+            calledServiceName: 'TestService',
+            toTransport: userServerTransport,
+          ), // НЕПРАВИЛЬНО: серверный транспорт
           throwsArgumentError,
         );
       });
@@ -796,9 +854,7 @@ void main() {
 
 extension RpcMetadataTestHelpers on RpcMetadata {
   static RpcMetadata forService(String serviceName) {
-    return RpcMetadata([
-      RpcHeader('x-route-service', serviceName),
-    ]);
+    return RpcMetadata([RpcHeader('x-route-service', serviceName)]);
   }
 
   static RpcMetadata withHeaders(Map<String, String> headers) {

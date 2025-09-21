@@ -99,7 +99,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     _parser = RpcMessageParser(logger: _logger);
     _methodPath = '/$_serviceName/$_methodName';
     _logger?.internal(
-        'Создан унарный сервер для $_methodPath${_context?.cancellationToken != null ? " с cancellation token" : ""}');
+      'Создан унарный сервер для $_methodPath${_context?.cancellationToken != null ? " с cancellation token" : ""}',
+    );
 
     // Регистрируем поток как принадлежащий этому методу
     _streamBelongsToThisMethod[id] = true;
@@ -155,7 +156,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           if (message.methodPath == _methodPath) {
             _streamBelongsToThisMethod[streamId] = true;
             _logger?.internal(
-                'Унарный сервер: stream $streamId привязан к методу $_methodPath');
+              'Унарный сервер: stream $streamId привязан к методу $_methodPath',
+            );
           }
           return; // Метаданные только регистрируем, но не обрабатываем
         }
@@ -168,7 +170,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         if (_streamRequestHandled[streamId] == true) {
           // Игнорируем дополнительные сообщения после обработки первого запроса
           _logger?.internal(
-              'Игнорируем дополнительное сообщение для stream $streamId (запрос уже обработан)');
+            'Игнорируем дополнительное сообщение для stream $streamId (запрос уже обработан)',
+          );
           return;
         }
 
@@ -195,7 +198,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
             _streamRequestHandled[streamId] != true) {
           _streamRequestHandled[streamId] = true;
           _logger?.warning(
-              'Клиент закрыл поток без отправки данных [streamId: $streamId]');
+            'Клиент закрыл поток без отправки данных [streamId: $streamId]',
+          );
 
           // Отправляем трейлер с ошибкой
           await _transport.sendMetadata(
@@ -236,9 +240,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     try {
       _checkCancellation();
     } catch (e) {
-      _logger?.internal(
-        'Обработка сообщения отменена [streamId: $streamId]',
-      );
+      _logger?.internal('Обработка сообщения отменена [streamId: $streamId]');
       return;
     }
 
@@ -246,13 +248,15 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     // Для id=0 (значение по умолчанию) принимаем любые сообщения, это нужно для тестов
     if (id != 0 && streamId != id) {
       _logger?.internal(
-          'Сообщение для stream $streamId не принадлежит этому респондеру (id=$id), пропускаем');
+        'Сообщение для stream $streamId не принадлежит этому респондеру (id=$id), пропускаем',
+      );
       return;
     }
 
     if (_streamRequestHandled[streamId] == true) {
       _logger?.internal(
-          'Сообщение для stream $streamId уже обработано, пропускаем');
+        'Сообщение для stream $streamId уже обработано, пропускаем',
+      );
       return;
     }
 
@@ -263,14 +267,16 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
     // Сразу помечаем запрос как обрабатываемый, чтобы предотвратить повторную обработку
     _streamRequestHandled[streamId] = true;
-    _logger
-        ?.internal('Обработка запроса для $_methodPath [streamId: $streamId]');
+    _logger?.internal(
+      'Обработка запроса для $_methodPath [streamId: $streamId]',
+    );
 
     try {
       // Отправляем начальные заголовки, если еще не отправляли
       if (_streamInitialHeadersSent[streamId] != true) {
-        _logger
-            ?.internal('Отправка начальных заголовков [streamId: $streamId]');
+        _logger?.internal(
+          'Отправка начальных заголовков [streamId: $streamId]',
+        );
         await _transport.sendMetadata(
           streamId,
           RpcMetadata.forServerInitialResponse(),
@@ -281,11 +287,13 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       // Десериализуем запрос
       // Используем парсер для извлечения сообщений из фрейма с префиксом
       _logger?.internal(
-          'Парсинг фрейма запроса размером ${message.payload!.length} байт [streamId: $streamId]');
+        'Парсинг фрейма запроса размером ${message.payload!.length} байт [streamId: $streamId]',
+      );
       final messages = _parser(message.payload!);
       if (messages.isEmpty) {
         _logger?.error(
-            'Не удалось извлечь сообщение из payload [streamId: $streamId]');
+          'Не удалось извлечь сообщение из payload [streamId: $streamId]',
+        );
         throw Exception('Не удалось извлечь сообщение из payload');
       }
 
@@ -293,28 +301,29 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       final request = _requestSerializer.deserialize(messages.first);
 
       _logger?.internal(
-          'Обработка запроса для $_methodPath [streamId: $streamId]');
+        'Обработка запроса для $_methodPath [streamId: $streamId]',
+      );
 
       // Обрабатываем запрос
       final response = await _handler(request);
       _logger?.internal(
-          'Запрос обработан, подготовка ответа [streamId: $streamId]');
+        'Запрос обработан, подготовка ответа [streamId: $streamId]',
+      );
 
       // Сериализуем и отправляем ответ
       _logger?.internal('Сериализация ответа [streamId: $streamId]');
       final serializedResponse = _responseSerializer.serialize(response);
       _logger?.internal(
-          'Ответ сериализован, размер: ${serializedResponse.length} байт [streamId: $streamId]');
+        'Ответ сериализован, размер: ${serializedResponse.length} байт [streamId: $streamId]',
+      );
       final framedResponse = RpcMessageFrame.encode(serializedResponse);
       _logger?.internal('Отправка ответа [streamId: $streamId]');
-      await _transport.sendMessage(
-        streamId,
-        framedResponse,
-      );
+      await _transport.sendMessage(streamId, framedResponse);
 
       // Отправляем трейлер с успешным статусом
       _logger?.internal(
-          'Отправка трейлера с успешным статусом [streamId: $streamId]');
+        'Отправка трейлера с успешным статусом [streamId: $streamId]',
+      );
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(RpcStatus.OK),
@@ -322,7 +331,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
 
       _logger?.internal(
-          'Ответ успешно отправлен для $_methodPath [streamId: $streamId]');
+        'Ответ успешно отправлен для $_methodPath [streamId: $streamId]',
+      );
     } catch (e, stackTrace) {
       _logger?.error(
         'Ошибка при обработке запроса [streamId: $streamId]',
@@ -375,26 +385,30 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     // Проверяем, что сообщение предназначено для этого экземпляра респондера
     if (id != 0 && streamId != id) {
       _logger?.internal(
-          'Zero-copy сообщение для stream $streamId не принадлежит этому респондеру (id=$id), пропускаем');
+        'Zero-copy сообщение для stream $streamId не принадлежит этому респондеру (id=$id), пропускаем',
+      );
       return;
     }
 
     if (_streamRequestHandled[streamId] == true) {
       _logger?.internal(
-          'Zero-copy сообщение для stream $streamId уже обработано, пропускаем');
+        'Zero-copy сообщение для stream $streamId уже обработано, пропускаем',
+      );
       return;
     }
 
     // Сразу помечаем запрос как обрабатываемый
     _streamRequestHandled[streamId] = true;
     _logger?.internal(
-        'Zero-copy request processing for $_methodPath [streamId: $streamId]');
+      'Zero-copy request processing for $_methodPath [streamId: $streamId]',
+    );
 
     try {
       // Отправляем начальные заголовки, если еще не отправляли
       if (_streamInitialHeadersSent[streamId] != true) {
-        _logger
-            ?.internal('Отправка начальных заголовков [streamId: $streamId]');
+        _logger?.internal(
+          'Отправка начальных заголовков [streamId: $streamId]',
+        );
         await _transport.sendMetadata(
           streamId,
           RpcMetadata.forServerInitialResponse(),
@@ -407,20 +421,19 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       final request = message.directPayload as TRequest;
 
       _logger?.internal(
-          'Zero-copy request handling for $_methodPath [streamId: $streamId]');
+        'Zero-copy request handling for $_methodPath [streamId: $streamId]',
+      );
 
       // Обрабатываем запрос
       final response = await _handler(request);
       _logger?.internal(
-          'Zero-copy request completed, preparing response [streamId: $streamId]');
+        'Zero-copy request completed, preparing response [streamId: $streamId]',
+      );
 
       // Zero-copy: отправляем ответ напрямую если транспорт поддерживает
       if (_transport.supportsZeroCopy) {
         _logger?.internal('Zero-copy response sending [streamId: $streamId]');
-        await _transport.sendDirectObject(
-          streamId,
-          response as Object,
-        );
+        await _transport.sendDirectObject(streamId, response as Object);
       } else {
         // Fallback на стандартную сериализацию для других транспортов
         _logger?.internal('Fallback сериализация ответа [streamId: $streamId]');
@@ -430,8 +443,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // Отправляем трейлер с успешным статусом
-      _logger
-          ?.internal('Zero-copy sending success trailer [streamId: $streamId]');
+      _logger?.internal(
+        'Zero-copy sending success trailer [streamId: $streamId]',
+      );
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(RpcStatus.OK),
@@ -439,7 +453,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
 
       _logger?.internal(
-          'Zero-copy response completed for $_methodPath [streamId: $streamId]');
+        'Zero-copy response completed for $_methodPath [streamId: $streamId]',
+      );
     } catch (e, stackTrace) {
       _logger?.error(
         'Zero-copy request processing error [streamId: $streamId]',
@@ -459,10 +474,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       // При ошибке отправляем трейлер с кодом ошибки
       await _transport.sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(
-          RpcStatus.INTERNAL,
-          message: e.toString(),
-        ),
+        RpcMetadata.forTrailer(RpcStatus.INTERNAL, message: e.toString()),
         endStream: true,
       );
     } finally {

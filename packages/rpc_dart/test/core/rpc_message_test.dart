@@ -111,10 +111,7 @@ void main() {
       test('сообщение_с_данными_и_метаданными_не_является_metadata_only', () {
         // Arrange
         final metadata = RpcMetadata([RpcHeader('header', 'value')]);
-        final message = RpcMessage<String>(
-          payload: 'data',
-          metadata: metadata,
-        );
+        final message = RpcMessage<String>(payload: 'data', metadata: metadata);
 
         // Act & Assert
         expect(message.isMetadataOnly, isFalse);

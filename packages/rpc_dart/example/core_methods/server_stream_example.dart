@@ -46,8 +46,10 @@ class ServerStreamingExample {
           .withTraceId('server-stream-trace-123')
           .withValue('stream-type', 'simple');
 
-      await for (final response
-          in client.getServerStream('Дай мне данные'.rpc, context: context1)) {
+      await for (final response in client.getServerStream(
+        'Дай мне данные'.rpc,
+        context: context1,
+      )) {
         print('КЛИЕНТ: Получен ответ: "$response"');
       }
 
@@ -58,8 +60,10 @@ class ServerStreamingExample {
           .withTraceId('numbers-stream-trace-456')
           .withAdditionalHeaders({'count': '10', 'delay': '100'});
 
-      await for (final number
-          in client.getNumberStream(5.rpc, context: context2)) {
+      await for (final number in client.getNumberStream(
+        5.rpc,
+        context: context2,
+      )) {
         print('КЛИЕНТ: Получено число: $number');
       }
 
@@ -67,8 +71,9 @@ class ServerStreamingExample {
       print('\n--- Пример 3: Server stream с отменой ---');
 
       final cancellationToken = RpcCancellationToken();
-      final cancelContext = RpcContext.withCancellation(cancellationToken)
-          .withValue('stream-type', 'long-running');
+      final cancelContext = RpcContext.withCancellation(
+        cancellationToken,
+      ).withValue('stream-type', 'long-running');
 
       // Отменяем через 200мс
       Future.delayed(Duration(milliseconds: 200), () {
@@ -78,8 +83,9 @@ class ServerStreamingExample {
 
       try {
         await for (final response in client.getLongRunningStream(
-            'Долгий stream'.rpc,
-            context: cancelContext)) {
+          'Долгий stream'.rpc,
+          context: cancelContext,
+        )) {
           print('КЛИЕНТ: Получен ответ: "$response"');
         }
       } catch (e) {
@@ -139,8 +145,10 @@ final class DataStreamServiceResponder extends RpcResponderContract
   }
 
   @override
-  Stream<RpcString> getServerStream(RpcString request,
-      {RpcContext? context}) async* {
+  Stream<RpcString> getServerStream(
+    RpcString request, {
+    RpcContext? context,
+  }) async* {
     final logger = RpcLogger('GetServerStream');
     logger.info('🔧 Получен запрос: ${request.value}');
     logger.info('🔍 Context: $context');
@@ -191,8 +199,10 @@ final class DataStreamServiceResponder extends RpcResponderContract
   }
 
   @override
-  Stream<RpcString> getLongRunningStream(RpcString request,
-      {RpcContext? context}) async* {
+  Stream<RpcString> getLongRunningStream(
+    RpcString request, {
+    RpcContext? context,
+  }) async* {
     final logger = RpcLogger('GetLongRunningStream');
     logger.info('🔧 Начинаем долгий поток: ${request.value}');
     logger.info('🔍 Context: $context');
@@ -249,8 +259,10 @@ final class DataStreamServiceCaller extends RpcCallerContract
   }
 
   @override
-  Stream<RpcString> getLongRunningStream(RpcString request,
-      {RpcContext? context}) {
+  Stream<RpcString> getLongRunningStream(
+    RpcString request, {
+    RpcContext? context,
+  }) {
     return callServerStream<RpcString, RpcString>(
       methodName: 'GetLongRunningStream',
       requestCodec: RpcString.codec,

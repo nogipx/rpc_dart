@@ -51,7 +51,7 @@ class BidirectionalStreamExample {
         'время',
         'случайное число',
         'привет, мир!',
-        'завершить'
+        'завершить',
       ];
 
       final responses = <String>[];
@@ -78,7 +78,7 @@ class BidirectionalStreamExample {
       final secureMessages = [
         'admin:получить статус',
         'admin:получить пользователей',
-        'admin:выход'
+        'admin:выход',
       ];
 
       await client
@@ -94,8 +94,9 @@ class BidirectionalStreamExample {
       print('\n--- Пример 3: Чат с отменой ---');
 
       final cancellationToken = RpcCancellationToken();
-      final cancelContext = RpcContext.withCancellation(cancellationToken)
-          .withValue('chat-type', 'long-running');
+      final cancelContext = RpcContext.withCancellation(
+        cancellationToken,
+      ).withValue('chat-type', 'long-running');
 
       // Отменяем через 300мс
       Future.delayed(Duration(milliseconds: 300), () {
@@ -153,8 +154,10 @@ final class ChatServiceResponder extends RpcResponderContract
   }
 
   @override
-  Stream<RpcString> chatWithServer(Stream<RpcString> messages,
-      {RpcContext? context}) async* {
+  Stream<RpcString> chatWithServer(
+    Stream<RpcString> messages, {
+    RpcContext? context,
+  }) async* {
     final logger = RpcLogger('ChatWithServer');
     logger.info('🔧 Начинаем чат-сессию');
     logger.info('🔍 Context: $context');
@@ -243,8 +246,10 @@ final class ChatServiceCaller extends RpcCallerContract
       : super('ChatService', endpoint);
 
   @override
-  Stream<RpcString> chatWithServer(Stream<RpcString> messages,
-      {RpcContext? context}) {
+  Stream<RpcString> chatWithServer(
+    Stream<RpcString> messages, {
+    RpcContext? context,
+  }) {
     return callBidirectionalStream<RpcString, RpcString>(
       methodName: 'ChatWithServer',
       requestCodec: RpcString.codec,

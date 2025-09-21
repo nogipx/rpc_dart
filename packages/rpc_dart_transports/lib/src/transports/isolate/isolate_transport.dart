@@ -10,14 +10,7 @@ import 'dart:isolate';
 import 'package:rpc_dart/rpc_dart.dart';
 
 /// Типы сообщений между изолятами
-enum _IsolateMessageType {
-  init,
-  metadata,
-  data,
-  directObject,
-  finish,
-  close,
-}
+enum _IsolateMessageType { init, metadata, data, directObject, finish, close }
 
 /// Сообщение для обмена между изолятами с поддержкой Stream ID
 class _IsolateMessage {
@@ -37,9 +30,7 @@ class _IsolateMessage {
 }
 
 typedef RpcIsolateEntrypoint = void Function(
-  IRpcTransport transport,
-  Map<String, dynamic> customParams,
-);
+    IRpcTransport transport, Map<String, dynamic> customParams);
 
 /// Фабрика для создания транспортов изолята с поддержкой Stream ID.
 /// Позволяет создавать пары хост-воркер транспортов с мультиплексированием.
@@ -101,15 +92,14 @@ abstract interface class RpcIsolateTransport {
 
     // Создаем и запускаем изолят с нашей оберткой
     final isolate = await Isolate.spawn(
-      entrypointWrapper,
-      [
-        initPort.sendPort,
-        isolateId,
-        customParams ?? {},
-        entrypoint, // Передаем пользовательскую функцию в изолят
-      ],
-      debugName: name,
-    );
+        entrypointWrapper,
+        [
+          initPort.sendPort,
+          isolateId,
+          customParams ?? {},
+          entrypoint, // Передаем пользовательскую функцию в изолят
+        ],
+        debugName: name);
 
     // Ожидаем SendPort от изолята
     final workerSendPort = await initPort.first as SendPort;
@@ -118,11 +108,13 @@ abstract interface class RpcIsolateTransport {
     final hostReceivePort = ReceivePort();
 
     // Отправляем порт для основной коммуникации в изолят
-    workerSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.init,
-      streamId: 0, // Специальный stream для инициализации
-      data: hostReceivePort.sendPort,
-    ));
+    workerSendPort.send(
+      _IsolateMessage(
+        type: _IsolateMessageType.init,
+        streamId: 0, // Специальный stream для инициализации
+        data: hostReceivePort.sendPort,
+      ),
+    );
 
     // Создаем хост-транспорт с поддержкой Stream ID
     final hostTransport = _IsolateHostTransport(
@@ -165,11 +157,14 @@ class _IsolateHostTransport implements IRpcTransport {
   })  : _workerSendPort = workerSendPort,
         _receivePort = receivePort {
     // Настраиваем обработку входящих сообщений
-    _receivePort.listen(_handleMessage, onDone: () {
-      if (!_messageController.isClosed) {
-        _messageController.close();
-      }
-    });
+    _receivePort.listen(
+      _handleMessage,
+      onDone: () {
+        if (!_messageController.isClosed) {
+          _messageController.close();
+        }
+      },
+    );
   }
 
   void _handleMessage(dynamic message) {
@@ -178,38 +173,43 @@ class _IsolateHostTransport implements IRpcTransport {
     switch (message.type) {
       case _IsolateMessageType.metadata:
         final metadata = message.data as RpcMetadata;
-        _messageController.add(RpcTransportMessage(
-          metadata: metadata,
-          isEndOfStream: message.isEndOfStream,
-          streamId: message.streamId,
-          methodPath: message.methodPath,
-        ));
+        _messageController.add(
+          RpcTransportMessage(
+            metadata: metadata,
+            isEndOfStream: message.isEndOfStream,
+            streamId: message.streamId,
+            methodPath: message.methodPath,
+          ),
+        );
         break;
 
       case _IsolateMessageType.data:
         final data = message.data as Uint8List;
-        _messageController.add(RpcTransportMessage(
-          payload: data,
-          isEndOfStream: message.isEndOfStream,
-          streamId: message.streamId,
-          methodPath: message.methodPath,
-        ));
+        _messageController.add(
+          RpcTransportMessage(
+            payload: data,
+            isEndOfStream: message.isEndOfStream,
+            streamId: message.streamId,
+            methodPath: message.methodPath,
+          ),
+        );
         break;
 
       case _IsolateMessageType.directObject:
         // Передаем объект напрямую через directPayload поле
-        _messageController.add(RpcTransportMessage(
-          streamId: message.streamId,
-          isEndOfStream: message.isEndOfStream,
-          directPayload: message.data, // Объект передается как directPayload
-        ));
+        _messageController.add(
+          RpcTransportMessage(
+            streamId: message.streamId,
+            isEndOfStream: message.isEndOfStream,
+            directPayload: message.data, // Объект передается как directPayload
+          ),
+        );
         break;
 
       case _IsolateMessageType.finish:
-        _messageController.add(RpcTransportMessage(
-          isEndOfStream: true,
-          streamId: message.streamId,
-        ));
+        _messageController.add(
+          RpcTransportMessage(isEndOfStream: true, streamId: message.streamId),
+        );
         break;
 
       default:
@@ -224,6 +224,40 @@ class _IsolateHostTransport implements IRpcTransport {
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
     return incomingMessages.where((message) => message.streamId == streamId);
+  }
+
+  Map<String, Object?> _healthDetails() => {
+        'isClosed': _isClosed,
+        'messageControllerClosed': _messageController.isClosed,
+        'activeStreams': _streamSendingFinished.length,
+      };
+
+  @override
+  Future<RpcHealthStatus> health() async {
+    final details = _healthDetails();
+
+    if (_messageController.isClosed || _isClosed) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'Isolate host transport closed',
+        details: details,
+      );
+    }
+
+    return RpcHealthStatus.healthy(
+      component: runtimeType.toString(),
+      message: 'Isolate host transport ready',
+      details: details,
+    );
+  }
+
+  @override
+  Future<RpcHealthStatus> reconnect() async {
+    return RpcHealthStatus.degraded(
+      component: runtimeType.toString(),
+      message: 'Isolate host transport cannot reconnect; spawn a new isolate',
+      details: {..._healthDetails(), 'supported': false},
+    );
   }
 
   @override
@@ -242,13 +276,15 @@ class _IsolateHostTransport implements IRpcTransport {
   }) async {
     if (_isClosed) return;
 
-    _workerSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.metadata,
-      streamId: streamId,
-      data: metadata,
-      isEndOfStream: endStream,
-      methodPath: metadata.methodPath,
-    ));
+    _workerSendPort.send(
+      _IsolateMessage(
+        type: _IsolateMessageType.metadata,
+        streamId: streamId,
+        data: metadata,
+        isEndOfStream: endStream,
+        methodPath: metadata.methodPath,
+      ),
+    );
 
     if (endStream) {
       _streamSendingFinished[streamId] = true;
@@ -263,12 +299,14 @@ class _IsolateHostTransport implements IRpcTransport {
   }) async {
     if (_isClosed) return;
 
-    _workerSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.data,
-      streamId: streamId,
-      data: data,
-      isEndOfStream: endStream,
-    ));
+    _workerSendPort.send(
+      _IsolateMessage(
+        type: _IsolateMessageType.data,
+        streamId: streamId,
+        data: data,
+        isEndOfStream: endStream,
+      ),
+    );
 
     if (endStream) {
       _streamSendingFinished[streamId] = true;
@@ -284,10 +322,9 @@ class _IsolateHostTransport implements IRpcTransport {
     }
 
     _streamSendingFinished[streamId] = true;
-    _workerSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.finish,
-      streamId: streamId,
-    ));
+    _workerSendPort.send(
+      _IsolateMessage(type: _IsolateMessageType.finish, streamId: streamId),
+    );
   }
 
   @override
@@ -303,10 +340,12 @@ class _IsolateHostTransport implements IRpcTransport {
     _isClosed = true;
     _streamSendingFinished.clear();
 
-    _workerSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.close,
-      streamId: 0, // Специальный ID для сообщений управления
-    ));
+    _workerSendPort.send(
+      _IsolateMessage(
+        type: _IsolateMessageType.close,
+        streamId: 0, // Специальный ID для сообщений управления
+      ),
+    );
 
     _receivePort.close();
 
@@ -319,16 +358,21 @@ class _IsolateHostTransport implements IRpcTransport {
   bool get isClosed => _isClosed;
 
   @override
-  Future<void> sendDirectObject(int streamId, Object object,
-      {bool endStream = false}) async {
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {
     if (_isClosed) return;
 
-    _workerSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.directObject,
-      streamId: streamId,
-      data: object, // Передаем объект напрямую
-      isEndOfStream: endStream,
-    ));
+    _workerSendPort.send(
+      _IsolateMessage(
+        type: _IsolateMessageType.directObject,
+        streamId: streamId,
+        data: object, // Передаем объект напрямую
+        isEndOfStream: endStream,
+      ),
+    );
 
     if (endStream) {
       _streamSendingFinished[streamId] = true;
@@ -365,11 +409,14 @@ class _IsolateWorkerTransport implements IRpcTransport {
   })  : _hostSendPort = hostSendPort,
         _messageStream = messageStream {
     // Настраиваем обработку входящих сообщений
-    _subscription = _messageStream.listen(_handleMessage, onDone: () {
-      if (!_messageController.isClosed) {
-        _messageController.close();
-      }
-    });
+    _subscription = _messageStream.listen(
+      _handleMessage,
+      onDone: () {
+        if (!_messageController.isClosed) {
+          _messageController.close();
+        }
+      },
+    );
   }
 
   void _handleMessage(dynamic message) {
@@ -378,38 +425,43 @@ class _IsolateWorkerTransport implements IRpcTransport {
     switch (message.type) {
       case _IsolateMessageType.metadata:
         final metadata = message.data as RpcMetadata;
-        _messageController.add(RpcTransportMessage(
-          metadata: metadata,
-          isEndOfStream: message.isEndOfStream,
-          streamId: message.streamId,
-          methodPath: message.methodPath,
-        ));
+        _messageController.add(
+          RpcTransportMessage(
+            metadata: metadata,
+            isEndOfStream: message.isEndOfStream,
+            streamId: message.streamId,
+            methodPath: message.methodPath,
+          ),
+        );
         break;
 
       case _IsolateMessageType.data:
         final data = message.data as Uint8List;
-        _messageController.add(RpcTransportMessage(
-          payload: data,
-          isEndOfStream: message.isEndOfStream,
-          streamId: message.streamId,
-          methodPath: message.methodPath,
-        ));
+        _messageController.add(
+          RpcTransportMessage(
+            payload: data,
+            isEndOfStream: message.isEndOfStream,
+            streamId: message.streamId,
+            methodPath: message.methodPath,
+          ),
+        );
         break;
 
       case _IsolateMessageType.directObject:
         // Передаем объект напрямую через directPayload поле
-        _messageController.add(RpcTransportMessage(
-          streamId: message.streamId,
-          isEndOfStream: message.isEndOfStream,
-          directPayload: message.data, // Объект передается как directPayload
-        ));
+        _messageController.add(
+          RpcTransportMessage(
+            streamId: message.streamId,
+            isEndOfStream: message.isEndOfStream,
+            directPayload: message.data, // Объект передается как directPayload
+          ),
+        );
         break;
 
       case _IsolateMessageType.finish:
-        _messageController.add(RpcTransportMessage(
-          isEndOfStream: true,
-          streamId: message.streamId,
-        ));
+        _messageController.add(
+          RpcTransportMessage(isEndOfStream: true, streamId: message.streamId),
+        );
         break;
 
       case _IsolateMessageType.close:
@@ -430,6 +482,40 @@ class _IsolateWorkerTransport implements IRpcTransport {
     return incomingMessages.where((message) => message.streamId == streamId);
   }
 
+  Map<String, Object?> _healthDetails() => {
+        'isClosed': _isClosed,
+        'messageControllerClosed': _messageController.isClosed,
+        'activeStreams': _streamSendingFinished.length,
+      };
+
+  @override
+  Future<RpcHealthStatus> health() async {
+    final details = _healthDetails();
+
+    if (_messageController.isClosed || _isClosed) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'Isolate worker transport closed',
+        details: details,
+      );
+    }
+
+    return RpcHealthStatus.healthy(
+      component: runtimeType.toString(),
+      message: 'Isolate worker transport ready',
+      details: details,
+    );
+  }
+
+  @override
+  Future<RpcHealthStatus> reconnect() async {
+    return RpcHealthStatus.degraded(
+      component: runtimeType.toString(),
+      message: 'Isolate worker transport cannot reconnect; restart the isolate',
+      details: {..._healthDetails(), 'supported': false},
+    );
+  }
+
   @override
   int createStream() {
     final streamId = _nextStreamId;
@@ -446,13 +532,15 @@ class _IsolateWorkerTransport implements IRpcTransport {
   }) async {
     if (_isClosed) return;
 
-    _hostSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.metadata,
-      streamId: streamId,
-      data: metadata,
-      isEndOfStream: endStream,
-      methodPath: metadata.methodPath,
-    ));
+    _hostSendPort.send(
+      _IsolateMessage(
+        type: _IsolateMessageType.metadata,
+        streamId: streamId,
+        data: metadata,
+        isEndOfStream: endStream,
+        methodPath: metadata.methodPath,
+      ),
+    );
 
     if (endStream) {
       _streamSendingFinished[streamId] = true;
@@ -467,12 +555,14 @@ class _IsolateWorkerTransport implements IRpcTransport {
   }) async {
     if (_isClosed) return;
 
-    _hostSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.data,
-      streamId: streamId,
-      data: data,
-      isEndOfStream: endStream,
-    ));
+    _hostSendPort.send(
+      _IsolateMessage(
+        type: _IsolateMessageType.data,
+        streamId: streamId,
+        data: data,
+        isEndOfStream: endStream,
+      ),
+    );
 
     if (endStream) {
       _streamSendingFinished[streamId] = true;
@@ -488,10 +578,9 @@ class _IsolateWorkerTransport implements IRpcTransport {
     }
 
     _streamSendingFinished[streamId] = true;
-    _hostSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.finish,
-      streamId: streamId,
-    ));
+    _hostSendPort.send(
+      _IsolateMessage(type: _IsolateMessageType.finish, streamId: streamId),
+    );
   }
 
   @override
@@ -518,16 +607,21 @@ class _IsolateWorkerTransport implements IRpcTransport {
   bool get isClosed => _isClosed;
 
   @override
-  Future<void> sendDirectObject(int streamId, Object object,
-      {bool endStream = false}) async {
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {
     if (_isClosed) return;
 
-    _hostSendPort.send(_IsolateMessage(
-      type: _IsolateMessageType.directObject,
-      streamId: streamId,
-      data: object, // Передаем объект напрямую
-      isEndOfStream: endStream,
-    ));
+    _hostSendPort.send(
+      _IsolateMessage(
+        type: _IsolateMessageType.directObject,
+        streamId: streamId,
+        data: object, // Передаем объект напрямую
+        isEndOfStream: endStream,
+      ),
+    );
 
     if (endStream) {
       _streamSendingFinished[streamId] = true;

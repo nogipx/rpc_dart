@@ -106,7 +106,7 @@ void main() {
       final messages = [
         RpcString('Message 1'),
         RpcString('Message 2'),
-        RpcString('Message 3')
+        RpcString('Message 3'),
       ];
 
       final requestStream = Stream.fromIterable(messages).map((msg) {
@@ -125,7 +125,8 @@ void main() {
       final response = await callFunction(requestStream).timeout(
         Duration(seconds: 5),
         onTimeout: () => throw TimeoutException(
-            'Timeout waiting for client streaming response'),
+          'Timeout waiting for client streaming response',
+        ),
       );
 
       // Assert
@@ -142,7 +143,7 @@ void main() {
       final messages = [
         RpcString('Bidirectional message #1'),
         RpcString('Bidirectional message #2'),
-        RpcString('Bidirectional message #3')
+        RpcString('Bidirectional message #3'),
       ];
 
       // Создаем StreamController для контроля закрытия
@@ -196,7 +197,8 @@ void main() {
       await completer.future.timeout(
         Duration(seconds: 30),
         onTimeout: () => throw TimeoutException(
-            'Timeout waiting for bidirectional responses'),
+          'Timeout waiting for bidirectional responses',
+        ),
       );
 
       expect(responses.length, equals(3));
@@ -205,7 +207,8 @@ void main() {
       expect(responses[2], equals('Echo: Bidirectional message #3'));
 
       print(
-          '✅ Bidirectional Streaming RPC через Caller/Responder работает отлично!');
+        '✅ Bidirectional Streaming RPC через Caller/Responder работает отлично!',
+      );
     });
 
     test('параллельные_rpc_вызовы_разных_типов', () async {
@@ -243,7 +246,8 @@ void main() {
             .then((responses) {
           expect(responses.length, equals(2));
           print(
-              '✅ Параллельный server streaming завершен: ${responses.length} ответов');
+            '✅ Параллельный server streaming завершен: ${responses.length} ответов',
+          );
         }),
       );
 
@@ -254,7 +258,8 @@ void main() {
       );
 
       print(
-          '✅ Все параллельные RPC вызовы через Caller/Responder завершены успешно!');
+        '✅ Все параллельные RPC вызовы через Caller/Responder завершены успешно!',
+      );
     });
   });
 }
@@ -307,7 +312,8 @@ final class TestServiceContract extends RpcResponderContract {
         }
 
         return RpcString(
-            'Received ${messages.length} client messages: ${messages.join(", ")}');
+          'Received ${messages.length} client messages: ${messages.join(", ")}',
+        );
       },
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,

@@ -28,22 +28,30 @@ void main() {
             result[key] = null;
             break;
           case 4:
-            result[key] = String.fromCharCodes(List.generate(
+            result[key] = String.fromCharCodes(
+              List.generate(
                 random.nextInt(100) + 1,
-                (i) => 65 + random.nextInt(26))); // Случайная строка A-Z
+                (i) => 65 + random.nextInt(26),
+              ),
+            ); // Случайная строка A-Z
             break;
           case 5:
             result[key] = List.generate(
-                random.nextInt(20) + 1, (i) => random.nextInt(1000));
+              random.nextInt(20) + 1,
+              (i) => random.nextInt(1000),
+            );
             break;
           case 6:
-            result[key] = Uint8List.fromList(List.generate(
-                random.nextInt(50) + 1, (i) => random.nextInt(256)));
+            result[key] = Uint8List.fromList(
+              List.generate(random.nextInt(50) + 1, (i) => random.nextInt(256)),
+            );
             break;
           case 7:
             if (depth > 0) {
-              result[key] =
-                  generateRandomData(depth - 1, random.nextInt(breadth) + 1);
+              result[key] = generateRandomData(
+                depth - 1,
+                random.nextInt(breadth) + 1,
+              );
             } else {
               result[key] = random.nextInt(100);
             }
@@ -67,12 +75,12 @@ void main() {
             [],
             [1, 2, 3],
             ['a', 'b', 'c'],
-            [1, 'mixed', true, null]
+            [1, 'mixed', true, null],
           ],
           'nested_map': {
             'level1': {
-              'level2': {'level3': 'deep value'}
-            }
+              'level2': {'level3': 'deep value'},
+            },
           },
           'binary_data': Uint8List.fromList([0, 1, 255, 128, 64]),
         };
@@ -95,8 +103,10 @@ void main() {
 
         // Проверяем floats с точностью
         for (int i = 0; i < (testData['floats'] as List).length; i++) {
-          expect((fastDecoded['floats'] as List)[i],
-              closeTo((testData['floats'] as List)[i], 0.000001));
+          expect(
+            (fastDecoded['floats'] as List)[i],
+            closeTo((testData['floats'] as List)[i], 0.000001),
+          );
         }
       });
 
@@ -106,8 +116,8 @@ void main() {
           'number': 42,
           'bool': true,
           'nested': {
-            'inner': [1, 2, 3]
-          }
+            'inner': [1, 2, 3],
+          },
         };
 
         final fastEncoded = CborCodec.encode(testData);
@@ -211,8 +221,9 @@ void main() {
       });
 
       test('Large binary data', () {
-        final largeBinary =
-            Uint8List.fromList(List.generate(50000, (i) => i % 256));
+        final largeBinary = Uint8List.fromList(
+          List.generate(50000, (i) => i % 256),
+        );
         final testData = {'binary': largeBinary};
 
         final encoded = CborCodec.encode(testData);
@@ -236,7 +247,9 @@ void main() {
 
         expect(stopwatch.elapsedMilliseconds, lessThan(1000)); // < 1 секунды
         expect(
-            encoded.length, greaterThan(1000)); // Должно быть достаточно данных
+          encoded.length,
+          greaterThan(1000),
+        ); // Должно быть достаточно данных
       });
 
       test('Large data decoding performance', () {
@@ -266,7 +279,8 @@ void main() {
         print('CBOR size: ${cborEncoded.length} bytes');
         print('JSON size: ${jsonEncoded.length} bytes');
         print(
-            'Compression ratio: ${(cborEncoded.length / jsonEncoded.length * 100).toStringAsFixed(1)}%');
+          'Compression ratio: ${(cborEncoded.length / jsonEncoded.length * 100).toStringAsFixed(1)}%',
+        );
 
         // CBOR должен быть компактнее JSON
         expect(cborEncoded.length, lessThan(jsonEncoded.length));
@@ -275,11 +289,7 @@ void main() {
 
     group('RFC 7049 Compliance Enhanced', () {
       test('Deterministic encoding', () {
-        final testData = {
-          'c': 3,
-          'a': 1,
-          'b': 2,
-        };
+        final testData = {'c': 3, 'a': 1, 'b': 2};
 
         // Кодируем несколько раз
         final encoded1 = CborCodec.encode(testData);
@@ -300,7 +310,7 @@ void main() {
           [1, 2, 3],
           {'nested': 'value'},
           3.14159,
-          Uint8List.fromList([1, 2, 3, 4])
+          Uint8List.fromList([1, 2, 3, 4]),
         ];
 
         final testData = {'mixed_array': mixedArray};
@@ -350,7 +360,7 @@ void main() {
           'nested': <String, dynamic>{
             'inner_string': 'inner_value',
             'inner_int': 456,
-          }
+          },
         };
 
         final encoded = CborCodec.encode(testData);
@@ -384,7 +394,7 @@ void main() {
         var data = <String, dynamic>{
           'counter': 0,
           'nested': {'value': 'test'},
-          'array': [1, 2, 3]
+          'array': [1, 2, 3],
         };
 
         // Выполняем 1000 циклов кодирования/декодирования
@@ -396,7 +406,9 @@ void main() {
 
         expect(data['counter'], equals(999));
         expect(
-            (data['nested'] as Map<String, dynamic>)['value'], equals('test'));
+          (data['nested'] as Map<String, dynamic>)['value'],
+          equals('test'),
+        );
         expect(data['array'], equals([1, 2, 3]));
       });
 

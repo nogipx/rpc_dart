@@ -217,7 +217,8 @@ class RpcServerBootstrap {
   Future<void> _daemonize(List<String> originalArgs) async {
     if (!Platform.isLinux && !Platform.isMacOS) {
       throw UnsupportedError(
-          'Daemon режим поддерживается только на Linux/macOS');
+        'Daemon режим поддерживается только на Linux/macOS',
+      );
     }
 
     print('🔄 Запуск в daemon режиме...');
@@ -235,10 +236,12 @@ class RpcServerBootstrap {
 
     // Создаем detached процесс
     final process = await Process.start(
-      Platform.resolvedExecutable,
-      [Platform.script.toFilePath(), ...childArgs],
-      mode: ProcessStartMode.detached,
-    );
+        Platform.resolvedExecutable,
+        [
+          Platform.script.toFilePath(),
+          ...childArgs,
+        ],
+        mode: ProcessStartMode.detached);
 
     // Проверяем что процесс запустился
     await Future.delayed(Duration(milliseconds: 1000));
@@ -349,11 +352,18 @@ class RpcServerBootstrap {
   /// Парсер аргументов
   ArgParser _createArgParser() {
     return ArgParser()
-      ..addOption('host',
-          abbr: 'h', defaultsTo: 'localhost', help: 'Хост сервера')
+      ..addOption(
+        'host',
+        abbr: 'h',
+        defaultsTo: 'localhost',
+        help: 'Хост сервера',
+      )
       ..addOption('port', abbr: 'p', defaultsTo: '8080', help: 'Порт сервера')
-      ..addOption('log-level',
-          allowed: ['debug', 'info', 'warning', 'error'], defaultsTo: 'info')
+      ..addOption(
+        'log-level',
+        allowed: ['debug', 'info', 'warning', 'error'],
+        defaultsTo: 'info',
+      )
       ..addFlag('verbose', abbr: 'v', help: 'Подробный вывод')
       ..addFlag('quiet', abbr: 'q', help: 'Тихий режим')
       ..addOption('log-file', help: 'Файл логов для daemon режима')
@@ -423,7 +433,8 @@ class RpcServerBootstrap {
   /// Логирует готовность daemon
   Future<void> _logDaemonReady() async {
     await _logDaemonEvent(
-        '$appName daemon ready on ${_config.host}:${_config.port}');
+      '$appName daemon ready on ${_config.host}:${_config.port}',
+    );
   }
 
   /// Логирует статистику daemon
@@ -433,10 +444,7 @@ class RpcServerBootstrap {
 
   /// Обрабатывает глобальные ошибки
   Future<void> _handleGlobalError(Object error, StackTrace stackTrace) async {
-    final errorHandler = _ErrorHandler(
-      verbose: true,
-      isDaemon: false,
-    );
+    final errorHandler = _ErrorHandler(verbose: true, isDaemon: false);
     await errorHandler.handleError(error, stackTrace);
     exit(1);
   }
@@ -584,10 +592,9 @@ class _ErrorHandler {
 
     if (isDaemon && logFile != null) {
       try {
-        await File(logFile!).writeAsString(
-          '$message\n',
-          mode: FileMode.writeOnlyAppend,
-        );
+        await File(
+          logFile!,
+        ).writeAsString('$message\n', mode: FileMode.writeOnlyAppend);
       } catch (e) {
         stderr.writeln('Failed to log error: $e');
       }

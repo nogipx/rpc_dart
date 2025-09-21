@@ -39,8 +39,11 @@ final class RpcMetadata {
   /// [methodName] Имя метода (например, "Send")
   /// [host] Хост-заголовок (опционально)
   /// Возвращает метаданные, готовые для отправки при инициализации запроса.
-  static RpcMetadata forClientRequest(String serviceName, String methodName,
-      {String host = ''}) {
+  static RpcMetadata forClientRequest(
+    String serviceName,
+    String methodName, {
+    String host = '',
+  }) {
     final methodPath = '/$serviceName/$methodName';
     return RpcMetadata([
       RpcHeader(':method', 'POST'),
@@ -60,8 +63,10 @@ final class RpcMetadata {
   /// Упрощенная версия для случаев, когда путь уже сформирован.
   /// [methodPath] Путь метода в формате /ServiceName/MethodName
   /// [host] Хост-заголовок (опционально)
-  static RpcMetadata forClientRequestWithPath(String methodPath,
-      {String host = ''}) {
+  static RpcMetadata forClientRequestWithPath(
+    String methodPath, {
+    String host = '',
+  }) {
     return RpcMetadata([
       RpcHeader(':method', 'POST'),
       RpcHeader(':path', methodPath),
@@ -99,17 +104,11 @@ final class RpcMetadata {
   /// Возвращает метаданные-трейлеры для завершения потока.
   static RpcMetadata forTrailer(int statusCode, {String message = ''}) {
     final headers = [
-      RpcHeader(
-        RpcConstants.GRPC_STATUS_HEADER,
-        statusCode.toString(),
-      ),
+      RpcHeader(RpcConstants.GRPC_STATUS_HEADER, statusCode.toString()),
     ];
 
     if (message.isNotEmpty) {
-      headers.add(RpcHeader(
-        RpcConstants.GRPC_MESSAGE_HEADER,
-        message,
-      ));
+      headers.add(RpcHeader(RpcConstants.GRPC_MESSAGE_HEADER, message));
     }
 
     return RpcMetadata(headers);

@@ -50,8 +50,9 @@ Future<void> _demonstrateMethods(CalculatorCaller calculator) async {
 
   // 2. Server Streaming
   print('2️⃣ Server Stream: один запрос → поток ответов');
-  await for (final step
-      in calculator.calculateSteps(Request(20, 4, 'multiply'))) {
+  await for (final step in calculator.calculateSteps(
+    Request(20, 4, 'multiply'),
+  )) {
     print('   📤 ${step.message}');
   }
   print('');
@@ -284,8 +285,10 @@ final class CalculatorResponder extends RpcResponderContract
   }
 
   // 3. Client Streaming
-  Future<Summary> processBatch(Stream<Request> reqs,
-      {RpcContext? context}) async {
+  Future<Summary> processBatch(
+    Stream<Request> reqs, {
+    RpcContext? context,
+  }) async {
     int count = 0;
     double total = 0;
 

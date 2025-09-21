@@ -12,6 +12,8 @@ Transport implementations for [RPC Dart](https://pub.dev/packages/rpc_dart). Pro
 - Client/Server transports — client-side connectors and server-side handlers.
 - Multiplexing — many RPCs over one connection where supported.
 - Zero-copy — supported where transport permits in-process object transfer.
+- Health monitoring — each transport exposes `health()` snapshots and
+  `reconnect()` attempts to simplify diagnostics.
 
 ### Supported transports
 

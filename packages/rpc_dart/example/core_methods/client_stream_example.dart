@@ -47,15 +47,16 @@ class ClientStreamingExample {
       // Пример 1: Базовая агрегация данных
       print('\n--- Пример 1: Агрегация текстовых сообщений ---');
 
-      final context1 = RpcContextUtils.withTracing(traceId: 'client-stream-123')
-          .withValue('aggregation-type', 'text');
+      final context1 = RpcContextUtils.withTracing(
+        traceId: 'client-stream-123',
+      ).withValue('aggregation-type', 'text');
 
       final messages = [
         'Сообщение 1: Привет',
         'Сообщение 2: Как дела?',
         'Сообщение 3: Это тест',
         'Сообщение 4: Клиентского',
-        'Сообщение 5: Стриминга!'
+        'Сообщение 5: Стриминга!',
       ];
 
       print('КЛИЕНТ: Отправляем ${messages.length} сообщений');
@@ -67,8 +68,10 @@ class ClientStreamingExample {
         return message;
       });
 
-      final result1 =
-          await client.aggregateMessages(messageStream, context: context1);
+      final result1 = await client.aggregateMessages(
+        messageStream,
+        context: context1,
+      );
       print('КЛИЕНТ: Результат агрегации: "${result1.value}"');
 
       // Пример 2: Агрегация с аутентификацией
@@ -77,14 +80,14 @@ class ClientStreamingExample {
       final authContext = RpcContextUtils.withBearerToken('aggregate-token-456')
           .withAdditionalHeaders({
         'client-version': '1.4.0',
-        'aggregation-format': 'structured'
+        'aggregation-format': 'structured',
       }).withTraceId('auth-aggregate-456');
 
       final secureMessages = [
         'admin:status',
         'admin:reports',
         'admin:analytics',
-        'admin:summary'
+        'admin:summary',
       ];
 
       final secureStream = Stream.fromIterable(secureMessages.map((m) => m.rpc))
@@ -94,17 +97,19 @@ class ClientStreamingExample {
         return message;
       });
 
-      final result2 =
-          await client.aggregateMessages(secureStream, context: authContext);
+      final result2 = await client.aggregateMessages(
+        secureStream,
+        context: authContext,
+      );
       print('КЛИЕНТ: Защищенный результат: "${result2.value}"');
 
       // Пример 3: Агрегация с отменой
       print('\n--- Пример 3: Агрегация с отменой ---');
 
       final cancellationToken = RpcCancellationToken();
-      final cancelContext = RpcContext.withCancellation(cancellationToken)
-          .withValue('batch-size', 100)
-          .withTraceId('cancel-aggregate-789');
+      final cancelContext = RpcContext.withCancellation(
+        cancellationToken,
+      ).withValue('batch-size', 100).withTraceId('cancel-aggregate-789');
 
       // Отменяем через 150мс
       Future.delayed(Duration(milliseconds: 150), () {
@@ -118,8 +123,10 @@ class ClientStreamingExample {
       ).take(10);
 
       try {
-        final result3 = await client.aggregateMessages(longMessages,
-            context: cancelContext);
+        final result3 = await client.aggregateMessages(
+          longMessages,
+          context: cancelContext,
+        );
         print('КЛИЕНТ: Результат отменённой агрегации: "${result3.value}"');
       } catch (e) {
         print('КЛИЕНТ: Агрегация отменена: $e');
@@ -128,21 +135,23 @@ class ClientStreamingExample {
       // Пример 4: Агрегация файлов
       print('\n--- Пример 4: Агрегация файлов ---');
 
-      final fileContext = RpcContext.withHeaders(
-              {'operation': 'file-processing', 'format': 'batch'})
-          .withTimeout(Duration(seconds: 5))
-          .withTraceId('file-aggregate-012');
+      final fileContext = RpcContext.withHeaders({
+        'operation': 'file-processing',
+        'format': 'batch',
+      }).withTimeout(Duration(seconds: 5)).withTraceId('file-aggregate-012');
 
       final fileMessages = [
         'file:document1.pdf',
         'file:image2.jpg',
         'file:data3.json',
-        'file:report4.xlsx'
+        'file:report4.xlsx',
       ];
 
       final fileStream = Stream.fromIterable(fileMessages.map((f) => f.rpc));
-      final result4 =
-          await client.aggregateMessages(fileStream, context: fileContext);
+      final result4 = await client.aggregateMessages(
+        fileStream,
+        context: fileContext,
+      );
       print('КЛИЕНТ: Результат обработки файлов: "${result4.value}"');
     } catch (e, stackTrace) {
       print('ОШИБКА: $e');
@@ -180,8 +189,10 @@ final class DataAggregatorResponder extends RpcResponderContract
   }
 
   @override
-  Future<RpcString> aggregateMessages(Stream<RpcString> messages,
-      {RpcContext? context}) async {
+  Future<RpcString> aggregateMessages(
+    Stream<RpcString> messages, {
+    RpcContext? context,
+  }) async {
     final logger = RpcLogger('AggregateMessages');
     logger.info('🔧 Начинаем агрегацию сообщений');
     logger.info('🔍 Context: $context');
@@ -192,8 +203,9 @@ final class DataAggregatorResponder extends RpcResponderContract
     final operation = context?.getHeader('operation');
     final authToken = context?.getHeader('authorization');
 
-    logger
-        .info('📊 Type: $aggregationType, Batch: $batchSize, Format: $format');
+    logger.info(
+      '📊 Type: $aggregationType, Batch: $batchSize, Format: $format',
+    );
 
     final receivedMessages = <String>[];
     int count = 0;
@@ -268,8 +280,10 @@ final class DataAggregatorCaller extends RpcCallerContract
       : super('DataAggregatorService', endpoint);
 
   @override
-  Future<RpcString> aggregateMessages(Stream<RpcString> messages,
-      {RpcContext? context}) {
+  Future<RpcString> aggregateMessages(
+    Stream<RpcString> messages, {
+    RpcContext? context,
+  }) {
     return callClientStream<RpcString, RpcString>(
       methodName: 'AggregateMessages',
       requestCodec: RpcString.codec,

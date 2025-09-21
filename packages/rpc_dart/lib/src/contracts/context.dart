@@ -438,8 +438,9 @@ abstract final class RpcContextUtils {
     if (spanId != null) headers['x-span-id'] = spanId;
     if (parentSpanId != null) headers['x-parent-span-id'] = parentSpanId;
 
-    return RpcContext.withHeaders(headers)
-        .withTraceId(traceId ?? _generateTraceId());
+    return RpcContext.withHeaders(
+      headers,
+    ).withTraceId(traceId ?? _generateTraceId());
   }
 
   /// Генерирует новый trace ID
@@ -484,8 +485,9 @@ class RpcContextBuilder {
   factory RpcContextBuilder.inheritFrom(RpcContext? parent) {
     if (parent?.traceId != null) {
       // Наследуем trace ID и базовые заголовки
-      return RpcContextBuilder.from(parent!)
-          .withGeneratedRequestId(); // Генерируем новый request ID для нового вызова
+      return RpcContextBuilder.from(
+        parent!,
+      ).withGeneratedRequestId(); // Генерируем новый request ID для нового вызова
     }
 
     // Создаем новый контекст с новым trace ID

@@ -33,8 +33,11 @@ void crashingServer(IRpcTransport transport, Map<String, dynamic> params) {
         switch (payload) {
           case 'PING':
             print('🏓 [Crashing Server] PONG от ${currentIsolate.debugName}');
-            await transport.sendDirectObject(message.streamId, 'PONG',
-                endStream: true);
+            await transport.sendDirectObject(
+              message.streamId,
+              'PONG',
+              endStream: true,
+            );
             break;
 
           case 'CRASH_NOW':
@@ -80,8 +83,11 @@ void stableServer(IRpcTransport transport, Map<String, dynamic> params) {
 
       if (payload is String && payload == 'PING') {
         print('🏓 [Stable Server] PONG от ${currentIsolate.debugName}');
-        await transport.sendDirectObject(message.streamId, 'PONG from stable',
-            endStream: true);
+        await transport.sendDirectObject(
+          message.streamId,
+          'PONG from stable',
+          endStream: true,
+        );
       }
     }
   });
@@ -132,8 +138,9 @@ void main() {
         final stableStreamId1 = stableResult.transport.createStream();
         final stablePingFuture1 = stableResult.transport
             .getMessagesForStream(stableStreamId1)
-            .where((msg) =>
-                msg.isDirect && msg.directPayload == 'PONG from stable')
+            .where(
+              (msg) => msg.isDirect && msg.directPayload == 'PONG from stable',
+            )
             .first
             .timeout(Duration(seconds: 2));
 
@@ -147,8 +154,10 @@ void main() {
         final crashStreamId2 = crashResult.transport.createStream();
 
         // Отправляем команду краша и ожидаем что соединение разорвется
-        await crashResult.transport
-            .sendDirectObject(crashStreamId2, 'CRASH_NOW');
+        await crashResult.transport.sendDirectObject(
+          crashStreamId2,
+          'CRASH_NOW',
+        );
 
         // Ждем немного чтобы краш произошел
         await Future.delayed(Duration(milliseconds: 100));
@@ -165,15 +174,17 @@ void main() {
         final stableStreamId2 = stableResult.transport.createStream();
         final stablePingFuture2 = stableResult.transport
             .getMessagesForStream(stableStreamId2)
-            .where((msg) =>
-                msg.isDirect && msg.directPayload == 'PONG from stable')
+            .where(
+              (msg) => msg.isDirect && msg.directPayload == 'PONG from stable',
+            )
             .first
             .timeout(Duration(seconds: 2));
 
         await stableResult.transport.sendDirectObject(stableStreamId2, 'PING');
         await stablePingFuture2;
         print(
-            '✅ Stable worker продолжает работать после краша другого изолята');
+          '✅ Stable worker продолжает работать после краша другого изолята',
+        );
 
         // Act 4 - проверяем что crashed worker действительно мертв
         print('💀 Проверяем что crashed worker действительно мертв...');
@@ -191,7 +202,8 @@ void main() {
           fail('Crashed worker не должен отвечать');
         } on TimeoutException {
           print(
-              '✅ Crashed worker действительно мертв (timeout при попытке связи)');
+            '✅ Crashed worker действительно мертв (timeout при попытке связи)',
+          );
         }
       } finally {
         // Cleanup
@@ -220,7 +232,7 @@ void main() {
         isolateResults.add((
           transport: result.transport,
           kill: result.kill,
-          name: isStable ? 'stable-$i' : 'crash-$i'
+          name: isStable ? 'stable-$i' : 'crash-$i',
         ));
       }
 
@@ -252,7 +264,8 @@ void main() {
           print('💀 Крашим ${crashIsolate.name}...');
           await crashIsolate.transport.sendDirectObject(streamId, 'CRASH_NOW');
           await Future.delayed(
-              Duration(milliseconds: 50)); // Даем время на краш
+            Duration(milliseconds: 50),
+          ); // Даем время на краш
         }
 
         // Act 3 - проверяем что stable изоляты все еще работают
@@ -264,8 +277,10 @@ void main() {
           final streamId = stableIsolate.transport.createStream();
           final pingFuture = stableIsolate.transport
               .getMessagesForStream(streamId)
-              .where((msg) =>
-                  msg.isDirect && msg.directPayload == 'PONG from stable')
+              .where(
+                (msg) =>
+                    msg.isDirect && msg.directPayload == 'PONG from stable',
+              )
               .first
               .timeout(Duration(seconds: 2));
 

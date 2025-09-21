@@ -51,17 +51,21 @@ void main() {
 
         final receivedResponses = <RpcString>[];
         print('Setting up response listener');
-        final subscription = client.responses.listen((message) {
-          print('Got response message: $message');
-          if (!message.isMetadataOnly && message.payload != null) {
-            print('Adding payload to responses: ${message.payload}');
-            receivedResponses.add(message.payload!);
-          }
-        }, onDone: () {
-          print('Response stream done');
-        }, onError: (e, st) {
-          print('Response stream error: $e');
-        });
+        final subscription = client.responses.listen(
+          (message) {
+            print('Got response message: $message');
+            if (!message.isMetadataOnly && message.payload != null) {
+              print('Adding payload to responses: ${message.payload}');
+              receivedResponses.add(message.payload!);
+            }
+          },
+          onDone: () {
+            print('Response stream done');
+          },
+          onError: (e, st) {
+            print('Response stream error: $e');
+          },
+        );
 
         // Act
         print('Sending request');
@@ -87,11 +91,17 @@ void main() {
         // Assert
         expect(receivedResponses.length, equals(3));
         expect(
-            receivedResponses[0], equals('Response 1 for: test request'.rpc));
+          receivedResponses[0],
+          equals('Response 1 for: test request'.rpc),
+        );
         expect(
-            receivedResponses[1], equals('Response 2 for: test request'.rpc));
+          receivedResponses[1],
+          equals('Response 2 for: test request'.rpc),
+        );
         expect(
-            receivedResponses[2], equals('Response 3 for: test request'.rpc));
+          receivedResponses[2],
+          equals('Response 3 for: test request'.rpc),
+        );
         expect(receivedRequests.length, equals(1));
         expect(receivedRequests.first, equals('test request'.rpc));
 
@@ -190,8 +200,9 @@ void main() {
         // Act & Assert
         await client.send('test request'.rpc);
 
-        final response =
-            await client.responses.first.timeout(Duration(seconds: 5));
+        final response = await client.responses.first.timeout(
+          Duration(seconds: 5),
+        );
 
         // Проверяем что получили метаданные с ошибкой
         expect(response.isMetadataOnly, isTrue);
@@ -199,8 +210,11 @@ void main() {
 
         final grpcStatus = response.metadata!.getHeaderValue('grpc-status');
         expect(grpcStatus, isNotNull);
-        expect(grpcStatus, isNot(equals('0')),
-            reason: 'gRPC статус должен указывать на ошибку (не 0)');
+        expect(
+          grpcStatus,
+          isNot(equals('0')),
+          reason: 'gRPC статус должен указывать на ошибку (не 0)',
+        );
 
         // Cleanup
         await client.close();
@@ -349,11 +363,17 @@ void main() {
         expect(receivedRequests.first, equals('Hello Server'.rpc));
         expect(receivedResponses.length, equals(3));
         expect(
-            receivedResponses[0], equals('Response 1 for: Hello Server'.rpc));
+          receivedResponses[0],
+          equals('Response 1 for: Hello Server'.rpc),
+        );
         expect(
-            receivedResponses[1], equals('Response 2 for: Hello Server'.rpc));
+          receivedResponses[1],
+          equals('Response 2 for: Hello Server'.rpc),
+        );
         expect(
-            receivedResponses[2], equals('Response 3 for: Hello Server'.rpc));
+          receivedResponses[2],
+          equals('Response 3 for: Hello Server'.rpc),
+        );
 
         // Cleanup
         await client.close();
@@ -393,8 +413,9 @@ void main() {
         // Act & Assert
         await client.send('test request'.rpc);
 
-        final response =
-            await client.responses.first.timeout(Duration(seconds: 5));
+        final response = await client.responses.first.timeout(
+          Duration(seconds: 5),
+        );
 
         // Проверяем что получили метаданные с ошибкой
         expect(response.isMetadataOnly, isTrue);
@@ -402,8 +423,11 @@ void main() {
 
         final grpcStatus = response.metadata!.getHeaderValue('grpc-status');
         expect(grpcStatus, isNotNull);
-        expect(grpcStatus, isNot(equals('0')),
-            reason: 'gRPC статус должен указывать на ошибку');
+        expect(
+          grpcStatus,
+          isNot(equals('0')),
+          reason: 'gRPC статус должен указывать на ошибку',
+        );
 
         // Cleanup
         await client.close();
@@ -524,9 +548,11 @@ void main() {
           orElse: () => throw AssertionError('Не найден ответ с gRPC ошибкой'),
         );
 
-        expect(errorResponse.metadata!.getHeaderValue('grpc-status'),
-            isNot(equals('0')),
-            reason: 'gRPC статус должен указывать на ошибку');
+        expect(
+          errorResponse.metadata!.getHeaderValue('grpc-status'),
+          isNot(equals('0')),
+          reason: 'gRPC статус должен указывать на ошибку',
+        );
 
         // Cleanup
         await client.close();

@@ -25,6 +25,7 @@
 - RpcInMemoryTransport with zero-copy support for in-process object transfer.
 - Data transfer modes: zeroCopy, codec, auto (recommended).
 - RpcContext carries trace id and headers.
+- Endpoint and transport diagnostics via `health()` and `reconnect()` APIs.
 - Built-in primitive wrappers: RpcString, RpcInt, RpcDouble, RpcBool, RpcList.
 - Pure Dart, no external dependencies.
 - Easy testing with InMemory transport and mocks.
@@ -105,6 +106,21 @@ void main() async {
   await callerEndpoint.close();
   await responderEndpoint.close();
 }
+```
+
+### Health monitoring
+
+RPC endpoints expose aggregated diagnostics that combine endpoint state and
+transport status. Use `health()` to retrieve a snapshot and `reconnect()` to
+delegate recovery to the underlying transport:
+
+```dart
+final report = await callerEndpoint.health();
+if (!report.isHealthy) {
+  print('Transport issue: ${report.transportStatus?.message}');
+}
+
+await callerEndpoint.reconnect();
 ```
 
 #### Data transfer modes

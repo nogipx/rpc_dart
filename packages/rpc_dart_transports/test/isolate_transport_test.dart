@@ -39,18 +39,19 @@ class TestLargeObject {
   static TestLargeObject generate(int size) {
     final random = Random();
     final data = List.generate(
-        size,
-        (index) => {
-              'id': index,
-              'value': random.nextDouble(),
-              'text': 'Item $index with random data ${random.nextInt(1000)}',
-              'nested': {
-                'level1': {
-                  'level2': 'deep value $index',
-                  'array': List.generate(5, (i) => 'item_${index}_$i'),
-                }
-              },
-            });
+      size,
+      (index) => {
+        'id': index,
+        'value': random.nextDouble(),
+        'text': 'Item $index with random data ${random.nextInt(1000)}',
+        'nested': {
+          'level1': {
+            'level2': 'deep value $index',
+            'array': List.generate(5, (i) => 'item_${index}_$i'),
+          },
+        },
+      },
+    );
     return TestLargeObject(data);
   }
 
@@ -176,8 +177,11 @@ void main() {
 
         // Assert
         for (final streamId in streamIds) {
-          expect(streamId % 2, equals(1),
-              reason: 'Stream ID должен быть нечетным');
+          expect(
+            streamId % 2,
+            equals(1),
+            reason: 'Stream ID должен быть нечетным',
+          );
         }
 
         // Cleanup
@@ -386,11 +390,17 @@ void main() {
 
         // Act
         await transport.sendMessage(
-            streamId1, Uint8List.fromList('message1'.codeUnits));
+          streamId1,
+          Uint8List.fromList('message1'.codeUnits),
+        );
         await transport.sendMessage(
-            streamId2, Uint8List.fromList('message2'.codeUnits));
+          streamId2,
+          Uint8List.fromList('message2'.codeUnits),
+        );
         await transport.sendMessage(
-            streamId1, Uint8List.fromList('message3'.codeUnits));
+          streamId1,
+          Uint8List.fromList('message3'.codeUnits),
+        );
 
         // Даем время для обработки в изоляте
         await Future.delayed(Duration(milliseconds: 200));
@@ -575,8 +585,10 @@ void main() {
         // Проверяем, что объект прошел без потерь и был модифицирован сервером
         expect(responseObject.id, equals(42));
         expect(responseObject.name, equals('Test User [PROCESSED]'));
-        expect(responseObject.metadata['roles'],
-            equals(['admin', 'user', 'zero-copy']));
+        expect(
+          responseObject.metadata['roles'],
+          equals(['admin', 'user', 'zero-copy']),
+        );
         expect(responseObject.tags.length, equals(3)); // добавился 'processed'
         expect(responseObject.isActive, equals(true));
 
@@ -601,7 +613,7 @@ void main() {
         // Act - отправляем разные типы данных
         final testCases = [
           {
-            'numbers': [1, 2, 3, 4, 5]
+            'numbers': [1, 2, 3, 4, 5],
           },
           'simple string',
           42,
@@ -610,7 +622,7 @@ void main() {
             1,
             'mixed',
             true,
-            {'nested': 'value'}
+            {'nested': 'value'},
           ],
         ];
 
@@ -650,8 +662,9 @@ void main() {
         );
 
         final transport = result.transport;
-        final largeObject =
-            TestLargeObject.generate(5000); // Увеличиваем размер
+        final largeObject = TestLargeObject.generate(
+          5000,
+        ); // Увеличиваем размер
 
         // Act & Assert - Zero-copy
         final stopwatchZeroCopy = Stopwatch()..start();
@@ -684,12 +697,15 @@ void main() {
 
         if (zeroCopyTime < serializedTime) {
           print(
-              '✅ Zero-copy быстрее в ${(serializedTime / zeroCopyTime).toStringAsFixed(2)}x раз');
+            '✅ Zero-copy быстрее в ${(serializedTime / zeroCopyTime).toStringAsFixed(2)}x раз',
+          );
         } else {
           print(
-              '⚠️ Для данного размера сериализация быстрее в ${(zeroCopyTime / serializedTime).toStringAsFixed(2)}x раз');
+            '⚠️ Для данного размера сериализация быстрее в ${(zeroCopyTime / serializedTime).toStringAsFixed(2)}x раз',
+          );
           print(
-              '💡 Zero-copy эффективен для очень больших или сложных объектов');
+            '💡 Zero-copy эффективен для очень больших или сложных объектов',
+          );
         }
 
         // Главное преимущество zero-copy - не нужна сериализация/десериализация
@@ -766,8 +782,11 @@ void main() {
         final released = transport.releaseStreamId(streamId);
 
         // Assert
-        expect(released, isTrue,
-            reason: 'Должен вернуть true для активного stream');
+        expect(
+          released,
+          isTrue,
+          reason: 'Должен вернуть true для активного stream',
+        );
 
         // Cleanup
         result.kill();
@@ -787,8 +806,11 @@ void main() {
         final released = transport.releaseStreamId(99999);
 
         // Assert
-        expect(released, isFalse,
-            reason: 'Должен вернуть false для несуществующего stream');
+        expect(
+          released,
+          isFalse,
+          reason: 'Должен вернуть false для несуществующего stream',
+        );
 
         // Cleanup
         result.kill();
@@ -810,10 +832,16 @@ void main() {
         final secondRelease = transport.releaseStreamId(streamId);
 
         // Assert
-        expect(firstRelease, isTrue,
-            reason: 'Первое освобождение должно быть успешным');
-        expect(secondRelease, isFalse,
-            reason: 'Повторное освобождение должно вернуть false');
+        expect(
+          firstRelease,
+          isTrue,
+          reason: 'Первое освобождение должно быть успешным',
+        );
+        expect(
+          secondRelease,
+          isFalse,
+          reason: 'Повторное освобождение должно вернуть false',
+        );
 
         // Cleanup
         result.kill();
@@ -835,8 +863,11 @@ void main() {
         final released = transport.releaseStreamId(streamId);
 
         // Assert
-        expect(released, isFalse,
-            reason: 'Должен вернуть false для закрытого транспорта');
+        expect(
+          released,
+          isFalse,
+          reason: 'Должен вернуть false для закрытого транспорта',
+        );
         expect(transport.isClosed, isTrue);
 
         // Cleanup
@@ -858,53 +889,61 @@ void main() {
         final results = streamIds.map(transport.releaseStreamId).toList();
 
         // Assert
-        expect(results.every((result) => result == true), isTrue,
-            reason: 'Все streams должны быть освобождены успешно');
+        expect(
+          results.every((result) => result == true),
+          isTrue,
+          reason: 'Все streams должны быть освобождены успешно',
+        );
 
         // Повторное освобождение должно вернуть false
         final secondResults = streamIds.map(transport.releaseStreamId).toList();
-        expect(secondResults.every((result) => result == false), isTrue,
-            reason: 'Повторное освобождение должно вернуть false');
-
-        // Cleanup
-        result.kill();
-      });
-
-      test('корректно_работает_с_отправкой_сообщений_после_освобождения',
-          () async {
-        // Arrange
-        final result = await RpcIsolateTransport.spawn(
-          entrypoint: _testEchoServer,
-          customParams: {},
-          isolateId: 'release-after-message-test',
+        expect(
+          secondResults.every((result) => result == false),
+          isTrue,
+          reason: 'Повторное освобождение должно вернуть false',
         );
 
-        final transport = result.transport;
-        final streamId = transport.createStream();
-        final receivedMessages = <RpcTransportMessage>[];
-
-        transport.incomingMessages.listen(receivedMessages.add);
-
-        // Act - отправляем сообщение
-        final testData = Uint8List.fromList('Test message'.codeUnits);
-        await transport.sendMessage(streamId, testData);
-
-        // Ждем ответ
-        await Future.delayed(Duration(milliseconds: 100));
-
-        // Освобождаем stream
-        final released = transport.releaseStreamId(streamId);
-
-        // Пытаемся отправить еще одно сообщение (не должно вызывать ошибку)
-        await transport.sendMessage(streamId, testData);
-
-        // Assert
-        expect(released, isTrue);
-        expect(receivedMessages.length, greaterThan(0));
-
         // Cleanup
         result.kill();
       });
+
+      test(
+        'корректно_работает_с_отправкой_сообщений_после_освобождения',
+        () async {
+          // Arrange
+          final result = await RpcIsolateTransport.spawn(
+            entrypoint: _testEchoServer,
+            customParams: {},
+            isolateId: 'release-after-message-test',
+          );
+
+          final transport = result.transport;
+          final streamId = transport.createStream();
+          final receivedMessages = <RpcTransportMessage>[];
+
+          transport.incomingMessages.listen(receivedMessages.add);
+
+          // Act - отправляем сообщение
+          final testData = Uint8List.fromList('Test message'.codeUnits);
+          await transport.sendMessage(streamId, testData);
+
+          // Ждем ответ
+          await Future.delayed(Duration(milliseconds: 100));
+
+          // Освобождаем stream
+          final released = transport.releaseStreamId(streamId);
+
+          // Пытаемся отправить еще одно сообщение (не должно вызывать ошибку)
+          await transport.sendMessage(streamId, testData);
+
+          // Assert
+          expect(released, isTrue);
+          expect(receivedMessages.length, greaterThan(0));
+
+          // Cleanup
+          result.kill();
+        },
+      );
     });
   });
 }
@@ -926,7 +965,9 @@ void _testEchoServer(IRpcTransport transport, Map<String, dynamic> params) {
 /// Сервер для тестирования параметров
 @pragma('vm:entry-point')
 void _testParameterServer(
-    IRpcTransport transport, Map<String, dynamic> params) {
+  IRpcTransport transport,
+  Map<String, dynamic> params,
+) {
   final responsePrefix = params['responsePrefix'] as String? ?? '[DEFAULT]: ';
 
   transport.incomingMessages.listen((message) async {
@@ -949,7 +990,9 @@ void _faultyServer(IRpcTransport transport, Map<String, dynamic> params) {
 /// Мульти-стрим сервер для тестирования фильтрации
 @pragma('vm:entry-point')
 void _testMultiStreamServer(
-    IRpcTransport transport, Map<String, dynamic> params) {
+  IRpcTransport transport,
+  Map<String, dynamic> params,
+) {
   transport.incomingMessages.listen((message) async {
     if (!message.isMetadataOnly && message.payload != null) {
       final originalText = String.fromCharCodes(message.payload!);
@@ -965,7 +1008,9 @@ void _testMultiStreamServer(
 /// Полный цикл сервер для интеграционных тестов
 @pragma('vm:entry-point')
 void _testFullCycleServer(
-    IRpcTransport transport, Map<String, dynamic> params) {
+  IRpcTransport transport,
+  Map<String, dynamic> params,
+) {
   final responseCount = params['responseCount'] as int? ?? 1;
 
   transport.incomingMessages.listen((message) async {
@@ -983,8 +1028,11 @@ void _testFullCycleServer(
 
       // Отправляем финальные метаданные
       final finalMetadata = RpcMetadata.forTrailer(RpcStatus.OK);
-      await transport.sendMetadata(message.streamId, finalMetadata,
-          endStream: true);
+      await transport.sendMetadata(
+        message.streamId,
+        finalMetadata,
+        endStream: true,
+      );
     }
   });
 }
@@ -995,10 +1043,15 @@ void _testErrorServer(IRpcTransport transport, Map<String, dynamic> params) {
   transport.incomingMessages.listen((message) async {
     if (!message.isMetadataOnly && message.payload != null) {
       // Отправляем ошибку
-      final errorMetadata =
-          RpcMetadata.forTrailer(RpcStatus.INTERNAL, message: 'Test error');
-      await transport.sendMetadata(message.streamId, errorMetadata,
-          endStream: true);
+      final errorMetadata = RpcMetadata.forTrailer(
+        RpcStatus.INTERNAL,
+        message: 'Test error',
+      );
+      await transport.sendMetadata(
+        message.streamId,
+        errorMetadata,
+        endStream: true,
+      );
     }
   });
 }
@@ -1043,8 +1096,11 @@ void _testZeroCopyServer(IRpcTransport transport, Map<String, dynamic> params) {
       );
 
       // Отправляем назад через zero-copy
-      await transport.sendDirectObject(message.streamId, modifiedObject,
-          endStream: true);
+      await transport.sendDirectObject(
+        message.streamId,
+        modifiedObject,
+        endStream: true,
+      );
     }
   });
 }
@@ -1052,7 +1108,9 @@ void _testZeroCopyServer(IRpcTransport transport, Map<String, dynamic> params) {
 /// Zero-copy сервер для примитивов и коллекций
 @pragma('vm:entry-point')
 void _testPrimitivesZeroCopyServer(
-    IRpcTransport transport, Map<String, dynamic> params) {
+  IRpcTransport transport,
+  Map<String, dynamic> params,
+) {
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload != null) {
       // Получаем любой объект и отправляем эхо-ответ
@@ -1067,7 +1125,9 @@ void _testPrimitivesZeroCopyServer(
 /// Сервер для тестирования производительности
 @pragma('vm:entry-point')
 void _testPerformanceServer(
-    IRpcTransport transport, Map<String, dynamic> params) {
+  IRpcTransport transport,
+  Map<String, dynamic> params,
+) {
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload != null) {
       // Просто отправляем подтверждение
@@ -1083,7 +1143,9 @@ void _testPerformanceServer(
 /// Zero-copy сервер с обработкой ошибок
 @pragma('vm:entry-point')
 void _testZeroCopyErrorServer(
-    IRpcTransport transport, Map<String, dynamic> params) {
+  IRpcTransport transport,
+  Map<String, dynamic> params,
+) {
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload != null) {
       final receivedObject = message.directPayload as TestComplexObject;
@@ -1095,12 +1157,18 @@ void _testZeroCopyErrorServer(
           RpcStatus.INVALID_ARGUMENT,
           message: 'Invalid object ID: ${receivedObject.id}',
         );
-        await transport.sendMetadata(message.streamId, errorMetadata,
-            endStream: true);
+        await transport.sendMetadata(
+          message.streamId,
+          errorMetadata,
+          endStream: true,
+        );
       } else {
         // Обычная обработка
-        await transport.sendDirectObject(message.streamId, 'Success',
-            endStream: true);
+        await transport.sendDirectObject(
+          message.streamId,
+          'Success',
+          endStream: true,
+        );
       }
     }
   });

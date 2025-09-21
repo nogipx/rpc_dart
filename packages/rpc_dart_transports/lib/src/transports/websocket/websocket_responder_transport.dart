@@ -12,8 +12,9 @@ import 'websocket_base_transport.dart';
 /// и использует четные StreamID для мультиплексирования.
 class RpcWebSocketResponderTransport extends RpcWebSocketTransportBase {
   /// Реализация менеджера ID для серверной стороны
-  final RpcStreamIdManager _streamIdManager =
-      RpcStreamIdManager(isClient: false);
+  final RpcStreamIdManager _streamIdManager = RpcStreamIdManager(
+    isClient: false,
+  );
 
   @override
   RpcStreamIdManager get idManager => _streamIdManager;
@@ -25,10 +26,7 @@ class RpcWebSocketResponderTransport extends RpcWebSocketTransportBase {
   ///
   /// [channel] WebSocket канал для коммуникации
   /// [logger] Опциональный логгер для отладки
-  RpcWebSocketResponderTransport(
-    super.channel, {
-    super.logger,
-  });
+  RpcWebSocketResponderTransport(super.channel, {super.logger});
 
   @override
   bool get supportsZeroCopy => false;

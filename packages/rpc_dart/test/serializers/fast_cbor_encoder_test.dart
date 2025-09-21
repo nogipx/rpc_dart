@@ -67,10 +67,12 @@ void main() {
       test('Binary data encoding optimization', () {
         final testData = {
           'small_binary': Uint8List.fromList([1, 2, 3]),
-          'medium_binary':
-              Uint8List.fromList(List.generate(1000, (i) => i % 256)),
-          'large_binary':
-              Uint8List.fromList(List.generate(100000, (i) => i % 256)),
+          'medium_binary': Uint8List.fromList(
+            List.generate(1000, (i) => i % 256),
+          ),
+          'large_binary': Uint8List.fromList(
+            List.generate(100000, (i) => i % 256),
+          ),
           'empty_binary': Uint8List(0),
         };
 
@@ -96,7 +98,7 @@ void main() {
           'extreme_floats': [
             double.infinity,
             double.negativeInfinity,
-            double.nan
+            double.nan,
           ],
           'precision_floats': [1.0e-100, 1.0e+100, 1.7976931348623157e+308],
           'special_zero': [0.0, -0.0],
@@ -130,7 +132,8 @@ void main() {
         final minTime = times.reduce((a, b) => a < b ? a : b);
 
         print(
-            'Float encoding times: ${times.join(', ')}μs (avg: ${avgTime.round()}μs, min: $minTimeμs)');
+          'Float encoding times: ${times.join(', ')}μs (avg: ${avgTime.round()}μs, min: $minTimeμs)',
+        );
 
         // Более мягкая проверка производительности - используем среднее время и увеличенный лимит
         expect(avgTime, lessThan(10000)); // < 3ms среднее время
@@ -154,7 +157,7 @@ void main() {
               'created': DateTime.now().millisecondsSinceEpoch,
               'description': 'Level $depth description',
               'tags': ['tag_$depth', 'level_$depth', 'nested'],
-            }
+            },
           };
         }
 
@@ -165,7 +168,8 @@ void main() {
         stopwatch.stop();
 
         print(
-            'Complex nested encoding took: ${stopwatch.elapsedMilliseconds}ms');
+          'Complex nested encoding took: ${stopwatch.elapsedMilliseconds}ms',
+        );
         print('Encoded size: ${encoded.length} bytes');
 
         final decoded = CborCodec.decode(encoded);
@@ -203,9 +207,11 @@ void main() {
         stopwatch.stop();
 
         print(
-            'Large map (10k entries) encoding took: ${stopwatch.elapsedMilliseconds}ms');
+          'Large map (10k entries) encoding took: ${stopwatch.elapsedMilliseconds}ms',
+        );
         print(
-            'Encoded size: ${(encoded.length / 1024 / 1024).toStringAsFixed(2)} MB');
+          'Encoded size: ${(encoded.length / 1024 / 1024).toStringAsFixed(2)} MB',
+        );
 
         expect(stopwatch.elapsedMilliseconds, lessThan(5000)); // < 5 секунд
         expect(encoded.length, greaterThan(1000000)); // > 1MB
@@ -218,8 +224,8 @@ void main() {
           'text': 'Same every time',
           'nested': {
             'inner': [1, 2, 3, 4, 5],
-            'map': {'a': 1, 'b': 2}
-          }
+            'map': {'a': 1, 'b': 2},
+          },
         };
 
         final encodings = <Uint8List>[];
@@ -306,7 +312,8 @@ void main() {
 
         print('Length encoding test took: ${stopwatch.elapsedMilliseconds}ms');
         print(
-            'Total encoded size: ${(encoded.length / 1024 / 1024).toStringAsFixed(2)} MB');
+          'Total encoded size: ${(encoded.length / 1024 / 1024).toStringAsFixed(2)} MB',
+        );
 
         final decoded = CborCodec.decode(encoded);
         expect(decoded['short_string'], equals('a' * 20));
@@ -316,8 +323,10 @@ void main() {
         expect(decoded['long_string'], equals('c' * 1000));
         expect(decoded['long_array'], equals(List.generate(1000, (i) => i)));
         expect(decoded['very_long_string'], equals('d' * 100000));
-        expect(decoded['very_long_array'],
-            equals(List.generate(100000, (i) => i % 1000)));
+        expect(
+          decoded['very_long_array'],
+          equals(List.generate(100000, (i) => i % 1000)),
+        );
 
         expect(stopwatch.elapsedMilliseconds, lessThan(3000)); // < 3 секунды
       });
@@ -333,8 +342,9 @@ void main() {
             testData['item_$i'] = {
               'id': i,
               'data': List.generate(50, (j) => '$i-$j'),
-              'binary':
-                  Uint8List.fromList(List.generate(100, (k) => (i + k) % 256)),
+              'binary': Uint8List.fromList(
+                List.generate(100, (k) => (i + k) % 256),
+              ),
             };
           }
 
@@ -345,10 +355,13 @@ void main() {
           final encodingSpeed =
               encoded.length / stopwatch.elapsedMicroseconds; // bytes/μs
           print(
-              'Size $size: ${stopwatch.elapsedMicroseconds}μs, ${encoded.length} bytes, ${encodingSpeed.toStringAsFixed(2)} bytes/μs');
+            'Size $size: ${stopwatch.elapsedMicroseconds}μs, ${encoded.length} bytes, ${encodingSpeed.toStringAsFixed(2)} bytes/μs',
+          );
 
-          expect(stopwatch.elapsedMicroseconds,
-              lessThan(size * 10000)); // Линейная зависимость
+          expect(
+            stopwatch.elapsedMicroseconds,
+            lessThan(size * 10000),
+          ); // Линейная зависимость
         }
       });
     });

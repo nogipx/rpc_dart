@@ -62,7 +62,9 @@ void main() {
         expect(response, contains('authorization:Bearer token-456'));
         expect(response, contains('custom-header:custom-value'));
         expect(
-            response, contains('special-chars:value with spaces & symbols!'));
+          response,
+          contains('special-chars:value with spaces & symbols!'),
+        );
         expect(response, contains('numbers:12345'));
         expect(response, contains('unicode:тест с unicode 🚀'));
       });
@@ -84,8 +86,10 @@ void main() {
         // Assert
         final response = result.value;
         expect(response, contains('trace-id:test-trace-123'));
-        expect(response,
-            contains('request-id:req_')); // Проверяем формат request ID
+        expect(
+          response,
+          contains('request-id:req_'),
+        ); // Проверяем формат request ID
       });
     });
 
@@ -198,8 +202,10 @@ void main() {
         // Assert
         expect(responses.length, equals(3));
         expect(responses.every((r) => r.value.contains('test-prefix')), isTrue);
-        expect(responses.every((r) => r.value.contains('server-stream-trace')),
-            isTrue);
+        expect(
+          responses.every((r) => r.value.contains('server-stream-trace')),
+          isTrue,
+        );
       });
     });
 
@@ -233,7 +239,9 @@ void main() {
 
         // Assert
         expect(
-            response.value, contains('count:6')); // 3 items * multiplier 2 = 6
+          response.value,
+          contains('count:6'),
+        ); // 3 items * multiplier 2 = 6
         expect(response.value, contains('multiplier:2'));
         expect(response.value, contains('client-stream-trace'));
       });
@@ -267,10 +275,12 @@ void main() {
 
         requestController.add('hello'.rpc);
         await Future.delayed(
-            Duration(milliseconds: 1)); // Даем время для обработки
+          Duration(milliseconds: 1),
+        ); // Даем время для обработки
         requestController.add('world'.rpc);
         await Future.delayed(
-            Duration(milliseconds: 1)); // Даем время для обработки
+          Duration(milliseconds: 1),
+        ); // Даем время для обработки
         await requestController.close();
 
         // Ждем больше времени для получения ответов
@@ -281,8 +291,10 @@ void main() {
         expect(responses.length, equals(2));
         expect(responses[0].value, contains('ECHO:HELLO'));
         expect(responses[1].value, contains('ECHO:WORLD'));
-        expect(responses.every((r) => r.value.contains('bidirectional-trace')),
-            isTrue);
+        expect(
+          responses.every((r) => r.value.contains('bidirectional-trace')),
+          isTrue,
+        );
       });
     });
 
@@ -308,9 +320,9 @@ void main() {
         expect(response, contains('visible-header:should-appear'));
         expect(response, isNot(contains('should-not-appear')));
         expect(
-            response,
-            contains(
-                'context-values-count:0')); // Сервер не должен видеть context values
+          response,
+          contains('context-values-count:0'),
+        ); // Сервер не должен видеть context values
       });
     });
 
@@ -347,16 +359,16 @@ void main() {
 
         // Assert
         expect(result.value, isNotEmpty); // Должен содержать хотя бы requestId
-        expect(result.value,
-            contains('request-id:req_')); // Базовый requestId должен быть
+        expect(
+          result.value,
+          contains('request-id:req_'),
+        ); // Базовый requestId должен быть
       });
 
       test('очень_длинные_заголовки_работают', () async {
         // Arrange
         final longValue = 'x' * 1000; // 1KB заголовок
-        final context = RpcContext.withHeaders({
-          'long-header': longValue,
-        });
+        final context = RpcContext.withHeaders({'long-header': longValue});
 
         // Act
         final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
@@ -454,33 +466,43 @@ final class ValidationServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _validateHeaders(RpcString request,
-      {RpcContext? context}) async {
+  Future<RpcString> _validateHeaders(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
     final headers = context?.headers ?? <String, String>{};
     final result = headers.entries.map((e) => '${e.key}:${e.value}').join('|');
     return result.rpc;
   }
 
-  Future<RpcString> _validateSystemHeaders(RpcString request,
-      {RpcContext? context}) async {
+  Future<RpcString> _validateSystemHeaders(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
     final traceId = context?.traceId ?? '';
     final requestId = context?.requestId;
     return 'trace-id:$traceId|request-id:$requestId'.rpc;
   }
 
-  Future<RpcString> _slowOperation(RpcString request,
-      {RpcContext? context}) async {
+  Future<RpcString> _slowOperation(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
     await Future.delayed(Duration(seconds: 5)); // Превышает timeout в тесте
     return 'slow-result'.rpc;
   }
 
-  Future<RpcString> _fastOperation(RpcString request,
-      {RpcContext? context}) async {
+  Future<RpcString> _fastOperation(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
     return 'fast-result'.rpc;
   }
 
-  Future<RpcString> _longOperation(RpcString request,
-      {RpcContext? context}) async {
+  Future<RpcString> _longOperation(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
     // Проверяем отмену каждые 10мс
     for (int i = 0; i < 1000; i++) {
       context?.cancellationToken?.throwIfCancelled();
@@ -489,8 +511,10 @@ final class ValidationServiceContract extends RpcResponderContract {
     return 'long-result'.rpc;
   }
 
-  Future<RpcString> _checkContextValues(RpcString request,
-      {RpcContext? context}) async {
+  Future<RpcString> _checkContextValues(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
     final headers = context?.headers ?? <String, String>{};
     final values = context?.values ?? <Object, Object>{};
     final headersList =
@@ -498,8 +522,10 @@ final class ValidationServiceContract extends RpcResponderContract {
     return '$headersList|context-values-count:${values.length}'.rpc;
   }
 
-  Stream<RpcString> _generateWithContext(RpcString request,
-      {RpcContext? context}) async* {
+  Stream<RpcString> _generateWithContext(
+    RpcString request, {
+    RpcContext? context,
+  }) async* {
     final size = int.parse(context?.getHeader('stream-size') ?? '1');
     final prefix = context?.getHeader('stream-prefix') ?? 'default';
     final traceId = context?.traceId ?? 'no-trace';
@@ -509,8 +535,10 @@ final class ValidationServiceContract extends RpcResponderContract {
     }
   }
 
-  Future<RpcString> _aggregateWithContext(Stream<RpcString> requests,
-      {RpcContext? context}) async {
+  Future<RpcString> _aggregateWithContext(
+    Stream<RpcString> requests, {
+    RpcContext? context,
+  }) async {
     final aggregationType = context?.getHeader('aggregation-type') ?? 'concat';
     final multiplier = int.parse(context?.getHeader('multiplier') ?? '1');
     final traceId = context?.traceId ?? 'no-trace';
@@ -525,8 +553,10 @@ final class ValidationServiceContract extends RpcResponderContract {
     return 'concat:${items.map((i) => i.value).join(',')}|trace:$traceId'.rpc;
   }
 
-  Stream<RpcString> _processWithContext(Stream<RpcString> requests,
-      {RpcContext? context}) async* {
+  Stream<RpcString> _processWithContext(
+    Stream<RpcString> requests, {
+    RpcContext? context,
+  }) async* {
     final prefix = context?.getHeader('echo-prefix') ?? 'ECHO';
     final transform = context?.getHeader('transform') ?? 'none';
     final traceId = context?.traceId ?? 'no-trace';

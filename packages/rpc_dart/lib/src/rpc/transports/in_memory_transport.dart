@@ -195,6 +195,69 @@ class RpcInMemoryTransport implements IRpcTransport {
     }
   }
 
+  Map<String, Object?> _collectHealthDetails() {
+    return {
+      'isClosed': _closed,
+      'activeStreams': _activeStreams.length,
+      'incomingControllerClosed': _incomingController.isClosed,
+      'outgoingControllerClosed': _outgoingController.isClosed,
+      'partnerAttached': _partner != null,
+      'partnerClosed': _partner?._closed,
+    };
+  }
+
+  @override
+  Future<RpcHealthStatus> health() async {
+    if (_closed) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'In-memory transport is closed',
+        details: _collectHealthDetails(),
+      );
+    }
+
+    final partnerClosed = _partner?._closed ?? false;
+    if (partnerClosed) {
+      return RpcHealthStatus.degraded(
+        component: runtimeType.toString(),
+        message: 'Partner transport is closed',
+        details: _collectHealthDetails(),
+      );
+    }
+
+    return RpcHealthStatus.healthy(
+      component: runtimeType.toString(),
+      message: 'In-memory transport ready',
+      details: _collectHealthDetails(),
+    );
+  }
+
+  @override
+  Future<RpcHealthStatus> reconnect() async {
+    if (_closed) {
+      return RpcHealthStatus.unhealthy(
+        component: runtimeType.toString(),
+        message:
+            'RpcInMemoryTransport cannot be reconnected after close(). Create a new pair instead.',
+        details: {..._collectHealthDetails(), 'supported': false},
+      );
+    }
+
+    if (_partner?._closed ?? false) {
+      return RpcHealthStatus.degraded(
+        component: runtimeType.toString(),
+        message: 'Partner transport is closed and requires recreation',
+        details: {..._collectHealthDetails(), 'supported': false},
+      );
+    }
+
+    return RpcHealthStatus.healthy(
+      component: runtimeType.toString(),
+      message: 'Reconnect is a no-op for in-memory transport',
+      details: {..._collectHealthDetails(), 'supported': false},
+    );
+  }
+
   @override
   Future<void> close() async {
     if (_closed) return;

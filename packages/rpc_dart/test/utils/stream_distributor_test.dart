@@ -11,10 +11,7 @@ class TestMessage implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() {
-    return {
-      'content': content,
-      'value': value,
-    };
+    return {'content': content, 'value': value};
   }
 
   @override
@@ -114,8 +111,10 @@ void main() {
       // Проверяем результаты
       expect(delivered, isTrue); // Успешная доставка
       expect(receivedMessages1.length, 1);
-      expect(receivedMessages2.length,
-          0); // Этот клиент не должен получить сообщение
+      expect(
+        receivedMessages2.length,
+        0,
+      ); // Этот клиент не должен получить сообщение
       expect(receivedMessages1.first.content, 'targeted message');
 
       // Отписываемся, чтобы избежать утечек
@@ -166,21 +165,27 @@ void main() {
 
       // Отправляем первое сообщение
       distributor.publishToClient(
-          'client-pause-test', TestMessage('message 1', 1));
+        'client-pause-test',
+        TestMessage('message 1', 1),
+      );
       await Future.delayed(Duration(milliseconds: 1));
       expect(receivedMessages.length, 1);
 
       // Ставим на паузу и отправляем второе сообщение
       expect(distributor.pauseClientStream('client-pause-test'), isTrue);
       distributor.publishToClient(
-          'client-pause-test', TestMessage('message 2', 2));
+        'client-pause-test',
+        TestMessage('message 2', 2),
+      );
       await Future.delayed(Duration(milliseconds: 1));
       expect(receivedMessages.length, 1); // Не должно увеличиться
 
       // Возобновляем и отправляем третье сообщение
       expect(distributor.resumeClientStream('client-pause-test'), isTrue);
       distributor.publishToClient(
-          'client-pause-test', TestMessage('message 3', 3));
+        'client-pause-test',
+        TestMessage('message 3', 3),
+      );
       await Future.delayed(Duration(milliseconds: 1));
       expect(receivedMessages.length, 2); // Должно получить сообщение 3
       expect(receivedMessages.last.content, 'message 3');
@@ -206,8 +211,9 @@ void main() {
       await Future.delayed(Duration(milliseconds: 1));
 
       // Получаем список неактивных клиентов
-      final inactiveIds =
-          testDistributor.getInactiveClientIds(Duration(milliseconds: 1));
+      final inactiveIds = testDistributor.getInactiveClientIds(
+        Duration(milliseconds: 1),
+      );
 
       // Выводим для отладки
       print('Неактивные клиенты: $inactiveIds');
@@ -215,8 +221,11 @@ void main() {
 
       // Проверяем, что все клиенты отмечены как неактивные,
       // так как оба стрима уже определенное время не получали обновлений
-      expect(inactiveIds.length, 2,
-          reason: 'Все клиенты должны быть в списке неактивных');
+      expect(
+        inactiveIds.length,
+        2,
+        reason: 'Все клиенты должны быть в списке неактивных',
+      );
       expect(inactiveIds, contains('client1'));
       expect(inactiveIds, contains('client2'));
 
@@ -227,9 +236,7 @@ void main() {
     test('Закрытие неактивных стримов', () async {
       // Создаем тестовый дистрибьютор
       final testDistributor = StreamDistributor<TestMessage>(
-        config: StreamDistributorConfig(
-          enableAutoCleanup: false,
-        ),
+        config: StreamDistributorConfig(enableAutoCleanup: false),
       );
 
       // Создаем два клиента
@@ -299,7 +306,8 @@ void main() {
       // 5. Проверяем, сколько клиентов осталось
       // В зависимости от реализации autoRemoveOnCancel, может быть 0 или 1
       print(
-          'Оставшиеся клиенты: ${autoCleanupDistributor.getActiveClientIds()}');
+        'Оставшиеся клиенты: ${autoCleanupDistributor.getActiveClientIds()}',
+      );
 
       // Чистим ресурсы
       await sub2.cancel();
@@ -386,7 +394,9 @@ void main() {
 
       // Попытки использовать закрытый дистрибьютор должны не влиять на состояние
       final delivered = distributor.publishToClient(
-          'test-client', TestMessage('should not be delivered', 1));
+        'test-client',
+        TestMessage('should not be delivered', 1),
+      );
       expect(delivered, isFalse);
 
       // Повторный вызов dispose не должен вызывать ошибок
@@ -398,7 +408,9 @@ void main() {
 
       expect(() => distributor.createClientStream(), throwsStateError);
       expect(
-          () => distributor.createClientStreamWithId('test'), throwsStateError);
+        () => distributor.createClientStreamWithId('test'),
+        throwsStateError,
+      );
     });
   });
 }

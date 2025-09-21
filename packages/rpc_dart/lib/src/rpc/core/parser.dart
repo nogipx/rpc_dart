@@ -75,14 +75,16 @@ final class RpcMessageParser {
       // Если мы еще не знаем длину сообщения, извлекаем ее из заголовка
       if (_state.expectedMessageLength == null) {
         try {
-          final header =
-              RpcMessageFrame.parseHeader(Uint8List.fromList(_state.buffer));
+          final header = RpcMessageFrame.parseHeader(
+            Uint8List.fromList(_state.buffer),
+          );
           _state.isCompressed = header.isCompressed;
           _state.expectedMessageLength = header.messageLength;
 
           // Удаляем заголовок из буфера
-          _state.buffer =
-              _state.buffer.sublist(RpcConstants.MESSAGE_PREFIX_SIZE);
+          _state.buffer = _state.buffer.sublist(
+            RpcConstants.MESSAGE_PREFIX_SIZE,
+          );
         } catch (e, trace) {
           _logger?.error(
             'Ошибка при парсинге заголовка: $e',
@@ -96,8 +98,10 @@ final class RpcMessageParser {
       // Если у нас достаточно данных для полного сообщения
       if (_state.buffer.length >= _state.expectedMessageLength!) {
         // Извлекаем сообщение
-        final messageBytes =
-            _state.buffer.sublist(0, _state.expectedMessageLength!);
+        final messageBytes = _state.buffer.sublist(
+          0,
+          _state.expectedMessageLength!,
+        );
         result.add(Uint8List.fromList(messageBytes));
 
         // Обновляем буфер, удаляя обработанное сообщение

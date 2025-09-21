@@ -43,16 +43,24 @@ void main() {
       test('65536 to 4294967295', () {
         expect(bytesToHex(CborCodec.encodeUnsafe(65536)), equals('1a00010000'));
         expect(
-            bytesToHex(CborCodec.encodeUnsafe(1000000)), equals('1a000f4240'));
-        expect(bytesToHex(CborCodec.encodeUnsafe(4294967295)),
-            equals('1affffffff'));
+          bytesToHex(CborCodec.encodeUnsafe(1000000)),
+          equals('1a000f4240'),
+        );
+        expect(
+          bytesToHex(CborCodec.encodeUnsafe(4294967295)),
+          equals('1affffffff'),
+        );
       });
 
       test('4294967296 and above', () {
-        expect(bytesToHex(CborCodec.encodeUnsafe(4294967296)),
-            equals('1b0000000100000000'));
-        expect(bytesToHex(CborCodec.encodeUnsafe(1000000000000)),
-            equals('1b000000e8d4a51000'));
+        expect(
+          bytesToHex(CborCodec.encodeUnsafe(4294967296)),
+          equals('1b0000000100000000'),
+        );
+        expect(
+          bytesToHex(CborCodec.encodeUnsafe(1000000000000)),
+          equals('1b000000e8d4a51000'),
+        );
       });
     });
 
@@ -108,29 +116,39 @@ void main() {
       test('ASCII strings', () {
         expect(bytesToHex(CborCodec.encodeUnsafe('a')), equals('6161'));
         expect(
-            bytesToHex(CborCodec.encodeUnsafe('IETF')), equals('6449455446'));
-        expect(bytesToHex(CborCodec.encodeUnsafe('hello')),
-            equals('6568656c6c6f'));
+          bytesToHex(CborCodec.encodeUnsafe('IETF')),
+          equals('6449455446'),
+        );
+        expect(
+          bytesToHex(CborCodec.encodeUnsafe('hello')),
+          equals('6568656c6c6f'),
+        );
       });
 
       test('Unicode strings', () {
-        expect(bytesToHex(CborCodec.encodeUnsafe('привет')),
-            equals('6cd0bfd180d0b8d0b2d0b5d182'));
+        expect(
+          bytesToHex(CborCodec.encodeUnsafe('привет')),
+          equals('6cd0bfd180d0b8d0b2d0b5d182'),
+        );
         expect(bytesToHex(CborCodec.encodeUnsafe('☺')), equals('63e298ba'));
       });
 
       test('Longer strings', () {
         final longStr = 'a' * 24;
         final encoded = CborCodec.encodeUnsafe(longStr);
-        expect(encoded[0],
-            equals(0x78)); // начинается с 0x78 (строка, длина в 1 байт)
+        expect(
+          encoded[0],
+          equals(0x78),
+        ); // начинается с 0x78 (строка, длина в 1 байт)
         expect(encoded[1], equals(24)); // длина 24
         expect(CborCodec.decodeUnsafe(encoded), equals(longStr));
 
         final veryLongStr = 'a' * 1000;
         final encoded2 = CborCodec.encodeUnsafe(veryLongStr);
-        expect(encoded2[0],
-            equals(0x79)); // начинается с 0x79 (строка, длина в 2 байта)
+        expect(
+          encoded2[0],
+          equals(0x79),
+        ); // начинается с 0x79 (строка, длина в 2 байта)
         expect(CborCodec.decodeUnsafe(encoded2), equals(veryLongStr));
       });
     });
@@ -142,14 +160,19 @@ void main() {
 
       test('Small arrays', () {
         expect(
-            bytesToHex(CborCodec.encodeUnsafe([1, 2, 3])), equals('83010203'));
+          bytesToHex(CborCodec.encodeUnsafe([1, 2, 3])),
+          equals('83010203'),
+        );
         expect(
-            bytesToHex(CborCodec.encodeUnsafe([
+          bytesToHex(
+            CborCodec.encodeUnsafe([
               1,
               [2, 3],
-              [4, 5]
-            ])),
-            equals('8301820203820405'));
+              [4, 5],
+            ]),
+          ),
+          equals('8301820203820405'),
+        );
       });
 
       test('Arrays with mixed types', () {
@@ -159,7 +182,7 @@ void main() {
           'hello',
           true,
           null,
-          [1, 2]
+          [1, 2],
         ]);
         final decoded = CborCodec.decodeUnsafe(encoded);
         expect(decoded[0], equals(1));
@@ -173,8 +196,10 @@ void main() {
       test('Longer arrays', () {
         final longArray = List.generate(100, (i) => i);
         final encoded = CborCodec.encodeUnsafe(longArray);
-        expect(encoded[0],
-            equals(0x98)); // начинается с 0x98 (массив, длина в 1 байт)
+        expect(
+          encoded[0],
+          equals(0x98),
+        ); // начинается с 0x98 (массив, длина в 1 байт)
         expect(encoded[1], equals(100)); // длина 100
         expect(CborCodec.decodeUnsafe(encoded), equals(longArray));
       });
@@ -186,15 +211,17 @@ void main() {
       });
 
       test('Simple maps', () {
-        expect(bytesToHex(CborCodec.encode({'a': 1, 'b': 2})),
-            equals('a2616101616202'));
+        expect(
+          bytesToHex(CborCodec.encode({'a': 1, 'b': 2})),
+          equals('a2616101616202'),
+        );
       });
 
       test('Maps with nested structures', () {
         final encoded = CborCodec.encode({
           'a': 1,
           'b': [2, 3],
-          'c': {'d': 4}
+          'c': {'d': 4},
         });
         final decoded = CborCodec.decodeUnsafe(encoded);
         expect(decoded['a'], equals(1));
@@ -216,9 +243,12 @@ void main() {
         final bytes = Uint8List.fromList([1, 2, 3, 4]);
         final encoded = CborCodec.encodeUnsafe(bytes);
         // 0x44 = 0x40 (major type 2) + 4 (length)
-        expect(encoded[0], equals(0x44),
-            reason:
-                'First byte should be 0x44 for a 4-byte string (major type 2 with length 4)');
+        expect(
+          encoded[0],
+          equals(0x44),
+          reason:
+              'First byte should be 0x44 for a 4-byte string (major type 2 with length 4)',
+        );
         final decoded = CborCodec.decodeUnsafe(encoded);
         expect(decoded, equals(bytes));
       });
@@ -254,15 +284,15 @@ void main() {
           {'value': [], 'hex': '80'},
           {
             'value': [1, 2, 3],
-            'hex': '83010203'
+            'hex': '83010203',
           },
           {
             'value': [
               1,
               [2, 3],
-              [4, 5]
+              [4, 5],
             ],
-            'hex': '8301820203820405'
+            'hex': '8301820203820405',
           },
           {
             'value': [
@@ -290,9 +320,9 @@ void main() {
               22,
               23,
               24,
-              25
+              25,
             ],
-            'hex': '98190102030405060708090a0b0c0d0e0f101112131415161718181819'
+            'hex': '98190102030405060708090a0b0c0d0e0f101112131415161718181819',
           },
 
           // Map
@@ -300,9 +330,9 @@ void main() {
           {
             'value': {
               'a': 1,
-              'b': [2, 3]
+              'b': [2, 3],
             },
-            'hex': 'a26161016162820203'
+            'hex': 'a26161016162820203',
           },
         ];
 
@@ -311,13 +341,19 @@ void main() {
           final hexExpected = example['hex'] as String;
           final encoded = CborCodec.encodeUnsafe(value);
           final hexActual = bytesToHex(encoded);
-          expect(hexActual, equals(hexExpected),
-              reason: 'Encoding of $value failed');
+          expect(
+            hexActual,
+            equals(hexExpected),
+            reason: 'Encoding of $value failed',
+          );
 
           // Проверяем также декодирование
           final decoded = CborCodec.decodeUnsafe(hexToBytes(hexExpected));
-          expect(decoded, equals(value),
-              reason: 'Decoding of $hexExpected failed');
+          expect(
+            decoded,
+            equals(value),
+            reason: 'Decoding of $hexExpected failed',
+          );
         }
       });
     });
@@ -338,17 +374,17 @@ void main() {
             [
               3,
               4,
-              [5, 6]
-            ]
+              [5, 6],
+            ],
           ],
           'map': {
             'a': 1,
             'b': 2,
             'nested': {
               'c': 3,
-              'd': [4, 5, 6]
-            }
-          }
+              'd': [4, 5, 6],
+            },
+          },
         };
 
         final encoded = CborCodec.encodeUnsafe(complexData);
@@ -385,17 +421,17 @@ void main() {
             [
               3,
               4,
-              [5, 6]
-            ]
+              [5, 6],
+            ],
           ],
           'map': {
             'a': 1,
             'b': 2,
             'nested': {
               'c': 3,
-              'd': [4, 5, 6]
-            }
-          }
+              'd': [4, 5, 6],
+            },
+          },
         };
 
         final cborEncoded = CborCodec.encode(testData);
@@ -404,7 +440,8 @@ void main() {
         print('CBOR size: ${cborEncoded.length} bytes');
         print('JSON size: ${jsonEncoded.length} bytes');
         print(
-            'Space saving: ${((jsonEncoded.length - cborEncoded.length) / jsonEncoded.length * 100).toStringAsFixed(2)}%');
+          'Space saving: ${((jsonEncoded.length - cborEncoded.length) / jsonEncoded.length * 100).toStringAsFixed(2)}%',
+        );
 
         // Убедимся, что CBOR компактнее JSON
         expect(cborEncoded.length, lessThan(jsonEncoded.length));

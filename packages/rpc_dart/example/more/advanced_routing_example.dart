@@ -55,7 +55,6 @@ Future<void> _demonstrateRealWorldRouting() async {
         priority: 100,
         description: '🌟 Premium пользователи → VIP сервер',
       )
-
       // A/B тестирование Payment Service V2 (приоритет 90)
       .routeWhen(
         toTransport: paymentV2TransportPair.$1,
@@ -65,9 +64,7 @@ Future<void> _demonstrateRealWorldRouting() async {
         priority: 90,
         description: '🧪 A/B тест Payment Service V2',
       )
-
       // 🎯 СРЕДНИЙ ПРИОРИТЕТ: Обычные сервисы (приоритет 50)
-
       .routeCall(
         calledServiceName: 'OrderService',
         toTransport: orderTransportPair.$1,
@@ -78,16 +75,13 @@ Future<void> _demonstrateRealWorldRouting() async {
         toTransport: auditTransportPair.$1,
         priority: 50,
       )
-
       // 🎯 НИЗКИЙ ПРИОРИТЕТ: Fallback правила (срабатывают последними)
-
       // Обычные пользователи UserService (приоритет 10)
       .routeCall(
         calledServiceName: 'UserService',
         toTransport: userTransportPair.$1,
         priority: 10,
       )
-
       // Стабильная версия Payment Service (приоритет 10)
       .routeCall(
         calledServiceName: 'PaymentService',
@@ -133,7 +127,9 @@ Future<void> _setupDomainServers(
 
 /// Создает demo контракт для примера роутинга
 RpcResponderContract _createDemoServiceContract(
-    String serviceName, String label) {
+  String serviceName,
+  String label,
+) {
   return _DemoServiceContract(serviceName, label);
 }
 
@@ -316,7 +312,8 @@ final class _DemoServiceContract extends RpcResponderContract {
         final reason = context?.getHeader('x-reason') ?? 'not specified';
         final adminId = context?.getHeader('x-admin-id') ?? 'unknown';
         return RpcString(
-            '🔍 $_label: удаление пользователя [админ: $adminId, причина: $reason]');
+          '🔍 $_label: удаление пользователя [админ: $adminId, причина: $reason]',
+        );
       },
     );
   }

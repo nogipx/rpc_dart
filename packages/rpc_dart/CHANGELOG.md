@@ -1,3 +1,9 @@
+# 2.3.0
+
+- Added health() and reconnect() APIs for endpoints and transports.
+- Added health diagnostics for RpcInMemoryTransport and RpcTransportRouter.
+- Updated documentation with health monitoring examples.
+
 # Changelog
 
 ## 2.2.2

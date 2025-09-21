@@ -40,11 +40,14 @@ Future<void> runIsolateExample() async {
   );
 
   // Подписываемся на ответы
-  final subscription = client.responses.listen((message) {
-    print('КЛИЕНТ: Получен ответ: "${message.payload}"');
-  }, onError: (error) {
-    print('КЛИЕНТ: Ошибка: $error');
-  });
+  final subscription = client.responses.listen(
+    (message) {
+      print('КЛИЕНТ: Получен ответ: "${message.payload}"');
+    },
+    onError: (error) {
+      print('КЛИЕНТ: Ошибка: $error');
+    },
+  );
 
   // Отправляем запросы
   print('\nОтправляем запрос: "Привет, сервер!"');

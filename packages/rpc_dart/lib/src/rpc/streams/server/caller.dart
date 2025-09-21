@@ -68,19 +68,23 @@ final class ServerStreamCaller<TRequest extends Object,
     // Zero-copy режим: требуется RpcInMemoryTransport
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.');
+        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
+        'Для сетевых транспортов передайте кодеки.',
+      );
     }
 
     // Режим сериализации: кодеки обязательны
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).');
+      throw ArgumentError(
+        'Кодеки обязательны для режима сериализации. '
+        'Для zero-copy не передавайте кодеки (null).',
+      );
     }
 
     _logger = logger?.child('ServerCaller');
     _logger?.internal(
-        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamCaller для $serviceName.$methodName');
+      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamCaller для $serviceName.$methodName',
+    );
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,
@@ -109,12 +113,15 @@ final class ServerStreamCaller<TRequest extends Object,
   /// Throws [StateError] если запрос уже был отправлен
   Future<void> send(TRequest request) async {
     if (_requestSent) {
-      throw StateError('ServerStream позволяет отправить только один запрос! '
-          'Запрос уже был отправлен.');
+      throw StateError(
+        'ServerStream позволяет отправить только один запрос! '
+        'Запрос уже был отправлен.',
+      );
     }
 
     _logger?.internal(
-        'Отправка единственного запроса в серверный стрим: $request');
+      'Отправка единственного запроса в серверный стрим: $request',
+    );
 
     try {
       _requestSent =
@@ -128,8 +135,11 @@ final class ServerStreamCaller<TRequest extends Object,
       // что у нас только один запрос (семантика серверного стрима)
       await _processor.finishSending();
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при отправке запроса в серверный стрим',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при отправке запроса в серверный стрим',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -159,16 +169,19 @@ final class ServerStreamCaller<TRequest extends Object,
 
         // Проверяем статус в метаданных
         if (response.metadata != null) {
-          final statusStr = response.metadata!
-              .getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
+          final statusStr = response.metadata!.getHeaderValue(
+            RpcConstants.GRPC_STATUS_HEADER,
+          );
           if (statusStr != null) {
             final status = int.tryParse(statusStr) ?? RpcStatus.UNKNOWN;
             if (status != RpcStatus.OK) {
-              final message = response.metadata!
-                      .getHeaderValue(RpcConstants.GRPC_MESSAGE_HEADER) ??
+              final message = response.metadata!.getHeaderValue(
+                    RpcConstants.GRPC_MESSAGE_HEADER,
+                  ) ??
                   'Unknown error';
               _logger?.error(
-                  'Серверный стрим завершился с ошибкой: $status - $message');
+                'Серверный стрим завершился с ошибкой: $status - $message',
+              );
               throw Exception('gRPC error $status: $message');
             }
           }

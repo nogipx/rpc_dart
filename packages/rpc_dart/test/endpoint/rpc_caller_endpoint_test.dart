@@ -194,8 +194,11 @@ void main() {
         await subscription.cancel();
 
         print('Результат: получено ${responses.length} ответов');
-        expect(responses.length, greaterThanOrEqualTo(1),
-            reason: 'Должен получить хотя бы 1 ответ');
+        expect(
+          responses.length,
+          greaterThanOrEqualTo(1),
+          reason: 'Должен получить хотя бы 1 ответ',
+        );
 
         if (responses.isNotEmpty) {
           expect(responses.first.message, contains('Stream request'));
@@ -241,10 +244,14 @@ void main() {
       print('Ответ получен успешно!');
 
       // Проверяем результат
-      expect(response.message,
-          equals('Received: Message 1, Message 2, Message 3'));
-      expect(testService.callLog,
-          contains('ClientStreamMethod: Message 1, Message 2, Message 3'));
+      expect(
+        response.message,
+        equals('Received: Message 1, Message 2, Message 3'),
+      );
+      expect(
+        testService.callLog,
+        contains('ClientStreamMethod: Message 1, Message 2, Message 3'),
+      );
     });
 
     test('Двунаправленный стрим работает в обоих направлениях', () async {
@@ -289,7 +296,8 @@ void main() {
         },
         onDone: () {
           print(
-              'Стрим ответов завершен, получено ответов: ${responses.length}');
+            'Стрим ответов завершен, получено ответов: ${responses.length}',
+          );
           if (!responseCompleter.isCompleted) {
             responseCompleter.complete(responses);
           }
@@ -326,7 +334,8 @@ void main() {
           Duration(seconds: 15),
           onTimeout: () {
             print(
-                'Таймаут при ожидании ответов, получено: ${responses.length}');
+              'Таймаут при ожидании ответов, получено: ${responses.length}',
+            );
             if (responses.length >= 3) {
               return responses; // Если успели получить достаточно ответов, считаем успешным
             }
@@ -350,11 +359,17 @@ void main() {
 
         expect(testService.callLog, contains('BidirectionalMethod: начат'));
         expect(
-            testService.callLog, contains('BidirectionalMethod: Bi Message 1'));
+          testService.callLog,
+          contains('BidirectionalMethod: Bi Message 1'),
+        );
         expect(
-            testService.callLog, contains('BidirectionalMethod: Bi Message 2'));
+          testService.callLog,
+          contains('BidirectionalMethod: Bi Message 2'),
+        );
         expect(
-            testService.callLog, contains('BidirectionalMethod: Bi Message 3'));
+          testService.callLog,
+          contains('BidirectionalMethod: Bi Message 3'),
+        );
       } finally {
         // Отменяем подписку
         await subscription.cancel();

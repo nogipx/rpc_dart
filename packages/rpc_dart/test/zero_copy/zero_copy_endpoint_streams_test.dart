@@ -82,7 +82,8 @@ final class ZeroCopyTestService extends RpcResponderContract {
           items.add(request.message);
         }
         final response = TestResponse(
-            'Processed ${items.length} items: ${items.join(", ")}');
+          'Processed ${items.length} items: ${items.join(", ")}',
+        );
         print('🔥 CLIENT HANDLER завершен: ${response.result}');
         return response;
       },
@@ -188,8 +189,11 @@ void main() {
       print('   📡 Сериализованных: $serializedCount');
 
       expect(responses.length, equals(3));
-      expect(directCount, greaterThan(0),
-          reason: 'Ожидаем zero-copy сообщения');
+      expect(
+        directCount,
+        greaterThan(0),
+        reason: 'Ожидаем zero-copy сообщения',
+      );
 
       if (directCount > serializedCount) {
         print('\n✅ ОТЛИЧНО! Zero-copy работает через endpoint!');
@@ -236,8 +240,11 @@ void main() {
         print('   📡 Сериализованных: $serializedCount');
 
         expect(response.result, contains('Processed 3 items'));
-        expect(directCount, greaterThan(0),
-            reason: 'Ожидаем zero-copy сообщения');
+        expect(
+          directCount,
+          greaterThan(0),
+          reason: 'Ожидаем zero-copy сообщения',
+        );
 
         if (directCount > serializedCount) {
           print('\n✅ ОТЛИЧНО! Client Stream Zero-copy работает!');
@@ -303,8 +310,11 @@ void main() {
         print('   📡 Сериализованных: $serializedCount');
 
         expect(responses.length, greaterThanOrEqualTo(2));
-        expect(directCount, greaterThan(0),
-            reason: 'Ожидаем zero-copy сообщения');
+        expect(
+          directCount,
+          greaterThan(0),
+          reason: 'Ожидаем zero-copy сообщения',
+        );
 
         if (directCount > serializedCount) {
           print('\n✅ ОТЛИЧНО! Bidirectional Stream Zero-copy работает!');

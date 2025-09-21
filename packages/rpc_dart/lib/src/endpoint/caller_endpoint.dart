@@ -11,11 +11,29 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
   final Map<String, Map<String, RpcCancellationToken>> _cancellationTokens = {};
 
   @override
-  RpcLogger get logger => RpcLogger(
-        'RpcCallerEndpoint',
-        colors: loggerColors,
-        label: debugLabel,
+  Map<String, Object?> collectEndpointMetrics() {
+    final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
+
+    final activeCalls = _cancellationTokens.values.fold<int>(
+      0,
+      (previousValue, tokens) => previousValue + tokens.length,
+    );
+
+    metrics['pendingRequests'] = activeCalls;
+    metrics['trackedMethods'] = _cancellationTokens.length;
+
+    if (_cancellationTokens.isNotEmpty) {
+      metrics['activeMethodKeys'] = List<String>.unmodifiable(
+        _cancellationTokens.keys,
       );
+    }
+
+    return metrics;
+  }
+
+  @override
+  RpcLogger get logger =>
+      RpcLogger('RpcCallerEndpoint', colors: loggerColors, label: debugLabel);
 
   RpcCallerEndpoint({
     required super.transport,
@@ -53,8 +71,12 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
   /// Отменяет конкретный вызов по requestId
   /// Возвращает true, если токен был найден и отменен
-  bool cancelRequest(String serviceName, String methodName, String requestId,
-      [String? reason]) {
+  bool cancelRequest(
+    String serviceName,
+    String methodName,
+    String requestId, [
+    String? reason,
+  ]) {
     final key = _createMethodKey(serviceName, methodName);
     final methodTokens = _cancellationTokens[key];
     if (methodTokens != null) {
@@ -133,15 +155,16 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       // Проверяем роль транспорта через интерфейс
       if (!transport.isClient) {
         throw ArgumentError(
-            'CRITICAL ERROR: RpcCallerEndpoint requires CLIENT transport!\n'
-            'Received server transport (isClient: false).\n'
-            'Client endpoints must use transports with odd Stream IDs (1, 3, 5...).\n\n'
-            'Correct usage:\n'
-            '  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();\n'
-            '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
-            '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
-            'INCORRECT:\n'
-            '  final callerEndpoint = RpcCallerEndpoint(transport: serverTransport);\n');
+          'CRITICAL ERROR: RpcCallerEndpoint requires CLIENT transport!\n'
+          'Received server transport (isClient: false).\n'
+          'Client endpoints must use transports with odd Stream IDs (1, 3, 5...).\n\n'
+          'Correct usage:\n'
+          '  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();\n'
+          '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
+          '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
+          'INCORRECT:\n'
+          '  final callerEndpoint = RpcCallerEndpoint(transport: serverTransport);\n',
+        );
       }
 
       logger.internal('Transport validated: client (isClient: true)');
@@ -184,9 +207,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     String serviceName,
     String methodName,
   ) {
-    final routingHeaders = {
-      'x-route-service': serviceName,
-    };
+    final routingHeaders = {'x-route-service': serviceName};
 
     final key = _createMethodKey(serviceName, methodName);
 
@@ -246,7 +267,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Проверяем активность эндпоинта
     if (!isActive) {
       throw StateError(
-          'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
+        'RpcCallerEndpoint закрыт и не может обрабатывать запросы',
+      );
     }
 
     final isZeroCopy = requestCodec == null && responseCodec == null;
@@ -254,14 +276,17 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Zero-copy режим: требуется поддержка zero-copy транспортом
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.');
+        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
+        'Для сетевых транспортов передайте кодеки.',
+      );
     }
 
     // Режим сериализации: кодеки обязательны
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).');
+      throw ArgumentError(
+        'Кодеки обязательны для режима сериализации. '
+        'Для zero-copy не передавайте кодеки (null).',
+      );
     }
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
@@ -294,10 +319,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
   /// Внутренняя реализация универсального унарного вызова
   Future<TResponse> _executeUniversalUnaryCall<TRequest extends Object,
-      TResponse extends Object>(
-    CallProcessor<TRequest, TResponse> processor,
-    TRequest request,
-  ) async {
+          TResponse extends Object>(
+      CallProcessor<TRequest, TResponse> processor, TRequest request) async {
     try {
       // Отправляем запрос
       await processor.send(request);
@@ -311,13 +334,15 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
         // Проверяем статус в метаданных
         if (response.metadata != null) {
-          final statusStr = response.metadata!
-              .getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
+          final statusStr = response.metadata!.getHeaderValue(
+            RpcConstants.GRPC_STATUS_HEADER,
+          );
           if (statusStr != null) {
             final status = int.tryParse(statusStr) ?? RpcStatus.UNKNOWN;
             if (status != RpcStatus.OK) {
-              final message = response.metadata!
-                      .getHeaderValue(RpcConstants.GRPC_MESSAGE_HEADER) ??
+              final message = response.metadata!.getHeaderValue(
+                    RpcConstants.GRPC_MESSAGE_HEADER,
+                  ) ??
                   'Unknown error';
               throw Exception('gRPC error $status: $message');
             }
@@ -326,7 +351,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       }
 
       throw Exception(
-          'gRPC error ${RpcStatus.UNAVAILABLE}: No response received');
+        'gRPC error ${RpcStatus.UNAVAILABLE}: No response received',
+      );
     } finally {
       await processor.close();
     }
@@ -373,7 +399,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Проверяем активность эндпоинта
     if (!isActive) {
       throw StateError(
-          'RpcCallerEndpoint закрыт и не может обрабатывать запросы');
+        'RpcCallerEndpoint закрыт и не может обрабатывать запросы',
+      );
     }
 
     final isZeroCopy = requestCodec == null && responseCodec == null;
@@ -381,18 +408,22 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Zero-copy режим: требуется поддержка zero-copy транспортом
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.');
+        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
+        'Для сетевых транспортов передайте кодеки.',
+      );
     }
 
     // Режим сериализации: кодеки обязательны
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).');
+      throw ArgumentError(
+        'Кодеки обязательны для режима сериализации. '
+        'Для zero-copy не передавайте кодеки (null).',
+      );
     }
 
     logger.internal(
-        'Создание ${isZeroCopy ? "zero-copy" : "serialized"} server stream для $serviceName/$methodName');
+      'Создание ${isZeroCopy ? "zero-copy" : "serialized"} server stream для $serviceName/$methodName',
+    );
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
     final enhancedContext = _effectiveContext(context, serviceName, methodName);
@@ -422,7 +453,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     RpcContext? context,
   }) {
     logger.internal(
-        'Создание client stream builder для $serviceName/$methodName');
+      'Создание client stream builder для $serviceName/$methodName',
+    );
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
     final enhancedContext = _effectiveContext(context, serviceName, methodName);
@@ -450,8 +482,11 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
             await caller.send(request);
           },
           onError: (error, stackTrace) {
-            logger.error('Ошибка в потоке запросов client stream',
-                error: error, stackTrace: stackTrace);
+            logger.error(
+              'Ошибка в потоке запросов client stream',
+              error: error,
+              stackTrace: stackTrace,
+            );
           },
           onDone: () {
             logger.internal('Поток запросов client stream завершен');
@@ -483,8 +518,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     IRpcCodec<R>? responseCodec,
     RpcContext? context,
   }) {
-    logger
-        .internal('Создание bidirectional stream для $serviceName/$methodName');
+    logger.internal(
+      'Создание bidirectional stream для $serviceName/$methodName',
+    );
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
     final enhancedContext = _effectiveContext(context, serviceName, methodName);
@@ -518,8 +554,11 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     final requestSubscription = requests.listen(
       (request) => caller.send(request),
       onError: (error, stackTrace) {
-        logger.error('Ошибка при отправке запроса в bidirectional stream',
-            error: error, stackTrace: stackTrace);
+        logger.error(
+          'Ошибка при отправке запроса в bidirectional stream',
+          error: error,
+          stackTrace: stackTrace,
+        );
         controller.addError(error, stackTrace);
       },
       onDone: () async {

@@ -190,9 +190,7 @@ extension RpcLoggerExtensions on RpcLogger {
       return child(operation);
     }
 
-    final opContext = context.withAdditionalHeaders({
-      'x-operation': operation,
-    });
+    final opContext = context.withAdditionalHeaders({'x-operation': operation});
 
     return RpcContextAwareLogger(child(operation), opContext);
   }

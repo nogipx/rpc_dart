@@ -107,10 +107,8 @@ class WebSocketReconnectManager {
   /// Генератор случайных чисел для jitter
   final Random _random = Random();
 
-  WebSocketReconnectManager({
-    ReconnectConfig? config,
-    RpcLogger? logger,
-  })  : _config = config ?? const ReconnectConfig(),
+  WebSocketReconnectManager({ReconnectConfig? config, RpcLogger? logger})
+      : _config = config ?? const ReconnectConfig(),
         _logger = logger?.child('ReconnectManager'),
         _currentDelay = config?.initialDelay ?? const Duration(seconds: 1);
 
@@ -153,8 +151,9 @@ class WebSocketReconnectManager {
     if (_shouldReconnect()) {
       _scheduleReconnect();
     } else {
-      _logger
-          ?.info('Достигнуто максимальное количество попыток переподключения');
+      _logger?.info(
+        'Достигнуто максимальное количество попыток переподключения',
+      );
       _setState(ReconnectState.stopped);
     }
   }
@@ -199,7 +198,8 @@ class WebSocketReconnectManager {
 
     final delay = _calculateDelay();
     _logger?.info(
-        'Планируем переподключение через ${delay.inSeconds}s (попытка ${_attemptCount + 1})');
+      'Планируем переподключение через ${delay.inSeconds}s (попытка ${_attemptCount + 1})',
+    );
 
     _reconnectTimer = Timer(delay, () {
       _attemptReconnect();
@@ -282,8 +282,9 @@ class WebSocketReconnectManager {
     // Добавляем jitter если включен
     if (_config.enableJitter) {
       final jitterMs = _random.nextInt(1000); // до 1 секунды
-      cappedDelay =
-          Duration(milliseconds: cappedDelay.inMilliseconds + jitterMs);
+      cappedDelay = Duration(
+        milliseconds: cappedDelay.inMilliseconds + jitterMs,
+      );
     }
 
     return cappedDelay;

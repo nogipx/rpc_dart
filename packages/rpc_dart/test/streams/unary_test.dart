@@ -77,11 +77,13 @@ void main() {
         // Act & Assert
         await expectLater(
           client.call('test request'.rpc),
-          throwsA(isA<Exception>().having(
-            (e) => e.toString(),
-            'message',
-            contains('gRPC error'),
-          )),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'message',
+              contains('gRPC error'),
+            ),
+          ),
         );
 
         // Cleanup
@@ -259,11 +261,13 @@ void main() {
         // Act & Assert
         await expectLater(
           client.call('test request'.rpc),
-          throwsA(isA<Exception>().having(
-            (e) => e.toString(),
-            'message',
-            contains('gRPC error'),
-          )),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'message',
+              contains('gRPC error'),
+            ),
+          ),
         );
 
         // Cleanup
@@ -326,8 +330,10 @@ void main() {
         final response2 = await otherClient.call('other request'.rpc);
 
         // Assert
-        expect(handlerCallCount,
-            equals(1)); // Только один вызов конкретного обработчика
+        expect(
+          handlerCallCount,
+          equals(1),
+        ); // Только один вызов конкретного обработчика
         expect(receivedRequests, equals(['correct request'.rpc]));
         expect(response1, equals('response from SpecificMethod'.rpc));
         expect(response2, equals('response from DifferentMethod'.rpc));

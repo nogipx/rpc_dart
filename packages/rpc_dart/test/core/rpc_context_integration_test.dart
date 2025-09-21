@@ -87,8 +87,9 @@ void main() {
         serverEndpoint.start();
 
         final authContext = RpcContextUtils.withBearerToken('auth-token');
-        final tracingContext =
-            RpcContextUtils.withTracing(traceId: 'combined-trace');
+        final tracingContext = RpcContextUtils.withTracing(
+          traceId: 'combined-trace',
+        );
         final userContext = RpcContext.withHeaders({'user-id': 'user-456'});
 
         final combinedContext = RpcContextUtils.merge(
@@ -143,8 +144,10 @@ void main() {
 
         // Assert
         expect(responses.length, equals(3));
-        expect(responses.every((r) => r.value.contains('stream-user-123')),
-            isTrue);
+        expect(
+          responses.every((r) => r.value.contains('stream-user-123')),
+          isTrue,
+        );
         expect(responses.every((r) => r.value.contains('test')), isTrue);
       });
 
@@ -310,10 +313,14 @@ void main() {
         // Assert
         expect(receivedResponses.length, greaterThanOrEqualTo(1));
         expect(
-            receivedResponses[0].value, equals('TEST: ECHO-SESSION-789: MSG1'));
+          receivedResponses[0].value,
+          equals('TEST: ECHO-SESSION-789: MSG1'),
+        );
         if (receivedResponses.length > 1) {
-          expect(receivedResponses[1].value,
-              equals('TEST: ECHO-SESSION-789: MSG2'));
+          expect(
+            receivedResponses[1].value,
+            equals('TEST: ECHO-SESSION-789: MSG2'),
+          );
         }
       });
 
@@ -378,8 +385,10 @@ void main() {
         final context = RpcContextUtils.withBearerToken('contract-token');
 
         // Act
-        final response =
-            await callerContract.getUserData('contract-user'.rpc, context);
+        final response = await callerContract.getUserData(
+          'contract-user'.rpc,
+          context,
+        );
 
         // Assert
         expect(response.value, contains('Bearer contract-token'));
@@ -400,13 +409,17 @@ void main() {
         });
 
         // Act
-        final responses =
-            await callerContract.generateStream('contract-stream'.rpc, context);
+        final responses = await callerContract.generateStream(
+          'contract-stream'.rpc,
+          context,
+        );
 
         // Assert
         expect(responses.length, equals(2));
-        expect(responses.every((r) => r.value.contains('contract-stream-user')),
-            isTrue);
+        expect(
+          responses.every((r) => r.value.contains('contract-stream-user')),
+          isTrue,
+        );
         expect(responses.every((r) => r.value.contains('contract')), isTrue);
       });
     });
@@ -454,8 +467,10 @@ final class _TestServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _getUserData(RpcString userId,
-      {RpcContext? context}) async {
+  Future<RpcString> _getUserData(
+    RpcString userId, {
+    RpcContext? context,
+  }) async {
     final authHeader = context?.getHeader('authorization');
     return 'User data for ${userId.value} (auth: $authHeader)'.rpc;
   }
@@ -475,8 +490,10 @@ final class _TracingServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _tracedOperation(RpcString request,
-      {RpcContext? context}) async {
+  Future<RpcString> _tracedOperation(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
     final traceId = context?.traceId;
     final spanId = context?.getHeader('x-span-id');
     final parentSpanId = context?.getHeader('x-parent-span-id');
@@ -500,8 +517,10 @@ final class _CombinedContextServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _processWithFullContext(RpcString request,
-      {RpcContext? context}) async {
+  Future<RpcString> _processWithFullContext(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
     final auth = context?.getHeader('authorization');
     final traceId = context?.traceId;
     final userId = context?.getHeader('user-id');
@@ -525,8 +544,10 @@ final class _StreamServiceContract extends RpcResponderContract {
     );
   }
 
-  Stream<RpcString> _generateStream(RpcString request,
-      {RpcContext? context}) async* {
+  Stream<RpcString> _generateStream(
+    RpcString request, {
+    RpcContext? context,
+  }) async* {
     final mode = context?.getHeader('streaming-mode');
     final userId = context?.getHeader('user-id');
     final countHeader = context?.getHeader('stream-count');
@@ -552,8 +573,10 @@ final class _AggregationServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _aggregateData(Stream<RpcString> requests,
-      {RpcContext? context}) async {
+  Future<RpcString> _aggregateData(
+    Stream<RpcString> requests, {
+    RpcContext? context,
+  }) async {
     final aggregationType = context?.getHeader('aggregation-type');
     final userId = context?.getHeader('user-id');
     final auth = context?.getHeader('authorization');
@@ -579,8 +602,10 @@ final class _EchoServiceContract extends RpcResponderContract {
     );
   }
 
-  Stream<RpcString> _echoStream(Stream<RpcString> requests,
-      {RpcContext? context}) async* {
+  Stream<RpcString> _echoStream(
+    Stream<RpcString> requests, {
+    RpcContext? context,
+  }) async* {
     final prefix = context?.getHeader('echo-prefix');
     final sessionId = context?.getHeader('session-id');
     final uppercaseHeader = context?.getHeader('echo-uppercase');
@@ -607,8 +632,10 @@ final class _ErrorServiceContract extends RpcResponderContract {
     );
   }
 
-  Future<RpcString> _throwError(RpcString request,
-      {RpcContext? context}) async {
+  Future<RpcString> _throwError(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
     final traceId = context?.traceId;
     throw Exception('Service error for ${request.value} [trace=$traceId]');
   }
@@ -636,7 +663,9 @@ final class _StreamServiceCallerContract extends RpcCallerContract {
       : super('StreamService', endpoint);
 
   Future<List<RpcString>> generateStream(
-      RpcString request, RpcContext? context) async {
+    RpcString request,
+    RpcContext? context,
+  ) async {
     final responses = <RpcString>[];
     await for (final response in callServerStream<RpcString, RpcString>(
       methodName: 'GenerateStream',

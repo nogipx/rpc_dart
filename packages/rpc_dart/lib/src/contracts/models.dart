@@ -48,7 +48,9 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
 
   /// Безопасный вызов unary handler'а с типизацией и контекстом
   Future<TResponse> callUnaryHandler(
-      RpcContext context, TRequest request) async {
+    RpcContext context,
+    TRequest request,
+  ) async {
     final typedHandler =
         handler as Future<TResponse> Function(TRequest, {RpcContext? context});
     return await typedHandler(request, context: context);
@@ -56,7 +58,9 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
 
   /// Безопасный вызов server stream handler'а с типизацией и контекстом
   Stream<TResponse> callServerStreamHandler(
-      RpcContext context, TRequest request) {
+    RpcContext context,
+    TRequest request,
+  ) {
     final typedHandler =
         handler as Stream<TResponse> Function(TRequest, {RpcContext? context});
     return typedHandler(request, context: context);
@@ -64,17 +68,25 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
 
   /// Безопасный вызов client stream handler'а с типизацией и контекстом
   Future<TResponse> callClientStreamHandler(
-      RpcContext context, Stream<TRequest> requests) async {
-    final typedHandler = handler as Future<TResponse> Function(Stream<TRequest>,
-        {RpcContext? context});
+    RpcContext context,
+    Stream<TRequest> requests,
+  ) async {
+    final typedHandler = handler as Future<TResponse> Function(
+      Stream<TRequest>, {
+      RpcContext? context,
+    });
     return await typedHandler(requests, context: context);
   }
 
   /// Безопасный вызов bidirectional stream handler'а с типизацией и контекстом
   Stream<TResponse> callBidirectionalStreamHandler(
-      RpcContext context, Stream<TRequest> requests) {
-    final typedHandler = handler as Stream<TResponse> Function(Stream<TRequest>,
-        {RpcContext? context});
+    RpcContext context,
+    Stream<TRequest> requests,
+  ) {
+    final typedHandler = handler as Stream<TResponse> Function(
+      Stream<TRequest>, {
+      RpcContext? context,
+    });
     return typedHandler(requests, context: context);
   }
 
@@ -116,7 +128,9 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
 
   /// Безопасный вызов unary handler'а с типизацией и контекстом
   Future<TResponse> callUnaryHandler(
-      RpcContext context, TRequest request) async {
+    RpcContext context,
+    TRequest request,
+  ) async {
     final typedHandler =
         handler as Future<TResponse> Function(TRequest, {RpcContext? context});
     return await typedHandler(request, context: context);
@@ -124,7 +138,9 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
 
   /// Безопасный вызов server stream handler'а с типизацией и контекстом
   Stream<TResponse> callServerStreamHandler(
-      RpcContext context, TRequest request) {
+    RpcContext context,
+    TRequest request,
+  ) {
     final typedHandler =
         handler as Stream<TResponse> Function(TRequest, {RpcContext? context});
     return typedHandler(request, context: context);
@@ -132,17 +148,25 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
 
   /// Безопасный вызов client stream handler'а с типизацией и контекстом
   Future<TResponse> callClientStreamHandler(
-      RpcContext context, Stream<TRequest> requests) async {
-    final typedHandler = handler as Future<TResponse> Function(Stream<TRequest>,
-        {RpcContext? context});
+    RpcContext context,
+    Stream<TRequest> requests,
+  ) async {
+    final typedHandler = handler as Future<TResponse> Function(
+      Stream<TRequest>, {
+      RpcContext? context,
+    });
     return await typedHandler(requests, context: context);
   }
 
   /// Безопасный вызов bidirectional stream handler'а с типизацией и контекстом
   Stream<TResponse> callBidirectionalStreamHandler(
-      RpcContext context, Stream<TRequest> requests) {
-    final typedHandler = handler as Stream<TResponse> Function(Stream<TRequest>,
-        {RpcContext? context});
+    RpcContext context,
+    Stream<TRequest> requests,
+  ) {
+    final typedHandler = handler as Stream<TResponse> Function(
+      Stream<TRequest>, {
+      RpcContext? context,
+    });
     return typedHandler(requests, context: context);
   }
 }

@@ -66,11 +66,13 @@ void main() {
         final afterCreation = DateTime.now().add(timeout);
         expect(sut.deadline, isNotNull);
         expect(
-            sut.deadline!
-                .isAfter(beforeCreation.subtract(Duration(seconds: 1))),
-            isTrue);
-        expect(sut.deadline!.isBefore(afterCreation.add(Duration(seconds: 1))),
-            isTrue);
+          sut.deadline!.isAfter(beforeCreation.subtract(Duration(seconds: 1))),
+          isTrue,
+        );
+        expect(
+          sut.deadline!.isBefore(afterCreation.add(Duration(seconds: 1))),
+          isTrue,
+        );
       });
 
       test('создает_контекст_с_токеном_отмены', () {
@@ -101,8 +103,9 @@ void main() {
       late RpcContext baseSut;
 
       setUp(() {
-        baseSut = RpcContext.withHeaders({'existing': 'header'})
-            .withTraceId('base-trace');
+        baseSut = RpcContext.withHeaders({
+          'existing': 'header',
+        }).withTraceId('base-trace');
       });
 
       test('добавляет_дополнительные_заголовки_сохраняя_существующие', () {
@@ -146,8 +149,10 @@ void main() {
 
         // Assert
         expect(sut.deadline, equals(newDeadline));
-        expect(sut.getHeader('existing'),
-            equals('header')); // Остальные поля сохранены
+        expect(
+          sut.getHeader('existing'),
+          equals('header'),
+        ); // Остальные поля сохранены
         expect(sut.traceId, equals('base-trace'));
       });
 
@@ -163,11 +168,13 @@ void main() {
         final afterCreation = DateTime.now().add(timeout);
         expect(sut.deadline, isNotNull);
         expect(
-            sut.deadline!
-                .isAfter(beforeCreation.subtract(Duration(seconds: 1))),
-            isTrue);
-        expect(sut.deadline!.isBefore(afterCreation.add(Duration(seconds: 1))),
-            isTrue);
+          sut.deadline!.isAfter(beforeCreation.subtract(Duration(seconds: 1))),
+          isTrue,
+        );
+        expect(
+          sut.deadline!.isBefore(afterCreation.add(Duration(seconds: 1))),
+          isTrue,
+        );
       });
 
       test('устанавливает_токен_отмены', () {
@@ -179,8 +186,10 @@ void main() {
 
         // Assert
         expect(sut.cancellationToken, equals(cancellationToken));
-        expect(sut.getHeader('existing'),
-            equals('header')); // Остальные поля сохранены
+        expect(
+          sut.getHeader('existing'),
+          equals('header'),
+        ); // Остальные поля сохранены
       });
 
       test('устанавливает_новый_trace_id', () {
@@ -192,8 +201,10 @@ void main() {
 
         // Assert
         expect(sut.traceId, equals(newTraceId));
-        expect(sut.getHeader('existing'),
-            equals('header')); // Остальные поля сохранены
+        expect(
+          sut.getHeader('existing'),
+          equals('header'),
+        ); // Остальные поля сохранены
       });
 
       test('добавляет_значение_в_контекст', () {
@@ -207,8 +218,10 @@ void main() {
         // Assert
         expect(sut.getValue<String>(key), equals(value));
         expect(sut.getValue<int>('non-existent'), isNull);
-        expect(sut.getHeader('existing'),
-            equals('header')); // Остальные поля сохранены
+        expect(
+          sut.getHeader('existing'),
+          equals('header'),
+        ); // Остальные поля сохранены
       });
     });
 
@@ -294,7 +307,9 @@ void main() {
 
         // Проверяем что неправильный тип выбрасывает исключение при касте
         expect(
-            () => sut.getValue<String>('int-key'), throwsA(isA<TypeError>()));
+          () => sut.getValue<String>('int-key'),
+          throwsA(isA<TypeError>()),
+        );
       });
     });
 
@@ -465,7 +480,9 @@ void main() {
         // Assert
         expect(sut.isCancelled, isTrue);
         expect(
-            sut.reason, equals('Первая причина')); // Сохраняется первая причина
+          sut.reason,
+          equals('Первая причина'),
+        ); // Сохраняется первая причина
       });
 
       test('уведомляет_о_отмене_через_future', () async {
@@ -503,8 +520,13 @@ void main() {
         // Act & Assert
         expect(
           () => sut.throwIfCancelled(),
-          throwsA(isA<RpcCancelledException>()
-              .having((e) => e.message, 'message', contains(reason))),
+          throwsA(
+            isA<RpcCancelledException>().having(
+              (e) => e.message,
+              'message',
+              contains(reason),
+            ),
+          ),
         );
       });
 
@@ -516,8 +538,13 @@ void main() {
         // Act & Assert
         expect(
           () => sut.throwIfCancelled(),
-          throwsA(isA<RpcCancelledException>()
-              .having((e) => e.message, 'message', 'Operation was cancelled')),
+          throwsA(
+            isA<RpcCancelledException>().having(
+              (e) => e.message,
+              'message',
+              'Operation was cancelled',
+            ),
+          ),
         );
       });
     });
@@ -529,15 +556,18 @@ void main() {
         // Arrange
         const username = 'testuser';
         const password = 'testpass';
-        final expectedCredentials =
-            base64Encode(utf8.encode('$username:$password'));
+        final expectedCredentials = base64Encode(
+          utf8.encode('$username:$password'),
+        );
 
         // Act
         final sut = RpcContextUtils.withBasicAuth(username, password);
 
         // Assert
-        expect(sut.getHeader('authorization'),
-            equals('Basic $expectedCredentials'));
+        expect(
+          sut.getHeader('authorization'),
+          equals('Basic $expectedCredentials'),
+        );
       });
 
       test('создает_контекст_с_bearer_token', () {
@@ -627,10 +657,14 @@ void main() {
     group('объединение_контекстов', () {
       test('объединяет_заголовки_из_двух_контекстов', () {
         // Arrange
-        final leftSut = RpcContext.withHeaders(
-            {'left-header': 'left-value', 'common': 'left'});
-        final rightSut = RpcContext.withHeaders(
-            {'right-header': 'right-value', 'common': 'right'});
+        final leftSut = RpcContext.withHeaders({
+          'left-header': 'left-value',
+          'common': 'left',
+        });
+        final rightSut = RpcContext.withHeaders({
+          'right-header': 'right-value',
+          'common': 'right',
+        });
 
         // Act
         final merged = RpcContextUtils.merge(leftSut, rightSut);
@@ -638,8 +672,10 @@ void main() {
         // Assert
         expect(merged.getHeader('left-header'), equals('left-value'));
         expect(merged.getHeader('right-header'), equals('right-value'));
-        expect(merged.getHeader('common'),
-            equals('right')); // Правый имеет приоритет
+        expect(
+          merged.getHeader('common'),
+          equals('right'),
+        ); // Правый имеет приоритет
       });
 
       test('объединяет_значения_из_двух_контекстов', () {
@@ -657,8 +693,10 @@ void main() {
         // Assert
         expect(merged.getValue<String>('left-key'), equals('left-value'));
         expect(merged.getValue<String>('right-key'), equals('right-value'));
-        expect(merged.getValue<String>('common-key'),
-            equals('right')); // Правый имеет приоритет
+        expect(
+          merged.getValue<String>('common-key'),
+          equals('right'),
+        ); // Правый имеет приоритет
       });
 
       test('использует_правые_значения_для_специальных_полей', () {
@@ -668,12 +706,12 @@ void main() {
         final leftToken = RpcCancellationToken();
         final rightToken = RpcCancellationToken();
 
-        final leftSut = RpcContext.withDeadline(leftDeadline)
-            .withCancellation(leftToken)
-            .withTraceId('left-trace');
-        final rightSut = RpcContext.withDeadline(rightDeadline)
-            .withCancellation(rightToken)
-            .withTraceId('right-trace');
+        final leftSut = RpcContext.withDeadline(
+          leftDeadline,
+        ).withCancellation(leftToken).withTraceId('left-trace');
+        final rightSut = RpcContext.withDeadline(
+          rightDeadline,
+        ).withCancellation(rightToken).withTraceId('right-trace');
 
         // Act
         final merged = RpcContextUtils.merge(leftSut, rightSut);
@@ -691,9 +729,9 @@ void main() {
         final token = RpcCancellationToken();
         const traceId = 'left-trace';
 
-        final leftSut = RpcContext.withDeadline(deadline)
-            .withCancellation(token)
-            .withTraceId(traceId);
+        final leftSut = RpcContext.withDeadline(
+          deadline,
+        ).withCancellation(token).withTraceId(traceId);
         final rightSut = RpcContext.empty();
 
         // Act

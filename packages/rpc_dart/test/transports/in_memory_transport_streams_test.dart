@@ -40,8 +40,10 @@ void main() {
       final streamId = clientTransport.createStream();
 
       // Отправляем метаданные и сообщение
-      final metadata =
-          RpcMetadata.forClientRequest('TestService', 'TestMethod');
+      final metadata = RpcMetadata.forClientRequest(
+        'TestService',
+        'TestMethod',
+      );
       await clientTransport.sendMetadata(streamId, metadata);
       await clientTransport.sendMessage(
         streamId,

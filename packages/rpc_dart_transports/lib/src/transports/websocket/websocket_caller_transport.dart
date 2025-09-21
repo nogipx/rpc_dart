@@ -13,8 +13,9 @@ import 'websocket_base_transport.dart';
 /// и использует нечетные StreamID для мультиплексирования.
 class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
   /// Реализация менеджера ID для клиентской стороны
-  final RpcStreamIdManager _streamIdManager =
-      RpcStreamIdManager(isClient: true);
+  final RpcStreamIdManager _streamIdManager = RpcStreamIdManager(
+    isClient: true,
+  );
 
   @override
   RpcStreamIdManager get idManager => _streamIdManager;
@@ -29,6 +30,7 @@ class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
   RpcWebSocketCallerTransport(
     super.channel, {
     super.logger,
+    super.reconnectFactory,
   });
 
   /// Фабричный метод для создания клиентского WebSocket транспорта
@@ -42,11 +44,15 @@ class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
     Iterable<String>? protocols,
     RpcLogger? logger,
   }) {
-    final channel = WebSocketChannel.connect(
-      uri,
-      protocols: protocols,
+    WebSocketChannel openChannel() =>
+        WebSocketChannel.connect(uri, protocols: protocols);
+
+    final channel = openChannel();
+    return RpcWebSocketCallerTransport(
+      channel,
+      logger: logger,
+      reconnectFactory: () async => openChannel(),
     );
-    return RpcWebSocketCallerTransport(channel, logger: logger);
   }
 
   @override
