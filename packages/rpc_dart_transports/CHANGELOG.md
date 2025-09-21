@@ -1,9 +1,15 @@
 # 1.2.0
 
-- Added health() and reconnect() implementations for HTTP/2, WebSocket and
-  isolate transports.
-- Improved WebSocket client reconnection support with automatic listeners.
-- Updated documentation with diagnostics overview.
+- Implemented rich `health()`/`reconnect()` diagnostics for HTTP/2,
+  WebSocket and isolate transports, exposing connection metadata and
+  supported flags for automation.
+- Introduced `WebSocketReconnectManager` with configurable backoff
+  strategies and automatic listener re-registration to stabilize client
+  reconnections.
+- Fixed isolate transport shutdown and health reporting so both host and
+  worker isolates surface accurate closed/degraded statuses.
+- Updated documentation and examples with diagnostics guidance for
+  transport consumers.
 
 # Changelog
 
