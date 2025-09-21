@@ -219,25 +219,65 @@ abstract class IRpcTransport {
 /// - ID 0 зарезервирован для управления соединением
 /// - Максимальное значение ID - 2^31-1 (2,147,483,647)
 ///
-/// После достижения максимального значения необходимо установить новое соединение.
+/// При достижении максимального значения ID менеджер пытается переиспользовать
+/// освобожденные идентификаторы (если активные потоки не занимают весь диапазон).
+/// Если же все возможные Stream ID находятся в использовании, выбрасывается
+/// [RpcException] и требуется дождаться освобождения либо переподключить транспорт.
 final class RpcStreamIdManager {
+  /// Максимально допустимое значение ID (2^31-1)
+  static const int maxId = 0x7FFFFFFF; // 2,147,483,647
+
   /// Определяет роль (клиент/сервер) для генерации ID
   final bool isClient;
 
   /// Последний сгенерированный ID
   int _lastId;
 
-  /// Максимально допустимое значение ID (2^31-1)
-  static const int maxId = 0x7FFFFFFF; // 2,147,483,647
+  /// Максимальное значение ID, которое может быть назначено с учетом четности
+  final int _maxAssignableId;
+
+  /// Первый допустимый ID для текущей роли (1 для клиента, 2 для сервера)
+  final int _firstAssignableId;
 
   /// Набор активных (используемых) ID
-  final Set<int> _activeIds = {};
+  final SplayTreeSet<int> _activeIds = SplayTreeSet<int>();
 
   /// Создает менеджер ID с указанной ролью.
   ///
   /// [isClient] Если true - генерирует ID для клиента (нечетные),
   ///            иначе - для сервера (четные)
-  RpcStreamIdManager({required this.isClient}) : _lastId = isClient ? -1 : 0;
+  /// [customMaxId] Позволяет задать альтернативный верхний предел ID
+  ///               (используется в тестах и специализированных транспортах).
+  RpcStreamIdManager({
+    required this.isClient,
+    int? customMaxId,
+  })  : _lastId = isClient ? -1 : 0,
+        _firstAssignableId = isClient ? 1 : 2,
+        _maxAssignableId = _computeMaxAssignableId(
+          isClient: isClient,
+          maxIdOverride: customMaxId,
+        );
+
+  /// Вычисляет верхнюю границу ID с учетом четности роли.
+  static int _computeMaxAssignableId({
+    required bool isClient,
+    int? maxIdOverride,
+  }) {
+    final effectiveMax = maxIdOverride ?? maxId;
+    final adjustedMax = isClient
+        ? (effectiveMax.isOdd ? effectiveMax : effectiveMax - 1)
+        : (effectiveMax.isEven ? effectiveMax : effectiveMax - 1);
+
+    if (adjustedMax < (isClient ? 1 : 2)) {
+      throw ArgumentError.value(
+        effectiveMax,
+        'customMaxId',
+        'Недостаточно допустимых значений Stream ID для указанной роли',
+      );
+    }
+
+    return adjustedMax;
+  }
 
   /// Генерирует новый уникальный ID для потока.
   ///
@@ -247,17 +287,30 @@ final class RpcStreamIdManager {
     // Вычисляем следующий ID в зависимости от роли
     final nextId = _lastId + 2;
 
-    // Проверяем, не достигли ли мы предела
-    if (nextId > maxId) {
+    if (nextId <= _maxAssignableId) {
+      _lastId = nextId;
+      _activeIds.add(nextId);
+      return nextId;
+    }
+
+    // Если все потоки завершены, можем безопасно перезапустить последовательность
+    if (_activeIds.isEmpty) {
+      final restartId = _firstAssignableId;
+      _lastId = restartId;
+      _activeIds.add(restartId);
+      return restartId;
+    }
+
+    final recycledId = _findReusableId();
+    if (recycledId == null) {
       throw RpcException(
-        'Достигнут максимальный ID стрима ($maxId). '
-        'Необходимо установить новое соединение.',
+        'Все ${_sideLabel} Stream ID заняты. '
+        'Дождитесь завершения активных потоков или установите новое соединение.',
       );
     }
 
-    _lastId = nextId;
-    _activeIds.add(nextId);
-    return nextId;
+    _activeIds.add(recycledId);
+    return recycledId;
   }
 
   /// Освобождает ID после завершения потока.
@@ -286,5 +339,35 @@ final class RpcStreamIdManager {
   void reset() {
     _activeIds.clear();
     _lastId = isClient ? -1 : 0;
+  }
+
+  String get _sideLabel => isClient ? 'клиентские' : 'серверные';
+
+  int? _findReusableId() {
+    var candidate = _firstAssignableId;
+
+    for (final activeId in _activeIds) {
+      if (candidate < activeId) {
+        return candidate;
+      }
+
+      if (candidate == activeId) {
+        candidate = _advanceCandidate(activeId);
+      }
+    }
+
+    if (!_activeIds.contains(candidate)) {
+      return candidate;
+    }
+
+    return null;
+  }
+
+  int _advanceCandidate(int current) {
+    final next = current + 2;
+    if (next > _maxAssignableId) {
+      return _firstAssignableId;
+    }
+    return next;
   }
 }
