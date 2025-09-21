@@ -15,15 +15,14 @@ topics:
 
 dependencies:
   rpc_dart: ^2.3.0
-  uuid: ^4.5.1
   web_socket_channel: ^3.0.3
   args: ^2.7.0
   http2: ^2.3.1
   universal_io: ^2.2.2
 
-dependency_overrides:
-  rpc_dart:
-    path: ../rpc_dart
+#dependency_overrides:
+#  rpc_dart:
+#    path: ../rpc_dart
 
 dev_dependencies:
   lints: ^5.1.1

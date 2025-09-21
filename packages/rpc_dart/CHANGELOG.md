@@ -1,10 +1,20 @@
-# 2.3.0
+## 2.3.0
 
-- Added health() and reconnect() APIs for endpoints and transports.
-- Added health diagnostics for RpcInMemoryTransport and RpcTransportRouter.
-- Updated documentation with health monitoring examples.
-
-# Changelog
+- Added aggregated diagnostics for caller and responder endpoints with
+  `health()`/`reconnect()` snapshots that combine endpoint metrics and
+  transport status via `RpcEndpointHealth` and `RpcHealthStatus`.
+- Implemented a built-in ping protocol between endpoints that exposes
+  round-trip timing, responder metadata and debug labels through
+  `RpcCallerEndpoint.ping()`.
+- Extended transport infrastructure with `IRpcTransport.health()` and
+  `IRpcTransport.reconnect()` plus detailed implementations for
+  `RpcInMemoryTransport`, `RpcTransportRouter` and the transport toolkit,
+  including automatic partner shutdown to avoid close deadlocks.
+- Improved `RpcStreamIdManager` so stream identifiers are recycled after
+  hitting the HTTP/2 limit, preventing allocation failures during
+  long-lived workloads.
+- Updated documentation and examples with health monitoring guidance and
+  diagnostics-driven workflows.
 
 ## 2.2.2
 
