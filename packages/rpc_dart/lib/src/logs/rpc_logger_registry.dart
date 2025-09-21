@@ -27,8 +27,12 @@ final class _RpcLoggerRegistry {
   ///
   /// Если логгер с таким именем не найден, создает новый
   /// Если передан context, создает контекстно-осведомленный логгер
-  RpcLogger get(String name,
-      {RpcLoggerColors? colors, String? label, RpcContext? context}) {
+  RpcLogger get(
+    String name, {
+    RpcLoggerColors? colors,
+    String? label,
+    RpcContext? context,
+  }) {
     // Создаем базовый логгер
     RpcLogger baseLogger;
 

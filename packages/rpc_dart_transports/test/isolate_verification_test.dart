@@ -43,10 +43,7 @@ class CpuIntensiveTask {
   final int iterations;
   final String taskId;
 
-  const CpuIntensiveTask({
-    required this.iterations,
-    required this.taskId,
-  });
+  const CpuIntensiveTask({required this.iterations, required this.taskId});
 }
 
 /// Результат CPU-интенсивной задачи
@@ -82,10 +79,7 @@ class MutationResult {
   final MutableCounter counter;
   final IsolateInfo isolateInfo;
 
-  const MutationResult({
-    required this.counter,
-    required this.isolateInfo,
-  });
+  const MutationResult({required this.counter, required this.isolateInfo});
 }
 
 // ============================================================================
@@ -114,10 +108,14 @@ void isolateInfoServer(IRpcTransport transport, Map<String, dynamic> params) {
         );
 
         print(
-            '📤 [Isolate Info Server] Отправляю информацию об изоляте: $isolateInfo');
+          '📤 [Isolate Info Server] Отправляю информацию об изоляте: $isolateInfo',
+        );
 
-        await transport.sendDirectObject(message.streamId, isolateInfo,
-            endStream: true);
+        await transport.sendDirectObject(
+          message.streamId,
+          isolateInfo,
+          endStream: true,
+        );
       }
     }
   });
@@ -140,7 +138,8 @@ void cpuIntensiveServer(IRpcTransport transport, Map<String, dynamic> params) {
         final stopwatch = Stopwatch()..start();
 
         print(
-            '🔥 [CPU Server] Начинаю CPU-интенсивную задачу: ${payload.taskId}');
+          '🔥 [CPU Server] Начинаю CPU-интенсивную задачу: ${payload.taskId}',
+        );
         print('   🔢 Итераций: ${payload.iterations}');
 
         // CPU-blocking операция - вычисляем числа Фибоначчи
@@ -183,11 +182,15 @@ void cpuIntensiveServer(IRpcTransport transport, Map<String, dynamic> params) {
         );
 
         print(
-            '✅ [CPU Server] Задача ${payload.taskId} завершена за ${stopwatch.elapsedMilliseconds}мс');
+          '✅ [CPU Server] Задача ${payload.taskId} завершена за ${stopwatch.elapsedMilliseconds}мс',
+        );
         print('   📊 Результат: $result');
 
-        await transport.sendDirectObject(message.streamId, taskResult,
-            endStream: true);
+        await transport.sendDirectObject(
+          message.streamId,
+          taskResult,
+          endStream: true,
+        );
       }
     }
   });
@@ -198,7 +201,9 @@ void cpuIntensiveServer(IRpcTransport transport, Map<String, dynamic> params) {
 /// Сервер для тестирования изоляции памяти
 @pragma('vm:entry-point')
 void memoryIsolationServer(
-    IRpcTransport transport, Map<String, dynamic> params) {
+  IRpcTransport transport,
+  Map<String, dynamic> params,
+) {
   final currentIsolate = Isolate.current;
 
   print('🖥️ [Memory Server] Запущен в изоляте ${currentIsolate.debugName}');
@@ -234,8 +239,11 @@ void memoryIsolationServer(
           isolateInfo: isolateInfo,
         );
 
-        await transport.sendDirectObject(message.streamId, result,
-            endStream: true);
+        await transport.sendDirectObject(
+          message.streamId,
+          result,
+          endStream: true,
+        );
       }
     }
   });
@@ -253,7 +261,8 @@ void main() {
       // Arrange
       final mainIsolate = Isolate.current;
       print(
-          '🔍 Main thread isolate: ${mainIsolate.debugName}, hashCode: ${mainIsolate.hashCode}');
+        '🔍 Main thread isolate: ${mainIsolate.debugName}, hashCode: ${mainIsolate.hashCode}',
+      );
 
       final result = await RpcIsolateTransport.spawn(
         entrypoint: isolateInfoServer,
@@ -279,12 +288,16 @@ void main() {
         // Assert
         print('📋 Comparison:');
         print(
-            '   🔸 Main isolate: ${mainIsolate.debugName} (${mainIsolate.hashCode})');
+          '   🔸 Main isolate: ${mainIsolate.debugName} (${mainIsolate.hashCode})',
+        );
         print(
-            '   🔸 Worker isolate: ${isolateInfo.isolateName} (${isolateInfo.isolateHashCode})');
+          '   🔸 Worker isolate: ${isolateInfo.isolateName} (${isolateInfo.isolateHashCode})',
+        );
 
         expect(
-            isolateInfo.isolateHashCode, isNot(equals(mainIsolate.hashCode)));
+          isolateInfo.isolateHashCode,
+          isNot(equals(mainIsolate.hashCode)),
+        );
         expect(isolateInfo.isolateName, contains('VerificationIsolate'));
 
         print('✅ Верификация пройдена: изоляты имеют разные идентификаторы');
@@ -325,8 +338,9 @@ void main() {
 
         // Пока задача выполняется в изоляте, основной поток должен оставаться отзывчивым
         var mainThreadCounter = 0;
-        final mainThreadTimer =
-            Timer.periodic(Duration(milliseconds: 1), (timer) {
+        final mainThreadTimer = Timer.periodic(Duration(milliseconds: 1), (
+          timer,
+        ) {
           mainThreadCounter++;
           if (mainThreadCounter >= 50) {
             // 50мс работы основного потока
@@ -339,7 +353,8 @@ void main() {
           taskFuture,
           mainThreadTimer.isActive
               ? Future.delayed(
-                  Duration(milliseconds: 60)) // Даем чуть больше времени
+                  Duration(milliseconds: 60),
+                ) // Даем чуть больше времени
               : Future.value(null),
         ]);
 
@@ -351,21 +366,26 @@ void main() {
         // Assert
         print('📊 CPU Task Results:');
         print(
-            '   ⏱️ Task processing time: ${taskResult.processingTime.inMilliseconds}ms');
+          '   ⏱️ Task processing time: ${taskResult.processingTime.inMilliseconds}ms',
+        );
         print('   🔢 Calculated value: ${taskResult.calculatedValue}');
         print(
-            '   🖥️ Processed in isolate: ${taskResult.isolateInfo.isolateName}');
+          '   🖥️ Processed in isolate: ${taskResult.isolateInfo.isolateName}',
+        );
         print(
-            '   🔄 Main thread counter: $mainThreadCounter (должно быть >= 50)');
+          '   🔄 Main thread counter: $mainThreadCounter (должно быть >= 50)',
+        );
         print(
-            '   ⏱️ Main thread total time: ${mainThreadStopwatch.elapsedMilliseconds}ms');
+          '   ⏱️ Main thread total time: ${mainThreadStopwatch.elapsedMilliseconds}ms',
+        );
 
         expect(taskResult.taskId, equals(task.taskId));
         expect(taskResult.processingTime.inMilliseconds, greaterThan(0));
         expect(taskResult.isolateInfo.isolateName, contains('CpuWorker'));
 
         print(
-            '✅ CPU-интенсивная задача выполнена в изоляте без блокировки основного потока');
+          '✅ CPU-интенсивная задача выполнена в изоляте без блокировки основного потока',
+        );
       } finally {
         await transport.close();
         result.kill();
@@ -403,14 +423,18 @@ void main() {
         print('📊 Memory Isolation Results:');
         print('   📝 Original counter (main thread): ${originalCounter.value}');
         print(
-            '   📝 Mutated counter (from isolate): ${mutationResult.counter.value}');
+          '   📝 Mutated counter (from isolate): ${mutationResult.counter.value}',
+        );
         print(
-            '   🖥️ Mutation happened in: ${mutationResult.isolateInfo.isolateName}');
+          '   🖥️ Mutation happened in: ${mutationResult.isolateInfo.isolateName}',
+        );
 
         // Проверяем что изолят получил копию и мутировал её
         expect(mutationResult.counter.value, equals(13)); // 10 + 3 increments
         expect(
-            mutationResult.isolateInfo.isolateName, contains('MemoryWorker'));
+          mutationResult.isolateInfo.isolateName,
+          contains('MemoryWorker'),
+        );
 
         // ВАЖНО: В Dart isolates, объекты копируются, поэтому оригинал не должен измениться
         // НО: если используется zero-copy (что и происходит), то изменения могут быть видны
@@ -418,7 +442,8 @@ void main() {
 
         print('✅ Память корректно обрабатывается между изолятами');
         print(
-            '   ℹ️ Zero-copy позволяет эффективную передачу без полного копирования');
+          '   ℹ️ Zero-copy позволяет эффективную передачу без полного копирования',
+        );
       } finally {
         await transport.close();
         result.kill();
@@ -456,7 +481,8 @@ void main() {
           final taskFuture = transport
               .getMessagesForStream(streamId)
               .where(
-                  (msg) => msg.isDirect && msg.directPayload is CpuTaskResult)
+                (msg) => msg.isDirect && msg.directPayload is CpuTaskResult,
+              )
               .first
               .then((msg) => msg.directPayload as CpuTaskResult);
 
@@ -473,13 +499,15 @@ void main() {
 
         print('📊 Parallel Execution Results:');
         print(
-            '   ⏱️ Total parallel execution time: ${stopwatch.elapsedMilliseconds}ms');
+          '   ⏱️ Total parallel execution time: ${stopwatch.elapsedMilliseconds}ms',
+        );
 
         final isolateNames = <String>{};
         for (int i = 0; i < results.length; i++) {
           final result = results[i];
           print(
-              '   🔸 Task $i: ${result.taskId} in ${result.isolateInfo.isolateName} (${result.processingTime.inMilliseconds}ms)');
+            '   🔸 Task $i: ${result.taskId} in ${result.isolateInfo.isolateName} (${result.processingTime.inMilliseconds}ms)',
+          );
           isolateNames.add(result.isolateInfo.isolateName);
         }
 
@@ -492,14 +520,14 @@ void main() {
                 .reduce((a, b) => a + b) /
             results.length;
         expect(
-            stopwatch.elapsedMilliseconds,
-            lessThan(averageTaskTime *
-                isolateCount *
-                0.8)); // Должно быть как минимум на 20% быстрее
+          stopwatch.elapsedMilliseconds,
+          lessThan(averageTaskTime * isolateCount * 0.8),
+        ); // Должно быть как минимум на 20% быстрее
 
         print('✅ Множественные изоляты работают параллельно и эффективно');
         print(
-            '   📈 Ускорение параллелизма: ${(averageTaskTime * isolateCount / stopwatch.elapsedMilliseconds).toStringAsFixed(2)}x');
+          '   📈 Ускорение параллелизма: ${(averageTaskTime * isolateCount / stopwatch.elapsedMilliseconds).toStringAsFixed(2)}x',
+        );
       } finally {
         // Cleanup
         for (final result in isolateResults) {

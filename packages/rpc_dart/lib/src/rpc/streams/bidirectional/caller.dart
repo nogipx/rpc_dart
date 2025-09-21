@@ -55,19 +55,23 @@ final class BidirectionalStreamCaller<TRequest extends Object,
     // Zero-copy режим: требуется RpcInMemoryTransport
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.');
+        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
+        'Для сетевых транспортов передайте кодеки.',
+      );
     }
 
     // Режим сериализации: кодеки обязательны
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).');
+      throw ArgumentError(
+        'Кодеки обязательны для режима сериализации. '
+        'Для zero-copy не передавайте кодеки (null).',
+      );
     }
 
     _logger = logger?.child('BidirectionalCaller');
     _logger?.internal(
-        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamCaller для $serviceName.$methodName');
+      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamCaller для $serviceName.$methodName',
+    );
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,
@@ -108,16 +112,19 @@ final class BidirectionalStreamCaller<TRequest extends Object,
 
       // Проверяем статус в метаданных
       if (response.metadata != null) {
-        final statusStr =
-            response.metadata!.getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
+        final statusStr = response.metadata!.getHeaderValue(
+          RpcConstants.GRPC_STATUS_HEADER,
+        );
         if (statusStr != null) {
           final status = int.tryParse(statusStr) ?? RpcStatus.UNKNOWN;
           if (status != RpcStatus.OK) {
-            final message = response.metadata!
-                    .getHeaderValue(RpcConstants.GRPC_MESSAGE_HEADER) ??
+            final message = response.metadata!.getHeaderValue(
+                  RpcConstants.GRPC_MESSAGE_HEADER,
+                ) ??
                 'Unknown error';
             _logger?.error(
-                'Bidirectional стрим завершился с ошибкой: $status - $message');
+              'Bidirectional стрим завершился с ошибкой: $status - $message',
+            );
             throw Exception('gRPC error $status: $message');
           }
         }
@@ -133,8 +140,9 @@ final class BidirectionalStreamCaller<TRequest extends Object,
       final controller = StreamController<TRequest>();
       controller.stream.listen(
         (request) async {
-          _logger
-              ?.internal('Отправка запроса в bidirectional стриме: $request');
+          _logger?.internal(
+            'Отправка запроса в bidirectional стриме: $request',
+          );
           await send(request);
         },
         onDone: () async {
@@ -142,8 +150,11 @@ final class BidirectionalStreamCaller<TRequest extends Object,
           await finishSending();
         },
         onError: (error, stackTrace) {
-          _logger?.error('Ошибка в потоке запросов',
-              error: error, stackTrace: stackTrace);
+          _logger?.error(
+            'Ошибка в потоке запросов',
+            error: error,
+            stackTrace: stackTrace,
+          );
         },
       );
       _requestSink = controller.sink;

@@ -200,6 +200,14 @@ abstract class IRpcTransport {
   ///
   /// Освобождает все связанные ресурсы и закрывает базовое соединение.
   Future<void> close();
+
+  /// Проверяет состояние транспорта и возвращает диагностический снимок.
+  Future<RpcHealthStatus> health();
+
+  /// Пытается восстановить соединение транспорта. Если транспорт не поддерживает
+  /// переподключение, он должен вернуть статус с уровнем [RpcHealthLevel.degraded]
+  /// или [RpcHealthLevel.unhealthy] с признаком `supported: false` в деталях.
+  Future<RpcHealthStatus> reconnect();
 }
 
 /// Менеджер Stream ID для HTTP/2 соединений.

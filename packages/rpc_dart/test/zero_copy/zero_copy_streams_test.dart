@@ -79,7 +79,8 @@ final class StreamingTestService extends RpcResponderContract {
           items.add(request.message);
         }
         return TestResponse(
-            'Processed ${items.length} items: ${items.join(", ")}');
+          'Processed ${items.length} items: ${items.join(", ")}',
+        );
       },
       // ✅ НЕ передаем кодеки → автоматически zero-copy режим
       description: 'Zero-copy client stream для обработки элементов',
@@ -192,11 +193,16 @@ void main() {
       expect(responses[2].result, equals('Number 3 for: 3'));
 
       // Проверяем zero-copy
-      expect(directMessages, greaterThan(0),
-          reason: 'Ожидаем zero-copy сообщения');
-      print(directMessages > 0
-          ? '\n✅ Server Stream Zero-Copy работает!'
-          : '\n❌ Zero-Copy НЕ работает');
+      expect(
+        directMessages,
+        greaterThan(0),
+        reason: 'Ожидаем zero-copy сообщения',
+      );
+      print(
+        directMessages > 0
+            ? '\n✅ Server Stream Zero-Copy работает!'
+            : '\n❌ Zero-Copy НЕ работает',
+      );
     });
 
     test('🚀 Client Stream с Zero-Copy', () async {
@@ -236,11 +242,16 @@ void main() {
       expect(response.result, equals('Processed 3 items: item1, item2, item3'));
 
       // Проверяем zero-copy
-      expect(directMessages, greaterThan(0),
-          reason: 'Ожидаем zero-copy сообщения');
-      print(directMessages > 0
-          ? '\n✅ Client Stream Zero-Copy работает!'
-          : '\n❌ Zero-Copy НЕ работает');
+      expect(
+        directMessages,
+        greaterThan(0),
+        reason: 'Ожидаем zero-copy сообщения',
+      );
+      print(
+        directMessages > 0
+            ? '\n✅ Client Stream Zero-Copy работает!'
+            : '\n❌ Zero-Copy НЕ работает',
+      );
     });
 
     test('🚀 Bidirectional Stream с Zero-Copy', () async {
@@ -293,11 +304,16 @@ void main() {
       expect(responses.any((r) => r.result == 'echo: hello world'), isTrue);
 
       // Проверяем zero-copy
-      expect(directMessages, greaterThan(0),
-          reason: 'Ожидаем zero-copy сообщения');
-      print(directMessages > 0
-          ? '\n✅ Bidirectional Stream Zero-Copy работает!'
-          : '\n❌ Zero-Copy НЕ работает');
+      expect(
+        directMessages,
+        greaterThan(0),
+        reason: 'Ожидаем zero-copy сообщения',
+      );
+      print(
+        directMessages > 0
+            ? '\n✅ Bidirectional Stream Zero-Copy работает!'
+            : '\n❌ Zero-Copy НЕ работает',
+      );
 
       await subscription.cancel();
     });
@@ -307,7 +323,8 @@ void main() {
 
       // Тест для демонстрации эффективности zero-copy
       final largeRequest = TestRequest(
-          'big data with lots of text that would take time to serialize and deserialize if we were not using zero-copy optimization for inmemory transport which allows us to pass objects by reference');
+        'big data with lots of text that would take time to serialize and deserialize if we were not using zero-copy optimization for inmemory transport which allows us to pass objects by reference',
+      );
 
       sentMessages.clear();
       final stopwatch = Stopwatch()..start();
@@ -327,7 +344,8 @@ void main() {
       stopwatch.stop();
 
       print(
-          '⏱️ Время выполнения: ${stopwatch.elapsedMicroseconds} микросекунд');
+        '⏱️ Время выполнения: ${stopwatch.elapsedMicroseconds} микросекунд',
+      );
 
       final serializedMessages =
           sentMessages.where((m) => m.isSerialized).length;
@@ -337,7 +355,8 @@ void main() {
       print('   📡 Сериализованных сообщений: $serializedMessages');
       print('   🚀 Zero-copy сообщений: $directMessages');
       print(
-          '   📈 Экономия на сериализации: ${directMessages > serializedMessages ? 'ЕСТЬ' : 'НЕТ'}');
+        '   📈 Экономия на сериализации: ${directMessages > serializedMessages ? 'ЕСТЬ' : 'НЕТ'}',
+      );
 
       expect(responses.length, equals(3));
       expect(directMessages, greaterThan(0));
@@ -345,7 +364,8 @@ void main() {
       if (directMessages > serializedMessages) {
         print('\n🎉 ОТЛИЧНО! Zero-copy оптимизация работает для стримов!');
         print(
-            '💡 Объекты передаются по ссылке без накладных расходов на сериализацию');
+          '💡 Объекты передаются по ссылке без накладных расходов на сериализацию',
+        );
       }
     });
   });

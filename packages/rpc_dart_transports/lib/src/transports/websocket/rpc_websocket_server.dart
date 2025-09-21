@@ -70,15 +70,19 @@ class RpcWebSocketServer implements IRpcServer {
       logger: logger,
       onEndpointCreated: (endpoint) {
         logger?.debug(
-            'Регистрация ${contracts.length} контрактов на новом WebSocket endpoint');
+          'Регистрация ${contracts.length} контрактов на новом WebSocket endpoint',
+        );
         for (final contract in contracts) {
           endpoint.registerServiceContract(contract);
           logger?.debug('Зарегистрирован контракт: ${contract.serviceName}');
         }
       },
       onConnectionError: (error, stackTrace) {
-        logger?.error('Ошибка WebSocket соединения',
-            error: error, stackTrace: stackTrace);
+        logger?.error(
+          'Ошибка WebSocket соединения',
+          error: error,
+          stackTrace: stackTrace,
+        );
       },
     );
   }
@@ -114,8 +118,11 @@ class RpcWebSocketServer implements IRpcServer {
         _handleWebSocketConnection(channel, label);
       },
       onError: (Object error, StackTrace st) {
-        _logger?.error('Ошибка потока подключений',
-            error: error, stackTrace: st);
+        _logger?.error(
+          'Ошибка потока подключений',
+          error: error,
+          stackTrace: st,
+        );
         _onConnectionError?.call(error, st);
       },
       onDone: () {
@@ -159,7 +166,9 @@ class RpcWebSocketServer implements IRpcServer {
 
   /// Обрабатывает новое WebSocket соединение (общая RPC-логика).
   void _handleWebSocketConnection(
-      WebSocketChannel channel, String clientLabel) {
+    WebSocketChannel channel,
+    String clientLabel,
+  ) {
     _onConnectionOpened?.call(channel);
 
     try {
@@ -193,13 +202,17 @@ class RpcWebSocketServer implements IRpcServer {
         _onConnectionClosed?.call(channel);
       }).catchError((error) {
         _logger?.warning(
-            'Ошибка при закрытии WebSocket соединения $clientLabel: $error');
+          'Ошибка при закрытии WebSocket соединения $clientLabel: $error',
+        );
         _endpoints.remove(endpoint);
         _onConnectionClosed?.call(channel);
       });
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при создании WebSocket RPC соединения',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при создании WebSocket RPC соединения',
+        error: e,
+        stackTrace: stackTrace,
+      );
       _onConnectionError?.call(e, stackTrace);
       channel.sink.close();
     }

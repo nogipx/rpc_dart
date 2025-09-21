@@ -49,8 +49,10 @@ class ComputeRequest {
   /// Генерирует большой запрос для тестирования производительности
   factory ComputeRequest.generateLarge(int numbersCount) {
     final random = Random();
-    final numbers =
-        List.generate(numbersCount, (_) => random.nextDouble() * 1000);
+    final numbers = List.generate(
+      numbersCount,
+      (_) => random.nextDouble() * 1000,
+    );
 
     return ComputeRequest(
       operationType: 'complexAnalysis',
@@ -85,10 +87,7 @@ class BatchComputeRequest {
   final List<ComputeRequest> requests;
   final bool parallel;
 
-  const BatchComputeRequest({
-    required this.requests,
-    this.parallel = true,
-  });
+  const BatchComputeRequest({required this.requests, this.parallel = true});
 }
 
 /// Ответ на пакетные вычисления
@@ -145,11 +144,14 @@ final class CalculatorResponder extends RpcResponderContract
   }
 
   @override
-  Future<ComputeResponse> compute(ComputeRequest request,
-      {RpcContext? context}) async {
+  Future<ComputeResponse> compute(
+    ComputeRequest request, {
+    RpcContext? context,
+  }) async {
     final stopwatch = Stopwatch()..start();
     print(
-        '🧮 [Calculator] Обработка ${request.operationType} с ${request.numbers.length} числами');
+      '🧮 [Calculator] Обработка ${request.operationType} с ${request.numbers.length} числами',
+    );
 
     // CPU-intensive вычисления (идеально для изолята!)
     double result = 0.0;
@@ -173,8 +175,9 @@ final class CalculatorResponder extends RpcResponderContract
       case 'variance':
         final mean =
             request.numbers.reduce((a, b) => a + b) / request.numbers.length;
-        final squaredDiffs =
-            request.numbers.map((x) => (x - mean) * (x - mean));
+        final squaredDiffs = request.numbers.map(
+          (x) => (x - mean) * (x - mean),
+        );
         result = squaredDiffs.reduce((a, b) => a + b) / request.numbers.length;
         details['operation'] = 'variance';
         details['mean'] = mean;
@@ -200,7 +203,8 @@ final class CalculatorResponder extends RpcResponderContract
 
     stopwatch.stop();
     print(
-        '✅ [Calculator] Обработка завершена за ${stopwatch.elapsedMilliseconds}мс');
+      '✅ [Calculator] Обработка завершена за ${stopwatch.elapsedMilliseconds}мс',
+    );
 
     return ComputeResponse(
       result: result,
@@ -211,11 +215,14 @@ final class CalculatorResponder extends RpcResponderContract
   }
 
   @override
-  Future<BatchComputeResponse> batchCompute(BatchComputeRequest request,
-      {RpcContext? context}) async {
+  Future<BatchComputeResponse> batchCompute(
+    BatchComputeRequest request, {
+    RpcContext? context,
+  }) async {
     final stopwatch = Stopwatch()..start();
     print(
-        '📊 [Calculator] Пакетная обработка ${request.requests.length} запросов');
+      '📊 [Calculator] Пакетная обработка ${request.requests.length} запросов',
+    );
 
     final results = <ComputeResponse>[];
     int successCount = 0;
@@ -248,19 +255,22 @@ final class CalculatorResponder extends RpcResponderContract
           if (result.success) successCount++;
         } catch (e) {
           print('❌ Ошибка обработки запроса: $e');
-          results.add(ComputeResponse(
-            result: 0.0,
-            details: {'error': e.toString()},
-            processingTime: Duration.zero,
-            success: false,
-          ));
+          results.add(
+            ComputeResponse(
+              result: 0.0,
+              details: {'error': e.toString()},
+              processingTime: Duration.zero,
+              success: false,
+            ),
+          );
         }
       }
     }
 
     stopwatch.stop();
     print(
-        '✅ [Calculator] Пакетная обработка завершена за ${stopwatch.elapsedMilliseconds}мс');
+      '✅ [Calculator] Пакетная обработка завершена за ${stopwatch.elapsedMilliseconds}мс',
+    );
 
     return BatchComputeResponse(
       results: results,
@@ -270,8 +280,10 @@ final class CalculatorResponder extends RpcResponderContract
   }
 
   @override
-  Stream<ComputeStepResponse> streamCompute(Stream<ComputeRequest> requests,
-      {RpcContext? context}) async* {
+  Stream<ComputeStepResponse> streamCompute(
+    Stream<ComputeRequest> requests, {
+    RpcContext? context,
+  }) async* {
     await for (final request in requests) {
       final requestId = 'req_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -406,9 +418,11 @@ Future<void> main() async {
       print('   📊 Обработано чисел: ${largeRequest.numbers.length}');
       print('   🧮 Результат: ${complexResponse.result.toStringAsFixed(4)}');
       print(
-          '   ⏱️ Время клиент-сервер: ${processingStopwatch.elapsedMilliseconds}мс');
+        '   ⏱️ Время клиент-сервер: ${processingStopwatch.elapsedMilliseconds}мс',
+      );
       print(
-          '   ⚙️ Время в изоляте: ${complexResponse.processingTime.inMilliseconds}мс');
+        '   ⚙️ Время в изоляте: ${complexResponse.processingTime.inMilliseconds}мс',
+      );
     }
 
     // ================================================================
@@ -419,28 +433,34 @@ Future<void> main() async {
 
     final batchRequests = [
       ComputeRequest(
-          operationType: 'sum',
-          numbers: List.generate(1000, (i) => i.toDouble())),
+        operationType: 'sum',
+        numbers: List.generate(1000, (i) => i.toDouble()),
+      ),
       ComputeRequest(operationType: 'product', numbers: [1.1, 2.2, 3.3]),
       ComputeRequest(
-          operationType: 'variance',
-          numbers: List.generate(5000, (i) => (i * 0.1))),
+        operationType: 'variance',
+        numbers: List.generate(5000, (i) => (i * 0.1)),
+      ),
     ];
 
-    final batchRequest =
-        BatchComputeRequest(requests: batchRequests, parallel: true);
+    final batchRequest = BatchComputeRequest(
+      requests: batchRequests,
+      parallel: true,
+    );
     final batchResponse = await calculator.batchCompute(batchRequest);
 
     print('✅ Пакетная обработка завершена!');
     print('   📊 Обработано запросов: ${batchResponse.results.length}');
     print('   ✅ Успешных: ${batchResponse.successCount}');
     print(
-        '   ⏱️ Общее время: ${batchResponse.totalProcessingTime.inMilliseconds}мс');
+      '   ⏱️ Общее время: ${batchResponse.totalProcessingTime.inMilliseconds}мс',
+    );
 
     for (int i = 0; i < batchResponse.results.length; i++) {
       final result = batchResponse.results[i];
       print(
-          '      ${i + 1}. ${result.details['operation']}: ${result.result.toStringAsFixed(4)}');
+        '      ${i + 1}. ${result.details['operation']}: ${result.result.toStringAsFixed(4)}',
+      );
     }
 
     // ================================================================
@@ -454,7 +474,9 @@ Future<void> main() async {
       ComputeRequest(operationType: 'mean', numbers: [10.0, 20.0, 30.0]),
       ComputeRequest(operationType: 'sum', numbers: [1.0, 2.0, 3.0, 4.0]),
       ComputeRequest(
-          operationType: 'variance', numbers: [5.0, 15.0, 25.0, 35.0]),
+        operationType: 'variance',
+        numbers: [5.0, 15.0, 25.0, 35.0],
+      ),
     ]).asyncMap((request) async {
       // Небольшая задержка между запросами для корректной передачи
       await Future.delayed(Duration(milliseconds: 100));
@@ -465,7 +487,8 @@ Future<void> main() async {
     await for (final step in calculator.streamCompute(streamingRequests)) {
       final status = step.isComplete ? '✅' : '🔄';
       print(
-          '   $status ${step.step}: ${step.intermediateResult.toStringAsFixed(2)}');
+        '   $status ${step.step}: ${step.intermediateResult.toStringAsFixed(2)}',
+      );
     }
 
     print('\n🏁 Потоковая обработка завершена!');
@@ -495,7 +518,9 @@ Future<void> main() async {
 /// Entry point для сервера в изоляте
 @pragma('vm:entry-point')
 void isolateServerEntrypoint(
-    IRpcTransport transport, Map<String, dynamic> params) {
+  IRpcTransport transport,
+  Map<String, dynamic> params,
+) {
   print('🖥️ [Isolate Server] Запущен Calculator RPC сервер');
 
   // Настраиваем RPC endpoint в изоляте

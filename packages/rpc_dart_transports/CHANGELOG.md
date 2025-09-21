@@ -1,3 +1,10 @@
+# 1.2.0
+
+- Added health() and reconnect() implementations for HTTP/2, WebSocket and
+  isolate transports.
+- Improved WebSocket client reconnection support with automatic listeners.
+- Updated documentation with diagnostics overview.
+
 # Changelog
 
 ## 1.1.2

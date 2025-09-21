@@ -54,8 +54,9 @@ void main() {
     });
 
     /// Удобный хелпер: ждём первое входящее WS-подключение
-    Future<WebSocket> nextServerSocket(
-        {Duration timeout = const Duration(seconds: 2)}) {
+    Future<WebSocket> nextServerSocket({
+      Duration timeout = const Duration(seconds: 2),
+    }) {
       return socketEvents.stream.first.timeout(timeout);
     }
 
@@ -125,8 +126,9 @@ void main() {
       final serverMessages = <RpcTransportMessage>[];
       final sub = serverTransport.incomingMessages.listen(serverMessages.add);
 
-      final metadata =
-          RpcMetadata.forClientRequestWithPath('/test.Service/TestMethod');
+      final metadata = RpcMetadata.forClientRequestWithPath(
+        '/test.Service/TestMethod',
+      );
       await clientTransport.sendMetadata(streamId, metadata);
 
       // Дадим очереди событий обработаться
@@ -140,13 +142,17 @@ void main() {
 
       final headers = received.metadata!.headers;
       expect(
-          headers.any(
-              (h) => h.name == 'content-type' && h.value == 'application/grpc'),
-          isTrue);
+        headers.any(
+          (h) => h.name == 'content-type' && h.value == 'application/grpc',
+        ),
+        isTrue,
+      );
       expect(
-          headers.any((h) =>
-              h.name == ':path' && h.value == '/test.Service/TestMethod'),
-          isTrue);
+        headers.any(
+          (h) => h.name == ':path' && h.value == '/test.Service/TestMethod',
+        ),
+        isTrue,
+      );
 
       await sub.cancel();
       await clientTransport.close();

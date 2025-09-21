@@ -21,7 +21,8 @@ void main() {
             print('Сервер: Начата обработка запросов');
             final allRequests = await requests.toList();
             print(
-                'Сервер: Получено ${allRequests.length} запросов: $allRequests');
+              'Сервер: Получено ${allRequests.length} запросов: $allRequests',
+            );
             final joinedRequests = allRequests.join(', ');
             print('Сервер: Отправляю ответ "Received: $joinedRequests"');
             return 'Received: $joinedRequests'.rpc;
@@ -60,7 +61,9 @@ void main() {
 
         // Assert
         expect(
-            response.value, equals('Received: request1, request2, request3'));
+          response.value,
+          equals('Received: request1, request2, request3'),
+        );
 
         // Cleanup
         await client.close();

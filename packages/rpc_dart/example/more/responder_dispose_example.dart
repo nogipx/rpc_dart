@@ -67,18 +67,21 @@ void main() async {
 
   // Разрегистрируем один сервис
   print(
-      '\n🗑️  Разрегистрируем DatabaseService (dispose() вызовется автоматически)...');
+    '\n🗑️  Разрегистрируем DatabaseService (dispose() вызовется автоматически)...',
+  );
   responderEndpoint.unregisterServiceContract('DatabaseService');
 
   print('📊 Состояние после разрегистрации:');
   print(
-      '  Database connections: ${databaseService.activeConnections} (должно быть 0)');
+    '  Database connections: ${databaseService.activeConnections} (должно быть 0)',
+  );
   print('  Cache size: ${cachingService.cacheSize} (не изменилось)');
   print('  Analytics timers: ${analyticsService.activeTimers} (не изменилось)');
 
   // Закрываем эндпоинт (остальные dispose() вызовутся автоматически)
   print(
-      '\n🚪 Закрываем эндпоинт (dispose() вызовется для всех оставшихся сервисов)...');
+    '\n🚪 Закрываем эндпоинт (dispose() вызовется для всех оставшихся сервисов)...',
+  );
   await responderEndpoint.close();
 
   print('📊 Финальное состояние ресурсов:');
@@ -132,8 +135,10 @@ final class DatabaseService extends RpcResponderContract {
     );
   }
 
-  Future<ResourceResponse> _initializeDatabase(ResourceRequest request,
-      {RpcContext? context}) async {
+  Future<ResourceResponse> _initializeDatabase(
+    ResourceRequest request, {
+    RpcContext? context,
+  }) async {
     print('  🗄️  [Database] Инициализация подключений...');
 
     // Создаем имитацию подключений к БД
@@ -152,14 +157,19 @@ final class DatabaseService extends RpcResponderContract {
 
     print('  🗄️  [Database] Создано $activeConnections подключений');
     return ResourceResponse(
-        'Database initialized with $activeConnections connections');
+      'Database initialized with $activeConnections connections',
+    );
   }
 
-  Future<ResourceResponse> _executeQuery(ResourceRequest request,
-      {RpcContext? context}) async {
+  Future<ResourceResponse> _executeQuery(
+    ResourceRequest request, {
+    RpcContext? context,
+  }) async {
     if (activeConnections == 0) {
-      return ResourceResponse('No database connections available',
-          success: false);
+      return ResourceResponse(
+        'No database connections available',
+        success: false,
+      );
     }
     return ResourceResponse('Query executed successfully');
   }
@@ -209,8 +219,10 @@ final class CachingService extends RpcResponderContract {
     );
   }
 
-  Future<ResourceResponse> _initializeCache(ResourceRequest request,
-      {RpcContext? context}) async {
+  Future<ResourceResponse> _initializeCache(
+    ResourceRequest request, {
+    RpcContext? context,
+  }) async {
     print('  💾 [Cache] Инициализация кеша...');
 
     // Заполняем кеш тестовыми данными
@@ -290,13 +302,17 @@ final class AnalyticsService extends RpcResponderContract {
     }
 
     print(
-        '  📊 [Analytics] Создано $activeTimers таймеров и ${_eventStreams.length} event streams');
+      '  📊 [Analytics] Создано $activeTimers таймеров и ${_eventStreams.length} event streams',
+    );
   }
 
-  Future<ResourceResponse> _initializeAnalytics(ResourceRequest request,
-      {RpcContext? context}) async {
+  Future<ResourceResponse> _initializeAnalytics(
+    ResourceRequest request, {
+    RpcContext? context,
+  }) async {
     return ResourceResponse(
-        'Analytics already initialized with $activeTimers timers');
+      'Analytics already initialized with $activeTimers timers',
+    );
   }
 
   /// 🆕 Переопределяем dispose() для освобождения analytics ресурсов

@@ -44,13 +44,15 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 100)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 100,
+            )
             .build();
 
-        final serverEndpoint =
-            RpcResponderEndpoint(transport: userServerTransport);
+        final serverEndpoint = RpcResponderEndpoint(
+          transport: userServerTransport,
+        );
         final testService = _TestStreamingService(serviceName: 'UserService');
         serverEndpoint.registerServiceContract(testService);
         serverEndpoint.start();
@@ -87,29 +89,33 @@ void main() {
         final router = RpcTransportRouterBuilder.client()
             // Premium пользователи имеют высший приоритет
             .routeWhen(
-                toTransport: premiumClientTransport,
-                whenCondition: (service, method, context) =>
-                    service == 'UserService' &&
-                    context?.getHeader('x-tier') == 'premium',
-                priority: 100,
-                description: 'Premium UserService')
+              toTransport: premiumClientTransport,
+              whenCondition: (service, method, context) =>
+                  service == 'UserService' &&
+                  context?.getHeader('x-tier') == 'premium',
+              priority: 100,
+              description: 'Premium UserService',
+            )
             // Обычные пользователи
             .routeCall(
-                calledServiceName: 'UserService',
-                toTransport: userClientTransport,
-                priority: 50)
+              calledServiceName: 'UserService',
+              toTransport: userClientTransport,
+              priority: 50,
+            )
             .build();
 
         // Настраиваем premium сервер
-        final premiumEndpoint =
-            RpcResponderEndpoint(transport: premiumServerTransport);
+        final premiumEndpoint = RpcResponderEndpoint(
+          transport: premiumServerTransport,
+        );
         final premiumService = _TestStreamingService(prefix: 'PREMIUM');
         premiumEndpoint.registerServiceContract(premiumService);
         premiumEndpoint.start();
 
         // Настраиваем обычный сервер
-        final userEndpoint =
-            RpcResponderEndpoint(transport: userServerTransport);
+        final userEndpoint = RpcResponderEndpoint(
+          transport: userServerTransport,
+        );
         final userService = _TestStreamingService(prefix: 'REGULAR');
         userEndpoint.registerServiceContract(userService);
         userEndpoint.start();
@@ -139,8 +145,10 @@ void main() {
         expect(responses.length, equals(3));
         expect(responses.every((r) => r.value.contains('PREMIUM')), isTrue);
         expect(premiumService.callLog, contains('ServerStream: 3'));
-        expect(userService.callLog,
-            isEmpty); // Обычный сервис не должен вызываться
+        expect(
+          userService.callLog,
+          isEmpty,
+        ); // Обычный сервис не должен вызываться
 
         // Cleanup
         await router.close();
@@ -155,15 +163,18 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'PaymentService',
-                toTransport: paymentClientTransport,
-                priority: 100)
+              calledServiceName: 'PaymentService',
+              toTransport: paymentClientTransport,
+              priority: 100,
+            )
             .build();
 
-        final serverEndpoint =
-            RpcResponderEndpoint(transport: paymentServerTransport);
-        final testService =
-            _TestStreamingService(serviceName: 'PaymentService');
+        final serverEndpoint = RpcResponderEndpoint(
+          transport: paymentServerTransport,
+        );
+        final testService = _TestStreamingService(
+          serviceName: 'PaymentService',
+        );
         serverEndpoint.registerServiceContract(testService);
         serverEndpoint.start();
 
@@ -179,13 +190,16 @@ void main() {
           responseCodec: RpcString.codec,
         );
 
-        final response =
-            await clientStreamBuilder(Stream.fromIterable(requests));
+        final response = await clientStreamBuilder(
+          Stream.fromIterable(requests),
+        );
 
         // Assert
         expect(response, equals('Processed 3 requests'.rpc));
-        expect(testService.callLog,
-            contains('ClientStream: payment1, payment2, payment3'));
+        expect(
+          testService.callLog,
+          contains('ClientStream: payment1, payment2, payment3'),
+        );
 
         await router.close();
         await serverEndpoint.close();
@@ -196,15 +210,18 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'PaymentService',
-                toTransport: paymentClientTransport,
-                priority: 100)
+              calledServiceName: 'PaymentService',
+              toTransport: paymentClientTransport,
+              priority: 100,
+            )
             .build();
 
-        final serverEndpoint =
-            RpcResponderEndpoint(transport: paymentServerTransport);
-        final testService =
-            _TestStreamingService(serviceName: 'PaymentService');
+        final serverEndpoint = RpcResponderEndpoint(
+          transport: paymentServerTransport,
+        );
+        final testService = _TestStreamingService(
+          serviceName: 'PaymentService',
+        );
         serverEndpoint.registerServiceContract(testService);
         serverEndpoint.start();
 
@@ -222,17 +239,22 @@ void main() {
           responseCodec: RpcString.codec,
         );
 
-        final response =
-            await clientStreamBuilder(Stream.fromIterable(requests));
+        final response = await clientStreamBuilder(
+          Stream.fromIterable(requests),
+        );
 
         // Assert
         expect(response, equals('Processed $batchSize requests'.rpc));
-        expect(testService.callLog.any((log) => log.contains('batch_item_0')),
-            isTrue);
         expect(
-            testService.callLog
-                .any((log) => log.contains('batch_item_${batchSize - 1}')),
-            isTrue);
+          testService.callLog.any((log) => log.contains('batch_item_0')),
+          isTrue,
+        );
+        expect(
+          testService.callLog.any(
+            (log) => log.contains('batch_item_${batchSize - 1}'),
+          ),
+          isTrue,
+        );
 
         // Cleanup
         await router.close();
@@ -246,13 +268,15 @@ void main() {
         // Arrange
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'ChatService',
-                toTransport: userClientTransport,
-                priority: 100)
+              calledServiceName: 'ChatService',
+              toTransport: userClientTransport,
+              priority: 100,
+            )
             .build();
 
-        final serverEndpoint =
-            RpcResponderEndpoint(transport: userServerTransport);
+        final serverEndpoint = RpcResponderEndpoint(
+          transport: userServerTransport,
+        );
         final testService = _TestStreamingService(serviceName: 'ChatService');
         serverEndpoint.registerServiceContract(testService);
         serverEndpoint.start();
@@ -286,8 +310,10 @@ void main() {
         // Assert
         expect(responses.length, greaterThanOrEqualTo(2));
         expect(responses.any((r) => r.value == 'pong'), isTrue);
-        expect(responses.any((r) => r.value.contains('echo: hello world')),
-            isTrue);
+        expect(
+          responses.any((r) => r.value.contains('echo: hello world')),
+          isTrue,
+        );
 
         await subscription.cancel();
         await router.close();
@@ -296,184 +322,203 @@ void main() {
       });
 
       test(
-          'должен поддерживать множественные bidirectional streams через роутер',
-          () async {
-        // Arrange
-        final router = RpcTransportRouterBuilder.client()
-            .routeCall(
+        'должен поддерживать множественные bidirectional streams через роутер',
+        () async {
+          // Arrange
+          final router = RpcTransportRouterBuilder.client()
+              .routeCall(
                 calledServiceName: 'ChatService',
                 toTransport: userClientTransport,
-                priority: 100)
-            .build();
+                priority: 100,
+              )
+              .build();
 
-        final serverEndpoint =
-            RpcResponderEndpoint(transport: userServerTransport);
-        final testService = _TestStreamingService(serviceName: 'ChatService');
-        serverEndpoint.registerServiceContract(testService);
-        serverEndpoint.start();
+          final serverEndpoint = RpcResponderEndpoint(
+            transport: userServerTransport,
+          );
+          final testService = _TestStreamingService(serviceName: 'ChatService');
+          serverEndpoint.registerServiceContract(testService);
+          serverEndpoint.start();
 
-        final clientEndpoint = RpcCallerEndpoint(transport: router);
+          final clientEndpoint = RpcCallerEndpoint(transport: router);
 
-        // Act - создаем два параллельных потока
-        final stream1Controller = StreamController<RpcString>();
-        final stream2Controller = StreamController<RpcString>();
-        final responses1 = <RpcString>[];
-        final responses2 = <RpcString>[];
+          // Act - создаем два параллельных потока
+          final stream1Controller = StreamController<RpcString>();
+          final stream2Controller = StreamController<RpcString>();
+          final responses1 = <RpcString>[];
+          final responses2 = <RpcString>[];
 
-        final responseStream1 =
-            clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-          serviceName: 'ChatService',
-          methodName: 'Chat',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          requests: stream1Controller.stream,
-        );
+          final responseStream1 =
+              clientEndpoint.bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'ChatService',
+            methodName: 'Chat',
+            requestCodec: RpcString.codec,
+            responseCodec: RpcString.codec,
+            requests: stream1Controller.stream,
+          );
 
-        final responseStream2 =
-            clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-          serviceName: 'ChatService',
-          methodName: 'Chat',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          requests: stream2Controller.stream,
-        );
+          final responseStream2 =
+              clientEndpoint.bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'ChatService',
+            methodName: 'Chat',
+            requestCodec: RpcString.codec,
+            responseCodec: RpcString.codec,
+            requests: stream2Controller.stream,
+          );
 
-        final subscription1 = responseStream1.listen(responses1.add);
-        final subscription2 = responseStream2.listen(responses2.add);
+          final subscription1 = responseStream1.listen(responses1.add);
+          final subscription2 = responseStream2.listen(responses2.add);
 
-        // Отправляем в оба потока
-        stream1Controller.add('stream1_msg'.rpc);
-        stream2Controller.add('stream2_msg'.rpc);
+          // Отправляем в оба потока
+          stream1Controller.add('stream1_msg'.rpc);
+          stream2Controller.add('stream2_msg'.rpc);
 
-        await Future.delayed(Duration(milliseconds: 1));
+          await Future.delayed(Duration(milliseconds: 1));
 
-        // Закрываем потоки
-        await stream1Controller.close();
-        await stream2Controller.close();
-        await Future.delayed(Duration(milliseconds: 1));
+          // Закрываем потоки
+          await stream1Controller.close();
+          await stream2Controller.close();
+          await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert - оба потока должны получить ответы
-        expect(responses1.length, greaterThanOrEqualTo(1));
-        expect(responses2.length, greaterThanOrEqualTo(1));
+          // Assert - оба потока должны получить ответы
+          expect(responses1.length, greaterThanOrEqualTo(1));
+          expect(responses2.length, greaterThanOrEqualTo(1));
 
-        expect(responses1.any((r) => r.value.contains('stream1_msg')), isTrue);
-        expect(responses2.any((r) => r.value.contains('stream2_msg')), isTrue);
+          expect(
+            responses1.any((r) => r.value.contains('stream1_msg')),
+            isTrue,
+          );
+          expect(
+            responses2.any((r) => r.value.contains('stream2_msg')),
+            isTrue,
+          );
 
-        // Cleanup
-        await subscription1.cancel();
-        await subscription2.cancel();
-        await router.close();
-        await serverEndpoint.close();
-        await clientEndpoint.close();
-      });
-    });
-
-    group('🌊 Mixed Streaming Scenarios', () {
-      test('должен обрабатывать все типы стримов одновременно', () async {
-        // Arrange
-        final router = RpcTransportRouterBuilder.client()
-            .routeCall(
-                calledServiceName: 'MixedService',
-                toTransport: userClientTransport,
-                priority: 100)
-            .build();
-
-        final serverEndpoint =
-            RpcResponderEndpoint(transport: userServerTransport);
-        final testService = _TestStreamingService(serviceName: 'MixedService');
-        serverEndpoint.registerServiceContract(testService);
-        serverEndpoint.start();
-
-        final clientEndpoint = RpcCallerEndpoint(transport: router);
-
-        try {
-          // Act - выполняем все типы стримов параллельно с таймаутами
-          final futures = <Future>[];
-
-          // 1. Unary Request
-          futures.add(() async {
-            final response = await clientEndpoint
-                .unaryRequest<RpcString, RpcString>(
-                  serviceName: 'MixedService',
-                  methodName: 'Echo',
-                  requestCodec: RpcString.codec,
-                  responseCodec: RpcString.codec,
-                  request: 'unary_test'.rpc,
-                )
-                .timeout(Duration(seconds: 5));
-            expect(response.value, equals('Echo: unary_test'));
-          }());
-
-          // 2. Server Stream
-          futures.add(() async {
-            final responses = <RpcString>[];
-            final stream = clientEndpoint.serverStream<RpcString, RpcString>(
-              serviceName: 'MixedService',
-              methodName: 'GetNumbers',
-              requestCodec: RpcString.codec,
-              responseCodec: RpcString.codec,
-              request: '3'.rpc,
-            );
-
-            await for (final response in stream.timeout(Duration(seconds: 5))) {
-              responses.add(response);
-            }
-            expect(responses.length, equals(3));
-          }());
-
-          // 3. Client Stream
-          futures.add(() async {
-            final clientStreamBuilder =
-                clientEndpoint.clientStream<RpcString, RpcString>(
-              serviceName: 'MixedService',
-              methodName: 'ProcessPayments',
-              requestCodec: RpcString.codec,
-              responseCodec: RpcString.codec,
-            );
-
-            final requests = ['item1'.rpc, 'item2'.rpc];
-            final response =
-                await clientStreamBuilder(Stream.fromIterable(requests))
-                    .timeout(Duration(seconds: 5));
-            expect(response, equals('Processed 2 requests'.rpc));
-          }());
-
-          // 4. Bidirectional Stream
-          futures.add(() async {
-            final requestController = StreamController<RpcString>();
-            final responses = <RpcString>[];
-
-            final responseStream =
-                clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-              serviceName: 'MixedService',
-              methodName: 'Chat',
-              requestCodec: RpcString.codec,
-              responseCodec: RpcString.codec,
-              requests: requestController.stream,
-            );
-
-            final subscription = responseStream
-                .timeout(Duration(seconds: 5))
-                .listen(responses.add);
-
-            requestController.add('chat_test'.rpc);
-            await Future.delayed(Duration(milliseconds: 1));
-            await requestController.close();
-            await Future.delayed(Duration(milliseconds: 1));
-
-            expect(responses.length, greaterThanOrEqualTo(1));
-            await subscription.cancel();
-          }());
-
-          // Assert - все операции должны завершиться успешно
-          await Future.wait(futures).timeout(Duration(seconds: 10));
-        } finally {
           // Cleanup
+          await subscription1.cancel();
+          await subscription2.cancel();
           await router.close();
           await serverEndpoint.close();
           await clientEndpoint.close();
-        }
-      }, timeout: Timeout(Duration(seconds: 15))); // Увеличиваем общий таймаут
+        },
+      );
+    });
+
+    group('🌊 Mixed Streaming Scenarios', () {
+      test(
+        'должен обрабатывать все типы стримов одновременно',
+        () async {
+          // Arrange
+          final router = RpcTransportRouterBuilder.client()
+              .routeCall(
+                calledServiceName: 'MixedService',
+                toTransport: userClientTransport,
+                priority: 100,
+              )
+              .build();
+
+          final serverEndpoint = RpcResponderEndpoint(
+            transport: userServerTransport,
+          );
+          final testService = _TestStreamingService(
+            serviceName: 'MixedService',
+          );
+          serverEndpoint.registerServiceContract(testService);
+          serverEndpoint.start();
+
+          final clientEndpoint = RpcCallerEndpoint(transport: router);
+
+          try {
+            // Act - выполняем все типы стримов параллельно с таймаутами
+            final futures = <Future>[];
+
+            // 1. Unary Request
+            futures.add(() async {
+              final response = await clientEndpoint
+                  .unaryRequest<RpcString, RpcString>(
+                    serviceName: 'MixedService',
+                    methodName: 'Echo',
+                    requestCodec: RpcString.codec,
+                    responseCodec: RpcString.codec,
+                    request: 'unary_test'.rpc,
+                  )
+                  .timeout(Duration(seconds: 5));
+              expect(response.value, equals('Echo: unary_test'));
+            }());
+
+            // 2. Server Stream
+            futures.add(() async {
+              final responses = <RpcString>[];
+              final stream = clientEndpoint.serverStream<RpcString, RpcString>(
+                serviceName: 'MixedService',
+                methodName: 'GetNumbers',
+                requestCodec: RpcString.codec,
+                responseCodec: RpcString.codec,
+                request: '3'.rpc,
+              );
+
+              await for (final response in stream.timeout(
+                Duration(seconds: 5),
+              )) {
+                responses.add(response);
+              }
+              expect(responses.length, equals(3));
+            }());
+
+            // 3. Client Stream
+            futures.add(() async {
+              final clientStreamBuilder =
+                  clientEndpoint.clientStream<RpcString, RpcString>(
+                serviceName: 'MixedService',
+                methodName: 'ProcessPayments',
+                requestCodec: RpcString.codec,
+                responseCodec: RpcString.codec,
+              );
+
+              final requests = ['item1'.rpc, 'item2'.rpc];
+              final response = await clientStreamBuilder(
+                Stream.fromIterable(requests),
+              ).timeout(Duration(seconds: 5));
+              expect(response, equals('Processed 2 requests'.rpc));
+            }());
+
+            // 4. Bidirectional Stream
+            futures.add(() async {
+              final requestController = StreamController<RpcString>();
+              final responses = <RpcString>[];
+
+              final responseStream =
+                  clientEndpoint.bidirectionalStream<RpcString, RpcString>(
+                serviceName: 'MixedService',
+                methodName: 'Chat',
+                requestCodec: RpcString.codec,
+                responseCodec: RpcString.codec,
+                requests: requestController.stream,
+              );
+
+              final subscription = responseStream
+                  .timeout(Duration(seconds: 5))
+                  .listen(responses.add);
+
+              requestController.add('chat_test'.rpc);
+              await Future.delayed(Duration(milliseconds: 1));
+              await requestController.close();
+              await Future.delayed(Duration(milliseconds: 1));
+
+              expect(responses.length, greaterThanOrEqualTo(1));
+              await subscription.cancel();
+            }());
+
+            // Assert - все операции должны завершиться успешно
+            await Future.wait(futures).timeout(Duration(seconds: 10));
+          } finally {
+            // Cleanup
+            await router.close();
+            await serverEndpoint.close();
+            await clientEndpoint.close();
+          }
+        },
+        timeout: Timeout(Duration(seconds: 15)),
+      ); // Увеличиваем общий таймаут
     });
 
     group('Error Handling в Streaming', () {
@@ -481,9 +526,10 @@ void main() {
         // Arrange - роутер без правил для несуществующего сервиса
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
-                calledServiceName: 'ExistingService',
-                toTransport: userClientTransport,
-                priority: 100)
+              calledServiceName: 'ExistingService',
+              toTransport: userClientTransport,
+              priority: 100,
+            )
             .build();
 
         final clientEndpoint = RpcCallerEndpoint(transport: router);
@@ -526,8 +572,9 @@ void main() {
             responseCodec: RpcString.codec,
           );
 
-          await builder(Stream.fromIterable(['test'.rpc]))
-              .timeout(Duration(seconds: 2));
+          await builder(
+            Stream.fromIterable(['test'.rpc]),
+          ).timeout(Duration(seconds: 2));
           fail('Expected RpcException for non-existent service');
         } catch (e) {
           print('CAUGHT ERROR Client Stream: $e (${e.runtimeType})');

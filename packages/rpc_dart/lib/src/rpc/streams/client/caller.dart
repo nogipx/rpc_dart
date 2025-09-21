@@ -74,19 +74,23 @@ final class ClientStreamCaller<TRequest extends Object,
     // Zero-copy режим: требуется RpcInMemoryTransport
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.');
+        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
+        'Для сетевых транспортов передайте кодеки.',
+      );
     }
 
     // Режим сериализации: кодеки обязательны
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).');
+      throw ArgumentError(
+        'Кодеки обязательны для режима сериализации. '
+        'Для zero-copy не передавайте кодеки (null).',
+      );
     }
 
     _logger = logger?.child('ClientCaller');
     _logger?.internal(
-        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamCaller для $serviceName.$methodName');
+      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamCaller для $serviceName.$methodName',
+    );
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,
@@ -106,24 +110,29 @@ final class ClientStreamCaller<TRequest extends Object,
     _subscription = _processor.responses.listen(
       (rpcMessage) {
         _logger?.internal(
-            'Получен ответ от сервера: isMetadataOnly=${rpcMessage.isMetadataOnly}, isEndOfStream=${rpcMessage.isEndOfStream}');
+          'Получен ответ от сервера: isMetadataOnly=${rpcMessage.isMetadataOnly}, isEndOfStream=${rpcMessage.isEndOfStream}',
+        );
 
         // Проверяем на ошибки в метаданных (трейлерах)
         if (rpcMessage.isMetadataOnly && rpcMessage.metadata != null) {
-          final statusCode = rpcMessage.metadata!
-              .getHeaderValue(RpcConstants.GRPC_STATUS_HEADER);
+          final statusCode = rpcMessage.metadata!.getHeaderValue(
+            RpcConstants.GRPC_STATUS_HEADER,
+          );
           _logger?.internal('Статус-код из метаданных: $statusCode');
 
           if (statusCode != null && statusCode != '0') {
-            final errorMessage = rpcMessage.metadata!
-                    .getHeaderValue(RpcConstants.GRPC_MESSAGE_HEADER) ??
+            final errorMessage = rpcMessage.metadata!.getHeaderValue(
+                  RpcConstants.GRPC_MESSAGE_HEADER,
+                ) ??
                 '';
             _logger?.error(
-                'Получен ошибочный статус-код: $statusCode - $errorMessage');
+              'Получен ошибочный статус-код: $statusCode - $errorMessage',
+            );
 
             if (!_responseCompleter.isCompleted) {
               _responseCompleter.completeError(
-                  Exception('gRPC error $statusCode: $errorMessage'));
+                Exception('gRPC error $statusCode: $errorMessage'),
+              );
             }
             return;
           }
@@ -134,8 +143,9 @@ final class ClientStreamCaller<TRequest extends Object,
               rpcMessage.isEndOfStream &&
               !_responseCompleter.isCompleted) {
             _logger?.warning('Получен статус OK, но нет данных в ответе');
-            _responseCompleter
-                .completeError(Exception('Стрим завершен без данных в ответе'));
+            _responseCompleter.completeError(
+              Exception('Стрим завершен без данных в ответе'),
+            );
           }
         }
 
@@ -143,14 +153,18 @@ final class ClientStreamCaller<TRequest extends Object,
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
-          _logger
-              ?.internal('Получена полезная нагрузка: ${rpcMessage.payload}');
+          _logger?.internal(
+            'Получена полезная нагрузка: ${rpcMessage.payload}',
+          );
           _responseCompleter.complete(rpcMessage.payload!);
         }
       },
       onError: (error, stackTrace) {
-        _logger?.error('Ошибка в потоке ответов',
-            error: error, stackTrace: stackTrace);
+        _logger?.error(
+          'Ошибка в потоке ответов',
+          error: error,
+          stackTrace: stackTrace,
+        );
         if (!_responseCompleter.isCompleted) {
           _responseCompleter.completeError(error, stackTrace);
         }
@@ -160,8 +174,9 @@ final class ClientStreamCaller<TRequest extends Object,
         if (!_responseCompleter.isCompleted) {
           // Проверяем, не было ли это вызвано закрытием транспорта
           try {
-            _responseCompleter
-                .completeError(Exception('Стрим закрыт без получения ответа'));
+            _responseCompleter.completeError(
+              Exception('Стрим закрыт без получения ответа'),
+            );
           } catch (e) {
             // Если completer уже завершен, ничего не делаем
             _logger?.internal('Completer уже завершен, пропускаем ошибку: $e');
@@ -178,8 +193,10 @@ final class ClientStreamCaller<TRequest extends Object,
   /// Throws [StateError] если отправка уже завершена
   Future<void> send(TRequest request) async {
     if (_sendingFinished) {
-      throw StateError('Отправка запросов уже завершена! '
-          'Вызовите finishSending() для получения ответа.');
+      throw StateError(
+        'Отправка запросов уже завершена! '
+        'Вызовите finishSending() для получения ответа.',
+      );
     }
 
     _logger?.internal('Отправка запроса в клиентский стрим: $request');
@@ -214,12 +231,17 @@ final class ClientStreamCaller<TRequest extends Object,
           // Освобождаем ресурсы при таймауте
           unawaited(close());
           throw TimeoutException(
-              'Таймаут ожидания ответа от сервера', Duration(seconds: 30));
+            'Таймаут ожидания ответа от сервера',
+            Duration(seconds: 30),
+          );
         },
       );
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при завершении отправки',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при завершении отправки',
+        error: e,
+        stackTrace: stackTrace,
+      );
 
       if (!_responseCompleter.isCompleted) {
         _responseCompleter.completeError(e, stackTrace);

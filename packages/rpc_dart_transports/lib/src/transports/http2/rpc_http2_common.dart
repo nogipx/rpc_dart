@@ -41,8 +41,9 @@ List<http2.Header> rpcMetadataToHttp2Headers(
   }
 
   // Добавляем стандартные gRPC headers если их нет
-  final hasUserAgent =
-      metadata.headers.any((h) => h.name.toLowerCase() == 'user-agent');
+  final hasUserAgent = metadata.headers.any(
+    (h) => h.name.toLowerCase() == 'user-agent',
+  );
   if (!hasUserAgent) {
     headers.add(http2.Header.ascii('user-agent', kGrpcUserAgent));
   }

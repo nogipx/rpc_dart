@@ -100,34 +100,40 @@ void main() {
         var metadataReceived = false;
         final completer = Completer<void>();
 
-        client.responses.listen((message) {
-          if (message.isMetadataOnly && message.metadata != null) {
-            metadataReceived = true;
-            if (!completer.isCompleted) {
-              completer.complete();
+        client.responses.listen(
+          (message) {
+            if (message.isMetadataOnly && message.metadata != null) {
+              metadataReceived = true;
+              if (!completer.isCompleted) {
+                completer.complete();
+              }
             }
-          }
-        }, onError: (e) {
-          print('Ошибка при получении ответа: $e');
-          if (!completer.isCompleted) {
-            completer.completeError(e);
-          }
-        });
+          },
+          onError: (e) {
+            print('Ошибка при получении ответа: $e');
+            if (!completer.isCompleted) {
+              completer.completeError(e);
+            }
+          },
+        );
 
         // Act
         await client.send('test message'.rpc);
 
         // Ждем обработки метаданных с таймаутом
-        await completer.future.timeout(Duration(seconds: 5), onTimeout: () {
-          print('Таймаут при ожидании метаданных');
-          // Форсируем успешное завершение теста, если метаданные не получены
-          // в некоторых тестовых окружениях метаданные могут не прийти
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
-          // Считаем тест успешным даже без получения метаданных
-          metadataReceived = true;
-        });
+        await completer.future.timeout(
+          Duration(seconds: 5),
+          onTimeout: () {
+            print('Таймаут при ожидании метаданных');
+            // Форсируем успешное завершение теста, если метаданные не получены
+            // в некоторых тестовых окружениях метаданные могут не прийти
+            if (!completer.isCompleted) {
+              completer.complete();
+            }
+            // Считаем тест успешным даже без получения метаданных
+            metadataReceived = true;
+          },
+        );
 
         // Assert
         expect(metadataReceived, isTrue);
@@ -224,12 +230,18 @@ void main() {
         // Assert
         expect(serverReceivedRequests.length, equals(2));
         expect(
-            serverReceivedRequests, equals(['Request 1'.rpc, 'Request 2'.rpc]));
+          serverReceivedRequests,
+          equals(['Request 1'.rpc, 'Request 2'.rpc]),
+        );
         expect(clientReceivedResponses.length, equals(2));
-        expect(clientReceivedResponses,
-            contains('Server processed: Request 1'.rpc));
-        expect(clientReceivedResponses,
-            contains('Server processed: Request 2'.rpc));
+        expect(
+          clientReceivedResponses,
+          contains('Server processed: Request 1'.rpc),
+        );
+        expect(
+          clientReceivedResponses,
+          contains('Server processed: Request 2'.rpc),
+        );
 
         // Cleanup
         await client.close();
@@ -382,8 +394,10 @@ void main() {
 
         // Assert
         expect(serverMessages.length, equals(3));
-        expect(serverMessages,
-            equals(['ping 1'.rpc, 'hello world'.rpc, 'ping 2'.rpc]));
+        expect(
+          serverMessages,
+          equals(['ping 1'.rpc, 'hello world'.rpc, 'ping 2'.rpc]),
+        );
 
         expect(clientMessages.length, equals(3));
         expect(clientMessages, contains('pong'.rpc));
@@ -446,8 +460,10 @@ void main() {
         // Assert
         expect(receivedResponses.length, equals(messageCount));
         expect(receivedResponses.first, equals('processed: message_0'.rpc));
-        expect(receivedResponses.last,
-            equals('processed: message_${messageCount - 1}'.rpc));
+        expect(
+          receivedResponses.last,
+          equals('processed: message_${messageCount - 1}'.rpc),
+        );
 
         // Cleanup
         await client.close();

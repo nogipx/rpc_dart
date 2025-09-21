@@ -67,15 +67,12 @@ void main() {
       final receivedResponses = <RpcMessage<RpcString>>[];
       final completer = Completer<void>();
 
-      final subscription = processor.responses.listen(
-        (response) {
-          receivedResponses.add(response);
-          if (!response.isMetadataOnly && response.payload != null) {
-            completer.complete();
-          }
-        },
-        onError: completer.completeError,
-      );
+      final subscription = processor.responses.listen((response) {
+        receivedResponses.add(response);
+        if (!response.isMetadataOnly && response.payload != null) {
+          completer.complete();
+        }
+      }, onError: completer.completeError);
 
       // Симулируем получение ответа через серверный транспорт
       final testResponse = 'response message'.rpc;
@@ -104,15 +101,12 @@ void main() {
       final receivedResponses = <RpcMessage<RpcString>>[];
       final completer = Completer<void>();
 
-      final subscription = processor.responses.listen(
-        (response) {
-          receivedResponses.add(response);
-          if (response.isMetadataOnly) {
-            completer.complete();
-          }
-        },
-        onError: completer.completeError,
-      );
+      final subscription = processor.responses.listen((response) {
+        receivedResponses.add(response);
+        if (response.isMetadataOnly) {
+          completer.complete();
+        }
+      }, onError: completer.completeError);
 
       // Отправляем метаданные через серверный транспорт
       final metadata = RpcMetadata.forTrailer(RpcStatus.OK, message: 'Success');
@@ -143,11 +137,7 @@ void main() {
 
     test('handles multiple requests in sequence', () async {
       // Подготавливаем несколько запросов
-      final requests = [
-        'message 1'.rpc,
-        'message 2'.rpc,
-        'message 3'.rpc,
-      ];
+      final requests = ['message 1'.rpc, 'message 2'.rpc, 'message 3'.rpc];
 
       // Отправляем запросы
       for (final request in requests) {

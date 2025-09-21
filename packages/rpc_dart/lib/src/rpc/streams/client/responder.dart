@@ -51,19 +51,23 @@ final class ClientStreamResponder<TRequest extends Object,
     // Zero-copy режим: требуется RpcInMemoryTransport
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.');
+        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
+        'Для сетевых транспортов передайте кодеки.',
+      );
     }
 
     // Режим сериализации: кодеки обязательны
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).');
+      throw ArgumentError(
+        'Кодеки обязательны для режима сериализации. '
+        'Для zero-copy не передавайте кодеки (null).',
+      );
     }
 
     _logger = logger?.child('ClientResponder');
     _logger?.internal(
-        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamResponder для $serviceName.$methodName [id: $id]');
+      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamResponder для $serviceName.$methodName [id: $id]',
+    );
 
     _processor = StreamProcessor<TRequest, TResponse>(
       transport: transport,
@@ -95,12 +99,14 @@ final class ClientStreamResponder<TRequest extends Object,
 
     _handlerStarted = true;
     _logger?.internal(
-        'Настройка обработчика запросов для клиентского стрима [id: $id]');
+      'Настройка обработчика запросов для клиентского стрима [id: $id]',
+    );
 
     // Вызываем обработчик напрямую с потоком запросов
     handler(_processor.requests).then((response) async {
       _logger?.internal(
-          'Обработчик завершен, отправляем ответ: $response [id: $id]');
+        'Обработчик завершен, отправляем ответ: $response [id: $id]',
+      );
 
       try {
         await _processor.send(response);

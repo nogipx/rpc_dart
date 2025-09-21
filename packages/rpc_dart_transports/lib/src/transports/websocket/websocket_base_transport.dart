@@ -15,7 +15,13 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// Протокол сообщений: [streamId:4байта][flags:1байт][gRPC_frame...]
 abstract class RpcWebSocketTransportBase implements IRpcTransport {
   /// WebSocket канал для обмена сообщениями
-  final WebSocketChannel _channel;
+  WebSocketChannel _channel;
+
+  /// Фабрика для переподключения (только для клиентских транспортов).
+  final Future<WebSocketChannel> Function()? _reconnectFactory;
+
+  /// Текущая подписка на поток сообщений канала.
+  StreamSubscription? _channelSubscription;
 
   /// Контроллер для управления потоком входящих сообщений
   final StreamController<RpcTransportMessage> _incomingController =
@@ -38,9 +44,12 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   /// [channel] WebSocket канал для коммуникации
   /// [logger] Опциональный логгер для отладки
   RpcWebSocketTransportBase(
-    this._channel, {
+    WebSocketChannel channel, {
     RpcLogger? logger,
-  }) : _logger = logger {
+    Future<WebSocketChannel> Function()? reconnectFactory,
+  })  : _channel = channel,
+        _reconnectFactory = reconnectFactory,
+        _logger = logger {
     _setupListener();
   }
 
@@ -50,11 +59,13 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   /// Устанавливает слушатель для входящих WebSocket сообщений
   void _setupListener() {
     _logger?.debug('Устанавливаем слушатель WebSocket');
-    _channel.stream.listen(
+    _channelSubscription?.cancel();
+    _channelSubscription = _channel.stream.listen(
       _handleIncomingMessage,
       onError: _handleError,
       onDone: _handleDone,
     );
+    _closed = false;
     _logger?.debug('Слушатель WebSocket установлен');
   }
 
@@ -105,7 +116,10 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
   /// Обрабатывает сообщение с метаданными
   void _handleMetadataMessage(
-      int streamId, Uint8List payload, bool isEndOfStream) {
+    int streamId,
+    Uint8List payload,
+    bool isEndOfStream,
+  ) {
     try {
       // Десериализуем метаданные из JSON
       final jsonStr = utf8.decode(payload);
@@ -115,10 +129,12 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       if (jsonData['headers'] is List) {
         for (final headerData in jsonData['headers'] as List) {
           if (headerData is Map<String, dynamic>) {
-            headers.add(RpcHeader(
-              headerData['name'] as String,
-              headerData['value'] as String,
-            ));
+            headers.add(
+              RpcHeader(
+                headerData['name'] as String,
+                headerData['value'] as String,
+              ),
+            );
           }
         }
       }
@@ -136,8 +152,11 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       _incomingController.add(transportMessage);
       _logger?.debug('Получены метаданные для stream $streamId');
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при парсинге метаданных: $e',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при парсинге метаданных: $e',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -180,7 +199,8 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       }
 
       _logger?.debug(
-          'Обработано ${messages.length} сообщений для stream $streamId');
+        'Обработано ${messages.length} сообщений для stream $streamId',
+      );
 
       // Очищаем парсер при завершении потока
       if (isEndOfStream) {
@@ -188,8 +208,11 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
         idManager.releaseId(streamId);
       }
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при парсинге данных: $e',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при парсинге данных: $e',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -205,7 +228,14 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   /// Обрабатывает закрытие WebSocket соединения
   void _handleDone() {
     _logger?.info('WebSocket соединение закрыто');
-    close();
+    _channelSubscription = null;
+    _closed = true;
+
+    if (_reconnectFactory == null) {
+      close();
+    } else {
+      _logger?.debug('Ожидание переподключения WebSocket транспорта');
+    }
   }
 
   @override
@@ -215,6 +245,105 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
     return incomingMessages.where((message) => message.streamId == streamId);
+  }
+
+  Map<String, Object?> _healthDetails() => {
+        'isClosed': _closed,
+        'incomingControllerClosed': _incomingController.isClosed,
+        'activeParsers': _streamParsers.length,
+        'reconnectSupported': _reconnectFactory != null,
+      };
+
+  @override
+  Future<RpcHealthStatus> health() async {
+    final details = _healthDetails();
+
+    if (_incomingController.isClosed) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'WebSocket transport closed',
+        details: details,
+      );
+    }
+
+    if (_closed) {
+      return RpcHealthStatus.degraded(
+        component: runtimeType.toString(),
+        message: _reconnectFactory != null
+            ? 'WebSocket connection is closed awaiting reconnect'
+            : 'WebSocket transport closed',
+        details: details,
+      );
+    }
+
+    return RpcHealthStatus.healthy(
+      component: runtimeType.toString(),
+      message: 'WebSocket transport ready',
+      details: details,
+    );
+  }
+
+  @override
+  Future<RpcHealthStatus> reconnect() async {
+    if (_incomingController.isClosed) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'WebSocket transport closed',
+        details: {..._healthDetails(), 'supported': _reconnectFactory != null},
+      );
+    }
+
+    if (_reconnectFactory == null) {
+      return RpcHealthStatus.degraded(
+        component: runtimeType.toString(),
+        message: 'Reconnect is not configured for this WebSocket transport',
+        details: {..._healthDetails(), 'supported': false},
+      );
+    }
+
+    try {
+      await _channel.sink.close();
+    } catch (_) {
+      // Игнорируем ошибки закрытия существующего канала
+    }
+
+    if (_channelSubscription != null) {
+      await _channelSubscription!.cancel();
+      _channelSubscription = null;
+    }
+
+    _streamParsers.clear();
+
+    try {
+      _channel = await _reconnectFactory!();
+    } catch (error, stackTrace) {
+      if (_logger != null) {
+        await _logger!.error(
+          'Не удалось переподключить WebSocket транспорт: $error',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+
+      _closed = true;
+      return RpcHealthStatus.unhealthy(
+        component: runtimeType.toString(),
+        message: 'Failed to reconnect WebSocket transport: $error',
+        details: {
+          ..._healthDetails(),
+          'supported': true,
+          'error': error.toString(),
+        },
+      );
+    }
+
+    _setupListener();
+
+    return RpcHealthStatus.healthy(
+      component: runtimeType.toString(),
+      message: 'WebSocket connection re-established',
+      details: {..._healthDetails(), 'supported': true},
+    );
   }
 
   @override
@@ -250,10 +379,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       // Сериализуем метаданные в JSON
       final metadataJson = {
         'headers': metadata.headers
-            .map((h) => {
-                  'name': h.name,
-                  'value': h.value,
-                })
+            .map((h) => {'name': h.name, 'value': h.value})
             .toList(),
         if (metadata.methodPath != null) 'methodPath': metadata.methodPath,
       };
@@ -262,14 +388,22 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       final payload = utf8.encode(jsonStr);
 
       // Отправляем с флагом метаданных
-      await _sendWithHeader(streamId, Uint8List.fromList(payload),
-          isMetadata: true, endStream: endStream);
+      await _sendWithHeader(
+        streamId,
+        Uint8List.fromList(payload),
+        isMetadata: true,
+        endStream: endStream,
+      );
 
       _logger?.debug(
-          'Отправлены метаданные для stream $streamId, endStream: $endStream');
+        'Отправлены метаданные для stream $streamId, endStream: $endStream',
+      );
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при отправке метаданных: $e',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при отправке метаданных: $e',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -290,7 +424,8 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       await _sendWithHeader(streamId, encoded, endStream: endStream);
 
       _logger?.debug(
-          'Отправлено сообщение для stream $streamId, размер: ${data.length} байт, endStream: $endStream');
+        'Отправлено сообщение для stream $streamId, размер: ${data.length} байт, endStream: $endStream',
+      );
 
       if (endStream) {
         idManager.releaseId(streamId);
@@ -317,8 +452,11 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
       idManager.releaseId(streamId);
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при завершении отправки: $e',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при завершении отправки: $e',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -354,26 +492,36 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
   @override
   Future<void> close() async {
-    if (_closed) return;
+    if (_closed && _incomingController.isClosed) return;
 
     _closed = true;
-
-    // Очищаем парсеры
     _streamParsers.clear();
+
+    final subscription = _channelSubscription;
+    _channelSubscription = null;
+    if (subscription != null) {
+      await subscription.cancel();
+    }
 
     try {
       await _channel.sink.close();
-      await _incomingController.close();
-      _logger?.info('WebSocket транспорт закрыт');
     } catch (e) {
       _logger?.error('Ошибка при закрытии WebSocket: $e');
       rethrow;
+    } finally {
+      if (!_incomingController.isClosed) {
+        await _incomingController.close();
+      }
+      _logger?.info('WebSocket транспорт закрыт');
     }
   }
 
   @override
-  Future<void> sendDirectObject(int streamId, Object object,
-      {bool endStream = false}) async {
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {
     throw UnimplementedError('Unsupport direct object sending');
   }
 }

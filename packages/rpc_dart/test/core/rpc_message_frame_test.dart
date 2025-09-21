@@ -96,11 +96,13 @@ void main() {
         // Act & Assert
         expect(
           () => RpcMessageFrame.parseHeader(shortHeader),
-          throwsA(isA<Exception>().having(
-            (e) => e.toString(),
-            'message',
-            contains('Неверная длина заголовка'),
-          )),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'message',
+              contains('Неверная длина заголовка'),
+            ),
+          ),
         );
       });
 
@@ -126,8 +128,9 @@ void main() {
         // Act
         final encoded = RpcMessageFrame.encode(originalMessage);
         final header = RpcMessageFrame.parseHeader(encoded);
-        final decodedPayload =
-            encoded.sublist(RpcConstants.MESSAGE_PREFIX_SIZE);
+        final decodedPayload = encoded.sublist(
+          RpcConstants.MESSAGE_PREFIX_SIZE,
+        );
 
         // Assert
         expect(header.messageLength, equals(originalMessage.length));

@@ -16,10 +16,7 @@ enum RpcLoggerLevel {
 
   /// Создание из строки JSON
   static RpcLoggerLevel fromJson(String json) {
-    return values.firstWhere(
-      (e) => e.name == json,
-      orElse: () => none,
-    );
+    return values.firstWhere((e) => e.name == json, orElse: () => none);
   }
 }
 
@@ -51,8 +48,14 @@ class LogFormattingResult {
 abstract interface class IRpcLoggerFormatter {
   /// Форматирует сообщение лога, возвращая заголовок и содержимое раздельно
   LogFormattingResult format(
-      DateTime timestamp, RpcLoggerLevel level, String source, String message,
-      {String? context, String? requestId, String? traceId});
+    DateTime timestamp,
+    RpcLoggerLevel level,
+    String source,
+    String message, {
+    String? context,
+    String? requestId,
+    String? traceId,
+  });
 }
 
 /// {@template rpc_logger}

@@ -58,17 +58,11 @@ class Contact implements IRpcSerializable {
   final String email;
   final String phone;
 
-  Contact({
-    required this.email,
-    required this.phone,
-  });
+  Contact({required this.email, required this.phone});
 
   @override
   Map<String, dynamic> toJson() {
-    return {
-      'email': email,
-      'phone': phone,
-    };
+    return {'email': email, 'phone': phone};
   }
 
   factory Contact.fromJson(Map<String, dynamic> json) {
@@ -154,7 +148,9 @@ class Person implements IRpcSerializable {
         listEquals(other.hobbies, hobbies) &&
         mapEquals(other.scores, scores) &&
         listEquals(
-            other.alternativeAddresses.toList(), alternativeAddresses.toList());
+          other.alternativeAddresses.toList(),
+          alternativeAddresses.toList(),
+        );
   }
 
   @override
@@ -204,16 +200,9 @@ void main() {
           country: 'USA',
           zipCode: 10001,
         ),
-        contact: Contact(
-          email: 'john@example.com',
-          phone: '+1234567890',
-        ),
+        contact: Contact(email: 'john@example.com', phone: '+1234567890'),
         hobbies: ['reading', 'hiking', 'coding'],
-        scores: {
-          'math': 95,
-          'science': 90,
-          'history': 85,
-        },
+        scores: {'math': 95, 'science': 90, 'history': 85},
         alternativeAddresses: RpcList<Address>.from([
           Address(
             street: '456 Park Ave',
@@ -257,21 +246,22 @@ void main() {
 
       // Проверяем коллекции
       expect(
-          deserializedPerson.hobbies, equals(['reading', 'hiking', 'coding']));
+        deserializedPerson.hobbies,
+        equals(['reading', 'hiking', 'coding']),
+      );
       expect(
-          deserializedPerson.scores,
-          equals({
-            'math': 95,
-            'science': 90,
-            'history': 85,
-          }));
+        deserializedPerson.scores,
+        equals({'math': 95, 'science': 90, 'history': 85}),
+      );
 
       // Проверяем RpcList с вложенными объектами
       expect(deserializedPerson.alternativeAddresses, isA<RpcList<Address>>());
       expect(deserializedPerson.alternativeAddresses.length, equals(2));
       expect(deserializedPerson.alternativeAddresses[0].city, equals('Boston'));
-      expect(deserializedPerson.alternativeAddresses[1].city,
-          equals('San Francisco'));
+      expect(
+        deserializedPerson.alternativeAddresses[1].city,
+        equals('San Francisco'),
+      );
 
       // Проверяем полное равенство оригинального и десериализованного объектов
       expect(deserializedPerson, equals(person));

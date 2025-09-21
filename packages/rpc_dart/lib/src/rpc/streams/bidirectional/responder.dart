@@ -51,19 +51,23 @@ final class BidirectionalStreamResponder<TRequest extends Object,
     // Zero-copy режим: требуется RpcInMemoryTransport
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.');
+        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
+        'Для сетевых транспортов передайте кодеки.',
+      );
     }
 
     // Режим сериализации: кодеки обязательны
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).');
+      throw ArgumentError(
+        'Кодеки обязательны для режима сериализации. '
+        'Для zero-copy не передавайте кодеки (null).',
+      );
     }
 
     _logger = logger?.child('BidirectionalResponder');
     _logger?.internal(
-        'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamResponder для $serviceName.$methodName [id: $id]');
+      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamResponder для $serviceName.$methodName [id: $id]',
+    );
 
     _processor = StreamProcessor<TRequest, TResponse>(
       transport: transport,
@@ -107,7 +111,8 @@ final class BidirectionalStreamResponder<TRequest extends Object,
       (response) async {
         try {
           await _processor.send(
-              response); // Используем напрямую _processor, избегая циклической зависимости
+            response,
+          ); // Используем напрямую _processor, избегая циклической зависимости
           _logger?.internal('Ответ отправлен через responseSink [id: $id]');
         } catch (e, stackTrace) {
           _logger?.error(
@@ -122,8 +127,11 @@ final class BidirectionalStreamResponder<TRequest extends Object,
         await finishReceiving();
       },
       onError: (error, stackTrace) {
-        _logger?.error('Ошибка в потоке ответов [id: $id]',
-            error: error, stackTrace: stackTrace);
+        _logger?.error(
+          'Ошибка в потоке ответов [id: $id]',
+          error: error,
+          stackTrace: stackTrace,
+        );
       },
     );
   }
@@ -139,8 +147,9 @@ final class BidirectionalStreamResponder<TRequest extends Object,
   /// [response] Ответ для отправки клиенту
   Future<void> send(TResponse response) async {
     if (!_isActive) {
-      _logger
-          ?.warning('Попытка отправить ответ в неактивный респондер [id: $id]');
+      _logger?.warning(
+        'Попытка отправить ответ в неактивный респондер [id: $id]',
+      );
       return;
     }
 

@@ -72,15 +72,19 @@ class RpcHttp2Server implements IRpcServer {
       logger: logger,
       onEndpointCreated: (endpoint) {
         logger?.debug(
-            'Регистрация ${contracts.length} контрактов на новом endpoint');
+          'Регистрация ${contracts.length} контрактов на новом endpoint',
+        );
         for (final contract in contracts) {
           endpoint.registerServiceContract(contract);
           logger?.debug('Зарегистрирован контракт: ${contract.serviceName}');
         }
       },
       onConnectionError: (error, stackTrace) {
-        logger?.error('Ошибка соединения HTTP/2',
-            error: error, stackTrace: stackTrace);
+        logger?.error(
+          'Ошибка соединения HTTP/2',
+          error: error,
+          stackTrace: stackTrace,
+        );
       },
     );
   }
@@ -121,16 +125,22 @@ class RpcHttp2Server implements IRpcServer {
       final subscription = _serverSocket!.listen(
         _handleConnection,
         onError: (error, stackTrace) {
-          _logger?.error('Ошибка сервера',
-              error: error, stackTrace: stackTrace);
+          _logger?.error(
+            'Ошибка сервера',
+            error: error,
+            stackTrace: stackTrace,
+          );
           _onConnectionError?.call(error, stackTrace);
         },
       );
 
       _subscriptions.add(subscription);
     } catch (e, stackTrace) {
-      _logger?.error('Не удалось запустить HTTP/2 сервер',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Не удалось запустить HTTP/2 сервер',
+        error: e,
+        stackTrace: stackTrace,
+      );
       _isRunning = false;
       rethrow;
     }
@@ -207,14 +217,18 @@ class RpcHttp2Server implements IRpcServer {
         _endpoints.remove(endpoint);
         _onConnectionClosed?.call(socket);
       }).catchError((error) {
-        _logger
-            ?.warning('Ошибка при закрытии соединения $clientAddress: $error');
+        _logger?.warning(
+          'Ошибка при закрытии соединения $clientAddress: $error',
+        );
         _endpoints.remove(endpoint);
         _onConnectionClosed?.call(socket);
       });
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при создании HTTP/2 RPC соединения',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при создании HTTP/2 RPC соединения',
+        error: e,
+        stackTrace: stackTrace,
+      );
       _onConnectionError?.call(e, stackTrace);
       socket.destroy();
     }

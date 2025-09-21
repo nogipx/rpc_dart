@@ -19,7 +19,10 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   bool get isClient => true;
 
   /// HTTP/2 соединение
-  final http2.ClientTransportConnection _connection;
+  http2.ClientTransportConnection _connection;
+
+  /// Фабрика для повторного создания соединения при переподключении
+  final Future<http2.ClientTransportConnection> Function() _connectionFactory;
 
   /// Контроллер для входящих сообщений
   final StreamController<RpcTransportMessage> _messageController =
@@ -43,6 +46,9 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   /// Схема (http/https)
   final String _scheme;
 
+  /// Порт подключения
+  final int _port;
+
   /// Флаг закрытия
   bool _isClosed = false;
 
@@ -51,11 +57,16 @@ class RpcHttp2CallerTransport implements IRpcTransport {
 
   RpcHttp2CallerTransport._({
     required http2.ClientTransportConnection connection,
+    required Future<http2.ClientTransportConnection> Function()
+        connectionFactory,
     required String host,
+    required int port,
     required String scheme,
     RpcLogger? logger,
   })  : _connection = connection,
+        _connectionFactory = connectionFactory,
         _host = host,
+        _port = port,
         _scheme = scheme,
         _logger = logger?.child('Http2ClientTransport');
 
@@ -67,19 +78,25 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   }) async {
     logger?.internal('Создание защищенного HTTP/2 соединения с $host:$port');
 
-    final socket = await SecureSocket.connect(
-      host,
-      port,
-      supportedProtocols: ['h2'], // HTTP/2
-    );
+    Future<http2.ClientTransportConnection> createConnection() async {
+      final socket = await SecureSocket.connect(
+        host,
+        port,
+        supportedProtocols: ['h2'], // HTTP/2
+      );
 
-    final connection = http2.ClientTransportConnection.viaSocket(socket);
+      return http2.ClientTransportConnection.viaSocket(socket);
+    }
+
+    final connection = await createConnection();
 
     logger?.internal('HTTP/2 соединение установлено');
 
     return RpcHttp2CallerTransport._(
       connection: connection,
+      connectionFactory: createConnection,
       host: host,
+      port: port,
       scheme: 'https',
       logger: logger,
     );
@@ -93,14 +110,20 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   }) async {
     logger?.internal('Создание HTTP/2 соединения с $host:$port');
 
-    final socket = await Socket.connect(host, port);
-    final connection = http2.ClientTransportConnection.viaSocket(socket);
+    Future<http2.ClientTransportConnection> createConnection() async {
+      final socket = await Socket.connect(host, port);
+      return http2.ClientTransportConnection.viaSocket(socket);
+    }
+
+    final connection = await createConnection();
 
     logger?.internal('HTTP/2 соединение установлено');
 
     return RpcHttp2CallerTransport._(
       connection: connection,
+      connectionFactory: createConnection,
       host: host,
+      port: port,
       scheme: 'http',
       logger: logger,
     );
@@ -129,7 +152,8 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       try {
         stream.sendData(Uint8List(0), endStream: true);
         _logger?.internal(
-            'Отправлен END_STREAM при освобождении stream $streamId');
+          'Отправлен END_STREAM при освобождении stream $streamId',
+        );
       } catch (e) {
         _logger?.internal('Используем terminate для stream $streamId: $e');
         stream.terminate();
@@ -158,7 +182,8 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     final methodPath = metadata.methodPath ?? '/Unknown/Unknown';
 
     _logger?.internal(
-        'Отправка метаданных для stream $streamId: $methodPath (endStream: $endStream)');
+      'Отправка метаданных для stream $streamId: $methodPath (endStream: $endStream)',
+    );
 
     // Конвертируем RPC метаданные в HTTP/2 headers
     final headers = rpcMetadataToHttp2Headers(
@@ -174,7 +199,8 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     _activeStreams[streamId] = stream;
 
     _logger?.internal(
-        'HTTP/2 stream создан: $streamId (активных: ${_activeStreams.length})');
+      'HTTP/2 stream создан: $streamId (активных: ${_activeStreams.length})',
+    );
 
     // Настраиваем обработку входящих сообщений
     _setupStreamListener(streamId, stream, methodPath);
@@ -196,7 +222,8 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     }
 
     _logger?.internal(
-        'Отправка данных для stream $streamId: ${data.length} байт (endStream: $endStream)');
+      'Отправка данных для stream $streamId: ${data.length} байт (endStream: $endStream)',
+    );
 
     // Упаковываем данные в gRPC frame формат
     final framedData = packGrpcMessage(data);
@@ -222,9 +249,23 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     _logger?.internal('Отправка завершена для stream $streamId');
   }
 
+  Map<String, Object?> _buildHealthDetails() => {
+        'isClosed': _isClosed,
+        'activeStreams': _activeStreams.length,
+        'pendingSubscriptions': _streamSubscriptions.length,
+        'pendingParsers': _streamParsers.length,
+        'host': _host,
+        'port': _port,
+        'scheme': _scheme,
+        'messageControllerClosed': _messageController.isClosed,
+      };
+
   /// Настраивает обработчик входящих сообщений для HTTP/2 stream
   void _setupStreamListener(
-      int streamId, http2.ClientTransportStream stream, String methodPath) {
+    int streamId,
+    http2.ClientTransportStream stream,
+    String methodPath,
+  ) {
     _logger?.internal('Настройка обработчика для stream $streamId');
 
     final subscription = stream.incomingMessages.listen(
@@ -232,8 +273,11 @@ class RpcHttp2CallerTransport implements IRpcTransport {
         _handleIncomingMessage(streamId, message, methodPath);
       },
       onError: (error, stackTrace) {
-        _logger?.error('Ошибка в stream $streamId',
-            error: error, stackTrace: stackTrace);
+        _logger?.error(
+          'Ошибка в stream $streamId',
+          error: error,
+          stackTrace: stackTrace,
+        );
 
         if (!_messageController.isClosed) {
           _messageController.addError(error, stackTrace);
@@ -244,10 +288,9 @@ class RpcHttp2CallerTransport implements IRpcTransport {
 
         // Отправляем сообщение о завершении потока
         if (!_messageController.isClosed) {
-          _messageController.add(RpcTransportMessage(
-            streamId: streamId,
-            isEndOfStream: true,
-          ));
+          _messageController.add(
+            RpcTransportMessage(streamId: streamId, isEndOfStream: true),
+          );
         }
 
         // Очищаем ресурсы
@@ -262,7 +305,10 @@ class RpcHttp2CallerTransport implements IRpcTransport {
 
   /// Обрабатывает входящее сообщение от HTTP/2 stream
   void _handleIncomingMessage(
-      int streamId, http2.StreamMessage message, String methodPath) {
+    int streamId,
+    http2.StreamMessage message,
+    String methodPath,
+  ) {
     // Убираем избыточное логирование - оставляем только в конкретных обработчиках
 
     try {
@@ -274,8 +320,11 @@ class RpcHttp2CallerTransport implements IRpcTransport {
         _handleDataMessage(streamId, message, methodPath);
       }
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при обработке сообщения stream $streamId',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при обработке сообщения stream $streamId',
+        error: e,
+        stackTrace: stackTrace,
+      );
 
       if (!_messageController.isClosed) {
         _messageController.addError(e, stackTrace);
@@ -285,7 +334,10 @@ class RpcHttp2CallerTransport implements IRpcTransport {
 
   /// Обрабатывает входящие HTTP/2 headers
   void _handleHeadersMessage(
-      int streamId, http2.HeadersStreamMessage message, String methodPath) {
+    int streamId,
+    http2.HeadersStreamMessage message,
+    String methodPath,
+  ) {
     // Конвертируем HTTP/2 headers в RPC метаданные
     final metadata = http2HeadersToRpcMetadata(message.headers);
 
@@ -304,7 +356,10 @@ class RpcHttp2CallerTransport implements IRpcTransport {
 
   /// Обрабатывает входящие HTTP/2 данные
   void _handleDataMessage(
-      int streamId, http2.DataStreamMessage message, String methodPath) {
+    int streamId,
+    http2.DataStreamMessage message,
+    String methodPath,
+  ) {
     try {
       // Получаем или создаем парсер для этого stream
       final parser = _streamParsers.putIfAbsent(
@@ -333,10 +388,14 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       }
 
       _logger?.internal(
-          'Обработано ${messages.length} сообщений для stream $streamId');
+        'Обработано ${messages.length} сообщений для stream $streamId',
+      );
     } catch (e, stackTrace) {
-      _logger?.error('Ошибка при распаковке gRPC данных для stream $streamId',
-          error: e, stackTrace: stackTrace);
+      _logger?.error(
+        'Ошибка при распаковке gRPC данных для stream $streamId',
+        error: e,
+        stackTrace: stackTrace,
+      );
 
       if (!_messageController.isClosed) {
         _messageController.addError(e, stackTrace);
@@ -353,6 +412,91 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   }
 
   @override
+  Future<RpcHealthStatus> health() async {
+    final details = _buildHealthDetails();
+
+    if (_messageController.isClosed) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'HTTP/2 transport closed',
+        details: details,
+      );
+    }
+
+    if (_isClosed) {
+      return RpcHealthStatus.degraded(
+        component: runtimeType.toString(),
+        message: 'HTTP/2 connection is closed. Reconnect is required.',
+        details: details,
+      );
+    }
+
+    return RpcHealthStatus.healthy(
+      component: runtimeType.toString(),
+      message: 'HTTP/2 transport ready',
+      details: details,
+    );
+  }
+
+  @override
+  Future<RpcHealthStatus> reconnect() async {
+    if (_messageController.isClosed) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'Transport is closed and cannot be reconnected',
+        details: {..._buildHealthDetails(), 'supported': false},
+      );
+    }
+
+    _logger?.info('Попытка переподключения HTTP/2 клиента к $_host:$_port');
+
+    try {
+      await _connection.finish();
+    } catch (e) {
+      _logger?.warning('Ошибка при завершении текущего соединения: $e');
+    }
+
+    for (final subscription in _streamSubscriptions.values) {
+      try {
+        await subscription.cancel();
+      } catch (e) {
+        _logger?.warning('Ошибка при отмене подписки: $e');
+      }
+    }
+    _streamSubscriptions.clear();
+    _streamParsers.clear();
+    _activeStreams.clear();
+
+    try {
+      _connection = await _connectionFactory();
+      _isClosed = false;
+      _nextStreamId = 1;
+      _logger?.info('HTTP/2 клиент успешно переподключен');
+      return RpcHealthStatus.healthy(
+        component: runtimeType.toString(),
+        message: 'HTTP/2 connection re-established',
+        details: {..._buildHealthDetails(), 'supported': true},
+      );
+    } catch (error, stackTrace) {
+      _isClosed = true;
+      _logger?.error(
+        'Не удалось переподключить HTTP/2 клиент',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return RpcHealthStatus.unhealthy(
+        component: runtimeType.toString(),
+        message: 'Failed to reconnect HTTP/2 transport: $error',
+        details: {
+          ..._buildHealthDetails(),
+          'supported': true,
+          'error': error.toString(),
+        },
+      );
+    }
+  }
+
+  @override
   Future<void> close() async {
     if (_isClosed) return;
 
@@ -362,7 +506,8 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     // Даем серверу время на завершение обработки активных потоков
     if (_activeStreams.isNotEmpty) {
       _logger?.internal(
-          'Ожидание завершения ${_activeStreams.length} активных потоков');
+        'Ожидание завершения ${_activeStreams.length} активных потоков',
+      );
       await Future.delayed(Duration(milliseconds: 50));
     }
 
@@ -429,8 +574,11 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   bool get isClosed => _isClosed;
 
   @override
-  Future<void> sendDirectObject(int streamId, Object object,
-      {bool endStream = false}) async {
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {
     throw UnimplementedError('Unsupport direct object sending');
   }
 

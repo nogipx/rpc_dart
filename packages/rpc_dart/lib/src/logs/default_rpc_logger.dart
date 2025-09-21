@@ -24,8 +24,14 @@ class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
 
   @override
   LogFormattingResult format(
-      DateTime timestamp, RpcLoggerLevel level, String source, String message,
-      {String? context, String? requestId, String? traceId}) {
+    DateTime timestamp,
+    RpcLoggerLevel level,
+    String source,
+    String message, {
+    String? context,
+    String? requestId,
+    String? traceId,
+  }) {
     final formattedTime =
         '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}';
 
@@ -115,9 +121,7 @@ class DefaultRpcLogger implements RpcLogger {
         _colors = colors,
         _formatter = formatter ?? const DefaultRpcLoggerFormatter(),
         _filter = filter ??
-            DefaultRpcLoggerFilter(
-              minLogLevel ?? RpcLogger.defaultMinLogLevel,
-            );
+            DefaultRpcLoggerFilter(minLogLevel ?? RpcLogger.defaultMinLogLevel);
 
   @override
   Future<void> log({
@@ -180,8 +184,15 @@ class DefaultRpcLogger implements RpcLogger {
       }
     }
 
-    final formattedLog = _formatter.format(timestamp, level, name, fullMessage,
-        context: context, requestId: requestId, traceId: traceId);
+    final formattedLog = _formatter.format(
+      timestamp,
+      level,
+      name,
+      fullMessage,
+      context: context,
+      requestId: requestId,
+      traceId: traceId,
+    );
 
     // Если включен цветной вывод, используем цвет только для заголовка
     if (_coloredLoggingEnabled) {

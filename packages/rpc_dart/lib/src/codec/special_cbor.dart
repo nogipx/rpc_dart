@@ -122,10 +122,12 @@ abstract interface class CborCodec {
 
   /// Кодирует bool
   static void _encodeBool(bool value, BytesBuilder builder) {
-    builder.addByte(_getMajorTypeByte(
-      _majorTypeSimple,
-      value ? _simpleValueTrue : _simpleValueFalse,
-    ));
+    builder.addByte(
+      _getMajorTypeByte(
+        _majorTypeSimple,
+        value ? _simpleValueTrue : _simpleValueFalse,
+      ),
+    );
   }
 
   /// Кодирует int
@@ -142,32 +144,31 @@ abstract interface class CborCodec {
     if (value <= 23) {
       builder.addByte(_getMajorTypeByte(_majorTypeUnsignedInt, value));
     } else if (value <= 0xFF) {
-      builder.addByte(_getMajorTypeByte(
-        _majorTypeUnsignedInt,
-        _additionalInfoOneByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(_majorTypeUnsignedInt, _additionalInfoOneByteFollow),
+      );
       builder.addByte(value & 0xFF);
     } else if (value <= 0xFFFF) {
-      builder.addByte(_getMajorTypeByte(
-        _majorTypeUnsignedInt,
-        _additionalInfoTwoByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(_majorTypeUnsignedInt, _additionalInfoTwoByteFollow),
+      );
       builder.addByte((value >> 8) & 0xFF);
       builder.addByte(value & 0xFF);
     } else if (value <= 0xFFFFFFFF) {
-      builder.addByte(_getMajorTypeByte(
-        _majorTypeUnsignedInt,
-        _additionalInfoFourByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(_majorTypeUnsignedInt, _additionalInfoFourByteFollow),
+      );
       builder.addByte((value >> 24) & 0xFF);
       builder.addByte((value >> 16) & 0xFF);
       builder.addByte((value >> 8) & 0xFF);
       builder.addByte(value & 0xFF);
     } else {
-      builder.addByte(_getMajorTypeByte(
-        _majorTypeUnsignedInt,
-        _additionalInfoEightByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(
+          _majorTypeUnsignedInt,
+          _additionalInfoEightByteFollow,
+        ),
+      );
 
       // Правильное кодирование 64-битного числа согласно RFC 7049
       builder.addByte((value >> 56) & 0xFF);
@@ -186,32 +187,31 @@ abstract interface class CborCodec {
     if (value <= 23) {
       builder.addByte(_getMajorTypeByte(_majorTypeNegativeInt, value));
     } else if (value <= 0xFF) {
-      builder.addByte(_getMajorTypeByte(
-        _majorTypeNegativeInt,
-        _additionalInfoOneByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(_majorTypeNegativeInt, _additionalInfoOneByteFollow),
+      );
       builder.addByte(value & 0xFF);
     } else if (value <= 0xFFFF) {
-      builder.addByte(_getMajorTypeByte(
-        _majorTypeNegativeInt,
-        _additionalInfoTwoByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(_majorTypeNegativeInt, _additionalInfoTwoByteFollow),
+      );
       builder.addByte((value >> 8) & 0xFF);
       builder.addByte(value & 0xFF);
     } else if (value <= 0xFFFFFFFF) {
-      builder.addByte(_getMajorTypeByte(
-        _majorTypeNegativeInt,
-        _additionalInfoFourByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(_majorTypeNegativeInt, _additionalInfoFourByteFollow),
+      );
       builder.addByte((value >> 24) & 0xFF);
       builder.addByte((value >> 16) & 0xFF);
       builder.addByte((value >> 8) & 0xFF);
       builder.addByte(value & 0xFF);
     } else {
-      builder.addByte(_getMajorTypeByte(
-        _majorTypeNegativeInt,
-        _additionalInfoEightByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(
+          _majorTypeNegativeInt,
+          _additionalInfoEightByteFollow,
+        ),
+      );
 
       // Правильное кодирование 64-битного числа согласно RFC 7049
       builder.addByte((value >> 56) & 0xFF);
@@ -228,10 +228,9 @@ abstract interface class CborCodec {
   /// Кодирует double
   static void _encodeDouble(double value, BytesBuilder builder) {
     // Для float используем IEEE 754 64-bit (Double)
-    builder.addByte(_getMajorTypeByte(
-      _majorTypeSimple,
-      _additionalInfoEightByteFollow,
-    ));
+    builder.addByte(
+      _getMajorTypeByte(_majorTypeSimple, _additionalInfoEightByteFollow),
+    );
 
     // Конвертируем double в bytes в формате IEEE 754
     final ByteData data = ByteData(8);
@@ -300,32 +299,28 @@ abstract interface class CborCodec {
     if (length <= 23) {
       builder.addByte(_getMajorTypeByte(majorType, length));
     } else if (length <= 0xFF) {
-      builder.addByte(_getMajorTypeByte(
-        majorType,
-        _additionalInfoOneByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(majorType, _additionalInfoOneByteFollow),
+      );
       builder.addByte(length & 0xFF);
     } else if (length <= 0xFFFF) {
-      builder.addByte(_getMajorTypeByte(
-        majorType,
-        _additionalInfoTwoByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(majorType, _additionalInfoTwoByteFollow),
+      );
       builder.addByte((length >> 8) & 0xFF);
       builder.addByte(length & 0xFF);
     } else if (length <= 0xFFFFFFFF) {
-      builder.addByte(_getMajorTypeByte(
-        majorType,
-        _additionalInfoFourByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(majorType, _additionalInfoFourByteFollow),
+      );
       builder.addByte((length >> 24) & 0xFF);
       builder.addByte((length >> 16) & 0xFF);
       builder.addByte((length >> 8) & 0xFF);
       builder.addByte(length & 0xFF);
     } else {
-      builder.addByte(_getMajorTypeByte(
-        majorType,
-        _additionalInfoEightByteFollow,
-      ));
+      builder.addByte(
+        _getMajorTypeByte(majorType, _additionalInfoEightByteFollow),
+      );
       builder.addByte((length >> 56) & 0xFF);
       builder.addByte((length >> 48) & 0xFF);
       builder.addByte((length >> 40) & 0xFF);
@@ -479,13 +474,16 @@ class _CborReader {
       while (true) {
         if (_offset >= _bytes.length) {
           throw FormatException(
-              'Unexpected end of CBOR data inside indefinite-length array');
+            'Unexpected end of CBOR data inside indefinite-length array',
+          );
         }
 
         // Проверяем наличие break маркера
         if (_bytes[_offset] ==
             CborCodec._getMajorTypeByte(
-                CborCodec._majorTypeSimple, CborCodec._simpleValueBreak)) {
+              CborCodec._majorTypeSimple,
+              CborCodec._simpleValueBreak,
+            )) {
           _offset++; // Пропускаем break маркер
           break;
         }
@@ -516,13 +514,16 @@ class _CborReader {
       while (true) {
         if (_offset >= _bytes.length) {
           throw FormatException(
-              'Unexpected end of CBOR data inside indefinite-length map');
+            'Unexpected end of CBOR data inside indefinite-length map',
+          );
         }
 
         // Проверяем наличие break маркера
         if (_bytes[_offset] ==
             CborCodec._getMajorTypeByte(
-                CborCodec._majorTypeSimple, CborCodec._simpleValueBreak)) {
+              CborCodec._majorTypeSimple,
+              CborCodec._simpleValueBreak,
+            )) {
           _offset++; // Пропускаем break маркер
           break;
         }
@@ -562,7 +563,8 @@ class _CborReader {
         return null;
       case CborCodec._simpleValueBreak:
         throw FormatException(
-            'Unexpected break value outside indefinite-length item');
+          'Unexpected break value outside indefinite-length item',
+        );
       case CborCodec._additionalInfoEightByteFollow:
         // IEEE 754 Double
         final byteData = ByteData(8);
@@ -570,7 +572,9 @@ class _CborReader {
           byteData.setUint8(i, _readByte());
         }
         return byteData.getFloat64(
-            0, Endian.big); // Используем big-endian по RFC 7049
+          0,
+          Endian.big,
+        ); // Используем big-endian по RFC 7049
       default:
         if (additionalInfo >= 0 && additionalInfo <= 19) {
           // Простые значения 0-19
@@ -881,16 +885,19 @@ class _FastCborWriter {
 
   /// Кодирует null
   void _writeNull() {
-    _builder.addByte(_getMajorTypeByte(
-        CborCodec._majorTypeSimple, CborCodec._simpleValueNull));
+    _builder.addByte(
+      _getMajorTypeByte(CborCodec._majorTypeSimple, CborCodec._simpleValueNull),
+    );
   }
 
   /// Кодирует bool
   void _writeBool(bool value) {
-    _builder.addByte(_getMajorTypeByte(
-      CborCodec._majorTypeSimple,
-      value ? CborCodec._simpleValueTrue : CborCodec._simpleValueFalse,
-    ));
+    _builder.addByte(
+      _getMajorTypeByte(
+        CborCodec._majorTypeSimple,
+        value ? CborCodec._simpleValueTrue : CborCodec._simpleValueFalse,
+      ),
+    );
   }
 
   /// Кодирует int
@@ -905,35 +912,44 @@ class _FastCborWriter {
   /// Кодирует положительное число
   void _writePositiveInt(int value) {
     if (value <= 23) {
-      _builder
-          .addByte(_getMajorTypeByte(CborCodec._majorTypeUnsignedInt, value));
+      _builder.addByte(
+        _getMajorTypeByte(CborCodec._majorTypeUnsignedInt, value),
+      );
     } else if (value <= 0xFF) {
-      _builder.addByte(_getMajorTypeByte(
-        CborCodec._majorTypeUnsignedInt,
-        CborCodec._additionalInfoOneByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(
+          CborCodec._majorTypeUnsignedInt,
+          CborCodec._additionalInfoOneByteFollow,
+        ),
+      );
       _builder.addByte(value & 0xFF);
     } else if (value <= 0xFFFF) {
-      _builder.addByte(_getMajorTypeByte(
-        CborCodec._majorTypeUnsignedInt,
-        CborCodec._additionalInfoTwoByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(
+          CborCodec._majorTypeUnsignedInt,
+          CborCodec._additionalInfoTwoByteFollow,
+        ),
+      );
       _builder.addByte((value >> 8) & 0xFF);
       _builder.addByte(value & 0xFF);
     } else if (value <= 0xFFFFFFFF) {
-      _builder.addByte(_getMajorTypeByte(
-        CborCodec._majorTypeUnsignedInt,
-        CborCodec._additionalInfoFourByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(
+          CborCodec._majorTypeUnsignedInt,
+          CborCodec._additionalInfoFourByteFollow,
+        ),
+      );
       _builder.addByte((value >> 24) & 0xFF);
       _builder.addByte((value >> 16) & 0xFF);
       _builder.addByte((value >> 8) & 0xFF);
       _builder.addByte(value & 0xFF);
     } else {
-      _builder.addByte(_getMajorTypeByte(
-        CborCodec._majorTypeUnsignedInt,
-        CborCodec._additionalInfoEightByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(
+          CborCodec._majorTypeUnsignedInt,
+          CborCodec._additionalInfoEightByteFollow,
+        ),
+      );
 
       // Правильное кодирование 64-битного числа согласно RFC 7049
       _builder.addByte((value >> 56) & 0xFF);
@@ -950,35 +966,44 @@ class _FastCborWriter {
   /// Кодирует отрицательное число
   void _writeNegativeInt(int value) {
     if (value <= 23) {
-      _builder
-          .addByte(_getMajorTypeByte(CborCodec._majorTypeNegativeInt, value));
+      _builder.addByte(
+        _getMajorTypeByte(CborCodec._majorTypeNegativeInt, value),
+      );
     } else if (value <= 0xFF) {
-      _builder.addByte(_getMajorTypeByte(
-        CborCodec._majorTypeNegativeInt,
-        CborCodec._additionalInfoOneByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(
+          CborCodec._majorTypeNegativeInt,
+          CborCodec._additionalInfoOneByteFollow,
+        ),
+      );
       _builder.addByte(value & 0xFF);
     } else if (value <= 0xFFFF) {
-      _builder.addByte(_getMajorTypeByte(
-        CborCodec._majorTypeNegativeInt,
-        CborCodec._additionalInfoTwoByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(
+          CborCodec._majorTypeNegativeInt,
+          CborCodec._additionalInfoTwoByteFollow,
+        ),
+      );
       _builder.addByte((value >> 8) & 0xFF);
       _builder.addByte(value & 0xFF);
     } else if (value <= 0xFFFFFFFF) {
-      _builder.addByte(_getMajorTypeByte(
-        CborCodec._majorTypeNegativeInt,
-        CborCodec._additionalInfoFourByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(
+          CborCodec._majorTypeNegativeInt,
+          CborCodec._additionalInfoFourByteFollow,
+        ),
+      );
       _builder.addByte((value >> 24) & 0xFF);
       _builder.addByte((value >> 16) & 0xFF);
       _builder.addByte((value >> 8) & 0xFF);
       _builder.addByte(value & 0xFF);
     } else {
-      _builder.addByte(_getMajorTypeByte(
-        CborCodec._majorTypeNegativeInt,
-        CborCodec._additionalInfoEightByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(
+          CborCodec._majorTypeNegativeInt,
+          CborCodec._additionalInfoEightByteFollow,
+        ),
+      );
 
       // Правильное кодирование 64-битного числа согласно RFC 7049
       _builder.addByte((value >> 56) & 0xFF);
@@ -995,10 +1020,12 @@ class _FastCborWriter {
   /// Кодирует double
   void _writeDouble(double value) {
     // Для float используем IEEE 754 64-bit (Double)
-    _builder.addByte(_getMajorTypeByte(
-      CborCodec._majorTypeSimple,
-      CborCodec._additionalInfoEightByteFollow,
-    ));
+    _builder.addByte(
+      _getMajorTypeByte(
+        CborCodec._majorTypeSimple,
+        CborCodec._additionalInfoEightByteFollow,
+      ),
+    );
 
     // Конвертируем double в bytes в формате IEEE 754
     final ByteData data = ByteData(8);
@@ -1067,32 +1094,28 @@ class _FastCborWriter {
     if (length <= 23) {
       _builder.addByte(_getMajorTypeByte(majorType, length));
     } else if (length <= 0xFF) {
-      _builder.addByte(_getMajorTypeByte(
-        majorType,
-        CborCodec._additionalInfoOneByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(majorType, CborCodec._additionalInfoOneByteFollow),
+      );
       _builder.addByte(length & 0xFF);
     } else if (length <= 0xFFFF) {
-      _builder.addByte(_getMajorTypeByte(
-        majorType,
-        CborCodec._additionalInfoTwoByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(majorType, CborCodec._additionalInfoTwoByteFollow),
+      );
       _builder.addByte((length >> 8) & 0xFF);
       _builder.addByte(length & 0xFF);
     } else if (length <= 0xFFFFFFFF) {
-      _builder.addByte(_getMajorTypeByte(
-        majorType,
-        CborCodec._additionalInfoFourByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(majorType, CborCodec._additionalInfoFourByteFollow),
+      );
       _builder.addByte((length >> 24) & 0xFF);
       _builder.addByte((length >> 16) & 0xFF);
       _builder.addByte((length >> 8) & 0xFF);
       _builder.addByte(length & 0xFF);
     } else {
-      _builder.addByte(_getMajorTypeByte(
-        majorType,
-        CborCodec._additionalInfoEightByteFollow,
-      ));
+      _builder.addByte(
+        _getMajorTypeByte(majorType, CborCodec._additionalInfoEightByteFollow),
+      );
       _builder.addByte((length >> 56) & 0xFF);
       _builder.addByte((length >> 48) & 0xFF);
       _builder.addByte((length >> 40) & 0xFF);

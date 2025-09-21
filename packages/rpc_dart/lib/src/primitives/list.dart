@@ -43,8 +43,7 @@ class RpcList<T extends IRpcSerializable> implements IRpcSerializable {
 
   static RpcList<T> Function(
       Map<String, dynamic>) fromJson<T extends IRpcSerializable>(
-    T Function(Map<String, dynamic>) fromJson,
-  ) =>
+          T Function(Map<String, dynamic>) fromJson) =>
       (Map<String, dynamic> json) => fromJsonRaw<T>(json['items'], fromJson);
 
   @override

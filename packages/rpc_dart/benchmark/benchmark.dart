@@ -178,18 +178,22 @@ class ProgressIndicator {
     final filled = (percentage * barWidth / 100).round();
     final bar = '█' * filled + '░' * (barWidth - filled);
 
-    stdout.write('\r   [$bar] $percentage% | '
-        '$_current/$total | '
-        '${rate.toStringAsFixed(1)} ops/s | '
-        'ETA: ${eta.toStringAsFixed(1)}s     ');
+    stdout.write(
+      '\r   [$bar] $percentage% | '
+      '$_current/$total | '
+      '${rate.toStringAsFixed(1)} ops/s | '
+      'ETA: ${eta.toStringAsFixed(1)}s     ',
+    );
   }
 
   void complete() {
     _stopwatch.stop();
     final rate = total / (_stopwatch.elapsedMilliseconds / 1000);
-    stdout.write('\r   ✅ $operation completed: $total operations in '
-        '${_stopwatch.elapsedMilliseconds / 1000}s '
-        '(${rate.toStringAsFixed(1)} ops/s)\n');
+    stdout.write(
+      '\r   ✅ $operation completed: $total operations in '
+      '${_stopwatch.elapsedMilliseconds / 1000}s '
+      '(${rate.toStringAsFixed(1)} ops/s)\n',
+    );
   }
 }
 
@@ -262,27 +266,37 @@ class TestDataGenerator {
           'entity': {
             'id': _random.nextInt(100000),
             'type': 'enterprise_entity',
-            'attributes': Map.fromEntries(List.generate(
-                20, (i) => MapEntry('attr_$i', _random.nextDouble() * 1000))),
+            'attributes': Map.fromEntries(
+              List.generate(
+                20,
+                (i) => MapEntry('attr_$i', _random.nextDouble() * 1000),
+              ),
+            ),
             'relations': List.generate(
-                10,
-                (i) => {
-                      'id': _random.nextInt(1000),
-                      'type': 'relation_$i',
-                      'weight': _random.nextDouble(),
-                    }),
+              10,
+              (i) => {
+                'id': _random.nextInt(1000),
+                'type': 'relation_$i',
+                'weight': _random.nextDouble(),
+              },
+            ),
           },
           'analytics': {
-            'metrics': Map.fromEntries(List.generate(50,
-                (i) => MapEntry('metric_$i', _random.nextDouble() * 10000))),
+            'metrics': Map.fromEntries(
+              List.generate(
+                50,
+                (i) => MapEntry('metric_$i', _random.nextDouble() * 10000),
+              ),
+            ),
             'trends': List.generate(100, (i) => _random.nextDouble() * 100),
             'segments': List.generate(
-                20,
-                (i) => {
-                      'name': 'segment_$i',
-                      'size': _random.nextInt(10000),
-                      'conversion': _random.nextDouble(),
-                    }),
+              20,
+              (i) => {
+                'name': 'segment_$i',
+                'size': _random.nextInt(10000),
+                'conversion': _random.nextDouble(),
+              },
+            ),
           },
           'metadata': {
             'version': '1.0.0',
@@ -330,8 +344,10 @@ final class TestRpcContract extends RpcResponderContract {
     );
   }
 
-  Future<TestResponse> _processRequest(TestRequest request,
-      {RpcContext? context}) async {
+  Future<TestResponse> _processRequest(
+    TestRequest request, {
+    RpcContext? context,
+  }) async {
     final start = DateTime.now();
 
     // Симулируем обработку
@@ -351,8 +367,10 @@ final class TestRpcContract extends RpcResponderContract {
     );
   }
 
-  Stream<TestResponse> _streamResponses(TestRequest request,
-      {RpcContext? context}) async* {
+  Stream<TestResponse> _streamResponses(
+    TestRequest request, {
+    RpcContext? context,
+  }) async* {
     for (int i = 0; i < 5; i++) {
       yield TestResponse(
         requestId: request.id,
@@ -363,8 +381,10 @@ final class TestRpcContract extends RpcResponderContract {
     }
   }
 
-  Future<TestResponse> _collectRequests(Stream<TestRequest> requests,
-      {RpcContext? context}) async {
+  Future<TestResponse> _collectRequests(
+    Stream<TestRequest> requests, {
+    RpcContext? context,
+  }) async {
     final start = DateTime.now();
     final collected = <String>[];
 
@@ -383,8 +403,10 @@ final class TestRpcContract extends RpcResponderContract {
     );
   }
 
-  Stream<TestResponse> _processStream(Stream<TestRequest> requests,
-      {RpcContext? context}) async* {
+  Stream<TestResponse> _processStream(
+    Stream<TestRequest> requests, {
+    RpcContext? context,
+  }) async* {
     await for (final request in requests) {
       await Future.delayed(Duration(microseconds: 25));
 
@@ -403,32 +425,40 @@ final class TestRpcCallerContract extends RpcCallerContract {
   TestRpcCallerContract(RpcCallerEndpoint endpoint)
       : super('TestService', endpoint);
 
-  Future<TestResponse> processRequest(TestRequest request,
-          {RpcContext? context}) =>
+  Future<TestResponse> processRequest(
+    TestRequest request, {
+    RpcContext? context,
+  }) =>
       callUnary<TestRequest, TestResponse>(
         methodName: 'processRequest',
         request: request,
         context: context,
       );
 
-  Stream<TestResponse> streamResponses(TestRequest request,
-          {RpcContext? context}) =>
+  Stream<TestResponse> streamResponses(
+    TestRequest request, {
+    RpcContext? context,
+  }) =>
       callServerStream<TestRequest, TestResponse>(
         methodName: 'streamResponses',
         request: request,
         context: context,
       );
 
-  Future<TestResponse> collectRequests(Stream<TestRequest> requests,
-          {RpcContext? context}) =>
+  Future<TestResponse> collectRequests(
+    Stream<TestRequest> requests, {
+    RpcContext? context,
+  }) =>
       callClientStream<TestRequest, TestResponse>(
         methodName: 'collectRequests',
         requests: requests,
         context: context,
       );
 
-  Stream<TestResponse> processStream(Stream<TestRequest> requests,
-          {RpcContext? context}) =>
+  Stream<TestResponse> processStream(
+    Stream<TestRequest> requests, {
+    RpcContext? context,
+  }) =>
       callBidirectionalStream<TestRequest, TestResponse>(
         methodName: 'processStream',
         requests: requests,
@@ -514,20 +544,25 @@ class ProfessionalBenchmarkStats {
     print('📊 === $category: $name ===');
     print('   Sample: ${latencies.length} measurements');
     print(
-        '   Mean: ${_formatMetric(mean, unit)} | Median: ${_formatMetric(median, unit)}');
+      '   Mean: ${_formatMetric(mean, unit)} | Median: ${_formatMetric(median, unit)}',
+    );
     print(
-        '   Min/Max: ${_formatMetric(min, unit)} / ${_formatMetric(max, unit)}');
+      '   Min/Max: ${_formatMetric(min, unit)} / ${_formatMetric(max, unit)}',
+    );
     print(
-        '   P95/P99: ${_formatMetric(p95, unit)} / ${_formatMetric(p99, unit)}');
+      '   P95/P99: ${_formatMetric(p95, unit)} / ${_formatMetric(p99, unit)}',
+    );
     print('   Throughput: ${throughputPerSecond.toStringAsFixed(0)} ops/sec');
     print(
-        '   Std Dev: ${_formatMetric(standardDeviation, unit)} (CV: ${(coefficientOfVariation * 100).toStringAsFixed(1)}%)');
+      '   Std Dev: ${_formatMetric(standardDeviation, unit)} (CV: ${(coefficientOfVariation * 100).toStringAsFixed(1)}%)',
+    );
 
     // Quality check
     final outliers = outlierAnalysis;
     if (outliers.total > 0) {
       print(
-          '   ⚠️  Outliers: ${outliers.total} (${outliers.percentage.toStringAsFixed(1)}%)');
+        '   ⚠️  Outliers: ${outliers.total} (${outliers.percentage.toStringAsFixed(1)}%)',
+      );
     }
 
     // Metadata
@@ -563,15 +598,8 @@ class ProfessionalBenchmarkStats {
           'std_dev': standardDeviation,
           'coefficient_of_variation': coefficientOfVariation,
         },
-        'percentiles': {
-          'p90': p90,
-          'p95': p95,
-          'p99': p99,
-          'p999': p999,
-        },
-        'performance': {
-          'throughput_ops_per_sec': throughputPerSecond,
-        },
+        'percentiles': {'p90': p90, 'p95': p95, 'p99': p99, 'p999': p999},
+        'performance': {'throughput_ops_per_sec': throughputPerSecond},
         'quality': {
           'outliers_count': outlierAnalysis.total,
           'outliers_percentage': outlierAnalysis.percentage,
@@ -639,27 +667,38 @@ class ProfessionalRpcBenchmark {
   void _printHeader() {
     print('');
     print(
-        '╔══════════════════════════════════════════════════════════════════════════════╗');
+      '╔══════════════════════════════════════════════════════════════════════════════╗',
+    );
     print(
-        '║                                                                              ║');
+      '║                                                                              ║',
+    );
     print(
-        '║    🚀 PROFESSIONAL RPC DART PERFORMANCE BENCHMARK SUITE 🚀                 ║');
+      '║    🚀 PROFESSIONAL RPC DART PERFORMANCE BENCHMARK SUITE 🚀                 ║',
+    );
     print(
-        '║                                                                              ║');
+      '║                                                                              ║',
+    );
     print(
-        '║    Comprehensive end-to-end RPC stack performance analysis                  ║');
+      '║    Comprehensive end-to-end RPC stack performance analysis                  ║',
+    );
     print(
-        '║    • Full RPC call lifecycle testing                                        ║');
+      '║    • Full RPC call lifecycle testing                                        ║',
+    );
     print(
-        '║    • Transport overhead analysis                                            ║');
+      '║    • Transport overhead analysis                                            ║',
+    );
     print(
-        '║    • Scalability and concurrency assessment                                 ║');
+      '║    • Scalability and concurrency assessment                                 ║',
+    );
     print(
-        '║    • Statistical analysis with outlier detection                            ║');
+      '║    • Statistical analysis with outlier detection                            ║',
+    );
     print(
-        '║                                                                              ║');
+      '║                                                                              ║',
+    );
     print(
-        '╚══════════════════════════════════════════════════════════════════════════════╝');
+      '╚══════════════════════════════════════════════════════════════════════════════╝',
+    );
     print('');
   }
 
@@ -719,7 +758,8 @@ class ProfessionalRpcBenchmark {
 
           // ignore: unused_local_variable
           final collected = await contract.collectRequests(
-              Stream.fromIterable([TestDataGenerator.generateSimple()]));
+            Stream.fromIterable([TestDataGenerator.generateSimple()]),
+          );
         } catch (e) {
           // Ignore warmup errors
         }
@@ -741,11 +781,20 @@ class ProfessionalRpcBenchmark {
 
     // Core RPC benchmarks
     await _benchmarkUnaryRpc(
-        contract, 'Simple Data', TestDataGenerator.generateSimple);
+      contract,
+      'Simple Data',
+      TestDataGenerator.generateSimple,
+    );
     await _benchmarkUnaryRpc(
-        contract, 'Medium Data', TestDataGenerator.generateMedium);
+      contract,
+      'Medium Data',
+      TestDataGenerator.generateMedium,
+    );
     await _benchmarkUnaryRpc(
-        contract, 'Complex Data', TestDataGenerator.generateComplex);
+      contract,
+      'Complex Data',
+      TestDataGenerator.generateComplex,
+    );
 
     // Streaming benchmarks
     await _benchmarkServerStream(contract);
@@ -767,7 +816,9 @@ class ProfessionalRpcBenchmark {
     final testData = dataGenerator();
     final latencies = <double>[];
     final progress = ProgressIndicator(
-        'Unary RPC - $dataType', config.measurementIterations);
+      'Unary RPC - $dataType',
+      config.measurementIterations,
+    );
 
     await _forceGc();
 
@@ -795,9 +846,7 @@ class ProfessionalRpcBenchmark {
       category: 'Unary RPC',
       latencies: latencies,
       unit: 'μs',
-      metadata: {
-        'data_type': dataType,
-      },
+      metadata: {'data_type': dataType},
     );
 
     stats.printProfessionalReport();
@@ -858,11 +907,14 @@ class ProfessionalRpcBenchmark {
 
     for (int i = 0; i < iterations; i++) {
       final requests = List.generate(
-          requestCount, (_) => TestDataGenerator.generateSimple());
+        requestCount,
+        (_) => TestDataGenerator.generateSimple(),
+      );
 
       final stopwatch = Stopwatch()..start();
-      final response =
-          await contract.collectRequests(Stream.fromIterable(requests));
+      final response = await contract.collectRequests(
+        Stream.fromIterable(requests),
+      );
       stopwatch.stop();
 
       latencies.add(stopwatch.elapsedMicroseconds.toDouble());
@@ -888,7 +940,8 @@ class ProfessionalRpcBenchmark {
 
   /// Benchmark bidirectional streaming
   Future<void> _benchmarkBidirectionalStream(
-      TestRpcCallerContract contract) async {
+    TestRpcCallerContract contract,
+  ) async {
     print('   🔄 Testing Bidirectional Stream RPC');
 
     final latencies = <double>[];
@@ -897,8 +950,10 @@ class ProfessionalRpcBenchmark {
     final progress = ProgressIndicator('Bidirectional Stream RPC', iterations);
 
     for (int i = 0; i < iterations; i++) {
-      final requests = Stream.periodic(Duration(microseconds: 100),
-          (index) => TestDataGenerator.generateSimple()).take(requestCount);
+      final requests = Stream.periodic(
+        Duration(microseconds: 100),
+        (index) => TestDataGenerator.generateSimple(),
+      ).take(requestCount);
 
       final stopwatch = Stopwatch()..start();
       final responses = await contract.processStream(requests).toList();
@@ -937,13 +992,17 @@ class ProfessionalRpcBenchmark {
       final latencies = <double>[];
       const iterationsPerConcurrency = 50;
       final progress = ProgressIndicator(
-          'Scalability $concurrency', iterationsPerConcurrency);
+        'Scalability $concurrency',
+        iterationsPerConcurrency,
+      );
 
       for (int i = 0; i < iterationsPerConcurrency; i++) {
         final stopwatch = Stopwatch()..start();
 
-        final futures = List.generate(concurrency,
-            (_) => contract.processRequest(TestDataGenerator.generateMedium()));
+        final futures = List.generate(
+          concurrency,
+          (_) => contract.processRequest(TestDataGenerator.generateMedium()),
+        );
 
         final responses = await Future.wait(futures);
         stopwatch.stop();
@@ -976,11 +1035,14 @@ class ProfessionalRpcBenchmark {
     _totalStopwatch.stop();
 
     print(
-        '╔══════════════════════════════════════════════════════════════════════════════╗');
+      '╔══════════════════════════════════════════════════════════════════════════════╗',
+    );
     print(
-        '║                           COMPREHENSIVE BENCHMARK REPORT                    ║');
+      '║                           COMPREHENSIVE BENCHMARK REPORT                    ║',
+    );
     print(
-        '╚══════════════════════════════════════════════════════════════════════════════╝');
+      '╚══════════════════════════════════════════════════════════════════════════════╝',
+    );
 
     // Summary statistics
     final groups = <String, List<ProfessionalBenchmarkStats>>{};
@@ -999,17 +1061,20 @@ class ProfessionalRpcBenchmark {
       print('   $category:');
       print('     • ${stats.length} test scenarios');
       print(
-          '     • Average throughput: ${avgThroughput.toStringAsFixed(0)} ops/sec');
+        '     • Average throughput: ${avgThroughput.toStringAsFixed(0)} ops/sec',
+      );
       print('     • Average latency: ${avgLatency.toStringAsFixed(1)} μs');
     });
 
     print('');
     print('⏱️  EXECUTION SUMMARY:');
     print(
-        '   • Total execution time: ${(_totalStopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)}s');
+      '   • Total execution time: ${(_totalStopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)}s',
+    );
     print('   • Tests completed: ${results.length}');
     print(
-        '   • Total measurements: ${results.map((r) => r.latencies.length).reduce((a, b) => a + b)}');
+      '   • Total measurements: ${results.map((r) => r.latencies.length).reduce((a, b) => a + b)}',
+    );
 
     await _exportResults();
 
@@ -1047,10 +1112,12 @@ class ProfessionalRpcBenchmark {
         },
       };
 
-      final resultsFile =
-          File('${config.outputDirectory}/rpc_benchmark_results.json');
-      await resultsFile
-          .writeAsString(JsonEncoder.withIndent('  ').convert(exportData));
+      final resultsFile = File(
+        '${config.outputDirectory}/rpc_benchmark_results.json',
+      );
+      await resultsFile.writeAsString(
+        JsonEncoder.withIndent('  ').convert(exportData),
+      );
 
       // Bencher.dev compatible format
       final bencherResults = <String, dynamic>{};
@@ -1068,10 +1135,12 @@ class ProfessionalRpcBenchmark {
         };
       }
 
-      final bencherFile =
-          File('${config.outputDirectory}/bencher_results.json');
-      await bencherFile
-          .writeAsString(JsonEncoder.withIndent('  ').convert(bencherResults));
+      final bencherFile = File(
+        '${config.outputDirectory}/bencher_results.json',
+      );
+      await bencherFile.writeAsString(
+        JsonEncoder.withIndent('  ').convert(bencherResults),
+      );
 
       print('   📄 Professional results: ${resultsFile.path}');
       print('   📊 Bencher.dev format: ${bencherFile.path}');
@@ -1084,8 +1153,9 @@ class ProfessionalRpcBenchmark {
   Future<void> _handleOutputFile() async {
     if (config.outputPath != null && config.outputPath!.endsWith('.json')) {
       try {
-        final sourceFile =
-            File('${config.outputDirectory}/rpc_benchmark_results.json');
+        final sourceFile = File(
+          '${config.outputDirectory}/rpc_benchmark_results.json',
+        );
         final targetFile = File(config.outputPath!);
 
         if (sourceFile.existsSync()) {

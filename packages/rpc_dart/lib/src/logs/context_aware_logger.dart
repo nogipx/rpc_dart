@@ -19,7 +19,9 @@ final class RpcContextAwareLogger implements RpcLogger {
   @override
   RpcContextAwareLogger child(String childName, {String? label}) {
     return RpcContextAwareLogger(
-        _baseLogger.child(childName, label: label), _context);
+      _baseLogger.child(childName, label: label),
+      _context,
+    );
   }
 
   @override
@@ -269,20 +271,41 @@ mixin RpcContextualLogging {
   }
 
   /// Удобные методы для логирования с контекстом
-  Future<void> infoWithContext(String message,
-          {String? context, Map<String, dynamic>? data}) =>
-      logWithContext(RpcLoggerLevel.info, message,
-          context: context, data: data);
+  Future<void> infoWithContext(
+    String message, {
+    String? context,
+    Map<String, dynamic>? data,
+  }) =>
+      logWithContext(
+        RpcLoggerLevel.info,
+        message,
+        context: context,
+        data: data,
+      );
 
-  Future<void> debugWithContext(String message,
-          {String? context, Map<String, dynamic>? data}) =>
-      logWithContext(RpcLoggerLevel.debug, message,
-          context: context, data: data);
+  Future<void> debugWithContext(
+    String message, {
+    String? context,
+    Map<String, dynamic>? data,
+  }) =>
+      logWithContext(
+        RpcLoggerLevel.debug,
+        message,
+        context: context,
+        data: data,
+      );
 
-  Future<void> warningWithContext(String message,
-          {String? context, Map<String, dynamic>? data}) =>
-      logWithContext(RpcLoggerLevel.warning, message,
-          context: context, data: data);
+  Future<void> warningWithContext(
+    String message, {
+    String? context,
+    Map<String, dynamic>? data,
+  }) =>
+      logWithContext(
+        RpcLoggerLevel.warning,
+        message,
+        context: context,
+        data: data,
+      );
 
   Future<void> errorWithContext(
     String message, {

@@ -15,6 +15,26 @@ typedef _MethodCallInfo = ({
 /// Серверный RPC эндпоинт для обработки запросов
 final class RpcResponderEndpoint extends RpcEndpointBase {
   @override
+  Map<String, Object?> collectEndpointMetrics() {
+    final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
+
+    metrics['registeredContracts'] = _contracts.length;
+    metrics['registeredMethods'] = _methods.length;
+    metrics['isListening'] = _isListening;
+    metrics['openStreams'] = _streamMethods.length;
+    metrics['metadataStreams'] = _streamMetadata.length;
+    metrics['bufferedMessages'] = _streamMessages.length;
+    metrics['clientStreamBuffers'] = _clientStreamMessages.length;
+    metrics['activeResponders'] = _streamResponders.length;
+
+    if (_contracts.isNotEmpty) {
+      metrics['contractKeys'] = List<String>.unmodifiable(_contracts.keys);
+    }
+
+    return metrics;
+  }
+
+  @override
   RpcLogger get logger => RpcLogger(
         'RpcResponderEndpoint',
         colors: loggerColors,
@@ -57,8 +77,12 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     int? streamId,
     String? methodKey,
   }) {
-    final logMessage = _formatLogMessage(message,
-        context: context, streamId: streamId, methodKey: methodKey);
+    final logMessage = _formatLogMessage(
+      message,
+      context: context,
+      streamId: streamId,
+      methodKey: methodKey,
+    );
     logger.internal(logMessage, rpcContext: context);
   }
 
@@ -68,8 +92,12 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     int? streamId,
     String? methodKey,
   }) {
-    final logMessage = _formatLogMessage(message,
-        context: context, streamId: streamId, methodKey: methodKey);
+    final logMessage = _formatLogMessage(
+      message,
+      context: context,
+      streamId: streamId,
+      methodKey: methodKey,
+    );
     logger.internal(logMessage, rpcContext: context);
   }
 
@@ -81,10 +109,18 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     Object? error,
     StackTrace? stackTrace,
   }) {
-    final logMessage = _formatLogMessage(message,
-        context: context, streamId: streamId, methodKey: methodKey);
-    logger.error(logMessage,
-        rpcContext: context, error: error, stackTrace: stackTrace);
+    final logMessage = _formatLogMessage(
+      message,
+      context: context,
+      streamId: streamId,
+      methodKey: methodKey,
+    );
+    logger.error(
+      logMessage,
+      rpcContext: context,
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
 
   String _formatLogMessage(
@@ -114,12 +150,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     }
 
     // Создаем контекст с автогенерацией trace ID
-    return _createContextFromMessage(RpcTransportMessage(
-      streamId: streamId,
-      methodPath: _streamMethods[streamId] != null
-          ? '/${_streamMethods[streamId]!.replaceAll('.', '/')}'
-          : '/UnknownService/UnknownMethod',
-    ));
+    return _createContextFromMessage(
+      RpcTransportMessage(
+        streamId: streamId,
+        methodPath: _streamMethods[streamId] != null
+            ? '/${_streamMethods[streamId]!.replaceAll('.', '/')}'
+            : '/UnknownService/UnknownMethod',
+      ),
+    );
   }
 
   Map<String, dynamic> get registeredContracts => Map.unmodifiable(_contracts);
@@ -141,15 +179,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       // Проверяем роль транспорта через интерфейс
       if (transport.isClient) {
         throw ArgumentError(
-            'CRITICAL ERROR: RpcResponderEndpoint requires SERVER transport!\n'
-            'Received client transport (isClient: true).\n'
-            'Server endpoints must use transports with even Stream IDs (2, 4, 6...).\n\n'
-            'Correct usage:\n'
-            '  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();\n'
-            '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
-            '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
-            'INCORRECT:\n'
-            '  final responderEndpoint = RpcResponderEndpoint(transport: clientTransport);\n');
+          'CRITICAL ERROR: RpcResponderEndpoint requires SERVER transport!\n'
+          'Received client transport (isClient: true).\n'
+          'Server endpoints must use transports with even Stream IDs (2, 4, 6...).\n\n'
+          'Correct usage:\n'
+          '  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();\n'
+          '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
+          '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
+          'INCORRECT:\n'
+          '  final responderEndpoint = RpcResponderEndpoint(transport: clientTransport);\n',
+        );
       }
 
       logger.internal('Transport validated: server (isClient: false)');
@@ -166,16 +205,12 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     super.start();
 
     if (_isListening) {
-      logger.warning(
-        'RpcResponderEndpoint уже слушает входящие запросы',
-      );
+      logger.warning('RpcResponderEndpoint уже слушает входящие запросы');
       return;
     }
 
     _isListening = true;
-    transport.incomingMessages.listen(
-      _handleIncomingMessage,
-    );
+    transport.incomingMessages.listen(_handleIncomingMessage);
   }
 
   /// Этап 2: Обрабатывает входящее сообщение от транспорта
@@ -214,7 +249,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         // СПЕЦИАЛЬНАЯ ОБРАБОТКА для Client Streaming - создаем респондер ТОЛЬКО СЕЙЧАС
         if (method != null && method.type == RpcMethodType.clientStream) {
           logger.internal(
-              'Stream $streamId завершен, создаем ClientStreamResponder с накопленными сообщениями');
+            'Stream $streamId завершен, создаем ClientStreamResponder с накопленными сообщениями',
+          );
           final parts = methodKey.split('.');
           final serviceName = parts[0];
           final methodName = parts[1];
@@ -250,8 +286,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   void _handleMetadataMessage(int streamId, RpcTransportMessage message) {
     // Проверяем, является ли это уведомлением об отмене от клиента
     if (message.metadata != null) {
-      final isCancelled =
-          message.metadata!.getHeaderValue('x-client-cancelled');
+      final isCancelled = message.metadata!.getHeaderValue(
+        'x-client-cancelled',
+      );
       if (isCancelled == 'true') {
         final reason =
             message.metadata!.getHeaderValue('x-cancellation-reason') ??
@@ -265,9 +302,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final methodInfo = _parseMethodPath(methodPath);
 
     if (methodInfo == null) {
-      logger.warning(
-        'Некорректный путь метода: $methodPath',
-      );
+      logger.warning('Некорректный путь метода: $methodPath');
       return;
     }
 
@@ -312,9 +347,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Находим и отменяем активный респондер для данного stream
     final responder = _streamResponders[streamId];
     if (responder != null) {
-      logger.internal(
-        'Отменяем активный респондер [streamId: $streamId]',
-      );
+      logger.internal('Отменяем активный респондер [streamId: $streamId]');
 
       // Отменяем респондер (он сам должен очистить ресурсы)
       if (responder is UnaryResponder) {
@@ -333,9 +366,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Очищаем все данные для этого stream
     _cleanupStream(streamId);
 
-    logger.internal(
-      'Обработка отмены завершена [streamId: $streamId]',
-    );
+    logger.internal('Обработка отмены завершена [streamId: $streamId]');
   }
 
   /// Этап 2.2: Обрабатывает сообщение с данными
@@ -347,9 +378,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       final methodInfo = _parseMethodPath(methodPath);
 
       if (methodInfo == null) {
-        logger.warning(
-          'Некорректный путь метода: $methodPath',
-        );
+        logger.warning('Некорректный путь метода: $methodPath');
         return;
       }
 
@@ -458,9 +487,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
   /// Этап 2.3: Очищает информацию о потоке при его завершении
   void _cleanupStream(int streamId) {
-    logger.internal(
-      'Поток завершен [streamId: $streamId]',
-    );
+    logger.internal('Поток завершен [streamId: $streamId]');
 
     // Закрываем и удаляем респондер, если он существует
     final responder = _streamResponders[streamId];
@@ -479,9 +506,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // Сообщаем транспорту, что этот ID больше не используется
     try {
       transport.releaseStreamId(streamId);
-      logger.internal(
-        'ID стрима освобожден [streamId: $streamId]',
-      );
+      logger.internal('ID стрима освобожден [streamId: $streamId]');
     } catch (e) {
       logger.warning(
         'Не удалось освободить ID стрима [streamId: $streamId]: $e',
@@ -491,9 +516,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
   /// Этап 3: Парсинг пути метода из строки формата /service/method
   (String, String)? _parseMethodPath(String methodPath) {
-    final parts = methodPath.split(
-      '/',
-    );
+    final parts = methodPath.split('/');
 
     if (parts.length != 3 || parts[0].isNotEmpty) {
       return null;
@@ -563,7 +586,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     if (isZeroCopyMethod && transport.supportsZeroCopy) {
       // 🚀 Создаем zero-copy унарный респондер используя ZeroCopyStreamProcessor
       contextLogger.internal(
-          'Создание zero-copy унарного респондера [streamId: $streamId]');
+        'Создание zero-copy унарного респондера [streamId: $streamId]',
+      );
 
       final zeroCopyMethod = contract!.zeroCopyMethods[methodName]!;
 
@@ -587,9 +611,12 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       processor.requests.listen((request) async {
         try {
           contextLogger.internal(
-              'Обработка zero-copy унарного запроса [streamId: $streamId]');
-          final response =
-              await zeroCopyMethod.callUnaryHandler(context, request);
+            'Обработка zero-copy унарного запроса [streamId: $streamId]',
+          );
+          final response = await zeroCopyMethod.callUnaryHandler(
+            context,
+            request,
+          );
           await processor.send(response);
           await processor.finishSending();
         } catch (e, stackTrace) {
@@ -614,14 +641,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           savedMessage.isDirect &&
           savedMessage.directPayload != null) {
         contextLogger.internal(
-            'Создаем zero-copy поток с сохраненным direct сообщением [streamId: $streamId]');
+          'Создаем zero-copy поток с сохраненным direct сообщением [streamId: $streamId]',
+        );
         // Создаем поток который начинается с сохраненного direct сообщения
         messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
       } else {
         contextLogger.internal(
-            'Создаем обычный zero-copy поток сообщений [streamId: $streamId]');
-        messageStream =
-            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+          'Создаем обычный zero-copy поток сообщений [streamId: $streamId]',
+        );
+        messageStream = transport.incomingMessages.where(
+          (msg) => msg.streamId == streamId,
+        );
       }
 
       // Привязываем процессор к потоку сообщений
@@ -638,8 +668,10 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         handler: (request) async {
           // Используем типизированный wrapper для безопасного вызова
           final typedRequest = request as dynamic; // Dart runtime cast
-          final response =
-              await i.method.callUnaryHandler(context, typedRequest);
+          final response = await i.method.callUnaryHandler(
+            context,
+            typedRequest,
+          );
           return i.method.castResponse(response);
         },
         context: context, // Передаем контекст для мониторинга отмены
@@ -667,12 +699,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   void _handleClientStreamMethod(_MethodCallInfo i) {
     final streamId = i.streamId;
     logger.internal(
-        '_handleClientStreamMethod для stream $streamId, уже есть: ${_streamResponders.containsKey(streamId)}');
+      '_handleClientStreamMethod для stream $streamId, уже есть: ${_streamResponders.containsKey(streamId)}',
+    );
 
     // Если респондер уже существует, НЕ создаем новый
     if (_streamResponders.containsKey(streamId)) {
       logger.internal(
-          'Респондер для stream $streamId уже существует, респондер обработает сообщение через transport.incomingMessages');
+        'Респондер для stream $streamId уже существует, респондер обработает сообщение через transport.incomingMessages',
+      );
       return;
     }
 
@@ -680,11 +714,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final methodName = i.methodName;
 
     // Создаем контекст из метаданных
-    final context = _createContextFromMessage(_streamMetadata[streamId] ??
-        RpcTransportMessage(
-          streamId: streamId,
-          methodPath: '/$serviceName/$methodName',
-        ));
+    final context = _createContextFromMessage(
+      _streamMetadata[streamId] ??
+          RpcTransportMessage(
+            streamId: streamId,
+            methodPath: '/$serviceName/$methodName',
+          ),
+    );
 
     // Создаем контекстный логгер
     final contextLogger = _createContextLogger(context);
@@ -697,7 +733,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     if (isZeroCopyMethod && transport.supportsZeroCopy) {
       // 🚀 Создаем zero-copy клиентский стрим респондер
       contextLogger.internal(
-          'Создание zero-copy клиентского стрим респондера [streamId: $streamId]');
+        'Создание zero-copy клиентского стрим респондера [streamId: $streamId]',
+      );
 
       final zeroCopyMethod = contract!.zeroCopyMethods[methodName]!;
 
@@ -708,10 +745,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         methodName: methodName,
         handler: (Stream<Object> requests) async {
           contextLogger.internal(
-              'Обработка zero-copy клиентского стрим запроса [streamId: $streamId]');
+            'Обработка zero-copy клиентского стрим запроса [streamId: $streamId]',
+          );
           // Вызываем zero-copy handler (типы уже адаптированы в контракте)
           return await zeroCopyMethod.callClientStreamHandler(
-              context, requests);
+            context,
+            requests,
+          );
         },
         context: context, // Передаем контекст для мониторинга отмены
         logger: contextLogger,
@@ -719,7 +759,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
       _streamResponders[responder.id] = responder;
       contextLogger.internal(
-          'Сохранили zero-copy ClientStreamResponder для stream ${responder.id}');
+        'Сохранили zero-copy ClientStreamResponder для stream ${responder.id}',
+      );
 
       // 🚀 Создаем поток сообщений для zero-copy клиентского стрима
       Stream<RpcTransportMessage> messageStream;
@@ -727,13 +768,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       final savedMessages = _clientStreamMessages[streamId];
       if (savedMessages != null && savedMessages.isNotEmpty) {
         contextLogger.internal(
-            'Создание zero-copy потока с ${savedMessages.length} накопленными сообщениями [streamId: $streamId]');
+          'Создание zero-copy потока с ${savedMessages.length} накопленными сообщениями [streamId: $streamId]',
+        );
         messageStream = _createStreamWithSavedMessages(streamId, savedMessages);
       } else {
         contextLogger.internal(
-            'Создание zero-copy потока сообщений [streamId: $streamId]');
-        messageStream =
-            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+          'Создание zero-copy потока сообщений [streamId: $streamId]',
+        );
+        messageStream = transport.incomingMessages.where(
+          (msg) => msg.streamId == streamId,
+        );
       }
 
       responder.bindToMessageStream(messageStream);
@@ -750,8 +794,10 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         handler: (Stream<IRpcSerializable> requests) async {
           // Используем типизированные wrapper'ы для безопасного вызова
           final typedRequests = i.method.castRequestStream(requests);
-          final response =
-              await i.method.callClientStreamHandler(context, typedRequests);
+          final response = await i.method.callClientStreamHandler(
+            context,
+            typedRequests,
+          );
           return i.method.castResponse(response);
         },
         context: context, // Передаем контекст для мониторинга отмены
@@ -761,7 +807,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       // Сохраняем респондер
       _streamResponders[responder.id] = responder;
       logger.internal(
-          'Сохранили ClientStreamResponder для stream ${responder.id}. Всего респондеров: ${_streamResponders.length}');
+        'Сохранили ClientStreamResponder для stream ${responder.id}. Всего респондеров: ${_streamResponders.length}',
+      );
 
       // Создаем поток сообщений для этого streamId
       // Используем накопленные сообщения Client Streaming
@@ -770,17 +817,21 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       final savedMessages = _clientStreamMessages[streamId];
       if (savedMessages != null && savedMessages.isNotEmpty) {
         logger.internal(
-            'Создание потока с ${savedMessages.length} накопленными сообщениями [streamId: $streamId]');
+          'Создание потока с ${savedMessages.length} накопленными сообщениями [streamId: $streamId]',
+        );
         messageStream = _createStreamWithSavedMessages(streamId, savedMessages);
       } else {
         logger.internal(
-            'Создание обычного потока сообщений [streamId: $streamId]');
-        messageStream =
-            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+          'Создание обычного потока сообщений [streamId: $streamId]',
+        );
+        messageStream = transport.incomingMessages.where(
+          (msg) => msg.streamId == streamId,
+        );
       }
 
       logger.internal(
-          'Привязка потока сообщений к ClientStreamResponder [streamId: $streamId]');
+        'Привязка потока сообщений к ClientStreamResponder [streamId: $streamId]',
+      );
       responder.bindToMessageStream(messageStream);
     }
   }
@@ -796,11 +847,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final methodName = i.methodName;
 
     // Создаем контекст из метаданных
-    final context = _createContextFromMessage(_streamMetadata[streamId] ??
-        RpcTransportMessage(
-          streamId: streamId,
-          methodPath: '/$serviceName/$methodName',
-        ));
+    final context = _createContextFromMessage(
+      _streamMetadata[streamId] ??
+          RpcTransportMessage(
+            streamId: streamId,
+            methodPath: '/$serviceName/$methodName',
+          ),
+    );
 
     // Создаем контекстный логгер
     final contextLogger = _createContextLogger(context);
@@ -813,7 +866,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     if (isZeroCopyMethod && transport.supportsZeroCopy) {
       // 🚀 Создаем zero-copy серверный стрим респондер
       contextLogger.internal(
-          'Создание zero-copy серверного стрим респондера [streamId: $streamId]');
+        'Создание zero-copy серверного стрим респондера [streamId: $streamId]',
+      );
 
       final zeroCopyMethod = contract!.zeroCopyMethods[methodName]!;
 
@@ -824,7 +878,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         methodName: methodName,
         handler: (request) {
           contextLogger.internal(
-              'Обработка zero-copy серверного стрим запроса [streamId: $streamId]');
+            'Обработка zero-copy серверного стрим запроса [streamId: $streamId]',
+          );
           // Вызываем zero-copy handler который возвращает Stream<Object>
           return zeroCopyMethod.callServerStreamHandler(context, request);
         },
@@ -842,13 +897,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           savedMessage.isDirect &&
           savedMessage.directPayload != null) {
         contextLogger.internal(
-            'Создаем zero-copy серверный стрим поток с сохраненным direct сообщением [streamId: $streamId]');
+          'Создаем zero-copy серверный стрим поток с сохраненным direct сообщением [streamId: $streamId]',
+        );
         messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
       } else {
         contextLogger.internal(
-            'Создаем обычный zero-copy серверный стрим поток сообщений [streamId: $streamId]');
-        messageStream =
-            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+          'Создаем обычный zero-copy серверный стрим поток сообщений [streamId: $streamId]',
+        );
+        messageStream = transport.incomingMessages.where(
+          (msg) => msg.streamId == streamId,
+        );
       }
 
       responder.bindToMessageStream(messageStream);
@@ -864,11 +922,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         handler: (request) {
           // Используем типизированный wrapper для безопасного вызова
           final typedRequest = request as dynamic; // Dart runtime cast
-          final responseStream =
-              i.method.callServerStreamHandler(context, typedRequest);
+          final responseStream = i.method.callServerStreamHandler(
+            context,
+            typedRequest,
+          );
           // Кастим поток ответов к базовому типу
-          return responseStream
-              .map((response) => i.method.castResponse(response));
+          return responseStream.map(
+            (response) => i.method.castResponse(response),
+          );
         },
         context: context, // Передаем контекст для мониторинга отмены
         logger: contextLogger, // Передаем контекстный логгер
@@ -884,41 +945,51 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           !savedMessage.isMetadataOnly &&
           (savedMessage.payload != null || savedMessage.isDirect)) {
         logger.internal(
-            'Создание потока с сохраненным сообщением [streamId: $streamId]${savedMessage.isDirect ? " (zero-copy)" : ""}');
+          'Создание потока с сохраненным сообщением [streamId: $streamId]${savedMessage.isDirect ? " (zero-copy)" : ""}',
+        );
         // Создаем поток который начинается с сохраненного сообщения
         messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
       } else {
         logger.internal(
-            'Создание обычного потока сообщений [streamId: $streamId]');
+          'Создание обычного потока сообщений [streamId: $streamId]',
+        );
         // Обычный поток сообщений для этого streamId
-        messageStream =
-            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+        messageStream = transport.incomingMessages.where(
+          (msg) => msg.streamId == streamId,
+        );
       }
 
       logger.internal(
-          'Привязка потока сообщений к ServerStreamResponder [streamId: $streamId]');
+        'Привязка потока сообщений к ServerStreamResponder [streamId: $streamId]',
+      );
       responder.bindToMessageStream(messageStream);
     }
   }
 
   /// Создает поток сообщений начинающийся с сохраненного сообщения
   Stream<RpcTransportMessage> _createStreamWithSavedMessage(
-      int streamId, RpcTransportMessage savedMessage) async* {
+    int streamId,
+    RpcTransportMessage savedMessage,
+  ) async* {
     // Сначала отправляем сохраненное сообщение
     yield savedMessage;
 
     // Затем пропускаем остальные сообщения для этого streamId
-    await for (final msg
-        in transport.incomingMessages.where((m) => m.streamId == streamId)) {
+    await for (final msg in transport.incomingMessages.where(
+      (m) => m.streamId == streamId,
+    )) {
       yield msg;
     }
   }
 
   /// Создает поток сообщений начинающийся с сохраненных сообщений
   Stream<RpcTransportMessage> _createStreamWithSavedMessages(
-      int streamId, List<RpcTransportMessage> savedMessages) async* {
+    int streamId,
+    List<RpcTransportMessage> savedMessages,
+  ) async* {
     logger.internal(
-        'Создание потока для stream $streamId с ${savedMessages.length} сохраненными сообщениями');
+      'Создание потока для stream $streamId с ${savedMessages.length} сохраненными сообщениями',
+    );
 
     // Создаем копию списка, чтобы избежать concurrent modification
     final messagesCopy = List<RpcTransportMessage>.from(savedMessages);
@@ -942,18 +1013,22 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           : message;
 
       logger.internal(
-          'Отдаем сохраненное сообщение для stream $streamId${isLastMessage ? " (END_STREAM)" : ""}');
+        'Отдаем сохраненное сообщение для stream $streamId${isLastMessage ? " (END_STREAM)" : ""}',
+      );
       yield messageToYield;
     }
 
-    logger
-        .internal('Все сохраненные сообщения отправлены для stream $streamId');
+    logger.internal(
+      'Все сохраненные сообщения отправлены для stream $streamId',
+    );
 
     // Затем пропускаем остальные сообщения для этого streamId
-    await for (final msg
-        in transport.incomingMessages.where((m) => m.streamId == streamId)) {
+    await for (final msg in transport.incomingMessages.where(
+      (m) => m.streamId == streamId,
+    )) {
       logger.internal(
-          'Передаем новое сообщение от transport для stream $streamId');
+        'Передаем новое сообщение от transport для stream $streamId',
+      );
       yield msg;
     }
   }
@@ -969,11 +1044,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final methodName = i.methodName;
 
     // Создаем контекст из метаданных
-    final context = _createContextFromMessage(_streamMetadata[streamId] ??
-        RpcTransportMessage(
-          streamId: streamId,
-          methodPath: '/$serviceName/$methodName',
-        ));
+    final context = _createContextFromMessage(
+      _streamMetadata[streamId] ??
+          RpcTransportMessage(
+            streamId: streamId,
+            methodPath: '/$serviceName/$methodName',
+          ),
+    );
 
     // Создаем контекстный логгер
     final contextLogger = _createContextLogger(context);
@@ -986,7 +1063,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     if (isZeroCopyMethod && transport.supportsZeroCopy) {
       // 🚀 Создаем zero-copy двунаправленный стрим респондер
       contextLogger.internal(
-          'Создание zero-copy двунаправленного стрим респондера [streamId: $streamId]');
+        'Создание zero-copy двунаправленного стрим респондера [streamId: $streamId]',
+      );
 
       final zeroCopyMethod = contract!.zeroCopyMethods[methodName]!;
 
@@ -1009,20 +1087,29 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           !savedMessage.isMetadataOnly &&
           (savedMessage.payload != null || savedMessage.isDirect)) {
         contextLogger.internal(
-            'Создание zero-copy потока с сохраненным сообщением [streamId: $streamId]${savedMessage.isDirect ? " (zero-copy)" : ""}');
+          'Создание zero-copy потока с сохраненным сообщением [streamId: $streamId]${savedMessage.isDirect ? " (zero-copy)" : ""}',
+        );
         messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
       } else {
         contextLogger.internal(
-            'Создание zero-copy потока сообщений [streamId: $streamId]');
-        messageStream =
-            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+          'Создание zero-copy потока сообщений [streamId: $streamId]',
+        );
+        messageStream = transport.incomingMessages.where(
+          (msg) => msg.streamId == streamId,
+        );
       }
 
       responder.bindToMessageStream(messageStream);
 
       // 🚀 Настраиваем zero-copy обработчик
-      _setupZeroCopyBidirectionalHandler(responder, zeroCopyMethod, serviceName,
-          methodName, streamId, context);
+      _setupZeroCopyBidirectionalHandler(
+        responder,
+        zeroCopyMethod,
+        serviceName,
+        methodName,
+        streamId,
+        context,
+      );
     } else {
       // Обычный двунаправленный стрим респондер
       final responder =
@@ -1047,22 +1134,32 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           !savedMessage.isMetadataOnly &&
           (savedMessage.payload != null || savedMessage.isDirect)) {
         logger.internal(
-            'Создание потока с сохраненным сообщением [streamId: $streamId]${savedMessage.isDirect ? " (zero-copy)" : ""}');
+          'Создание потока с сохраненным сообщением [streamId: $streamId]${savedMessage.isDirect ? " (zero-copy)" : ""}',
+        );
         messageStream = _createStreamWithSavedMessage(streamId, savedMessage);
       } else {
         logger.internal(
-            'Создание обычного потока сообщений [streamId: $streamId]');
-        messageStream =
-            transport.incomingMessages.where((msg) => msg.streamId == streamId);
+          'Создание обычного потока сообщений [streamId: $streamId]',
+        );
+        messageStream = transport.incomingMessages.where(
+          (msg) => msg.streamId == streamId,
+        );
       }
 
       logger.internal(
-          'Привязка потока сообщений к BidirectionalStreamResponder [streamId: $streamId]');
+        'Привязка потока сообщений к BidirectionalStreamResponder [streamId: $streamId]',
+      );
       responder.bindToMessageStream(messageStream);
 
       // Подключаем пользовательский обработчик к потоку запросов
-      _setupBidirectionalHandler(responder, i.method, i.serviceName,
-          i.methodName, i.streamId, context);
+      _setupBidirectionalHandler(
+        responder,
+        i.method,
+        i.serviceName,
+        i.methodName,
+        i.streamId,
+        context,
+      );
     }
   }
 
@@ -1076,28 +1173,34 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     RpcContext context,
   ) {
     logger.internal(
-        'Настройка обработчика двунаправленного стрима [id: ${responder.id}]');
+      'Настройка обработчика двунаправленного стрима [id: ${responder.id}]',
+    );
 
     // Подписываемся на поток запросов и связываем с пользовательским обработчиком
     unawaited(() async {
       try {
         logger.internal(
-            'Вызов пользовательского обработчика [id: ${responder.id}]');
+          'Вызов пользовательского обработчика [id: ${responder.id}]',
+        );
 
         // Используем переданный контекст (уже создан из метаданных)
 
         // Используем типизированные wrapper'ы для безопасного вызова
         final typedRequests = method.castRequestStream(responder.requests);
-        final responseStream =
-            method.callBidirectionalStreamHandler(context, typedRequests);
+        final responseStream = method.callBidirectionalStreamHandler(
+          context,
+          typedRequests,
+        );
 
         logger.internal(
-            'Получен поток ответов от обработчика [id: ${responder.id}]');
+          'Получен поток ответов от обработчика [id: ${responder.id}]',
+        );
 
         // Подписываемся на поток ответов от обработчика и отправляем их клиенту
         await for (final response in responseStream) {
-          logger
-              .internal('Отправка ответа от обработчика [id: ${responder.id}]');
+          logger.internal(
+            'Отправка ответа от обработчика [id: ${responder.id}]',
+          );
           await responder.send(method.castResponse(response));
         }
 
@@ -1126,25 +1229,31 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     RpcContext context,
   ) {
     logger.internal(
-        'Настройка zero-copy обработчика двунаправленного стрима [id: ${responder.id}]');
+      'Настройка zero-copy обработчика двунаправленного стрима [id: ${responder.id}]',
+    );
 
     // Подписываемся на поток запросов и связываем с пользовательским обработчиком
     unawaited(() async {
       try {
         logger.internal(
-            'Вызов zero-copy пользовательского обработчика [id: ${responder.id}]');
+          'Вызов zero-copy пользовательского обработчика [id: ${responder.id}]',
+        );
 
         // Вызываем zero-copy handler (типы уже адаптированы в контракте)
         final responseStream = zeroCopyMethod.callBidirectionalStreamHandler(
-            context, responder.requests);
+          context,
+          responder.requests,
+        );
 
         logger.internal(
-            'Получен поток ответов от zero-copy обработчика [id: ${responder.id}]');
+          'Получен поток ответов от zero-copy обработчика [id: ${responder.id}]',
+        );
 
         // Подписываемся на поток ответов от обработчика и отправляем их клиенту
         await for (final response in responseStream) {
           logger.internal(
-              'Отправка ответа от zero-copy обработчика [id: ${responder.id}]');
+            'Отправка ответа от zero-copy обработчика [id: ${responder.id}]',
+          );
           await responder.send(response);
         }
 
@@ -1173,9 +1282,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       );
     }
 
-    logger.internal(
-      'Регистрируем контракт сервиса: $serviceName',
-    );
+    logger.internal('Регистрируем контракт сервиса: $serviceName');
     _contracts[serviceName] = contract;
 
     // Вызываем setup для регистрации методов в контракте
@@ -1190,14 +1297,10 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       final methodKey = '$serviceName.$methodName';
 
       if (_methods.containsKey(methodKey)) {
-        throw RpcException(
-          'Метод $methodKey уже зарегистрирован',
-        );
+        throw RpcException('Метод $methodKey уже зарегистрирован');
       }
 
-      logger.internal(
-        'Регистрируем метод: $methodKey (${method.type.name})',
-      );
+      logger.internal('Регистрируем метод: $methodKey (${method.type.name})');
       _methods[methodKey] = method;
     }
 
@@ -1237,9 +1340,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       );
     }
 
-    logger.internal(
-      'Разрегистрируем контракт сервиса: $serviceName',
-    );
+    logger.internal('Разрегистрируем контракт сервиса: $serviceName');
 
     // Получаем контракт для вызова dispose()
     final contract = _contracts[serviceName]!;
@@ -1247,9 +1348,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     // 🆕 Освобождаем ресурсы контракта ПЕРЕД удалением
     try {
       contract.dispose();
-      logger.internal(
-        'Ресурсы контракта $serviceName освобождены',
-      );
+      logger.internal('Ресурсы контракта $serviceName освобождены');
     } catch (e, stackTrace) {
       logger.error(
         'Ошибка при освобождении ресурсов контракта $serviceName: $e',
@@ -1301,8 +1400,10 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       case RpcMethodType.unaryRequest:
         wrappedHandler = (dynamic request, {RpcContext? context}) async {
           // Для zero-copy directPayload приходит как есть, без каста к IRpcSerializable
-          final result =
-              await zeroCopyMethod.callUnaryHandler(context!, request);
+          final result = await zeroCopyMethod.callUnaryHandler(
+            context!,
+            request,
+          );
           return result; // Возвращаем как есть, без каста
         };
         break;
@@ -1317,7 +1418,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
             (Stream<dynamic> requests, {RpcContext? context}) async {
           final objectStream = requests.cast<Object>();
           final result = await zeroCopyMethod.callClientStreamHandler(
-              context!, objectStream);
+            context!,
+            objectStream,
+          );
           return result; // Возвращаем как есть
         };
         break;
@@ -1325,7 +1428,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         wrappedHandler = (Stream<dynamic> requests, {RpcContext? context}) {
           final objectStream = requests.cast<Object>();
           return zeroCopyMethod.callBidirectionalStreamHandler(
-              context!, objectStream);
+            context!,
+            objectStream,
+          );
           // .map не нужен - возвращаем объекты как есть
         };
         break;
@@ -1351,9 +1456,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     final method = _methods[methodKey];
 
     if (method == null) {
-      throw RpcException(
-        'Метод $methodKey не зарегистрирован',
-      );
+      throw RpcException('Метод $methodKey не зарегистрирован');
     }
 
     if (method.type != expectedType) {
@@ -1471,8 +1574,5 @@ final class _ZeroCopyUnaryResponderWrapper implements IRpcResponder {
   @override
   final int id;
 
-  _ZeroCopyUnaryResponderWrapper({
-    required this.processor,
-    required this.id,
-  });
+  _ZeroCopyUnaryResponderWrapper({required this.processor, required this.id});
 }

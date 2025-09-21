@@ -63,8 +63,9 @@ void main() {
       final originalHeaders = {'x-user-id': '123'};
       final additionalHeaders = {'x-session': 'abc', 'x-trace': '456'};
 
-      final context = RpcContext.withHeaders(originalHeaders)
-          .withAdditionalHeaders(additionalHeaders);
+      final context = RpcContext.withHeaders(
+        originalHeaders,
+      ).withAdditionalHeaders(additionalHeaders);
 
       expect(context.headers['x-user-id'], equals('123'));
       expect(context.headers['x-session'], equals('abc'));
@@ -158,8 +159,10 @@ void main() {
     test('создает контекст с пользовательским заголовком API ключа', () {
       final apiKey = 'secret-key-123';
       final headerName = 'x-custom-key';
-      final context =
-          RpcContextUtils.withApiKey(apiKey, headerName: headerName);
+      final context = RpcContextUtils.withApiKey(
+        apiKey,
+        headerName: headerName,
+      );
 
       expect(context.getHeader(headerName), equals(apiKey));
       expect(context.getHeader('x-api-key'), isNull);
@@ -192,13 +195,13 @@ void main() {
     });
 
     test('объединяет контексты с приоритетом правого', () {
-      final leftContext = RpcContext.withHeaders({'x-left': 'left-value'})
-          .withTraceId('left-trace')
-          .withValue('shared-key', 'left-shared');
+      final leftContext = RpcContext.withHeaders({
+        'x-left': 'left-value',
+      }).withTraceId('left-trace').withValue('shared-key', 'left-shared');
 
-      final rightContext = RpcContext.withHeaders({'x-right': 'right-value'})
-          .withTraceId('right-trace')
-          .withValue('shared-key', 'right-shared');
+      final rightContext = RpcContext.withHeaders({
+        'x-right': 'right-value',
+      }).withTraceId('right-trace').withValue('shared-key', 'right-shared');
 
       final merged = RpcContextUtils.merge(leftContext, rightContext);
 
@@ -236,12 +239,13 @@ void main() {
     test('наследует от родительского контекста', () {
       final parentTraceId = 'parent-trace-123';
       final parentHeaders = {'x-session': 'parent-session'};
-      final parent =
-          RpcContext.withHeaders(parentHeaders).withTraceId(parentTraceId);
+      final parent = RpcContext.withHeaders(
+        parentHeaders,
+      ).withTraceId(parentTraceId);
 
-      final child = RpcContextBuilder.inheritFrom(parent)
-          .withHeader('x-user-id', '456')
-          .build();
+      final child = RpcContextBuilder.inheritFrom(
+        parent,
+      ).withHeader('x-user-id', '456').build();
 
       // Наследует trace ID
       expect(child.traceId, equals(parentTraceId));
@@ -337,8 +341,9 @@ void main() {
 
     test('создает контекст для междоменного вызова', () {
       final parentTraceId = 'parent-trace-123';
-      final parent = RpcContext.withTraceId(parentTraceId)
-          .withAdditionalHeaders({'x-user-id': '456'});
+      final parent = RpcContext.withTraceId(
+        parentTraceId,
+      ).withAdditionalHeaders({'x-user-id': '456'});
 
       final context = RpcContext.forDomainCall(
         parentContext: parent,
@@ -381,7 +386,8 @@ void main() {
     test('проверяет валидность контекста', () {
       final validContext = RpcContext.empty();
       final expiredContext = RpcContext.withDeadline(
-          DateTime.now().subtract(Duration(minutes: 1)));
+        DateTime.now().subtract(Duration(minutes: 1)),
+      );
       final cancelledToken = RpcCancellationToken.cancelled();
       final cancelledContext = RpcContext.withCancellation(cancelledToken);
 
@@ -414,10 +420,14 @@ void main() {
 
       // Проверяем, что каждый контекст имеет правильную метку шага
       expect(
-          chain['OrderDomain']!.getValue('cord.step'), equals('OrderDomain'));
+        chain['OrderDomain']!.getValue('cord.step'),
+        equals('OrderDomain'),
+      );
       expect(chain['UserDomain']!.getValue('cord.step'), equals('UserDomain'));
-      expect(chain['PaymentDomain']!.getValue('cord.step'),
-          equals('PaymentDomain'));
+      expect(
+        chain['PaymentDomain']!.getValue('cord.step'),
+        equals('PaymentDomain'),
+      );
     });
 
     test('санитизирует контекст', () {
@@ -503,8 +513,9 @@ void main() {
 
   group('RpcContextAware', () {
     test('миксин создает контекст для вызова', () {
-      final parentContext = RpcContext.withTraceId('parent-trace-123')
-          .withAdditionalHeaders({'x-user-id': '456'});
+      final parentContext = RpcContext.withTraceId(
+        'parent-trace-123',
+      ).withAdditionalHeaders({'x-user-id': '456'});
       final domain = TestDomain('TestDomain', parentContext);
 
       final callContext = domain.createCallContext(
@@ -516,8 +527,10 @@ void main() {
       expect(callContext.requestId, startsWith('req_'));
       expect(callContext.getHeader('x-user-id'), equals('456'));
       expect(callContext.getHeader('x-to-domain'), equals('PaymentService'));
-      expect(callContext.getHeader('x-domain-operation'),
-          equals('ProcessPayment'));
+      expect(
+        callContext.getHeader('x-domain-operation'),
+        equals('ProcessPayment'),
+      );
       expect(callContext.getHeader('x-from-domain'), equals('TestDomain'));
     });
   });
@@ -561,8 +574,9 @@ void main() {
       expect(userToPaymentContext.getHeader('x-user-id'), equals('123'));
 
       // Проверяем метаданные последнего вызова
-      final paymentMetadata =
-          RpcContext.extractDomainMetadata(userToPaymentContext);
+      final paymentMetadata = RpcContext.extractDomainMetadata(
+        userToPaymentContext,
+      );
       expect(paymentMetadata.userId, equals('123'));
       expect(paymentMetadata.toDomain, equals('PaymentDomain'));
       expect(paymentMetadata.operation, equals('ValidateCard'));
@@ -592,8 +606,10 @@ void main() {
       cancellationToken.cancel('User cancelled');
 
       expect(childContext.isCancelled, isTrue);
-      expect(() => childContext.cancellationToken!.throwIfCancelled(),
-          throwsA(isA<RpcCancelledException>()));
+      expect(
+        () => childContext.cancellationToken!.throwIfCancelled(),
+        throwsA(isA<RpcCancelledException>()),
+      );
     });
   });
 }

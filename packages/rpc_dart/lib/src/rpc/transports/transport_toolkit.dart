@@ -42,10 +42,8 @@ abstract class RpcBaseTransport implements IRpcTransport {
   ///
   /// [isClient] Флаг клиентского транспорта (влияет на Stream ID)
   /// [logger] Опциональный логгер для отладки
-  RpcBaseTransport({
-    required bool isClient,
-    RpcLogger? logger,
-  })  : _idManager = RpcStreamIdManager(isClient: isClient),
+  RpcBaseTransport({required bool isClient, RpcLogger? logger})
+      : _idManager = RpcStreamIdManager(isClient: isClient),
         _logger = logger;
 
   @override
@@ -91,6 +89,52 @@ abstract class RpcBaseTransport implements IRpcTransport {
     _log('Transport closed');
   }
 
+  @override
+  Future<RpcHealthStatus> health() async {
+    final details = {
+      'isClosed': _closed,
+      'activeStreams': _activeStreams.length,
+      'supportsZeroCopy': supportsZeroCopy,
+    };
+
+    return _closed
+        ? RpcHealthStatus.closed(
+            component: runtimeType.toString(),
+            message: 'Transport closed',
+            details: details,
+          )
+        : RpcHealthStatus.healthy(
+            component: runtimeType.toString(),
+            message: 'Transport active',
+            details: details,
+          );
+  }
+
+  @override
+  Future<RpcHealthStatus> reconnect() async {
+    if (_closed) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'Transport closed – create a new instance',
+        details: {
+          'isClosed': _closed,
+          'supportsZeroCopy': supportsZeroCopy,
+          'supported': false,
+        },
+      );
+    }
+
+    return RpcHealthStatus.degraded(
+      component: runtimeType.toString(),
+      message: 'Reconnect is not implemented for this transport',
+      details: {
+        'isClosed': _closed,
+        'supportsZeroCopy': supportsZeroCopy,
+        'supported': false,
+      },
+    );
+  }
+
   /// Отправляет сообщение через конкретный транспорт
   ///
   /// Должен быть реализован в подклассах для специфичной логики отправки
@@ -122,11 +166,17 @@ abstract class RpcBaseTransport implements IRpcTransport {
     }
 
     if (message.payload != null) {
-      await sendMessage(message.streamId, message.payload!,
-          endStream: message.isEndOfStream);
+      await sendMessage(
+        message.streamId,
+        message.payload!,
+        endStream: message.isEndOfStream,
+      );
     } else if (message.isDirect && supportsZeroCopy) {
-      await sendDirectObject(message.streamId, message.directPayload!,
-          endStream: message.isEndOfStream);
+      await sendDirectObject(
+        message.streamId,
+        message.directPayload!,
+        endStream: message.isEndOfStream,
+      );
     }
 
     if (message.isEndOfStream) {
@@ -212,8 +262,11 @@ class RpcTransportUtils {
   /// Создает WebSocket фрейм с Stream ID
   ///
   /// Формат: [streamId:4байта][flags:1байт][данные...]
-  static List<int> createWebSocketFrame(int streamId, List<int> data,
-      {int flags = 0}) {
+  static List<int> createWebSocketFrame(
+    int streamId,
+    List<int> data, {
+    int flags = 0,
+  }) {
     return <int>[
       (streamId >> 24) & 0xFF,
       (streamId >> 16) & 0xFF,
@@ -236,11 +289,7 @@ class RpcTransportUtils {
     final flags = buffer[4];
     final data = buffer.sublist(5);
 
-    return {
-      'streamId': streamId,
-      'flags': flags,
-      'data': data,
-    };
+    return {'streamId': streamId, 'flags': flags, 'data': data};
   }
 }
 

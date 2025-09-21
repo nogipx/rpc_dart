@@ -51,8 +51,9 @@ void main() {
 
       // Операция должна завершиться без ошибки
       expect(
-          () => processor.bindToMessageStream(messageStreamController.stream),
-          returnsNormally);
+        () => processor.bindToMessageStream(messageStreamController.stream),
+        returnsNormally,
+      );
 
       messageStreamController.close();
     });
@@ -94,8 +95,10 @@ void main() {
 
     test('sendError executes without errors', () async {
       // Операция должна завершиться без ошибки
-      expect(() => processor.sendError(RpcStatus.INTERNAL, 'Test error'),
-          returnsNormally);
+      expect(
+        () => processor.sendError(RpcStatus.INTERNAL, 'Test error'),
+        returnsNormally,
+      );
 
       // Процессор должен остаться активным
       expect(processor.isActive, isTrue);
@@ -120,8 +123,10 @@ void main() {
       // Попытки операций должны завершаться без ошибки, но ничего не делать
       expect(() => processor.send('should not work'.rpc), returnsNormally);
       expect(() => processor.finishSending(), returnsNormally);
-      expect(() => processor.sendError(RpcStatus.INTERNAL, 'Error'),
-          returnsNormally);
+      expect(
+        () => processor.sendError(RpcStatus.INTERNAL, 'Error'),
+        returnsNormally,
+      );
     });
 
     test('basic message processing works', () async {
@@ -139,11 +144,13 @@ void main() {
       final bytes = codec.serialize(request);
       final frame = RpcMessageFrame.encode(bytes);
 
-      messageStreamController.add(RpcTransportMessage(
-        streamId: streamId,
-        payload: frame,
-        isEndOfStream: false,
-      ));
+      messageStreamController.add(
+        RpcTransportMessage(
+          streamId: streamId,
+          payload: frame,
+          isEndOfStream: false,
+        ),
+      );
 
       // Ждем обработки
       await Future.delayed(Duration(milliseconds: 1));
@@ -167,11 +174,13 @@ void main() {
       );
 
       // Отправляем END_STREAM сообщение
-      messageStreamController.add(RpcTransportMessage(
-        streamId: streamId,
-        metadata: RpcMetadata.forTrailer(RpcStatus.OK),
-        isEndOfStream: true,
-      ));
+      messageStreamController.add(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: RpcMetadata.forTrailer(RpcStatus.OK),
+          isEndOfStream: true,
+        ),
+      );
 
       // Ждем закрытия потока запросов
       await completer.future.timeout(Duration(seconds: 5));

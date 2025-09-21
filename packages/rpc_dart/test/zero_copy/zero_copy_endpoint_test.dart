@@ -32,10 +32,7 @@ class TestResponse implements IRpcSerializable {
   TestResponse(this.result, this.count);
 
   factory TestResponse.fromJson(Map<String, dynamic> json) {
-    return TestResponse(
-      json['result'] as String,
-      json['count'] as int,
-    );
+    return TestResponse(json['result'] as String, json['count'] as int);
   }
 
   @override
@@ -97,10 +94,13 @@ void main() {
       print('\n🔬 Анализ текущего поведения endpoint-ов...');
 
       // Создаем сложный объект для тестирования
-      final request = TestRequest(
-        'Complex data processing',
-        ['item1', 'item2', 'item3', 'item4', 'item5'],
-      );
+      final request = TestRequest('Complex data processing', [
+        'item1',
+        'item2',
+        'item3',
+        'item4',
+        'item5',
+      ]);
 
       print('\n📤 Отправляем запрос через endpoint...');
       print('   Запрос: ${request.message}');
@@ -116,7 +116,8 @@ void main() {
         if (message.isSerialized && message.payload != null) {
           print('\n📡 СЕРИАЛИЗАЦИЯ обнаружена!');
           print(
-              '   Размер сериализованных данных: ${message.payload!.length} bytes');
+            '   Размер сериализованных данных: ${message.payload!.length} bytes',
+          );
           print('   Stream ID: ${message.streamId}');
           print('   EndOfStream: ${message.isEndOfStream}');
         } else if (message.isDirect && message.directPayload != null) {
@@ -167,7 +168,8 @@ void main() {
         print('🚀 Объекты передаются по ссылке без сериализации');
       } else if (serializedMessages > 0) {
         print(
-            '\n⚠️ ПРОБЛЕМА: Все еще используется сериализация для inmemory транспорта!');
+          '\n⚠️ ПРОБЛЕМА: Все еще используется сериализация для inmemory транспорта!',
+        );
         print('💡 Решение: Проверить реализацию zero-copy в endpoint-ах');
       }
 
@@ -176,19 +178,27 @@ void main() {
       expect(response.count, equals(5));
 
       // Теперь ожидаем zero-copy для inmemory транспорта
-      expect(directMessages, greaterThan(0),
-          reason: 'Ожидаем zero-copy в новой реализации');
-      expect(serializedMessages, equals(0),
-          reason: 'Не должно быть сериализации для inmemory транспорта');
+      expect(
+        directMessages,
+        greaterThan(0),
+        reason: 'Ожидаем zero-copy в новой реализации',
+      );
+      expect(
+        serializedMessages,
+        equals(0),
+        reason: 'Не должно быть сериализации для inmemory транспорта',
+      );
     });
 
     test('🎯 Идеальный Zero-Copy сценарий', () async {
       print('\n💭 Как ДОЛЖНО работать zero-copy в endpoint-ах:');
       print('   1. Endpoint определяет что используется RpcInMemoryTransport');
       print(
-          '   2. Вместо serialize() + sendMessage() использует sendDirectObject()');
+        '   2. Вместо serialize() + sendMessage() использует sendDirectObject()',
+      );
       print(
-          '   3. На receiving стороне получает directPayload без deserialize()');
+        '   3. На receiving стороне получает directPayload без deserialize()',
+      );
       print('   4. Объекты передаются по ссылке - ZERO накладных расходов');
 
       // Демонстрируем прямое использование zero-copy
@@ -213,8 +223,11 @@ void main() {
         // Ждем сообщение
         final directMessage = await messagesFuture;
 
-        expect(directMessage.directPayload, same(request),
-            reason: 'Объект должен быть тем же самым (по ссылке)');
+        expect(
+          directMessage.directPayload,
+          same(request),
+          reason: 'Объект должен быть тем же самым (по ссылке)',
+        );
 
         print('   ✅ Объект передан по ссылке без сериализации!');
         print('   ✅ Размер данных: 0 bytes (указатель на объект)');

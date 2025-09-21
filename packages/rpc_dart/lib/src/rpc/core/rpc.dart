@@ -119,12 +119,11 @@ abstract interface class RpcMessageFrame {
   /// [messageBytes] Байты сериализованного сообщения
   /// [compressed] Флаг, указывающий, сжато ли сообщение
   /// Возвращает полностью упакованное сообщение с префиксом
-  static Uint8List encode(
-    Uint8List messageBytes, {
-    bool compressed = false,
-  }) {
+  static Uint8List encode(Uint8List messageBytes, {bool compressed = false}) {
     final result = List<int>.filled(
-        RpcConstants.MESSAGE_PREFIX_SIZE + messageBytes.length, 0);
+      RpcConstants.MESSAGE_PREFIX_SIZE + messageBytes.length,
+      0,
+    );
 
     // Устанавливаем флаг сжатия
     result[RpcConstants.COMPRESSION_FLAG_INDEX] =

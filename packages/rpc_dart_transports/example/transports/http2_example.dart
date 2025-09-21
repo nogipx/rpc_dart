@@ -13,7 +13,8 @@ Future<void> main() async {
 
   print('🚀 === ДЕМОНСТРАЦИЯ ВСЕХ ТИПОВ RPC С HTTP/2 ТРАНСПОРТОМ === 🚀\n');
   print(
-      '📱 Покажем Unary, Server Streaming, Client Streaming и Bidirectional!\n');
+    '📱 Покажем Unary, Server Streaming, Client Streaming и Bidirectional!\n',
+  );
 
   // Запускаем HTTP/2 сервер с настоящим RPC обработчиком
   print('📡 Запуск HTTP/2 сервера с RPC обработчиком...');
@@ -21,9 +22,7 @@ Future<void> main() async {
   final rpcServer = RpcHttp2Server.createWithContracts(
     port: serverPort,
     logger: RpcLogger('Http2Server'),
-    contracts: [
-      _DemoServiceContract(),
-    ],
+    contracts: [_DemoServiceContract()],
   );
   await rpcServer.start();
 

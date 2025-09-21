@@ -12,6 +12,7 @@ export 'streams/_index.dart';
 part 'core/message.dart';
 part 'core/parser.dart';
 part 'core/rpc.dart';
+part 'core/health.dart';
 part 'core/transport.dart';
 
 part 'transports/in_memory_transport.dart';

@@ -20,8 +20,10 @@ void main() {
         // Assert
         expect(metadata.headers.length, equals(6));
         expect(_getHeaderValue(metadata, ':method'), equals('POST'));
-        expect(_getHeaderValue(metadata, ':path'),
-            equals('/TestService/TestMethod'));
+        expect(
+          _getHeaderValue(metadata, ':path'),
+          equals('/TestService/TestMethod'),
+        );
         expect(_getHeaderValue(metadata, ':scheme'), equals('http'));
         expect(_getHeaderValue(metadata, ':authority'), equals(host));
         expect(
@@ -198,9 +200,7 @@ void main() {
 
       test('возвращает_null_для_некорректного_пути', () {
         // Arrange
-        final metadata = RpcMetadata([
-          RpcHeader(':path', 'invalid-path'),
-        ]);
+        final metadata = RpcMetadata([RpcHeader(':path', 'invalid-path')]);
 
         // Act
         final serviceName = metadata.serviceName;
@@ -211,9 +211,7 @@ void main() {
 
       test('возвращает_null_для_пустого_пути', () {
         // Arrange
-        final metadata = RpcMetadata([
-          RpcHeader(':path', '/'),
-        ]);
+        final metadata = RpcMetadata([RpcHeader(':path', '/')]);
 
         // Act
         final serviceName = metadata.serviceName;
@@ -239,9 +237,7 @@ void main() {
 
       test('возвращает_null_для_пути_без_метода', () {
         // Arrange
-        final metadata = RpcMetadata([
-          RpcHeader(':path', '/TestService'),
-        ]);
+        final metadata = RpcMetadata([RpcHeader(':path', '/TestService')]);
 
         // Act
         final methodName = metadata.methodName;

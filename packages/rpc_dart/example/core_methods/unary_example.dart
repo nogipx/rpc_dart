@@ -50,17 +50,22 @@ class UnaryRpcExample {
           .withAdditionalHeaders({'user-id': 'user-456'}).withTraceId(
               'trace-${DateTime.now().millisecondsSinceEpoch}');
 
-      final response2 =
-          await client.getCurrentTime('Время'.rpc, context: context2);
+      final response2 = await client.getCurrentTime(
+        'Время'.rpc,
+        context: context2,
+      );
       print('КЛИЕНТ: Получен ответ: "$response2"');
 
       // Пример 3: Вызов с таймаутом
       print('\n--- Пример 3: Вызов с таймаутом ---');
-      final timeoutContext = RpcContext.withTimeout(Duration(milliseconds: 500))
-          .withValue('request-type', 'health-check');
+      final timeoutContext = RpcContext.withTimeout(
+        Duration(milliseconds: 500),
+      ).withValue('request-type', 'health-check');
 
-      final response3 =
-          await client.checkHealth('Статус'.rpc, context: timeoutContext);
+      final response3 = await client.checkHealth(
+        'Статус'.rpc,
+        context: timeoutContext,
+      );
       print('КЛИЕНТ: Получен ответ: "$response3"');
 
       // Пример 4: Вызов с ошибкой
@@ -83,8 +88,10 @@ class UnaryRpcExample {
           cancellationToken.cancel('User cancelled');
         });
 
-        await client.longOperation('Долгая операция'.rpc,
-            context: cancelContext);
+        await client.longOperation(
+          'Долгая операция'.rpc,
+          context: cancelContext,
+        );
       } catch (e) {
         print('КЛИЕНТ: Операция отменена: $e');
       }
@@ -170,8 +177,10 @@ final class MultiServiceResponder extends RpcResponderContract
   }
 
   @override
-  Future<RpcString> getCurrentTime(RpcString message,
-      {RpcContext? context}) async {
+  Future<RpcString> getCurrentTime(
+    RpcString message, {
+    RpcContext? context,
+  }) async {
     final logger = RpcLogger('GetCurrentTime');
     logger.info('🔧 Получен запрос времени: ${message.value}');
     logger.info('🔍 Context: $context');
@@ -185,8 +194,10 @@ final class MultiServiceResponder extends RpcResponderContract
   }
 
   @override
-  Future<RpcString> checkHealth(RpcString message,
-      {RpcContext? context}) async {
+  Future<RpcString> checkHealth(
+    RpcString message, {
+    RpcContext? context,
+  }) async {
     final logger = RpcLogger('CheckHealth');
     logger.info('🔧 Проверка здоровья: ${message.value}');
     logger.info('🔍 Context: $context');
@@ -208,8 +219,10 @@ final class MultiServiceResponder extends RpcResponderContract
   }
 
   @override
-  Future<RpcString> longOperation(RpcString message,
-      {RpcContext? context}) async {
+  Future<RpcString> longOperation(
+    RpcString message, {
+    RpcContext? context,
+  }) async {
     final logger = RpcLogger('LongOperation');
     logger.info('🔧 Начинаем долгую операцию: ${message.value}');
     logger.info('🔍 Context: $context');
