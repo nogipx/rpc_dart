@@ -1,0 +1,150 @@
+---
+title: Testing & Tooling
+description: Build reliable suites for services powered by RPC Dart.
+---
+
+Testing RPC services should be as frictionless as testing regular functions.
+RPC Dart exposes utilities and patterns that make it simple to exercise
+contracts, transports, and streaming logic in isolation or end-to-end.
+
+## In-memory end-to-end tests
+
+`RpcInMemoryTransport.pair()` produces a connected client/server transport with
+zero serialisation overhead. It is the quickest way to run integration tests.
+
+```dart
+final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+
+final responder = RpcResponderEndpoint(transport: serverTransport)
+  ..registerServiceContract(CalculatorResponder())
+  ..start();
+
+final caller = RpcCallerEndpoint(transport: clientTransport);
+final calculator = CalculatorCaller(caller);
+
+expect(await calculator.add(AddRequest(1, 2)), isA<AddResponse>());
+```
+
+Because data is passed by reference you can assert on complex object identity or
+mutations without dealing with serialisation noise.
+
+## Controlling context during tests
+
+`RpcContextBuilder` helps you craft trace IDs, deadlines, and metadata for your
+scenarios:
+
+```dart
+final ctx = RpcContextBuilder()
+    .withHeader('x-test-case', 'retry-path')
+    .withTimeout(const Duration(milliseconds: 200))
+    .build();
+
+await calculator.add(AddRequest(1, 2), context: ctx);
+```
+
+Use `RpcContext.sanitize` before snapshotting contexts in golden tests to strip
+sensitive headers such as API keys.
+
+## Inspecting transport state
+
+Expose `RpcEndpointHealth` in assertions to guarantee transports remain healthy
+throughout the test:
+
+```dart
+final report = await caller.health();
+expect(report.endpointStatus.level, RpcHealthLevel.healthy);
+expect(report.transportStatus?.details['activeStreams'], equals(0));
+```
+
+Pair this with `caller.ping()` when you need deterministic latency expectations
+or to verify that routers point to the right downstream service.
+
+## Testing streaming behaviour
+
+Streams are first-class citizens in the testing story. Use `expectLater` with the
+Dart `Stream` API to assert on emitted events, errors, and completion:
+
+```dart
+final updates = chat.joinRoom('general', 'u-1');
+expectLater(
+  updates,
+  emitsInOrder([
+    predicate<ChatMessage>((m) => m.type == MessageType.joined),
+    emitsDone,
+  ]),
+);
+```
+
+`StreamDistributor` provides metrics that you can assert against to confirm that
+cleanup logic works as expected:
+
+```dart
+final distributor = StreamDistributor<ChatMessage>();
+final stream = distributor.createClientStreamWithId('test');
+final subscription = stream.listen((_) {});
+
+distributor.publish(ChatMessage('hello'));
+expect(distributor.metrics.totalMessages, 1);
+await subscription.cancel();
+```
+
+## Faking transports
+
+When you need to simulate edge cases (packet loss, reconnection, buffering)
+extend `RpcBaseTransport` in tests. The base class already handles stream ID
+management and incoming message dispatch, so you only implement the behaviour
+under test.
+
+```dart
+class FlakyTransport extends RpcBaseTransport {
+  FlakyTransport() : super(isClient: true);
+
+  bool dropNextMessage = false;
+
+  @override
+  Future<void> sendMessage(int streamId, Uint8List data, {bool endStream = false}) async {
+    if (dropNextMessage) {
+      dropNextMessage = false;
+      return; // simulate packet loss
+    }
+    addIncomingMessage(RpcTransportMessage.withPayload(
+      payload: data,
+      streamId: streamId,
+      isEndOfStream: endStream,
+    ));
+  }
+
+  @override
+  Future<void> sendMetadata(int streamId, RpcMetadata metadata, {bool endStream = false}) async {}
+
+  @override
+  Future<void> finishSending(int streamId) async {}
+}
+```
+
+Combine flaky transports with the real endpoints to exercise retry logic and
+error handling paths.
+
+## Leveraging logging in tests
+
+Inject a custom logger via `RpcLogger.setLoggerFactory` that records messages in
+memory. This lets you assert on emitted diagnostics without relying on stdout.
+
+```dart
+final events = <String>[];
+RpcLogger.setLoggerFactory((name, {colors, label, context}) {
+  return InMemoryLogger(name, onLog: events.add);
+});
+```
+
+## Automation tips
+
+- Add a `just` recipe or `dart test --platform vm` command to CI that runs your
+  suites with `--run-skipped` to surface quarantined tests early.
+- Run `dart run benchmark/benchmark.dart` inside `packages/rpc_dart` to
+  stress-test zero-copy code paths and compare codec performance.
+- Capture `RpcContext` snapshots on failure to speed up debugging of distributed
+  workflows.
+
+With these patterns your RPC services stay easy to verify, refactor, and extend
+as new requirements arrive.

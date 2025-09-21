@@ -88,18 +88,19 @@ responder.start();
 ### Пример транспорта
 
 ```dart
+import 'package:rpc_dart_transports/rpc_dart_transports.dart';
+
 // Разработка/Тестирование
 final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-// Продакшн HTTP
-final httpTransport = RpcHttpTransport(
-  url: 'https://api.example.com',
-  timeout: Duration(seconds: 30),
+// Продакшн HTTP/2 (внутри async-функции)
+final httpTransport = await RpcHttp2CallerTransport.secureConnect(
+  host: 'api.example.com',
 );
 
 // Реальное время WebSocket
-final wsTransport = RpcWebSocketTransport(
-  url: 'wss://api.example.com/rpc',
+final wsTransport = RpcWebSocketCallerTransport.connect(
+  Uri.parse('wss://api.example.com/rpc'),
 );
 ```
 
@@ -122,19 +123,20 @@ RPC Контекст переносит дополнительную инфор�
 // Серверная сторона - доступ к контексту
 Future<AddResponse> _add(AddRequest request, {RpcContext? context}) async {
   final correlationId = context?.correlationId;
-  final userAgent = context?.metadata['user-agent'];
-  
+  final userAgent = context?.getHeader('user-agent');
+
   if (context?.isCancelled ?? false) {
     throw RpcException('Запрос был отменён');
   }
-  
+
   return AddResponse(request.a + request.b);
 }
 
 // Клиентская сторона - передача метаданных
-final context = RpcContext()
-  ..metadata['user-agent'] = 'MyApp/1.0'
-  ..deadline = DateTime.now().add(Duration(seconds: 5));
+final context = RpcContextBuilder()
+    .withHeader('user-agent', 'MyApp/1.0')
+    .withTimeout(const Duration(seconds: 5))
+    .build();
 
 final result = await calculator.add(
   AddRequest(5, 3),
@@ -256,19 +258,36 @@ RPC Dart поддерживает middleware для сквозных задач:
 
 ```dart
 // Middleware логирования
-class LoggingMiddleware extends RpcMiddleware {
+class LoggingMiddleware implements IRpcMiddleware {
   @override
-  Future<T> call<T>(RpcCall call, RpcNext next) async {
-    print('Вызов ${call.method}');
-    final result = await next(call);
-    print('Завершён ${call.method}');
-    return result;
+  Future<dynamic> processRequest(
+    String serviceName,
+    String methodName,
+    dynamic request,
+  ) async {
+    print('Вызов $serviceName.$methodName');
+    return request;
+  }
+
+  @override
+  Future<dynamic> processResponse(
+    String serviceName,
+    String methodName,
+    dynamic response,
+  ) async {
+    print('Завершён $serviceName.$methodName');
+    return response;
   }
 }
 
-// Регистрация middleware
+// Регистрация middleware (для запуска хуков расширьте эндпоинт)
 responder.addMiddleware(LoggingMiddleware());
 ```
+
+> **Примечание.** Базовые эндпоинты хранят зарегистрированные middleware и
+> отображают их количество в диагностике. Чтобы запускать хуки до/после
+> обработчиков уже сейчас, расширьте эндпоинт и вызовите
+> `processRequest`/`processResponse` вручную.
 
 ## Лучшие практики
 
@@ -299,5 +318,5 @@ responder.addMiddleware(LoggingMiddleware());
 
 - [Архитектура](/ru/architecture) - Изучите паттерны архитектуры CORD
 - [Типы транспортов](/ru/transports/inmemory) - Глубокое погружение в доступные транспорты
-- [Типы RPC](/ru/rpc-types/unary) - Подробные примеры каждого паттерна RPC
-- [Тестирование](/ru/testing) - Лучшие практики тестирования RPC приложений
+- [Паттерны стриминга](/guides/streaming-patterns) - Подробные примеры каждого паттерна RPC
+- [Тестирование и инструменты](/guides/testing-and-debugging) - Лучшие практики тестирования RPC приложений

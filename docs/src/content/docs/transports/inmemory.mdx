@@ -570,8 +570,10 @@ class HybridApplication {
     final (cacheClient, cacheServer) = RpcInMemoryTransport.pair();
     setupCacheService(cacheServer);
     
-    // External API communication
-    final httpTransport = RpcHttpTransport(url: 'https://api.external.com');
+    // External API communication over HTTP/2
+    final httpTransport = await RpcHttp2CallerTransport.secureConnect(
+      host: 'api.external.com',
+    );
     setupExternalApiClient(httpTransport);
   }
 }
@@ -629,8 +631,10 @@ When you need to scale beyond a single process:
 // Development with InMemory
 final (client, server) = RpcInMemoryTransport.pair();
 
-// Production with HTTP
-final httpTransport = RpcHttpTransport(url: 'https://api.production.com');
+// Production with HTTP/2
+final httpTransport = await RpcHttp2CallerTransport.secureConnect(
+  host: 'api.production.com',
+);
 
 // Same service code works with both!
 final calculator = CalculatorCaller(RpcCallerEndpoint(transport: httpTransport));
