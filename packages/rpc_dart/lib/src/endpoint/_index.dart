@@ -87,7 +87,7 @@ final class RpcEndpointPingResult {
   /// Все заголовки ответа в удобном для чтения формате.
   final Map<String, String> responseHeaders;
 
-  const RpcEndpointPingResult({
+  RpcEndpointPingResult({
     required this.sentAt,
     required this.receivedAt,
     required this.roundTrip,

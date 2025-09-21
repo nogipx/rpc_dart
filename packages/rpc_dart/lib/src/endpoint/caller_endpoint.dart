@@ -117,7 +117,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     final completer = Completer<RpcEndpointPingResult>();
     StreamSubscription<RpcTransportMessage>? subscription;
 
-    Map<String, String> _metadataToMap(RpcMetadata metadata) {
+    Map<String, String> metadataToMap(RpcMetadata metadata) {
       final map = <String, String>{};
       for (final header in metadata.headers) {
         map[header.name] = header.value;
@@ -143,7 +143,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
           return;
         }
 
-        final headersMap = _metadataToMap(message.metadata!);
+        final headersMap = metadataToMap(message.metadata!);
 
         if (!headersMap.containsKey(RpcConstants.GRPC_STATUS_HEADER)) {
           logger.internal(
@@ -222,7 +222,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       await transport.sendMetadata(streamId, metadata);
       await transport.finishSending(streamId);
     } catch (error, stackTrace) {
-      await subscription?.cancel();
+      await subscription.cancel();
       logger.error(
         'Ошибка при отправке ping [streamId: $streamId]',
         error: error,
@@ -250,7 +250,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     try {
       return await future;
     } finally {
-      await subscription?.cancel();
+      await subscription.cancel();
     }
   }
 

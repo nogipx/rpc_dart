@@ -304,7 +304,7 @@ final class RpcStreamIdManager {
     final recycledId = _findReusableId();
     if (recycledId == null) {
       throw RpcException(
-        'Все ${_sideLabel} Stream ID заняты. '
+        'Все $_sideLabel Stream ID заняты. '
         'Дождитесь завершения активных потоков или установите новое соединение.',
       );
     }
