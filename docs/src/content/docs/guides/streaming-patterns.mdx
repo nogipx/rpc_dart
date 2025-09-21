@@ -39,7 +39,7 @@ class ChatContract extends RpcResponderContract {
       handler: _joinRoom,
     );
 
-    addBidirectionalStreamMethod<ClientEvent, ChatMessage>(
+    addBidirectionalMethod<ClientEvent, ChatMessage>(
       methodName: 'LiveChat',
       handler: _liveChat,
     );
@@ -103,7 +103,8 @@ class ChatCaller extends RpcCallerContract {
 ## Managing server-side fan-out with StreamDistributor
 
 `StreamDistributor<T>` simplifies building broadcast or multi-subscriber
-channels on top of streaming RPCs.
+channels on top of streaming RPCs. Declare events that implement
+`IRpcSerializable` so they work with both zero-copy and codec-based transports.
 
 ```dart
 final distributor = StreamDistributor<ChatMessage>();
@@ -124,7 +125,7 @@ Key capabilities:
 
 - Automatic cleanup of inactive client streams.
 - Targeted delivery via `publishFiltered` to specific clients.
-- Metrics via `distributor.metrics` (active clients, total messages, throughput).
+- Metrics via `distributor.metrics` (total/current streams, total messages, average message size).
 - Optional logging hooks for visibility.
 
 ## Testing streaming logic

@@ -141,8 +141,8 @@ RpcLogger.setLoggerFactory((name, {colors, label, context}) {
 
 - Add a `just` recipe or `dart test --platform vm` command to CI that runs your
   suites with `--run-skipped` to surface quarantined tests early.
-- Use the `benchmark` package within this repo to stress-test zero-copy code
-  paths and compare codec performance.
+- Run `dart run benchmark/benchmark.dart` inside `packages/rpc_dart` to
+  stress-test zero-copy code paths and compare codec performance.
 - Capture `RpcContext` snapshots on failure to speed up debugging of distributed
   workflows.
 

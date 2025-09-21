@@ -570,8 +570,10 @@ class HybridApplication {
     final (cacheClient, cacheServer) = RpcInMemoryTransport.pair();
     setupCacheService(cacheServer);
     
-    // Внешняя API коммуникация
-    final httpTransport = RpcHttpTransport(url: 'https://api.external.com');
+    // Внешняя API коммуникация через HTTP/2
+    final httpTransport = await RpcHttp2CallerTransport.secureConnect(
+      host: 'api.external.com',
+    );
     setupExternalApiClient(httpTransport);
   }
 }
@@ -629,8 +631,10 @@ final result = await calculator.add(MathRequest(10, 5));
 // Разработка с InMemory
 final (client, server) = RpcInMemoryTransport.pair();
 
-// Продакшн с HTTP
-final httpTransport = RpcHttpTransport(url: 'https://api.production.com');
+// Продакшн с HTTP/2
+final httpTransport = await RpcHttp2CallerTransport.secureConnect(
+  host: 'api.production.com',
+);
 
 // Тот же код сервиса работает с обоими!
 final calculator = CalculatorCaller(RpcCallerEndpoint(transport: httpTransport));

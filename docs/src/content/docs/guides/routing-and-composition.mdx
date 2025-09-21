@@ -80,23 +80,30 @@ can expose it through an RPC method while reusing the same infrastructure for
 internal subscribers.
 
 ```dart
-final distributor = StreamDistributor<EventNotification>();
+final distributor = StreamDistributor<RpcString>();
 
 class NotificationResponder extends RpcResponderContract {
   NotificationResponder() : super('Notifications');
 
   @override
   void setup() {
-    addServerStreamMethod<SubscribeRequest, EventNotification>(
+    addServerStreamMethod<RpcString, RpcString>(
       methodName: 'Subscribe',
-      handler: (request, {context}) {
-        return distributor.getOrCreateClientStream(request.clientId);
-      },
+      handler: _subscribe,
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
     );
   }
 
-  void publish(EventNotification notification) {
+  void publish(RpcString notification) {
     distributor.publish(notification);
+  }
+
+  Stream<RpcString> _subscribe(
+    RpcString request, {
+    RpcContext? context,
+  }) {
+    return distributor.getOrCreateClientStream(request.value);
   }
 }
 ```
@@ -117,8 +124,9 @@ throughout.
 - Call `router.health()` to inspect the state of each underlying transport.
 - Register middleware on caller endpoints to tag requests with routing decisions
   (for example `x-routed-by: websocket`).
-- Combine `StreamDistributor.metrics` with transport diagnostics to monitor fan
-  out and subscriber churn.
+- Combine `StreamDistributor.metrics` (total/current streams, total messages,
+  average message size) with transport diagnostics to monitor fan out and
+  subscriber churn.
 
 With routing and composition primitives you can evolve system architecture
 without rewriting the RPC layer, making RPC Dart a long-term foundation for your

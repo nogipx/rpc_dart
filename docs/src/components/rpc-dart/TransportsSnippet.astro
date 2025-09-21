@@ -4,28 +4,23 @@ import { Code } from '@astrojs/starlight/components';
 const code = `
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
-void main() async {
-  // WebSocket транспорт
-  final wsTransport = RpcWebSocketTransport(
-    uri: Uri.parse('ws://localhost:8080/rpc'),
+Future<void> main() async {
+  // WebSocket transport (client side)
+  final wsTransport = RpcWebSocketCallerTransport.connect(
+    Uri.parse('ws://localhost:8080/rpc'),
   );
-  await wsTransport.connect();
-  
-  // HTTP/2 транспорт
-  final http2Transport = RpcHttp2Transport(
-    baseUrl: 'https://api.example.com',
-    headers: {'Authorization': 'Bearer \$token'},
+
+  // HTTP/2 transport for production APIs
+  final httpTransport = await RpcHttp2CallerTransport.secureConnect(
+    host: 'api.example.com',
   );
-  await http2Transport.connect();
-  
-  // Isolate транспорт для межизолированной связи
-  final isolateTransport = RpcIsolateTransport();
-  await isolateTransport.connect();
-  
-  // Использование с RPC endpoint
+
+  // In-memory transport for tests or co-located services
+  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+
   final caller = RpcCallerEndpoint(transport: wsTransport);
   final calculator = CalculatorCaller(caller);
-  
+
   final result = await calculator.add(AddRequest(a: 1, b: 2));
   print('Result: \${result.result}');
 }

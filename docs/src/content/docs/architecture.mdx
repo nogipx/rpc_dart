@@ -116,14 +116,23 @@ final user = await userService.getUser(userId);
 The transport layer handles message delivery between endpoints:
 
 ```dart
-abstract class RpcTransport {
-  Stream<RpcMessage> get messageStream;
-  Future<void> sendMessage(RpcMessage message);
+abstract class IRpcTransport {
+  bool get isClient;
+  bool get supportsZeroCopy;
+  int createStream();
+  Future<void> sendMetadata(int streamId, RpcMetadata metadata, {bool endStream = false});
+  Future<void> sendMessage(int streamId, Uint8List data, {bool endStream = false});
+  Future<void> sendDirectObject(int streamId, Object object, {bool endStream = false});
+  Stream<RpcTransportMessage> get incomingMessages;
+  Future<void> finishSending(int streamId);
   Future<void> close();
+  Future<RpcHealthStatus> health();
+  Future<RpcHealthStatus> reconnect();
 }
 ```
 
-This abstraction allows switching between different transport implementations without changing application code.
+This matches the production interface exposed by RPC Dart and lets you swap
+transports without rewriting callers or responders.
 
 ## Design Patterns
 
@@ -175,25 +184,17 @@ class CalculatorCaller extends RpcCallerContract {
 For complex applications, you can route different services through different transports:
 
 ```dart
-final router = RpcTransportRouter();
-
-// Route UserService through HTTP
-router.addRoute(
-  serviceName: 'UserService',
-  transport: httpTransport,
-);
-
-// Route NotificationService through WebSocket
-router.addRoute(
-  serviceName: 'NotificationService', 
-  transport: webSocketTransport,
-);
-
-// Route internal services through InMemory
-router.addRoute(
-  serviceName: 'CacheService',
-  transport: inMemoryTransport,
-);
+final router = RpcTransportRouterBuilder.client()
+    .routeCall(calledServiceName: 'UserService', toTransport: httpTransport)
+    .routeCall(
+      calledServiceName: 'NotificationService',
+      toTransport: webSocketTransport,
+    )
+    .routeCall(
+      calledServiceName: 'CacheService',
+      toTransport: inMemoryTransport,
+    )
+    .build();
 
 final caller = RpcCallerEndpoint(transport: router);
 ```
@@ -203,37 +204,29 @@ final caller = RpcCallerEndpoint(transport: router);
 Implement cross-cutting concerns using middleware:
 
 ```dart
-class AuthenticationMiddleware extends RpcMiddleware {
+class LoggingMiddleware implements IRpcMiddleware {
   @override
-  Future<T> call<T>(RpcCall call, RpcNext next) async {
-    // Check authentication
-    final token = call.context?.metadata['auth-token'];
-    if (token == null || !isValidToken(token)) {
-      throw RpcException(code: 'UNAUTHORIZED');
-    }
-    
-    return next(call);
+  Future<dynamic> processRequest(
+    String serviceName,
+    String methodName,
+    dynamic request,
+  ) async {
+    log('Calling $serviceName.$methodName');
+    return request;
+  }
+
+  @override
+  Future<dynamic> processResponse(
+    String serviceName,
+    String methodName,
+    dynamic response,
+  ) async {
+    log('Completed $serviceName.$methodName');
+    return response;
   }
 }
 
-class LoggingMiddleware extends RpcMiddleware {
-  @override
-  Future<T> call<T>(RpcCall call, RpcNext next) async {
-    final start = DateTime.now();
-    try {
-      final result = await next(call);
-      final duration = DateTime.now().difference(start);
-      log('${call.service}.${call.method} completed in ${duration.inMilliseconds}ms');
-      return result;
-    } catch (e) {
-      log('${call.service}.${call.method} failed: $e');
-      rethrow;
-    }
-  }
-}
-
-// Register middleware
-responder.addMiddleware(AuthenticationMiddleware());
+// Register middleware (extend the endpoints to invoke hooks around handlers)
 responder.addMiddleware(LoggingMiddleware());
 ```
 
@@ -359,23 +352,29 @@ class LargeDataService extends RpcResponderContract {
 Network transports automatically handle serialization:
 
 ```dart
-// Uses CBOR encoding for efficient serialization
-final httpTransport = RpcHttpTransport(
-  url: 'https://api.example.com',
-  codec: CborCodec(), // Efficient binary encoding
+// Provide codecs when you register methods for network transports
+addUnaryMethod<MyRequest, MyResponse>(
+  methodName: 'Process',
+  handler: _process,
+  requestCodec: RpcCodec(MyRequest.fromJson),
+  responseCodec: RpcCodec(MyResponse.fromJson),
 );
 ```
 
-### 3. Connection Pooling
+### 3. Connection management
 
-HTTP transport includes connection pooling:
+`RpcHttp2CallerTransport` keeps a single multiplexed HTTP/2 connection alive and
+exposes health/reconnect hooks:
 
 ```dart
-final httpTransport = RpcHttpTransport(
-  url: 'https://api.example.com',
-  maxConnections: 10,
-  keepAlive: true,
+final httpTransport = await RpcHttp2CallerTransport.secureConnect(
+  host: 'api.example.com',
 );
+
+final status = await httpTransport.health();
+if (!status.isHealthy) {
+  await httpTransport.reconnect();
+}
 ```
 
 ## Scalability Patterns
@@ -406,7 +405,9 @@ abstract interface class INotificationServiceContract {
 
 ### 2. Transport Selection by Service
 
-Use appropriate transports for different service types:
+Use appropriate transports for different service types (for example
+`httpTransport` from `RpcHttp2CallerTransport.secureConnect` and
+`webSocketTransport` from `RpcWebSocketCallerTransport.connect`):
 
 ```dart
 // Real-time services use WebSocket
@@ -425,21 +426,12 @@ final cacheService = CacheServiceCaller(
 );
 ```
 
-### 3. Load Balancing
+### 3. Load balancing
 
-Distribute load across multiple service instances:
-
-```dart
-final loadBalancer = RpcLoadBalancingTransport([
-  RpcHttpTransport(url: 'https://api1.example.com'),
-  RpcHttpTransport(url: 'https://api2.example.com'),
-  RpcHttpTransport(url: 'https://api3.example.com'),
-]);
-
-final userService = UserServiceCaller(
-  RpcCallerEndpoint(transport: loadBalancer)
-);
-```
+Use multiple transports together with `RpcTransportRouter` or build a custom
+transport by extending `RpcBaseTransport`. You can rotate between several
+`RpcHttp2CallerTransport` instances or route based on metadata such as tenant ID
+and latency.
 
 ## Testing Architecture
 

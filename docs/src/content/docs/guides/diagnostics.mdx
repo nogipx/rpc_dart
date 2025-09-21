@@ -82,7 +82,7 @@ Use `RpcLoggerColors` to differentiate client and server logs in the terminal:
 ```dart
 final callerLogger = RpcLogger(
   'CheckoutCaller',
-  colors: RpcLoggerColors.clientPalette(),
+  colors: const RpcLoggerColors.bright(),
 );
 callerLogger.debug('Prepared context', data: context.headers);
 ```

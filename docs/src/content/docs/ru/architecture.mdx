@@ -116,14 +116,23 @@ final user = await userService.getUser(userId);
 Слой транспорта обрабатывает доставку сообщений между эндпоинтами:
 
 ```dart
-abstract class RpcTransport {
-  Stream<RpcMessage> get messageStream;
-  Future<void> sendMessage(RpcMessage message);
+abstract class IRpcTransport {
+  bool get isClient;
+  bool get supportsZeroCopy;
+  int createStream();
+  Future<void> sendMetadata(int streamId, RpcMetadata metadata, {bool endStream = false});
+  Future<void> sendMessage(int streamId, Uint8List data, {bool endStream = false});
+  Future<void> sendDirectObject(int streamId, Object object, {bool endStream = false});
+  Stream<RpcTransportMessage> get incomingMessages;
+  Future<void> finishSending(int streamId);
   Future<void> close();
+  Future<RpcHealthStatus> health();
+  Future<RpcHealthStatus> reconnect();
 }
 ```
 
-Эта абстракция позволяет переключаться между различными реализациями транспорта без изменения кода приложения.
+Такой контракт реализован в RPC Dart и позволяет заменять транспорты без
+изменения бизнес-логики.
 
 ## Паттерны проектирования
 
@@ -175,25 +184,17 @@ class CalculatorCaller extends RpcCallerContract {
 Для сложных приложений вы можете маршрутизировать различные сервисы через разные транспорты:
 
 ```dart
-final router = RpcTransportRouter();
-
-// Маршрутизируем UserService через HTTP
-router.addRoute(
-  serviceName: 'UserService',
-  transport: httpTransport,
-);
-
-// Маршрутизируем NotificationService через WebSocket
-router.addRoute(
-  serviceName: 'NotificationService', 
-  transport: webSocketTransport,
-);
-
-// Маршрутизируем внутренние сервисы через InMemory
-router.addRoute(
-  serviceName: 'CacheService',
-  transport: inMemoryTransport,
-);
+final router = RpcTransportRouterBuilder.client()
+    .routeCall(calledServiceName: 'UserService', toTransport: httpTransport)
+    .routeCall(
+      calledServiceName: 'NotificationService',
+      toTransport: webSocketTransport,
+    )
+    .routeCall(
+      calledServiceName: 'CacheService',
+      toTransport: inMemoryTransport,
+    )
+    .build();
 
 final caller = RpcCallerEndpoint(transport: router);
 ```
@@ -203,39 +204,36 @@ final caller = RpcCallerEndpoint(transport: router);
 Реализуйте сквозные задачи с помощью middleware:
 
 ```dart
-class AuthenticationMiddleware extends RpcMiddleware {
+class LoggingMiddleware implements IRpcMiddleware {
   @override
-  Future<T> call<T>(RpcCall call, RpcNext next) async {
-    // Проверяем аутентификацию
-    final token = call.context?.metadata['auth-token'];
-    if (token == null || !isValidToken(token)) {
-      throw RpcException(code: 'UNAUTHORIZED');
-    }
-    
-    return next(call);
+  Future<dynamic> processRequest(
+    String serviceName,
+    String methodName,
+    dynamic request,
+  ) async {
+    log('Вызов $serviceName.$methodName');
+    return request;
+  }
+
+  @override
+  Future<dynamic> processResponse(
+    String serviceName,
+    String methodName,
+    dynamic response,
+  ) async {
+    log('Завершён $serviceName.$methodName');
+    return response;
   }
 }
 
-class LoggingMiddleware extends RpcMiddleware {
-  @override
-  Future<T> call<T>(RpcCall call, RpcNext next) async {
-    final start = DateTime.now();
-    try {
-      final result = await next(call);
-      final duration = DateTime.now().difference(start);
-      log('${call.service}.${call.method} завершён за ${duration.inMilliseconds}мс');
-      return result;
-    } catch (e) {
-      log('${call.service}.${call.method} неудачно: $e');
-      rethrow;
-    }
-  }
-}
-
-// Регистрируем middleware
-responder.addMiddleware(AuthenticationMiddleware());
+// Регистрируем middleware (для запуска хуков расширьте эндпоинты)
 responder.addMiddleware(LoggingMiddleware());
 ```
+
+> **Примечание.** Базовые эндпоинты хранят зарегистрированные middleware и
+> отображают их количество в диагностике. Чтобы выполнять логику до/после
+> обработчиков, расширьте эндпоинт и вызовите `processRequest`/`processResponse`
+> вручную.
 
 ## Поток сообщений
 
@@ -359,23 +357,29 @@ class LargeDataService extends RpcResponderContract {
 Сетевые транспорты автоматически обрабатывают сериализацию:
 
 ```dart
-// Использует CBOR кодирование для эффективной сериализации
-final httpTransport = RpcHttpTransport(
-  url: 'https://api.example.com',
-  codec: CborCodec(), // Эффективное бинарное кодирование
+// Для сетевых транспортов передавайте кодеки при регистрации методов
+addUnaryMethod<MyRequest, MyResponse>(
+  methodName: 'Process',
+  handler: _process,
+  requestCodec: RpcCodec(MyRequest.fromJson),
+  responseCodec: RpcCodec(MyResponse.fromJson),
 );
 ```
 
-### 3. Пулинг соединений
+### 3. Управление соединением
 
-HTTP транспорт включает пулинг соединений:
+`RpcHttp2CallerTransport` поддерживает одно мультиплексированное соединение и
+экспонирует health/reconnect-хуки:
 
 ```dart
-final httpTransport = RpcHttpTransport(
-  url: 'https://api.example.com',
-  maxConnections: 10,
-  keepAlive: true,
+final httpTransport = await RpcHttp2CallerTransport.secureConnect(
+  host: 'api.example.com',
 );
+
+final status = await httpTransport.health();
+if (!status.isHealthy) {
+  await httpTransport.reconnect();
+}
 ```
 
 ## Паттерны масштабируемости
@@ -406,7 +410,9 @@ abstract interface class INotificationServiceContract {
 
 ### 2. Выбор транспорта по сервису
 
-Используйте подходящие транспорты для разных типов сервисов:
+Используйте подходящие транспорты для разных типов сервисов (например
+`httpTransport`, созданный через `RpcHttp2CallerTransport.secureConnect`, и
+`webSocketTransport`, созданный через `RpcWebSocketCallerTransport.connect`):
 
 ```dart
 // Сервисы реального времени используют WebSocket
@@ -427,19 +433,10 @@ final cacheService = CacheServiceCaller(
 
 ### 3. Балансировка нагрузки
 
-Распределяйте нагрузку между несколькими экземплярами сервиса:
-
-```dart
-final loadBalancer = RpcLoadBalancingTransport([
-  RpcHttpTransport(url: 'https://api1.example.com'),
-  RpcHttpTransport(url: 'https://api2.example.com'),
-  RpcHttpTransport(url: 'https://api3.example.com'),
-]);
-
-final userService = UserServiceCaller(
-  RpcCallerEndpoint(transport: loadBalancer)
-);
-```
+Используйте несколько транспортов вместе с `RpcTransportRouter` или расширьте
+`RpcBaseTransport`, чтобы реализовать round-robin/health-check стратегию. Можно
+распределять вызовы между несколькими `RpcHttp2CallerTransport` или маршрутизировать
+по метаданным, таким как тариф или география.
 
 ## Архитектура тестирования
 
