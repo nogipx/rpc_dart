@@ -142,6 +142,101 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     return parts.join(' ');
   }
 
+  bool _isPingMethod(String serviceName, String methodName) {
+    return serviceName == RpcEndpointPingProtocol.serviceName &&
+        methodName == RpcEndpointPingProtocol.methodName;
+  }
+
+  bool _isPingMethodKey(String methodKey) =>
+      methodKey == RpcEndpointPingProtocol.methodKey;
+
+  void _handlePingRequest(int streamId, RpcContext context) {
+    unawaited(() async {
+      final responderTimestamp = DateTime.now().toUtc();
+
+      try {
+        await transport.sendMetadata(
+          streamId,
+          RpcMetadata.forServerInitialResponse(),
+        );
+
+        final responseHeaders = <RpcHeader>[
+          RpcHeader(
+            RpcEndpointPingProtocol.responseTimestampHeader,
+            responderTimestamp.toIso8601String(),
+          ),
+          RpcHeader(
+            RpcEndpointPingProtocol.responseTransportHeader,
+            transport.runtimeType.toString(),
+          ),
+          RpcHeader(
+            RpcConstants.GRPC_STATUS_HEADER,
+            RpcStatus.OK.toString(),
+          ),
+        ];
+
+        if (debugLabel != null && debugLabel!.isNotEmpty) {
+          responseHeaders.add(
+            RpcHeader(
+              RpcEndpointPingProtocol.responseDebugLabelHeader,
+              debugLabel!,
+            ),
+          );
+        }
+
+        await transport.sendMetadata(
+          streamId,
+          RpcMetadata(responseHeaders),
+          endStream: true,
+        );
+
+        _logWithContext(
+          'Ping обработан успешно',
+          context: context,
+          streamId: streamId,
+          methodKey: RpcEndpointPingProtocol.methodKey,
+        );
+      } catch (error, stackTrace) {
+        _logErrorWithContext(
+          'Ошибка при обработке ping',
+          context: context,
+          streamId: streamId,
+          methodKey: RpcEndpointPingProtocol.methodKey,
+          error: error,
+          stackTrace: stackTrace,
+        );
+
+        try {
+          await transport.sendMetadata(
+            streamId,
+            RpcMetadata([
+              RpcHeader(
+                RpcConstants.GRPC_STATUS_HEADER,
+                RpcStatus.INTERNAL.toString(),
+              ),
+              RpcHeader(
+                RpcConstants.GRPC_MESSAGE_HEADER,
+                'Ping handling error: $error',
+              ),
+            ]),
+            endStream: true,
+          );
+        } catch (sendError, sendStackTrace) {
+          _logErrorWithContext(
+            'Не удалось отправить ошибку ping',
+            context: context,
+            streamId: streamId,
+            methodKey: RpcEndpointPingProtocol.methodKey,
+            error: sendError,
+            stackTrace: sendStackTrace,
+          );
+        }
+      } finally {
+        _cleanupStream(streamId);
+      }
+    }());
+  }
+
   /// Получает контекст для stream ID (создает если нужно)
   RpcContext _getOrCreateContextForStream(int streamId) {
     final metadataMessage = _streamMetadata[streamId];
@@ -244,6 +339,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     if (message.isEndOfStream) {
       final methodKey = _streamMethods[streamId];
       if (methodKey != null) {
+        if (_isPingMethodKey(methodKey)) {
+          _logWithContext(
+            'Получен финальный фрейм ping',
+            context: _getOrCreateContextForStream(streamId),
+            streamId: streamId,
+            methodKey: methodKey,
+          );
+          // Очистка произойдет в _handlePingRequest после отправки ответа
+          return;
+        }
+
         final method = _methods[methodKey];
 
         // СПЕЦИАЛЬНАЯ ОБРАБОТКА для Client Streaming - создаем респондер ТОЛЬКО СЕЙЧАС
@@ -312,6 +418,22 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     // Создаем контекст из метаданных для логирования
     final context = _createContextFromMessage(message);
+
+    if (_isPingMethod(serviceName, methodName)) {
+      _logWithContext(
+        'Получен ping запрос',
+        context: context,
+        streamId: streamId,
+        methodKey: methodKey,
+      );
+
+      // Сохраняем информацию о потоке для корректной очистки и контекста
+      _streamMethods[streamId] = methodKey;
+      _streamMetadata[streamId] = message;
+
+      _handlePingRequest(streamId, context);
+      return;
+    }
 
     _logWithContext(
       'Получено сообщение метаданных',

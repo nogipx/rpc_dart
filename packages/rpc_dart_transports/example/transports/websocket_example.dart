@@ -11,7 +11,7 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// Пример: реальный WebSocket-сервер + клиент.
-/// Серверная часть: shelf_web_socket -> Stream<WebSocketChannel> -> RpcWebSocketServer.
+/// Серверная часть: shelf_web_socket -> Stream(WebSocketChannel) -> RpcWebSocketServer.
 /// Клиент: WebSocketChannel.connect -> RpcWebSocketCallerTransport.
 Future<void> main() async {
   // 1) Логирование

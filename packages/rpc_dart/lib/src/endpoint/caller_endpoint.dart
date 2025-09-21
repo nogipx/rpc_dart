@@ -43,6 +43,217 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     _validateClientTransport();
   }
 
+  /// Выполняет ping-запрос к responder эндпоинту и возвращает результат.
+  Future<RpcEndpointPingResult> ping({
+    Duration? timeout,
+    RpcContext? context,
+  }) async {
+    if (!isActive) {
+      throw StateError(
+        'RpcCallerEndpoint закрыт и не может выполнять ping',
+      );
+    }
+
+    if (transport.isClosed) {
+      throw StateError(
+        'Транспорт закрыт и не может отправлять ping',
+      );
+    }
+
+    final streamId = transport.createStream();
+    final sentAt = DateTime.now().toUtc();
+
+    logger.internal('Подготовка ping запроса [streamId: $streamId]');
+
+    final baseContext = _ensureContext(context);
+    final routingContext = baseContext.withAdditionalHeaders({
+      'x-route-service': RpcEndpointPingProtocol.serviceName,
+    });
+
+    // Проверяем отмену и deadline до отправки ping.
+    routingContext.cancellationToken?.throwIfCancelled();
+    if (routingContext.isExpired) {
+      throw RpcDeadlineExceededException(
+        routingContext.deadline!,
+        Duration.zero,
+      );
+    }
+
+    final baseMetadata = RpcMetadata.forClientRequest(
+      RpcEndpointPingProtocol.serviceName,
+      RpcEndpointPingProtocol.methodName,
+    );
+
+    final headers = List<RpcHeader>.from(baseMetadata.headers);
+
+    for (final entry in routingContext.headers.entries) {
+      headers.add(RpcHeader(entry.key, entry.value));
+    }
+
+    if (routingContext.traceId != null) {
+      headers.add(RpcHeader('x-trace-id', routingContext.traceId!));
+    }
+
+    headers.add(RpcHeader('x-request-id', routingContext.requestId));
+
+    if (routingContext.deadline != null) {
+      headers.add(
+        RpcHeader(
+          'x-deadline',
+          routingContext.deadline!.millisecondsSinceEpoch.toString(),
+        ),
+      );
+    }
+
+    headers.add(
+      RpcHeader(
+        RpcEndpointPingProtocol.requestTimestampHeader,
+        sentAt.toIso8601String(),
+      ),
+    );
+
+    final metadata = RpcMetadata(headers);
+
+    final completer = Completer<RpcEndpointPingResult>();
+    StreamSubscription<RpcTransportMessage>? subscription;
+
+    Map<String, String> metadataToMap(RpcMetadata metadata) {
+      final map = <String, String>{};
+      for (final header in metadata.headers) {
+        map[header.name] = header.value;
+      }
+      return map;
+    }
+
+    void completeSuccess(RpcEndpointPingResult result) {
+      if (!completer.isCompleted) {
+        completer.complete(result);
+      }
+    }
+
+    void completeError(Object error, [StackTrace? stackTrace]) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stackTrace);
+      }
+    }
+
+    subscription = transport.getMessagesForStream(streamId).listen(
+      (message) {
+        if (!message.isMetadataOnly || message.metadata == null) {
+          return;
+        }
+
+        final headersMap = metadataToMap(message.metadata!);
+
+        if (!headersMap.containsKey(RpcConstants.GRPC_STATUS_HEADER)) {
+          logger.internal(
+            'Получены начальные метаданные ответа ping [streamId: $streamId]',
+          );
+          return;
+        }
+
+        final statusCode = int.tryParse(
+              headersMap[RpcConstants.GRPC_STATUS_HEADER] ?? '',
+            ) ??
+            RpcStatus.UNKNOWN;
+
+        final receivedAt = DateTime.now().toUtc();
+
+        if (statusCode != RpcStatus.OK) {
+          final statusMessage =
+              headersMap[RpcConstants.GRPC_MESSAGE_HEADER] ?? 'Unknown error';
+          logger.warning(
+            'Ping завершился с ошибкой: status=$statusCode, message=$statusMessage [streamId: $streamId]',
+          );
+          completeError(
+            RpcException(
+              'Ping failed with status $statusCode: $statusMessage',
+            ),
+          );
+          return;
+        }
+
+        DateTime? responderTimestamp;
+        final responderTimestampRaw =
+            headersMap[RpcEndpointPingProtocol.responseTimestampHeader];
+        if (responderTimestampRaw != null) {
+          responderTimestamp = DateTime.tryParse(responderTimestampRaw);
+        }
+
+        final result = RpcEndpointPingResult(
+          sentAt: sentAt,
+          receivedAt: receivedAt,
+          roundTrip: receivedAt.difference(sentAt),
+          responderTimestamp: responderTimestamp,
+          responderDebugLabel:
+              headersMap[RpcEndpointPingProtocol.responseDebugLabelHeader],
+          responderTransportType:
+              headersMap[RpcEndpointPingProtocol.responseTransportHeader],
+          responseHeaders: headersMap,
+        );
+
+        logger.internal(
+          'Ping успешно завершен, RTT=${result.roundTrip.inMilliseconds}мс [streamId: $streamId]',
+        );
+
+        completeSuccess(result);
+      },
+      onError: (error, stackTrace) {
+        logger.error(
+          'Ошибка при получении ответа ping [streamId: $streamId]',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        completeError(error, stackTrace);
+      },
+      onDone: () {
+        if (!completer.isCompleted) {
+          completeError(
+            StateError(
+              'Ping stream завершен без трейлеров [streamId: $streamId]',
+            ),
+          );
+        }
+      },
+    );
+
+    try {
+      logger.internal('Отправка ping запроса [streamId: $streamId]');
+      await transport.sendMetadata(streamId, metadata);
+      await transport.finishSending(streamId);
+    } catch (error, stackTrace) {
+      await subscription.cancel();
+      logger.error(
+        'Ошибка при отправке ping [streamId: $streamId]',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+
+    Future<RpcEndpointPingResult> future = completer.future;
+
+    if (timeout != null) {
+      future = future.timeout(
+        timeout,
+        onTimeout: () {
+          logger.warning(
+            'Ping превысил время ожидания ${timeout.inMilliseconds}мс [streamId: $streamId]',
+          );
+          throw TimeoutException(
+            'Ping не завершился за ${timeout.inMilliseconds}мс',
+          );
+        },
+      );
+    }
+
+    try {
+      return await future;
+    } finally {
+      await subscription.cancel();
+    }
+  }
+
   /// Создает ключ для реестра токенов из имени сервиса и метода
   String _createMethodKey(String serviceName, String methodName) {
     return '$serviceName/$methodName';

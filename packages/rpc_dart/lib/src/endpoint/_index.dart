@@ -37,6 +37,67 @@ final class RpcEndpointHealth {
   RpcHealthStatus? get transportStatus => dependencies['transport'];
 }
 
+/// Константы и метаданные протокола ping между эндпоинтами.
+abstract final class RpcEndpointPingProtocol {
+  /// Имя служебного сервиса для ping запросов.
+  static const String serviceName = '_rpc.System';
+
+  /// Имя служебного метода для ping запросов.
+  static const String methodName = 'Ping';
+
+  /// Полный ключ метода (service.method).
+  static const String methodKey = '$serviceName.$methodName';
+
+  /// HTTP/2 путь метода /Service/Method.
+  static const String methodPath = '/$serviceName/$methodName';
+
+  /// Заголовок с отметкой времени отправки ping от клиента.
+  static const String requestTimestampHeader = 'x-rpc-ping-timestamp';
+
+  /// Заголовок с отметкой времени обработки ping на стороне responder.
+  static const String responseTimestampHeader = 'x-rpc-pong-timestamp';
+
+  /// Заголовок с debug label responder эндпоинта.
+  static const String responseDebugLabelHeader = 'x-rpc-pong-endpoint';
+
+  /// Заголовок с типом транспорта responder эндпоинта.
+  static const String responseTransportHeader = 'x-rpc-pong-transport';
+}
+
+/// Результат ping-запроса между эндпоинтами.
+final class RpcEndpointPingResult {
+  /// Время отправки ping-запроса.
+  final DateTime sentAt;
+
+  /// Время получения ответа.
+  final DateTime receivedAt;
+
+  /// Полный круговой трип (RTT) ping-запроса.
+  final Duration roundTrip;
+
+  /// Отметка времени обработки ping на responder, если была передана.
+  final DateTime? responderTimestamp;
+
+  /// Debug label responder эндпоинта, если указан.
+  final String? responderDebugLabel;
+
+  /// Тип транспорта responder эндпоинта, если передан.
+  final String? responderTransportType;
+
+  /// Все заголовки ответа в удобном для чтения формате.
+  final Map<String, String> responseHeaders;
+
+  RpcEndpointPingResult({
+    required this.sentAt,
+    required this.receivedAt,
+    required this.roundTrip,
+    this.responderTimestamp,
+    this.responderDebugLabel,
+    this.responderTransportType,
+    Map<String, String>? responseHeaders,
+  }) : responseHeaders = Map.unmodifiable(responseHeaders ?? const {});
+}
+
 /// Базовый класс для всех RPC эндпоинтов
 abstract base class RpcEndpointBase {
   final IRpcTransport _transport;

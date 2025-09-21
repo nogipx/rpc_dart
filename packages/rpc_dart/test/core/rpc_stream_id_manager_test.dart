@@ -83,6 +83,67 @@ void main() {
       // В реальных условиях приложение должно создавать новое соединение
       // при достижении этого ограничения.
     });
+
+    test('Переиспользует освобожденные ID при достижении предела', () {
+      final manager = RpcStreamIdManager(
+        isClient: true,
+        customMaxId: 9,
+      );
+
+      final id1 = manager.generateId();
+      final id2 = manager.generateId();
+      final id3 = manager.generateId();
+
+      expect(id1, equals(1));
+      expect(id2, equals(3));
+      expect(id3, equals(5));
+
+      expect(manager.releaseId(id1), isTrue);
+      expect(manager.releaseId(id2), isTrue);
+
+      expect(manager.generateId(), equals(7));
+      expect(manager.generateId(), equals(9));
+
+      // После достижения максимального значения ID должны переиспользоваться
+      expect(manager.generateId(), equals(1));
+      expect(manager.generateId(), equals(3));
+    });
+
+    test('Сбрасывает последовательность при полном освобождении', () {
+      final manager = RpcStreamIdManager(
+        isClient: false,
+        customMaxId: 10,
+      );
+
+      final allocated = <int>[];
+      for (var i = 0; i < 5; i++) {
+        allocated.add(manager.generateId());
+      }
+
+      expect(allocated, equals([2, 4, 6, 8, 10]));
+
+      for (final id in allocated) {
+        expect(manager.releaseId(id), isTrue);
+      }
+
+      expect(manager.generateId(), equals(2));
+    });
+
+    test('Выбрасывает исключение если нет свободных ID', () {
+      final manager = RpcStreamIdManager(
+        isClient: true,
+        customMaxId: 5,
+      );
+
+      expect(manager.generateId(), equals(1));
+      expect(manager.generateId(), equals(3));
+      expect(manager.generateId(), equals(5));
+
+      expect(
+        () => manager.generateId(),
+        throwsA(isA<RpcException>()),
+      );
+    });
   });
 
   group('Интеграция с транспортом', () {
