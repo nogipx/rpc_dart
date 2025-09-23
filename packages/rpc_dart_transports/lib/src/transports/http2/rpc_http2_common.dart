@@ -68,9 +68,41 @@ RpcMetadata http2HeadersToRpcMetadata(List<http2.Header> headers) {
   return RpcMetadata(rpcHeaders);
 }
 
-/// Упаковывает данные в gRPC frame формат используя RpcMessageFrame
+/// Гарантирует, что данные представляют собой корректно сформированный gRPC frame.
 ///
-/// Делегирует упаковку стандартному классу из rpc_dart
-Uint8List packGrpcMessage(Uint8List data) {
+/// Если входные [data] уже содержат валидный 5-байтный префикс и длину,
+/// возвращает исходный буфер без копирования. В противном случае добавляет
+/// gRPC префикс, предполагая отсутствие сжатия.
+Uint8List ensureGrpcFrame(Uint8List data) {
+  if (data.length >= RpcConstants.MESSAGE_PREFIX_SIZE) {
+    try {
+      final header = RpcMessageFrame.parseHeader(data);
+      final expectedLength =
+          RpcConstants.MESSAGE_PREFIX_SIZE + header.messageLength;
+
+      if (expectedLength == data.length) {
+        return data;
+      }
+    } catch (_) {
+      // Игнорируем ошибку и упаковываем данные заново.
+    }
+  }
+
   return RpcMessageFrame.encode(data, compressed: false);
+}
+
+/// Проверяет, что данные имеют валидный gRPC префикс и соответствующую длину.
+bool isGrpcFrame(Uint8List data) {
+  if (data.length < RpcConstants.MESSAGE_PREFIX_SIZE) {
+    return false;
+  }
+
+  try {
+    final header = RpcMessageFrame.parseHeader(data);
+    final expectedLength =
+        RpcConstants.MESSAGE_PREFIX_SIZE + header.messageLength;
+    return expectedLength == data.length;
+  } catch (_) {
+    return false;
+  }
 }

@@ -225,11 +225,13 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       'Отправка данных для stream $streamId: ${data.length} байт (endStream: $endStream)',
     );
 
-    // Упаковываем данные в gRPC frame формат
-    final framedData = packGrpcMessage(data);
+    assert(
+      isGrpcFrame(data),
+      'IRpcTransport.sendMessage ожидает gRPC frame с 5-байтовым префиксом',
+    );
 
-    // Отправляем данные через HTTP/2
-    stream.sendData(framedData, endStream: endStream);
+    // Отправляем данные через HTTP/2 как уже сформированный gRPC frame
+    stream.sendData(data, endStream: endStream);
 
     _logger?.internal('Данные отправлены для stream $streamId');
   }
@@ -375,9 +377,10 @@ class RpcHttp2CallerTransport implements IRpcTransport {
 
       // Отправляем каждое сообщение отдельно
       for (final msgData in messages) {
+        final framedMessage = ensureGrpcFrame(msgData);
         final transportMessage = RpcTransportMessage(
           streamId: streamId,
-          payload: msgData,
+          payload: framedMessage,
           isEndOfStream: message.endStream && msgData == messages.last,
           methodPath: methodPath,
         );
