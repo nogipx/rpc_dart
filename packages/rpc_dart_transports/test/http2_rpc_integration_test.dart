@@ -12,12 +12,22 @@ void main() {
     late IRpcServer testServer;
     late RpcHttp2CallerTransport clientTransport;
     late RpcCallerEndpoint callerEndpoint;
+    late StreamController<Uint8List> serverRequestPayloads;
 
     setUpAll(() async {
+      serverRequestPayloads = StreamController<Uint8List>.broadcast();
+
       testServer = RpcHttp2Server(
         port: 10101,
-        onEndpointCreated: (endpoint) =>
-            endpoint.registerServiceContract(TestServiceContract()),
+        onEndpointCreated: (endpoint) {
+          endpoint.transport.incomingMessages.listen((message) {
+            if (!message.isMetadataOnly && message.payload != null) {
+              serverRequestPayloads.add(Uint8List.fromList(message.payload!));
+            }
+          });
+
+          endpoint.registerServiceContract(TestServiceContract());
+        },
       );
       await testServer.start();
 
@@ -36,7 +46,40 @@ void main() {
     tearDownAll(() async {
       await callerEndpoint.close();
       await testServer.stop();
+      await serverRequestPayloads.close();
       print('🔒 Долгоживущее RPC соединение закрыто');
+    });
+
+    test('http2_unary_payload_has_single_grpc_prefix', () async {
+      final request = RpcString('Check nested prefix elimination');
+      final serializedRequest = RpcString.codec.serialize(request);
+      final payloadFuture = serverRequestPayloads.stream.first;
+
+      final response = await callerEndpoint.unaryRequest<RpcString, RpcString>(
+        serviceName: 'TestService',
+        methodName: 'Echo',
+        requestCodec: RpcString.codec,
+        responseCodec: RpcString.codec,
+        request: request,
+      );
+
+      expect(
+        response.value,
+        equals('Server Echo: Check nested prefix elimination'),
+      );
+
+      final rawFrame = await payloadFuture.timeout(
+        Duration(seconds: 5),
+        onTimeout: () =>
+            throw TimeoutException('Timeout waiting for unary payload frame'),
+      );
+
+      final header = RpcMessageFrame.parseHeader(rawFrame);
+      expect(header.messageLength, equals(serializedRequest.length));
+
+      final payloadWithoutPrefix =
+          rawFrame.sublist(RpcConstants.MESSAGE_PREFIX_SIZE);
+      expect(payloadWithoutPrefix, equals(serializedRequest));
     });
 
     test('unary_rpc_через_caller_и_responder', () async {

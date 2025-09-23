@@ -149,7 +149,7 @@ abstract class IRpcTransport {
   /// Отправляет сообщение для конкретного stream.
   ///
   /// [streamId] Уникальный идентификатор HTTP/2 stream
-  /// [data] Байты для отправки
+  /// [data] Байты gRPC-фрейма (5-байтовый префикс + полезная нагрузка)
   /// [endStream] Флаг завершения потока данных
   Future<void> sendMessage(
     int streamId,
