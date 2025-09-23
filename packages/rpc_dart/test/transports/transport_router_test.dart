@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:collection';
 import 'package:test/test.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
@@ -724,6 +725,54 @@ void main() {
           expect(true, isTrue);
         },
       );
+
+      test(
+        'должен освобождать stream ID целевого транспорта и переиспользовать начальные значения',
+        () async {
+          final spyTransport = _ReusableIdTestTransport();
+          final router = RpcTransportRouterBuilder.client()
+              .routeCall(
+                calledServiceName: 'UserService',
+                toTransport: spyTransport,
+              )
+              .build();
+
+          // Проверка роли в builder уже использовала createStream/releaseStreamId.
+          // Сбрасываем счетчики, чтобы анализировать только реальные вызовы теста.
+          spyTransport.resetTracking();
+
+          final clientStreamIds = <int>[];
+
+          for (var i = 0; i < 3; i++) {
+            final clientStreamId = router.createStream();
+            clientStreamIds.add(clientStreamId);
+
+            await router.sendMetadata(
+              clientStreamId,
+              RpcMetadata([RpcHeader('x-route-service', 'UserService')]),
+            );
+
+            // После очистки роутер должен снова выделять базовый ID на целевом транспорте
+            expect(spyTransport.createdStreamIds.last, equals(1));
+
+            final released = router.releaseStreamId(clientStreamId);
+            expect(released, isTrue);
+
+            final releasedAgain = router.releaseStreamId(clientStreamId);
+            expect(releasedAgain, isFalse);
+          }
+
+          // Router генерирует последовательность клиентских ID (1, 3, 5...)
+          expect(clientStreamIds, equals([1, 3, 5]));
+
+          // Целевой транспорт получает повторно начальный Stream ID после освобождения
+          expect(spyTransport.createdStreamIds, equals([1, 1, 1]));
+          expect(spyTransport.releasedStreamIds, equals([1, 1, 1]));
+
+          await router.close();
+          await spyTransport.close();
+        },
+      );
     });
 
     group('📈 Statistics and Monitoring', () {
@@ -848,6 +897,114 @@ void main() {
       });
     });
   });
+}
+
+class _ReusableIdTestTransport implements IRpcTransport {
+  final StreamController<RpcTransportMessage> _incomingController =
+      StreamController<RpcTransportMessage>.broadcast();
+
+  final List<int> createdStreamIds = <int>[];
+  final List<int> releasedStreamIds = <int>[];
+
+  final SplayTreeSet<int> _recycledIds = SplayTreeSet<int>();
+  final Set<int> _activeIds = <int>{};
+
+  int _nextId = 1;
+  bool _closed = false;
+
+  void resetTracking() {
+    createdStreamIds.clear();
+    releasedStreamIds.clear();
+  }
+
+  @override
+  bool get isClient => true;
+
+  @override
+  bool get supportsZeroCopy => false;
+
+  @override
+  bool get isClosed => _closed;
+
+  @override
+  Stream<RpcTransportMessage> get incomingMessages =>
+      _incomingController.stream;
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    return incomingMessages.where((message) => message.streamId == streamId);
+  }
+
+  @override
+  int createStream() {
+    if (_closed) {
+      throw StateError('Transport is closed');
+    }
+
+    final reusedId = _recycledIds.isNotEmpty ? _recycledIds.first : null;
+    final streamId = reusedId ?? _nextId;
+
+    if (reusedId != null) {
+      _recycledIds.remove(reusedId);
+    } else {
+      _nextId += 2;
+    }
+
+    _activeIds.add(streamId);
+    createdStreamIds.add(streamId);
+    return streamId;
+  }
+
+  @override
+  bool releaseStreamId(int streamId) {
+    final removed = _activeIds.remove(streamId);
+    if (removed) {
+      releasedStreamIds.add(streamId);
+      _recycledIds.add(streamId);
+    }
+    return removed;
+  }
+
+  @override
+  Future<void> sendMetadata(
+    int streamId,
+    RpcMetadata metadata, {
+    bool endStream = false,
+  }) async {}
+
+  @override
+  Future<void> sendMessage(
+    int streamId,
+    Uint8List data, {
+    bool endStream = false,
+  }) async {}
+
+  @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {}
+
+  @override
+  Future<void> finishSending(int streamId) async {}
+
+  @override
+  Future<RpcHealthStatus> health() async {
+    return RpcHealthStatus.healthy(component: runtimeType.toString());
+  }
+
+  @override
+  Future<RpcHealthStatus> reconnect() async {
+    return RpcHealthStatus.healthy(component: runtimeType.toString());
+  }
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await _incomingController.close();
+  }
 }
 
 /// Вспомогательные extension'ы для тестов

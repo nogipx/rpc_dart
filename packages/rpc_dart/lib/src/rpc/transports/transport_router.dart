@@ -137,8 +137,9 @@ final class RpcTransportRouter implements IRpcTransport {
     );
   }
 
-  /// Очищает ресурсы для завершенного stream'а
-  void _cleanupStream(int clientStreamId, int serverStreamId) {
+  /// Очищает ресурсы для завершенного stream'а и возвращает true, если были
+  /// освобождены клиентский или серверный Stream ID
+  bool _cleanupStream(int clientStreamId, int serverStreamId) {
     // 🔥 ЗАЩИТА ОТ ПОВТОРНОЙ ОЧИСТКИ: Проверяем, есть ли еще данные для очистки
     if (!_streamTransports.containsKey(clientStreamId) &&
         !_clientToServerStreamMapping.containsKey(clientStreamId) &&
@@ -146,12 +147,50 @@ final class RpcTransportRouter implements IRpcTransport {
       _logger.debug(
         'Cleanup skipped: client stream [$clientStreamId] already cleaned',
       );
-      return;
+      return false;
     }
 
     _logger.internal(
       'Starting cleanup: client[$clientStreamId] -> server[$serverStreamId]',
     );
+
+    var clientIdReleased = false;
+    try {
+      clientIdReleased = _idManager.releaseId(clientStreamId);
+      _logger.debug(
+        'Client stream ID [$clientStreamId] release result: $clientIdReleased',
+      );
+    } catch (error, stackTrace) {
+      _logger.error(
+        'Failed to release client stream ID [$clientStreamId]',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    final transport = _streamTransports[clientStreamId];
+    final mappedServerStreamId =
+        _clientToServerStreamMapping[clientStreamId] ?? serverStreamId;
+
+    var serverIdReleased = false;
+    if (transport != null) {
+      try {
+        serverIdReleased = transport.releaseStreamId(mappedServerStreamId);
+        _logger.debug(
+          'Requested release for server stream [$mappedServerStreamId] on $transport: $serverIdReleased',
+        );
+      } catch (error, stackTrace) {
+        _logger.error(
+          'Failed to release server stream [$mappedServerStreamId] on transport $transport',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    } else {
+      _logger.debug(
+        'Transport already removed for client stream [$clientStreamId] during cleanup',
+      );
+    }
 
     _streamTransports.remove(clientStreamId);
     _clientToServerStreamMapping.remove(clientStreamId);
@@ -167,6 +206,8 @@ final class RpcTransportRouter implements IRpcTransport {
     _logger.internal(
       'Cleanup completed for stream: client[$clientStreamId] -> server[$serverStreamId]',
     );
+
+    return clientIdReleased || serverIdReleased;
   }
 
   /// Извлекает RpcContext из метаданных сообщения
@@ -224,7 +265,7 @@ final class RpcTransportRouter implements IRpcTransport {
     // Очищаем все маппинги для данного stream ID
     final serverStreamId = _clientToServerStreamMapping[streamId];
     if (serverStreamId != null) {
-      _cleanupStream(streamId, serverStreamId);
+      return _cleanupStream(streamId, serverStreamId);
     }
     return _idManager.releaseId(streamId);
   }
