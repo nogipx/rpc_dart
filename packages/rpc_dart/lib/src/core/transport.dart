@@ -2,7 +2,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-part of '../_index.dart';
+import 'dart:async';
+import 'dart:collection';
+import 'dart:typed_data';
+
+import 'errors.dart';
+import 'health.dart';
+import 'metadata.dart';
 
 /// Сообщение транспортного уровня с поддержкой Stream ID.
 ///

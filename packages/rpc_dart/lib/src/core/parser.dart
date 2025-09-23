@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-part of '../_index.dart';
+import 'dart:typed_data';
+
+import '../logs/_logs.dart';
+import 'protocol.dart';
 
 /// Состояние процесса парсинга входящих данных потока gRPC.
 ///
@@ -71,7 +74,7 @@ final class RpcMessageParser {
     _state.buffer.addAll(data);
 
     // Обрабатываем буфер, пока можем извлекать сообщения
-    while (_state.buffer.length >= RpcConstants.MESSAGE_PREFIX_SIZE) {
+    while (_state.buffer.length >= RpcConstants.messagePrefixSize) {
       // Если мы еще не знаем длину сообщения, извлекаем ее из заголовка
       if (_state.expectedMessageLength == null) {
         try {
@@ -83,7 +86,7 @@ final class RpcMessageParser {
 
           // Удаляем заголовок из буфера
           _state.buffer = _state.buffer.sublist(
-            RpcConstants.MESSAGE_PREFIX_SIZE,
+            RpcConstants.messagePrefixSize,
           );
         } catch (e, trace) {
           _logger?.error(

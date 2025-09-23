@@ -167,7 +167,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         if (!_isActive) return;
 
         try {
-          final trailers = RpcMetadata.forTrailer(RpcStatus.OK);
+          final trailers = RpcMetadata.forTrailer(RpcStatus.ok);
           await _transport.sendMetadata(_streamId, trailers, endStream: true);
           _logger?.internal(
             'Трейлер отправлен для $_methodPath [streamId: $_streamId]',
@@ -441,15 +441,15 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         final errorHeaders = [
           RpcHeader(':status', '200'), // HTTP 200 для gRPC
           RpcHeader(
-            RpcConstants.CONTENT_TYPE_HEADER,
-            RpcConstants.GRPC_CONTENT_TYPE,
+            RpcConstants.contentTypeHeader,
+            RpcConstants.grpcContentType,
           ),
-          RpcHeader(RpcConstants.GRPC_STATUS_HEADER, statusCode.toString()),
+          RpcHeader(RpcConstants.grpcStatusHeader, statusCode.toString()),
         ];
 
         if (message.isNotEmpty) {
           errorHeaders.add(
-            RpcHeader(RpcConstants.GRPC_MESSAGE_HEADER, message),
+            RpcHeader(RpcConstants.grpcMessageHeader, message),
           );
         }
 
@@ -507,10 +507,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     _isActive = false;
 
     // Отменяем все подписки
-    await _messageSubscription?.cancel();
+    unawaited(_messageSubscription?.cancel());
     _messageSubscription = null;
 
-    await _cancellationSubscription?.cancel();
+    unawaited(_cancellationSubscription?.cancel());
     _cancellationSubscription = null;
 
     if (!_requestController.isClosed) {
@@ -910,8 +910,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         RpcHeader('x-client-cancelled', 'true'),
         RpcHeader('x-cancellation-reason', reason),
         RpcHeader(
-          RpcConstants.GRPC_STATUS_HEADER,
-          RpcStatus.CANCELLED.toString(),
+          RpcConstants.grpcStatusHeader,
+          RpcStatus.cancelled.toString(),
         ),
       ];
 

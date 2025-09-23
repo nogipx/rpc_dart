@@ -101,16 +101,6 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
   }
 }
 
-/// Исключение для RpcEndpoint
-class RpcException implements Exception {
-  final String message;
-
-  RpcException(this.message);
-
-  @override
-  String toString() => 'RpcException: $message';
-}
-
 /// 🚀 ZERO-COPY: Регистрация метода без IRpcSerializable ограничений
 final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     TResponse extends Object> {
@@ -169,19 +159,4 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     });
     return typedHandler(requests, context: context);
   }
-}
-
-/// Интерфейс для middleware
-abstract class IRpcMiddleware {
-  Future<dynamic> processRequest(
-    String serviceName,
-    String methodName,
-    dynamic request,
-  );
-
-  Future<dynamic> processResponse(
-    String serviceName,
-    String methodName,
-    dynamic response,
-  );
 }

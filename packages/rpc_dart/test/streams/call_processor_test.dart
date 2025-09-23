@@ -109,7 +109,7 @@ void main() {
       }, onError: completer.completeError);
 
       // Отправляем метаданные через серверный транспорт
-      final metadata = RpcMetadata.forTrailer(RpcStatus.OK, message: 'Success');
+      final metadata = RpcMetadata.forTrailer(RpcStatus.ok, message: 'Success');
       await serverTransport.sendMetadata(processor.streamId, metadata);
 
       // Ждем получения метаданных
@@ -209,7 +209,7 @@ void main() {
       );
 
       // Отправляем END_STREAM через серверный транспорт
-      final endMetadata = RpcMetadata.forTrailer(RpcStatus.OK);
+      final endMetadata = RpcMetadata.forTrailer(RpcStatus.ok);
       await serverTransport.sendMetadata(
         processor.streamId,
         endMetadata,

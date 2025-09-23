@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:rpc_dart/src/rpc/_index.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('RpcMetadata', () {
@@ -27,8 +27,8 @@ void main() {
         expect(_getHeaderValue(metadata, ':scheme'), equals('http'));
         expect(_getHeaderValue(metadata, ':authority'), equals(host));
         expect(
-          _getHeaderValue(metadata, RpcConstants.CONTENT_TYPE_HEADER),
-          equals(RpcConstants.GRPC_CONTENT_TYPE),
+          _getHeaderValue(metadata, RpcConstants.contentTypeHeader),
+          equals(RpcConstants.grpcContentType),
         );
         expect(_getHeaderValue(metadata, 'te'), equals('trailers'));
       });
@@ -73,8 +73,8 @@ void main() {
         expect(metadata.headers.length, equals(2));
         expect(_getHeaderValue(metadata, ':status'), equals('200'));
         expect(
-          _getHeaderValue(metadata, RpcConstants.CONTENT_TYPE_HEADER),
-          equals(RpcConstants.GRPC_CONTENT_TYPE),
+          _getHeaderValue(metadata, RpcConstants.contentTypeHeader),
+          equals(RpcConstants.grpcContentType),
         );
       });
     });
@@ -82,7 +82,7 @@ void main() {
     group('forTrailer', () {
       test('создает_трейлер_с_успешным_статусом', () {
         // Arrange
-        const statusCode = RpcStatus.OK;
+        const statusCode = RpcStatus.ok;
 
         // Act
         final metadata = RpcMetadata.forTrailer(statusCode);
@@ -90,14 +90,14 @@ void main() {
         // Assert
         expect(metadata.headers.length, equals(1));
         expect(
-          _getHeaderValue(metadata, RpcConstants.GRPC_STATUS_HEADER),
+          _getHeaderValue(metadata, RpcConstants.grpcStatusHeader),
           equals('0'),
         );
       });
 
       test('создает_трейлер_с_ошибкой_и_сообщением', () {
         // Arrange
-        const statusCode = RpcStatus.INTERNAL;
+        const statusCode = RpcStatus.internal;
         const message = 'Внутренняя ошибка сервера';
 
         // Act
@@ -106,18 +106,18 @@ void main() {
         // Assert
         expect(metadata.headers.length, equals(2));
         expect(
-          _getHeaderValue(metadata, RpcConstants.GRPC_STATUS_HEADER),
+          _getHeaderValue(metadata, RpcConstants.grpcStatusHeader),
           equals('13'),
         );
         expect(
-          _getHeaderValue(metadata, RpcConstants.GRPC_MESSAGE_HEADER),
+          _getHeaderValue(metadata, RpcConstants.grpcMessageHeader),
           equals(message),
         );
       });
 
       test('не_добавляет_пустое_сообщение', () {
         // Arrange
-        const statusCode = RpcStatus.CANCELLED;
+        const statusCode = RpcStatus.cancelled;
 
         // Act
         final metadata = RpcMetadata.forTrailer(statusCode, message: '');
@@ -125,7 +125,7 @@ void main() {
         // Assert
         expect(metadata.headers.length, equals(1));
         expect(
-          _getHeaderValue(metadata, RpcConstants.GRPC_MESSAGE_HEADER),
+          _getHeaderValue(metadata, RpcConstants.grpcMessageHeader),
           isNull,
         );
       });

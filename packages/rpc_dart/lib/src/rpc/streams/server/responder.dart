@@ -158,7 +158,7 @@ final class ServerStreamResponder<TRequest extends Object,
               error: error,
               stackTrace: trace,
             );
-            await _processor.sendError(RpcStatus.INTERNAL, error.toString());
+            await _processor.sendError(RpcStatus.internal, error.toString());
           }
         } else {
           _logger?.internal(

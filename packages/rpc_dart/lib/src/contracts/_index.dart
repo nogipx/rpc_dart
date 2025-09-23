@@ -9,6 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart'
     show IRpcCodec, IRpcSerializable, RpcCallerEndpoint;
 
 export 'dart:typed_data';
+export '../endpoint/_index.dart' show IRpcMiddleware;
 
 part 'contract.dart';
 part 'context.dart';

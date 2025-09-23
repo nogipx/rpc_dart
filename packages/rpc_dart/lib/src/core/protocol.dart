@@ -2,9 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// ignore_for_file: constant_identifier_names
-
-part of '../_index.dart';
+import 'dart:typed_data';
 
 /// Константы протокола gRPC.
 ///
@@ -12,31 +10,31 @@ part of '../_index.dart';
 /// что обеспечивает единообразие и устраняет "магические числа" в коде.
 abstract interface class RpcConstants {
   /// Размер префикса сообщения в байтах (1 байт флаг + 4 байта длина)
-  static const int MESSAGE_PREFIX_SIZE = 5;
+  static const int messagePrefixSize = 5;
 
   /// Позиция флага сжатия в префиксе
-  static const int COMPRESSION_FLAG_INDEX = 0;
+  static const int compressionFlagIndex = 0;
 
   /// Позиция начала поля длины сообщения в префиксе
-  static const int MESSAGE_LENGTH_INDEX = 1;
+  static const int messageLengthIndex = 1;
 
   /// Если сообщение не сжато, используется это значение
-  static const int NO_COMPRESSION = 0;
+  static const int noCompression = 0;
 
   /// Если сообщение сжато, используется это значение
-  static const int COMPRESSED = 1;
+  static const int compressed = 1;
 
   /// HTTP заголовок, содержащий статус gRPC
-  static const String GRPC_STATUS_HEADER = 'grpc-status';
+  static const String grpcStatusHeader = 'grpc-status';
 
   /// HTTP заголовок, содержащий сообщение об ошибке
-  static const String GRPC_MESSAGE_HEADER = 'grpc-message';
+  static const String grpcMessageHeader = 'grpc-message';
 
   /// HTTP заголовок для типа контента
-  static const String CONTENT_TYPE_HEADER = 'content-type';
+  static const String contentTypeHeader = 'content-type';
 
   /// Тип контента для gRPC
-  static const String GRPC_CONTENT_TYPE = 'application/grpc';
+  static const String grpcContentType = 'application/grpc';
 }
 
 /// Стандартные коды состояний gRPC.
@@ -50,55 +48,55 @@ abstract interface class RpcConstants {
 /// - UNAVAILABLE (14): сервис недоступен
 abstract interface class RpcStatus {
   /// Успешное выполнение
-  static const int OK = 0;
+  static const int ok = 0;
 
   /// Операция отменена
-  static const int CANCELLED = 1;
+  static const int cancelled = 1;
 
   /// Неизвестная ошибка
-  static const int UNKNOWN = 2;
+  static const int unknown = 2;
 
   /// Неверный аргумент
-  static const int INVALID_ARGUMENT = 3;
+  static const int invalidArgument = 3;
 
   /// Превышено время ожидания
-  static const int DEADLINE_EXCEEDED = 4;
+  static const int deadlineExceeded = 4;
 
   /// Ресурс не найден
-  static const int NOT_FOUND = 5;
+  static const int notFound = 5;
 
   /// Ресурс уже существует
-  static const int ALREADY_EXISTS = 6;
+  static const int alreadyExists = 6;
 
   /// Отказано в доступе
-  static const int PERMISSION_DENIED = 7;
+  static const int permissionDenied = 7;
 
   /// Ресурс исчерпан
-  static const int RESOURCE_EXHAUSTED = 8;
+  static const int resourceExhausted = 8;
 
   /// Предусловие не выполнено
-  static const int FAILED_PRECONDITION = 9;
+  static const int failedPrecondition = 9;
 
   /// Операция прервана
-  static const int ABORTED = 10;
+  static const int aborted = 10;
 
   /// Выход за пределы диапазона
-  static const int OUT_OF_RANGE = 11;
+  static const int outOfRange = 11;
 
   /// Не реализовано
-  static const int UNIMPLEMENTED = 12;
+  static const int unimplemented = 12;
 
   /// Внутренняя ошибка
-  static const int INTERNAL = 13;
+  static const int internal = 13;
 
   /// Сервис недоступен
-  static const int UNAVAILABLE = 14;
+  static const int unavailable = 14;
 
   /// Потеря данных
-  static const int DATA_LOSS = 15;
+  static const int dataLoss = 15;
 
   /// Не аутентифицирован
-  static const int UNAUTHENTICATED = 16;
+  static const int unauthenticated = 16;
 }
 
 /// Утилитарный класс для работы с форматом сообщений gRPC.
@@ -121,24 +119,24 @@ abstract interface class RpcMessageFrame {
   /// Возвращает полностью упакованное сообщение с префиксом
   static Uint8List encode(Uint8List messageBytes, {bool compressed = false}) {
     final result = List<int>.filled(
-      RpcConstants.MESSAGE_PREFIX_SIZE + messageBytes.length,
+      RpcConstants.messagePrefixSize + messageBytes.length,
       0,
     );
 
     // Устанавливаем флаг сжатия
-    result[RpcConstants.COMPRESSION_FLAG_INDEX] =
-        compressed ? RpcConstants.COMPRESSED : RpcConstants.NO_COMPRESSION;
+    result[RpcConstants.compressionFlagIndex] =
+        compressed ? RpcConstants.compressed : RpcConstants.noCompression;
 
     // Устанавливаем длину сообщения (big-endian)
     final length = messageBytes.length;
-    result[RpcConstants.MESSAGE_LENGTH_INDEX] = (length >> 24) & 0xFF;
-    result[RpcConstants.MESSAGE_LENGTH_INDEX + 1] = (length >> 16) & 0xFF;
-    result[RpcConstants.MESSAGE_LENGTH_INDEX + 2] = (length >> 8) & 0xFF;
-    result[RpcConstants.MESSAGE_LENGTH_INDEX + 3] = length & 0xFF;
+    result[RpcConstants.messageLengthIndex] = (length >> 24) & 0xFF;
+    result[RpcConstants.messageLengthIndex + 1] = (length >> 16) & 0xFF;
+    result[RpcConstants.messageLengthIndex + 2] = (length >> 8) & 0xFF;
+    result[RpcConstants.messageLengthIndex + 3] = length & 0xFF;
 
     // Копируем данные сообщения
     for (int i = 0; i < messageBytes.length; i++) {
-      result[RpcConstants.MESSAGE_PREFIX_SIZE + i] = messageBytes[i];
+      result[RpcConstants.messagePrefixSize + i] = messageBytes[i];
     }
 
     return Uint8List.fromList(result);
@@ -153,17 +151,17 @@ abstract interface class RpcMessageFrame {
   /// Возвращает структуру с информацией о сжатии и длине сообщения
   /// Выбрасывает Exception при неверной длине входных данных
   static RpcMessageHeader parseHeader(Uint8List headerBytes) {
-    if (headerBytes.length < RpcConstants.MESSAGE_PREFIX_SIZE) {
+    if (headerBytes.length < RpcConstants.messagePrefixSize) {
       throw Exception('Неверная длина заголовка сообщения');
     }
 
-    final isCompressed = headerBytes[RpcConstants.COMPRESSION_FLAG_INDEX] ==
-        RpcConstants.COMPRESSED;
+    final isCompressed = headerBytes[RpcConstants.compressionFlagIndex] ==
+        RpcConstants.compressed;
 
-    final length = (headerBytes[RpcConstants.MESSAGE_LENGTH_INDEX] << 24) |
-        (headerBytes[RpcConstants.MESSAGE_LENGTH_INDEX + 1] << 16) |
-        (headerBytes[RpcConstants.MESSAGE_LENGTH_INDEX + 2] << 8) |
-        headerBytes[RpcConstants.MESSAGE_LENGTH_INDEX + 3];
+    final length = (headerBytes[RpcConstants.messageLengthIndex] << 24) |
+        (headerBytes[RpcConstants.messageLengthIndex + 1] << 16) |
+        (headerBytes[RpcConstants.messageLengthIndex + 2] << 8) |
+        headerBytes[RpcConstants.messageLengthIndex + 3];
 
     return RpcMessageHeader(isCompressed, length);
   }

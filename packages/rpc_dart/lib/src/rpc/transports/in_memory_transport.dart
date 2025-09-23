@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-part of '../_index.dart';
+import 'dart:async';
+import 'dart:typed_data';
+
+import '../../core/_index.dart';
 
 /// Сверхбыстрый транспорт для обмена сообщениями в памяти со Stream ID.
 ///

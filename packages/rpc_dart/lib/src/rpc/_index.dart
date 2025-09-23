@@ -2,19 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:async';
-import 'dart:collection';
-
-import 'package:rpc_dart/rpc_dart.dart';
-
+export '../core/_index.dart';
 export 'streams/_index.dart';
-
-part 'core/message.dart';
-part 'core/parser.dart';
-part 'core/rpc.dart';
-part 'core/health.dart';
-part 'core/transport.dart';
-
-part 'transports/in_memory_transport.dart';
-part 'transports/transport_router.dart';
-part 'transports/transport_toolkit.dart';
+export 'transports/in_memory_transport.dart';
+export 'transports/transport_router.dart';
+export 'transports/transport_toolkit.dart';
