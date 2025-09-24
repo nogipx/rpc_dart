@@ -1,3 +1,17 @@
+## 2.3.1
+
+- Introduced a unified middleware and interceptor pipeline across caller
+  and responder endpoints, ensuring context propagation for unary and
+  streaming RPC flows.
+- Added `RpcMiddlewareContext` enhancements and default async hooks so
+  extensions can enrich request/response handling without touching the
+  core.
+- Hardened serialization by validating codec decoders and shipping a
+  pluggable `RpcBinaryCodec` for external binary formats such as
+  protobuf.
+- Expanded the test suite with exhaustive pipeline coverage for all RPC
+  shapes and binary codec scenarios.
+
 ## 2.3.0
 
 - Added aggregated diagnostics for caller and responder endpoints with
