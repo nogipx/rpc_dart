@@ -376,35 +376,44 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
     final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
-    if (isZeroCopy) {
-      // Zero-copy путь с универсальным процессором
-      final processor = CallProcessor<TRequest, TResponse>(
-        transport: transport,
-        serviceName: serviceName,
-        methodName: methodName,
-        // Кодеки не указываем для zero-copy режима
-        context: enhancedContext,
-        logger: logger,
-      );
+    return handleUnary<TRequest, TResponse>(
+      serviceName: serviceName,
+      methodName: methodName,
+      context: enhancedContext,
+      request: request,
+      handler: (ctx, normalizedRequest) async {
+        if (isZeroCopy) {
+          final processor = CallProcessor<TRequest, TResponse>(
+            transport: transport,
+            serviceName: serviceName,
+            methodName: methodName,
+            context: ctx,
+            logger: logger,
+          );
 
-      return _executeUniversalUnaryCall(processor, request);
-    } else {
-      // Сериализация с обычным UnaryCaller
-      return UnaryCaller<TRequest, TResponse>(
-        serviceName: serviceName,
-        methodName: methodName,
-        transport: transport,
-        requestCodec: requestCodec!,
-        responseCodec: responseCodec!,
-        context: enhancedContext,
-      ).call(request);
-    }
+          return _executeUniversalUnaryCall(
+            processor: processor,
+            request: normalizedRequest,
+          );
+        }
+
+        return UnaryCaller<TRequest, TResponse>(
+          serviceName: serviceName,
+          methodName: methodName,
+          transport: transport,
+          requestCodec: requestCodec!,
+          responseCodec: responseCodec!,
+          context: ctx,
+        ).call(normalizedRequest);
+      },
+    );
   }
 
   /// Внутренняя реализация универсального унарного вызова
   Future<TResponse> _executeUniversalUnaryCall<TRequest extends Object,
           TResponse extends Object>(
-      CallProcessor<TRequest, TResponse> processor, TRequest request) async {
+      {required CallProcessor<TRequest, TResponse> processor,
+      required TRequest request}) async {
     try {
       // Отправляем запрос
       await processor.send(request);
@@ -512,19 +521,25 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
     final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
-    // Используем универсальный ServerStreamCaller
-    final caller = ServerStreamCaller<TRequest, TResponse>(
-      transport: transport,
+    return handleServerStream<TRequest, TResponse>(
       serviceName: serviceName,
       methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
       context: enhancedContext,
-      logger: logger,
-    );
+      request: request,
+      handler: (ctx, normalizedRequest) {
+        final caller = ServerStreamCaller<TRequest, TResponse>(
+          transport: transport,
+          serviceName: serviceName,
+          methodName: methodName,
+          requestCodec: requestCodec,
+          responseCodec: responseCodec,
+          context: ctx,
+          logger: logger,
+        );
 
-    // Используем удобный метод call для автоматического управления ресурсами
-    return caller.call(request);
+        return caller.call(normalizedRequest);
+      },
+    );
   }
 
   /// Создает client stream для отправки множественных запросов и получения одного ответа
@@ -545,51 +560,25 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
     return (Stream<C> requests) async {
       logger.internal('Выполнение client stream для $serviceName/$methodName');
-
-      // Создаем client stream caller с контекстом
-      final caller = ClientStreamCaller<C, R>(
-        transport: transport,
+      return handleClientStream<C, R>(
         serviceName: serviceName,
         methodName: methodName,
-        requestCodec: requestCodec,
-        responseCodec: responseCodec,
-        context: enhancedContext, // Передаем обогащенный контекст
-        logger: logger,
+        context: enhancedContext,
+        requests: requests,
+        handler: (ctx, normalizedRequests) {
+          final caller = ClientStreamCaller<C, R>(
+            transport: transport,
+            serviceName: serviceName,
+            methodName: methodName,
+            requestCodec: requestCodec,
+            responseCodec: responseCodec,
+            context: ctx,
+            logger: logger,
+          );
+
+          return caller.call(normalizedRequests);
+        },
       );
-
-      // Подписываемся на поток запросов
-      StreamSubscription? subscription;
-      try {
-        subscription = requests.listen(
-          (request) async {
-            logger.internal('Отправка запроса в client stream: $request');
-            await caller.send(request);
-          },
-          onError: (error, stackTrace) {
-            logger.error(
-              'Ошибка в потоке запросов client stream',
-              error: error,
-              stackTrace: stackTrace,
-            );
-          },
-          onDone: () {
-            logger.internal('Поток запросов client stream завершен');
-          },
-        );
-
-        // Ждем завершения потока запросов
-        await subscription.asFuture();
-        logger.internal('Поток запросов обработан, завершаем отправку');
-
-        // Завершаем отправку и получаем единственный ответ
-        final response = await caller.finishSending();
-        logger.internal('Получен ответ от client stream');
-
-        return response;
-      } finally {
-        // Всегда освобождаем ресурсы
-        await subscription?.cancel();
-      }
     };
   }
 
@@ -609,57 +598,108 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
     final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
-    // Создаем контроллер для передачи сообщений
-    final controller = StreamController<R>();
-
-    // Создаем bidirectional stream caller с контекстом
-    final caller = BidirectionalStreamCaller<C, R>(
-      transport: transport,
+    return handleBidirectionalStream<C, R>(
       serviceName: serviceName,
       methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
-      context: enhancedContext, // Передаем обогащенный контекст
-      logger: logger,
-    );
-
-    // Подписываемся на входящие ответы
-    final responseSubscription = caller.responses.listen(
-      (rpcMessage) {
-        if (!rpcMessage.isMetadataOnly && rpcMessage.payload != null) {
-          controller.add(rpcMessage.payload!);
-        }
-      },
-      onError: controller.addError,
-      onDone: () => controller.close(),
-    );
-
-    // Подписываемся на исходящие запросы
-    final requestSubscription = requests.listen(
-      (request) => caller.send(request),
-      onError: (error, stackTrace) {
-        logger.error(
-          'Ошибка при отправке запроса в bidirectional stream',
-          error: error,
-          stackTrace: stackTrace,
+      context: enhancedContext,
+      requests: requests,
+      handler: (ctx, normalizedRequests) {
+        final controller = StreamController<R>();
+        final caller = BidirectionalStreamCaller<C, R>(
+          transport: transport,
+          serviceName: serviceName,
+          methodName: methodName,
+          requestCodec: requestCodec,
+          responseCodec: responseCodec,
+          context: ctx,
+          logger: logger,
         );
-        controller.addError(error, stackTrace);
-      },
-      onDone: () async {
-        logger.internal('Поток запросов bidirectional stream завершен');
-        await caller.close();
-      },
-    );
 
-    // Возвращаем поток с автоматической очисткой
-    return controller.stream.transform(
-      StreamTransformer.fromHandlers(
-        handleDone: (sink) {
-          responseSubscription.cancel();
-          requestSubscription.cancel();
-          sink.close();
-        },
-      ),
+        StreamSubscription<RpcMessage<R>>? responseSubscription;
+        StreamSubscription<C>? requestSubscription;
+
+        var isCleaned = false;
+
+        Future<void> cleanup() async {
+          if (isCleaned) {
+            return;
+          }
+          isCleaned = true;
+          await responseSubscription?.cancel();
+          await requestSubscription?.cancel();
+          await caller.close();
+          if (!controller.isClosed) {
+            await controller.close();
+          }
+        }
+
+        responseSubscription = caller.responses.listen(
+          (rpcMessage) {
+            if (!rpcMessage.isMetadataOnly && rpcMessage.payload != null) {
+              controller.add(rpcMessage.payload!);
+            }
+          },
+          onError: (error, stackTrace) {
+            controller.addError(error, stackTrace);
+            unawaited(cleanup());
+          },
+          onDone: () {
+            unawaited(cleanup());
+          },
+        );
+
+        requestSubscription = normalizedRequests.listen(
+          (request) {
+            requestSubscription?.pause();
+            unawaited(() async {
+              try {
+                await caller.send(request);
+              } catch (error, stackTrace) {
+                logger.error(
+                  'Ошибка при отправке запроса в bidirectional stream',
+                  error: error,
+                  stackTrace: stackTrace,
+                );
+                controller.addError(error, stackTrace);
+                await cleanup();
+              } finally {
+                if (!isCleaned) {
+                  requestSubscription?.resume();
+                }
+              }
+            }());
+          },
+          onError: (error, stackTrace) {
+            logger.error(
+              'Ошибка при отправке запроса в bidirectional stream',
+              error: error,
+              stackTrace: stackTrace,
+            );
+            controller.addError(error, stackTrace);
+            unawaited(cleanup());
+          },
+          onDone: () {
+            logger.internal('Поток запросов bidirectional stream завершен');
+            unawaited(
+              caller.finishSending().catchError((error, stackTrace) async {
+                controller.addError(error, stackTrace);
+                await cleanup();
+              }),
+            );
+          },
+        );
+
+        controller.onCancel = cleanup;
+
+        return controller.stream.transform(
+          StreamTransformer.fromHandlers(
+            handleDone: (sink) {
+              unawaited(cleanup());
+              sink.close();
+            },
+          ),
+        );
+      },
     );
   }
 }

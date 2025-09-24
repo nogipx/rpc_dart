@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'special_cbor.dart';
 
 part 'codec.dart';
+part 'binary_codec.dart';
 
 /// Основной интерфейс для всех RPC сообщений - работает с байтами
 /// Все типы запросов и ответов должны реализовывать этот интерфейс

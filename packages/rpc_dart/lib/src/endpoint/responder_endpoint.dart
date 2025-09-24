@@ -385,9 +385,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
       processor.requests.listen((request) async {
         try {
-          final response = await binding.zeroCopyMethod.callUnaryHandler(
-            context,
-            request,
+          final response = await handleUnary<Object, Object>(
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            request: request,
+            handler: (ctx, req) async {
+              return binding.zeroCopyMethod.callUnaryHandler(
+                ctx,
+                req,
+              );
+            },
           );
           await processor.send(response);
           await processor.finishSending();
@@ -424,11 +432,19 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: method.requestCodec,
       responseCodec: method.responseCodec,
       handler: (request) async {
-        final response = await method.callUnaryHandler(
-          context,
-          request,
+        return handleUnary<IRpcSerializable, IRpcSerializable>(
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          context: context,
+          request: request,
+          handler: (ctx, req) async {
+            final response = await method.callUnaryHandler(
+              ctx,
+              req,
+            );
+            return method.castResponse(response);
+          },
         );
-        return method.castResponse(response);
       },
       context: context,
       logger: contextLogger,
@@ -465,10 +481,18 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         transport: transport,
         serviceName: binding.serviceName,
         methodName: binding.methodName,
-        handler: (requests) async {
-          return await binding.zeroCopyMethod.callClientStreamHandler(
-            context,
-            requests,
+        handler: (requests) {
+          return handleClientStream<Object, Object>(
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            requests: requests,
+            handler: (ctx, normalizedRequests) {
+              return binding.zeroCopyMethod.callClientStreamHandler(
+                ctx,
+                normalizedRequests,
+              );
+            },
           );
         },
         context: context,
@@ -495,12 +519,23 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: method.requestCodec,
       responseCodec: method.responseCodec,
       handler: (requests) async {
-        final typedRequests = method.castRequestStream(requests);
-        final response = await method.callClientStreamHandler(
-          context,
-          typedRequests,
+        final response = await handleClientStream<IRpcSerializable,
+            IRpcSerializable>(
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          context: context,
+          requests: requests,
+          handler: (ctx, normalizedRequests) async {
+            final typedRequests = method.castRequestStream(normalizedRequests);
+            final result = await method.callClientStreamHandler(
+              ctx,
+              typedRequests,
+            );
+            return method.castResponse(result);
+          },
         );
-        return method.castResponse(response);
+
+        return response;
       },
       context: context,
       logger: contextLogger,
@@ -535,9 +570,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         serviceName: binding.serviceName,
         methodName: binding.methodName,
         handler: (request) {
-          return binding.zeroCopyMethod.callServerStreamHandler(
-            context,
-            request,
+          return handleServerStream<Object, Object>(
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            request: request,
+            handler: (ctx, normalizedRequest) {
+              return binding.zeroCopyMethod.callServerStreamHandler(
+                ctx,
+                normalizedRequest,
+              );
+            },
           );
         },
         context: context,
@@ -566,8 +609,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: method.requestCodec,
       responseCodec: method.responseCodec,
       handler: (request) {
-        final responseStream = method.callServerStreamHandler(context, request);
-        return responseStream.map(method.castResponse);
+        return handleServerStream<IRpcSerializable, IRpcSerializable>(
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          context: context,
+          request: request,
+          handler: (ctx, normalizedRequest) {
+            final responseStream =
+                method.callServerStreamHandler(ctx, normalizedRequest);
+            return responseStream.map(method.castResponse);
+          },
+        );
       },
       context: context,
       logger: contextLogger,
@@ -619,10 +671,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
       unawaited(() async {
         try {
-          final responseStream =
-              binding.zeroCopyMethod.callBidirectionalStreamHandler(
-            context,
-            responder.requests,
+          final responseStream = handleBidirectionalStream<Object, Object>(
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            requests: responder.requests,
+            handler: (ctx, normalizedRequests) {
+              return binding.zeroCopyMethod.callBidirectionalStreamHandler(
+                ctx,
+                normalizedRequests,
+              );
+            },
           );
 
           await for (final response in responseStream) {
@@ -671,12 +730,24 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     unawaited(() async {
       try {
-        final typedRequests = method.castRequestStream(responder.requests);
-        final responseStream =
-            method.callBidirectionalStreamHandler(context, typedRequests);
+        final responseStream = handleBidirectionalStream<IRpcSerializable,
+            IRpcSerializable>(
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          context: context,
+          requests: responder.requests,
+          handler: (ctx, normalizedRequests) {
+            final typedRequests = method.castRequestStream(normalizedRequests);
+            final stream = method.callBidirectionalStreamHandler(
+              ctx,
+              typedRequests,
+            );
+            return stream.map(method.castResponse);
+          },
+        );
 
         await for (final response in responseStream) {
-          await responder.send(method.castResponse(response));
+          await responder.send(response);
         }
 
         await responder.finishReceiving();

@@ -8,6 +8,7 @@ part of '_index.dart';
 abstract base class RpcEndpointBase {
   final IRpcTransport _transport;
   final List<IRpcMiddleware> _middlewares = [];
+  final List<IRpcInterceptor> _interceptors = [];
   final String? debugLabel;
   final RpcLoggerColors? loggerColors;
 
@@ -26,6 +27,7 @@ abstract base class RpcEndpointBase {
     final metrics = <String, Object?>{
       'isActive': _isActive,
       'middlewareCount': _middlewares.length,
+      'interceptorCount': _interceptors.length,
       'transportClosed': _transport.isClosed,
       'transportType': _transport.runtimeType.toString(),
     };
@@ -164,6 +166,11 @@ abstract base class RpcEndpointBase {
     logger.internal('Добавлен middleware: ${middleware.toString()}');
   }
 
+  void addInterceptor(IRpcInterceptor interceptor) {
+    _interceptors.add(interceptor);
+    logger.internal('Добавлен interceptor: ${interceptor.toString()}');
+  }
+
   bool get isActive => _isActive;
 
   IRpcTransport get transport => _transport;
@@ -184,6 +191,7 @@ abstract base class RpcEndpointBase {
     logger.internal('Закрытие RpcEndpoint');
     _isActive = false;
     _middlewares.clear();
+    _interceptors.clear();
 
     try {
       // Закрываем транспорт и ожидаем завершения с таймаутом
@@ -204,5 +212,330 @@ abstract base class RpcEndpointBase {
       _isActive = false;
       logger.internal('RpcEndpoint закрыт');
     }
+  }
+
+  RpcMiddlewareContext _createMiddlewareContext(
+    String serviceName,
+    String methodName,
+    RpcContext context,
+  ) {
+    return RpcMiddlewareContext(
+      endpoint: this,
+      serviceName: serviceName,
+      methodName: methodName,
+      context: context,
+    );
+  }
+
+  Future<TRequest> _applyRequestMiddlewares<TRequest>(
+    RpcMiddlewareContext context,
+    TRequest request,
+  ) async {
+    var current = request;
+
+    for (final middleware in _middlewares) {
+      current = await Future<TRequest>.value(
+        middleware.processRequest<TRequest>(context, current),
+      );
+    }
+
+    return current;
+  }
+
+  Future<TResponse> _applyResponseMiddlewares<TResponse>(
+    RpcMiddlewareContext context,
+    TResponse response,
+  ) async {
+    var current = response;
+
+    for (final middleware in _middlewares) {
+      current = await Future<TResponse>.value(
+        middleware.processResponse<TResponse>(context, current),
+      );
+    }
+
+    return current;
+  }
+
+  Stream<TRequest> _applyRequestMiddlewaresToStream<TRequest>(
+    RpcMiddlewareContext context,
+    Stream<TRequest> requests,
+  ) async* {
+    await for (final request in requests) {
+      yield await _applyRequestMiddlewares<TRequest>(context, request);
+    }
+  }
+
+  Stream<TResponse> _applyResponseMiddlewaresToStream<TResponse>(
+    RpcMiddlewareContext context,
+    Stream<TResponse> responses,
+  ) async* {
+    await for (final response in responses) {
+      yield await _applyResponseMiddlewares<TResponse>(context, response);
+    }
+  }
+
+  Future<({TResponse response, RpcContext context})>
+      _invokeUnaryInterceptors<TRequest, TResponse>(
+    RpcMiddlewareContext context,
+    TRequest request,
+    Future<TResponse> Function(RpcContext ctx, TRequest request) handler,
+  ) async {
+    RpcContext currentContext = context.context;
+
+    Future<TResponse> invokeHandler(RpcContext ctx, TRequest req) async {
+      currentContext = ctx;
+      return handler(ctx, req);
+    }
+
+    RpcUnaryNext<TRequest, TResponse> next = invokeHandler;
+
+    for (final interceptor in _interceptors.reversed) {
+      final previous = next;
+      next = (ctx, req) => interceptor.interceptUnary<TRequest, TResponse>(
+            context.copyWith(context: ctx),
+            req,
+            previous,
+          );
+    }
+
+    final response = await next(context.context, request);
+    return (response: response, context: currentContext);
+  }
+
+  Future<({Stream<TResponse> stream, RpcContext context})>
+      _invokeServerStreamInterceptors<TRequest, TResponse>(
+    RpcMiddlewareContext context,
+    TRequest request,
+    FutureOr<Stream<TResponse>> Function(
+      RpcContext ctx,
+      TRequest request,
+    ) handler,
+  ) async {
+    RpcContext currentContext = context.context;
+
+    FutureOr<Stream<TResponse>> invokeHandler(
+      RpcContext ctx,
+      TRequest req,
+    ) {
+      currentContext = ctx;
+      return handler(ctx, req);
+    }
+
+    RpcServerStreamNext<TRequest, TResponse> next = invokeHandler;
+
+    for (final interceptor in _interceptors.reversed) {
+      final previous = next;
+      next = (ctx, req) => interceptor.interceptServerStream<TRequest, TResponse>(
+            context.copyWith(context: ctx),
+            req,
+            previous,
+          );
+    }
+
+    final stream = await Future<Stream<TResponse>>.value(
+      next(context.context, request),
+    );
+
+    return (stream: stream, context: currentContext);
+  }
+
+  Future<({TResponse response, RpcContext context})>
+      _invokeClientStreamInterceptors<TRequest, TResponse>(
+    RpcMiddlewareContext context,
+    Stream<TRequest> requests,
+    Future<TResponse> Function(
+      RpcContext ctx,
+      Stream<TRequest> requests,
+    ) handler,
+  ) async {
+    RpcContext currentContext = context.context;
+
+    Future<TResponse> invokeHandler(
+      RpcContext ctx,
+      Stream<TRequest> reqs,
+    ) async {
+      currentContext = ctx;
+      return handler(ctx, reqs);
+    }
+
+    RpcClientStreamNext<TRequest, TResponse> next = invokeHandler;
+
+    for (final interceptor in _interceptors.reversed) {
+      final previous = next;
+      next = (ctx, reqs) => interceptor.interceptClientStream<TRequest, TResponse>(
+            context.copyWith(context: ctx),
+            reqs,
+            previous,
+          );
+    }
+
+    final response = await next(context.context, requests);
+    return (response: response, context: currentContext);
+  }
+
+  Future<({Stream<TResponse> stream, RpcContext context})>
+      _invokeBidirectionalInterceptors<TRequest, TResponse>(
+    RpcMiddlewareContext context,
+    Stream<TRequest> requests,
+    FutureOr<Stream<TResponse>> Function(
+      RpcContext ctx,
+      Stream<TRequest> requests,
+    ) handler,
+  ) async {
+    RpcContext currentContext = context.context;
+
+    FutureOr<Stream<TResponse>> invokeHandler(
+      RpcContext ctx,
+      Stream<TRequest> reqs,
+    ) {
+      currentContext = ctx;
+      return handler(ctx, reqs);
+    }
+
+    RpcBidirectionalStreamNext<TRequest, TResponse> next = invokeHandler;
+
+    for (final interceptor in _interceptors.reversed) {
+      final previous = next;
+      next = (ctx, reqs) =>
+          interceptor.interceptBidirectionalStream<TRequest, TResponse>(
+            context.copyWith(context: ctx),
+            reqs,
+            previous,
+          );
+    }
+
+    final stream = await Future<Stream<TResponse>>.value(
+      next(context.context, requests),
+    );
+
+    return (stream: stream, context: currentContext);
+  }
+
+  Future<TResponse> handleUnary<TRequest, TResponse>({
+    required String serviceName,
+    required String methodName,
+    required RpcContext context,
+    required TRequest request,
+    required Future<TResponse> Function(
+      RpcContext ctx,
+      TRequest request,
+    ) handler,
+  }) async {
+    final middlewareContext =
+        _createMiddlewareContext(serviceName, methodName, context);
+    final normalizedRequest =
+        await _applyRequestMiddlewares<TRequest>(middlewareContext, request);
+
+    final interceptorResult = await _invokeUnaryInterceptors<TRequest, TResponse>(
+      middlewareContext,
+      normalizedRequest,
+      handler,
+    );
+
+    final responseContext =
+        middlewareContext.copyWith(context: interceptorResult.context);
+    final normalizedResponse = await _applyResponseMiddlewares<TResponse>(
+      responseContext,
+      interceptorResult.response,
+    );
+
+    return normalizedResponse;
+  }
+
+  Stream<TResponse> handleServerStream<TRequest, TResponse>({
+    required String serviceName,
+    required String methodName,
+    required RpcContext context,
+    required TRequest request,
+    required FutureOr<Stream<TResponse>> Function(
+      RpcContext ctx,
+      TRequest request,
+    ) handler,
+  }) async* {
+    final middlewareContext =
+        _createMiddlewareContext(serviceName, methodName, context);
+    final normalizedRequest =
+        await _applyRequestMiddlewares<TRequest>(middlewareContext, request);
+
+    final interceptorResult =
+        await _invokeServerStreamInterceptors<TRequest, TResponse>(
+      middlewareContext,
+      normalizedRequest,
+      handler,
+    );
+
+    final responseContext =
+        middlewareContext.copyWith(context: interceptorResult.context);
+
+    yield* _applyResponseMiddlewaresToStream<TResponse>(
+      responseContext,
+      interceptorResult.stream,
+    );
+  }
+
+  Future<TResponse> handleClientStream<TRequest, TResponse>({
+    required String serviceName,
+    required String methodName,
+    required RpcContext context,
+    required Stream<TRequest> requests,
+    required Future<TResponse> Function(
+      RpcContext ctx,
+      Stream<TRequest> requests,
+    ) handler,
+  }) async {
+    final middlewareContext =
+        _createMiddlewareContext(serviceName, methodName, context);
+    final normalizedRequests = _applyRequestMiddlewaresToStream<TRequest>(
+      middlewareContext,
+      requests,
+    );
+
+    final interceptorResult =
+        await _invokeClientStreamInterceptors<TRequest, TResponse>(
+      middlewareContext,
+      normalizedRequests,
+      handler,
+    );
+
+    final responseContext =
+        middlewareContext.copyWith(context: interceptorResult.context);
+    return _applyResponseMiddlewares<TResponse>(
+      responseContext,
+      interceptorResult.response,
+    );
+  }
+
+  Stream<TResponse> handleBidirectionalStream<TRequest, TResponse>({
+    required String serviceName,
+    required String methodName,
+    required RpcContext context,
+    required Stream<TRequest> requests,
+    required FutureOr<Stream<TResponse>> Function(
+      RpcContext ctx,
+      Stream<TRequest> requests,
+    ) handler,
+  }) async* {
+    final middlewareContext =
+        _createMiddlewareContext(serviceName, methodName, context);
+    final normalizedRequests = _applyRequestMiddlewaresToStream<TRequest>(
+      middlewareContext,
+      requests,
+    );
+
+    final interceptorResult =
+        await _invokeBidirectionalInterceptors<TRequest, TResponse>(
+      middlewareContext,
+      normalizedRequests,
+      handler,
+    );
+
+    final responseContext =
+        middlewareContext.copyWith(context: interceptorResult.context);
+
+    yield* _applyResponseMiddlewaresToStream<TResponse>(
+      responseContext,
+      interceptorResult.stream,
+    );
   }
 }

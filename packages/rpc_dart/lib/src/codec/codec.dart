@@ -6,11 +6,12 @@ part of '_index.dart';
 
 /// CBOR сериализатор для RPC сообщений
 class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
-  final T Function(Map<String, dynamic> json)? _fromJson;
+  final T Function(Map<String, dynamic> json) _fromJson;
 
   /// Создает CBOR сериализатор
-  /// [fromCbor] - функция для создания объекта из CBOR Map
-  RpcCodec(this._fromJson);
+  /// [fromJson] - функция для создания объекта из JSON Map
+  const RpcCodec(T Function(Map<String, dynamic> json) fromJson)
+      : _fromJson = fromJson;
 
   @override
   Uint8List serialize(T message) {
@@ -25,7 +26,7 @@ class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
     final decoded = CborCodec.decode(bytes);
 
     // CborCodec.decode теперь всегда возвращает Map<String, dynamic>
-    return _fromJson!(decoded);
+    return _fromJson(decoded);
   }
 
   /// Статический хелпер для десериализации CBOR
