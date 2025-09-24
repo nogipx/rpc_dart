@@ -619,6 +619,16 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         StreamSubscription<C>? requestSubscription;
 
         var isCleaned = false;
+        var sendSequence = Future<void>.value();
+
+        void enqueueSend(Future<void> Function() operation) {
+          sendSequence = sendSequence.then((_) async {
+            if (isCleaned) {
+              return;
+            }
+            await operation();
+          });
+        }
 
         Future<void> cleanup() async {
           if (isCleaned) {
@@ -650,8 +660,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
         requestSubscription = normalizedRequests.listen(
           (request) {
-            requestSubscription?.pause();
-            unawaited(() async {
+            enqueueSend(() async {
               try {
                 await caller.send(request);
               } catch (error, stackTrace) {
@@ -662,12 +671,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
                 );
                 controller.addError(error, stackTrace);
                 await cleanup();
-              } finally {
-                if (!isCleaned) {
-                  requestSubscription?.resume();
-                }
               }
-            }());
+            });
           },
           onError: (error, stackTrace) {
             logger.error(
@@ -680,12 +685,14 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
           },
           onDone: () {
             logger.internal('Поток запросов bidirectional stream завершен');
-            unawaited(
-              caller.finishSending().catchError((error, stackTrace) async {
+            enqueueSend(() async {
+              try {
+                await caller.finishSending();
+              } catch (error, stackTrace) {
                 controller.addError(error, stackTrace);
                 await cleanup();
-              }),
-            );
+              }
+            });
           },
         );
 

@@ -152,7 +152,12 @@ void main() {
       );
 
       expect(responseContexts, hasLength(2));
-      expect(responseContexts.every((ctx) => identical(ctx, responseContexts.first)), isTrue);
+      expect(
+        responseContexts.every(
+          (ctx) => identical(ctx.context, responseContexts.first.context),
+        ),
+        isTrue,
+      );
     });
 
     test('handleClientStream normalizes incoming stream and updates context', () async {

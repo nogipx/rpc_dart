@@ -6,11 +6,16 @@ part of '_index.dart';
 
 /// CBOR сериализатор для RPC сообщений
 class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
-  final T Function(Map<String, dynamic> json) _fromJson;
+  final T Function(Map<String, dynamic> json)? _fromJson;
 
   /// Создает CBOR сериализатор
   /// [fromJson] - функция для создания объекта из JSON Map
-  const RpcCodec(T Function(Map<String, dynamic> json) fromJson)
+  @Deprecated('Укажите декодер через RpcCodec.withDecoder или toBinaryCodec')
+  const RpcCodec([T Function(Map<String, dynamic> json)? fromJson])
+      : _fromJson = fromJson;
+
+  /// Создает CBOR сериализатор с обязательным декодером
+  const RpcCodec.withDecoder(T Function(Map<String, dynamic> json) fromJson)
       : _fromJson = fromJson;
 
   @override
@@ -23,10 +28,18 @@ class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
 
   @override
   T deserialize(Uint8List bytes) {
+    final decoder = _fromJson;
+    if (decoder == null) {
+      throw StateError(
+        'RpcCodec не может десериализовать данные без функции fromJson. '
+        'Создайте экземпляр через RpcCodec.withDecoder или передайте fromJson в конструктор.',
+      );
+    }
+
     final decoded = CborCodec.decode(bytes);
 
     // CborCodec.decode теперь всегда возвращает Map<String, dynamic>
-    return _fromJson(decoded);
+    return decoder(decoded);
   }
 
   /// Статический хелпер для десериализации CBOR
