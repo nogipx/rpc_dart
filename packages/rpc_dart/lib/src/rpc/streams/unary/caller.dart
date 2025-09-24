@@ -200,7 +200,7 @@ final class UnaryCaller<TRequest, TResponse> {
             // Получили метаданные (возможно трейлеры)
             _logger?.internal('Получены метаданные [streamId: $streamId]');
             final statusCode = message.metadata!.getHeaderValue(
-              RpcConstants.GRPC_STATUS_HEADER,
+              RpcConstants.grpcStatusHeader,
             );
 
             if (statusCode != null && message.isEndOfStream) {
@@ -208,9 +208,9 @@ final class UnaryCaller<TRequest, TResponse> {
               _logger?.internal(
                 'Получен статус завершения: $code [streamId: $streamId]',
               );
-              if (code != RpcStatus.OK && !completer.isCompleted) {
+              if (code != RpcStatus.ok && !completer.isCompleted) {
                 final errorMessage = message.metadata!.getHeaderValue(
-                      RpcConstants.GRPC_MESSAGE_HEADER,
+                      RpcConstants.grpcMessageHeader,
                     ) ??
                     '';
                 _logger?.error(

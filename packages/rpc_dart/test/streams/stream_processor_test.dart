@@ -96,7 +96,7 @@ void main() {
     test('sendError executes without errors', () async {
       // Операция должна завершиться без ошибки
       expect(
-        () => processor.sendError(RpcStatus.INTERNAL, 'Test error'),
+        () => processor.sendError(RpcStatus.internal, 'Test error'),
         returnsNormally,
       );
 
@@ -124,7 +124,7 @@ void main() {
       expect(() => processor.send('should not work'.rpc), returnsNormally);
       expect(() => processor.finishSending(), returnsNormally);
       expect(
-        () => processor.sendError(RpcStatus.INTERNAL, 'Error'),
+        () => processor.sendError(RpcStatus.internal, 'Error'),
         returnsNormally,
       );
     });
@@ -177,7 +177,7 @@ void main() {
       messageStreamController.add(
         RpcTransportMessage(
           streamId: streamId,
-          metadata: RpcMetadata.forTrailer(RpcStatus.OK),
+          metadata: RpcMetadata.forTrailer(RpcStatus.ok),
           isEndOfStream: true,
         ),
       );

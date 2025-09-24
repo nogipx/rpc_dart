@@ -125,7 +125,7 @@ final class ClientStreamResponder<TRequest extends Object,
         error: error,
         stackTrace: stackTrace,
       );
-      await _processor.sendError(RpcStatus.INTERNAL, error.toString());
+      await _processor.sendError(RpcStatus.internal, error.toString());
     });
   }
 

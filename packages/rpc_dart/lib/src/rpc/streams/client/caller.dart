@@ -116,13 +116,13 @@ final class ClientStreamCaller<TRequest extends Object,
         // Проверяем на ошибки в метаданных (трейлерах)
         if (rpcMessage.isMetadataOnly && rpcMessage.metadata != null) {
           final statusCode = rpcMessage.metadata!.getHeaderValue(
-            RpcConstants.GRPC_STATUS_HEADER,
+            RpcConstants.grpcStatusHeader,
           );
           _logger?.internal('Статус-код из метаданных: $statusCode');
 
           if (statusCode != null && statusCode != '0') {
             final errorMessage = rpcMessage.metadata!.getHeaderValue(
-                  RpcConstants.GRPC_MESSAGE_HEADER,
+                  RpcConstants.grpcMessageHeader,
                 ) ??
                 '';
             _logger?.error(

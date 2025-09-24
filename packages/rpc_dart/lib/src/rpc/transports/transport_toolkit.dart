@@ -2,7 +2,12 @@
 //
 // SPDX-License-Identifier: MIT
 
-part of '../_index.dart';
+import 'dart:async';
+import 'dart:collection';
+import 'dart:typed_data';
+
+import '../../core/_index.dart';
+import '../../logs/_logs.dart';
 
 /// Минимальный инструментарий для разработки транспортов RPC Dart
 ///

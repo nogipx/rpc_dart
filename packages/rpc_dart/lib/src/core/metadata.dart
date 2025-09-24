@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-part of '../_index.dart';
+import 'protocol.dart';
 
 /// Представляет отдельный HTTP/2 заголовок.
 ///
@@ -46,15 +46,15 @@ final class RpcMetadata {
   }) {
     final methodPath = '/$serviceName/$methodName';
     return RpcMetadata([
-      RpcHeader(':method', 'POST'),
+      const RpcHeader(':method', 'POST'),
       RpcHeader(':path', methodPath),
-      RpcHeader(':scheme', 'http'),
+      const RpcHeader(':scheme', 'http'),
       RpcHeader(':authority', host),
-      RpcHeader(
-        RpcConstants.CONTENT_TYPE_HEADER,
-        RpcConstants.GRPC_CONTENT_TYPE,
+      const RpcHeader(
+        RpcConstants.contentTypeHeader,
+        RpcConstants.grpcContentType,
       ),
-      RpcHeader('te', 'trailers'),
+      const RpcHeader('te', 'trailers'),
     ]);
   }
 
@@ -68,15 +68,15 @@ final class RpcMetadata {
     String host = '',
   }) {
     return RpcMetadata([
-      RpcHeader(':method', 'POST'),
+      const RpcHeader(':method', 'POST'),
       RpcHeader(':path', methodPath),
-      RpcHeader(':scheme', 'http'),
+      const RpcHeader(':scheme', 'http'),
       RpcHeader(':authority', host),
-      RpcHeader(
-        RpcConstants.CONTENT_TYPE_HEADER,
-        RpcConstants.GRPC_CONTENT_TYPE,
+      const RpcHeader(
+        RpcConstants.contentTypeHeader,
+        RpcConstants.grpcContentType,
       ),
-      RpcHeader('te', 'trailers'),
+      const RpcHeader('te', 'trailers'),
     ]);
   }
 
@@ -86,11 +86,11 @@ final class RpcMetadata {
   /// при получении запроса, до отправки каких-либо данных.
   /// Возвращает метаданные, готовые для отправки в начале ответа.
   static RpcMetadata forServerInitialResponse() {
-    return RpcMetadata([
+    return const RpcMetadata([
       RpcHeader(':status', '200'),
       RpcHeader(
-        RpcConstants.CONTENT_TYPE_HEADER,
-        RpcConstants.GRPC_CONTENT_TYPE,
+        RpcConstants.contentTypeHeader,
+        RpcConstants.grpcContentType,
       ),
     ]);
   }
@@ -104,11 +104,11 @@ final class RpcMetadata {
   /// Возвращает метаданные-трейлеры для завершения потока.
   static RpcMetadata forTrailer(int statusCode, {String message = ''}) {
     final headers = [
-      RpcHeader(RpcConstants.GRPC_STATUS_HEADER, statusCode.toString()),
+      RpcHeader(RpcConstants.grpcStatusHeader, statusCode.toString()),
     ];
 
     if (message.isNotEmpty) {
-      headers.add(RpcHeader(RpcConstants.GRPC_MESSAGE_HEADER, message));
+      headers.add(RpcHeader(RpcConstants.grpcMessageHeader, message));
     }
 
     return RpcMetadata(headers);
@@ -155,60 +155,5 @@ final class RpcMetadata {
 
     final parts = path.substring(1).split('/');
     return parts.length >= 2 ? parts[1] : null;
-  }
-}
-
-/// Обертка для gRPC сообщения с его метаданными.
-///
-/// Объединяет данные (payload) и метаданные (headers) в единый объект,
-/// что позволяет обрабатывать разные типы данных в потоке сообщений:
-/// - Сообщения с полезной нагрузкой
-/// - Сообщения только с метаданными (например, трейлеры)
-/// - Информацию о завершении потока
-final class RpcMessage<T> {
-  /// Полезная нагрузка сообщения (данные)
-  final T? payload;
-
-  /// Связанные метаданные (заголовки или трейлеры)
-  final RpcMetadata? metadata;
-
-  /// Флаг, указывающий, что сообщение содержит только метаданные
-  final bool isMetadataOnly;
-
-  /// Флаг, указывающий, что это последнее сообщение в потоке
-  final bool isEndOfStream;
-
-  /// Создает сообщение с указанными параметрами
-  const RpcMessage({
-    this.payload,
-    this.metadata,
-    this.isMetadataOnly = false,
-    this.isEndOfStream = false,
-  });
-
-  /// Создает сообщение только с полезной нагрузкой (данными).
-  ///
-  /// Удобный фабричный метод для создания обычных сообщений с данными.
-  /// [payload] Полезная нагрузка для передачи
-  /// Возвращает сообщение, содержащее только данные.
-  static RpcMessage<T> withPayload<T>(T payload) {
-    return RpcMessage<T>(payload: payload);
-  }
-
-  /// Создает сообщение только с метаданными (заголовками или трейлерами).
-  ///
-  /// Удобный фабричный метод для создания сообщений с метаданными.
-  /// [metadata] Метаданные для передачи
-  /// [isEndOfStream] Флаг конца потока (для трейлеров)
-  /// Возвращает сообщение, содержащее только метаданные.
-  static RpcMessage<T> withMetadata<T>(
-    RpcMetadata metadata, {
-    bool isEndOfStream = false,
-  }) {
-    return RpcMessage<T>(
-      metadata: metadata,
-      isMetadataOnly: true,
-      isEndOfStream: isEndOfStream,
-    );
   }
 }

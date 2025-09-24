@@ -205,7 +205,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           await _transport.sendMetadata(
             streamId,
             RpcMetadata.forTrailer(
-              RpcStatus.INVALID_ARGUMENT,
+              RpcStatus.invalidArgument,
               message: 'Запрос не получен: поток закрыт без данных',
             ),
             endStream: true,
@@ -326,7 +326,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
       await _transport.sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(RpcStatus.OK),
+        RpcMetadata.forTrailer(RpcStatus.ok),
         endStream: true,
       );
 
@@ -354,7 +354,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(
-          RpcStatus.INTERNAL,
+          RpcStatus.internal,
           message: 'Ошибка при обработке запроса: $e',
         ),
         endStream: true,
@@ -448,7 +448,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
       await _transport.sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(RpcStatus.OK),
+        RpcMetadata.forTrailer(RpcStatus.ok),
         endStream: true,
       );
 
@@ -474,7 +474,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       // При ошибке отправляем трейлер с кодом ошибки
       await _transport.sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(RpcStatus.INTERNAL, message: e.toString()),
+        RpcMetadata.forTrailer(RpcStatus.internal, message: e.toString()),
         endStream: true,
       );
     } finally {

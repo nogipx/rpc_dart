@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:test/test.dart';
+
 import 'package:rpc_dart/src/rpc/_index.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('RpcInMemoryTransport', () {
@@ -371,7 +372,7 @@ void main() {
           responseStreamId,
           Uint8List.fromList('test response'.codeUnits),
         );
-        final trailerMetadata = RpcMetadata.forTrailer(RpcStatus.OK);
+        final trailerMetadata = RpcMetadata.forTrailer(RpcStatus.ok);
         await serverTransport.sendMetadata(
           responseStreamId,
           trailerMetadata,

@@ -114,144 +114,17 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
     final metadata = RpcMetadata(headers);
 
-    final completer = Completer<RpcEndpointPingResult>();
-    StreamSubscription<RpcTransportMessage>? subscription;
-
-    Map<String, String> metadataToMap(RpcMetadata metadata) {
-      final map = <String, String>{};
-      for (final header in metadata.headers) {
-        map[header.name] = header.value;
-      }
-      return map;
-    }
-
-    void completeSuccess(RpcEndpointPingResult result) {
-      if (!completer.isCompleted) {
-        completer.complete(result);
-      }
-    }
-
-    void completeError(Object error, [StackTrace? stackTrace]) {
-      if (!completer.isCompleted) {
-        completer.completeError(error, stackTrace);
-      }
-    }
-
-    subscription = transport.getMessagesForStream(streamId).listen(
-      (message) {
-        if (!message.isMetadataOnly || message.metadata == null) {
-          return;
-        }
-
-        final headersMap = metadataToMap(message.metadata!);
-
-        if (!headersMap.containsKey(RpcConstants.GRPC_STATUS_HEADER)) {
-          logger.internal(
-            'Получены начальные метаданные ответа ping [streamId: $streamId]',
-          );
-          return;
-        }
-
-        final statusCode = int.tryParse(
-              headersMap[RpcConstants.GRPC_STATUS_HEADER] ?? '',
-            ) ??
-            RpcStatus.UNKNOWN;
-
-        final receivedAt = DateTime.now().toUtc();
-
-        if (statusCode != RpcStatus.OK) {
-          final statusMessage =
-              headersMap[RpcConstants.GRPC_MESSAGE_HEADER] ?? 'Unknown error';
-          logger.warning(
-            'Ping завершился с ошибкой: status=$statusCode, message=$statusMessage [streamId: $streamId]',
-          );
-          completeError(
-            RpcException(
-              'Ping failed with status $statusCode: $statusMessage',
-            ),
-          );
-          return;
-        }
-
-        DateTime? responderTimestamp;
-        final responderTimestampRaw =
-            headersMap[RpcEndpointPingProtocol.responseTimestampHeader];
-        if (responderTimestampRaw != null) {
-          responderTimestamp = DateTime.tryParse(responderTimestampRaw);
-        }
-
-        final result = RpcEndpointPingResult(
-          sentAt: sentAt,
-          receivedAt: receivedAt,
-          roundTrip: receivedAt.difference(sentAt),
-          responderTimestamp: responderTimestamp,
-          responderDebugLabel:
-              headersMap[RpcEndpointPingProtocol.responseDebugLabelHeader],
-          responderTransportType:
-              headersMap[RpcEndpointPingProtocol.responseTransportHeader],
-          responseHeaders: headersMap,
-        );
-
-        logger.internal(
-          'Ping успешно завершен, RTT=${result.roundTrip.inMilliseconds}мс [streamId: $streamId]',
-        );
-
-        completeSuccess(result);
-      },
-      onError: (error, stackTrace) {
-        logger.error(
-          'Ошибка при получении ответа ping [streamId: $streamId]',
-          error: error,
-          stackTrace: stackTrace,
-        );
-        completeError(error, stackTrace);
-      },
-      onDone: () {
-        if (!completer.isCompleted) {
-          completeError(
-            StateError(
-              'Ping stream завершен без трейлеров [streamId: $streamId]',
-            ),
-          );
-        }
-      },
+    final exchange = RpcEndpointPingExchange(
+      transport: transport,
+      logger: logger,
+      streamId: streamId,
+      sentAt: sentAt,
     );
 
-    try {
-      logger.internal('Отправка ping запроса [streamId: $streamId]');
-      await transport.sendMetadata(streamId, metadata);
-      await transport.finishSending(streamId);
-    } catch (error, stackTrace) {
-      await subscription.cancel();
-      logger.error(
-        'Ошибка при отправке ping [streamId: $streamId]',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      rethrow;
-    }
-
-    Future<RpcEndpointPingResult> future = completer.future;
-
-    if (timeout != null) {
-      future = future.timeout(
-        timeout,
-        onTimeout: () {
-          logger.warning(
-            'Ping превысил время ожидания ${timeout.inMilliseconds}мс [streamId: $streamId]',
-          );
-          throw TimeoutException(
-            'Ping не завершился за ${timeout.inMilliseconds}мс',
-          );
-        },
-      );
-    }
-
-    try {
-      return await future;
-    } finally {
-      await subscription.cancel();
-    }
+    return exchange.execute(
+      metadata: metadata,
+      timeout: timeout,
+    );
   }
 
   /// Создает ключ для реестра токенов из имени сервиса и метода
@@ -546,13 +419,13 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         // Проверяем статус в метаданных
         if (response.metadata != null) {
           final statusStr = response.metadata!.getHeaderValue(
-            RpcConstants.GRPC_STATUS_HEADER,
+            RpcConstants.grpcStatusHeader,
           );
           if (statusStr != null) {
-            final status = int.tryParse(statusStr) ?? RpcStatus.UNKNOWN;
-            if (status != RpcStatus.OK) {
+            final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
+            if (status != RpcStatus.ok) {
               final message = response.metadata!.getHeaderValue(
-                    RpcConstants.GRPC_MESSAGE_HEADER,
+                    RpcConstants.grpcMessageHeader,
                   ) ??
                   'Unknown error';
               throw Exception('gRPC error $status: $message');
@@ -562,7 +435,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       }
 
       throw Exception(
-        'gRPC error ${RpcStatus.UNAVAILABLE}: No response received',
+        'gRPC error ${RpcStatus.unavailable}: No response received',
       );
     } finally {
       await processor.close();

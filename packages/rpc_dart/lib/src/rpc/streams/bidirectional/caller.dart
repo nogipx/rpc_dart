@@ -113,13 +113,13 @@ final class BidirectionalStreamCaller<TRequest extends Object,
       // Проверяем статус в метаданных
       if (response.metadata != null) {
         final statusStr = response.metadata!.getHeaderValue(
-          RpcConstants.GRPC_STATUS_HEADER,
+          RpcConstants.grpcStatusHeader,
         );
         if (statusStr != null) {
-          final status = int.tryParse(statusStr) ?? RpcStatus.UNKNOWN;
-          if (status != RpcStatus.OK) {
+          final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
+          if (status != RpcStatus.ok) {
             final message = response.metadata!.getHeaderValue(
-                  RpcConstants.GRPC_MESSAGE_HEADER,
+                  RpcConstants.grpcMessageHeader,
                 ) ??
                 'Unknown error';
             _logger?.error(

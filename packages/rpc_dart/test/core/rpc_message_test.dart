@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:rpc_dart/src/rpc/_index.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('RpcMessage', () {
@@ -83,7 +83,7 @@ void main() {
       test('создает_сообщение_с_метаданными_и_флагом_конца_потока', () {
         // Arrange
         final metadata = RpcMetadata([
-          RpcHeader(RpcConstants.GRPC_STATUS_HEADER, '0'),
+          RpcHeader(RpcConstants.grpcStatusHeader, '0'),
         ]);
 
         // Act

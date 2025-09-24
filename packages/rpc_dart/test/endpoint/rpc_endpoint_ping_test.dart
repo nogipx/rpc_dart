@@ -41,8 +41,8 @@ void main() {
       expect(result.roundTrip.isNegative, isFalse);
       expect(result.responderTimestamp, isNotNull);
       expect(
-        result.responseHeaders[RpcConstants.GRPC_STATUS_HEADER],
-        equals(RpcStatus.OK.toString()),
+        result.responseHeaders[RpcConstants.grpcStatusHeader],
+        equals(RpcStatus.ok.toString()),
       );
       expect(
         result.responseHeaders

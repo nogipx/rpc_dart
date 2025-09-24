@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-part of '../_index.dart';
+import 'dart:async';
+
+import '../../contracts/_index.dart';
+import '../../core/_index.dart';
+import '../../logs/_logs.dart';
 
 /// Функция условия для роутинга RPC вызовов
 ///

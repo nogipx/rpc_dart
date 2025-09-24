@@ -1,6 +1,7 @@
 import 'dart:typed_data';
-import 'package:test/test.dart';
+
 import 'package:rpc_dart/src/rpc/_index.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('RpcMessageFrame', () {
@@ -14,7 +15,7 @@ void main() {
 
         // Assert
         expect(result.length, equals(10)); // 5 байт префикс + 5 байт данные
-        expect(result[0], equals(RpcConstants.NO_COMPRESSION));
+        expect(result[0], equals(RpcConstants.noCompression));
         expect(result[1], equals(0)); // старший байт длины
         expect(result[2], equals(0));
         expect(result[3], equals(0));
@@ -30,7 +31,7 @@ void main() {
         final result = RpcMessageFrame.encode(messageBytes, compressed: true);
 
         // Assert
-        expect(result[0], equals(RpcConstants.COMPRESSED));
+        expect(result[0], equals(RpcConstants.compressed));
         expect(result[4], equals(3)); // длина 3 байта
         expect(result.sublist(5), equals(messageBytes));
       });
@@ -44,7 +45,7 @@ void main() {
 
         // Assert
         expect(result.length, equals(5));
-        expect(result[0], equals(RpcConstants.NO_COMPRESSION));
+        expect(result[0], equals(RpcConstants.noCompression));
         expect(result[4], equals(0)); // длина 0
       });
 
@@ -129,7 +130,7 @@ void main() {
         final encoded = RpcMessageFrame.encode(originalMessage);
         final header = RpcMessageFrame.parseHeader(encoded);
         final decodedPayload = encoded.sublist(
-          RpcConstants.MESSAGE_PREFIX_SIZE,
+          RpcConstants.messagePrefixSize,
         );
 
         // Assert
