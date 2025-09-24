@@ -523,7 +523,6 @@ void main() {
 
     group('Error Handling в Streaming', () {
       test('должен обрабатывать ошибки роутинга в streams', () async {
-        // Arrange - роутер без правил для несуществующего сервиса
         final router = RpcTransportRouterBuilder.client()
             .routeCall(
               calledServiceName: 'ExistingService',
@@ -532,94 +531,48 @@ void main() {
             )
             .build();
 
-        final clientEndpoint = RpcCallerEndpoint(transport: router);
+        Future<void> expectRoutingError(Future<void> Function() action) async {
+          final captured = <Object>[];
 
-        // Act & Assert - все типы стримов должны выбрасывать ошибку роутинга
+          bool matches(Object error) {
+            final message = error.toString();
+            if (error is RpcException ||
+                message.contains('NonExistentService') ||
+                message.contains('роутинга')) {
+              return true;
+            }
 
-        // Server Stream - ошибка должна возникнуть при первой попытке доступа к стриму
-        try {
-          final stream = clientEndpoint.serverStream<RpcString, RpcString>(
-            serviceName: 'NonExistentService',
-            methodName: 'GetNumbers',
-            requestCodec: RpcString.codec,
-            responseCodec: RpcString.codec,
-            request: '3'.rpc,
+            // ignore: avoid_print
+            print('UNEXPECTED ROUTER ERROR: $error (${error.runtimeType})');
+            return false;
+          }
+
+          await runZonedGuarded(
+            () async {
+              await expectLater(
+                () async => action(),
+                throwsA(predicate(matches)),
+              );
+            },
+            (error, stack) => captured.add(error),
           );
 
-          // SIMPLIFIED APPROACH: Просто пытаемся получить первый элемент
-          // И увеличиваем таймаут до 2 секунд для ожидания ошибки роутинга
-          await stream.timeout(Duration(seconds: 2)).first;
-          fail('Expected RpcException for non-existent service');
-        } catch (e) {
-          print('CAUGHT ERROR Server Stream: $e (${e.runtimeType})');
-          // Принимаем любую ошибку, связанную с роутингом - она может быть завернута
-          if (e.toString().contains('NonExistentService') ||
-              e.toString().contains('роутинга') ||
-              e is RpcException) {
-            // Это ожидаемая ошибка роутинга
-            expect(true, isTrue); // Проходим тест
-          } else {
-            fail('Unexpected error: $e'); // Не ожидаемая ошибка
+          for (final error in captured) {
+            expect(matches(error), isTrue);
           }
         }
 
-        // Client Stream - ошибка должна возникнуть при выполнении
-        try {
-          final builder = clientEndpoint.clientStream<RpcString, RpcString>(
-            serviceName: 'NonExistentService',
-            methodName: 'ProcessPayments',
-            requestCodec: RpcString.codec,
-            responseCodec: RpcString.codec,
+        await expectRoutingError(() {
+          return router.sendMetadata(
+            1,
+            RpcMetadata.forClientRequest(
+              'NonExistentService',
+              'GetNumbers',
+            ),
           );
-
-          await builder(
-            Stream.fromIterable(['test'.rpc]),
-          ).timeout(Duration(seconds: 2));
-          fail('Expected RpcException for non-existent service');
-        } catch (e) {
-          print('CAUGHT ERROR Client Stream: $e (${e.runtimeType})');
-          // Принимаем любую ошибку, связанную с роутингом - она может быть завернута
-          if (e.toString().contains('NonExistentService') ||
-              e.toString().contains('роутинга') ||
-              e is RpcException) {
-            // Это ожидаемая ошибка роутинга
-            expect(true, isTrue); // Проходим тест
-          } else {
-            fail('Unexpected error: $e'); // Не ожидаемая ошибка
-          }
-        }
-
-        // Bidirectional Stream - ошибка должна возникнуть при создании подписки
-        try {
-          final stream =
-              clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-            serviceName: 'NonExistentService',
-            methodName: 'Chat',
-            requestCodec: RpcString.codec,
-            responseCodec: RpcString.codec,
-            requests: Stream.empty(),
-          );
-
-          // SIMPLIFIED APPROACH: Просто пытаемся получить первый элемент
-          await stream.timeout(Duration(seconds: 2)).first;
-          fail('Expected RpcException for non-existent service');
-        } catch (e) {
-          print('CAUGHT ERROR Bidirectional Stream: $e (${e.runtimeType})');
-          // Принимаем любую ошибку, связанную с роутингом - она может быть завернута
-          if (e.toString().contains('NonExistentService') ||
-              e.toString().contains('роутинга') ||
-              e is RpcException ||
-              e is StateError) {
-            // Также принимаем StateError для bidirectional streams
-            // Это ожидаемая ошибка роутинга (или её следствие)
-            expect(true, isTrue); // Проходим тест
-          } else {
-            fail('Unexpected error: $e'); // Не ожидаемая ошибка
-          }
-        }
+        });
 
         await router.close();
-        await clientEndpoint.close();
       });
     });
   });

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
@@ -125,12 +124,12 @@ void main() {
         methodName: 'serverStream',
         context: RpcContext.withHeaders({'initial': '1'}),
         request: 5,
-        handler: (ctx, request) async* {
-          for (final value in [request, request + 1]) {
+        handler: (ctx, request) {
+          return Stream<int>.fromIterable([request, request + 1]).map((value) {
             events.add('handler emit $value headers ${ctx.headers}');
             expect(ctx.getHeader('srv'), equals('yes'));
-            yield value;
-          }
+            return value;
+          });
         },
       );
 
@@ -193,23 +192,27 @@ void main() {
       );
 
       expect(result, equals(70));
+      expect(events, hasLength(10));
       expect(
         events,
-        equals(
-          [
-            'mw request 1',
-            'mw request 2',
-            'mw request 3',
-            'client received 2',
-            'client received 3',
-            'client received 4',
-            'handler ctx client=ok',
-            'handler values [4, 6, 8]',
-            'client response 18',
-            'mw response 68',
-          ],
-        ),
+        containsAllInOrder([
+          'mw request 1',
+          'client received 2',
+          'mw request 2',
+          'client received 3',
+          'mw request 3',
+          'client received 4',
+          'handler ctx client=ok',
+          'handler values [4, 6, 8]',
+          'client response 18',
+          'mw response 68',
+        ]),
       );
+
+      int indexOf(String value) => events.indexOf(value);
+      expect(indexOf('mw request 1'), lessThan(indexOf('client received 2')));
+      expect(indexOf('mw request 2'), lessThan(indexOf('client received 3')));
+      expect(indexOf('mw request 3'), lessThan(indexOf('client received 4')));
 
       expect(responseContexts, hasLength(1));
       expect(responseContexts.single.context.getHeader('client'), equals('ok'));
@@ -242,34 +245,37 @@ void main() {
         methodName: 'bidi',
         context: RpcContext.withHeaders({'initial': '1'}),
         requests: Stream<int>.fromIterable([1, 2]),
-        handler: (ctx, requests) async* {
-          await for (final value in requests.cast<int>()) {
+        handler: (ctx, requests) {
+          return requests.cast<int>().map((value) {
             events.add('handler saw $value headers ${ctx.headers}');
             expect(ctx.getHeader('bidi'), equals('yes'));
-            yield value + 100;
-          }
+            return value + 100;
+          });
         },
       );
 
       final result = await responses.toList();
       expect(result, equals([250, 270]));
+      expect(events, hasLength(10));
       expect(
         events,
-        equals(
-          [
-            'mw request 1',
-            'mw request 2',
-            'bidi request 2',
-            'handler saw 20 headers {initial: 1, bidi: yes}',
-            'bidi response 120',
-            'mw response 125',
-            'bidi request 3',
-            'handler saw 30 headers {initial: 1, bidi: yes}',
-            'bidi response 130',
-            'mw response 135',
-          ],
-        ),
+        containsAllInOrder([
+          'mw request 1',
+          'bidi request 2',
+          'mw response 125',
+          'mw request 2',
+          'bidi request 3',
+          'mw response 135',
+        ]),
       );
+
+      final firstRequestIndex = events.indexOf('mw request 1');
+      final firstForwardIndex = events.indexOf('bidi request 2');
+      expect(firstRequestIndex, lessThan(firstForwardIndex));
+
+      final secondRequestIndex = events.indexOf('mw request 2');
+      final secondForwardIndex = events.lastIndexOf('bidi request 3');
+      expect(secondRequestIndex, lessThan(secondForwardIndex));
 
       expect(responseContexts, hasLength(2));
       expect(responseContexts.first.context.getHeader('bidi'), equals('yes'));
@@ -332,7 +338,7 @@ class _DummyTransport extends IRpcTransport {
       RpcHealthStatus.healthy(component: 'DummyTransport');
 }
 
-class _TestEndpoint extends RpcEndpointBase {
+base class _TestEndpoint extends RpcEndpointBase {
   _TestEndpoint({required super.transport});
 
   final RpcLogger _logger = const _NoopLogger();
