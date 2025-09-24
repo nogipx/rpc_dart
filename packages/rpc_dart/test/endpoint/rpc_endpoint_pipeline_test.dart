@@ -27,6 +27,7 @@ void main() {
               mw1ResponseContexts.add(context);
               expect(context.context.getHeader('A'), equals('yes'));
               expect(context.context.getHeader('B'), equals('true'));
+              expect(context.context.getHeader('C'), equals('done'));
               return (value as int) + 1;
             },
           ),
@@ -42,6 +43,7 @@ void main() {
               mw2ResponseContexts.add(context);
               expect(context.context.getHeader('A'), equals('yes'));
               expect(context.context.getHeader('B'), equals('true'));
+              expect(context.context.getHeader('C'), equals('done'));
               return (value as int) * 2;
             },
           ),
@@ -64,7 +66,7 @@ void main() {
         },
       );
 
-      expect(result, equals(390));
+      expect(result, equals(389));
       expect(
         events,
         equals(
@@ -76,8 +78,8 @@ void main() {
             'handler request 42 headers {initial: value, A: yes, B: true}',
             'inner after 47',
             'outer after 94',
-            'mw1 response 194',
-            'mw2 response 195',
+            'mw2 response 194',
+            'mw1 response 388',
           ],
         ),
       );
@@ -96,7 +98,8 @@ void main() {
       expect(mw1ResponseContexts.single.endpoint, same(endpoint));
     });
 
-    test('handleServerStream applies middleware to every response item', () async {
+    test('handleServerStream applies middleware to every response item',
+        () async {
       final endpoint = _TestEndpoint(transport: _DummyTransport());
       addTearDown(() async => endpoint.close());
 
@@ -160,7 +163,8 @@ void main() {
       );
     });
 
-    test('handleClientStream normalizes incoming stream and updates context', () async {
+    test('handleClientStream normalizes incoming stream and updates context',
+        () async {
       final endpoint = _TestEndpoint(transport: _DummyTransport());
       addTearDown(() async => endpoint.close());
 
@@ -223,7 +227,8 @@ void main() {
       expect(responseContexts.single.context.getHeader('client'), equals('ok'));
     });
 
-    test('handleBidirectionalStream applies middleware to both directions', () async {
+    test('handleBidirectionalStream applies middleware to both directions',
+        () async {
       final endpoint = _TestEndpoint(transport: _DummyTransport());
       addTearDown(() async => endpoint.close());
 
@@ -463,7 +468,8 @@ class _RecordingMiddleware extends IRpcMiddleware {
   final String name;
   final List<String> events;
   final dynamic Function(RpcMiddlewareContext context, dynamic value) onRequest;
-  final dynamic Function(RpcMiddlewareContext context, dynamic value) onResponse;
+  final dynamic Function(RpcMiddlewareContext context, dynamic value)
+      onResponse;
   final bool asyncRequest;
   final bool asyncResponse;
 
@@ -543,6 +549,9 @@ class _InnerUnaryInterceptor extends IRpcInterceptor {
     final response = await next(newContext, (intRequest * 3) as TRequest);
     final intResponse = response as int;
     events.add('inner after $intResponse');
+    call.updateContext(
+      call.context.withAdditionalHeaders({'C': 'done'}),
+    );
     return (intResponse * 2) as TResponse;
   }
 }
@@ -591,7 +600,8 @@ class _ClientStreamInterceptor extends IRpcInterceptor {
     final newContext = call.context.withAdditionalHeaders({'client': 'ok'});
     final response = await next(
       newContext,
-      Stream<int>.fromIterable(values).map<TRequest>((value) => value as TRequest),
+      Stream<int>.fromIterable(values)
+          .map<TRequest>((value) => value as TRequest),
     );
     events.add('client response $response');
     return ((response as int) + 50) as TResponse;

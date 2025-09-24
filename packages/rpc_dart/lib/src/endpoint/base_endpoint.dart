@@ -248,7 +248,7 @@ abstract base class RpcEndpointBase {
   ) async {
     var current = response;
 
-    for (final middleware in _middlewares) {
+    for (final middleware in _middlewares.reversed) {
       current = await Future<TResponse>.value(
         middleware.processResponse<TResponse>(context, current),
       );
@@ -281,26 +281,27 @@ abstract base class RpcEndpointBase {
     TRequest request,
     Future<TResponse> Function(RpcContext ctx, TRequest request) handler,
   ) async {
-    RpcContext currentContext = context.context;
-
     Future<TResponse> invokeHandler(RpcContext ctx, TRequest req) async {
-      currentContext = ctx;
-      return handler(ctx, req);
+      context.updateContext(ctx);
+      return handler(context.context, req);
     }
 
     RpcUnaryNext<TRequest, TResponse> next = invokeHandler;
 
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
-      next = (ctx, req) => interceptor.interceptUnary<TRequest, TResponse>(
-            context.copyWith(context: ctx),
-            req,
-            previous,
-          );
+      next = (ctx, req) async {
+        context.updateContext(ctx);
+        return interceptor.interceptUnary<TRequest, TResponse>(
+          context,
+          req,
+          previous,
+        );
+      };
     }
 
     final response = await next(context.context, request);
-    return (response: response, context: currentContext);
+    return (response: response, context: context.context);
   }
 
   Future<({Stream<TResponse> stream, RpcContext context})>
@@ -312,32 +313,33 @@ abstract base class RpcEndpointBase {
       TRequest request,
     ) handler,
   ) async {
-    RpcContext currentContext = context.context;
-
     FutureOr<Stream<TResponse>> invokeHandler(
       RpcContext ctx,
       TRequest req,
     ) {
-      currentContext = ctx;
-      return handler(ctx, req);
+      context.updateContext(ctx);
+      return handler(context.context, req);
     }
 
     RpcServerStreamNext<TRequest, TResponse> next = invokeHandler;
 
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
-      next = (ctx, req) => interceptor.interceptServerStream<TRequest, TResponse>(
-            context.copyWith(context: ctx),
-            req,
-            previous,
-          );
+      next = (ctx, req) async {
+        context.updateContext(ctx);
+        return interceptor.interceptServerStream<TRequest, TResponse>(
+          context,
+          req,
+          previous,
+        );
+      };
     }
 
     final stream = await Future<Stream<TResponse>>.value(
       next(context.context, request),
     );
 
-    return (stream: stream, context: currentContext);
+    return (stream: stream, context: context.context);
   }
 
   Future<({TResponse response, RpcContext context})>
@@ -349,29 +351,30 @@ abstract base class RpcEndpointBase {
       Stream<TRequest> requests,
     ) handler,
   ) async {
-    RpcContext currentContext = context.context;
-
     Future<TResponse> invokeHandler(
       RpcContext ctx,
       Stream<TRequest> reqs,
     ) async {
-      currentContext = ctx;
-      return handler(ctx, reqs);
+      context.updateContext(ctx);
+      return handler(context.context, reqs);
     }
 
     RpcClientStreamNext<TRequest, TResponse> next = invokeHandler;
 
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
-      next = (ctx, reqs) => interceptor.interceptClientStream<TRequest, TResponse>(
-            context.copyWith(context: ctx),
-            reqs,
-            previous,
-          );
+      next = (ctx, reqs) async {
+        context.updateContext(ctx);
+        return interceptor.interceptClientStream<TRequest, TResponse>(
+          context,
+          reqs,
+          previous,
+        );
+      };
     }
 
     final response = await next(context.context, requests);
-    return (response: response, context: currentContext);
+    return (response: response, context: context.context);
   }
 
   Future<({Stream<TResponse> stream, RpcContext context})>
@@ -383,33 +386,33 @@ abstract base class RpcEndpointBase {
       Stream<TRequest> requests,
     ) handler,
   ) async {
-    RpcContext currentContext = context.context;
-
     FutureOr<Stream<TResponse>> invokeHandler(
       RpcContext ctx,
       Stream<TRequest> reqs,
     ) {
-      currentContext = ctx;
-      return handler(ctx, reqs);
+      context.updateContext(ctx);
+      return handler(context.context, reqs);
     }
 
     RpcBidirectionalStreamNext<TRequest, TResponse> next = invokeHandler;
 
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
-      next = (ctx, reqs) =>
-          interceptor.interceptBidirectionalStream<TRequest, TResponse>(
-            context.copyWith(context: ctx),
-            reqs,
-            previous,
-          );
+      next = (ctx, reqs) async {
+        context.updateContext(ctx);
+        return interceptor.interceptBidirectionalStream<TRequest, TResponse>(
+          context,
+          reqs,
+          previous,
+        );
+      };
     }
 
     final stream = await Future<Stream<TResponse>>.value(
       next(context.context, requests),
     );
 
-    return (stream: stream, context: currentContext);
+    return (stream: stream, context: context.context);
   }
 
   Future<TResponse> handleUnary<TRequest, TResponse>({
@@ -427,16 +430,16 @@ abstract base class RpcEndpointBase {
     final normalizedRequest =
         await _applyRequestMiddlewares<TRequest>(middlewareContext, request);
 
-    final interceptorResult = await _invokeUnaryInterceptors<TRequest, TResponse>(
+    final interceptorResult =
+        await _invokeUnaryInterceptors<TRequest, TResponse>(
       middlewareContext,
       normalizedRequest,
       handler,
     );
 
-    final responseContext =
-        middlewareContext.copyWith(context: interceptorResult.context);
+    middlewareContext.updateContext(interceptorResult.context);
     final normalizedResponse = await _applyResponseMiddlewares<TResponse>(
-      responseContext,
+      middlewareContext,
       interceptorResult.response,
     );
 
@@ -465,11 +468,10 @@ abstract base class RpcEndpointBase {
       handler,
     );
 
-    final responseContext =
-        middlewareContext.copyWith(context: interceptorResult.context);
+    middlewareContext.updateContext(interceptorResult.context);
 
     yield* _applyResponseMiddlewaresToStream<TResponse>(
-      responseContext,
+      middlewareContext,
       interceptorResult.stream,
     );
   }
@@ -498,10 +500,9 @@ abstract base class RpcEndpointBase {
       handler,
     );
 
-    final responseContext =
-        middlewareContext.copyWith(context: interceptorResult.context);
+    middlewareContext.updateContext(interceptorResult.context);
     return _applyResponseMiddlewares<TResponse>(
-      responseContext,
+      middlewareContext,
       interceptorResult.response,
     );
   }
@@ -530,11 +531,8 @@ abstract base class RpcEndpointBase {
       handler,
     );
 
-    final responseContext =
-        middlewareContext.copyWith(context: interceptorResult.context);
-
     yield* _applyResponseMiddlewaresToStream<TResponse>(
-      responseContext,
+      middlewareContext,
       interceptorResult.stream,
     );
   }

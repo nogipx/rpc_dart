@@ -12,14 +12,19 @@ class RpcMiddlewareContext {
   final RpcEndpointBase endpoint;
   final String serviceName;
   final String methodName;
-  final RpcContext context;
+  RpcContext context;
 
-  const RpcMiddlewareContext({
+  RpcMiddlewareContext({
     required this.endpoint,
     required this.serviceName,
     required this.methodName,
     required this.context,
   });
+
+  /// Обновляет [context] на новое значение.
+  void updateContext(RpcContext newContext) {
+    context = newContext;
+  }
 
   /// Создает новый контекст с обновленными полями.
   RpcMiddlewareContext copyWith({
@@ -69,17 +74,16 @@ abstract class IRpcMiddleware {
 }
 
 /// Тип обработчика следующего шага для унарного вызова.
-typedef RpcUnaryNext<TRequest, TResponse> =
-    Future<TResponse> Function(RpcContext context, TRequest request);
+typedef RpcUnaryNext<TRequest, TResponse> = Future<TResponse> Function(
+    RpcContext context, TRequest request);
 
-typedef RpcServerStreamNext<TRequest, TResponse>
-    = FutureOr<Stream<TResponse>> Function(
+typedef RpcServerStreamNext<TRequest, TResponse> = FutureOr<Stream<TResponse>>
+    Function(
   RpcContext context,
   TRequest request,
 );
 
-typedef RpcClientStreamNext<TRequest, TResponse>
-    = Future<TResponse> Function(
+typedef RpcClientStreamNext<TRequest, TResponse> = Future<TResponse> Function(
   RpcContext context,
   Stream<TRequest> requests,
 );

@@ -519,8 +519,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       requestCodec: method.requestCodec,
       responseCodec: method.responseCodec,
       handler: (requests) async {
-        final response = await handleClientStream<IRpcSerializable,
-            IRpcSerializable>(
+        final response =
+            await handleClientStream<IRpcSerializable, IRpcSerializable>(
           serviceName: binding.serviceName,
           methodName: binding.methodName,
           context: context,
@@ -730,8 +730,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     unawaited(() async {
       try {
-        final responseStream = handleBidirectionalStream<IRpcSerializable,
-            IRpcSerializable>(
+        final responseStream =
+            handleBidirectionalStream<IRpcSerializable, IRpcSerializable>(
           serviceName: binding.serviceName,
           methodName: binding.methodName,
           context: context,

@@ -10,7 +10,6 @@ class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
 
   /// Создает CBOR сериализатор
   /// [fromJson] - функция для создания объекта из JSON Map
-  @Deprecated('Укажите декодер через RpcCodec.withDecoder или toBinaryCodec')
   const RpcCodec([T Function(Map<String, dynamic> json)? fromJson])
       : _fromJson = fromJson;
 
