@@ -1,0 +1,100 @@
+# Diagnostics & health checks
+
+Visibility is critical when you run RPC Dart in production. The library ships
+with health reporting, active ping support, and a configurable logging system to
+help you troubleshoot issues without redeploying instrumentation.
+
+## Endpoint health snapshots
+
+`RpcCallerEndpoint.health()` and `RpcResponderEndpoint.health()` return
+`RpcEndpointHealth`, a composite structure that includes:
+
+- `endpointStatus` – overall status of the endpoint lifecycle (`active`,
+  `degraded`, `closed`, etc.).
+- `dependencies` – map of component names (usually transports) to their
+  `RpcHealthStatus`.
+- `transportStatus` – convenience getter exposing the primary transport.
+- `timestamp` – when the snapshot was generated.
+
+```dart
+final report = await callerEndpoint.health();
+if (!report.isHealthy) {
+  final transport = report.transportStatus;
+  logger.warning('Caller degraded: ${transport?.message}', data: transport?.details);
+}
+```
+
+Call `reconnect()` to delegate recovery to the transport. Transports that support
+automatic reconnection return `RpcHealthStatus.reconnecting` until the link is
+stable again.
+
+## Active ping between endpoints
+
+`RpcCallerEndpoint.ping()` performs a round-trip check using the built-in system
+service `_rpc.System/Ping`.
+
+```dart
+final result = await callerEndpoint.ping(timeout: const Duration(seconds: 1));
+print('RTT: ${result.roundTrip.inMilliseconds} ms');
+print('Responder: ${result.responderDebugLabel}');
+```
+
+The result includes:
+
+- `roundTrip` – measured latency.
+- `responderTimestamp` – when the responder processed the ping.
+- `responderDebugLabel` and `responderTransportType` – diagnostic headers
+  supplied by the responder endpoint.
+- `responseHeaders` – raw metadata for custom analysis.
+
+Ping uses the same transport pipeline as regular calls, so you can detect routing
+issues, TLS problems, or degraded links in real time.
+
+## Logging with `RpcLogger`
+
+`RpcLogger` is a pluggable logging facade with structured metadata support. Each
+endpoint exposes a logger and you can create child loggers for subcomponents.
+
+```dart
+final logger = RpcLogger('BillingService');
+logger.info('Responder started', data: responder.collectEndpointMetrics());
+```
+
+Customise logging globally:
+
+```dart
+RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+RpcLogger.setLoggerFactory((name, {colors, label, context}) {
+  return MyJsonLogger(name, label: label, context: context);
+});
+```
+
+Per-message calls accept contextual data, trace IDs, and request IDs so you can
+ship logs to observability pipelines without losing correlation.
+
+## Colour-coding and formatting
+
+Use `RpcLoggerColors` to differentiate client and server logs in the terminal:
+
+```dart
+final callerLogger = RpcLogger(
+  'CheckoutCaller',
+  colors: const RpcLoggerColors.bright(),
+);
+callerLogger.debug('Prepared context', data: context.headers);
+```
+
+Formatters and filters let you integrate with any logging backend. Implement
+`IRpcLoggerFormatter` to change the output structure or `IRpcLoggerFilter` to
+suppress noisy categories.
+
+## Transport diagnostics
+
+Every `IRpcTransport` implements `health()` and `reconnect()`, so you can gather
+per-transport metrics even when multiple transports are routed together via
+`RpcTransportRouter`. Health details expose flags such as `supportsZeroCopy`,
+`activeStreams`, and `isClosed`—perfect for exporting to Prometheus or custom
+metrics collectors.
+
+Combine these tools to build dashboards, trigger alerts, and keep latency under
+control as your system grows.

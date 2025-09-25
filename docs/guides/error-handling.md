@@ -1,0 +1,113 @@
+# Error handling & status codes
+
+Robust RPC systems make failures explicit. RPC Dart follows gRPC semantics and
+adds helpers to translate between domain exceptions, transport errors, and
+client-side feedback.
+
+## Status codes at a glance
+
+| Status | Constant | Typical meaning |
+| --- | --- | --- |
+| `0` | `RpcStatus.OK` | Success |
+| `1` | `RpcStatus.CANCELLED` | Caller cancelled the operation |
+| `4` | `RpcStatus.DEADLINE_EXCEEDED` | Deadline expired before completion |
+| `5` | `RpcStatus.NOT_FOUND` | Requested resource does not exist |
+| `7` | `RpcStatus.PERMISSION_DENIED` | Authenticated caller lacks permissions |
+| `13` | `RpcStatus.INTERNAL` | Unhandled server-side failure |
+| `14` | `RpcStatus.UNAVAILABLE` | Transport is down or service is restarting |
+
+`RpcMetadata.forTrailer(status, message: ...)` attaches the final status to the
+response stream. Caller endpoints parse the trailer and surface structured
+errors.
+
+## Throwing responder-side exceptions
+
+```dart
+Future<Order> placeOrder(PlaceOrderRequest request, {RpcContext? context}) async {
+  final inventory = await inventoryClient.reserve(request.items, context: context);
+
+  if (!inventory.isSuccess) {
+    throw RpcException('Inventory check failed: ${inventory.reason}');
+  }
+
+  try {
+    return await payments.charge(request.paymentMethod);
+  } on PaymentDeclined catch (error) {
+    // Let the caller know the request was valid but could not be processed.
+    throw RpcException('Payment declined: ${error.reason}');
+  }
+}
+```
+
+`RpcResponderEndpoint` catches any exception and converts it into a trailer with
+`RpcStatus.INTERNAL` by default, using the message you provided. When you need
+more control you can intercept responses in middleware, inspect the thrown
+exception, and call `RpcMetadata.forTrailer` to emit a specific status code
+before letting the endpoint close the stream.
+
+## Handling timeouts and cancellations
+
+- `RpcDeadlineExceededException` is thrown when `RpcContext.deadline` has passed.
+  You can catch it and emit compensating actions or retries.
+- `RpcCancellationToken` cooperates with responders through
+  `context?.cancellationToken`. Call `token.throwIfCancelled()` inside long
+  loops to abort early and return `RpcStatus.CANCELLED`.
+
+```dart
+await for (final chunk in stream) {
+  context?.cancellationToken?.throwIfCancelled();
+  await process(chunk);
+}
+```
+
+## Client-side behaviour
+
+Caller endpoints translate trailers into `RpcException` instances. When you
+await a unary call the future completes with an error whose message includes the
+status code and description supplied by the responder.
+
+You can intercept errors centrally by wrapping calls:
+
+```dart
+Future<T> safeCall<T>(Future<T> Function() call) async {
+  try {
+    return await call();
+  } on RpcException catch (error) {
+    logger.error('RPC failed', error: error);
+    rethrow;
+  }
+}
+```
+
+For streaming calls, `Stream` errors propagate through `addError`. Use
+`expectLater` or `stream.handleError` to react accordingly during tests and in
+production code.
+
+## Transport-level failures
+
+`RpcEndpointHealth` snapshots expose the transport status, including reconnection
+attempts or protocol violations. When a transport becomes unhealthy:
+
+1. `RpcCallerEndpoint.health()` returns `RpcHealthStatus` with level
+   `unhealthy` or `reconnecting`.
+2. `RpcCallerEndpoint.reconnect()` delegates to `IRpcTransport.reconnect()` if
+   supported; otherwise you can recreate the transport and endpoint.
+3. `RpcTransportRouter` surfaces routing errors (such as missing rules) via
+   thrown `RpcException`s that bubble up to the caller.
+
+Monitoring these signals lets you distinguish between application bugs and
+infrastructure issues quickly.
+
+## Best practices
+
+- Use descriptive messages in `RpcException` so clients can produce actionable
+  UI feedback.
+- Attach structured details via context headers (`x-error-id`, `x-retry-after`)
+  to implement richer error handling strategies.
+- For idempotent operations consider retrying automatically when you receive
+  `RpcStatus.UNAVAILABLE` and the call has not reached the responder.
+- Log trailers and context metadata in middleware to build dashboards correlating
+  error spikes with specific transports or services.
+
+By treating errors as part of the contract you build predictable, debuggable
+systems that behave well under stress.
