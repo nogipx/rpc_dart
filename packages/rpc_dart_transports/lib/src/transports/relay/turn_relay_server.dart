@@ -10,13 +10,10 @@ import 'package:universal_io/io.dart';
 import 'turn_allocation.dart';
 import 'turn_message.dart';
 import 'turn_relay_logger.dart';
+import 'turn_tcp_frame.dart';
 
-/// TURN relay server implementation following RFC 5766 for UDP relaying.
-///
-/// The server listens for TURN requests on [bindAddress]/[bindPort], manages
-/// allocations and permissions, and forwards peer traffic back to clients using
-/// Data indications or ChannelData messages depending on active channel
-/// bindings.
+/// TURN relay server implementation following RFC 5766 for TCP-connected
+/// clients relaying UDP peer traffic.
 final class TurnRelayServer {
   TurnRelayServer({
     required this.bindAddress,
@@ -30,10 +27,10 @@ final class TurnRelayServer {
   }) : relayAddress = relayAddress ?? bindAddress,
         _logger = logger?.child('TurnRelayServer');
 
-  /// Address used for the TURN UDP listener.
+  /// Address used for the TURN TCP listener.
   final InternetAddress bindAddress;
 
-  /// Port used for the TURN UDP listener (0 enables OS-assigned port).
+  /// Port used for the TURN TCP listener (0 enables OS-assigned port).
   final int bindPort;
 
   /// Public relay address advertised via XOR-RELAYED-ADDRESS.
@@ -53,141 +50,150 @@ final class TurnRelayServer {
 
   final TurnRelayLogger? _logger;
 
-  RawDatagramSocket? _socket;
-  StreamSubscription<RawSocketEvent>? _subscription;
+  ServerSocket? _socket;
+  StreamSubscription<Socket>? _listener;
 
-  final Map<String, _TurnRelayAllocationContext> _allocations = {};
+  final Map<String, _TurnRelayConnectionContext> _connections = {};
 
-  /// Returns true once the UDP socket has been created.
+  /// Returns true once the TCP listener has been created.
   bool get isRunning => _socket != null;
 
-  /// Actual port of the bound UDP socket (may differ from [bindPort]).
+  /// Actual port of the bound TCP listener (may differ from [bindPort]).
   int get port => _socket?.port ?? bindPort;
 
   /// Active allocations for debugging and metrics purposes.
-  Iterable<TurnAllocation> get allocations =>
-      _allocations.values.map((context) => context.allocation);
+  Iterable<TurnAllocation> get allocations => _connections.values
+      .map((context) => context.allocation)
+      .whereType<TurnAllocation>();
 
-  /// Starts the UDP listener and begins processing TURN requests.
+  /// Starts the TCP listener and begins processing TURN requests.
   Future<void> start() async {
     if (isRunning) {
       return;
     }
 
     _logger?.info(
-      'Starting TURN relay on ${bindAddress.address}:$bindPort',
+      'Starting TURN relay (TCP) on ${bindAddress.address}:$bindPort',
     );
 
-    final socket = await RawDatagramSocket.bind(bindAddress, bindPort);
-    socket.readEventsEnabled = true;
-    socket.writeEventsEnabled = true;
-    _socket = socket;
+    final server = await ServerSocket.bind(bindAddress, bindPort);
+    _socket = server;
 
-    _subscription = socket.listen(
-      _handleSocketEvent,
+    _listener = server.listen(
+      _handleConnection,
       onError: (Object error, StackTrace stackTrace) {
         _logger?.error(
-          'TURN relay socket error',
+          'TURN relay listener error',
           error: error,
           stackTrace: stackTrace,
         );
       },
       onDone: () {
-        _logger?.info('TURN relay socket closed');
-        stop();
+        _logger?.info('TURN relay listener closed');
+        unawaited(stop());
       },
     );
   }
 
-  /// Stops the UDP listener and disposes all active allocations.
+  /// Stops the TCP listener and disposes all active allocations.
   Future<void> stop() async {
-    _subscription?.cancel();
-    _subscription = null;
-    _socket?.close();
+    await _listener?.cancel();
+    _listener = null;
+    await _socket?.close();
     _socket = null;
 
-    for (final context in _allocations.values) {
+    final contexts = _connections.values.toList();
+    _connections.clear();
+    for (final context in contexts) {
       await context.dispose();
     }
-
-    _allocations.clear();
   }
 
-  void _handleSocketEvent(RawSocketEvent event) {
-    if (event != RawSocketEvent.read) {
-      return;
-    }
+  void _handleConnection(Socket socket) {
+    final key = _allocationKey(socket.remoteAddress, socket.remotePort);
+    _logger?.debug('Accepted connection from $key');
 
-    while (true) {
-      final datagram = _socket?.receive();
-      if (datagram == null) {
-        break;
-      }
-      _handleDatagram(datagram);
-    }
+    final connectionLogger =
+        _logger?.child('Connection $key');
+    final context = _TurnRelayConnectionContext(
+      socket: socket,
+      logger: connectionLogger,
+    );
+
+    _connections[key] = context;
+
+    context.start(
+      onTurnMessage: (TurnMessage message) {
+        _handleTurnMessage(context, message);
+      },
+      onChannelData: (int channelNumber, Uint8List payload) {
+        _handleChannelData(context, channelNumber, payload);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        _logger?.error(
+          'TURN connection error for $key',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        unawaited(_closeConnection(context));
+      },
+      onClosed: () {
+        _logger?.debug('Connection closed for $key');
+        unawaited(_closeConnection(context));
+      },
+    );
   }
 
-  void _handleDatagram(Datagram datagram) {
-    final bytes = Uint8List.fromList(datagram.data);
-    if (bytes.isEmpty) {
+  Future<void> _closeConnection(_TurnRelayConnectionContext context) async {
+    final key = _allocationKey(context.clientAddress, context.clientPort);
+    if (_connections.remove(key) == null) {
       return;
     }
 
-    // ChannelData packets use a different framing (RFC 5766 section 10).
-    if (_isChannelData(bytes)) {
-      _handleChannelData(bytes, datagram.address, datagram.port);
-      return;
-    }
+    await context.dispose();
+  }
 
-    final message = TurnMessage.decode(bytes);
-    if (message == null) {
-      _logger?.warning(
-        'Invalid TURN message from ${datagram.address.address}:${datagram.port}',
-      );
-      return;
-    }
-
+  void _handleTurnMessage(
+    _TurnRelayConnectionContext context,
+    TurnMessage message,
+  ) {
     switch (message.messageClass) {
       case TurnMessageClass.request:
-        _handleRequest(message, datagram.address, datagram.port);
+        _handleRequest(context, message);
         break;
       case TurnMessageClass.indication:
-        _handleIndication(message, datagram.address, datagram.port);
+        _handleIndication(context, message);
         break;
       case TurnMessageClass.successResponse:
       case TurnMessageClass.errorResponse:
         _logger?.warning(
-          'Unexpected TURN response from ${datagram.address.address}:${datagram.port}',
+          'Unexpected TURN response from ${context.clientAddress.address}:${context.clientPort}',
         );
         break;
     }
   }
 
   void _handleRequest(
+    _TurnRelayConnectionContext context,
     TurnMessage message,
-    InternetAddress clientAddress,
-    int clientPort,
   ) {
     switch (message.method) {
       case TurnMethod.allocate:
-        unawaited(
-          _processAllocateRequest(message, clientAddress, clientPort),
-        );
+        unawaited(_processAllocateRequest(context, message));
         break;
       case TurnMethod.refresh:
-        _handleRefreshRequest(message, clientAddress, clientPort);
+        _handleRefreshRequest(context, message);
         break;
       case TurnMethod.createPermission:
-        _handleCreatePermissionRequest(message, clientAddress, clientPort);
+        _handleCreatePermissionRequest(context, message);
         break;
       case TurnMethod.channelBind:
-        _handleChannelBindRequest(message, clientAddress, clientPort);
+        _handleChannelBindRequest(context, message);
         break;
       default:
         _sendError(
+          context,
           message,
-          clientAddress,
-          clientPort,
           code: 420,
           reason: 'Unsupported method ${message.method}',
         );
@@ -196,31 +202,25 @@ final class TurnRelayServer {
   }
 
   Future<void> _processAllocateRequest(
+    _TurnRelayConnectionContext context,
     TurnMessage message,
-    InternetAddress clientAddress,
-    int clientPort,
   ) async {
-    final key = _allocationKey(clientAddress, clientPort);
-    var context = _allocations[key];
-
-    if (context != null && !context.allocation.isExpired) {
-      context.allocation.refresh(allocationLifetime);
-      _sendAllocateSuccess(message, context, clientAddress, clientPort);
+    final existing = context.allocation;
+    if (existing != null && !existing.isExpired) {
+      existing.refresh(allocationLifetime);
+      _sendAllocateSuccess(context, message, existing);
       return;
     }
 
-    if (context != null) {
-      await context.dispose();
-      _allocations.remove(key);
-    }
+    existing?.close();
+    context.allocation = null;
 
     final relaySocket = await RawDatagramSocket.bind(relayAddress, 0);
 
-    late final _TurnRelayAllocationContext allocationContext;
-
-    final allocation = TurnAllocation(
-      clientAddress: clientAddress,
-      clientPort: clientPort,
+    late final TurnAllocation allocation;
+    allocation = TurnAllocation(
+      clientAddress: context.clientAddress,
+      clientPort: context.clientPort,
       socket: relaySocket,
       relayAddress: relayAddress,
       defaultLifetime: allocationLifetime,
@@ -228,41 +228,34 @@ final class TurnRelayServer {
       channelLifetime: channelLifetime,
       logger: _logger?.child('Allocation'),
       onPeerData: (Uint8List data, InternetAddress peerAddress, int peerPort) {
-        _forwardPeerData(
-          allocationContext,
-          data,
-          peerAddress,
-          peerPort,
-        );
+        _forwardPeerData(context, data, peerAddress, peerPort);
       },
       onExpired: () {
         _logger?.info(
-          'Allocation expired for ${clientAddress.address}:$clientPort',
+          'Allocation expired for ${context.clientAddress.address}:${context.clientPort}',
         );
-        _closeAllocation(key);
+        context.allocation = null;
       },
     );
 
-    allocationContext = _TurnRelayAllocationContext(
-      clientAddress: clientAddress,
-      clientPort: clientPort,
-      allocation: allocation,
-    );
-
-    _allocations[key] = allocationContext;
-    _sendAllocateSuccess(message, allocationContext, clientAddress, clientPort);
+    context.allocation = allocation;
+    _sendAllocateSuccess(context, message, allocation);
   }
 
   void _forwardPeerData(
-    _TurnRelayAllocationContext context,
+    _TurnRelayConnectionContext context,
     Uint8List data,
     InternetAddress peerAddress,
     int peerPort,
   ) {
-    final channel = context.allocation.findChannelByPeer(peerAddress, peerPort);
+    final allocation = context.allocation;
+    if (allocation == null) {
+      return;
+    }
+
+    final channel = allocation.findChannelByPeer(peerAddress, peerPort);
     if (channel != null) {
-      final frame = _encodeChannelData(channel.channelNumber, data);
-      _socket?.send(frame, context.clientAddress, context.clientPort);
+      context.send(encodeChannelDataFrame(channel.channelNumber, data));
       return;
     }
 
@@ -280,32 +273,18 @@ final class TurnRelayServer {
       ],
     );
 
-    _socket?.send(
-      indication.encode(),
-      context.clientAddress,
-      context.clientPort,
-    );
-  }
-
-  void _closeAllocation(String key) {
-    final context = _allocations.remove(key);
-    if (context == null) {
-      return;
-    }
-    unawaited(context.dispose());
+    context.send(indication.encode());
   }
 
   void _handleRefreshRequest(
+    _TurnRelayConnectionContext context,
     TurnMessage message,
-    InternetAddress clientAddress,
-    int clientPort,
   ) {
-    final context = _allocations[_allocationKey(clientAddress, clientPort)];
-    if (context == null) {
+    final allocation = context.allocation;
+    if (allocation == null) {
       _sendError(
+        context,
         message,
-        clientAddress,
-        clientPort,
         code: 437,
         reason: 'Allocation mismatch',
       );
@@ -317,33 +296,32 @@ final class TurnRelayServer {
         lifetimeAttr != null ? decodeLifetime(lifetimeAttr) : allocationLifetime;
 
     if (requestedLifetime.inSeconds == 0) {
-      _closeAllocation(_allocationKey(clientAddress, clientPort));
+      context.allocation = null;
+      allocation.close();
       final response = message.buildSuccessResponse([]);
-      _sendTurnMessage(response, clientAddress, clientPort);
+      _sendTurnMessage(context, response);
       return;
     }
 
-    context.allocation.refresh(requestedLifetime);
+    allocation.refresh(requestedLifetime);
     final response = message.buildSuccessResponse([
       TurnAttribute(
         TurnAttributeType.lifetime,
         encodeLifetime(requestedLifetime),
       ),
     ]);
-    _sendTurnMessage(response, clientAddress, clientPort);
+    _sendTurnMessage(context, response);
   }
 
   void _handleCreatePermissionRequest(
+    _TurnRelayConnectionContext context,
     TurnMessage message,
-    InternetAddress clientAddress,
-    int clientPort,
   ) {
-    final context = _allocations[_allocationKey(clientAddress, clientPort)];
-    if (context == null) {
+    final allocation = context.allocation;
+    if (allocation == null) {
       _sendError(
+        context,
         message,
-        clientAddress,
-        clientPort,
         code: 437,
         reason: 'Allocation mismatch',
       );
@@ -352,25 +330,24 @@ final class TurnRelayServer {
 
     final peers = message.attributesOfType(TurnAttributeType.xorPeerAddress);
     for (final peerAttr in peers) {
-      final (peerAddress, _) = decodeXorAddress(peerAttr, message.transactionId);
-      context.allocation.addPermission(peerAddress);
+      final (peerAddress, _) =
+          decodeXorAddress(peerAttr, message.transactionId);
+      allocation.addPermission(peerAddress);
     }
 
     final response = message.buildSuccessResponse([]);
-    _sendTurnMessage(response, clientAddress, clientPort);
+    _sendTurnMessage(context, response);
   }
 
   void _handleChannelBindRequest(
+    _TurnRelayConnectionContext context,
     TurnMessage message,
-    InternetAddress clientAddress,
-    int clientPort,
   ) {
-    final context = _allocations[_allocationKey(clientAddress, clientPort)];
-    if (context == null) {
+    final allocation = context.allocation;
+    if (allocation == null) {
       _sendError(
+        context,
         message,
-        clientAddress,
-        clientPort,
         code: 437,
         reason: 'Allocation mismatch',
       );
@@ -382,55 +359,52 @@ final class TurnRelayServer {
 
     if (channelAttr == null || peerAttr == null) {
       _sendError(
+        context,
         message,
-        clientAddress,
-        clientPort,
         code: 400,
-        reason: 'Missing channel binding attributes',
+        reason: 'CHANNEL-NUMBER or XOR-PEER-ADDRESS missing',
       );
       return;
     }
 
-    final channelNumber = decodeChannelNumber(channelAttr);
+    final channelNumber = ByteData.sublistView(channelAttr).getUint16(0);
     final (peerAddress, peerPort) =
         decodeXorAddress(peerAttr, message.transactionId);
-    context.allocation.bindChannel(channelNumber, peerAddress, peerPort);
 
+    allocation.bindChannel(channelNumber, peerAddress, peerPort);
     final response = message.buildSuccessResponse([
       TurnAttribute(
         TurnAttributeType.lifetime,
         encodeLifetime(channelLifetime),
       ),
     ]);
-    _sendTurnMessage(response, clientAddress, clientPort);
+    _sendTurnMessage(context, response);
   }
 
   void _handleIndication(
+    _TurnRelayConnectionContext context,
     TurnMessage message,
-    InternetAddress clientAddress,
-    int clientPort,
   ) {
     switch (message.method) {
       case TurnMethod.send:
-        _handleSendIndication(message, clientAddress, clientPort);
+        _handleSendIndication(context, message);
         break;
       default:
         _logger?.warning(
-          'Unsupported indication ${message.method} from ${clientAddress.address}:$clientPort',
+          'Unsupported indication ${message.method} from ${context.clientAddress.address}:${context.clientPort}',
         );
         break;
     }
   }
 
   void _handleSendIndication(
+    _TurnRelayConnectionContext context,
     TurnMessage message,
-    InternetAddress clientAddress,
-    int clientPort,
   ) {
-    final context = _allocations[_allocationKey(clientAddress, clientPort)];
-    if (context == null) {
+    final allocation = context.allocation;
+    if (allocation == null) {
       _logger?.warning(
-        'Send indication without allocation from ${clientAddress.address}:$clientPort',
+        'Send indication without allocation from ${context.clientAddress.address}:${context.clientPort}',
       );
       return;
     }
@@ -449,14 +423,14 @@ final class TurnRelayServer {
 
     final (peerAddress, peerPort) =
         decodeXorAddress(peerAttr, message.transactionId);
-    if (!context.allocation.hasPermission(peerAddress)) {
+    if (!allocation.hasPermission(peerAddress)) {
       _logger?.warning(
         'Permission missing for peer ${peerAddress.address}',
       );
       return;
     }
 
-    context.allocation.sendToPeer(
+    allocation.sendToPeer(
       Uint8List.fromList(dataAttr),
       peerAddress,
       peerPort,
@@ -464,39 +438,25 @@ final class TurnRelayServer {
   }
 
   void _handleChannelData(
-    Uint8List packet,
-    InternetAddress clientAddress,
-    int clientPort,
+    _TurnRelayConnectionContext context,
+    int channelNumber,
+    Uint8List payload,
   ) {
-    if (packet.length < 4) {
-      return;
-    }
-
-    final header = ByteData.sublistView(packet, 0, 4);
-    final channelNumber = header.getUint16(0);
-    final length = header.getUint16(2);
-
-    if (packet.length < 4 + length) {
-      return;
-    }
-
-    final payload = Uint8List.fromList(packet.sublist(4, 4 + length));
-
-    final context = _allocations[_allocationKey(clientAddress, clientPort)];
-    if (context == null) {
+    final allocation = context.allocation;
+    if (allocation == null) {
       _logger?.warning(
-        'ChannelData without allocation from ${clientAddress.address}:$clientPort',
+        'ChannelData without allocation from ${context.clientAddress.address}:${context.clientPort}',
       );
       return;
     }
 
-    final binding = context.allocation.getChannel(channelNumber);
+    final binding = allocation.getChannel(channelNumber);
     if (binding == null) {
       _logger?.warning('Unknown channel $channelNumber from client');
       return;
     }
 
-    context.allocation.sendToPeer(
+    allocation.sendToPeer(
       payload,
       binding.peerAddress,
       binding.peerPort,
@@ -504,23 +464,26 @@ final class TurnRelayServer {
   }
 
   void _sendAllocateSuccess(
+    _TurnRelayConnectionContext context,
     TurnMessage request,
-    _TurnRelayAllocationContext context,
-    InternetAddress clientAddress,
-    int clientPort,
+    TurnAllocation allocation,
   ) {
     final attributes = <TurnAttribute>[
       TurnAttribute(
         TurnAttributeType.xorRelayedAddress,
         encodeXorAddress(
-          context.allocation.relayAddress,
-          context.allocation.relayPort,
+          allocation.relayAddress,
+          allocation.relayPort,
           request.transactionId,
         ),
       ),
       TurnAttribute(
         TurnAttributeType.xorMappedAddress,
-        encodeXorAddress(clientAddress, clientPort, request.transactionId),
+        encodeXorAddress(
+          context.clientAddress,
+          context.clientPort,
+          request.transactionId,
+        ),
       ),
       TurnAttribute(
         TurnAttributeType.lifetime,
@@ -533,59 +496,90 @@ final class TurnRelayServer {
     ];
 
     final response = request.buildSuccessResponse(attributes);
-    _sendTurnMessage(response, clientAddress, clientPort);
+    _sendTurnMessage(context, response);
   }
 
   void _sendError(
-    TurnMessage request,
-    InternetAddress clientAddress,
-    int clientPort, {
+    _TurnRelayConnectionContext context,
+    TurnMessage request, {
     required int code,
     required String reason,
   }) {
     final response = request.buildErrorResponse(code: code, reason: reason);
-    _sendTurnMessage(response, clientAddress, clientPort);
+    _sendTurnMessage(context, response);
   }
 
   void _sendTurnMessage(
+    _TurnRelayConnectionContext context,
     TurnMessage message,
-    InternetAddress address,
-    int port,
   ) {
-    final encoded = message.encode();
-    _socket?.send(encoded, address, port);
+    context.send(message.encode());
   }
 
-  static bool _isChannelData(Uint8List data) =>
-      data.length >= 4 && (data[0] & 0xC0) == 0x40;
-
-  static Uint8List _encodeChannelData(int channelNumber, Uint8List payload) {
-    final length = payload.length;
-    final paddedLength = (length + 3) & ~3;
-    final buffer = Uint8List(4 + paddedLength);
-    final header = ByteData.sublistView(buffer, 0, 4);
-    header.setUint16(0, channelNumber);
-    header.setUint16(2, length);
-    buffer.setRange(4, 4 + length, payload);
-    return buffer;
-  }
-
-  String _allocationKey(InternetAddress address, int port) =>
+  static String _allocationKey(InternetAddress address, int port) =>
       '${address.address}:$port';
 }
 
-final class _TurnRelayAllocationContext {
-  _TurnRelayAllocationContext({
-    required this.clientAddress,
-    required this.clientPort,
-    required this.allocation,
+final class _TurnRelayConnectionContext {
+  _TurnRelayConnectionContext({
+    required this.socket,
+    this.logger,
   });
 
-  final InternetAddress clientAddress;
-  final int clientPort;
-  final TurnAllocation allocation;
+  final Socket socket;
+  final TurnRelayLogger? logger;
+
+  StreamSubscription<Uint8List>? _subscription;
+  TurnTcpFrameDecoder? _decoder;
+  bool _disposed = false;
+
+  TurnAllocation? allocation;
+
+  InternetAddress get clientAddress => socket.remoteAddress;
+  int get clientPort => socket.remotePort;
+
+  void start({
+    required void Function(TurnMessage message) onTurnMessage,
+    required void Function(int channelNumber, Uint8List payload) onChannelData,
+    required void Function(Object error, StackTrace stackTrace) onError,
+    required void Function() onClosed,
+  }) {
+    _decoder = TurnTcpFrameDecoder(
+      onTurnMessage: onTurnMessage,
+      onChannelData: onChannelData,
+    );
+
+    _subscription = socket.listen(
+      (Uint8List data) {
+        if (data.isEmpty) {
+          return;
+        }
+        _decoder?.addChunk(data);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        logger?.error(
+          'TURN TCP connection error',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        onError(error, stackTrace);
+      },
+      onDone: onClosed,
+      cancelOnError: false,
+    );
+  }
+
+  void send(Uint8List data) {
+    socket.add(data);
+  }
 
   Future<void> dispose() async {
-    allocation.close();
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    await _subscription?.cancel();
+    allocation?.close();
+    await socket.close();
   }
 }

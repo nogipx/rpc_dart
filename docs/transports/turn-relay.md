@@ -1,12 +1,12 @@
 # TURN relay
 
-`TurnRelayServer` implements an RFC 5766 compatible UDP relay in pure Dart. The
-listener accepts TURN Allocate requests, provisions individual relay sockets for
-clients, tracks permissions and channel bindings, and converts peer traffic back
-into TURN Data indications or ChannelData frames. The implementation ships with
-`rpc_dart_transports` but has no dependency on the RPC runtime, which makes it a
-lightweight building block for any UDP-based application that needs NAT
-traversal.
+`TurnRelayServer` implements an RFC 5766 compatible relay in pure Dart. Clients
+connect over TCP, while the relay itself provisions UDP sockets for peer
+traffic. The listener accepts TURN Allocate requests, tracks permissions and
+channel bindings, and converts peer packets back into TURN Data indications or
+ChannelData frames. The implementation ships with `rpc_dart_transports` but has
+no dependency on the RPC runtime, which makes it a lightweight building block
+for any UDP-based application that needs NAT traversal.
 
 ## Key capabilities
 
@@ -66,7 +66,7 @@ attribute.
 
 Every successful `Allocate` request spawns a `TurnAllocation`:
 
-- `clientAddress` / `clientPort` identify the TURN client socket.
+- `clientAddress` / `clientPort` identify the TCP client connection.
 - `relayPort` exposes the UDP port peers must target.
 - `addPermission`, `hasPermission`, and `bindChannel` enforce the TURN security
   rules for authorized peers and optional channel bindings.
@@ -127,12 +127,13 @@ writing tests or integrating custom clients:
 - `encodeLifetime` / `decodeLifetime`
 - `encodeData`
 
-These cover the pieces required for the UDP relay profile defined in RFC 5766.
+These cover the pieces required for the UDP relay profile defined in RFC 5766,
+while the TCP stream framing is handled internally by `TurnTcpFrameDecoder`.
 
 ## Limitations
 
-- Only the UDP transport profile is supported – TCP allocations, TLS, and DTLS
-  are currently out of scope.
+- TURN client connections run over TCP, but only UDP peer allocations are
+  supported. TCP allocations, TLS, and DTLS remain out of scope.
 - Authentication (long-term or short-term credentials) is not implemented; gate
   access at the network level or layer additional authentication on top.
 - No quota management or alternate server discovery is provided yet.

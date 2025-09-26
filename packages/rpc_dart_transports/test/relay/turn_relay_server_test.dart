@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
+import 'package:rpc_dart_transports/src/transports/relay/turn_tcp_frame.dart';
 import 'package:test/test.dart';
 import 'package:universal_io/io.dart';
 
@@ -26,22 +27,10 @@ void main() {
     });
 
     test('relays data between client and peer', () async {
-      final clientSocket =
-          await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
       final peerSocket =
           await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
 
-      final clientDatagrams = StreamController<Datagram>();
       final peerDatagrams = StreamController<Datagram>();
-
-      final clientSub = clientSocket.listen((event) {
-        if (event == RawSocketEvent.read) {
-          Datagram? datagram;
-          while ((datagram = clientSocket.receive()) != null) {
-            clientDatagrams.add(datagram!);
-          }
-        }
-      });
 
       final peerSub = peerSocket.listen((event) {
         if (event == RawSocketEvent.read) {
@@ -53,29 +42,43 @@ void main() {
       });
 
       addTearDown(() async {
-        await clientSub.cancel();
         await peerSub.cancel();
-        await clientDatagrams.close();
         await peerDatagrams.close();
-        clientSocket.close();
         peerSocket.close();
       });
 
-      final serverAddress = server.bindAddress;
-      final serverPort = server.port;
+      final socket = await Socket.connect(server.bindAddress, server.port);
+      final turnMessages = StreamController<TurnMessage>.broadcast();
+      final frameDecoder = TurnTcpFrameDecoder(
+        onTurnMessage: turnMessages.add,
+        onChannelData: (_, __) {},
+      );
+
+      final socketSub = socket.listen(
+        (Uint8List data) {
+          if (data.isNotEmpty) {
+            frameDecoder.addChunk(data);
+          }
+        },
+      );
+
+      addTearDown(() async {
+        await socketSub.cancel();
+        await turnMessages.close();
+        await socket.close();
+      });
 
       final allocateRequest = TurnMessage(
         method: TurnMethod.allocate,
         messageClass: TurnMessageClass.request,
       );
 
-      clientSocket.send(
-        allocateRequest.encode(),
-        serverAddress,
-        serverPort,
-      );
+      socket.add(allocateRequest.encode());
 
-      final allocateResponse = await _nextTurnMessage(clientDatagrams.stream);
+      final allocateResponse = await turnMessages.stream.first.timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => throw StateError('allocate response timeout'),
+      );
       expect(allocateResponse.messageClass, TurnMessageClass.successResponse);
       expect(allocateResponse.method, TurnMethod.allocate);
 
@@ -102,13 +105,12 @@ void main() {
         ],
       );
 
-      clientSocket.send(
-        permissionRequest.encode(),
-        serverAddress,
-        serverPort,
-      );
+      socket.add(permissionRequest.encode());
 
-      final permissionResponse = await _nextTurnMessage(clientDatagrams.stream);
+      final permissionResponse = await turnMessages.stream.first.timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => throw StateError('permission response timeout'),
+      );
       expect(permissionResponse.messageClass, TurnMessageClass.successResponse);
       expect(permissionResponse.method, TurnMethod.createPermission);
 
@@ -131,11 +133,7 @@ void main() {
         ],
       );
 
-      clientSocket.send(
-        sendIndication.encode(),
-        serverAddress,
-        serverPort,
-      );
+      socket.add(sendIndication.encode());
 
       final peerDatagram = await peerDatagrams.stream.first.timeout(
         const Duration(seconds: 1),
@@ -148,7 +146,10 @@ void main() {
       final inboundPayload = Uint8List.fromList('pong'.codeUnits);
       peerSocket.send(inboundPayload, relayAddress, relayPort);
 
-      final dataIndication = await _nextTurnMessage(clientDatagrams.stream);
+      final dataIndication = await turnMessages.stream.first.timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => throw StateError('client did not receive data'),
+      );
       expect(dataIndication.messageClass, TurnMessageClass.indication);
       expect(dataIndication.method, TurnMethod.data);
       final dataAttr = dataIndication.firstAttribute(TurnAttributeType.data);
@@ -156,15 +157,4 @@ void main() {
       expect(dataAttr, inboundPayload);
     });
   });
-}
-
-Future<TurnMessage> _nextTurnMessage(Stream<Datagram> datagrams) async {
-  await for (final datagram in datagrams) {
-    final message =
-        TurnMessage.decode(Uint8List.fromList(datagram.data));
-    if (message != null) {
-      return message;
-    }
-  }
-  throw StateError('stream completed before receiving TURN message');
 }

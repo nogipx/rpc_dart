@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:universal_io/io.dart';
 
 import 'turn_message.dart';
+import 'turn_tcp_frame.dart';
 
 /// Options used to customize [TurnRelayClient.connect].
 class TurnRelayClientOptions {
@@ -53,7 +54,7 @@ class TurnRelayClientOptions {
 /// stream.
 final class TurnRelayClient {
   TurnRelayClient._({
-    required RawDatagramSocket socket,
+    required Socket socket,
     required this.serverAddress,
     required this.serverPort,
     required TurnRelayClientOptions options,
@@ -72,12 +73,12 @@ final class TurnRelayClient {
     required int serverPort,
     TurnRelayClientOptions options = const TurnRelayClientOptions(),
   }) async {
-    final socket = await RawDatagramSocket.bind(
-      options.localAddress ?? InternetAddress.anyIPv4,
-      options.localPort,
+    final socket = await Socket.connect(
+      serverAddress,
+      serverPort,
+      sourceAddress: options.localAddress,
+      sourcePort: options.localPort == 0 ? null : options.localPort,
     );
-    socket.readEventsEnabled = true;
-    socket.writeEventsEnabled = true;
 
     final client = TurnRelayClient._(
       socket: socket,
@@ -116,10 +117,11 @@ final class TurnRelayClient {
   /// When enabled, [send] automatically creates peer permissions if required.
   final bool autoCreatePermission;
 
-  final RawDatagramSocket _socket;
+  final Socket _socket;
   final StreamController<Uint8List> _inboundController;
+  late final TurnTcpFrameDecoder _frameDecoder;
 
-  StreamSubscription<RawSocketEvent>? _subscription;
+  StreamSubscription<Uint8List>? _subscription;
   Timer? _refreshTimer;
   final Map<String, Timer> _permissionTimers = {};
   final Map<String, Completer<TurnMessage>> _pendingRequests = {};
@@ -143,8 +145,19 @@ final class TurnRelayClient {
   bool get isClosed => _closed;
 
   Future<void> _initialize(Duration? requestedAllocationLifetime) async {
+    _frameDecoder = TurnTcpFrameDecoder(
+      onTurnMessage: _handleTurnMessage,
+      onChannelData: (_, payload) {
+        _inboundController.add(payload);
+      },
+    );
+
     _subscription = _socket.listen(
-      _handleSocketEvent,
+      (Uint8List data) {
+        if (data.isNotEmpty) {
+          _frameDecoder.addChunk(data);
+        }
+      },
       onError: (Object error, StackTrace stackTrace) {
         if (!_inboundController.isClosed) {
           _inboundController.addError(error, stackTrace);
@@ -245,7 +258,7 @@ final class TurnRelayClient {
       attributes: attributes,
     );
 
-    _socket.send(indication.encode(), serverAddress, serverPort);
+    _socket.add(indication.encode());
   }
 
   Future<void> _createPermission(
@@ -353,44 +366,19 @@ final class TurnRelayClient {
     );
   }
 
-  void _handleSocketEvent(RawSocketEvent event) {
-    if (event != RawSocketEvent.read) {
-      return;
-    }
-
-    Datagram? datagram;
-    while ((datagram = _socket.receive()) != null) {
-      final data = Uint8List.fromList(datagram!.data);
-      if (data.isEmpty) {
-        continue;
-      }
-
-      if (_isChannelData(data)) {
-        final payload = _decodeChannelData(data);
-        if (payload != null) {
-          _inboundController.add(payload);
-        }
-        continue;
-      }
-
-      final message = TurnMessage.decode(data);
-      if (message == null) {
-        continue;
-      }
-
-      switch (message.messageClass) {
-        case TurnMessageClass.successResponse:
-          _resolveRequest(message.transactionId, message);
-          break;
-        case TurnMessageClass.errorResponse:
-          _failRequest(message);
-          break;
-        case TurnMessageClass.indication:
-          _handleIndication(message);
-          break;
-        case TurnMessageClass.request:
-          break;
-      }
+  void _handleTurnMessage(TurnMessage message) {
+    switch (message.messageClass) {
+      case TurnMessageClass.successResponse:
+        _resolveRequest(message.transactionId, message);
+        break;
+      case TurnMessageClass.errorResponse:
+        _failRequest(message);
+        break;
+      case TurnMessageClass.indication:
+        _handleIndication(message);
+        break;
+      case TurnMessageClass.request:
+        break;
     }
   }
 
@@ -442,7 +430,7 @@ final class TurnRelayClient {
     final completer = Completer<TurnMessage>();
     _pendingRequests[key] = completer;
 
-    _socket.send(request.encode(), serverAddress, serverPort);
+    _socket.add(request.encode());
 
     final timer = Timer(requestTimeout, () {
       final pending = _pendingRequests.remove(key);
@@ -482,7 +470,7 @@ final class TurnRelayClient {
     await _subscription?.cancel();
     _subscription = null;
 
-    _socket.close();
+    await _socket.close();
 
     await _inboundController.close();
   }
@@ -498,21 +486,6 @@ final class TurnRelayClient {
 
   static String _permissionKey(InternetAddress address, int port) =>
       '${address.address}:$port';
-
-  static bool _isChannelData(Uint8List data) =>
-      data.length >= 4 && (data[0] & 0xC0) == 0x40;
-
-  static Uint8List? _decodeChannelData(Uint8List data) {
-    if (data.length < 4) {
-      return null;
-    }
-    final header = ByteData.sublistView(data, 0, 4);
-    final length = header.getUint16(2);
-    if (length > data.length - 4) {
-      return null;
-    }
-    return Uint8List.fromList(data.sublist(4, 4 + length));
-  }
 
   static Uint8List _encodeRequestedTransport(int protocolNumber) {
     final data = Uint8List(4);
