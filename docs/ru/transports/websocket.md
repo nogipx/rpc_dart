@@ -1,0 +1,98 @@
+# WebSocket транспорт
+
+WebSocket транспорт удерживает одно TCP соединение и мультиплексирует множество
+RPC вызовов. Он подходит для дашбордов в реальном времени, совместной работы и
+сценариев, где клиенту нужно отправлять обновления без повторного установления
+соединения.
+
+## Когда использовать WebSocket
+
+- **Двунаправленные обновления** – UI клиенты могут отправлять команды и получать
+  стриминговые ответы в рамках одной сессии.
+- **Минимальная задержка** – нет накладных расходов на повторные HTTP
+  подключения при push-обновлениях.
+- **Совместимость с фаерволами** – достаточно одного исходящего порта (например,
+  443).
+
+## Настройка клиента
+
+Создайте транспорт с помощью `RpcWebSocketCallerTransport.connect` и передайте
+его в `RpcCallerEndpoint`:
+
+```dart
+
+Future<void> main() async {
+  final transport = RpcWebSocketCallerTransport.connect(
+Uri.parse('wss://api.example.com/rpc'),
+protocols: const ['rpc-dart'],
+logger: RpcLogger('WebSocketClient'),
+  );
+
+  final caller = RpcCallerEndpoint(transport: transport);
+  final chat = ChatCaller(caller);
+
+  final stream = chat.joinRoom('general', 'u-42');
+  stream.listen((message) => print('[$message]'));
+}
+```
+
+`RpcWebSocketCallerTransport.connect` автоматически настраивает фабрику
+переподключения, поэтому при обрыве соединения можно вызвать
+`transport.reconnect()`.
+
+## Настройка сервера
+
+Используйте `RpcWebSocketServer`, если у вас есть поток уже апгрейженных
+`WebSocketChannel` (например, через `shelf_web_socket` или `HttpServer`):
+
+```dart
+final connections = controller.stream; // Stream<WebSocketChannel>
+
+final server = RpcWebSocketServer.createWithContracts(
+  connections: connections,
+  port: 8080,
+  contracts: [ChatResponder()],
+  logger: RpcLogger('WebSocketServer'),
+);
+
+await server.start();
+```
+
+Для низкоуровневого контроля создайте `RpcWebSocketResponderTransport`
+напрямую из `WebSocketChannel` и передайте его в `RpcResponderEndpoint`.
+
+## Расширение транспорта
+
+`RpcWebSocketTransportBase` предоставляет те же хуки, что и другие транспорты
+набора инструментов. Можно комбинировать mixin'ы для буферизации или
+автоматического переподключения:
+
+```dart
+class ResilientWebSocketTransport extends RpcWebSocketTransportBase
+with RpcAutoReconnect, RpcMessageBuffering {
+  ResilientWebSocketTransport(WebSocketChannel channel)
+  : super(channel, logger: RpcLogger('ResilientWs'));
+
+  @override
+  RpcStreamIdManager get idManager => RpcStreamIdManager(isClient: true);
+
+  @override
+  bool get isClient => true;
+}
+```
+
+Используйте `RpcZeroCopySupport` только для транспотов внутри одного процесса:
+в большинстве случаев WebSocket передаёт сериализованные полезные данные.
+
+## Диагностика
+
+Все WebSocket транспорты реализуют `IRpcTransport`, поэтому можно:
+
+- вызывать `transport.health()` для получения снимков `RpcHealthStatus`;
+- инициировать переподключение через `transport.reconnect()` (на стороне
+  клиента);
+- закрывать соединение методом `transport.close()` при остановке эндпоинта.
+
+Сочетайте эти возможности с `RpcEndpoint.health()` и `RpcEndpointPingProtocol`
+из основной библиотеки, чтобы строить дашборды и оповещения по состоянию
+соединений.

@@ -1,0 +1,86 @@
+site_name: RPC Dart
+site_description: Official documentation for the RPC Dart library
+site_url: https://nogipx.github.io/rpc_dart/
+repo_url: https://github.com/nogipx/rpc_dart
+repo_name: nogipx/rpc_dart
+edit_uri: ''
+
+nav:
+  - Overview: index.md
+  - Getting started: getting-started.md
+  - Core concepts: core-concepts.md
+  - Architecture: architecture.md
+  - Guides:
+      - Context, metadata & deadlines: guides/context-and-metadata.md
+      - Diagnostics & health checks: guides/diagnostics.md
+      - Error handling & status codes: guides/error-handling.md
+      - Routing & composition: guides/routing-and-composition.md
+      - RPC call lifecycle: guides/rpc-lifecycle.md
+      - Streaming patterns: guides/streaming-patterns.md
+      - Testing & tooling: guides/testing-and-debugging.md
+  - Transports:
+      - InMemory: transports/inmemory.md
+      - HTTP/2: transports/http2.md
+      - WebSocket: transports/websocket.md
+      - Isolate: transports/isolate.md
+      - Transport toolkit: transports/transport-toolkit.md
+  - Русский:
+      - Обзор: ru/index.md
+      - Быстрый старт: ru/getting-started.md
+      - Основные концепции: ru/core-concepts.md
+      - Архитектура: ru/architecture.md
+      - Транспорты:
+          - InMemory: ru/transports/inmemory.md
+          - HTTP/2: ru/transports/http2.md
+          - WebSocket: ru/transports/websocket.md
+          - Isolate: ru/transports/isolate.md
+          - Кастомные транспорты: ru/transports/custom.md
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - toc.integrate
+  palette:
+    - scheme: slate
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+    - scheme: default
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+  - macros:
+      module_name: macros
