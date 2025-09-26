@@ -23,6 +23,7 @@ nav:
       - HTTP/2: transports/http2.md
       - WebSocket: transports/websocket.md
       - Isolate: transports/isolate.md
+      - TURN relay: transports/turn-relay.md
       - Transport toolkit: transports/transport-toolkit.md
   - Русский:
       - Обзор: ru/index.md
@@ -34,6 +35,7 @@ nav:
           - HTTP/2: ru/transports/http2.md
           - WebSocket: ru/transports/websocket.md
           - Isolate: ru/transports/isolate.md
+          - TURN релейный: ru/transports/turn-relay.md
           - Кастомные транспорты: ru/transports/custom.md
 
 theme:
