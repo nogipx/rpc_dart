@@ -4,8 +4,8 @@
 
 import 'dart:async';
 
-import 'package:test/test.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('HTTP/2 RPC Integration Tests (High-Level API)', () {
@@ -78,7 +78,7 @@ void main() {
       expect(header.messageLength, equals(serializedRequest.length));
 
       final payloadWithoutPrefix =
-          rawFrame.sublist(RpcConstants.MESSAGE_PREFIX_SIZE);
+          rawFrame.sublist(RpcConstants.messagePrefixSize);
       expect(payloadWithoutPrefix, equals(serializedRequest));
     });
 

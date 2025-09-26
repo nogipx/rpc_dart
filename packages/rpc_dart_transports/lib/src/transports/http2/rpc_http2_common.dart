@@ -74,11 +74,11 @@ RpcMetadata http2HeadersToRpcMetadata(List<http2.Header> headers) {
 /// возвращает исходный буфер без копирования. В противном случае добавляет
 /// gRPC префикс, предполагая отсутствие сжатия.
 Uint8List ensureGrpcFrame(Uint8List data) {
-  if (data.length >= RpcConstants.MESSAGE_PREFIX_SIZE) {
+  if (data.length >= RpcConstants.messagePrefixSize) {
     try {
       final header = RpcMessageFrame.parseHeader(data);
       final expectedLength =
-          RpcConstants.MESSAGE_PREFIX_SIZE + header.messageLength;
+          RpcConstants.messagePrefixSize + header.messageLength;
 
       if (expectedLength == data.length) {
         return data;
@@ -93,14 +93,14 @@ Uint8List ensureGrpcFrame(Uint8List data) {
 
 /// Проверяет, что данные имеют валидный gRPC префикс и соответствующую длину.
 bool isGrpcFrame(Uint8List data) {
-  if (data.length < RpcConstants.MESSAGE_PREFIX_SIZE) {
+  if (data.length < RpcConstants.messagePrefixSize) {
     return false;
   }
 
   try {
     final header = RpcMessageFrame.parseHeader(data);
     final expectedLength =
-        RpcConstants.MESSAGE_PREFIX_SIZE + header.messageLength;
+        RpcConstants.messagePrefixSize + header.messageLength;
     return expectedLength == data.length;
   } catch (_) {
     return false;
