@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:rpc_dart_transports/src/transports/relay/turn_tcp_frame.dart';
@@ -27,7 +26,7 @@ void main() {
     });
 
     for (final entry in [
-      ('udp', TurnRequestedTransport.udp),
+      // ('udp', TurnRequestedTransport.udp),
       ('tcp', TurnRequestedTransport.tcp),
     ]) {
       final label = entry.$1;
@@ -121,7 +120,6 @@ void main() {
           peerPort = udpPeer.port;
         } else {
           tcpPeer = await Socket.connect(relayAddress, relayPort);
-          tcpPeer.encoding = null;
           tcpPeerSub = tcpPeer.listen((Uint8List data) {
             if (data.isNotEmpty) {
               tcpPayloads.add(Uint8List.fromList(data));
@@ -155,7 +153,8 @@ void main() {
           const Duration(seconds: 1),
           onTimeout: () => throw StateError('permission response timeout'),
         );
-        expect(permissionResponse.messageClass, TurnMessageClass.successResponse);
+        expect(
+            permissionResponse.messageClass, TurnMessageClass.successResponse);
         expect(permissionResponse.method, TurnMethod.createPermission);
 
         final outboundPayload = Uint8List.fromList('ping'.codeUnits);

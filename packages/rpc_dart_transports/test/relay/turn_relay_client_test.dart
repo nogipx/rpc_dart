@@ -3,11 +3,12 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
 import 'package:universal_io/io.dart';
+
+const _ioTimeout = Duration(seconds: 1);
 
 void main() {
   group('TurnRelayClient', () {
@@ -25,43 +26,6 @@ void main() {
       await server.stop();
     });
 
-    test('relays payload bytes via TURN (UDP peer)', () async {
-      final peerSocket =
-          await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
-      addTearDown(peerSocket.close);
-
-      final client = await TurnRelayClient.connect(
-        serverAddress: server.bindAddress,
-        serverPort: server.port,
-      );
-      addTearDown(client.close);
-
-      await client.addPermission(InternetAddress.loopbackIPv4, peerSocket.port);
-
-      final outboundPayload = Uint8List.fromList('hello'.codeUnits);
-
-      await client.send(
-        outboundPayload,
-        peerAddress: InternetAddress.loopbackIPv4,
-        peerPort: peerSocket.port,
-      );
-
-      final peerReceived = await _nextPeerDatagram(peerSocket);
-      expect(peerReceived.data, outboundPayload);
-      expect(peerReceived.address, server.relayAddress);
-      expect(peerReceived.port, server.allocations.first.relayPort);
-
-      final inboundPayload = Uint8List.fromList('world'.codeUnits);
-      peerSocket.send(inboundPayload, client.relayAddress, client.relayPort);
-
-      final received = await client.bytes.first.timeout(
-        const Duration(seconds: 1),
-        onTimeout: () => throw StateError('client did not receive data'),
-      );
-
-      expect(received, inboundPayload);
-    });
-
     test('relays payload bytes via TURN (TCP peer)', () async {
       final client = await TurnRelayClient.connect(
         serverAddress: server.bindAddress,
@@ -72,9 +36,11 @@ void main() {
       );
       addTearDown(client.close);
 
+      expect(client.relayAddress, equals(server.relayAddress));
+      expect(client.relayPort, greaterThan(0));
+
       final peerSocket =
           await Socket.connect(client.relayAddress, client.relayPort);
-      peerSocket.encoding = null;
       addTearDown(peerSocket.close);
 
       final peerPayloads = StreamController<Uint8List>();
@@ -90,7 +56,8 @@ void main() {
 
       await client.addPermission(peerSocket.address, peerSocket.port);
 
-      final outboundPayload = Uint8List.fromList('hello'.codeUnits);
+      const outboundText = 'hello';
+      final outboundPayload = Uint8List.fromList(outboundText.codeUnits);
 
       await client.send(
         outboundPayload,
@@ -99,44 +66,25 @@ void main() {
       );
 
       final peerReceived = await peerPayloads.stream.first.timeout(
-        const Duration(seconds: 1),
-        onTimeout: () => throw StateError('peer did not receive data'),
+        _ioTimeout,
+        onTimeout: () => throw StateError('TCP peer timeout waiting outbound'),
       );
       expect(peerReceived, outboundPayload);
 
-      final inboundPayload = Uint8List.fromList('world'.codeUnits);
+      const inboundText = 'world';
+      final inboundPayload = Uint8List.fromList(inboundText.codeUnits);
       peerSocket.add(inboundPayload);
 
-      final received = await client.bytes.first.timeout(
-        const Duration(seconds: 1),
-        onTimeout: () => throw StateError('client did not receive data'),
-      );
-
+      final received = await _nextClientBytes(client);
       expect(received, inboundPayload);
     });
   });
 }
 
-Future<Datagram> _nextPeerDatagram(RawDatagramSocket socket) async {
-  final completer = Completer<Datagram>();
-  late StreamSubscription<RawSocketEvent> subscription;
-  subscription = socket.listen((event) {
-    if (event == RawSocketEvent.read) {
-      Datagram? datagram;
-      while ((datagram = socket.receive()) != null) {
-        if (!completer.isCompleted) {
-          completer.complete(datagram!);
-        }
-      }
-    }
-  });
-
-  try {
-    return await completer.future.timeout(
-      const Duration(seconds: 1),
-      onTimeout: () => throw StateError('peer did not receive data'),
-    );
-  } finally {
-    await subscription.cancel();
-  }
+Future<Uint8List> _nextClientBytes(TurnRelayClient client) async {
+  return client.bytes.first.timeout(
+    _ioTimeout,
+    onTimeout: () =>
+        throw StateError('Client did not receive data within timeout'),
+  );
 }

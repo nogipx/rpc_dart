@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:universal_io/io.dart';
 
-import 'turn_message.dart';
 import 'turn_relay_logger.dart';
 
 /// Represents the transport protocol used for relaying peer traffic.
@@ -190,7 +190,8 @@ final class TurnAllocation {
     return true;
   }
 
-  void bindChannel(int channelNumber, InternetAddress peerAddress, int peerPort) {
+  void bindChannel(
+      int channelNumber, InternetAddress peerAddress, int peerPort) {
     final binding = _channels[channelNumber];
     if (binding != null) {
       binding.refresh(channelLifetime);
@@ -293,7 +294,7 @@ final class TurnAllocation {
   void _handleTcpConnection(Socket socket) {
     final key = _peerKey(socket.remoteAddress, socket.remotePort);
     _tcpPeers[key] = socket;
-    socket.encoding = null;
+    socket.encoding = utf8;
 
     final subscription = socket.listen(
       (List<int> data) {

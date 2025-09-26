@@ -82,7 +82,7 @@ final class TurnRelayClient {
       serverAddress,
       serverPort,
       sourceAddress: options.localAddress,
-      sourcePort: options.localPort == 0 ? null : options.localPort,
+      sourcePort: options.localPort,
     );
 
     final client = TurnRelayClient._(
@@ -144,10 +144,10 @@ final class TurnRelayClient {
   Stream<Uint8List> get bytes => _inboundController.stream;
 
   /// Address advertised via XOR-RELAYED-ADDRESS for this allocation.
-  InternetAddress get relayedAddress => _relayedAddress;
+  InternetAddress get relayAddress => _relayedAddress;
 
   /// Port advertised via XOR-RELAYED-ADDRESS for this allocation.
-  int get relayedPort => _relayedPort;
+  int get relayPort => _relayedPort;
 
   /// Whether the client has been closed.
   bool get isClosed => _closed;
@@ -208,10 +208,12 @@ final class TurnRelayClient {
     final relayedAttr =
         response.firstAttribute(TurnAttributeType.xorRelayedAddress);
     if (relayedAttr == null) {
-      throw const TurnRelayException('Allocate success without relayed address');
+      throw const TurnRelayException(
+          'Allocate success without relayed address');
     }
 
-    final (address, port) = decodeXorAddress(relayedAttr, response.transactionId);
+    final (address, port) =
+        decodeXorAddress(relayedAttr, response.transactionId);
     _relayedAddress = address;
     _relayedPort = port;
 
@@ -424,9 +426,8 @@ final class TurnRelayClient {
 
     final view = ByteData.sublistView(errorAttr);
     final code = view.getUint8(2) * 100 + view.getUint8(3);
-    final reasonBytes = errorAttr.length > 4
-        ? errorAttr.sublist(4)
-        : Uint8List(0);
+    final reasonBytes =
+        errorAttr.length > 4 ? errorAttr.sublist(4) : Uint8List(0);
     final reason = utf8.decode(reasonBytes, allowMalformed: true);
     completer.completeError(
       TurnRelayException('TURN request failed: $reason', code: code),
@@ -510,6 +511,7 @@ class TurnRelayException implements Exception {
   final int? code;
 
   @override
-  String toString() =>
-      code != null ? 'TurnRelayException($code): $message' : 'TurnRelayException: $message';
+  String toString() => code != null
+      ? 'TurnRelayException($code): $message'
+      : 'TurnRelayException: $message';
 }

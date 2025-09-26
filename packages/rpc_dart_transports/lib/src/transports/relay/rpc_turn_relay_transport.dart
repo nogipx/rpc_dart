@@ -4,7 +4,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
@@ -260,7 +259,8 @@ abstract class RpcTurnRelayTransportBase implements IRpcTransport {
     }
 
     if (message.length < 5) {
-      _logger?.warning('Ignoring short TURN relay frame of ${message.length} bytes');
+      _logger?.warning(
+          'Ignoring short TURN relay frame of ${message.length} bytes');
       return;
     }
 
@@ -464,6 +464,17 @@ final class RpcTurnRelayCallerTransport extends RpcTurnRelayTransportBase {
 
   @override
   bool get isClient => true;
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    return incomingMessages.where((message) => message.streamId == streamId);
+  }
+
+  @override
+  Future<void> sendDirectObject(int streamId, Object object,
+      {bool endStream = false}) {
+    throw UnimplementedError();
+  }
 }
 
 /// Server-side transport that uses even stream identifiers.
@@ -520,4 +531,15 @@ final class RpcTurnRelayResponderTransport extends RpcTurnRelayTransportBase {
 
   @override
   bool get isClient => false;
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    return incomingMessages.where((message) => message.streamId == streamId);
+  }
+
+  @override
+  Future<void> sendDirectObject(int streamId, Object object,
+      {bool endStream = false}) {
+    throw UnimplementedError();
+  }
 }
