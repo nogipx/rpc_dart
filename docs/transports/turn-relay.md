@@ -121,6 +121,136 @@ Leaving the parameter out falls back to the built-in defaults (5 second request
 timeouts, automatic permission creation, and allocation refreshes scheduled 30
 seconds before expiry).
 
+## Using `RpcTurnRelayPeer`
+
+`RpcTurnRelayPeer` wraps the TURN client so that you can publish your relay
+endpoint first and decide on the actual peer address later. It stores responder
+contracts up front, keeps a single connection to the relay server, and creates
+the underlying transports on demand once you know where the remote participant
+is reachable.
+
+```dart
+final peer = await RpcTurnRelayPeer.connectToRelay(
+  serverAddress: relay.bindAddress,
+  serverPort: relay.port,
+  responderContracts: [EchoResponderContract()],
+);
+
+print('Share this TURN endpoint: ${peer.relayAddress.address}:${peer.relayPort}');
+
+// ... exchange relay coordinates with the other participant ...
+
+await peer.connectPeer(
+  peerAddress: otherPeerAddress,
+  peerPort: otherPeerPort,
+);
+
+final response = await peer.callerEndpoint.unaryRequest<RpcString, RpcString>(
+  serviceName: 'echo',
+  methodName: 'echo',
+  requestCodec: RpcString.codec,
+  responseCodec: RpcString.codec,
+  request: RpcString('ping'),
+);
+
+print(response.value);
+```
+
+`connectPeer()` lazily provisions the caller and responder transports. After the
+call returns you can start issuing outgoing RPC requests through
+`callerEndpoint`, while `responderEndpoint` automatically exposes the contracts
+provided during construction. The `close()` method disposes of every resource and
+is safe to invoke multiple times.
+
+### Coordinating QR-based invitations
+
+You can keep the entire invitation workflow inside the RPC layer without
+standing up a dedicated signaling service. A typical flow looks like this:
+
+1. Both participants call `RpcTurnRelayPeer.connectToRelay(...)` during app
+   startup and register a contract with a method such as `incomingInvite`.
+2. Each client generates a QR code that bundles its `relayAddress`,
+   `relayPort`, and any additional metadata (for example a display name or
+   verification token).
+3. When Alice scans Bob's QR code she immediately calls
+   `peer.connectPeer(peerAddress: bobAddress, peerPort: bobPort)` to create the
+   TURN transports, then performs an RPC call to `incomingInvite` with her own
+   coordinates.
+4. Bob's handler shows the prompt to the user. If the invite is accepted it
+   calls `peer.connectPeer(...)` with Alice's address and port from the request
+   before returning a positive response.
+5. Once both sides have confirmed the invite they continue using the same
+   caller/responder endpoints for the main session.
+
+The contract can decode the invite payload and establish the transport only
+after the user confirms the connection:
+
+```dart
+import 'dart:convert';
+import 'package:universal_io/io.dart';
+
+class ConnectionInvitationContract extends RpcResponderContract {
+  ConnectionInvitationContract(this.peer, this.showPrompt)
+      : super('ConnectionInvitation');
+
+  final RpcTurnRelayPeer peer;
+  final Future<bool> Function(Map<String, Object?> payload) showPrompt;
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcBool>(
+      methodName: 'incomingInvite',
+      requestCodec: RpcString.codec,
+      responseCodec: RpcBool.codec,
+      handler: _handleInvite,
+    );
+  }
+
+  Future<RpcBool> _handleInvite(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
+    final payload = jsonDecode(request.value) as Map<String, Object?>;
+    final accepted = await showPrompt(payload);
+
+    if (accepted) {
+      await peer.connectPeer(
+        peerAddress: InternetAddress(payload['peerAddress']! as String),
+        peerPort: payload['peerPort']! as int,
+      );
+    }
+
+    return RpcBool(accepted);
+  }
+}
+```
+
+Alice issues the invite with her own coordinates so Bob can connect back once he
+approves the prompt:
+
+```dart
+final inviteAccepted = await peer.callerEndpoint.unaryRequest<RpcString, RpcBool>(
+  serviceName: 'ConnectionInvitation',
+  methodName: 'incomingInvite',
+  requestCodec: RpcString.codec,
+  responseCodec: RpcBool.codec,
+  request: RpcString(jsonEncode({
+    'peerAddress': peer.relayAddress.address,
+    'peerPort': peer.relayPort,
+    'displayName': currentUserName,
+  })),
+);
+
+if (!inviteAccepted.value) {
+  // user on the other side declined the connection
+  return;
+}
+```
+
+This approach keeps the QR exchange, confirmation prompt, and session setup in a
+single RPC protocol while the TURN relay continues to forward the encrypted
+transport traffic.
+
 ## Helper APIs
 
 Use the helpers from `turn_message.dart` to build or inspect TURN frames when
