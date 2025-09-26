@@ -1,124 +1,119 @@
-# TURN relay transport
+# TURN relay
 
-`RpcTurnRelayServer` brings RFC 5766 style UDP relaying into the
-`rpc_dart_transports` package. It exposes a TURN listener that accepts
-allocations from clients, forwards outbound datagrams to peers, and relays peer
-traffic back to the original caller. The implementation lives entirely in Dart
-and reuses the same diagnostics/logging facilities that power other RPC Dart
-transports.
+`TurnRelayServer` implements an RFC 5766 compatible UDP relay in pure Dart. The
+listener accepts TURN Allocate requests, provisions individual relay sockets for
+clients, tracks permissions and channel bindings, and converts peer traffic back
+into TURN Data indications or ChannelData frames. The implementation ships with
+`rpc_dart_transports` but has no dependency on the RPC runtime, which makes it a
+lightweight building block for any UDP-based application that needs NAT
+traversal.
 
-## What was implemented
+## Key capabilities
 
-- **TURN/STUN framing helpers** – `TurnMessage`, `TurnAttribute`, and encoding
-  utilities cover the XOR address, data, channel data, and lifetime attributes
-  required by RFC 5389/5766.
-- **Allocation lifecycle management** – `TurnAllocation` tracks each client's
-  relay socket, expiration timers, peer permissions, and channel bindings.
-- **TURN method handlers** – the server responds to `Allocate`, `Refresh`,
-  `CreatePermission`, `ChannelBind`, and `Send` flows and emits peer data through
-  `Data` indications or channel data frames.
-- **UDP relay sockets** – every active allocation binds its own UDP socket on
-  the relay address so that peer hosts exchange datagrams without touching the
-  TURN control port.
+- **TURN/STUN encoding helpers** – `TurnMessage`, `TurnAttribute`, and related
+  utilities cover XOR addresses, DATA attributes, lifetimes, and channel
+  metadata so that you do not have to craft binary frames by hand.
+- **Allocation lifecycle management** – `TurnAllocation` keeps per-client relay
+  sockets, expiration timers, peer permissions, and channel bindings in sync
+  with RFC 5766.
+- **Full TURN method support** – the server handles `Allocate`, `Refresh`,
+  `CreatePermission`, `ChannelBind`, and `Send` flows and delivers peer packets
+  back to the client as Data indications or ChannelData messages depending on
+  active bindings.
+- **Embeddable logging** – `TurnRelayLogger` lets you adapt the relay output to
+  your own logging infrastructure without pulling in extra packages.
 
-## When to use the relay
-
-Choose the TURN relay when:
-
-- you need a **NAT traversal helper** for WebRTC-style media flows or other
-  bidirectional UDP protocols;
-- **rpc_dart** already powers your control plane and you want to reuse the same
-  logging, lifecycle hooks, and deployment story instead of running a separate
-  coturn/turnserver process;
-- you plan to **integrate TURN allocations with custom business logic**, e.g.
-  provisioning relay quotas, introspecting active peers, or wiring RPC calls to
-  allocation events.
-
-## Starting a server
+## Running a relay
 
 ```dart
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:universal_io/io.dart';
 
 Future<void> main() async {
-  final relay = RpcTurnRelayServer(
+  final relay = TurnRelayServer(
     bindAddress: InternetAddress.anyIPv4,
-    port: 3478,
-    logger: RpcLogger('turn'),
+    bindPort: 3478,
+    logger: TurnRelayLogger(
+      scope: 'turn',
+      onInfo: (message) => print('[INFO] $message'),
+      onWarning: (message) => print('[WARN] $message'),
+      onError: (message, {error, stackTrace}) {
+        print('[ERROR] $message');
+        if (error != null) {
+          print('  error: $error');
+        }
+        if (stackTrace != null) {
+          print('  stack: $stackTrace');
+        }
+      },
+    ),
   );
 
   await relay.start();
-  print('TURN relay listening on ${relay.bindAddress.address}:${relay.listenPort}');
+  print('TURN relay listening on ${relay.bindAddress.address}:${relay.port}');
 
-  // ...keep the process alive until shutdown...
+  // ... keep the process alive ...
 
   await relay.stop();
 }
 ```
 
-By default the relay reuses the bind address as the public relay address. Supply
-`relayAddress` when you run behind NAT or want to advertise a different IP in
-`XOR-RELAYED-ADDRESS` attributes.
+When the listener binds to a private address, provide `relayAddress` so the
+server advertises the externally reachable IP in the `XOR-RELAYED-ADDRESS`
+attribute.
 
-## Handling allocations and peers
+## Allocation lifecycle
 
-`RpcTurnRelayServer` keeps a registry of live `TurnAllocation` instances that
-your application can inspect. Each allocation exposes:
+Every successful `Allocate` request spawns a `TurnAllocation`:
 
-- `clientAddress` / `clientPort` – the TURN client's socket;
-- `relayPort` – the ephemeral UDP port peers should target;
-- `permissions` and `channels` (via helper getters) – check which peers are
-  allowed or bound;
-- `onPeerData` callback – invoked whenever a peer datagram arrives so the server
-  can emit a `Data` indication back to the client.
+- `clientAddress` / `clientPort` identify the TURN client socket.
+- `relayPort` exposes the UDP port peers must target.
+- `addPermission`, `hasPermission`, and `bindChannel` enforce the TURN security
+  rules for authorized peers and optional channel bindings.
+- `onPeerData` delivers datagrams received on the relay socket so the server can
+  translate them back into TURN responses.
 
 Allocations expire automatically after `allocationLifetime` (10 minutes by
-default). `Refresh` requests extend that lifetime, and the server sweeps expired
-permissions and channels lazily whenever it evaluates them.
+default). A `Refresh` request extends the lifetime, while a zero-second
+refresh tears the allocation down immediately. Permissions and channel bindings
+are lazily pruned when their TTL elapses.
 
-## Client interaction flow
+## Client workflow
 
-1. **Allocate** – send an `Allocate` request with
-   `REQUESTED-TRANSPORT = UDP`. The success response returns the relay socket in
-   `XOR-RELAYED-ADDRESS` and echoes the client's `XOR-MAPPED-ADDRESS`.
-2. **Create permissions** – issue one or more `CreatePermission` requests to
-   authorize specific peers via `XOR-PEER-ADDRESS` attributes.
-3. **Send data** – either:
-   - send `Send` indications containing `XOR-PEER-ADDRESS` + `DATA`, or
-   - bind a channel via `ChannelBind` and then transmit raw ChannelData frames
-     for lower overhead.
-4. **Receive peer traffic** – the relay transforms inbound peer datagrams into
-   `Data` indications (or ChannelData frames) and forwards them to the client.
-5. **Refresh / teardown** – `Refresh` requests renew the allocation; omitting a
-   lifetime or setting it to zero tears the allocation down immediately.
+1. **Allocate** – send an `Allocate` request (with `REQUESTED-TRANSPORT = UDP`).
+   The success response returns the relay endpoint in `XOR-RELAYED-ADDRESS`.
+2. **Create permissions** – authorize peers with `CreatePermission` requests.
+3. **Send data** – use `Send` indications (`XOR-PEER-ADDRESS` + `DATA`) or bind a
+   channel via `ChannelBind` and transmit ChannelData packets for lower
+   overhead.
+4. **Receive peer traffic** – the relay emits either Data indications or
+   ChannelData frames back to the client depending on whether a channel binding
+   exists for the peer.
+5. **Refresh / tear down** – `Refresh` extends the allocation lifetime or closes
+   it when the client requests a zero-second duration.
 
-The companion test `rpc_turn_relay_server_test.dart` demonstrates the full flow
-end-to-end, including a peer replying through the relay.
+The integration test `turn_relay_server_test.dart` demonstrates this flow with a
+TURN client talking to a peer socket through the relay.
 
-## Helper APIs for TURN messages
+## Helper APIs
 
-`TurnMessage` offers strongly typed helpers for TURN/STUN encoding so you do not
-have to handcraft byte buffers:
+Use the helpers from `turn_message.dart` to build or inspect TURN frames when
+writing tests or integrating custom clients:
 
-- `TurnMessage.encode()` and `TurnMessage.decode(...)` convert between Dart
-  objects and UDP payloads.
-- `encodeXorAddress`, `decodeXorAddress`, `encodeLifetime`, `encodeData`, and
-  ChannelData helpers in `turn_message.dart` simplify working with common
-  attribute types.
+- `TurnMessage.encode()` / `TurnMessage.decode(...)`
+- `encodeXorAddress` / `decodeXorAddress`
+- `encodeLifetime` / `decodeLifetime`
+- `encodeData`
 
-Use these utilities to integrate existing TURN clients, write your own
-specialized tooling, or test interactions without extra dependencies.
+These cover the pieces required for the UDP relay profile defined in RFC 5766.
 
-## Limitations and roadmap
+## Limitations
 
-- Only **UDP allocations** are currently supported; TCP relaying, DTLS, and
-  TURN-over-TLS are out of scope.
-- **Authentication (long-term or short-term credentials) is not implemented**.
-  Gate TURN access at the network perimeter or add your own challenge/response
-  logic before exposing the relay publicly.
-- No bandwidth quotas or alternate server selection (ALTERNATE-SERVER) logic is
-  implemented yet.
+- Only the UDP transport profile is supported – TCP allocations, TLS, and DTLS
+  are currently out of scope.
+- Authentication (long-term or short-term credentials) is not implemented; gate
+  access at the network level or layer additional authentication on top.
+- No quota management or alternate server discovery is provided yet.
 
-Despite these gaps the relay is already useful for private deployments, tests,
-prototyping, or as a foundation for a more feature-complete TURN service.
+Despite these gaps the relay is sufficient for controlled environments,
+integration tests, or as a foundation for more advanced TURN deployments.

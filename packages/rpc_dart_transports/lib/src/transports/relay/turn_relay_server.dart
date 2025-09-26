@@ -5,88 +5,79 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
-import '../../server/rpc_server_interface.dart';
-import 'rpc_turn_relay_responder_transport.dart';
 import 'turn_allocation.dart';
 import 'turn_message.dart';
+import 'turn_relay_logger.dart';
 
-/// RPC TURN relay server. Оборачивает UDP relay (RFC 5766) в инфраструктуру
-/// rpc_dart, создавая [RpcResponderEndpoint] для каждой TURN allocation.
-final class RpcTurnRelayServer implements IRpcServer {
-  RpcTurnRelayServer({
+/// TURN relay server implementation following RFC 5766 for UDP relaying.
+///
+/// The server listens for TURN requests on [bindAddress]/[bindPort], manages
+/// allocations and permissions, and forwards peer traffic back to clients using
+/// Data indications or ChannelData messages depending on active channel
+/// bindings.
+final class TurnRelayServer {
+  TurnRelayServer({
     required this.bindAddress,
     required this.bindPort,
-    required List<RpcResponderContract> contracts,
     InternetAddress? relayAddress,
     this.allocationLifetime = const Duration(minutes: 10),
     this.permissionLifetime = const Duration(minutes: 5),
     this.channelLifetime = const Duration(minutes: 10),
-    this.software = 'rpc_dart_turn_relay/0.1.0',
-    RpcLogger? logger,
-  })  : relayAddress = relayAddress ?? bindAddress,
-        _logger = logger?.child('TurnRelayServer'),
-        _contracts = List.unmodifiable(contracts);
+    this.software = 'turn_relay/0.1.0',
+    TurnRelayLogger? logger,
+  }) : relayAddress = relayAddress ?? bindAddress,
+        _logger = logger?.child('TurnRelayServer');
 
-  /// Адрес, на котором слушаем TURN UDP пакеты.
+  /// Address used for the TURN UDP listener.
   final InternetAddress bindAddress;
 
-  /// Порт для UDP listener (можно 0 для автоназначения).
+  /// Port used for the TURN UDP listener (0 enables OS-assigned port).
   final int bindPort;
 
-  /// Адрес, который будет возвращаться в XOR-RELAYED-ADDRESS (обычно публичный IP).
+  /// Public relay address advertised via XOR-RELAYED-ADDRESS.
   final InternetAddress relayAddress;
 
-  /// Жизненный цикл allocation.
+  /// Default allocation lifetime when client does not request a value.
   final Duration allocationLifetime;
 
-  /// Жизненный цикл permission.
+  /// Permission lifetime according to RFC 5766 section 8.
   final Duration permissionLifetime;
 
-  /// Жизненный цикл channel binding.
+  /// Channel binding lifetime according to RFC 5766 section 11.
   final Duration channelLifetime;
 
-  /// Строка для TURN SOFTWARE атрибута.
+  /// Value exposed through the SOFTWARE attribute.
   final String software;
 
-  final RpcLogger? _logger;
-  final List<RpcResponderContract> _contracts;
+  final TurnRelayLogger? _logger;
 
   RawDatagramSocket? _socket;
   StreamSubscription<RawSocketEvent>? _subscription;
 
-  final Map<String, _RpcTurnRelayAllocationContext> _allocations = {};
-  final List<RpcResponderEndpoint> _endpoints = [];
+  final Map<String, _TurnRelayAllocationContext> _allocations = {};
 
-  @override
-  String get host => bindAddress.address;
-
-  /// Фактический порт, на котором слушает UDP сокет.
-  int get listenPort => _socket?.port ?? bindPort;
-
-  @override
-  int get port => listenPort;
-
-  @override
+  /// Returns true once the UDP socket has been created.
   bool get isRunning => _socket != null;
 
-  @override
-  List<RpcResponderEndpoint> get endpoints => List.unmodifiable(_endpoints);
+  /// Actual port of the bound UDP socket (may differ from [bindPort]).
+  int get port => _socket?.port ?? bindPort;
 
-  /// Текущие allocation (для отладки/метрик).
-  Iterable<_RpcTurnRelayAllocationContext> get allocations =>
-      _allocations.values;
+  /// Active allocations for debugging and metrics purposes.
+  Iterable<TurnAllocation> get allocations =>
+      _allocations.values.map((context) => context.allocation);
 
-  /// Запуск UDP listener и обработка TURN запросов.
-  @override
+  /// Starts the UDP listener and begins processing TURN requests.
   Future<void> start() async {
     if (isRunning) {
       return;
     }
 
-    _logger?.info('Starting TURN relay on ${bindAddress.address}:$bindPort');
+    _logger?.info(
+      'Starting TURN relay on ${bindAddress.address}:$bindPort',
+    );
+
     final socket = await RawDatagramSocket.bind(bindAddress, bindPort);
     socket.readEventsEnabled = true;
     socket.writeEventsEnabled = true;
@@ -108,7 +99,7 @@ final class RpcTurnRelayServer implements IRpcServer {
     );
   }
 
-  @override
+  /// Stops the UDP listener and disposes all active allocations.
   Future<void> stop() async {
     _subscription?.cancel();
     _subscription = null;
@@ -117,7 +108,6 @@ final class RpcTurnRelayServer implements IRpcServer {
 
     for (final context in _allocations.values) {
       await context.dispose();
-      _endpoints.remove(context.endpoint);
     }
 
     _allocations.clear();
@@ -138,12 +128,18 @@ final class RpcTurnRelayServer implements IRpcServer {
   }
 
   void _handleDatagram(Datagram datagram) {
-    final bytes = datagram.data;
+    final bytes = Uint8List.fromList(datagram.data);
     if (bytes.isEmpty) {
       return;
     }
 
-    final message = TurnMessage.decode(Uint8List.fromList(bytes));
+    // ChannelData packets use a different framing (RFC 5766 section 10).
+    if (_isChannelData(bytes)) {
+      _handleChannelData(bytes, datagram.address, datagram.port);
+      return;
+    }
+
+    final message = TurnMessage.decode(bytes);
     if (message == null) {
       _logger?.warning(
         'Invalid TURN message from ${datagram.address.address}:${datagram.port}',
@@ -160,7 +156,6 @@ final class RpcTurnRelayServer implements IRpcServer {
         break;
       case TurnMessageClass.successResponse:
       case TurnMessageClass.errorResponse:
-        // Сервер не ожидает ответов.
         _logger?.warning(
           'Unexpected TURN response from ${datagram.address.address}:${datagram.port}',
         );
@@ -217,12 +212,11 @@ final class RpcTurnRelayServer implements IRpcServer {
     if (context != null) {
       await context.dispose();
       _allocations.remove(key);
-      _endpoints.remove(context.endpoint);
     }
 
     final relaySocket = await RawDatagramSocket.bind(relayAddress, 0);
 
-    late final _RpcTurnRelayAllocationContext allocationContext;
+    late final _TurnRelayAllocationContext allocationContext;
 
     final allocation = TurnAllocation(
       clientAddress: clientAddress,
@@ -234,75 +228,44 @@ final class RpcTurnRelayServer implements IRpcServer {
       channelLifetime: channelLifetime,
       logger: _logger?.child('Allocation'),
       onPeerData: (Uint8List data, InternetAddress peerAddress, int peerPort) {
-        _forwardPeerData(allocationContext, data, peerAddress, peerPort);
+        _forwardPeerData(
+          allocationContext,
+          data,
+          peerAddress,
+          peerPort,
+        );
       },
       onExpired: () {
-        _logger?.info('Allocation expired for ${clientAddress.address}:$clientPort');
+        _logger?.info(
+          'Allocation expired for ${clientAddress.address}:$clientPort',
+        );
         _closeAllocation(key);
       },
     );
 
-    final transport = RpcTurnRelayResponderTransport(
-      sendFrame: (Uint8List frame) async {
-        final transactionId = TurnMessage.generateTransactionId();
-        final indication = TurnMessage(
-          method: TurnMethod.data,
-          messageClass: TurnMessageClass.indication,
-          transactionId: transactionId,
-          attributes: [
-            TurnAttribute(
-              TurnAttributeType.xorPeerAddress,
-              encodeXorAddress(
-                allocation.relayAddress,
-                allocation.relayPort,
-                transactionId,
-              ),
-            ),
-            TurnAttribute(TurnAttributeType.data, encodeData(frame)),
-          ],
-        );
-
-        _socket?.send(
-          indication.encode(),
-          clientAddress,
-          clientPort,
-        );
-      },
-      logger: _logger,
-    );
-
-    final endpoint = RpcResponderEndpoint(
-      transport: transport,
-      debugLabel: 'turn:${clientAddress.address}:$clientPort',
-      loggerColors: RpcLoggerColors.singleColor(AnsiColor.cyan),
-    );
-
-    for (final contract in _contracts) {
-      endpoint.registerServiceContract(contract);
-    }
-
-    endpoint.start();
-
-    allocationContext = _RpcTurnRelayAllocationContext(
+    allocationContext = _TurnRelayAllocationContext(
       clientAddress: clientAddress,
       clientPort: clientPort,
       allocation: allocation,
-      endpoint: endpoint,
-      transport: transport,
     );
 
     _allocations[key] = allocationContext;
-    _endpoints.add(endpoint);
-
     _sendAllocateSuccess(message, allocationContext, clientAddress, clientPort);
   }
 
   void _forwardPeerData(
-    _RpcTurnRelayAllocationContext context,
+    _TurnRelayAllocationContext context,
     Uint8List data,
     InternetAddress peerAddress,
     int peerPort,
   ) {
+    final channel = context.allocation.findChannelByPeer(peerAddress, peerPort);
+    if (channel != null) {
+      final frame = _encodeChannelData(channel.channelNumber, data);
+      _socket?.send(frame, context.clientAddress, context.clientPort);
+      return;
+    }
+
     final transactionId = TurnMessage.generateTransactionId();
     final indication = TurnMessage(
       method: TurnMethod.data,
@@ -326,8 +289,9 @@ final class RpcTurnRelayServer implements IRpcServer {
 
   void _closeAllocation(String key) {
     final context = _allocations.remove(key);
-    if (context == null) return;
-    _endpoints.remove(context.endpoint);
+    if (context == null) {
+      return;
+    }
     unawaited(context.dispose());
   }
 
@@ -361,7 +325,10 @@ final class RpcTurnRelayServer implements IRpcServer {
 
     context.allocation.refresh(requestedLifetime);
     final response = message.buildSuccessResponse([
-      TurnAttribute(TurnAttributeType.lifetime, encodeLifetime(requestedLifetime)),
+      TurnAttribute(
+        TurnAttributeType.lifetime,
+        encodeLifetime(requestedLifetime),
+      ),
     ]);
     _sendTurnMessage(response, clientAddress, clientPort);
   }
@@ -425,11 +392,15 @@ final class RpcTurnRelayServer implements IRpcServer {
     }
 
     final channelNumber = decodeChannelNumber(channelAttr);
-    final (peerAddress, peerPort) = decodeXorAddress(peerAttr, message.transactionId);
+    final (peerAddress, peerPort) =
+        decodeXorAddress(peerAttr, message.transactionId);
     context.allocation.bindChannel(channelNumber, peerAddress, peerPort);
 
     final response = message.buildSuccessResponse([
-      TurnAttribute(TurnAttributeType.lifetime, encodeLifetime(channelLifetime)),
+      TurnAttribute(
+        TurnAttributeType.lifetime,
+        encodeLifetime(channelLifetime),
+      ),
     ]);
     _sendTurnMessage(response, clientAddress, clientPort);
   }
@@ -471,19 +442,70 @@ final class RpcTurnRelayServer implements IRpcServer {
     }
 
     final peerAttr = message.firstAttribute(TurnAttributeType.xorPeerAddress);
-    if (peerAttr != null) {
-      final (peerAddress, _) = decodeXorAddress(peerAttr, message.transactionId);
-      if (!context.allocation.hasPermission(peerAddress)) {
-        _logger?.warning('Permission missing for peer ${peerAddress.address}');
-      }
+    if (peerAttr == null) {
+      _logger?.warning('TURN send indication without XOR-PEER-ADDRESS');
+      return;
     }
 
-    context.transport.handleIncomingFrame(Uint8List.fromList(dataAttr));
+    final (peerAddress, peerPort) =
+        decodeXorAddress(peerAttr, message.transactionId);
+    if (!context.allocation.hasPermission(peerAddress)) {
+      _logger?.warning(
+        'Permission missing for peer ${peerAddress.address}',
+      );
+      return;
+    }
+
+    context.allocation.sendToPeer(
+      Uint8List.fromList(dataAttr),
+      peerAddress,
+      peerPort,
+    );
+  }
+
+  void _handleChannelData(
+    Uint8List packet,
+    InternetAddress clientAddress,
+    int clientPort,
+  ) {
+    if (packet.length < 4) {
+      return;
+    }
+
+    final header = ByteData.sublistView(packet, 0, 4);
+    final channelNumber = header.getUint16(0);
+    final length = header.getUint16(2);
+
+    if (packet.length < 4 + length) {
+      return;
+    }
+
+    final payload = Uint8List.fromList(packet.sublist(4, 4 + length));
+
+    final context = _allocations[_allocationKey(clientAddress, clientPort)];
+    if (context == null) {
+      _logger?.warning(
+        'ChannelData without allocation from ${clientAddress.address}:$clientPort',
+      );
+      return;
+    }
+
+    final binding = context.allocation.getChannel(channelNumber);
+    if (binding == null) {
+      _logger?.warning('Unknown channel $channelNumber from client');
+      return;
+    }
+
+    context.allocation.sendToPeer(
+      payload,
+      binding.peerAddress,
+      binding.peerPort,
+    );
   }
 
   void _sendAllocateSuccess(
     TurnMessage request,
-    _RpcTurnRelayAllocationContext context,
+    _TurnRelayAllocationContext context,
     InternetAddress clientAddress,
     int clientPort,
   ) {
@@ -534,29 +556,36 @@ final class RpcTurnRelayServer implements IRpcServer {
     _socket?.send(encoded, address, port);
   }
 
+  static bool _isChannelData(Uint8List data) =>
+      data.length >= 4 && (data[0] & 0xC0) == 0x40;
+
+  static Uint8List _encodeChannelData(int channelNumber, Uint8List payload) {
+    final length = payload.length;
+    final paddedLength = (length + 3) & ~3;
+    final buffer = Uint8List(4 + paddedLength);
+    final header = ByteData.sublistView(buffer, 0, 4);
+    header.setUint16(0, channelNumber);
+    header.setUint16(2, length);
+    buffer.setRange(4, 4 + length, payload);
+    return buffer;
+  }
+
   String _allocationKey(InternetAddress address, int port) =>
       '${address.address}:$port';
 }
 
-final class _RpcTurnRelayAllocationContext {
-  _RpcTurnRelayAllocationContext({
+final class _TurnRelayAllocationContext {
+  _TurnRelayAllocationContext({
     required this.clientAddress,
     required this.clientPort,
     required this.allocation,
-    required this.endpoint,
-    required this.transport,
   });
 
   final InternetAddress clientAddress;
   final int clientPort;
   final TurnAllocation allocation;
-  final RpcResponderEndpoint endpoint;
-  final RpcTurnRelayResponderTransport transport;
 
   Future<void> dispose() async {
     allocation.close();
-    await transport.close();
-    await endpoint.close();
   }
 }
-

@@ -5,10 +5,10 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
 import 'turn_message.dart';
+import 'turn_relay_logger.dart';
 
 /// Represents permission to send data to a specific peer address.
 final class TurnPeerPermission {
@@ -72,7 +72,7 @@ final class TurnAllocation {
   final Duration defaultLifetime;
   final Duration permissionLifetime;
   final Duration channelLifetime;
-  final RpcLogger? logger;
+  final TurnRelayLogger? logger;
   final void Function(Uint8List data, InternetAddress address, int port)
       onPeerData;
   final void Function()? onExpired;
