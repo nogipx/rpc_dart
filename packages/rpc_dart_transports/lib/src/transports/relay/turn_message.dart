@@ -272,6 +272,7 @@ abstract final class TurnMethod {
   static const int data = 0x0007;
   static const int createPermission = 0x0008;
   static const int channelBind = 0x0009;
+  static const int connectRequest = 0x0400;
 }
 
 /// Encodes an IPv4 XOR'ed address attribute.

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:universal_io/io.dart';
@@ -15,6 +16,9 @@ class RpcTurnRelayPeer {
   /// Адрес, по которому другие клиенты должны подключаться к вашему пиру.
   InternetAddress get relayAddress => _client.relayAddress;
   int get relayPort => _client.relayPort;
+
+  /// Уведомления о том, что другой участник хочет подключиться к нам.
+  Stream<TurnConnectRequest> get connectRequests => _client.connectRequests;
 
   /// Endpoint для исходящих вызовов (доступен после `connectPeer()`).
   RpcCallerEndpoint get callerEndpoint {
@@ -89,6 +93,20 @@ class RpcTurnRelayPeer {
     _callerEndpoint ??= RpcCallerEndpoint(
       transport: _callerTransport!,
       debugLabel: 'turn-caller',
+    );
+  }
+
+  /// Отправляет на relay запрос, чтобы оно уведомило удалённого пира о желании
+  /// подключиться.
+  Future<void> requestPeerConnection({
+    required InternetAddress peerAddress,
+    required int peerPort,
+    Uint8List? payload,
+  }) {
+    return _client.requestPeerConnection(
+      peerAddress: peerAddress,
+      peerPort: peerPort,
+      payload: payload,
     );
   }
 

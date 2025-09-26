@@ -54,6 +54,7 @@ final class TurnRelayServer {
   StreamSubscription<Socket>? _listener;
 
   final Map<String, _TurnRelayConnectionContext> _connections = {};
+  final Map<String, _TurnRelayConnectionContext> _allocationsByRelay = {};
 
   /// Returns true once the TCP listener has been created.
   bool get isRunning => _socket != null;
@@ -104,6 +105,7 @@ final class TurnRelayServer {
 
     final contexts = _connections.values.toList();
     _connections.clear();
+    _allocationsByRelay.clear();
     for (final context in contexts) {
       await context.dispose();
     }
@@ -150,6 +152,11 @@ final class TurnRelayServer {
       return;
     }
 
+    final allocation = context.allocation;
+    if (allocation != null) {
+      _unregisterAllocation(allocation);
+    }
+
     await context.dispose();
   }
 
@@ -190,6 +197,9 @@ final class TurnRelayServer {
       case TurnMethod.channelBind:
         _handleChannelBindRequest(context, message);
         break;
+      case TurnMethod.connectRequest:
+        _handleConnectRequest(context, message);
+        break;
       default:
         _sendError(
           context,
@@ -208,11 +218,15 @@ final class TurnRelayServer {
     final existing = context.allocation;
     if (existing != null && !existing.isExpired) {
       existing.refresh(allocationLifetime);
+      _registerAllocation(context, existing);
       _sendAllocateSuccess(context, message, existing);
       return;
     }
 
-    existing?.close();
+    if (existing != null) {
+      _unregisterAllocation(existing);
+      existing.close();
+    }
     context.allocation = null;
 
     final requestedTransportAttr =
@@ -260,6 +274,7 @@ final class TurnRelayServer {
             _logger?.info(
               'Allocation expired for ${context.clientAddress.address}:${context.clientPort}',
             );
+            _unregisterAllocation(allocation);
             context.allocation = null;
           },
         );
@@ -283,6 +298,7 @@ final class TurnRelayServer {
             _logger?.info(
               'Allocation expired for ${context.clientAddress.address}:${context.clientPort}',
             );
+            _unregisterAllocation(allocation);
             context.allocation = null;
           },
         );
@@ -290,6 +306,7 @@ final class TurnRelayServer {
     }
 
     context.allocation = allocation;
+    _registerAllocation(context, allocation);
     _sendAllocateSuccess(context, message, allocation);
   }
 
@@ -347,6 +364,7 @@ final class TurnRelayServer {
         lifetimeAttr != null ? decodeLifetime(lifetimeAttr) : allocationLifetime;
 
     if (requestedLifetime.inSeconds == 0) {
+      _unregisterAllocation(allocation);
       context.allocation = null;
       allocation.close();
       final response = message.buildSuccessResponse([]);
@@ -430,6 +448,100 @@ final class TurnRelayServer {
       ),
     ]);
     _sendTurnMessage(context, response);
+  }
+
+  void _handleConnectRequest(
+    _TurnRelayConnectionContext context,
+    TurnMessage message,
+  ) {
+    final sourceAllocation = context.allocation;
+    if (sourceAllocation == null || sourceAllocation.isExpired) {
+      _sendError(
+        context,
+        message,
+        code: 437,
+        reason: 'Allocation mismatch',
+      );
+      return;
+    }
+
+    final peerAttr = message.firstAttribute(TurnAttributeType.xorPeerAddress);
+    if (peerAttr == null) {
+      _sendError(
+        context,
+        message,
+        code: 400,
+        reason: 'XOR-PEER-ADDRESS missing',
+      );
+      return;
+    }
+
+    final (peerAddress, peerPort) =
+        decodeXorAddress(peerAttr, message.transactionId);
+    final targetContext =
+        _allocationsByRelay[_relayKey(peerAddress, peerPort)];
+    final targetAllocation = targetContext?.allocation;
+    if (targetContext == null || targetAllocation == null) {
+      _sendError(
+        context,
+        message,
+        code: 437,
+        reason: 'Target allocation not found',
+      );
+      return;
+    }
+
+    if (targetAllocation.isExpired) {
+      _unregisterAllocation(targetAllocation);
+      targetContext.allocation = null;
+      targetAllocation.close();
+      _sendError(
+        context,
+        message,
+        code: 437,
+        reason: 'Target allocation expired',
+      );
+      return;
+    }
+
+    final response = message.buildSuccessResponse([]);
+    _sendTurnMessage(context, response);
+
+    final notificationTx = TurnMessage.generateTransactionId();
+    final attributes = <TurnAttribute>[
+      TurnAttribute(
+        TurnAttributeType.xorPeerAddress,
+        encodeXorAddress(
+          sourceAllocation.relayAddress,
+          sourceAllocation.relayPort,
+          notificationTx,
+        ),
+      ),
+      TurnAttribute(
+        TurnAttributeType.xorMappedAddress,
+        encodeXorAddress(
+          context.clientAddress,
+          context.clientPort,
+          notificationTx,
+        ),
+      ),
+    ];
+
+    final payloadAttr = message.firstAttribute(TurnAttributeType.data);
+    if (payloadAttr != null) {
+      attributes.add(
+        TurnAttribute(TurnAttributeType.data, Uint8List.fromList(payloadAttr)),
+      );
+    }
+
+    final indication = TurnMessage(
+      method: TurnMethod.connectRequest,
+      messageClass: TurnMessageClass.indication,
+      transactionId: notificationTx,
+      attributes: attributes,
+    );
+
+    targetContext.send(indication.encode());
   }
 
   void _handleIndication(
@@ -567,7 +679,26 @@ final class TurnRelayServer {
     context.send(message.encode());
   }
 
+  void _registerAllocation(
+    _TurnRelayConnectionContext context,
+    TurnAllocation allocation,
+  ) {
+    final key = _relayKey(allocation.relayAddress, allocation.relayPort);
+    _allocationsByRelay[key] = context;
+  }
+
+  void _unregisterAllocation(TurnAllocation allocation) {
+    final key = _relayKey(allocation.relayAddress, allocation.relayPort);
+    final owner = _allocationsByRelay[key];
+    if (owner?.allocation == allocation) {
+      _allocationsByRelay.remove(key);
+    }
+  }
+
   static String _allocationKey(InternetAddress address, int port) =>
+      '${address.address}:$port';
+
+  static String _relayKey(InternetAddress address, int port) =>
       '${address.address}:$port';
 }
 

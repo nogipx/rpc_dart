@@ -251,6 +251,41 @@ This approach keeps the QR exchange, confirmation prompt, and session setup in a
 single RPC protocol while the TURN relay continues to forward the encrypted
 transport traffic.
 
+### Relay-assisted connect requests
+
+When you want the relay to notify a participant about an incoming connection,
+use the custom TURN method `CONNECT-REQUEST` exposed through
+`RpcTurnRelayPeer`.
+
+```dart
+// Bob subscribes to incoming notifications before showing his QR code.
+peer.connectRequests.listen((TurnConnectRequest request) async {
+  final shouldAccept = await showPrompt(request);
+  if (!shouldAccept) {
+    return;
+  }
+
+  await peer.connectPeer(
+    peerAddress: request.peerAddress,
+    peerPort: request.peerPort,
+  );
+});
+
+// Alice scans Bob's QR code and asks the relay to ping Bob.
+await peer.requestPeerConnection(
+  peerAddress: bobAddress,
+  peerPort: bobPort,
+  payload: utf8.encode(jsonEncode({
+    'displayName': currentUserName,
+  })),
+);
+```
+
+The relay delivers an indication containing the requesting allocation's relay
+address/port plus the optional payload. This keeps the "please connect back"
+notification inside the TURN transport without introducing a separate signaling
+channel.
+
 ## Helper APIs
 
 Use the helpers from `turn_message.dart` to build or inspect TURN frames when

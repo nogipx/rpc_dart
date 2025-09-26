@@ -241,6 +241,40 @@ if (!inviteAccepted.value) {
 RPC-протокола, а TURN-релей продолжает транслировать зашифрованный трафик
 транспортного уровня.
 
+### Уведомление пира через relay
+
+Если хочется, чтобы relay само уведомило участника о попытке подключения,
+воспользуйтесь новой процедурой `CONNECT-REQUEST`, доступной через
+`RpcTurnRelayPeer`.
+
+```dart
+// Боб подписывается на уведомления до показа своего QR.
+peer.connectRequests.listen((TurnConnectRequest request) async {
+  final shouldAccept = await showPrompt(request);
+  if (!shouldAccept) {
+    return;
+  }
+
+  await peer.connectPeer(
+    peerAddress: request.peerAddress,
+    peerPort: request.peerPort,
+  );
+});
+
+// Алиса сканирует QR Боба и просит relay уведомить его.
+await peer.requestPeerConnection(
+  peerAddress: bobAddress,
+  peerPort: bobPort,
+  payload: utf8.encode(jsonEncode({
+    'displayName': currentUserName,
+  })),
+);
+```
+
+Relay отправляет индикацию с координатами allocation инициатора и, при желании,
+payload. Так шаг «постучаться и подключиться обратно» остаётся внутри TURN без
+отдельного уровня сигнализации.
+
 ## Вспомогательные API
 
 В `turn_message.dart` лежат функции, которые помогают собирать и разбирать TURN
