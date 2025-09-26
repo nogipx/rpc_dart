@@ -345,7 +345,7 @@ final class TurnRelayClient {
     final delayMicros = lifetimeMicros - marginMicros;
 
     _refreshTimer?.cancel();
-    final clampedMicros = delayMicros.clamp(0, lifetimeMicros) as int;
+    final clampedMicros = delayMicros.clamp(0, lifetimeMicros);
 
     _refreshTimer = Timer(
       Duration(microseconds: clampedMicros),
@@ -395,7 +395,7 @@ final class TurnRelayClient {
     final delayMicros = lifetimeMicros - marginMicros;
 
     _permissionTimers[key]?.cancel();
-    final clampedMicros = delayMicros.clamp(0, lifetimeMicros) as int;
+    final clampedMicros = delayMicros.clamp(0, lifetimeMicros);
 
     _permissionTimers[key] = Timer(
       Duration(microseconds: clampedMicros),

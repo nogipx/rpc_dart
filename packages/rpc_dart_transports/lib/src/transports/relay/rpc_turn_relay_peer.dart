@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:universal_io/io.dart';

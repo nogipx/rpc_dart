@@ -24,7 +24,7 @@ final class TurnRelayServer {
     this.channelLifetime = const Duration(minutes: 10),
     this.software = 'turn_relay/0.1.0',
     TurnRelayLogger? logger,
-  }) : relayAddress = relayAddress ?? bindAddress,
+  })  : relayAddress = relayAddress ?? bindAddress,
         _logger = logger?.child('TurnRelayServer');
 
   /// Address used for the TURN TCP listener.
@@ -115,8 +115,7 @@ final class TurnRelayServer {
     final key = _allocationKey(socket.remoteAddress, socket.remotePort);
     _logger?.debug('Accepted connection from $key');
 
-    final connectionLogger =
-        _logger?.child('Connection $key');
+    final connectionLogger = _logger?.child('Connection $key');
     final context = _TurnRelayConnectionContext(
       socket: socket,
       logger: connectionLogger,
@@ -360,8 +359,9 @@ final class TurnRelayServer {
     }
 
     final lifetimeAttr = message.firstAttribute(TurnAttributeType.lifetime);
-    final requestedLifetime =
-        lifetimeAttr != null ? decodeLifetime(lifetimeAttr) : allocationLifetime;
+    final requestedLifetime = lifetimeAttr != null
+        ? decodeLifetime(lifetimeAttr)
+        : allocationLifetime;
 
     if (requestedLifetime.inSeconds == 0) {
       _unregisterAllocation(allocation);
@@ -478,8 +478,7 @@ final class TurnRelayServer {
 
     final (peerAddress, peerPort) =
         decodeXorAddress(peerAttr, message.transactionId);
-    final targetContext =
-        _allocationsByRelay[_relayKey(peerAddress, peerPort)];
+    final targetContext = _allocationsByRelay[_relayKey(peerAddress, peerPort)];
     final targetAllocation = targetContext?.allocation;
     if (targetContext == null || targetAllocation == null) {
       _sendError(

@@ -416,10 +416,10 @@ final class RpcTurnRelayCallerTransport extends RpcTurnRelayTransportBase {
     required super.client,
     required super.peerAddress,
     required super.peerPort,
-    required RpcStreamIdManager idManager,
+    required super.idManager,
     super.manageClientLifecycle,
     super.logger,
-  }) : super(idManager: idManager);
+  });
 
   factory RpcTurnRelayCallerTransport.fromClient({
     required TurnRelayClient client,
@@ -483,10 +483,10 @@ final class RpcTurnRelayResponderTransport extends RpcTurnRelayTransportBase {
     required super.client,
     required super.peerAddress,
     required super.peerPort,
-    required RpcStreamIdManager idManager,
+    required super.idManager,
     super.manageClientLifecycle,
     super.logger,
-  }) : super(idManager: idManager);
+  });
 
   factory RpcTurnRelayResponderTransport.fromClient({
     required TurnRelayClient client,

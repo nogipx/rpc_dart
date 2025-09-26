@@ -16,8 +16,7 @@ enum TurnMessageClass {
 
 /// Utility representation of a TURN/STUN attribute.
 final class TurnAttribute {
-  TurnAttribute(this.type, Uint8List value)
-      : value = Uint8List.fromList(value);
+  TurnAttribute(this.type, Uint8List value) : value = Uint8List.fromList(value);
 
   final int type;
   final Uint8List value;
@@ -149,7 +148,8 @@ final class TurnMessage {
       if (offset + attrLength > data.length) {
         return null;
       }
-      final value = Uint8List.fromList(data.sublist(offset, offset + attrLength));
+      final value =
+          Uint8List.fromList(data.sublist(offset, offset + attrLength));
       offset += attrLength;
 
       // Skip padding to 4-byte boundary.
@@ -190,7 +190,9 @@ final class TurnMessage {
     buffer.add(errorData.buffer.asUint8List());
     buffer.add(Uint8List.fromList(reason.codeUnits));
 
-    final attributes = [TurnAttribute(TurnAttributeType.errorCode, buffer.toBytes())];
+    final attributes = [
+      TurnAttribute(TurnAttributeType.errorCode, buffer.toBytes())
+    ];
 
     return TurnMessage(
       method: method,
@@ -228,8 +230,8 @@ final class TurnMessage {
         ((messageType & 0x00E0) >> 1) |
         (messageType & 0x000F);
 
-    final classBits = ((messageType & 0x0100) >> 7) |
-        ((messageType & 0x0010) >> 4);
+    final classBits =
+        ((messageType & 0x0100) >> 7) | ((messageType & 0x0010) >> 4);
 
     final messageClass = switch (classBits) {
       0 => TurnMessageClass.request,
@@ -245,7 +247,8 @@ final class TurnMessage {
   static Uint8List generateTransactionId() {
     final randomBytes = Uint8List(12);
     for (var i = 0; i < randomBytes.length; i++) {
-      randomBytes[i] = (DateTime.now().microsecondsSinceEpoch >> (i * 5)) & 0xFF;
+      randomBytes[i] =
+          (DateTime.now().microsecondsSinceEpoch >> (i * 5)) & 0xFF;
     }
     return randomBytes;
   }

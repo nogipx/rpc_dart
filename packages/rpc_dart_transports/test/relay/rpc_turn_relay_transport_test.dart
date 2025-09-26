@@ -4,9 +4,7 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
 import 'package:universal_io/io.dart';
@@ -27,7 +25,8 @@ void main() {
       await server.stop();
     });
 
-    test('exchange metadata and payload between caller and responder', () async {
+    test('exchange metadata and payload between caller and responder',
+        () async {
       final callerClient = await TurnRelayClient.connect(
         serverAddress: server.bindAddress,
         serverPort: server.port,

@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
 import 'package:universal_io/io.dart';
@@ -56,7 +54,8 @@ void main() {
       const port = 3478;
 
       final encoded = encodeXorAddress(address, port, transactionId);
-      final (decodedAddress, decodedPort) = decodeXorAddress(encoded, transactionId);
+      final (decodedAddress, decodedPort) =
+          decodeXorAddress(encoded, transactionId);
 
       expect(decodedAddress.address, address.address);
       expect(decodedPort, port);
