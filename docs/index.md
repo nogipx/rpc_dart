@@ -4,6 +4,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/nogipx/rpc_dart?style=for-the-badge&logo=github&logoColor=white&color=24292e)](https://github.com/nogipx/rpc_dart)
 [![Pub Likes](https://img.shields.io/pub/likes/rpc_dart?style=for-the-badge&logo=dart&logoColor=white&color=86c3f4)](https://pub.dev/packages/rpc_dart)
 
+
 > 📦 Downloaded **{{ pub_downloads() }}** times in the last 30 days on [pub.dev]({{ pub_package_url() }}).
 
 RPC Dart is a transport-independent RPC framework written entirely in Dart. It
