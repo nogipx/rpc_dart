@@ -114,6 +114,167 @@ final client = await TurnRelayClient.connect(
 запросов, автоматическое создание разрешений и продление allocation за 30 секунд
 до истечения срока.
 
+## Использование `RpcTurnRelayPeer`
+
+`RpcTurnRelayPeer` облегчает настройку RPC-пира поверх TURN. Объект сначала
+создаёт подключение к релею и регистрирует контракты, а реальный адрес пира
+можно указать позднее, когда второй участник сообщит `relayAddress` и
+`relayPort`.
+
+```dart
+final peer = await RpcTurnRelayPeer.connectToRelay(
+  serverAddress: relay.bindAddress,
+  serverPort: relay.port,
+  responderContracts: [EchoResponderContract()],
+);
+
+print('Мой TURN адрес: ${peer.relayAddress.address}:${peer.relayPort}');
+
+// ... передайте адрес другому клиенту и получите его реквизиты ...
+
+await peer.connectPeer(
+  peerAddress: otherPeerAddress,
+  peerPort: otherPeerPort,
+);
+
+final response = await peer.callerEndpoint.unaryRequest<RpcString, RpcString>(
+  serviceName: 'echo',
+  methodName: 'echo',
+  requestCodec: RpcString.codec,
+  responseCodec: RpcString.codec,
+  request: RpcString('ping'),
+);
+
+print(response.value);
+```
+
+Метод `connectPeer()` лениво создаёт транспорты и endpoints. После него можно
+использовать `callerEndpoint` для исходящих RPC-вызовов, а `responderEndpoint`
+автоматически обслужит зарегистрированные контракты. Метод `close()` аккуратно
+освобождает все ресурсы и может вызываться несколько раз подряд.
+
+### Обмен приглашениями через QR
+
+Всю процедуру подключения можно оставить внутри RPC-протокола, не поднимая
+отдельный сигналинговый сервис. Последовательность будет такой:
+
+1. Оба участника на старте приложения вызывают
+   `RpcTurnRelayPeer.connectToRelay(...)` и регистрируют контракт с методом
+   вроде `incomingInvite`.
+2. Каждый клиент генерирует QR-код с собственными `relayAddress`, `relayPort` и
+   дополнительными данными (например, именем пользователя или токеном проверки).
+3. Когда пользователь А сканирует QR пользователя B, приложение А сразу
+   выполняет `peer.connectPeer(peerAddress: bAddress, peerPort: bPort)`, а затем
+   делает RPC-вызов `incomingInvite`, передавая свои координаты.
+4. Обработчик на стороне B показывает пользователю запрос. Если тот соглашается,
+   код вызывает `peer.connectPeer(...)` с адресом и портом А из полученных
+   данных и только после этого возвращает положительный ответ.
+5. После взаимного подтверждения обе стороны продолжают работать через те же
+   caller/responder endpoints в рамках основной сессии.
+
+Контракт может декодировать полезную нагрузку и устанавливать транспорт только
+после явного согласия пользователя:
+
+```dart
+import 'dart:convert';
+import 'package:universal_io/io.dart';
+
+class ConnectionInvitationContract extends RpcResponderContract {
+  ConnectionInvitationContract(this.peer, this.showPrompt)
+      : super('ConnectionInvitation');
+
+  final RpcTurnRelayPeer peer;
+  final Future<bool> Function(Map<String, Object?> payload) showPrompt;
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcBool>(
+      methodName: 'incomingInvite',
+      requestCodec: RpcString.codec,
+      responseCodec: RpcBool.codec,
+      handler: _handleInvite,
+    );
+  }
+
+  Future<RpcBool> _handleInvite(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
+    final payload = jsonDecode(request.value) as Map<String, Object?>;
+    final accepted = await showPrompt(payload);
+
+    if (accepted) {
+      await peer.connectPeer(
+        peerAddress: InternetAddress(payload['peerAddress']! as String),
+        peerPort: payload['peerPort']! as int,
+      );
+    }
+
+    return RpcBool(accepted);
+  }
+}
+```
+
+Пользователь А отправляет приглашение со своими координатами, чтобы B смог
+подключиться после подтверждения:
+
+```dart
+final inviteAccepted = await peer.callerEndpoint.unaryRequest<RpcString, RpcBool>(
+  serviceName: 'ConnectionInvitation',
+  methodName: 'incomingInvite',
+  requestCodec: RpcString.codec,
+  responseCodec: RpcBool.codec,
+  request: RpcString(jsonEncode({
+    'peerAddress': peer.relayAddress.address,
+    'peerPort': peer.relayPort,
+    'displayName': currentUserName,
+  })),
+);
+
+if (!inviteAccepted.value) {
+  // пользователь на другой стороне отклонил подключение
+  return;
+}
+```
+
+Так QR-обмен, подтверждение и запуск сессии остаются в рамках одного
+RPC-протокола, а TURN-релей продолжает транслировать зашифрованный трафик
+транспортного уровня.
+
+### Уведомление пира через relay
+
+Если хочется, чтобы relay само уведомило участника о попытке подключения,
+воспользуйтесь новой процедурой `CONNECT-REQUEST`, доступной через
+`RpcTurnRelayPeer`.
+
+```dart
+// Боб подписывается на уведомления до показа своего QR.
+peer.connectRequests.listen((TurnConnectRequest request) async {
+  final shouldAccept = await showPrompt(request);
+  if (!shouldAccept) {
+    return;
+  }
+
+  await peer.connectPeer(
+    peerAddress: request.peerAddress,
+    peerPort: request.peerPort,
+  );
+});
+
+// Алиса сканирует QR Боба и просит relay уведомить его.
+await peer.requestPeerConnection(
+  peerAddress: bobAddress,
+  peerPort: bobPort,
+  payload: utf8.encode(jsonEncode({
+    'displayName': currentUserName,
+  })),
+);
+```
+
+Relay отправляет индикацию с координатами allocation инициатора и, при желании,
+payload. Так шаг «постучаться и подключиться обратно» остаётся внутри TURN без
+отдельного уровня сигнализации.
+
 ## Вспомогательные API
 
 В `turn_message.dart` лежат функции, которые помогают собирать и разбирать TURN

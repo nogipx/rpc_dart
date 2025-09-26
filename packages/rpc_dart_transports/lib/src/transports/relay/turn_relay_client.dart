@@ -69,7 +69,9 @@ final class TurnRelayClient {
         autoCreatePermission = options.autoCreatePermission,
         requestedTransport = options.requestedTransport,
         _socket = socket,
-        _inboundController = StreamController<Uint8List>.broadcast();
+        _inboundController = StreamController<Uint8List>.broadcast(),
+        _connectRequestController =
+            StreamController<TurnConnectRequest>.broadcast();
 
   /// Establishes a TURN allocation against [serverAddress]/[serverPort] and
   /// returns an active [TurnRelayClient].
@@ -127,6 +129,7 @@ final class TurnRelayClient {
 
   final Socket _socket;
   final StreamController<Uint8List> _inboundController;
+  final StreamController<TurnConnectRequest> _connectRequestController;
   late final TurnTcpFrameDecoder _frameDecoder;
 
   StreamSubscription<Uint8List>? _subscription;
@@ -142,6 +145,10 @@ final class TurnRelayClient {
 
   /// Stream of payloads received from peers via the relay.
   Stream<Uint8List> get bytes => _inboundController.stream;
+
+  /// Stream of peer connection requests delivered by the relay.
+  Stream<TurnConnectRequest> get connectRequests =>
+      _connectRequestController.stream;
 
   /// Address advertised via XOR-RELAYED-ADDRESS for this allocation.
   InternetAddress get relayAddress => _relayedAddress;
@@ -223,6 +230,35 @@ final class TurnRelayClient {
     }
 
     _scheduleRefresh();
+  }
+
+  /// Sends a custom TURN request that asks the relay to notify [peerAddress]
+  /// / [peerPort] about the current allocation.
+  Future<void> requestPeerConnection({
+    required InternetAddress peerAddress,
+    required int peerPort,
+    Uint8List? payload,
+  }) async {
+    _ensureOpen();
+
+    final transactionId = TurnMessage.generateTransactionId();
+    final attributes = <TurnAttribute>[
+      TurnAttribute(
+        TurnAttributeType.xorPeerAddress,
+        encodeXorAddress(peerAddress, peerPort, transactionId),
+      ),
+      if (payload != null)
+        TurnAttribute(TurnAttributeType.data, encodeData(payload)),
+    ];
+
+    final request = TurnMessage(
+      method: TurnMethod.connectRequest,
+      messageClass: TurnMessageClass.request,
+      transactionId: transactionId,
+      attributes: attributes,
+    );
+
+    await _sendRequest(request);
   }
 
   /// Sends a CreatePermission request for [peerAddress]/[peerPort].
@@ -393,16 +429,38 @@ final class TurnRelayClient {
   }
 
   void _handleIndication(TurnMessage message) {
-    if (message.method != TurnMethod.data) {
+    switch (message.method) {
+      case TurnMethod.data:
+        final dataAttr = message.firstAttribute(TurnAttributeType.data);
+        if (dataAttr == null) {
+          return;
+        }
+        _inboundController.add(Uint8List.fromList(dataAttr));
+        break;
+      case TurnMethod.connectRequest:
+        _handleConnectRequestIndication(message);
+        break;
+      default:
+        break;
+    }
+  }
+
+  void _handleConnectRequestIndication(TurnMessage message) {
+    final peerAttr = message.firstAttribute(TurnAttributeType.xorPeerAddress);
+    if (peerAttr == null) {
       return;
     }
 
-    final dataAttr = message.firstAttribute(TurnAttributeType.data);
-    if (dataAttr == null) {
-      return;
-    }
-
-    _inboundController.add(Uint8List.fromList(dataAttr));
+    final (peerAddress, peerPort) =
+        decodeXorAddress(peerAttr, message.transactionId);
+    final payloadAttr = message.firstAttribute(TurnAttributeType.data);
+    _connectRequestController.add(
+      TurnConnectRequest(
+        peerAddress: peerAddress,
+        peerPort: peerPort,
+        payload: payloadAttr != null ? Uint8List.fromList(payloadAttr) : null,
+      ),
+    );
   }
 
   void _resolveRequest(Uint8List transactionId, TurnMessage message) {
@@ -482,6 +540,7 @@ final class TurnRelayClient {
     await _socket.close();
 
     await _inboundController.close();
+    await _connectRequestController.close();
   }
 
   void _ensureOpen() {
@@ -514,4 +573,17 @@ class TurnRelayException implements Exception {
   String toString() => code != null
       ? 'TurnRelayException($code): $message'
       : 'TurnRelayException: $message';
+}
+
+/// Payload delivered when another allocation asks to establish a connection.
+class TurnConnectRequest {
+  TurnConnectRequest({
+    required this.peerAddress,
+    required this.peerPort,
+    this.payload,
+  });
+
+  final InternetAddress peerAddress;
+  final int peerPort;
+  final Uint8List? payload;
 }
