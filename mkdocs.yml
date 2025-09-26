@@ -49,10 +49,13 @@ theme:
     - content.code.annotate
     - toc.integrate
   palette:
-    - scheme: default
+    - scheme: slate
       primary: blue
       accent: light blue
-    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+    - scheme: default
       primary: blue
       accent: light blue
       toggle:
@@ -79,3 +82,5 @@ markdown_extensions:
 
 plugins:
   - search
+  - macros:
+      module_name: macros

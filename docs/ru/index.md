@@ -4,6 +4,8 @@
 [![GitHub Stars](https://img.shields.io/github/stars/nogipx/rpc_dart?style=for-the-badge&logo=github&logoColor=white&color=24292e)](https://github.com/nogipx/rpc_dart)
 [![Pub Likes](https://img.shields.io/pub/likes/rpc_dart?style=for-the-badge&logo=dart&logoColor=white&color=86c3f4)](https://pub.dev/packages/rpc_dart)
 
+> 📦 **{{ pub_downloads() }}** установок за последние 30 дней на [pub.dev]({{ pub_package_url() }}).
+
 RPC Dart — транспортонезависимая библиотека RPC на чистом Dart. Она позволяет
 писать сервисы один раз и запускать их на мобильных, веб, десктопных и
 серверных платформах без привязки к конкретному транспорту или формату
