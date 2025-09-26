@@ -362,5 +362,14 @@ Uint8List encodeData(Uint8List payload) => Uint8List.fromList(payload);
 
 /// TURN requested transport protocol helper.
 abstract final class TurnRequestedTransport {
+  static const int tcp = 6;
   static const int udp = 17;
+}
+
+/// Decodes the REQUESTED-TRANSPORT attribute value into the IP protocol number.
+int decodeRequestedTransport(Uint8List value) {
+  if (value.isEmpty) {
+    throw ArgumentError('REQUESTED-TRANSPORT attribute is empty');
+  }
+  return value[0];
 }

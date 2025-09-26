@@ -1,12 +1,13 @@
 # TURN relay
 
 `TurnRelayServer` implements an RFC 5766 compatible relay in pure Dart. Clients
-connect over TCP, while the relay itself provisions UDP sockets for peer
-traffic. The listener accepts TURN Allocate requests, tracks permissions and
-channel bindings, and converts peer packets back into TURN Data indications or
-ChannelData frames. The implementation ships with `rpc_dart_transports` but has
-no dependency on the RPC runtime, which makes it a lightweight building block
-for any UDP-based application that needs NAT traversal.
+connect over TCP, while the relay provisions per-allocation UDP sockets *or*
+TCP listeners for peer traffic. The listener accepts TURN Allocate requests,
+tracks permissions and channel bindings, and converts peer packets back into
+TURN Data indications or ChannelData frames. The implementation ships with
+`rpc_dart_transports` but has no dependency on the RPC runtime, which makes it a
+lightweight building block for any UDP- or TCP-based application that needs NAT
+traversal.
 
 ## Key capabilities
 
@@ -14,8 +15,8 @@ for any UDP-based application that needs NAT traversal.
   utilities cover XOR addresses, DATA attributes, lifetimes, and channel
   metadata so that you do not have to craft binary frames by hand.
 - **Allocation lifecycle management** – `TurnAllocation` keeps per-client relay
-  sockets, expiration timers, peer permissions, and channel bindings in sync
-  with RFC 5766.
+  sockets or TCP listeners, expiration timers, peer permissions, and channel
+  bindings in sync with RFC 5766.
 - **Full TURN method support** – the server handles `Allocate`, `Refresh`,
   `CreatePermission`, `ChannelBind`, and `Send` flows and delivers peer packets
   back to the client as Data indications or ChannelData messages depending on
@@ -67,7 +68,7 @@ attribute.
 Every successful `Allocate` request spawns a `TurnAllocation`:
 
 - `clientAddress` / `clientPort` identify the TCP client connection.
-- `relayPort` exposes the UDP port peers must target.
+- `relayPort` exposes the UDP or TCP port peers must target.
 - `addPermission`, `hasPermission`, and `bindChannel` enforce the TURN security
   rules for authorized peers and optional channel bindings.
 - `onPeerData` delivers datagrams received on the relay socket so the server can
@@ -80,8 +81,10 @@ are lazily pruned when their TTL elapses.
 
 ## Client workflow
 
-1. **Allocate** – send an `Allocate` request (with `REQUESTED-TRANSPORT = UDP`).
-   The success response returns the relay endpoint in `XOR-RELAYED-ADDRESS`.
+1. **Allocate** – send an `Allocate` request with the desired
+   `REQUESTED-TRANSPORT` (UDP by default, TCP when peer sockets should be
+   stream-oriented). The success response returns the relay endpoint in
+   `XOR-RELAYED-ADDRESS`.
 2. **Create permissions** – authorize peers with `CreatePermission` requests.
 3. **Send data** – use `Send` indications (`XOR-PEER-ADDRESS` + `DATA`) or bind a
    channel via `ChannelBind` and transmit ChannelData packets for lower
@@ -98,8 +101,8 @@ TURN client talking to a peer socket through the relay.
 ### Client options
 
 `TurnRelayClient.connect` accepts a `TurnRelayClientOptions` instance when you
-need to customize timeouts, lifetimes, the local bind address, or permission
-behaviour:
+need to customize timeouts, lifetimes, the local bind address, peer transport,
+or permission behaviour:
 
 ```dart
 final client = await TurnRelayClient.connect(
@@ -109,6 +112,7 @@ final client = await TurnRelayClient.connect(
     requestTimeout: Duration(seconds: 3),
     allocationRefreshMargin: Duration(seconds: 10),
     autoCreatePermission: false,
+    requestedTransport: TurnRequestedTransport.tcp,
   ),
 );
 ```
@@ -129,11 +133,14 @@ writing tests or integrating custom clients:
 
 These cover the pieces required for the UDP relay profile defined in RFC 5766,
 while the TCP stream framing is handled internally by `TurnTcpFrameDecoder`.
+When requesting TCP peer transport, the allocation exposes a TCP listener and
+forwards bytes through established connections.
 
 ## Limitations
 
-- TURN client connections run over TCP, but only UDP peer allocations are
-  supported. TCP allocations, TLS, and DTLS remain out of scope.
+- TURN client connections run over TCP. Peer allocations may be UDP or TCP,
+  but TLS and DTLS remain out of scope, and the TCP workflow assumes peers can
+  actively connect to the advertised relay port.
 - Authentication (long-term or short-term credentials) is not implemented; gate
   access at the network level or layer additional authentication on top.
 - No quota management or alternate server discovery is provided yet.

@@ -22,12 +22,13 @@ class TurnRelayClientOptions {
     this.permissionLifetime = const Duration(minutes: 5),
     this.permissionRefreshMargin = const Duration(seconds: 30),
     this.autoCreatePermission = true,
+    this.requestedTransport = TurnRequestedTransport.udp,
   });
 
-  /// Local interface bound by the UDP socket (defaults to ANY).
+  /// Local interface bound by the TCP socket (defaults to ANY).
   final InternetAddress? localAddress;
 
-  /// Local UDP port (0 lets the OS pick an ephemeral port).
+  /// Local TCP port (0 lets the OS pick an ephemeral port).
   final int localPort;
 
   /// Timeout used for Allocate/Refresh/CreatePermission requests.
@@ -47,6 +48,9 @@ class TurnRelayClientOptions {
 
   /// When enabled, [TurnRelayClient.send] auto-creates missing permissions.
   final bool autoCreatePermission;
+
+  /// IP protocol advertised via the REQUESTED-TRANSPORT attribute.
+  final int requestedTransport;
 }
 
 /// Simple TURN relay client that performs Allocate/Refresh/CreatePermission
@@ -63,6 +67,7 @@ final class TurnRelayClient {
         permissionLifetime = options.permissionLifetime,
         permissionRefreshMargin = options.permissionRefreshMargin,
         autoCreatePermission = options.autoCreatePermission,
+        requestedTransport = options.requestedTransport,
         _socket = socket,
         _inboundController = StreamController<Uint8List>.broadcast();
 
@@ -116,6 +121,9 @@ final class TurnRelayClient {
 
   /// When enabled, [send] automatically creates peer permissions if required.
   final bool autoCreatePermission;
+
+  /// IP protocol requested during Allocate.
+  final int requestedTransport;
 
   final Socket _socket;
   final StreamController<Uint8List> _inboundController;
@@ -179,7 +187,7 @@ final class TurnRelayClient {
     final attributes = <TurnAttribute>[
       TurnAttribute(
         TurnAttributeType.requestedTransport,
-        _encodeRequestedTransport(TurnRequestedTransport.udp),
+        _encodeRequestedTransport(requestedTransport),
       ),
       if (requestedAllocationLifetime != null)
         TurnAttribute(

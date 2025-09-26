@@ -25,7 +25,7 @@ void main() {
       await server.stop();
     });
 
-    test('relays payload bytes via TURN', () async {
+    test('relays payload bytes via TURN (UDP peer)', () async {
       final peerSocket =
           await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(peerSocket.close);
@@ -53,6 +53,59 @@ void main() {
 
       final inboundPayload = Uint8List.fromList('world'.codeUnits);
       peerSocket.send(inboundPayload, client.relayAddress, client.relayPort);
+
+      final received = await client.bytes.first.timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => throw StateError('client did not receive data'),
+      );
+
+      expect(received, inboundPayload);
+    });
+
+    test('relays payload bytes via TURN (TCP peer)', () async {
+      final client = await TurnRelayClient.connect(
+        serverAddress: server.bindAddress,
+        serverPort: server.port,
+        options: const TurnRelayClientOptions(
+          requestedTransport: TurnRequestedTransport.tcp,
+        ),
+      );
+      addTearDown(client.close);
+
+      final peerSocket =
+          await Socket.connect(client.relayAddress, client.relayPort);
+      peerSocket.encoding = null;
+      addTearDown(peerSocket.close);
+
+      final peerPayloads = StreamController<Uint8List>();
+      final peerSub = peerSocket.listen((Uint8List data) {
+        if (data.isNotEmpty) {
+          peerPayloads.add(Uint8List.fromList(data));
+        }
+      });
+      addTearDown(() async {
+        await peerSub.cancel();
+        await peerPayloads.close();
+      });
+
+      await client.addPermission(peerSocket.address, peerSocket.port);
+
+      final outboundPayload = Uint8List.fromList('hello'.codeUnits);
+
+      await client.send(
+        outboundPayload,
+        peerAddress: peerSocket.address,
+        peerPort: peerSocket.port,
+      );
+
+      final peerReceived = await peerPayloads.stream.first.timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => throw StateError('peer did not receive data'),
+      );
+      expect(peerReceived, outboundPayload);
+
+      final inboundPayload = Uint8List.fromList('world'.codeUnits);
+      peerSocket.add(inboundPayload);
 
       final received = await client.bytes.first.timeout(
         const Duration(seconds: 1),

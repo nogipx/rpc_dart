@@ -38,6 +38,18 @@ void main() {
       );
     });
 
+    test('decodes requested transport attribute', () {
+      final udp = decodeRequestedTransport(
+        Uint8List.fromList(<int>[TurnRequestedTransport.udp]),
+      );
+      final tcp = decodeRequestedTransport(
+        Uint8List.fromList(<int>[TurnRequestedTransport.tcp, 0, 0, 0]),
+      );
+
+      expect(udp, TurnRequestedTransport.udp);
+      expect(tcp, TurnRequestedTransport.tcp);
+    });
+
     test('XOR address encode/decode', () {
       final transactionId = Uint8List.fromList(List.filled(12, 1));
       final address = InternetAddress.loopbackIPv4;

@@ -10,6 +10,9 @@ import 'package:universal_io/io.dart';
 import 'turn_message.dart';
 import 'turn_relay_logger.dart';
 
+/// Represents the transport protocol used for relaying peer traffic.
+enum TurnRelayTransportProtocol { udp, tcp }
+
 /// Represents permission to send data to a specific peer address.
 final class TurnPeerPermission {
   TurnPeerPermission(this.address, Duration lifetime)
@@ -48,10 +51,10 @@ final class TurnChannelBinding {
 
 /// Active TURN allocation state for a single client.
 final class TurnAllocation {
-  TurnAllocation({
+  TurnAllocation.udp({
     required this.clientAddress,
     required this.clientPort,
-    required this.socket,
+    required RawDatagramSocket socket,
     required this.relayAddress,
     required this.defaultLifetime,
     required this.permissionLifetime,
@@ -59,15 +62,38 @@ final class TurnAllocation {
     required this.logger,
     required this.onPeerData,
     this.onExpired,
-  }) {
-    _subscription = socket.listen(_handleSocketEvent, onError: _handleSocketError);
+  })  : transportProtocol = TurnRelayTransportProtocol.udp,
+        _udpSocket = socket,
+        _tcpListener = null {
+    _udpSubscription =
+        socket.listen(_handleUdpSocketEvent, onError: _handleUdpSocketError);
     socket.readEventsEnabled = true;
+    refresh(defaultLifetime);
+  }
+
+  TurnAllocation.tcp({
+    required this.clientAddress,
+    required this.clientPort,
+    required ServerSocket serverSocket,
+    required this.relayAddress,
+    required this.defaultLifetime,
+    required this.permissionLifetime,
+    required this.channelLifetime,
+    required this.logger,
+    required this.onPeerData,
+    this.onExpired,
+  })  : transportProtocol = TurnRelayTransportProtocol.tcp,
+        _udpSocket = null,
+        _tcpListener = serverSocket {
+    _tcpListenerSubscription = serverSocket.listen(
+      _handleTcpConnection,
+      onError: _handleTcpListenerError,
+    );
     refresh(defaultLifetime);
   }
 
   final InternetAddress clientAddress;
   final int clientPort;
-  final RawDatagramSocket socket;
   final InternetAddress relayAddress;
   final Duration defaultLifetime;
   final Duration permissionLifetime;
@@ -77,13 +103,23 @@ final class TurnAllocation {
       onPeerData;
   final void Function()? onExpired;
 
+  final TurnRelayTransportProtocol transportProtocol;
+  final RawDatagramSocket? _udpSocket;
+  final ServerSocket? _tcpListener;
+
   final Map<String, TurnPeerPermission> _permissions = {};
   final Map<int, TurnChannelBinding> _channels = {};
-  StreamSubscription<RawSocketEvent>? _subscription;
+  final Map<String, Socket> _tcpPeers = {};
+  final Map<String, StreamSubscription<List<int>>> _tcpPeerSubscriptions = {};
+
+  StreamSubscription<RawSocketEvent>? _udpSubscription;
+  StreamSubscription<Socket>? _tcpListenerSubscription;
   Timer? _expirationTimer;
   DateTime expiresAt = DateTime.now();
 
-  int get relayPort => socket.port;
+  int get relayPort => transportProtocol == TurnRelayTransportProtocol.udp
+      ? _udpSocket!.port
+      : _tcpListener!.port;
 
   bool get isExpired => DateTime.now().isAfter(expiresAt);
 
@@ -107,12 +143,30 @@ final class TurnAllocation {
 
   void close() {
     _expirationTimer?.cancel();
-    _subscription?.cancel();
-    socket.close();
+    _udpSubscription?.cancel();
+    _tcpListenerSubscription?.cancel();
+
+    if (_udpSocket != null) {
+      _udpSocket!.close();
+    }
+
+    if (_tcpListener != null) {
+      _tcpListener!.close();
+    }
+
+    for (final subscription in _tcpPeerSubscriptions.values) {
+      subscription.cancel();
+    }
+    _tcpPeerSubscriptions.clear();
+
+    for (final socket in _tcpPeers.values) {
+      socket.destroy();
+    }
+    _tcpPeers.clear();
   }
 
-  void addPermission(InternetAddress address) {
-    final key = address.address;
+  void addPermission(InternetAddress address, int port) {
+    final key = _permissionKey(address);
     final permission = _permissions[key];
     if (permission != null) {
       permission.refresh(permissionLifetime);
@@ -123,8 +177,8 @@ final class TurnAllocation {
     }
   }
 
-  bool hasPermission(InternetAddress address) {
-    final key = address.address;
+  bool hasPermission(InternetAddress address, int port) {
+    final key = _permissionKey(address);
     final permission = _permissions[key];
     if (permission == null) {
       return false;
@@ -154,7 +208,7 @@ final class TurnAllocation {
         'Channel $channelNumber bound to ${peerAddress.address}:$peerPort',
       );
     }
-    addPermission(peerAddress);
+    addPermission(peerAddress, peerPort);
   }
 
   TurnChannelBinding? getChannel(int channelNumber) {
@@ -186,29 +240,107 @@ final class TurnAllocation {
   }
 
   void sendToPeer(Uint8List payload, InternetAddress address, int port) {
-    socket.send(payload, address, port);
-  }
-
-  void _handleSocketEvent(RawSocketEvent event) {
-    if (event == RawSocketEvent.read) {
-      while (true) {
-        final datagram = socket.receive();
-        if (datagram == null) {
-          break;
+    switch (transportProtocol) {
+      case TurnRelayTransportProtocol.udp:
+        _udpSocket!.send(payload, address, port);
+        break;
+      case TurnRelayTransportProtocol.tcp:
+        final key = _peerKey(address, port);
+        Socket? socket = _tcpPeers[key];
+        if (socket == null) {
+          for (final entry in _tcpPeers.entries) {
+            if (entry.value.remoteAddress.address == address.address) {
+              socket = entry.value;
+              break;
+            }
+          }
         }
-        onPeerData(
-          Uint8List.fromList(datagram.data),
-          datagram.address,
-          datagram.port,
-        );
-      }
+        if (socket == null) {
+          logger?.warning(
+            'No TCP peer connection for ${address.address}:$port',
+          );
+          return;
+        }
+        socket.add(payload);
+        break;
     }
   }
 
-  void _handleSocketError(Object error) {
+  void _handleUdpSocketEvent(RawSocketEvent event) {
+    if (event != RawSocketEvent.read) {
+      return;
+    }
+    while (true) {
+      final datagram = _udpSocket!.receive();
+      if (datagram == null) {
+        break;
+      }
+      onPeerData(
+        Uint8List.fromList(datagram.data),
+        datagram.address,
+        datagram.port,
+      );
+    }
+  }
+
+  void _handleUdpSocketError(Object error) {
     logger?.error(
-      'Relay socket error for ${clientAddress.address}:$clientPort',
+      'Relay UDP socket error for ${clientAddress.address}:$clientPort',
       error: error,
     );
   }
+
+  void _handleTcpConnection(Socket socket) {
+    final key = _peerKey(socket.remoteAddress, socket.remotePort);
+    _tcpPeers[key] = socket;
+    socket.encoding = null;
+
+    final subscription = socket.listen(
+      (List<int> data) {
+        if (data.isEmpty) {
+          return;
+        }
+        onPeerData(
+          Uint8List.fromList(data),
+          socket.remoteAddress,
+          socket.remotePort,
+        );
+      },
+      onError: (Object error) {
+        logger?.error(
+          'Relay TCP peer error for ${socket.remoteAddress.address}:${socket.remotePort}',
+          error: error,
+        );
+        _removeTcpPeer(key, close: true);
+      },
+      onDone: () {
+        _removeTcpPeer(key, close: false);
+      },
+      cancelOnError: false,
+    );
+
+    _tcpPeerSubscriptions[key] = subscription;
+  }
+
+  void _handleTcpListenerError(Object error) {
+    logger?.error(
+      'Relay TCP listener error for ${clientAddress.address}:$clientPort',
+      error: error,
+    );
+  }
+
+  void _removeTcpPeer(String key, {required bool close}) {
+    final subscription = _tcpPeerSubscriptions.remove(key);
+    subscription?.cancel();
+
+    final socket = _tcpPeers.remove(key);
+    if (socket != null && close) {
+      socket.destroy();
+    }
+  }
+
+  static String _permissionKey(InternetAddress address) => address.address;
+
+  static String _peerKey(InternetAddress address, int port) =>
+      '${address.address}:$port';
 }

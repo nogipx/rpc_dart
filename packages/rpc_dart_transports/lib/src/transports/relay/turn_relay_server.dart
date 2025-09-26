@@ -13,7 +13,7 @@ import 'turn_relay_logger.dart';
 import 'turn_tcp_frame.dart';
 
 /// TURN relay server implementation following RFC 5766 for TCP-connected
-/// clients relaying UDP peer traffic.
+/// clients relaying UDP or TCP peer traffic.
 final class TurnRelayServer {
   TurnRelayServer({
     required this.bindAddress,
@@ -215,28 +215,79 @@ final class TurnRelayServer {
     existing?.close();
     context.allocation = null;
 
-    final relaySocket = await RawDatagramSocket.bind(relayAddress, 0);
+    final requestedTransportAttr =
+        message.firstAttribute(TurnAttributeType.requestedTransport);
+    final requestedTransport = requestedTransportAttr != null
+        ? decodeRequestedTransport(requestedTransportAttr)
+        : TurnRequestedTransport.udp;
+
+    late final TurnRelayTransportProtocol protocol;
+    switch (requestedTransport) {
+      case TurnRequestedTransport.udp:
+        protocol = TurnRelayTransportProtocol.udp;
+        break;
+      case TurnRequestedTransport.tcp:
+        protocol = TurnRelayTransportProtocol.tcp;
+        break;
+      default:
+        _sendError(
+          context,
+          message,
+          code: 442,
+          reason: 'Unsupported REQUESTED-TRANSPORT $requestedTransport',
+        );
+        return;
+    }
 
     late final TurnAllocation allocation;
-    allocation = TurnAllocation(
-      clientAddress: context.clientAddress,
-      clientPort: context.clientPort,
-      socket: relaySocket,
-      relayAddress: relayAddress,
-      defaultLifetime: allocationLifetime,
-      permissionLifetime: permissionLifetime,
-      channelLifetime: channelLifetime,
-      logger: _logger?.child('Allocation'),
-      onPeerData: (Uint8List data, InternetAddress peerAddress, int peerPort) {
-        _forwardPeerData(context, data, peerAddress, peerPort);
-      },
-      onExpired: () {
-        _logger?.info(
-          'Allocation expired for ${context.clientAddress.address}:${context.clientPort}',
+    switch (protocol) {
+      case TurnRelayTransportProtocol.udp:
+        final relaySocket = await RawDatagramSocket.bind(relayAddress, 0);
+        allocation = TurnAllocation.udp(
+          clientAddress: context.clientAddress,
+          clientPort: context.clientPort,
+          socket: relaySocket,
+          relayAddress: relayAddress,
+          defaultLifetime: allocationLifetime,
+          permissionLifetime: permissionLifetime,
+          channelLifetime: channelLifetime,
+          logger: _logger?.child('Allocation'),
+          onPeerData:
+              (Uint8List data, InternetAddress peerAddress, int peerPort) {
+            _forwardPeerData(context, data, peerAddress, peerPort);
+          },
+          onExpired: () {
+            _logger?.info(
+              'Allocation expired for ${context.clientAddress.address}:${context.clientPort}',
+            );
+            context.allocation = null;
+          },
         );
-        context.allocation = null;
-      },
-    );
+        break;
+      case TurnRelayTransportProtocol.tcp:
+        final listener = await ServerSocket.bind(relayAddress, 0);
+        allocation = TurnAllocation.tcp(
+          clientAddress: context.clientAddress,
+          clientPort: context.clientPort,
+          serverSocket: listener,
+          relayAddress: relayAddress,
+          defaultLifetime: allocationLifetime,
+          permissionLifetime: permissionLifetime,
+          channelLifetime: channelLifetime,
+          logger: _logger?.child('Allocation'),
+          onPeerData:
+              (Uint8List data, InternetAddress peerAddress, int peerPort) {
+            _forwardPeerData(context, data, peerAddress, peerPort);
+          },
+          onExpired: () {
+            _logger?.info(
+              'Allocation expired for ${context.clientAddress.address}:${context.clientPort}',
+            );
+            context.allocation = null;
+          },
+        );
+        break;
+    }
 
     context.allocation = allocation;
     _sendAllocateSuccess(context, message, allocation);
@@ -330,9 +381,9 @@ final class TurnRelayServer {
 
     final peers = message.attributesOfType(TurnAttributeType.xorPeerAddress);
     for (final peerAttr in peers) {
-      final (peerAddress, _) =
+      final (peerAddress, peerPort) =
           decodeXorAddress(peerAttr, message.transactionId);
-      allocation.addPermission(peerAddress);
+      allocation.addPermission(peerAddress, peerPort);
     }
 
     final response = message.buildSuccessResponse([]);
@@ -423,7 +474,7 @@ final class TurnRelayServer {
 
     final (peerAddress, peerPort) =
         decodeXorAddress(peerAttr, message.transactionId);
-    if (!allocation.hasPermission(peerAddress)) {
+    if (!allocation.hasPermission(peerAddress, peerPort)) {
       _logger?.warning(
         'Permission missing for peer ${peerAddress.address}',
       );
