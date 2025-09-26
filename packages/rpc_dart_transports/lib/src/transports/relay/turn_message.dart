@@ -48,7 +48,7 @@ final class TurnMessage {
     required this.messageClass,
     Uint8List? transactionId,
     List<TurnAttribute>? attributes,
-  })  : transactionId = transactionId ?? _generateTransactionId(),
+  })  : transactionId = transactionId ?? generateTransactionId(),
         attributes = List.unmodifiable(attributes ?? const []);
 
   /// TURN magic cookie value defined in RFC 5389 section 6.
@@ -242,7 +242,7 @@ final class TurnMessage {
     return (method, messageClass);
   }
 
-  static Uint8List _generateTransactionId() {
+  static Uint8List generateTransactionId() {
     final randomBytes = Uint8List(12);
     for (var i = 0; i < randomBytes.length; i++) {
       randomBytes[i] = (DateTime.now().microsecondsSinceEpoch >> (i * 5)) & 0xFF;
