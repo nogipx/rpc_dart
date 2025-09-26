@@ -7,3 +7,4 @@ export 'websocket/rpc_websocket_server.dart';
 export 'websocket/_index.dart';
 export '../server/rpc_server_bootstrap.dart';
 export 'isolate/isolate_transport.dart';
+export 'relay/_index.dart';

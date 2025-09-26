@@ -5,3 +5,4 @@
 export 'transports/isolate/isolate_transport.dart';
 export 'transports/websocket/_index.dart';
 export 'transports/http2/_index.dart';
+export 'transports/relay/_index.dart';
