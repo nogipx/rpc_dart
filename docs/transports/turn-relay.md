@@ -95,6 +95,28 @@ are lazily pruned when their TTL elapses.
 The integration test `turn_relay_server_test.dart` demonstrates this flow with a
 TURN client talking to a peer socket through the relay.
 
+### Client options
+
+`TurnRelayClient.connect` accepts a `TurnRelayClientOptions` instance when you
+need to customize timeouts, lifetimes, the local bind address, or permission
+behaviour:
+
+```dart
+final client = await TurnRelayClient.connect(
+  serverAddress: server.bindAddress,
+  serverPort: server.port,
+  options: const TurnRelayClientOptions(
+    requestTimeout: Duration(seconds: 3),
+    allocationRefreshMargin: Duration(seconds: 10),
+    autoCreatePermission: false,
+  ),
+);
+```
+
+Leaving the parameter out falls back to the built-in defaults (5 second request
+timeouts, automatic permission creation, and allocation refreshes scheduled 30
+seconds before expiry).
+
 ## Helper APIs
 
 Use the helpers from `turn_message.dart` to build or inspect TURN frames when

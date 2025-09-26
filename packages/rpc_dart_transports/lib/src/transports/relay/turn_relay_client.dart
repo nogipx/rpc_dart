@@ -10,6 +10,44 @@ import 'package:universal_io/io.dart';
 
 import 'turn_message.dart';
 
+/// Options used to customize [TurnRelayClient.connect].
+class TurnRelayClientOptions {
+  const TurnRelayClientOptions({
+    this.localAddress,
+    this.localPort = 0,
+    this.requestTimeout = const Duration(seconds: 5),
+    this.requestedAllocationLifetime,
+    this.allocationRefreshMargin = const Duration(seconds: 30),
+    this.permissionLifetime = const Duration(minutes: 5),
+    this.permissionRefreshMargin = const Duration(seconds: 30),
+    this.autoCreatePermission = true,
+  });
+
+  /// Local interface bound by the UDP socket (defaults to ANY).
+  final InternetAddress? localAddress;
+
+  /// Local UDP port (0 lets the OS pick an ephemeral port).
+  final int localPort;
+
+  /// Timeout used for Allocate/Refresh/CreatePermission requests.
+  final Duration requestTimeout;
+
+  /// Client-requested allocation lifetime advertised in Allocate requests.
+  final Duration? requestedAllocationLifetime;
+
+  /// Margin used when scheduling allocation refreshes.
+  final Duration allocationRefreshMargin;
+
+  /// Expected permission lifetime used for refresh scheduling.
+  final Duration permissionLifetime;
+
+  /// Margin before [permissionLifetime] when the client refreshes permissions.
+  final Duration permissionRefreshMargin;
+
+  /// When enabled, [TurnRelayClient.send] auto-creates missing permissions.
+  final bool autoCreatePermission;
+}
+
 /// Simple TURN relay client that performs Allocate/Refresh/CreatePermission
 /// flows against [TurnRelayServer] and exposes relayed payloads as a byte
 /// stream.
@@ -18,12 +56,13 @@ final class TurnRelayClient {
     required RawDatagramSocket socket,
     required this.serverAddress,
     required this.serverPort,
-    required this.requestTimeout,
-    required this.allocationRefreshMargin,
-    required this.permissionLifetime,
-    required this.permissionRefreshMargin,
-    required this.autoCreatePermission,
-  }) : _socket = socket,
+    required TurnRelayClientOptions options,
+  })  : requestTimeout = options.requestTimeout,
+        allocationRefreshMargin = options.allocationRefreshMargin,
+        permissionLifetime = options.permissionLifetime,
+        permissionRefreshMargin = options.permissionRefreshMargin,
+        autoCreatePermission = options.autoCreatePermission,
+        _socket = socket,
         _inboundController = StreamController<Uint8List>.broadcast();
 
   /// Establishes a TURN allocation against [serverAddress]/[serverPort] and
@@ -31,18 +70,11 @@ final class TurnRelayClient {
   static Future<TurnRelayClient> connect({
     required InternetAddress serverAddress,
     required int serverPort,
-    InternetAddress? localAddress,
-    int localPort = 0,
-    Duration requestTimeout = const Duration(seconds: 5),
-    Duration? requestedAllocationLifetime,
-    Duration allocationRefreshMargin = const Duration(seconds: 30),
-    Duration permissionLifetime = const Duration(minutes: 5),
-    Duration permissionRefreshMargin = const Duration(seconds: 30),
-    bool autoCreatePermission = true,
+    TurnRelayClientOptions options = const TurnRelayClientOptions(),
   }) async {
     final socket = await RawDatagramSocket.bind(
-      localAddress ?? InternetAddress.anyIPv4,
-      localPort,
+      options.localAddress ?? InternetAddress.anyIPv4,
+      options.localPort,
     );
     socket.readEventsEnabled = true;
     socket.writeEventsEnabled = true;
@@ -51,15 +83,11 @@ final class TurnRelayClient {
       socket: socket,
       serverAddress: serverAddress,
       serverPort: serverPort,
-      requestTimeout: requestTimeout,
-      allocationRefreshMargin: allocationRefreshMargin,
-      permissionLifetime: permissionLifetime,
-      permissionRefreshMargin: permissionRefreshMargin,
-      autoCreatePermission: autoCreatePermission,
+      options: options,
     );
 
     try {
-      await client._initialize(requestedAllocationLifetime);
+      await client._initialize(options.requestedAllocationLifetime);
       return client;
     } catch (error) {
       await client.close();

@@ -90,6 +90,28 @@ Allocation истекает через `allocationLifetime` (по умолчан
 Интеграционный тест `turn_relay_server_test.dart` показывает этот сценарий: TURN
 клиент общается с пиром через релей.
 
+### Настройки клиента
+
+`TurnRelayClient.connect` принимает объект `TurnRelayClientOptions`, если нужно
+переопределить таймауты, параметры времени жизни, локальный адрес сокета или
+поведение по созданию разрешений:
+
+```dart
+final client = await TurnRelayClient.connect(
+  serverAddress: server.bindAddress,
+  serverPort: server.port,
+  options: const TurnRelayClientOptions(
+    requestTimeout: Duration(seconds: 3),
+    allocationRefreshMargin: Duration(seconds: 10),
+    autoCreatePermission: false,
+  ),
+);
+```
+
+Если параметр опустить, используются стандартные значения: 5-секундный таймаут
+запросов, автоматическое создание разрешений и продление allocation за 30 секунд
+до истечения срока.
+
 ## Вспомогательные API
 
 В `turn_message.dart` лежат функции, которые помогают собирать и разбирать TURN

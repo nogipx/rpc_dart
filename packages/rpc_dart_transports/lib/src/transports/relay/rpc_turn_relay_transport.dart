@@ -443,27 +443,13 @@ final class RpcTurnRelayCallerTransport extends RpcTurnRelayTransportBase {
     required int serverPort,
     required InternetAddress peerAddress,
     required int peerPort,
-    InternetAddress? localAddress,
-    int localPort = 0,
-    Duration requestTimeout = const Duration(seconds: 5),
-    Duration? requestedAllocationLifetime,
-    Duration allocationRefreshMargin = const Duration(seconds: 30),
-    Duration permissionLifetime = const Duration(minutes: 5),
-    Duration permissionRefreshMargin = const Duration(seconds: 30),
-    bool autoCreatePermission = true,
+    TurnRelayClientOptions options = const TurnRelayClientOptions(),
     RpcLogger? logger,
   }) async {
     final client = await TurnRelayClient.connect(
       serverAddress: serverAddress,
       serverPort: serverPort,
-      localAddress: localAddress,
-      localPort: localPort,
-      requestTimeout: requestTimeout,
-      requestedAllocationLifetime: requestedAllocationLifetime,
-      allocationRefreshMargin: allocationRefreshMargin,
-      permissionLifetime: permissionLifetime,
-      permissionRefreshMargin: permissionRefreshMargin,
-      autoCreatePermission: autoCreatePermission,
+      options: options,
     );
 
     return RpcTurnRelayCallerTransport._(
@@ -513,27 +499,13 @@ final class RpcTurnRelayResponderTransport extends RpcTurnRelayTransportBase {
     required int serverPort,
     required InternetAddress peerAddress,
     required int peerPort,
-    InternetAddress? localAddress,
-    int localPort = 0,
-    Duration requestTimeout = const Duration(seconds: 5),
-    Duration? requestedAllocationLifetime,
-    Duration allocationRefreshMargin = const Duration(seconds: 30),
-    Duration permissionLifetime = const Duration(minutes: 5),
-    Duration permissionRefreshMargin = const Duration(seconds: 30),
-    bool autoCreatePermission = true,
+    TurnRelayClientOptions options = const TurnRelayClientOptions(),
     RpcLogger? logger,
   }) async {
     final client = await TurnRelayClient.connect(
       serverAddress: serverAddress,
       serverPort: serverPort,
-      localAddress: localAddress,
-      localPort: localPort,
-      requestTimeout: requestTimeout,
-      requestedAllocationLifetime: requestedAllocationLifetime,
-      allocationRefreshMargin: allocationRefreshMargin,
-      permissionLifetime: permissionLifetime,
-      permissionRefreshMargin: permissionRefreshMargin,
-      autoCreatePermission: autoCreatePermission,
+      options: options,
     );
 
     return RpcTurnRelayResponderTransport._(
