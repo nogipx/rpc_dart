@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
@@ -77,6 +78,39 @@ void main() {
 
       final received = await _nextClientBytes(client);
       expect(received, inboundPayload);
+    });
+
+    test('delivers connect requests to the target allocation', () async {
+      final initiator = await TurnRelayClient.connect(
+        serverAddress: server.bindAddress,
+        serverPort: server.port,
+      );
+      addTearDown(initiator.close);
+
+      final target = await TurnRelayClient.connect(
+        serverAddress: server.bindAddress,
+        serverPort: server.port,
+      );
+      addTearDown(target.close);
+
+      final payload = Uint8List.fromList(<int>[1, 2, 3]);
+      final requestFuture = target.connectRequests.first.timeout(
+        _ioTimeout,
+        onTimeout: () =>
+            throw StateError('Target allocation did not receive connect request'),
+      );
+
+      await initiator.requestPeerConnection(
+        peerAddress: target.relayAddress,
+        peerPort: target.relayPort,
+        payload: payload,
+      );
+
+      final request = await requestFuture;
+      expect(request.peerAddress.address, initiator.relayAddress.address);
+      expect(request.peerPort, initiator.relayPort);
+      expect(request.payload, isNotNull);
+      expect(request.payload, orderedEquals(payload));
     });
   });
 }
