@@ -188,8 +188,11 @@ final class RpcEndpointPingExchange {
 
     try {
       logger.internal('Отправка ping запроса [streamId: $streamId]');
-      await transport.sendMetadata(streamId, metadata);
-      await transport.finishSending(streamId);
+      await transport.sendMetadata(
+        streamId,
+        metadata,
+        endStream: true,
+      );
     } catch (error, stackTrace) {
       await subscription.cancel();
       logger.error(
