@@ -1,0 +1,710 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart' show Hmac, sha256;
+import 'package:licensify/licensify.dart';
+import 'package:rpc_dart/rpc_dart.dart';
+
+const _handshakeHeader = 'x-rpc-secure-handshake';
+const _metadataHeader = 'x-rpc-secure-metadata';
+const _protocolLabel = 'rpc+secure/1';
+const _infoCallerToResponder = 'rpc:data:caller->responder';
+const _infoResponderToCaller = 'rpc:data:responder->caller';
+
+/// Configuration for the [SecureTransportAdapter].
+class SecureTransportConfig {
+  const SecureTransportConfig({
+    this.handshakeTimeout = const Duration(seconds: 15),
+    this.handshakeTokenTtl = const Duration(minutes: 5),
+  });
+
+  /// Maximum time to wait for handshake messages.
+  final Duration handshakeTimeout;
+
+  /// Time-to-live for Licensify handshake tokens.
+  final Duration handshakeTokenTtl;
+}
+
+/// Holds the long-term identity material used by the secure overlay.
+class SecureTransportKeyStore {
+  const SecureTransportKeyStore({
+    required this.transportId,
+    required this.privateKey,
+    required this.peerPublicKey,
+  });
+
+  /// Identifier advertised to the remote peer.
+  final String transportId;
+
+  /// Local signing key used to produce handshake tokens.
+  final LicensifyPrivateKey privateKey;
+
+  /// Remote signing key used to validate handshake tokens.
+  final LicensifyPublicKey peerPublicKey;
+}
+
+enum _SecureFrameType { data, metadata }
+
+class _SessionState {
+  _SessionState({
+    required this.sendKey,
+    required this.recvKey,
+    required this.assertion,
+    required this.peerTransportId,
+  });
+
+  final LicensifySymmetricKey sendKey;
+  final LicensifySymmetricKey recvKey;
+  final String assertion;
+  final String peerTransportId;
+
+  void dispose() {
+    sendKey.dispose();
+    recvKey.dispose();
+  }
+}
+
+class _DecryptedFrame {
+  _DecryptedFrame(this.payload, this.type);
+
+  final Uint8List payload;
+  final _SecureFrameType type;
+}
+
+/// Wraps any [IRpcTransport] with a Licensify-backed encrypted overlay.
+class SecureTransportAdapter implements IRpcTransport {
+  SecureTransportAdapter._(
+    this._inner,
+    this._keyStore,
+    this._config,
+    this._logger,
+  ) {
+    _handshakeFuture = _performHandshake();
+    _innerSubscription = _inner.incomingMessages.listen(
+      (message) => unawaited(_processIncoming(message)),
+      onError: (error, stackTrace) {
+        if (!_incomingController.isClosed) {
+          _incomingController.addError(error, stackTrace);
+        }
+      },
+      onDone: () async {
+        if (!_incomingController.isClosed) {
+          await _incomingController.close();
+        }
+      },
+    );
+  }
+
+  /// Wraps a transport instance with encryption.
+  factory SecureTransportAdapter.wrap(
+    IRpcTransport inner, {
+    required SecureTransportKeyStore keyStore,
+    SecureTransportConfig config = const SecureTransportConfig(),
+    RpcLogger? logger,
+  }) {
+    return SecureTransportAdapter._(inner, keyStore, config, logger);
+  }
+
+  final IRpcTransport _inner;
+  final SecureTransportKeyStore _keyStore;
+  final SecureTransportConfig _config;
+  final RpcLogger? _logger;
+
+  final StreamController<RpcTransportMessage> _incomingController =
+      StreamController<RpcTransportMessage>.broadcast();
+  final StreamController<String> _handshakeTokens = StreamController<String>();
+  final List<RpcTransportMessage> _pendingMessages = <RpcTransportMessage>[];
+
+  late final StreamSubscription<RpcTransportMessage> _innerSubscription;
+  late final Future<_SessionState> _handshakeFuture;
+
+  _SessionState? _session;
+  bool _closed = false;
+  int _outboundSequence = 0;
+  int _expectedInboundSequence = 0;
+
+  /// Exposes a future that completes when the secure channel is ready.
+  Future<void> get ready async {
+    await _handshakeFuture;
+  }
+
+  @override
+  bool get isClient => _inner.isClient;
+
+  @override
+  bool get isClosed => _closed || _inner.isClosed;
+
+  @override
+  bool get supportsZeroCopy => false;
+
+  @override
+  Stream<RpcTransportMessage> get incomingMessages =>
+      _incomingController.stream;
+
+  @override
+  int createStream() => _inner.createStream();
+
+  @override
+  bool releaseStreamId(int streamId) => _inner.releaseStreamId(streamId);
+
+  @override
+  Future<void> sendMetadata(
+    int streamId,
+    RpcMetadata metadata, {
+    bool endStream = false,
+  }) async {
+    final session = await _handshakeFuture;
+    _logger?.debug('[SecureTransportAdapter] Encrypting metadata for stream $streamId');
+    final payload = _serializeMetadata(metadata);
+    final token = await _encryptFrame(
+      session: session,
+      streamId: streamId,
+      type: _SecureFrameType.metadata,
+      payload: payload,
+    );
+    final wrappedMetadata = RpcMetadata([
+      RpcHeader(_metadataHeader, token),
+    ]);
+    await _inner.sendMetadata(streamId, wrappedMetadata, endStream: endStream);
+  }
+
+  @override
+  Future<void> sendMessage(
+    int streamId,
+    Uint8List data, {
+    bool endStream = false,
+  }) async {
+    final session = await _handshakeFuture;
+    _logger?.debug('[SecureTransportAdapter] Encrypting payload for stream $streamId');
+    final token = await _encryptFrame(
+      session: session,
+      streamId: streamId,
+      type: _SecureFrameType.data,
+      payload: data,
+    );
+    final bytes = Uint8List.fromList(utf8.encode(token));
+    await _inner.sendMessage(streamId, bytes, endStream: endStream);
+  }
+
+  @override
+  Future<void> finishSending(int streamId) async {
+    await _handshakeFuture;
+    await _inner.finishSending(streamId);
+  }
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+
+    await _innerSubscription.cancel();
+
+    if (!_handshakeTokens.isClosed) {
+      await _handshakeTokens.close();
+    }
+
+    final session = _session;
+    if (session != null) {
+      session.dispose();
+    }
+
+    if (!_incomingController.isClosed) {
+      await _incomingController.close();
+    }
+
+    await _inner.close();
+  }
+
+  @override
+  Future<RpcHealthStatus> health() async {
+    if (_closed) {
+      return RpcHealthStatus.closed(
+        component: 'SecureTransportAdapter',
+        message: 'Secure transport closed',
+        details: {
+          'transportId': _keyStore.transportId,
+        },
+      );
+    }
+
+    if (_session == null) {
+      return RpcHealthStatus.degraded(
+        component: 'SecureTransportAdapter',
+        message: 'Handshake pending',
+        details: {
+          'transportId': _keyStore.transportId,
+        },
+      );
+    }
+
+    final base = await _inner.health();
+    return RpcHealthStatus(
+      component: 'SecureTransportAdapter',
+      level: base.level,
+      message: base.message,
+      details: {
+        ...base.details,
+        'transportId': _keyStore.transportId,
+        'secure': true,
+      },
+    );
+  }
+
+  @override
+  Future<RpcHealthStatus> reconnect() async {
+    return RpcHealthStatus.degraded(
+      component: 'SecureTransportAdapter',
+      message: 'Reconnect is not supported by SecureTransportAdapter yet',
+      details: {
+        'transportId': _keyStore.transportId,
+        'supported': false,
+      },
+    );
+  }
+
+  Future<void> _processIncoming(RpcTransportMessage message) async {
+    if (_closed) return;
+
+    if (message.streamId == 0 && message.metadata != null) {
+      final token = message.metadata!.getHeaderValue(_handshakeHeader);
+      if (token != null && !_handshakeTokens.isClosed) {
+        _handshakeTokens.add(token);
+        return;
+      }
+    }
+
+    final session = _session;
+    if (session == null) {
+      _pendingMessages.add(message);
+      return;
+    }
+
+    await _deliverProtectedMessage(message, session);
+  }
+
+  Future<_SessionState> _performHandshake() async {
+    try {
+      final result = _inner.isClient
+          ? await _performCallerHandshake()
+          : await _performResponderHandshake();
+      _session = result;
+      _flushPendingMessages();
+      return result;
+    } catch (error, stackTrace) {
+      _logger?.error('Secure handshake failed: $error', error: error, stackTrace: stackTrace);
+      if (!_incomingController.isClosed) {
+        _incomingController.addError(error, stackTrace);
+      }
+      rethrow;
+    }
+  }
+
+  Future<_SessionState> _performCallerHandshake() async {
+    final seedCaller = _randomBytes(32);
+    final nonceCaller = _randomBytes(24);
+
+    final helloLicense = await Licensify.createLicense(
+      privateKey: _keyStore.privateKey,
+      appId: 'rpc.secure',
+      expirationDate: DateTime.now().toUtc().add(_config.handshakeTokenTtl),
+      type: LicenseType.standard,
+      features: {
+        'protocol': _protocolLabel,
+        'nonce': base64Encode(nonceCaller),
+      },
+      metadata: {
+        'seed': base64Encode(seedCaller),
+        'transportId': _keyStore.transportId,
+      },
+    );
+
+    final helloToken = helloLicense.token;
+    await _inner.sendMetadata(
+      0,
+      RpcMetadata([
+        RpcHeader(_handshakeHeader, helloToken),
+      ]),
+    );
+
+    final ackToken = await _waitForHandshakeToken();
+    final ack = await Licensify.fromToken(
+      token: ackToken,
+      publicKey: _keyStore.peerPublicKey,
+    );
+
+    final ackFeatures = await ack.features;
+    final ackMetadata = await ack.metadata ?? <String, dynamic>{};
+
+    _ensureProtocol(ackFeatures['protocol']);
+
+    final peerNonceBase64 = ackMetadata['peerNonce'] as String?;
+    if (peerNonceBase64 == null || peerNonceBase64 != base64Encode(nonceCaller)) {
+      throw StateError('Responder returned unexpected peer nonce');
+    }
+
+    final seedResponderBase64 = ackMetadata['seed'] as String?;
+    if (seedResponderBase64 == null) {
+      throw StateError('Responder did not provide seed');
+    }
+
+    final transportId = ackMetadata['transportId'] as String?;
+    if (transportId == null) {
+      throw StateError('Responder did not provide transportId');
+    }
+
+    final seedResponder = Uint8List.fromList(base64Decode(seedResponderBase64));
+    final nonceResponderBase64 = ackFeatures['nonce'] as String?;
+    if (nonceResponderBase64 == null) {
+      throw StateError('Responder did not provide nonce');
+    }
+
+    final nonceResponder = Uint8List.fromList(base64Decode(nonceResponderBase64));
+
+    final secretMaterial = Uint8List.fromList([
+      ...seedCaller,
+      ...seedResponder,
+      ...nonceCaller,
+      ...nonceResponder,
+    ]);
+
+    final sendKeyBytes = _hkdf(secretMaterial, info: utf8.encode(_infoCallerToResponder));
+    final recvKeyBytes = _hkdf(secretMaterial, info: utf8.encode(_infoResponderToCaller));
+
+    final sendKey = Licensify.encryptionKeyFromBytes(sendKeyBytes);
+    final recvKey = Licensify.encryptionKeyFromBytes(recvKeyBytes);
+
+    final handshakeHash = _computeHandshakeHash(helloToken, ackToken);
+
+    return _SessionState(
+      sendKey: sendKey,
+      recvKey: recvKey,
+      assertion: base64Encode(handshakeHash),
+      peerTransportId: transportId,
+    );
+  }
+
+  Future<_SessionState> _performResponderHandshake() async {
+    final helloToken = await _waitForHandshakeToken();
+    final hello = await Licensify.fromToken(
+      token: helloToken,
+      publicKey: _keyStore.peerPublicKey,
+    );
+
+    final helloFeatures = await hello.features;
+    final helloMetadata = await hello.metadata ?? <String, dynamic>{};
+
+    _ensureProtocol(helloFeatures['protocol']);
+
+    final seedCallerBase64 = helloMetadata['seed'] as String?;
+    if (seedCallerBase64 == null) {
+      throw StateError('Caller did not include seed');
+    }
+
+    final transportId = helloMetadata['transportId'] as String?;
+    if (transportId == null) {
+      throw StateError('Caller did not include transportId');
+    }
+
+    final seedCaller = Uint8List.fromList(base64Decode(seedCallerBase64));
+    final nonceCallerBase64 = helloFeatures['nonce'] as String?;
+    if (nonceCallerBase64 == null) {
+      throw StateError('Caller did not include nonce');
+    }
+
+    final nonceCaller = Uint8List.fromList(base64Decode(nonceCallerBase64));
+
+    final seedResponder = _randomBytes(32);
+    final nonceResponder = _randomBytes(24);
+
+    final ackLicense = await Licensify.createLicense(
+      privateKey: _keyStore.privateKey,
+      appId: 'rpc.secure',
+      expirationDate: DateTime.now().toUtc().add(_config.handshakeTokenTtl),
+      type: LicenseType.standard,
+      features: {
+        'protocol': _protocolLabel,
+        'nonce': base64Encode(nonceResponder),
+      },
+      metadata: {
+        'seed': base64Encode(seedResponder),
+        'peerNonce': base64Encode(nonceCaller),
+        'transportId': _keyStore.transportId,
+      },
+    );
+
+    final ackToken = ackLicense.token;
+
+    await _inner.sendMetadata(
+      0,
+      RpcMetadata([
+        RpcHeader(_handshakeHeader, ackToken),
+      ]),
+    );
+
+    final secretMaterial = Uint8List.fromList([
+      ...seedCaller,
+      ...seedResponder,
+      ...nonceCaller,
+      ...nonceResponder,
+    ]);
+
+    final sendKeyBytes = _hkdf(secretMaterial, info: utf8.encode(_infoResponderToCaller));
+    final recvKeyBytes = _hkdf(secretMaterial, info: utf8.encode(_infoCallerToResponder));
+
+    final sendKey = Licensify.encryptionKeyFromBytes(sendKeyBytes);
+    final recvKey = Licensify.encryptionKeyFromBytes(recvKeyBytes);
+
+    final handshakeHash = _computeHandshakeHash(helloToken, ackToken);
+
+    return _SessionState(
+      sendKey: sendKey,
+      recvKey: recvKey,
+      assertion: base64Encode(handshakeHash),
+      peerTransportId: transportId,
+    );
+  }
+
+  Future<void> _deliverProtectedMessage(
+    RpcTransportMessage message,
+    _SessionState session,
+  ) async {
+    if (message.metadata != null) {
+      final token = message.metadata!.getHeaderValue(_metadataHeader);
+      if (token == null) {
+        throw StateError('Received unprotected metadata on secure channel');
+      }
+
+      final decrypted = await _decryptFrame(
+        token: token,
+        session: session,
+        streamId: message.streamId,
+        expected: _SecureFrameType.metadata,
+      );
+
+      final metadata = _deserializeMetadata(decrypted.payload);
+      _incomingController.add(
+        RpcTransportMessage(
+          metadata: metadata,
+          streamId: message.streamId,
+          isEndOfStream: message.isEndOfStream,
+          methodPath: metadata.methodPath,
+        ),
+      );
+      return;
+    }
+
+    if (message.payload != null) {
+      final token = utf8.decode(message.payload!);
+      final decrypted = await _decryptFrame(
+        token: token,
+        session: session,
+        streamId: message.streamId,
+        expected: _SecureFrameType.data,
+      );
+
+      _incomingController.add(
+        RpcTransportMessage(
+          payload: decrypted.payload,
+          streamId: message.streamId,
+          isEndOfStream: message.isEndOfStream,
+        ),
+      );
+      return;
+    }
+
+    if (message.isEndOfStream) {
+      _incomingController.add(
+        RpcTransportMessage(
+          streamId: message.streamId,
+          isEndOfStream: true,
+        ),
+      );
+    }
+  }
+
+  Future<String> _waitForHandshakeToken() async {
+    try {
+      return await _handshakeTokens.stream
+          .first
+          .timeout(_config.handshakeTimeout);
+    } on TimeoutException catch (error) {
+      throw StateError('Handshake timed out: ${error.message ?? ''}');
+    }
+  }
+
+  Uint8List _serializeMetadata(RpcMetadata metadata) {
+    final headers = metadata.headers
+        .map((header) => {'name': header.name, 'value': header.value})
+        .toList(growable: false);
+    final jsonData = json.encode({'headers': headers});
+    return Uint8List.fromList(utf8.encode(jsonData));
+  }
+
+  RpcMetadata _deserializeMetadata(Uint8List payload) {
+    final jsonData = json.decode(utf8.decode(payload)) as Map<String, dynamic>;
+    final headers = <RpcHeader>[];
+    final rawHeaders = jsonData['headers'];
+    if (rawHeaders is List) {
+      for (final entry in rawHeaders) {
+        if (entry is Map<String, dynamic>) {
+          final name = entry['name'];
+          final value = entry['value'];
+          if (name is String && value is String) {
+            headers.add(RpcHeader(name, value));
+          }
+        }
+      }
+    }
+    return RpcMetadata(headers);
+  }
+
+  Future<String> _encryptFrame({
+    required _SessionState session,
+    required int streamId,
+    required _SecureFrameType type,
+    required Uint8List payload,
+  }) async {
+    final sequence = _outboundSequence++;
+    final token = await Licensify.encryptData(
+      data: {
+        'payload': base64Encode(payload),
+        'transportId': _keyStore.transportId,
+        'streamId': streamId,
+        'protocol': _protocolLabel,
+        'sequence': sequence,
+        'type': type.name,
+      },
+      encryptionKey: session.sendKey,
+      implicitAssertion: session.assertion,
+    );
+    return token;
+  }
+
+  Future<_DecryptedFrame> _decryptFrame({
+    required String token,
+    required _SessionState session,
+    required int streamId,
+    required _SecureFrameType expected,
+  }) async {
+    final decoded = await Licensify.decryptData(
+      encryptedToken: token,
+      encryptionKey: session.recvKey,
+      implicitAssertion: session.assertion,
+    );
+
+    final protocol = decoded['protocol'];
+    _ensureProtocol(protocol);
+
+    final transportId = decoded['transportId'];
+    if (transportId is! String || transportId != session.peerTransportId) {
+      throw StateError('Unexpected transportId in secure frame');
+    }
+
+    final frameStreamId = decoded['streamId'];
+    if (frameStreamId is! num || frameStreamId.toInt() != streamId) {
+      throw StateError('Secure frame stream mismatch');
+    }
+
+    final typeValue = decoded['type'];
+    if (typeValue is! String) {
+      throw StateError('Secure frame missing type');
+    }
+
+    final type = _SecureFrameType.values.firstWhere(
+      (value) => value.name == typeValue,
+      orElse: () => throw StateError('Unknown secure frame type: $typeValue'),
+    );
+
+    if (type != expected) {
+      throw StateError('Secure frame type mismatch');
+    }
+
+    final sequenceValue = decoded['sequence'];
+    if (sequenceValue is! num) {
+      throw StateError('Secure frame missing sequence');
+    }
+
+    final sequence = sequenceValue.toInt();
+    if (sequence != _expectedInboundSequence) {
+      throw StateError('Secure frame sequence mismatch');
+    }
+    _expectedInboundSequence++;
+
+    final payload = decoded['payload'];
+    if (payload is! String) {
+      throw StateError('Secure frame payload missing');
+    }
+
+    return _DecryptedFrame(
+      Uint8List.fromList(base64Decode(payload)),
+      type,
+    );
+  }
+
+  void _flushPendingMessages() {
+    if (_session == null || _pendingMessages.isEmpty) {
+      return;
+    }
+
+    final pending = List<RpcTransportMessage>.from(_pendingMessages);
+    _pendingMessages.clear();
+
+    for (final message in pending) {
+      unawaited(_deliverProtectedMessage(message, _session!));
+    }
+  }
+
+  void _ensureProtocol(Object? value) {
+    if (value is! String || value != _protocolLabel) {
+      throw StateError('Unsupported secure protocol: $value');
+    }
+  }
+
+  Uint8List _computeHandshakeHash(String helloToken, String ackToken) {
+    final digest = sha256.convert(
+      <int>[
+        ...utf8.encode(helloToken),
+        0,
+        ...utf8.encode(ackToken),
+      ],
+    );
+    return Uint8List.fromList(digest.bytes);
+  }
+
+  Uint8List _hkdf(
+    Uint8List input, {
+    required List<int> info,
+    int length = 32,
+  }) {
+    final salt = List<int>.filled(sha256.blockSize, 0);
+    final prk = Hmac(sha256, salt).convert(input).bytes;
+    final hmac = Hmac(sha256, prk);
+
+    final iterations = (length / sha256.convert(<int>[]).bytes.length).ceil();
+    final okm = <int>[];
+    var previous = <int>[];
+
+    for (var i = 1; i <= iterations; i++) {
+      final buffer = <int>[...previous, ...info, i];
+      previous = hmac.convert(buffer).bytes;
+      okm.addAll(previous);
+    }
+
+    return Uint8List.fromList(okm.sublist(0, length));
+  }
+
+  Uint8List _randomBytes(int length) {
+    final random = Random.secure();
+    final bytes = Uint8List(length);
+    for (var i = 0; i < length; i++) {
+      bytes[i] = random.nextInt(256);
+    }
+    return bytes;
+  }
+}
