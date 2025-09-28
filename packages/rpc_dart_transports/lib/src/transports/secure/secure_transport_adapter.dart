@@ -5,7 +5,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
 import 'package:licensify/licensify.dart';
@@ -17,11 +16,18 @@ const _protocolLabel = 'rpc+secure/1';
 const _infoCallerToResponder = 'rpc:data:caller->responder';
 const _infoResponderToCaller = 'rpc:data:responder->caller';
 
+enum SecureFrameFormat { verbose, compact }
+
 /// Configuration for the [SecureTransportAdapter].
 class SecureTransportConfig {
   const SecureTransportConfig({
     this.handshakeTimeout = const Duration(seconds: 15),
     this.handshakeTokenTtl = const Duration(minutes: 5),
+    this.frameFormat = SecureFrameFormat.verbose,
+    this.paddingBlockSize,
+    this.maxPaddingBlocks = 3,
+    this.removeTransportId = false,
+    this.removeProtocol = false,
   });
 
   /// Maximum time to wait for handshake messages.
@@ -29,18 +35,33 @@ class SecureTransportConfig {
 
   /// Time-to-live for Licensify handshake tokens.
   final Duration handshakeTokenTtl;
+
+  /// Формат кадра: verbose (текущий совместимый) или compact (минимизированные ключи).
+  final SecureFrameFormat frameFormat;
+
+  /// Размер блока для padding (байт). Если null — padding отключен.
+  final int? paddingBlockSize;
+
+  /// Максимальное число блоков padding (0..maxPaddingBlocks). Игнорируется если paddingBlockSize == null.
+  final int maxPaddingBlocks;
+
+  /// Удалять ли transportId из каждого кадра (экономия, но снижает самодокументированность). Используется только в compact формате.
+  final bool removeTransportId;
+
+  /// Удалять ли protocol поле из каждого кадра (опираемся на handshake). Только compact.
+  final bool removeProtocol;
 }
 
 /// Holds the long-term identity material used by the secure overlay.
 class SecureTransportKeyStore {
   const SecureTransportKeyStore({
-    required this.transportId,
     required this.privateKey,
     required this.peerPublicKey,
+    this.transportId = '',
   });
 
   /// Identifier advertised to the remote peer.
-  final String transportId;
+  final String? transportId;
 
   /// Local signing key used to produce handshake tokens.
   final LicensifyPrivateKey privateKey;
@@ -160,7 +181,8 @@ class SecureTransportAdapter implements IRpcTransport {
     bool endStream = false,
   }) async {
     final session = await _handshakeFuture;
-    _logger?.debug('[SecureTransportAdapter] Encrypting metadata for stream $streamId');
+    _logger?.debug(
+        '[SecureTransportAdapter] Encrypting metadata for stream $streamId');
     final payload = _serializeMetadata(metadata);
     final token = await _encryptFrame(
       session: session,
@@ -181,7 +203,8 @@ class SecureTransportAdapter implements IRpcTransport {
     bool endStream = false,
   }) async {
     final session = await _handshakeFuture;
-    _logger?.debug('[SecureTransportAdapter] Encrypting payload for stream $streamId');
+    _logger?.debug(
+        '[SecureTransportAdapter] Encrypting payload for stream $streamId');
     final token = await _encryptFrame(
       session: session,
       streamId: streamId,
@@ -194,8 +217,12 @@ class SecureTransportAdapter implements IRpcTransport {
 
   @override
   Future<void> finishSending(int streamId) async {
-    await _handshakeFuture;
-    await _inner.finishSending(streamId);
+    // Вместо прямого делегирования во внутренний транспорт (которое
+    // генерировало незашифрованный metadata end-of-stream кадр),
+    // отправляем зашифрованный пустой metadata кадр с endStream=true.
+    // Это сохраняет инвариант: все metadata после завершения handshake
+    // проходят через шифрование.
+    await sendMetadata(streamId, const RpcMetadata([]), endStream: true);
   }
 
   @override
@@ -297,7 +324,8 @@ class SecureTransportAdapter implements IRpcTransport {
       _flushPendingMessages();
       return result;
     } catch (error, stackTrace) {
-      _logger?.error('Secure handshake failed: $error', error: error, stackTrace: stackTrace);
+      _logger?.error('Secure handshake failed: $error',
+          error: error, stackTrace: stackTrace);
       if (!_incomingController.isClosed) {
         _incomingController.addError(error, stackTrace);
       }
@@ -344,7 +372,8 @@ class SecureTransportAdapter implements IRpcTransport {
     _ensureProtocol(ackFeatures['protocol']);
 
     final peerNonceBase64 = ackMetadata['peerNonce'] as String?;
-    if (peerNonceBase64 == null || peerNonceBase64 != base64Encode(nonceCaller)) {
+    if (peerNonceBase64 == null ||
+        peerNonceBase64 != base64Encode(nonceCaller)) {
       throw StateError('Responder returned unexpected peer nonce');
     }
 
@@ -364,7 +393,8 @@ class SecureTransportAdapter implements IRpcTransport {
       throw StateError('Responder did not provide nonce');
     }
 
-    final nonceResponder = Uint8List.fromList(base64Decode(nonceResponderBase64));
+    final nonceResponder =
+        Uint8List.fromList(base64Decode(nonceResponderBase64));
 
     final secretMaterial = Uint8List.fromList([
       ...seedCaller,
@@ -373,8 +403,10 @@ class SecureTransportAdapter implements IRpcTransport {
       ...nonceResponder,
     ]);
 
-    final sendKeyBytes = _hkdf(secretMaterial, info: utf8.encode(_infoCallerToResponder));
-    final recvKeyBytes = _hkdf(secretMaterial, info: utf8.encode(_infoResponderToCaller));
+    final sendKeyBytes =
+        _hkdf(secretMaterial, info: utf8.encode(_infoCallerToResponder));
+    final recvKeyBytes =
+        _hkdf(secretMaterial, info: utf8.encode(_infoResponderToCaller));
 
     final sendKey = Licensify.encryptionKeyFromBytes(sendKeyBytes);
     final recvKey = Licensify.encryptionKeyFromBytes(recvKeyBytes);
@@ -454,8 +486,10 @@ class SecureTransportAdapter implements IRpcTransport {
       ...nonceResponder,
     ]);
 
-    final sendKeyBytes = _hkdf(secretMaterial, info: utf8.encode(_infoResponderToCaller));
-    final recvKeyBytes = _hkdf(secretMaterial, info: utf8.encode(_infoCallerToResponder));
+    final sendKeyBytes =
+        _hkdf(secretMaterial, info: utf8.encode(_infoResponderToCaller));
+    final recvKeyBytes =
+        _hkdf(secretMaterial, info: utf8.encode(_infoCallerToResponder));
 
     final sendKey = Licensify.encryptionKeyFromBytes(sendKeyBytes);
     final recvKey = Licensify.encryptionKeyFromBytes(recvKeyBytes);
@@ -530,8 +564,7 @@ class SecureTransportAdapter implements IRpcTransport {
 
   Future<String> _waitForHandshakeToken() async {
     try {
-      return await _handshakeTokens.stream
-          .first
+      return await _handshakeTokens.stream.first
           .timeout(_config.handshakeTimeout);
     } on TimeoutException catch (error) {
       throw StateError('Handshake timed out: ${error.message ?? ''}');
@@ -571,15 +604,49 @@ class SecureTransportAdapter implements IRpcTransport {
     required Uint8List payload,
   }) async {
     final sequence = _outboundSequence++;
-    final token = await Licensify.encryptData(
-      data: {
+
+    Map<String, dynamic> frame;
+    if (_config.frameFormat == SecureFrameFormat.verbose) {
+      frame = <String, dynamic>{
         'payload': base64Encode(payload),
         'transportId': _keyStore.transportId,
         'streamId': streamId,
         'protocol': _protocolLabel,
         'sequence': sequence,
         'type': type.name,
-      },
+      };
+    } else {
+      // compact format: shorter keys, optional omission of transportId / protocol, optional padding
+      final map = <String, dynamic>{
+        't': type.index, // 0 metadata, 1 data
+        'i': streamId,
+        'q': sequence,
+        'p': base64Encode(payload),
+        'v': 1, // version of compact frame
+      };
+      if (!_config.removeTransportId) {
+        map['x'] = _keyStore.transportId; // transport id
+      }
+      if (!_config.removeProtocol) {
+        map['r'] = 1; // protocol marker (fixed 1 for rpc+secure/1)
+      }
+      // padding
+      if (_config.paddingBlockSize != null && _config.paddingBlockSize! > 0) {
+        final block = _config.paddingBlockSize!;
+        final maxBlocks = _config.maxPaddingBlocks.clamp(0, 16);
+        final blocks =
+            maxBlocks == 0 ? 0 : Random.secure().nextInt(maxBlocks + 1);
+        if (blocks > 0) {
+          final padBytes = _randomBytes(block * blocks);
+          map['d'] = base64Encode(padBytes); // d = dummy padding
+          map['db'] = blocks; // number of blocks (for анализ, можно опустить)
+        }
+      }
+      frame = map;
+    }
+
+    final token = await Licensify.encryptData(
+      data: frame,
       encryptionKey: session.sendKey,
       implicitAssertion: session.assertion,
     );
@@ -598,53 +665,114 @@ class SecureTransportAdapter implements IRpcTransport {
       implicitAssertion: session.assertion,
     );
 
-    final protocol = decoded['protocol'];
-    _ensureProtocol(protocol);
-
-    final transportId = decoded['transportId'];
-    if (transportId is! String || transportId != session.peerTransportId) {
-      throw StateError('Unexpected transportId in secure frame');
+    // Distinguish formats by presence of 'payload' vs 'p'.
+    bool compact = false;
+    if (!decoded.containsKey('payload') && decoded.containsKey('p')) {
+      compact = true;
     }
 
-    final frameStreamId = decoded['streamId'];
-    if (frameStreamId is! num || frameStreamId.toInt() != streamId) {
+    late int frameStreamId;
+    late int sequence;
+    late _SecureFrameType type;
+    Uint8List payloadBytes;
+
+    if (!compact) {
+      final protocol = decoded['protocol'];
+      _ensureProtocol(protocol);
+
+      final transportId = decoded['transportId'];
+      if (transportId is! String || transportId != session.peerTransportId) {
+        throw StateError('Unexpected transportId in secure frame');
+      }
+
+      final frameStreamIdVal = decoded['streamId'];
+      if (frameStreamIdVal is! num) {
+        throw StateError('Secure frame stream mismatch');
+      }
+      frameStreamId = frameStreamIdVal.toInt();
+
+      final typeValue = decoded['type'];
+      if (typeValue is! String) {
+        throw StateError('Secure frame missing type');
+      }
+
+      type = _SecureFrameType.values.firstWhere(
+        (value) => value.name == typeValue,
+        orElse: () => throw StateError('Unknown secure frame type: $typeValue'),
+      );
+
+      final sequenceValue = decoded['sequence'];
+      if (sequenceValue is! num) {
+        throw StateError('Secure frame missing sequence');
+      }
+      sequence = sequenceValue.toInt();
+
+      final payload = decoded['payload'];
+      if (payload is! String) {
+        throw StateError('Secure frame payload missing');
+      }
+      payloadBytes = Uint8List.fromList(base64Decode(payload));
+    } else {
+      // compact format parsing
+      // protocol & transportId optionally omitted; rely on implicitAssertion binding.
+      final version = decoded['v'];
+      if (version != 1) {
+        throw StateError('Unsupported compact frame version: $version');
+      }
+      final typeIdx = decoded['t'];
+      if (typeIdx is! num ||
+          typeIdx.toInt() < 0 ||
+          typeIdx.toInt() >= _SecureFrameType.values.length) {
+        throw StateError('Invalid compact frame type index: $typeIdx');
+      }
+      type = _SecureFrameType.values[typeIdx.toInt()];
+
+      final streamVal = decoded['i'];
+      if (streamVal is! num) {
+        throw StateError('Compact frame missing stream id');
+      }
+      frameStreamId = streamVal.toInt();
+
+      final seqVal = decoded['q'];
+      if (seqVal is! num) {
+        throw StateError('Compact frame missing sequence');
+      }
+      sequence = seqVal.toInt();
+
+      if (!_config.removeTransportId) {
+        final transportId = decoded['x'];
+        if (transportId is! String || transportId != session.peerTransportId) {
+          throw StateError('Unexpected transportId in compact frame');
+        }
+      }
+      if (!_config.removeProtocol) {
+        final protoMarker = decoded['r'];
+        if (protoMarker != 1) {
+          throw StateError('Invalid protocol marker in compact frame');
+        }
+      }
+      final payloadStr = decoded['p'];
+      if (payloadStr is! String) {
+        throw StateError('Compact frame missing payload');
+      }
+      payloadBytes = Uint8List.fromList(base64Decode(payloadStr));
+      // ignore padding fields: 'd' (dummy), 'db'
+    }
+
+    if (frameStreamId != streamId) {
       throw StateError('Secure frame stream mismatch');
     }
-
-    final typeValue = decoded['type'];
-    if (typeValue is! String) {
-      throw StateError('Secure frame missing type');
-    }
-
-    final type = _SecureFrameType.values.firstWhere(
-      (value) => value.name == typeValue,
-      orElse: () => throw StateError('Unknown secure frame type: $typeValue'),
-    );
 
     if (type != expected) {
       throw StateError('Secure frame type mismatch');
     }
 
-    final sequenceValue = decoded['sequence'];
-    if (sequenceValue is! num) {
-      throw StateError('Secure frame missing sequence');
-    }
-
-    final sequence = sequenceValue.toInt();
     if (sequence != _expectedInboundSequence) {
       throw StateError('Secure frame sequence mismatch');
     }
     _expectedInboundSequence++;
 
-    final payload = decoded['payload'];
-    if (payload is! String) {
-      throw StateError('Secure frame payload missing');
-    }
-
-    return _DecryptedFrame(
-      Uint8List.fromList(base64Decode(payload)),
-      type,
-    );
+    return _DecryptedFrame(payloadBytes, type);
   }
 
   void _flushPendingMessages() {
@@ -706,5 +834,16 @@ class SecureTransportAdapter implements IRpcTransport {
       bytes[i] = random.nextInt(256);
     }
     return bytes;
+  }
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    return incomingMessages.where((message) => message.streamId == streamId);
+  }
+
+  @override
+  Future<void> sendDirectObject(int streamId, Object object,
+      {bool endStream = false}) {
+    throw UnimplementedError();
   }
 }

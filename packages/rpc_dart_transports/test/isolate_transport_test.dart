@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:math';
+
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
 
@@ -1027,7 +1028,7 @@ void _testFullCycleServer(
       }
 
       // Отправляем финальные метаданные
-      final finalMetadata = RpcMetadata.forTrailer(RpcStatus.OK);
+      final finalMetadata = RpcMetadata.forTrailer(RpcStatus.ok);
       await transport.sendMetadata(
         message.streamId,
         finalMetadata,
@@ -1044,7 +1045,7 @@ void _testErrorServer(IRpcTransport transport, Map<String, dynamic> params) {
     if (!message.isMetadataOnly && message.payload != null) {
       // Отправляем ошибку
       final errorMetadata = RpcMetadata.forTrailer(
-        RpcStatus.INTERNAL,
+        RpcStatus.internal,
         message: 'Test error',
       );
       await transport.sendMetadata(
@@ -1154,7 +1155,7 @@ void _testZeroCopyErrorServer(
       if (receivedObject.id == -1) {
         // Отправляем ошибку через metadata (как в gRPC)
         final errorMetadata = RpcMetadata.forTrailer(
-          RpcStatus.INVALID_ARGUMENT,
+          RpcStatus.invalidArgument,
           message: 'Invalid object ID: ${receivedObject.id}',
         );
         await transport.sendMetadata(
