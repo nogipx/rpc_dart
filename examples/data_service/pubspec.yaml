@@ -1,0 +1,16 @@
+name: data_service_example
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  rpc_dart:
+    path: ../../packages/rpc_dart
+  rpc_dart_transports:
+    path: ../../packages/rpc_dart_transports
+  equatable: ^2.0.5
+  collection: ^1.18.0
+  meta: ^1.11.0
+
