@@ -140,22 +140,6 @@ void main() {
         ),
       );
 
-      // // Оборачиваем в secure адаптеры
-      // final caller = SecureTransportAdapter.wrap(
-      //   callerTransport,
-      //   logger: RpcLogger('ws-secure-caller'),
-      // );
-      //
-      // final responder = SecureTransportAdapter.wrap(
-      //   responderTransport,
-      //   keyStore: SecureTransportKeyStore(
-      //     transportId: 'ws-secure-responder',
-      //     privateKey: responderKeys.privateKey,
-      //     peerPublicKey: callerKeys.publicKey,
-      //   ),
-      //   logger: RpcLogger('ws-secure-responder'),
-      // );
-
       final streamId = clientTransport.createStream();
 
       final serverMessages = <RpcTransportMessage>[];

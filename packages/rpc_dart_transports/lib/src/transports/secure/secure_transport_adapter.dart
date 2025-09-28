@@ -61,7 +61,7 @@ class SecureTransportKeyStore {
   });
 
   /// Identifier advertised to the remote peer.
-  final String? transportId;
+  final String transportId;
 
   /// Local signing key used to produce handshake tokens.
   final LicensifyPrivateKey privateKey;

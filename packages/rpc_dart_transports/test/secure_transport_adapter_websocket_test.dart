@@ -473,7 +473,6 @@ void main() {
       expect(endMsg.isEndOfStream, isTrue);
       expect(endMsg.metadata, isNotNull);
       expect(endMsg.metadata!.headers, isEmpty);
-      expect(endMsg.metadata!.headers, isEmpty);
     });
 
     test('responder -> caller: metadata + payload + encrypted end-of-stream',
