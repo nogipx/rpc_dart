@@ -8,3 +8,4 @@ export 'websocket/_index.dart';
 export '../server/rpc_server_bootstrap.dart';
 export 'isolate/isolate_transport.dart';
 export 'relay/_index.dart';
+export 'secure/_index.dart';

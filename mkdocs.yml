@@ -24,6 +24,7 @@ nav:
       - WebSocket: transports/websocket.md
       - Isolate: transports/isolate.md
       - TURN relay: transports/turn-relay.md
+      - Encrypted overlay: transports/encryption.md
       - Transport toolkit: transports/transport-toolkit.md
   - Русский:
       - Обзор: ru/index.md
@@ -37,6 +38,7 @@ nav:
           - Isolate: ru/transports/isolate.md
           - TURN релейный: ru/transports/turn-relay.md
           - Кастомные транспорты: ru/transports/custom.md
+          - Шифрованный слой: ru/transports/encryption.md
 
 theme:
   name: material

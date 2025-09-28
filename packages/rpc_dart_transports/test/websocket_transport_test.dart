@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'package:licensify/licensify.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
 import 'package:universal_io/io.dart';
@@ -111,14 +112,32 @@ void main() {
     });
 
     test('отправка и получение метаданных', () async {
-      final clientTransport = RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://localhost:${server.port}'),
-        logger: RpcLogger('TestClient'),
+      final callerKeys = await Licensify.generateSigningKeys();
+      final responderKeys = await Licensify.generateSigningKeys();
+
+      final clientTransport = SecureTransportAdapter.wrap(
+        RpcWebSocketCallerTransport.connect(
+          Uri.parse('ws://localhost:${server.port}'),
+          logger: RpcLogger('TestClient'),
+        ),
+        keyStore: SecureTransportKeyStore(
+          transportId: 'ws-secure-caller',
+          privateKey: callerKeys.privateKey,
+          peerPublicKey: responderKeys.publicKey,
+        ),
       );
+
       final serverSocket = await nextServerSocket();
-      final serverTransport = RpcWebSocketResponderTransport(
-        IOWebSocketChannel(serverSocket),
-        logger: RpcLogger('TestServer'),
+      final serverTransport = SecureTransportAdapter.wrap(
+        RpcWebSocketResponderTransport(
+          IOWebSocketChannel(serverSocket),
+          logger: RpcLogger('TestServer'),
+        ),
+        keyStore: SecureTransportKeyStore(
+          transportId: 'ws-secure-responder',
+          privateKey: responderKeys.privateKey,
+          peerPublicKey: callerKeys.publicKey,
+        ),
       );
 
       final streamId = clientTransport.createStream();
