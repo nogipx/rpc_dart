@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:collection/collection.dart';
-
 import 'data_contract.dart';
 import 'models.dart';
 
@@ -55,6 +53,36 @@ abstract interface class DataRepository {
   Future<void> dispose();
 }
 
+/// Адаптер хранилища, который можно реализовать поверх любого backend-а
+/// (in-memory, SQLite, Postgres и т.д.).
+abstract interface class DataStorageAdapter {
+  Future<DataRecord?> readRecord(
+    String tenantId,
+    String collection,
+    String id,
+  );
+
+  Future<List<DataRecord>> readCollection(String tenantId, String collection);
+
+  Future<void> writeRecord(String tenantId, DataRecord record);
+
+  Future<void> writeRecords(String tenantId, Iterable<DataRecord> records);
+
+  Future<bool> deleteRecord(
+    String tenantId,
+    String collection,
+    String id,
+  );
+
+  Future<int> deleteRecords(
+    String tenantId,
+    String collection,
+    Iterable<String> ids,
+  );
+
+  Future<void> dispose();
+}
+
 final class _RecordedEvent {
   _RecordedEvent(this.tenantId, this.event);
 
@@ -62,56 +90,59 @@ final class _RecordedEvent {
   final DataChangeEvent event;
 }
 
-/// Простая in-memory реализация с оптимистической конкуренцией.
-final class InMemoryDataRepository implements DataRepository {
-  final Map<String, Map<String, Map<String, DataRecord>>> _storage = {};
+/// Базовая реализация `DataRepository`, инкапсулирующая общую бизнес-логику
+/// и работу с журналом событий. Хранилище делегируется `DataStorageAdapter`,
+/// поэтому поверх класса легко собрать адаптеры под SQLite/Postgres/Firestore.
+abstract class BaseDataRepository implements DataRepository {
+  BaseDataRepository(
+    this.storage, {
+    DateTime Function()? clock,
+    String Function(String tenantId, String collection)? idGenerator,
+  })  : _clock = clock ?? () => DateTime.now().toUtc(),
+        _idGenerator = idGenerator,
+        _changeController = StreamController<_RecordedEvent>.broadcast();
+
+  final DataStorageAdapter storage;
+  final DateTime Function() _clock;
+  final String Function(String tenantId, String collection)? _idGenerator;
+  final StreamController<_RecordedEvent> _changeController;
   final Map<String, List<DataChangeEvent>> _eventJournal = {};
-  final StreamController<_RecordedEvent> _changeController =
-      StreamController<_RecordedEvent>.broadcast();
   final Random _random = Random();
-
   int _cursorSequence = 0;
-  int _idSequence = 0;
 
-  Map<String, DataRecord> _collection(
-    String tenantId,
-    String collection,
-  ) {
-    final tenantStore =
-        _storage.putIfAbsent(tenantId, () => <String, Map<String, DataRecord>>{});
-    return tenantStore.putIfAbsent(collection, () => <String, DataRecord>{});
-  }
+  String _eventKey(String tenantId, String collection) => '$tenantId::$collection';
 
   List<DataChangeEvent> _history(String tenantId, String collection) {
     final key = _eventKey(tenantId, collection);
     return _eventJournal.putIfAbsent(key, () => <DataChangeEvent>[]);
   }
 
-  String _eventKey(String tenantId, String collection) => '$tenantId::$collection';
-
-  String _generateId(String collection) {
+  String _generateId(String tenantId, String collection) {
+    if (_idGenerator != null) {
+      return _idGenerator!(tenantId, collection);
+    }
     final suffix = _random.nextInt(1 << 32).toRadixString(16);
-    final sequence = _idSequence++;
-    return '$collection-$sequence-$suffix';
+    final timestamp = _clock().microsecondsSinceEpoch;
+    return '$collection-$timestamp-$suffix';
   }
 
   DataChangeEvent _recordEvent(
     String tenantId,
     DataChangeType type,
-    DataRecord? record,
+    DataRecord record,
   ) {
     final cursor = (++_cursorSequence).toString();
-    final occurredAt = DateTime.now().toUtc();
+    final occurredAt = _clock();
     final event = DataChangeEvent(
       type: type,
-      collection: record?.collection ?? '<unknown>',
-      id: record?.id ?? '<unknown>',
+      collection: record.collection,
+      id: record.id,
       record: record,
-      version: record?.version ?? 0,
+      version: record.version,
       cursor: cursor,
       occurredAt: occurredAt,
     );
-    final history = _history(tenantId, event.collection);
+    final history = _history(tenantId, record.collection);
     history.add(event);
     _changeController.add(_RecordedEvent(tenantId, event));
     return event;
@@ -121,16 +152,16 @@ final class InMemoryDataRepository implements DataRepository {
     String tenantId,
     String collection,
     String id,
-    int version,
+    int nextVersion,
   ) {
     final cursor = (++_cursorSequence).toString();
-    final occurredAt = DateTime.now().toUtc();
+    final occurredAt = _clock();
     final event = DataChangeEvent(
       type: DataChangeType.deleted,
       collection: collection,
       id: id,
       record: null,
-      version: version,
+      version: nextVersion,
       cursor: cursor,
       occurredAt: occurredAt,
     );
@@ -138,6 +169,23 @@ final class InMemoryDataRepository implements DataRepository {
     history.add(event);
     _changeController.add(_RecordedEvent(tenantId, event));
     return event;
+  }
+
+  dynamic _getFieldValue(DataRecord record, String field) {
+    switch (field) {
+      case 'id':
+        return record.id;
+      case 'collection':
+        return record.collection;
+      case 'version':
+        return record.version;
+      case 'createdAt':
+        return record.createdAt;
+      case 'updatedAt':
+        return record.updatedAt;
+      default:
+        return record.payload[field];
+    }
   }
 
   bool _matchesFilter(DataRecord record, RecordFilter? filter) {
@@ -159,49 +207,35 @@ final class InMemoryDataRepository implements DataRepository {
       }
       final constraint = entry.value;
       if (constraint.min != null) {
-        final cmp = value.compareTo(constraint.min!);
-        if (cmp < 0 || (cmp == 0 && !constraint.includeMin)) {
+        if (constraint.includeMin) {
+          if (value < constraint.min!) {
+            return false;
+          }
+        } else if (value <= constraint.min!) {
           return false;
         }
       }
       if (constraint.max != null) {
-        final cmp = value.compareTo(constraint.max!);
-        if (cmp > 0 || (cmp == 0 && !constraint.includeMax)) {
+        if (constraint.includeMax) {
+          if (value > constraint.max!) {
+            return false;
+          }
+        } else if (value >= constraint.max!) {
           return false;
         }
       }
     }
 
     if (filter.containsTerms.isNotEmpty) {
-      final payloadString = record.payload.values
-          .whereType<String>()
-          .map((value) => value.toLowerCase())
-          .join(' ');
+      final haystack = record.payload.values.map((v) => v.toString().toLowerCase()).join(' ');
       for (final term in filter.containsTerms) {
-        if (!payloadString.contains(term.toLowerCase())) {
+        if (!haystack.contains(term.toLowerCase())) {
           return false;
         }
       }
     }
 
     return true;
-  }
-
-  Object? _getFieldValue(DataRecord record, String field) {
-    switch (field) {
-      case 'id':
-        return record.id;
-      case 'collection':
-        return record.collection;
-      case 'version':
-        return record.version;
-      case 'createdAt':
-        return record.createdAt;
-      case 'updatedAt':
-        return record.updatedAt;
-      default:
-        return record.payload[field];
-    }
   }
 
   int _compare(DataRecord a, DataRecord b, SortOrder? sort) {
@@ -223,29 +257,39 @@ final class InMemoryDataRepository implements DataRepository {
   }
 
   List<DataRecord> _filterAndSort(
-    Map<String, DataRecord> collection,
+    List<DataRecord> records,
     RecordFilter? filter,
     SortOrder? sort,
   ) {
-    final filtered = collection.values
-        .where((record) => _matchesFilter(record, filter))
-        .toList();
+    final filtered = records.where((record) => _matchesFilter(record, filter)).toList();
     filtered.sort((a, b) => _compare(a, b, sort));
     return filtered;
   }
 
+  int _resolveStartIndex(List<DataRecord> records, String? cursor) {
+    if (cursor == null) {
+      return 0;
+    }
+    final index = records.indexWhere((record) => record.id == cursor);
+    if (index == -1) {
+      throw RpcError.invalidArgument('Cursor $cursor is not valid for selection');
+    }
+    return index + 1;
+  }
+
   @override
   Future<DataRecord> create(String tenantId, CreateRecordRequest request) async {
-    final collection = _collection(tenantId, request.collection);
-    final now = DateTime.now().toUtc();
-    final id = request.id ?? _generateId(request.collection);
-
-    if (collection.containsKey(id)) {
+    final existing = request.id == null
+        ? null
+        : await storage.readRecord(tenantId, request.collection, request.id!);
+    if (existing != null) {
       throw RpcError.conflict(
-        'Record with id "$id" already exists in ${request.collection}',
+        'Record with id "${request.id}" already exists in ${request.collection}',
       );
     }
 
+    final now = _clock();
+    final id = request.id ?? _generateId(tenantId, request.collection);
     final record = DataRecord(
       id: id,
       collection: request.collection,
@@ -254,15 +298,14 @@ final class InMemoryDataRepository implements DataRepository {
       createdAt: now,
       updatedAt: now,
     );
-    collection[id] = record;
+    await storage.writeRecord(tenantId, record);
     _recordEvent(tenantId, DataChangeType.created, record);
     return record;
   }
 
   @override
-  Future<DataRecord?> get(String tenantId, GetRecordRequest request) async {
-    final collection = _collection(tenantId, request.collection);
-    return collection[request.id];
+  Future<DataRecord?> get(String tenantId, GetRecordRequest request) {
+    return storage.readRecord(tenantId, request.collection, request.id);
   }
 
   @override
@@ -270,17 +313,10 @@ final class InMemoryDataRepository implements DataRepository {
     String tenantId,
     ListRecordsRequest request,
   ) async {
-    final collection = _collection(tenantId, request.collection);
+    final collection = await storage.readCollection(tenantId, request.collection);
     final filtered = _filterAndSort(collection, request.filter, request.sort);
 
-    int startIndex = 0;
-    if (request.options.cursor != null) {
-      final index = filtered.indexWhere((record) => record.id == request.options.cursor);
-      if (index >= 0) {
-        startIndex = index + 1;
-      }
-    }
-
+    final startIndex = _resolveStartIndex(filtered, request.options.cursor);
     final endIndex = (startIndex + request.options.limit).clamp(0, filtered.length);
     final slice = filtered.sublist(startIndex, endIndex);
     final nextCursor = endIndex < filtered.length ? filtered[endIndex - 1].id : null;
@@ -295,8 +331,11 @@ final class InMemoryDataRepository implements DataRepository {
 
   @override
   Future<DataRecord> update(String tenantId, UpdateRecordRequest request) async {
-    final collection = _collection(tenantId, request.record.collection);
-    final existing = collection[request.record.id];
+    final existing = await storage.readRecord(
+      tenantId,
+      request.record.collection,
+      request.record.id,
+    );
     if (existing == null) {
       throw RpcError.notFound(
         'Record ${request.record.id} not found in ${request.record.collection}',
@@ -309,16 +348,19 @@ final class InMemoryDataRepository implements DataRepository {
       );
     }
 
-    final updated = request.record.copyWith(updatedAt: DateTime.now().toUtc());
-    collection[updated.id] = updated;
+    final updated = request.record.copyWith(updatedAt: _clock());
+    await storage.writeRecord(tenantId, updated);
     _recordEvent(tenantId, DataChangeType.updated, updated);
     return updated;
   }
 
   @override
   Future<DataRecord> patch(String tenantId, PatchRecordRequest request) async {
-    final collection = _collection(tenantId, request.collection);
-    final existing = collection[request.id];
+    final existing = await storage.readRecord(
+      tenantId,
+      request.collection,
+      request.id,
+    );
     if (existing == null) {
       throw RpcError.notFound(
         'Record ${request.id} not found in ${request.collection}',
@@ -335,17 +377,20 @@ final class InMemoryDataRepository implements DataRepository {
     final updated = existing.copyWith(
       payload: newPayload,
       version: existing.version + 1,
-      updatedAt: DateTime.now().toUtc(),
+      updatedAt: _clock(),
     );
-    collection[updated.id] = updated;
+    await storage.writeRecord(tenantId, updated);
     _recordEvent(tenantId, DataChangeType.patched, updated);
     return updated;
   }
 
   @override
   Future<bool> delete(String tenantId, DeleteRecordRequest request) async {
-    final collection = _collection(tenantId, request.collection);
-    final existing = collection[request.id];
+    final existing = await storage.readRecord(
+      tenantId,
+      request.collection,
+      request.id,
+    );
     if (existing == null) {
       return false;
     }
@@ -356,9 +401,11 @@ final class InMemoryDataRepository implements DataRepository {
       );
     }
 
-    collection.remove(request.id);
-    _recordDeletion(tenantId, request.collection, request.id, existing.version + 1);
-    return true;
+    final removed = await storage.deleteRecord(tenantId, request.collection, request.id);
+    if (removed) {
+      _recordDeletion(tenantId, request.collection, request.id, existing.version + 1);
+    }
+    return removed;
   }
 
   @override
@@ -368,8 +415,7 @@ final class InMemoryDataRepository implements DataRepository {
   ) async {
     final results = <DataRecord>[];
     for (final record in request.records) {
-      final collection = _collection(tenantId, record.collection);
-      final existing = collection[record.id];
+      final existing = await storage.readRecord(tenantId, record.collection, record.id);
       if (existing == null) {
         final created = await create(
           tenantId,
@@ -386,8 +432,8 @@ final class InMemoryDataRepository implements DataRepository {
             'Version ${record.version} is not newer than ${existing.version} for ${record.id}',
           );
         }
-        final updated = record.copyWith(updatedAt: DateTime.now().toUtc());
-        collection[record.id] = updated;
+        final updated = record.copyWith(updatedAt: _clock());
+        await storage.writeRecord(tenantId, updated);
         _recordEvent(tenantId, DataChangeType.updated, updated);
         results.add(updated);
       }
@@ -397,16 +443,30 @@ final class InMemoryDataRepository implements DataRepository {
 
   @override
   Future<int> bulkDelete(String tenantId, BulkDeleteRequest request) async {
-    final collection = _collection(tenantId, request.collection);
-    var count = 0;
+    final existing = <String, DataRecord>{};
     for (final id in request.ids) {
-      final existing = collection.remove(id);
-      if (existing != null) {
-        count++;
-        _recordDeletion(tenantId, request.collection, id, existing.version + 1);
+      final record = await storage.readRecord(tenantId, request.collection, id);
+      if (record != null) {
+        existing[id] = record;
       }
     }
-    return count;
+
+    final removed = await storage.deleteRecords(
+      tenantId,
+      request.collection,
+      request.ids,
+    );
+
+    for (final entry in existing.entries) {
+      _recordDeletion(
+        tenantId,
+        request.collection,
+        entry.key,
+        entry.value.version + 1,
+      );
+    }
+
+    return removed;
   }
 
   @override
@@ -414,11 +474,10 @@ final class InMemoryDataRepository implements DataRepository {
     String tenantId,
     ExportSnapshotRequest request,
   ) async {
-    final collection = _collection(tenantId, request.collection);
-    final records = collection.values.toList(growable: false);
+    final collection = await storage.readCollection(tenantId, request.collection);
     return ExportSnapshotResponse(
-      records: records,
-      generatedAt: DateTime.now().toUtc(),
+      records: collection,
+      generatedAt: _clock(),
     );
   }
 
@@ -427,7 +486,7 @@ final class InMemoryDataRepository implements DataRepository {
     String tenantId,
     SearchRecordsRequest request,
   ) async {
-    final collection = _collection(tenantId, request.collection);
+    final collection = await storage.readCollection(tenantId, request.collection);
     final filtered = _filterAndSort(collection, request.filter, null);
     final query = request.query.toLowerCase();
     final hits = filtered.where((record) {
@@ -453,7 +512,7 @@ final class InMemoryDataRepository implements DataRepository {
     String tenantId,
     AggregateMetricsRequest request,
   ) async {
-    final collection = _collection(tenantId, request.collection);
+    final collection = await storage.readCollection(tenantId, request.collection);
     final filtered = _filterAndSort(collection, request.filter, null);
     final metrics = <String, num>{};
 
@@ -480,11 +539,12 @@ final class InMemoryDataRepository implements DataRepository {
 
       switch (op) {
         case 'sum':
-          metrics[metricName] = values.fold<num>(0, (sum, value) => sum + value);
+          metrics[metricName] = values.fold<num>(0, (prev, element) => prev + element);
           break;
         case 'avg':
-          final total = values.fold<num>(0, (sum, value) => sum + value);
-          metrics[metricName] = values.isEmpty ? 0 : total / values.length;
+          metrics[metricName] = values.isEmpty
+              ? 0
+              : values.reduce((a, b) => a + b) / values.length;
           break;
         case 'min':
           metrics[metricName] = values.isEmpty ? 0 : values.reduce(min);
@@ -494,7 +554,7 @@ final class InMemoryDataRepository implements DataRepository {
           break;
         default:
           throw RpcError.invalidArgument(
-            'Unsupported aggregate operator "$op"',
+            'Unknown aggregate operation "$op"',
           );
       }
     }
@@ -503,11 +563,11 @@ final class InMemoryDataRepository implements DataRepository {
   }
 
   @override
-  Stream<DataChangeEvent> watch(String tenantId, WatchChangesRequest request) {
-    final history = List<DataChangeEvent>.from(
-      _history(tenantId, request.collection),
-    );
-
+  Stream<DataChangeEvent> watch(
+    String tenantId,
+    WatchChangesRequest request,
+  ) {
+    final history = _history(tenantId, request.collection);
     final startIndex = () {
       if (request.cursor == null) {
         return 0;
@@ -539,6 +599,96 @@ final class InMemoryDataRepository implements DataRepository {
     });
   }
 
+  Future<DataRecord?> _fetchConflictRecord(
+    String tenantId,
+    DataCommand command,
+  ) async {
+    switch (command.type) {
+      case DataCommandType.create:
+        final request = CreateRecordRequest.fromJson(command.payload);
+        if (request.id == null) {
+          return null;
+        }
+        return get(
+          tenantId,
+          GetRecordRequest(collection: request.collection, id: request.id!),
+        );
+      case DataCommandType.update:
+        final request = UpdateRecordRequest.fromJson(command.payload);
+        return get(
+          tenantId,
+          GetRecordRequest(
+            collection: request.record.collection,
+            id: request.record.id,
+          ),
+        );
+      case DataCommandType.patch:
+        final request = PatchRecordRequest.fromJson(command.payload);
+        return get(
+          tenantId,
+          GetRecordRequest(collection: request.collection, id: request.id),
+        );
+      case DataCommandType.delete:
+        final request = DeleteRecordRequest.fromJson(command.payload);
+        return get(
+          tenantId,
+          GetRecordRequest(collection: request.collection, id: request.id),
+        );
+    }
+  }
+
+  Future<SyncChangeResponse> _applyCommand(
+    String tenantId,
+    SyncChangeRequest message,
+  ) async {
+    final command = message.command;
+    switch (command.type) {
+      case DataCommandType.create:
+        final request = CreateRecordRequest.fromJson(command.payload);
+        final record = await create(tenantId, request);
+        return SyncChangeResponse(
+          requestId: message.requestId,
+          commandId: command.commandId,
+          applied: true,
+          record: record,
+        );
+      case DataCommandType.update:
+        final request = UpdateRecordRequest.fromJson(command.payload);
+        final record = await update(tenantId, request);
+        return SyncChangeResponse(
+          requestId: message.requestId,
+          commandId: command.commandId,
+          applied: true,
+          record: record,
+        );
+      case DataCommandType.patch:
+        final request = PatchRecordRequest.fromJson(command.payload);
+        final record = await patch(tenantId, request);
+        return SyncChangeResponse(
+          requestId: message.requestId,
+          commandId: command.commandId,
+          applied: true,
+          record: record,
+        );
+      case DataCommandType.delete:
+        final request = DeleteRecordRequest.fromJson(command.payload);
+        final removed = await delete(tenantId, request);
+        if (!removed) {
+          // Отсутствие записи не считаем ошибкой — команда идемпотентна.
+          return SyncChangeResponse(
+            requestId: message.requestId,
+            commandId: command.commandId,
+            applied: true,
+          );
+        }
+        return SyncChangeResponse(
+          requestId: message.requestId,
+          commandId: command.commandId,
+          applied: true,
+        );
+    }
+  }
+
   @override
   Stream<SyncChangeResponse> sync(
     String tenantId,
@@ -546,23 +696,16 @@ final class InMemoryDataRepository implements DataRepository {
   ) async* {
     await for (final message in requests) {
       try {
-        await _applySyncEvent(tenantId, message.event);
-        yield SyncChangeResponse(
-          requestId: message.requestId,
-          applied: true,
-        );
+        final response = await _applyCommand(tenantId, message);
+        yield response;
       } on RpcError catch (error) {
-        final conflictRecord = await get(
-          tenantId,
-          GetRecordRequest(
-            collection: message.event.collection,
-            id: message.event.id,
-          ),
-        );
+        final conflict = await _fetchConflictRecord(tenantId, message.command);
         yield SyncChangeResponse(
           requestId: message.requestId,
+          commandId: message.command.commandId,
           applied: false,
-          conflict: conflictRecord,
+          conflict: conflict,
+          error: error.message,
         );
         if (!message.resolveConflicts) {
           rethrow;
@@ -571,64 +714,92 @@ final class InMemoryDataRepository implements DataRepository {
     }
   }
 
-  Future<void> _applySyncEvent(
-    String tenantId,
-    DataChangeEvent event,
-  ) async {
-    switch (event.type) {
-      case DataChangeType.created:
-        final payload = event.record?.payload ?? const <String, dynamic>{};
-        await create(
-          tenantId,
-          CreateRecordRequest(
-            collection: event.collection,
-            payload: payload,
-            id: event.id,
-          ),
-        );
-        break;
-      case DataChangeType.updated:
-        final record = event.record;
-        if (record == null) {
-          throw RpcError.invalidArgument('Sync update requires record payload');
-        }
-        await update(
-          tenantId,
-          UpdateRecordRequest(record: record),
-        );
-        break;
-      case DataChangeType.patched:
-        final record = event.record;
-        if (record == null) {
-          throw RpcError.invalidArgument('Sync patch requires record payload');
-        }
-        await patch(
-          tenantId,
-          PatchRecordRequest(
-            collection: record.collection,
-            id: record.id,
-            expectedVersion: record.version - 1,
-            patch: RecordPatch(set: record.payload),
-          ),
-        );
-        break;
-      case DataChangeType.deleted:
-        await delete(
-          tenantId,
-          DeleteRecordRequest(
-            collection: event.collection,
-            id: event.id,
-          ),
-        );
-        break;
-      case DataChangeType.snapshot:
-        // Snapshot events are informational for initial sync.
-        break;
+  @override
+  Future<void> dispose() async {
+    await _changeController.close();
+    await storage.dispose();
+  }
+}
+
+/// In-memory адаптер, реализующий интерфейс `DataStorageAdapter` на обычных
+/// картах. Эту реализацию легко заменить на SQLite/Isar/Hive, не меняя
+/// бизнес-логику `BaseDataRepository`.
+final class InMemoryStorageAdapter implements DataStorageAdapter {
+  final Map<String, Map<String, Map<String, DataRecord>>> _storage = {};
+
+  Map<String, Map<String, DataRecord>> _tenant(String tenantId) {
+    return _storage.putIfAbsent(tenantId, () => <String, Map<String, DataRecord>>{});
+  }
+
+  Map<String, DataRecord> _collection(String tenantId, String collection) {
+    final tenantStore = _tenant(tenantId);
+    return tenantStore.putIfAbsent(collection, () => <String, DataRecord>{});
+  }
+
+  @override
+  Future<DataRecord?> readRecord(String tenantId, String collection, String id) async {
+    final store = _collection(tenantId, collection);
+    return store[id];
+  }
+
+  @override
+  Future<List<DataRecord>> readCollection(String tenantId, String collection) async {
+    final store = _collection(tenantId, collection);
+    return store.values.toList(growable: false);
+  }
+
+  @override
+  Future<void> writeRecord(String tenantId, DataRecord record) async {
+    final store = _collection(tenantId, record.collection);
+    store[record.id] = record;
+  }
+
+  @override
+  Future<void> writeRecords(String tenantId, Iterable<DataRecord> records) async {
+    for (final record in records) {
+      final store = _collection(tenantId, record.collection);
+      store[record.id] = record;
     }
   }
 
   @override
-  Future<void> dispose() async {
-    await _changeController.close();
+  Future<bool> deleteRecord(String tenantId, String collection, String id) async {
+    final store = _collection(tenantId, collection);
+    return store.remove(id) != null;
   }
+
+  @override
+  Future<int> deleteRecords(
+    String tenantId,
+    String collection,
+    Iterable<String> ids,
+  ) async {
+    final store = _collection(tenantId, collection);
+    var removed = 0;
+    for (final id in ids) {
+      if (store.remove(id) != null) {
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  @override
+  Future<void> dispose() async {
+    _storage.clear();
+  }
+}
+
+/// Готовый in-memory репозиторий, который можно заменить адаптером к SQLite
+/// или любому другому backend-у, не меняя остальной код сервиса данных.
+final class InMemoryDataRepository extends BaseDataRepository {
+  InMemoryDataRepository({
+    InMemoryStorageAdapter? storage,
+    DateTime Function()? clock,
+    String Function(String tenantId, String collection)? idGenerator,
+  }) : super(
+          storage ?? InMemoryStorageAdapter(),
+          clock: clock,
+          idGenerator: idGenerator,
+        );
 }

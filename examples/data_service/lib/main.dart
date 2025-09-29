@@ -15,6 +15,8 @@ Future<void> main() async {
     transport: serverTransport,
     debugLabel: 'DataResponder',
   );
+  // При необходимости можно передать собственный DataStorageAdapter и тем
+  // самым подключить SQLite, Postgres или другое хранилище вместо in-memory.
   final repository = InMemoryDataRepository();
   final responder = DataServiceResponder(repository: repository);
   responderEndpoint.registerServiceContract(responder);
@@ -105,33 +107,37 @@ Future<void> main() async {
   watchCancellation.cancel('scenario complete');
   await watchSubscription.cancel();
 
-  final offlineRecord = DataRecord(
-    id: 'offline-1',
-    collection: 'articles',
-    payload: const {'title': 'Offline note', 'views': 0},
-    version: 1,
-    createdAt: DateTime.now().toUtc(),
-    updatedAt: DateTime.now().toUtc(),
+  final offlineQueue = OfflineCommandQueue(
+    client,
+    sessionId: 'mobile-session',
   );
-  final syncController = StreamController<SyncChangeRequest>();
-  final syncResponses = client.syncChanges(syncController.stream, context: baseContext);
-  syncController.add(
-    SyncChangeRequest(
-      requestId: 'req-1',
-      event: DataChangeEvent(
-        type: DataChangeType.created,
-        collection: offlineRecord.collection,
-        id: offlineRecord.id,
-        record: offlineRecord,
-        version: offlineRecord.version,
-        cursor: 'client-cursor',
-        occurredAt: offlineRecord.updatedAt,
-      ),
+  final offlineCommand = offlineQueue.buildCreateCommand(
+    const CreateRecordRequest(
+      collection: 'articles',
+      payload: {
+        'title': 'Offline note',
+        'views': 0,
+      },
     ),
   );
-  await syncController.close();
-  final firstAck = await syncResponses.first;
-  expect(firstAck.applied, true, reason: 'Offline change must be applied');
+  final serializedCommand = offlineCommand.toJson();
+  final offlineAckFuture = offlineQueue.enqueueCommand(
+    DataCommand.fromJson(serializedCommand),
+    autoStart: false,
+  );
+  expect(offlineQueue.pendingCommands, 1,
+      reason: 'Command should be buffered until connection restored');
+
+  await offlineQueue.start(context: baseContext);
+  await offlineQueue.flushPending();
+  final offlineAck = await offlineAckFuture;
+  expect(offlineAck.applied, true,
+      reason: 'Offline change must be applied after reconnect');
+  expect(offlineAck.record != null, true,
+      reason: 'Server should echo created record for mapping local state');
+  final offlineRecordId = offlineAck.record!.id;
+  expect(offlineQueue.pendingCommands, 0,
+      reason: 'Queue should be empty after receiving ack');
 
   final snapshot = await client.exportSnapshot(
     const ExportSnapshotRequest(collection: 'articles'),
@@ -154,10 +160,11 @@ Future<void> main() async {
   }
 
   await client.bulkDelete(
-    const BulkDeleteRequest(collection: 'articles', ids: ['offline-1']),
+    BulkDeleteRequest(collection: 'articles', ids: [offlineRecordId]),
     context: baseContext,
   );
 
+  await offlineQueue.dispose();
   await callerEndpoint.close();
   await responderEndpoint.close();
   await repository.dispose();

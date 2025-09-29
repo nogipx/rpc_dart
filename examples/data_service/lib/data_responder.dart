@@ -176,7 +176,7 @@ class DataServiceResponder extends RpcResponderContract
       handler: _handleSync,
       requestCodec: _syncRequestCodec,
       responseCodec: _syncResponseCodec,
-      description: 'Двунаправленная синхронизация офлайн клиента',
+      description: 'Двунаправленная синхронизация офлайн клиента (command queue)',
     );
   }
 

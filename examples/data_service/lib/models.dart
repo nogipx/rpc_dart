@@ -9,6 +9,80 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// Тип изменения записи в потоке изменений.
 enum DataChangeType { created, updated, patched, deleted, snapshot }
 
+/// Тип команды для офлайн-синхронизации и command pattern.
+enum DataCommandType { create, update, patch, delete }
+
+String _commandTypeToJson(DataCommandType type) {
+  return switch (type) {
+    DataCommandType.create => 'create',
+    DataCommandType.update => 'update',
+    DataCommandType.patch => 'patch',
+    DataCommandType.delete => 'delete',
+  };
+}
+
+DataCommandType _commandTypeFromJson(String value) {
+  return switch (value) {
+    'create' => DataCommandType.create,
+    'update' => DataCommandType.update,
+    'patch' => DataCommandType.patch,
+    'delete' => DataCommandType.delete,
+    _ => throw ArgumentError.value(value, 'value', 'Unknown command type'),
+  };
+}
+
+/// Команда для отложенного выполнения операций над данными.
+///
+/// Команда описывает тип действия и полезную нагрузку, которая повторяет
+/// формат соответствующих RPC-запросов (`CreateRecordRequest` и т.д.).
+/// Клиенты могут складировать команды локально и позже реплицировать их через
+/// `syncChanges`, не теряя контекст сессии и времени создания.
+@immutable
+class DataCommand extends Equatable implements IRpcSerializable {
+  const DataCommand({
+    required this.commandId,
+    required this.sessionId,
+    required this.type,
+    required this.payload,
+    required this.issuedAt,
+  });
+
+  factory DataCommand.fromJson(Map<String, dynamic> json) => DataCommand(
+        commandId: json['commandId'] as String,
+        sessionId: json['sessionId'] as String,
+        type: _commandTypeFromJson(json['type'] as String),
+        payload: Map<String, dynamic>.from(json['payload'] as Map),
+        issuedAt: DateTime.parse(json['issuedAt'] as String),
+      );
+
+  /// Уникальный идентификатор команды, генерируемый клиентом.
+  final String commandId;
+
+  /// Идентификатор клиентской сессии, к которой относится команда.
+  final String sessionId;
+
+  /// Тип действия.
+  final DataCommandType type;
+
+  /// Полезная нагрузка, содержащая сериализованный RPC-запрос.
+  final Map<String, dynamic> payload;
+
+  /// Время создания команды на клиенте.
+  final DateTime issuedAt;
+
+  @override
+  List<Object?> get props => [commandId, sessionId, type, payload, issuedAt];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'commandId': commandId,
+        'sessionId': sessionId,
+        'type': _commandTypeToJson(type),
+        'payload': payload,
+        'issuedAt': issuedAt.toIso8601String(),
+      };
+}
+
 /// Неизменяемая запись данных.
 @immutable
 class DataRecord implements IRpcSerializable {
@@ -847,27 +921,28 @@ class WatchChangesRequest extends Equatable implements IRpcSerializable {
 class SyncChangeRequest extends Equatable implements IRpcSerializable {
   const SyncChangeRequest({
     required this.requestId,
-    required this.event,
+    required this.command,
     this.resolveConflicts = true,
   });
 
   factory SyncChangeRequest.fromJson(Map<String, dynamic> json) => SyncChangeRequest(
         requestId: json['requestId'] as String,
-        event: DataChangeEvent.fromJson(Map<String, dynamic>.from(json['event'] as Map)),
+        command:
+            DataCommand.fromJson(Map<String, dynamic>.from(json['command'] as Map)),
         resolveConflicts: json['resolveConflicts'] as bool? ?? true,
       );
 
   final String requestId;
-  final DataChangeEvent event;
+  final DataCommand command;
   final bool resolveConflicts;
 
   @override
-  List<Object?> get props => [requestId, event, resolveConflicts];
+  List<Object?> get props => [requestId, command, resolveConflicts];
 
   @override
   Map<String, dynamic> toJson() => {
         'requestId': requestId,
-        'event': event.toJson(),
+        'command': command.toJson(),
         'resolveConflicts': resolveConflicts,
       };
 }
@@ -876,30 +951,46 @@ class SyncChangeRequest extends Equatable implements IRpcSerializable {
 class SyncChangeResponse extends Equatable implements IRpcSerializable {
   const SyncChangeResponse({
     required this.requestId,
+    required this.commandId,
     required this.applied,
+    this.record,
     this.conflict,
+    this.error,
   });
 
   factory SyncChangeResponse.fromJson(Map<String, dynamic> json) => SyncChangeResponse(
         requestId: json['requestId'] as String,
+        commandId: json['commandId'] as String,
         applied: json['applied'] as bool,
+        record: json['record'] == null
+            ? null
+            : DataRecord.fromJson(Map<String, dynamic>.from(json['record'] as Map)),
         conflict: json['conflict'] == null
             ? null
             : DataRecord.fromJson(Map<String, dynamic>.from(json['conflict'] as Map)),
+        error: json['error'] as String?,
       );
 
   final String requestId;
+  final String commandId;
   final bool applied;
+  final DataRecord? record;
   final DataRecord? conflict;
+  final String? error;
+
+  bool get hasConflict => conflict != null;
 
   @override
-  List<Object?> get props => [requestId, applied, conflict];
+  List<Object?> get props => [requestId, commandId, applied, record, conflict, error];
 
   @override
   Map<String, dynamic> toJson() => {
         'requestId': requestId,
+        'commandId': commandId,
         'applied': applied,
+        'record': record?.toJson(),
         'conflict': conflict?.toJson(),
+        'error': error,
       };
 }
 
