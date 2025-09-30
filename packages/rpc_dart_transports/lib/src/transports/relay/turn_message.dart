@@ -181,6 +181,7 @@ final class TurnMessage {
   TurnMessage buildErrorResponse({
     required int code,
     required String reason,
+    List<TurnAttribute>? attributes,
   }) {
     final buffer = BytesBuilder();
     final errorData = ByteData(4);
@@ -190,15 +191,16 @@ final class TurnMessage {
     buffer.add(errorData.buffer.asUint8List());
     buffer.add(Uint8List.fromList(reason.codeUnits));
 
-    final attributes = [
-      TurnAttribute(TurnAttributeType.errorCode, buffer.toBytes())
+    final attrs = [
+      TurnAttribute(TurnAttributeType.errorCode, buffer.toBytes()),
+      ...?attributes,
     ];
 
     return TurnMessage(
       method: method,
       messageClass: TurnMessageClass.errorResponse,
       transactionId: transactionId,
-      attributes: attributes,
+      attributes: attrs,
     );
   }
 
@@ -256,10 +258,14 @@ final class TurnMessage {
 
 /// TURN attribute type constants used in this implementation.
 abstract final class TurnAttributeType {
+  static const int username = 0x0006;
+  static const int messageIntegrity = 0x0008;
   static const int channelNumber = 0x000C;
   static const int lifetime = 0x000D;
   static const int xorPeerAddress = 0x0012;
   static const int data = 0x0013;
+  static const int realm = 0x0014;
+  static const int nonce = 0x0015;
   static const int xorRelayedAddress = 0x0016;
   static const int requestedTransport = 0x0019;
   static const int xorMappedAddress = 0x0020;
