@@ -4,6 +4,7 @@
 
 export 'rpc_turn_relay_peer.dart';
 export 'rpc_turn_relay_transport.dart';
+export 'turn_credentials.dart';
 export 'turn_allocation.dart';
 export 'turn_message.dart';
 export 'turn_relay_client.dart';

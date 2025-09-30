@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' show Hmac, sha1;
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
 import 'package:universal_io/io.dart';
@@ -223,4 +226,204 @@ void main() {
       });
     }
   });
+
+  group('TurnRelayServer with authentication', () {
+    const username = 'alice';
+    const password = 'p@ssw0rd';
+    const realm = 'example.org';
+    const nonce = 'nonce-token';
+
+    late TurnRelayServer server;
+    late StaticTurnCredentialStore credentialStore;
+    late TurnCredential credential;
+
+    setUp(() async {
+      credentialStore = StaticTurnCredentialStore(
+        realm: realm,
+        nonce: nonce,
+        credentials: {
+          username: TurnCredential(
+            username: username,
+            password: password,
+            type: TurnCredentialType.longTerm,
+          ),
+        },
+      );
+      credential = credentialStore.lookup(username)!;
+
+      server = TurnRelayServer(
+        bindAddress: InternetAddress.loopbackIPv4,
+        bindPort: 0,
+        credentialStore: credentialStore,
+      );
+      await server.start();
+    });
+
+    tearDown(() async {
+      await server.stop();
+    });
+
+    test('rejects unauthenticated allocate request', () async {
+      final socket = await Socket.connect(server.bindAddress, server.port);
+      final turnMessages = StreamController<TurnMessage>.broadcast();
+      final frameDecoder = TurnTcpFrameDecoder(
+        onTurnMessage: turnMessages.add,
+        onChannelData: (_, __) {},
+      );
+
+      final socketSub = socket.listen((Uint8List data) {
+        if (data.isNotEmpty) {
+          frameDecoder.addChunk(data);
+        }
+      });
+
+      addTearDown(() async {
+        await socketSub.cancel();
+        await turnMessages.close();
+        await socket.close();
+      });
+
+      final allocateRequest = TurnMessage(
+        method: TurnMethod.allocate,
+        messageClass: TurnMessageClass.request,
+        attributes: [
+          TurnAttribute(
+            TurnAttributeType.requestedTransport,
+            Uint8List.fromList(<int>[TurnRequestedTransport.tcp, 0, 0, 0]),
+          ),
+        ],
+      );
+
+      socket.add(allocateRequest.encode());
+
+      final response = await turnMessages.stream.first.timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => throw StateError('allocate response timeout'),
+      );
+
+      expect(response.messageClass, TurnMessageClass.errorResponse);
+      final errorAttr = response.firstAttribute(TurnAttributeType.errorCode);
+      expect(errorAttr, isNotNull);
+      expect(_decodeErrorCode(errorAttr!), 401);
+      expect(server.allocations, isEmpty);
+    });
+
+    test('accepts authenticated allocate request', () async {
+      final socket = await Socket.connect(server.bindAddress, server.port);
+      final turnMessages = StreamController<TurnMessage>.broadcast();
+      final frameDecoder = TurnTcpFrameDecoder(
+        onTurnMessage: turnMessages.add,
+        onChannelData: (_, __) {},
+      );
+
+      final socketSub = socket.listen((Uint8List data) {
+        if (data.isNotEmpty) {
+          frameDecoder.addChunk(data);
+        }
+      });
+
+      addTearDown(() async {
+        await socketSub.cancel();
+        await turnMessages.close();
+        await socket.close();
+      });
+
+      final request = _buildAuthenticatedRequest(
+        method: TurnMethod.allocate,
+        additional: [
+          TurnAttribute(
+            TurnAttributeType.requestedTransport,
+            Uint8List.fromList(<int>[TurnRequestedTransport.tcp, 0, 0, 0]),
+          ),
+        ],
+        credential: credential,
+        store: credentialStore,
+      );
+
+      socket.add(request.encode());
+
+      final response = await turnMessages.stream.first.timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => throw StateError('allocate response timeout'),
+      );
+
+      expect(response.messageClass, TurnMessageClass.successResponse);
+      expect(server.allocations, isNotEmpty);
+    });
+  });
+}
+
+int _decodeErrorCode(Uint8List errorAttribute) {
+  final data = ByteData.sublistView(errorAttribute);
+  final classValue = data.getUint8(2);
+  final number = data.getUint8(3);
+  return classValue * 100 + number;
+}
+
+TurnMessage _buildAuthenticatedRequest({
+  required int method,
+  required List<TurnAttribute> additional,
+  required TurnCredential credential,
+  required TurnCredentialStore store,
+}) {
+  final transactionId = TurnMessage.generateTransactionId();
+  final attributes = <TurnAttribute>[
+    TurnAttribute(
+      TurnAttributeType.username,
+      Uint8List.fromList(utf8.encode(credential.username)),
+    ),
+    TurnAttribute(
+      TurnAttributeType.realm,
+      Uint8List.fromList(utf8.encode(store.realm)),
+    ),
+    TurnAttribute(
+      TurnAttributeType.nonce,
+      Uint8List.fromList(utf8.encode(store.nonce)),
+    ),
+    ...additional,
+  ];
+
+  final placeholder = TurnAttribute(
+    TurnAttributeType.messageIntegrity,
+    Uint8List(20),
+  );
+  final unsigned = TurnMessage(
+    method: method,
+    messageClass: TurnMessageClass.request,
+    transactionId: transactionId,
+    attributes: [...attributes, placeholder],
+  );
+
+  final key = credential.deriveKey(store.realm);
+  return _signMessage(unsigned, key);
+}
+
+TurnMessage _signMessage(TurnMessage message, Uint8List key) {
+  final encoded = message.encode();
+  var offset = 20;
+  late int integrityIndex;
+  for (var i = 0; i < message.attributes.length; i++) {
+    final attribute = message.attributes[i];
+    final length = attribute.value.length;
+    final paddedLength = (length + 3) & ~3;
+    if (attribute.type == TurnAttributeType.messageIntegrity) {
+      integrityIndex = i;
+      break;
+    }
+    offset += 4 + paddedLength;
+  }
+
+  final hmac = Hmac(sha1, key).convert(encoded.sublist(0, offset));
+  final attributes = [...message.attributes];
+  attributes[integrityIndex] = TurnAttribute(
+    TurnAttributeType.messageIntegrity,
+    Uint8List.fromList(hmac.bytes),
+  );
+
+  return TurnMessage(
+    method: message.method,
+    messageClass: message.messageClass,
+    transactionId: message.transactionId,
+    attributes: attributes,
+  );
 }

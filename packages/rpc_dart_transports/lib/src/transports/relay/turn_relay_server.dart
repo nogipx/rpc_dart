@@ -3,10 +3,13 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' show Hmac, sha1;
 import 'package:universal_io/io.dart';
 
+import 'turn_credentials.dart';
 import 'turn_allocation.dart';
 import 'turn_message.dart';
 import 'turn_relay_logger.dart';
@@ -23,6 +26,7 @@ final class TurnRelayServer {
     this.permissionLifetime = const Duration(minutes: 5),
     this.channelLifetime = const Duration(minutes: 10),
     this.software = 'turn_relay/0.1.0',
+    this.credentialStore,
     TurnRelayLogger? logger,
   })  : relayAddress = relayAddress ?? bindAddress,
         _logger = logger?.child('TurnRelayServer');
@@ -47,6 +51,9 @@ final class TurnRelayServer {
 
   /// Value exposed through the SOFTWARE attribute.
   final String software;
+
+  /// Optional credential store used to authenticate TURN requests.
+  final TurnCredentialStore? credentialStore;
 
   final TurnRelayLogger? _logger;
 
@@ -188,15 +195,27 @@ final class TurnRelayServer {
         unawaited(_processAllocateRequest(context, message));
         break;
       case TurnMethod.refresh:
+        if (!_ensureAuthenticated(context, message)) {
+          return;
+        }
         _handleRefreshRequest(context, message);
         break;
       case TurnMethod.createPermission:
+        if (!_ensureAuthenticated(context, message)) {
+          return;
+        }
         _handleCreatePermissionRequest(context, message);
         break;
       case TurnMethod.channelBind:
+        if (!_ensureAuthenticated(context, message)) {
+          return;
+        }
         _handleChannelBindRequest(context, message);
         break;
       case TurnMethod.connectRequest:
+        if (!_ensureAuthenticated(context, message)) {
+          return;
+        }
         _handleConnectRequest(context, message);
         break;
       default:
@@ -214,6 +233,10 @@ final class TurnRelayServer {
     _TurnRelayConnectionContext context,
     TurnMessage message,
   ) async {
+    if (!_ensureAuthenticated(context, message)) {
+      return;
+    }
+
     final existing = context.allocation;
     if (existing != null && !existing.isExpired) {
       existing.refresh(allocationLifetime);
@@ -666,9 +689,143 @@ final class TurnRelayServer {
     TurnMessage request, {
     required int code,
     required String reason,
+    List<TurnAttribute> attributes = const [],
   }) {
-    final response = request.buildErrorResponse(code: code, reason: reason);
+    final response = request.buildErrorResponse(
+      code: code,
+      reason: reason,
+      attributes: attributes.isEmpty ? null : attributes,
+    );
     _sendTurnMessage(context, response);
+  }
+
+  bool _ensureAuthenticated(
+    _TurnRelayConnectionContext context,
+    TurnMessage message,
+  ) {
+    final store = credentialStore;
+    if (store == null) {
+      return true;
+    }
+
+    final usernameAttr = message.firstAttribute(TurnAttributeType.username);
+    final realmAttr = message.firstAttribute(TurnAttributeType.realm);
+    final nonceAttr = message.firstAttribute(TurnAttributeType.nonce);
+    final integrityAttr =
+        message.firstAttribute(TurnAttributeType.messageIntegrity);
+
+    if (usernameAttr == null ||
+        realmAttr == null ||
+        nonceAttr == null ||
+        integrityAttr == null) {
+      _sendUnauthorized(context, message, staleNonce: false);
+      return false;
+    }
+
+    String username;
+    String realm;
+    String nonce;
+    try {
+      username = utf8.decode(usernameAttr);
+      realm = utf8.decode(realmAttr);
+      nonce = utf8.decode(nonceAttr);
+    } on FormatException {
+      _sendUnauthorized(context, message, staleNonce: false);
+      return false;
+    }
+
+    if (realm != store.realm) {
+      _sendUnauthorized(context, message, staleNonce: false);
+      return false;
+    }
+
+    if (!store.validateNonce(nonce)) {
+      _sendUnauthorized(context, message, staleNonce: true);
+      return false;
+    }
+
+    if (integrityAttr.length != 20) {
+      _sendUnauthorized(context, message, staleNonce: false);
+      return false;
+    }
+
+    final existingUser = context.authenticatedUsername;
+    if (existingUser != null && existingUser != username) {
+      _sendUnauthorized(context, message, staleNonce: false);
+      return false;
+    }
+
+    final credential = store.lookup(username);
+    if (credential == null) {
+      _sendUnauthorized(context, message, staleNonce: false);
+      return false;
+    }
+
+    final key = credential.deriveKey(realm);
+    final expected = _computeMessageIntegrity(message, key);
+    if (expected == null || !_constantTimeEquals(expected, integrityAttr)) {
+      _sendUnauthorized(context, message, staleNonce: false);
+      return false;
+    }
+
+    context.authenticatedUsername = username;
+    return true;
+  }
+
+  Uint8List? _computeMessageIntegrity(TurnMessage message, List<int> key) {
+    final encoded = message.encode();
+    var offset = 20;
+    for (final attribute in message.attributes) {
+      final length = attribute.value.length;
+      final paddedLength = (length + 3) & ~3;
+      if (attribute.type == TurnAttributeType.messageIntegrity) {
+        final data = encoded.sublist(0, offset);
+        final digest = Hmac(sha1, key).convert(data);
+        return Uint8List.fromList(digest.bytes);
+      }
+      offset += 4 + paddedLength;
+    }
+    return null;
+  }
+
+  bool _constantTimeEquals(Uint8List a, Uint8List b) {
+    if (a.length != b.length) {
+      return false;
+    }
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a[i] ^ b[i];
+    }
+    return diff == 0;
+  }
+
+  void _sendUnauthorized(
+    _TurnRelayConnectionContext context,
+    TurnMessage request, {
+    required bool staleNonce,
+  }) {
+    final store = credentialStore;
+    final attributes = <TurnAttribute>[];
+    if (store != null) {
+      attributes.addAll([
+        TurnAttribute(
+          TurnAttributeType.realm,
+          Uint8List.fromList(utf8.encode(store.realm)),
+        ),
+        TurnAttribute(
+          TurnAttributeType.nonce,
+          Uint8List.fromList(utf8.encode(store.nonce)),
+        ),
+      ]);
+    }
+
+    _sendError(
+      context,
+      request,
+      code: staleNonce ? 438 : 401,
+      reason: staleNonce ? 'Stale Nonce' : 'Unauthorized',
+      attributes: attributes,
+    );
   }
 
   void _sendTurnMessage(
@@ -715,6 +872,7 @@ final class _TurnRelayConnectionContext {
   bool _disposed = false;
 
   TurnAllocation? allocation;
+  String? authenticatedUsername;
 
   InternetAddress get clientAddress => socket.remoteAddress;
   int get clientPort => socket.remotePort;
