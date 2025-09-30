@@ -28,7 +28,8 @@ class SecureTransportConfig {
     this.maxPaddingBlocks = 3,
     this.removeTransportId = false,
     this.removeProtocol = false,
-  });
+    this.pendingHandshakeMessageLimit = 16,
+  }) : assert(pendingHandshakeMessageLimit >= 0);
 
   /// Maximum time to wait for handshake messages.
   final Duration handshakeTimeout;
@@ -50,6 +51,12 @@ class SecureTransportConfig {
 
   /// Удалять ли protocol поле из каждого кадра (опираемся на handshake). Только compact.
   final bool removeProtocol;
+
+  /// Максимальное число сообщений, которые буферизуются до завершения handshake.
+  ///
+  /// Значение `0` отключает буферизацию и приводит к немедленному отклонению
+  /// любого сообщения до завершения аутентификации.
+  final int pendingHandshakeMessageLimit;
 }
 
 /// Holds the long-term identity material used by the secure overlay.
@@ -308,6 +315,16 @@ class SecureTransportAdapter implements IRpcTransport {
 
     final session = _session;
     if (session == null) {
+      final limit = _config.pendingHandshakeMessageLimit;
+      if (limit == 0 || _pendingMessages.length >= limit) {
+        _logger?.warning(
+          '[SecureTransportAdapter] Dropping pre-handshake message and closing connection '
+          '(streamId=${message.streamId}, buffered=${_pendingMessages.length}, limit=$limit)',
+        );
+        unawaited(close());
+        return;
+      }
+
       _pendingMessages.add(message);
       return;
     }
