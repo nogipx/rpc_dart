@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 import 'data_contract.dart';
 import 'models.dart';
@@ -12,67 +12,10 @@ class DataServiceCaller extends RpcCallerContract
     RpcCallerEndpoint endpoint, {
     RpcDataTransferMode mode = RpcDataTransferMode.codec,
   }) : super(
-          IDataServiceContract.serviceName,
+          IDataServiceContract.name,
           endpoint,
           dataTransferMode: mode,
         );
-
-  // В примере используется стандартный RpcCodec, который сериализует
-  // IRpcSerializable-сообщения через встроенный CBOR кодек. При необходимости
-  // его можно заменить на собственный codec, реализующий JSON или другой
-  // формат, реализовав интерфейс [IRpcCodec].
-  static const RpcCodec<CreateRecordRequest> _createRequestCodec =
-      RpcCodec.withDecoder(CreateRecordRequest.fromJson);
-  static const RpcCodec<CreateRecordResponse> _createResponseCodec =
-      RpcCodec.withDecoder(CreateRecordResponse.fromJson);
-  static const RpcCodec<GetRecordRequest> _getRequestCodec =
-      RpcCodec.withDecoder(GetRecordRequest.fromJson);
-  static const RpcCodec<GetRecordResponse> _getResponseCodec =
-      RpcCodec.withDecoder(GetRecordResponse.fromJson);
-  static const RpcCodec<ListRecordsRequest> _listRequestCodec =
-      RpcCodec.withDecoder(ListRecordsRequest.fromJson);
-  static const RpcCodec<ListRecordsResponse> _listResponseCodec =
-      RpcCodec.withDecoder(ListRecordsResponse.fromJson);
-  static const RpcCodec<UpdateRecordRequest> _updateRequestCodec =
-      RpcCodec.withDecoder(UpdateRecordRequest.fromJson);
-  static const RpcCodec<UpdateRecordResponse> _updateResponseCodec =
-      RpcCodec.withDecoder(UpdateRecordResponse.fromJson);
-  static const RpcCodec<PatchRecordRequest> _patchRequestCodec =
-      RpcCodec.withDecoder(PatchRecordRequest.fromJson);
-  static const RpcCodec<PatchRecordResponse> _patchResponseCodec =
-      RpcCodec.withDecoder(PatchRecordResponse.fromJson);
-  static const RpcCodec<DeleteRecordRequest> _deleteRequestCodec =
-      RpcCodec.withDecoder(DeleteRecordRequest.fromJson);
-  static const RpcCodec<DeleteRecordResponse> _deleteResponseCodec =
-      RpcCodec.withDecoder(DeleteRecordResponse.fromJson);
-  static const RpcCodec<DataRecord> _recordCodec =
-      RpcCodec.withDecoder(DataRecord.fromJson);
-  static const RpcCodec<BulkUpsertResponse> _bulkUpsertResponseCodec =
-      RpcCodec.withDecoder(BulkUpsertResponse.fromJson);
-  static const RpcCodec<BulkDeleteRequest> _bulkDeleteRequestCodec =
-      RpcCodec.withDecoder(BulkDeleteRequest.fromJson);
-  static const RpcCodec<BulkDeleteResponse> _bulkDeleteResponseCodec =
-      RpcCodec.withDecoder(BulkDeleteResponse.fromJson);
-  static const RpcCodec<ExportSnapshotRequest> _exportRequestCodec =
-      RpcCodec.withDecoder(ExportSnapshotRequest.fromJson);
-  static const RpcCodec<ExportSnapshotResponse> _exportResponseCodec =
-      RpcCodec.withDecoder(ExportSnapshotResponse.fromJson);
-  static const RpcCodec<SearchRecordsRequest> _searchRequestCodec =
-      RpcCodec.withDecoder(SearchRecordsRequest.fromJson);
-  static const RpcCodec<SearchRecordsResponse> _searchResponseCodec =
-      RpcCodec.withDecoder(SearchRecordsResponse.fromJson);
-  static const RpcCodec<AggregateMetricsRequest> _aggregateRequestCodec =
-      RpcCodec.withDecoder(AggregateMetricsRequest.fromJson);
-  static const RpcCodec<AggregateMetricsResponse> _aggregateResponseCodec =
-      RpcCodec.withDecoder(AggregateMetricsResponse.fromJson);
-  static const RpcCodec<WatchChangesRequest> _watchRequestCodec =
-      RpcCodec.withDecoder(WatchChangesRequest.fromJson);
-  static const RpcCodec<DataChangeEvent> _changeEventCodec =
-      RpcCodec.withDecoder(DataChangeEvent.fromJson);
-  static const RpcCodec<SyncChangeRequest> _syncRequestCodec =
-      RpcCodec.withDecoder(SyncChangeRequest.fromJson);
-  static const RpcCodec<SyncChangeResponse> _syncResponseCodec =
-      RpcCodec.withDecoder(SyncChangeResponse.fromJson);
 
   Future<CreateRecordResponse> createRecord(
     CreateRecordRequest request, {
@@ -81,8 +24,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.createRecord,
       request: request,
-      requestCodec: _createRequestCodec,
-      responseCodec: _createResponseCodec,
+      requestCodec: createRequestCodec,
+      responseCodec: createResponseCodec,
       context: context,
     );
   }
@@ -94,8 +37,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.getRecord,
       request: request,
-      requestCodec: _getRequestCodec,
-      responseCodec: _getResponseCodec,
+      requestCodec: getRequestCodec,
+      responseCodec: getResponseCodec,
       context: context,
     );
   }
@@ -107,8 +50,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.listRecords,
       request: request,
-      requestCodec: _listRequestCodec,
-      responseCodec: _listResponseCodec,
+      requestCodec: listRequestCodec,
+      responseCodec: listResponseCodec,
       context: context,
     );
   }
@@ -120,8 +63,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.updateRecord,
       request: request,
-      requestCodec: _updateRequestCodec,
-      responseCodec: _updateResponseCodec,
+      requestCodec: updateRequestCodec,
+      responseCodec: updateResponseCodec,
       context: context,
     );
   }
@@ -133,8 +76,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.patchRecord,
       request: request,
-      requestCodec: _patchRequestCodec,
-      responseCodec: _patchResponseCodec,
+      requestCodec: patchRequestCodec,
+      responseCodec: patchResponseCodec,
       context: context,
     );
   }
@@ -146,8 +89,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.deleteRecord,
       request: request,
-      requestCodec: _deleteRequestCodec,
-      responseCodec: _deleteResponseCodec,
+      requestCodec: deleteRequestCodec,
+      responseCodec: deleteResponseCodec,
       context: context,
     );
   }
@@ -159,8 +102,8 @@ class DataServiceCaller extends RpcCallerContract
     return callClientStream(
       methodName: IDataServiceContract.bulkUpsert,
       requests: records,
-      requestCodec: _recordCodec,
-      responseCodec: _bulkUpsertResponseCodec,
+      requestCodec: recordCodec,
+      responseCodec: bulkUpsertResponseCodec,
       context: context,
     );
   }
@@ -172,8 +115,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.bulkDelete,
       request: request,
-      requestCodec: _bulkDeleteRequestCodec,
-      responseCodec: _bulkDeleteResponseCodec,
+      requestCodec: bulkDeleteRequestCodec,
+      responseCodec: bulkDeleteResponseCodec,
       context: context,
     );
   }
@@ -185,8 +128,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.exportSnapshot,
       request: request,
-      requestCodec: _exportRequestCodec,
-      responseCodec: _exportResponseCodec,
+      requestCodec: exportRequestCodec,
+      responseCodec: exportResponseCodec,
       context: context,
     );
   }
@@ -198,8 +141,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.searchRecords,
       request: request,
-      requestCodec: _searchRequestCodec,
-      responseCodec: _searchResponseCodec,
+      requestCodec: searchRequestCodec,
+      responseCodec: searchResponseCodec,
       context: context,
     );
   }
@@ -211,8 +154,8 @@ class DataServiceCaller extends RpcCallerContract
     return callUnary(
       methodName: IDataServiceContract.aggregateMetrics,
       request: request,
-      requestCodec: _aggregateRequestCodec,
-      responseCodec: _aggregateResponseCodec,
+      requestCodec: aggregateRequestCodec,
+      responseCodec: aggregateResponseCodec,
       context: context,
     );
   }
@@ -224,8 +167,8 @@ class DataServiceCaller extends RpcCallerContract
     return callServerStream(
       methodName: IDataServiceContract.watchChanges,
       request: request,
-      requestCodec: _watchRequestCodec,
-      responseCodec: _changeEventCodec,
+      requestCodec: watchRequestCodec,
+      responseCodec: changeEventCodec,
       context: context,
     );
   }
@@ -237,8 +180,8 @@ class DataServiceCaller extends RpcCallerContract
     return callBidirectionalStream(
       methodName: IDataServiceContract.syncChanges,
       requests: requests,
-      requestCodec: _syncRequestCodec,
-      responseCodec: _syncResponseCodec,
+      requestCodec: syncRequestCodec,
+      responseCodec: syncResponseCodec,
       context: context,
     );
   }
@@ -300,7 +243,7 @@ class OfflineCommandQueue {
     String? sessionId,
     DateTime Function()? clock,
     void Function(Object error, StackTrace stackTrace)? onError,
-  })  : _clock = clock ?? () => DateTime.now().toUtc(),
+  })  : _clock = clock ?? (() => DateTime.now().toUtc()),
         _sessionId = sessionId ?? _defaultSessionId(),
         _onError = onError,
         _requestController = StreamController<SyncChangeRequest>();
@@ -344,10 +287,10 @@ class OfflineCommandQueue {
     _subscription = _caller
         .syncChanges(_requestController.stream, context: _context)
         .listen(
-      _handleResponse,
-      onError: _handleStreamError,
-      onDone: _handleDone,
-    );
+          _handleResponse,
+          onError: _handleStreamError,
+          onDone: _handleDone,
+        );
     _connected = true;
     _flushQueued();
   }
@@ -469,7 +412,9 @@ class OfflineCommandQueue {
     final pending = _PendingRequest(
       command.commandId,
       request,
-      _requestSequence = _requestSequence + 1,
+      // Используем текущее значение счетчика (уже инкрементирован _nextRequestId),
+      // чтобы порядок совпадал с номером requestId.
+      _requestSequence,
     );
     _queued.addLast(pending);
 
@@ -554,5 +499,5 @@ class OfflineCommandQueue {
 
   String _nextCommandId() => '$sessionId-cmd-${++_commandSequence}';
 
-  String _nextRequestId() => '$sessionId-req-${_requestSequence + 1}';
+  String _nextRequestId() => '$sessionId-req-${++_requestSequence}';
 }

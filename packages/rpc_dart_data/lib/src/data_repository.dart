@@ -98,7 +98,7 @@ abstract class BaseDataRepository implements DataRepository {
     this.storage, {
     DateTime Function()? clock,
     String Function(String tenantId, String collection)? idGenerator,
-  })  : _clock = clock ?? () => DateTime.now().toUtc(),
+  })  : _clock = clock ?? (() => DateTime.now().toUtc()),
         _idGenerator = idGenerator,
         _changeController = StreamController<_RecordedEvent>.broadcast();
 
@@ -110,7 +110,8 @@ abstract class BaseDataRepository implements DataRepository {
   final Random _random = Random();
   int _cursorSequence = 0;
 
-  String _eventKey(String tenantId, String collection) => '$tenantId::$collection';
+  String _eventKey(String tenantId, String collection) =>
+      '$tenantId::$collection';
 
   List<DataChangeEvent> _history(String tenantId, String collection) {
     final key = _eventKey(tenantId, collection);
@@ -227,7 +228,9 @@ abstract class BaseDataRepository implements DataRepository {
     }
 
     if (filter.containsTerms.isNotEmpty) {
-      final haystack = record.payload.values.map((v) => v.toString().toLowerCase()).join(' ');
+      final haystack = record.payload.values
+          .map((v) => v.toString().toLowerCase())
+          .join(' ');
       for (final term in filter.containsTerms) {
         if (!haystack.contains(term.toLowerCase())) {
           return false;
@@ -248,7 +251,8 @@ abstract class BaseDataRepository implements DataRepository {
 
     int result;
     if (valueA is Comparable && valueB is Comparable) {
-      result = valueA.compareTo(valueB as Comparable);
+      // Сравниваем напрямую, не приводя второй операнд к Comparable — compareTo принимает Object.
+      result = (valueA as Comparable).compareTo(valueB);
     } else {
       result = valueA.toString().compareTo(valueB.toString());
     }
@@ -261,7 +265,8 @@ abstract class BaseDataRepository implements DataRepository {
     RecordFilter? filter,
     SortOrder? sort,
   ) {
-    final filtered = records.where((record) => _matchesFilter(record, filter)).toList();
+    final filtered =
+        records.where((record) => _matchesFilter(record, filter)).toList();
     filtered.sort((a, b) => _compare(a, b, sort));
     return filtered;
   }
@@ -272,18 +277,20 @@ abstract class BaseDataRepository implements DataRepository {
     }
     final index = records.indexWhere((record) => record.id == cursor);
     if (index == -1) {
-      throw RpcError.invalidArgument('Cursor $cursor is not valid for selection');
+      throw RpcDataError.invalidArgument(
+          'Cursor $cursor is not valid for selection');
     }
     return index + 1;
   }
 
   @override
-  Future<DataRecord> create(String tenantId, CreateRecordRequest request) async {
+  Future<DataRecord> create(
+      String tenantId, CreateRecordRequest request) async {
     final existing = request.id == null
         ? null
         : await storage.readRecord(tenantId, request.collection, request.id!);
     if (existing != null) {
-      throw RpcError.conflict(
+      throw RpcDataError.conflict(
         'Record with id "${request.id}" already exists in ${request.collection}',
       );
     }
@@ -313,14 +320,20 @@ abstract class BaseDataRepository implements DataRepository {
     String tenantId,
     ListRecordsRequest request,
   ) async {
-    final collection = await storage.readCollection(tenantId, request.collection);
+    final collection =
+        await storage.readCollection(tenantId, request.collection);
     final filtered = _filterAndSort(collection, request.filter, request.sort);
 
     final startIndex = _resolveStartIndex(filtered, request.options.cursor);
-    final endIndex = (startIndex + request.options.limit).clamp(0, filtered.length);
+    final limit = request.options.limit;
+    final endIndex = startIndex >= filtered.length
+        ? filtered.length
+        : min(startIndex + limit, filtered.length);
     final slice = filtered.sublist(startIndex, endIndex);
-    final nextCursor = endIndex < filtered.length ? filtered[endIndex - 1].id : null;
-    final totalCount = request.options.includeTotalCount ? filtered.length : null;
+    final nextCursor =
+        endIndex < filtered.length && slice.isNotEmpty ? slice.last.id : null;
+    final totalCount =
+        request.options.includeTotalCount ? filtered.length : null;
 
     return ListRecordsResponse(
       records: slice,
@@ -330,20 +343,21 @@ abstract class BaseDataRepository implements DataRepository {
   }
 
   @override
-  Future<DataRecord> update(String tenantId, UpdateRecordRequest request) async {
+  Future<DataRecord> update(
+      String tenantId, UpdateRecordRequest request) async {
     final existing = await storage.readRecord(
       tenantId,
       request.record.collection,
       request.record.id,
     );
     if (existing == null) {
-      throw RpcError.notFound(
+      throw RpcDataError.notFound(
         'Record ${request.record.id} not found in ${request.record.collection}',
       );
     }
 
     if (request.record.version <= existing.version) {
-      throw RpcError.conflict(
+      throw RpcDataError.conflict(
         'Version ${request.record.version} is not newer than ${existing.version}',
       );
     }
@@ -362,13 +376,13 @@ abstract class BaseDataRepository implements DataRepository {
       request.id,
     );
     if (existing == null) {
-      throw RpcError.notFound(
+      throw RpcDataError.notFound(
         'Record ${request.id} not found in ${request.collection}',
       );
     }
 
     if (existing.version != request.expectedVersion) {
-      throw RpcError.conflict(
+      throw RpcDataError.conflict(
         'Expected version ${request.expectedVersion}, got ${existing.version}',
       );
     }
@@ -395,15 +409,18 @@ abstract class BaseDataRepository implements DataRepository {
       return false;
     }
 
-    if (request.expectedVersion != null && existing.version != request.expectedVersion) {
-      throw RpcError.conflict(
+    if (request.expectedVersion != null &&
+        existing.version != request.expectedVersion) {
+      throw RpcDataError.conflict(
         'Expected version ${request.expectedVersion}, got ${existing.version}',
       );
     }
 
-    final removed = await storage.deleteRecord(tenantId, request.collection, request.id);
+    final removed =
+        await storage.deleteRecord(tenantId, request.collection, request.id);
     if (removed) {
-      _recordDeletion(tenantId, request.collection, request.id, existing.version + 1);
+      _recordDeletion(
+          tenantId, request.collection, request.id, existing.version + 1);
     }
     return removed;
   }
@@ -415,7 +432,8 @@ abstract class BaseDataRepository implements DataRepository {
   ) async {
     final results = <DataRecord>[];
     for (final record in request.records) {
-      final existing = await storage.readRecord(tenantId, record.collection, record.id);
+      final existing =
+          await storage.readRecord(tenantId, record.collection, record.id);
       if (existing == null) {
         final created = await create(
           tenantId,
@@ -428,7 +446,7 @@ abstract class BaseDataRepository implements DataRepository {
         results.add(created);
       } else {
         if (record.version <= existing.version) {
-          throw RpcError.conflict(
+          throw RpcDataError.conflict(
             'Version ${record.version} is not newer than ${existing.version} for ${record.id}',
           );
         }
@@ -474,7 +492,8 @@ abstract class BaseDataRepository implements DataRepository {
     String tenantId,
     ExportSnapshotRequest request,
   ) async {
-    final collection = await storage.readCollection(tenantId, request.collection);
+    final collection =
+        await storage.readCollection(tenantId, request.collection);
     return ExportSnapshotResponse(
       records: collection,
       generatedAt: _clock(),
@@ -486,7 +505,8 @@ abstract class BaseDataRepository implements DataRepository {
     String tenantId,
     SearchRecordsRequest request,
   ) async {
-    final collection = await storage.readCollection(tenantId, request.collection);
+    final collection =
+        await storage.readCollection(tenantId, request.collection);
     final filtered = _filterAndSort(collection, request.filter, null);
     final query = request.query.toLowerCase();
     final hits = filtered.where((record) {
@@ -512,7 +532,8 @@ abstract class BaseDataRepository implements DataRepository {
     String tenantId,
     AggregateMetricsRequest request,
   ) async {
-    final collection = await storage.readCollection(tenantId, request.collection);
+    final collection =
+        await storage.readCollection(tenantId, request.collection);
     final filtered = _filterAndSort(collection, request.filter, null);
     final metrics = <String, num>{};
 
@@ -526,7 +547,7 @@ abstract class BaseDataRepository implements DataRepository {
 
       final parts = definition.split(':');
       if (parts.length != 2) {
-        throw RpcError.invalidArgument(
+        throw RpcDataError.invalidArgument(
           'Unsupported metric definition "$definition"',
         );
       }
@@ -539,7 +560,8 @@ abstract class BaseDataRepository implements DataRepository {
 
       switch (op) {
         case 'sum':
-          metrics[metricName] = values.fold<num>(0, (prev, element) => prev + element);
+          metrics[metricName] =
+              values.fold<num>(0, (prev, element) => prev + element);
           break;
         case 'avg':
           metrics[metricName] = values.isEmpty
@@ -553,7 +575,7 @@ abstract class BaseDataRepository implements DataRepository {
           metrics[metricName] = values.isEmpty ? 0 : values.reduce(max);
           break;
         default:
-          throw RpcError.invalidArgument(
+          throw RpcDataError.invalidArgument(
             'Unknown aggregate operation "$op"',
           );
       }
@@ -572,9 +594,10 @@ abstract class BaseDataRepository implements DataRepository {
       if (request.cursor == null) {
         return 0;
       }
-      final index = history.indexWhere((event) => event.cursor == request.cursor);
+      final index =
+          history.indexWhere((event) => event.cursor == request.cursor);
       if (index == -1) {
-        throw RpcError.invalidArgument(
+        throw RpcDataError.invalidArgument(
           'Cursor ${request.cursor} is not known for ${request.collection}',
         );
       }
@@ -698,7 +721,7 @@ abstract class BaseDataRepository implements DataRepository {
       try {
         final response = await _applyCommand(tenantId, message);
         yield response;
-      } on RpcError catch (error) {
+      } on RpcDataError catch (error) {
         final conflict = await _fetchConflictRecord(tenantId, message.command);
         yield SyncChangeResponse(
           requestId: message.requestId,
@@ -728,7 +751,8 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
   final Map<String, Map<String, Map<String, DataRecord>>> _storage = {};
 
   Map<String, Map<String, DataRecord>> _tenant(String tenantId) {
-    return _storage.putIfAbsent(tenantId, () => <String, Map<String, DataRecord>>{});
+    return _storage.putIfAbsent(
+        tenantId, () => <String, Map<String, DataRecord>>{});
   }
 
   Map<String, DataRecord> _collection(String tenantId, String collection) {
@@ -737,13 +761,15 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
   }
 
   @override
-  Future<DataRecord?> readRecord(String tenantId, String collection, String id) async {
+  Future<DataRecord?> readRecord(
+      String tenantId, String collection, String id) async {
     final store = _collection(tenantId, collection);
     return store[id];
   }
 
   @override
-  Future<List<DataRecord>> readCollection(String tenantId, String collection) async {
+  Future<List<DataRecord>> readCollection(
+      String tenantId, String collection) async {
     final store = _collection(tenantId, collection);
     return store.values.toList(growable: false);
   }
@@ -755,7 +781,8 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
   }
 
   @override
-  Future<void> writeRecords(String tenantId, Iterable<DataRecord> records) async {
+  Future<void> writeRecords(
+      String tenantId, Iterable<DataRecord> records) async {
     for (final record in records) {
       final store = _collection(tenantId, record.collection);
       store[record.id] = record;
@@ -763,7 +790,8 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
   }
 
   @override
-  Future<bool> deleteRecord(String tenantId, String collection, String id) async {
+  Future<bool> deleteRecord(
+      String tenantId, String collection, String id) async {
     final store = _collection(tenantId, collection);
     return store.remove(id) != null;
   }

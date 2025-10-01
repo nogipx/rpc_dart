@@ -1,0 +1,25 @@
+name: rpc_dart_data
+description: A starting point for Dart libraries or applications.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  rpc_dart_transports:
+  equatable: ^2.0.5
+  collection: ^1.18.0
+  meta: ^1.11.0
+
+dependency_overrides:
+  rpc_dart:
+    path: ../rpc_dart
+  rpc_dart_transports:
+    path: ../rpc_dart_transports
+
+dev_dependencies:
+  lints: ^5.1.1
+  test: ^1.26.3
+
+

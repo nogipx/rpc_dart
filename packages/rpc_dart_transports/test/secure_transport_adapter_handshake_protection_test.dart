@@ -3,10 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:licensify/licensify.dart';
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
 
@@ -59,7 +57,8 @@ void main() {
 
       final payload = Uint8List.fromList([1, 2, 3, 4]);
       final receivedFuture = responder.incomingMessages
-          .where((message) => message.streamId == streamId && message.payload != null)
+          .where((message) =>
+              message.streamId == streamId && message.payload != null)
           .first;
 
       await caller.sendMessage(streamId, payload, endStream: true);
@@ -71,7 +70,8 @@ void main() {
       await Future.wait([caller.close(), responder.close()]);
     });
 
-    test('drops excessive pre-handshake traffic and closes connection', () async {
+    test('drops excessive pre-handshake traffic and closes connection',
+        () async {
       final pair = _LoopbackTransportPair();
       final logger = _RecordingLogger('responder');
 
@@ -203,7 +203,8 @@ class _LoopbackTransport implements IRpcTransport {
     Object object, {
     bool endStream = false,
   }) {
-    throw UnsupportedError('Direct objects not supported in loopback transport');
+    throw UnsupportedError(
+        'Direct objects not supported in loopback transport');
   }
 
   @override
@@ -257,6 +258,11 @@ class _LoopbackTransport implements IRpcTransport {
         peer._incoming.add(message);
       }
     });
+  }
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    return incomingMessages.where((e) => e.streamId == streamId);
   }
 }
 
