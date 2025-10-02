@@ -362,6 +362,78 @@ void main() {
     expect(registry.keys, containsAll(['logs', 'metrics', 'notes', 'tasks']));
   });
 
+  test('bulk upsert preserves provided record metadata', () async {
+    final storage = DriftDataStorageAdapter.file(dbFile);
+    final repository = DriftDataRepository(storage: storage);
+    final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => repository.storage.dispose());
+    addTearDown(() async => env.dispose());
+
+    final ctx = buildContext();
+
+    final createdAt = DateTime.utc(2024, 1, 1, 12, 0, 0);
+    final initialUpdatedAt = DateTime.utc(2024, 1, 2, 12, 0, 0);
+    final incoming = DataRecord(
+      id: 'external-1',
+      collection: 'notes',
+      payload: const {'title': 'Imported note'},
+      version: 3,
+      createdAt: createdAt,
+      updatedAt: initialUpdatedAt,
+    );
+
+    final inserted = await env.client.bulkUpsert(
+      records: [incoming],
+      context: ctx,
+    );
+
+    expect(inserted.single.version, 3);
+    expect(inserted.single.createdAt, createdAt);
+    expect(inserted.single.updatedAt, initialUpdatedAt);
+
+    final stored = await env.client.get(
+      collection: 'notes',
+      id: incoming.id,
+      context: ctx,
+    );
+
+    expect(stored, isNotNull);
+    expect(stored!.createdAt, createdAt);
+    expect(stored.updatedAt, initialUpdatedAt);
+    expect(stored.version, 3);
+
+    final newUpdatedAt = DateTime.utc(2024, 1, 3, 12, 0, 0);
+    final updatedIncoming = DataRecord(
+      id: incoming.id,
+      collection: incoming.collection,
+      payload: const {'title': 'Imported note', 'status': 'synced'},
+      version: 4,
+      createdAt: createdAt,
+      updatedAt: newUpdatedAt,
+    );
+
+    final updated = await env.client.bulkUpsert(
+      records: [updatedIncoming],
+      context: ctx,
+    );
+
+    expect(updated.single.version, 4);
+    expect(updated.single.createdAt, createdAt);
+    expect(updated.single.updatedAt, newUpdatedAt);
+
+    final storedUpdated = await env.client.get(
+      collection: 'notes',
+      id: incoming.id,
+      context: ctx,
+    );
+
+    expect(storedUpdated, isNotNull);
+    expect(storedUpdated!.createdAt, createdAt);
+    expect(storedUpdated.updatedAt, newUpdatedAt);
+    expect(storedUpdated.version, 4);
+    expect(storedUpdated.payload['status'], 'synced');
+  });
+
   test('search respects cursor-based pagination', () async {
     final storage = DriftDataStorageAdapter.file(dbFile);
     final repository = DriftDataRepository(storage: storage);

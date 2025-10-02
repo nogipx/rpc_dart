@@ -395,28 +395,33 @@ abstract class BaseDataRepository implements DataRepository {
   @override
   Future<List<DataRecord>> bulkUpsert(BulkUpsertRequest request) async {
     final results = <DataRecord>[];
-    for (final record in request.records) {
-      final existing = await storage.readRecord(record.collection, record.id);
+    for (final incoming in request.records) {
+      final existing =
+          await storage.readRecord(incoming.collection, incoming.id);
       if (existing == null) {
-        final created = await create(
-          CreateRecordRequest(
-            collection: record.collection,
-            payload: record.payload,
-            id: record.id,
-          ),
-        );
-        results.add(created);
-      } else {
-        if (record.version <= existing.version) {
-          throw RpcDataError.conflict(
-            'Version ${record.version} is not newer than ${existing.version} for ${record.id}',
-          );
-        }
-        final updated = record.copyWith(updatedAt: _clock());
-        await storage.writeRecord(updated);
-        _recordEvent(DataChangeType.updated, updated);
-        results.add(updated);
+        await storage.writeRecord(incoming);
+        _recordEvent(DataChangeType.created, incoming);
+        results.add(incoming);
+        continue;
       }
+
+      if (incoming.version <= existing.version) {
+        throw RpcDataError.conflict(
+          'Version ${incoming.version} is not newer than ${existing.version} for ${incoming.id}',
+        );
+      }
+
+      final updated = DataRecord(
+        id: existing.id,
+        collection: existing.collection,
+        payload: incoming.payload,
+        version: incoming.version,
+        createdAt: existing.createdAt,
+        updatedAt: incoming.updatedAt,
+      );
+      await storage.writeRecord(updated);
+      _recordEvent(DataChangeType.updated, updated);
+      results.add(updated);
     }
     return results;
   }
