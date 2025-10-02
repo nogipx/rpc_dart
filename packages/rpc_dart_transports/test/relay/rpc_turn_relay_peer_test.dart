@@ -238,23 +238,24 @@ void main() {
 
       expect(serviceInfo, isNotNull, reason: 'service was not discovered');
       expect(serviceInfo!.serviceId, serviceId);
-      expect(serviceInfo!.description, 'Peer A ping handler');
-      expect(serviceInfo!.relayAddress.address, peerA.relayAddress.address);
-      expect(serviceInfo!.relayPort, peerA.relayPort);
+      expect(serviceInfo.description, 'Peer A ping handler');
+      expect(serviceInfo.relayAddress.address, peerA.relayAddress.address);
+      expect(serviceInfo.relayPort, peerA.relayPort);
 
       await peerB.connectPeer(
-        peerAddress: serviceInfo!.relayAddress,
-        peerPort: serviceInfo!.relayPort,
+        peerAddress: serviceInfo.relayAddress,
+        peerPort: serviceInfo.relayPort,
       );
 
       await peerB.sendConnectionInfoToPeer(
-        peerAddress: serviceInfo!.relayAddress,
-        peerPort: serviceInfo!.relayPort,
+        peerAddress: serviceInfo.relayAddress,
+        peerPort: serviceInfo.relayPort,
       );
 
       final connectRequest = await peerA.connectRequests.first.timeout(
         const Duration(seconds: 2),
-        onTimeout: () => throw StateError('peerA did not receive connect request'),
+        onTimeout: () =>
+            throw StateError('peerA did not receive connect request'),
       );
 
       await peerA.connectPeer(
@@ -262,8 +263,8 @@ void main() {
         peerPort: connectRequest.peerPort,
       );
 
-      final response = await peerB.callerEndpoint
-          .unaryRequest<RpcString, RpcString>(
+      final response =
+          await peerB.callerEndpoint.unaryRequest<RpcString, RpcString>(
         serviceName: 'integration',
         methodName: 'ping',
         requestCodec: RpcString.codec,

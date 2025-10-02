@@ -129,6 +129,11 @@ class TurnRelayServiceInfo {
       type: InternetAddressType.IPv4,
     );
   }
+
+  @override
+  String toString() {
+    return '$serviceId($clientAddress, $clientPort) -> ($relayAddress, $relayPort)';
+  }
 }
 
 /// Simple TURN relay client that performs Allocate/Refresh/CreatePermission

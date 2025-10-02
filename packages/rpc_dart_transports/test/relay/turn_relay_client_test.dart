@@ -135,6 +135,7 @@ void main() {
       expect(service.relayPort, client.relayPort);
 
       final filtered = await client.listServices(serviceId: 'service.test');
+      filtered.forEach(print);
       expect(filtered, hasLength(1));
       expect(filtered.single.serviceId, 'service.test');
     });
