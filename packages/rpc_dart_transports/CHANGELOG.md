@@ -1,3 +1,8 @@
+## Unreleased
+
+- Added TURN relay discovery API allowing allocations to register service
+  descriptions and list active peers for easier rendezvous.
+
 ## 1.2.0
 
 - Implemented rich `health()`/`reconnect()` diagnostics for HTTP/2,

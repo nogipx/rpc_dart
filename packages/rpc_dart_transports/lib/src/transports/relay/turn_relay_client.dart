@@ -53,6 +53,84 @@ class TurnRelayClientOptions {
   final int requestedTransport;
 }
 
+/// Describes a service registered within the relay discovery catalogue.
+class TurnRelayServiceInfo {
+  TurnRelayServiceInfo({
+    required this.serviceId,
+    required this.relayAddress,
+    required this.relayPort,
+    this.description,
+    this.clientAddress,
+    this.clientPort,
+    this.updatedAt,
+  });
+
+  final String serviceId;
+  final InternetAddress relayAddress;
+  final int relayPort;
+  final String? description;
+  final InternetAddress? clientAddress;
+  final int? clientPort;
+  final DateTime? updatedAt;
+
+  factory TurnRelayServiceInfo.fromJson(Map<String, dynamic> json) {
+    final relayAddress = _parseAddress(json['relayAddress'] as String?);
+    if (relayAddress == null) {
+      throw const FormatException('Missing relayAddress in service info');
+    }
+
+    final relayPort = (json['relayPort'] as num?)?.toInt();
+    if (relayPort == null) {
+      throw const FormatException('Missing relayPort in service info');
+    }
+
+    final clientAddress = _parseAddress(json['clientAddress'] as String?);
+    final clientPort = (json['clientPort'] as num?)?.toInt();
+    final updatedAtRaw = json['updatedAt'] as String?;
+
+    final serviceId = json['serviceId'] as String?;
+    if (serviceId == null || serviceId.isEmpty) {
+      throw const FormatException('Missing serviceId in service info');
+    }
+
+    return TurnRelayServiceInfo(
+      serviceId: serviceId,
+      relayAddress: relayAddress,
+      relayPort: relayPort,
+      description: json['description'] as String?,
+      clientAddress: clientAddress,
+      clientPort: clientPort,
+      updatedAt: updatedAtRaw != null ? DateTime.tryParse(updatedAtRaw) : null,
+    );
+  }
+
+  static InternetAddress? _parseAddress(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    // Relay currently exposes IPv4 XOR-RELAYED-ADDRESS values only.
+    final segments = value.split('.');
+    if (segments.length != 4) {
+      throw FormatException('Invalid IP address: $value');
+    }
+
+    final bytes = Uint8List(4);
+    for (var i = 0; i < segments.length; i++) {
+      final segment = int.tryParse(segments[i]);
+      if (segment == null || segment < 0 || segment > 255) {
+        throw FormatException('Invalid IP address: $value');
+      }
+      bytes[i] = segment;
+    }
+
+    return InternetAddress.fromRawAddress(
+      bytes,
+      type: InternetAddressType.IPv4,
+    );
+  }
+}
+
 /// Simple TURN relay client that performs Allocate/Refresh/CreatePermission
 /// flows against [TurnRelayServer] and exposes relayed payloads as a byte
 /// stream.
@@ -259,6 +337,91 @@ final class TurnRelayClient {
     );
 
     await _sendRequest(request);
+  }
+
+  /// Registers the current allocation under [serviceId] for discovery.
+  Future<void> registerService({
+    required String serviceId,
+    String? description,
+  }) async {
+    _ensureOpen();
+
+    if (serviceId.isEmpty) {
+      throw ArgumentError.value(serviceId, 'serviceId', 'must not be empty');
+    }
+
+    final tx = TurnMessage.generateTransactionId();
+    final attributes = <TurnAttribute>[
+      TurnAttribute(
+        TurnAttributeType.rpcServiceId,
+        Uint8List.fromList(utf8.encode(serviceId)),
+      ),
+      if (description != null)
+        TurnAttribute(
+          TurnAttributeType.rpcServiceDescription,
+          Uint8List.fromList(utf8.encode(description)),
+        ),
+    ];
+
+    final request = TurnMessage(
+      method: TurnMethod.registerService,
+      messageClass: TurnMessageClass.request,
+      transactionId: tx,
+      attributes: attributes,
+    );
+
+    await _sendRequest(request);
+  }
+
+  /// Retrieves all services registered in the relay discovery catalogue.
+  Future<List<TurnRelayServiceInfo>> listServices({String? serviceId}) async {
+    _ensureOpen();
+
+    final tx = TurnMessage.generateTransactionId();
+    final attributes = <TurnAttribute>[
+      if (serviceId != null)
+        TurnAttribute(
+          TurnAttributeType.rpcServiceId,
+          Uint8List.fromList(utf8.encode(serviceId)),
+        ),
+    ];
+
+    final request = TurnMessage(
+      method: TurnMethod.listServices,
+      messageClass: TurnMessageClass.request,
+      transactionId: tx,
+      attributes: attributes,
+    );
+
+    final response = await _sendRequest(request);
+    final payloadAttr = response.firstAttribute(TurnAttributeType.data);
+    if (payloadAttr == null) {
+      return const <TurnRelayServiceInfo>[];
+    }
+
+    final decoded = utf8.decode(payloadAttr, allowMalformed: true);
+    final Object? jsonPayload = jsonDecode(decoded);
+    if (jsonPayload is! Map<String, dynamic>) {
+      return const <TurnRelayServiceInfo>[];
+    }
+
+    final servicesRaw = jsonPayload['services'];
+    if (servicesRaw is! List) {
+      return const <TurnRelayServiceInfo>[];
+    }
+
+    final services = <TurnRelayServiceInfo>[];
+    for (final entry in servicesRaw) {
+      if (entry is Map<String, dynamic>) {
+        services.add(TurnRelayServiceInfo.fromJson(entry));
+      } else if (entry is Map) {
+        services.add(
+          TurnRelayServiceInfo.fromJson(Map<String, dynamic>.from(entry)),
+        );
+      }
+    }
+
+    return services;
   }
 
   /// Sends a CreatePermission request for [peerAddress]/[peerPort].

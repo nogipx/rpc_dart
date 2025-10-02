@@ -109,6 +109,22 @@ class RpcTurnRelayPeer {
     );
   }
 
+  /// Регистрирует текущее соединение в каталоге relay для обнаружения.
+  Future<void> registerService({
+    required String serviceId,
+    String? description,
+  }) {
+    return _client.registerService(
+      serviceId: serviceId,
+      description: description,
+    );
+  }
+
+  /// Возвращает список доступных сервисов в relay (по желанию фильтруя по id).
+  Future<List<TurnRelayServiceInfo>> listServices({String? serviceId}) {
+    return _client.listServices(serviceId: serviceId);
+  }
+
   /// Закрывает все ресурсы.
   Future<void> close() async {
     await _callerEndpoint?.close();

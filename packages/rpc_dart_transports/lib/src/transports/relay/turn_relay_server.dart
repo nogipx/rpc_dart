@@ -62,6 +62,7 @@ final class TurnRelayServer {
 
   final Map<String, _TurnRelayConnectionContext> _connections = {};
   final Map<String, _TurnRelayConnectionContext> _allocationsByRelay = {};
+  final Map<String, _TurnRelayConnectionContext> _servicesById = {};
 
   /// Returns true once the TCP listener has been created.
   bool get isRunning => _socket != null;
@@ -163,6 +164,8 @@ final class TurnRelayServer {
       _unregisterAllocation(allocation);
     }
 
+    _clearServiceRegistration(context);
+
     await context.dispose();
   }
 
@@ -217,6 +220,18 @@ final class TurnRelayServer {
           return;
         }
         _handleConnectRequest(context, message);
+        break;
+      case TurnMethod.registerService:
+        if (!_ensureAuthenticated(context, message)) {
+          return;
+        }
+        _handleRegisterServiceRequest(context, message);
+        break;
+      case TurnMethod.listServices:
+        if (!_ensureAuthenticated(context, message)) {
+          return;
+        }
+        _handleListServicesRequest(context, message);
         break;
       default:
         _sendError(
@@ -298,6 +313,7 @@ final class TurnRelayServer {
             );
             _unregisterAllocation(allocation);
             context.allocation = null;
+            _clearServiceRegistration(context);
           },
         );
         break;
@@ -322,6 +338,7 @@ final class TurnRelayServer {
             );
             _unregisterAllocation(allocation);
             context.allocation = null;
+            _clearServiceRegistration(context);
           },
         );
         break;
@@ -390,6 +407,7 @@ final class TurnRelayServer {
       _unregisterAllocation(allocation);
       context.allocation = null;
       allocation.close();
+      _clearServiceRegistration(context);
       final response = message.buildSuccessResponse([]);
       _sendTurnMessage(context, response);
       return;
@@ -564,6 +582,123 @@ final class TurnRelayServer {
     );
 
     targetContext.send(indication.encode());
+  }
+
+  void _handleRegisterServiceRequest(
+    _TurnRelayConnectionContext context,
+    TurnMessage request,
+  ) {
+    final allocation = context.allocation;
+    if (allocation == null) {
+      _sendError(
+        context,
+        request,
+        code: 437,
+        reason: 'Allocation mismatch',
+      );
+      return;
+    }
+
+    final idAttr = request.firstAttribute(TurnAttributeType.rpcServiceId);
+    if (idAttr == null || idAttr.isEmpty) {
+      _sendError(
+        context,
+        request,
+        code: 400,
+        reason: 'Missing RPC-SERVICE-ID',
+      );
+      return;
+    }
+
+    final serviceId = utf8.decode(idAttr, allowMalformed: true);
+    final descriptionAttr =
+        request.firstAttribute(TurnAttributeType.rpcServiceDescription);
+    final description = descriptionAttr != null
+        ? utf8.decode(descriptionAttr, allowMalformed: true)
+        : null;
+
+    final existing = _servicesById[serviceId];
+    if (existing != null && !identical(existing, context)) {
+      _sendError(
+        context,
+        request,
+        code: 487,
+        reason: 'Service ID already registered',
+      );
+      return;
+    }
+
+    final previousId = context.registeredServiceId;
+    if (previousId != null && previousId != serviceId) {
+      final owner = _servicesById[previousId];
+      if (identical(owner, context)) {
+        _servicesById.remove(previousId);
+      }
+    }
+
+    context
+      ..registeredServiceId = serviceId
+      ..registeredServiceDescription = description
+      ..registeredServiceUpdatedAt = DateTime.now().toUtc();
+    _servicesById[serviceId] = context;
+
+    final response = request.buildSuccessResponse([
+      TurnAttribute(
+        TurnAttributeType.lifetime,
+        encodeLifetime(allocationLifetime),
+      ),
+    ]);
+    _sendTurnMessage(context, response);
+  }
+
+  void _handleListServicesRequest(
+    _TurnRelayConnectionContext context,
+    TurnMessage request,
+  ) {
+    final filterAttr = request.firstAttribute(TurnAttributeType.rpcServiceId);
+    final filterId =
+        filterAttr != null ? utf8.decode(filterAttr, allowMalformed: true) : null;
+
+    final services = <Map<String, Object?>>[];
+
+    void addContext(String serviceId, _TurnRelayConnectionContext ctx) {
+      final allocation = ctx.allocation;
+      if (allocation == null) {
+        return;
+      }
+
+      services.add({
+        'serviceId': serviceId,
+        'description': ctx.registeredServiceDescription,
+        'relayAddress': allocation.relayAddress.address,
+        'relayPort': allocation.relayPort,
+        'clientAddress': ctx.clientAddress.address,
+        'clientPort': ctx.clientPort,
+        'updatedAt': ctx.registeredServiceUpdatedAt?.toIso8601String(),
+      });
+    }
+
+    if (filterId != null) {
+      final ctx = _servicesById[filterId];
+      if (ctx != null) {
+        addContext(filterId, ctx);
+      }
+    } else {
+      _servicesById.forEach(addContext);
+    }
+
+    final payload = jsonEncode({
+      'generatedAt': DateTime.now().toUtc().toIso8601String(),
+      'services': services,
+    });
+
+    final response = request.buildSuccessResponse([
+      TurnAttribute(
+        TurnAttributeType.data,
+        Uint8List.fromList(utf8.encode(payload)),
+      ),
+    ]);
+    _sendTurnMessage(context, response);
   }
 
   void _handleIndication(
@@ -856,6 +991,21 @@ final class TurnRelayServer {
 
   static String _relayKey(InternetAddress address, int port) =>
       '${address.address}:$port';
+
+  void _clearServiceRegistration(_TurnRelayConnectionContext context) {
+    final serviceId = context.registeredServiceId;
+    if (serviceId != null) {
+      final owner = _servicesById[serviceId];
+      if (identical(owner, context)) {
+        _servicesById.remove(serviceId);
+      }
+    }
+
+    context
+      ..registeredServiceId = null
+      ..registeredServiceDescription = null
+      ..registeredServiceUpdatedAt = null;
+  }
 }
 
 final class _TurnRelayConnectionContext {
@@ -873,6 +1023,9 @@ final class _TurnRelayConnectionContext {
 
   TurnAllocation? allocation;
   String? authenticatedUsername;
+  String? registeredServiceId;
+  String? registeredServiceDescription;
+  DateTime? registeredServiceUpdatedAt;
 
   InternetAddress get clientAddress => socket.remoteAddress;
   int get clientPort => socket.remotePort;

@@ -271,6 +271,8 @@ abstract final class TurnAttributeType {
   static const int xorMappedAddress = 0x0020;
   static const int errorCode = 0x0009;
   static const int software = 0x8022;
+  static const int rpcServiceId = 0x8030;
+  static const int rpcServiceDescription = 0x8031;
 }
 
 /// TURN method identifiers used by the relay server.
@@ -282,6 +284,8 @@ abstract final class TurnMethod {
   static const int createPermission = 0x0008;
   static const int channelBind = 0x0009;
   static const int connectRequest = 0x0400;
+  static const int registerService = 0x0401;
+  static const int listServices = 0x0402;
 }
 
 /// Encodes an IPv4 XOR'ed address attribute.

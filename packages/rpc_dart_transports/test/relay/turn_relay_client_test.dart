@@ -112,6 +112,59 @@ void main() {
       expect(request.payload, isNotNull);
       expect(request.payload, orderedEquals(payload));
     });
+
+    test('registers service and lists discovery catalogue', () async {
+      final client = await TurnRelayClient.connect(
+        serverAddress: server.bindAddress,
+        serverPort: server.port,
+      );
+      addTearDown(client.close);
+
+      await client.registerService(
+        serviceId: 'service.test',
+        description: 'Test service',
+      );
+
+      final services = await client.listServices();
+      expect(services, isNotEmpty);
+
+      final service =
+          services.firstWhere((info) => info.serviceId == 'service.test');
+      expect(service.description, 'Test service');
+      expect(service.relayAddress.address, client.relayAddress.address);
+      expect(service.relayPort, client.relayPort);
+
+      final filtered = await client.listServices(serviceId: 'service.test');
+      expect(filtered, hasLength(1));
+      expect(filtered.single.serviceId, 'service.test');
+    });
+
+    test('rejects duplicate service registrations', () async {
+      final first = await TurnRelayClient.connect(
+        serverAddress: server.bindAddress,
+        serverPort: server.port,
+      );
+      addTearDown(first.close);
+
+      final second = await TurnRelayClient.connect(
+        serverAddress: server.bindAddress,
+        serverPort: server.port,
+      );
+      addTearDown(second.close);
+
+      await first.registerService(serviceId: 'duplicate.service');
+
+      await expectLater(
+        () => second.registerService(serviceId: 'duplicate.service'),
+        throwsA(
+          isA<TurnRelayException>().having(
+            (error) => error.code,
+            'code',
+            487,
+          ),
+        ),
+      );
+    });
   });
 }
 
