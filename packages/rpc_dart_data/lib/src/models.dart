@@ -538,21 +538,36 @@ class ListRecordsResponse extends Equatable implements IRpcSerializable {
 
 @immutable
 class UpdateRecordRequest extends Equatable implements IRpcSerializable {
-  const UpdateRecordRequest({required this.record});
+  const UpdateRecordRequest({
+    required this.collection,
+    required this.id,
+    required this.expectedVersion,
+    required this.payload,
+  });
 
   factory UpdateRecordRequest.fromJson(Map<String, dynamic> json) =>
       UpdateRecordRequest(
-        record: DataRecord.fromJson(
-            Map<String, dynamic>.from(json['record'] as Map)),
+        collection: json['collection'] as String,
+        id: json['id'] as String,
+        expectedVersion: json['expectedVersion'] as int,
+        payload: Map<String, dynamic>.from(json['payload'] as Map),
       );
 
-  final DataRecord record;
+  final String collection;
+  final String id;
+  final int expectedVersion;
+  final Map<String, dynamic> payload;
 
   @override
-  List<Object?> get props => [record];
+  List<Object?> get props => [collection, id, expectedVersion, payload];
 
   @override
-  Map<String, dynamic> toJson() => {'record': record.toJson()};
+  Map<String, dynamic> toJson() => {
+        'collection': collection,
+        'id': id,
+        'expectedVersion': expectedVersion,
+        'payload': payload,
+      };
 }
 
 @immutable

@@ -44,7 +44,10 @@ abstract interface class DataService {
   });
 
   Future<DataRecord> update({
-    required DataRecord record,
+    required String collection,
+    required String id,
+    required int expectedVersion,
+    required Map<String, dynamic> payload,
     RpcContext? context,
   });
 
@@ -163,11 +166,19 @@ class DataServiceClient implements DataService {
 
   @override
   Future<DataRecord> update({
-    required DataRecord record,
+    required String collection,
+    required String id,
+    required int expectedVersion,
+    required Map<String, dynamic> payload,
     RpcContext? context,
   }) async {
     final response = await _caller.updateRecord(
-      UpdateRecordRequest(record: record),
+      UpdateRecordRequest(
+        collection: collection,
+        id: id,
+        expectedVersion: expectedVersion,
+        payload: payload,
+      ),
       context: context,
     );
     return response.record;

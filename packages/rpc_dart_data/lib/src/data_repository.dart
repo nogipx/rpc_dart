@@ -310,22 +310,26 @@ abstract class BaseDataRepository implements DataRepository {
   @override
   Future<DataRecord> update(UpdateRecordRequest request) async {
     final existing = await storage.readRecord(
-      request.record.collection,
-      request.record.id,
+      request.collection,
+      request.id,
     );
     if (existing == null) {
       throw RpcDataError.notFound(
-        'Record ${request.record.id} not found in ${request.record.collection}',
+        'Record ${request.id} not found in ${request.collection}',
       );
     }
 
-    if (request.record.version <= existing.version) {
+    if (existing.version != request.expectedVersion) {
       throw RpcDataError.conflict(
-        'Version ${request.record.version} is not newer than ${existing.version}',
+        'Expected version ${request.expectedVersion}, got ${existing.version}',
       );
     }
 
-    final updated = request.record.copyWith(updatedAt: _clock());
+    final updated = existing.copyWith(
+      payload: request.payload,
+      version: existing.version + 1,
+      updatedAt: _clock(),
+    );
     await storage.writeRecord(updated);
     _recordEvent(DataChangeType.updated, updated);
     return updated;
@@ -584,8 +588,8 @@ abstract class BaseDataRepository implements DataRepository {
         final request = UpdateRecordRequest.fromJson(command.payload);
         return get(
           GetRecordRequest(
-            collection: request.record.collection,
-            id: request.record.id,
+            collection: request.collection,
+            id: request.id,
           ),
         );
       case DataCommandType.patch:

@@ -112,7 +112,7 @@ print(metrics.metrics);
 `watchChanges` принимает опциональный `cursor` — можно продолжить с точки останова. История держится в памяти базовой реализацией; для production замените на persistent/event sourced storage.
 
 ## Конфликты
-- `update` требует `record.version` > текущей версии.
+- `update` требует `expectedVersion`, совпадающий с текущей версией записи.
 - `patch` требует точного совпадения `expectedVersion`.
 - При нарушении получите `RpcDataError.conflict(...)` (или базовый `RpcException`, если перешло через границу транспорта), в офлайн sync — `SyncChangeResponse(applied=false, conflict=...)`.
 

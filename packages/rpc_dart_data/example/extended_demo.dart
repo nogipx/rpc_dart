@@ -35,15 +35,14 @@ Future<void> main() async {
   _check(listed.totalCount == 1, 'Should have exact 1 record after create');
 
   final updated = await client.update(
-    record: created.copyWith(
-      payload: {
-        ...created.payload,
-        'views': 2,
-        'description': 'An end-to-end RPC example',
-      },
-      version: created.version + 1,
-      updatedAt: DateTime.now().toUtc(),
-    ),
+    collection: created.collection,
+    id: created.id,
+    expectedVersion: created.version,
+    payload: {
+      ...created.payload,
+      'views': 2,
+      'description': 'An end-to-end RPC example',
+    },
     context: baseContext,
   );
   _check(updated.version == 2, 'Version after update must be 2');
