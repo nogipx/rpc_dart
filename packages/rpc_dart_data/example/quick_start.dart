@@ -5,10 +5,7 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 Future<void> main() async {
   final env = await DataServiceFactory.inMemory();
   final client = env.client;
-  final ctx = RpcContext.withHeaders({
-    'x-tenant-id': 'demo-tenant',
-    'authorization': 'Bearer dev',
-  });
+  final ctx = RpcContext.withHeaders({'authorization': 'Bearer dev'});
 
   final created = await client.create(
     collection: 'notes',

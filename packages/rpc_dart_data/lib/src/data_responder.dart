@@ -129,10 +129,9 @@ class DataServiceResponder extends RpcResponderContract
     CreateRecordRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
     final record = await _runSafely(
       context,
-      () => _repository.create(tenant, request),
+      () => _repository.create(request),
     );
     return CreateRecordResponse(record: record);
   }
@@ -141,10 +140,9 @@ class DataServiceResponder extends RpcResponderContract
     GetRecordRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
     final record = await _runSafely(
       context,
-      () => _repository.get(tenant, request),
+      () => _repository.get(request),
     );
     return GetRecordResponse(record: record);
   }
@@ -153,18 +151,16 @@ class DataServiceResponder extends RpcResponderContract
     ListRecordsRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
-    return _runSafely(context, () => _repository.list(tenant, request));
+    return _runSafely(context, () => _repository.list(request));
   }
 
   Future<UpdateRecordResponse> _handleUpdate(
     UpdateRecordRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
     final record = await _runSafely(
       context,
-      () => _repository.update(tenant, request),
+      () => _repository.update(request),
     );
     return UpdateRecordResponse(record: record);
   }
@@ -173,10 +169,9 @@ class DataServiceResponder extends RpcResponderContract
     PatchRecordRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
     final record = await _runSafely(
       context,
-      () => _repository.patch(tenant, request),
+      () => _repository.patch(request),
     );
     return PatchRecordResponse(record: record);
   }
@@ -185,10 +180,9 @@ class DataServiceResponder extends RpcResponderContract
     DeleteRecordRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
     final deleted = await _runSafely(
       context,
-      () => _repository.delete(tenant, request),
+      () => _repository.delete(request),
     );
     return DeleteRecordResponse(deleted: deleted);
   }
@@ -197,15 +191,13 @@ class DataServiceResponder extends RpcResponderContract
     Stream<DataRecord> records, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
     final collected = await records.toList();
     if (collected.isEmpty) {
       return const BulkUpsertResponse(records: []);
     }
     final saved = await _runSafely(
       context,
-      () =>
-          _repository.bulkUpsert(tenant, BulkUpsertRequest(records: collected)),
+      () => _repository.bulkUpsert(BulkUpsertRequest(records: collected)),
     );
     return BulkUpsertResponse(records: saved);
   }
@@ -214,10 +206,9 @@ class DataServiceResponder extends RpcResponderContract
     BulkDeleteRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
     final deleted = await _runSafely(
       context,
-      () => _repository.bulkDelete(tenant, request),
+      () => _repository.bulkDelete(request),
     );
     return BulkDeleteResponse(deletedCount: deleted);
   }
@@ -226,10 +217,9 @@ class DataServiceResponder extends RpcResponderContract
     ExportSnapshotRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
     return _runSafely(
       context,
-      () => _repository.exportSnapshot(tenant, request),
+      () => _repository.exportSnapshot(request),
     );
   }
 
@@ -237,24 +227,22 @@ class DataServiceResponder extends RpcResponderContract
     SearchRecordsRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
-    return _runSafely(context, () => _repository.search(tenant, request));
+    return _runSafely(context, () => _repository.search(request));
   }
 
   Future<AggregateMetricsResponse> _handleAggregate(
     AggregateMetricsRequest request, {
     RpcContext? context,
   }) async {
-    final tenant = _resolveTenant(context);
-    return _runSafely(context, () => _repository.aggregate(tenant, request));
+    return _runSafely(context, () => _repository.aggregate(request));
   }
 
   Stream<DataChangeEvent> _handleWatch(
     WatchChangesRequest request, {
     RpcContext? context,
   }) {
-    final tenant = _resolveTenant(context);
-    return _repository.watch(tenant, request).handleError((error, stackTrace) {
+    _ensureAuthorized(context);
+    return _repository.watch(request).handleError((error, stackTrace) {
       if (error is RpcDataError) {
         throw error;
       }
@@ -266,8 +254,8 @@ class DataServiceResponder extends RpcResponderContract
     Stream<SyncChangeRequest> requests, {
     RpcContext? context,
   }) {
-    final tenant = _resolveTenant(context);
-    return _repository.sync(tenant, requests).handleError((error, stackTrace) {
+    _ensureAuthorized(context);
+    return _repository.sync(requests).handleError((error, stackTrace) {
       if (error is RpcDataError) {
         throw error;
       }
@@ -275,12 +263,8 @@ class DataServiceResponder extends RpcResponderContract
     });
   }
 
-  String _resolveTenant(RpcContext? context) {
-    final tenant = context?.getHeader('x-tenant-id');
+  void _ensureAuthorized(RpcContext? context) {
     final authHeader = context?.getHeader('authorization');
-    if (tenant == null || tenant.isEmpty) {
-      throw RpcDataError.unauthenticated('Header x-tenant-id is required');
-    }
     if (authHeader == null || !authHeader.startsWith('Bearer ')) {
       throw RpcDataError.permissionDenied('Bearer token is required');
     }
@@ -289,7 +273,6 @@ class DataServiceResponder extends RpcResponderContract
         'Deadline exceeded for request ${context?.requestId}',
       );
     }
-    return tenant;
   }
 
   Future<T> _runSafely<T>(
@@ -297,6 +280,7 @@ class DataServiceResponder extends RpcResponderContract
     Future<T> Function() action,
   ) async {
     try {
+      _ensureAuthorized(context);
       context?.cancellationToken?.throwIfCancelled();
       return await action();
     } on RpcCancelledException catch (error) {

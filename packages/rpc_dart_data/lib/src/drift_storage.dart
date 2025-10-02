@@ -59,23 +59,19 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
     }
     await _database.customStatement(
       'CREATE TABLE IF NOT EXISTS collection_registry ('
-      'tenant_id TEXT NOT NULL, '
-      'collection TEXT NOT NULL, '
-      'table_name TEXT NOT NULL, '
-      'PRIMARY KEY (tenant_id, collection), '
-      'UNIQUE(table_name)'
+      'collection TEXT NOT NULL PRIMARY KEY, '
+      'table_name TEXT NOT NULL UNIQUE'
       ')',
     );
     _registryReady = true;
   }
 
-  Future<String?> _lookupTable(String tenantId, String collection) async {
+  Future<String?> _lookupTable(String collection) async {
     await _ensureRegistry();
     final row = await _database.customSelect(
       'SELECT table_name FROM collection_registry '
-      'WHERE tenant_id = ? AND collection = ? LIMIT 1',
+      'WHERE collection = ? LIMIT 1',
       variables: [
-        Variable<String>(tenantId),
         Variable<String>(collection),
       ],
     ).getSingleOrNull();
@@ -121,22 +117,19 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
     return sanitized;
   }
 
-  Future<String> _createTable(String tenantId, String collection) async {
+  Future<String> _createTable(String collection) async {
     await _ensureRegistry();
-    final existing = await _lookupTable(tenantId, collection);
+    final existing = await _lookupTable(collection);
     if (existing != null) {
       return existing;
     }
 
-    final normalizedTenant = _normalizeSegment(
-      tenantId.isEmpty ? 'default' : tenantId,
-    );
     final normalizedCollection = _normalizeSegment(collection);
     var attempt = 0;
 
     while (true) {
       final suffix = attempt == 0 ? '' : '_$attempt';
-      final candidate = 'c_${normalizedTenant}_${normalizedCollection}$suffix';
+      final candidate = 'c_${normalizedCollection}$suffix';
 
       final collision = await _database.customSelect(
         'SELECT 1 FROM collection_registry WHERE table_name = ? LIMIT 1',
@@ -154,9 +147,9 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
             ')',
           );
           await _database.customStatement(
-            'INSERT INTO collection_registry (tenant_id, collection, table_name) '
-            'VALUES (?, ?, ?)',
-            [tenantId, collection, candidate],
+            'INSERT INTO collection_registry (collection, table_name) '
+            'VALUES (?, ?)',
+            [collection, candidate],
           );
         });
         _knownTables.add(candidate);
@@ -166,11 +159,8 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
     }
   }
 
-  Future<String?> _ensureTableForRead(
-    String tenantId,
-    String collection,
-  ) async {
-    final table = await _lookupTable(tenantId, collection);
+  Future<String?> _ensureTableForRead(String collection) async {
+    final table = await _lookupTable(collection);
     if (table == null) {
       return null;
     }
@@ -180,11 +170,8 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
     return table;
   }
 
-  Future<String> _ensureTableForWrite(
-    String tenantId,
-    String collection,
-  ) async {
-    final existing = await _lookupTable(tenantId, collection);
+  Future<String> _ensureTableForWrite(String collection) async {
+    final existing = await _lookupTable(collection);
     if (existing != null) {
       if (!await _tableExists(existing)) {
         await _database.customStatement(
@@ -200,7 +187,7 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
       }
       return existing;
     }
-    return _createTable(tenantId, collection);
+    return _createTable(collection);
   }
 
   DataRecord _mapRow(String collection, QueryRow row) {
@@ -241,11 +228,10 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
 
   @override
   Future<DataRecord?> readRecord(
-    String tenantId,
     String collection,
     String id,
   ) async {
-    final tableName = await _ensureTableForRead(tenantId, collection);
+    final tableName = await _ensureTableForRead(collection);
     if (tableName == null) {
       return null;
     }
@@ -262,10 +248,9 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
 
   @override
   Future<List<DataRecord>> readCollection(
-    String tenantId,
     String collection,
   ) async {
-    final tableName = await _ensureTableForRead(tenantId, collection);
+    final tableName = await _ensureTableForRead(collection);
     if (tableName == null) {
       return const [];
     }
@@ -278,8 +263,8 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
   }
 
   @override
-  Future<void> writeRecord(String tenantId, DataRecord record) async {
-    final tableName = await _ensureTableForWrite(tenantId, record.collection);
+  Future<void> writeRecord(DataRecord record) async {
+    final tableName = await _ensureTableForWrite(record.collection);
     await _database.customStatement(
       'INSERT INTO "$tableName" (id, payload, version, created_at, updated_at) '
       'VALUES (?, ?, ?, ?, ?) '
@@ -294,7 +279,6 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
 
   @override
   Future<void> writeRecords(
-    String tenantId,
     Iterable<DataRecord> records,
   ) async {
     if (records.isEmpty) {
@@ -309,7 +293,7 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
 
     final tableNames = <String, String>{};
     for (final entry in recordsByCollection.entries) {
-      tableNames[entry.key] = await _ensureTableForWrite(tenantId, entry.key);
+      tableNames[entry.key] = await _ensureTableForWrite(entry.key);
     }
 
     await _database.transaction(() async {
@@ -333,11 +317,10 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
 
   @override
   Future<bool> deleteRecord(
-    String tenantId,
     String collection,
     String id,
   ) async {
-    final tableName = await _ensureTableForRead(tenantId, collection);
+    final tableName = await _ensureTableForRead(collection);
     if (tableName == null) {
       return false;
     }
@@ -355,14 +338,13 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
 
   @override
   Future<int> deleteRecords(
-    String tenantId,
     String collection,
     Iterable<String> ids,
   ) async {
     if (ids.isEmpty) {
       return 0;
     }
-    final tableName = await _ensureTableForRead(tenantId, collection);
+    final tableName = await _ensureTableForRead(collection);
     if (tableName == null) {
       return 0;
     }
@@ -391,7 +373,7 @@ class DriftDataRepository extends BaseDataRepository {
   DriftDataRepository({
     required DriftDataStorageAdapter storage,
     DateTime Function()? clock,
-    String Function(String tenantId, String collection)? idGenerator,
+    String Function(String collection)? idGenerator,
   }) : super(storage, clock: clock, idGenerator: idGenerator);
 
   @override

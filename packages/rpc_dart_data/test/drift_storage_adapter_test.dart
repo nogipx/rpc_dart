@@ -6,12 +6,9 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 
 void main() {
-  const tenantHeaders = {
-    'x-tenant-id': 'tenant-1',
-    'authorization': 'Bearer test-token',
-  };
-
-  RpcContext buildContext() => RpcContext.withHeaders(tenantHeaders);
+  RpcContext buildContext() => RpcContext.withHeaders({
+        'authorization': 'Bearer test-token',
+      });
 
   test('Drift storage adapter supports CRUD lifecycle', () async {
     final storage = DriftDataStorageAdapter.memory();
@@ -114,7 +111,7 @@ void main() {
     addTearDown(() async => env.dispose());
 
     // Reading before any writes should not create a backing table.
-    final empty = await storage.readCollection('tenant-1', 'drafts');
+    final empty = await storage.readCollection('drafts');
     expect(empty, isEmpty);
 
     final ctx = buildContext();
@@ -138,11 +135,7 @@ void main() {
     final tableNames = tables.map((row) => row.read<String>('name')).toList();
     expect(
       tableNames,
-      containsAll([
-        'collection_registry',
-        'c_tenant_1_notes',
-        'c_tenant_1_tasks',
-      ]),
+      containsAll(['collection_registry', 'c_notes', 'c_tasks']),
     );
 
     final registryRows = await storage.database
@@ -156,7 +149,7 @@ void main() {
     };
     expect(
       registryMap,
-      equals({'notes': 'c_tenant_1_notes', 'tasks': 'c_tenant_1_tasks'}),
+      equals({'notes': 'c_notes', 'tasks': 'c_tasks'}),
     );
   });
 }

@@ -13,7 +13,6 @@ Future<void> main() async {
   final env = await DataServiceFactory.inMemory();
   final client = env.client;
   final baseContext = RpcContext.withHeaders({
-    'x-tenant-id': 'tenant-acme',
     'authorization': 'Bearer development-token',
   }).withTraceId('trace-${DateTime.now().millisecondsSinceEpoch}');
 

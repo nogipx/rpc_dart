@@ -6,49 +6,35 @@ import 'models.dart';
 
 /// Абстракция репозитория данных.
 abstract interface class DataRepository {
-  Future<DataRecord> create(String tenantId, CreateRecordRequest request);
+  Future<DataRecord> create(CreateRecordRequest request);
 
-  Future<DataRecord?> get(String tenantId, GetRecordRequest request);
+  Future<DataRecord?> get(GetRecordRequest request);
 
-  Future<ListRecordsResponse> list(String tenantId, ListRecordsRequest request);
+  Future<ListRecordsResponse> list(ListRecordsRequest request);
 
-  Future<DataRecord> update(String tenantId, UpdateRecordRequest request);
+  Future<DataRecord> update(UpdateRecordRequest request);
 
-  Future<DataRecord> patch(String tenantId, PatchRecordRequest request);
+  Future<DataRecord> patch(PatchRecordRequest request);
 
-  Future<bool> delete(String tenantId, DeleteRecordRequest request);
+  Future<bool> delete(DeleteRecordRequest request);
 
-  Future<List<DataRecord>> bulkUpsert(
-    String tenantId,
-    BulkUpsertRequest request,
-  );
+  Future<List<DataRecord>> bulkUpsert(BulkUpsertRequest request);
 
-  Future<int> bulkDelete(String tenantId, BulkDeleteRequest request);
+  Future<int> bulkDelete(BulkDeleteRequest request);
 
   Future<ExportSnapshotResponse> exportSnapshot(
-    String tenantId,
     ExportSnapshotRequest request,
   );
 
-  Future<SearchRecordsResponse> search(
-    String tenantId,
-    SearchRecordsRequest request,
-  );
+  Future<SearchRecordsResponse> search(SearchRecordsRequest request);
 
   Future<AggregateMetricsResponse> aggregate(
-    String tenantId,
     AggregateMetricsRequest request,
   );
 
-  Stream<DataChangeEvent> watch(
-    String tenantId,
-    WatchChangesRequest request,
-  );
+  Stream<DataChangeEvent> watch(WatchChangesRequest request);
 
-  Stream<SyncChangeResponse> sync(
-    String tenantId,
-    Stream<SyncChangeRequest> requests,
-  );
+  Stream<SyncChangeResponse> sync(Stream<SyncChangeRequest> requests);
 
   Future<void> dispose();
 }
@@ -57,37 +43,27 @@ abstract interface class DataRepository {
 /// (in-memory, SQLite, Postgres и т.д.).
 abstract interface class DataStorageAdapter {
   Future<DataRecord?> readRecord(
-    String tenantId,
     String collection,
     String id,
   );
 
-  Future<List<DataRecord>> readCollection(String tenantId, String collection);
+  Future<List<DataRecord>> readCollection(String collection);
 
-  Future<void> writeRecord(String tenantId, DataRecord record);
+  Future<void> writeRecord(DataRecord record);
 
-  Future<void> writeRecords(String tenantId, Iterable<DataRecord> records);
+  Future<void> writeRecords(Iterable<DataRecord> records);
 
   Future<bool> deleteRecord(
-    String tenantId,
     String collection,
     String id,
   );
 
   Future<int> deleteRecords(
-    String tenantId,
     String collection,
     Iterable<String> ids,
   );
 
   Future<void> dispose();
-}
-
-final class _RecordedEvent {
-  _RecordedEvent(this.tenantId, this.event);
-
-  final String tenantId;
-  final DataChangeEvent event;
 }
 
 /// Базовая реализация `DataRepository`, инкапсулирующая общую бизнес-логику
@@ -97,30 +73,26 @@ abstract class BaseDataRepository implements DataRepository {
   BaseDataRepository(
     this.storage, {
     DateTime Function()? clock,
-    String Function(String tenantId, String collection)? idGenerator,
+    String Function(String collection)? idGenerator,
   })  : _clock = clock ?? (() => DateTime.now().toUtc()),
         _idGenerator = idGenerator,
-        _changeController = StreamController<_RecordedEvent>.broadcast();
+        _changeController = StreamController<DataChangeEvent>.broadcast();
 
   final DataStorageAdapter storage;
   final DateTime Function() _clock;
-  final String Function(String tenantId, String collection)? _idGenerator;
-  final StreamController<_RecordedEvent> _changeController;
+  final String Function(String collection)? _idGenerator;
+  final StreamController<DataChangeEvent> _changeController;
   final Map<String, List<DataChangeEvent>> _eventJournal = {};
   final Random _random = Random();
   int _cursorSequence = 0;
 
-  String _eventKey(String tenantId, String collection) =>
-      '$tenantId::$collection';
-
-  List<DataChangeEvent> _history(String tenantId, String collection) {
-    final key = _eventKey(tenantId, collection);
-    return _eventJournal.putIfAbsent(key, () => <DataChangeEvent>[]);
+  List<DataChangeEvent> _history(String collection) {
+    return _eventJournal.putIfAbsent(collection, () => <DataChangeEvent>[]);
   }
 
-  String _generateId(String tenantId, String collection) {
+  String _generateId(String collection) {
     if (_idGenerator != null) {
-      return _idGenerator!(tenantId, collection);
+      return _idGenerator!(collection);
     }
     final suffix = _random.nextInt(1 << 32).toRadixString(16);
     final timestamp = _clock().microsecondsSinceEpoch;
@@ -128,7 +100,6 @@ abstract class BaseDataRepository implements DataRepository {
   }
 
   DataChangeEvent _recordEvent(
-    String tenantId,
     DataChangeType type,
     DataRecord record,
   ) {
@@ -143,14 +114,13 @@ abstract class BaseDataRepository implements DataRepository {
       cursor: cursor,
       occurredAt: occurredAt,
     );
-    final history = _history(tenantId, record.collection);
+    final history = _history(record.collection);
     history.add(event);
-    _changeController.add(_RecordedEvent(tenantId, event));
+    _changeController.add(event);
     return event;
   }
 
   DataChangeEvent _recordDeletion(
-    String tenantId,
     String collection,
     String id,
     int nextVersion,
@@ -166,9 +136,9 @@ abstract class BaseDataRepository implements DataRepository {
       cursor: cursor,
       occurredAt: occurredAt,
     );
-    final history = _history(tenantId, collection);
+    final history = _history(collection);
     history.add(event);
-    _changeController.add(_RecordedEvent(tenantId, event));
+    _changeController.add(event);
     return event;
   }
 
@@ -284,11 +254,10 @@ abstract class BaseDataRepository implements DataRepository {
   }
 
   @override
-  Future<DataRecord> create(
-      String tenantId, CreateRecordRequest request) async {
+  Future<DataRecord> create(CreateRecordRequest request) async {
     final existing = request.id == null
         ? null
-        : await storage.readRecord(tenantId, request.collection, request.id!);
+        : await storage.readRecord(request.collection, request.id!);
     if (existing != null) {
       throw RpcDataError.conflict(
         'Record with id "${request.id}" already exists in ${request.collection}',
@@ -296,7 +265,7 @@ abstract class BaseDataRepository implements DataRepository {
     }
 
     final now = _clock();
-    final id = request.id ?? _generateId(tenantId, request.collection);
+    final id = request.id ?? _generateId(request.collection);
     final record = DataRecord(
       id: id,
       collection: request.collection,
@@ -305,23 +274,19 @@ abstract class BaseDataRepository implements DataRepository {
       createdAt: now,
       updatedAt: now,
     );
-    await storage.writeRecord(tenantId, record);
-    _recordEvent(tenantId, DataChangeType.created, record);
+    await storage.writeRecord(record);
+    _recordEvent(DataChangeType.created, record);
     return record;
   }
 
   @override
-  Future<DataRecord?> get(String tenantId, GetRecordRequest request) {
-    return storage.readRecord(tenantId, request.collection, request.id);
+  Future<DataRecord?> get(GetRecordRequest request) {
+    return storage.readRecord(request.collection, request.id);
   }
 
   @override
-  Future<ListRecordsResponse> list(
-    String tenantId,
-    ListRecordsRequest request,
-  ) async {
-    final collection =
-        await storage.readCollection(tenantId, request.collection);
+  Future<ListRecordsResponse> list(ListRecordsRequest request) async {
+    final collection = await storage.readCollection(request.collection);
     final filtered = _filterAndSort(collection, request.filter, request.sort);
 
     final startIndex = _resolveStartIndex(filtered, request.options.cursor);
@@ -343,10 +308,8 @@ abstract class BaseDataRepository implements DataRepository {
   }
 
   @override
-  Future<DataRecord> update(
-      String tenantId, UpdateRecordRequest request) async {
+  Future<DataRecord> update(UpdateRecordRequest request) async {
     final existing = await storage.readRecord(
-      tenantId,
       request.record.collection,
       request.record.id,
     );
@@ -363,15 +326,14 @@ abstract class BaseDataRepository implements DataRepository {
     }
 
     final updated = request.record.copyWith(updatedAt: _clock());
-    await storage.writeRecord(tenantId, updated);
-    _recordEvent(tenantId, DataChangeType.updated, updated);
+    await storage.writeRecord(updated);
+    _recordEvent(DataChangeType.updated, updated);
     return updated;
   }
 
   @override
-  Future<DataRecord> patch(String tenantId, PatchRecordRequest request) async {
+  Future<DataRecord> patch(PatchRecordRequest request) async {
     final existing = await storage.readRecord(
-      tenantId,
       request.collection,
       request.id,
     );
@@ -393,15 +355,14 @@ abstract class BaseDataRepository implements DataRepository {
       version: existing.version + 1,
       updatedAt: _clock(),
     );
-    await storage.writeRecord(tenantId, updated);
-    _recordEvent(tenantId, DataChangeType.patched, updated);
+    await storage.writeRecord(updated);
+    _recordEvent(DataChangeType.patched, updated);
     return updated;
   }
 
   @override
-  Future<bool> delete(String tenantId, DeleteRecordRequest request) async {
+  Future<bool> delete(DeleteRecordRequest request) async {
     final existing = await storage.readRecord(
-      tenantId,
       request.collection,
       request.id,
     );
@@ -416,27 +377,24 @@ abstract class BaseDataRepository implements DataRepository {
       );
     }
 
-    final removed =
-        await storage.deleteRecord(tenantId, request.collection, request.id);
+    final removed = await storage.deleteRecord(request.collection, request.id);
     if (removed) {
       _recordDeletion(
-          tenantId, request.collection, request.id, existing.version + 1);
+        request.collection,
+        request.id,
+        existing.version + 1,
+      );
     }
     return removed;
   }
 
   @override
-  Future<List<DataRecord>> bulkUpsert(
-    String tenantId,
-    BulkUpsertRequest request,
-  ) async {
+  Future<List<DataRecord>> bulkUpsert(BulkUpsertRequest request) async {
     final results = <DataRecord>[];
     for (final record in request.records) {
-      final existing =
-          await storage.readRecord(tenantId, record.collection, record.id);
+      final existing = await storage.readRecord(record.collection, record.id);
       if (existing == null) {
         final created = await create(
-          tenantId,
           CreateRecordRequest(
             collection: record.collection,
             payload: record.payload,
@@ -451,8 +409,8 @@ abstract class BaseDataRepository implements DataRepository {
           );
         }
         final updated = record.copyWith(updatedAt: _clock());
-        await storage.writeRecord(tenantId, updated);
-        _recordEvent(tenantId, DataChangeType.updated, updated);
+        await storage.writeRecord(updated);
+        _recordEvent(DataChangeType.updated, updated);
         results.add(updated);
       }
     }
@@ -460,24 +418,22 @@ abstract class BaseDataRepository implements DataRepository {
   }
 
   @override
-  Future<int> bulkDelete(String tenantId, BulkDeleteRequest request) async {
+  Future<int> bulkDelete(BulkDeleteRequest request) async {
     final existing = <String, DataRecord>{};
     for (final id in request.ids) {
-      final record = await storage.readRecord(tenantId, request.collection, id);
+      final record = await storage.readRecord(request.collection, id);
       if (record != null) {
         existing[id] = record;
       }
     }
 
     final removed = await storage.deleteRecords(
-      tenantId,
       request.collection,
       request.ids,
     );
 
     for (final entry in existing.entries) {
       _recordDeletion(
-        tenantId,
         request.collection,
         entry.key,
         entry.value.version + 1,
@@ -489,11 +445,9 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<ExportSnapshotResponse> exportSnapshot(
-    String tenantId,
     ExportSnapshotRequest request,
   ) async {
-    final collection =
-        await storage.readCollection(tenantId, request.collection);
+    final collection = await storage.readCollection(request.collection);
     return ExportSnapshotResponse(
       records: collection,
       generatedAt: _clock(),
@@ -502,11 +456,9 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<SearchRecordsResponse> search(
-    String tenantId,
     SearchRecordsRequest request,
   ) async {
-    final collection =
-        await storage.readCollection(tenantId, request.collection);
+    final collection = await storage.readCollection(request.collection);
     final filtered = _filterAndSort(collection, request.filter, null);
     final query = request.query.toLowerCase();
     final hits = filtered.where((record) {
@@ -529,11 +481,9 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<AggregateMetricsResponse> aggregate(
-    String tenantId,
     AggregateMetricsRequest request,
   ) async {
-    final collection =
-        await storage.readCollection(tenantId, request.collection);
+    final collection = await storage.readCollection(request.collection);
     final filtered = _filterAndSort(collection, request.filter, null);
     final metrics = <String, num>{};
 
@@ -586,10 +536,9 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Stream<DataChangeEvent> watch(
-    String tenantId,
     WatchChangesRequest request,
   ) {
-    final history = _history(tenantId, request.collection);
+    final history = _history(request.collection);
     final startIndex = () {
       if (request.cursor == null) {
         return 0;
@@ -609,12 +558,9 @@ abstract class BaseDataRepository implements DataRepository {
         listener.add(event);
       }
 
-      final subscription = _changeController.stream.listen((recorded) {
-        if (recorded.tenantId == tenantId &&
-            recorded.event.collection == request.collection) {
-          listener.add(recorded.event);
-        }
-      }, onError: listener.addError, onDone: listener.close);
+      final subscription = _changeController.stream
+          .where((event) => event.collection == request.collection)
+          .listen(listener.add, onError: listener.addError, onDone: listener.close);
 
       listener.onCancel = () async {
         await subscription.cancel();
@@ -623,7 +569,6 @@ abstract class BaseDataRepository implements DataRepository {
   }
 
   Future<DataRecord?> _fetchConflictRecord(
-    String tenantId,
     DataCommand command,
   ) async {
     switch (command.type) {
@@ -633,13 +578,11 @@ abstract class BaseDataRepository implements DataRepository {
           return null;
         }
         return get(
-          tenantId,
           GetRecordRequest(collection: request.collection, id: request.id!),
         );
       case DataCommandType.update:
         final request = UpdateRecordRequest.fromJson(command.payload);
         return get(
-          tenantId,
           GetRecordRequest(
             collection: request.record.collection,
             id: request.record.id,
@@ -648,27 +591,24 @@ abstract class BaseDataRepository implements DataRepository {
       case DataCommandType.patch:
         final request = PatchRecordRequest.fromJson(command.payload);
         return get(
-          tenantId,
           GetRecordRequest(collection: request.collection, id: request.id),
         );
       case DataCommandType.delete:
         final request = DeleteRecordRequest.fromJson(command.payload);
         return get(
-          tenantId,
           GetRecordRequest(collection: request.collection, id: request.id),
         );
     }
   }
 
   Future<SyncChangeResponse> _applyCommand(
-    String tenantId,
     SyncChangeRequest message,
   ) async {
     final command = message.command;
     switch (command.type) {
       case DataCommandType.create:
         final request = CreateRecordRequest.fromJson(command.payload);
-        final record = await create(tenantId, request);
+        final record = await create(request);
         return SyncChangeResponse(
           requestId: message.requestId,
           commandId: command.commandId,
@@ -677,7 +617,7 @@ abstract class BaseDataRepository implements DataRepository {
         );
       case DataCommandType.update:
         final request = UpdateRecordRequest.fromJson(command.payload);
-        final record = await update(tenantId, request);
+        final record = await update(request);
         return SyncChangeResponse(
           requestId: message.requestId,
           commandId: command.commandId,
@@ -686,7 +626,7 @@ abstract class BaseDataRepository implements DataRepository {
         );
       case DataCommandType.patch:
         final request = PatchRecordRequest.fromJson(command.payload);
-        final record = await patch(tenantId, request);
+        final record = await patch(request);
         return SyncChangeResponse(
           requestId: message.requestId,
           commandId: command.commandId,
@@ -695,7 +635,7 @@ abstract class BaseDataRepository implements DataRepository {
         );
       case DataCommandType.delete:
         final request = DeleteRecordRequest.fromJson(command.payload);
-        final removed = await delete(tenantId, request);
+        final removed = await delete(request);
         if (!removed) {
           // Отсутствие записи не считаем ошибкой — команда идемпотентна.
           return SyncChangeResponse(
@@ -714,15 +654,14 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Stream<SyncChangeResponse> sync(
-    String tenantId,
     Stream<SyncChangeRequest> requests,
   ) async* {
     await for (final message in requests) {
       try {
-        final response = await _applyCommand(tenantId, message);
+        final response = await _applyCommand(message);
         yield response;
       } on RpcDataError catch (error) {
-        final conflict = await _fetchConflictRecord(tenantId, message.command);
+        final conflict = await _fetchConflictRecord(message.command);
         yield SyncChangeResponse(
           requestId: message.requestId,
           commandId: message.command.commandId,
@@ -748,61 +687,50 @@ abstract class BaseDataRepository implements DataRepository {
 /// картах. Эту реализацию легко заменить на SQLite/Isar/Hive, не меняя
 /// бизнес-логику `BaseDataRepository`.
 final class InMemoryStorageAdapter implements DataStorageAdapter {
-  final Map<String, Map<String, Map<String, DataRecord>>> _storage = {};
+  final Map<String, Map<String, DataRecord>> _storage = {};
 
-  Map<String, Map<String, DataRecord>> _tenant(String tenantId) {
-    return _storage.putIfAbsent(
-        tenantId, () => <String, Map<String, DataRecord>>{});
-  }
-
-  Map<String, DataRecord> _collection(String tenantId, String collection) {
-    final tenantStore = _tenant(tenantId);
-    return tenantStore.putIfAbsent(collection, () => <String, DataRecord>{});
+  Map<String, DataRecord> _collection(String collection) {
+    return _storage.putIfAbsent(collection, () => <String, DataRecord>{});
   }
 
   @override
-  Future<DataRecord?> readRecord(
-      String tenantId, String collection, String id) async {
-    final store = _collection(tenantId, collection);
+  Future<DataRecord?> readRecord(String collection, String id) async {
+    final store = _collection(collection);
     return store[id];
   }
 
   @override
-  Future<List<DataRecord>> readCollection(
-      String tenantId, String collection) async {
-    final store = _collection(tenantId, collection);
+  Future<List<DataRecord>> readCollection(String collection) async {
+    final store = _collection(collection);
     return store.values.toList(growable: false);
   }
 
   @override
-  Future<void> writeRecord(String tenantId, DataRecord record) async {
-    final store = _collection(tenantId, record.collection);
+  Future<void> writeRecord(DataRecord record) async {
+    final store = _collection(record.collection);
     store[record.id] = record;
   }
 
   @override
-  Future<void> writeRecords(
-      String tenantId, Iterable<DataRecord> records) async {
+  Future<void> writeRecords(Iterable<DataRecord> records) async {
     for (final record in records) {
-      final store = _collection(tenantId, record.collection);
+      final store = _collection(record.collection);
       store[record.id] = record;
     }
   }
 
   @override
-  Future<bool> deleteRecord(
-      String tenantId, String collection, String id) async {
-    final store = _collection(tenantId, collection);
+  Future<bool> deleteRecord(String collection, String id) async {
+    final store = _collection(collection);
     return store.remove(id) != null;
   }
 
   @override
   Future<int> deleteRecords(
-    String tenantId,
     String collection,
     Iterable<String> ids,
   ) async {
-    final store = _collection(tenantId, collection);
+    final store = _collection(collection);
     var removed = 0;
     for (final id in ids) {
       if (store.remove(id) != null) {
@@ -824,7 +752,7 @@ final class InMemoryDataRepository extends BaseDataRepository {
   InMemoryDataRepository({
     InMemoryStorageAdapter? storage,
     DateTime Function()? clock,
-    String Function(String tenantId, String collection)? idGenerator,
+    String Function(String collection)? idGenerator,
   }) : super(
           storage ?? InMemoryStorageAdapter(),
           clock: clock,

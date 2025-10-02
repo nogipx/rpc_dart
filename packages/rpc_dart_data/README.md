@@ -22,7 +22,7 @@ and the Flutter guide for
 - Реактивные изменения: watchChanges с курсорами
 - Offline-first: двунаправленный syncChanges + очередь команд `OfflineCommandQueue`
 - Оптимистичная конкуренция через версии записей
-- Multi-tenant + auth через заголовки (`x-tenant-id`, `authorization`)
+- Авторизация через заголовок `authorization: Bearer ...`
 
 ## Архитектура (слои)
 1. Transport (WebSocket / HTTP2 / isolate / TURN / in-memory) из `rpc_dart_transports`
@@ -43,10 +43,7 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 Future<void> main() async {
   final env = await DataServiceFactory.inMemory();
   final client = env.client;
-  final ctx = RpcContext.withHeaders({
-    'x-tenant-id': 'demo',
-    'authorization': 'Bearer dev',
-  });
+  final ctx = RpcContext.withHeaders({'authorization': 'Bearer dev'});
 
   final rec = await client.create(
     collection: 'notes',
@@ -77,7 +74,7 @@ Future<void> main() async {
 ```dart
 final env = await DataServiceFactory.inMemory();
 final client = env.client;
-final ctx = RpcContext.withHeaders({'x-tenant-id':'t','authorization':'Bearer x'});
+final ctx = RpcContext.withHeaders({'authorization':'Bearer x'});
 final queue = OfflineCommandQueue(client.rawCaller, sessionId: 'device-1');
 
 // Локально (офлайн) формируем команду create и сериализуем
@@ -124,7 +121,7 @@ print(metrics.metrics);
 ```dart
 class PostgresAdapter implements DataStorageAdapter {
   // readRecord, writeRecord, deleteRecord, ... собственная реализация
-  @override Future<DataRecord?> readRecord(String tenant, String collection, String id) async { /* ... */ }
+  @override Future<DataRecord?> readRecord(String collection, String id) async { /* ... */ }
   // остальные методы
   @override Future<void> dispose() async {}
 }
@@ -147,7 +144,7 @@ final storage = DriftDataStorageAdapter.file(File('data.sqlite3'));
 final repository = DriftDataRepository(storage: storage);
 final env = await DataServiceFactory.inMemory(repository: repository);
 
-final ctx = RpcContext.withHeaders({'x-tenant-id': 'tenant-1'});
+final ctx = RpcContext.withHeaders({'authorization': 'Bearer demo'});
 await env.client.create(collection: 'notes', payload: {'title': 'Hello'}, context: ctx);
 ```
 
@@ -161,12 +158,12 @@ final storage = DriftDataStorageAdapter.memory();
 
 Каждая коллекция хранится в отдельной таблице. Адаптер автоматически регистрирует коллекцию
 в служебной таблице `collection_registry` и создаёт dedicated-таблицу при первой записи.
-Имя таблицы генерируется из tenantId + названия коллекции, символы за пределами `[a-zA-Z0-9_]`
+Имя таблицы генерируется из названия коллекции: символы за пределами `[a-zA-Z0-9_]`
 нормализуются. Это позволяет держать коллекции изолированно и упрощает бэкапы/миграции:
 
 ```text
 sqlite> .tables
-collection_registry   c_tenant_1_notes   c_tenant_1_tasks
+collection_registry   c_notes   c_tasks
 ```
 
 Чтение из ещё не созданной коллекции вернёт пустой список и не создаст таблицу, пока не
