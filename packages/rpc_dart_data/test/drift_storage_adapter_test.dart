@@ -361,4 +361,58 @@ void main() {
     };
     expect(registry.keys, containsAll(['logs', 'metrics', 'notes', 'tasks']));
   });
+
+  test('search respects cursor-based pagination', () async {
+    final storage = DriftDataStorageAdapter.file(dbFile);
+    final repository = DriftDataRepository(storage: storage);
+    final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => repository.storage.dispose());
+    addTearDown(() async => env.dispose());
+
+    final ctx = buildContext();
+
+    final ids = <String>{};
+    for (final id in ['note-1', 'note-2', 'note-3']) {
+      final record = await env.client.create(
+        collection: 'notes',
+        id: id,
+        payload: {
+          'title': 'Note $id',
+          'body': 'note body $id',
+        },
+        context: ctx,
+      );
+      ids.add(record.id);
+    }
+
+    final firstPage = await env.client.search(
+      collection: 'notes',
+      query: 'note',
+      options: const QueryOptions(limit: 2),
+      context: ctx,
+    );
+
+    expect(firstPage.totalHits, 3);
+    expect(firstPage.records, hasLength(2));
+    expect(firstPage.nextCursor, isNotNull);
+    expect(ids.containsAll(firstPage.records.map((record) => record.id)), isTrue);
+
+    final secondPage = await env.client.search(
+      collection: 'notes',
+      query: 'note',
+      options: QueryOptions(limit: 2, cursor: firstPage.nextCursor),
+      context: ctx,
+    );
+
+    expect(secondPage.records, hasLength(1));
+    expect(secondPage.nextCursor, isNull);
+    expect(ids.contains(secondPage.records.single.id), isTrue);
+    expect(
+      {
+        ...firstPage.records.map((record) => record.id),
+        ...secondPage.records.map((record) => record.id),
+      },
+      equals(ids),
+    );
+  });
 }

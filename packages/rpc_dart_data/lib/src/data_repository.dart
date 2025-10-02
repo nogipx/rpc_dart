@@ -470,11 +470,16 @@ abstract class BaseDataRepository implements DataRepository {
           .map((value) => value.toString().toLowerCase())
           .join(' ');
       return text.contains(query);
-    }).toList();
+    }).toList(growable: false);
 
+    final startIndex = _resolveStartIndex(hits, request.options.cursor);
     final limit = request.options.limit;
-    final slice = hits.take(limit).toList(growable: false);
-    final nextCursor = slice.length == limit ? slice.last.id : null;
+    final endIndex = startIndex >= hits.length
+        ? hits.length
+        : min(startIndex + limit, hits.length);
+    final slice = hits.sublist(startIndex, endIndex);
+    final nextCursor =
+        endIndex < hits.length && slice.isNotEmpty ? slice.last.id : null;
 
     return SearchRecordsResponse(
       records: slice,
