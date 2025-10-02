@@ -36,6 +36,25 @@ class EchoResponderContract extends RpcResponderContract {
   }
 }
 
+class PingResponderContract extends RpcResponderContract {
+  PingResponderContract() : super('integration');
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'ping',
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+      handler: (request, {context}) async {
+        if (request.value != 'ping') {
+          throw StateError('Unexpected payload: ${request.value}');
+        }
+        return RpcString('pong');
+      },
+    );
+  }
+}
+
 void main() {
   group('RpcTurnRelayPeer', () {
     late TurnRelayServer server;
@@ -183,6 +202,77 @@ void main() {
 
       expect(respAB.value, 'echo:fromA');
       expect(respBA.value, 'echo:fromB');
+    });
+
+    test('discovers peer via relay catalogue and exchanges ping/pong',
+        () async {
+      final peerA = await RpcTurnRelayPeer.connectToRelay(
+        serverAddress: server.bindAddress,
+        serverPort: server.port,
+        responderContracts: [PingResponderContract()],
+      );
+      peers.add(peerA);
+
+      const serviceId = 'integration.ping';
+      await peerA.registerService(
+        serviceId: serviceId,
+        description: 'Peer A ping handler',
+      );
+
+      final peerB = await RpcTurnRelayPeer.connectToRelay(
+        serverAddress: server.bindAddress,
+        serverPort: server.port,
+      );
+      peers.add(peerB);
+
+      TurnRelayServiceInfo? serviceInfo;
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (serviceInfo == null && DateTime.now().isBefore(deadline)) {
+        final services = await peerB.listServices(serviceId: serviceId);
+        if (services.isNotEmpty) {
+          serviceInfo = services.single;
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+
+      expect(serviceInfo, isNotNull, reason: 'service was not discovered');
+      expect(serviceInfo!.serviceId, serviceId);
+      expect(serviceInfo.description, 'Peer A ping handler');
+      expect(serviceInfo.relayAddress.address, peerA.relayAddress.address);
+      expect(serviceInfo.relayPort, peerA.relayPort);
+
+      await peerB.connectPeer(
+        peerAddress: serviceInfo.relayAddress,
+        peerPort: serviceInfo.relayPort,
+      );
+
+      await peerB.sendConnectionInfoToPeer(
+        peerAddress: serviceInfo.relayAddress,
+        peerPort: serviceInfo.relayPort,
+      );
+
+      final connectRequest = await peerA.connectRequests.first.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () =>
+            throw StateError('peerA did not receive connect request'),
+      );
+
+      await peerA.connectPeer(
+        peerAddress: connectRequest.peerAddress,
+        peerPort: connectRequest.peerPort,
+      );
+
+      final response =
+          await peerB.callerEndpoint.unaryRequest<RpcString, RpcString>(
+        serviceName: 'integration',
+        methodName: 'ping',
+        requestCodec: RpcString.codec,
+        responseCodec: RpcString.codec,
+        request: const RpcString('ping'),
+      );
+
+      expect(response.value, 'pong');
     });
 
     test('close is idempotent', () async {
