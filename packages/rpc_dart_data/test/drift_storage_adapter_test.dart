@@ -6,14 +6,48 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 
 void main() {
+  final dbFile = File(
+    p.join(Directory.current.path, 'rpc_dart_data_test.db'),
+  );
+
+  Future<void> resetDatabase() async {
+    final storage = DriftDataStorageAdapter.file(dbFile);
+    try {
+      final tables = await storage.database
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+            " AND name NOT LIKE 'sqlite_%'",
+          )
+          .get();
+
+      for (final row in tables) {
+        final tableName = row.read<String>('name');
+        if (tableName == 'collection_registry') {
+          await storage.database
+              .customStatement('DELETE FROM collection_registry');
+        } else {
+          await storage.database
+              .customStatement('DROP TABLE IF EXISTS "$tableName"');
+        }
+      }
+    } finally {
+      await storage.dispose();
+    }
+  }
+
+  setUp(() async {
+    await resetDatabase();
+  });
+
   RpcContext buildContext() => RpcContext.withHeaders({
         'authorization': 'Bearer test-token',
       });
 
   test('Drift storage adapter supports CRUD lifecycle', () async {
-    final storage = DriftDataStorageAdapter.memory();
+    final storage = DriftDataStorageAdapter.file(dbFile);
     final repository = DriftDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => repository.storage.dispose());
     addTearDown(() async => env.dispose());
 
     final ctx = buildContext();
@@ -68,19 +102,19 @@ void main() {
   });
 
   test('Drift storage adapter persists records on disk', () async {
-    final tempDir = await Directory.systemTemp.createTemp(
-      'rpc_dart_drift_test',
-    );
-    addTearDown(() async => tempDir.delete(recursive: true));
-    final dbFile = File(p.join(tempDir.path, 'data.sqlite3'));
-
-    Future<InMemoryDataServiceEnvironment> openEnv() async {
+    Future<({
+      InMemoryDataServiceEnvironment env,
+      DriftDataRepository repository,
+    })> openEnv() async {
       final storage = DriftDataStorageAdapter.file(dbFile);
       final repository = DriftDataRepository(storage: storage);
-      return DataServiceFactory.inMemory(repository: repository);
+      final env = await DataServiceFactory.inMemory(repository: repository);
+      return (env: env, repository: repository);
     }
 
-    final env1 = await openEnv();
+    final firstSession = await openEnv();
+    final env1 = firstSession.env;
+    final repo1 = firstSession.repository;
     final ctx = buildContext();
 
     final created = await env1.client.create(
@@ -90,9 +124,15 @@ void main() {
     );
     final recordId = created.id;
     await env1.dispose();
+    await repo1.storage.dispose();
 
-    final env2 = await openEnv();
-    addTearDown(() async => env2.dispose());
+    final secondSession = await openEnv();
+    final env2 = secondSession.env;
+    final repo2 = secondSession.repository;
+    addTearDown(() async {
+      await env2.dispose();
+      await repo2.storage.dispose();
+    });
 
     final fetched = await env2.client.get(
       collection: 'tasks',
@@ -105,9 +145,10 @@ void main() {
   });
 
   test('creates isolated tables per collection on demand', () async {
-    final storage = DriftDataStorageAdapter.memory();
+    final storage = DriftDataStorageAdapter.file(dbFile);
     final repository = DriftDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => repository.storage.dispose());
     addTearDown(() async => env.dispose());
 
     // Reading before any writes should not create a backing table.
@@ -154,27 +195,23 @@ void main() {
   });
 
   test('supports multi-session clients working with many collections', () async {
-    final tempDir = await Directory.systemTemp.createTemp(
-      'rpc_dart_drift_integration',
-    );
-    addTearDown(() async {
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
-      }
-    });
-    final dbFile = File(p.join(tempDir.path, 'data.sqlite3'));
-
-    Future<InMemoryDataServiceEnvironment> startSession(String name) async {
+    Future<({
+      InMemoryDataServiceEnvironment env,
+      DriftDataRepository repository,
+    })> startSession(String name) async {
       final storage = DriftDataStorageAdapter.file(dbFile);
       final repository = DriftDataRepository(storage: storage);
-      return DataServiceFactory.inMemory(
+      final env = await DataServiceFactory.inMemory(
         repository: repository,
         serverLabel: 'DataResponder-$name',
         clientLabel: 'DataCaller-$name',
       );
+      return (env: env, repository: repository);
     }
 
     final session1 = await startSession('session1');
+    final env1 = session1.env;
+    final repo1 = session1.repository;
 
     final ctxAlice = RpcContext.withHeaders({
       'authorization': 'Bearer alice',
@@ -186,7 +223,7 @@ void main() {
       'authorization': 'Bearer charlie',
     });
 
-    final aliceNote = await session1.client.create(
+    final aliceNote = await env1.client.create(
       collection: 'notes',
       payload: {
         'title': 'Product ideas',
@@ -195,7 +232,7 @@ void main() {
       context: ctxAlice,
     );
 
-    final bobTask = await session1.client.create(
+    final bobTask = await env1.client.create(
       collection: 'tasks',
       payload: {
         'title': 'Ship drift integration',
@@ -205,7 +242,7 @@ void main() {
       context: ctxBob,
     );
 
-    final systemLog = await session1.client.create(
+    final systemLog = await env1.client.create(
       collection: 'logs',
       payload: {
         'event': 'boot',
@@ -214,7 +251,7 @@ void main() {
       context: ctxCharlie,
     );
 
-    final bobTaskPatched = await session1.client.patch(
+    final bobTaskPatched = await env1.client.patch(
       collection: 'tasks',
       id: bobTask.id,
       expectedVersion: bobTask.version,
@@ -222,7 +259,7 @@ void main() {
       context: ctxBob,
     );
 
-    final notesList = await session1.client.list(
+    final notesList = await env1.client.list(
       collection: 'notes',
       context: ctxAlice,
     );
@@ -232,7 +269,7 @@ void main() {
       isNot(contains(bobTask.id)),
     );
 
-    final tasksList = await session1.client.list(
+    final tasksList = await env1.client.list(
       collection: 'tasks',
       context: ctxBob,
     );
@@ -241,22 +278,28 @@ void main() {
     };
     expect(tasksById[bobTask.id]!.payload['status'], 'done');
 
-    final logsList = await session1.client.list(
+    final logsList = await env1.client.list(
       collection: 'logs',
       context: ctxCharlie,
     );
     expect(logsList.records.length, 1);
     expect(logsList.records.single.payload['event'], 'boot');
 
-    await session1.dispose();
+    await env1.dispose();
+    await repo1.storage.dispose();
 
     final session2 = await startSession('session2');
-    addTearDown(() async => session2.dispose());
+    final env2 = session2.env;
+    final repo2 = session2.repository;
+    addTearDown(() async {
+      await env2.dispose();
+      await repo2.storage.dispose();
+    });
     final auditCtx = RpcContext.withHeaders({
       'authorization': 'Bearer auditor',
     });
 
-    final persistedTask = await session2.client.get(
+    final persistedTask = await env2.client.get(
       collection: 'tasks',
       id: bobTask.id,
       context: auditCtx,
@@ -265,7 +308,7 @@ void main() {
     expect(persistedTask!.payload['status'], 'done');
     expect(persistedTask.version, bobTaskPatched.version);
 
-    final persistedNotes = await session2.client.list(
+    final persistedNotes = await env2.client.list(
       collection: 'notes',
       context: auditCtx,
     );
@@ -274,14 +317,14 @@ void main() {
       contains(aliceNote.id),
     );
 
-    final persistedLog = await session2.client.get(
+    final persistedLog = await env2.client.get(
       collection: 'logs',
       id: systemLog.id,
       context: auditCtx,
     );
     expect(persistedLog, isNotNull);
 
-    final metricsRecord = await session2.client.create(
+    final metricsRecord = await env2.client.create(
       collection: 'metrics',
       payload: {
         'key': 'uptime',
@@ -290,14 +333,13 @@ void main() {
       context: auditCtx,
     );
 
-    final metricsList = await session2.client.list(
+    final metricsList = await env2.client.list(
       collection: 'metrics',
       context: auditCtx,
     );
     expect(metricsList.records.map((record) => record.id), contains(metricsRecord.id));
 
-    final repository2 = session2.server.repository as DriftDataRepository;
-    final tables = await repository2.storage.database
+    final tables = await repo2.storage.database
         .customSelect(
           "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
         )
@@ -308,7 +350,7 @@ void main() {
       containsAll(['collection_registry', 'c_logs', 'c_metrics', 'c_notes', 'c_tasks']),
     );
 
-    final registryRows = await repository2.storage.database
+    final registryRows = await repo2.storage.database
         .customSelect(
           'SELECT collection, table_name FROM collection_registry ORDER BY collection',
         )
