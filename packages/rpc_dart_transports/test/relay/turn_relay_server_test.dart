@@ -4,7 +4,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' show Hmac, sha1;
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';

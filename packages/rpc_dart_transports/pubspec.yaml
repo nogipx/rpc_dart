@@ -22,9 +22,9 @@ dependencies:
   licensify: ^3.1.0
   crypto: ^3.0.5
 
-#dependency_overrides:
-#  rpc_dart:
-#    path: ../rpc_dart
+dependency_overrides:
+  rpc_dart:
+    path: ../rpc_dart
 
 dev_dependencies:
   lints: ^5.1.1
