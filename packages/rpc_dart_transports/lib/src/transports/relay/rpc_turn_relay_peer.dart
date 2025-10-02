@@ -97,7 +97,7 @@ class RpcTurnRelayPeer {
 
   /// Отправляет на relay запрос, чтобы оно уведомило удалённого пира о желании
   /// подключиться.
-  Future<void> requestPeerConnection({
+  Future<void> sendConnectionInfoToPeer({
     required InternetAddress peerAddress,
     required int peerPort,
     Uint8List? payload,
