@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
@@ -432,6 +433,78 @@ void main() {
     expect(storedUpdated.updatedAt, newUpdatedAt);
     expect(storedUpdated.version, 4);
     expect(storedUpdated.payload['status'], 'synced');
+  });
+
+  test('deleteCollection drops tables and registry entries', () async {
+    final storage = DriftDataStorageAdapter.file(dbFile);
+    final repository = DriftDataRepository(storage: storage);
+    final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => repository.storage.dispose());
+    addTearDown(() async => env.dispose());
+
+    final ctx = buildContext();
+
+    await env.client.create(
+      collection: 'archive',
+      payload: {'title': 'Old note'},
+      context: ctx,
+    );
+    await env.client.create(
+      collection: 'active',
+      payload: {'title': 'Fresh note'},
+      context: ctx,
+    );
+
+    var tableRows = await storage.database
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+        )
+        .get();
+    expect(
+      tableRows.map((row) => row.read<String>('name')),
+      contains('c_archive'),
+    );
+
+    final deleted = await env.client.deleteCollection(
+      collection: 'archive',
+      context: ctx,
+    );
+    expect(deleted, isTrue);
+
+    final archiveList = await env.client.list(
+      collection: 'archive',
+      context: ctx,
+    );
+    expect(archiveList.records, isEmpty);
+
+    tableRows = await storage.database
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+        )
+        .get();
+    final tableNamesAfter =
+        tableRows.map((row) => row.read<String>('name')).toList();
+    expect(tableNamesAfter, isNot(contains('c_archive')));
+
+    final registryRows = await storage.database
+        .customSelect(
+          'SELECT collection FROM collection_registry WHERE collection = ?',
+          variables: [Variable<String>('archive')],
+        )
+        .get();
+    expect(registryRows, isEmpty);
+
+    final secondDelete = await env.client.deleteCollection(
+      collection: 'archive',
+      context: ctx,
+    );
+    expect(secondDelete, isFalse);
+
+    final activeList = await env.client.list(
+      collection: 'active',
+      context: ctx,
+    );
+    expect(activeList.records, isNotEmpty);
   });
 
   test('search respects cursor-based pagination', () async {

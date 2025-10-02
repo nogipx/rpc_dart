@@ -26,6 +26,9 @@ abstract interface class IDataServiceContract implements IRpcContract {
   /// Удаление записи.
   static const String deleteRecord = 'deleteRecord';
 
+  /// Удаление коллекции целиком.
+  static const String deleteCollection = 'deleteCollection';
+
   /// Массовый upsert записей.
   static const String bulkUpsert = 'bulkUpsert';
 
@@ -146,6 +149,10 @@ const RpcCodec<DeleteRecordRequest> deleteRequestCodec =
     RpcCodec.withDecoder(DeleteRecordRequest.fromJson);
 const RpcCodec<DeleteRecordResponse> deleteResponseCodec =
     RpcCodec.withDecoder(DeleteRecordResponse.fromJson);
+const RpcCodec<DeleteCollectionRequest> deleteCollectionRequestCodec =
+    RpcCodec.withDecoder(DeleteCollectionRequest.fromJson);
+const RpcCodec<DeleteCollectionResponse> deleteCollectionResponseCodec =
+    RpcCodec.withDecoder(DeleteCollectionResponse.fromJson);
 const RpcCodec<DataRecord> recordCodec =
     RpcCodec.withDecoder(DataRecord.fromJson);
 const RpcCodec<BulkUpsertResponse> bulkUpsertResponseCodec =

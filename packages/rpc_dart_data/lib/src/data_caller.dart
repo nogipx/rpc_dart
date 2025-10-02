@@ -95,6 +95,19 @@ class DataServiceCaller extends RpcCallerContract
     );
   }
 
+  Future<DeleteCollectionResponse> deleteCollection(
+    DeleteCollectionRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary(
+      methodName: IDataServiceContract.deleteCollection,
+      request: request,
+      requestCodec: deleteCollectionRequestCodec,
+      responseCodec: deleteCollectionResponseCodec,
+      context: context,
+    );
+  }
+
   Future<BulkUpsertResponse> bulkUpsert(
     Stream<DataRecord> records, {
     RpcContext? context,

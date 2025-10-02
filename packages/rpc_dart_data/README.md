@@ -15,7 +15,7 @@ and the Flutter guide for
 
 Высокоуровневый слой данных (CRUD + запросы + стримы + офлайн синхронизация) поверх `rpc_dart`. Предоставляет:
 
-- Универсальный контракт `DataService` (create/get/list/update/patch/delete)
+- Универсальный контракт `DataService` (create/get/list/update/patch/delete/deleteCollection)
 - Пакетные операции: bulkUpsert / bulkDelete
 - Поиск и метрики: search + aggregate (count / sum / avg / min / max)
 - Экспорт снимка коллекции (snapshot)
@@ -123,6 +123,7 @@ class PostgresAdapter implements DataStorageAdapter {
   // readRecord, writeRecord, deleteRecord, ... собственная реализация
   @override Future<DataRecord?> readRecord(String collection, String id) async { /* ... */ }
   // остальные методы
+  @override Future<bool> deleteCollection(String collection) async { /* ... */ }
   @override Future<void> dispose() async {}
 }
 
@@ -168,6 +169,9 @@ collection_registry   c_notes   c_tasks
 
 Чтение из ещё не созданной коллекции вернёт пустой список и не создаст таблицу, пока не
 произойдёт первая запись.
+
+Коллекцию можно удалить вызовом `deleteCollection(collection: 'archive')` на `DataService`.
+Адаптер удалит таблицу и запись в `collection_registry`, не затрагивая другие коллекции.
 
 ## Тесты
 Рекомендуем smoke тест (пример добавлен в `test/data_service_facade_test.dart`).

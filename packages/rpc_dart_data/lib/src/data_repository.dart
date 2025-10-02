@@ -18,6 +18,8 @@ abstract interface class DataRepository {
 
   Future<bool> delete(DeleteRecordRequest request);
 
+  Future<bool> deleteCollection(DeleteCollectionRequest request);
+
   Future<List<DataRecord>> bulkUpsert(BulkUpsertRequest request);
 
   Future<int> bulkDelete(BulkDeleteRequest request);
@@ -62,6 +64,8 @@ abstract interface class DataStorageAdapter {
     String collection,
     Iterable<String> ids,
   );
+
+  Future<bool> deleteCollection(String collection);
 
   Future<void> dispose();
 }
@@ -390,6 +394,28 @@ abstract class BaseDataRepository implements DataRepository {
       );
     }
     return removed;
+  }
+
+  @override
+  Future<bool> deleteCollection(DeleteCollectionRequest request) async {
+    final existingRecords = await storage.readCollection(request.collection);
+    final removed = await storage.deleteCollection(request.collection);
+    if (!removed) {
+      return false;
+    }
+
+    final history = _history(request.collection);
+    history.clear();
+
+    for (final record in existingRecords) {
+      _recordDeletion(
+        request.collection,
+        record.id,
+        record.version + 1,
+      );
+    }
+
+    return true;
   }
 
   @override
@@ -752,6 +778,11 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
       }
     }
     return removed;
+  }
+
+  @override
+  Future<bool> deleteCollection(String collection) async {
+    return _storage.remove(collection) != null;
   }
 
   @override

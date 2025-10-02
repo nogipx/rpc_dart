@@ -66,6 +66,11 @@ abstract interface class DataService {
     RpcContext? context,
   });
 
+  Future<bool> deleteCollection({
+    required String collection,
+    RpcContext? context,
+  });
+
   Future<List<DataRecord>> bulkUpsert({
     required Iterable<DataRecord> records,
     RpcContext? context,
@@ -217,6 +222,18 @@ class DataServiceClient implements DataService {
         id: id,
         expectedVersion: expectedVersion,
       ),
+      context: context,
+    );
+    return response.deleted;
+  }
+
+  @override
+  Future<bool> deleteCollection({
+    required String collection,
+    RpcContext? context,
+  }) async {
+    final response = await _caller.deleteCollection(
+      DeleteCollectionRequest(collection: collection),
       context: context,
     );
     return response.deleted;

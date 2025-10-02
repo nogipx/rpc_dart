@@ -363,6 +363,28 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
   }
 
   @override
+  Future<bool> deleteCollection(String collection) async {
+    final tableName = await _lookupTable(collection);
+    if (tableName == null) {
+      return false;
+    }
+
+    await _ensureRegistry();
+    await _database.transaction(() async {
+      await _database.customStatement(
+        'DROP TABLE IF EXISTS "$tableName"',
+      );
+      await _database.customStatement(
+        'DELETE FROM collection_registry WHERE collection = ?',
+        [collection],
+      );
+    });
+
+    _knownTables.remove(tableName);
+    return true;
+  }
+
+  @override
   Future<void> dispose() async {
     await _database.close();
   }

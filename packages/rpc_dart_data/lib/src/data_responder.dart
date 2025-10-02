@@ -67,6 +67,14 @@ class DataServiceResponder extends RpcResponderContract
       description: 'Удаление с проверкой версии',
     );
 
+    addUnaryMethod<DeleteCollectionRequest, DeleteCollectionResponse>(
+      methodName: IDataServiceContract.deleteCollection,
+      handler: _handleDeleteCollection,
+      requestCodec: deleteCollectionRequestCodec,
+      responseCodec: deleteCollectionResponseCodec,
+      description: 'Удаление коллекции и всех записей',
+    );
+
     addClientStreamMethod<DataRecord, BulkUpsertResponse>(
       methodName: IDataServiceContract.bulkUpsert,
       handler: _handleBulkUpsertStream,
@@ -185,6 +193,17 @@ class DataServiceResponder extends RpcResponderContract
       () => _repository.delete(request),
     );
     return DeleteRecordResponse(deleted: deleted);
+  }
+
+  Future<DeleteCollectionResponse> _handleDeleteCollection(
+    DeleteCollectionRequest request, {
+    RpcContext? context,
+  }) async {
+    final deleted = await _runSafely(
+      context,
+      () => _repository.deleteCollection(request),
+    );
+    return DeleteCollectionResponse(deleted: deleted);
   }
 
   Future<BulkUpsertResponse> _handleBulkUpsertStream(
