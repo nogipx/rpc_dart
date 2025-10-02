@@ -71,8 +71,9 @@ void main() {
   });
 
   test('Drift storage adapter persists records on disk', () async {
-    final tempDir =
-        await Directory.systemTemp.createTemp('rpc_dart_drift_test');
+    final tempDir = await Directory.systemTemp.createTemp(
+      'rpc_dart_drift_test',
+    );
     addTearDown(() async => tempDir.delete(recursive: true));
     final dbFile = File(p.join(tempDir.path, 'data.sqlite3'));
 
@@ -104,5 +105,58 @@ void main() {
 
     expect(fetched, isNotNull);
     expect(fetched!.payload['title'], 'Persisted');
+  });
+
+  test('creates isolated tables per collection on demand', () async {
+    final storage = DriftDataStorageAdapter.memory();
+    final repository = DriftDataRepository(storage: storage);
+    final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => env.dispose());
+
+    // Reading before any writes should not create a backing table.
+    final empty = await storage.readCollection('tenant-1', 'drafts');
+    expect(empty, isEmpty);
+
+    final ctx = buildContext();
+
+    await env.client.create(
+      collection: 'notes',
+      payload: {'title': 'One'},
+      context: ctx,
+    );
+    await env.client.create(
+      collection: 'tasks',
+      payload: {'title': 'Two'},
+      context: ctx,
+    );
+
+    final tables = await storage.database
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+        )
+        .get();
+    final tableNames = tables.map((row) => row.read<String>('name')).toList();
+    expect(
+      tableNames,
+      containsAll([
+        'collection_registry',
+        'c_tenant_1_notes',
+        'c_tenant_1_tasks',
+      ]),
+    );
+
+    final registryRows = await storage.database
+        .customSelect(
+          'SELECT collection, table_name FROM collection_registry ORDER BY collection',
+        )
+        .get();
+    final registryMap = <String, String>{
+      for (final row in registryRows)
+        row.read<String>('collection'): row.read<String>('table_name'),
+    };
+    expect(
+      registryMap,
+      equals({'notes': 'c_tenant_1_notes', 'tasks': 'c_tenant_1_tasks'}),
+    );
   });
 }
