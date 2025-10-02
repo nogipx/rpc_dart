@@ -12,6 +12,11 @@ export 'src/data_repository.dart'
         BaseDataRepository,
         InMemoryDataRepository,
         InMemoryStorageAdapter;
+export 'src/drift_storage.dart'
+    show
+        DriftDataRepository,
+        DriftDataStorageAdapter,
+        DriftDataDatabase;
 export 'src/data_responder.dart'
     show DataServiceResponder; // низкоуровневый респондёр
 export 'src/data_service_facade.dart'

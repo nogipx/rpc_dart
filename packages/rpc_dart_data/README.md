@@ -137,6 +137,28 @@ final server = DataServiceFactory.createServer(
 );
 ```
 
+## Drift + SQLite хранилище
+Пакет включает готовый адаптер `DriftDataStorageAdapter`, который хранит записи в SQLite
+через [drift](https://drift.simonbinder.eu/). Его можно использовать как in-memory БД или
+persisted файл:
+
+```dart
+final storage = DriftDataStorageAdapter.file(File('data.sqlite3'));
+final repository = DriftDataRepository(storage: storage);
+final env = await DataServiceFactory.inMemory(repository: repository);
+
+final ctx = RpcContext.withHeaders({'x-tenant-id': 'tenant-1'});
+await env.client.create(collection: 'notes', payload: {'title': 'Hello'}, context: ctx);
+```
+
+Для тестов или демо можно использовать in-memory вариант:
+
+```dart
+final storage = DriftDataStorageAdapter.memory();
+```
+
+При вызове `dispose()` на репозитории/сервисе подключение к SQLite закрывается автоматически.
+
 ## Тесты
 Рекомендуем smoke тест (пример добавлен в `test/data_service_facade_test.dart`).
 Запуск:
