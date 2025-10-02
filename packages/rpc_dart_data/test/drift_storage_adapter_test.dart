@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' as drift;
 import 'package:path/path.dart' as p;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
@@ -10,6 +10,7 @@ void main() {
   final dbFile = File(
     p.join(Directory.current.path, 'rpc_dart_data_test.db'),
   );
+  final skip = false;
 
   Future<void> resetDatabase() async {
     final storage = DriftDataStorageAdapter.file(dbFile);
@@ -37,14 +38,41 @@ void main() {
   }
 
   setUp(() async {
-    await resetDatabase();
+    if (!skip) {
+      await resetDatabase();
+    }
   });
 
   RpcContext buildContext() => RpcContext.withHeaders({
         'authorization': 'Bearer test-token',
       });
 
-  test('Drift storage adapter supports CRUD lifecycle', () async {
+  if (skip) {
+    test('tsrtr', () async {
+      final storage = DriftDataStorageAdapter.file(dbFile);
+      final repository = DriftDataRepository(storage: storage);
+      final env = await DataServiceFactory.inMemory(repository: repository);
+      final context = RpcContext.withHeaders({
+        'authorization': 'Bearer test-token',
+      });
+      await env.client.delete(
+        collection: 'tasks',
+        id: 'tasks-1759370294574943-6d6dec62',
+        context: context,
+      );
+      await env.client.update(
+        collection: 'logs',
+        payload: {
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+        id: '123456',
+        context: context,
+        expectedVersion: 1,
+      );
+    });
+  }
+
+  test('Drift storage adapter supports CRUD lifecycle', skip: skip, () async {
     final storage = DriftDataStorageAdapter.file(dbFile);
     final repository = DriftDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
@@ -102,11 +130,12 @@ void main() {
     expect(afterDelete, isNull);
   });
 
-  test('Drift storage adapter persists records on disk', () async {
-    Future<({
-      InMemoryDataServiceEnvironment env,
-      DriftDataRepository repository,
-    })> openEnv() async {
+  test('Drift storage adapter persists records on disk', skip: skip, () async {
+    Future<
+        ({
+          InMemoryDataServiceEnvironment env,
+          DriftDataRepository repository,
+        })> openEnv() async {
       final storage = DriftDataStorageAdapter.file(dbFile);
       final repository = DriftDataRepository(storage: storage);
       final env = await DataServiceFactory.inMemory(repository: repository);
@@ -145,7 +174,8 @@ void main() {
     expect(fetched!.payload['title'], 'Persisted');
   });
 
-  test('creates isolated tables per collection on demand', () async {
+  test('creates isolated tables per collection on demand', skip: skip,
+      () async {
     final storage = DriftDataStorageAdapter.file(dbFile);
     final repository = DriftDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
@@ -195,11 +225,13 @@ void main() {
     );
   });
 
-  test('supports multi-session clients working with many collections', () async {
-    Future<({
-      InMemoryDataServiceEnvironment env,
-      DriftDataRepository repository,
-    })> startSession(String name) async {
+  test('supports multi-session clients working with many collections',
+      skip: skip, () async {
+    Future<
+        ({
+          InMemoryDataServiceEnvironment env,
+          DriftDataRepository repository,
+        })> startSession(String name) async {
       final storage = DriftDataStorageAdapter.file(dbFile);
       final repository = DriftDataRepository(storage: storage);
       final env = await DataServiceFactory.inMemory(
@@ -264,7 +296,8 @@ void main() {
       collection: 'notes',
       context: ctxAlice,
     );
-    expect(notesList.records.map((record) => record.id), contains(aliceNote.id));
+    expect(
+        notesList.records.map((record) => record.id), contains(aliceNote.id));
     expect(
       notesList.records.map((record) => record.id),
       isNot(contains(bobTask.id)),
@@ -338,7 +371,8 @@ void main() {
       collection: 'metrics',
       context: auditCtx,
     );
-    expect(metricsList.records.map((record) => record.id), contains(metricsRecord.id));
+    expect(metricsList.records.map((record) => record.id),
+        contains(metricsRecord.id));
 
     final tables = await repo2.storage.database
         .customSelect(
@@ -348,7 +382,8 @@ void main() {
     final tableNames = tables.map((row) => row.read<String>('name')).toList();
     expect(
       tableNames,
-      containsAll(['collection_registry', 'c_logs', 'c_metrics', 'c_notes', 'c_tasks']),
+      containsAll(
+          ['collection_registry', 'c_logs', 'c_metrics', 'c_notes', 'c_tasks']),
     );
 
     final registryRows = await repo2.storage.database
@@ -486,12 +521,10 @@ void main() {
         tableRows.map((row) => row.read<String>('name')).toList();
     expect(tableNamesAfter, isNot(contains('c_archive')));
 
-    final registryRows = await storage.database
-        .customSelect(
-          'SELECT collection FROM collection_registry WHERE collection = ?',
-          variables: [Variable<String>('archive')],
-        )
-        .get();
+    final registryRows = await storage.database.customSelect(
+      'SELECT collection FROM collection_registry WHERE collection = ?',
+      variables: [drift.Variable<String>('archive')],
+    ).get();
     expect(registryRows, isEmpty);
 
     final secondDelete = await env.client.deleteCollection(
@@ -540,7 +573,8 @@ void main() {
     expect(firstPage.totalHits, 3);
     expect(firstPage.records, hasLength(2));
     expect(firstPage.nextCursor, isNotNull);
-    expect(ids.containsAll(firstPage.records.map((record) => record.id)), isTrue);
+    expect(
+        ids.containsAll(firstPage.records.map((record) => record.id)), isTrue);
 
     final secondPage = await env.client.search(
       collection: 'notes',

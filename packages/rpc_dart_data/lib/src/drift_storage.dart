@@ -8,7 +8,7 @@ import 'data_repository.dart';
 import 'models.dart';
 
 class DriftDataDatabase extends GeneratedDatabase {
-  DriftDataDatabase(QueryExecutor executor) : super(executor);
+  DriftDataDatabase(super.executor);
 
   @override
   int get schemaVersion => 1;
@@ -129,7 +129,7 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
 
     while (true) {
       final suffix = attempt == 0 ? '' : '_$attempt';
-      final candidate = 'c_${normalizedCollection}$suffix';
+      final candidate = 'c_$normalizedCollection$suffix';
 
       final collision = await _database.customSelect(
         'SELECT 1 FROM collection_registry WHERE table_name = ? LIMIT 1',
