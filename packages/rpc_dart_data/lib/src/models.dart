@@ -1,6 +1,3 @@
-import 'dart:collection';
-import 'dart:convert';
-
 import 'package:collection/collection.dart';
 import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
@@ -93,7 +90,7 @@ class DataRecord implements IRpcSerializable {
     required this.version,
     required this.createdAt,
     required this.updatedAt,
-  }) : payload = UnmodifiableMapView(Map<String, dynamic>.from(payload));
+  }) : payload = Map<String, dynamic>.unmodifiable(payload);
 
   factory DataRecord.fromJson(Map<String, dynamic> json) {
     return DataRecord(
@@ -174,9 +171,11 @@ class RecordFilter extends Equatable implements IRpcSerializable {
   factory RecordFilter.fromJson(Map<String, dynamic> json) {
     return RecordFilter(
       equals: Map<String, dynamic>.from(json['equals'] as Map? ?? const {}),
-      range: (json['range'] as Map? ?? const {})
-          .map((key, value) => MapEntry(key as String, RangeFilter.fromJson(Map<String, dynamic>.from(value as Map)))),
-      containsTerms: List<String>.from(json['containsTerms'] as List? ?? const []),
+      range: (json['range'] as Map? ?? const {}).map((key, value) => MapEntry(
+          key as String,
+          RangeFilter.fromJson(Map<String, dynamic>.from(value as Map)))),
+      containsTerms:
+          List<String>.from(json['containsTerms'] as List? ?? const []),
     );
   }
 
@@ -197,7 +196,8 @@ class RecordFilter extends Equatable implements IRpcSerializable {
 
 @immutable
 class RangeFilter extends Equatable implements IRpcSerializable {
-  const RangeFilter({this.min, this.max, this.includeMin = true, this.includeMax = true});
+  const RangeFilter(
+      {this.min, this.max, this.includeMin = true, this.includeMax = true});
 
   factory RangeFilter.fromJson(Map<String, dynamic> json) {
     return RangeFilter(
@@ -318,14 +318,16 @@ class DataChangeEvent extends Equatable implements IRpcSerializable {
     required this.occurredAt,
   });
 
-  factory DataChangeEvent.fromJson(Map<String, dynamic> json) => DataChangeEvent(
+  factory DataChangeEvent.fromJson(Map<String, dynamic> json) =>
+      DataChangeEvent(
         type: DataChangeType.values
             .firstWhere((e) => e.name == (json['type'] as String)),
         collection: json['collection'] as String,
         id: json['id'] as String,
         record: json['record'] == null
             ? null
-            : DataRecord.fromJson(Map<String, dynamic>.from(json['record'] as Map)),
+            : DataRecord.fromJson(
+                Map<String, dynamic>.from(json['record'] as Map)),
         version: json['version'] as int,
         cursor: json['cursor'] as String,
         occurredAt: DateTime.parse(json['occurredAt'] as String),
@@ -350,7 +352,8 @@ class DataChangeEvent extends Equatable implements IRpcSerializable {
       );
 
   @override
-  List<Object?> get props => [type, collection, id, record, version, cursor, occurredAt];
+  List<Object?> get props =>
+      [type, collection, id, record, version, cursor, occurredAt];
 
   @override
   Map<String, dynamic> toJson() => {
@@ -372,7 +375,8 @@ class CreateRecordRequest extends Equatable implements IRpcSerializable {
     this.id,
   });
 
-  factory CreateRecordRequest.fromJson(Map<String, dynamic> json) => CreateRecordRequest(
+  factory CreateRecordRequest.fromJson(Map<String, dynamic> json) =>
+      CreateRecordRequest(
         collection: json['collection'] as String,
         payload: Map<String, dynamic>.from(json['payload'] as Map),
         id: json['id'] as String?,
@@ -399,7 +403,8 @@ class CreateRecordResponse extends Equatable implements IRpcSerializable {
 
   factory CreateRecordResponse.fromJson(Map<String, dynamic> json) =>
       CreateRecordResponse(
-        record: DataRecord.fromJson(Map<String, dynamic>.from(json['record'] as Map)),
+        record: DataRecord.fromJson(
+            Map<String, dynamic>.from(json['record'] as Map)),
       );
 
   final DataRecord record;
@@ -415,7 +420,8 @@ class CreateRecordResponse extends Equatable implements IRpcSerializable {
 class GetRecordRequest extends Equatable implements IRpcSerializable {
   const GetRecordRequest({required this.collection, required this.id});
 
-  factory GetRecordRequest.fromJson(Map<String, dynamic> json) => GetRecordRequest(
+  factory GetRecordRequest.fromJson(Map<String, dynamic> json) =>
+      GetRecordRequest(
         collection: json['collection'] as String,
         id: json['id'] as String,
       );
@@ -437,10 +443,12 @@ class GetRecordRequest extends Equatable implements IRpcSerializable {
 class GetRecordResponse extends Equatable implements IRpcSerializable {
   const GetRecordResponse({this.record});
 
-  factory GetRecordResponse.fromJson(Map<String, dynamic> json) => GetRecordResponse(
+  factory GetRecordResponse.fromJson(Map<String, dynamic> json) =>
+      GetRecordResponse(
         record: json['record'] == null
             ? null
-            : DataRecord.fromJson(Map<String, dynamic>.from(json['record'] as Map)),
+            : DataRecord.fromJson(
+                Map<String, dynamic>.from(json['record'] as Map)),
       );
 
   final DataRecord? record;
@@ -461,17 +469,21 @@ class ListRecordsRequest extends Equatable implements IRpcSerializable {
     this.options = const QueryOptions(),
   });
 
-  factory ListRecordsRequest.fromJson(Map<String, dynamic> json) => ListRecordsRequest(
+  factory ListRecordsRequest.fromJson(Map<String, dynamic> json) =>
+      ListRecordsRequest(
         collection: json['collection'] as String,
         filter: json['filter'] == null
             ? null
-            : RecordFilter.fromJson(Map<String, dynamic>.from(json['filter'] as Map)),
+            : RecordFilter.fromJson(
+                Map<String, dynamic>.from(json['filter'] as Map)),
         sort: json['sort'] == null
             ? null
-            : SortOrder.fromJson(Map<String, dynamic>.from(json['sort'] as Map)),
+            : SortOrder.fromJson(
+                Map<String, dynamic>.from(json['sort'] as Map)),
         options: json['options'] == null
             ? const QueryOptions()
-            : QueryOptions.fromJson(Map<String, dynamic>.from(json['options'] as Map)),
+            : QueryOptions.fromJson(
+                Map<String, dynamic>.from(json['options'] as Map)),
       );
 
   final String collection;
@@ -502,7 +514,8 @@ class ListRecordsResponse extends Equatable implements IRpcSerializable {
   factory ListRecordsResponse.fromJson(Map<String, dynamic> json) =>
       ListRecordsResponse(
         records: (json['records'] as List? ?? const [])
-            .map((e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map(
+                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(growable: false),
         nextCursor: json['nextCursor'] as String?,
         totalCount: json['totalCount'] as int?,
@@ -527,8 +540,10 @@ class ListRecordsResponse extends Equatable implements IRpcSerializable {
 class UpdateRecordRequest extends Equatable implements IRpcSerializable {
   const UpdateRecordRequest({required this.record});
 
-  factory UpdateRecordRequest.fromJson(Map<String, dynamic> json) => UpdateRecordRequest(
-        record: DataRecord.fromJson(Map<String, dynamic>.from(json['record'] as Map)),
+  factory UpdateRecordRequest.fromJson(Map<String, dynamic> json) =>
+      UpdateRecordRequest(
+        record: DataRecord.fromJson(
+            Map<String, dynamic>.from(json['record'] as Map)),
       );
 
   final DataRecord record;
@@ -546,7 +561,8 @@ class UpdateRecordResponse extends Equatable implements IRpcSerializable {
 
   factory UpdateRecordResponse.fromJson(Map<String, dynamic> json) =>
       UpdateRecordResponse(
-        record: DataRecord.fromJson(Map<String, dynamic>.from(json['record'] as Map)),
+        record: DataRecord.fromJson(
+            Map<String, dynamic>.from(json['record'] as Map)),
       );
 
   final DataRecord record;
@@ -567,11 +583,13 @@ class PatchRecordRequest extends Equatable implements IRpcSerializable {
     required this.patch,
   });
 
-  factory PatchRecordRequest.fromJson(Map<String, dynamic> json) => PatchRecordRequest(
+  factory PatchRecordRequest.fromJson(Map<String, dynamic> json) =>
+      PatchRecordRequest(
         collection: json['collection'] as String,
         id: json['id'] as String,
         expectedVersion: json['expectedVersion'] as int,
-        patch: RecordPatch.fromJson(Map<String, dynamic>.from(json['patch'] as Map)),
+        patch: RecordPatch.fromJson(
+            Map<String, dynamic>.from(json['patch'] as Map)),
       );
 
   final String collection;
@@ -597,7 +615,8 @@ class PatchRecordResponse extends Equatable implements IRpcSerializable {
 
   factory PatchRecordResponse.fromJson(Map<String, dynamic> json) =>
       PatchRecordResponse(
-        record: DataRecord.fromJson(Map<String, dynamic>.from(json['record'] as Map)),
+        record: DataRecord.fromJson(
+            Map<String, dynamic>.from(json['record'] as Map)),
       );
 
   final DataRecord record;
@@ -617,7 +636,8 @@ class DeleteRecordRequest extends Equatable implements IRpcSerializable {
     this.expectedVersion,
   });
 
-  factory DeleteRecordRequest.fromJson(Map<String, dynamic> json) => DeleteRecordRequest(
+  factory DeleteRecordRequest.fromJson(Map<String, dynamic> json) =>
+      DeleteRecordRequest(
         collection: json['collection'] as String,
         id: json['id'] as String,
         expectedVersion: json['expectedVersion'] as int?,
@@ -658,9 +678,11 @@ class DeleteRecordResponse extends Equatable implements IRpcSerializable {
 class BulkUpsertRequest extends Equatable implements IRpcSerializable {
   const BulkUpsertRequest({required this.records});
 
-  factory BulkUpsertRequest.fromJson(Map<String, dynamic> json) => BulkUpsertRequest(
+  factory BulkUpsertRequest.fromJson(Map<String, dynamic> json) =>
+      BulkUpsertRequest(
         records: (json['records'] as List)
-            .map((e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map(
+                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(growable: false),
       );
 
@@ -682,7 +704,8 @@ class BulkUpsertResponse extends Equatable implements IRpcSerializable {
   factory BulkUpsertResponse.fromJson(Map<String, dynamic> json) =>
       BulkUpsertResponse(
         records: (json['records'] as List)
-            .map((e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map(
+                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(growable: false),
       );
 
@@ -701,7 +724,8 @@ class BulkUpsertResponse extends Equatable implements IRpcSerializable {
 class BulkDeleteRequest extends Equatable implements IRpcSerializable {
   const BulkDeleteRequest({required this.collection, required this.ids});
 
-  factory BulkDeleteRequest.fromJson(Map<String, dynamic> json) => BulkDeleteRequest(
+  factory BulkDeleteRequest.fromJson(Map<String, dynamic> json) =>
+      BulkDeleteRequest(
         collection: json['collection'] as String,
         ids: List<String>.from(json['ids'] as List),
       );
@@ -753,12 +777,14 @@ class ExportSnapshotRequest extends Equatable implements IRpcSerializable {
 
 @immutable
 class ExportSnapshotResponse extends Equatable implements IRpcSerializable {
-  const ExportSnapshotResponse({required this.records, required this.generatedAt});
+  const ExportSnapshotResponse(
+      {required this.records, required this.generatedAt});
 
   factory ExportSnapshotResponse.fromJson(Map<String, dynamic> json) =>
       ExportSnapshotResponse(
         records: (json['records'] as List)
-            .map((e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map(
+                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(growable: false),
         generatedAt: DateTime.parse(json['generatedAt'] as String),
       );
@@ -785,15 +811,18 @@ class SearchRecordsRequest extends Equatable implements IRpcSerializable {
     this.options = const QueryOptions(),
   });
 
-  factory SearchRecordsRequest.fromJson(Map<String, dynamic> json) => SearchRecordsRequest(
+  factory SearchRecordsRequest.fromJson(Map<String, dynamic> json) =>
+      SearchRecordsRequest(
         collection: json['collection'] as String,
         query: json['query'] as String,
         filter: json['filter'] == null
             ? null
-            : RecordFilter.fromJson(Map<String, dynamic>.from(json['filter'] as Map)),
+            : RecordFilter.fromJson(
+                Map<String, dynamic>.from(json['filter'] as Map)),
         options: json['options'] == null
             ? const QueryOptions()
-            : QueryOptions.fromJson(Map<String, dynamic>.from(json['options'] as Map)),
+            : QueryOptions.fromJson(
+                Map<String, dynamic>.from(json['options'] as Map)),
       );
 
   final String collection;
@@ -824,7 +853,8 @@ class SearchRecordsResponse extends Equatable implements IRpcSerializable {
   factory SearchRecordsResponse.fromJson(Map<String, dynamic> json) =>
       SearchRecordsResponse(
         records: (json['records'] as List)
-            .map((e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map(
+                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(growable: false),
         totalHits: json['totalHits'] as int,
         nextCursor: json['nextCursor'] as String?,
@@ -858,7 +888,8 @@ class AggregateMetricsRequest extends Equatable implements IRpcSerializable {
         collection: json['collection'] as String,
         filter: json['filter'] == null
             ? null
-            : RecordFilter.fromJson(Map<String, dynamic>.from(json['filter'] as Map)),
+            : RecordFilter.fromJson(
+                Map<String, dynamic>.from(json['filter'] as Map)),
         metrics: Map<String, String>.from(json['metrics'] as Map? ?? const {}),
       );
 
@@ -899,7 +930,8 @@ class AggregateMetricsResponse extends Equatable implements IRpcSerializable {
 class WatchChangesRequest extends Equatable implements IRpcSerializable {
   const WatchChangesRequest({required this.collection, this.cursor});
 
-  factory WatchChangesRequest.fromJson(Map<String, dynamic> json) => WatchChangesRequest(
+  factory WatchChangesRequest.fromJson(Map<String, dynamic> json) =>
+      WatchChangesRequest(
         collection: json['collection'] as String,
         cursor: json['cursor'] as String?,
       );
@@ -925,10 +957,11 @@ class SyncChangeRequest extends Equatable implements IRpcSerializable {
     this.resolveConflicts = true,
   });
 
-  factory SyncChangeRequest.fromJson(Map<String, dynamic> json) => SyncChangeRequest(
+  factory SyncChangeRequest.fromJson(Map<String, dynamic> json) =>
+      SyncChangeRequest(
         requestId: json['requestId'] as String,
-        command:
-            DataCommand.fromJson(Map<String, dynamic>.from(json['command'] as Map)),
+        command: DataCommand.fromJson(
+            Map<String, dynamic>.from(json['command'] as Map)),
         resolveConflicts: json['resolveConflicts'] as bool? ?? true,
       );
 
@@ -958,16 +991,19 @@ class SyncChangeResponse extends Equatable implements IRpcSerializable {
     this.error,
   });
 
-  factory SyncChangeResponse.fromJson(Map<String, dynamic> json) => SyncChangeResponse(
+  factory SyncChangeResponse.fromJson(Map<String, dynamic> json) =>
+      SyncChangeResponse(
         requestId: json['requestId'] as String,
         commandId: json['commandId'] as String,
         applied: json['applied'] as bool,
         record: json['record'] == null
             ? null
-            : DataRecord.fromJson(Map<String, dynamic>.from(json['record'] as Map)),
+            : DataRecord.fromJson(
+                Map<String, dynamic>.from(json['record'] as Map)),
         conflict: json['conflict'] == null
             ? null
-            : DataRecord.fromJson(Map<String, dynamic>.from(json['conflict'] as Map)),
+            : DataRecord.fromJson(
+                Map<String, dynamic>.from(json['conflict'] as Map)),
         error: json['error'] as String?,
       );
 
@@ -981,7 +1017,8 @@ class SyncChangeResponse extends Equatable implements IRpcSerializable {
   bool get hasConflict => conflict != null;
 
   @override
-  List<Object?> get props => [requestId, commandId, applied, record, conflict, error];
+  List<Object?> get props =>
+      [requestId, commandId, applied, record, conflict, error];
 
   @override
   Map<String, dynamic> toJson() => {
@@ -993,4 +1030,3 @@ class SyncChangeResponse extends Equatable implements IRpcSerializable {
         'error': error,
       };
 }
-

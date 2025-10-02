@@ -251,8 +251,8 @@ abstract class BaseDataRepository implements DataRepository {
 
     int result;
     if (valueA is Comparable && valueB is Comparable) {
-      // Сравниваем напрямую, не приводя второй операнд к Comparable — compareTo принимает Object.
-      result = (valueA as Comparable).compareTo(valueB);
+      // Сравниваем напрямую; valueA уже Comparable.
+      result = valueA.compareTo(valueB);
     } else {
       result = valueA.toString().compareTo(valueB.toString());
     }

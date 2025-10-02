@@ -11,29 +11,149 @@ and the Flutter guide for
 [developing packages and plugins](https://flutter.dev/to/develop-packages). 
 -->
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+# rpc_dart_data
 
-## Features
+Высокоуровневый слой данных (CRUD + запросы + стримы + офлайн синхронизация) поверх `rpc_dart`. Предоставляет:
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- Универсальный контракт `DataService` (create/get/list/update/patch/delete)
+- Пакетные операции: bulkUpsert / bulkDelete
+- Поиск и метрики: search + aggregate (count / sum / avg / min / max)
+- Экспорт снимка коллекции (snapshot)
+- Реактивные изменения: watchChanges с курсорами
+- Offline-first: двунаправленный syncChanges + очередь команд `OfflineCommandQueue`
+- Оптимистичная конкуренция через версии записей
+- Multi-tenant + auth через заголовки (`x-tenant-id`, `authorization`)
 
-## Getting started
+## Архитектура (слои)
+1. Transport (WebSocket / HTTP2 / isolate / TURN / in-memory) из `rpc_dart_transports`
+2. Endpoint (`RpcCallerEndpoint` / `RpcResponderEndpoint`)
+3. Контракт + кодеки (`IDataServiceContract` + RpcCodec<...>)
+4. Низкоуровневый слой (DataServiceCaller / DataServiceResponder)
+5. Repository + StorageAdapter (бизнес-логика + журнал событий)
+6. Фасад (DataServiceClient / DataServiceServer / DataServiceFactory / InMemoryDataServiceEnvironment)
+7. Утилиты офлайн (`OfflineCommandQueue`)
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+Вы переиспользуете 6-й уровень — остальное скрывается.
 
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
-
+## Быстрый старт
 ```dart
-const like = 'sample';
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_data/rpc_dart_data.dart';
+
+Future<void> main() async {
+  final env = await DataServiceFactory.inMemory();
+  final client = env.client;
+  final ctx = RpcContext.withHeaders({
+    'x-tenant-id': 'demo',
+    'authorization': 'Bearer dev',
+  });
+
+  final rec = await client.create(
+    collection: 'notes',
+    payload: {'title': 'Hello', 'done': false},
+    context: ctx,
+  );
+
+  final watchSub = client
+      .watchChanges(collection: 'notes', context: ctx)
+      .listen((e) => print('Change: ${e.type} id=${e.id} v=${e.version}'));
+
+  await client.patch(
+    collection: 'notes',
+    id: rec.id,
+    expectedVersion: rec.version,
+    patch: const RecordPatch(set: {'done': true}),
+    context: ctx,
+  );
+
+  await Future<void>.delayed(const Duration(milliseconds: 50));
+  await watchSub.cancel();
+  await env.dispose();
+}
+```
+Полный пример см. `example/extended_demo.dart`.
+
+## Offline очередь и синхронизация
+```dart
+final env = await DataServiceFactory.inMemory();
+final client = env.client;
+final ctx = RpcContext.withHeaders({'x-tenant-id':'t','authorization':'Bearer x'});
+final queue = OfflineCommandQueue(client.rawCaller, sessionId: 'device-1');
+
+// Локально (офлайн) формируем команду create и сериализуем
+final cmd = queue.buildCreateCommand(
+  const CreateRecordRequest(collection: 'tasks', payload: {'title':'Draft'}),
+);
+final json = cmd.toJson();
+
+// Позже (онлайн) восстанавливаем и отправляем
+final ackFuture = queue.enqueueCommand(DataCommand.fromJson(json), autoStart: false, context: ctx);
+await queue.start(context: ctx);
+await queue.flushPending();
+final ack = await ackFuture;
+print('Applied=${ack.applied} id=${ack.record?.id}');
+```
+Используйте `resolveConflicts=false` в `enqueueCommand` если хотите падать при конфликте, иначе придёт `conflict` + `error` в ответе и команда не будет выброшена.
+
+## Агрегаты
+```dart
+final metrics = await client.aggregate(
+  collection: 'orders',
+  metrics: {
+    'countAll': 'count',
+    'sumPrice': 'sum:price',
+    'avgPrice': 'avg:price',
+    'minPrice': 'min:price',
+    'maxPrice': 'max:price',
+  },
+  context: ctx,
+);
+print(metrics.metrics);
 ```
 
-## Additional information
+## Стрим изменений
+`watchChanges` принимает опциональный `cursor` — можно продолжить с точки останова. История держится в памяти базовой реализацией; для production замените на persistent/event sourced storage.
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+## Конфликты
+- `update` требует `record.version` > текущей версии.
+- `patch` требует точного совпадения `expectedVersion`.
+- При нарушении получите `RpcDataError.conflict(...)` (или базовый `RpcException`, если перешло через границу транспорта), в офлайн sync — `SyncChangeResponse(applied=false, conflict=...)`.
+
+## Расширение / кастомное хранилище
+Реализуйте `DataStorageAdapter`:
+```dart
+class PostgresAdapter implements DataStorageAdapter {
+  // readRecord, writeRecord, deleteRecord, ... собственная реализация
+  @override Future<DataRecord?> readRecord(String tenant, String collection, String id) async { /* ... */ }
+  // остальные методы
+  @override Future<void> dispose() async {}
+}
+
+final repo = InMemoryDataRepository(storage: InMemoryStorageAdapter()); // по умолчанию
+// или свой:
+final server = DataServiceFactory.createServer(
+  transport: myTransport,
+  repository: InMemoryDataRepository(storage: /* ваш адаптер */),
+);
+```
+
+## Тесты
+Рекомендуем smoke тест (пример добавлен в `test/data_service_facade_test.dart`).
+Запуск:
+```bash
+dart test --concurrency=1 -r compact
+```
+
+## Примеры
+- `example/quick_start.dart` — минимальный
+- `example/offline_sync.dart` — офлайн очередь
+- `example/extended_demo.dart` — полный сценарий
+
+## Планы / идеи
+- Плагинные политики разрешения конфликтов (last-write-wins, merge payload)
+- Расширяемая система индексов/поиска
+- Persisted journal для watch/rewind
+- Production адаптеры (SQLite / Isar / Postgres)
+
+## Лицензия
+См. LICENSE (наследует лицензионную политику родительского репо).
