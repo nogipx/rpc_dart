@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:universal_io/io.dart';
 
-/// Позволяет подключиться к TURN‑relay, а затем позднее задать адрес пира.
+/// Helper that creates a TURN relay allocation and later attaches peer
+/// transports once the remote endpoint is known.
 class RpcTurnRelayPeer {
   final TurnRelayClient _client;
   final List<RpcResponderContract> _pendingContracts;
@@ -12,14 +13,15 @@ class RpcTurnRelayPeer {
   RpcCallerEndpoint? _callerEndpoint;
   RpcResponderEndpoint? _responderEndpoint;
 
-  /// Адрес, по которому другие клиенты должны подключаться к вашему пиру.
+  /// Address used by remote peers when dialing this client through the relay.
   InternetAddress get relayAddress => _client.relayAddress;
+  /// Port advertised to peers for the relay allocation.
   int get relayPort => _client.relayPort;
 
-  /// Уведомления о том, что другой участник хочет подключиться к нам.
+  /// Notifications about remote peers requesting a connection.
   Stream<TurnConnectRequest> get connectRequests => _client.connectRequests;
 
-  /// Endpoint для исходящих вызовов (доступен после `connectPeer()`).
+  /// Caller endpoint used for outgoing RPC invocations after [connectPeer].
   RpcCallerEndpoint get callerEndpoint {
     final endpoint = _callerEndpoint;
     if (endpoint == null) {
@@ -28,7 +30,7 @@ class RpcTurnRelayPeer {
     return endpoint;
   }
 
-  /// Endpoint для приёма входящих вызовов (создаётся после `connectPeer()`).
+  /// Responder endpoint that receives inbound RPC calls after [connectPeer].
   RpcResponderEndpoint get responderEndpoint {
     final endpoint = _responderEndpoint;
     if (endpoint == null) {
@@ -39,7 +41,8 @@ class RpcTurnRelayPeer {
 
   RpcTurnRelayPeer._(this._client, this._pendingContracts);
 
-  /// Подключается к TURN‑relay и хранит контракты для последующей регистрации.
+  /// Connects to the TURN relay and stores responder contracts for later
+  /// registration.
   static Future<RpcTurnRelayPeer> connectToRelay({
     required InternetAddress serverAddress,
     required int serverPort,
@@ -54,14 +57,15 @@ class RpcTurnRelayPeer {
     return RpcTurnRelayPeer._(client, List.of(responderContracts));
   }
 
-  /// После обмена `relayAddress`/`relayPort` с другим участником вызывайте этот метод.
+  /// Creates transports towards [peerAddress]/[peerPort] and registers stored
+  /// responder contracts.
   Future<void> connectPeer({
     required InternetAddress peerAddress,
     required int peerPort,
     RpcLogger? logger,
   }) async {
-    // Создаём транспорты. Здесь используют один и тот же TurnRelayClient,
-    // поэтому соединение с relay не дублируется.
+    // Create transports while reusing the same TurnRelayClient instance so the
+    // relay allocation is not duplicated.
     _responderTransport ??= RpcTurnRelayResponderTransport.fromClient(
       client: _client,
       peerAddress: peerAddress,
@@ -75,7 +79,7 @@ class RpcTurnRelayPeer {
       logger: logger,
     );
 
-    // Поднимаем responder‑endpoint и регистрируем сохранённые контракты.
+    // Spin up the responder endpoint and register the buffered contracts.
     if (_responderEndpoint == null) {
       final responder = RpcResponderEndpoint(
         transport: _responderTransport!,
@@ -88,15 +92,15 @@ class RpcTurnRelayPeer {
       _responderEndpoint = responder;
     }
 
-    // Поднимаем caller‑endpoint.
+    // Prepare the caller endpoint.
     _callerEndpoint ??= RpcCallerEndpoint(
       transport: _callerTransport!,
       debugLabel: 'turn-caller',
     );
   }
 
-  /// Отправляет на relay запрос, чтобы оно уведомило удалённого пира о желании
-  /// подключиться.
+  /// Sends a Connect request so the relay notifies the remote peer about the
+  /// desired connection.
   Future<void> sendConnectionInfoToPeer({
     required InternetAddress peerAddress,
     required int peerPort,
@@ -109,7 +113,7 @@ class RpcTurnRelayPeer {
     );
   }
 
-  /// Регистрирует текущее соединение в каталоге relay для обнаружения.
+  /// Registers the current allocation in the relay discovery catalogue.
   Future<void> registerService({
     required String serviceId,
     String? description,
@@ -120,12 +124,12 @@ class RpcTurnRelayPeer {
     );
   }
 
-  /// Возвращает список доступных сервисов в relay (по желанию фильтруя по id).
+  /// Returns services registered in the discovery catalogue.
   Future<List<TurnRelayServiceInfo>> listServices({String? serviceId}) {
     return _client.listServices(serviceId: serviceId);
   }
 
-  /// Закрывает все ресурсы.
+  /// Releases transports and closes the TURN client.
   Future<void> close() async {
     await _callerEndpoint?.close();
     await _responderEndpoint?.close();

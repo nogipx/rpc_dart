@@ -21,8 +21,10 @@ final class TurnPeerPermission {
   final InternetAddress address;
   DateTime expiresAt;
 
+  /// Indicates whether the permission already expired.
   bool get isExpired => DateTime.now().isAfter(expiresAt);
 
+  /// Refreshes the permission lifetime.
   void refresh(Duration lifetime) {
     expiresAt = DateTime.now().add(lifetime);
   }
@@ -42,8 +44,10 @@ final class TurnChannelBinding {
   final int peerPort;
   DateTime expiresAt;
 
+  /// Indicates whether the channel binding already expired.
   bool get isExpired => DateTime.now().isAfter(expiresAt);
 
+  /// Extends the channel binding lifetime.
   void refresh(Duration lifetime) {
     expiresAt = DateTime.now().add(lifetime);
   }
@@ -117,12 +121,15 @@ final class TurnAllocation {
   Timer? _expirationTimer;
   DateTime expiresAt = DateTime.now();
 
+  /// Relay port assigned to the allocation.
   int get relayPort => transportProtocol == TurnRelayTransportProtocol.udp
       ? _udpSocket!.port
       : _tcpListener!.port;
 
+  /// Indicates whether the allocation lifetime already elapsed.
   bool get isExpired => DateTime.now().isAfter(expiresAt);
 
+  /// Refreshes the allocation lifetime and schedules expiration.
   void refresh(Duration lifetime) {
     final effective = lifetime.inSeconds > 0 ? lifetime : defaultLifetime;
     expiresAt = DateTime.now().add(effective);
@@ -133,6 +140,7 @@ final class TurnAllocation {
     );
   }
 
+  /// Forces the allocation to expire immediately and cleans up resources.
   void expire() {
     logger?.info(
       'Allocation for ${clientAddress.address}:$clientPort expired',
@@ -141,6 +149,7 @@ final class TurnAllocation {
     close();
   }
 
+  /// Releases all sockets and timers associated with the allocation.
   void close() {
     _expirationTimer?.cancel();
     _udpSubscription?.cancel();
@@ -165,6 +174,7 @@ final class TurnAllocation {
     _tcpPeers.clear();
   }
 
+  /// Adds or refreshes a permission for [address].
   void addPermission(InternetAddress address, int port) {
     final key = _permissionKey(address);
     final permission = _permissions[key];
@@ -177,6 +187,7 @@ final class TurnAllocation {
     }
   }
 
+  /// Checks whether a permission exists and is still valid for [address].
   bool hasPermission(InternetAddress address, int port) {
     final key = _permissionKey(address);
     final permission = _permissions[key];
@@ -190,6 +201,7 @@ final class TurnAllocation {
     return true;
   }
 
+  /// Associates a channel number with a peer address for ChannelData packets.
   void bindChannel(
       int channelNumber, InternetAddress peerAddress, int peerPort) {
     final binding = _channels[channelNumber];
@@ -212,6 +224,7 @@ final class TurnAllocation {
     addPermission(peerAddress, peerPort);
   }
 
+  /// Returns the channel binding for [channelNumber] if it remains valid.
   TurnChannelBinding? getChannel(int channelNumber) {
     final binding = _channels[channelNumber];
     if (binding == null) return null;
@@ -222,6 +235,7 @@ final class TurnAllocation {
     return binding;
   }
 
+  /// Returns a channel binding associated with the provided peer endpoint.
   TurnChannelBinding? findChannelByPeer(
     InternetAddress peerAddress,
     int peerPort,
@@ -240,6 +254,7 @@ final class TurnAllocation {
     return null;
   }
 
+  /// Sends [payload] directly to the peer endpoint using the active transport.
   void sendToPeer(Uint8List payload, InternetAddress address, int port) {
     switch (transportProtocol) {
       case TurnRelayTransportProtocol.udp:
