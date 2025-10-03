@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
@@ -104,5 +106,239 @@ void main() {
       final webPayload = await inboundBytesFuture;
       expect(String.fromCharCodes(webPayload), 'pong');
     });
+
+    test(
+        'tcp and websocket clients exchange ping/pong via relay when running in separate isolates',
+        () async {
+      const timeout = Duration(seconds: 5);
+
+      final webMessages = ReceivePort();
+      final webErrors = ReceivePort();
+      final webExit = ReceivePort();
+
+      final gatewayUri =
+          'ws://${gatewayServer.bindAddress.address}:${gatewayServer.port}';
+
+      final webIsolate = await Isolate.spawn(
+        _runWebGatewayClient,
+        <Object?>[
+          webMessages.sendPort,
+          gatewayUri,
+          timeout.inMilliseconds,
+        ],
+        onError: webErrors.sendPort,
+        onExit: webExit.sendPort,
+      );
+
+      final webErrorSub = webErrors.listen((message) {
+        final parts = message as List<Object?>;
+        fail('Web isolate error: ${parts[0]}\n${parts[1]}');
+      });
+
+      final webIterator = StreamIterator<Object?>(webMessages);
+
+      addTearDown(() async {
+        webIsolate.kill(priority: Isolate.immediate);
+        await webIterator.cancel();
+        await webErrorSub.cancel();
+        webMessages.close();
+        webErrors.close();
+        webExit.close();
+      });
+
+      final hasAllocationMessage =
+          await webIterator.moveNext().timeout(timeout, onTimeout: () => false);
+      expect(hasAllocationMessage, isTrue, reason: 'web isolate produced no data');
+
+      final allocationMessage =
+          _expectMessage(webIterator.current, expectedType: 'allocation');
+
+      final relayAddress = allocationMessage['relayAddress'] as String;
+      final relayPort = allocationMessage['relayPort'] as int;
+
+      final tcpMessages = ReceivePort();
+      final tcpErrors = ReceivePort();
+      final tcpExit = ReceivePort();
+
+      final tcpIsolate = await Isolate.spawn(
+        _runTcpTurnClient,
+        <Object?>[
+          tcpMessages.sendPort,
+          relayServer.bindAddress.address,
+          relayServer.port,
+          relayAddress,
+          relayPort,
+          timeout.inMilliseconds,
+        ],
+        onError: tcpErrors.sendPort,
+        onExit: tcpExit.sendPort,
+      );
+
+      final tcpErrorSub = tcpErrors.listen((message) {
+        final parts = message as List<Object?>;
+        fail('TCP isolate error: ${parts[0]}\n${parts[1]}');
+      });
+
+      final tcpIterator = StreamIterator<Object?>(tcpMessages);
+
+      addTearDown(() async {
+        tcpIsolate.kill(priority: Isolate.immediate);
+        await tcpIterator.cancel();
+        await tcpErrorSub.cancel();
+        tcpMessages.close();
+        tcpErrors.close();
+        tcpExit.close();
+      });
+
+      final hasConnectMessage =
+          await webIterator.moveNext().timeout(timeout, onTimeout: () => false);
+      expect(hasConnectMessage, isTrue, reason: 'web isolate connect stream ended');
+
+      final connectMessage =
+          _expectMessage(webIterator.current, expectedType: 'connect');
+      expect(connectMessage['peerAddress'], isNotEmpty);
+      expect(connectMessage['peerPort'], greaterThan(0));
+      expect(
+        String.fromCharCodes(connectMessage['payload'] as Uint8List),
+        'hello',
+      );
+
+      final hasTcpReceived =
+          await tcpIterator.moveNext().timeout(timeout, onTimeout: () => false);
+      expect(hasTcpReceived, isTrue, reason: 'tcp isolate did not report payload');
+
+      final tcpReceived =
+          _expectMessage(tcpIterator.current, expectedType: 'received');
+      expect(String.fromCharCodes(tcpReceived['payload'] as Uint8List), 'ping');
+
+      final hasWebPayload =
+          await webIterator.moveNext().timeout(timeout, onTimeout: () => false);
+      expect(hasWebPayload, isTrue, reason: 'web isolate did not receive pong');
+
+      final webPayload =
+          _expectMessage(webIterator.current, expectedType: 'payload');
+      expect(String.fromCharCodes(webPayload['payload'] as Uint8List), 'pong');
+
+      final hasTcpDone =
+          await tcpIterator.moveNext().timeout(timeout, onTimeout: () => false);
+      expect(hasTcpDone, isTrue, reason: 'tcp isolate did not finish');
+      _expectMessage(tcpIterator.current, expectedType: 'done');
+
+      final hasWebDone =
+          await webIterator.moveNext().timeout(timeout, onTimeout: () => false);
+      expect(hasWebDone, isTrue, reason: 'web isolate did not finish');
+      _expectMessage(webIterator.current, expectedType: 'done');
+
+      await tcpExit.first.timeout(timeout);
+      await webExit.first.timeout(timeout);
+    });
   });
+}
+
+Map<String, Object?> _expectMessage(
+  Object? message, {
+  required String expectedType,
+}) {
+  expect(message, isA<Map<Object?, Object?>>());
+  final typed = Map<Object?, Object?>.from(message! as Map<Object?, Object?>);
+  expect(typed['type'], expectedType);
+  final result = <String, Object?>{};
+  typed.forEach((key, value) {
+    if (key is! String) {
+      fail('Unexpected non-string key: $key');
+    }
+    result[key] = value;
+  });
+  return result;
+}
+
+Future<void> _runWebGatewayClient(List<Object?> args) async {
+  final sendPort = args[0] as SendPort;
+  final gatewayUri = args[1] as String;
+  final timeout = Duration(milliseconds: args[2] as int);
+
+  final callerEndpoint = RpcCallerEndpoint(
+    transport: RpcWebSocketCallerTransport.connect(Uri.parse(gatewayUri)),
+    debugLabel: 'web-gateway-client-isolate',
+  );
+  final gatewayCaller = TurnRelayGatewayCaller(callerEndpoint);
+
+  try {
+    final allocation =
+        await gatewayCaller.getAllocationInfo().timeout(timeout);
+    sendPort.send({
+      'type': 'allocation',
+      'relayAddress': allocation.relayAddress,
+      'relayPort': allocation.relayPort,
+    });
+
+    final connectRequestFuture =
+        gatewayCaller.watchConnectRequests().first.timeout(timeout);
+    final inboundBytesFuture =
+        gatewayCaller.watchIncomingBytes().first.timeout(timeout);
+
+    final connectRequest = await connectRequestFuture;
+    sendPort.send({
+      'type': 'connect',
+      'peerAddress': connectRequest.peerAddress,
+      'peerPort': connectRequest.peerPort,
+      'payload': connectRequest.payload,
+    });
+
+    await gatewayCaller.sendToPeer(
+      TurnRelayGatewaySendRequest(
+        peerAddress: connectRequest.peerAddress,
+        peerPort: connectRequest.peerPort,
+        payload: Uint8List.fromList('ping'.codeUnits),
+      ),
+    );
+
+    final inboundPayload = await inboundBytesFuture;
+    sendPort.send({
+      'type': 'payload',
+      'payload': inboundPayload,
+    });
+  } finally {
+    await callerEndpoint.close();
+    sendPort.send({'type': 'done'});
+  }
+}
+
+Future<void> _runTcpTurnClient(List<Object?> args) async {
+  final sendPort = args[0] as SendPort;
+  final serverAddress = args[1] as String;
+  final serverPort = args[2] as int;
+  final relayAddress = args[3] as String;
+  final relayPort = args[4] as int;
+  final timeout = Duration(milliseconds: args[5] as int);
+
+  final client = await TurnRelayClient.connect(
+    serverAddress: io.InternetAddress(serverAddress),
+    serverPort: serverPort,
+  );
+
+  try {
+    final inboundFuture = client.bytes.first.timeout(timeout);
+
+    await client.requestPeerConnection(
+      peerAddress: io.InternetAddress(relayAddress),
+      peerPort: relayPort,
+      payload: Uint8List.fromList('hello'.codeUnits),
+    );
+
+    final inboundPayload = await inboundFuture;
+    sendPort.send({
+      'type': 'received',
+      'payload': inboundPayload,
+    });
+
+    await client.send(
+      Uint8List.fromList('pong'.codeUnits),
+      peerAddress: io.InternetAddress(relayAddress),
+      peerPort: relayPort,
+    );
+  } finally {
+    await client.close();
+    sendPort.send({'type': 'done'});
+  }
 }
