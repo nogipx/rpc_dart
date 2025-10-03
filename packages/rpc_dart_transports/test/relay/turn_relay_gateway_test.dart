@@ -61,6 +61,21 @@ void main() {
       expect(allocation.relayAddress, isNotEmpty);
       expect(allocation.relayPort, greaterThan(0));
 
+      const serviceId = 'web-gateway-client';
+      await gatewayCaller.registerService(
+        TurnRelayGatewayRegisterServiceRequest(
+          serviceId: serviceId,
+          description: 'integration-test',
+        ),
+      );
+
+      final services = await gatewayCaller
+          .listServices(serviceId: serviceId)
+          .timeout(const Duration(seconds: 2));
+      expect(services, isNotEmpty);
+      expect(services.first.serviceId, serviceId);
+      expect(services.first.relayAddress, allocation.relayAddress);
+
       final connectRequestFuture = gatewayCaller
           .watchConnectRequests()
           .first
@@ -85,6 +100,13 @@ void main() {
       expect(connectRequest.peerAddress, tcpClient.relayAddress.address);
       expect(connectRequest.peerPort, tcpClient.relayPort);
       expect(connectRequest.payload, Uint8List.fromList('hello'.codeUnits));
+
+      await gatewayCaller.addPermission(
+        TurnRelayGatewayPermissionRequest(
+          peerAddress: connectRequest.peerAddress,
+          peerPort: connectRequest.peerPort,
+        ),
+      );
 
       await gatewayCaller.sendToPeer(
         TurnRelayGatewaySendRequest(
@@ -155,6 +177,15 @@ void main() {
 
       final relayAddress = allocationMessage['relayAddress'] as String;
       final relayPort = allocationMessage['relayPort'] as int;
+
+      final hasServicesMessage =
+          await webIterator.moveNext().timeout(timeout, onTimeout: () => false);
+      expect(hasServicesMessage, isTrue, reason: 'web isolate did not report services');
+
+      final servicesMessage =
+          _expectMessage(webIterator.current, expectedType: 'services');
+      final servicesPayload = servicesMessage['services'] as List<dynamic>;
+      expect(servicesPayload, isNotEmpty);
 
       final tcpMessages = ReceivePort();
       final tcpErrors = ReceivePort();
@@ -272,6 +303,22 @@ Future<void> _runWebGatewayClient(List<Object?> args) async {
       'relayPort': allocation.relayPort,
     });
 
+    const serviceId = 'web-gateway-client-isolate';
+    await gatewayCaller.registerService(
+      TurnRelayGatewayRegisterServiceRequest(
+        serviceId: serviceId,
+        description: 'isolate-test',
+      ),
+    );
+
+    final services = await gatewayCaller
+        .listServices(serviceId: serviceId)
+        .timeout(timeout);
+    sendPort.send({
+      'type': 'services',
+      'services': services.map((service) => service.toJson()).toList(),
+    });
+
     final connectRequestFuture =
         gatewayCaller.watchConnectRequests().first.timeout(timeout);
     final inboundBytesFuture =
@@ -284,6 +331,13 @@ Future<void> _runWebGatewayClient(List<Object?> args) async {
       'peerPort': connectRequest.peerPort,
       'payload': connectRequest.payload,
     });
+
+    await gatewayCaller.addPermission(
+      TurnRelayGatewayPermissionRequest(
+        peerAddress: connectRequest.peerAddress,
+        peerPort: connectRequest.peerPort,
+      ),
+    );
 
     await gatewayCaller.sendToPeer(
       TurnRelayGatewaySendRequest(

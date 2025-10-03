@@ -251,6 +251,42 @@ class TurnRelayGatewaySession {
     );
   }
 
+  Future<void> registerService({
+    required String serviceId,
+    String? description,
+  }) {
+    return client.registerService(serviceId: serviceId, description: description);
+  }
+
+  Future<List<TurnRelayGatewayServiceInfo>> listServices({String? serviceId}) async {
+    final services = await client.listServices(serviceId: serviceId);
+    return services
+        .map(
+          (service) => TurnRelayGatewayServiceInfo(
+            serviceId: service.serviceId,
+            relayAddress: service.relayAddress.address,
+            relayPort: service.relayPort,
+            description: service.description,
+            clientAddress: service.clientAddress?.address,
+            clientPort: service.clientPort,
+            updatedAt: service.updatedAt?.toIso8601String(),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> addPermission({
+    required String peerAddress,
+    required int peerPort,
+  }) async {
+    final address = _parseAddress(peerAddress);
+    if (address == null) {
+      throw ArgumentError.value(peerAddress, 'peerAddress', 'Invalid IPv4 address');
+    }
+
+    await client.addPermission(address, peerPort);
+  }
+
   Future<void> close() async {
     await client.close();
   }
@@ -335,6 +371,48 @@ class TurnRelayGatewayResponder extends RpcResponderContract {
       },
     );
 
+    addUnaryMethod<TurnRelayGatewayRegisterServiceRequest, RpcNull>(
+      methodName: 'RegisterService',
+      requestCodec: TurnRelayGatewayRegisterServiceRequest.codec,
+      responseCodec: RpcNull.codec,
+      handler: (request, {context}) async {
+        _logger?.debug('Registering service ${request.serviceId}');
+        await _session.registerService(
+          serviceId: request.serviceId,
+          description: request.description,
+        );
+        return const RpcNull();
+      },
+    );
+
+    addUnaryMethod<TurnRelayGatewayListServicesRequest,
+        RpcList<TurnRelayGatewayServiceInfo>>(
+      methodName: 'ListServices',
+      requestCodec: TurnRelayGatewayListServicesRequest.codec,
+      responseCodec: _gatewayServiceListCodec,
+      handler: (request, {context}) async {
+        _logger?.debug('Listing services for ${request.serviceId ?? '*'}');
+        final services = await _session.listServices(serviceId: request.serviceId);
+        return RpcList<TurnRelayGatewayServiceInfo>.from(services);
+      },
+    );
+
+    addUnaryMethod<TurnRelayGatewayPermissionRequest, RpcNull>(
+      methodName: 'AddPermission',
+      requestCodec: TurnRelayGatewayPermissionRequest.codec,
+      responseCodec: RpcNull.codec,
+      handler: (request, {context}) async {
+        _logger?.debug(
+          'Creating permission for ${request.peerAddress}:${request.peerPort}',
+        );
+        await _session.addPermission(
+          peerAddress: request.peerAddress,
+          peerPort: request.peerPort,
+        );
+        return const RpcNull();
+      },
+    );
+
     addServerStreamMethod<RpcNull, TurnRelayGatewayConnectNotification>(
       methodName: 'WatchConnectRequests',
       requestCodec: RpcNull.codec,
@@ -355,6 +433,7 @@ class TurnRelayGatewayResponder extends RpcResponderContract {
       },
     );
   }
+
 
   @override
   void dispose() {
@@ -393,6 +472,42 @@ class TurnRelayGatewayCaller extends RpcCallerContract {
       serviceName: serviceName,
       methodName: 'SendToPeer',
       requestCodec: TurnRelayGatewaySendRequest.codec,
+      responseCodec: RpcNull.codec,
+      request: request,
+    );
+  }
+
+  Future<void> registerService(
+    TurnRelayGatewayRegisterServiceRequest request,
+  ) async {
+    await endpoint.unaryRequest<TurnRelayGatewayRegisterServiceRequest, RpcNull>(
+      serviceName: serviceName,
+      methodName: 'RegisterService',
+      requestCodec: TurnRelayGatewayRegisterServiceRequest.codec,
+      responseCodec: RpcNull.codec,
+      request: request,
+    );
+  }
+
+  Future<List<TurnRelayGatewayServiceInfo>> listServices({String? serviceId}) async {
+    final response =
+        await endpoint.unaryRequest<TurnRelayGatewayListServicesRequest,
+            RpcList<TurnRelayGatewayServiceInfo>>(
+      serviceName: serviceName,
+      methodName: 'ListServices',
+      requestCodec: TurnRelayGatewayListServicesRequest.codec,
+      responseCodec: _gatewayServiceListCodec,
+      request: TurnRelayGatewayListServicesRequest(serviceId: serviceId),
+    );
+
+    return response.toList();
+  }
+
+  Future<void> addPermission(TurnRelayGatewayPermissionRequest request) async {
+    await endpoint.unaryRequest<TurnRelayGatewayPermissionRequest, RpcNull>(
+      serviceName: serviceName,
+      methodName: 'AddPermission',
+      requestCodec: TurnRelayGatewayPermissionRequest.codec,
       responseCodec: RpcNull.codec,
       request: request,
     );
@@ -531,6 +646,160 @@ class TurnRelayGatewayPeerRequest implements IRpcSerializable {
     TurnRelayGatewayPeerRequest.fromJson,
   );
 }
+
+class TurnRelayGatewayRegisterServiceRequest implements IRpcSerializable {
+  TurnRelayGatewayRegisterServiceRequest({
+    required this.serviceId,
+    this.description,
+  });
+
+  final String serviceId;
+  final String? description;
+
+  Map<String, dynamic> toJson() => {
+        'serviceId': serviceId,
+        if (description != null) 'description': description,
+      };
+
+  factory TurnRelayGatewayRegisterServiceRequest.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final serviceId = json['serviceId'] as String?;
+    if (serviceId == null || serviceId.isEmpty) {
+      throw const FormatException('Invalid register service payload');
+    }
+
+    return TurnRelayGatewayRegisterServiceRequest(
+      serviceId: serviceId,
+      description: json['description'] as String?,
+    );
+  }
+
+  static const RpcCodec<TurnRelayGatewayRegisterServiceRequest> codec =
+      RpcCodec<TurnRelayGatewayRegisterServiceRequest>.withDecoder(
+    TurnRelayGatewayRegisterServiceRequest.fromJson,
+  );
+}
+
+class TurnRelayGatewayListServicesRequest implements IRpcSerializable {
+  TurnRelayGatewayListServicesRequest({this.serviceId});
+
+  final String? serviceId;
+
+  Map<String, dynamic> toJson() => {
+        if (serviceId != null) 'serviceId': serviceId,
+      };
+
+  factory TurnRelayGatewayListServicesRequest.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return TurnRelayGatewayListServicesRequest(
+      serviceId: json['serviceId'] as String?,
+    );
+  }
+
+  static const RpcCodec<TurnRelayGatewayListServicesRequest> codec =
+      RpcCodec<TurnRelayGatewayListServicesRequest>.withDecoder(
+    TurnRelayGatewayListServicesRequest.fromJson,
+  );
+}
+
+class TurnRelayGatewayPermissionRequest implements IRpcSerializable {
+  TurnRelayGatewayPermissionRequest({
+    required this.peerAddress,
+    required this.peerPort,
+  });
+
+  final String peerAddress;
+  final int peerPort;
+
+  Map<String, dynamic> toJson() => {
+        'peerAddress': peerAddress,
+        'peerPort': peerPort,
+      };
+
+  factory TurnRelayGatewayPermissionRequest.fromJson(Map<String, dynamic> json) {
+    final peerAddress = json['peerAddress'] as String?;
+    final peerPort = (json['peerPort'] as num?)?.toInt();
+    if (peerAddress == null || peerAddress.isEmpty || peerPort == null) {
+      throw const FormatException('Invalid permission request payload');
+    }
+
+    return TurnRelayGatewayPermissionRequest(
+      peerAddress: peerAddress,
+      peerPort: peerPort,
+    );
+  }
+
+  static const RpcCodec<TurnRelayGatewayPermissionRequest> codec =
+      RpcCodec<TurnRelayGatewayPermissionRequest>.withDecoder(
+    TurnRelayGatewayPermissionRequest.fromJson,
+  );
+}
+
+class TurnRelayGatewayServiceInfo implements IRpcSerializable {
+  TurnRelayGatewayServiceInfo({
+    required this.serviceId,
+    required this.relayAddress,
+    required this.relayPort,
+    this.description,
+    this.clientAddress,
+    this.clientPort,
+    this.updatedAt,
+  });
+
+  final String serviceId;
+  final String relayAddress;
+  final int relayPort;
+  final String? description;
+  final String? clientAddress;
+  final int? clientPort;
+  final String? updatedAt;
+
+  Map<String, dynamic> toJson() => {
+        'serviceId': serviceId,
+        'relayAddress': relayAddress,
+        'relayPort': relayPort,
+        if (description != null) 'description': description,
+        if (clientAddress != null) 'clientAddress': clientAddress,
+        if (clientPort != null) 'clientPort': clientPort,
+        if (updatedAt != null) 'updatedAt': updatedAt,
+      };
+
+  factory TurnRelayGatewayServiceInfo.fromJson(Map<String, dynamic> json) {
+    final serviceId = json['serviceId'] as String?;
+    final relayAddress = json['relayAddress'] as String?;
+    final relayPort = (json['relayPort'] as num?)?.toInt();
+    if (serviceId == null || serviceId.isEmpty) {
+      throw const FormatException('Invalid service info: missing serviceId');
+    }
+    if (relayAddress == null || relayAddress.isEmpty || relayPort == null) {
+      throw const FormatException('Invalid service info: missing relay endpoint');
+    }
+
+    return TurnRelayGatewayServiceInfo(
+      serviceId: serviceId,
+      relayAddress: relayAddress,
+      relayPort: relayPort,
+      description: json['description'] as String?,
+      clientAddress: json['clientAddress'] as String?,
+      clientPort: (json['clientPort'] as num?)?.toInt(),
+      updatedAt: json['updatedAt'] as String?,
+    );
+  }
+
+  static const RpcCodec<TurnRelayGatewayServiceInfo> codec =
+      RpcCodec<TurnRelayGatewayServiceInfo>.withDecoder(
+    TurnRelayGatewayServiceInfo.fromJson,
+  );
+}
+
+final RpcCodec<RpcList<TurnRelayGatewayServiceInfo>> _gatewayServiceListCodec =
+    RpcCodec<RpcList<TurnRelayGatewayServiceInfo>>(
+  RpcList.fromJson<TurnRelayGatewayServiceInfo>(
+    TurnRelayGatewayServiceInfo.fromJson,
+  ),
+);
 
 class TurnRelayGatewaySendRequest implements IRpcSerializable {
   TurnRelayGatewaySendRequest({
