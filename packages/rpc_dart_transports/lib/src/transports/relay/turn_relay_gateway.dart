@@ -11,6 +11,8 @@ import 'package:universal_io/io.dart' as io;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'turn_relay_stream_transport_core.dart';
+
 /// WebSocket gateway that hosts TURN allocations on the server side and exposes
 /// them to browser clients through RPC.
 class TurnRelayGatewayServer {
@@ -575,6 +577,91 @@ class TurnRelayGatewayCaller extends RpcCallerContract {
         .map((TurnRelayGatewayBinaryFrame frame) => Uint8List.fromList(frame.data))
         .asBroadcastStream();
   }
+}
+
+/// Shared base for gateway-backed transports that operate on top of the
+/// [`TurnRelayGatewayCaller`] RPC surface.
+abstract class RpcTurnRelayGatewayTransportBase
+    extends RpcTurnRelayStreamTransportCore {
+  RpcTurnRelayGatewayTransportBase({
+    required this.gateway,
+    required this.peerAddress,
+    required this.peerPort,
+    required bool isClient,
+    bool manageGatewayLifecycle = false,
+    RpcLogger? logger,
+  }) : super(
+          componentName: 'RpcTurnRelayGatewayTransport',
+          idManager: RpcStreamIdManager(isClient: isClient),
+          incomingDatagrams: gateway.watchIncomingBytes(),
+          sendDatagram: (packet) => gateway.sendToPeer(
+            TurnRelayGatewaySendRequest(
+              peerAddress: peerAddress,
+              peerPort: peerPort,
+              payload: packet,
+            ),
+          ),
+          onClose: manageGatewayLifecycle ? gateway.endpoint.close : null,
+          customReconnect: () async => RpcHealthStatus.degraded(
+            component: 'RpcTurnRelayGatewayTransport',
+            message: 'Reconnect is not supported for gateway transports',
+            details: const {'supported': false},
+          ),
+          logger: logger?.child('RpcTurnRelayGatewayTransport'),
+        );
+
+  /// RPC helper that bridges the browser client with the TURN allocation.
+  final TurnRelayGatewayCaller gateway;
+
+  /// Target peer relay address used when sending packets.
+  final String peerAddress;
+
+  /// Target peer relay port used when sending packets.
+  final int peerPort;
+}
+
+/// Client-side transport that multiplexes RPC calls over the gateway session.
+final class RpcTurnRelayGatewayCallerTransport
+    extends RpcTurnRelayGatewayTransportBase {
+  RpcTurnRelayGatewayCallerTransport({
+    required TurnRelayGatewayCaller gateway,
+    required String peerAddress,
+    required int peerPort,
+    bool manageGatewayLifecycle = false,
+    RpcLogger? logger,
+  }) : super(
+          gateway: gateway,
+          peerAddress: peerAddress,
+          peerPort: peerPort,
+          isClient: true,
+          manageGatewayLifecycle: manageGatewayLifecycle,
+          logger: logger,
+        );
+
+  @override
+  bool get isClient => true;
+}
+
+/// Server-side transport that allows gateway clients to host RPC responders.
+final class RpcTurnRelayGatewayResponderTransport
+    extends RpcTurnRelayGatewayTransportBase {
+  RpcTurnRelayGatewayResponderTransport({
+    required TurnRelayGatewayCaller gateway,
+    required String peerAddress,
+    required int peerPort,
+    bool manageGatewayLifecycle = false,
+    RpcLogger? logger,
+  }) : super(
+          gateway: gateway,
+          peerAddress: peerAddress,
+          peerPort: peerPort,
+          isClient: false,
+          manageGatewayLifecycle: manageGatewayLifecycle,
+          logger: logger,
+        );
+
+  @override
+  bool get isClient => false;
 }
 
 /// JSON-serializable description of a TURN allocation hosted by the gateway.

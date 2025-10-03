@@ -10,6 +10,20 @@ import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
 import 'package:universal_io/io.dart' as io;
 
+class _PingResponderContract extends RpcResponderContract {
+  _PingResponderContract() : super('gatewayTest');
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'ping',
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+      handler: (request, {context}) async => RpcString('pong:${request.value}'),
+    );
+  }
+}
+
 void main() {
   group('TurnRelayGateway', () {
     late TurnRelayServer relayServer;
@@ -127,6 +141,95 @@ void main() {
 
       final webPayload = await inboundBytesFuture;
       expect(String.fromCharCodes(webPayload), 'pong');
+    });
+
+    test('web client performs RPC call through gateway transport', () async {
+      final tcpClient = await TurnRelayClient.connect(
+        serverAddress: relayServer.bindAddress,
+        serverPort: relayServer.port,
+      );
+      addTearDown(tcpClient.close);
+
+      final callerEndpoint = RpcCallerEndpoint(
+        transport: RpcWebSocketCallerTransport.connect(
+          Uri.parse('ws://${gatewayServer.bindAddress.address}:${gatewayServer.port}'),
+        ),
+        debugLabel: 'web-gateway-rpc',
+      );
+      addTearDown(callerEndpoint.close);
+
+      final gatewayCaller = TurnRelayGatewayCaller(callerEndpoint);
+
+      final allocation = await gatewayCaller
+          .getAllocationInfo()
+          .timeout(const Duration(seconds: 2));
+
+      final responderTransport = RpcTurnRelayResponderTransport.fromClient(
+        client: tcpClient,
+        peerAddress: io.InternetAddress(allocation.relayAddress),
+        peerPort: allocation.relayPort,
+      );
+      addTearDown(responderTransport.close);
+
+      final responderEndpoint = RpcResponderEndpoint(
+        transport: responderTransport,
+        debugLabel: 'tcp-gateway-responder',
+      );
+      responderEndpoint.registerServiceContract(_PingResponderContract());
+      responderEndpoint.start();
+      addTearDown(responderEndpoint.close);
+
+      await tcpClient.addPermission(
+        io.InternetAddress(allocation.relayAddress),
+        allocation.relayPort,
+      );
+
+      final connectRequestFuture = gatewayCaller
+          .watchConnectRequests()
+          .first
+          .timeout(const Duration(seconds: 5));
+
+      await tcpClient.requestPeerConnection(
+        peerAddress: io.InternetAddress(allocation.relayAddress),
+        peerPort: allocation.relayPort,
+        payload: Uint8List.fromList('rpc'.codeUnits),
+      );
+
+      final connectRequest = await connectRequestFuture;
+      expect(connectRequest.peerAddress, tcpClient.relayAddress.address);
+      expect(connectRequest.peerPort, tcpClient.relayPort);
+
+      await gatewayCaller.addPermission(
+        TurnRelayGatewayPermissionRequest(
+          peerAddress: connectRequest.peerAddress,
+          peerPort: connectRequest.peerPort,
+        ),
+      );
+
+      final gatewayTransport = RpcTurnRelayGatewayCallerTransport(
+        gateway: gatewayCaller,
+        peerAddress: connectRequest.peerAddress,
+        peerPort: connectRequest.peerPort,
+      );
+      addTearDown(gatewayTransport.close);
+
+      final rpcCaller = RpcCallerEndpoint(
+        transport: gatewayTransport,
+        debugLabel: 'web-turn-rpc',
+      );
+      addTearDown(rpcCaller.close);
+
+      final response = await rpcCaller
+          .unaryRequest<RpcString, RpcString>(
+            serviceName: 'gatewayTest',
+            methodName: 'ping',
+            requestCodec: RpcString.codec,
+            responseCodec: RpcString.codec,
+            request: RpcString('hello'),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      expect(response.value, 'pong:hello');
     });
 
     test(
