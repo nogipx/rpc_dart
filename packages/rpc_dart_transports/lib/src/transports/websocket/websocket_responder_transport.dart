@@ -10,7 +10,7 @@ import 'websocket_base_transport.dart';
 ///
 /// Серверный транспорт принимает соединение от клиента
 /// и использует четные StreamID для мультиплексирования.
-class RpcWebSocketResponderTransport extends RpcWebSocketTransportBase {
+final class RpcWebSocketResponderTransport extends RpcWebSocketTransportBase {
   /// Реализация менеджера ID для серверной стороны
   final RpcStreamIdManager _streamIdManager = RpcStreamIdManager(
     isClient: false,

@@ -2,26 +2,23 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:universal_io/io.dart';
-
-import 'turn_relay_client.dart';
-import 'turn_relay_stream_transport_core.dart';
 
 /// Base transport that multiplexes gRPC metadata and payload frames over a
 /// [`TurnRelayClient`] connection.
-abstract class RpcTurnRelayTransportBase extends RpcTurnRelayStreamTransportCore {
+abstract base class RpcTurnRelayTransportBase
+    extends RpcTurnRelayStreamTransportCore {
   RpcTurnRelayTransportBase({
     required TurnRelayClient client,
     required this.peerAddress,
     required this.peerPort,
-    required RpcStreamIdManager idManager,
+    required super.idManager,
     bool manageClientLifecycle = false,
     RpcLogger? logger,
   })  : _client = client,
         super(
           componentName: 'RpcTurnRelayTransport',
-          idManager: idManager,
           incomingDatagrams: client.bytes,
           sendDatagram: (packet) => client.send(
             packet,
@@ -60,6 +57,21 @@ abstract class RpcTurnRelayTransportBase extends RpcTurnRelayStreamTransportCore
 
   @override
   bool get isClosed => super.isClosed || _client.isClosed;
+
+  @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) {
+    // TODO: implement sendDirectObject
+    throw UnimplementedError();
+  }
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    return incomingMessages.where((e) => e.streamId == streamId);
+  }
 }
 
 /// Client-side transport that uses odd stream identifiers.
@@ -185,4 +197,15 @@ final class RpcTurnRelayResponderTransport extends RpcTurnRelayTransportBase {
 
   @override
   bool get isClient => false;
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    return incomingMessages.where((e) => e.streamId == streamId);
+  }
+
+  @override
+  Future<void> sendDirectObject(int streamId, Object object,
+      {bool endStream = false}) {
+    throw UnimplementedError();
+  }
 }

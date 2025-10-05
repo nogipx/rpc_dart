@@ -4,7 +4,6 @@
 
 import 'dart:async';
 import 'dart:isolate';
-import 'dart:typed_data';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
@@ -51,7 +50,8 @@ void main() {
       await relayServer.stop();
     });
 
-    test('tcp client exchanges ping/pong with websocket client via relay', () async {
+    test('tcp client exchanges ping/pong with websocket client via relay',
+        () async {
       final tcpClient = await TurnRelayClient.connect(
         serverAddress: relayServer.bindAddress,
         serverPort: relayServer.port,
@@ -60,7 +60,8 @@ void main() {
 
       final callerEndpoint = RpcCallerEndpoint(
         transport: RpcWebSocketCallerTransport.connect(
-          Uri.parse('ws://${gatewayServer.bindAddress.address}:${gatewayServer.port}'),
+          Uri.parse(
+              'ws://${gatewayServer.bindAddress.address}:${gatewayServer.port}'),
         ),
         debugLabel: 'web-gateway-client',
       );
@@ -101,8 +102,8 @@ void main() {
           .timeout(const Duration(seconds: 5));
 
       final tcpInboundFuture = tcpClient.bytes.first.timeout(
-            const Duration(seconds: 5),
-          );
+        const Duration(seconds: 5),
+      );
 
       await tcpClient.requestPeerConnection(
         peerAddress: io.InternetAddress(allocation.relayAddress),
@@ -152,7 +153,8 @@ void main() {
 
       final callerEndpoint = RpcCallerEndpoint(
         transport: RpcWebSocketCallerTransport.connect(
-          Uri.parse('ws://${gatewayServer.bindAddress.address}:${gatewayServer.port}'),
+          Uri.parse(
+              'ws://${gatewayServer.bindAddress.address}:${gatewayServer.port}'),
         ),
         debugLabel: 'web-gateway-rpc',
       );
@@ -206,10 +208,11 @@ void main() {
         ),
       );
 
-      final gatewayTransport = RpcTurnRelayGatewayCallerTransport(
+      final gatewayTransport = RpcTurnRelayGatewayTransport(
         gateway: gatewayCaller,
         peerAddress: connectRequest.peerAddress,
         peerPort: connectRequest.peerPort,
+        isClient: true,
       );
       addTearDown(gatewayTransport.close);
 
@@ -273,7 +276,8 @@ void main() {
 
       final hasAllocationMessage =
           await webIterator.moveNext().timeout(timeout, onTimeout: () => false);
-      expect(hasAllocationMessage, isTrue, reason: 'web isolate produced no data');
+      expect(hasAllocationMessage, isTrue,
+          reason: 'web isolate produced no data');
 
       final allocationMessage =
           _expectMessage(webIterator.current, expectedType: 'allocation');
@@ -283,7 +287,8 @@ void main() {
 
       final hasServicesMessage =
           await webIterator.moveNext().timeout(timeout, onTimeout: () => false);
-      expect(hasServicesMessage, isTrue, reason: 'web isolate did not report services');
+      expect(hasServicesMessage, isTrue,
+          reason: 'web isolate did not report services');
 
       final servicesMessage =
           _expectMessage(webIterator.current, expectedType: 'services');
@@ -326,7 +331,8 @@ void main() {
 
       final hasConnectMessage =
           await webIterator.moveNext().timeout(timeout, onTimeout: () => false);
-      expect(hasConnectMessage, isTrue, reason: 'web isolate connect stream ended');
+      expect(hasConnectMessage, isTrue,
+          reason: 'web isolate connect stream ended');
 
       final connectMessage =
           _expectMessage(webIterator.current, expectedType: 'connect');
@@ -339,7 +345,8 @@ void main() {
 
       final hasTcpReceived =
           await tcpIterator.moveNext().timeout(timeout, onTimeout: () => false);
-      expect(hasTcpReceived, isTrue, reason: 'tcp isolate did not report payload');
+      expect(hasTcpReceived, isTrue,
+          reason: 'tcp isolate did not report payload');
 
       final tcpReceived =
           _expectMessage(tcpIterator.current, expectedType: 'received');
@@ -398,8 +405,7 @@ Future<void> _runWebGatewayClient(List<Object?> args) async {
   final gatewayCaller = TurnRelayGatewayCaller(callerEndpoint);
 
   try {
-    final allocation =
-        await gatewayCaller.getAllocationInfo().timeout(timeout);
+    final allocation = await gatewayCaller.getAllocationInfo().timeout(timeout);
     sendPort.send({
       'type': 'allocation',
       'relayAddress': allocation.relayAddress,
@@ -414,9 +420,8 @@ Future<void> _runWebGatewayClient(List<Object?> args) async {
       ),
     );
 
-    final services = await gatewayCaller
-        .listServices(serviceId: serviceId)
-        .timeout(timeout);
+    final services =
+        await gatewayCaller.listServices(serviceId: serviceId).timeout(timeout);
     sendPort.send({
       'type': 'services',
       'services': services.map((service) => service.toJson()).toList(),

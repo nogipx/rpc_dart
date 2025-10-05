@@ -4,14 +4,11 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:universal_io/io.dart' as io;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-
-import 'turn_relay_stream_transport_core.dart';
 
 /// WebSocket gateway that hosts TURN allocations on the server side and exposes
 /// them to browser clients through RPC.
@@ -79,7 +76,8 @@ class TurnRelayGatewayServer {
           _handleUpgrade(request);
         },
         onError: (Object error, StackTrace stackTrace) {
-          logger?.error('Gateway HTTP server error', error: error, stackTrace: stackTrace);
+          logger?.error('Gateway HTTP server error',
+              error: error, stackTrace: stackTrace);
         },
         cancelOnError: false,
       );
@@ -109,7 +107,8 @@ class TurnRelayGatewayServer {
     try {
       socket = await io.WebSocketTransformer.upgrade(request);
     } catch (error, stackTrace) {
-      logger?.error('Failed to upgrade to WebSocket', error: error, stackTrace: stackTrace);
+      logger?.error('Failed to upgrade to WebSocket',
+          error: error, stackTrace: stackTrace);
       return;
     }
 
@@ -121,7 +120,8 @@ class TurnRelayGatewayServer {
         options: clientOptions,
       );
     } catch (error, stackTrace) {
-      logger?.error('Failed to connect to TURN relay', error: error, stackTrace: stackTrace);
+      logger?.error('Failed to connect to TURN relay',
+          error: error, stackTrace: stackTrace);
       await socket.close(io.WebSocketStatus.internalServerError);
       return;
     }
@@ -239,7 +239,8 @@ class TurnRelayGatewaySession {
   }) async {
     final address = _parseAddress(peerAddress);
     if (address == null) {
-      throw ArgumentError.value(peerAddress, 'peerAddress', 'Invalid IPv4 address');
+      throw ArgumentError.value(
+          peerAddress, 'peerAddress', 'Invalid IPv4 address');
     }
 
     await client.send(
@@ -259,7 +260,8 @@ class TurnRelayGatewaySession {
   }) async {
     final address = _parseAddress(peerAddress);
     if (address == null) {
-      throw ArgumentError.value(peerAddress, 'peerAddress', 'Invalid IPv4 address');
+      throw ArgumentError.value(
+          peerAddress, 'peerAddress', 'Invalid IPv4 address');
     }
 
     await client.requestPeerConnection(
@@ -275,11 +277,13 @@ class TurnRelayGatewaySession {
     required String serviceId,
     String? description,
   }) {
-    return client.registerService(serviceId: serviceId, description: description);
+    return client.registerService(
+        serviceId: serviceId, description: description);
   }
 
   /// Lists discovery entries and converts them to gateway DTOs.
-  Future<List<TurnRelayGatewayServiceInfo>> listServices({String? serviceId}) async {
+  Future<List<TurnRelayGatewayServiceInfo>> listServices(
+      {String? serviceId}) async {
     final services = await client.listServices(serviceId: serviceId);
     return services
         .map(
@@ -303,7 +307,8 @@ class TurnRelayGatewaySession {
   }) async {
     final address = _parseAddress(peerAddress);
     if (address == null) {
-      throw ArgumentError.value(peerAddress, 'peerAddress', 'Invalid IPv4 address');
+      throw ArgumentError.value(
+          peerAddress, 'peerAddress', 'Invalid IPv4 address');
     }
 
     await client.addPermission(address, peerPort);
@@ -418,7 +423,8 @@ class TurnRelayGatewayResponder extends RpcResponderContract {
       responseCodec: _gatewayServiceListCodec,
       handler: (request, {context}) async {
         _logger?.debug('Listing services for ${request.serviceId ?? '*'}');
-        final services = await _session.listServices(serviceId: request.serviceId);
+        final services =
+            await _session.listServices(serviceId: request.serviceId);
         return RpcList<TurnRelayGatewayServiceInfo>.from(services);
       },
     );
@@ -460,7 +466,6 @@ class TurnRelayGatewayResponder extends RpcResponderContract {
     );
   }
 
-
   @override
   void dispose() {
     unawaited(_session.close());
@@ -475,7 +480,8 @@ class TurnRelayGatewayResponder extends RpcResponderContract {
 /// runtimes without direct socket support such as Flutter Web.
 class TurnRelayGatewayCaller extends RpcCallerContract {
   TurnRelayGatewayCaller(RpcCallerEndpoint endpoint)
-      : super('turnRelayGateway', endpoint, dataTransferMode: RpcDataTransferMode.codec);
+      : super('turnRelayGateway', endpoint,
+            dataTransferMode: RpcDataTransferMode.codec);
 
   /// Retrieves the relay allocation endpoint owned by the active session.
   Future<TurnRelayGatewayAllocationInfo> getAllocationInfo() {
@@ -490,7 +496,8 @@ class TurnRelayGatewayCaller extends RpcCallerContract {
 
   /// Asks the relay to notify a peer about the caller's desire to connect and
   /// optionally forwards a payload.
-  Future<void> requestPeerConnection(TurnRelayGatewayPeerRequest request) async {
+  Future<void> requestPeerConnection(
+      TurnRelayGatewayPeerRequest request) async {
     await endpoint.unaryRequest<TurnRelayGatewayPeerRequest, RpcNull>(
       serviceName: serviceName,
       methodName: 'RequestPeerConnection',
@@ -515,7 +522,8 @@ class TurnRelayGatewayCaller extends RpcCallerContract {
   Future<void> registerService(
     TurnRelayGatewayRegisterServiceRequest request,
   ) async {
-    await endpoint.unaryRequest<TurnRelayGatewayRegisterServiceRequest, RpcNull>(
+    await endpoint
+        .unaryRequest<TurnRelayGatewayRegisterServiceRequest, RpcNull>(
       serviceName: serviceName,
       methodName: 'RegisterService',
       requestCodec: TurnRelayGatewayRegisterServiceRequest.codec,
@@ -525,10 +533,11 @@ class TurnRelayGatewayCaller extends RpcCallerContract {
   }
 
   /// Lists discovery entries currently advertised by the relay gateway.
-  Future<List<TurnRelayGatewayServiceInfo>> listServices({String? serviceId}) async {
-    final response =
-        await endpoint.unaryRequest<TurnRelayGatewayListServicesRequest,
-            RpcList<TurnRelayGatewayServiceInfo>>(
+  Future<List<TurnRelayGatewayServiceInfo>> listServices(
+      {String? serviceId}) async {
+    final response = await endpoint.unaryRequest<
+        TurnRelayGatewayListServicesRequest,
+        RpcList<TurnRelayGatewayServiceInfo>>(
       serviceName: serviceName,
       methodName: 'ListServices',
       requestCodec: TurnRelayGatewayListServicesRequest.codec,
@@ -574,16 +583,17 @@ class TurnRelayGatewayCaller extends RpcCallerContract {
           responseCodec: TurnRelayGatewayBinaryFrame.codec,
           request: const RpcNull(),
         )
-        .map((TurnRelayGatewayBinaryFrame frame) => Uint8List.fromList(frame.data))
+        .map((TurnRelayGatewayBinaryFrame frame) =>
+            Uint8List.fromList(frame.data))
         .asBroadcastStream();
   }
 }
 
 /// Shared base for gateway-backed transports that operate on top of the
 /// [`TurnRelayGatewayCaller`] RPC surface.
-abstract class RpcTurnRelayGatewayTransportBase
+final class RpcTurnRelayGatewayTransport
     extends RpcTurnRelayStreamTransportCore {
-  RpcTurnRelayGatewayTransportBase({
+  RpcTurnRelayGatewayTransport({
     required this.gateway,
     required this.peerAddress,
     required this.peerPort,
@@ -620,50 +630,6 @@ abstract class RpcTurnRelayGatewayTransportBase
   final int peerPort;
 }
 
-/// Client-side transport that multiplexes RPC calls over the gateway session.
-final class RpcTurnRelayGatewayCallerTransport
-    extends RpcTurnRelayGatewayTransportBase {
-  RpcTurnRelayGatewayCallerTransport({
-    required TurnRelayGatewayCaller gateway,
-    required String peerAddress,
-    required int peerPort,
-    bool manageGatewayLifecycle = false,
-    RpcLogger? logger,
-  }) : super(
-          gateway: gateway,
-          peerAddress: peerAddress,
-          peerPort: peerPort,
-          isClient: true,
-          manageGatewayLifecycle: manageGatewayLifecycle,
-          logger: logger,
-        );
-
-  @override
-  bool get isClient => true;
-}
-
-/// Server-side transport that allows gateway clients to host RPC responders.
-final class RpcTurnRelayGatewayResponderTransport
-    extends RpcTurnRelayGatewayTransportBase {
-  RpcTurnRelayGatewayResponderTransport({
-    required TurnRelayGatewayCaller gateway,
-    required String peerAddress,
-    required int peerPort,
-    bool manageGatewayLifecycle = false,
-    RpcLogger? logger,
-  }) : super(
-          gateway: gateway,
-          peerAddress: peerAddress,
-          peerPort: peerPort,
-          isClient: false,
-          manageGatewayLifecycle: manageGatewayLifecycle,
-          logger: logger,
-        );
-
-  @override
-  bool get isClient => false;
-}
-
 /// JSON-serializable description of a TURN allocation hosted by the gateway.
 class TurnRelayGatewayAllocationInfo implements IRpcSerializable {
   TurnRelayGatewayAllocationInfo({
@@ -675,6 +641,7 @@ class TurnRelayGatewayAllocationInfo implements IRpcSerializable {
   final int relayPort;
 
   /// Serializes the allocation info into JSON.
+  @override
   Map<String, dynamic> toJson() => {
         'relayAddress': relayAddress,
         'relayPort': relayPort,
@@ -713,6 +680,7 @@ class TurnRelayGatewayConnectNotification implements IRpcSerializable {
   final Uint8List? payload;
 
   /// Serializes the notification into JSON, encoding [payload] with base64.
+  @override
   Map<String, dynamic> toJson() => {
         'peerAddress': peerAddress,
         'peerPort': peerPort,
@@ -720,7 +688,8 @@ class TurnRelayGatewayConnectNotification implements IRpcSerializable {
       };
 
   /// Deserializes the notification from JSON.
-  factory TurnRelayGatewayConnectNotification.fromJson(Map<String, dynamic> json) {
+  factory TurnRelayGatewayConnectNotification.fromJson(
+      Map<String, dynamic> json) {
     final address = json['peerAddress'] as String?;
     final port = (json['peerPort'] as num?)?.toInt();
     if (address == null || address.isEmpty || port == null) {
@@ -754,6 +723,7 @@ class TurnRelayGatewayPeerRequest implements IRpcSerializable {
   final Uint8List? payload;
 
   /// Serializes the peer request into JSON.
+  @override
   Map<String, dynamic> toJson() => {
         'peerAddress': peerAddress,
         'peerPort': peerPort,
@@ -793,6 +763,7 @@ class TurnRelayGatewayRegisterServiceRequest implements IRpcSerializable {
   final String? description;
 
   /// Serializes the registration request into JSON.
+  @override
   Map<String, dynamic> toJson() => {
         'serviceId': serviceId,
         if (description != null) 'description': description,
@@ -826,6 +797,7 @@ class TurnRelayGatewayListServicesRequest implements IRpcSerializable {
   final String? serviceId;
 
   /// Serializes the listing request into JSON.
+  @override
   Map<String, dynamic> toJson() => {
         if (serviceId != null) 'serviceId': serviceId,
       };
@@ -856,13 +828,15 @@ class TurnRelayGatewayPermissionRequest implements IRpcSerializable {
   final int peerPort;
 
   /// Serializes the permission request into JSON.
+  @override
   Map<String, dynamic> toJson() => {
         'peerAddress': peerAddress,
         'peerPort': peerPort,
       };
 
   /// Deserializes a permission request from JSON.
-  factory TurnRelayGatewayPermissionRequest.fromJson(Map<String, dynamic> json) {
+  factory TurnRelayGatewayPermissionRequest.fromJson(
+      Map<String, dynamic> json) {
     final peerAddress = json['peerAddress'] as String?;
     final peerPort = (json['peerPort'] as num?)?.toInt();
     if (peerAddress == null || peerAddress.isEmpty || peerPort == null) {
@@ -902,6 +876,7 @@ class TurnRelayGatewayServiceInfo implements IRpcSerializable {
   final String? updatedAt;
 
   /// Converts the service info into a JSON map.
+  @override
   Map<String, dynamic> toJson() => {
         'serviceId': serviceId,
         'relayAddress': relayAddress,
@@ -921,7 +896,8 @@ class TurnRelayGatewayServiceInfo implements IRpcSerializable {
       throw const FormatException('Invalid service info: missing serviceId');
     }
     if (relayAddress == null || relayAddress.isEmpty || relayPort == null) {
-      throw const FormatException('Invalid service info: missing relay endpoint');
+      throw const FormatException(
+          'Invalid service info: missing relay endpoint');
     }
 
     return TurnRelayGatewayServiceInfo(
@@ -962,6 +938,7 @@ class TurnRelayGatewaySendRequest implements IRpcSerializable {
   final Uint8List payload;
 
   /// Serializes the send request into JSON, encoding the payload as base64.
+  @override
   Map<String, dynamic> toJson() => {
         'peerAddress': peerAddress,
         'peerPort': peerPort,
@@ -973,7 +950,10 @@ class TurnRelayGatewaySendRequest implements IRpcSerializable {
     final address = json['peerAddress'] as String?;
     final port = (json['peerPort'] as num?)?.toInt();
     final payloadRaw = json['payload'] as String?;
-    if (address == null || address.isEmpty || port == null || payloadRaw == null) {
+    if (address == null ||
+        address.isEmpty ||
+        port == null ||
+        payloadRaw == null) {
       throw const FormatException('Invalid send request payload');
     }
 
@@ -997,6 +977,7 @@ class TurnRelayGatewayBinaryFrame implements IRpcSerializable {
   final Uint8List data;
 
   /// Encodes the binary frame into a base64 string for JSON transport.
+  @override
   Map<String, dynamic> toJson() => {
         'data': base64Encode(data),
       };

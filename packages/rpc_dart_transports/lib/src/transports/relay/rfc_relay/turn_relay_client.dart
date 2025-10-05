@@ -22,7 +22,7 @@ class TurnRelayClientOptions {
     this.permissionLifetime = const Duration(minutes: 5),
     this.permissionRefreshMargin = const Duration(seconds: 30),
     this.autoCreatePermission = true,
-    this.requestedTransport = TurnRequestedTransport.udp,
+    this.requestedTransport = TurnRequestedTransport.tcp,
   });
 
   /// Local interface bound by the TCP socket (defaults to ANY).

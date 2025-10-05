@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -13,7 +14,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// Упрощен до минимума - только WebSocket канал + встроенный функционал.
 ///
 /// Протокол сообщений: [streamId:4байта][flags:1байт][gRPC_frame...]
-abstract class RpcWebSocketTransportBase implements IRpcTransport {
+abstract base class RpcWebSocketTransportBase implements IRpcTransport {
   /// WebSocket канал для обмена сообщениями
   WebSocketChannel _channel;
 

@@ -4,7 +4,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
@@ -30,7 +29,8 @@ abstract class RpcTurnRelayStreamTransportCore implements IRpcTransport {
         _customHealth = customHealth,
         _customReconnect = customReconnect,
         _logger = logger,
-        _incomingController = StreamController<RpcTransportMessage>.broadcast() {
+        _incomingController =
+            StreamController<RpcTransportMessage>.broadcast() {
     _subscription = incomingDatagrams.listen(
       _handleIncomingBytes,
       onError: _handleError,
@@ -239,6 +239,20 @@ abstract class RpcTurnRelayStreamTransportCore implements IRpcTransport {
       message: 'Reconnect is not supported for $componentName transports',
       details: const {'supported': false},
     );
+  }
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    return incomingMessages.where((e) => e.streamId == streamId);
+  }
+
+  @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) {
+    throw UnimplementedError();
   }
 
   Future<void> _sendWithHeader(
