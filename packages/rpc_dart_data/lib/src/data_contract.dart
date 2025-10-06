@@ -38,6 +38,12 @@ abstract interface class IDataServiceContract implements IRpcContract {
   /// Экспорт моментального снимка коллекции.
   static const String exportSnapshot = 'exportSnapshot';
 
+  /// Экспорт полной базы данных.
+  static const String exportDatabase = 'exportDatabase';
+
+  /// Импорт полной базы данных.
+  static const String importDatabase = 'importDatabase';
+
   /// Поиск записей.
   static const String searchRecords = 'searchRecords';
 
@@ -165,6 +171,14 @@ const RpcCodec<ExportSnapshotRequest> exportRequestCodec =
     RpcCodec.withDecoder(ExportSnapshotRequest.fromJson);
 const RpcCodec<ExportSnapshotResponse> exportResponseCodec =
     RpcCodec.withDecoder(ExportSnapshotResponse.fromJson);
+const RpcCodec<ExportDatabaseRequest> exportDatabaseRequestCodec =
+    RpcCodec.withDecoder(ExportDatabaseRequest.fromJson);
+const RpcCodec<ExportDatabaseResponse> exportDatabaseResponseCodec =
+    RpcCodec.withDecoder(ExportDatabaseResponse.fromJson);
+const RpcCodec<ImportDatabaseRequest> importDatabaseRequestCodec =
+    RpcCodec.withDecoder(ImportDatabaseRequest.fromJson);
+const RpcCodec<ImportDatabaseResponse> importDatabaseResponseCodec =
+    RpcCodec.withDecoder(ImportDatabaseResponse.fromJson);
 const RpcCodec<SearchRecordsRequest> searchRequestCodec =
     RpcCodec.withDecoder(SearchRecordsRequest.fromJson);
 const RpcCodec<SearchRecordsResponse> searchResponseCodec =

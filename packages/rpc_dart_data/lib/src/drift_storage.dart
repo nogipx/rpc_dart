@@ -263,6 +263,17 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
   }
 
   @override
+  Future<List<String>> listCollections() async {
+    await _ensureRegistry();
+    final rows = await _database.customSelect(
+      'SELECT collection FROM collection_registry ORDER BY collection',
+    ).get();
+    return rows
+        .map((row) => row.read<String>('collection'))
+        .toList(growable: false);
+  }
+
+  @override
   Future<void> writeRecord(DataRecord record) async {
     final tableName = await _ensureTableForWrite(record.collection);
     await _database.customStatement(

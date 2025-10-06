@@ -99,6 +99,22 @@ class DataServiceResponder extends RpcResponderContract
       description: 'Экспорт моментального снимка коллекции',
     );
 
+    addUnaryMethod<ExportDatabaseRequest, ExportDatabaseResponse>(
+      methodName: IDataServiceContract.exportDatabase,
+      handler: _handleExportDatabase,
+      requestCodec: exportDatabaseRequestCodec,
+      responseCodec: exportDatabaseResponseCodec,
+      description: 'Полный экспорт базы данных (с шифрованием по паролю)',
+    );
+
+    addUnaryMethod<ImportDatabaseRequest, ImportDatabaseResponse>(
+      methodName: IDataServiceContract.importDatabase,
+      handler: _handleImportDatabase,
+      requestCodec: importDatabaseRequestCodec,
+      responseCodec: importDatabaseResponseCodec,
+      description: 'Импорт полной базы данных из снапшота',
+    );
+
     addUnaryMethod<SearchRecordsRequest, SearchRecordsResponse>(
       methodName: IDataServiceContract.searchRecords,
       handler: _handleSearch,
@@ -239,6 +255,26 @@ class DataServiceResponder extends RpcResponderContract
     return _runSafely(
       context,
       () => _repository.exportSnapshot(request),
+    );
+  }
+
+  Future<ExportDatabaseResponse> _handleExportDatabase(
+    ExportDatabaseRequest request, {
+    RpcContext? context,
+  }) async {
+    return _runSafely(
+      context,
+      () => _repository.exportDatabase(request),
+    );
+  }
+
+  Future<ImportDatabaseResponse> _handleImportDatabase(
+    ImportDatabaseRequest request, {
+    RpcContext? context,
+  }) async {
+    return _runSafely(
+      context,
+      () => _repository.importDatabase(request),
     );
   }
 

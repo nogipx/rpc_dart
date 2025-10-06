@@ -87,6 +87,19 @@ abstract interface class DataService {
     RpcContext? context,
   });
 
+  Future<ExportDatabaseResponse> exportDatabase({
+    String? password,
+    RpcContext? context,
+  });
+
+  Future<ImportDatabaseResponse> importDatabase({
+    required String payload,
+    bool encrypted,
+    String? password,
+    bool replaceExisting,
+    RpcContext? context,
+  });
+
   Future<SearchRecordsResponse> search({
     required String collection,
     required String query,
@@ -269,6 +282,36 @@ class DataServiceClient implements DataService {
   }) {
     return _caller.exportSnapshot(
       ExportSnapshotRequest(collection: collection),
+      context: context,
+    );
+  }
+
+  @override
+  Future<ExportDatabaseResponse> exportDatabase({
+    String? password,
+    RpcContext? context,
+  }) {
+    return _caller.exportDatabase(
+      ExportDatabaseRequest(password: password),
+      context: context,
+    );
+  }
+
+  @override
+  Future<ImportDatabaseResponse> importDatabase({
+    required String payload,
+    bool encrypted = false,
+    String? password,
+    bool replaceExisting = true,
+    RpcContext? context,
+  }) {
+    return _caller.importDatabase(
+      ImportDatabaseRequest(
+        payload: payload,
+        password: password,
+        encrypted: encrypted,
+        replaceExisting: replaceExisting,
+      ),
       context: context,
     );
   }

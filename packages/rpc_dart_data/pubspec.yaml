@@ -15,6 +15,8 @@ dependencies:
   drift: ^2.16.0
   sqlite3: ^2.4.0
   path: ^1.9.0
+  licensify: ^3.1.0
+  crypto: ^3.0.3
 
 dependency_overrides:
   rpc_dart:

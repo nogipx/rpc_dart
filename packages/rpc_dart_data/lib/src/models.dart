@@ -852,6 +852,137 @@ class ExportSnapshotResponse extends Equatable implements IRpcSerializable {
 }
 
 @immutable
+class ExportDatabaseRequest extends Equatable implements IRpcSerializable {
+  const ExportDatabaseRequest({this.password});
+
+  factory ExportDatabaseRequest.fromJson(Map<String, dynamic> json) =>
+      ExportDatabaseRequest(password: json['password'] as String?);
+
+  final String? password;
+
+  @override
+  List<Object?> get props => [password];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        if (password != null) 'password': password,
+      };
+}
+
+@immutable
+class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
+  const ExportDatabaseResponse({
+    required this.payload,
+    required this.encrypted,
+    required this.generatedAt,
+    required this.formatVersion,
+    required this.collectionCount,
+    required this.recordCount,
+  });
+
+  factory ExportDatabaseResponse.fromJson(Map<String, dynamic> json) =>
+      ExportDatabaseResponse(
+        payload: json['payload'] as String,
+        encrypted: json['encrypted'] as bool? ?? false,
+        generatedAt: DateTime.parse(json['generatedAt'] as String),
+        formatVersion: json['formatVersion'] as String? ?? '1.0.0',
+        collectionCount: json['collectionCount'] as int? ?? 0,
+        recordCount: json['recordCount'] as int? ?? 0,
+      );
+
+  final String payload;
+  final bool encrypted;
+  final DateTime generatedAt;
+  final String formatVersion;
+  final int collectionCount;
+  final int recordCount;
+
+  @override
+  List<Object?> get props => [
+        payload,
+        encrypted,
+        generatedAt,
+        formatVersion,
+        collectionCount,
+        recordCount,
+      ];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'payload': payload,
+        'encrypted': encrypted,
+        'generatedAt': generatedAt.toIso8601String(),
+        'formatVersion': formatVersion,
+        'collectionCount': collectionCount,
+        'recordCount': recordCount,
+      };
+}
+
+@immutable
+class ImportDatabaseRequest extends Equatable implements IRpcSerializable {
+  const ImportDatabaseRequest({
+    required this.payload,
+    this.password,
+    this.encrypted = false,
+    this.replaceExisting = true,
+  });
+
+  factory ImportDatabaseRequest.fromJson(Map<String, dynamic> json) =>
+      ImportDatabaseRequest(
+        payload: json['payload'] as String,
+        password: json['password'] as String?,
+        encrypted: json['encrypted'] as bool? ?? false,
+        replaceExisting: json['replaceExisting'] as bool? ?? true,
+      );
+
+  final String payload;
+  final String? password;
+  final bool encrypted;
+  final bool replaceExisting;
+
+  @override
+  List<Object?> get props => [payload, password, encrypted, replaceExisting];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'payload': payload,
+        'encrypted': encrypted,
+        'replaceExisting': replaceExisting,
+        if (password != null) 'password': password,
+      };
+}
+
+@immutable
+class ImportDatabaseResponse extends Equatable implements IRpcSerializable {
+  const ImportDatabaseResponse({
+    required this.collectionCount,
+    required this.recordCount,
+    required this.appliedAt,
+  });
+
+  factory ImportDatabaseResponse.fromJson(Map<String, dynamic> json) =>
+      ImportDatabaseResponse(
+        collectionCount: json['collectionCount'] as int? ?? 0,
+        recordCount: json['recordCount'] as int? ?? 0,
+        appliedAt: DateTime.parse(json['appliedAt'] as String),
+      );
+
+  final int collectionCount;
+  final int recordCount;
+  final DateTime appliedAt;
+
+  @override
+  List<Object?> get props => [collectionCount, recordCount, appliedAt];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'collectionCount': collectionCount,
+        'recordCount': recordCount,
+        'appliedAt': appliedAt.toIso8601String(),
+      };
+}
+
+@immutable
 class SearchRecordsRequest extends Equatable implements IRpcSerializable {
   const SearchRecordsRequest({
     required this.collection,
