@@ -19,8 +19,7 @@ dependencies:
   args: ^2.7.0
   http2: ^2.3.1
   universal_io: ^2.2.2
-  licensify: ^3.1.0
-  crypto: ^3.0.5
+  licensify: ^4.0.0
 
 dependency_overrides:
   rpc_dart:

@@ -425,8 +425,8 @@ class SecureTransportAdapter implements IRpcTransport {
     final recvKeyBytes =
         _hkdf(secretMaterial, info: utf8.encode(_infoResponderToCaller));
 
-    final sendKey = Licensify.encryptionKeyFromBytes(sendKeyBytes);
-    final recvKey = Licensify.encryptionKeyFromBytes(recvKeyBytes);
+    final sendKey = Licensify.encryptionKeyFromBytes(keyBytes: sendKeyBytes);
+    final recvKey = Licensify.encryptionKeyFromBytes(keyBytes: recvKeyBytes);
 
     final handshakeHash = _computeHandshakeHash(helloToken, ackToken);
 
@@ -508,8 +508,8 @@ class SecureTransportAdapter implements IRpcTransport {
     final recvKeyBytes =
         _hkdf(secretMaterial, info: utf8.encode(_infoCallerToResponder));
 
-    final sendKey = Licensify.encryptionKeyFromBytes(sendKeyBytes);
-    final recvKey = Licensify.encryptionKeyFromBytes(recvKeyBytes);
+    final sendKey = Licensify.encryptionKeyFromBytes(keyBytes: sendKeyBytes);
+    final recvKey = Licensify.encryptionKeyFromBytes(keyBytes: recvKeyBytes);
 
     final handshakeHash = _computeHandshakeHash(helloToken, ackToken);
 
