@@ -30,6 +30,24 @@ Future<void> main(List<String> arguments) async {
       defaultsTo: 'data_service.sqlite',
       help: 'Путь до SQLite файла для Drift-хранилища.',
     )
+    ..addOption(
+      'pid-file',
+      defaultsTo: 'data_service.pid',
+      help: 'Путь до PID файла для режима демона.',
+    )
+    ..addFlag(
+      'daemon',
+      abbr: 'D',
+      help:
+          'Запустить сервис в фоне: создаёт дочерний процесс и отсоединяет его.',
+      negatable: false,
+    )
+    ..addFlag(
+      'daemon-child',
+      hide: true,
+      negatable: false,
+      help: 'Внутренний флаг для дочернего процесса демона.',
+    )
     ..addFlag(
       'verbose',
       abbr: 'v',
@@ -72,7 +90,74 @@ Future<void> main(List<String> arguments) async {
 
   final host = args['host'] as String;
   final databasePath = args['database'] as String;
+  final pidFilePath = args['pid-file'] as String;
+  final daemonize = args['daemon'] as bool;
+  final isDaemonChild = args['daemon-child'] as bool;
   final verbose = args['verbose'] as bool;
+
+  if (daemonize && !isDaemonChild) {
+    final childArgs = <String>[];
+    for (final argument in args.arguments) {
+      if (argument == '--daemon' ||
+          argument == '-D' ||
+          argument == '--daemon-child' ||
+          argument.startsWith('--daemon=')) {
+        continue;
+      }
+      childArgs.add(argument);
+    }
+    childArgs.add('--daemon-child');
+
+    final executableArguments = <String>[
+      ...Platform.executableArguments,
+    ];
+
+    final hasExplicitScript = executableArguments.any(
+      (argument) =>
+          argument.endsWith('.dart') || argument.startsWith('package:'),
+    );
+
+    if (!hasExplicitScript) {
+      final scriptUri = Platform.script;
+      String? scriptArgument;
+
+      if (scriptUri.scheme == 'file') {
+        final scriptPath = scriptUri.toFilePath();
+        if (scriptPath != Platform.resolvedExecutable &&
+            File(scriptPath).existsSync()) {
+          scriptArgument = scriptPath;
+        }
+      } else if (scriptUri.scheme == 'package') {
+        scriptArgument = scriptUri.toString();
+      }
+
+      if (scriptArgument != null) {
+        executableArguments.add(scriptArgument);
+      }
+    }
+
+    executableArguments.addAll(childArgs);
+
+    try {
+      final process = await Process.start(
+        Platform.resolvedExecutable,
+        executableArguments,
+        environment: Platform.environment,
+        mode: ProcessStartMode.detached,
+      );
+
+      stdout.writeln(
+        'Daemon процесса данных запущен (PID ${process.pid}). PID-файл: $pidFilePath',
+      );
+      return;
+    } catch (error, stackTrace) {
+      stderr
+        ..writeln('Не удалось создать daemon процесса: $error')
+        ..writeln(stackTrace);
+      exitCode = 1;
+      return;
+    }
+  }
 
   final minLevel = verbose ? RpcLoggerLevel.debug : RpcLoggerLevel.info;
   RpcLogger.setDefaultMinLogLevel(minLevel);
@@ -126,6 +211,60 @@ Future<void> main(List<String> arguments) async {
 
   final shutdownCompleter = Completer<void>();
   var isShuttingDown = false;
+  RandomAccessFile? pidFileHandle;
+  File? pidFile;
+
+  Future<void> releasePidFile() async {
+    if (pidFileHandle == null) {
+      return;
+    }
+
+    try {
+      await pidFileHandle!.truncate(0);
+      await pidFileHandle!.flush();
+    } catch (error, stackTrace) {
+      await logger.warning(
+        'Не удалось очистить PID файл перед удалением: $error',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    try {
+      await pidFileHandle!.unlock();
+    } catch (error, stackTrace) {
+      await logger.warning(
+        'Не удалось освободить блокировку PID файла: $error',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    try {
+      await pidFileHandle!.close();
+    } catch (error, stackTrace) {
+      await logger.warning(
+        'Не удалось закрыть PID файл: $error',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      pidFileHandle = null;
+    }
+
+    if (pidFile != null) {
+      try {
+        await pidFile!.delete();
+      } catch (error, stackTrace) {
+        await logger.warning(
+          'Не удалось удалить PID файл: $error',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      pidFile = null;
+    }
+  }
 
   Future<void> shutdown(String reason) async {
     if (isShuttingDown) {
@@ -154,6 +293,8 @@ Future<void> main(List<String> arguments) async {
         stackTrace: stackTrace,
       );
     }
+
+    await releasePidFile();
 
     shutdownCompleter.complete();
   }
@@ -186,6 +327,30 @@ Future<void> main(List<String> arguments) async {
   }
 
   try {
+    pidFile = File(pidFilePath);
+    await pidFile!.parent.create(recursive: true);
+    pidFileHandle = await pidFile!.open(mode: FileMode.write);
+    await pidFileHandle!.lock(FileLock.exclusive);
+    await pidFileHandle!.setPosition(0);
+    await pidFileHandle!.truncate(0);
+    await pidFileHandle!.writeString('${ProcessInfo.currentPid}\n');
+    await pidFileHandle!.flush();
+    await logger.info('PID файл создан: ${pidFile!.path} (PID ${ProcessInfo.currentPid})');
+  } catch (error, stackTrace) {
+    await logger.error(
+      'Не удалось создать или заблокировать PID файл "$pidFilePath": $error',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    await repository.dispose();
+    for (final subscription in signalSubscriptions) {
+      await subscription.cancel();
+    }
+    exitCode = 74; // EX_IOERR
+    return;
+  }
+
+  try {
     await server.start();
   } catch (error, stackTrace) {
     await logger.error(
@@ -194,6 +359,7 @@ Future<void> main(List<String> arguments) async {
       stackTrace: stackTrace,
     );
     await repository.dispose();
+    await releasePidFile();
     for (final subscription in signalSubscriptions) {
       await subscription.cancel();
     }
