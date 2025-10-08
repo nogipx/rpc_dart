@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:convert';
+
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
 
@@ -35,8 +37,16 @@ List<http2.Header> rpcMetadataToHttp2Headers(
     } else if (headerName == ':authority' && authority != null) {
       headers.add(http2.Header.ascii(':authority', authority));
     } else {
+      String headerValue;
+      try {
+        ascii.encode(rpcHeader.value);
+        headerValue = rpcHeader.value;
+      } on Object catch (_) {
+        final encodedValue = base64UrlEncode(utf8.encode(rpcHeader.value));
+        headerValue = encodedValue;
+      }
       // Добавляем header как есть
-      headers.add(http2.Header.ascii(headerName, rpcHeader.value));
+      headers.add(http2.Header.ascii(headerName, headerValue));
     }
   }
 
@@ -59,7 +69,12 @@ RpcMetadata http2HeadersToRpcMetadata(List<http2.Header> headers) {
 
   for (final header in headers) {
     final name = String.fromCharCodes(header.name);
-    final value = String.fromCharCodes(header.value);
+    var value = String.fromCharCodes(header.value);
+    try {
+      value = utf8.decode(base64Url.decode(value));
+    } on Object {
+      null;
+    }
 
     // Сохраняем все headers как есть
     rpcHeaders.add(RpcHeader(name, value));
