@@ -23,6 +23,8 @@ class RpcHttp2Server implements IRpcServer {
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
   final void Function(Socket socket)? _onConnectionOpened;
   final void Function(Socket socket)? _onConnectionClosed;
+  final IRpcTransport Function(IRpcTransport inner, Socket socket)?
+      _transportWrapper;
 
   ServerSocket? _serverSocket;
   bool _isRunning = false;
@@ -46,13 +48,15 @@ class RpcHttp2Server implements IRpcServer {
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(Socket socket)? onConnectionOpened,
     void Function(Socket socket)? onConnectionClosed,
+    IRpcTransport Function(IRpcTransport inner, Socket socket)? transportWrapper,
   })  : _host = host,
         _port = port,
         _logger = logger?.child('Http2Server'),
         _onEndpointCreated = onEndpointCreated,
         _onConnectionError = onConnectionError,
         _onConnectionOpened = onConnectionOpened,
-        _onConnectionClosed = onConnectionClosed;
+        _onConnectionClosed = onConnectionClosed,
+        _transportWrapper = transportWrapper;
 
   /// Создает простой HTTP/2 сервер с автоматической регистрацией контрактов
   ///
@@ -189,14 +193,29 @@ class RpcHttp2Server implements IRpcServer {
       final connection = http2.ServerTransportConnection.viaSocket(socket);
 
       // Создаем серверный транспорт (правильный способ!)
-      final serverTransport = RpcHttp2ResponderTransport(
+      IRpcTransport transport = RpcHttp2ResponderTransport(
         connection: connection,
         logger: _logger,
       );
 
+      if (_transportWrapper != null) {
+        try {
+          transport = _transportWrapper!(transport, socket);
+        } catch (error, stackTrace) {
+          _logger?.error(
+            'Ошибка при обёртке транспорта',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          _onConnectionError?.call(error, stackTrace);
+          socket.destroy();
+          return;
+        }
+      }
+
       // Создаем RPC endpoint
       final endpoint = RpcResponderEndpoint(
-        transport: serverTransport,
+        transport: transport,
         debugLabel: 'Http2Endpoint-$clientAddress',
         loggerColors: RpcLoggerColors.singleColor(AnsiColor.cyan),
       );
