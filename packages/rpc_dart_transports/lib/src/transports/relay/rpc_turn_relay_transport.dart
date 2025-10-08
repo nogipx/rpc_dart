@@ -8,7 +8,7 @@ import 'dart:convert';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
-import 'turn_relay_client.dart';
+import 'rfc_relay/turn_relay_client.dart';
 
 /// Base transport that multiplexes gRPC metadata and payload frames over a
 /// [`TurnRelayClient`] connection.
