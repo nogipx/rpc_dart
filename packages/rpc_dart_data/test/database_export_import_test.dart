@@ -117,8 +117,10 @@ void main() {
       final footer = _decodePasetoFooter(exportResponse.payload);
       expect(footer['salt'], isA<String>());
       expect((footer['salt'] as String).isNotEmpty, isTrue);
-      expect(footer['iterations'], greaterThan(0));
-      expect(footer['keyLength'], greaterThan(0));
+      expect(footer['memoryCost'], 67108864);
+      expect(footer['timeCost'], 2);
+      expect(footer['parallelism'], 1);
+      expect(footer['kdf'], 'argon2id-v4.local-pw');
 
       await expectLater(
         targetRepository.importDatabase(
@@ -173,5 +175,6 @@ void main() {
         containsAll({'First', 'Second'}),
       );
     });
+
   });
 }

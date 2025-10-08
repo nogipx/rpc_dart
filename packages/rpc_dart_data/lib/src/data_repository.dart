@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:licensify/licensify.dart';
 
 import 'data_contract.dart';
-import 'licensify_password_extension.dart';
 import 'models.dart';
 
 /// Абстракция репозитория данных.
@@ -98,9 +96,11 @@ abstract class BaseDataRepository implements DataRepository {
         _changeController = StreamController<DataChangeEvent>.broadcast();
 
   static const String _databaseFormatVersion = '1.0.0';
-  static const int _pbkdf2Iterations = 150000;
-  static const int _pbkdf2KeyLength = 32;
-  static const int _pbkdf2SaltLength = 16;
+  static const int _passwordSaltLength = 16;
+  static const int _argon2MemoryCost = 64 * 1024 * 1024; // 64 MiB
+  static const int _argon2TimeCost = 2;
+  static const int _argon2Parallelism = 1;
+  static const String _argon2KdfIdentifier = 'argon2id-v4.local-pw';
   static const String _exportAssertion = 'rpc_dart_data:database:v1';
   static const String _pasetoVersion = 'v4';
   static const String _pasetoPurpose = 'local';
@@ -321,6 +321,34 @@ abstract class BaseDataRepository implements DataRepository {
     return input.padRight(input.length + padding, '=');
   }
 
+  int _coercePositiveInt(
+    Object? value,
+    int fallback, {
+    required String fieldName,
+  }) {
+    final resolved = value is int
+        ? value
+        : (value is num
+            ? value.toInt()
+            : fallback);
+    if (resolved <= 0) {
+      throw RpcDataError.invalidArgument(
+        'Encrypted snapshot payload has invalid $fieldName',
+      );
+    }
+    return resolved;
+  }
+
+  LicensifySalt _parseArgon2Salt(String encoded) {
+    try {
+      return LicensifySalt.fromString(value: encoded);
+    } on FormatException {
+      throw RpcDataError.invalidArgument(
+        'Encrypted snapshot payload footer has invalid salt encoding',
+      );
+    }
+  }
+
   Map<String, List<DataRecord>> _parseSnapshotCollections(
     Map<String, dynamic> snapshot,
   ) {
@@ -366,53 +394,52 @@ abstract class BaseDataRepository implements DataRepository {
 
     final token = request.payload;
     final footer = _extractPasetoFooter(token);
-    final saltBase64 = footer['salt'] as String?;
-    final iterationsValue = footer['iterations'];
-    final keyLengthValue = footer['keyLength'];
+    final saltField = footer['salt'] as String?;
+    final kdfValue = footer['kdf'] as String?;
+    final memoryCostValue = footer['memoryCost'];
+    final timeCostValue = footer['timeCost'];
+    final parallelismValue = footer['parallelism'];
 
-    if (saltBase64 == null) {
+    if (saltField == null) {
       throw RpcDataError.invalidArgument(
         'Encrypted snapshot payload footer is missing salt',
       );
     }
 
-    final iterations = iterationsValue is int
-        ? iterationsValue
-        : (iterationsValue is num
-            ? iterationsValue.toInt()
-            : _pbkdf2Iterations);
-    final keyLength = keyLengthValue is int
-        ? keyLengthValue
-        : (keyLengthValue is num
-            ? keyLengthValue.toInt()
-            : _pbkdf2KeyLength);
-
-    if (iterations <= 0) {
+    if (kdfValue != _argon2KdfIdentifier) {
       throw RpcDataError.invalidArgument(
-        'Encrypted snapshot payload has invalid iterations',
+        'Encrypted snapshot payload has unsupported kdf',
       );
     }
 
-    late Uint8List salt;
-    try {
-      salt = Uint8List.fromList(base64Decode(saltBase64));
-    } on FormatException {
+    final salt = _parseArgon2Salt(saltField);
+    final memoryCost = _coercePositiveInt(
+      memoryCostValue,
+      _argon2MemoryCost,
+      fieldName: 'memoryCost',
+    );
+    if (memoryCost % 1024 != 0) {
       throw RpcDataError.invalidArgument(
-        'Encrypted snapshot payload footer has invalid salt encoding',
+        'Encrypted snapshot payload has invalid memoryCost',
       );
     }
+    final timeCost = _coercePositiveInt(
+      timeCostValue,
+      _argon2TimeCost,
+      fieldName: 'timeCost',
+    );
+    final parallelism = _coercePositiveInt(
+      parallelismValue,
+      _argon2Parallelism,
+      fieldName: 'parallelism',
+    );
 
-    if (keyLength <= 0) {
-      throw RpcDataError.invalidArgument(
-        'Encrypted snapshot payload has invalid keyLength',
-      );
-    }
-    final symmetricKey =
-        LicensifyPasswordDerivation.deriveSymmetricKeyFromPassword(
+    final symmetricKey = await Licensify.encryptionKeyFromPassword(
       password: password,
       salt: salt,
-      iterations: iterations,
-      length: keyLength,
+      memoryCost: memoryCost,
+      timeCost: timeCost,
+      parallelism: parallelism,
     );
     try {
       final decrypted = await Licensify.decryptData(
@@ -722,23 +749,26 @@ abstract class BaseDataRepository implements DataRepository {
     final snapshot = _serializeSnapshot(snapshotCollections, generatedAt);
 
     if ((request.password ?? '').isNotEmpty) {
-      final derived =
-          LicensifyPasswordDerivation.deriveSymmetricKeyWithGeneratedSalt(
+      final salt = Licensify.generatePasswordSalt(length: _passwordSaltLength);
+      final symmetricKey = await Licensify.encryptionKeyFromPassword(
         password: request.password!,
-        saltLength: _pbkdf2SaltLength,
-        iterations: _pbkdf2Iterations,
-        length: _pbkdf2KeyLength,
+        salt: salt,
+        memoryCost: _argon2MemoryCost,
+        timeCost: _argon2TimeCost,
+        parallelism: _argon2Parallelism,
       );
       try {
         final token = await Licensify.encryptData(
           data: {'snapshot': snapshot},
-          encryptionKey: derived.symmetricKey,
+          encryptionKey: symmetricKey,
           implicitAssertion: _exportAssertion,
         );
         final payload = _appendPasetoFooter(token, {
-          'salt': base64Encode(derived.salt),
-          'iterations': derived.iterations,
-          'keyLength': derived.keyLength,
+          'salt': salt.asString(),
+          'memoryCost': _argon2MemoryCost,
+          'timeCost': _argon2TimeCost,
+          'parallelism': _argon2Parallelism,
+          'kdf': _argon2KdfIdentifier,
         });
         return ExportDatabaseResponse(
           payload: payload,
@@ -749,7 +779,7 @@ abstract class BaseDataRepository implements DataRepository {
           recordCount: recordCount,
         );
       } finally {
-        derived.dispose();
+        symmetricKey.dispose();
       }
     }
 

@@ -17,5 +17,4 @@ export 'src/data_service_facade.dart'
         InMemoryDataServiceEnvironment;
 export 'src/drift_storage.dart'
     show DriftDataRepository, DriftDataStorageAdapter, DriftDataDatabase;
-export 'src/licensify_password_extension.dart';
 export 'src/models.dart';
