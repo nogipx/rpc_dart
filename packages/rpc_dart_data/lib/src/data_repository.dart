@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
+
+import 'package:licensify/licensify.dart';
 
 import 'data_contract.dart';
 import 'models.dart';
@@ -28,6 +31,14 @@ abstract interface class DataRepository {
     ExportSnapshotRequest request,
   );
 
+  Future<ExportDatabaseResponse> exportDatabase(
+    ExportDatabaseRequest request,
+  );
+
+  Future<ImportDatabaseResponse> importDatabase(
+    ImportDatabaseRequest request,
+  );
+
   Future<SearchRecordsResponse> search(SearchRecordsRequest request);
 
   Future<AggregateMetricsResponse> aggregate(
@@ -50,6 +61,8 @@ abstract interface class DataStorageAdapter {
   );
 
   Future<List<DataRecord>> readCollection(String collection);
+
+  Future<List<String>> listCollections();
 
   Future<void> writeRecord(DataRecord record);
 
@@ -81,6 +94,15 @@ abstract class BaseDataRepository implements DataRepository {
   })  : _clock = clock ?? (() => DateTime.now().toUtc()),
         _idGenerator = idGenerator,
         _changeController = StreamController<DataChangeEvent>.broadcast();
+
+  static const String _databaseFormatVersion = '1.0.0';
+  static const int _passwordSaltLength = 16;
+  static const int _argon2MemoryCost = 64 * 1024 * 1024; // 64 MiB
+  static const int _argon2TimeCost = 2;
+  static const int _argon2Parallelism = 1;
+  static const String _exportAssertion = 'rpc_dart_data:database:v1';
+  static const String _pasetoVersion = 'v4';
+  static const String _pasetoPurpose = 'local';
 
   final DataStorageAdapter storage;
   final DateTime Function() _clock;
@@ -213,6 +235,183 @@ abstract class BaseDataRepository implements DataRepository {
     }
 
     return true;
+  }
+
+  Map<String, dynamic> _serializeSnapshot(
+    Map<String, List<DataRecord>> collections,
+    DateTime generatedAt,
+  ) {
+    return {
+      'formatVersion': _databaseFormatVersion,
+      'generatedAt': generatedAt.toIso8601String(),
+      'collections': collections.map((key, value) {
+        return MapEntry(
+          key,
+          value.map((record) => record.toJson()).toList(growable: false),
+        );
+      }),
+    };
+  }
+
+  void _ensurePasetoV4LocalHeader(
+    List<String> segments, {
+    required bool fromExternalInput,
+  }) {
+    if (segments.length < 2 ||
+        segments[0] != _pasetoVersion ||
+        segments[1] != _pasetoPurpose) {
+      const message =
+          'Encrypted snapshot payload must use PASETO v4.local tokens';
+      if (fromExternalInput) {
+        throw RpcDataError.invalidArgument(message);
+      }
+      throw RpcDataError.internal(message);
+    }
+  }
+
+  Map<String, dynamic> _extractPasetoFooter(String token) {
+    final segments = token.split('.');
+    if (segments.length != 4) {
+      throw RpcDataError.invalidArgument(
+        'Encrypted snapshot payload is missing footer metadata',
+      );
+    }
+    _ensurePasetoV4LocalHeader(segments, fromExternalInput: true);
+
+    final footerSegment = segments.last;
+    try {
+      final footerBytes = base64Url.decode(_normalizeBase64Url(footerSegment));
+      final decoded = jsonDecode(utf8.decode(footerBytes));
+      if (decoded is! Map) {
+        throw const FormatException('Footer JSON must be an object');
+      }
+      return Map<String, dynamic>.from(decoded as Map);
+    } on FormatException {
+      throw RpcDataError.invalidArgument(
+        'Encrypted snapshot payload has malformed footer metadata',
+      );
+    }
+  }
+
+  String _normalizeBase64Url(String input) {
+    final remainder = input.length % 4;
+    if (remainder == 0) {
+      return input;
+    }
+    final padding = 4 - remainder;
+    return input.padRight(input.length + padding, '=');
+  }
+
+  LicensifySalt _parsePasswordSalt(String encoded) {
+    try {
+      return LicensifySalt.fromString(value: encoded);
+    } on FormatException {
+      throw RpcDataError.invalidArgument(
+        'Encrypted snapshot payload footer has invalid salt encoding',
+      );
+    }
+  }
+
+  Map<String, List<DataRecord>> _parseSnapshotCollections(
+    Map<String, dynamic> snapshot,
+  ) {
+    final rawCollections = snapshot['collections'];
+    if (rawCollections is! Map) {
+      throw RpcDataError.invalidArgument('Snapshot is missing collections map');
+    }
+    final collectionsMap = Map<String, dynamic>.from(rawCollections as Map);
+    final parsed = <String, List<DataRecord>>{};
+    collectionsMap.forEach((key, value) {
+      if (value is! List) {
+        throw RpcDataError.invalidArgument(
+          'Snapshot collection "$key" must be a list',
+        );
+      }
+      final records = value
+          .map((entry) => DataRecord.fromJson(
+                Map<String, dynamic>.from(entry as Map),
+              ))
+          .toList(growable: false);
+      parsed[key] = records;
+    });
+    return parsed;
+  }
+
+  Future<Map<String, dynamic>> _decodeSnapshotPayload(
+    ImportDatabaseRequest request,
+  ) async {
+    if (!request.encrypted) {
+      final decoded = jsonDecode(request.payload);
+      if (decoded is! Map) {
+        throw RpcDataError.invalidArgument('Invalid snapshot payload');
+      }
+      return Map<String, dynamic>.from(decoded as Map);
+    }
+
+    final password = request.password;
+    if (password == null || password.isEmpty) {
+      throw RpcDataError.invalidArgument(
+        'Password is required to import encrypted snapshot',
+      );
+    }
+
+    final token = request.payload;
+    final footer = _extractPasetoFooter(token);
+    final saltField = footer['salt'] as String?;
+    final wrapField = footer['wrap'] as String?;
+
+    if (saltField == null) {
+      throw RpcDataError.invalidArgument(
+        'Encrypted snapshot payload footer is missing salt',
+      );
+    }
+
+    if (wrapField == null || wrapField.isEmpty) {
+      throw RpcDataError.invalidArgument(
+        'Encrypted snapshot payload footer is missing wrapped key',
+      );
+    }
+
+    final salt = _parsePasswordSalt(saltField);
+    final wrappingKey = await Licensify.encryptionKeyFromPassword(
+      password: password,
+      salt: salt,
+      memoryCost: _argon2MemoryCost,
+      timeCost: _argon2TimeCost,
+      parallelism: _argon2Parallelism,
+    );
+    try {
+      final snapshotKey = () {
+        try {
+          return Licensify.encryptionKeyFromPaserkWrap(
+            paserk: wrapField,
+            wrappingKey: wrappingKey,
+          );
+        } on Exception {
+          throw RpcDataError.invalidArgument(
+            'Encrypted snapshot payload footer has invalid wrapped key',
+          );
+        }
+      }();
+      try {
+        final decrypted = await Licensify.decryptData(
+          encryptedToken: token,
+          encryptionKey: snapshotKey,
+          implicitAssertion: _exportAssertion,
+        );
+        final snapshot = decrypted['snapshot'];
+        if (snapshot is! Map) {
+          throw RpcDataError.invalidArgument(
+            'Encrypted snapshot has invalid body',
+          );
+        }
+        return Map<String, dynamic>.from(snapshot as Map);
+      } finally {
+        snapshotKey.dispose();
+      }
+    } finally {
+      wrappingKey.dispose();
+    }
   }
 
   int _compare(DataRecord a, DataRecord b, SortOrder? sort) {
@@ -490,6 +689,144 @@ abstract class BaseDataRepository implements DataRepository {
   }
 
   @override
+  Future<ExportDatabaseResponse> exportDatabase(
+    ExportDatabaseRequest request,
+  ) async {
+    final generatedAt = _clock();
+    final collections = await storage.listCollections();
+    final snapshotCollections = <String, List<DataRecord>>{};
+    var recordCount = 0;
+
+    for (final collection in collections) {
+      final records = await storage.readCollection(collection);
+      snapshotCollections[collection] = records;
+      recordCount += records.length;
+    }
+
+    final snapshot = _serializeSnapshot(snapshotCollections, generatedAt);
+
+    if ((request.password ?? '').isNotEmpty) {
+      final snapshotKey = Licensify.generateEncryptionKey();
+      final salt = Licensify.generatePasswordSalt(length: _passwordSaltLength);
+      LicensifySymmetricKey? wrappingKey;
+      try {
+        wrappingKey = await Licensify.encryptionKeyFromPassword(
+          password: request.password!,
+          salt: salt,
+          memoryCost: _argon2MemoryCost,
+          timeCost: _argon2TimeCost,
+          parallelism: _argon2Parallelism,
+        );
+        final wrappedKey = Licensify.encryptionKeyToPaserkWrap(
+          key: snapshotKey,
+          wrappingKey: wrappingKey,
+        );
+        final footerJson = jsonEncode({
+          'salt': salt.asString(),
+          'wrap': wrappedKey,
+        });
+        final payload = await Licensify.encryptData(
+          data: {'snapshot': snapshot},
+          encryptionKey: snapshotKey,
+          implicitAssertion: _exportAssertion,
+          footer: footerJson,
+        );
+        return ExportDatabaseResponse(
+          payload: payload,
+          encrypted: true,
+          generatedAt: generatedAt,
+          formatVersion: _databaseFormatVersion,
+          collectionCount: collections.length,
+          recordCount: recordCount,
+        );
+      } finally {
+        wrappingKey?.dispose();
+        snapshotKey.dispose();
+      }
+    }
+
+    return ExportDatabaseResponse(
+      payload: jsonEncode(snapshot),
+      encrypted: false,
+      generatedAt: generatedAt,
+      formatVersion: _databaseFormatVersion,
+      collectionCount: collections.length,
+      recordCount: recordCount,
+    );
+  }
+
+  @override
+  Future<ImportDatabaseResponse> importDatabase(
+    ImportDatabaseRequest request,
+  ) async {
+    final snapshot = await _decodeSnapshotPayload(request);
+    final formatVersion = snapshot['formatVersion'] as String?;
+    if (formatVersion != null && formatVersion != _databaseFormatVersion) {
+      throw RpcDataError.invalidArgument(
+        'Unsupported snapshot format "$formatVersion"',
+      );
+    }
+
+    final collections = _parseSnapshotCollections(snapshot);
+    final replaceExisting = request.replaceExisting;
+
+    final existingCollections = await storage.listCollections();
+    final existingRecords = <String, Map<String, DataRecord>>{};
+    if (replaceExisting) {
+      for (final collection in existingCollections) {
+        final records = await storage.readCollection(collection);
+        existingRecords[collection] = {
+          for (final record in records) record.id: record,
+        };
+      }
+    }
+
+    if (replaceExisting) {
+      for (final collection in existingCollections) {
+        if (!collections.containsKey(collection)) {
+          final previous = existingRecords[collection];
+          if (previous != null) {
+            for (final record in previous.values) {
+              _recordDeletion(collection, record.id, record.version + 1);
+            }
+          }
+          await storage.deleteCollection(collection);
+        }
+      }
+    }
+
+    var importedRecords = 0;
+    for (final entry in collections.entries) {
+      final collection = entry.key;
+      final records = entry.value;
+
+      if (replaceExisting) {
+        final previous = existingRecords[collection];
+        if (previous != null && previous.isNotEmpty) {
+          for (final record in previous.values) {
+            _recordDeletion(collection, record.id, record.version + 1);
+          }
+          await storage.deleteCollection(collection);
+        }
+      }
+
+      if (records.isNotEmpty) {
+        await storage.writeRecords(records);
+        for (final record in records) {
+          _recordEvent(DataChangeType.snapshot, record);
+        }
+        importedRecords += records.length;
+      }
+    }
+
+    return ImportDatabaseResponse(
+      collectionCount: collections.length,
+      recordCount: importedRecords,
+      appliedAt: _clock(),
+    );
+  }
+
+  @override
   Future<SearchRecordsResponse> search(
     SearchRecordsRequest request,
   ) async {
@@ -600,7 +937,8 @@ abstract class BaseDataRepository implements DataRepository {
 
       final subscription = _changeController.stream
           .where((event) => event.collection == request.collection)
-          .listen(listener.add, onError: listener.addError, onDone: listener.close);
+          .listen(listener.add,
+              onError: listener.addError, onDone: listener.close);
 
       listener.onCancel = () async {
         await subscription.cancel();
@@ -743,6 +1081,11 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
   Future<List<DataRecord>> readCollection(String collection) async {
     final store = _collection(collection);
     return store.values.toList(growable: false);
+  }
+
+  @override
+  Future<List<String>> listCollections() async {
+    return _storage.keys.toList(growable: false);
   }
 
   @override

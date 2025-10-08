@@ -147,6 +147,32 @@ class DataServiceCaller extends RpcCallerContract
     );
   }
 
+  Future<ExportDatabaseResponse> exportDatabase(
+    ExportDatabaseRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary(
+      methodName: IDataServiceContract.exportDatabase,
+      request: request,
+      requestCodec: exportDatabaseRequestCodec,
+      responseCodec: exportDatabaseResponseCodec,
+      context: context,
+    );
+  }
+
+  Future<ImportDatabaseResponse> importDatabase(
+    ImportDatabaseRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary(
+      methodName: IDataServiceContract.importDatabase,
+      request: request,
+      requestCodec: importDatabaseRequestCodec,
+      responseCodec: importDatabaseResponseCodec,
+      context: context,
+    );
+  }
+
   Future<SearchRecordsResponse> searchRecords(
     SearchRecordsRequest request, {
     RpcContext? context,
