@@ -269,24 +269,6 @@ abstract class BaseDataRepository implements DataRepository {
     }
   }
 
-  String _appendPasetoFooter(
-    String token,
-    Map<String, dynamic> footer,
-  ) {
-    final segments = token.split('.');
-    if (segments.length != 3) {
-      throw RpcDataError.internal(
-        'Encrypted snapshot payload must be a footerless PASETO v4.local token',
-      );
-    }
-    _ensurePasetoV4LocalHeader(segments, fromExternalInput: false);
-
-    final footerJson = jsonEncode(footer);
-    final footerBytes = utf8.encode(footerJson);
-    final encodedFooter = base64Url.encode(footerBytes).replaceAll('=', '');
-    return '$token.$encodedFooter';
-  }
-
   Map<String, dynamic> _extractPasetoFooter(String token) {
     final segments = token.split('.');
     if (segments.length != 4) {
@@ -735,19 +717,20 @@ abstract class BaseDataRepository implements DataRepository {
           timeCost: _argon2TimeCost,
           parallelism: _argon2Parallelism,
         );
-        final token = await Licensify.encryptData(
-          data: {'snapshot': snapshot},
-          encryptionKey: snapshotKey,
-          implicitAssertion: _exportAssertion,
-        );
         final wrappedKey = Licensify.encryptionKeyToPaserkWrap(
           key: snapshotKey,
           wrappingKey: wrappingKey,
         );
-        final payload = _appendPasetoFooter(token, {
+        final footerJson = jsonEncode({
           'salt': salt.asString(),
           'wrap': wrappedKey,
         });
+        final payload = await Licensify.encryptData(
+          data: {'snapshot': snapshot},
+          encryptionKey: snapshotKey,
+          implicitAssertion: _exportAssertion,
+          footer: footerJson,
+        );
         return ExportDatabaseResponse(
           payload: payload,
           encrypted: true,
@@ -954,7 +937,8 @@ abstract class BaseDataRepository implements DataRepository {
 
       final subscription = _changeController.stream
           .where((event) => event.collection == request.collection)
-          .listen(listener.add, onError: listener.addError, onDone: listener.close);
+          .listen(listener.add,
+              onError: listener.addError, onDone: listener.close);
 
       listener.onCancel = () async {
         await subscription.cancel();

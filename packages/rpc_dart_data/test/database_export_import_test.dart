@@ -100,7 +100,8 @@ void main() {
           containsAll({'First', 'Second'}));
     });
 
-    test('exports encrypted snapshot and enforces password on import', () async {
+    test('exports encrypted snapshot and enforces password on import',
+        () async {
       await seedSampleData(sourceRepository);
 
       final exportResponse = await sourceRepository.exportDatabase(
@@ -242,8 +243,5 @@ void main() {
       expect(secondFooter['wrap'], isNot(equals(wrapField)));
       expect(secondFooter['salt'], isNot(equals(saltField)));
     });
-
-    });
-
   });
 }
