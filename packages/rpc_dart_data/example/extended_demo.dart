@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
+import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 /// Расширенный демонстрационный сценарий использования фасада DataService.
 /// 1. CRUD
@@ -10,8 +10,13 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 /// 4. Offline очередь команд (OfflineCommandQueue)
 /// 5. Конфликты версий (patch/delete)
 Future<void> main() async {
-  final env = await DataServiceFactory.inMemory();
-  final client = env.client;
+  final env = DataServiceFactory.createClient(
+    transport: await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: 8080,
+    ),
+  );
+  final client = env;
   final baseContext = RpcContext.withHeaders({
     'authorization': 'Bearer development-token',
   }).withTraceId('trace-${DateTime.now().millisecondsSinceEpoch}');
@@ -163,7 +168,7 @@ Future<void> main() async {
   print('Final count: ${finalList.records.length}');
 
   await offlineQueue.dispose();
-  await env.dispose();
+  // await env.dispose();
   print('✅ Extended demo finished');
 }
 
