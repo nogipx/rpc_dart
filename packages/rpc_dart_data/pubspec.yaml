@@ -10,6 +10,7 @@ dependencies:
   rpc_dart: any
   rpc_dart_transports: any
   args: ^2.5.0
+  licensify: ^4.0.0
   equatable: ^2.0.5
   collection: ^1.18.0
   meta: ^1.11.0
