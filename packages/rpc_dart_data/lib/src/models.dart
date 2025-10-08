@@ -853,27 +853,22 @@ class ExportSnapshotResponse extends Equatable implements IRpcSerializable {
 
 @immutable
 class ExportDatabaseRequest extends Equatable implements IRpcSerializable {
-  const ExportDatabaseRequest({this.password});
+  const ExportDatabaseRequest();
 
   factory ExportDatabaseRequest.fromJson(Map<String, dynamic> json) =>
-      ExportDatabaseRequest(password: json['password'] as String?);
-
-  final String? password;
+      const ExportDatabaseRequest();
 
   @override
-  List<Object?> get props => [password];
+  List<Object?> get props => const [];
 
   @override
-  Map<String, dynamic> toJson() => {
-        if (password != null) 'password': password,
-      };
+  Map<String, dynamic> toJson() => const {};
 }
 
 @immutable
 class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
   const ExportDatabaseResponse({
     required this.payload,
-    required this.encrypted,
     required this.generatedAt,
     required this.formatVersion,
     required this.collectionCount,
@@ -883,7 +878,6 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
   factory ExportDatabaseResponse.fromJson(Map<String, dynamic> json) =>
       ExportDatabaseResponse(
         payload: json['payload'] as String,
-        encrypted: json['encrypted'] as bool? ?? false,
         generatedAt: DateTime.parse(json['generatedAt'] as String),
         formatVersion: json['formatVersion'] as String? ?? '1.0.0',
         collectionCount: json['collectionCount'] as int? ?? 0,
@@ -891,7 +885,6 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
       );
 
   final String payload;
-  final bool encrypted;
   final DateTime generatedAt;
   final String formatVersion;
   final int collectionCount;
@@ -900,7 +893,6 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
   @override
   List<Object?> get props => [
         payload,
-        encrypted,
         generatedAt,
         formatVersion,
         collectionCount,
@@ -910,7 +902,6 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
   @override
   Map<String, dynamic> toJson() => {
         'payload': payload,
-        'encrypted': encrypted,
         'generatedAt': generatedAt.toIso8601String(),
         'formatVersion': formatVersion,
         'collectionCount': collectionCount,
@@ -922,33 +913,25 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
 class ImportDatabaseRequest extends Equatable implements IRpcSerializable {
   const ImportDatabaseRequest({
     required this.payload,
-    this.password,
-    this.encrypted = false,
     this.replaceExisting = true,
   });
 
   factory ImportDatabaseRequest.fromJson(Map<String, dynamic> json) =>
       ImportDatabaseRequest(
         payload: json['payload'] as String,
-        password: json['password'] as String?,
-        encrypted: json['encrypted'] as bool? ?? false,
         replaceExisting: json['replaceExisting'] as bool? ?? true,
       );
 
   final String payload;
-  final String? password;
-  final bool encrypted;
   final bool replaceExisting;
 
   @override
-  List<Object?> get props => [payload, password, encrypted, replaceExisting];
+  List<Object?> get props => [payload, replaceExisting];
 
   @override
   Map<String, dynamic> toJson() => {
         'payload': payload,
-        'encrypted': encrypted,
         'replaceExisting': replaceExisting,
-        if (password != null) 'password': password,
       };
 }
 
