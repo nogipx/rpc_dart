@@ -100,7 +100,6 @@ abstract class BaseDataRepository implements DataRepository {
   static const int _argon2MemoryCost = 64 * 1024 * 1024; // 64 MiB
   static const int _argon2TimeCost = 2;
   static const int _argon2Parallelism = 1;
-  static const String _argon2KdfIdentifier = 'argon2id-v4.local-pw';
   static const String _exportAssertion = 'rpc_dart_data:database:v1';
   static const String _pasetoVersion = 'v4';
   static const String _pasetoPurpose = 'local';
@@ -321,25 +320,7 @@ abstract class BaseDataRepository implements DataRepository {
     return input.padRight(input.length + padding, '=');
   }
 
-  int _coercePositiveInt(
-    Object? value,
-    int fallback, {
-    required String fieldName,
-  }) {
-    final resolved = value is int
-        ? value
-        : (value is num
-            ? value.toInt()
-            : fallback);
-    if (resolved <= 0) {
-      throw RpcDataError.invalidArgument(
-        'Encrypted snapshot payload has invalid $fieldName',
-      );
-    }
-    return resolved;
-  }
-
-  LicensifySalt _parseArgon2Salt(String encoded) {
+  LicensifySalt _parsePasswordSalt(String encoded) {
     try {
       return LicensifySalt.fromString(value: encoded);
     } on FormatException {
@@ -395,10 +376,7 @@ abstract class BaseDataRepository implements DataRepository {
     final token = request.payload;
     final footer = _extractPasetoFooter(token);
     final saltField = footer['salt'] as String?;
-    final kdfValue = footer['kdf'] as String?;
-    final memoryCostValue = footer['memoryCost'];
-    final timeCostValue = footer['timeCost'];
-    final parallelismValue = footer['parallelism'];
+    final wrapField = footer['wrap'] as String?;
 
     if (saltField == null) {
       throw RpcDataError.invalidArgument(
@@ -406,54 +384,51 @@ abstract class BaseDataRepository implements DataRepository {
       );
     }
 
-    if (kdfValue != _argon2KdfIdentifier) {
+    if (wrapField == null || wrapField.isEmpty) {
       throw RpcDataError.invalidArgument(
-        'Encrypted snapshot payload has unsupported kdf',
+        'Encrypted snapshot payload footer is missing wrapped key',
       );
     }
 
-    final salt = _parseArgon2Salt(saltField);
-    final memoryCost = _coercePositiveInt(
-      memoryCostValue,
-      _argon2MemoryCost,
-      fieldName: 'memoryCost',
-    );
-    if (memoryCost % 1024 != 0) {
-      throw RpcDataError.invalidArgument(
-        'Encrypted snapshot payload has invalid memoryCost',
-      );
-    }
-    final timeCost = _coercePositiveInt(
-      timeCostValue,
-      _argon2TimeCost,
-      fieldName: 'timeCost',
-    );
-    final parallelism = _coercePositiveInt(
-      parallelismValue,
-      _argon2Parallelism,
-      fieldName: 'parallelism',
-    );
-
-    final symmetricKey = await Licensify.encryptionKeyFromPassword(
+    final salt = _parsePasswordSalt(saltField);
+    final wrappingKey = await Licensify.encryptionKeyFromPassword(
       password: password,
       salt: salt,
-      memoryCost: memoryCost,
-      timeCost: timeCost,
-      parallelism: parallelism,
+      memoryCost: _argon2MemoryCost,
+      timeCost: _argon2TimeCost,
+      parallelism: _argon2Parallelism,
     );
     try {
-      final decrypted = await Licensify.decryptData(
-        encryptedToken: token,
-        encryptionKey: symmetricKey,
-        implicitAssertion: _exportAssertion,
-      );
-      final snapshot = decrypted['snapshot'];
-      if (snapshot is! Map) {
-        throw RpcDataError.invalidArgument('Encrypted snapshot has invalid body');
+      final snapshotKey = () {
+        try {
+          return Licensify.encryptionKeyFromPaserkWrap(
+            paserk: wrapField,
+            wrappingKey: wrappingKey,
+          );
+        } on Exception {
+          throw RpcDataError.invalidArgument(
+            'Encrypted snapshot payload footer has invalid wrapped key',
+          );
+        }
+      }();
+      try {
+        final decrypted = await Licensify.decryptData(
+          encryptedToken: token,
+          encryptionKey: snapshotKey,
+          implicitAssertion: _exportAssertion,
+        );
+        final snapshot = decrypted['snapshot'];
+        if (snapshot is! Map) {
+          throw RpcDataError.invalidArgument(
+            'Encrypted snapshot has invalid body',
+          );
+        }
+        return Map<String, dynamic>.from(snapshot as Map);
+      } finally {
+        snapshotKey.dispose();
       }
-      return Map<String, dynamic>.from(snapshot as Map);
     } finally {
-      symmetricKey.dispose();
+      wrappingKey.dispose();
     }
   }
 
@@ -749,26 +724,29 @@ abstract class BaseDataRepository implements DataRepository {
     final snapshot = _serializeSnapshot(snapshotCollections, generatedAt);
 
     if ((request.password ?? '').isNotEmpty) {
+      final snapshotKey = Licensify.generateEncryptionKey();
       final salt = Licensify.generatePasswordSalt(length: _passwordSaltLength);
-      final symmetricKey = await Licensify.encryptionKeyFromPassword(
-        password: request.password!,
-        salt: salt,
-        memoryCost: _argon2MemoryCost,
-        timeCost: _argon2TimeCost,
-        parallelism: _argon2Parallelism,
-      );
+      LicensifySymmetricKey? wrappingKey;
       try {
+        wrappingKey = await Licensify.encryptionKeyFromPassword(
+          password: request.password!,
+          salt: salt,
+          memoryCost: _argon2MemoryCost,
+          timeCost: _argon2TimeCost,
+          parallelism: _argon2Parallelism,
+        );
         final token = await Licensify.encryptData(
           data: {'snapshot': snapshot},
-          encryptionKey: symmetricKey,
+          encryptionKey: snapshotKey,
           implicitAssertion: _exportAssertion,
+        );
+        final wrappedKey = Licensify.encryptionKeyToPaserkWrap(
+          key: snapshotKey,
+          wrappingKey: wrappingKey,
         );
         final payload = _appendPasetoFooter(token, {
           'salt': salt.asString(),
-          'memoryCost': _argon2MemoryCost,
-          'timeCost': _argon2TimeCost,
-          'parallelism': _argon2Parallelism,
-          'kdf': _argon2KdfIdentifier,
+          'wrap': wrappedKey,
         });
         return ExportDatabaseResponse(
           payload: payload,
@@ -779,7 +757,8 @@ abstract class BaseDataRepository implements DataRepository {
           recordCount: recordCount,
         );
       } finally {
-        symmetricKey.dispose();
+        wrappingKey?.dispose();
+        snapshotKey.dispose();
       }
     }
 

@@ -115,12 +115,12 @@ void main() {
       );
 
       final footer = _decodePasetoFooter(exportResponse.payload);
-      expect(footer['salt'], isA<String>());
-      expect((footer['salt'] as String).isNotEmpty, isTrue);
-      expect(footer['memoryCost'], 67108864);
-      expect(footer['timeCost'], 2);
-      expect(footer['parallelism'], 1);
-      expect(footer['kdf'], 'argon2id-v4.local-pw');
+      final salt = footer['salt'];
+      final wrap = footer['wrap'];
+      expect(salt, isA<String>());
+      expect((salt as String).isNotEmpty, isTrue);
+      expect(wrap, isA<String>());
+      expect(wrap, startsWith('k4.local-wrap.pie'));
 
       await expectLater(
         targetRepository.importDatabase(
