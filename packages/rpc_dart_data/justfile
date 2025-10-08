@@ -31,6 +31,10 @@ prepare:
     genhtml coverage/lcov.info -o coverage/html
     open coverage/html/index.html
 
+compile_serve output='build/rpc_dart_data_serve' *flags:
+    mkdir -p $(dirname {{output}})
+    fvm dart compile exe bin/serve.dart -o {{output}} {{flags}}
+
 dry:
     fvm dart pub publish --dry-run
 

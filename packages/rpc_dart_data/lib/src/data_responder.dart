@@ -8,14 +8,22 @@ import 'models.dart';
 
 class DataServiceResponder extends RpcResponderContract
     implements IDataServiceContract {
-  DataServiceResponder({required DataRepository repository})
-      : _repository = repository,
+  DataServiceResponder({
+    required DataRepository repository,
+    bool disposeRepositoryOnClose = true,
+  })  : _repository = repository,
+        _disposeRepositoryOnClose = disposeRepositoryOnClose,
         super(
           IDataServiceContract.name,
           dataTransferMode: RpcDataTransferMode.codec,
         );
 
   final DataRepository _repository;
+  /// Управляет тем, должен ли [dispose] закрывать репозиторий.
+  ///
+  /// Это полезно, когда один экземпляр репозитория шарится между
+  /// несколькими эндпоинтами, например в случае HTTP/2 сервера.
+  final bool _disposeRepositoryOnClose;
 
   @override
   void setup() {
@@ -353,7 +361,9 @@ class DataServiceResponder extends RpcResponderContract
 
   @override
   Future<void> dispose() async {
-    await _repository.dispose();
+    if (_disposeRepositoryOnClose) {
+      await _repository.dispose();
+    }
     super.dispose();
   }
 }
