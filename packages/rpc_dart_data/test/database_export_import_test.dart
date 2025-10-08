@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:licensify/licensify.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 
@@ -174,6 +175,74 @@ void main() {
         notesAfter.records.map((e) => e.payload['title']).toSet(),
         containsAll({'First', 'Second'}),
       );
+    });
+
+    test('wrap-based encrypted export can be unwrapped with derived key',
+        () async {
+      await seedSampleData(sourceRepository);
+
+      final exportResponse = await sourceRepository.exportDatabase(
+        const ExportDatabaseRequest(password: 'secret'),
+      );
+
+      final footer = _decodePasetoFooter(exportResponse.payload);
+      final saltField = footer['salt'];
+      final wrapField = footer['wrap'];
+
+      expect(saltField, isA<String>());
+      expect((saltField as String).isNotEmpty, isTrue);
+      expect(wrapField, isA<String>());
+      expect((wrapField as String).startsWith('k4.local-wrap.'), isTrue);
+
+      final salt = LicensifySalt.fromString(value: saltField);
+      final wrappingKey = await Licensify.encryptionKeyFromPassword(
+        password: 'secret',
+        salt: salt,
+        memoryCost: 64 * 1024 * 1024,
+        timeCost: 2,
+        parallelism: 1,
+      );
+
+      try {
+        final snapshotKey = Licensify.encryptionKeyFromPaserkWrap(
+          paserk: wrapField,
+          wrappingKey: wrappingKey,
+        );
+
+        try {
+          final decrypted = await Licensify.decryptData(
+            encryptedToken: exportResponse.payload,
+            encryptionKey: snapshotKey,
+            implicitAssertion: 'rpc_dart_data:database:v1',
+          );
+
+          expect(decrypted, isA<Map<String, dynamic>>());
+          final snapshot = Map<String, dynamic>.from(
+            decrypted['snapshot'] as Map,
+          );
+
+          expect(snapshot['collections'], isA<Map<String, dynamic>>());
+          final collections = Map<String, dynamic>.from(
+            snapshot['collections'] as Map,
+          );
+          expect(collections['notes'], isNotNull);
+          expect(collections['tasks'], isNotNull);
+        } finally {
+          snapshotKey.dispose();
+        }
+      } finally {
+        wrappingKey.dispose();
+      }
+
+      final secondExport = await sourceRepository.exportDatabase(
+        const ExportDatabaseRequest(password: 'secret'),
+      );
+      final secondFooter = _decodePasetoFooter(secondExport.payload);
+
+      expect(secondFooter['wrap'], isNot(equals(wrapField)));
+      expect(secondFooter['salt'], isNot(equals(saltField)));
+    });
+
     });
 
   });
