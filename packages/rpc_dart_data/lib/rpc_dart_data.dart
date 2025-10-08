@@ -15,6 +15,8 @@ export 'src/data_service_facade.dart'
         DataServiceServer,
         DataServiceFactory,
         InMemoryDataServiceEnvironment;
+export 'src/daemon_process_manager.dart'
+    show DaemonProcessManager, DaemonLaunchException, PidFileException;
 export 'src/drift_storage.dart'
     show DriftDataRepository, DriftDataStorageAdapter, DriftDataDatabase;
 export 'src/models.dart';

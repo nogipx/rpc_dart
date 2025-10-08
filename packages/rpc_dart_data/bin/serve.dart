@@ -95,73 +95,40 @@ Future<void> main(List<String> arguments) async {
   final isDaemonChild = args['daemon-child'] as bool;
   final verbose = args['verbose'] as bool;
 
-  if (daemonize && !isDaemonChild) {
-    final childArgs = <String>[];
-    for (final argument in args.arguments) {
-      if (argument == '--daemon' ||
-          argument == '-D' ||
-          argument == '--daemon-child' ||
-          argument.startsWith('--daemon=')) {
-        continue;
-      }
-      childArgs.add(argument);
-    }
-    childArgs.add('--daemon-child');
+  final minLevel = verbose ? RpcLoggerLevel.debug : RpcLoggerLevel.info;
+  RpcLogger.setDefaultMinLogLevel(minLevel);
+  final logger = RpcLogger('DataService');
 
-    final executableArguments = <String>[
-      ...Platform.executableArguments,
-    ];
+  final processManager = DaemonProcessManager(
+    logger: logger,
+    pidFilePath: pidFilePath,
+  );
 
-    final hasExplicitScript = executableArguments.any(
-      (argument) =>
-          argument.endsWith('.dart') || argument.startsWith('package:'),
+  try {
+    final process = await processManager.maybeLaunchDaemon(
+      daemonizeRequested: daemonize,
+      isDaemonChild: isDaemonChild,
+      cliArguments: args.arguments,
     );
-
-    if (!hasExplicitScript) {
-      final scriptUri = Platform.script;
-      String? scriptArgument;
-
-      if (scriptUri.scheme == 'file') {
-        final scriptPath = scriptUri.toFilePath();
-        if (scriptPath != Platform.resolvedExecutable &&
-            File(scriptPath).existsSync()) {
-          scriptArgument = scriptPath;
-        }
-      } else if (scriptUri.scheme == 'package') {
-        scriptArgument = scriptUri.toString();
-      }
-
-      if (scriptArgument != null) {
-        executableArguments.add(scriptArgument);
-      }
-    }
-
-    executableArguments.addAll(childArgs);
-
-    try {
-      final process = await Process.start(
-        Platform.resolvedExecutable,
-        executableArguments,
-        environment: Platform.environment,
-        mode: ProcessStartMode.detached,
-      );
-
+    if (process != null) {
       stdout.writeln(
         'Daemon процесса данных запущен (PID ${process.pid}). PID-файл: $pidFilePath',
       );
       return;
-    } catch (error, stackTrace) {
-      stderr
-        ..writeln('Не удалось создать daemon процесса: $error')
-        ..writeln(stackTrace);
-      exitCode = 1;
-      return;
     }
+  } on DaemonLaunchException catch (error) {
+    stderr.writeln(error.message);
+    final cause = error.cause;
+    if (cause != null) {
+      stderr.writeln(cause);
+    }
+    final stackTrace = error.stackTrace;
+    if (stackTrace != null) {
+      stderr.writeln(stackTrace);
+    }
+    exitCode = 1;
+    return;
   }
-
-  final minLevel = verbose ? RpcLoggerLevel.debug : RpcLoggerLevel.info;
-  RpcLogger.setDefaultMinLogLevel(minLevel);
-  final logger = RpcLogger('DataService');
 
   await logger.info(
     'Запуск сервиса данных на $host:$port (база: ${File(databasePath).path})',
@@ -211,60 +178,6 @@ Future<void> main(List<String> arguments) async {
 
   final shutdownCompleter = Completer<void>();
   var isShuttingDown = false;
-  RandomAccessFile? pidFileHandle;
-  File? pidFile;
-
-  Future<void> releasePidFile() async {
-    if (pidFileHandle == null) {
-      return;
-    }
-
-    try {
-      await pidFileHandle!.truncate(0);
-      await pidFileHandle!.flush();
-    } catch (error, stackTrace) {
-      await logger.warning(
-        'Не удалось очистить PID файл перед удалением: $error',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-
-    try {
-      await pidFileHandle!.unlock();
-    } catch (error, stackTrace) {
-      await logger.warning(
-        'Не удалось освободить блокировку PID файла: $error',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-
-    try {
-      await pidFileHandle!.close();
-    } catch (error, stackTrace) {
-      await logger.warning(
-        'Не удалось закрыть PID файл: $error',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    } finally {
-      pidFileHandle = null;
-    }
-
-    if (pidFile != null) {
-      try {
-        await pidFile!.delete();
-      } catch (error, stackTrace) {
-        await logger.warning(
-          'Не удалось удалить PID файл: $error',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-      pidFile = null;
-    }
-  }
 
   Future<void> shutdown(String reason) async {
     if (isShuttingDown) {
@@ -294,58 +207,24 @@ Future<void> main(List<String> arguments) async {
       );
     }
 
-    await releasePidFile();
+    await processManager.releasePidFile();
 
     shutdownCompleter.complete();
   }
 
-  StreamSubscription<ProcessSignal>? listenSignal(ProcessSignal signal) {
-    try {
-      return signal.watch().listen((_) {
-        shutdown('получен сигнал ${signal.toString()}');
-      });
-    } catch (error) {
-      unawaited(
-        logger.warning('Сигнал ${signal.toString()} не поддерживается: $error'),
-      );
-      return null;
-    }
-  }
-
-  final signalSubscriptions = <StreamSubscription<ProcessSignal>>[];
-
-  if (!Platform.isWindows) {
-    final sigtermSubscription = listenSignal(ProcessSignal.sigterm);
-    if (sigtermSubscription != null) {
-      signalSubscriptions.add(sigtermSubscription);
-    }
-  }
-
-  final sigintSubscription = listenSignal(ProcessSignal.sigint);
-  if (sigintSubscription != null) {
-    signalSubscriptions.add(sigintSubscription);
-  }
+  await processManager.registerSignalHandlers(shutdown);
 
   try {
-    pidFile = File(pidFilePath);
-    await pidFile!.parent.create(recursive: true);
-    pidFileHandle = await pidFile!.open(mode: FileMode.write);
-    await pidFileHandle!.lock(FileLock.exclusive);
-    await pidFileHandle!.setPosition(0);
-    await pidFileHandle!.truncate(0);
-    await pidFileHandle!.writeString('${ProcessInfo.currentPid}\n');
-    await pidFileHandle!.flush();
-    await logger.info('PID файл создан: ${pidFile!.path} (PID ${ProcessInfo.currentPid})');
-  } catch (error, stackTrace) {
+    await processManager.createPidFile();
+  } on PidFileException catch (error) {
+    final cause = error.cause;
     await logger.error(
-      'Не удалось создать или заблокировать PID файл "$pidFilePath": $error',
-      error: error,
-      stackTrace: stackTrace,
+      cause != null ? '${error.message}: $cause' : error.message,
+      error: cause,
+      stackTrace: error.stackTrace,
     );
     await repository.dispose();
-    for (final subscription in signalSubscriptions) {
-      await subscription.cancel();
-    }
+    await processManager.disposeSignalHandlers();
     exitCode = 74; // EX_IOERR
     return;
   }
@@ -359,10 +238,8 @@ Future<void> main(List<String> arguments) async {
       stackTrace: stackTrace,
     );
     await repository.dispose();
-    await releasePidFile();
-    for (final subscription in signalSubscriptions) {
-      await subscription.cancel();
-    }
+    await processManager.releasePidFile();
+    await processManager.disposeSignalHandlers();
     exitCode = 1;
     return;
   }
@@ -371,9 +248,7 @@ Future<void> main(List<String> arguments) async {
 
   await shutdownCompleter.future;
 
-  for (final subscription in signalSubscriptions) {
-    await subscription.cancel();
-  }
+  await processManager.disposeSignalHandlers();
 
   await logger.info('Сервис данных остановлен.');
 }
