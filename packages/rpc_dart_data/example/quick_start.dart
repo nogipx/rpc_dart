@@ -1,10 +1,15 @@
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
+import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 // Quick start: минимальный CRUD + watch.
 Future<void> main() async {
-  final env = await DataServiceFactory.inMemory();
-  final client = env.client;
+  final env = DataServiceFactory.createClient(
+    transport: await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: 8080,
+    ),
+  );
+  final client = env;
   final ctx = RpcContext.withHeaders({'authorization': 'Bearer dev'});
 
   final created = await client.create(
@@ -31,5 +36,5 @@ Future<void> main() async {
 
   await Future<void>.delayed(const Duration(milliseconds: 100));
   await sub.cancel();
-  await env.dispose();
+  await env.close();
 }

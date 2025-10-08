@@ -1,12 +1,17 @@
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
+import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 // Пример офлайн-репликации: очередь команд + последующая синхронизация.
 Future<void> main() async {
-  final env = await DataServiceFactory.inMemory();
-  final client = env.client;
+  final env = DataServiceFactory.createClient(
+    transport: await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: 8080,
+    ),
+  );
+  final client = env;
   final ctx = RpcContext.withHeaders({'authorization': 'Bearer dev'});
 
   final queue = OfflineCommandQueue(client.rawCaller, sessionId: 'device-123');
@@ -63,5 +68,5 @@ Future<void> main() async {
   print('Final notes: ${all.records.length}');
 
   await queue.dispose();
-  await env.dispose();
+  await env.close();
 }

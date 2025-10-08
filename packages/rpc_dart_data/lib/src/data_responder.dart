@@ -19,6 +19,7 @@ class DataServiceResponder extends RpcResponderContract
         );
 
   final DataRepository _repository;
+
   /// Управляет тем, должен ли [dispose] закрывать репозиторий.
   ///
   /// Это полезно, когда один экземпляр репозитория шарится между

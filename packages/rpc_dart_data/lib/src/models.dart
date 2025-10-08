@@ -690,8 +690,7 @@ class DeleteRecordResponse extends Equatable implements IRpcSerializable {
 }
 
 @immutable
-class DeleteCollectionRequest extends Equatable
-    implements IRpcSerializable {
+class DeleteCollectionRequest extends Equatable implements IRpcSerializable {
   const DeleteCollectionRequest({required this.collection});
 
   factory DeleteCollectionRequest.fromJson(Map<String, dynamic> json) =>
@@ -707,8 +706,7 @@ class DeleteCollectionRequest extends Equatable
 }
 
 @immutable
-class DeleteCollectionResponse extends Equatable
-    implements IRpcSerializable {
+class DeleteCollectionResponse extends Equatable implements IRpcSerializable {
   const DeleteCollectionResponse({required this.deleted});
 
   factory DeleteCollectionResponse.fromJson(Map<String, dynamic> json) =>

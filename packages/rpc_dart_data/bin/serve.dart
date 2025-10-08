@@ -8,7 +8,6 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:licensify/licensify.dart';
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
@@ -115,8 +114,7 @@ Future<void> main(List<String> arguments) async {
     )
     ..addFlag(
       'secure-wrap-remove-protocol',
-      help:
-          'Удалять поле protocol из кадров (актуально для compact формата).',
+      help: 'Удалять поле protocol из кадров (актуально для compact формата).',
       negatable: false,
     )
     ..addOption(
@@ -316,14 +314,17 @@ Future<void> main(List<String> arguments) async {
   );
 
   if (secureWrapConfig != null) {
-    final details = <String>['frame=${secureWrapConfig.transportConfig.frameFormat.name}'];
+    final details = <String>[
+      'frame=${secureWrapConfig.transportConfig.frameFormat.name}'
+    ];
     final transportId = secureWrapConfig.keyStore.transportId;
     if (transportId.isNotEmpty) {
       details.add('transportId=$transportId');
     }
     final padding = secureWrapConfig.transportConfig.paddingBlockSize;
     if (padding != null) {
-      details.add('padding=$padding/${secureWrapConfig.transportConfig.maxPaddingBlocks}');
+      details.add(
+          'padding=$padding/${secureWrapConfig.transportConfig.maxPaddingBlocks}');
     }
     await logger.info('Secure wrap включён (${details.join(', ')}).');
   }
@@ -351,7 +352,7 @@ Future<void> main(List<String> arguments) async {
     onConnectionClosed: (socket) {
       unawaited(
         logger.info(
-          'Соединение закрыто: ${socket.remoteAddress.address}:${socket.remotePort}',
+          'Соединение закрыто',
         ),
       );
     },
@@ -393,7 +394,7 @@ Future<void> main(List<String> arguments) async {
     try {
       await relayConnectSubscription?.cancel();
     } catch (error, stackTrace) {
-      await logger.warning(
+      await logger.error(
         'Не удалось закрыть подписку relay: $error',
         error: error,
         stackTrace: stackTrace,
@@ -634,20 +635,23 @@ SecureWrapRuntimeConfig? _parseSecureWrapConfig(ArgResults args) {
     );
   }
 
-  final transportId = (args['secure-wrap-transport-id'] as String?)?.trim() ?? '';
+  final transportId =
+      (args['secure-wrap-transport-id'] as String?)?.trim() ?? '';
 
   LicensifyPrivateKey privateKey;
   try {
     privateKey = LicensifyPrivateKey.fromPaserkSecret(paserk: privateKeyRaw);
   } catch (error) {
-    throw FormatException('Не удалось импортировать приватный ключ из PASERK: $error');
+    throw FormatException(
+        'Не удалось импортировать приватный ключ из PASERK: $error');
   }
 
   LicensifyPublicKey peerPublicKey;
   try {
     peerPublicKey = LicensifyPublicKey.fromPaserk(paserk: peerKeyRaw);
   } catch (error) {
-    throw FormatException('Не удалось импортировать публичный ключ из PASERK: $error');
+    throw FormatException(
+        'Не удалось импортировать публичный ключ из PASERK: $error');
   }
 
   final handshakeTimeout = _parseDurationOption(
@@ -739,7 +743,8 @@ Future<RelayRuntimeConfig?> _parseRelayConfig(ArgResults args) async {
   final localAddressRaw = (args['relay-local-address'] as String?)?.trim();
   InternetAddress? localAddress;
   if (localAddressRaw != null && localAddressRaw.isNotEmpty) {
-    localAddress = await _resolveAddress(localAddressRaw, '--relay-local-address');
+    localAddress =
+        await _resolveAddress(localAddressRaw, '--relay-local-address');
   }
 
   final requestTimeout = _parseDurationOption(
@@ -768,7 +773,8 @@ Future<RelayRuntimeConfig?> _parseRelayConfig(ArgResults args) async {
   );
 
   final autoPermission = args['relay-auto-permission'] as bool;
-  final transportRaw = (args['relay-transport'] as String?)?.toLowerCase().trim() ?? 'udp';
+  final transportRaw =
+      (args['relay-transport'] as String?)?.toLowerCase().trim() ?? 'udp';
   final requestedTransport = transportRaw == 'tcp'
       ? TurnRequestedTransport.tcp
       : TurnRequestedTransport.udp;
@@ -967,7 +973,8 @@ Map<String, String> _parseKeyValueMetadata(
   return metadata;
 }
 
-String? _composeRelayDescription(String? description, Map<String, String> metadata) {
+String? _composeRelayDescription(
+    String? description, Map<String, String> metadata) {
   if (metadata.isEmpty) {
     if (description == null || description.isEmpty) {
       return null;

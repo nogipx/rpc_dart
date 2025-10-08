@@ -251,7 +251,7 @@ abstract class BaseDataRepository implements DataRepository {
     if (rawCollections is! Map) {
       throw RpcDataError.invalidArgument('Snapshot is missing collections map');
     }
-    final collectionsMap = Map<String, dynamic>.from(rawCollections as Map);
+    final collectionsMap = Map<String, dynamic>.from(rawCollections);
     final parsed = <String, List<DataRecord>>{};
     collectionsMap.forEach((key, value) {
       if (value is! List) {
@@ -276,7 +276,7 @@ abstract class BaseDataRepository implements DataRepository {
     if (decoded is! Map) {
       throw RpcDataError.invalidArgument('Invalid snapshot payload');
     }
-    return Map<String, dynamic>.from(decoded as Map);
+    return Map<String, dynamic>.from(decoded);
   }
 
   int _compare(DataRecord a, DataRecord b, SortOrder? sort) {
