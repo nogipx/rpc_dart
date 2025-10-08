@@ -16,8 +16,7 @@ class DaemonLaunchException implements Exception {
 
   @override
   String toString() {
-    final buffer = StringBuffer('DaemonLaunchException: ')
-      ..write(message);
+    final buffer = StringBuffer('DaemonLaunchException: ')..write(message);
     if (cause != null) {
       buffer
         ..write(' (cause: ')
@@ -42,8 +41,7 @@ class PidFileException implements Exception {
 
   @override
   String toString() {
-    final buffer = StringBuffer('PidFileException: ')
-      ..write(message);
+    final buffer = StringBuffer('PidFileException: ')..write(message);
     if (cause != null) {
       buffer
         ..write(' (cause: ')
@@ -90,8 +88,7 @@ class DaemonProcessManager {
 
     final sanitizedArguments = <String>[];
     for (final originalArgument in cliArguments) {
-      final isDaemonLong =
-          originalArgument == daemonFlag ||
+      final isDaemonLong = originalArgument == daemonFlag ||
           originalArgument.startsWith('$daemonFlag=');
       if (isDaemonLong) {
         continue;
@@ -176,7 +173,8 @@ class DaemonProcessManager {
         });
       } catch (error) {
         unawaited(
-          logger.warning('Сигнал ${signal.toString()} не поддерживается: $error'),
+          logger
+              .warning('Сигнал ${signal.toString()} не поддерживается: $error'),
         );
         return null;
       }
@@ -211,12 +209,12 @@ class DaemonProcessManager {
       await handle.lock(FileLock.exclusive);
       await handle.setPosition(0);
       await handle.truncate(0);
-      await handle.writeString('${ProcessInfo.currentPid}\n');
+      await handle.writeString('$pid\n');
       await handle.flush();
       _pidFile = file;
       _pidFileHandle = handle;
       await logger.info(
-        'PID файл создан: ${file.path} (PID ${ProcessInfo.currentPid})',
+        'PID файл создан: ${file.path} (PID $pid)',
       );
     } catch (error, stackTrace) {
       if (handle != null) {
@@ -224,7 +222,7 @@ class DaemonProcessManager {
           await handle.close();
         } catch (closeError, closeStackTrace) {
           unawaited(
-            logger.warning(
+            logger.error(
               'Не удалось закрыть PID файл после ошибки: $closeError',
               error: closeError,
               stackTrace: closeStackTrace,
@@ -252,7 +250,7 @@ class DaemonProcessManager {
       await handle.truncate(0);
       await handle.flush();
     } catch (error, stackTrace) {
-      await logger.warning(
+      await logger.error(
         'Не удалось очистить PID файл перед удалением: $error',
         error: error,
         stackTrace: stackTrace,
@@ -262,7 +260,7 @@ class DaemonProcessManager {
     try {
       await handle.unlock();
     } catch (error, stackTrace) {
-      await logger.warning(
+      await logger.error(
         'Не удалось освободить блокировку PID файла: $error',
         error: error,
         stackTrace: stackTrace,
@@ -272,7 +270,7 @@ class DaemonProcessManager {
     try {
       await handle.close();
     } catch (error, stackTrace) {
-      await logger.warning(
+      await logger.error(
         'Не удалось закрыть PID файл: $error',
         error: error,
         stackTrace: stackTrace,
@@ -284,7 +282,7 @@ class DaemonProcessManager {
     try {
       await file.delete();
     } catch (error, stackTrace) {
-      await logger.warning(
+      await logger.error(
         'Не удалось удалить PID файл: $error',
         error: error,
         stackTrace: stackTrace,
