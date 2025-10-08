@@ -87,16 +87,11 @@ abstract interface class DataService {
     RpcContext? context,
   });
 
-  Future<ExportDatabaseResponse> exportDatabase({
-    String? password,
-    RpcContext? context,
-  });
+  Future<ExportDatabaseResponse> exportDatabase({RpcContext? context});
 
   Future<ImportDatabaseResponse> importDatabase({
     required String payload,
-    bool encrypted,
-    String? password,
-    bool replaceExisting,
+    bool replaceExisting = true,
     RpcContext? context,
   });
 
@@ -287,12 +282,9 @@ class DataServiceClient implements DataService {
   }
 
   @override
-  Future<ExportDatabaseResponse> exportDatabase({
-    String? password,
-    RpcContext? context,
-  }) {
+  Future<ExportDatabaseResponse> exportDatabase({RpcContext? context}) {
     return _caller.exportDatabase(
-      ExportDatabaseRequest(password: password),
+      const ExportDatabaseRequest(),
       context: context,
     );
   }
@@ -300,16 +292,12 @@ class DataServiceClient implements DataService {
   @override
   Future<ImportDatabaseResponse> importDatabase({
     required String payload,
-    bool encrypted = false,
-    String? password,
     bool replaceExisting = true,
     RpcContext? context,
   }) {
     return _caller.importDatabase(
       ImportDatabaseRequest(
         payload: payload,
-        password: password,
-        encrypted: encrypted,
         replaceExisting: replaceExisting,
       ),
       context: context,
