@@ -274,7 +274,7 @@ class DriftDataStorageAdapter
           await _database.customStatement(
             'CREATE TABLE IF NOT EXISTS "$candidate" ('
             'id TEXT PRIMARY KEY, '
-            'tenant_id TEXT, '
+            'tenantId TEXT, '
             'payload TEXT NOT NULL, '
             'version INTEGER NOT NULL, '
             'created_at INTEGER NOT NULL, '
@@ -295,7 +295,7 @@ class DriftDataStorageAdapter
           );
           await _database.customStatement(
             'CREATE INDEX IF NOT EXISTS "${candidate}_idx_tenant_id" '
-            'ON "$candidate" (tenant_id)',
+            'ON "$candidate" (tenantId)',
           );
           await _database.customStatement(
             'INSERT INTO collection_registry (collection, table_name) '
@@ -330,7 +330,7 @@ class DriftDataStorageAdapter
         await _database.customStatement(
           'CREATE TABLE IF NOT EXISTS "$existing" ('
           'id TEXT PRIMARY KEY, '
-          'tenant_id TEXT, '
+          'tenantId TEXT, '
           'payload TEXT NOT NULL, '
           'version INTEGER NOT NULL, '
           'created_at INTEGER NOT NULL, '
@@ -355,15 +355,15 @@ class DriftDataStorageAdapter
         .customSelect('PRAGMA table_info("$tableName")')
         .get();
     final hasTenantColumn = rows
-        .any((row) => row.read<String>('name').toLowerCase() == 'tenant_id');
+        .any((row) => row.read<String>('name').toLowerCase() == 'tenantid');
     if (!hasTenantColumn) {
       await _database.customStatement(
-        'ALTER TABLE "$tableName" ADD COLUMN tenant_id TEXT',
+        'ALTER TABLE "$tableName" ADD COLUMN tenantId TEXT',
       );
     }
     await _database.customStatement(
       'CREATE INDEX IF NOT EXISTS "${tableName}_idx_tenant_id" '
-      'ON "$tableName" (tenant_id)',
+      'ON "$tableName" (tenantId)',
     );
     _tenantPreparedTables.add(tableName);
   }
@@ -381,7 +381,7 @@ class DriftDataStorageAdapter
     return DataRecord(
       id: row.read<String>('id'),
       collection: collection,
-      tenantId: row.data['tenant_id'] as String?,
+      tenantId: row.data['tenantId'] as String?,
       payload: Map<String, dynamic>.from(decoded),
       version: row.read<int>('version'),
       createdAt: DateTime.fromMicrosecondsSinceEpoch(
@@ -411,7 +411,7 @@ class DriftDataStorageAdapter
       case 'id':
         return 'id';
       case 'tenantId':
-        return 'tenant_id';
+        return 'tenantId';
       case 'version':
         return 'version';
       case 'createdAt':
@@ -579,7 +579,7 @@ class DriftDataStorageAdapter
       return null;
     }
     final row = await _database.customSelect(
-      'SELECT id, tenant_id, payload, version, created_at, updated_at '
+      'SELECT id, tenantId, payload, version, created_at, updated_at '
       'FROM "$tableName" WHERE id = ? LIMIT 1',
       variables: [Variable<String>(id)],
     ).getSingleOrNull();
@@ -599,7 +599,7 @@ class DriftDataStorageAdapter
     }
     final rows = await _database
         .customSelect(
-          'SELECT id, tenant_id, payload, version, created_at, updated_at FROM "$tableName"',
+          'SELECT id, tenantId, payload, version, created_at, updated_at FROM "$tableName"',
         )
         .get();
     return rows.map((row) => _mapRow(collection, row)).toList(growable: false);
@@ -676,7 +676,7 @@ class DriftDataStorageAdapter
     }
 
     final querySql = StringBuffer(
-      'SELECT id, tenant_id, payload, version, created_at, updated_at '
+      'SELECT id, tenantId, payload, version, created_at, updated_at '
       'FROM "$tableName"',
     );
     if (whereClauses.isNotEmpty) {
@@ -801,10 +801,10 @@ class DriftDataStorageAdapter
   Future<void> writeRecord(DataRecord record) async {
     final tableName = await _ensureTableForWrite(record.collection);
     await _database.customStatement(
-      'INSERT INTO "$tableName" (id, tenant_id, payload, version, created_at, updated_at) '
+      'INSERT INTO "$tableName" (id, tenantId, payload, version, created_at, updated_at) '
       'VALUES (?, ?, ?, ?, ?, ?) '
       'ON CONFLICT(id) DO UPDATE SET '
-      'tenant_id = excluded.tenant_id, '
+      'tenantId = excluded.tenantId, '
       'payload = excluded.payload, '
       'version = excluded.version, '
       'created_at = excluded.created_at, '
@@ -837,10 +837,10 @@ class DriftDataStorageAdapter
         final tableName = tableNames[entry.key]!;
         for (final record in entry.value) {
           await _database.customStatement(
-            'INSERT INTO "$tableName" (id, tenant_id, payload, version, created_at, updated_at) '
+            'INSERT INTO "$tableName" (id, tenantId, payload, version, created_at, updated_at) '
             'VALUES (?, ?, ?, ?, ?, ?) '
             'ON CONFLICT(id) DO UPDATE SET '
-            'tenant_id = excluded.tenant_id, '
+            'tenantId = excluded.tenantId, '
             'payload = excluded.payload, '
             'version = excluded.version, '
             'created_at = excluded.created_at, '
