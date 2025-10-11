@@ -389,13 +389,15 @@ class DriftDataStorageAdapter
   ) {
     final snapshot = List<_CollectionIndexMetadata>.unmodifiable(indexes);
     _cachedCollectionIndexes[collection] = snapshot;
-    for (final metadata in snapshot) {
-      _knownIndexNames.add(metadata.indexName);
-    }
   }
 
   void _invalidateCollectionIndexCache(String collection) {
-    _cachedCollectionIndexes.remove(collection);
+    final existing = _cachedCollectionIndexes.remove(collection);
+    if (existing != null) {
+      for (final metadata in existing) {
+        _knownIndexNames.remove(metadata.indexName);
+      }
+    }
   }
 
   Future<List<_CollectionIndexMetadata>> _loadCollectionIndexes(
