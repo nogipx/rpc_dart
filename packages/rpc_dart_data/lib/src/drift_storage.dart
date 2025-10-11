@@ -184,6 +184,9 @@ class DriftDataStorageAdapter
   bool _registryReady = false;
   final Set<String> _knownTables = <String>{};
   final Set<String> _tenantPreparedTables = <String>{};
+  final Map<String, Set<String>> _payloadIndexedFields =
+      <String, Set<String>>{};
+  static final RegExp _simpleJsonKey = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
 
   DriftDataDatabase get database => _database;
 
@@ -458,84 +461,215 @@ class DriftDataStorageAdapter
     }
   }
 
-  bool _applyEquals(
-    RecordFilter? filter,
-    List<String> conditions,
-    List<Object> values,
-  ) {
-    if (filter == null || filter.equals.isEmpty) {
-      return true;
+  int _stableFieldHash(String field) {
+    var hash = 17;
+    for (final unit in field.codeUnits) {
+      hash = (hash * 37 + unit) & 0x7fffffff;
     }
-    for (final entry in filter.equals.entries) {
-      final column = _columnForField(entry.key);
-      if (column == null) {
-        return false;
-      }
-      final normalized = _normalizeValue(entry.key, entry.value);
-      if (normalized == null) {
-        return false;
-      }
-      conditions.add('"$column" = ?');
-      values.add(normalized);
-    }
-    return true;
+    return hash;
   }
 
-  bool _applyRanges(
-    RecordFilter? filter,
-    List<String> conditions,
-    List<Object> values,
-  ) {
-    if (filter == null || filter.range.isEmpty) {
-      return true;
-    }
-    for (final entry in filter.range.entries) {
-      final column = _columnForField(entry.key);
-      if (column == null) {
-        return false;
-      }
-      final constraint = entry.value;
-      if (constraint.min != null) {
-        final min = _normalizeValue(entry.key, constraint.min);
-        if (min == null) {
-          return false;
-        }
-        final op = constraint.includeMin ? '>=' : '>';
-        conditions.add('"$column" $op ?');
-        values.add(min);
-      }
-      if (constraint.max != null) {
-        final max = _normalizeValue(entry.key, constraint.max);
-        if (max == null) {
-          return false;
-        }
-        final op = constraint.includeMax ? '<=' : '<';
-        conditions.add('"$column" $op ?');
-        values.add(max);
-      }
-    }
-    return true;
+  String _escapeSingleQuotes(String value) {
+    return value.replaceAll("'", "''");
   }
 
-  bool _translateFilter(
-    RecordFilter? filter,
-    List<String> conditions,
-    List<Object> values,
-  ) {
+  String _buildJsonPath(String field) {
+    final segments = field.split('.');
+    if (segments.isEmpty) {
+      return r'$';
+    }
+    final buffer = StringBuffer(r'$');
+    for (final segment in segments) {
+      if (segment.isEmpty) {
+        buffer.write('[""]');
+        continue;
+      }
+      if (_simpleJsonKey.hasMatch(segment)) {
+        buffer
+          ..write('.')
+          ..write(segment);
+      } else {
+        final escaped = segment
+            .replaceAll('\\', r'\\')
+            .replaceAll('"', r'"');
+        buffer
+          ..write('["')
+          ..write(escaped)
+          ..write('"]');
+      }
+    }
+    return buffer.toString();
+  }
+
+  String _jsonExtractExpression(String field) {
+    final path = _buildJsonPath(field);
+    return "json_extract(payload, '${_escapeSingleQuotes(path)}')";
+  }
+
+  String _payloadIndexName(String tableName, String field) {
+    final normalizedField =
+        _normalizeSegment(field.replaceAll('.', '_'));
+    final hash = _stableFieldHash(field).toRadixString(16);
+    return '${tableName}_idx_payload_${normalizedField}_$hash';
+  }
+
+  String? _encodeJsonLiteral(Object value) {
+    Object? normalized = value;
+    if (value is DateTime) {
+      normalized = value.toUtc().toIso8601String();
+    } else if (value is Iterable) {
+      normalized = value.toList();
+    } else if (value is Map) {
+      normalized = value.map(
+        (key, dynamic v) => MapEntry(key.toString(), v),
+      );
+    }
+    try {
+      return jsonEncode(normalized);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _ensurePayloadIndexes(
+    String tableName,
+    Iterable<String> fields,
+  ) async {
+    if (fields.isEmpty) {
+      return;
+    }
+    final prepared =
+        _payloadIndexedFields.putIfAbsent(tableName, () => <String>{});
+    for (final field in fields) {
+      if (prepared.contains(field)) {
+        continue;
+      }
+      final indexName = _payloadIndexName(tableName, field);
+      final expression = _jsonExtractExpression(field);
+      await _database.customStatement(
+        'CREATE INDEX IF NOT EXISTS "$indexName" '
+        'ON "$tableName" (($expression))',
+      );
+      prepared.add(field);
+    }
+  }
+
+  _FilterTranslation? _translateFilter(RecordFilter? filter) {
+    final conditions = <String>[];
+    final values = <Object>[];
+    final payloadFields = <String>{};
+
     if (filter == null) {
-      return true;
+      return _FilterTranslation(
+        conditions: conditions,
+        values: values,
+        payloadFields: payloadFields,
+      );
     }
     if (filter.containsTerms.isNotEmpty) {
-      return false;
+      return null;
     }
-    if (!_applyEquals(filter, conditions, values)) {
-      return false;
+
+    for (final entry in filter.equals.entries) {
+      final field = entry.key;
+      final column = _columnForField(field);
+      final value = entry.value;
+
+      if (column != null) {
+        if (value == null) {
+          conditions.add('"$column" IS NULL');
+          continue;
+        }
+        final normalized = _normalizeValue(field, value);
+        if (normalized == null) {
+          return null;
+        }
+        conditions.add('"$column" = ?');
+        values.add(normalized);
+        continue;
+      }
+
+      final expression = _jsonExtractExpression(field);
+      if (value == null) {
+        conditions.add('$expression IS NULL');
+        payloadFields.add(field);
+        continue;
+      }
+      final encoded = _encodeJsonLiteral(value);
+      if (encoded == null) {
+        return null;
+      }
+      conditions.add('$expression = json(?)');
+      values.add(encoded);
+      payloadFields.add(field);
     }
-    if (!_applyRanges(filter, conditions, values)) {
-      return false;
+
+    for (final entry in filter.range.entries) {
+      final field = entry.key;
+      final constraint = entry.value;
+      final column = _columnForField(field);
+      if (column != null) {
+        if (constraint.min != null) {
+          final min = _normalizeValue(field, constraint.min);
+          if (min == null) {
+            return null;
+          }
+          final op = constraint.includeMin ? '>=' : '>';
+          conditions.add('"$column" $op ?');
+          values.add(min);
+        }
+        if (constraint.max != null) {
+          final max = _normalizeValue(field, constraint.max);
+          if (max == null) {
+            return null;
+          }
+          final op = constraint.includeMax ? '<=' : '<';
+          conditions.add('"$column" $op ?');
+          values.add(max);
+        }
+        continue;
+      }
+
+      final expression = _jsonExtractExpression(field);
+      if (constraint.min != null) {
+        final encodedMin = _encodeJsonLiteral(constraint.min!);
+        if (encodedMin == null) {
+          return null;
+        }
+        final op = constraint.includeMin ? '>=' : '>';
+        conditions.add('$expression $op json(?)');
+        values.add(encodedMin);
+      }
+      if (constraint.max != null) {
+        final encodedMax = _encodeJsonLiteral(constraint.max!);
+        if (encodedMax == null) {
+          return null;
+        }
+        final op = constraint.includeMax ? '<=' : '<';
+        conditions.add('$expression $op json(?)');
+        values.add(encodedMax);
+      }
+      payloadFields.add(field);
     }
-    return true;
+
+    return _FilterTranslation(
+      conditions: conditions,
+      values: values,
+      payloadFields: payloadFields,
+    );
   }
+
+class _FilterTranslation {
+  const _FilterTranslation({
+    required this.conditions,
+    required this.values,
+    required this.payloadFields,
+  });
+
+  final List<String> conditions;
+  final List<Object> values;
+  final Set<String> payloadFields;
+}
 
   bool _supportsSort(SortOrder? sort) {
     if (sort == null) {
@@ -631,11 +765,15 @@ class DriftDataStorageAdapter
       );
     }
 
-    final filterConditions = <String>[];
-    final filterValues = <Object>[];
-    if (!_translateFilter(request.filter, filterConditions, filterValues)) {
+    final translation = _translateFilter(request.filter);
+    if (translation == null) {
       return null;
     }
+
+    await _ensurePayloadIndexes(tableName, translation.payloadFields);
+
+    final filterConditions = List<String>.from(translation.conditions);
+    final filterValues = List<Object>.from(translation.values);
 
     final sort = request.sort;
     final sortField = sort?.field ?? 'id';
@@ -758,11 +896,15 @@ class DriftDataStorageAdapter
       );
     }
 
-    final conditions = <String>[];
-    final values = <Object>[];
-    if (!_translateFilter(request.filter, conditions, values)) {
+    final translation = _translateFilter(request.filter);
+    if (translation == null) {
       return null;
     }
+
+    await _ensurePayloadIndexes(tableName, translation.payloadFields);
+
+    final conditions = translation.conditions;
+    final values = translation.values;
 
     final sql = StringBuffer(
       'SELECT COUNT(*) AS count FROM "$tableName"',
@@ -918,6 +1060,8 @@ class DriftDataStorageAdapter
     });
 
     _knownTables.remove(tableName);
+    _tenantPreparedTables.remove(tableName);
+    _payloadIndexedFields.remove(tableName);
     return true;
   }
 

@@ -540,6 +540,60 @@ void main() {
     expect(activeList.records, isNotEmpty);
   });
 
+  test('creates expression index for payload filters', () async {
+    final storage = DriftDataStorageAdapter.file(dbFile);
+    final repository = DriftDataRepository(storage: storage);
+    final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => repository.storage.dispose());
+    addTearDown(() async => env.dispose());
+
+    final ctx = buildContext();
+
+    await env.client.create(
+      collection: 'notes',
+      payload: {
+        'title': 'Indexed note',
+        'status': 'open',
+      },
+      context: ctx,
+    );
+
+    final response = await env.client.list(
+      collection: 'notes',
+      filter: const RecordFilter(equals: {'title': 'Indexed note'}),
+      options: const QueryOptions(limit: 5, includeTotalCount: true),
+      context: ctx,
+    );
+
+    expect(response.records, hasLength(1));
+
+    final tableRow = await storage.database
+        .customSelect(
+          'SELECT table_name FROM collection_registry '
+          'WHERE collection = ? LIMIT 1',
+          variables: [drift.Variable<String>('notes')],
+        )
+        .getSingle();
+    final tableName = tableRow.read<String>('table_name');
+
+    final indexRows = await storage.database
+        .customSelect(
+          "SELECT name, sql FROM sqlite_master WHERE type = 'index' "
+          'AND tbl_name = ? AND name LIKE ?',
+          variables: [
+            drift.Variable<String>(tableName),
+            drift.Variable<String>('%_idx_payload_%'),
+          ],
+        )
+        .get();
+
+    expect(indexRows, isNotEmpty,
+        reason: 'expected expression index for payload field');
+    final indexSql = indexRows.first.read<String>('sql');
+    expect(indexSql, contains('json_extract'));
+    expect(indexSql, contains('$.title'));
+  });
+
   test('search respects cursor-based pagination', () async {
     final storage = DriftDataStorageAdapter.file(dbFile);
     final repository = DriftDataRepository(storage: storage);
