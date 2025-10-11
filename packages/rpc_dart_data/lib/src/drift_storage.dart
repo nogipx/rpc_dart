@@ -184,6 +184,9 @@ class DriftDataStorageAdapter
   bool _registryReady = false;
   final Set<String> _knownTables = <String>{};
   final Set<String> _tenantPreparedTables = <String>{};
+  final Set<String> _ftsPreparedTables = <String>{};
+
+  String _ftsTableName(String baseTable) => 'fts_$baseTable';
 
   DriftDataDatabase get database => _database;
 
@@ -233,6 +236,17 @@ class DriftDataStorageAdapter
       _knownTables.add(tableName);
     }
     return exists;
+  }
+
+  Future<bool> _ftsTableExists(String tableName) async {
+    final row = await _database.customSelect(
+      'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+      variables: [
+        Variable<String>('table'),
+        Variable<String>(tableName),
+      ],
+    ).getSingleOrNull();
+    return row != null;
   }
 
   String _normalizeSegment(String value) {
@@ -340,10 +354,12 @@ class DriftDataStorageAdapter
         _knownTables.add(existing);
       }
       await _ensureTenantSupport(existing);
+      await _ensureFtsTable(collection, existing);
       return existing;
     }
     final table = await _createTable(collection);
     await _ensureTenantSupport(table);
+    await _ensureFtsTable(collection, table);
     return table;
   }
 
@@ -423,59 +439,133 @@ class DriftDataStorageAdapter
     }
   }
 
-  Object? _normalizeValue(String field, Object? value) {
+  String _qualifiedColumn(
+    String column, {
+    String? tableAlias,
+  }) {
+    if (tableAlias == null || tableAlias.isEmpty) {
+      return '"$column"';
+    }
+    return '$tableAlias."$column"';
+  }
+
+  String _payloadColumn({String? tableAlias}) {
+    if (tableAlias == null || tableAlias.isEmpty) {
+      return 'payload';
+    }
+    return '$tableAlias.payload';
+  }
+
+  String _jsonPathLiteral(String field) {
+    final segments = field.split('.').where((segment) => segment.isNotEmpty);
+    final buffer = StringBuffer(r'$');
+    for (final segment in segments) {
+      final escaped = segment.replaceAll('"', r'\"');
+      buffer.write('."$escaped"');
+    }
+    if (buffer.length == 1) {
+      buffer.write('."$field"');
+    }
+    return "'${buffer.toString()}'";
+  }
+
+  String _jsonExtractExpression(
+    String field, {
+    String? tableAlias,
+  }) {
+    final source = _payloadColumn(tableAlias: tableAlias);
+    final path = _jsonPathLiteral(field);
+    return 'json_extract($source, $path)';
+  }
+
+  String? _fieldExpression(
+    String field, {
+    String? tableAlias,
+  }) {
+    final column = _columnForField(field);
+    if (column != null) {
+      return _qualifiedColumn(column, tableAlias: tableAlias);
+    }
+    return _jsonExtractExpression(field, tableAlias: tableAlias);
+  }
+
+  Object? _normalizeValue(
+    String field,
+    Object? value, {
+    bool forRange = false,
+  }) {
     if (value == null) {
       return null;
     }
-    switch (field) {
-      case 'id':
-        return value.toString();
-      case 'tenantId':
-        return value.toString();
-      case 'version':
-        if (value is num) {
-          return value.toInt();
-        }
-        return null;
-      case 'createdAt':
-      case 'updatedAt':
-        if (value is DateTime) {
-          return value.toUtc().microsecondsSinceEpoch;
-        }
-        if (value is String) {
-          try {
-            return DateTime.parse(value).toUtc().microsecondsSinceEpoch;
-          } catch (_) {
-            return null;
+    final column = _columnForField(field);
+    if (column != null) {
+      switch (column) {
+        case 'id':
+        case 'tenantId':
+          return value.toString();
+        case 'version':
+          if (value is num) {
+            return value.toInt();
           }
-        }
-        if (value is num) {
-          return value.toInt();
-        }
-        return null;
-      default:
-        return null;
+          return null;
+        case 'created_at':
+        case 'updated_at':
+          if (value is DateTime) {
+            return value.toUtc().microsecondsSinceEpoch;
+          }
+          if (value is String) {
+            try {
+              return DateTime.parse(value).toUtc().microsecondsSinceEpoch;
+            } catch (_) {
+              return null;
+            }
+          }
+          if (value is num) {
+            return value.toInt();
+          }
+          return null;
+      }
     }
+    if (value is bool) {
+      return value ? 1 : 0;
+    }
+    if (value is num) {
+      return value;
+    }
+    if (value is DateTime) {
+      return forRange
+          ? value.toUtc().toIso8601String()
+          : value.toUtc().toIso8601String();
+    }
+    if (value is String) {
+      return value;
+    }
+    if (value is Map || value is Iterable) {
+      return jsonEncode(value);
+    }
+    return value.toString();
   }
 
   bool _applyEquals(
     RecordFilter? filter,
     List<String> conditions,
-    List<Object> values,
-  ) {
+    List<Object> values, {
+    String? tableAlias,
+  }) {
     if (filter == null || filter.equals.isEmpty) {
       return true;
     }
     for (final entry in filter.equals.entries) {
-      final column = _columnForField(entry.key);
-      if (column == null) {
+      final expression =
+          _fieldExpression(entry.key, tableAlias: tableAlias);
+      if (expression == null) {
         return false;
       }
       final normalized = _normalizeValue(entry.key, entry.value);
       if (normalized == null) {
         return false;
       }
-      conditions.add('"$column" = ?');
+      conditions.add('$expression = ?');
       values.add(normalized);
     }
     return true;
@@ -484,33 +574,43 @@ class DriftDataStorageAdapter
   bool _applyRanges(
     RecordFilter? filter,
     List<String> conditions,
-    List<Object> values,
-  ) {
+    List<Object> values, {
+    String? tableAlias,
+  }) {
     if (filter == null || filter.range.isEmpty) {
       return true;
     }
     for (final entry in filter.range.entries) {
-      final column = _columnForField(entry.key);
-      if (column == null) {
+      final expression =
+          _fieldExpression(entry.key, tableAlias: tableAlias);
+      if (expression == null) {
         return false;
       }
       final constraint = entry.value;
       if (constraint.min != null) {
-        final min = _normalizeValue(entry.key, constraint.min);
+        final min = _normalizeValue(
+          entry.key,
+          constraint.min,
+          forRange: true,
+        );
         if (min == null) {
           return false;
         }
         final op = constraint.includeMin ? '>=' : '>';
-        conditions.add('"$column" $op ?');
+        conditions.add('$expression $op ?');
         values.add(min);
       }
       if (constraint.max != null) {
-        final max = _normalizeValue(entry.key, constraint.max);
+        final max = _normalizeValue(
+          entry.key,
+          constraint.max,
+          forRange: true,
+        );
         if (max == null) {
           return false;
         }
         final op = constraint.includeMax ? '<=' : '<';
-        conditions.add('"$column" $op ?');
+        conditions.add('$expression $op ?');
         values.add(max);
       }
     }
@@ -520,18 +620,29 @@ class DriftDataStorageAdapter
   bool _translateFilter(
     RecordFilter? filter,
     List<String> conditions,
-    List<Object> values,
-  ) {
+    List<Object> values, {
+    String? tableAlias,
+  }) {
     if (filter == null) {
       return true;
     }
     if (filter.containsTerms.isNotEmpty) {
       return false;
     }
-    if (!_applyEquals(filter, conditions, values)) {
+    if (!_applyEquals(
+      filter,
+      conditions,
+      values,
+      tableAlias: tableAlias,
+    )) {
       return false;
     }
-    if (!_applyRanges(filter, conditions, values)) {
+    if (!_applyRanges(
+      filter,
+      conditions,
+      values,
+      tableAlias: tableAlias,
+    )) {
       return false;
     }
     return true;
@@ -567,6 +678,154 @@ class DriftDataStorageAdapter
 
   List<Variable> _buildVariables(Iterable<Object> values) {
     return values.map(_variableForValue).toList();
+  }
+
+  String? _buildFtsMatchPattern(String query) {
+    final tokens = query
+        .split(RegExp(r'\s+'))
+        .map((token) => token.trim())
+        .where((token) => token.isNotEmpty)
+        .toList(growable: false);
+    if (tokens.isEmpty) {
+      return null;
+    }
+    final wildcardTokens = tokens
+        .map((token) => '${token.replaceAll('"', '""')}*')
+        .join(' ');
+    return wildcardTokens;
+  }
+
+  String _normalizeSearchToken(Object? value) {
+    if (value == null) {
+      return '';
+    }
+    if (value is DateTime) {
+      return value.toUtc().toIso8601String();
+    }
+    if (value is bool) {
+      return value ? 'true' : 'false';
+    }
+    if (value is Map || value is Iterable) {
+      return jsonEncode(value);
+    }
+    return value.toString();
+  }
+
+  String _prepareSearchText(DataRecord record) {
+    final buffer = StringBuffer()
+      ..write(record.id)
+      ..write(' ')
+      ..write(record.collection);
+    if (record.tenantId != null && record.tenantId!.isNotEmpty) {
+      buffer
+        ..write(' ')
+        ..write(record.tenantId);
+    }
+    buffer
+      ..write(' version ')
+      ..write(record.version.toString());
+    record.payload.forEach((key, value) {
+      buffer
+        ..write(' ')
+        ..write(key);
+      final token = _normalizeSearchToken(value);
+      if (token.isNotEmpty) {
+        buffer
+          ..write(' ')
+          ..write(token);
+      }
+    });
+    buffer
+      ..write(' created ')
+      ..write(record.createdAt.toUtc().toIso8601String())
+      ..write(' updated ')
+      ..write(record.updatedAt.toUtc().toIso8601String());
+    return buffer.toString().toLowerCase();
+  }
+
+  Future<void> _insertIntoFtsTable(
+    String ftsTable,
+    DataRecord record,
+  ) async {
+    await _database.customStatement(
+      'DELETE FROM "$ftsTable" WHERE id = ?',
+      [record.id],
+    );
+    await _database.customStatement(
+      'INSERT INTO "$ftsTable" (id, content) VALUES (?, ?)',
+      [record.id, _prepareSearchText(record)],
+    );
+  }
+
+  Future<void> _seedFtsTable(
+    String collection,
+    String baseTable,
+    String ftsTable,
+  ) async {
+    final countRow = await _database
+        .customSelect(
+          'SELECT COUNT(*) AS count FROM "$ftsTable"',
+        )
+        .getSingle();
+    final existing = countRow.read<int>('count');
+    if (existing > 0) {
+      return;
+    }
+    final rows = await _database.customSelect(
+      'SELECT id, tenantId, payload, version, created_at, updated_at '
+      'FROM "$baseTable"',
+    ).get();
+    for (final row in rows) {
+      final record = _mapRow(collection, row);
+      await _insertIntoFtsTable(ftsTable, record);
+    }
+  }
+
+  Future<String> _ensureFtsTable(
+    String collection,
+    String baseTable,
+  ) async {
+    final ftsTable = _ftsTableName(baseTable);
+    final exists = await _ftsTableExists(ftsTable);
+    if (!exists) {
+      await _database.customStatement(
+        'CREATE VIRTUAL TABLE "$ftsTable" '
+        'USING fts5(id UNINDEXED, content, tokenize="unicode61 remove_diacritics 2")',
+      );
+    }
+    if (!_ftsPreparedTables.contains(baseTable)) {
+      _ftsPreparedTables.add(baseTable);
+      await _seedFtsTable(collection, baseTable, ftsTable);
+    }
+    return ftsTable;
+  }
+
+  Future<void> _updateFtsIndex(
+    String collection,
+    String baseTable,
+    DataRecord record,
+  ) async {
+    final ftsTable = await _ensureFtsTable(collection, baseTable);
+    await _insertIntoFtsTable(ftsTable, record);
+  }
+
+  Future<void> _removeFromFtsIndex(
+    String baseTable,
+    String id,
+  ) async {
+    if (!_ftsPreparedTables.contains(baseTable)) {
+      final ftsTable = _ftsTableName(baseTable);
+      final exists = await _ftsTableExists(ftsTable);
+      if (!exists) {
+        return;
+      }
+      _ftsPreparedTables.add(baseTable);
+    }
+    final ftsTable = _ftsTableName(baseTable);
+    await _database.customStatement(
+      'DELETE FROM "$ftsTable" WHERE id = ?',
+      [id],
+    );
   }
 
   @override
@@ -733,7 +992,107 @@ class DriftDataStorageAdapter
   Future<SearchRecordsResponse?> searchCollection(
     SearchRecordsRequest request,
   ) async {
-    return null;
+    final pattern = _buildFtsMatchPattern(request.query);
+    if (pattern == null) {
+      return null;
+    }
+
+    final tableName = await _ensureTableForRead(request.collection);
+    if (tableName == null) {
+      return SearchRecordsResponse(
+        records: const [],
+        totalHits: 0,
+        nextCursor: null,
+      );
+    }
+
+    final ftsTable = await _ensureFtsTable(request.collection, tableName);
+    final baseAlias = 'b';
+
+    final baseConditions = <String>['"$ftsTable" MATCH ?'];
+    final baseValues = <Object>[pattern];
+
+    if (!_translateFilter(
+      request.filter,
+      baseConditions,
+      baseValues,
+      tableAlias: baseAlias,
+    )) {
+      return null;
+    }
+
+    final queryConditions = List<String>.from(baseConditions);
+    final queryValues = List<Object>.from(baseValues);
+
+    final cursor = request.options.cursor;
+    if (cursor != null) {
+      final exists = await _cursorExists(tableName, cursor);
+      if (!exists) {
+        throw RpcDataError.invalidArgument(
+          'Cursor $cursor is not valid for ${request.collection}',
+        );
+      }
+      queryConditions.add(
+        '${_qualifiedColumn('id', tableAlias: baseAlias)} > ?',
+      );
+      queryValues.add(cursor);
+    }
+
+    final whereClause =
+        queryConditions.isEmpty ? '' : 'WHERE ${queryConditions.join(' AND ')}';
+
+    final fetchLimit = request.options.limit + 1;
+    final querySql = StringBuffer(
+      'SELECT $baseAlias.id, $baseAlias.tenantId, $baseAlias.payload, '
+      '$baseAlias.version, $baseAlias.created_at, $baseAlias.updated_at '
+      'FROM "$tableName" $baseAlias '
+      'JOIN "$ftsTable" fts ON fts.id = $baseAlias.id '
+      '$whereClause '
+      'ORDER BY $baseAlias.id ASC '
+      'LIMIT ?',
+    );
+
+    final queryArgs = <Object>[...queryValues, fetchLimit];
+    final rows = await _database
+        .customSelect(
+          querySql.toString(),
+          variables: _buildVariables(queryArgs),
+        )
+        .get();
+
+    final hasMore = rows.length == fetchLimit;
+    final limitedRows =
+        hasMore ? rows.sublist(0, rows.length - 1) : rows;
+    final records = limitedRows
+        .map((row) => _mapRow(request.collection, row))
+        .toList(growable: false);
+
+    String? nextCursor;
+    if (hasMore && records.isNotEmpty) {
+      nextCursor = records.last.id;
+    }
+
+    final countWhere =
+        baseConditions.isEmpty ? '' : 'WHERE ${baseConditions.join(' AND ')}';
+    final countSql = StringBuffer(
+      'SELECT COUNT(*) AS count '
+      'FROM "$tableName" $baseAlias '
+      'JOIN "$ftsTable" fts ON fts.id = $baseAlias.id '
+      '$countWhere',
+    );
+    final countRow = await _database
+        .customSelect(
+          countSql.toString(),
+          variables: _buildVariables(baseValues),
+        )
+        .getSingle();
+    final totalHits = countRow.read<int>('count');
+
+    return SearchRecordsResponse(
+      records: records,
+      totalHits: totalHits,
+      nextCursor: nextCursor,
+    );
   }
 
   @override
@@ -742,11 +1101,6 @@ class DriftDataStorageAdapter
   ) async {
     if (request.metrics.isEmpty) {
       return const AggregateMetricsResponse(metrics: <String, num>{});
-    }
-
-    if (request.metrics.values
-        .any((definition) => definition.toLowerCase() != 'count')) {
-      return null;
     }
 
     final tableName = await _ensureTableForRead(request.collection);
@@ -758,30 +1112,82 @@ class DriftDataStorageAdapter
       );
     }
 
+    final projections = <String>[];
+    final metricOrder = <String>[];
+    for (final entry in request.metrics.entries) {
+      final metricName = entry.key;
+      final definition = entry.value;
+      final parts = definition.split(':');
+      final op = parts.first.toLowerCase();
+      switch (op) {
+        case 'count':
+          projections.add('COUNT(*) AS "$metricName"');
+          metricOrder.add(metricName);
+          continue;
+        case 'sum':
+        case 'avg':
+        case 'min':
+        case 'max':
+          if (parts.length != 2) {
+            return null;
+          }
+          final fieldName = parts[1];
+          final expression =
+              _fieldExpression(fieldName, tableAlias: 'b');
+          if (expression == null) {
+            return null;
+          }
+          final castExpression = 'CAST($expression AS REAL)';
+          projections.add(
+            '${op.toUpperCase()}($castExpression) AS "$metricName"',
+          );
+          metricOrder.add(metricName);
+          continue;
+        default:
+          return null;
+      }
+    }
+
     final conditions = <String>[];
     final values = <Object>[];
-    if (!_translateFilter(request.filter, conditions, values)) {
+    if (!_translateFilter(
+      request.filter,
+      conditions,
+      values,
+      tableAlias: 'b',
+    )) {
       return null;
     }
 
+    final selectClause = projections.join(', ');
     final sql = StringBuffer(
-      'SELECT COUNT(*) AS count FROM "$tableName"',
+      'SELECT $selectClause FROM "$tableName" b',
     );
     if (conditions.isNotEmpty) {
       sql
         ..write(' WHERE ')
         ..write(conditions.join(' AND '));
     }
-    final row = await _database
-        .customSelect(sql.toString(), variables: _buildVariables(values))
-        .getSingle();
-    final count = row.read<int>('count');
+    final selectable = values.isEmpty
+        ? _database.customSelect(sql.toString())
+        : _database.customSelect(
+            sql.toString(),
+            variables: _buildVariables(values),
+          );
+    final row = await selectable.getSingle();
+    final metrics = <String, num>{};
+    for (final metric in metricOrder) {
+      final dynamic rawValue = row.data[metric];
+      if (rawValue is num) {
+        metrics[metric] = rawValue;
+      } else if (rawValue is String) {
+        metrics[metric] = num.tryParse(rawValue) ?? 0;
+      } else {
+        metrics[metric] = 0;
+      }
+    }
 
-    return AggregateMetricsResponse(
-      metrics: {
-        for (final entry in request.metrics.entries) entry.key: count,
-      },
-    );
+    return AggregateMetricsResponse(metrics: metrics);
   }
 
   @override
@@ -800,17 +1206,20 @@ class DriftDataStorageAdapter
   @override
   Future<void> writeRecord(DataRecord record) async {
     final tableName = await _ensureTableForWrite(record.collection);
-    await _database.customStatement(
-      'INSERT INTO "$tableName" (id, tenantId, payload, version, created_at, updated_at) '
-      'VALUES (?, ?, ?, ?, ?, ?) '
-      'ON CONFLICT(id) DO UPDATE SET '
-      'tenantId = excluded.tenantId, '
-      'payload = excluded.payload, '
-      'version = excluded.version, '
-      'created_at = excluded.created_at, '
-      'updated_at = excluded.updated_at',
-      _recordToArguments(record),
-    );
+    await _database.transaction(() async {
+      await _database.customStatement(
+        'INSERT INTO "$tableName" (id, tenantId, payload, version, created_at, updated_at) '
+        'VALUES (?, ?, ?, ?, ?, ?) '
+        'ON CONFLICT(id) DO UPDATE SET '
+        'tenantId = excluded.tenantId, '
+        'payload = excluded.payload, '
+        'version = excluded.version, '
+        'created_at = excluded.created_at, '
+        'updated_at = excluded.updated_at',
+        _recordToArguments(record),
+      );
+      await _updateFtsIndex(record.collection, tableName, record);
+    });
   }
 
   @override
@@ -847,6 +1256,7 @@ class DriftDataStorageAdapter
             'updated_at = excluded.updated_at',
             _recordToArguments(record),
           );
+          await _updateFtsIndex(entry.key, tableName, record);
         }
       }
     });
@@ -870,6 +1280,9 @@ class DriftDataStorageAdapter
           await _database.customSelect('SELECT changes() AS count').getSingle();
       affected = changeRow.read<int>('count');
     });
+    if (affected > 0) {
+      await _removeFromFtsIndex(tableName, id);
+    }
     return affected > 0;
   }
 
@@ -885,17 +1298,23 @@ class DriftDataStorageAdapter
     if (tableName == null) {
       return 0;
     }
-    final placeholders = List.filled(ids.length, '?').join(', ');
+    final idList = ids.toList();
+    final placeholders = List.filled(idList.length, '?').join(', ');
     var affected = 0;
     await _database.transaction(() async {
       await _database.customStatement(
         'DELETE FROM "$tableName" WHERE id IN ($placeholders)',
-        ids.toList(),
+        idList,
       );
       final changeRow =
           await _database.customSelect('SELECT changes() AS count').getSingle();
       affected = changeRow.read<int>('count');
     });
+    if (affected > 0) {
+      for (final id in idList) {
+        await _removeFromFtsIndex(tableName, id);
+      }
+    }
     return affected;
   }
 
@@ -907,9 +1326,13 @@ class DriftDataStorageAdapter
     }
 
     await _ensureRegistry();
+    final ftsTable = _ftsTableName(tableName);
     await _database.transaction(() async {
       await _database.customStatement(
         'DROP TABLE IF EXISTS "$tableName"',
+      );
+      await _database.customStatement(
+        'DROP TABLE IF EXISTS "$ftsTable"',
       );
       await _database.customStatement(
         'DELETE FROM collection_registry WHERE collection = ?',
@@ -918,6 +1341,7 @@ class DriftDataStorageAdapter
     });
 
     _knownTables.remove(tableName);
+    _ftsPreparedTables.remove(tableName);
     return true;
   }
 
