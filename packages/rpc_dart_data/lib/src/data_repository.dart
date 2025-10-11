@@ -167,6 +167,8 @@ abstract class BaseDataRepository implements DataRepository {
         return record.id;
       case 'collection':
         return record.collection;
+      case 'tenantId':
+        return record.tenantId;
       case 'version':
         return record.version;
       case 'createdAt':
@@ -516,6 +518,7 @@ abstract class BaseDataRepository implements DataRepository {
       final updated = DataRecord(
         id: existing.id,
         collection: existing.collection,
+        tenantId: incoming.tenantId ?? existing.tenantId,
         payload: incoming.payload,
         version: incoming.version,
         createdAt: existing.createdAt,

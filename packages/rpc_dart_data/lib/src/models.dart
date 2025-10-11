@@ -86,6 +86,7 @@ class DataRecord implements IRpcSerializable {
   DataRecord({
     required this.id,
     required this.collection,
+    this.tenantId,
     required Map<String, dynamic> payload,
     required this.version,
     required this.createdAt,
@@ -96,6 +97,7 @@ class DataRecord implements IRpcSerializable {
     return DataRecord(
       id: json['id'] as String,
       collection: json['collection'] as String,
+      tenantId: json['tenantId'] as String?,
       payload: Map<String, dynamic>.from(json['payload'] as Map),
       version: json['version'] as int,
       createdAt: DateTime.parse(json['createdAt'] as String),
@@ -105,6 +107,7 @@ class DataRecord implements IRpcSerializable {
 
   final String id;
   final String collection;
+  final String? tenantId;
   final Map<String, dynamic> payload;
   final int version;
   final DateTime createdAt;
@@ -114,6 +117,7 @@ class DataRecord implements IRpcSerializable {
       DeepCollectionEquality.unordered();
 
   DataRecord copyWith({
+    String? tenantId,
     Map<String, dynamic>? payload,
     int? version,
     DateTime? updatedAt,
@@ -121,6 +125,7 @@ class DataRecord implements IRpcSerializable {
     return DataRecord(
       id: id,
       collection: collection,
+      tenantId: tenantId ?? this.tenantId,
       payload: payload ?? this.payload,
       version: version ?? this.version,
       createdAt: createdAt,
@@ -132,6 +137,7 @@ class DataRecord implements IRpcSerializable {
   Map<String, dynamic> toJson() => {
         'id': id,
         'collection': collection,
+        if (tenantId != null) 'tenantId': tenantId,
         'payload': payload,
         'version': version,
         'createdAt': createdAt.toIso8601String(),
@@ -143,6 +149,7 @@ class DataRecord implements IRpcSerializable {
     return other is DataRecord &&
         other.id == id &&
         other.collection == collection &&
+        other.tenantId == tenantId &&
         other.version == version &&
         other.createdAt == createdAt &&
         other.updatedAt == updatedAt &&
@@ -153,6 +160,7 @@ class DataRecord implements IRpcSerializable {
   int get hashCode => Object.hash(
         id,
         collection,
+        tenantId,
         version,
         createdAt,
         updatedAt,

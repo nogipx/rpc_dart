@@ -183,6 +183,7 @@ class DriftDataStorageAdapter
   final DriftDataDatabase _database;
   bool _registryReady = false;
   final Set<String> _knownTables = <String>{};
+  final Set<String> _tenantPreparedTables = <String>{};
 
   DriftDataDatabase get database => _database;
 
@@ -273,6 +274,7 @@ class DriftDataStorageAdapter
           await _database.customStatement(
             'CREATE TABLE IF NOT EXISTS "$candidate" ('
             'id TEXT PRIMARY KEY, '
+            'tenant_id TEXT, '
             'payload TEXT NOT NULL, '
             'version INTEGER NOT NULL, '
             'created_at INTEGER NOT NULL, '
@@ -292,12 +294,17 @@ class DriftDataStorageAdapter
             'ON "$candidate" (updated_at)',
           );
           await _database.customStatement(
+            'CREATE INDEX IF NOT EXISTS "${candidate}_idx_tenant_id" '
+            'ON "$candidate" (tenant_id)',
+          );
+          await _database.customStatement(
             'INSERT INTO collection_registry (collection, table_name) '
             'VALUES (?, ?)',
             [collection, candidate],
           );
         });
         _knownTables.add(candidate);
+        _tenantPreparedTables.add(candidate);
         return candidate;
       }
       attempt += 1;
@@ -312,6 +319,7 @@ class DriftDataStorageAdapter
     if (!await _tableExists(table)) {
       return null;
     }
+    await _ensureTenantSupport(table);
     return table;
   }
 
@@ -322,6 +330,7 @@ class DriftDataStorageAdapter
         await _database.customStatement(
           'CREATE TABLE IF NOT EXISTS "$existing" ('
           'id TEXT PRIMARY KEY, '
+          'tenant_id TEXT, '
           'payload TEXT NOT NULL, '
           'version INTEGER NOT NULL, '
           'created_at INTEGER NOT NULL, '
@@ -330,9 +339,33 @@ class DriftDataStorageAdapter
         );
         _knownTables.add(existing);
       }
+      await _ensureTenantSupport(existing);
       return existing;
     }
-    return _createTable(collection);
+    final table = await _createTable(collection);
+    await _ensureTenantSupport(table);
+    return table;
+  }
+
+  Future<void> _ensureTenantSupport(String tableName) async {
+    if (_tenantPreparedTables.contains(tableName)) {
+      return;
+    }
+    final rows = await _database
+        .customSelect('PRAGMA table_info("$tableName")')
+        .get();
+    final hasTenantColumn = rows
+        .any((row) => row.read<String>('name').toLowerCase() == 'tenant_id');
+    if (!hasTenantColumn) {
+      await _database.customStatement(
+        'ALTER TABLE "$tableName" ADD COLUMN tenant_id TEXT',
+      );
+    }
+    await _database.customStatement(
+      'CREATE INDEX IF NOT EXISTS "${tableName}_idx_tenant_id" '
+      'ON "$tableName" (tenant_id)',
+    );
+    _tenantPreparedTables.add(tableName);
   }
 
   DataRecord _mapRow(String collection, QueryRow row) {
@@ -348,6 +381,7 @@ class DriftDataStorageAdapter
     return DataRecord(
       id: row.read<String>('id'),
       collection: collection,
+      tenantId: row.data['tenant_id'] as String?,
       payload: Map<String, dynamic>.from(decoded),
       version: row.read<int>('version'),
       createdAt: DateTime.fromMicrosecondsSinceEpoch(
@@ -364,6 +398,7 @@ class DriftDataStorageAdapter
   List<Object?> _recordToArguments(DataRecord record) {
     return [
       record.id,
+      record.tenantId,
       jsonEncode(record.payload),
       record.version,
       record.createdAt.microsecondsSinceEpoch,
@@ -375,6 +410,8 @@ class DriftDataStorageAdapter
     switch (field) {
       case 'id':
         return 'id';
+      case 'tenantId':
+        return 'tenant_id';
       case 'version':
         return 'version';
       case 'createdAt':
@@ -392,6 +429,8 @@ class DriftDataStorageAdapter
     }
     switch (field) {
       case 'id':
+        return value.toString();
+      case 'tenantId':
         return value.toString();
       case 'version':
         if (value is num) {
@@ -540,7 +579,7 @@ class DriftDataStorageAdapter
       return null;
     }
     final row = await _database.customSelect(
-      'SELECT id, payload, version, created_at, updated_at '
+      'SELECT id, tenant_id, payload, version, created_at, updated_at '
       'FROM "$tableName" WHERE id = ? LIMIT 1',
       variables: [Variable<String>(id)],
     ).getSingleOrNull();
@@ -560,7 +599,7 @@ class DriftDataStorageAdapter
     }
     final rows = await _database
         .customSelect(
-          'SELECT id, payload, version, created_at, updated_at FROM "$tableName"',
+          'SELECT id, tenant_id, payload, version, created_at, updated_at FROM "$tableName"',
         )
         .get();
     return rows.map((row) => _mapRow(collection, row)).toList(growable: false);
@@ -637,7 +676,7 @@ class DriftDataStorageAdapter
     }
 
     final querySql = StringBuffer(
-      'SELECT id, payload, version, created_at, updated_at '
+      'SELECT id, tenant_id, payload, version, created_at, updated_at '
       'FROM "$tableName"',
     );
     if (whereClauses.isNotEmpty) {
@@ -762,9 +801,10 @@ class DriftDataStorageAdapter
   Future<void> writeRecord(DataRecord record) async {
     final tableName = await _ensureTableForWrite(record.collection);
     await _database.customStatement(
-      'INSERT INTO "$tableName" (id, payload, version, created_at, updated_at) '
-      'VALUES (?, ?, ?, ?, ?) '
+      'INSERT INTO "$tableName" (id, tenant_id, payload, version, created_at, updated_at) '
+      'VALUES (?, ?, ?, ?, ?, ?) '
       'ON CONFLICT(id) DO UPDATE SET '
+      'tenant_id = excluded.tenant_id, '
       'payload = excluded.payload, '
       'version = excluded.version, '
       'created_at = excluded.created_at, '
@@ -797,9 +837,10 @@ class DriftDataStorageAdapter
         final tableName = tableNames[entry.key]!;
         for (final record in entry.value) {
           await _database.customStatement(
-            'INSERT INTO "$tableName" (id, payload, version, created_at, updated_at) '
-            'VALUES (?, ?, ?, ?, ?) '
+            'INSERT INTO "$tableName" (id, tenant_id, payload, version, created_at, updated_at) '
+            'VALUES (?, ?, ?, ?, ?, ?) '
             'ON CONFLICT(id) DO UPDATE SET '
+            'tenant_id = excluded.tenant_id, '
             'payload = excluded.payload, '
             'version = excluded.version, '
             'created_at = excluded.created_at, '
