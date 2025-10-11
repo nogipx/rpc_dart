@@ -7,6 +7,9 @@ export 'src/data_repository.dart'
         BaseDataRepository,
         InMemoryDataRepository,
         InMemoryStorageAdapter;
+export 'src/data_repository.dart' show AdvancedDataStorageAdapter;
+export 'src/change_journal.dart'
+    show DataChangeJournal, InMemoryDataChangeJournal;
 export 'src/data_responder.dart' show DataServiceResponder;
 export 'src/data_service_facade.dart'
     show
@@ -18,5 +21,10 @@ export 'src/data_service_facade.dart'
 export 'src/daemon_process_manager.dart'
     show DaemonProcessManager, DaemonLaunchException, PidFileException;
 export 'src/drift_storage.dart'
-    show DriftDataRepository, DriftDataStorageAdapter, DriftDataDatabase;
+    show
+        DriftDataRepository,
+        DriftDataStorageAdapter,
+        DriftDataDatabase,
+        SqlCipherKey,
+        SqlCipherException;
 export 'src/models.dart';
