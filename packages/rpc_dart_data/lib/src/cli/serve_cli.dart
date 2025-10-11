@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:licensify/licensify.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
@@ -30,10 +31,10 @@ class ServeCli {
     ServeCliStartupMessageBuilder? startupMessageBuilder,
   })  : _stdout = outSink ?? stdout,
         _stderr = errSink ?? stderr,
-        _helpHeader = helpHeader ??
-            'HTTP/2 сервис данных на основе rpc_dart_data',
-        _usageLine = usageLine ??
-            'Использование: dart run rpc_dart_data serve [опции]',
+        _helpHeader =
+            helpHeader ?? 'HTTP/2 сервис данных на основе rpc_dart_data',
+        _usageLine =
+            usageLine ?? 'Использование: dart run rpc_dart_data serve [опции]',
         _loggerName = loggerName ?? 'DataService',
         _configureAdditionalParser =
             configureArguments ?? _configureDataServiceArguments,
@@ -228,12 +229,12 @@ class ServeCli {
         unawaited(logger.debug('Создание endpoint ${endpoint.debugLabel}'));
         unawaited(
           application.registerEndpoint(endpoint).catchError(
-            (error, stackTrace) => logger.error(
-              'Не удалось настроить endpoint: $error',
-              error: error,
-              stackTrace: stackTrace,
-            ),
-          ),
+                (error, stackTrace) => logger.error(
+                  'Не удалось настроить endpoint: $error',
+                  error: error,
+                  stackTrace: stackTrace,
+                ),
+              ),
         );
       },
       onConnectionOpened: (socket) {
@@ -549,8 +550,8 @@ class ServeCliRuntime {
   final List<String> authTokens;
 }
 
-typedef ServeCliApplicationBuilder =
-    FutureOr<ServeCliApplication> Function(ServeCliRuntime runtime);
+typedef ServeCliApplicationBuilder = FutureOr<ServeCliApplication> Function(
+    ServeCliRuntime runtime);
 
 typedef ServeCliStartupMessageBuilder = String Function(
   ServeCliRuntime runtime,
@@ -558,7 +559,7 @@ typedef ServeCliStartupMessageBuilder = String Function(
 
 class ServeCliApplication {
   ServeCliApplication({
-    required FutureOr<void> Function(RpcServerEndpoint endpoint)
+    required FutureOr<void> Function(RpcResponderEndpoint endpoint)
         registerEndpoint,
     FutureOr<List<RpcResponderContract>> Function()? createRelayResponders,
     FutureOr<void> Function()? onShutdown,
@@ -566,12 +567,12 @@ class ServeCliApplication {
         _createRelayResponders = createRelayResponders,
         _onShutdown = onShutdown;
 
-  final FutureOr<void> Function(RpcServerEndpoint endpoint) _registerEndpoint;
-  final FutureOr<List<RpcResponderContract>> Function()?
-      _createRelayResponders;
+  final FutureOr<void> Function(RpcResponderEndpoint endpoint)
+      _registerEndpoint;
+  final FutureOr<List<RpcResponderContract>> Function()? _createRelayResponders;
   final FutureOr<void> Function()? _onShutdown;
 
-  Future<void> registerEndpoint(RpcServerEndpoint endpoint) async {
+  Future<void> registerEndpoint(RpcResponderEndpoint endpoint) async {
     await _registerEndpoint(endpoint);
   }
 
@@ -908,11 +909,13 @@ Future<List<String>> _parseAuthTokens(ArgResults args) async {
   for (final rawName in envVariables) {
     final name = rawName.trim();
     if (name.isEmpty) {
-      throw const FormatException('Имя переменной окружения для токена не может быть пустым');
+      throw const FormatException(
+          'Имя переменной окружения для токена не может быть пустым');
     }
     final value = Platform.environment[name];
     if (value == null || value.trim().isEmpty) {
-      throw FormatException('Переменная окружения "$name" не содержит bearer токен');
+      throw FormatException(
+          'Переменная окружения "$name" не содержит bearer токен');
     }
     tokens.add(value.trim());
   }
@@ -1095,8 +1098,8 @@ Future<RelayRuntimeConfig?> _parseRelayConfig(ArgResults args) async {
 
   final transportRaw = (args['relay-transport'] as String?)?.toLowerCase();
   final relayTransport = transportRaw == 'tcp'
-      ? TurnTransport.tcp
-      : TurnTransport.udp;
+      ? TurnRequestedTransport.tcp
+      : TurnRequestedTransport.udp;
 
   final publish = args['relay-publish'] as bool;
   final autoPermission = args['relay-auto-permission'] as bool;
@@ -1115,20 +1118,18 @@ Future<RelayRuntimeConfig?> _parseRelayConfig(ArgResults args) async {
     clientOptions: TurnRelayClientOptions(
       localAddress: localAddress,
       localPort: localPort,
-      relayTransport: relayTransport,
-      publishService: publish,
-      serviceId: args['relay-service-id'] as String,
       requestTimeout: requestTimeout,
-      allocationLifetime: allocationLifetime,
-      allocationMargin: allocationMargin,
+      requestedAllocationLifetime: allocationLifetime,
+      allocationRefreshMargin: allocationMargin,
       permissionLifetime: permissionLifetime,
-      permissionMargin: permissionMargin,
+      permissionRefreshMargin: permissionMargin,
       autoCreatePermission: autoPermission,
+      requestedTransport: relayTransport,
     ),
     serviceId: args['relay-service-id'] as String,
     publish: publish,
     metadata: metadata,
-    transportLabel: relayTransport == TurnTransport.tcp ? 'tcp' : 'udp',
+    transportLabel: transportRaw == 'tcp' ? 'tcp' : 'udp',
     description: description,
   );
 }

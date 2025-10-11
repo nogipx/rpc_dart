@@ -544,7 +544,7 @@ class DriftDataStorageAdapter
     return _columnForField(sort.field) != null;
   }
 
-  Variable<Object?> _variableForValue(Object value) {
+  Variable _variableForValue(Object value) {
     if (value is int) {
       return Variable<int>(value);
     }
@@ -565,8 +565,8 @@ class DriftDataStorageAdapter
     );
   }
 
-  List<Variable<Object?>> _buildVariables(Iterable<Object> values) {
-    return values.map(_variableForValue).toList(growable: false);
+  List<Variable> _buildVariables(Iterable<Object> values) {
+    return values.map(_variableForValue).toList();
   }
 
   @override
@@ -973,11 +973,10 @@ class DriftDataChangeJournal implements DataChangeJournal {
         Variable<String>(collection),
         Variable<String>(id),
         Variable<String>(type.name),
-        Variable<String?>(payload),
+        Variable<String>(payload),
         Variable<int>(version),
         Variable<int>(occurredAt.microsecondsSinceEpoch),
       ],
-      returningId: true,
     );
     return DataChangeEvent(
       type: type,
@@ -1069,7 +1068,7 @@ class DriftDataChangeJournal implements DataChangeJournal {
       }
     }
 
-    final variables = <Variable<Object?>>[
+    final variables = <Variable>[
       Variable<String>(collection),
     ];
     final query = StringBuffer(
