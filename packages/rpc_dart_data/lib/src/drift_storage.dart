@@ -7,6 +7,8 @@ import 'package:drift/native.dart';
 import 'package:licensify/licensify.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
+import 'change_journal.dart';
+import 'data_contract.dart';
 import 'data_repository.dart';
 import 'models.dart';
 
@@ -142,7 +144,8 @@ class DriftDataDatabase extends GeneratedDatabase {
 }
 
 /// Drift-based implementation of [DataStorageAdapter] backed by SQLite.
-class DriftDataStorageAdapter implements DataStorageAdapter {
+class DriftDataStorageAdapter
+    implements DataStorageAdapter, AdvancedDataStorageAdapter {
   DriftDataStorageAdapter._(this._database);
 
   /// Create an adapter backed by the provided Drift [executor].
@@ -277,6 +280,18 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
             ')',
           );
           await _database.customStatement(
+            'CREATE INDEX IF NOT EXISTS "${candidate}_idx_version" '
+            'ON "$candidate" (version)',
+          );
+          await _database.customStatement(
+            'CREATE INDEX IF NOT EXISTS "${candidate}_idx_created_at" '
+            'ON "$candidate" (created_at)',
+          );
+          await _database.customStatement(
+            'CREATE INDEX IF NOT EXISTS "${candidate}_idx_updated_at" '
+            'ON "$candidate" (updated_at)',
+          );
+          await _database.customStatement(
             'INSERT INTO collection_registry (collection, table_name) '
             'VALUES (?, ?)',
             [collection, candidate],
@@ -356,6 +371,165 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
     ];
   }
 
+  String? _columnForField(String field) {
+    switch (field) {
+      case 'id':
+        return 'id';
+      case 'version':
+        return 'version';
+      case 'createdAt':
+        return 'created_at';
+      case 'updatedAt':
+        return 'updated_at';
+      default:
+        return null;
+    }
+  }
+
+  Object? _normalizeValue(String field, Object? value) {
+    if (value == null) {
+      return null;
+    }
+    switch (field) {
+      case 'id':
+        return value.toString();
+      case 'version':
+        if (value is num) {
+          return value.toInt();
+        }
+        return null;
+      case 'createdAt':
+      case 'updatedAt':
+        if (value is DateTime) {
+          return value.toUtc().microsecondsSinceEpoch;
+        }
+        if (value is String) {
+          try {
+            return DateTime.parse(value).toUtc().microsecondsSinceEpoch;
+          } catch (_) {
+            return null;
+          }
+        }
+        if (value is num) {
+          return value.toInt();
+        }
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  bool _applyEquals(
+    RecordFilter? filter,
+    List<String> conditions,
+    List<Object> values,
+  ) {
+    if (filter == null || filter.equals.isEmpty) {
+      return true;
+    }
+    for (final entry in filter.equals.entries) {
+      final column = _columnForField(entry.key);
+      if (column == null) {
+        return false;
+      }
+      final normalized = _normalizeValue(entry.key, entry.value);
+      if (normalized == null) {
+        return false;
+      }
+      conditions.add('"$column" = ?');
+      values.add(normalized);
+    }
+    return true;
+  }
+
+  bool _applyRanges(
+    RecordFilter? filter,
+    List<String> conditions,
+    List<Object> values,
+  ) {
+    if (filter == null || filter.range.isEmpty) {
+      return true;
+    }
+    for (final entry in filter.range.entries) {
+      final column = _columnForField(entry.key);
+      if (column == null) {
+        return false;
+      }
+      final constraint = entry.value;
+      if (constraint.min != null) {
+        final min = _normalizeValue(entry.key, constraint.min);
+        if (min == null) {
+          return false;
+        }
+        final op = constraint.includeMin ? '>=' : '>';
+        conditions.add('"$column" $op ?');
+        values.add(min);
+      }
+      if (constraint.max != null) {
+        final max = _normalizeValue(entry.key, constraint.max);
+        if (max == null) {
+          return false;
+        }
+        final op = constraint.includeMax ? '<=' : '<';
+        conditions.add('"$column" $op ?');
+        values.add(max);
+      }
+    }
+    return true;
+  }
+
+  bool _translateFilter(
+    RecordFilter? filter,
+    List<String> conditions,
+    List<Object> values,
+  ) {
+    if (filter == null) {
+      return true;
+    }
+    if (filter.containsTerms.isNotEmpty) {
+      return false;
+    }
+    if (!_applyEquals(filter, conditions, values)) {
+      return false;
+    }
+    if (!_applyRanges(filter, conditions, values)) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _supportsSort(SortOrder? sort) {
+    if (sort == null) {
+      return true;
+    }
+    return _columnForField(sort.field) != null;
+  }
+
+  Variable<Object?> _variableForValue(Object value) {
+    if (value is int) {
+      return Variable<int>(value);
+    }
+    if (value is double) {
+      return Variable<double>(value);
+    }
+    if (value is num) {
+      return Variable<double>(value.toDouble());
+    }
+    if (value is String) {
+      return Variable<String>(value);
+    }
+    if (value is bool) {
+      return Variable<bool>(value);
+    }
+    throw UnsupportedError(
+      'Unsupported variable type ${value.runtimeType} for Drift adapter.',
+    );
+  }
+
+  List<Variable<Object?>> _buildVariables(Iterable<Object> values) {
+    return values.map(_variableForValue).toList(growable: false);
+  }
+
   @override
   Future<DataRecord?> readRecord(
     String collection,
@@ -390,6 +564,185 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
         )
         .get();
     return rows.map((row) => _mapRow(collection, row)).toList(growable: false);
+  }
+
+  Future<bool> _cursorExists(String tableName, String cursor) async {
+    final exists = await _database.customSelect(
+      'SELECT 1 FROM "$tableName" WHERE id = ? LIMIT 1',
+      variables: [Variable<String>(cursor)],
+    ).getSingleOrNull();
+    return exists != null;
+  }
+
+  @override
+  Future<ListRecordsResponse?> queryCollection(
+    ListRecordsRequest request,
+  ) async {
+    if (!_supportsSort(request.sort)) {
+      return null;
+    }
+
+    final tableName = await _ensureTableForRead(request.collection);
+    if (tableName == null) {
+      return ListRecordsResponse(
+        records: const [],
+        nextCursor: null,
+        totalCount:
+            request.options.includeTotalCount ? 0 : null,
+      );
+    }
+
+    final filterConditions = <String>[];
+    final filterValues = <Object>[];
+    if (!_translateFilter(request.filter, filterConditions, filterValues)) {
+      return null;
+    }
+
+    final sort = request.sort;
+    final sortField = sort?.field ?? 'id';
+    final sortColumn = _columnForField(sortField);
+    if (sortColumn == null) {
+      return null;
+    }
+    final descending = sort?.descending ?? false;
+
+    final whereClauses = List<String>.from(filterConditions);
+    final values = List<Object>.from(filterValues);
+
+    final cursor = request.options.cursor;
+    if (cursor != null) {
+      final exists = await _cursorExists(tableName, cursor);
+      if (!exists) {
+        throw RpcDataError.invalidArgument(
+          'Cursor $cursor is not valid for ${request.collection}',
+        );
+      }
+      final comparator = descending ? '<' : '>';
+      whereClauses.add('"$sortColumn" $comparator ?');
+      if (sortColumn == 'id') {
+        values.add(cursor);
+      } else {
+        final boundary = await _database.customSelect(
+          'SELECT "$sortColumn" AS boundary FROM "$tableName" '
+          'WHERE id = ? LIMIT 1',
+          variables: [Variable<String>(cursor)],
+        ).getSingleOrNull();
+        if (boundary == null) {
+          throw RpcDataError.invalidArgument(
+            'Cursor $cursor is not valid for ${request.collection}',
+          );
+        }
+        values.add(boundary.read<Object>('boundary'));
+      }
+    }
+
+    final querySql = StringBuffer(
+      'SELECT id, payload, version, created_at, updated_at '
+      'FROM "$tableName"',
+    );
+    if (whereClauses.isNotEmpty) {
+      querySql
+        ..write(' WHERE ')
+        ..write(whereClauses.join(' AND '));
+    }
+    querySql
+      ..write(' ORDER BY "')
+      ..write(sortColumn)
+      ..write(descending ? '" DESC' : '" ASC')
+      ..write(', id ')
+      ..write(descending ? 'DESC' : 'ASC')
+      ..write(' LIMIT ?');
+
+    final queryVariables = _buildVariables(values)
+      ..add(Variable<int>(request.options.limit));
+    final rows = await _database
+        .customSelect(querySql.toString(), variables: queryVariables)
+        .get();
+    final records =
+        rows.map((row) => _mapRow(request.collection, row)).toList();
+
+    String? nextCursor;
+    if (records.length == request.options.limit) {
+      nextCursor = records.last.id;
+    }
+
+    int? totalCount;
+    if (request.options.includeTotalCount) {
+      final countSql = StringBuffer(
+        'SELECT COUNT(*) AS count FROM "$tableName"',
+      );
+      if (filterConditions.isNotEmpty) {
+        countSql
+          ..write(' WHERE ')
+          ..write(filterConditions.join(' AND '));
+      }
+      final countVariables = _buildVariables(filterValues);
+      final row = await _database
+          .customSelect(countSql.toString(), variables: countVariables)
+          .getSingle();
+      totalCount = row.read<int>('count');
+    }
+
+    return ListRecordsResponse(
+      records: records,
+      nextCursor: nextCursor,
+      totalCount: totalCount,
+    );
+  }
+
+  @override
+  Future<SearchRecordsResponse?> searchCollection(
+    SearchRecordsRequest request,
+  ) async {
+    return null;
+  }
+
+  @override
+  Future<AggregateMetricsResponse?> aggregateCollection(
+    AggregateMetricsRequest request,
+  ) async {
+    if (request.metrics.isEmpty) {
+      return const AggregateMetricsResponse(metrics: <String, num>{});
+    }
+
+    if (request.metrics.values
+        .any((definition) => definition.toLowerCase() != 'count')) {
+      return null;
+    }
+
+    final tableName = await _ensureTableForRead(request.collection);
+    if (tableName == null) {
+      return AggregateMetricsResponse(
+        metrics: {
+          for (final entry in request.metrics.entries) entry.key: 0,
+        },
+      );
+    }
+
+    final conditions = <String>[];
+    final values = <Object>[];
+    if (!_translateFilter(request.filter, conditions, values)) {
+      return null;
+    }
+
+    final sql = StringBuffer(
+      'SELECT COUNT(*) AS count FROM "$tableName"',
+    );
+    if (conditions.isNotEmpty) {
+      sql
+        ..write(' WHERE ')
+        ..write(conditions.join(' AND '));
+    }
+    final row = await _database
+        .customSelect(sql.toString(), variables: _buildVariables(values))
+        .getSingle();
+    final count = row.read<int>('count');
+
+    return AggregateMetricsResponse(
+      metrics: {
+        for (final entry in request.metrics.entries) entry.key: count,
+      },
+    );
   }
 
   @override
@@ -533,13 +886,196 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
   }
 }
 
+class DriftDataChangeJournal implements DataChangeJournal {
+  DriftDataChangeJournal(this._database);
+
+  final DriftDataDatabase _database;
+  bool _tableReady = false;
+
+  Future<void> _ensureTable() async {
+    if (_tableReady) {
+      return;
+    }
+    await _database.customStatement(
+      'CREATE TABLE IF NOT EXISTS change_journal ('
+      'sequence INTEGER PRIMARY KEY AUTOINCREMENT, '
+      'collection TEXT NOT NULL, '
+      'record_id TEXT NOT NULL, '
+      'change_type TEXT NOT NULL, '
+      'payload TEXT NULL, '
+      'version INTEGER NOT NULL, '
+      'occurred_at INTEGER NOT NULL'
+      ')',
+    );
+    await _database.customStatement(
+      'CREATE INDEX IF NOT EXISTS change_journal_collection_sequence '
+      'ON change_journal(collection, sequence)',
+    );
+    _tableReady = true;
+  }
+
+  Future<DataChangeEvent> _insertEvent({
+    required DataChangeType type,
+    required String collection,
+    required String id,
+    required int version,
+    required DateTime occurredAt,
+    DataRecord? record,
+  }) async {
+    await _ensureTable();
+    final payload = encodeRecordPayload(record);
+    final sequence = await _database.customInsert(
+      'INSERT INTO change_journal '
+      '(collection, record_id, change_type, payload, version, occurred_at) '
+      'VALUES (?, ?, ?, ?, ?, ?)',
+      variables: [
+        Variable<String>(collection),
+        Variable<String>(id),
+        Variable<String>(type.name),
+        Variable<String?>(payload),
+        Variable<int>(version),
+        Variable<int>(occurredAt.microsecondsSinceEpoch),
+      ],
+      returningId: true,
+    );
+    return DataChangeEvent(
+      type: type,
+      collection: collection,
+      id: id,
+      record: record,
+      version: version,
+      cursor: sequence.toString(),
+      occurredAt: occurredAt,
+    );
+  }
+
+  DataChangeEvent _mapRow(QueryRow row) {
+    final typeName = row.read<String>('change_type');
+    final type = DataChangeType.values
+        .firstWhere((value) => value.name == typeName);
+    final payload = row.read<String?>('payload');
+    final occurredAtMicros = row.read<int>('occurred_at');
+    return DataChangeEvent(
+      type: type,
+      collection: row.read<String>('collection'),
+      id: row.read<String>('record_id'),
+      record: decodeRecordPayload(payload),
+      version: row.read<int>('version'),
+      cursor: row.read<int>('sequence').toString(),
+      occurredAt: DateTime.fromMicrosecondsSinceEpoch(
+        occurredAtMicros,
+        isUtc: true,
+      ),
+    );
+  }
+
+  @override
+  Future<DataChangeEvent> recordChange({
+    required DataChangeType type,
+    required String collection,
+    required String id,
+    required int version,
+    required DateTime occurredAt,
+    DataRecord? record,
+  }) {
+    return _insertEvent(
+      type: type,
+      collection: collection,
+      id: id,
+      version: version,
+      occurredAt: occurredAt,
+      record: record,
+    );
+  }
+
+  @override
+  Future<DataChangeEvent> recordDeletion({
+    required String collection,
+    required String id,
+    required int version,
+    required DateTime occurredAt,
+  }) {
+    return _insertEvent(
+      type: DataChangeType.deleted,
+      collection: collection,
+      id: id,
+      version: version,
+      occurredAt: occurredAt,
+    );
+  }
+
+  @override
+  Future<List<DataChangeEvent>> replayCollection(
+    String collection, {
+    String? afterCursor,
+  }) async {
+    await _ensureTable();
+    int? afterSequence;
+    if (afterCursor != null) {
+      afterSequence = parseCursor(afterCursor);
+      final exists = await _database.customSelect(
+        'SELECT 1 FROM change_journal '
+        'WHERE collection = ? AND sequence = ? LIMIT 1',
+        variables: [
+          Variable<String>(collection),
+          Variable<int>(afterSequence),
+        ],
+      ).getSingleOrNull();
+      if (exists == null) {
+        throw RpcDataError.invalidArgument(
+          'Cursor $afterCursor is not known for $collection',
+        );
+      }
+    }
+
+    final variables = <Variable<Object?>>[
+      Variable<String>(collection),
+    ];
+    final query = StringBuffer(
+      'SELECT sequence, collection, record_id, change_type, payload, '
+      'version, occurred_at FROM change_journal WHERE collection = ?',
+    );
+    if (afterSequence != null) {
+      query.write(' AND sequence > ?');
+      variables.add(Variable<int>(afterSequence));
+    }
+    query.write(' ORDER BY sequence ASC');
+
+    final rows = await _database
+        .customSelect(query.toString(), variables: variables)
+        .get();
+    return rows.map(_mapRow).toList(growable: false);
+  }
+
+  @override
+  Future<void> purgeCollection(String collection) async {
+    await _ensureTable();
+    await _database.customStatement(
+      'DELETE FROM change_journal WHERE collection = ?',
+      [collection],
+    );
+  }
+
+  @override
+  Future<void> dispose() async {
+    // No resources to release – the parent repository closes the database.
+  }
+}
+
 /// Convenience repository that uses [DriftDataStorageAdapter].
 class DriftDataRepository extends BaseDataRepository {
   DriftDataRepository({
     required DriftDataStorageAdapter storage,
     DateTime Function()? clock,
     String Function(String collection)? idGenerator,
-  }) : super(storage, clock: clock, idGenerator: idGenerator);
+    DataChangeJournal? changeJournal,
+  }) : super(
+          storage,
+          clock: clock,
+          idGenerator: idGenerator,
+          changeJournal:
+              changeJournal ?? DriftDataChangeJournal(storage.database),
+        );
 
   @override
   DriftDataStorageAdapter get storage =>

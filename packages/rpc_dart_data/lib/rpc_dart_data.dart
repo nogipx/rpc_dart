@@ -7,6 +7,9 @@ export 'src/data_repository.dart'
         BaseDataRepository,
         InMemoryDataRepository,
         InMemoryStorageAdapter;
+export 'src/data_repository.dart' show AdvancedDataStorageAdapter;
+export 'src/change_journal.dart'
+    show DataChangeJournal, InMemoryDataChangeJournal;
 export 'src/data_responder.dart' show DataServiceResponder;
 export 'src/data_service_facade.dart'
     show

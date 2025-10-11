@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'change_journal.dart';
 import 'data_contract.dart';
 import 'models.dart';
 
@@ -81,6 +82,20 @@ abstract interface class DataStorageAdapter {
   Future<void> dispose();
 }
 
+/// Optional extensions that storage adapters can implement to offload heavy
+/// operations (filtering, pagination, aggregations) to the backend.
+abstract interface class AdvancedDataStorageAdapter {
+  Future<ListRecordsResponse?> queryCollection(ListRecordsRequest request);
+
+  Future<SearchRecordsResponse?> searchCollection(
+    SearchRecordsRequest request,
+  );
+
+  Future<AggregateMetricsResponse?> aggregateCollection(
+    AggregateMetricsRequest request,
+  );
+}
+
 /// Базовая реализация `DataRepository`, инкапсулирующая общую бизнес-логику
 /// и работу с журналом событий. Хранилище делегируется `DataStorageAdapter`,
 /// поэтому поверх класса легко собрать адаптеры под SQLite/Postgres/Firestore.
@@ -89,8 +104,10 @@ abstract class BaseDataRepository implements DataRepository {
     this.storage, {
     DateTime Function()? clock,
     String Function(String collection)? idGenerator,
+    DataChangeJournal? changeJournal,
   })  : _clock = clock ?? (() => DateTime.now().toUtc()),
         _idGenerator = idGenerator,
+        _journal = changeJournal ?? InMemoryDataChangeJournal(),
         _changeController = StreamController<DataChangeEvent>.broadcast();
 
   static const String _databaseFormatVersion = '1.0.0';
@@ -98,14 +115,9 @@ abstract class BaseDataRepository implements DataRepository {
   final DataStorageAdapter storage;
   final DateTime Function() _clock;
   final String Function(String collection)? _idGenerator;
+  final DataChangeJournal _journal;
   final StreamController<DataChangeEvent> _changeController;
-  final Map<String, List<DataChangeEvent>> _eventJournal = {};
   final Random _random = Random();
-  int _cursorSequence = 0;
-
-  List<DataChangeEvent> _history(String collection) {
-    return _eventJournal.putIfAbsent(collection, () => <DataChangeEvent>[]);
-  }
 
   String _generateId(String collection) {
     if (_idGenerator != null) {
@@ -116,45 +128,35 @@ abstract class BaseDataRepository implements DataRepository {
     return '$collection-$timestamp-$suffix';
   }
 
-  DataChangeEvent _recordEvent(
+  Future<DataChangeEvent> _recordEvent(
     DataChangeType type,
     DataRecord record,
-  ) {
-    final cursor = (++_cursorSequence).toString();
+  ) async {
     final occurredAt = _clock();
-    final event = DataChangeEvent(
+    final event = await _journal.recordChange(
       type: type,
       collection: record.collection,
       id: record.id,
-      record: record,
       version: record.version,
-      cursor: cursor,
       occurredAt: occurredAt,
+      record: record,
     );
-    final history = _history(record.collection);
-    history.add(event);
     _changeController.add(event);
     return event;
   }
 
-  DataChangeEvent _recordDeletion(
+  Future<DataChangeEvent> _recordDeletion(
     String collection,
     String id,
     int nextVersion,
-  ) {
-    final cursor = (++_cursorSequence).toString();
+  ) async {
     final occurredAt = _clock();
-    final event = DataChangeEvent(
-      type: DataChangeType.deleted,
+    final event = await _journal.recordDeletion(
       collection: collection,
       id: id,
-      record: null,
       version: nextVersion,
-      cursor: cursor,
       occurredAt: occurredAt,
     );
-    final history = _history(collection);
-    history.add(event);
     _changeController.add(event);
     return event;
   }
@@ -343,7 +345,7 @@ abstract class BaseDataRepository implements DataRepository {
       updatedAt: now,
     );
     await storage.writeRecord(record);
-    _recordEvent(DataChangeType.created, record);
+    await _recordEvent(DataChangeType.created, record);
     return record;
   }
 
@@ -354,6 +356,14 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<ListRecordsResponse> list(ListRecordsRequest request) async {
+    if (storage is AdvancedDataStorageAdapter) {
+      final response =
+          await (storage as AdvancedDataStorageAdapter).queryCollection(request);
+      if (response != null) {
+        return response;
+      }
+    }
+
     final collection = await storage.readCollection(request.collection);
     final filtered = _filterAndSort(collection, request.filter, request.sort);
 
@@ -399,7 +409,7 @@ abstract class BaseDataRepository implements DataRepository {
       updatedAt: _clock(),
     );
     await storage.writeRecord(updated);
-    _recordEvent(DataChangeType.updated, updated);
+    await _recordEvent(DataChangeType.updated, updated);
     return updated;
   }
 
@@ -428,7 +438,7 @@ abstract class BaseDataRepository implements DataRepository {
       updatedAt: _clock(),
     );
     await storage.writeRecord(updated);
-    _recordEvent(DataChangeType.patched, updated);
+    await _recordEvent(DataChangeType.patched, updated);
     return updated;
   }
 
@@ -451,7 +461,7 @@ abstract class BaseDataRepository implements DataRepository {
 
     final removed = await storage.deleteRecord(request.collection, request.id);
     if (removed) {
-      _recordDeletion(
+      await _recordDeletion(
         request.collection,
         request.id,
         existing.version + 1,
@@ -468,11 +478,10 @@ abstract class BaseDataRepository implements DataRepository {
       return false;
     }
 
-    final history = _history(request.collection);
-    history.clear();
+    await _journal.purgeCollection(request.collection);
 
     for (final record in existingRecords) {
-      _recordDeletion(
+      await _recordDeletion(
         request.collection,
         record.id,
         record.version + 1,
@@ -485,12 +494,15 @@ abstract class BaseDataRepository implements DataRepository {
   @override
   Future<List<DataRecord>> bulkUpsert(BulkUpsertRequest request) async {
     final results = <DataRecord>[];
+    final writes = <DataRecord>[];
+    final events = <MapEntry<DataChangeType, DataRecord>>[];
+
     for (final incoming in request.records) {
       final existing =
           await storage.readRecord(incoming.collection, incoming.id);
       if (existing == null) {
-        await storage.writeRecord(incoming);
-        _recordEvent(DataChangeType.created, incoming);
+        writes.add(incoming);
+        events.add(MapEntry(DataChangeType.created, incoming));
         results.add(incoming);
         continue;
       }
@@ -509,10 +521,18 @@ abstract class BaseDataRepository implements DataRepository {
         createdAt: existing.createdAt,
         updatedAt: incoming.updatedAt,
       );
-      await storage.writeRecord(updated);
-      _recordEvent(DataChangeType.updated, updated);
+      writes.add(updated);
+      events.add(MapEntry(DataChangeType.updated, updated));
       results.add(updated);
     }
+
+    if (writes.isNotEmpty) {
+      await storage.writeRecords(writes);
+      for (final entry in events) {
+        await _recordEvent(entry.key, entry.value);
+      }
+    }
+
     return results;
   }
 
@@ -532,7 +552,7 @@ abstract class BaseDataRepository implements DataRepository {
     );
 
     for (final entry in existing.entries) {
-      _recordDeletion(
+      await _recordDeletion(
         request.collection,
         entry.key,
         entry.value.version + 1,
@@ -611,7 +631,11 @@ abstract class BaseDataRepository implements DataRepository {
           final previous = existingRecords[collection];
           if (previous != null) {
             for (final record in previous.values) {
-              _recordDeletion(collection, record.id, record.version + 1);
+              await _recordDeletion(
+                collection,
+                record.id,
+                record.version + 1,
+              );
             }
           }
           await storage.deleteCollection(collection);
@@ -628,7 +652,11 @@ abstract class BaseDataRepository implements DataRepository {
         final previous = existingRecords[collection];
         if (previous != null && previous.isNotEmpty) {
           for (final record in previous.values) {
-            _recordDeletion(collection, record.id, record.version + 1);
+            await _recordDeletion(
+              collection,
+              record.id,
+              record.version + 1,
+            );
           }
           await storage.deleteCollection(collection);
         }
@@ -637,7 +665,7 @@ abstract class BaseDataRepository implements DataRepository {
       if (records.isNotEmpty) {
         await storage.writeRecords(records);
         for (final record in records) {
-          _recordEvent(DataChangeType.snapshot, record);
+          await _recordEvent(DataChangeType.snapshot, record);
         }
         importedRecords += records.length;
       }
@@ -654,6 +682,14 @@ abstract class BaseDataRepository implements DataRepository {
   Future<SearchRecordsResponse> search(
     SearchRecordsRequest request,
   ) async {
+    if (storage is AdvancedDataStorageAdapter) {
+      final response =
+          await (storage as AdvancedDataStorageAdapter).searchCollection(request);
+      if (response != null) {
+        return response;
+      }
+    }
+
     final collection = await storage.readCollection(request.collection);
     final filtered = _filterAndSort(collection, request.filter, null);
     final query = request.query.toLowerCase();
@@ -684,6 +720,14 @@ abstract class BaseDataRepository implements DataRepository {
   Future<AggregateMetricsResponse> aggregate(
     AggregateMetricsRequest request,
   ) async {
+    if (storage is AdvancedDataStorageAdapter) {
+      final response = await (storage as AdvancedDataStorageAdapter)
+          .aggregateCollection(request);
+      if (response != null) {
+        return response;
+      }
+    }
+
     final collection = await storage.readCollection(request.collection);
     final filtered = _filterAndSort(collection, request.filter, null);
     final metrics = <String, num>{};
@@ -739,30 +783,32 @@ abstract class BaseDataRepository implements DataRepository {
   Stream<DataChangeEvent> watch(
     WatchChangesRequest request,
   ) {
-    final history = _history(request.collection);
-    final startIndex = () {
-      if (request.cursor == null) {
-        return 0;
-      }
-      final index =
-          history.indexWhere((event) => event.cursor == request.cursor);
-      if (index == -1) {
-        throw RpcDataError.invalidArgument(
-          'Cursor ${request.cursor} is not known for ${request.collection}',
+    return Stream<DataChangeEvent>.multi((listener) async {
+      try {
+        final backlog = await _journal.replayCollection(
+          request.collection,
+          afterCursor: request.cursor,
         );
-      }
-      return index + 1;
-    }();
-
-    return Stream<DataChangeEvent>.multi((listener) {
-      for (final event in history.skip(startIndex)) {
-        listener.add(event);
+        for (final event in backlog) {
+          listener.add(event);
+        }
+      } on RpcDataError catch (error, stackTrace) {
+        listener.addError(error, stackTrace);
+        listener.close();
+        return;
+      } catch (error, stackTrace) {
+        listener.addError(error, stackTrace);
+        listener.close();
+        return;
       }
 
       final subscription = _changeController.stream
           .where((event) => event.collection == request.collection)
-          .listen(listener.add,
-              onError: listener.addError, onDone: listener.close);
+          .listen(
+        listener.add,
+        onError: listener.addError,
+        onDone: listener.close,
+      );
 
       listener.onCancel = () async {
         await subscription.cancel();
@@ -881,6 +927,7 @@ abstract class BaseDataRepository implements DataRepository {
   @override
   Future<void> dispose() async {
     await _changeController.close();
+    await _journal.dispose();
     await storage.dispose();
   }
 }
