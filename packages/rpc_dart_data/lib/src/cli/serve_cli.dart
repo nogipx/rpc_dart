@@ -16,211 +16,46 @@ import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 /// Вынесен в отдельный модуль, чтобы переиспользовать реализацию
 /// одновременно для старого входа `dart run rpc_dart_data:serve` и для
 /// нового command-runner интерфейса (`dart run rpc_dart_data`).
+/// Через параметры конструктора можно изменить набор аргументов, логику
+/// поднятия приложения и текстовые сообщения, чтобы использовать раннер для
+/// других RPC-сервисов без дублирования инфраструктуры.
 class ServeCli {
-  ServeCli({IOSink? outSink, IOSink? errSink})
-      : _stdout = outSink ?? stdout,
-        _stderr = errSink ?? stderr;
+  ServeCli({
+    IOSink? outSink,
+    IOSink? errSink,
+    String? helpHeader,
+    String? usageLine,
+    String? loggerName,
+    void Function(ArgParser parser)? configureArguments,
+    ServeCliApplicationBuilder? applicationBuilder,
+    ServeCliStartupMessageBuilder? startupMessageBuilder,
+  })  : _stdout = outSink ?? stdout,
+        _stderr = errSink ?? stderr,
+        _helpHeader = helpHeader ??
+            'HTTP/2 сервис данных на основе rpc_dart_data',
+        _usageLine = usageLine ??
+            'Использование: dart run rpc_dart_data:serve [опции]',
+        _loggerName = loggerName ?? 'DataService',
+        _configureAdditionalParser =
+            configureArguments ?? _configureDataServiceArguments,
+        _applicationBuilder =
+            applicationBuilder ?? _buildDataServiceApplication,
+        _startupMessageBuilder =
+            startupMessageBuilder ?? _defaultStartupMessage;
 
   final IOSink _stdout;
   final IOSink _stderr;
+  final String _helpHeader;
+  final String _usageLine;
+  final String _loggerName;
+  final void Function(ArgParser parser) _configureAdditionalParser;
+  final ServeCliApplicationBuilder _applicationBuilder;
+  final ServeCliStartupMessageBuilder _startupMessageBuilder;
 
   /// Накапливает в переданном [parser] все опции, используемые командой.
   void configureParser(ArgParser parser) {
-    parser
-      ..addOption(
-        'host',
-        abbr: 'H',
-        defaultsTo: InternetAddress.anyIPv4.address,
-        help: 'Адрес интерфейса, на котором будет слушать сервис.',
-      )
-      ..addOption(
-        'port',
-        abbr: 'p',
-        defaultsTo: '8080',
-        help: 'TCP-порт HTTP/2 сервера.',
-      )
-      ..addOption(
-        'database',
-        abbr: 'd',
-        defaultsTo: 'data_service.sqlite',
-        help: 'Путь до SQLite файла для Drift-хранилища.',
-      )
-      ..addOption(
-        'pid-file',
-        defaultsTo: 'data_service.pid',
-        help: 'Путь до PID файла для режима демона.',
-      )
-      ..addFlag(
-        'daemon',
-        abbr: 'D',
-        help:
-            'Запустить сервис в фоне: создаёт дочерний процесс и отсоединяет его.',
-        negatable: false,
-      )
-      ..addFlag(
-        'daemon-child',
-        hide: true,
-        negatable: false,
-        help: 'Внутренний флаг для дочернего процесса демона.',
-      )
-      ..addFlag(
-        'verbose',
-        abbr: 'v',
-        help: 'Включить подробное логирование.',
-        negatable: false,
-      )
-      ..addFlag(
-        'secure-wrap',
-        help:
-            'Включить Licensify secure wrap поверх транспорта HTTP/2 (требуются PASERK ключи).',
-        negatable: false,
-      )
-      ..addOption(
-        'secure-wrap-private-key',
-        help:
-            'PASERK k4.secret приватного ключа Licensify. Ключ не читается из файлов и передаётся напрямую.',
-      )
-      ..addOption(
-        'secure-wrap-peer-key',
-        help: 'PASERK k4.public публичного ключа удалённого пира/клиента.',
-      )
-      ..addOption(
-        'secure-wrap-transport-id',
-        help: 'Необязательный идентификатор транспорта, публикуемый в relay.',
-        defaultsTo: '',
-      )
-      ..addOption(
-        'secure-wrap-handshake-timeout',
-        help: 'Таймаут handshake secure wrap (например, 15s, 5000ms).',
-        defaultsTo: '15s',
-      )
-      ..addOption(
-        'secure-wrap-handshake-ttl',
-        help: 'Время жизни handshake токена (например, 5m).',
-        defaultsTo: '5m',
-      )
-      ..addOption(
-        'secure-wrap-frame-format',
-        allowed: SecureFrameFormat.values.map((format) => format.name),
-        allowedHelp: {
-          for (final format in SecureFrameFormat.values)
-            format.name: format == SecureFrameFormat.verbose
-                ? 'Совместимый вербозный формат (по умолчанию).'
-                : 'Компактный формат с минимизацией полей.',
-        },
-        defaultsTo: SecureFrameFormat.verbose.name,
-        help: 'Формат кадров secure wrap.',
-      )
-      ..addOption(
-        'secure-wrap-padding-block-size',
-        help: 'Размер блока паддинга (байт). 0 или пусто отключает паддинг.',
-      )
-      ..addOption(
-        'secure-wrap-max-padding-blocks',
-        defaultsTo: '3',
-        help: 'Максимальное количество блоков паддинга.',
-      )
-      ..addFlag(
-        'secure-wrap-remove-transport-id',
-        help:
-            'Удалять поле transportId из кадров (актуально для compact формата).',
-        negatable: false,
-      )
-      ..addFlag(
-        'secure-wrap-remove-protocol',
-        help: 'Удалять поле protocol из кадров (актуально для compact формата).',
-        negatable: false,
-      )
-      ..addOption(
-        'secure-wrap-pending-handshake-limit',
-        defaultsTo: '16',
-        help: 'Лимит буфера сообщений до завершения secure handshake.',
-      )
-      ..addFlag(
-        'relay',
-        help: 'Подключить сервис к TURN relay и (по умолчанию) опубликовать его.',
-        negatable: false,
-      )
-      ..addOption(
-        'relay-host',
-        help:
-            'Адрес TURN relay (может быть IP или DNS). Обязателен при включенном relay.',
-      )
-      ..addOption(
-        'relay-port',
-        defaultsTo: '3478',
-        help: 'TCP-порт TURN relay.',
-      )
-      ..addOption(
-        'relay-service-id',
-        defaultsTo: 'rpc-data-service',
-        help: 'Идентификатор сервиса при публикации в relay.',
-      )
-      ..addOption(
-        'relay-description',
-        help: 'Человеко-читаемое описание сервиса для каталога relay.',
-      )
-      ..addMultiOption(
-        'relay-metadata',
-        help:
-            'Дополнительные метаданные публикации в формате ключ=значение. Значение сериализуется в JSON и передается в описании.',
-        valueHelp: 'key=value',
-      )
-      ..addOption(
-        'relay-local-address',
-        help: 'Локальный адрес TCP-клиента при подключении к relay.',
-      )
-      ..addOption(
-        'relay-local-port',
-        defaultsTo: '0',
-        help: 'Локальный TCP-порт клиента (0 = выбрать автоматически).',
-      )
-      ..addOption(
-        'relay-request-timeout',
-        defaultsTo: '5s',
-        help: 'Таймаут TURN запросов Allocate/Refresh/Permission.',
-      )
-      ..addOption(
-        'relay-allocation-lifetime',
-        help: 'Желаемое время жизни allocation (например, 5m).',
-      )
-      ..addOption(
-        'relay-allocation-margin',
-        defaultsTo: '30s',
-        help: 'Запас по времени перед обновлением allocation.',
-      )
-      ..addOption(
-        'relay-permission-lifetime',
-        defaultsTo: '5m',
-        help: 'Ожидаемое время жизни TURN permission.',
-      )
-      ..addOption(
-        'relay-permission-margin',
-        defaultsTo: '30s',
-        help: 'Запас по времени перед обновлением permission.',
-      )
-      ..addFlag(
-        'relay-auto-permission',
-        defaultsTo: true,
-        help: 'Автоматически создавать TURN permissions при отправке данных.',
-      )
-      ..addOption(
-        'relay-transport',
-        defaultsTo: 'udp',
-        allowed: const ['udp', 'tcp'],
-        help: 'Протокол для relay (udp или tcp).',
-      )
-      ..addFlag(
-        'relay-publish',
-        defaultsTo: true,
-        help: 'Публиковать сервис в каталоге relay (можно отключить).',
-      )
-      ..addFlag(
-        'help',
-        abbr: 'h',
-        help: 'Показать справку по команде.',
-        negatable: false,
-      );
+    _configureCommonArguments(parser);
+    _configureAdditionalParser(parser);
   }
 
   /// Запуск обработчика.
@@ -232,9 +67,9 @@ class ServeCli {
     final helpRequested = args['help'] as bool;
     if (helpRequested) {
       _stdout
-        ..writeln('HTTP/2 сервис данных на основе rpc_dart_data')
+        ..writeln(_helpHeader)
         ..writeln()
-        ..writeln('Использование: dart run rpc_dart_data:serve [опции]')
+        ..writeln(_usageLine)
         ..writeln(usage);
       return 0;
     }
@@ -247,7 +82,6 @@ class ServeCli {
     }
 
     final host = args['host'] as String;
-    final databasePath = args['database'] as String;
     final pidFilePath = args['pid-file'] as String;
     final daemonize = args['daemon'] as bool;
     final isDaemonChild = args['daemon-child'] as bool;
@@ -279,45 +113,60 @@ class ServeCli {
 
     final minLevel = verbose ? RpcLoggerLevel.debug : RpcLoggerLevel.info;
     RpcLogger.setDefaultMinLogLevel(minLevel);
-    final logger = RpcLogger('DataService');
+    final logger = RpcLogger(_loggerName);
 
     final processManager = DaemonProcessManager(
       logger: logger,
       pidFilePath: pidFilePath,
     );
 
+    final runtime = ServeCliRuntime(
+      args: args,
+      usage: usage,
+      host: host,
+      port: port,
+      pidFilePath: pidFilePath,
+      daemonize: daemonize,
+      isDaemonChild: isDaemonChild,
+      verbose: verbose,
+      logger: logger,
+      processManager: processManager,
+      secureWrapConfig: secureWrapConfig,
+      relayConfig: relayConfig,
+      stdoutSink: _stdout,
+      stderrSink: _stderr,
+    );
+
+    late final ServeCliApplication application;
     try {
-      final process = await processManager.maybeLaunchDaemon(
-        daemonizeRequested: daemonize,
-        isDaemonChild: isDaemonChild,
-        cliArguments: args.arguments,
+      application = await _applicationBuilder(runtime);
+    } catch (error, stackTrace) {
+      await logger.error(
+        'Не удалось подготовить приложение сервиса: $error',
+        error: error,
+        stackTrace: stackTrace,
       );
-      if (process != null) {
-        _stdout.writeln(
-          'Daemon процесса данных запущен (PID ${process.pid}). PID-файл: $pidFilePath',
-        );
-        return 0;
-      }
-    } on DaemonLaunchException catch (error) {
-      _stderr.writeln(error.message);
-      final cause = error.cause;
-      if (cause != null) {
-        _stderr.writeln(cause);
-      }
-      final stackTrace = error.stackTrace;
-      if (stackTrace != null) {
-        _stderr.writeln(stackTrace);
-      }
       return 1;
     }
 
-    await logger.info(
-      'Запуск сервиса данных на $host:$port (база: ${File(databasePath).path})',
-    );
+    final daemonResult = await _maybeLaunchDaemon(runtime);
+    final daemonExitCode = daemonResult.exitCode;
+    if (daemonExitCode != null) {
+      await _disposeApplication(application, logger);
+      return daemonExitCode;
+    }
 
-    final repository = DriftDataRepository(
-      storage: DriftDataStorageAdapter.file(File(databasePath)),
-    );
+    final process = daemonResult.process;
+    if (process != null) {
+      _stdout.writeln(
+        'Daemon процесса данных запущен (PID ${process.pid}). PID-файл: $pidFilePath',
+      );
+      await _disposeApplication(application, logger);
+      return 0;
+    }
+
+    final startupMessage = _startupMessageBuilder(runtime);
+    await logger.info(startupMessage);
 
     if (secureWrapConfig != null) {
       final details = <String>[
@@ -341,10 +190,13 @@ class ServeCli {
       logger: logger,
       onEndpointCreated: (endpoint) {
         unawaited(logger.debug('Создание endpoint ${endpoint.debugLabel}'));
-        endpoint.registerServiceContract(
-          DataServiceResponder(
-            repository: repository,
-            disposeRepositoryOnClose: false,
+        unawaited(
+          application.registerEndpoint(endpoint).catchError(
+            (error, stackTrace) => logger.error(
+              'Не удалось настроить endpoint: $error',
+              error: error,
+              stackTrace: stackTrace,
+            ),
           ),
         );
       },
@@ -427,15 +279,7 @@ class ServeCli {
         );
       }
 
-      try {
-        await repository.dispose();
-      } catch (error, stackTrace) {
-        await logger.error(
-          'Ошибка при закрытии репозитория: $error',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
+      await _disposeApplication(application, logger);
 
       await processManager.releasePidFile();
 
@@ -453,7 +297,7 @@ class ServeCli {
         error: cause,
         stackTrace: error.stackTrace,
       );
-      await repository.dispose();
+      await _disposeApplication(application, logger);
       await processManager.disposeSignalHandlers();
       return 74; // EX_IOERR
     }
@@ -466,7 +310,7 @@ class ServeCli {
         error: error,
         stackTrace: stackTrace,
       );
-      await repository.dispose();
+      await _disposeApplication(application, logger);
       await processManager.releasePidFile();
       await processManager.disposeSignalHandlers();
       return 1;
@@ -496,15 +340,11 @@ class ServeCli {
       int? activeRelayPeerPort;
 
       try {
+        final relayResponders = await application.createRelayResponders();
         relayPeer = await RpcTurnRelayPeer.connectToRelay(
           serverAddress: relayConfig.serverAddress,
           serverPort: relayConfig.serverPort,
-          responderContracts: [
-            DataServiceResponder(
-              repository: repository,
-              disposeRepositoryOnClose: false,
-            ),
-          ],
+          responderContracts: relayResponders,
           options: relayConfig.clientOptions,
         );
 
@@ -583,9 +423,131 @@ class ServeCli {
 
     await processManager.disposeSignalHandlers();
 
-    await logger.info('Сервис данных остановлен.');
+    await logger.info('Сервис остановлен.');
 
     return 0;
+  }
+
+  Future<ServeDaemonLaunchResult> _maybeLaunchDaemon(
+    ServeCliRuntime runtime,
+  ) async {
+    try {
+      final process = await runtime.processManager.maybeLaunchDaemon(
+        daemonizeRequested: runtime.daemonize,
+        isDaemonChild: runtime.isDaemonChild,
+        cliArguments: runtime.args.arguments,
+      );
+      return ServeDaemonLaunchResult(process: process);
+    } on DaemonLaunchException catch (error) {
+      runtime.stderrSink.writeln(error.message);
+      final cause = error.cause;
+      if (cause != null) {
+        runtime.stderrSink.writeln(cause);
+      }
+      final stackTrace = error.stackTrace;
+      if (stackTrace != null) {
+        runtime.stderrSink.writeln(stackTrace);
+      }
+      return const ServeDaemonLaunchResult(exitCode: 1);
+    }
+  }
+
+  Future<void> _disposeApplication(
+    ServeCliApplication application,
+    RpcLogger logger,
+  ) async {
+    try {
+      await application.dispose();
+    } catch (error, stackTrace) {
+      await logger.error(
+        'Ошибка при закрытии приложения сервиса: $error',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+}
+
+class ServeDaemonLaunchResult {
+  const ServeDaemonLaunchResult({this.process, this.exitCode});
+
+  final Process? process;
+  final int? exitCode;
+}
+
+class ServeCliRuntime {
+  ServeCliRuntime({
+    required this.args,
+    required this.usage,
+    required this.host,
+    required this.port,
+    required this.pidFilePath,
+    required this.daemonize,
+    required this.isDaemonChild,
+    required this.verbose,
+    required this.logger,
+    required this.processManager,
+    required this.secureWrapConfig,
+    required this.relayConfig,
+    required this.stdoutSink,
+    required this.stderrSink,
+  });
+
+  final ArgResults args;
+  final String usage;
+  final String host;
+  final int port;
+  final String pidFilePath;
+  final bool daemonize;
+  final bool isDaemonChild;
+  final bool verbose;
+  final RpcLogger logger;
+  final DaemonProcessManager processManager;
+  final SecureWrapRuntimeConfig? secureWrapConfig;
+  final RelayRuntimeConfig? relayConfig;
+  final IOSink stdoutSink;
+  final IOSink stderrSink;
+}
+
+typedef ServeCliApplicationBuilder =
+    FutureOr<ServeCliApplication> Function(ServeCliRuntime runtime);
+
+typedef ServeCliStartupMessageBuilder = String Function(
+  ServeCliRuntime runtime,
+);
+
+class ServeCliApplication {
+  ServeCliApplication({
+    required FutureOr<void> Function(RpcServerEndpoint endpoint)
+        registerEndpoint,
+    FutureOr<List<RpcResponderContract>> Function()? createRelayResponders,
+    FutureOr<void> Function()? onShutdown,
+  })  : _registerEndpoint = registerEndpoint,
+        _createRelayResponders = createRelayResponders,
+        _onShutdown = onShutdown;
+
+  final FutureOr<void> Function(RpcServerEndpoint endpoint) _registerEndpoint;
+  final FutureOr<List<RpcResponderContract>> Function()?
+      _createRelayResponders;
+  final FutureOr<void> Function()? _onShutdown;
+
+  Future<void> registerEndpoint(RpcServerEndpoint endpoint) async {
+    await _registerEndpoint(endpoint);
+  }
+
+  Future<List<RpcResponderContract>> createRelayResponders() async {
+    if (_createRelayResponders == null) {
+      return const [];
+    }
+    final responders = await _createRelayResponders!.call();
+    return responders;
+  }
+
+  Future<void> dispose() async {
+    if (_onShutdown == null) {
+      return;
+    }
+    await _onShutdown!();
   }
 }
 
@@ -619,6 +581,239 @@ class RelayRuntimeConfig {
   final Map<String, String> metadata;
   final String transportLabel;
   final String? description;
+}
+
+void _configureCommonArguments(ArgParser parser) {
+  parser
+    ..addOption(
+      'host',
+      abbr: 'H',
+      defaultsTo: InternetAddress.anyIPv4.address,
+      help: 'Адрес интерфейса, на котором будет слушать сервис.',
+    )
+    ..addOption(
+      'port',
+      abbr: 'p',
+      defaultsTo: '8080',
+      help: 'TCP-порт HTTP/2 сервера.',
+    )
+    ..addOption(
+      'pid-file',
+      defaultsTo: 'data_service.pid',
+      help: 'Путь до PID файла для режима демона.',
+    )
+    ..addFlag(
+      'daemon',
+      abbr: 'D',
+      help:
+          'Запустить сервис в фоне: создаёт дочерний процесс и отсоединяет его.',
+      negatable: false,
+    )
+    ..addFlag(
+      'daemon-child',
+      hide: true,
+      negatable: false,
+      help: 'Внутренний флаг для дочернего процесса демона.',
+    )
+    ..addFlag(
+      'verbose',
+      abbr: 'v',
+      help: 'Включить подробное логирование.',
+      negatable: false,
+    )
+    ..addFlag(
+      'secure-wrap',
+      help:
+          'Включить Licensify secure wrap поверх транспорта HTTP/2 (требуются PASERK ключи).',
+      negatable: false,
+    )
+    ..addOption(
+      'secure-wrap-private-key',
+      help:
+          'PASERK k4.secret приватного ключа Licensify. Ключ не читается из файлов и передаётся напрямую.',
+    )
+    ..addOption(
+      'secure-wrap-peer-key',
+      help: 'PASERK k4.public публичного ключа удалённого пира/клиента.',
+    )
+    ..addOption(
+      'secure-wrap-transport-id',
+      help: 'Необязательный идентификатор транспорта, публикуемый в relay.',
+      defaultsTo: '',
+    )
+    ..addOption(
+      'secure-wrap-handshake-timeout',
+      help: 'Таймаут handshake secure wrap (например, 15s, 5000ms).',
+      defaultsTo: '15s',
+    )
+    ..addOption(
+      'secure-wrap-handshake-ttl',
+      help: 'Время жизни handshake токена (например, 5m).',
+      defaultsTo: '5m',
+    )
+    ..addOption(
+      'secure-wrap-frame-format',
+      allowed: SecureFrameFormat.values.map((format) => format.name),
+      allowedHelp: {
+        for (final format in SecureFrameFormat.values)
+          format.name: format == SecureFrameFormat.verbose
+              ? 'Совместимый вербозный формат (по умолчанию).'
+              : 'Компактный формат с минимизацией полей.',
+      },
+      defaultsTo: SecureFrameFormat.verbose.name,
+      help: 'Формат кадров secure wrap.',
+    )
+    ..addOption(
+      'secure-wrap-padding-block-size',
+      help: 'Размер блока паддинга (байт). 0 или пусто отключает паддинг.',
+    )
+    ..addOption(
+      'secure-wrap-max-padding-blocks',
+      defaultsTo: '3',
+      help: 'Максимальное количество блоков паддинга.',
+    )
+    ..addFlag(
+      'secure-wrap-remove-transport-id',
+      help:
+          'Удалять поле transportId из кадров (актуально для compact формата).',
+      negatable: false,
+    )
+    ..addFlag(
+      'secure-wrap-remove-protocol',
+      help: 'Удалять поле protocol из кадров (актуально для compact формата).',
+      negatable: false,
+    )
+    ..addOption(
+      'secure-wrap-pending-handshake-limit',
+      defaultsTo: '16',
+      help: 'Лимит буфера сообщений до завершения secure handshake.',
+    )
+    ..addFlag(
+      'relay',
+      help: 'Подключить сервис к TURN relay и (по умолчанию) опубликовать его.',
+      negatable: false,
+    )
+    ..addOption(
+      'relay-host',
+      help:
+          'Адрес TURN relay (может быть IP или DNS). Обязателен при включенном relay.',
+    )
+    ..addOption(
+      'relay-port',
+      defaultsTo: '3478',
+      help: 'TCP-порт TURN relay.',
+    )
+    ..addOption(
+      'relay-service-id',
+      defaultsTo: 'rpc-data-service',
+      help: 'Идентификатор сервиса при публикации в relay.',
+    )
+    ..addOption(
+      'relay-description',
+      help: 'Человеко-читаемое описание сервиса для каталога relay.',
+    )
+    ..addMultiOption(
+      'relay-metadata',
+      help:
+          'Дополнительные метаданные публикации в формате ключ=значение. Значение сериализуется в JSON и передается в описании.',
+      valueHelp: 'key=value',
+    )
+    ..addOption(
+      'relay-local-address',
+      help: 'Локальный адрес TCP-клиента при подключении к relay.',
+    )
+    ..addOption(
+      'relay-local-port',
+      defaultsTo: '0',
+      help: 'Локальный TCP-порт клиента (0 = выбрать автоматически).',
+    )
+    ..addOption(
+      'relay-request-timeout',
+      defaultsTo: '5s',
+      help: 'Таймаут TURN запросов Allocate/Refresh/Permission.',
+    )
+    ..addOption(
+      'relay-allocation-lifetime',
+      help: 'Желаемое время жизни allocation (например, 5m).',
+    )
+    ..addOption(
+      'relay-allocation-margin',
+      defaultsTo: '30s',
+      help: 'Запас по времени перед обновлением allocation.',
+    )
+    ..addOption(
+      'relay-permission-lifetime',
+      defaultsTo: '5m',
+      help: 'Ожидаемое время жизни TURN permission.',
+    )
+    ..addOption(
+      'relay-permission-margin',
+      defaultsTo: '30s',
+      help: 'Запас по времени перед обновлением permission.',
+    )
+    ..addFlag(
+      'relay-auto-permission',
+      defaultsTo: true,
+      help: 'Автоматически создавать TURN permissions при отправке данных.',
+    )
+    ..addOption(
+      'relay-transport',
+      defaultsTo: 'udp',
+      allowed: const ['udp', 'tcp'],
+      help: 'Протокол для relay (udp или tcp).',
+    )
+    ..addFlag(
+      'relay-publish',
+      defaultsTo: true,
+      help: 'Публиковать сервис в каталоге relay (можно отключить).',
+    )
+    ..addFlag(
+      'help',
+      abbr: 'h',
+      help: 'Показать справку по команде.',
+      negatable: false,
+    );
+}
+
+void _configureDataServiceArguments(ArgParser parser) {
+  parser.addOption(
+    'database',
+    abbr: 'd',
+    defaultsTo: 'data_service.sqlite',
+    help: 'Путь до SQLite файла для Drift-хранилища.',
+  );
+}
+
+ServeCliApplication _buildDataServiceApplication(ServeCliRuntime runtime) {
+  final databasePath = runtime.args['database'] as String;
+  final repository = DriftDataRepository(
+    storage: DriftDataStorageAdapter.file(File(databasePath)),
+  );
+
+  return ServeCliApplication(
+    registerEndpoint: (endpoint) {
+      endpoint.registerServiceContract(
+        DataServiceResponder(
+          repository: repository,
+          disposeRepositoryOnClose: false,
+        ),
+      );
+    },
+    createRelayResponders: () async => [
+      DataServiceResponder(
+        repository: repository,
+        disposeRepositoryOnClose: false,
+      ),
+    ],
+    onShutdown: () => repository.dispose(),
+  );
+}
+
+String _defaultStartupMessage(ServeCliRuntime runtime) {
+  final databasePath = runtime.args['database'] as String?;
+  final databaseInfo =
+      databasePath != null ? ' (база: ${File(databasePath).path})' : '';
+  return 'Запуск сервиса данных на ${runtime.host}:${runtime.port}$databaseInfo';
 }
 
 SecureWrapRuntimeConfig? _parseSecureWrapConfig(ArgResults args) {
@@ -778,29 +973,21 @@ Future<RelayRuntimeConfig?> _parseRelayConfig(ArgResults args) async {
     defaultValue: const Duration(seconds: 30),
   );
 
-  final autoPermission = args['relay-auto-permission'] as bool;
-
-  final transportRaw =
-      (args['relay-transport'] as String?)?.toLowerCase().trim() ?? 'udp';
-  final requestedTransport = transportRaw == 'tcp'
-      ? TurnRequestedTransport.tcp
-      : TurnRequestedTransport.udp;
-
-  final serviceIdRaw = (args['relay-service-id'] as String?)?.trim();
-  if (serviceIdRaw == null || serviceIdRaw.isEmpty) {
-    throw const FormatException(
-      'Параметр --relay-service-id обязателен при публикации через relay.',
-    );
-  }
-
-  final descriptionRaw = (args['relay-description'] as String?)?.trim();
-  final metadataPairs = (args['relay-metadata'] as List<dynamic>?)
-          ?.cast<String>()
-          .toList(growable: false) ??
-      const <String>[];
-  final metadata = _parseKeyValueMetadata(metadataPairs, '--relay-metadata');
+  final transportRaw = (args['relay-transport'] as String?)?.toLowerCase();
+  final relayTransport = transportRaw == 'tcp'
+      ? TurnTransport.tcp
+      : TurnTransport.udp;
 
   final publish = args['relay-publish'] as bool;
+  final autoPermission = args['relay-auto-permission'] as bool;
+
+  final metadataEntries = args['relay-metadata'] as List<String>;
+  final metadata = _parseKeyValueMetadata(
+    metadataEntries,
+    '--relay-metadata',
+  );
+
+  final description = (args['relay-description'] as String?)?.trim();
 
   return RelayRuntimeConfig(
     serverAddress: serverAddress,
@@ -808,20 +995,39 @@ Future<RelayRuntimeConfig?> _parseRelayConfig(ArgResults args) async {
     clientOptions: TurnRelayClientOptions(
       localAddress: localAddress,
       localPort: localPort,
+      relayTransport: relayTransport,
+      publishService: publish,
+      serviceId: args['relay-service-id'] as String,
       requestTimeout: requestTimeout,
-      requestedAllocationLifetime: allocationLifetime,
-      allocationRefreshMargin: allocationMargin,
+      allocationLifetime: allocationLifetime,
+      allocationMargin: allocationMargin,
       permissionLifetime: permissionLifetime,
-      permissionRefreshMargin: permissionMargin,
+      permissionMargin: permissionMargin,
       autoCreatePermission: autoPermission,
-      requestedTransport: requestedTransport,
     ),
-    serviceId: serviceIdRaw,
+    serviceId: args['relay-service-id'] as String,
     publish: publish,
-    description: descriptionRaw,
     metadata: metadata,
-    transportLabel: transportRaw,
+    transportLabel: relayTransport == TurnTransport.tcp ? 'tcp' : 'udp',
+    description: description,
   );
+}
+
+Duration _parseDurationOption(
+  String? raw,
+  String optionName, {
+  required Duration defaultValue,
+}) {
+  if (raw == null || raw.trim().isEmpty) {
+    return defaultValue;
+  }
+  final parsed = _tryParseDuration(raw.trim());
+  if (parsed == null) {
+    throw FormatException(
+      'Опция $optionName должна быть числом с суффиксом времени (например, 5s, 2m, 1000ms).',
+    );
+  }
+  return parsed;
 }
 
 Duration? _parseOptionalDuration(String? raw, String optionName) {
@@ -831,8 +1037,7 @@ Duration? _parseOptionalDuration(String? raw, String optionName) {
   final parsed = _tryParseDuration(raw.trim());
   if (parsed == null) {
     throw FormatException(
-      'Не удалось разобрать значение "$raw" для опции $optionName. '
-      'Используйте формат <число>[ms|s|m|h].',
+      'Опция $optionName должна быть числом с суффиксом времени (например, 5s, 2m, 1000ms).',
     );
   }
   if (parsed.isNegative) {
@@ -959,42 +1164,16 @@ Map<String, String> _parseKeyValueMetadata(
   return metadata;
 }
 
-Duration _parseDurationOption(
-  String? raw,
-  String optionName, {
-  required Duration defaultValue,
-}) {
-  if (raw == null || raw.trim().isEmpty) {
-    return defaultValue;
-  }
-  final parsed = _tryParseDuration(raw.trim());
-  if (parsed == null) {
-    throw FormatException(
-      'Не удалось разобрать значение "$raw" для опции $optionName. '
-      'Используйте формат <число>[ms|s|m|h].',
-    );
-  }
-  if (parsed.isNegative) {
-    throw FormatException('Опция $optionName должна быть положительной.');
-  }
-  return parsed;
-}
-
-String? _composeRelayDescription(
+String _composeRelayDescription(
   String? description,
   Map<String, String> metadata,
 ) {
   if (metadata.isEmpty) {
-    if (description == null || description.isEmpty) {
-      return null;
-    }
-    return description;
+    return description ?? '';
   }
-  final payload = <String, dynamic>{
-    'metadata': metadata,
-  };
-  if (description != null && description.isNotEmpty) {
-    payload['description'] = description;
+  final encodedMetadata = jsonEncode(metadata);
+  if (description == null || description.isEmpty) {
+    return encodedMetadata;
   }
-  return jsonEncode(payload);
+  return '$description\n$encodedMetadata';
 }
