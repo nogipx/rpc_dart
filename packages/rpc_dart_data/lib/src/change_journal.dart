@@ -36,6 +36,17 @@ abstract interface class DataChangeJournal {
     String? afterCursor,
   });
 
+  /// Applies retention rules to the backlog of [collection].
+  ///
+  /// When [retainAfter] is provided, events older than the timestamp are
+  /// removed. When [maxEvents] is provided, only the most recent entries are
+  /// kept. Both rules can be combined.
+  Future<void> prune({
+    required String collection,
+    int? maxEvents,
+    DateTime? retainAfter,
+  });
+
   /// Removes the backlog for the given [collection].
   Future<void> purgeCollection(String collection);
 
@@ -123,6 +134,24 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
   @override
   Future<void> purgeCollection(String collection) async {
     _events.remove(collection);
+  }
+
+  @override
+  Future<void> prune({
+    required String collection,
+    int? maxEvents,
+    DateTime? retainAfter,
+  }) async {
+    final history = _history(collection);
+    if (history.isEmpty) {
+      return;
+    }
+    if (retainAfter != null) {
+      history.removeWhere((event) => event.occurredAt.isBefore(retainAfter));
+    }
+    if (maxEvents != null && maxEvents > 0 && history.length > maxEvents) {
+      history.removeRange(0, history.length - maxEvents);
+    }
   }
 
   @override

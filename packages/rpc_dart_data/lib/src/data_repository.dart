@@ -105,18 +105,32 @@ abstract class BaseDataRepository implements DataRepository {
     DateTime Function()? clock,
     String Function(String collection)? idGenerator,
     DataChangeJournal? changeJournal,
+    int? journalMaxEvents = defaultJournalMaxEvents,
+    Duration? journalRetention = defaultJournalRetention,
   })  : _clock = clock ?? (() => DateTime.now().toUtc()),
         _idGenerator = idGenerator,
         _journal = changeJournal ?? InMemoryDataChangeJournal(),
-        _changeController = StreamController<DataChangeEvent>.broadcast();
+        _changeController = StreamController<DataChangeEvent>.broadcast(),
+        _journalMaxEvents =
+            journalMaxEvents != null && journalMaxEvents < 1
+                ? null
+                : journalMaxEvents,
+        _journalRetention =
+            journalRetention != null && journalRetention.inMicroseconds <= 0
+                ? null
+                : journalRetention;
 
   static const String _databaseFormatVersion = '1.0.0';
+  static const int defaultJournalMaxEvents = 5000;
+  static const Duration defaultJournalRetention = Duration(days: 7);
 
   final DataStorageAdapter storage;
   final DateTime Function() _clock;
   final String Function(String collection)? _idGenerator;
   final DataChangeJournal _journal;
   final StreamController<DataChangeEvent> _changeController;
+  final int? _journalMaxEvents;
+  final Duration? _journalRetention;
   final Random _random = Random();
 
   String _generateId(String collection) {
@@ -142,6 +156,10 @@ abstract class BaseDataRepository implements DataRepository {
       record: record,
     );
     _changeController.add(event);
+    await _enforceJournalRetention(
+      record.collection,
+      occurredAt: occurredAt,
+    );
     return event;
   }
 
@@ -158,7 +176,32 @@ abstract class BaseDataRepository implements DataRepository {
       occurredAt: occurredAt,
     );
     _changeController.add(event);
+    await _enforceJournalRetention(
+      collection,
+      occurredAt: occurredAt,
+    );
     return event;
+  }
+
+  Future<void> _enforceJournalRetention(
+    String collection, {
+    required DateTime occurredAt,
+  }) async {
+    final maxEvents = _journalMaxEvents != null && _journalMaxEvents! > 0
+        ? _journalMaxEvents
+        : null;
+    final retention = _journalRetention;
+    final retainAfter = retention != null && retention.inMicroseconds > 0
+        ? occurredAt.subtract(retention)
+        : null;
+    if (maxEvents == null && retainAfter == null) {
+      return;
+    }
+    await _journal.prune(
+      collection: collection,
+      maxEvents: maxEvents,
+      retainAfter: retainAfter,
+    );
   }
 
   dynamic _getFieldValue(DataRecord record, String field) {
@@ -1015,9 +1058,13 @@ final class InMemoryDataRepository extends BaseDataRepository {
     InMemoryStorageAdapter? storage,
     DateTime Function()? clock,
     String Function(String collection)? idGenerator,
+    int? journalMaxEvents = BaseDataRepository.defaultJournalMaxEvents,
+    Duration? journalRetention = BaseDataRepository.defaultJournalRetention,
   }) : super(
           storage ?? InMemoryStorageAdapter(),
           clock: clock,
           idGenerator: idGenerator,
+          journalMaxEvents: journalMaxEvents,
+          journalRetention: journalRetention,
         );
 }

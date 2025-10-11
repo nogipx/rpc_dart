@@ -185,6 +185,7 @@ class DriftDataStorageAdapter
   final Set<String> _knownTables = <String>{};
   final Set<String> _tenantPreparedTables = <String>{};
   final Set<String> _ftsPreparedTables = <String>{};
+  static const int _ftsBatchSize = 200;
 
   String _ftsTableName(String baseTable) => 'fts_$baseTable';
 
@@ -743,20 +744,6 @@ class DriftDataStorageAdapter
     return buffer.toString().toLowerCase();
   }
 
-  Future<void> _insertIntoFtsTable(
-    String ftsTable,
-    DataRecord record,
-  ) async {
-    await _database.customStatement(
-      'DELETE FROM "$ftsTable" WHERE id = ?',
-      [record.id],
-    );
-    await _database.customStatement(
-      'INSERT INTO "$ftsTable" (id, content) VALUES (?, ?)',
-      [record.id, _prepareSearchText(record)],
-    );
-  }
-
   Future<void> _seedFtsTable(
     String collection,
     String baseTable,
@@ -777,7 +764,10 @@ class DriftDataStorageAdapter
     ).get();
     for (final row in rows) {
       final record = _mapRow(collection, row);
-      await _insertIntoFtsTable(ftsTable, record);
+      await _database.customStatement(
+        'INSERT INTO "$ftsTable" (id, content) VALUES (?, ?)',
+        [record.id, _prepareSearchText(record)],
+      );
     }
   }
 
@@ -805,14 +795,62 @@ class DriftDataStorageAdapter
     String baseTable,
     DataRecord record,
   ) async {
-    final ftsTable = await _ensureFtsTable(collection, baseTable);
-    await _insertIntoFtsTable(ftsTable, record);
+    await _upsertFtsBatch(collection, baseTable, [record]);
   }
 
   Future<void> _removeFromFtsIndex(
     String baseTable,
     String id,
   ) async {
+    await _removeFromFtsIndexMany(baseTable, [id]);
+  }
+
+  Iterable<List<T>> _chunk<T>(List<T> items, int size) sync* {
+    if (items.isEmpty) {
+      return;
+    }
+    final chunkSize = size <= 0 ? items.length : size;
+    for (var offset = 0; offset < items.length; offset += chunkSize) {
+      final end = offset + chunkSize;
+      yield items.sublist(offset, end > items.length ? items.length : end);
+    }
+  }
+
+  Future<void> _upsertFtsBatch(
+    String collection,
+    String baseTable,
+    Iterable<DataRecord> records,
+  ) async {
+    final pending = records.toList(growable: false);
+    if (pending.isEmpty) {
+      return;
+    }
+    final ftsTable = await _ensureFtsTable(collection, baseTable);
+
+    for (final chunk in _chunk(pending, _ftsBatchSize)) {
+      final ids = <String>[for (final record in chunk) record.id];
+      final placeholders = List.filled(ids.length, '?').join(', ');
+      await _database.customStatement(
+        'DELETE FROM "$ftsTable" WHERE id IN ($placeholders)',
+        ids,
+      );
+      for (final record in chunk) {
+        await _database.customStatement(
+          'INSERT INTO "$ftsTable" (id, content) VALUES (?, ?)',
+          [record.id, _prepareSearchText(record)],
+        );
+      }
+    }
+  }
+
+  Future<void> _removeFromFtsIndexMany(
+    String baseTable,
+    Iterable<String> ids,
+  ) async {
+    final idList = ids.toList(growable: false);
+    if (idList.isEmpty) {
+      return;
+    }
     if (!_ftsPreparedTables.contains(baseTable)) {
       final ftsTable = _ftsTableName(baseTable);
       final exists = await _ftsTableExists(ftsTable);
@@ -822,10 +860,13 @@ class DriftDataStorageAdapter
       _ftsPreparedTables.add(baseTable);
     }
     final ftsTable = _ftsTableName(baseTable);
-    await _database.customStatement(
-      'DELETE FROM "$ftsTable" WHERE id = ?',
-      [id],
-    );
+    for (final chunk in _chunk(idList, _ftsBatchSize)) {
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+      await _database.customStatement(
+        'DELETE FROM "$ftsTable" WHERE id IN ($placeholders)',
+        chunk,
+      );
+    }
   }
 
   @override
@@ -1243,8 +1284,11 @@ class DriftDataStorageAdapter
 
     await _database.transaction(() async {
       for (final entry in recordsByCollection.entries) {
-        final tableName = tableNames[entry.key]!;
-        for (final record in entry.value) {
+        final collection = entry.key;
+        final tableName = tableNames[collection]!;
+        final recordsForTable = entry.value;
+
+        for (final record in recordsForTable) {
           await _database.customStatement(
             'INSERT INTO "$tableName" (id, tenantId, payload, version, created_at, updated_at) '
             'VALUES (?, ?, ?, ?, ?, ?) '
@@ -1256,8 +1300,8 @@ class DriftDataStorageAdapter
             'updated_at = excluded.updated_at',
             _recordToArguments(record),
           );
-          await _updateFtsIndex(entry.key, tableName, record);
         }
+        await _upsertFtsBatch(collection, tableName, recordsForTable);
       }
     });
   }
@@ -1299,21 +1343,21 @@ class DriftDataStorageAdapter
       return 0;
     }
     final idList = ids.toList();
-    final placeholders = List.filled(idList.length, '?').join(', ');
     var affected = 0;
     await _database.transaction(() async {
-      await _database.customStatement(
-        'DELETE FROM "$tableName" WHERE id IN ($placeholders)',
-        idList,
-      );
+      for (final chunk in _chunk(idList, _ftsBatchSize)) {
+        final placeholders = List.filled(chunk.length, '?').join(', ');
+        await _database.customStatement(
+          'DELETE FROM "$tableName" WHERE id IN ($placeholders)',
+          chunk,
+        );
+      }
       final changeRow =
           await _database.customSelect('SELECT changes() AS count').getSingle();
       affected = changeRow.read<int>('count');
     });
     if (affected > 0) {
-      for (final id in idList) {
-        await _removeFromFtsIndex(tableName, id);
-      }
+      await _removeFromFtsIndexMany(tableName, idList);
     }
     return affected;
   }
@@ -1341,6 +1385,7 @@ class DriftDataStorageAdapter
     });
 
     _knownTables.remove(tableName);
+    _tenantPreparedTables.remove(tableName);
     _ftsPreparedTables.remove(tableName);
     return true;
   }
@@ -1512,6 +1557,53 @@ class DriftDataChangeJournal implements DataChangeJournal {
   }
 
   @override
+  Future<void> prune({
+    required String collection,
+    int? maxEvents,
+    DateTime? retainAfter,
+  }) async {
+    await _ensureTable();
+    if (retainAfter != null) {
+      await _database.customStatement(
+        'DELETE FROM change_journal '
+        'WHERE collection = ? AND occurred_at < ?',
+        [
+          collection,
+          retainAfter.microsecondsSinceEpoch,
+        ],
+      );
+    }
+    if (maxEvents != null && maxEvents > 0) {
+      final countRow = await _database
+          .customSelect(
+            'SELECT COUNT(*) AS count FROM change_journal WHERE collection = ?',
+            variables: [Variable<String>(collection)],
+          )
+          .getSingle();
+      final count = countRow.read<int>('count');
+      if (count > maxEvents) {
+        final thresholdRow = await _database.customSelect(
+          'SELECT sequence FROM change_journal '
+          'WHERE collection = ? ORDER BY sequence DESC '
+          'LIMIT 1 OFFSET ?',
+          variables: [
+            Variable<String>(collection),
+            Variable<int>(maxEvents - 1),
+          ],
+        ).getSingleOrNull();
+        if (thresholdRow != null) {
+          final threshold = thresholdRow.read<int>('sequence');
+          await _database.customStatement(
+            'DELETE FROM change_journal '
+            'WHERE collection = ? AND sequence < ?',
+            [collection, threshold],
+          );
+        }
+      }
+    }
+  }
+
+  @override
   Future<void> purgeCollection(String collection) async {
     await _ensureTable();
     await _database.customStatement(
@@ -1533,12 +1625,16 @@ class DriftDataRepository extends BaseDataRepository {
     DateTime Function()? clock,
     String Function(String collection)? idGenerator,
     DataChangeJournal? changeJournal,
+    int? journalMaxEvents = BaseDataRepository.defaultJournalMaxEvents,
+    Duration? journalRetention = BaseDataRepository.defaultJournalRetention,
   }) : super(
           storage,
           clock: clock,
           idGenerator: idGenerator,
           changeJournal:
               changeJournal ?? DriftDataChangeJournal(storage.database),
+          journalMaxEvents: journalMaxEvents,
+          journalRetention: journalRetention,
         );
 
   @override
