@@ -145,9 +145,26 @@ class DriftDataDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => const [];
 }
 
+class _CollectionIndexMetadata {
+  const _CollectionIndexMetadata({
+    required this.collection,
+    required this.path,
+    required this.indexName,
+    required this.expression,
+  });
+
+  final String collection;
+  final String path;
+  final String indexName;
+  final String expression;
+}
+
 /// Drift-based implementation of [DataStorageAdapter] backed by SQLite.
 class DriftDataStorageAdapter
-    implements DataStorageAdapter, AdvancedDataStorageAdapter {
+    implements
+        DataStorageAdapter,
+        AdvancedDataStorageAdapter,
+        CollectionIndexStorageAdapter {
   DriftDataStorageAdapter._(this._database, this._inMemory);
 
   /// Create an adapter backed by the provided Drift [executor].
@@ -211,6 +228,10 @@ class DriftDataStorageAdapter
   bool _ftsReady = false;
   static const int _ftsBatchSize = 200;
   static const String _ftsTableName = 'c_global_fts';
+  bool _indexRegistryReady = false;
+  final Map<String, List<_CollectionIndexMetadata>>
+      _cachedCollectionIndexes = <String, List<_CollectionIndexMetadata>>{};
+  final Set<String> _knownIndexNames = <String>{};
 
   DriftDataDatabase get database => _database;
 
@@ -225,6 +246,22 @@ class DriftDataStorageAdapter
       ')',
     );
     _registryReady = true;
+  }
+
+  Future<void> _ensureIndexRegistry() async {
+    if (_indexRegistryReady) {
+      return;
+    }
+    await _database.customStatement(
+      'CREATE TABLE IF NOT EXISTS collection_index_registry ('
+      'collection TEXT NOT NULL, '
+      'path TEXT NOT NULL, '
+      'index_name TEXT NOT NULL UNIQUE, '
+      'expression TEXT NOT NULL, '
+      'PRIMARY KEY (collection, path)'
+      ')',
+    );
+    _indexRegistryReady = true;
   }
 
   Future<String?> _lookupTable(String collection) async {
@@ -276,6 +313,217 @@ class DriftDataStorageAdapter
       return 'c_$sanitized';
     }
     return sanitized;
+  }
+
+  static int _stableHash(String input) {
+    const int fnvOffset = 0xcbf29ce484222325;
+    const int fnvPrime = 0x100000001b3;
+    var hash = fnvOffset;
+    for (final unit in input.codeUnits) {
+      hash ^= unit;
+      hash = (hash * fnvPrime) & 0xFFFFFFFFFFFFFFFF;
+    }
+    return hash & 0xFFFFFFFFFFFFFFFF;
+  }
+
+  String _normalizeIndexSegment(String value) {
+    final sanitized = value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_+'), '')
+        .replaceAll(RegExp(r'_+$'), '');
+    if (sanitized.isEmpty) {
+      return 'field';
+    }
+    if (RegExp(r'^[0-9]').hasMatch(sanitized)) {
+      return 'f_$sanitized';
+    }
+    return sanitized;
+  }
+
+  String _autoIndexName(String tableName, String path) {
+    final normalizedTable = tableName.toLowerCase();
+    final normalizedPath = _normalizeIndexSegment(path);
+    final hash = _stableHash('$normalizedTable::$path')
+        .toRadixString(16)
+        .padLeft(16, '0');
+    var base = '${normalizedTable}_idx_$normalizedPath';
+    if (base.length > 48) {
+      base = base.substring(0, 48);
+    }
+    final candidate = '${base}_$hash';
+    if (candidate.length > 60) {
+      return candidate.substring(0, 60);
+    }
+    return candidate;
+  }
+
+  String _resolveIndexName({
+    required String collection,
+    required String tableName,
+    required String path,
+    String? customName,
+  }) {
+    if (customName != null && customName.trim().isNotEmpty) {
+      final trimmed = customName.trim();
+      final valid = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+      if (!valid.hasMatch(trimmed)) {
+        throw RpcDataError.invalidArgument(
+          'Index name "$trimmed" for $collection contains invalid symbols.',
+        );
+      }
+      if (trimmed.length > 60) {
+        throw RpcDataError.invalidArgument(
+          'Index name "$trimmed" for $collection is too long (max 60 chars).',
+        );
+      }
+      return trimmed;
+    }
+    return _autoIndexName(tableName, path);
+  }
+
+  void _cacheCollectionIndexes(
+    String collection,
+    Iterable<_CollectionIndexMetadata> indexes,
+  ) {
+    final snapshot = List<_CollectionIndexMetadata>.unmodifiable(indexes);
+    _cachedCollectionIndexes[collection] = snapshot;
+    for (final metadata in snapshot) {
+      _knownIndexNames.add(metadata.indexName);
+    }
+  }
+
+  void _invalidateCollectionIndexCache(String collection) {
+    _cachedCollectionIndexes.remove(collection);
+  }
+
+  Future<List<_CollectionIndexMetadata>> _loadCollectionIndexes(
+    String collection,
+  ) async {
+    final cached = _cachedCollectionIndexes[collection];
+    if (cached != null) {
+      return cached;
+    }
+    await _ensureIndexRegistry();
+    final rows = await _database
+        .customSelect(
+          'SELECT path, index_name, expression '
+          'FROM collection_index_registry WHERE collection = ? '
+          'ORDER BY path',
+          variables: [Variable<String>(collection)],
+        )
+        .get();
+    final indexes = rows
+        .map(
+          (row) => _CollectionIndexMetadata(
+            collection: collection,
+            path: row.read<String>('path'),
+            indexName: row.read<String>('index_name'),
+            expression: row.read<String>('expression'),
+          ),
+        )
+        .toList(growable: false);
+    _cacheCollectionIndexes(collection, indexes);
+    return _cachedCollectionIndexes[collection] ?? const [];
+  }
+
+  Future<bool> _indexExists(String indexName) async {
+    if (_knownIndexNames.contains(indexName)) {
+      return true;
+    }
+    final row = await _database.customSelect(
+      'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+      variables: [
+        const Variable<String>('index'),
+        Variable<String>(indexName),
+      ],
+    ).getSingleOrNull();
+    final exists = row != null;
+    if (exists) {
+      _knownIndexNames.add(indexName);
+    }
+    return exists;
+  }
+
+  Future<void> _ensureIndexExists(
+    String tableName,
+    _CollectionIndexMetadata metadata,
+  ) async {
+    if (await _indexExists(metadata.indexName)) {
+      return;
+    }
+    try {
+      await _database.customStatement(
+        'CREATE INDEX IF NOT EXISTS "${metadata.indexName}" '
+        'ON "$tableName" (${metadata.expression})',
+      );
+      _knownIndexNames.add(metadata.indexName);
+    } on sqlite.SqliteException catch (error) {
+      throw RpcDataError.internal(
+        'Failed to ensure index ${metadata.indexName} on $tableName',
+        error: error,
+      );
+    }
+  }
+
+  Future<void> _ensureCollectionIndexes(
+    String collection,
+    String tableName,
+  ) async {
+    final indexes = await _loadCollectionIndexes(collection);
+    if (indexes.isEmpty) {
+      return;
+    }
+    for (final metadata in indexes) {
+      await _ensureIndexExists(tableName, metadata);
+    }
+  }
+
+  Future<List<_CollectionIndexMetadata>> _readCollectionIndexes(
+    String collection,
+  ) async {
+    return _loadCollectionIndexes(collection);
+  }
+
+  void _addIndexToCache(_CollectionIndexMetadata metadata) {
+    final existing = _cachedCollectionIndexes[metadata.collection];
+    if (existing == null || existing.isEmpty) {
+      _cacheCollectionIndexes(metadata.collection, [metadata]);
+      return;
+    }
+    final updated = <_CollectionIndexMetadata>[];
+    var replaced = false;
+    for (final current in existing) {
+      if (current.path == metadata.path) {
+        updated.add(metadata);
+        replaced = true;
+      } else {
+        updated.add(current);
+      }
+    }
+    if (!replaced) {
+      updated.add(metadata);
+    }
+    _cacheCollectionIndexes(metadata.collection, updated);
+  }
+
+  void _removeIndexFromCache({
+    required String collection,
+    required String path,
+    required String indexName,
+  }) {
+    final existing = _cachedCollectionIndexes[collection];
+    if (existing == null || existing.isEmpty) {
+      return;
+    }
+    final updated = existing.where((index) => index.path != path).toList();
+    if (updated.isEmpty) {
+      _cachedCollectionIndexes.remove(collection);
+    } else {
+      _cacheCollectionIndexes(collection, updated);
+    }
+    _knownIndexNames.remove(indexName);
   }
 
   Future<String> _createTable(String collection) async {
@@ -347,6 +595,7 @@ class DriftDataStorageAdapter
       return null;
     }
     await _ensureTenantSupport(table);
+    await _ensureCollectionIndexes(collection, table);
     await _ensureFtsSeeded(collection, table);
     return table;
   }
@@ -368,10 +617,12 @@ class DriftDataStorageAdapter
         _knownTables.add(existing);
       }
       await _ensureTenantSupport(existing);
+      await _ensureCollectionIndexes(collection, existing);
       return existing;
     }
     final table = await _createTable(collection);
     await _ensureTenantSupport(table);
+    await _ensureCollectionIndexes(collection, table);
     return table;
   }
 
@@ -506,15 +757,27 @@ class DriftDataStorageAdapter
     return '$tableAlias.payload';
   }
 
+  String _normalizeJsonFieldName(String field) {
+    var normalized = field.trim();
+    if (normalized.startsWith(r'$.')) {
+      normalized = normalized.substring(2);
+    } else if (normalized.startsWith(r'$')) {
+      normalized = normalized.substring(1);
+    }
+    return normalized;
+  }
+
   String _jsonPathLiteral(String field) {
-    final segments = field.split('.').where((segment) => segment.isNotEmpty);
+    final normalized = _normalizeJsonFieldName(field);
+    final segments =
+        normalized.split('.').where((segment) => segment.isNotEmpty);
     final buffer = StringBuffer(r'$');
     for (final segment in segments) {
       final escaped = segment.replaceAll('"', r'\"');
       buffer.write('."$escaped"');
     }
     if (buffer.length == 1) {
-      buffer.write('."$field"');
+      buffer.write('."$normalized"');
     }
     return "'${buffer.toString()}'";
   }
@@ -532,11 +795,13 @@ class DriftDataStorageAdapter
     String field, {
     String? tableAlias,
   }) {
-    final column = _columnForField(field);
+    final normalizedField = _normalizeJsonFieldName(field);
+    final column =
+        _columnForField(field) ?? _columnForField(normalizedField);
     if (column != null) {
       return _qualifiedColumn(column, tableAlias: tableAlias);
     }
-    return _jsonExtractExpression(field, tableAlias: tableAlias);
+    return _jsonExtractExpression(normalizedField, tableAlias: tableAlias);
   }
 
   Object? _normalizeValue(
@@ -547,7 +812,9 @@ class DriftDataStorageAdapter
     if (value == null) {
       return null;
     }
-    final column = _columnForField(field);
+    final normalizedField = _normalizeJsonFieldName(field);
+    final column =
+        _columnForField(field) ?? _columnForField(normalizedField);
     if (column != null) {
       switch (column) {
         case 'id':
@@ -861,6 +1128,194 @@ class DriftDataStorageAdapter
         [collection, ...chunk],
       );
     }
+  }
+
+  @override
+  Future<CollectionIndex> createCollectionIndex(
+    CreateCollectionIndexRequest request,
+  ) async {
+    final collection = request.collection.trim();
+    if (collection.isEmpty) {
+      throw RpcDataError.invalidArgument(
+        'Collection name for index must not be empty.',
+      );
+    }
+
+    final rawPath = request.path.trim();
+    if (rawPath.isEmpty) {
+      throw RpcDataError.invalidArgument(
+        'JSON field path for index must not be empty.',
+      );
+    }
+    final path = _normalizeJsonFieldName(rawPath);
+    if (path.isEmpty) {
+      throw RpcDataError.invalidArgument(
+        'JSON field path for index must not resolve to a valid field.',
+      );
+    }
+
+    final tableName = await _ensureTableForWrite(collection);
+    await _ensureIndexRegistry();
+
+    final existingRow = await _database.customSelect(
+      'SELECT index_name, expression FROM collection_index_registry '
+      'WHERE collection = ? AND path = ? LIMIT 1',
+      variables: [
+        Variable<String>(collection),
+        Variable<String>(path),
+      ],
+    ).getSingleOrNull();
+
+    if (existingRow != null) {
+      final existingName = existingRow.read<String>('index_name');
+      final expectedName = request.indexName?.trim();
+      if (expectedName != null && expectedName.isNotEmpty) {
+        if (expectedName != existingName) {
+          throw RpcDataError.invalidArgument(
+            'Index for $collection.$path already exists as "$existingName".',
+          );
+        }
+      }
+      final metadata = _CollectionIndexMetadata(
+        collection: collection,
+        path: path,
+        indexName: existingName,
+        expression: existingRow.read<String>('expression'),
+      );
+      _addIndexToCache(metadata);
+      await _ensureIndexExists(tableName, metadata);
+      return CollectionIndex(
+        collection: collection,
+        path: path,
+        indexName: existingName,
+      );
+    }
+
+    final providedName = request.indexName?.trim();
+    final indexName = _resolveIndexName(
+      collection: collection,
+      tableName: tableName,
+      path: path,
+      customName:
+          providedName != null && providedName.isNotEmpty ? providedName : null,
+    );
+    final expression = _jsonExtractExpression(path);
+
+    try {
+      await _database.transaction(() async {
+        await _database.customStatement(
+          'INSERT INTO collection_index_registry '
+          '(collection, path, index_name, expression) '
+          'VALUES (?, ?, ?, ?)',
+          [
+            collection,
+            path,
+            indexName,
+            expression,
+          ],
+        );
+        await _database.customStatement(
+          'CREATE INDEX IF NOT EXISTS "$indexName" '
+          'ON "$tableName" ($expression)',
+        );
+      });
+    } on sqlite.SqliteException catch (error) {
+      final message = error.message ?? '';
+      if (message.contains('UNIQUE') || message.contains('unique')) {
+        throw RpcDataError.invalidArgument(
+          'Index name "$indexName" is already in use.',
+          details: {
+            'collection': collection,
+            'path': path,
+          },
+        );
+      }
+      throw RpcDataError.internal(
+        'Failed to create index "$indexName" for $collection',
+        error: error,
+      );
+    }
+
+    final metadata = _CollectionIndexMetadata(
+      collection: collection,
+      path: path,
+      indexName: indexName,
+      expression: expression,
+    );
+    _addIndexToCache(metadata);
+    return CollectionIndex(
+      collection: collection,
+      path: path,
+      indexName: indexName,
+    );
+  }
+
+  @override
+  Future<bool> deleteCollectionIndex(
+    DeleteCollectionIndexRequest request,
+  ) async {
+    final collection = request.collection.trim();
+    if (collection.isEmpty) {
+      throw RpcDataError.invalidArgument(
+        'Collection name for index must not be empty.',
+      );
+    }
+    final rawPath = request.path.trim();
+    if (rawPath.isEmpty) {
+      throw RpcDataError.invalidArgument(
+        'JSON field path for index must not be empty.',
+      );
+    }
+    final path = _normalizeJsonFieldName(rawPath);
+    await _ensureIndexRegistry();
+
+    final row = await _database.customSelect(
+      'SELECT index_name FROM collection_index_registry '
+      'WHERE collection = ? AND path = ? LIMIT 1',
+      variables: [
+        Variable<String>(collection),
+        Variable<String>(path),
+      ],
+    ).getSingleOrNull();
+
+    if (row == null) {
+      return false;
+    }
+
+    final indexName = row.read<String>('index_name');
+    final expectedName = request.indexName?.trim();
+    if (expectedName != null && expectedName.isNotEmpty) {
+      if (expectedName != indexName) {
+        throw RpcDataError.invalidArgument(
+          'Index registered for $collection.$path is "$indexName".',
+        );
+      }
+    }
+
+    try {
+      await _database.transaction(() async {
+        await _database.customStatement(
+          'DELETE FROM collection_index_registry '
+          'WHERE collection = ? AND path = ?',
+          [collection, path],
+        );
+        await _database.customStatement(
+          'DROP INDEX IF EXISTS "$indexName"',
+        );
+      });
+    } on sqlite.SqliteException catch (error) {
+      throw RpcDataError.internal(
+        'Failed to delete index "$indexName" for $collection',
+        error: error,
+      );
+    }
+
+    _removeIndexFromCache(
+      collection: collection,
+      path: path,
+      indexName: indexName,
+    );
+    return true;
   }
 
   @override
@@ -1388,6 +1843,8 @@ class DriftDataStorageAdapter
       return false;
     }
 
+    final existingIndexes = await _readCollectionIndexes(collection);
+
     await _ensureRegistry();
     await _database.transaction(() async {
       await _database.customStatement(
@@ -1403,10 +1860,27 @@ class DriftDataStorageAdapter
           [collection],
         );
       }
+      if (existingIndexes.isNotEmpty) {
+        for (final metadata in existingIndexes) {
+          await _database.customStatement(
+            'DROP INDEX IF EXISTS "${metadata.indexName}"',
+          );
+        }
+        await _database.customStatement(
+          'DELETE FROM collection_index_registry WHERE collection = ?',
+          [collection],
+        );
+      }
     });
 
     _knownTables.remove(tableName);
     _tenantPreparedTables.remove(tableName);
+    if (existingIndexes.isNotEmpty) {
+      for (final metadata in existingIndexes) {
+        _knownIndexNames.remove(metadata.indexName);
+      }
+      _invalidateCollectionIndexCache(collection);
+    }
     return true;
   }
 

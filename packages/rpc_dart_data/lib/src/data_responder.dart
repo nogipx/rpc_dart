@@ -146,6 +146,22 @@ class DataServiceResponder extends RpcResponderContract
       description: 'Агрегирование по полям',
     );
 
+    addUnaryMethod<CreateCollectionIndexRequest, CreateCollectionIndexResponse>(
+      methodName: IDataServiceContract.createCollectionIndex,
+      handler: _handleCreateIndex,
+      requestCodec: createIndexRequestCodec,
+      responseCodec: createIndexResponseCodec,
+      description: 'Создание индексированного выражения для JSON-поля',
+    );
+
+    addUnaryMethod<DeleteCollectionIndexRequest, DeleteCollectionIndexResponse>(
+      methodName: IDataServiceContract.deleteCollectionIndex,
+      handler: _handleDeleteIndex,
+      requestCodec: deleteIndexRequestCodec,
+      responseCodec: deleteIndexResponseCodec,
+      description: 'Удаление индексированного выражения коллекции',
+    );
+
     addServerStreamMethod<WatchChangesRequest, DataChangeEvent>(
       methodName: IDataServiceContract.watchChanges,
       handler: _handleWatch,
@@ -305,6 +321,28 @@ class DataServiceResponder extends RpcResponderContract
     RpcContext? context,
   }) async {
     return _runSafely(context, () => _repository.aggregate(request));
+  }
+
+  Future<CreateCollectionIndexResponse> _handleCreateIndex(
+    CreateCollectionIndexRequest request, {
+    RpcContext? context,
+  }) async {
+    final index = await _runSafely(
+      context,
+      () => _repository.createCollectionIndex(request),
+    );
+    return CreateCollectionIndexResponse(index: index);
+  }
+
+  Future<DeleteCollectionIndexResponse> _handleDeleteIndex(
+    DeleteCollectionIndexRequest request, {
+    RpcContext? context,
+  }) async {
+    final deleted = await _runSafely(
+      context,
+      () => _repository.deleteCollectionIndex(request),
+    );
+    return DeleteCollectionIndexResponse(deleted: deleted);
   }
 
   Stream<DataChangeEvent> _handleWatch(

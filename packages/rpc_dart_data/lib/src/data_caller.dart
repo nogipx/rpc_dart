@@ -199,6 +199,32 @@ class DataServiceCaller extends RpcCallerContract
     );
   }
 
+  Future<CreateCollectionIndexResponse> createCollectionIndex(
+    CreateCollectionIndexRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary(
+      methodName: IDataServiceContract.createCollectionIndex,
+      request: request,
+      requestCodec: createIndexRequestCodec,
+      responseCodec: createIndexResponseCodec,
+      context: context,
+    );
+  }
+
+  Future<DeleteCollectionIndexResponse> deleteCollectionIndex(
+    DeleteCollectionIndexRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary(
+      methodName: IDataServiceContract.deleteCollectionIndex,
+      request: request,
+      requestCodec: deleteIndexRequestCodec,
+      responseCodec: deleteIndexResponseCodec,
+      context: context,
+    );
+  }
+
   Stream<DataChangeEvent> watchChanges(
     WatchChangesRequest request, {
     RpcContext? context,

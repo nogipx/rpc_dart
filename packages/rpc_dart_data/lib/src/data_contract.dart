@@ -50,6 +50,12 @@ abstract interface class IDataServiceContract implements IRpcContract {
   /// Расчет агрегатов.
   static const String aggregateMetrics = 'aggregateMetrics';
 
+  /// Создание выраженного индекса по JSON-полю.
+  static const String createCollectionIndex = 'createCollectionIndex';
+
+  /// Удаление выраженного индекса.
+  static const String deleteCollectionIndex = 'deleteCollectionIndex';
+
   /// Подписка на поток изменений.
   static const String watchChanges = 'watchChanges';
 
@@ -187,6 +193,14 @@ const RpcCodec<AggregateMetricsRequest> aggregateRequestCodec =
     RpcCodec.withDecoder(AggregateMetricsRequest.fromJson);
 const RpcCodec<AggregateMetricsResponse> aggregateResponseCodec =
     RpcCodec.withDecoder(AggregateMetricsResponse.fromJson);
+const RpcCodec<CreateCollectionIndexRequest> createIndexRequestCodec =
+    RpcCodec.withDecoder(CreateCollectionIndexRequest.fromJson);
+const RpcCodec<CreateCollectionIndexResponse> createIndexResponseCodec =
+    RpcCodec.withDecoder(CreateCollectionIndexResponse.fromJson);
+const RpcCodec<DeleteCollectionIndexRequest> deleteIndexRequestCodec =
+    RpcCodec.withDecoder(DeleteCollectionIndexRequest.fromJson);
+const RpcCodec<DeleteCollectionIndexResponse> deleteIndexResponseCodec =
+    RpcCodec.withDecoder(DeleteCollectionIndexResponse.fromJson);
 const RpcCodec<WatchChangesRequest> watchRequestCodec =
     RpcCodec.withDecoder(WatchChangesRequest.fromJson);
 const RpcCodec<DataChangeEvent> changeEventCodec =

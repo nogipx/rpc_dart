@@ -46,6 +46,14 @@ abstract interface class DataRepository {
 
   Stream<DataChangeEvent> watch(WatchChangesRequest request);
 
+  Future<CollectionIndex> createCollectionIndex(
+    CreateCollectionIndexRequest request,
+  );
+
+  Future<bool> deleteCollectionIndex(
+    DeleteCollectionIndexRequest request,
+  );
+
   Stream<SyncChangeResponse> sync(Stream<SyncChangeRequest> requests);
 
   Future<void> dispose();
@@ -93,6 +101,16 @@ abstract interface class AdvancedDataStorageAdapter {
 
   Future<AggregateMetricsResponse?> aggregateCollection(
     AggregateMetricsRequest request,
+  );
+}
+
+abstract interface class CollectionIndexStorageAdapter {
+  Future<CollectionIndex> createCollectionIndex(
+    CreateCollectionIndexRequest request,
+  );
+
+  Future<bool> deleteCollectionIndex(
+    DeleteCollectionIndexRequest request,
   );
 }
 
@@ -823,6 +841,32 @@ abstract class BaseDataRepository implements DataRepository {
     }
 
     return AggregateMetricsResponse(metrics: metrics);
+  }
+
+  @override
+  Future<CollectionIndex> createCollectionIndex(
+    CreateCollectionIndexRequest request,
+  ) async {
+    if (storage is! CollectionIndexStorageAdapter) {
+      throw RpcDataError.invalidArgument(
+        'Storage adapter does not support collection indexes.',
+      );
+    }
+    return (storage as CollectionIndexStorageAdapter)
+        .createCollectionIndex(request);
+  }
+
+  @override
+  Future<bool> deleteCollectionIndex(
+    DeleteCollectionIndexRequest request,
+  ) async {
+    if (storage is! CollectionIndexStorageAdapter) {
+      throw RpcDataError.invalidArgument(
+        'Storage adapter does not support collection indexes.',
+      );
+    }
+    return (storage as CollectionIndexStorageAdapter)
+        .deleteCollectionIndex(request);
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:async/async.dart';
+import 'package:drift/drift.dart' show Variable;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
@@ -14,6 +15,7 @@ void main() {
     setUp(() async {
       repository = DriftDataRepository(
         storage: await openMainStorage(),
+        // storage: DriftDataStorageAdapter.memory(),
       );
       env = await DataServiceFactory.inMemory(repository: repository);
       authContext = RpcContext.withHeaders({
@@ -173,6 +175,42 @@ void main() {
         context: authContext,
       );
       expect(bulkUpserted, hasLength(2));
+
+      final createdIndex = await env.client.createCollectionIndex(
+        collection: 'tasks',
+        path: r'$.priority',
+        context: authContext,
+        indexName: 'priority_index',
+      );
+      expect(createdIndex.collection, 'tasks');
+      expect(createdIndex.path, 'priority');
+      expect(createdIndex.indexName, isNotEmpty);
+
+      final indexRow = await repository.storage.database.customSelect(
+        'SELECT name FROM sqlite_master WHERE type = \'index\' AND name = ?',
+        variables: [Variable<String>(createdIndex.indexName)],
+      ).getSingleOrNull();
+      expect(indexRow, isNotNull, reason: 'Index must exist after creation');
+      //
+      // final indexDeleted = await env.client.deleteCollectionIndex(
+      //   collection: 'tasks',
+      //   path: 'priority',
+      //   context: authContext,
+      // );
+      // expect(indexDeleted, isTrue);
+      //
+      // final indexRowAfterDrop = await repository.storage.database.customSelect(
+      //   'SELECT name FROM sqlite_master WHERE type = \'index\' AND name = ?',
+      //   variables: [Variable<String>(createdIndex.indexName)],
+      // ).getSingleOrNull();
+      // expect(indexRowAfterDrop, isNull, reason: 'Index should be removed');
+      //
+      // final indexDeletedAgain = await env.client.deleteCollectionIndex(
+      //   collection: 'tasks',
+      //   path: 'priority',
+      //   context: authContext,
+      // );
+      // expect(indexDeletedAgain, isFalse);
 
       final taskMetrics = await env.client.aggregate(
         collection: 'tasks',

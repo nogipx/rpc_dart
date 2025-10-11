@@ -169,6 +169,146 @@ class DataRecord implements IRpcSerializable {
 }
 
 @immutable
+class CollectionIndex extends Equatable implements IRpcSerializable {
+  const CollectionIndex({
+    required this.collection,
+    required this.path,
+    required this.indexName,
+  });
+
+  factory CollectionIndex.fromJson(Map<String, dynamic> json) {
+    return CollectionIndex(
+      collection: json['collection'] as String,
+      path: json['path'] as String,
+      indexName: json['indexName'] as String,
+    );
+  }
+
+  final String collection;
+  final String path;
+  final String indexName;
+
+  @override
+  List<Object?> get props => [collection, path, indexName];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'collection': collection,
+        'path': path,
+        'indexName': indexName,
+      };
+}
+
+@immutable
+class CreateCollectionIndexRequest extends Equatable
+    implements IRpcSerializable {
+  const CreateCollectionIndexRequest({
+    required this.collection,
+    required this.path,
+    this.indexName,
+  });
+
+  factory CreateCollectionIndexRequest.fromJson(Map<String, dynamic> json) {
+    return CreateCollectionIndexRequest(
+      collection: json['collection'] as String,
+      path: json['path'] as String,
+      indexName: json['indexName'] as String?,
+    );
+  }
+
+  final String collection;
+  final String path;
+  final String? indexName;
+
+  @override
+  List<Object?> get props => [collection, path, indexName];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'collection': collection,
+        'path': path,
+        if (indexName != null) 'indexName': indexName,
+      };
+}
+
+@immutable
+class CreateCollectionIndexResponse extends Equatable
+    implements IRpcSerializable {
+  const CreateCollectionIndexResponse({required this.index});
+
+  factory CreateCollectionIndexResponse.fromJson(Map<String, dynamic> json) {
+    return CreateCollectionIndexResponse(
+      index:
+          CollectionIndex.fromJson(Map<String, dynamic>.from(json['index'] as Map)),
+    );
+  }
+
+  final CollectionIndex index;
+
+  @override
+  List<Object?> get props => [index];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'index': index.toJson(),
+      };
+}
+
+@immutable
+class DeleteCollectionIndexRequest extends Equatable
+    implements IRpcSerializable {
+  const DeleteCollectionIndexRequest({
+    required this.collection,
+    required this.path,
+    this.indexName,
+  });
+
+  factory DeleteCollectionIndexRequest.fromJson(Map<String, dynamic> json) {
+    return DeleteCollectionIndexRequest(
+      collection: json['collection'] as String,
+      path: json['path'] as String,
+      indexName: json['indexName'] as String?,
+    );
+  }
+
+  final String collection;
+  final String path;
+  final String? indexName;
+
+  @override
+  List<Object?> get props => [collection, path, indexName];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'collection': collection,
+        'path': path,
+        if (indexName != null) 'indexName': indexName,
+      };
+}
+
+@immutable
+class DeleteCollectionIndexResponse extends Equatable
+    implements IRpcSerializable {
+  const DeleteCollectionIndexResponse({required this.deleted});
+
+  factory DeleteCollectionIndexResponse.fromJson(Map<String, dynamic> json) {
+    return DeleteCollectionIndexResponse(
+      deleted: json['deleted'] as bool,
+    );
+  }
+
+  final bool deleted;
+
+  @override
+  List<Object?> get props => [deleted];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'deleted': deleted,
+      };
+}
+
+@immutable
 class RecordFilter extends Equatable implements IRpcSerializable {
   const RecordFilter({
     this.equals = const {},

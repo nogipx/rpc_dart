@@ -110,6 +110,20 @@ abstract interface class DataService {
     RpcContext? context,
   });
 
+  Future<CollectionIndex> createCollectionIndex({
+    required String collection,
+    required String path,
+    String? indexName,
+    RpcContext? context,
+  });
+
+  Future<bool> deleteCollectionIndex({
+    required String collection,
+    required String path,
+    String? indexName,
+    RpcContext? context,
+  });
+
   Stream<DataChangeEvent> watchChanges({
     required String collection,
     String? cursor,
@@ -338,6 +352,42 @@ class DataServiceClient implements DataService {
       ),
       context: context,
     );
+  }
+
+  @override
+  Future<CollectionIndex> createCollectionIndex({
+    required String collection,
+    required String path,
+    String? indexName,
+    RpcContext? context,
+  }) async {
+    final response = await _caller.createCollectionIndex(
+      CreateCollectionIndexRequest(
+        collection: collection,
+        path: path,
+        indexName: indexName,
+      ),
+      context: context,
+    );
+    return response.index;
+  }
+
+  @override
+  Future<bool> deleteCollectionIndex({
+    required String collection,
+    required String path,
+    String? indexName,
+    RpcContext? context,
+  }) async {
+    final response = await _caller.deleteCollectionIndex(
+      DeleteCollectionIndexRequest(
+        collection: collection,
+        path: path,
+        indexName: indexName,
+      ),
+      context: context,
+    );
+    return response.deleted;
   }
 
   @override
