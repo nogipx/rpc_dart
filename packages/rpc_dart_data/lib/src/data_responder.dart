@@ -11,14 +11,20 @@ class DataServiceResponder extends RpcResponderContract
   DataServiceResponder({
     required DataRepository repository,
     bool disposeRepositoryOnClose = true,
+    Iterable<String> allowedBearerTokens = const [],
   })  : _repository = repository,
         _disposeRepositoryOnClose = disposeRepositoryOnClose,
+        _allowedBearerTokens = {
+          for (final token in allowedBearerTokens)
+            if (token.trim().isNotEmpty) token.trim(),
+        },
         super(
           IDataServiceContract.name,
           dataTransferMode: RpcDataTransferMode.codec,
         );
 
   final DataRepository _repository;
+  final Set<String> _allowedBearerTokens;
 
   /// Управляет тем, должен ли [dispose] закрывать репозиторий.
   ///
@@ -331,6 +337,13 @@ class DataServiceResponder extends RpcResponderContract
     final authHeader = context?.getHeader('authorization');
     if (authHeader == null || !authHeader.startsWith('Bearer ')) {
       throw RpcDataError.permissionDenied('Bearer token is required');
+    }
+    final token = authHeader.substring(7).trim();
+    if (token.isEmpty) {
+      throw RpcDataError.permissionDenied('Bearer token is required');
+    }
+    if (_allowedBearerTokens.isNotEmpty && !_allowedBearerTokens.contains(token)) {
+      throw RpcDataError.permissionDenied('Bearer token is invalid');
     }
     if (context?.isExpired ?? false) {
       throw RpcDataError.deadlineExceeded(

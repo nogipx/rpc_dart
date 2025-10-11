@@ -118,9 +118,28 @@ class ServeCli {
       return 64;
     }
 
+    late final List<String> authTokens;
+    try {
+      authTokens = await _parseAuthTokens(args);
+    } on FormatException catch (error) {
+      _stderr.writeln('Ошибка настроек авторизации: ${error.message}');
+      return 64;
+    } catch (error, stackTrace) {
+      _stderr.writeln('Не удалось загрузить bearer токены: $error');
+      _stderr.writeln(stackTrace);
+      return 64;
+    }
+
     final minLevel = verbose ? RpcLoggerLevel.debug : RpcLoggerLevel.info;
     RpcLogger.setDefaultMinLogLevel(minLevel);
     final logger = RpcLogger(_loggerName);
+
+    if (authTokens.isEmpty) {
+      await logger.warning(
+        'Bearer токены не заданы: сервис примет любой Authorization header. '
+        'Добавьте --auth-token/--auth-token-file/--auth-token-env для ограничений.',
+      );
+    }
 
     final processManager = DaemonProcessManager(
       logger: logger,
@@ -143,6 +162,7 @@ class ServeCli {
       relayConfig: relayConfig,
       stdoutSink: _stdout,
       stderrSink: _stderr,
+      authTokens: authTokens,
     );
 
     late final ServeCliApplication application;
@@ -508,7 +528,8 @@ class ServeCliRuntime {
     required this.relayConfig,
     required this.stdoutSink,
     required this.stderrSink,
-  });
+    required List<String> authTokens,
+  }) : authTokens = List.unmodifiable(authTokens);
 
   final ArgResults args;
   final String usage;
@@ -525,6 +546,7 @@ class ServeCliRuntime {
   final RelayRuntimeConfig? relayConfig;
   final IOSink stdoutSink;
   final IOSink stderrSink;
+  final List<String> authTokens;
 }
 
 typedef ServeCliApplicationBuilder =
@@ -805,6 +827,25 @@ void _configureDataServiceArguments(ArgParser parser) {
     help:
         'PASERK k4.local ключ SQLCipher (XChaCha20). Активирует шифрование файла.',
   );
+  parser.addMultiOption(
+    'auth-token',
+    help:
+        'Статический bearer токен для доступа к сервису (можно указать несколько).',
+    valueHelp: 'token',
+    splitCommas: false,
+  );
+  parser.addOption(
+    'auth-token-file',
+    help:
+        'Файл со списком bearer токенов (по одному в строке, пустые/"#" строки игнорируются).',
+  );
+  parser.addMultiOption(
+    'auth-token-env',
+    help:
+        'Имена переменных окружения с bearer токенами (одна переменная — один токен).',
+    valueHelp: 'ENV_VAR',
+    splitCommas: false,
+  );
 }
 
 ServeCliApplication _buildDataServiceApplication(ServeCliRuntime runtime) {
@@ -816,20 +857,20 @@ ServeCliApplication _buildDataServiceApplication(ServeCliRuntime runtime) {
     ),
   );
 
+  DataServiceResponder _createResponder() => DataServiceResponder(
+        repository: repository,
+        disposeRepositoryOnClose: false,
+        allowedBearerTokens: runtime.authTokens,
+      );
+
   return ServeCliApplication(
     registerEndpoint: (endpoint) {
       endpoint.registerServiceContract(
-        DataServiceResponder(
-          repository: repository,
-          disposeRepositoryOnClose: false,
-        ),
+        _createResponder(),
       );
     },
     createRelayResponders: () async => [
-      DataServiceResponder(
-        repository: repository,
-        disposeRepositoryOnClose: false,
-      ),
+      _createResponder(),
     ],
     onShutdown: () => repository.dispose(),
   );
@@ -849,6 +890,50 @@ SqlCipherKey? _parseSqlCipherKey(ArgResults args) {
     return null;
   }
   return SqlCipherKey.fromPaserk(paserk: raw);
+}
+
+Future<List<String>> _parseAuthTokens(ArgResults args) async {
+  final tokens = <String>{};
+
+  final cliTokens = (args['auth-token'] as List<String>?) ?? const [];
+  for (final raw in cliTokens) {
+    final token = raw.trim();
+    if (token.isEmpty) {
+      throw const FormatException('Пустой bearer токен недопустим');
+    }
+    tokens.add(token);
+  }
+
+  final envVariables = (args['auth-token-env'] as List<String>?) ?? const [];
+  for (final rawName in envVariables) {
+    final name = rawName.trim();
+    if (name.isEmpty) {
+      throw const FormatException('Имя переменной окружения для токена не может быть пустым');
+    }
+    final value = Platform.environment[name];
+    if (value == null || value.trim().isEmpty) {
+      throw FormatException('Переменная окружения "$name" не содержит bearer токен');
+    }
+    tokens.add(value.trim());
+  }
+
+  final filePath = (args['auth-token-file'] as String?)?.trim();
+  if (filePath != null && filePath.isNotEmpty) {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw FormatException('Файл с bearer токенами не найден: $filePath');
+    }
+    final lines = await file.readAsLines();
+    for (final line in lines) {
+      final token = line.trim();
+      if (token.isEmpty || token.startsWith('#')) {
+        continue;
+      }
+      tokens.add(token);
+    }
+  }
+
+  return List.unmodifiable(tokens);
 }
 
 SecureWrapRuntimeConfig? _parseSecureWrapConfig(ArgResults args) {

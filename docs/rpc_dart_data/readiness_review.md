@@ -14,7 +14,7 @@
 
 ## Remaining considerations before launch
 - **Backups remain manual.** `exportDatabase`/`importDatabase` cover the data path, but there is no turnkey CLI command yet; schedule cron jobs or container sidecars to copy JSON snapshots until the automation lands.【F:packages/rpc_dart_data/README.md†L210-L260】【F:docs/rpc_dart_data/production_readiness.md†L1-L120】
-- **Edge security is still basic.** Authentication is a single bearer token and there is no rate limiting, so put the service behind a reverse proxy/API gateway that enforces TLS, authn/z and throttling.【F:packages/rpc_dart_data/README.md†L24-L27】
+- **Edge security остаётся базовой.** Белый список bearer токенов теперь задаётся через CLI, но всё ещё нет ротации ключей, rate limiting и TLS — размещайте сервис за reverse proxy/API шлюзом, который возьмёт на себя шифрование и защиту от злоупотреблений.【F:packages/rpc_dart_data/README.md†L24-L112】
 
 ## Recommendation
 The current single-node profile is ready for small-to-medium deployments (≈10k daily active users) provided you front it with an ingress proxy and schedule periodic backups. Drift-based storage now gives durable change streams, indexed queries and transactional bulk writes out of the box. Focus upcoming work on operational tooling (backup/restore CLI, retention policies) rather than core correctness.

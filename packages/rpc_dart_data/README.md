@@ -23,7 +23,7 @@ and the Flutter guide for
 - Реактивные изменения: watchChanges с курсорами
 - Offline-first: двунаправленный syncChanges + очередь команд `OfflineCommandQueue`
 - Оптимистичная конкуренция через версии записей
-- Авторизация через заголовок `authorization: Bearer ...`
+- Авторизация через заголовок `authorization: Bearer ...` с проверкой по белому списку токенов
 
 ## Архитектура (слои)
 1. Transport (WebSocket / HTTP2 / isolate / TURN / in-memory) из `rpc_dart_transports`
@@ -99,6 +99,10 @@ just compile_serve [build/rpc_dart_data_serve] [-- <доп. флаги dart comp
   только PASERK `k4.local` (XChaCha20) строку, полученную, например, через
   `LicensifySymmetricKey.generateLocalKey().toPaserk()`. Ключ читается только
   из CLI аргумента и не выводится в логи.
+- `--auth-token <value>` — добавляет статический bearer токен. Можно указать
+  несколько флагов, а также считать секреты из переменных окружения
+  (`--auth-token-env NAME`) или файла (`--auth-token-file path`). Если токены
+  не заданы, сервис предупреждает и принимает любой заголовок `Authorization`.
 - `--secure-wrap` и связанные параметры — включают шифрование/аутентификацию
   поверх HTTP/2 через Licensify. Ключи передаются **только** в формате PASERK:
   `--secure-wrap-private-key` принимает строку `k4.secret`, а
@@ -115,6 +119,25 @@ just compile_serve [build/rpc_dart_data_serve] [-- <доп. флаги dart comp
 Если демон не может захватить PID файл (например, уже запущен другой экземпляр),
 он завершится с ошибкой. Для корректной работы фонового режима запускайте
 команду через `dart run bin/serve.dart` или через скомпилированный бинарь.
+
+## Использование за backend-ом
+
+Для сервисного сценария, когда единственный клиент — ваш backend, включите
+аутентификацию через bearer токены и храните их в секрете окружения. Пример
+запуска:
+
+```bash
+rpc-data serve \
+  --host 127.0.0.1 --port 9042 \
+  --database /var/lib/rpc_data.sqlite \
+  --auth-token-env DATA_SERVICE_TOKEN
+```
+
+Backend передаёт заголовок `Authorization: Bearer $DATA_SERVICE_TOKEN` при
+каждом RPC-вызове. Токены можно прокинуть через менеджер секретов, volume или
+отдельный файл с ограниченными правами. При необходимости заведите несколько
+токенов (для разных сервисов) и укажите их множественными флагами `--auth-token`
+или через отдельные переменные окружения.
 
 ## Экспорт и импорт базы данных
 
