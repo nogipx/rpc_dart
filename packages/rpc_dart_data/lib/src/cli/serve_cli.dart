@@ -14,11 +14,10 @@ import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 /// Настроечный раннер CLI-команды `serve`.
 ///
 /// Вынесен в отдельный модуль, чтобы переиспользовать реализацию
-/// одновременно для старого входа `dart run rpc_dart_data:serve` и для
-/// нового command-runner интерфейса (`dart run rpc_dart_data`).
-/// Через параметры конструктора можно изменить набор аргументов, логику
-/// поднятия приложения и текстовые сообщения, чтобы использовать раннер для
-/// других RPC-сервисов без дублирования инфраструктуры.
+/// command-runner интерфейса (`dart run rpc_dart_data`). Через параметры
+/// конструктора можно изменить набор аргументов, логику поднятия приложения и
+/// текстовые сообщения, чтобы использовать раннер для других RPC-сервисов без
+/// дублирования инфраструктуры.
 class ServeCli {
   ServeCli({
     IOSink? outSink,
@@ -34,7 +33,7 @@ class ServeCli {
         _helpHeader = helpHeader ??
             'HTTP/2 сервис данных на основе rpc_dart_data',
         _usageLine = usageLine ??
-            'Использование: dart run rpc_dart_data:serve [опции]',
+            'Использование: dart run rpc_dart_data serve [опции]',
         _loggerName = loggerName ?? 'DataService',
         _configureAdditionalParser =
             configureArguments ?? _configureDataServiceArguments,
