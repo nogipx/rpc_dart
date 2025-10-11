@@ -28,7 +28,7 @@ final class TurnPeerPermission {
   }
 }
 
-/// Channel binding information according to RFC 5766 section 11.
+/// Channel binding information according to RFC 8656 section 12.
 final class TurnChannelBinding {
   TurnChannelBinding({
     required this.channelNumber,

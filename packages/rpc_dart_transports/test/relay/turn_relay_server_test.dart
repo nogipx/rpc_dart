@@ -4,8 +4,9 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart' show Hmac, sha1;
+import 'package:crypto/crypto.dart' show Hmac, sha1, sha256;
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 import 'package:test/test.dart';
 import 'package:universal_io/io.dart';
@@ -304,15 +305,26 @@ void main() {
       final errorAttr = response.firstAttribute(TurnAttributeType.errorCode);
       expect(errorAttr, isNotNull);
       expect(_decodeErrorCode(errorAttr!), 401);
+      final algorithmsAttr =
+          response.firstAttribute(TurnAttributeType.passwordAlgorithms);
+      expect(algorithmsAttr, isNotNull);
+      final advertisedAlgorithms =
+          _decodePasswordAlgorithms(algorithmsAttr!);
+      expect(
+        advertisedAlgorithms,
+        containsAll(TurnPasswordAlgorithm.values.map((e) => e.wireValue)),
+      );
       expect(server.allocations, isEmpty);
     });
 
-    test('accepts authenticated allocate request', () async {
-      final socket = await Socket.connect(server.bindAddress, server.port);
-      final turnMessages = StreamController<TurnMessage>.broadcast();
-      final frameDecoder = TurnTcpFrameDecoder(
-        onTurnMessage: turnMessages.add,
-        onChannelData: (_, __) {},
+    for (final algorithm in TurnPasswordAlgorithm.values) {
+      test('accepts authenticated allocate request (${algorithm.name})',
+          () async {
+        final socket = await Socket.connect(server.bindAddress, server.port);
+        final turnMessages = StreamController<TurnMessage>.broadcast();
+        final frameDecoder = TurnTcpFrameDecoder(
+          onTurnMessage: turnMessages.add,
+          onChannelData: (_, __) {},
       );
 
       final socketSub = socket.listen((Uint8List data) {
@@ -327,28 +339,30 @@ void main() {
         await socket.close();
       });
 
-      final request = _buildAuthenticatedRequest(
-        method: TurnMethod.allocate,
-        additional: [
-          TurnAttribute(
-            TurnAttributeType.requestedTransport,
-            Uint8List.fromList(<int>[TurnRequestedTransport.tcp, 0, 0, 0]),
-          ),
-        ],
-        credential: credential,
-        store: credentialStore,
-      );
+        final request = _buildAuthenticatedRequest(
+          method: TurnMethod.allocate,
+          additional: [
+            TurnAttribute(
+              TurnAttributeType.requestedTransport,
+              Uint8List.fromList(<int>[TurnRequestedTransport.tcp, 0, 0, 0]),
+            ),
+          ],
+          credential: credential,
+          store: credentialStore,
+          algorithm: algorithm,
+        );
 
-      socket.add(request.encode());
+        socket.add(request.encode());
 
-      final response = await turnMessages.stream.first.timeout(
-        const Duration(seconds: 1),
-        onTimeout: () => throw StateError('allocate response timeout'),
-      );
+        final response = await turnMessages.stream.first.timeout(
+          const Duration(seconds: 1),
+          onTimeout: () => throw StateError('allocate response timeout'),
+        );
 
-      expect(response.messageClass, TurnMessageClass.successResponse);
-      expect(server.allocations, isNotEmpty);
-    });
+        expect(response.messageClass, TurnMessageClass.successResponse);
+        expect(server.allocations, isNotEmpty);
+      });
+    }
   });
 }
 
@@ -364,6 +378,7 @@ TurnMessage _buildAuthenticatedRequest({
   required List<TurnAttribute> additional,
   required TurnCredential credential,
   required TurnCredentialStore store,
+  TurnPasswordAlgorithm algorithm = TurnPasswordAlgorithm.hmacSha1Md5,
 }) {
   final transactionId = TurnMessage.generateTransactionId();
   final attributes = <TurnAttribute>[
@@ -382,9 +397,24 @@ TurnMessage _buildAuthenticatedRequest({
     ...additional,
   ];
 
+  if (algorithm != TurnPasswordAlgorithm.hmacSha1Md5) {
+    attributes.add(
+      TurnAttribute(
+        TurnAttributeType.passwordAlgorithm,
+        encodePasswordAlgorithm(algorithm),
+      ),
+    );
+  }
+
+  final integrityType = switch (algorithm) {
+    TurnPasswordAlgorithm.hmacSha1Md5 => TurnAttributeType.messageIntegrity,
+    TurnPasswordAlgorithm.hmacSha256 =>
+        TurnAttributeType.messageIntegritySha256,
+  };
+
   final placeholder = TurnAttribute(
-    TurnAttributeType.messageIntegrity,
-    Uint8List(20),
+    integrityType,
+    Uint8List(algorithm.integrityLength),
   );
   final unsigned = TurnMessage(
     method: method,
@@ -393,11 +423,15 @@ TurnMessage _buildAuthenticatedRequest({
     attributes: [...attributes, placeholder],
   );
 
-  final key = credential.deriveKey(store.realm);
-  return _signMessage(unsigned, key);
+  final key = credential.deriveKey(store.realm, algorithm);
+  return _signMessage(unsigned, key, algorithm);
 }
 
-TurnMessage _signMessage(TurnMessage message, Uint8List key) {
+TurnMessage _signMessage(
+  TurnMessage message,
+  Uint8List key,
+  TurnPasswordAlgorithm algorithm,
+) {
   final encoded = message.encode();
   var offset = 20;
   late int integrityIndex;
@@ -405,18 +439,34 @@ TurnMessage _signMessage(TurnMessage message, Uint8List key) {
     final attribute = message.attributes[i];
     final length = attribute.value.length;
     final paddedLength = (length + 3) & ~3;
-    if (attribute.type == TurnAttributeType.messageIntegrity) {
+    final matches = switch (algorithm) {
+      TurnPasswordAlgorithm.hmacSha1Md5 =>
+          attribute.type == TurnAttributeType.messageIntegrity,
+      TurnPasswordAlgorithm.hmacSha256 =>
+          attribute.type == TurnAttributeType.messageIntegritySha256,
+    };
+    if (matches) {
       integrityIndex = i;
       break;
     }
     offset += 4 + paddedLength;
   }
 
-  final hmac = Hmac(sha1, key).convert(encoded.sublist(0, offset));
+  final mac = switch (algorithm) {
+    TurnPasswordAlgorithm.hmacSha1Md5 =>
+        Hmac(sha1, key).convert(encoded.sublist(0, offset)),
+    TurnPasswordAlgorithm.hmacSha256 =>
+        Hmac(sha256, key).convert(encoded.sublist(0, offset)),
+  };
   final attributes = [...message.attributes];
   attributes[integrityIndex] = TurnAttribute(
-    TurnAttributeType.messageIntegrity,
-    Uint8List.fromList(hmac.bytes),
+    switch (algorithm) {
+      TurnPasswordAlgorithm.hmacSha1Md5 =>
+          TurnAttributeType.messageIntegrity,
+      TurnPasswordAlgorithm.hmacSha256 =>
+          TurnAttributeType.messageIntegritySha256,
+    },
+    Uint8List.fromList(mac.bytes),
   );
 
   return TurnMessage(
@@ -425,4 +475,17 @@ TurnMessage _signMessage(TurnMessage message, Uint8List key) {
     transactionId: message.transactionId,
     attributes: attributes,
   );
+}
+
+List<int> _decodePasswordAlgorithms(Uint8List value) {
+  final algorithms = <int>[];
+  var offset = 0;
+  final data = ByteData.sublistView(value);
+  while (offset + 4 <= value.length) {
+    final algorithm = data.getUint16(offset);
+    final paramsLength = data.getUint16(offset + 2);
+    offset += 4 + paramsLength;
+    algorithms.add(algorithm);
+  }
+  return algorithms;
 }
