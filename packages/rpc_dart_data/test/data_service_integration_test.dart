@@ -13,7 +13,7 @@ void main() {
 
     setUp(() async {
       repository = DriftDataRepository(
-        storage: DriftDataStorageAdapter.memory(),
+        storage: await openMainStorage(),
       );
       env = await DataServiceFactory.inMemory(repository: repository);
       authContext = RpcContext.withHeaders({
@@ -33,9 +33,7 @@ void main() {
         ),
         throwsA(
           predicate(
-            (error) => error
-                .toString()
-                .contains('Bearer token is required'),
+            (error) => error.toString().contains('Bearer token is required'),
           ),
         ),
       );
@@ -60,8 +58,7 @@ void main() {
 
       Future<DataChangeEvent> nextChange(String step) async {
         try {
-          return await notesChanges.next
-              .timeout(const Duration(seconds: 5));
+          return await notesChanges.next.timeout(const Duration(seconds: 5));
         } on TimeoutException {
           fail('Timed out waiting for change event during $step');
         }
@@ -106,7 +103,9 @@ void main() {
         id: created.id,
         expectedVersion: updated.version,
         patch: const RecordPatch(
-          set: {'tags': ['important']},
+          set: {
+            'tags': ['important']
+          },
           unset: ['status'],
         ),
         context: authContext,
@@ -135,7 +134,9 @@ void main() {
 
       final filteredByTags = await env.client.list(
         collection: 'notes',
-        filter: RecordFilter(equals: {'tags': ['important']}),
+        filter: RecordFilter(equals: {
+          'tags': ['important']
+        }),
         context: authContext,
       );
       expect(filteredByTags.records.map((record) => record.id),
@@ -251,8 +252,8 @@ void main() {
 
       SyncChangeResponse syncResponse;
       try {
-        syncResponse = await syncResponseFuture
-            .timeout(const Duration(seconds: 5));
+        syncResponse =
+            await syncResponseFuture.timeout(const Duration(seconds: 5));
       } on TimeoutException {
         fail('Timed out waiting for sync response');
       }
@@ -273,19 +274,19 @@ void main() {
 
       final restored = await env.client
           .get(
-        collection: 'notes',
-        id: created.id,
-        context: authContext,
-      )
+            collection: 'notes',
+            id: created.id,
+            context: authContext,
+          )
           .timeout(const Duration(seconds: 5));
       expect(restored, isNotNull);
       expect(restored!.payload.containsKey('tags'), isTrue);
 
       final restoredTasks = await env.client
           .list(
-        collection: 'tasks',
-        context: authContext,
-      )
+            collection: 'tasks',
+            context: authContext,
+          )
           .timeout(const Duration(seconds: 5));
       expect(restoredTasks.records, isNotEmpty);
     });

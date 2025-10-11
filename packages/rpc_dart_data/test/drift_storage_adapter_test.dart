@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 
 void main() {
   final dbFile = File(
-    p.join(Directory.current.path, 'rpc_dart_data_test.db'),
+    p.join(Directory.current.path, 'rpc_dart_data_test.sqlite'),
   );
   final skip = false;
 

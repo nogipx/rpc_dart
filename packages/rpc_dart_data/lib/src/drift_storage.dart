@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -133,6 +132,9 @@ class SqlCipherKey {
 class DriftDataDatabase extends GeneratedDatabase {
   DriftDataDatabase(super.executor);
 
+  DriftDataDatabase.connect(DatabaseConnection connection)
+      : super.connect(connection);
+
   @override
   int get schemaVersion => 1;
 
@@ -146,17 +148,35 @@ class DriftDataDatabase extends GeneratedDatabase {
 /// Drift-based implementation of [DataStorageAdapter] backed by SQLite.
 class DriftDataStorageAdapter
     implements DataStorageAdapter, AdvancedDataStorageAdapter {
-  DriftDataStorageAdapter._(this._database);
+  DriftDataStorageAdapter._(this._database, this._inMemory);
 
   /// Create an adapter backed by the provided Drift [executor].
-  factory DriftDataStorageAdapter(QueryExecutor executor) {
-    return DriftDataStorageAdapter._(DriftDataDatabase(executor));
+  factory DriftDataStorageAdapter(
+    QueryExecutor executor, {
+    bool isInMemory = false,
+  }) {
+    return DriftDataStorageAdapter._(
+      DriftDataDatabase(executor),
+      isInMemory,
+    );
+  }
+
+  /// Create an adapter backed by an existing [DatabaseConnection].
+  factory DriftDataStorageAdapter.connection(
+    DatabaseConnection connection, {
+    bool isInMemory = false,
+  }) {
+    return DriftDataStorageAdapter._(
+      DriftDataDatabase.connect(connection),
+      isInMemory,
+    );
   }
 
   /// Create an adapter backed by an in-memory SQLite database.
   factory DriftDataStorageAdapter.memory({bool logStatements = false}) {
     return DriftDataStorageAdapter(
       NativeDatabase.memory(logStatements: logStatements),
+      isInMemory: true,
     );
   }
 
@@ -181,13 +201,16 @@ class DriftDataStorageAdapter
   }
 
   final DriftDataDatabase _database;
+  final bool _inMemory;
+
+  bool get isInMemory => _inMemory;
   bool _registryReady = false;
   final Set<String> _knownTables = <String>{};
   final Set<String> _tenantPreparedTables = <String>{};
-  final Set<String> _ftsPreparedTables = <String>{};
+  final Set<String> _ftsSeededCollections = <String>{};
+  bool _ftsReady = false;
   static const int _ftsBatchSize = 200;
-
-  String _ftsTableName(String baseTable) => 'fts_$baseTable';
+  static const String _ftsTableName = 'c_global_fts';
 
   DriftDataDatabase get database => _database;
 
@@ -237,17 +260,6 @@ class DriftDataStorageAdapter
       _knownTables.add(tableName);
     }
     return exists;
-  }
-
-  Future<bool> _ftsTableExists(String tableName) async {
-    final row = await _database.customSelect(
-      'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-      variables: [
-        Variable<String>('table'),
-        Variable<String>(tableName),
-      ],
-    ).getSingleOrNull();
-    return row != null;
   }
 
   String _normalizeSegment(String value) {
@@ -335,6 +347,7 @@ class DriftDataStorageAdapter
       return null;
     }
     await _ensureTenantSupport(table);
+    await _ensureFtsSeeded(collection, table);
     return table;
   }
 
@@ -355,12 +368,10 @@ class DriftDataStorageAdapter
         _knownTables.add(existing);
       }
       await _ensureTenantSupport(existing);
-      await _ensureFtsTable(collection, existing);
       return existing;
     }
     final table = await _createTable(collection);
     await _ensureTenantSupport(table);
-    await _ensureFtsTable(collection, table);
     return table;
   }
 
@@ -368,11 +379,10 @@ class DriftDataStorageAdapter
     if (_tenantPreparedTables.contains(tableName)) {
       return;
     }
-    final rows = await _database
-        .customSelect('PRAGMA table_info("$tableName")')
-        .get();
-    final hasTenantColumn = rows
-        .any((row) => row.read<String>('name').toLowerCase() == 'tenantid');
+    final rows =
+        await _database.customSelect('PRAGMA table_info("$tableName")').get();
+    final hasTenantColumn =
+        rows.any((row) => row.read<String>('name').toLowerCase() == 'tenantid');
     if (!hasTenantColumn) {
       await _database.customStatement(
         'ALTER TABLE "$tableName" ADD COLUMN tenantId TEXT',
@@ -383,6 +393,45 @@ class DriftDataStorageAdapter
       'ON "$tableName" (tenantId)',
     );
     _tenantPreparedTables.add(tableName);
+  }
+
+  Future<void> _ensureFts() async {
+    if (_ftsReady) {
+      return;
+    }
+    await _database.customStatement(
+      'CREATE VIRTUAL TABLE IF NOT EXISTS "$_ftsTableName" '
+      'USING fts5(collection UNINDEXED, id UNINDEXED, content, '
+      'tokenize="unicode61 remove_diacritics 2")',
+    );
+    _ftsReady = true;
+  }
+
+  Future<void> _ensureFtsSeeded(String collection, String tableName) async {
+    await _ensureFts();
+    if (_ftsSeededCollections.contains(collection)) {
+      return;
+    }
+    final exists = await _database.customSelect(
+      'SELECT 1 FROM "$_ftsTableName" WHERE collection = ? LIMIT 1',
+      variables: [Variable<String>(collection)],
+    ).getSingleOrNull();
+    if (exists != null) {
+      _ftsSeededCollections.add(collection);
+      return;
+    }
+    final rows = await _database
+        .customSelect(
+          'SELECT id, tenantId, payload, version, created_at, updated_at '
+          'FROM "$tableName"',
+        )
+        .get();
+    if (rows.isNotEmpty) {
+      final records =
+          rows.map((row) => _mapRow(collection, row)).toList(growable: false);
+      await _upsertFtsBatch(collection, tableName, records);
+    }
+    _ftsSeededCollections.add(collection);
   }
 
   DataRecord _mapRow(String collection, QueryRow row) {
@@ -557,8 +606,7 @@ class DriftDataStorageAdapter
       return true;
     }
     for (final entry in filter.equals.entries) {
-      final expression =
-          _fieldExpression(entry.key, tableAlias: tableAlias);
+      final expression = _fieldExpression(entry.key, tableAlias: tableAlias);
       if (expression == null) {
         return false;
       }
@@ -582,8 +630,7 @@ class DriftDataStorageAdapter
       return true;
     }
     for (final entry in filter.range.entries) {
-      final expression =
-          _fieldExpression(entry.key, tableAlias: tableAlias);
+      final expression = _fieldExpression(entry.key, tableAlias: tableAlias);
       if (expression == null) {
         return false;
       }
@@ -690,9 +737,8 @@ class DriftDataStorageAdapter
     if (tokens.isEmpty) {
       return null;
     }
-    final wildcardTokens = tokens
-        .map((token) => '${token.replaceAll('"', '""')}*')
-        .join(' ');
+    final wildcardTokens =
+        tokens.map((token) => '${token.replaceAll('"', '""')}*').join(' ');
     return wildcardTokens;
   }
 
@@ -744,52 +790,6 @@ class DriftDataStorageAdapter
     return buffer.toString().toLowerCase();
   }
 
-  Future<void> _seedFtsTable(
-    String collection,
-    String baseTable,
-    String ftsTable,
-  ) async {
-    final countRow = await _database
-        .customSelect(
-          'SELECT COUNT(*) AS count FROM "$ftsTable"',
-        )
-        .getSingle();
-    final existing = countRow.read<int>('count');
-    if (existing > 0) {
-      return;
-    }
-    final rows = await _database.customSelect(
-      'SELECT id, tenantId, payload, version, created_at, updated_at '
-      'FROM "$baseTable"',
-    ).get();
-    for (final row in rows) {
-      final record = _mapRow(collection, row);
-      await _database.customStatement(
-        'INSERT INTO "$ftsTable" (id, content) VALUES (?, ?)',
-        [record.id, _prepareSearchText(record)],
-      );
-    }
-  }
-
-  Future<String> _ensureFtsTable(
-    String collection,
-    String baseTable,
-  ) async {
-    final ftsTable = _ftsTableName(baseTable);
-    final exists = await _ftsTableExists(ftsTable);
-    if (!exists) {
-      await _database.customStatement(
-        'CREATE VIRTUAL TABLE "$ftsTable" '
-        'USING fts5(id UNINDEXED, content, tokenize="unicode61 remove_diacritics 2")',
-      );
-    }
-    if (!_ftsPreparedTables.contains(baseTable)) {
-      _ftsPreparedTables.add(baseTable);
-      await _seedFtsTable(collection, baseTable, ftsTable);
-    }
-    return ftsTable;
-  }
-
   Future<void> _updateFtsIndex(
     String collection,
     String baseTable,
@@ -799,10 +799,10 @@ class DriftDataStorageAdapter
   }
 
   Future<void> _removeFromFtsIndex(
-    String baseTable,
-    String id,
+    String collection,
+    Iterable<String> ids,
   ) async {
-    await _removeFromFtsIndexMany(baseTable, [id]);
+    await _removeFromFtsIndexMany(collection, ids);
   }
 
   Iterable<List<T>> _chunk<T>(List<T> items, int size) sync* {
@@ -821,50 +821,44 @@ class DriftDataStorageAdapter
     String baseTable,
     Iterable<DataRecord> records,
   ) async {
+    await _ensureFts();
     final pending = records.toList(growable: false);
     if (pending.isEmpty) {
       return;
     }
-    final ftsTable = await _ensureFtsTable(collection, baseTable);
+    final ftsTable = _ftsTableName;
 
     for (final chunk in _chunk(pending, _ftsBatchSize)) {
       final ids = <String>[for (final record in chunk) record.id];
       final placeholders = List.filled(ids.length, '?').join(', ');
       await _database.customStatement(
-        'DELETE FROM "$ftsTable" WHERE id IN ($placeholders)',
-        ids,
+        'DELETE FROM "$ftsTable" WHERE collection = ? AND id IN ($placeholders)',
+        [collection, ...ids],
       );
       for (final record in chunk) {
         await _database.customStatement(
-          'INSERT INTO "$ftsTable" (id, content) VALUES (?, ?)',
-          [record.id, _prepareSearchText(record)],
+          'INSERT INTO "$ftsTable" (collection, id, content) VALUES (?, ?, ?)',
+          [collection, record.id, _prepareSearchText(record)],
         );
       }
     }
+    _ftsSeededCollections.add(collection);
   }
 
   Future<void> _removeFromFtsIndexMany(
-    String baseTable,
+    String collection,
     Iterable<String> ids,
   ) async {
     final idList = ids.toList(growable: false);
-    if (idList.isEmpty) {
+    if (idList.isEmpty || !_ftsReady) {
       return;
     }
-    if (!_ftsPreparedTables.contains(baseTable)) {
-      final ftsTable = _ftsTableName(baseTable);
-      final exists = await _ftsTableExists(ftsTable);
-      if (!exists) {
-        return;
-      }
-      _ftsPreparedTables.add(baseTable);
-    }
-    final ftsTable = _ftsTableName(baseTable);
+    final ftsTable = _ftsTableName;
     for (final chunk in _chunk(idList, _ftsBatchSize)) {
       final placeholders = List.filled(chunk.length, '?').join(', ');
       await _database.customStatement(
-        'DELETE FROM "$ftsTable" WHERE id IN ($placeholders)',
-        chunk,
+        'DELETE FROM "$ftsTable" WHERE collection = ? AND id IN ($placeholders)',
+        [collection, ...chunk],
       );
     }
   }
@@ -926,8 +920,7 @@ class DriftDataStorageAdapter
       return ListRecordsResponse(
         records: const [],
         nextCursor: null,
-        totalCount:
-            request.options.includeTotalCount ? 0 : null,
+        totalCount: request.options.includeTotalCount ? 0 : null,
       );
     }
 
@@ -1047,23 +1040,24 @@ class DriftDataStorageAdapter
       );
     }
 
-    final ftsTable = await _ensureFtsTable(request.collection, tableName);
+    await _ensureFtsSeeded(request.collection, tableName);
     final baseAlias = 'b';
 
-    final baseConditions = <String>['"$ftsTable" MATCH ?'];
-    final baseValues = <Object>[pattern];
+    final ftsArgs = <Object>[
+      request.collection,
+      pattern,
+    ];
 
+    final filterConditions = <String>[];
+    final filterValues = <Object>[];
     if (!_translateFilter(
       request.filter,
-      baseConditions,
-      baseValues,
+      filterConditions,
+      filterValues,
       tableAlias: baseAlias,
     )) {
       return null;
     }
-
-    final queryConditions = List<String>.from(baseConditions);
-    final queryValues = List<Object>.from(baseValues);
 
     final cursor = request.options.cursor;
     if (cursor != null) {
@@ -1073,37 +1067,51 @@ class DriftDataStorageAdapter
           'Cursor $cursor is not valid for ${request.collection}',
         );
       }
-      queryConditions.add(
+      filterConditions.add(
         '${_qualifiedColumn('id', tableAlias: baseAlias)} > ?',
       );
-      queryValues.add(cursor);
+      filterValues.add(cursor);
     }
 
     final whereClause =
-        queryConditions.isEmpty ? '' : 'WHERE ${queryConditions.join(' AND ')}';
+        filterConditions.isEmpty ? '' : 'WHERE ${filterConditions.join(' AND ')}';
 
     final fetchLimit = request.options.limit + 1;
     final querySql = StringBuffer(
+      'WITH fts_hits AS ('
+      'SELECT id FROM "$_ftsTableName" WHERE collection = ? AND content MATCH ?'
+      ') '
       'SELECT $baseAlias.id, $baseAlias.tenantId, $baseAlias.payload, '
       '$baseAlias.version, $baseAlias.created_at, $baseAlias.updated_at '
       'FROM "$tableName" $baseAlias '
-      'JOIN "$ftsTable" fts ON fts.id = $baseAlias.id '
+      'JOIN fts_hits fts ON fts.id = $baseAlias.id '
       '$whereClause '
       'ORDER BY $baseAlias.id ASC '
       'LIMIT ?',
     );
 
-    final queryArgs = <Object>[...queryValues, fetchLimit];
-    final rows = await _database
-        .customSelect(
-          querySql.toString(),
-          variables: _buildVariables(queryArgs),
-        )
-        .get();
+    final queryArgs = <Object>[
+      ...ftsArgs,
+      ...filterValues,
+      fetchLimit,
+    ];
+    List<QueryRow> rows;
+    try {
+      rows = await _database
+          .customSelect(
+            querySql.toString(),
+            variables: _buildVariables(queryArgs),
+          )
+          .get();
+    } on sqlite.SqliteException catch (error) {
+      throw RpcDataError.internal(
+        'Failed to execute search query for ${request.collection}',
+        error: error,
+      );
+    }
 
     final hasMore = rows.length == fetchLimit;
-    final limitedRows =
-        hasMore ? rows.sublist(0, rows.length - 1) : rows;
+    final limitedRows = hasMore ? rows.sublist(0, rows.length - 1) : rows;
     final records = limitedRows
         .map((row) => _mapRow(request.collection, row))
         .toList(growable: false);
@@ -1113,20 +1121,32 @@ class DriftDataStorageAdapter
       nextCursor = records.last.id;
     }
 
-    final countWhere =
-        baseConditions.isEmpty ? '' : 'WHERE ${baseConditions.join(' AND ')}';
     final countSql = StringBuffer(
+      'WITH fts_hits AS ('
+      'SELECT id FROM "$_ftsTableName" WHERE collection = ? AND content MATCH ?'
+      ') '
       'SELECT COUNT(*) AS count '
       'FROM "$tableName" $baseAlias '
-      'JOIN "$ftsTable" fts ON fts.id = $baseAlias.id '
-      '$countWhere',
+      'JOIN fts_hits fts ON fts.id = $baseAlias.id '
+      '$whereClause',
     );
-    final countRow = await _database
-        .customSelect(
-          countSql.toString(),
-          variables: _buildVariables(baseValues),
-        )
-        .getSingle();
+    QueryRow countRow;
+    try {
+      countRow = await _database
+          .customSelect(
+            countSql.toString(),
+            variables: _buildVariables([
+              ...ftsArgs,
+              ...filterValues,
+            ]),
+          )
+          .getSingle();
+    } on sqlite.SqliteException catch (error) {
+      throw RpcDataError.internal(
+        'Failed to count search results for ${request.collection}',
+        error: error,
+      );
+    }
     final totalHits = countRow.read<int>('count');
 
     return SearchRecordsResponse(
@@ -1173,8 +1193,7 @@ class DriftDataStorageAdapter
             return null;
           }
           final fieldName = parts[1];
-          final expression =
-              _fieldExpression(fieldName, tableAlias: 'b');
+          final expression = _fieldExpression(fieldName, tableAlias: 'b');
           if (expression == null) {
             return null;
           }
@@ -1325,7 +1344,7 @@ class DriftDataStorageAdapter
       affected = changeRow.read<int>('count');
     });
     if (affected > 0) {
-      await _removeFromFtsIndex(tableName, id);
+      await _removeFromFtsIndex(collection, [id]);
     }
     return affected > 0;
   }
@@ -1357,7 +1376,7 @@ class DriftDataStorageAdapter
       affected = changeRow.read<int>('count');
     });
     if (affected > 0) {
-      await _removeFromFtsIndexMany(tableName, idList);
+      await _removeFromFtsIndexMany(collection, idList);
     }
     return affected;
   }
@@ -1370,23 +1389,24 @@ class DriftDataStorageAdapter
     }
 
     await _ensureRegistry();
-    final ftsTable = _ftsTableName(tableName);
     await _database.transaction(() async {
       await _database.customStatement(
         'DROP TABLE IF EXISTS "$tableName"',
       );
       await _database.customStatement(
-        'DROP TABLE IF EXISTS "$ftsTable"',
-      );
-      await _database.customStatement(
         'DELETE FROM collection_registry WHERE collection = ?',
         [collection],
       );
+      if (_ftsReady) {
+        await _database.customStatement(
+          'DELETE FROM "$_ftsTableName" WHERE collection = ?',
+          [collection],
+        );
+      }
     });
 
     _knownTables.remove(tableName);
     _tenantPreparedTables.remove(tableName);
-    _ftsPreparedTables.remove(tableName);
     return true;
   }
 
@@ -1397,12 +1417,20 @@ class DriftDataStorageAdapter
 }
 
 class DriftDataChangeJournal implements DataChangeJournal {
-  DriftDataChangeJournal(this._database);
+  DriftDataChangeJournal(this._database, {bool clearOnOpen = false})
+      : _clearOnOpen = clearOnOpen;
 
   final DriftDataDatabase _database;
+  final bool _clearOnOpen;
   bool _tableReady = false;
+  bool _clearedOnOpen = false;
 
   Future<void> _ensureTable() async {
+    if (_clearOnOpen && !_clearedOnOpen) {
+      await _database.customStatement('DROP TABLE IF EXISTS change_journal');
+      _clearedOnOpen = true;
+      _tableReady = false;
+    }
     if (_tableReady) {
       return;
     }
@@ -1460,8 +1488,8 @@ class DriftDataChangeJournal implements DataChangeJournal {
 
   DataChangeEvent _mapRow(QueryRow row) {
     final typeName = row.read<String>('change_type');
-    final type = DataChangeType.values
-        .firstWhere((value) => value.name == typeName);
+    final type =
+        DataChangeType.values.firstWhere((value) => value.name == typeName);
     final payload = row.read<String?>('payload');
     final occurredAtMicros = row.read<int>('occurred_at');
     return DataChangeEvent(
@@ -1553,7 +1581,13 @@ class DriftDataChangeJournal implements DataChangeJournal {
     final rows = await _database
         .customSelect(query.toString(), variables: variables)
         .get();
-    return rows.map(_mapRow).toList(growable: false);
+    final events = rows.map(_mapRow).toList(growable: false);
+    // DEBUG
+    for (final event in events) {
+      // ignore: avoid_print
+      print('replay event: collection='           '${event.collection} id=${event.id} cursor=${event.cursor}');
+    }
+    return events;
   }
 
   @override
@@ -1574,12 +1608,10 @@ class DriftDataChangeJournal implements DataChangeJournal {
       );
     }
     if (maxEvents != null && maxEvents > 0) {
-      final countRow = await _database
-          .customSelect(
-            'SELECT COUNT(*) AS count FROM change_journal WHERE collection = ?',
-            variables: [Variable<String>(collection)],
-          )
-          .getSingle();
+      final countRow = await _database.customSelect(
+        'SELECT COUNT(*) AS count FROM change_journal WHERE collection = ?',
+        variables: [Variable<String>(collection)],
+      ).getSingle();
       final count = countRow.read<int>('count');
       if (count > maxEvents) {
         final thresholdRow = await _database.customSelect(
@@ -1631,8 +1663,10 @@ class DriftDataRepository extends BaseDataRepository {
           storage,
           clock: clock,
           idGenerator: idGenerator,
-          changeJournal:
-              changeJournal ?? DriftDataChangeJournal(storage.database),
+          changeJournal: changeJournal ?? DriftDataChangeJournal(
+            storage.database,
+            clearOnOpen: storage.isInMemory,
+          ),
           journalMaxEvents: journalMaxEvents,
           journalRetention: journalRetention,
         );

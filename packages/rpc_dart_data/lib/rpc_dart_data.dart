@@ -28,3 +28,4 @@ export 'src/drift_storage.dart'
         SqlCipherKey,
         SqlCipherException;
 export 'src/models.dart';
+export 'src/connection/connection.dart';
