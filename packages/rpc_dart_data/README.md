@@ -95,6 +95,10 @@ just compile_serve [build/rpc_dart_data_serve] [-- <доп. флаги dart comp
 - `--pid-file <path>` — путь до PID файла (по умолчанию `data_service.pid`).
   Файл блокируется эксклюзивно и хранит PID активного процесса. При остановке
   сервера блокировка снимается, а файл удаляется.
+- `--database-key <paserk>` — включает SQLCipher для файла SQLite. Принимает
+  только PASERK `k4.local` (XChaCha20) строку, полученную, например, через
+  `LicensifySymmetricKey.generateLocalKey().toPaserk()`. Ключ читается только
+  из CLI аргумента и не выводится в логи.
 - `--secure-wrap` и связанные параметры — включают шифрование/аутентификацию
   поверх HTTP/2 через Licensify. Ключи передаются **только** в формате PASERK:
   `--secure-wrap-private-key` принимает строку `k4.secret`, а
@@ -196,13 +200,22 @@ final server = DataServiceFactory.createServer(
 persisted файл:
 
 ```dart
-final storage = DriftDataStorageAdapter.file(File('data.sqlite3'));
+final storage = DriftDataStorageAdapter.file(
+  File('data.sqlite3'),
+  sqlCipherKey: SqlCipherKey.fromPaserk(
+    paserk: 'k4.local....', // храните отдельно и передавайте при запуске
+  ),
+);
 final repository = DriftDataRepository(storage: storage);
 final env = await DataServiceFactory.inMemory(repository: repository);
 
 final ctx = RpcContext.withHeaders({'authorization': 'Bearer demo'});
 await env.client.create(collection: 'notes', payload: {'title': 'Hello'}, context: ctx);
 ```
+
+Если системная библиотека SQLite собрана без SQLCipher, адаптер выбросит
+`SqlCipherException` при первом открытии файла. Убедитесь, что рантайм подхватывает
+`libsqlcipher` (или другую совместимую сборку) и доступен `PRAGMA cipher_version`.
 
 Для тестов или демо можно использовать in-memory вариант:
 

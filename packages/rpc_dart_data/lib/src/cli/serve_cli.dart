@@ -87,6 +87,14 @@ class ServeCli {
     final isDaemonChild = args['daemon-child'] as bool;
     final verbose = args['verbose'] as bool;
 
+    SqlCipherKey? sqlCipherKey;
+    try {
+      sqlCipherKey = _parseSqlCipherKey(args);
+    } on FormatException catch (error) {
+      _stderr.writeln('Ошибка настроек SQLCipher: ${error.message}');
+      return 64;
+    }
+
     SecureWrapRuntimeConfig? secureWrapConfig;
     try {
       secureWrapConfig = _parseSecureWrapConfig(args);
@@ -131,6 +139,7 @@ class ServeCli {
       verbose: verbose,
       logger: logger,
       processManager: processManager,
+      sqlCipherKey: sqlCipherKey,
       secureWrapConfig: secureWrapConfig,
       relayConfig: relayConfig,
       stdoutSink: _stdout,
@@ -140,6 +149,14 @@ class ServeCli {
     late final ServeCliApplication application;
     try {
       application = await _applicationBuilder(runtime);
+    } on SqlCipherException catch (error, stackTrace) {
+      _stderr.writeln('Ошибка инициализации SQLCipher: ${error.message}');
+      await logger.error(
+        'Не удалось подготовить приложение сервиса: ${error.message}',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return 64;
     } catch (error, stackTrace) {
       await logger.error(
         'Не удалось подготовить приложение сервиса: $error',
@@ -487,6 +504,7 @@ class ServeCliRuntime {
     required this.verbose,
     required this.logger,
     required this.processManager,
+    required this.sqlCipherKey,
     required this.secureWrapConfig,
     required this.relayConfig,
     required this.stdoutSink,
@@ -503,6 +521,7 @@ class ServeCliRuntime {
   final bool verbose;
   final RpcLogger logger;
   final DaemonProcessManager processManager;
+  final SqlCipherKey? sqlCipherKey;
   final SecureWrapRuntimeConfig? secureWrapConfig;
   final RelayRuntimeConfig? relayConfig;
   final IOSink stdoutSink;
@@ -782,12 +801,20 @@ void _configureDataServiceArguments(ArgParser parser) {
     defaultsTo: 'data_service.sqlite',
     help: 'Путь до SQLite файла для Drift-хранилища.',
   );
+  parser.addOption(
+    'database-key',
+    help:
+        'PASERK k4.local ключ SQLCipher (XChaCha20). Активирует шифрование файла.',
+  );
 }
 
 ServeCliApplication _buildDataServiceApplication(ServeCliRuntime runtime) {
   final databasePath = runtime.args['database'] as String;
   final repository = DriftDataRepository(
-    storage: DriftDataStorageAdapter.file(File(databasePath)),
+    storage: DriftDataStorageAdapter.file(
+      File(databasePath),
+      sqlCipherKey: runtime.sqlCipherKey,
+    ),
   );
 
   return ServeCliApplication(
@@ -813,7 +840,16 @@ String _defaultStartupMessage(ServeCliRuntime runtime) {
   final databasePath = runtime.args['database'] as String?;
   final databaseInfo =
       databasePath != null ? ' (база: ${File(databasePath).path})' : '';
-  return 'Запуск сервиса данных на ${runtime.host}:${runtime.port}$databaseInfo';
+  final cipherInfo = runtime.sqlCipherKey != null ? ' + SQLCipher' : '';
+  return 'Запуск сервиса данных на ${runtime.host}:${runtime.port}$databaseInfo$cipherInfo';
+}
+
+SqlCipherKey? _parseSqlCipherKey(ArgResults args) {
+  final raw = (args['database-key'] as String?)?.trim();
+  if (raw == null || raw.isEmpty) {
+    return null;
+  }
+  return SqlCipherKey.fromPaserk(paserk: raw);
 }
 
 SecureWrapRuntimeConfig? _parseSecureWrapConfig(ArgResults args) {

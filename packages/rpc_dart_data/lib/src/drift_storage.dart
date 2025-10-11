@@ -1,11 +1,132 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:licensify/licensify.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 import 'data_repository.dart';
 import 'models.dart';
+
+/// Ошибка инициализации SQLCipher.
+class SqlCipherException implements Exception {
+  SqlCipherException(this.message, {this.cause});
+
+  final String message;
+  final Object? cause;
+
+  @override
+  String toString() {
+    if (cause == null) {
+      return 'SqlCipherException: $message';
+    }
+    return 'SqlCipherException: $message (cause: $cause)';
+  }
+}
+
+/// Контейнер с материалом ключа SQLCipher, передаваемый из CLI.
+///
+/// Ключ передаётся в виде PASERK `k4.local` (XChaCha20). При применении
+/// преобразуется в шестнадцатеричную строку и вводится через `PRAGMA key`.
+/// После единственного использования нулируется в памяти.
+class SqlCipherKey {
+  SqlCipherKey._(this._keyBytes);
+
+  factory SqlCipherKey.fromBytes({required Uint8List keyBytes}) {
+    if (keyBytes.isEmpty) {
+      throw const FormatException('SQLCipher key must not be empty.');
+    }
+    return SqlCipherKey._(Uint8List.fromList(keyBytes));
+  }
+
+  factory SqlCipherKey.fromPaserk({required String paserk}) {
+    final trimmed = paserk.trim();
+    if (trimmed.isEmpty) {
+      throw const FormatException('Пустой PASERK ключ SQLCipher.');
+    }
+
+    try {
+      final symmetricKey = LicensifySymmetricKey.fromPaserk(paserk: trimmed);
+      return symmetricKey.executeWithKeyBytes((keyBytes) {
+        return SqlCipherKey.fromBytes(keyBytes: Uint8List.fromList(keyBytes));
+      });
+    } on FormatException catch (error) {
+      throw FormatException(
+        'Некорректный PASERK ключ SQLCipher: ${error.message}',
+      );
+    } catch (error) {
+      throw FormatException(
+        'Не удалось прочитать PASERK ключ SQLCipher: $error',
+      );
+    }
+  }
+
+  final Uint8List _keyBytes;
+  bool _consumed = false;
+
+  void applyTo(
+    sqlite.Database database, {
+    bool verifyCipher = true,
+    bool enforceMemorySecurity = true,
+  }) {
+    if (_consumed) {
+      throw StateError('SQLCipher key material has already been consumed.');
+    }
+
+    final hexKey = _encodeHex(_keyBytes);
+    try {
+      database.execute("PRAGMA key = \"x'$hexKey'\";");
+
+      if (verifyCipher) {
+        _assertCipherAvailable(database);
+      }
+
+      if (enforceMemorySecurity) {
+        database.execute('PRAGMA cipher_memory_security = ON;');
+      }
+    } on sqlite.SqliteException catch (error) {
+      throw SqlCipherException(
+        'Ошибка применения настроек SQLCipher: ${error.message}',
+        cause: error,
+      );
+    } finally {
+      _zeroBytes(_keyBytes);
+      _consumed = true;
+    }
+  }
+
+  static void _assertCipherAvailable(sqlite.Database database) {
+    try {
+      final result = database.select('PRAGMA cipher_version;');
+      if (result.isEmpty) {
+        throw SqlCipherException(
+          'SQLCipher не активирован: PRAGMA cipher_version вернул пустое значение.',
+        );
+      }
+    } on sqlite.SqliteException catch (error) {
+      throw SqlCipherException(
+        'Сборка SQLite не поддерживает SQLCipher (cipher_version недоступен).',
+        cause: error,
+      );
+    }
+  }
+
+  static String _encodeHex(Uint8List bytes) {
+    final buffer = StringBuffer();
+    for (final byte in bytes) {
+      buffer.write(byte.toRadixString(16).padLeft(2, '0'));
+    }
+    return buffer.toString();
+  }
+
+  static void _zeroBytes(Uint8List bytes) {
+    for (var i = 0; i < bytes.length; i += 1) {
+      bytes[i] = 0;
+    }
+  }
+}
 
 class DriftDataDatabase extends GeneratedDatabase {
   DriftDataDatabase(super.executor);
@@ -40,10 +161,19 @@ class DriftDataStorageAdapter implements DataStorageAdapter {
   factory DriftDataStorageAdapter.file(
     File file, {
     bool logStatements = false,
+    SqlCipherKey? sqlCipherKey,
   }) {
     file.parent.createSync(recursive: true);
     return DriftDataStorageAdapter(
-      NativeDatabase(file, logStatements: logStatements),
+      NativeDatabase(
+        file,
+        logStatements: logStatements,
+        setup: sqlCipherKey == null
+            ? null
+            : (sqlite.Database database) {
+                sqlCipherKey.applyTo(database);
+              },
+      ),
     );
   }
 
