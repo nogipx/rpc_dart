@@ -47,7 +47,7 @@ final class TurnTcpFrameDecoder {
 
       final firstByte = _buffer[offset];
 
-      // ChannelData packets start with 0b01 (RFC 5766 section 10).
+      // ChannelData packets start with 0b01 (RFC 8656 section 11).
       if ((firstByte & 0xC0) == 0x40) {
         if (remaining < 4) {
           break;

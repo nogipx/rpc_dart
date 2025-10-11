@@ -6,7 +6,9 @@ import 'dart:typed_data';
 
 import 'package:universal_io/io.dart';
 
-/// TURN/STUN message classes according to RFC 5389 / RFC 5766.
+import 'turn_password_algorithm.dart';
+
+/// TURN/STUN message classes according to RFC 8489 / RFC 8656.
 enum TurnMessageClass {
   request,
   indication,
@@ -267,7 +269,13 @@ abstract final class TurnAttributeType {
   static const int realm = 0x0014;
   static const int nonce = 0x0015;
   static const int xorRelayedAddress = 0x0016;
+  static const int requestedAddressFamily = 0x0017;
   static const int requestedTransport = 0x0019;
+  static const int dontFragment = 0x001A;
+  static const int messageIntegritySha256 = 0x001C;
+  static const int passwordAlgorithms = 0x001D;
+  static const int passwordAlgorithm = 0x001E;
+  static const int alternateDomain = 0x001F;
   static const int xorMappedAddress = 0x0020;
   static const int errorCode = 0x0009;
   static const int software = 0x8022;
@@ -286,6 +294,12 @@ abstract final class TurnMethod {
   static const int connectRequest = 0x0400;
   static const int registerService = 0x0401;
   static const int listServices = 0x0402;
+}
+
+/// TURN requested address family helper.
+abstract final class TurnRequestedAddressFamily {
+  static const int ipv4 = 0x01;
+  static const int ipv6 = 0x02;
 }
 
 /// Encodes an IPv4 XOR'ed address attribute.
@@ -384,6 +398,14 @@ abstract final class TurnRequestedTransport {
 int decodeRequestedTransport(Uint8List value) {
   if (value.isEmpty) {
     throw ArgumentError('REQUESTED-TRANSPORT attribute is empty');
+  }
+  return value[0];
+}
+
+/// Decodes the REQUESTED-ADDRESS-FAMILY attribute value.
+int decodeRequestedAddressFamily(Uint8List value) {
+  if (value.isEmpty) {
+    throw ArgumentError('REQUESTED-ADDRESS-FAMILY attribute is empty');
   }
   return value[0];
 }

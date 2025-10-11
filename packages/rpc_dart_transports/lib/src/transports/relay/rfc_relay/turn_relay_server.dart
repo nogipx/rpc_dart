@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart' show Hmac, sha1;
+import 'package:crypto/crypto.dart' show Hmac, sha1, sha256;
 import 'package:universal_io/io.dart';
 
 import 'turn_credentials.dart';
@@ -14,8 +14,9 @@ import 'turn_allocation.dart';
 import 'turn_message.dart';
 import 'turn_relay_logger.dart';
 import 'turn_tcp_frame.dart';
+import 'turn_password_algorithm.dart';
 
-/// TURN relay server implementation following RFC 5766 for TCP-connected
+/// TURN relay server implementation following RFC 8656 for TCP-connected
 /// clients relaying UDP or TCP peer traffic.
 final class TurnRelayServer {
   TurnRelayServer({
@@ -43,10 +44,10 @@ final class TurnRelayServer {
   /// Default allocation lifetime when client does not request a value.
   final Duration allocationLifetime;
 
-  /// Permission lifetime according to RFC 5766 section 8.
+  /// Permission lifetime according to RFC 8656 recommendations.
   final Duration permissionLifetime;
 
-  /// Channel binding lifetime according to RFC 5766 section 11.
+  /// Channel binding lifetime according to RFC 8656 recommendations.
   final Duration channelLifetime;
 
   /// Value exposed through the SOFTWARE attribute.
@@ -271,6 +272,21 @@ final class TurnRelayServer {
     final requestedTransport = requestedTransportAttr != null
         ? decodeRequestedTransport(requestedTransportAttr)
         : TurnRequestedTransport.udp;
+
+    final requestedFamilyAttr =
+        message.firstAttribute(TurnAttributeType.requestedAddressFamily);
+    if (requestedFamilyAttr != null) {
+      final family = decodeRequestedAddressFamily(requestedFamilyAttr);
+      if (family != TurnRequestedAddressFamily.ipv4) {
+        _sendError(
+          context,
+          message,
+          code: 440,
+          reason: 'Requested address family $family not supported',
+        );
+        return;
+      }
+    }
 
     late final TurnRelayTransportProtocol protocol;
     switch (requestedTransport) {
@@ -846,13 +862,44 @@ final class TurnRelayServer {
     final usernameAttr = message.firstAttribute(TurnAttributeType.username);
     final realmAttr = message.firstAttribute(TurnAttributeType.realm);
     final nonceAttr = message.firstAttribute(TurnAttributeType.nonce);
-    final integrityAttr =
+    final integritySha1Attr =
         message.firstAttribute(TurnAttributeType.messageIntegrity);
+    final integritySha256Attr =
+        message.firstAttribute(TurnAttributeType.messageIntegritySha256);
+    final passwordAlgorithmAttr =
+        message.firstAttribute(TurnAttributeType.passwordAlgorithm);
 
-    if (usernameAttr == null ||
-        realmAttr == null ||
-        nonceAttr == null ||
-        integrityAttr == null) {
+    if (usernameAttr == null || realmAttr == null || nonceAttr == null) {
+      _sendUnauthorized(context, message, staleNonce: false);
+      return false;
+    }
+
+    TurnPasswordAlgorithm? requestedAlgorithm;
+    if (passwordAlgorithmAttr != null) {
+      requestedAlgorithm = decodePasswordAlgorithm(passwordAlgorithmAttr);
+      if (requestedAlgorithm == null) {
+        _sendUnauthorized(context, message, staleNonce: false);
+        return false;
+      }
+    }
+
+    late final TurnPasswordAlgorithm algorithm;
+    Uint8List? integrityAttr;
+    if (requestedAlgorithm != null) {
+      algorithm = requestedAlgorithm;
+      integrityAttr = switch (algorithm) {
+        TurnPasswordAlgorithm.hmacSha1Md5 => integritySha1Attr,
+        TurnPasswordAlgorithm.hmacSha256 => integritySha256Attr,
+      };
+    } else if (integritySha256Attr != null) {
+      algorithm = TurnPasswordAlgorithm.hmacSha256;
+      integrityAttr = integritySha256Attr;
+    } else {
+      algorithm = TurnPasswordAlgorithm.hmacSha1Md5;
+      integrityAttr = integritySha1Attr;
+    }
+
+    if (integrityAttr == null) {
       _sendUnauthorized(context, message, staleNonce: false);
       return false;
     }
@@ -879,11 +926,6 @@ final class TurnRelayServer {
       return false;
     }
 
-    if (integrityAttr.length != 20) {
-      _sendUnauthorized(context, message, staleNonce: false);
-      return false;
-    }
-
     final existingUser = context.authenticatedUsername;
     if (existingUser != null && existingUser != username) {
       _sendUnauthorized(context, message, staleNonce: false);
@@ -891,14 +933,13 @@ final class TurnRelayServer {
     }
 
     final credential = store.lookup(username);
-    if (credential == null) {
+    if (credential == null || !credential.supportsAlgorithm(algorithm)) {
       _sendUnauthorized(context, message, staleNonce: false);
       return false;
     }
 
-    final key = credential.deriveKey(realm);
-    final expected = _computeMessageIntegrity(message, key);
-    if (expected == null || !_constantTimeEquals(expected, integrityAttr)) {
+    final key = credential.deriveKey(realm, algorithm);
+    if (!_verifyMessageIntegrity(message, key, algorithm)) {
       _sendUnauthorized(context, message, staleNonce: false);
       return false;
     }
@@ -907,20 +948,42 @@ final class TurnRelayServer {
     return true;
   }
 
-  Uint8List? _computeMessageIntegrity(TurnMessage message, List<int> key) {
+  bool _verifyMessageIntegrity(
+    TurnMessage message,
+    List<int> key,
+    TurnPasswordAlgorithm algorithm,
+  ) {
     final encoded = message.encode();
     var offset = 20;
+    final integrityType = switch (algorithm) {
+      TurnPasswordAlgorithm.hmacSha1Md5 => TurnAttributeType.messageIntegrity,
+      TurnPasswordAlgorithm.hmacSha256 =>
+          TurnAttributeType.messageIntegritySha256,
+    };
+
     for (final attribute in message.attributes) {
       final length = attribute.value.length;
       final paddedLength = (length + 3) & ~3;
-      if (attribute.type == TurnAttributeType.messageIntegrity) {
+      if (attribute.type == integrityType) {
+        if (length != algorithm.integrityLength) {
+          return false;
+        }
         final data = encoded.sublist(0, offset);
-        final digest = Hmac(sha1, key).convert(data);
-        return Uint8List.fromList(digest.bytes);
+        final digest = switch (algorithm) {
+          TurnPasswordAlgorithm.hmacSha1Md5 =>
+              Hmac(sha1, key).convert(data).bytes,
+          TurnPasswordAlgorithm.hmacSha256 =>
+              Hmac(sha256, key).convert(data).bytes,
+        };
+        return _constantTimeEquals(
+          Uint8List.fromList(digest),
+          attribute.value,
+        );
       }
       offset += 4 + paddedLength;
     }
-    return null;
+
+    return false;
   }
 
   bool _constantTimeEquals(Uint8List a, Uint8List b) {
@@ -952,6 +1015,15 @@ final class TurnRelayServer {
           Uint8List.fromList(utf8.encode(store.nonce)),
         ),
       ]);
+      final algorithms = store.supportedAlgorithms;
+      if (algorithms.isNotEmpty) {
+        attributes.add(
+          TurnAttribute(
+            TurnAttributeType.passwordAlgorithms,
+            encodePasswordAlgorithms(algorithms),
+          ),
+        );
+      }
     }
 
     _sendError(
