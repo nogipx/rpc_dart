@@ -9,6 +9,140 @@ import 'package:test/test.dart';
 
 void main() {
   group('DriftDataStorageAdapter expression indexes', () {
+    test('createCollectionIndex creates json expression index', () async {
+      final adapter = DriftDataStorageAdapter(NativeDatabase.memory());
+      addTearDown(() async {
+        await adapter.dispose();
+      });
+
+      const indexName = 'priority_idx';
+      const collection = 'tasks';
+      const path = 'priority';
+
+      await adapter.createCollectionIndex(
+        const CreateCollectionIndexRequest(
+          collection: collection,
+          path: path,
+          indexName: indexName,
+        ),
+      );
+
+      final indexRow = await adapter.database
+          .customSelect(
+            'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
+            variables: const [
+              Variable<String>('index'),
+              Variable<String>(indexName),
+            ],
+          )
+          .getSingleOrNull();
+
+      expect(indexRow, isNotNull);
+      final sql = indexRow!.read<String>('sql');
+      expect(sql, contains('json_extract'));
+      expect(sql, contains('payload'));
+
+      final registryRow = await adapter.database
+          .customSelect(
+            'SELECT expression FROM collection_index_registry '
+            'WHERE collection = ? AND path = ?',
+            variables: const [
+              Variable<String>(collection),
+              Variable<String>(path),
+            ],
+          )
+          .getSingleOrNull();
+
+      expect(registryRow, isNotNull);
+      expect(
+        registryRow!.read<String>('expression'),
+        contains("json_extract(payload"),
+      );
+    });
+
+    test('deleteCollectionIndex removes json expression index', () async {
+      final adapter = DriftDataStorageAdapter(NativeDatabase.memory());
+      addTearDown(() async {
+        await adapter.dispose();
+      });
+
+      const indexName = 'priority_idx';
+      const collection = 'tasks';
+      const path = 'priority';
+
+      await adapter.createCollectionIndex(
+        const CreateCollectionIndexRequest(
+          collection: collection,
+          path: path,
+          indexName: indexName,
+        ),
+      );
+
+      final beforeDelete = await adapter.database
+          .customSelect(
+            'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+            variables: const [
+              Variable<String>('index'),
+              Variable<String>(indexName),
+            ],
+          )
+          .getSingleOrNull();
+      expect(beforeDelete, isNotNull);
+
+      final removed = await adapter.deleteCollectionIndex(
+        const DeleteCollectionIndexRequest(
+          collection: collection,
+          path: path,
+          indexName: indexName,
+        ),
+      );
+
+      expect(removed, isTrue);
+
+      final afterDelete = await adapter.database
+          .customSelect(
+            'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+            variables: const [
+              Variable<String>('index'),
+              Variable<String>(indexName),
+            ],
+          )
+          .getSingleOrNull();
+      expect(afterDelete, isNull);
+
+      final registryRow = await adapter.database
+          .customSelect(
+            'SELECT 1 FROM collection_index_registry '
+            'WHERE collection = ? AND path = ? LIMIT 1',
+            variables: const [
+              Variable<String>(collection),
+              Variable<String>(path),
+            ],
+          )
+          .getSingleOrNull();
+      expect(registryRow, isNull);
+
+      await adapter.createCollectionIndex(
+        const CreateCollectionIndexRequest(
+          collection: collection,
+          path: path,
+          indexName: indexName,
+        ),
+      );
+
+      final recreated = await adapter.database
+          .customSelect(
+            'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
+            variables: const [
+              Variable<String>('index'),
+              Variable<String>(indexName),
+            ],
+          )
+          .getSingleOrNull();
+      expect(recreated, isNotNull);
+      expect(recreated!.read<String>('sql'), contains('json_extract'));
+    });
+
     test('restores missing indexes from registry metadata', () async {
       final tempDir = await Directory.systemTemp.createTemp('rpc_dart_data_test');
       addTearDown(() async {

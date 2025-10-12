@@ -517,6 +517,7 @@ class DriftDataStorageAdapter
   }) {
     final existing = _cachedCollectionIndexes[collection];
     if (existing == null || existing.isEmpty) {
+      _knownIndexNames.remove(indexName);
       return;
     }
     final updated = existing.where((index) => index.path != path).toList();
