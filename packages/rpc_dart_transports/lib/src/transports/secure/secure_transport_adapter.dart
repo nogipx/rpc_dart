@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
 import 'package:licensify/licensify.dart';
@@ -231,8 +232,9 @@ class SecureTransportAdapter implements IRpcTransport {
       type: _SecureFrameType.data,
       payload: data,
     );
-    final bytes = Uint8List.fromList(utf8.encode(token));
-    await _inner.sendMessage(streamId, bytes, endStream: endStream);
+    final tokenBytes = Uint8List.fromList(utf8.encode(token));
+    final framed = RpcMessageFrame.encode(tokenBytes, compressed: false);
+    await _inner.sendMessage(streamId, framed, endStream: endStream);
   }
 
   @override
@@ -592,7 +594,27 @@ class SecureTransportAdapter implements IRpcTransport {
     }
 
     if (message.payload != null) {
-      final token = utf8.decode(message.payload!);
+      final payload = message.payload!;
+      if (payload.length < RpcConstants.messagePrefixSize) {
+        throw StateError('Received truncated gRPC frame on secure channel');
+      }
+
+      final header = RpcMessageFrame.parseHeader(payload);
+      if (header.isCompressed) {
+        throw StateError('Compressed gRPC frames are not supported');
+      }
+
+      final expectedLength =
+          RpcConstants.messagePrefixSize + header.messageLength;
+      if (expectedLength != payload.length) {
+        throw StateError(
+          'Received gRPC frame with mismatched length on secure channel',
+        );
+      }
+
+      final tokenBytes =
+          payload.sublist(RpcConstants.messagePrefixSize, expectedLength);
+      final token = utf8.decode(tokenBytes);
       final decrypted = await _decryptFrame(
         token: token,
         session: session,
