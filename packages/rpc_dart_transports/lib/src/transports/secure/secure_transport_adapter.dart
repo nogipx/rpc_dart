@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
 import 'package:licensify/licensify.dart';
@@ -15,6 +16,18 @@ const _metadataHeader = 'x-rpc-secure-metadata';
 const _protocolLabel = 'rpc+secure/1';
 const _infoCallerToResponder = 'rpc:data:caller->responder';
 const _infoResponderToCaller = 'rpc:data:responder->caller';
+
+class _HandshakeEnvelope {
+  const _HandshakeEnvelope({
+    required this.token,
+    required this.streamId,
+    required this.isEndOfStream,
+  });
+
+  final String token;
+  final int streamId;
+  final bool isEndOfStream;
+}
 
 enum SecureFrameFormat { verbose, compact }
 
@@ -146,7 +159,8 @@ class SecureTransportAdapter implements IRpcTransport {
 
   final StreamController<RpcTransportMessage> _incomingController =
       StreamController<RpcTransportMessage>.broadcast();
-  final StreamController<String> _handshakeTokens = StreamController<String>();
+  final StreamController<_HandshakeEnvelope> _handshakeTokens =
+      StreamController<_HandshakeEnvelope>();
   final List<RpcTransportMessage> _pendingMessages = <RpcTransportMessage>[];
 
   late final StreamSubscription<RpcTransportMessage> _innerSubscription;
@@ -218,8 +232,9 @@ class SecureTransportAdapter implements IRpcTransport {
       type: _SecureFrameType.data,
       payload: data,
     );
-    final bytes = Uint8List.fromList(utf8.encode(token));
-    await _inner.sendMessage(streamId, bytes, endStream: endStream);
+    final tokenBytes = Uint8List.fromList(utf8.encode(token));
+    final framed = RpcMessageFrame.encode(tokenBytes, compressed: false);
+    await _inner.sendMessage(streamId, framed, endStream: endStream);
   }
 
   @override
@@ -305,10 +320,16 @@ class SecureTransportAdapter implements IRpcTransport {
   Future<void> _processIncoming(RpcTransportMessage message) async {
     if (_closed) return;
 
-    if (message.streamId == 0 && message.metadata != null) {
+    if (message.metadata != null) {
       final token = message.metadata!.getHeaderValue(_handshakeHeader);
       if (token != null && !_handshakeTokens.isClosed) {
-        _handshakeTokens.add(token);
+        _handshakeTokens.add(
+          _HandshakeEnvelope(
+            token: token,
+            streamId: message.streamId,
+            isEndOfStream: message.isEndOfStream,
+          ),
+        );
         return;
       }
     }
@@ -354,6 +375,8 @@ class SecureTransportAdapter implements IRpcTransport {
     final seedCaller = _randomBytes(32);
     final nonceCaller = _randomBytes(24);
 
+    final handshakeStreamId = _inner.createStream();
+
     final helloLicense = await Licensify.createLicense(
       privateKey: _keyStore.privateKey,
       appId: 'rpc.secure',
@@ -371,13 +394,18 @@ class SecureTransportAdapter implements IRpcTransport {
 
     final helloToken = helloLicense.token;
     await _inner.sendMetadata(
-      0,
+      handshakeStreamId,
       RpcMetadata([
         RpcHeader(_handshakeHeader, helloToken),
       ]),
+      endStream: true,
     );
 
-    final ackToken = await _waitForHandshakeToken();
+    final ackEnvelope = await _waitForHandshakeToken();
+    if (ackEnvelope.streamId != handshakeStreamId) {
+      throw StateError('Responder returned handshake on unexpected stream');
+    }
+    final ackToken = ackEnvelope.token;
     final ack = await Licensify.fromToken(
       token: ackToken,
       publicKey: _keyStore.peerPublicKey,
@@ -430,16 +458,24 @@ class SecureTransportAdapter implements IRpcTransport {
 
     final handshakeHash = _computeHandshakeHash(helloToken, ackToken);
 
-    return _SessionState(
+    final session = _SessionState(
       sendKey: sendKey,
       recvKey: recvKey,
       assertion: base64Encode(handshakeHash),
       peerTransportId: transportId,
     );
+
+    if (!ackEnvelope.isEndOfStream) {
+      unawaited(_inner.finishSending(handshakeStreamId));
+    }
+
+    return session;
   }
 
   Future<_SessionState> _performResponderHandshake() async {
-    final helloToken = await _waitForHandshakeToken();
+    final helloEnvelope = await _waitForHandshakeToken();
+    final handshakeStreamId = helloEnvelope.streamId;
+    final helloToken = helloEnvelope.token;
     final hello = await Licensify.fromToken(
       token: helloToken,
       publicKey: _keyStore.peerPublicKey,
@@ -490,10 +526,11 @@ class SecureTransportAdapter implements IRpcTransport {
     final ackToken = ackLicense.token;
 
     await _inner.sendMetadata(
-      0,
+      handshakeStreamId,
       RpcMetadata([
         RpcHeader(_handshakeHeader, ackToken),
       ]),
+      endStream: true,
     );
 
     final secretMaterial = Uint8List.fromList([
@@ -513,12 +550,18 @@ class SecureTransportAdapter implements IRpcTransport {
 
     final handshakeHash = _computeHandshakeHash(helloToken, ackToken);
 
-    return _SessionState(
+    final session = _SessionState(
       sendKey: sendKey,
       recvKey: recvKey,
       assertion: base64Encode(handshakeHash),
       peerTransportId: transportId,
     );
+
+    if (!helloEnvelope.isEndOfStream) {
+      unawaited(_inner.finishSending(handshakeStreamId));
+    }
+
+    return session;
   }
 
   Future<void> _deliverProtectedMessage(
@@ -551,7 +594,27 @@ class SecureTransportAdapter implements IRpcTransport {
     }
 
     if (message.payload != null) {
-      final token = utf8.decode(message.payload!);
+      final payload = message.payload!;
+      if (payload.length < RpcConstants.messagePrefixSize) {
+        throw StateError('Received truncated gRPC frame on secure channel');
+      }
+
+      final header = RpcMessageFrame.parseHeader(payload);
+      if (header.isCompressed) {
+        throw StateError('Compressed gRPC frames are not supported');
+      }
+
+      final expectedLength =
+          RpcConstants.messagePrefixSize + header.messageLength;
+      if (expectedLength != payload.length) {
+        throw StateError(
+          'Received gRPC frame with mismatched length on secure channel',
+        );
+      }
+
+      final tokenBytes =
+          payload.sublist(RpcConstants.messagePrefixSize, expectedLength);
+      final token = utf8.decode(tokenBytes);
       final decrypted = await _decryptFrame(
         token: token,
         session: session,
@@ -579,7 +642,7 @@ class SecureTransportAdapter implements IRpcTransport {
     }
   }
 
-  Future<String> _waitForHandshakeToken() async {
+  Future<_HandshakeEnvelope> _waitForHandshakeToken() async {
     try {
       return await _handshakeTokens.stream.first
           .timeout(_config.handshakeTimeout);
