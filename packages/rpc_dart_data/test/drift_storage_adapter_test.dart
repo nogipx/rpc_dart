@@ -47,31 +47,6 @@ void main() {
         'authorization': 'Bearer test-token',
       });
 
-  if (skip) {
-    test('tsrtr', () async {
-      final storage = DriftDataStorageAdapter.file(dbFile);
-      final repository = DriftDataRepository(storage: storage);
-      final env = await DataServiceFactory.inMemory(repository: repository);
-      final context = RpcContext.withHeaders({
-        'authorization': 'Bearer test-token',
-      });
-      await env.client.delete(
-        collection: 'tasks',
-        id: 'tasks-1759370294574943-6d6dec62',
-        context: context,
-      );
-      await env.client.update(
-        collection: 'logs',
-        payload: {
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-        id: '123456',
-        context: context,
-        expectedVersion: 1,
-      );
-    });
-  }
-
   test('Drift storage adapter supports CRUD lifecycle', skip: skip, () async {
     final storage = DriftDataStorageAdapter.file(dbFile);
     final repository = DriftDataRepository(storage: storage);

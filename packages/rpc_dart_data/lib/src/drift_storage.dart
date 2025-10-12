@@ -143,7 +143,7 @@ void ensureJsonExtractFunction(sqlite.Database database) {
     );
     return;
   } on sqlite.SqliteException catch (error) {
-    final message = error.message ?? '';
+    final message = error.message;
     if (!message.contains('no such function: json_extract')) {
       rethrow;
     }
@@ -307,8 +307,7 @@ Object? _jsonValueToSqlValue(Object? value) {
 class DriftDataDatabase extends GeneratedDatabase {
   DriftDataDatabase(super.executor);
 
-  DriftDataDatabase.connect(DatabaseConnection connection)
-      : super.connect(connection);
+  DriftDataDatabase.connect(super.connection) : super.connect();
 
   @override
   int get schemaVersion => 1;
@@ -408,8 +407,8 @@ class DriftDataStorageAdapter
   static const int _ftsBatchSize = 200;
   static const String _ftsTableName = 'c_global_fts';
   bool _indexRegistryReady = false;
-  final Map<String, List<_CollectionIndexMetadata>>
-      _cachedCollectionIndexes = <String, List<_CollectionIndexMetadata>>{};
+  final Map<String, List<_CollectionIndexMetadata>> _cachedCollectionIndexes =
+      <String, List<_CollectionIndexMetadata>>{};
   final Set<String> _knownIndexNames = <String>{};
 
   DriftDataDatabase get database => _database;
@@ -587,14 +586,12 @@ class DriftDataStorageAdapter
       return cached;
     }
     await _ensureIndexRegistry();
-    final rows = await _database
-        .customSelect(
-          'SELECT path, index_name, expression '
-          'FROM collection_index_registry WHERE collection = ? '
-          'ORDER BY path',
-          variables: [Variable<String>(collection)],
-        )
-        .get();
+    final rows = await _database.customSelect(
+      'SELECT path, index_name, expression '
+      'FROM collection_index_registry WHERE collection = ? '
+      'ORDER BY path',
+      variables: [Variable<String>(collection)],
+    ).get();
     final indexes = rows
         .map(
           (row) => _CollectionIndexMetadata(
@@ -978,8 +975,7 @@ class DriftDataStorageAdapter
     String? tableAlias,
   }) {
     final normalizedField = _normalizeJsonFieldName(field);
-    final column =
-        _columnForField(field) ?? _columnForField(normalizedField);
+    final column = _columnForField(field) ?? _columnForField(normalizedField);
     if (column != null) {
       return _qualifiedColumn(column, tableAlias: tableAlias);
     }
@@ -995,8 +991,7 @@ class DriftDataStorageAdapter
       return null;
     }
     final normalizedField = _normalizeJsonFieldName(field);
-    final column =
-        _columnForField(field) ?? _columnForField(normalizedField);
+    final column = _columnForField(field) ?? _columnForField(normalizedField);
     if (column != null) {
       switch (column) {
         case 'id':
@@ -1402,7 +1397,7 @@ class DriftDataStorageAdapter
         );
       });
     } on sqlite.SqliteException catch (error) {
-      final message = error.message ?? '';
+      final message = error.message;
       if (message.contains('UNIQUE') || message.contains('unique')) {
         throw RpcDataError.invalidArgument(
           'Index name "$indexName" is already in use.',
@@ -1710,8 +1705,9 @@ class DriftDataStorageAdapter
       filterValues.add(cursor);
     }
 
-    final whereClause =
-        filterConditions.isEmpty ? '' : 'WHERE ${filterConditions.join(' AND ')}';
+    final whereClause = filterConditions.isEmpty
+        ? ''
+        : 'WHERE ${filterConditions.join(' AND ')}';
 
     final fetchLimit = request.options.limit + 1;
     final querySql = StringBuffer(
@@ -2241,7 +2237,8 @@ class DriftDataChangeJournal implements DataChangeJournal {
     // DEBUG
     for (final event in events) {
       // ignore: avoid_print
-      print('replay event: collection='           '${event.collection} id=${event.id} cursor=${event.cursor}');
+      print('replay event: collection='
+          '${event.collection} id=${event.id} cursor=${event.cursor}');
     }
     return events;
   }
@@ -2319,10 +2316,11 @@ class DriftDataRepository extends BaseDataRepository {
           storage,
           clock: clock,
           idGenerator: idGenerator,
-          changeJournal: changeJournal ?? DriftDataChangeJournal(
-            storage.database,
-            clearOnOpen: storage.isInMemory,
-          ),
+          changeJournal: changeJournal ??
+              DriftDataChangeJournal(
+                storage.database,
+                clearOnOpen: storage.isInMemory,
+              ),
           journalMaxEvents: journalMaxEvents,
           journalRetention: journalRetention,
         );

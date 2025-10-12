@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -13,8 +12,8 @@ const _defaultOptions = DriftConnectionOptions.defaults;
 
 Future<File> _resolveMainDbFile(DriftConnectionOptions options) async {
   final explicitPath = options.nativePath;
-  final targetPath = explicitPath ??
-      p.join(Directory.current.path, options.nativeFileName);
+  final targetPath =
+      explicitPath ?? p.join(Directory.current.path, options.nativeFileName);
   final file = File(targetPath);
   await file.parent.create(recursive: true);
   return file;

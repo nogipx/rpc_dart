@@ -31,7 +31,7 @@ Future<void> main() async {
     context: baseContext,
   );
 
-  final listed = await client.list(
+  await client.list(
     collection: 'articles',
     filter: const RecordFilter(equals: {'title': 'Hello RPC'}),
     options: const QueryOptions(limit: 10, includeTotalCount: true),
@@ -39,7 +39,7 @@ Future<void> main() async {
   );
   // _check(listed.totalCount == 1, 'Should have exact 1 record after create');
 
-  final updated = await client.update(
+  await client.update(
     collection: created.collection,
     id: created.id,
     expectedVersion: created.version,
@@ -60,7 +60,7 @@ Future<void> main() async {
       .listen((e) => print(
           '🔔 change: ${e.type} id=${e.id} v=${e.version} cursor=${e.cursor}'));
 
-  final patched = await client.patch(
+  await client.patch(
     collection: 'articles',
     id: created.id,
     expectedVersion: 2,
@@ -69,7 +69,7 @@ Future<void> main() async {
   );
   // _check(patched.version == 3, 'Patch increments version');
 
-  final search = await client.search(
+  await client.search(
     collection: 'articles',
     query: 'rpc',
     context: baseContext,
@@ -170,8 +170,4 @@ Future<void> main() async {
   await offlineQueue.dispose();
   await env.close();
   print('✅ Extended demo finished');
-}
-
-void _check(bool c, String m) {
-  if (!c) throw StateError(m);
 }

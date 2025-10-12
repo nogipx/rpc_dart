@@ -8,7 +8,6 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:licensify/licensify.dart';
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
@@ -858,7 +857,7 @@ ServeCliApplication _buildDataServiceApplication(ServeCliRuntime runtime) {
     ),
   );
 
-  DataServiceResponder _createResponder() => DataServiceResponder(
+  DataServiceResponder createResponder() => DataServiceResponder(
         repository: repository,
         disposeRepositoryOnClose: false,
         allowedBearerTokens: runtime.authTokens,
@@ -867,11 +866,11 @@ ServeCliApplication _buildDataServiceApplication(ServeCliRuntime runtime) {
   return ServeCliApplication(
     registerEndpoint: (endpoint) {
       endpoint.registerServiceContract(
-        _createResponder(),
+        createResponder(),
       );
     },
     createRelayResponders: () async => [
-      _createResponder(),
+      createResponder(),
     ],
     onShutdown: () => repository.dispose(),
   );
