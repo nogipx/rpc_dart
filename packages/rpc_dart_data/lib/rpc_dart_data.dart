@@ -1,3 +1,10 @@
+export 'package:rpc_dart_transports/rpc_dart_transports.dart';
+
+export 'src/change_journal.dart'
+    show DataChangeJournal, InMemoryDataChangeJournal;
+export 'src/connection/connection.dart';
+export 'src/daemon_process_manager.dart'
+    show DaemonProcessManager, DaemonLaunchException, PidFileException;
 export 'src/data_caller.dart' show DataServiceCaller, OfflineCommandQueue;
 export 'src/data_contract.dart';
 export 'src/data_repository.dart'
@@ -8,8 +15,6 @@ export 'src/data_repository.dart'
         InMemoryDataRepository,
         InMemoryStorageAdapter;
 export 'src/data_repository.dart' show AdvancedDataStorageAdapter;
-export 'src/change_journal.dart'
-    show DataChangeJournal, InMemoryDataChangeJournal;
 export 'src/data_responder.dart' show DataServiceResponder;
 export 'src/data_service_facade.dart'
     show
@@ -18,8 +23,6 @@ export 'src/data_service_facade.dart'
         DataServiceServer,
         DataServiceFactory,
         InMemoryDataServiceEnvironment;
-export 'src/daemon_process_manager.dart'
-    show DaemonProcessManager, DaemonLaunchException, PidFileException;
 export 'src/drift_storage.dart'
     show
         DriftDataRepository,
@@ -28,4 +31,3 @@ export 'src/drift_storage.dart'
         SqlCipherKey,
         SqlCipherException;
 export 'src/models.dart';
-export 'src/connection/connection.dart';

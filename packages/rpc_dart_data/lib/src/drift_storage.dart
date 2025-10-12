@@ -413,6 +413,55 @@ class DriftDataStorageAdapter
 
   DriftDataDatabase get database => _database;
 
+  /// Ensures that the underlying SQLite database is present and consistent.
+  ///
+  /// Creates base tables when the database is empty and validates existing
+  /// metadata before accepting traffic. A fast integrity check is executed to
+  /// catch structural corruption early.
+  Future<void> ensureReady({bool validateIntegrity = true}) async {
+    await _ensureRegistry();
+    await _ensureIndexRegistry();
+    await _ensureFts();
+    final journal = DriftDataChangeJournal(_database);
+    await journal.ensureReady();
+
+    if (validateIntegrity) {
+      final quickCheckRows =
+          await _database.customSelect('PRAGMA quick_check').get();
+      final issues = <String>[];
+      for (final row in quickCheckRows) {
+        final value = row.read<String>('quick_check');
+        if (value.toLowerCase() != 'ok') {
+          issues.add(value);
+        }
+      }
+      if (issues.isNotEmpty) {
+        throw RpcDataError.internal(
+          'SQLite quick_check failed: ${issues.join(', ')}',
+        );
+      }
+    }
+
+    final registryRows = await _database
+        .customSelect(
+          'SELECT collection, table_name FROM collection_registry',
+        )
+        .get();
+
+    for (final row in registryRows) {
+      final collection = row.read<String>('collection');
+      final tableName = row.read<String>('table_name');
+      final exists = await _tableExists(tableName);
+      if (!exists) {
+        throw RpcDataError.internal(
+          'Registered collection "$collection" is missing table "$tableName".',
+        );
+      }
+      await _ensureTenantSupport(tableName);
+      await _ensureCollectionIndexes(collection, tableName);
+    }
+  }
+
   Future<void> _ensureRegistry() async {
     if (_registryReady) {
       return;
@@ -2076,6 +2125,8 @@ class DriftDataChangeJournal implements DataChangeJournal {
   final bool _clearOnOpen;
   bool _tableReady = false;
   bool _clearedOnOpen = false;
+
+  Future<void> ensureReady() => _ensureTable();
 
   Future<void> _ensureTable() async {
     if (_clearOnOpen && !_clearedOnOpen) {

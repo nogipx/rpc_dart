@@ -372,21 +372,33 @@ class DataServiceResponder extends RpcResponderContract
   }
 
   void _ensureAuthorized(RpcContext? context) {
-    final authHeader = context?.getHeader('authorization');
-    if (authHeader == null || !authHeader.startsWith('Bearer ')) {
-      throw RpcDataError.permissionDenied('Bearer token is required');
-    }
-    final token = authHeader.substring(7).trim();
-    if (token.isEmpty) {
-      throw RpcDataError.permissionDenied('Bearer token is required');
-    }
-    if (_allowedBearerTokens.isNotEmpty && !_allowedBearerTokens.contains(token)) {
-      throw RpcDataError.permissionDenied('Bearer token is invalid');
-    }
     if (context?.isExpired ?? false) {
       throw RpcDataError.deadlineExceeded(
         'Deadline exceeded for request ${context?.requestId}',
       );
+    }
+    if (_allowedBearerTokens.isEmpty) {
+      return;
+    }
+    final authHeader = context?.getHeader('authorization');
+    if (authHeader == null || authHeader.trim().isEmpty) {
+      throw RpcDataError.permissionDenied(
+        'Authorization header is required for this service',
+      );
+    }
+    if (!authHeader.startsWith('Bearer ')) {
+      throw RpcDataError.permissionDenied(
+        'Authorization header must use the Bearer scheme',
+      );
+    }
+    final token = authHeader.substring(7).trim();
+    if (token.isEmpty) {
+      throw RpcDataError.permissionDenied(
+        'Authorization header is required for this service',
+      );
+    }
+    if (!_allowedBearerTokens.contains(token)) {
+      throw RpcDataError.permissionDenied('Bearer token is invalid');
     }
   }
 

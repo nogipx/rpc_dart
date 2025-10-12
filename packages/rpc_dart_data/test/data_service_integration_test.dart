@@ -28,18 +28,6 @@ void main() {
     });
 
     test('exercises full service lifecycle', () async {
-      await expectLater(
-        () => env.client.create(
-          collection: 'notes',
-          payload: {'title': 'Unauthorized access'},
-        ),
-        throwsA(
-          predicate(
-            (error) => error.toString().contains('Bearer token is required'),
-          ),
-        ),
-      );
-
       final notesChanges = StreamQueue<DataChangeEvent>(
         env.client.watchChanges(
           collection: 'notes',
@@ -53,7 +41,6 @@ void main() {
       final created = await env.client.create(
         collection: 'notes',
         payload: {'title': 'First note', 'status': 'draft'},
-        context: authContext,
       );
       expect(created.collection, 'notes');
       expect(created.version, 1);

@@ -23,7 +23,7 @@ and the Flutter guide for
 - Реактивные изменения: watchChanges с курсорами
 - Offline-first: двунаправленный syncChanges + очередь команд `OfflineCommandQueue`
 - Оптимистичная конкуренция через версии записей
-- Авторизация через заголовок `authorization: Bearer ...` с проверкой по белому списку токенов
+- Опциональная авторизация через заголовок `authorization: Bearer ...` с проверкой по белому списку токенов
 
 ## Архитектура (слои)
 1. Transport (WebSocket / HTTP2 / isolate / TURN / in-memory) из `rpc_dart_transports`
@@ -44,6 +44,7 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 Future<void> main() async {
   final env = await DataServiceFactory.inMemory();
   final client = env.client;
+  // Контекст с Authorization заголовком нужен только если сервер проверяет bearer токены.
   final ctx = RpcContext.withHeaders({'authorization': 'Bearer dev'});
 
   final rec = await client.create(
@@ -89,7 +90,10 @@ just compile_serve [build/rpc_dart_data_serve] [-- <доп. флаги dart comp
 сигналы `SIGINT`/`SIGTERM` и корректно завершает работу, закрывая HTTP/2
 соединения и репозиторий данных. По умолчанию он создаёт файл `data_service.sqlite`
 в рабочем каталоге процесса (см. `--database` ниже), поэтому без дополнительной
-конфигурации вы сразу получаете persistent-хранилище на диске. В CLI доступны
+конфигурации вы сразу получаете persistent-хранилище на диске. На этапе старта
+сервер автоматически разворачивает схему, если файл отсутствует, и выполняет
+быструю проверку целостности существующего файла, чтобы убедиться, что база готова
+к использованию перед обработкой запросов. В CLI доступны
 дополнительные опции:
 
 - `--daemon` (`-D`) — запускает сервер в фоне, создавая отсоединённый дочерний
@@ -105,7 +109,7 @@ just compile_serve [build/rpc_dart_data_serve] [-- <доп. флаги dart comp
 - `--auth-token <value>` — добавляет статический bearer токен. Можно указать
   несколько флагов, а также считать секреты из переменных окружения
   (`--auth-token-env NAME`) или файла (`--auth-token-file path`). Если токены
-  не заданы, сервис предупреждает и принимает любой заголовок `Authorization`.
+  не заданы, сервис предупреждает и работает без проверки заголовка `Authorization`.
 - `--secure-wrap` и связанные параметры — включают шифрование/аутентификацию
   поверх HTTP/2 через Licensify. Ключи передаются **только** в формате PASERK:
   `--secure-wrap-private-key` принимает строку `k4.secret`, а

@@ -91,7 +91,14 @@ Future<DriftDataStorageAdapter> openMainStorage({
     logStatements: logStatements,
     sqlCipherKey: sqlCipherKey,
   );
-  return DriftDataStorageAdapter.connection(connection);
+  final adapter = DriftDataStorageAdapter.connection(connection);
+  try {
+    await adapter.ensureReady();
+  } catch (error) {
+    await adapter.dispose();
+    rethrow;
+  }
+  return adapter;
 }
 
 /// Replaces the persistent database contents with the provided [bytes].

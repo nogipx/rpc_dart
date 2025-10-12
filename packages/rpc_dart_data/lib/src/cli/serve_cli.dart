@@ -136,8 +136,8 @@ class ServeCli {
 
     if (authTokens.isEmpty) {
       await logger.warning(
-        'Bearer токены не заданы: сервис примет любой Authorization header. '
-        'Добавьте --auth-token/--auth-token-file/--auth-token-env для ограничений.',
+        'Bearer токены не заданы: сервис работает без проверки Authorization header. '
+        'Добавьте --auth-token/--auth-token-file/--auth-token-env, чтобы ограничить доступ.',
       );
     }
 
@@ -848,14 +848,20 @@ void _configureDataServiceArguments(ArgParser parser) {
   );
 }
 
-ServeCliApplication _buildDataServiceApplication(ServeCliRuntime runtime) {
+Future<ServeCliApplication> _buildDataServiceApplication(
+    ServeCliRuntime runtime) async {
   final databasePath = runtime.args['database'] as String;
-  final repository = DriftDataRepository(
-    storage: DriftDataStorageAdapter.file(
-      File(databasePath),
-      sqlCipherKey: runtime.sqlCipherKey,
-    ),
+  final storage = DriftDataStorageAdapter.file(
+    File(databasePath),
+    sqlCipherKey: runtime.sqlCipherKey,
   );
+  try {
+    await storage.ensureReady();
+  } catch (error) {
+    await storage.dispose();
+    rethrow;
+  }
+  final repository = DriftDataRepository(storage: storage);
 
   DataServiceResponder createResponder() => DataServiceResponder(
         repository: repository,

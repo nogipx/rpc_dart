@@ -29,7 +29,14 @@ Future<DriftDataStorageAdapter> openMainStorage({
   DriftConnectionOptions options = _defaultOptions,
 }) async {
   final connection = await openMainDb(options: options);
-  return DriftDataStorageAdapter.connection(connection);
+  final adapter = DriftDataStorageAdapter.connection(connection);
+  try {
+    await adapter.ensureReady();
+  } catch (error) {
+    await adapter.dispose();
+    rethrow;
+  }
+  return adapter;
 }
 
 /// Replaces the persistent database contents with the provided [bytes].
