@@ -56,11 +56,12 @@ NativeDatabase _createNativeDatabase(
   return NativeDatabase(
     file,
     logStatements: logStatements,
-    setup: sqlCipherKey == null
-        ? null
-        : (s3.Database database) {
-            sqlCipherKey.applyTo(database);
-          },
+    setup: (s3.Database database) {
+      if (sqlCipherKey != null) {
+        sqlCipherKey.applyTo(database);
+      }
+      ensureJsonExtractFunction(database);
+    },
   );
 }
 
@@ -163,6 +164,7 @@ Future<DatabaseConnection> openInMemoryDbFromBytes(
       NativeDatabase.opened(
         dst,
         logStatements: logStatements,
+        setup: ensureJsonExtractFunction,
       ),
     );
   } finally {
