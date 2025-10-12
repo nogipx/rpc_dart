@@ -1,5 +1,6 @@
 ## 2.3.1
 
+- Optimize ping requests
 - Introduced a unified middleware and interceptor pipeline across caller
   and responder endpoints, ensuring context propagation for unary and
   streaming RPC flows.
