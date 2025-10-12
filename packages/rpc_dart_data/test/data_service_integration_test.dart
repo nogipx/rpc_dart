@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:async/async.dart';
 import 'package:drift/drift.dart' show Variable;
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 

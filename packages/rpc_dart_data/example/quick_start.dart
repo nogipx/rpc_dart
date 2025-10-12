@@ -1,5 +1,4 @@
 import 'package:rpc_dart_data/rpc_dart_data.dart';
-import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 // Quick start: минимальный CRUD + watch.
 Future<void> main() async {

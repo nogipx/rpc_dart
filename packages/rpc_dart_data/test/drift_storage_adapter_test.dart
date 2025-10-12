@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' as drift;
 import 'package:path/path.dart' as p;
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 
