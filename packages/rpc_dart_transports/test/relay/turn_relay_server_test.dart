@@ -4,7 +4,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' show Hmac, sha1, sha256;
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
@@ -308,8 +307,7 @@ void main() {
       final algorithmsAttr =
           response.firstAttribute(TurnAttributeType.passwordAlgorithms);
       expect(algorithmsAttr, isNotNull);
-      final advertisedAlgorithms =
-          _decodePasswordAlgorithms(algorithmsAttr!);
+      final advertisedAlgorithms = _decodePasswordAlgorithms(algorithmsAttr!);
       expect(
         advertisedAlgorithms,
         containsAll(TurnPasswordAlgorithm.values.map((e) => e.wireValue)),
@@ -325,19 +323,19 @@ void main() {
         final frameDecoder = TurnTcpFrameDecoder(
           onTurnMessage: turnMessages.add,
           onChannelData: (_, __) {},
-      );
+        );
 
-      final socketSub = socket.listen((Uint8List data) {
-        if (data.isNotEmpty) {
-          frameDecoder.addChunk(data);
-        }
-      });
+        final socketSub = socket.listen((Uint8List data) {
+          if (data.isNotEmpty) {
+            frameDecoder.addChunk(data);
+          }
+        });
 
-      addTearDown(() async {
-        await socketSub.cancel();
-        await turnMessages.close();
-        await socket.close();
-      });
+        addTearDown(() async {
+          await socketSub.cancel();
+          await turnMessages.close();
+          await socket.close();
+        });
 
         final request = _buildAuthenticatedRequest(
           method: TurnMethod.allocate,
@@ -409,7 +407,7 @@ TurnMessage _buildAuthenticatedRequest({
   final integrityType = switch (algorithm) {
     TurnPasswordAlgorithm.hmacSha1Md5 => TurnAttributeType.messageIntegrity,
     TurnPasswordAlgorithm.hmacSha256 =>
-        TurnAttributeType.messageIntegritySha256,
+      TurnAttributeType.messageIntegritySha256,
   };
 
   final placeholder = TurnAttribute(
@@ -441,9 +439,9 @@ TurnMessage _signMessage(
     final paddedLength = (length + 3) & ~3;
     final matches = switch (algorithm) {
       TurnPasswordAlgorithm.hmacSha1Md5 =>
-          attribute.type == TurnAttributeType.messageIntegrity,
+        attribute.type == TurnAttributeType.messageIntegrity,
       TurnPasswordAlgorithm.hmacSha256 =>
-          attribute.type == TurnAttributeType.messageIntegritySha256,
+        attribute.type == TurnAttributeType.messageIntegritySha256,
     };
     if (matches) {
       integrityIndex = i;
@@ -454,17 +452,16 @@ TurnMessage _signMessage(
 
   final mac = switch (algorithm) {
     TurnPasswordAlgorithm.hmacSha1Md5 =>
-        Hmac(sha1, key).convert(encoded.sublist(0, offset)),
+      Hmac(sha1, key).convert(encoded.sublist(0, offset)),
     TurnPasswordAlgorithm.hmacSha256 =>
-        Hmac(sha256, key).convert(encoded.sublist(0, offset)),
+      Hmac(sha256, key).convert(encoded.sublist(0, offset)),
   };
   final attributes = [...message.attributes];
   attributes[integrityIndex] = TurnAttribute(
     switch (algorithm) {
-      TurnPasswordAlgorithm.hmacSha1Md5 =>
-          TurnAttributeType.messageIntegrity,
+      TurnPasswordAlgorithm.hmacSha1Md5 => TurnAttributeType.messageIntegrity,
       TurnPasswordAlgorithm.hmacSha256 =>
-          TurnAttributeType.messageIntegritySha256,
+        TurnAttributeType.messageIntegritySha256,
     },
     Uint8List.fromList(mac.bytes),
   );

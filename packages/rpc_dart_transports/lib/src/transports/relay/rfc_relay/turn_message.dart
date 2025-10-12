@@ -6,8 +6,6 @@ import 'dart:typed_data';
 
 import 'package:universal_io/io.dart';
 
-import 'turn_password_algorithm.dart';
-
 /// TURN/STUN message classes according to RFC 8489 / RFC 8656.
 enum TurnMessageClass {
   request,

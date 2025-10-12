@@ -129,11 +129,185 @@ class SqlCipherKey {
   }
 }
 
+/// Ensures that a deterministic [json_extract] function is available on the
+/// underlying SQLite [database].
+///
+/// SQLCipher builds may omit the JSON1 extension, which prevents the creation
+/// of expression indexes on JSON payload fields. When the built-in function is
+/// missing, this method registers a minimal Dart-backed implementation that
+/// supports the subset of JSON path expressions used by rpc_dart.
+void ensureJsonExtractFunction(sqlite.Database database) {
+  try {
+    database.select(
+      r"""SELECT json_extract('{"v":1}', '$."v"')""",
+    );
+    return;
+  } on sqlite.SqliteException catch (error) {
+    final message = error.message;
+    if (!message.contains('no such function: json_extract')) {
+      rethrow;
+    }
+  }
+
+  database.createFunction(
+    functionName: 'json_extract',
+    argumentCount: const sqlite.AllowedArgumentCount(2),
+    deterministic: true,
+    directOnly: false,
+    function: _jsonExtractFallback,
+  );
+}
+
+Object? _jsonExtractFallback(List<Object?> arguments) {
+  if (arguments.length < 2) {
+    return null;
+  }
+
+  final source = arguments[0];
+  final pathArg = arguments[1];
+  if (source == null || pathArg == null) {
+    return null;
+  }
+
+  final jsonText = _jsonStringFromValue(source);
+  if (jsonText == null) {
+    return null;
+  }
+
+  final path = pathArg.toString();
+  if (path.isEmpty) {
+    return null;
+  }
+
+  try {
+    final root = jsonDecode(jsonText);
+    final tokens = _parseJsonPathTokens(path);
+    if (tokens.isEmpty) {
+      final normalized = path.trim();
+      if (normalized == r'$') {
+        return _jsonValueToSqlValue(root);
+      }
+      return null;
+    }
+    final value = _walkJsonPath(root, tokens);
+    return _jsonValueToSqlValue(value);
+  } catch (_) {
+    return null;
+  }
+}
+
+String? _jsonStringFromValue(Object? source) {
+  if (source is String) {
+    return source;
+  }
+  if (source is List<int>) {
+    return utf8.decode(source, allowMalformed: true);
+  }
+  return null;
+}
+
+List<Object> _parseJsonPathTokens(String path) {
+  final tokens = <Object>[];
+  var index = 0;
+
+  if (path.startsWith(r'$')) {
+    index += 1;
+  }
+
+  while (index < path.length) {
+    final current = path[index];
+    if (current == '.') {
+      index += 1;
+      if (index >= path.length) {
+        break;
+      }
+      if (path[index] == '"') {
+        index += 1;
+        final buffer = StringBuffer();
+        while (index < path.length) {
+          final char = path[index];
+          if (char == '\\') {
+            if (index + 1 < path.length) {
+              buffer.write(path[index + 1]);
+              index += 2;
+              continue;
+            }
+            index += 1;
+            continue;
+          }
+          if (char == '"') {
+            index += 1;
+            break;
+          }
+          buffer.write(char);
+          index += 1;
+        }
+        tokens.add(buffer.toString());
+        continue;
+      }
+    }
+
+    if (current == '[') {
+      final end = path.indexOf(']', index + 1);
+      if (end == -1) {
+        break;
+      }
+      final indexValue = int.tryParse(path.substring(index + 1, end));
+      if (indexValue != null) {
+        tokens.add(indexValue);
+      }
+      index = end + 1;
+      continue;
+    }
+
+    index += 1;
+  }
+
+  return tokens;
+}
+
+dynamic _walkJsonPath(dynamic root, List<Object> tokens) {
+  var current = root;
+  for (final token in tokens) {
+    if (token is String) {
+      if (current is Map<String, dynamic>) {
+        current = current[token];
+        continue;
+      }
+      return null;
+    }
+    if (token is int) {
+      if (current is List && token >= 0 && token < current.length) {
+        current = current[token];
+        continue;
+      }
+      return null;
+    }
+    return null;
+  }
+  return current;
+}
+
+Object? _jsonValueToSqlValue(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num || value is String) {
+    return value;
+  }
+  if (value is bool) {
+    return value ? 1 : 0;
+  }
+  if (value is List || value is Map) {
+    return jsonEncode(value);
+  }
+  return value.toString();
+}
+
 class DriftDataDatabase extends GeneratedDatabase {
   DriftDataDatabase(super.executor);
 
-  DriftDataDatabase.connect(DatabaseConnection connection)
-      : super.connect(connection);
+  DriftDataDatabase.connect(super.connection) : super.connect();
 
   @override
   int get schemaVersion => 1;
@@ -192,7 +366,10 @@ class DriftDataStorageAdapter
   /// Create an adapter backed by an in-memory SQLite database.
   factory DriftDataStorageAdapter.memory({bool logStatements = false}) {
     return DriftDataStorageAdapter(
-      NativeDatabase.memory(logStatements: logStatements),
+      NativeDatabase.memory(
+        logStatements: logStatements,
+        setup: ensureJsonExtractFunction,
+      ),
       isInMemory: true,
     );
   }
@@ -208,11 +385,12 @@ class DriftDataStorageAdapter
       NativeDatabase(
         file,
         logStatements: logStatements,
-        setup: sqlCipherKey == null
-            ? null
-            : (sqlite.Database database) {
-                sqlCipherKey.applyTo(database);
-              },
+        setup: (sqlite.Database database) {
+          if (sqlCipherKey != null) {
+            sqlCipherKey.applyTo(database);
+          }
+          ensureJsonExtractFunction(database);
+        },
       ),
     );
   }
@@ -229,8 +407,8 @@ class DriftDataStorageAdapter
   static const int _ftsBatchSize = 200;
   static const String _ftsTableName = 'c_global_fts';
   bool _indexRegistryReady = false;
-  final Map<String, List<_CollectionIndexMetadata>>
-      _cachedCollectionIndexes = <String, List<_CollectionIndexMetadata>>{};
+  final Map<String, List<_CollectionIndexMetadata>> _cachedCollectionIndexes =
+      <String, List<_CollectionIndexMetadata>>{};
   final Set<String> _knownIndexNames = <String>{};
 
   DriftDataDatabase get database => _database;
@@ -389,13 +567,15 @@ class DriftDataStorageAdapter
   ) {
     final snapshot = List<_CollectionIndexMetadata>.unmodifiable(indexes);
     _cachedCollectionIndexes[collection] = snapshot;
-    for (final metadata in snapshot) {
-      _knownIndexNames.add(metadata.indexName);
-    }
   }
 
   void _invalidateCollectionIndexCache(String collection) {
-    _cachedCollectionIndexes.remove(collection);
+    final existing = _cachedCollectionIndexes.remove(collection);
+    if (existing != null) {
+      for (final metadata in existing) {
+        _knownIndexNames.remove(metadata.indexName);
+      }
+    }
   }
 
   Future<List<_CollectionIndexMetadata>> _loadCollectionIndexes(
@@ -406,14 +586,12 @@ class DriftDataStorageAdapter
       return cached;
     }
     await _ensureIndexRegistry();
-    final rows = await _database
-        .customSelect(
-          'SELECT path, index_name, expression '
-          'FROM collection_index_registry WHERE collection = ? '
-          'ORDER BY path',
-          variables: [Variable<String>(collection)],
-        )
-        .get();
+    final rows = await _database.customSelect(
+      'SELECT path, index_name, expression '
+      'FROM collection_index_registry WHERE collection = ? '
+      'ORDER BY path',
+      variables: [Variable<String>(collection)],
+    ).get();
     final indexes = rows
         .map(
           (row) => _CollectionIndexMetadata(
@@ -515,6 +693,7 @@ class DriftDataStorageAdapter
   }) {
     final existing = _cachedCollectionIndexes[collection];
     if (existing == null || existing.isEmpty) {
+      _knownIndexNames.remove(indexName);
       return;
     }
     final updated = existing.where((index) => index.path != path).toList();
@@ -796,8 +975,7 @@ class DriftDataStorageAdapter
     String? tableAlias,
   }) {
     final normalizedField = _normalizeJsonFieldName(field);
-    final column =
-        _columnForField(field) ?? _columnForField(normalizedField);
+    final column = _columnForField(field) ?? _columnForField(normalizedField);
     if (column != null) {
       return _qualifiedColumn(column, tableAlias: tableAlias);
     }
@@ -813,8 +991,7 @@ class DriftDataStorageAdapter
       return null;
     }
     final normalizedField = _normalizeJsonFieldName(field);
-    final column =
-        _columnForField(field) ?? _columnForField(normalizedField);
+    final column = _columnForField(field) ?? _columnForField(normalizedField);
     if (column != null) {
       switch (column) {
         case 'id':
@@ -1220,7 +1397,7 @@ class DriftDataStorageAdapter
         );
       });
     } on sqlite.SqliteException catch (error) {
-      final message = error.message ?? '';
+      final message = error.message;
       if (message.contains('UNIQUE') || message.contains('unique')) {
         throw RpcDataError.invalidArgument(
           'Index name "$indexName" is already in use.',
@@ -1528,8 +1705,9 @@ class DriftDataStorageAdapter
       filterValues.add(cursor);
     }
 
-    final whereClause =
-        filterConditions.isEmpty ? '' : 'WHERE ${filterConditions.join(' AND ')}';
+    final whereClause = filterConditions.isEmpty
+        ? ''
+        : 'WHERE ${filterConditions.join(' AND ')}';
 
     final fetchLimit = request.options.limit + 1;
     final querySql = StringBuffer(
@@ -2059,7 +2237,8 @@ class DriftDataChangeJournal implements DataChangeJournal {
     // DEBUG
     for (final event in events) {
       // ignore: avoid_print
-      print('replay event: collection='           '${event.collection} id=${event.id} cursor=${event.cursor}');
+      print('replay event: collection='
+          '${event.collection} id=${event.id} cursor=${event.cursor}');
     }
     return events;
   }
@@ -2137,10 +2316,11 @@ class DriftDataRepository extends BaseDataRepository {
           storage,
           clock: clock,
           idGenerator: idGenerator,
-          changeJournal: changeJournal ?? DriftDataChangeJournal(
-            storage.database,
-            clearOnOpen: storage.isInMemory,
-          ),
+          changeJournal: changeJournal ??
+              DriftDataChangeJournal(
+                storage.database,
+                clearOnOpen: storage.isInMemory,
+              ),
           journalMaxEvents: journalMaxEvents,
           journalRetention: journalRetention,
         );

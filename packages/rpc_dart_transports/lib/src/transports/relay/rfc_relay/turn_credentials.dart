@@ -62,8 +62,7 @@ final class TurnCredential {
         return Uint8List.fromList(
           switch (algorithm) {
             TurnPasswordAlgorithm.hmacSha1Md5 => md5.convert(material).bytes,
-            TurnPasswordAlgorithm.hmacSha256 =>
-                sha256.convert(material).bytes,
+            TurnPasswordAlgorithm.hmacSha256 => sha256.convert(material).bytes,
           },
         );
     }
