@@ -1,0 +1,14 @@
+name: qr_stl_generator
+description: CLI tool to generate dual-color friendly STL models of QR codes.
+version: 0.1.0
+publish_to: "none"
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  args: ^2.4.2
+  qr: ^3.0.2
+
+dev_dependencies:
+  lints: ^2.1.0
+  test: ^1.24.0
