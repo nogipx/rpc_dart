@@ -672,8 +672,9 @@ final class TurnRelayServer {
     TurnMessage request,
   ) {
     final filterAttr = request.firstAttribute(TurnAttributeType.rpcServiceId);
-    final filterId =
-        filterAttr != null ? utf8.decode(filterAttr, allowMalformed: true) : null;
+    final filterId = filterAttr != null
+        ? utf8.decode(filterAttr, allowMalformed: true)
+        : null;
 
     final services = <Map<String, Object?>>[];
 
@@ -958,7 +959,7 @@ final class TurnRelayServer {
     final integrityType = switch (algorithm) {
       TurnPasswordAlgorithm.hmacSha1Md5 => TurnAttributeType.messageIntegrity,
       TurnPasswordAlgorithm.hmacSha256 =>
-          TurnAttributeType.messageIntegritySha256,
+        TurnAttributeType.messageIntegritySha256,
     };
 
     for (final attribute in message.attributes) {
@@ -971,9 +972,9 @@ final class TurnRelayServer {
         final data = encoded.sublist(0, offset);
         final digest = switch (algorithm) {
           TurnPasswordAlgorithm.hmacSha1Md5 =>
-              Hmac(sha1, key).convert(data).bytes,
+            Hmac(sha1, key).convert(data).bytes,
           TurnPasswordAlgorithm.hmacSha256 =>
-              Hmac(sha256, key).convert(data).bytes,
+            Hmac(sha256, key).convert(data).bytes,
         };
         return _constantTimeEquals(
           Uint8List.fromList(digest),

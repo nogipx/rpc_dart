@@ -1,7 +1,27 @@
-## Unreleased
+## 1.3.0
 
-- Added TURN relay discovery API allowing allocations to register service
-  descriptions and list active peers for easier rendezvous.
+- **Breaking**: Removed the `RpcServerBootstrap` production facade and bundled
+  service scripts; the package now exports only the shared server interfaces,
+  so integrate your own daemon/CLI layer when upgrading.
+- **Feature**: Added the Licensify-backed `SecureTransportAdapter` that wraps
+  any `IRpcTransport` with mutual handshake tokens, metadata sealing, optional
+  padding and handshake flood protection (`lib/src/transports/secure/secure_transport_adapter.dart:33`).
+- **Feature**: Shipped a TURN relay stack with an RFC 8656–compliant server,
+  client transports and the `RpcTurnRelayPeer` helper for discovery-driven
+  rendezvous (`lib/src/transports/relay/rfc_relay/turn_relay_server.dart:19`,
+  `lib/src/transports/relay/rpc_turn_relay_transport.dart:13`,
+  `lib/src/transports/relay/rpc_turn_relay_peer.dart:6`).
+- **Improvement**: HTTP/2 transports can now be wrapped (e.g. with the secure
+  overlay) and guard against double gRPC framing while Base64-encoding
+  non-ASCII headers so handshake tokens propagate correctly
+  (`lib/src/transports/http2/rpc_http2_server.dart:26`,
+  `lib/src/transports/http2/rpc_http2_common.dart:40`,
+  `lib/src/transports/http2/rpc_http2_caller_transport.dart:225`).
+- **Quality**: Added a secure transport example plus extensive tests that cover
+  handshake failure modes, TURN routing paths and WebSocket integration
+  (`example/transports/secure_adapter_example.dart:1`,
+  `test/secure_transport_adapter_handshake_protection_test.dart:1`,
+  `test/relay/turn_relay_server_test.dart:1`).
 
 ## 1.2.0
 

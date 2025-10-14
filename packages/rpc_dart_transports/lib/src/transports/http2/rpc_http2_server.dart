@@ -48,7 +48,8 @@ class RpcHttp2Server implements IRpcServer {
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(Socket socket)? onConnectionOpened,
     void Function(Socket socket)? onConnectionClosed,
-    IRpcTransport Function(IRpcTransport inner, Socket socket)? transportWrapper,
+    IRpcTransport Function(IRpcTransport inner, Socket socket)?
+        transportWrapper,
   })  : _host = host,
         _port = port,
         _logger = logger?.child('Http2Server'),
