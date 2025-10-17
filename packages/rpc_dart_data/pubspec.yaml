@@ -8,7 +8,12 @@ environment:
 
 dependencies:
   rpc_dart: ^2.3.1
-  rpc_dart_transports: ^1.3.0
+#  rpc_dart_transports: ^1.3.0
+  rpc_dart_transports:
+    git:
+      url: https://github.com/nogipx/rpc_dart
+      ref: main
+      path: packages/rpc_dart_transports
   args: ^2.7.0
   licensify: ^4.2.0
   equatable: ^2.0.7

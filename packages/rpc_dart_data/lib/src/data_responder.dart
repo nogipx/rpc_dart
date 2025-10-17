@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:rpc_dart_transports/rpc_dart_transports.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 
 import 'data_contract.dart';
 import 'data_repository.dart';

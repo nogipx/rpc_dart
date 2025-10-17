@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:licensify/licensify.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
@@ -106,18 +106,6 @@ class ServeCli {
       return 64;
     }
 
-    RelayRuntimeConfig? relayConfig;
-    try {
-      relayConfig = await _parseRelayConfig(args);
-    } on FormatException catch (error) {
-      _stderr.writeln('Ошибка настроек relay: ${error.message}');
-      return 64;
-    } catch (error, stackTrace) {
-      _stderr.writeln('Не удалось подготовить подключение к relay: $error');
-      _stderr.writeln(stackTrace);
-      return 64;
-    }
-
     late final List<String> authTokens;
     try {
       authTokens = await _parseAuthTokens(args);
@@ -159,7 +147,6 @@ class ServeCli {
       processManager: processManager,
       sqlCipherKey: sqlCipherKey,
       secureWrapConfig: secureWrapConfig,
-      relayConfig: relayConfig,
       stdoutSink: _stdout,
       stderrSink: _stderr,
       authTokens: authTokens,
@@ -274,8 +261,6 @@ class ServeCli {
 
     final shutdownCompleter = Completer<void>();
     var isShuttingDown = false;
-    StreamSubscription<TurnConnectRequest>? relayConnectSubscription;
-    RpcTurnRelayPeer? relayPeer;
 
     Future<void> shutdown(String reason) async {
       if (isShuttingDown) {
@@ -284,26 +269,6 @@ class ServeCli {
       isShuttingDown = true;
 
       await logger.info('Остановка сервиса ($reason)...');
-
-      try {
-        await relayConnectSubscription?.cancel();
-      } catch (error, stackTrace) {
-        await logger.error(
-          'Не удалось закрыть подписку relay: $error',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-
-      try {
-        await relayPeer?.close();
-      } catch (error, stackTrace) {
-        await logger.error(
-          'Ошибка при остановке relay-подключения: $error',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
 
       try {
         await server.stop();
@@ -353,107 +318,6 @@ class ServeCli {
     }
 
     await logger.info('Сервис запущен и ожидает соединения...');
-
-    if (relayConfig != null) {
-      final relayLogger = logger.child('Relay');
-      final relayMetadata = <String, String>{...relayConfig.metadata};
-      if (secureWrapConfig != null) {
-        relayMetadata['secureWrap.enabled'] = 'true';
-        final transportId = secureWrapConfig.keyStore.transportId;
-        if (transportId.isNotEmpty) {
-          relayMetadata['secureWrap.transportId'] = transportId;
-        }
-        relayMetadata['secureWrap.frameFormat'] =
-            secureWrapConfig.transportConfig.frameFormat.name;
-      }
-      relayMetadata['transport'] = 'http2';
-      relayMetadata['relay.transport'] = relayConfig.transportLabel;
-
-      final publicationDescription =
-          _composeRelayDescription(relayConfig.description, relayMetadata);
-
-      InternetAddress? activeRelayPeerAddress;
-      int? activeRelayPeerPort;
-
-      try {
-        final relayResponders = await application.createRelayResponders();
-        relayPeer = await RpcTurnRelayPeer.connectToRelay(
-          serverAddress: relayConfig.serverAddress,
-          serverPort: relayConfig.serverPort,
-          responderContracts: relayResponders,
-          options: relayConfig.clientOptions,
-        );
-
-        await relayLogger.info(
-          'Подключено к relay ${relayConfig.serverAddress.address}:${relayConfig.serverPort}. '
-          'Назначенный адрес: ${relayPeer.relayAddress.address}:${relayPeer.relayPort}.',
-        );
-
-        if (relayConfig.publish) {
-          await relayPeer.registerService(
-            serviceId: relayConfig.serviceId,
-            description: publicationDescription,
-          );
-          await relayLogger.info(
-            'Сервис опубликован в relay как ${relayConfig.serviceId}.',
-          );
-          if (relayMetadata.isNotEmpty) {
-            await relayLogger.debug(
-              'Метаданные публикации: ${jsonEncode(relayMetadata)}',
-            );
-          }
-        } else {
-          await relayLogger.info('Публикация сервиса в relay отключена.');
-        }
-
-        relayConnectSubscription =
-            relayPeer.connectRequests.listen((request) async {
-          await relayLogger.info(
-            'Получен запрос на подключение от ${request.peerAddress.address}:${request.peerPort}',
-          );
-
-          if (activeRelayPeerAddress != null &&
-              (activeRelayPeerAddress!.address != request.peerAddress.address ||
-                  activeRelayPeerPort != request.peerPort)) {
-            await relayLogger.warning(
-              'Уже активен пир ${activeRelayPeerAddress!.address}:$activeRelayPeerPort, '
-              'игнорируем новый запрос.',
-            );
-            return;
-          }
-
-          if (activeRelayPeerAddress == null) {
-            try {
-              await relayPeer!.connectPeer(
-                peerAddress: request.peerAddress,
-                peerPort: request.peerPort,
-                logger: relayLogger.child('Peer'),
-              );
-              activeRelayPeerAddress = request.peerAddress;
-              activeRelayPeerPort = request.peerPort;
-              await relayLogger.info(
-                'Установлен канал с пиром ${request.peerAddress.address}:${request.peerPort}.',
-              );
-            } catch (error, stackTrace) {
-              await relayLogger.error(
-                'Ошибка подключения к пиру через relay: $error',
-                error: error,
-                stackTrace: stackTrace,
-              );
-            }
-          }
-        });
-      } catch (error, stackTrace) {
-        await logger.error(
-          'Не удалось инициализировать relay-подключение: $error',
-          error: error,
-          stackTrace: stackTrace,
-        );
-        await shutdown('relay initialization failed');
-        await processManager.disposeSignalHandlers();
-        return 1;
-      }
-    }
 
     await shutdownCompleter.future;
 
@@ -525,7 +389,6 @@ class ServeCliRuntime {
     required this.processManager,
     required this.sqlCipherKey,
     required this.secureWrapConfig,
-    required this.relayConfig,
     required this.stdoutSink,
     required this.stderrSink,
     required List<String> authTokens,
@@ -543,7 +406,6 @@ class ServeCliRuntime {
   final DaemonProcessManager processManager;
   final SqlCipherKey? sqlCipherKey;
   final SecureWrapRuntimeConfig? secureWrapConfig;
-  final RelayRuntimeConfig? relayConfig;
   final IOSink stdoutSink;
   final IOSink stderrSink;
   final List<String> authTokens;
@@ -599,28 +461,6 @@ class SecureWrapRuntimeConfig {
 
   final SecureTransportKeyStore keyStore;
   final SecureTransportConfig transportConfig;
-}
-
-class RelayRuntimeConfig {
-  RelayRuntimeConfig({
-    required this.serverAddress,
-    required this.serverPort,
-    required this.clientOptions,
-    required this.serviceId,
-    required this.publish,
-    required this.metadata,
-    required this.transportLabel,
-    this.description,
-  });
-
-  final InternetAddress serverAddress;
-  final int serverPort;
-  final TurnRelayClientOptions clientOptions;
-  final String serviceId;
-  final bool publish;
-  final Map<String, String> metadata;
-  final String transportLabel;
-  final String? description;
 }
 
 void _configureCommonArguments(ArgParser parser) {
@@ -1040,105 +880,6 @@ SecureWrapRuntimeConfig? _parseSecureWrapConfig(ArgResults args) {
   );
 }
 
-Future<RelayRuntimeConfig?> _parseRelayConfig(ArgResults args) async {
-  final enabled = args['relay'] as bool;
-  if (!enabled) {
-    return null;
-  }
-
-  final hostRaw = (args['relay-host'] as String?)?.trim();
-  if (hostRaw == null || hostRaw.isEmpty) {
-    throw const FormatException(
-      'Для включения relay укажите адрес сервера (--relay-host).',
-    );
-  }
-
-  final serverAddress = await _resolveAddress(hostRaw, '--relay-host');
-
-  final port = _parseIntOption(
-    args['relay-port'] as String?,
-    '--relay-port',
-    minValue: 1,
-    maxValue: 65535,
-  );
-
-  final localPort = _parseIntOption(
-    args['relay-local-port'] as String?,
-    '--relay-local-port',
-    minValue: 0,
-    maxValue: 65535,
-  );
-
-  final localAddressRaw = (args['relay-local-address'] as String?)?.trim();
-  InternetAddress? localAddress;
-  if (localAddressRaw != null && localAddressRaw.isNotEmpty) {
-    localAddress =
-        await _resolveAddress(localAddressRaw, '--relay-local-address');
-  }
-
-  final requestTimeout = _parseDurationOption(
-    args['relay-request-timeout'] as String?,
-    '--relay-request-timeout',
-    defaultValue: const Duration(seconds: 5),
-  );
-  final allocationLifetime = _parseOptionalDuration(
-    args['relay-allocation-lifetime'] as String?,
-    '--relay-allocation-lifetime',
-  );
-  final allocationMargin = _parseDurationOption(
-    args['relay-allocation-margin'] as String?,
-    '--relay-allocation-margin',
-    defaultValue: const Duration(seconds: 30),
-  );
-  final permissionLifetime = _parseDurationOption(
-    args['relay-permission-lifetime'] as String?,
-    '--relay-permission-lifetime',
-    defaultValue: const Duration(minutes: 5),
-  );
-  final permissionMargin = _parseDurationOption(
-    args['relay-permission-margin'] as String?,
-    '--relay-permission-margin',
-    defaultValue: const Duration(seconds: 30),
-  );
-
-  final transportRaw = (args['relay-transport'] as String?)?.toLowerCase();
-  final relayTransport = transportRaw == 'tcp'
-      ? TurnRequestedTransport.tcp
-      : TurnRequestedTransport.udp;
-
-  final publish = args['relay-publish'] as bool;
-  final autoPermission = args['relay-auto-permission'] as bool;
-
-  final metadataEntries = args['relay-metadata'] as List<String>;
-  final metadata = _parseKeyValueMetadata(
-    metadataEntries,
-    '--relay-metadata',
-  );
-
-  final description = (args['relay-description'] as String?)?.trim();
-
-  return RelayRuntimeConfig(
-    serverAddress: serverAddress,
-    serverPort: port,
-    clientOptions: TurnRelayClientOptions(
-      localAddress: localAddress,
-      localPort: localPort,
-      requestTimeout: requestTimeout,
-      requestedAllocationLifetime: allocationLifetime,
-      allocationRefreshMargin: allocationMargin,
-      permissionLifetime: permissionLifetime,
-      permissionRefreshMargin: permissionMargin,
-      autoCreatePermission: autoPermission,
-      requestedTransport: relayTransport,
-    ),
-    serviceId: args['relay-service-id'] as String,
-    publish: publish,
-    metadata: metadata,
-    transportLabel: transportRaw == 'tcp' ? 'tcp' : 'udp',
-    description: description,
-  );
-}
-
 Duration _parseDurationOption(
   String? raw,
   String optionName, {
@@ -1152,22 +893,6 @@ Duration _parseDurationOption(
     throw FormatException(
       'Опция $optionName должна быть числом с суффиксом времени (например, 5s, 2m, 1000ms).',
     );
-  }
-  return parsed;
-}
-
-Duration? _parseOptionalDuration(String? raw, String optionName) {
-  if (raw == null || raw.trim().isEmpty) {
-    return null;
-  }
-  final parsed = _tryParseDuration(raw.trim());
-  if (parsed == null) {
-    throw FormatException(
-      'Опция $optionName должна быть числом с суффиксом времени (например, 5s, 2m, 1000ms).',
-    );
-  }
-  if (parsed.isNegative) {
-    throw FormatException('Опция $optionName должна быть положительной.');
   }
   return parsed;
 }
@@ -1242,64 +967,4 @@ int? _parseOptionalInt(
     throw FormatException('Опция $optionName должна быть <= $maxValue.');
   }
   return parsed;
-}
-
-Future<InternetAddress> _resolveAddress(String raw, String optionName) async {
-  final direct = InternetAddress.tryParse(raw);
-  if (direct != null) {
-    return direct;
-  }
-  try {
-    final results = await InternetAddress.lookup(raw);
-    if (results.isEmpty) {
-      throw FormatException('Не удалось разрешить адрес $raw для $optionName.');
-    }
-    return results.first;
-  } on SocketException catch (error) {
-    throw FormatException(
-      'Не удалось разрешить адрес $raw для $optionName: ${error.message}',
-    );
-  }
-}
-
-Map<String, String> _parseKeyValueMetadata(
-  List<String> entries,
-  String optionName,
-) {
-  final metadata = <String, String>{};
-  for (final entry in entries) {
-    final trimmed = entry.trim();
-    if (trimmed.isEmpty) {
-      continue;
-    }
-    final separator = trimmed.indexOf('=');
-    if (separator <= 0 || separator == trimmed.length - 1) {
-      throw FormatException(
-        'Опция $optionName принимает значения в формате ключ=значение. Получено: "$entry".',
-      );
-    }
-    final key = trimmed.substring(0, separator).trim();
-    final value = trimmed.substring(separator + 1).trim();
-    if (key.isEmpty) {
-      throw FormatException(
-        'Опция $optionName содержит пустой ключ в "$entry".',
-      );
-    }
-    metadata[key] = value;
-  }
-  return metadata;
-}
-
-String _composeRelayDescription(
-  String? description,
-  Map<String, String> metadata,
-) {
-  if (metadata.isEmpty) {
-    return description ?? '';
-  }
-  final encodedMetadata = jsonEncode(metadata);
-  if (description == null || description.isEmpty) {
-    return encodedMetadata;
-  }
-  return '$description\n$encodedMetadata';
 }
