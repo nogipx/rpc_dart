@@ -188,13 +188,12 @@ class RpcConnectionBloc extends Bloc<RpcConnectionEvent, RpcConnectionState> {
         return;
       }
 
-      _log.debug('Calling health on endpoint');
       final healthy = await _callHealth(endpoint);
-      _log.info('Health call result: ${healthy ? 'healthy' : 'unhealthy'}');
       if (healthy) {
         emit(RpcConnectionState.healthy(state));
       } else {
         emit(RpcConnectionState.unhealthy(state));
+        _log.info('Health call result: ${healthy ? 'healthy' : 'unhealthy'}');
         if (!state.reconnecting) {
           _log.debug('Requesting reconnect because endpoint is unhealthy');
           add(const _RpcConnectionReconnectRequested());
