@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 /// Мощная демонстрация всех типов RPC с настоящим HTTP/2 транспортом! 🚀

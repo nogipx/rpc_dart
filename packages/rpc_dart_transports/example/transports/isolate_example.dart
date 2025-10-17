@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 void main() {
