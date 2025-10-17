@@ -6,5 +6,6 @@
 library;
 
 // Экспорт транспортов
+export 'src/adapters/secure/_index.dart';
 export 'src/server/_index.dart';
 export 'src/transports/_index.dart';

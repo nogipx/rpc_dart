@@ -1,3 +1,7 @@
+## 1.4.0
+
+- Remove dependency on io, compiles with web
+
 ## 1.3.0
 
 - **Breaking**: Removed the `RpcServerBootstrap` production facade and bundled
