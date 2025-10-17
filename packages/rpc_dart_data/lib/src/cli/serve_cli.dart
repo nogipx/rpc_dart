@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:args/args.dart';
 import 'package:licensify/licensify.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
+import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 /// Настроечный раннер CLI-команды `serve`.
 ///

@@ -1,5 +1,3 @@
-export 'package:rpc_dart_transports/rpc_dart_transports.dart';
-
 export 'src/change_journal.dart'
     show DataChangeJournal, InMemoryDataChangeJournal;
 export 'src/connection/connection.dart';
