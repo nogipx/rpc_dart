@@ -1,0 +1,256 @@
+# TODO(anybody): enable strong mode and change warnings to errors in the errors section.
+
+analyzer:
+  exclude:
+    - lib/**.g.dart
+    - lib/**.gr.dart
+    - lib/**.freezed.dart
+    - lib/**.mock.dart
+    - build/**
+    - builds/
+
+  errors:
+    use_key_in_widget_constructors: info
+    always_declare_return_types: warning #error
+    always_put_control_body_on_new_line: warning #error
+    always_put_required_named_parameters_first: warning #error
+    always_require_non_null_named_parameters: warning #error
+    annotate_overrides: warning #error
+    avoid_catches_without_on_clauses: warning
+    avoid_catching_errors: warning #error
+    avoid_equals_and_hash_code_on_mutable_classes: warning #error
+    avoid_escaping_inner_quotes: warning
+    avoid_field_initializers_in_const_classes: warning #error
+    avoid_implementing_value_types: warning #error
+    avoid_init_to_null: warning
+    avoid_null_checks_in_equality_operators: warning
+    avoid_positional_boolean_parameters: warning
+    avoid_private_typedef_functions: warning #error
+    avoid_redundant_argument_values: info
+    avoid_renaming_method_parameters: warning
+    avoid_return_types_on_setters: info
+    avoid_returning_null: warning
+    avoid_returning_null_for_void: warning
+    avoid_returning_this: info
+    avoid_setters_without_getters: warning
+    avoid_shadowing_type_parameters: warning #error
+    avoid_single_cascade_in_expression_statements: warning
+    avoid_unnecessary_containers: warning #error
+    avoid_unused_constructor_parameters: warning #error
+    avoid_void_async: warning #error
+    await_only_futures: warning
+    camel_case_extensions: warning
+    camel_case_types: warning #error
+    cascade_invocations: info
+    cast_nullable_to_non_nullable: warning
+    constant_identifier_names: warning
+    curly_braces_in_flow_control_structures: warning
+    directives_ordering: info
+    empty_catches: warning
+    empty_constructor_bodies: warning
+    exhaustive_cases: warning #error
+    file_names: warning #error
+    flutter_style_todos: warning
+    implementation_imports: warning #error
+    join_return_with_assignment: warning
+    library_names: warning #error
+    library_prefixes: warning #error
+    missing_whitespace_between_adjacent_strings: warning
+    no_runtimeType_toString: warning
+    non_constant_identifier_names: warning #error
+    null_check_on_nullable_type_parameter: warning #error
+    null_closures: warning
+    one_member_abstracts: warning
+    only_throw_errors: warning #error
+    overridden_fields: warning
+    package_api_docs: warning #error
+    parameter_assignments: warning #error
+    prefer_adjacent_string_concatenation: warning
+    prefer_asserts_in_initializer_lists: warning
+    prefer_asserts_with_message: warning
+    prefer_collection_literals: warning
+    prefer_conditional_assignment: warning
+    prefer_const_constructors: warning
+    prefer_const_constructors_in_immutables: warning #error
+    prefer_contains: warning
+    prefer_final_fields: warning
+    prefer_final_in_for_each: warning
+    prefer_final_locals: warning
+    prefer_generic_function_type_aliases: warning
+    prefer_if_elements_to_conditional_expressions: warning
+    prefer_typing_uninitialized_variables: warning
+    provide_deprecation_message: warning #error
+    public_member_api_docs: warning #error
+    recursive_getters: warning #error
+    require_trailing_commas: warning
+    sized_box_for_whitespace: warning #error
+    type_annotate_public_apis: warning #error
+    use_full_hex_values_for_flutter_colors: warning
+    test_types_in_equals: warning #error
+    no_logic_in_create_state: warning #error
+    no_duplicate_case_values: warning
+    invalid_annotation_target: ignore
+linter:
+  rules:
+    - use_build_context_synchronously
+    - avoid_empty_else
+    - avoid_print
+    - avoid_relative_lib_imports
+    - avoid_slow_async_io
+    - avoid_type_to_string
+    - avoid_types_as_parameter_names
+    - avoid_web_libraries_in_flutter
+    - cancel_subscriptions
+    - close_sinks
+    - comment_references
+    - control_flow_in_finally
+    - empty_statements
+    - hash_and_equals
+    - literal_only_boolean_expressions
+    - no_adjacent_strings_in_list
+    - no_duplicate_case_values
+    - no_logic_in_create_state
+    - prefer_void_to_null
+    - test_types_in_equals
+    - throw_in_finally
+    - unnecessary_statements
+    - unrelated_type_equality_checks
+    - use_key_in_widget_constructors
+    - valid_regexps
+    - always_declare_return_types
+    - always_put_control_body_on_new_line
+    - always_put_required_named_parameters_first
+    - annotate_overrides
+    - avoid_catches_without_on_clauses
+    - avoid_catching_errors
+    - avoid_equals_and_hash_code_on_mutable_classes
+    - avoid_escaping_inner_quotes
+    - avoid_field_initializers_in_const_classes
+    - avoid_implementing_value_types
+    - avoid_init_to_null
+    - avoid_null_checks_in_equality_operators
+    - avoid_positional_boolean_parameters
+    - avoid_private_typedef_functions
+    - avoid_redundant_argument_values
+    - avoid_renaming_method_parameters
+    - avoid_return_types_on_setters
+    - avoid_returning_null_for_void
+    - avoid_returning_this
+    - avoid_setters_without_getters
+    - avoid_shadowing_type_parameters
+    - avoid_single_cascade_in_expression_statements
+    - avoid_unnecessary_containers
+    - avoid_unused_constructor_parameters
+    - avoid_void_async
+    - await_only_futures
+    - camel_case_extensions
+    - camel_case_types
+    - cascade_invocations
+    - cast_nullable_to_non_nullable
+    - constant_identifier_names
+    - curly_braces_in_flow_control_structures
+    - directives_ordering
+    - empty_catches
+    - empty_constructor_bodies
+    - exhaustive_cases
+    - file_names
+    - flutter_style_todos
+    - implementation_imports
+    - join_return_with_assignment
+    - library_names
+    - library_prefixes
+    - missing_whitespace_between_adjacent_strings
+    - no_runtimeType_toString
+    - non_constant_identifier_names
+    - null_check_on_nullable_type_parameter
+    - null_closures
+    - omit_local_variable_types
+    - one_member_abstracts
+    - only_throw_errors
+    - overridden_fields
+    - parameter_assignments
+    - prefer_adjacent_string_concatenation
+    - prefer_asserts_in_initializer_lists
+    - prefer_asserts_with_message
+    - prefer_collection_literals
+    - prefer_conditional_assignment
+    - prefer_const_constructors
+    - prefer_const_constructors_in_immutables
+    - prefer_const_declarations
+    - prefer_const_literals_to_create_immutables
+    - prefer_constructors_over_static_methods
+    - prefer_contains
+    - prefer_single_quotes
+    - prefer_final_fields
+    - prefer_final_in_for_each
+    - prefer_final_locals
+    - prefer_generic_function_type_aliases
+    - prefer_if_elements_to_conditional_expressions
+    - prefer_if_null_operators
+    - prefer_initializing_formals
+    - prefer_inlined_adds
+    - prefer_int_literals
+    - prefer_interpolation_to_compose_strings
+    - prefer_is_empty
+    - prefer_is_not_empty
+    - prefer_is_not_operator
+    - prefer_iterable_whereType
+    - prefer_null_aware_operators
+    - prefer_spread_collections
+    - prefer_typing_uninitialized_variables
+    - provide_deprecation_message
+    - recursive_getters
+    - require_trailing_commas
+    - sized_box_for_whitespace
+    - slash_for_doc_comments
+    - sort_child_properties_last
+    - sort_unnamed_constructors_first
+    - tighten_type_of_initializing_formals
+    - type_annotate_public_apis
+    - type_init_formals
+    - unnecessary_await_in_return
+    - unnecessary_brace_in_string_interps
+    - unnecessary_const
+    - unnecessary_getters_setters
+    - unnecessary_lambdas
+    - unnecessary_new
+    - unnecessary_null_aware_assignments
+    - unnecessary_null_checks
+    - unnecessary_null_in_if_null_operators
+    - unnecessary_nullable_for_final_variable_declarations
+    - unnecessary_overrides
+    - unnecessary_parenthesis
+    - unnecessary_raw_strings
+    - unnecessary_string_escapes
+    - unnecessary_string_interpolations
+    - unnecessary_this
+    - use_full_hex_values_for_flutter_colors
+    - use_function_type_syntax_for_parameters
+    - use_is_even_rather_than_modulo
+    - use_late_for_private_fields_and_variables
+    - use_raw_strings
+    - use_rethrow_when_possible
+    - use_string_buffers
+    - use_to_and_as_if_applicable
+    - void_checks
+
+dart_code_metrics:
+  anti-patterns:
+    - long-method
+    - long-parameter-list
+  metrics:
+    cyclomatic-complexity: 20
+    maximum-nesting-level: 5
+    number-of-parameters: 4
+    source-lines-of-code: 120
+    lines-of-code: 120
+
+  metrics-exclude:
+    - test/**
+  rules:
+    - newline-before-return
+    - no-boolean-literal-compare
+    - no-empty-block
+    - prefer-trailing-comma
+    - prefer-conditional-expressions
+    - no-equal-then-else
