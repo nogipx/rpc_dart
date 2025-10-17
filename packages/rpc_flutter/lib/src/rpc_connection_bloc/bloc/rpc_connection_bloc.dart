@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 part 'rpc_connection_event.dart';
@@ -229,7 +230,9 @@ class RpcConnectionBloc extends Bloc<RpcConnectionEvent, RpcConnectionState> {
 
     emit(
       state.copyWith(
-          reconnecting: true, status: RpcConnectionHealthStatus.connecting),
+        reconnecting: true,
+        status: RpcConnectionHealthStatus.connecting,
+      ),
     );
     try {
       final endpoint = state.endpoint;
