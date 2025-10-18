@@ -28,4 +28,6 @@ export 'src/drift_storage.dart'
         DriftDataDatabase,
         SqlCipherKey,
         SqlCipherException;
+export 'src/sharded_storage_adapter.dart'
+    show ShardedDataStorageAdapter, ShardResolver;
 export 'src/models.dart';
