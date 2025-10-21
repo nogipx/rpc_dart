@@ -15,10 +15,7 @@ dependencies:
   rpc_dart_transports: ^1.4.0
   licensify: ^4.2.0
   drift: ^2.28.2
-  collection: ^1.19.1
   meta: ^1.16.0
-  crypto: ^3.0.3
-  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:

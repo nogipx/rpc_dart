@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
+import 'package:licensify/licensify.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 
@@ -21,7 +20,7 @@ void analyticsWorkerEntrypoint(
       final config = _WorkerBootstrapParams.fromMap(customParams);
       final storage = await AnalyticsStorageManager.open(
         databasePath: config.databasePath,
-        encryptionKey: config.encryptionKey,
+        publicKey: config.licenseKey,
         enabledByDefault: config.enabledByDefault,
         logSqlStatements: config.logSqlStatements,
       );
@@ -45,21 +44,18 @@ void analyticsWorkerEntrypoint(
 class _WorkerBootstrapParams {
   const _WorkerBootstrapParams({
     required this.databasePath,
-    required this.encryptionKey,
+    required this.licenseKey,
     required this.enabledByDefault,
     required this.logSqlStatements,
   });
 
   factory _WorkerBootstrapParams.fromMap(Map<String, dynamic> raw) {
-    final keyData = raw['encryptionKey'];
-    late final Uint8List encryptionKey;
-    if (keyData is Uint8List) {
-      encryptionKey = Uint8List.fromList(keyData);
-    } else if (keyData is List<int>) {
-      encryptionKey = Uint8List.fromList(keyData);
-    } else {
-      throw ArgumentError('Invalid encryptionKey payload: ${keyData.runtimeType}');
+    final keyPaserk = raw['licenseKeyPaserk'];
+    if (keyPaserk is! String || keyPaserk.trim().isEmpty) {
+      throw ArgumentError('licenseKeyPaserk must be a non-empty string');
     }
+
+    final licenseKey = LicensifyPublicKey.fromPaserk(paserk: keyPaserk.trim());
 
     final databasePath = raw['databasePath'] as String?;
     if (databasePath == null || databasePath.isEmpty) {
@@ -68,14 +64,14 @@ class _WorkerBootstrapParams {
 
     return _WorkerBootstrapParams(
       databasePath: databasePath,
-      encryptionKey: encryptionKey,
+      licenseKey: licenseKey,
       enabledByDefault: raw['enabled'] as bool? ?? true,
       logSqlStatements: raw['logStatements'] as bool? ?? false,
     );
   }
 
   final String databasePath;
-  final Uint8List encryptionKey;
+  final LicensifyPublicKey licenseKey;
   final bool enabledByDefault;
   final bool logSqlStatements;
 }
@@ -227,13 +223,15 @@ final class AnalyticsResponder extends RpcResponderContract {
 final class AnalyticsStorageManager {
   AnalyticsStorageManager._({
     required DriftDataStorageAdapter storage,
+    required LicensifyPublicKey publicKey,
     required bool enabled,
   })  : _storage = storage,
+        _publicKey = publicKey,
         _enabled = enabled;
 
   static Future<AnalyticsStorageManager> open({
     required String databasePath,
-    required Uint8List encryptionKey,
+    required LicensifyPublicKey publicKey,
     required bool enabledByDefault,
     required bool logSqlStatements,
   }) async {
@@ -242,13 +240,11 @@ final class AnalyticsStorageManager {
     final adapter = DriftDataStorageAdapter.file(
       file,
       logStatements: logSqlStatements,
-      sqlCipherKey: SqlCipherKey.fromBytes(
-        keyBytes: Uint8List.fromList(encryptionKey),
-      ),
     );
     await adapter.ensureReady();
     final manager = AnalyticsStorageManager._(
       storage: adapter,
+      publicKey: publicKey,
       enabled: enabledByDefault,
     );
     await manager._ensureSchema();
@@ -256,6 +252,7 @@ final class AnalyticsStorageManager {
   }
 
   final DriftDataStorageAdapter _storage;
+  final LicensifyPublicKey _publicKey;
   bool _enabled;
   bool _schemaReady = false;
 
@@ -265,15 +262,9 @@ final class AnalyticsStorageManager {
     await _storage.database.customStatement(
       'CREATE TABLE IF NOT EXISTS analytics_events ('
       'id INTEGER PRIMARY KEY AUTOINCREMENT,'
-      'event_name TEXT NOT NULL,'
-      'properties_json TEXT,'
-      'created_at_ms INTEGER NOT NULL'
+      'created_at_ms INTEGER NOT NULL,'
+      'encrypted_token TEXT NOT NULL'
       ')',
-    );
-
-    await _storage.database.customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_analytics_events_created_at '
-      'ON analytics_events(created_at_ms)',
     );
 
     _schemaReady = true;
@@ -285,17 +276,21 @@ final class AnalyticsStorageManager {
     }
 
     await _ensureSchema();
-    final payload = request.properties == null
-        ? null
-        : jsonEncode(request.properties);
+    final encryptedToken = await Licensify.encryptDataForPublicKey(
+      data: <String, dynamic>{
+        'event': request.eventName,
+        'timestamp': request.timestamp.toUtc().toIso8601String(),
+        if (request.properties != null) 'properties': request.properties!,
+      },
+      publicKey: _publicKey,
+    );
 
     await _storage.database.customStatement(
-      'INSERT INTO analytics_events (event_name, properties_json, created_at_ms) '
-      'VALUES (?, ?, ?)',
+      'INSERT INTO analytics_events (created_at_ms, encrypted_token) '
+      'VALUES (?, ?)',
       <Object?>[
-        request.eventName,
-        payload,
-        request.timestamp.toUtc().millisecondsSinceEpoch,
+        DateTime.now().toUtc().millisecondsSinceEpoch,
+        encryptedToken,
       ],
     );
 

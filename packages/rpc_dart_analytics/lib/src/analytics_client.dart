@@ -1,8 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
-
-import 'package:crypto/crypto.dart';
 import 'package:licensify/licensify.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
@@ -27,13 +23,15 @@ class RpcAnalytics {
 
   /// Spawns the analytics worker isolate and prepares the RPC stack.
   static Future<RpcAnalytics> initialize(RpcAnalyticsConfig config) async {
-    final encryptionKey = _deriveEncryptionKey(config.licenseKey);
+    final trimmed = config.licenseKeyPaserk.trim();
+    // Validate the PASERK string eagerly so configuration errors surface early.
+    LicensifyPublicKey.fromPaserk(paserk: trimmed);
 
     final spawnResult = await RpcIsolateTransport.spawn(
       entrypoint: analyticsWorkerEntrypoint,
       customParams: <String, dynamic>{
         'databasePath': config.databasePath,
-        'encryptionKey': encryptionKey,
+        'licenseKeyPaserk': trimmed,
         'enabled': config.enabledByDefault,
         'logStatements': config.logSqlStatements,
       },
@@ -48,9 +46,6 @@ class RpcAnalytics {
 
     // Ensure the worker is fully initialized before returning control.
     await caller.getStatus();
-
-    // Best-effort wipe of the derived key once the worker consumed it.
-    encryptionKey.fillRange(0, encryptionKey.length, 0);
 
     return RpcAnalytics._(
       caller,
@@ -193,21 +188,3 @@ class _AnalyticsCaller extends RpcCallerContract {
   }
 }
 
-Uint8List _deriveEncryptionKey(LicensifyPublicKey publicKey) {
-  final serialized = _serializePublicKey(publicKey);
-  final digest = sha256.convert(utf8.encode(serialized));
-  return Uint8List.fromList(digest.bytes);
-}
-
-String _serializePublicKey(LicensifyPublicKey publicKey) {
-  try {
-    final dynamic dynamicKey = publicKey;
-    final paserk = dynamicKey.toPaserk();
-    if (paserk is String && paserk.isNotEmpty) {
-      return paserk;
-    }
-  } catch (_) {
-    // Fall through to the `toString()` fallback below.
-  }
-  return publicKey.toString();
-}
