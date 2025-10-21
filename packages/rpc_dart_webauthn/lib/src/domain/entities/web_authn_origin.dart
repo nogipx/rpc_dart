@@ -31,6 +31,8 @@ class WebAuthnOriginConfig implements IOrigin {
         return productConfig.androidAppInfo.origin;
       case 'ios':
         return productConfig.iosBundleId;
+      case 'default':
+        return defaultOrigin;
       default:
         // Проверяем кастомные origins
         if (_customOrigins.containsKey(platform.toLowerCase())) {
@@ -38,6 +40,56 @@ class WebAuthnOriginConfig implements IOrigin {
         }
         return defaultOrigin;
     }
+  }
+
+  /// Определяет платформу на основе origin
+  String? detectPlatformByOrigin(String origin) {
+    final normalizedOrigin = origin.trim();
+    if (normalizedOrigin.isEmpty) {
+      return null;
+    }
+
+    if (normalizedOrigin == productConfig.webOrigin.toString()) {
+      return 'web';
+    }
+
+    if (normalizedOrigin == productConfig.androidAppInfo.origin) {
+      return 'android';
+    }
+
+    if (normalizedOrigin == productConfig.iosBundleId) {
+      return 'ios';
+    }
+
+    for (final entry in _customOrigins.entries) {
+      if (entry.value == normalizedOrigin) {
+        return entry.key;
+      }
+    }
+
+    if (defaultOrigin.isNotEmpty && normalizedOrigin == defaultOrigin) {
+      return 'default';
+    }
+
+    return null;
+  }
+
+  /// Проверяет, разрешен ли origin, учитывая платформу
+  bool isAllowedOrigin(String origin, {String? platform}) {
+    final normalizedOrigin = origin.trim();
+    if (normalizedOrigin.isEmpty) {
+      return false;
+    }
+
+    if (platform != null && platform.isNotEmpty) {
+      final expected = getOriginForPlatform(platform);
+      if (expected.isEmpty) {
+        return false;
+      }
+      return expected == normalizedOrigin;
+    }
+
+    return detectPlatformByOrigin(normalizedOrigin) != null;
   }
 
   /// Проверка соответствия origin для платформы

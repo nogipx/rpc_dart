@@ -568,14 +568,13 @@ class WebAuthnResponderFactory {
     // === 4. Создаем use cases ===
     final startRegistrationUseCase = StartRegistrationUseCase(
       challengeRepository,
-      rpId: settings.rpId,
-      rpName: settings.rpName,
+      settings: settings,
     );
 
     final finishRegistrationUseCase = FinishRegistrationUseCase(
       webAuthnRepository,
       challengeRepository,
-      rpId: settings.rpId,
+      settings: settings,
     );
 
     final startAuthenticationUseCase = StartAuthenticationUseCase(

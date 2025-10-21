@@ -9,6 +9,7 @@ abstract class FinishRegistrationParams
     required String userId,
     required WebAuthnRegistrationCredential credential,
     required String origin,
+    @Default('web') String platform,
   }) = _FinishRegistrationParams;
 
   static IRpcCodec<FinishRegistrationParams> get codec =>
@@ -51,13 +52,13 @@ abstract class FinishRegistrationResult
 class FinishRegistrationUseCase {
   final IWebAuthnRepository _webAuthnRepository;
   final IChallengeRepository _challengeRepository;
-  final String _rpId;
+  final WebAuthnSettings _settings;
 
   const FinishRegistrationUseCase(
     this._webAuthnRepository,
     this._challengeRepository, {
-    required String rpId,
-  }) : _rpId = rpId;
+    required WebAuthnSettings settings,
+  }) : _settings = settings;
 
   // Выполнение usecase
   Future<FinishRegistrationResult> execute(FinishRegistrationParams params) async {
@@ -79,6 +80,7 @@ class FinishRegistrationUseCase {
         params.credential,
         challenge,
         params.origin,
+        params.platform,
       );
 
       if (!verified.success) {
@@ -114,7 +116,8 @@ class FinishRegistrationUseCase {
   Future<VerificationResult> _verifyRegistrationResponse(
     WebAuthnRegistrationCredential credential,
     List<int> challenge,
-    String origin,
+    String reportedOrigin,
+    String platform,
   ) async {
     // 1. Декодируем clientDataJSON
     final clientDataJSON = utf8.decode(credential.response.clientDataJSON);
@@ -132,9 +135,12 @@ class FinishRegistrationUseCase {
     }
 
     // 4. Проверяем origin - простое сравнение с ожидаемым значением
-    if (clientData['origin'] != origin) {
-      throw WebAuthnException.originMismatch(origin, clientData['origin']);
-    }
+    final clientOrigin = clientData['origin'] as String? ?? '';
+    _settings.ensureOriginAllowed(
+      clientOrigin: clientOrigin,
+      reportedOrigin: reportedOrigin,
+      platform: platform,
+    );
 
     // 5. Хешируем clientDataJSON
     final clientDataHash = sha256.convert(credential.response.clientDataJSON).bytes;
@@ -158,7 +164,7 @@ class FinishRegistrationUseCase {
     final authenticatorData = AppCborDecoder.parseAuthenticatorData(authData);
 
     // Проверяем RP ID hash
-    final rpIdHash = sha256.convert(utf8.encode(_rpId)).bytes;
+    final rpIdHash = sha256.convert(utf8.encode(_settings.rpId)).bytes;
     if (!WebAuthnCryptoUtils.compareBytes(authenticatorData.rpIdHash, rpIdHash)) {
       throw WebAuthnException.registration('RP ID hash не соответствует');
     }

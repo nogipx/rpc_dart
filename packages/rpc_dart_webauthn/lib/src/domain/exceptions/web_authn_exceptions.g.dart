@@ -10,8 +10,9 @@ _WebAuthnException _$WebAuthnExceptionFromJson(Map<String, dynamic> json) =>
     _WebAuthnException(
       type: $enumDecode(_$WebAuthnExceptionTypeEnumMap, json['type']),
       message: json['message'] as String,
-      stackTrace:
-          const StackTraceConverter().fromJson(json['stackTrace'] as String?),
+      stackTrace: const StackTraceConverter().fromJson(
+        json['stackTrace'] as String?,
+      ),
     );
 
 Map<String, dynamic> _$WebAuthnExceptionToJson(_WebAuthnException instance) =>

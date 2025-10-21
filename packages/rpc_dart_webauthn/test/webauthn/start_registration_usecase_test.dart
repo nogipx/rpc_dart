@@ -11,8 +11,22 @@ void main() {
 
       useCase = StartRegistrationUseCase(
         challengeRepository,
-        rpId: 'example.com',
-        rpName: 'Example App',
+        settings: WebAuthnSettings(
+          rpId: 'example.com',
+          rpName: 'Example App',
+          originConfig: WebAuthnOriginConfig(
+            productConfig: ProductConfig(
+              webOrigin: Uri.parse('https://example.com'),
+              androidAppInfo: const ProductConfigAndroid(
+                packageName: 'com.example.app',
+                sha256:
+                    '11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00',
+              ),
+              iosBundleId: 'TEAMID.com.example.app',
+            ),
+            defaultOrigin: 'https://example.com',
+          ),
+        ),
       );
     });
 
@@ -91,6 +105,8 @@ void main() {
       expect(clientFormat['publicKey']['challenge'], isNotNull);
       expect(clientFormat['publicKey']['rp'], isNotNull);
       expect(clientFormat['publicKey']['user'], isNotNull);
+      expect(clientFormat['publicKey']['user']['name'], equals('1'));
+      expect(clientFormat['publicKey']['user']['displayName'], equals('1'));
       expect(clientFormat['publicKey']['pubKeyCredParams'], isNotNull);
     });
   });

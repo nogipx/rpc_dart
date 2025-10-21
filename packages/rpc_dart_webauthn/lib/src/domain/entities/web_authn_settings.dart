@@ -42,6 +42,49 @@ class WebAuthnSettings {
     return originConfig.isValidOrigin(origin, platform);
   }
 
+  /// Проверяет, что origin соответствует ожидаемому значению
+  void ensureOriginAllowed({
+    required String clientOrigin,
+    String? reportedOrigin,
+    String? platform,
+  }) {
+    final normalizedClientOrigin = clientOrigin.trim();
+    final normalizedReportedOrigin = reportedOrigin?.trim();
+
+    if (normalizedClientOrigin.isEmpty) {
+      final expected = originConfig.getOriginForPlatform(platform ?? 'web');
+      throw WebAuthnException.originMismatch(
+        expected.isEmpty ? 'configured origin' : expected,
+        normalizedClientOrigin,
+      );
+    }
+
+    if (normalizedReportedOrigin != null &&
+        normalizedReportedOrigin.isNotEmpty &&
+        normalizedClientOrigin != normalizedReportedOrigin) {
+      throw WebAuthnException.originMismatch(
+        normalizedClientOrigin,
+        normalizedReportedOrigin,
+      );
+    }
+
+    final platformToUse = (platform?.trim().isNotEmpty ?? false)
+        ? platform!.trim().toLowerCase()
+        : originConfig.detectPlatformByOrigin(normalizedClientOrigin) ?? 'web';
+
+    final expectedOrigin = originConfig.getOriginForPlatform(platformToUse);
+    final expected = expectedOrigin.isEmpty
+        ? 'configured origin for $platformToUse'
+        : expectedOrigin;
+
+    if (!originConfig.isAllowedOrigin(
+      normalizedClientOrigin,
+      platform: platformToUse,
+    )) {
+      throw WebAuthnException.originMismatch(expected, normalizedClientOrigin);
+    }
+  }
+
   /// Получение ожидаемого origin для платформы
   String getOriginForPlatform(String platform) {
     return originConfig.getOriginForPlatform(platform);

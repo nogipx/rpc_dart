@@ -11,6 +11,7 @@ abstract class FinishAuthenticationParams
     required String origin,
     required int expiresIn,
     required List<String> scopes,
+    @Default('web') String platform,
   }) = _FinishAuthenticationParams;
 
   static IRpcCodec<FinishAuthenticationParams> get codec =>
@@ -103,8 +104,10 @@ class FinishAuthenticationUseCase {
         params.assertion,
         challenge,
         params.origin,
+        params.platform,
         credential.publicKey,
         credential.counter,
+        params.userId,
       );
 
       // 7. Обновляем счетчик
@@ -172,9 +175,11 @@ class FinishAuthenticationUseCase {
   Future<int> _verifyAuthenticationResponse(
     WebAuthnAssertion assertion,
     List<int> challenge,
-    String origin,
+    String reportedOrigin,
+    String platform,
     List<int> publicKey,
     int storedCounter,
+    String expectedUserId,
   ) async {
     // 1. Декодируем clientDataJSON
     final clientDataJSON = utf8.decode(assertion.response.clientDataJSON);
@@ -187,14 +192,28 @@ class FinishAuthenticationUseCase {
 
     // 3. Проверяем challenge
     final clientChallenge = WebAuthnSafeBase64.decode(clientData['challenge']);
-    if (!_compareBytes(challenge, clientChallenge)) {
+    if (!WebAuthnCryptoUtils.compareBytes(challenge, clientChallenge)) {
       throw WebAuthnException.authentication('Challenge не совпадает');
     }
 
     // 4. Проверяем origin
-    final clientOrigin = clientData['origin'] as String;
-    if (clientOrigin != origin) {
-      throw WebAuthnException.originMismatch(origin, clientOrigin);
+    final clientOrigin = clientData['origin'] as String? ?? '';
+    _settings.ensureOriginAllowed(
+      clientOrigin: clientOrigin,
+      reportedOrigin: reportedOrigin,
+      platform: platform,
+    );
+
+    // 4a. Проверяем user handle, если он присутствует
+    final userHandle = assertion.response.userHandle;
+    if (userHandle != null && userHandle.isNotEmpty) {
+      final handleUtf8 = utf8.decode(userHandle, allowMalformed: true);
+      final handleBase64 = WebAuthnSafeBase64.encode(userHandle);
+      if (handleUtf8 != expectedUserId && handleBase64 != expectedUserId) {
+        throw WebAuthnException.authentication(
+          'User handle не соответствует ожидаемому пользователю',
+        );
+      }
     }
 
     // 5. Проверяем authenticator data
@@ -229,7 +248,7 @@ class FinishAuthenticationUseCase {
     final rpIdHash = authenticatorData.sublist(0, 32);
     final calculatedRpIdHash = sha256.convert(utf8.encode(_settings.rpId)).bytes;
 
-    if (!_compareBytes(rpIdHash, calculatedRpIdHash)) {
+    if (!WebAuthnCryptoUtils.compareBytes(rpIdHash, calculatedRpIdHash)) {
       throw WebAuthnException.authentication(
         'RP ID hash не совпадает. Ожидалось: ${_bytesToHex(calculatedRpIdHash)}, получено: ${_bytesToHex(rpIdHash)}',
       );
@@ -278,15 +297,6 @@ class FinishAuthenticationUseCase {
 
     // Возвращаем новое значение счетчика
     return counter;
-  }
-
-  // Вспомогательный метод для сравнения байтов
-  bool _compareBytes(List<int> a, List<int> b) {
-    if (a.length != b.length) return false;
-    for (int i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
   }
 
   // Вспомогательный метод для преобразования байтов в шестнадцатеричную строку

@@ -3,7 +3,12 @@ part of '_index.dart';
 // Параметры для usecase
 @freezed
 abstract class StartRegistrationParams with _$StartRegistrationParams implements IRpcSerializable {
-  const factory StartRegistrationParams({required String userId}) = _StartRegistrationParams;
+  const factory StartRegistrationParams({
+    required String userId,
+    List<int>? userHandle,
+    String? username,
+    String? displayName,
+  }) = _StartRegistrationParams;
 
   static IRpcCodec<StartRegistrationParams> get codec => RpcCodec(StartRegistrationParams.fromJson);
 
@@ -36,15 +41,12 @@ abstract class StartRegistrationResult with _$StartRegistrationResult implements
 // UseCase для начала процесса регистрации WebAuthn
 class StartRegistrationUseCase {
   final IChallengeRepository _challengeRepository;
-  final String _rpId;
-  final String _rpName;
+  final WebAuthnSettings _settings;
 
   const StartRegistrationUseCase(
     this._challengeRepository, {
-    required String rpId,
-    required String rpName,
-  })  : _rpId = rpId,
-        _rpName = rpName;
+    required WebAuthnSettings settings,
+  }) : _settings = settings;
 
   // Выполнение usecase
   Future<StartRegistrationResult> execute(
@@ -55,25 +57,37 @@ class StartRegistrationUseCase {
     final challenge = precomputedChallenge ?? _generateRandomBytes(32);
 
     // Сохранение challenge в репозитории
-    await _challengeRepository.storeChallenge(params.userId, challenge);
+    await _challengeRepository.storeChallenge(
+      params.userId,
+      challenge,
+      expiresInSeconds: _settings.challengeTimeout,
+    );
+
+    final userHandle = params.userHandle ?? utf8.encode(params.userId);
+    final username = params.username ?? params.userId;
+    final displayName = params.displayName ?? username;
 
     // Создание опций регистрации
     return StartRegistrationResult.success(
       RegistrationOptions(
         challenge: challenge,
-        rpId: _rpId,
-        rpName: _rpName,
+        rpId: _settings.rpId,
+        rpName: _settings.rpName,
         userId: params.userId,
+        userHandle: userHandle,
+        userName: username,
+        userDisplayName: displayName,
         pubKeyCredParams: [
           {'type': 'public-key', 'alg': -7}, // ES256
           {'type': 'public-key', 'alg': -257}, // RS256
         ],
         authenticatorSelection: {
           'authenticatorAttachment': 'platform',
-          'userVerification': 'preferred',
+          'userVerification':
+              _settings.requireUserVerification ? 'required' : 'preferred',
           'requireResidentKey': false,
         },
-        timeout: 60000,
+        timeout: _settings.challengeTimeout * 1000,
         attestation: 'direct',
       ),
     );
