@@ -1,0 +1,200 @@
+import 'package:meta/meta.dart';
+import 'package:rpc_dart/rpc_dart.dart';
+
+/// RPC contract identifiers shared between the analytics caller and responder.
+@immutable
+final class AnalyticsContract {
+  const AnalyticsContract._();
+
+  static const String serviceName = 'rpc.dart.analytics';
+  static const String methodLogEvent = 'logEvent';
+  static const String methodSetEnabled = 'setEnabled';
+  static const String methodClear = 'clear';
+  static const String methodDisableAndClear = 'disableAndClear';
+  static const String methodGetStatus = 'getStatus';
+  static const String methodShutdown = 'shutdown';
+}
+
+/// Minimal acknowledgement envelope.
+@immutable
+class AnalyticsAck implements IRpcSerializable {
+  const AnalyticsAck({
+    required this.success,
+    this.message,
+  });
+
+  final bool success;
+  final String? message;
+
+  static const RpcCodec<AnalyticsAck> codec =
+      RpcCodec<AnalyticsAck>.withDecoder(AnalyticsAck.fromJson);
+
+  static AnalyticsAck fromJson(Map<String, dynamic> json) {
+    return AnalyticsAck(
+      success: json['success'] as bool? ?? false,
+      message: json['message'] as String?,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'success': success,
+      if (message != null) 'message': message,
+    };
+  }
+}
+
+/// Request payload for writing an analytics event.
+@immutable
+class AnalyticsLogEventRequest implements IRpcSerializable {
+  const AnalyticsLogEventRequest({
+    required this.eventName,
+    this.properties,
+    required this.timestamp,
+  });
+
+  final String eventName;
+  final Map<String, dynamic>? properties;
+  final DateTime timestamp;
+
+  static const RpcCodec<AnalyticsLogEventRequest> codec =
+      RpcCodec<AnalyticsLogEventRequest>.withDecoder(
+    AnalyticsLogEventRequest.fromJson,
+  );
+
+  static AnalyticsLogEventRequest fromJson(Map<String, dynamic> json) {
+    final rawProperties = json['properties'];
+    return AnalyticsLogEventRequest(
+      eventName: json['eventName'] as String? ?? '',
+      properties: rawProperties == null
+          ? null
+          : Map<String, dynamic>.from(rawProperties as Map),
+      timestamp: DateTime.parse(json['timestamp'] as String),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'eventName': eventName,
+      if (properties != null) 'properties': properties,
+      'timestamp': timestamp.toUtc().toIso8601String(),
+    };
+  }
+}
+
+/// Request that toggles the analytics enabled state.
+@immutable
+class AnalyticsSetEnabledRequest implements IRpcSerializable {
+  const AnalyticsSetEnabledRequest(this.enabled);
+
+  final bool enabled;
+
+  static const RpcCodec<AnalyticsSetEnabledRequest> codec =
+      RpcCodec<AnalyticsSetEnabledRequest>.withDecoder(
+    AnalyticsSetEnabledRequest.fromJson,
+  );
+
+  static AnalyticsSetEnabledRequest fromJson(Map<String, dynamic> json) {
+    return AnalyticsSetEnabledRequest(json['enabled'] as bool? ?? true);
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{'enabled': enabled};
+  }
+}
+
+/// Snapshot returned back to the Flutter isolate with storage metadata.
+@immutable
+class AnalyticsStatusSnapshot implements IRpcSerializable {
+  const AnalyticsStatusSnapshot({
+    required this.enabled,
+    required this.eventCount,
+    this.lastEventAt,
+  });
+
+  final bool enabled;
+  final int eventCount;
+  final DateTime? lastEventAt;
+
+  static const RpcCodec<AnalyticsStatusSnapshot> codec =
+      RpcCodec<AnalyticsStatusSnapshot>.withDecoder(
+    AnalyticsStatusSnapshot.fromJson,
+  );
+
+  static AnalyticsStatusSnapshot fromJson(Map<String, dynamic> json) {
+    final lastTimestamp = json['lastEventAt'] as String?;
+    return AnalyticsStatusSnapshot(
+      enabled: json['enabled'] as bool? ?? false,
+      eventCount: json['eventCount'] as int? ?? 0,
+      lastEventAt:
+          lastTimestamp == null ? null : DateTime.parse(lastTimestamp).toUtc(),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'enabled': enabled,
+      'eventCount': eventCount,
+      if (lastEventAt != null)
+        'lastEventAt': lastEventAt!.toUtc().toIso8601String(),
+    };
+  }
+}
+
+/// Command that clears all stored analytics events.
+@immutable
+class AnalyticsClearRequest implements IRpcSerializable {
+  const AnalyticsClearRequest();
+
+  static const RpcCodec<AnalyticsClearRequest> codec =
+      RpcCodec<AnalyticsClearRequest>.withDecoder(
+    AnalyticsClearRequest.fromJson,
+  );
+
+  static AnalyticsClearRequest fromJson(Map<String, dynamic> json) {
+    return const AnalyticsClearRequest();
+  }
+
+  @override
+  Map<String, dynamic> toJson() => const <String, dynamic>{};
+}
+
+/// Combined disable + clear command envelope.
+@immutable
+class AnalyticsDisableAndClearRequest implements IRpcSerializable {
+  const AnalyticsDisableAndClearRequest();
+
+  static const RpcCodec<AnalyticsDisableAndClearRequest> codec =
+      RpcCodec<AnalyticsDisableAndClearRequest>.withDecoder(
+    AnalyticsDisableAndClearRequest.fromJson,
+  );
+
+  static AnalyticsDisableAndClearRequest fromJson(Map<String, dynamic> json) {
+    return const AnalyticsDisableAndClearRequest();
+  }
+
+  @override
+  Map<String, dynamic> toJson() => const <String, dynamic>{};
+}
+
+/// Final shutdown command that tells the worker to release resources.
+@immutable
+class AnalyticsShutdownRequest implements IRpcSerializable {
+  const AnalyticsShutdownRequest();
+
+  static const RpcCodec<AnalyticsShutdownRequest> codec =
+      RpcCodec<AnalyticsShutdownRequest>.withDecoder(
+    AnalyticsShutdownRequest.fromJson,
+  );
+
+  static AnalyticsShutdownRequest fromJson(Map<String, dynamic> json) {
+    return const AnalyticsShutdownRequest();
+  }
+
+  @override
+  Map<String, dynamic> toJson() => const <String, dynamic>{};
+}
