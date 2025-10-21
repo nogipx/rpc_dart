@@ -18,6 +18,8 @@ application.
 - 🧵 Runs in a background isolate to isolate disk IO from the UI thread.
 - 🧹 Offers a one-shot `disableAndClear()` helper to wipe all telemetry.
 - 🛠️ Ships with optional in-memory diagnostics buffers for development builds.
+- ☁️ Exposes fetch + acknowledge APIs (and a helper) for forwarding sealed
+  events to your backend.
 
 See `lib/rpc_dart_analytics.dart` for the public API surface.
 
@@ -33,6 +35,30 @@ final analytics = await RpcAnalytics.initialize(
 
 await analytics.logEvent('app_launch');
 ```
+
+### Forwarding events to a backend
+
+Because the worker stores Licensify-sealed tokens, you can upload them without
+ever touching the raw payloads. Fetch the encrypted batches, send them to your
+API, and acknowledge them so they are removed locally:
+
+```dart
+final uploaded = await analytics.uploadPendingEvents(
+  (events) async {
+    await backendClient.sendAnalytics(events.map((e) => <String, dynamic>{
+          'id': e.id,
+          'createdAt': e.createdAt.toIso8601String(),
+          'sealed': e.encryptedToken,
+        }));
+  },
+  batchSize: 100,
+);
+
+debugPrint('Uploaded $uploaded events');
+```
+
+If you prefer manual control, call `fetchForUpload()` to retrieve a batch and
+`acknowledgeUpload()` once your backend confirms persistence.
 
 ### Developer diagnostics
 

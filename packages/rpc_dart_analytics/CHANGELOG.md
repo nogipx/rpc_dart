@@ -1,3 +1,8 @@
+## 0.3.0
+
+- Added fetch/acknowledge RPCs and a high-level `uploadPendingEvents()` helper
+  for forwarding sealed analytics batches to backend services.
+
 ## 0.2.0
 
 - Added opt-in diagnostics buffers with `RpcAnalyticsDiagnosticsOptions` and a

@@ -169,6 +169,20 @@ final class AnalyticsResponder extends RpcResponderContract {
       responseCodec: AnalyticsDiagnosticsSnapshot.codec,
       handler: _handleDiagnostics,
     );
+
+    addUnaryMethod<AnalyticsUploadFetchRequest, AnalyticsUploadBatch>(
+      methodName: AnalyticsContract.methodFetchForUpload,
+      requestCodec: AnalyticsUploadFetchRequest.codec,
+      responseCodec: AnalyticsUploadBatch.codec,
+      handler: _handleFetchForUpload,
+    );
+
+    addUnaryMethod<AnalyticsUploadAcknowledgeRequest, AnalyticsAck>(
+      methodName: AnalyticsContract.methodAcknowledgeUpload,
+      requestCodec: AnalyticsUploadAcknowledgeRequest.codec,
+      responseCodec: AnalyticsAck.codec,
+      handler: _handleAcknowledgeUpload,
+    );
   }
 
   Future<AnalyticsAck> _handleLogEvent(
@@ -271,6 +285,33 @@ final class AnalyticsResponder extends RpcResponderContract {
       );
     }
     return _storage.diagnosticsSnapshot();
+  }
+
+  Future<AnalyticsUploadBatch> _handleFetchForUpload(
+    AnalyticsUploadFetchRequest request, {
+    RpcContext? context,
+  }) {
+    if (_disposed) {
+      return Future.value(
+        const AnalyticsUploadBatch(
+          events: <AnalyticsUploadEnvelope>[],
+          hasMore: false,
+        ),
+      );
+    }
+    return _storage.fetchForUpload(limit: request.limit);
+  }
+
+  Future<AnalyticsAck> _handleAcknowledgeUpload(
+    AnalyticsUploadAcknowledgeRequest request, {
+    RpcContext? context,
+  }) async {
+    if (_disposed) {
+      return const AnalyticsAck(success: false, message: 'analytics storage disposed');
+    }
+
+    await _storage.acknowledgeUpload(request.eventIds);
+    return const AnalyticsAck(success: true, message: 'acknowledged');
   }
 }
 
@@ -433,6 +474,57 @@ final class AnalyticsStorageManager {
       diagnosticsEnabled: _diagnostics.enabled,
       recentEvents: _diagnostics.snapshot(),
       status: status,
+    );
+  }
+
+  Future<AnalyticsUploadBatch> fetchForUpload({required int limit}) async {
+    await _ensureSchema();
+    final rows = await _storage.database
+        .customSelect(
+          'SELECT id, created_at_ms, encrypted_token '
+          'FROM analytics_events ORDER BY id ASC LIMIT ?',
+          <Object?>[limit],
+        )
+        .get();
+
+    final events = rows
+        .map(
+          (row) => AnalyticsUploadEnvelope(
+            id: row.read<int>('id'),
+            createdAt: DateTime.fromMillisecondsSinceEpoch(
+              row.read<int>('created_at_ms'),
+              isUtc: true,
+            ).toUtc(),
+            encryptedToken: row.read<String>('encrypted_token'),
+          ),
+        )
+        .toList(growable: false);
+
+    var hasMore = false;
+    if (events.length == limit && events.isNotEmpty) {
+      final lastId = events.last.id;
+      final moreRow = await _storage.database
+          .customSelect(
+            'SELECT EXISTS(SELECT 1 FROM analytics_events WHERE id > ?) AS more',
+            <Object?>[lastId],
+          )
+          .getSingle();
+      hasMore = moreRow.read<int>('more') == 1;
+    }
+
+    return AnalyticsUploadBatch(events: events, hasMore: hasMore);
+  }
+
+  Future<void> acknowledgeUpload(List<int> eventIds) async {
+    if (eventIds.isEmpty) {
+      return;
+    }
+
+    await _ensureSchema();
+    final placeholders = List<String>.filled(eventIds.length, '?').join(',');
+    await _storage.database.customStatement(
+      'DELETE FROM analytics_events WHERE id IN ($placeholders)',
+      eventIds.cast<Object?>(),
     );
   }
 }

@@ -96,6 +96,65 @@ class RpcAnalytics {
     return _caller.getDiagnostics();
   }
 
+  /// Fetches a batch of encrypted events ready to be uploaded.
+  Future<AnalyticsUploadBatch> fetchForUpload({int limit = 50}) {
+    _throwIfDisposed();
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'must be greater than zero');
+    }
+
+    return _caller.fetchForUpload(
+      AnalyticsUploadFetchRequest(limit: limit),
+    );
+  }
+
+  /// Removes uploaded events from local storage once the backend confirms.
+  Future<void> acknowledgeUpload(Iterable<int> eventIds) async {
+    _throwIfDisposed();
+    final uniqueIds = eventIds.toSet().toList(growable: false);
+    if (uniqueIds.isEmpty) {
+      return;
+    }
+
+    await _caller.acknowledgeUpload(
+      AnalyticsUploadAcknowledgeRequest(eventIds: uniqueIds),
+    );
+  }
+
+  /// Convenience helper that iterates through stored events and uploads them.
+  ///
+  /// The provided [uploader] receives the encrypted batch; once it completes
+  /// without throwing, the events are removed from local storage. Returns the
+  /// total number of uploaded events.
+  Future<int> uploadPendingEvents(
+    Future<void> Function(List<AnalyticsUploadEnvelope> events) uploader, {
+    int batchSize = 50,
+  }) async {
+    _throwIfDisposed();
+    if (batchSize <= 0) {
+      throw ArgumentError.value(batchSize, 'batchSize', 'must be positive');
+    }
+
+    var uploaded = 0;
+    while (true) {
+      final batch = await fetchForUpload(limit: batchSize);
+      final events = batch.events;
+      if (events.isEmpty) {
+        break;
+      }
+
+      await uploader(events);
+      await acknowledgeUpload(events.map((e) => e.id));
+      uploaded += events.length;
+
+      if (!batch.hasMore) {
+        break;
+      }
+    }
+
+    return uploaded;
+  }
+
   /// Removes all stored events without disabling the pipeline.
   Future<AnalyticsStatusSnapshot> clear() async {
     _throwIfDisposed();
@@ -192,6 +251,30 @@ class _AnalyticsCaller extends RpcCallerContract {
       requestCodec: AnalyticsDiagnosticsRequest.codec,
       responseCodec: AnalyticsDiagnosticsSnapshot.codec,
     );
+  }
+
+  Future<AnalyticsUploadBatch> fetchForUpload(
+    AnalyticsUploadFetchRequest request,
+  ) {
+    return callUnary<AnalyticsUploadFetchRequest, AnalyticsUploadBatch>(
+      methodName: AnalyticsContract.methodFetchForUpload,
+      request: request,
+      requestCodec: AnalyticsUploadFetchRequest.codec,
+      responseCodec: AnalyticsUploadBatch.codec,
+    );
+  }
+
+  Future<void> acknowledgeUpload(AnalyticsUploadAcknowledgeRequest request) {
+    return callUnary<AnalyticsUploadAcknowledgeRequest, AnalyticsAck>(
+      methodName: AnalyticsContract.methodAcknowledgeUpload,
+      request: request,
+      requestCodec: AnalyticsUploadAcknowledgeRequest.codec,
+      responseCodec: AnalyticsAck.codec,
+    ).then((value) {
+      if (!value.success) {
+        throw StateError(value.message ?? 'Failed to acknowledge analytics events');
+      }
+    });
   }
 
   Future<void> shutdown() async {

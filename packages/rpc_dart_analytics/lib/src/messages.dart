@@ -14,6 +14,8 @@ final class AnalyticsContract {
   static const String methodGetStatus = 'getStatus';
   static const String methodShutdown = 'shutdown';
   static const String methodDiagnostics = 'diagnostics';
+  static const String methodFetchForUpload = 'fetchForUpload';
+  static const String methodAcknowledgeUpload = 'acknowledgeUpload';
 }
 
 /// Minimal acknowledgement envelope.
@@ -297,6 +299,151 @@ class AnalyticsDiagnosticsSnapshot implements IRpcSerializable {
       'diagnosticsEnabled': diagnosticsEnabled,
       'recentEvents': recentEvents.map((e) => e.toJson()).toList(growable: false),
       'status': status.toJson(),
+    };
+  }
+}
+
+/// Request payload for fetching encrypted analytics tokens.
+@immutable
+class AnalyticsUploadFetchRequest implements IRpcSerializable {
+  const AnalyticsUploadFetchRequest({this.limit = 50}) : assert(limit > 0);
+
+  /// Maximum number of events to include in the batch.
+  final int limit;
+
+  static const RpcCodec<AnalyticsUploadFetchRequest> codec =
+      RpcCodec<AnalyticsUploadFetchRequest>.withDecoder(
+    AnalyticsUploadFetchRequest.fromJson,
+  );
+
+  static AnalyticsUploadFetchRequest fromJson(Map<String, dynamic> json) {
+    final limit = json['limit'] as int? ?? 50;
+    return AnalyticsUploadFetchRequest(limit: limit > 0 ? limit : 50);
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'limit': limit,
+    };
+  }
+}
+
+/// A single encrypted analytics event ready for backend upload.
+@immutable
+class AnalyticsUploadEnvelope implements IRpcSerializable {
+  const AnalyticsUploadEnvelope({
+    required this.id,
+    required this.createdAt,
+    required this.encryptedToken,
+  });
+
+  /// Local database identifier, used for acknowledging uploads.
+  final int id;
+
+  /// Timestamp when the event was persisted on-device.
+  final DateTime createdAt;
+
+  /// Licensify-sealed payload to forward to backend storage.
+  final String encryptedToken;
+
+  static const RpcCodec<AnalyticsUploadEnvelope> codec =
+      RpcCodec<AnalyticsUploadEnvelope>.withDecoder(
+    AnalyticsUploadEnvelope.fromJson,
+  );
+
+  static AnalyticsUploadEnvelope fromJson(Map<String, dynamic> json) {
+    return AnalyticsUploadEnvelope(
+      id: json['id'] as int? ?? -1,
+      createdAt: DateTime.parse(json['createdAt'] as String).toUtc(),
+      encryptedToken: json['encryptedToken'] as String? ?? '',
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'createdAt': createdAt.toUtc().toIso8601String(),
+      'encryptedToken': encryptedToken,
+    };
+  }
+}
+
+/// Batch of encrypted analytics events.
+@immutable
+class AnalyticsUploadBatch implements IRpcSerializable {
+  const AnalyticsUploadBatch({
+    required this.events,
+    required this.hasMore,
+  });
+
+  /// Events returned for the current batch.
+  final List<AnalyticsUploadEnvelope> events;
+
+  /// Indicates whether more events remain in the store.
+  final bool hasMore;
+
+  static const RpcCodec<AnalyticsUploadBatch> codec =
+      RpcCodec<AnalyticsUploadBatch>.withDecoder(
+    AnalyticsUploadBatch.fromJson,
+  );
+
+  static AnalyticsUploadBatch fromJson(Map<String, dynamic> json) {
+    final events = json['events'] as List<dynamic>?;
+    return AnalyticsUploadBatch(
+      events: events == null
+          ? const <AnalyticsUploadEnvelope>[]
+          : events
+              .map((dynamic raw) => AnalyticsUploadEnvelope.fromJson(
+                    Map<String, dynamic>.from(raw as Map),
+                  ))
+              .toList(growable: false),
+      hasMore: json['hasMore'] as bool? ?? false,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'events': events.map((e) => e.toJson()).toList(growable: false),
+      'hasMore': hasMore,
+    };
+  }
+}
+
+/// Request payload used to delete uploaded events from local storage.
+@immutable
+class AnalyticsUploadAcknowledgeRequest implements IRpcSerializable {
+  const AnalyticsUploadAcknowledgeRequest({required this.eventIds})
+      : assert(eventIds.length == eventIds.toSet().length,
+            'eventIds should be unique');
+
+  /// Identifiers of events that have been uploaded successfully.
+  final List<int> eventIds;
+
+  static const RpcCodec<AnalyticsUploadAcknowledgeRequest> codec =
+      RpcCodec<AnalyticsUploadAcknowledgeRequest>.withDecoder(
+    AnalyticsUploadAcknowledgeRequest.fromJson,
+  );
+
+  static AnalyticsUploadAcknowledgeRequest fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final rawIds = json['eventIds'];
+    final ids = rawIds is List
+        ? rawIds
+            .whereType<num>()
+            .map((num value) => value.toInt())
+            .toList(growable: false)
+        : const <int>[];
+    return AnalyticsUploadAcknowledgeRequest(eventIds: ids);
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'eventIds': eventIds,
     };
   }
 }
