@@ -2,7 +2,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
 import '../../rpc_dart_webauthn.dart';
-rt';
 // Экспортируем модели из юзкейсов для контракта
 export '../usecases/_index.dart'
     show

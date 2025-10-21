@@ -15,4 +15,4 @@ part 'finish_registration_usecase.dart';
 part 'revoke_session_usecase.dart';
 part 'start_authentication_usecase.dart';
 part 'start_registration_usecase.dart';
-part 'validate_token_usecaseex.g.dart';
+part 'validate_token_usecase.dart';
