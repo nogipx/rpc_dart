@@ -13,6 +13,7 @@ final class AnalyticsContract {
   static const String methodDisableAndClear = 'disableAndClear';
   static const String methodGetStatus = 'getStatus';
   static const String methodShutdown = 'shutdown';
+  static const String methodDiagnostics = 'diagnostics';
 }
 
 /// Minimal acknowledgement envelope.
@@ -197,4 +198,105 @@ class AnalyticsShutdownRequest implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => const <String, dynamic>{};
+}
+
+/// Request for retrieving diagnostics information.
+@immutable
+class AnalyticsDiagnosticsRequest implements IRpcSerializable {
+  const AnalyticsDiagnosticsRequest();
+
+  static const RpcCodec<AnalyticsDiagnosticsRequest> codec =
+      RpcCodec<AnalyticsDiagnosticsRequest>.withDecoder(
+    AnalyticsDiagnosticsRequest.fromJson,
+  );
+
+  static AnalyticsDiagnosticsRequest fromJson(Map<String, dynamic> json) {
+    return const AnalyticsDiagnosticsRequest();
+  }
+
+  @override
+  Map<String, dynamic> toJson() => const <String, dynamic>{};
+}
+
+/// In-memory analytics event kept only for diagnostics tooling.
+@immutable
+class AnalyticsDiagnosticsEvent implements IRpcSerializable {
+  const AnalyticsDiagnosticsEvent({
+    required this.eventName,
+    required this.timestamp,
+    this.properties,
+  });
+
+  final String eventName;
+  final DateTime timestamp;
+  final Map<String, dynamic>? properties;
+
+  static const RpcCodec<AnalyticsDiagnosticsEvent> codec =
+      RpcCodec<AnalyticsDiagnosticsEvent>.withDecoder(
+    AnalyticsDiagnosticsEvent.fromJson,
+  );
+
+  static AnalyticsDiagnosticsEvent fromJson(Map<String, dynamic> json) {
+    final rawProperties = json['properties'];
+    return AnalyticsDiagnosticsEvent(
+      eventName: json['eventName'] as String? ?? '',
+      timestamp: DateTime.parse(json['timestamp'] as String).toUtc(),
+      properties: rawProperties == null
+          ? null
+          : Map<String, dynamic>.from(rawProperties as Map),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'eventName': eventName,
+      'timestamp': timestamp.toUtc().toIso8601String(),
+      if (properties != null) 'properties': properties,
+    };
+  }
+}
+
+/// Snapshot with recent diagnostics data for development tooling.
+@immutable
+class AnalyticsDiagnosticsSnapshot implements IRpcSerializable {
+  const AnalyticsDiagnosticsSnapshot({
+    required this.diagnosticsEnabled,
+    required this.recentEvents,
+    required this.status,
+  });
+
+  final bool diagnosticsEnabled;
+  final List<AnalyticsDiagnosticsEvent> recentEvents;
+  final AnalyticsStatusSnapshot status;
+
+  static const RpcCodec<AnalyticsDiagnosticsSnapshot> codec =
+      RpcCodec<AnalyticsDiagnosticsSnapshot>.withDecoder(
+    AnalyticsDiagnosticsSnapshot.fromJson,
+  );
+
+  static AnalyticsDiagnosticsSnapshot fromJson(Map<String, dynamic> json) {
+    final events = json['recentEvents'] as List<dynamic>?;
+    return AnalyticsDiagnosticsSnapshot(
+      diagnosticsEnabled: json['diagnosticsEnabled'] as bool? ?? false,
+      recentEvents: events == null
+          ? const <AnalyticsDiagnosticsEvent>[]
+          : events
+              .map((dynamic raw) =>
+                  AnalyticsDiagnosticsEvent.fromJson(Map<String, dynamic>.from(raw as Map)))
+              .toList(growable: false),
+      status: AnalyticsStatusSnapshot.fromJson(
+        Map<String, dynamic>.from(json['status'] as Map),
+      ),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'diagnosticsEnabled': diagnosticsEnabled,
+      'recentEvents': recentEvents.map((e) => e.toJson()).toList(growable: false),
+      'status': status.toJson(),
+    };
+  }
 }

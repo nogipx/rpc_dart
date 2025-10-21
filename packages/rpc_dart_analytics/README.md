@@ -17,6 +17,7 @@ application.
 - 📶 Works fully offline — no network connection is required to collect events.
 - 🧵 Runs in a background isolate to isolate disk IO from the UI thread.
 - 🧹 Offers a one-shot `disableAndClear()` helper to wipe all telemetry.
+- 🛠️ Ships with optional in-memory diagnostics buffers for development builds.
 
 See `lib/rpc_dart_analytics.dart` for the public API surface.
 
@@ -31,4 +32,30 @@ final analytics = await RpcAnalytics.initialize(
 );
 
 await analytics.logEvent('app_launch');
+```
+
+### Developer diagnostics
+
+To inspect recent events during development, enable the diagnostics buffer in the
+configuration. The worker keeps the latest `maxEvents` payloads (unencrypted) in
+memory and exposes them via `RpcAnalytics.diagnostics()`. The encrypted store on
+disk is unaffected.
+
+```dart
+final analytics = await RpcAnalytics.initialize(
+  RpcAnalyticsConfig(
+    licenseKeyPaserk: 'k4.public.your-app-key-here',
+    databasePath: '/path/to/analytics.sqlite',
+    diagnosticsOptions: const RpcAnalyticsDiagnosticsOptions(
+      enabled: true,
+      maxEvents: 100,
+    ),
+  ),
+);
+
+final diagnostics = await analytics.diagnostics();
+debugPrint('Diagnostics enabled: ${diagnostics.diagnosticsEnabled}');
+for (final event in diagnostics.recentEvents) {
+  debugPrint('${event.timestamp}: ${event.eventName}');
+}
 ```

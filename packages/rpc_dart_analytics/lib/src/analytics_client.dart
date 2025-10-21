@@ -34,6 +34,7 @@ class RpcAnalytics {
         'licenseKeyPaserk': trimmed,
         'enabled': config.enabledByDefault,
         'logStatements': config.logSqlStatements,
+        'diagnostics': config.diagnosticsOptions.toJson(),
       },
       debugName: 'rpc_dart_analytics_worker',
     );
@@ -87,6 +88,12 @@ class RpcAnalytics {
   Future<AnalyticsStatusSnapshot> status() async {
     _throwIfDisposed();
     return _caller.getStatus();
+  }
+
+  /// Returns a diagnostics snapshot with recent buffered events.
+  Future<AnalyticsDiagnosticsSnapshot> diagnostics() async {
+    _throwIfDisposed();
+    return _caller.getDiagnostics();
   }
 
   /// Removes all stored events without disabling the pipeline.
@@ -175,6 +182,15 @@ class _AnalyticsCaller extends RpcCallerContract {
       request: const AnalyticsClearRequest(),
       requestCodec: AnalyticsClearRequest.codec,
       responseCodec: AnalyticsStatusSnapshot.codec,
+    );
+  }
+
+  Future<AnalyticsDiagnosticsSnapshot> getDiagnostics() {
+    return callUnary<AnalyticsDiagnosticsRequest, AnalyticsDiagnosticsSnapshot>(
+      methodName: AnalyticsContract.methodDiagnostics,
+      request: const AnalyticsDiagnosticsRequest(),
+      requestCodec: AnalyticsDiagnosticsRequest.codec,
+      responseCodec: AnalyticsDiagnosticsSnapshot.codec,
     );
   }
 

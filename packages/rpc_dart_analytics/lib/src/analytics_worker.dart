@@ -23,6 +23,7 @@ void analyticsWorkerEntrypoint(
         publicKey: config.licenseKey,
         enabledByDefault: config.enabledByDefault,
         logSqlStatements: config.logSqlStatements,
+        diagnosticsOptions: config.diagnosticsOptions,
       );
 
       final endpoint = RpcResponderEndpoint(
@@ -47,6 +48,7 @@ class _WorkerBootstrapParams {
     required this.licenseKey,
     required this.enabledByDefault,
     required this.logSqlStatements,
+    required this.diagnosticsOptions,
   });
 
   factory _WorkerBootstrapParams.fromMap(Map<String, dynamic> raw) {
@@ -67,6 +69,9 @@ class _WorkerBootstrapParams {
       licenseKey: licenseKey,
       enabledByDefault: raw['enabled'] as bool? ?? true,
       logSqlStatements: raw['logStatements'] as bool? ?? false,
+      diagnosticsOptions: AnalyticsDiagnosticsOptions.fromMap(
+        raw['diagnostics'],
+      ),
     );
   }
 
@@ -74,6 +79,32 @@ class _WorkerBootstrapParams {
   final LicensifyPublicKey licenseKey;
   final bool enabledByDefault;
   final bool logSqlStatements;
+  final AnalyticsDiagnosticsOptions diagnosticsOptions;
+}
+
+@immutable
+class AnalyticsDiagnosticsOptions {
+  const AnalyticsDiagnosticsOptions({
+    required this.enabled,
+    required this.maxEvents,
+  });
+
+  factory AnalyticsDiagnosticsOptions.fromMap(dynamic raw) {
+    if (raw is! Map) {
+      return const AnalyticsDiagnosticsOptions(enabled: false, maxEvents: 200);
+    }
+
+    final map = Map<String, dynamic>.from(raw as Map);
+    final enabled = map['enabled'] as bool? ?? false;
+    final maxEvents = map['maxEvents'] as int? ?? 200;
+    return AnalyticsDiagnosticsOptions(
+      enabled: enabled,
+      maxEvents: maxEvents > 0 ? maxEvents : 200,
+    );
+  }
+
+  final bool enabled;
+  final int maxEvents;
 }
 
 final class AnalyticsResponder extends RpcResponderContract {
@@ -130,6 +161,13 @@ final class AnalyticsResponder extends RpcResponderContract {
       requestCodec: AnalyticsShutdownRequest.codec,
       responseCodec: AnalyticsAck.codec,
       handler: _handleShutdown,
+    );
+
+    addUnaryMethod<AnalyticsDiagnosticsRequest, AnalyticsDiagnosticsSnapshot>(
+      methodName: AnalyticsContract.methodDiagnostics,
+      requestCodec: AnalyticsDiagnosticsRequest.codec,
+      responseCodec: AnalyticsDiagnosticsSnapshot.codec,
+      handler: _handleDiagnostics,
     );
   }
 
@@ -218,6 +256,22 @@ final class AnalyticsResponder extends RpcResponderContract {
     }
     super.dispose();
   }
+
+  Future<AnalyticsDiagnosticsSnapshot> _handleDiagnostics(
+    AnalyticsDiagnosticsRequest request, {
+    RpcContext? context,
+  }) {
+    if (_disposed) {
+      return Future.value(
+        const AnalyticsDiagnosticsSnapshot(
+          diagnosticsEnabled: false,
+          recentEvents: <AnalyticsDiagnosticsEvent>[],
+          status: AnalyticsStatusSnapshot(enabled: false, eventCount: 0),
+        ),
+      );
+    }
+    return _storage.diagnosticsSnapshot();
+  }
 }
 
 final class AnalyticsStorageManager {
@@ -225,15 +279,18 @@ final class AnalyticsStorageManager {
     required DriftDataStorageAdapter storage,
     required LicensifyPublicKey publicKey,
     required bool enabled,
+    required AnalyticsDiagnosticsController diagnostics,
   })  : _storage = storage,
         _publicKey = publicKey,
-        _enabled = enabled;
+        _enabled = enabled,
+        _diagnostics = diagnostics;
 
   static Future<AnalyticsStorageManager> open({
     required String databasePath,
     required LicensifyPublicKey publicKey,
     required bool enabledByDefault,
     required bool logSqlStatements,
+    required AnalyticsDiagnosticsOptions diagnosticsOptions,
   }) async {
     final file = File(databasePath);
     file.parent.createSync(recursive: true);
@@ -242,10 +299,16 @@ final class AnalyticsStorageManager {
       logStatements: logSqlStatements,
     );
     await adapter.ensureReady();
+    final diagnostics = diagnosticsOptions.enabled
+        ? AnalyticsDiagnosticsController.enabled(
+            maxEvents: diagnosticsOptions.maxEvents,
+          )
+        : AnalyticsDiagnosticsController.disabled();
     final manager = AnalyticsStorageManager._(
       storage: adapter,
       publicKey: publicKey,
       enabled: enabledByDefault,
+      diagnostics: diagnostics,
     );
     await manager._ensureSchema();
     return manager;
@@ -255,6 +318,7 @@ final class AnalyticsStorageManager {
   final LicensifyPublicKey _publicKey;
   bool _enabled;
   bool _schemaReady = false;
+  final AnalyticsDiagnosticsController _diagnostics;
 
   Future<void> _ensureSchema() async {
     if (_schemaReady) return;
@@ -276,6 +340,15 @@ final class AnalyticsStorageManager {
     }
 
     await _ensureSchema();
+    final diagnosticsEvent = _diagnostics.enabled
+        ? AnalyticsDiagnosticsEvent(
+            eventName: request.eventName,
+            timestamp: request.timestamp.toUtc(),
+            properties: request.properties == null
+                ? null
+                : Map<String, dynamic>.from(request.properties!),
+          )
+        : null;
     final encryptedToken = await Licensify.encryptDataForPublicKey(
       data: <String, dynamic>{
         'event': request.eventName,
@@ -294,6 +367,10 @@ final class AnalyticsStorageManager {
       ],
     );
 
+    if (diagnosticsEvent != null) {
+      _diagnostics.record(diagnosticsEvent);
+    }
+
     return true;
   }
 
@@ -305,6 +382,7 @@ final class AnalyticsStorageManager {
   Future<AnalyticsStatusSnapshot> clear() async {
     await _ensureSchema();
     await _storage.database.customStatement('DELETE FROM analytics_events');
+    _diagnostics.clear();
     return snapshot();
   }
 
@@ -312,6 +390,7 @@ final class AnalyticsStorageManager {
     _enabled = false;
     await _ensureSchema();
     await _storage.database.customStatement('DELETE FROM analytics_events');
+    _diagnostics.clear();
     return snapshot();
   }
 
@@ -344,6 +423,52 @@ final class AnalyticsStorageManager {
   }
 
   Future<void> dispose() async {
+    _diagnostics.clear();
     await _storage.dispose();
+  }
+
+  Future<AnalyticsDiagnosticsSnapshot> diagnosticsSnapshot() async {
+    final status = await snapshot();
+    return AnalyticsDiagnosticsSnapshot(
+      diagnosticsEnabled: _diagnostics.enabled,
+      recentEvents: _diagnostics.snapshot(),
+      status: status,
+    );
+  }
+}
+
+final class AnalyticsDiagnosticsController {
+  AnalyticsDiagnosticsController.disabled()
+      : enabled = false,
+        maxEvents = 0,
+        _buffer = <AnalyticsDiagnosticsEvent>[];
+
+  AnalyticsDiagnosticsController.enabled({required this.maxEvents})
+      : enabled = true,
+        _buffer = <AnalyticsDiagnosticsEvent>[];
+
+  final bool enabled;
+  final int maxEvents;
+  final List<AnalyticsDiagnosticsEvent> _buffer;
+
+  void record(AnalyticsDiagnosticsEvent event) {
+    if (!enabled) {
+      return;
+    }
+    _buffer.add(event);
+    if (_buffer.length > maxEvents) {
+      _buffer.removeAt(0);
+    }
+  }
+
+  void clear() {
+    _buffer.clear();
+  }
+
+  List<AnalyticsDiagnosticsEvent> snapshot() {
+    if (!enabled) {
+      return const <AnalyticsDiagnosticsEvent>[];
+    }
+    return List<AnalyticsDiagnosticsEvent>.unmodifiable(_buffer);
   }
 }
