@@ -262,6 +262,41 @@ final newToken = refreshResult.authResponse!.accessToken;
 > 💡 После успешного обновления сохраните новый токен, а старый можно удалить из хранилища клиента —
 > домен уже поместил его `jti` в blacklist.
 
+### Почему возвращается только один токен
+
+`AuthResponse` содержит единственный PASETO access token. Отдельный «refresh token» не требуется: метод
+`refreshToken` принимает текущий access token, проверяет его подпись, состояние сессии, добавляет старый
+`jti` в blacklist и возвращает новый PASETO с продлённым сроком жизни. Благодаря этому клиентам достаточно
+хранить только актуальный bearer-токен, а устаревшие экземпляры автоматически блокируются при ротации.
+
+### Клиентский interceptor для автоматического обновления токена
+
+Чтобы не прокидывать заголовок авторизации вручную и автоматически реагировать на истечение срока, подключите
+`WebAuthnTokenInterceptor` к `RpcCallerEndpoint`:
+
+```dart
+final tokenStore = MySecureStore();
+
+callerEndpoint.addInterceptor(
+  WebAuthnTokenInterceptor(
+    tokenProvider: tokenStore.readToken,
+    refreshCallback: (token, call) async {
+      final result = await webAuthnCaller.refreshToken(
+        RefreshTokenParams(token: token),
+      );
+
+      return result.authResponse;
+    },
+    onTokenRefreshed: (state, response) => tokenStore.save(state),
+  ),
+);
+```
+
+Interceptor добавляет заголовок `Authorization: Bearer <token>` ко всем вызовам, проактивно обновляет PASETO,
+если до истечения срока осталось меньше заданного порога, и повторяет запрос при ошибке авторизации, получив
+новый токен через `refreshToken`. Колбэки `tokenProvider` и `onTokenRefreshed` можно связать с безопасным
+хранилищем приложения, а `refreshCallback` — с любым `IWebAuthnContract`-клиентом.
+
 ## Тестирование
 
 Пакет содержит тестовые векторы W3C и сценарии use case'ов. Запустите все проверки командой:
