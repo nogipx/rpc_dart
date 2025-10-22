@@ -99,6 +99,29 @@ class MemorySessionRepositoryImpl implements ISessionRepository {
   }
 
   @override
+  Future<SessionInfo?> extendSession(
+    String sessionId, {
+    DateTime? newExpiresAt,
+    Map<String, dynamic>? metadataUpdates,
+  }) async {
+    final session = _sessions[sessionId];
+    if (session == null) return null;
+
+    final updatedMetadata = metadataUpdates == null
+        ? Map<String, dynamic>.from(session.metadata)
+        : {...session.metadata, ...metadataUpdates};
+
+    final updatedSession = session.copyWith(
+      expiresAt: newExpiresAt ?? session.expiresAt,
+      metadata: updatedMetadata,
+      isActive: true,
+    );
+
+    _sessions[sessionId] = updatedSession;
+    return updatedSession;
+  }
+
+  @override
   Future<void> cleanupExpiredSessions() async {
     final now = DateTime.now();
     final expiredSessions = _sessions.entries

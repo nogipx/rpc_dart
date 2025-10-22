@@ -12,6 +12,7 @@ part '_index.freezed.dart';
 part '_index.g.dart';
 part 'finish_authentication_usecase.dart';
 part 'finish_registration_usecase.dart';
+part 'refresh_token_usecase.dart';
 part 'revoke_session_usecase.dart';
 part 'start_authentication_usecase.dart';
 part 'start_registration_usecase.dart';

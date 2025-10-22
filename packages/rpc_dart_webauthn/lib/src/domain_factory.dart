@@ -43,9 +43,7 @@ class WebAuthnServerConfig {
       port: port,
       enableCors: true,
       logRequests: true,
-      additionalHeaders: {
-        'X-Environment': 'development',
-      },
+      additionalHeaders: {'X-Environment': 'development'},
     );
   }
 
@@ -152,8 +150,9 @@ class WebAuthnDomainConfig {
       challengeTimeout: challengeTimeout,
       tokenLifetime: tokenLifetime,
       scopes: scopes,
-      serverConfig:
-          startWellKnownServer ? (serverConfig ?? WebAuthnServerConfig.development()) : null,
+      serverConfig: startWellKnownServer
+          ? (serverConfig ?? WebAuthnServerConfig.development())
+          : null,
     );
   }
 
@@ -199,8 +198,9 @@ class WebAuthnDomainConfig {
       tokenLifetime: tokenLifetime,
       scopes: scopes,
       secretKey: secretKey,
-      serverConfig:
-          startWellKnownServer ? (serverConfig ?? WebAuthnServerConfig.production()) : null,
+      serverConfig: startWellKnownServer
+          ? (serverConfig ?? WebAuthnServerConfig.production())
+          : null,
     );
   }
 
@@ -223,20 +223,25 @@ class WebAuthnDomainConfig {
     if (rpName.toLowerCase().contains('demo') ||
         rpName.toLowerCase().contains('test') ||
         rpName.toLowerCase().contains('dev')) {
-      errors.add('Production rpName cannot contain demo, test, or dev: $rpName');
+      errors.add(
+        'Production rpName cannot contain demo, test, or dev: $rpName',
+      );
     }
 
     if (webOrigin.host == 'localhost' ||
         webOrigin.host.contains('test') ||
         webOrigin.host.contains('dev')) {
-      errors.add('Production webOrigin cannot be localhost, test, or dev: ${webOrigin.host}');
+      errors.add(
+        'Production webOrigin cannot be localhost, test, or dev: ${webOrigin.host}',
+      );
     }
 
     if (androidAppInfo.packageName.contains('example') ||
         androidAppInfo.packageName.contains('test') ||
         androidAppInfo.packageName.contains('dev')) {
       errors.add(
-          'Production Android package cannot contain example, test, or dev: ${androidAppInfo.packageName}');
+        'Production Android package cannot contain example, test, or dev: ${androidAppInfo.packageName}',
+      );
     }
 
     if (androidAppInfo.sha256 == _generateDevelopmentSha256()) {
@@ -246,7 +251,9 @@ class WebAuthnDomainConfig {
     if (iosBundleId.contains('example') ||
         iosBundleId.contains('test') ||
         iosBundleId.contains('dev')) {
-      errors.add('Production iOS bundle ID cannot contain example, test, or dev: $iosBundleId');
+      errors.add(
+        'Production iOS bundle ID cannot contain example, test, or dev: $iosBundleId',
+      );
     }
 
     // Проверяем тестовый ключ
@@ -256,7 +263,9 @@ class WebAuthnDomainConfig {
     }
 
     if (errors.isNotEmpty) {
-      throw ArgumentError('Production validation failed:\n${errors.join('\n')}');
+      throw ArgumentError(
+        'Production validation failed:\n${errors.join('\n')}',
+      );
     }
   }
 
@@ -272,10 +281,7 @@ class WebAuthnWellKnownServer {
   HttpServer? _server;
   bool _isRunning = false;
 
-  WebAuthnWellKnownServer({
-    required this.config,
-    required this.productConfig,
-  });
+  WebAuthnWellKnownServer({required this.config, required this.productConfig});
 
   /// Запускает веб-сервер
   Future<void> start() async {
@@ -288,7 +294,9 @@ class WebAuthnWellKnownServer {
       _isRunning = true;
 
       if (config.logRequests) {
-        print('🌐 WebAuthn .well-known сервер запущен на http://${config.host}:${config.port}');
+        print(
+          '🌐 WebAuthn .well-known сервер запущен на http://${config.host}:${config.port}',
+        );
         print('   • Android: /.well-known/assetlinks.json');
         print('   • iOS: /.well-known/apple-app-site-association');
       }
@@ -320,7 +328,9 @@ class WebAuthnWellKnownServer {
       final path = request.uri.path;
 
       if (config.logRequests) {
-        print('📥 ${request.method} $path от ${request.connectionInfo?.remoteAddress}');
+        print(
+          '📥 ${request.method} $path от ${request.connectionInfo?.remoteAddress}',
+        );
       }
 
       // Устанавливаем базовые заголовки
@@ -364,7 +374,10 @@ class WebAuthnWellKnownServer {
     });
 
     // Заголовки кэширования для .well-known файлов
-    response.headers.set('Cache-Control', 'public, max-age=3600'); // Кэш на 1 час
+    response.headers.set(
+      'Cache-Control',
+      'public, max-age=3600',
+    ); // Кэш на 1 час
   }
 
   /// Обрабатывает запрос к Android assetlinks.json
@@ -475,12 +488,15 @@ class WebAuthnDomainResult {
   RpcCallerEndpoint get clientEndpoint => callerResult.clientEndpoint;
   RpcResponderEndpoint get serverEndpoint => responderResult.serverEndpoint;
   WebAuthnCaller get webAuthnCaller => callerResult.webAuthnCaller;
-  IWebAuthnRepository get webAuthnRepository => responderResult.webAuthnRepository;
+  IWebAuthnRepository get webAuthnRepository =>
+      responderResult.webAuthnRepository;
   ISessionRepository get sessionRepository => responderResult.sessionRepository;
-  IChallengeRepository get challengeRepository => responderResult.challengeRepository;
+  IChallengeRepository get challengeRepository =>
+      responderResult.challengeRepository;
   ITokenBlacklistRepository get tokenBlacklistRepository =>
       responderResult.tokenBlacklistRepository;
-  WebAuthnWellKnownServer? get wellKnownServer => responderResult.wellKnownServer;
+  WebAuthnWellKnownServer? get wellKnownServer =>
+      responderResult.wellKnownServer;
 
   /// Освобождает ресурсы домена
   Future<void> dispose() async {
@@ -499,9 +515,7 @@ class WebAuthnCallerFactory {
   /// коммуникацию (InMemory, HTTP, WebSocket, Isolate и т.д.).
   ///
   /// [transport] - RPC транспорт для коммуникации с сервером
-  static WebAuthnCallerResult create({
-    required IRpcTransport transport,
-  }) {
+  static WebAuthnCallerResult create({required IRpcTransport transport}) {
     final clientEndpoint = RpcCallerEndpoint(transport: transport);
     final webAuthnCaller = WebAuthnCaller(clientEndpoint);
 
@@ -542,7 +556,8 @@ class WebAuthnResponderFactory {
     // === 3. Создаем настройки ===
     final productConfig = ProductConfig(
       webOrigin: config.webOrigin,
-      androidAppInfo: config.androidAppInfo ??
+      androidAppInfo:
+          config.androidAppInfo ??
           ProductConfigAndroid(
             packageName: 'com.example.dev',
             sha256: WebAuthnDomainConfig._generateDevelopmentSha256(),
@@ -598,11 +613,18 @@ class WebAuthnResponderFactory {
       pasetoUtils,
     );
 
-    final revokeSessionUseCase = RevokeSessionUseCase(
+    final refreshTokenUseCase = RefreshTokenUseCase(
+      webAuthnRepository,
       sessionRepository,
+      tokenBlacklistRepository,
+      pasetoUtils,
     );
 
-    final authorizationService = WebAuthnAuthorizationService(validateTokenUseCase);
+    final revokeSessionUseCase = RevokeSessionUseCase(sessionRepository);
+
+    final authorizationService = WebAuthnAuthorizationService(
+      validateTokenUseCase,
+    );
 
     // === 5. Создаем responder ===
     final webAuthnResponder = WebAuthnResponder(
@@ -611,6 +633,7 @@ class WebAuthnResponderFactory {
       startAuthenticationUseCase: startAuthenticationUseCase,
       finishAuthenticationUseCase: finishAuthenticationUseCase,
       validateTokenUseCase: validateTokenUseCase,
+      refreshTokenUseCase: refreshTokenUseCase,
       revokeSessionUseCase: revokeSessionUseCase,
       webAuthnRepository: webAuthnRepository,
       settings: settings,
@@ -677,7 +700,9 @@ class WebAuthnDomainFactory {
     final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
     // Создаем caller и responder
-    final callerResult = WebAuthnCallerFactory.create(transport: clientTransport);
+    final callerResult = WebAuthnCallerFactory.create(
+      transport: clientTransport,
+    );
     final responderResult = await WebAuthnResponderFactory.create(
       config: config,
       transport: serverTransport,
@@ -698,7 +723,9 @@ class WebAuthnDomainFactory {
     required IRpcTransport clientTransport,
     required IRpcTransport serverTransport,
   }) async {
-    final callerResult = WebAuthnCallerFactory.create(transport: clientTransport);
+    final callerResult = WebAuthnCallerFactory.create(
+      transport: clientTransport,
+    );
     final responderResult = await WebAuthnResponderFactory.create(
       config: config,
       transport: serverTransport,

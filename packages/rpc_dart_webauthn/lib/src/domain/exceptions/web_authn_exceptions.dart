@@ -30,50 +30,67 @@ abstract class WebAuthnException with _$WebAuthnException {
   factory WebAuthnException.fromJson(Map<String, dynamic> json) =>
       _$WebAuthnExceptionFromJson(json);
 
-  factory WebAuthnException.registration(String message, [StackTrace? stackTrace]) =>
-      WebAuthnException(
-        type: WebAuthnExceptionType.registration,
-        message: message,
-        stackTrace: stackTrace ?? StackTrace.current,
-      );
+  factory WebAuthnException.registration(
+    String message, [
+    StackTrace? stackTrace,
+  ]) => WebAuthnException(
+    type: WebAuthnExceptionType.registration,
+    message: message,
+    stackTrace: stackTrace ?? StackTrace.current,
+  );
 
-  factory WebAuthnException.authentication(String message, [StackTrace? stackTrace]) =>
-      WebAuthnException(
-        type: WebAuthnExceptionType.authentication,
-        message: message,
-        stackTrace: stackTrace ?? StackTrace.current,
-      );
+  factory WebAuthnException.authentication(
+    String message, [
+    StackTrace? stackTrace,
+  ]) => WebAuthnException(
+    type: WebAuthnExceptionType.authentication,
+    message: message,
+    stackTrace: stackTrace ?? StackTrace.current,
+  );
 
-  factory WebAuthnException.credential(String message, [StackTrace? stackTrace]) =>
-      WebAuthnException(
-        type: WebAuthnExceptionType.credential,
-        message: message,
-        stackTrace: stackTrace ?? StackTrace.current,
-      );
+  factory WebAuthnException.credential(
+    String message, [
+    StackTrace? stackTrace,
+  ]) => WebAuthnException(
+    type: WebAuthnExceptionType.credential,
+    message: message,
+    stackTrace: stackTrace ?? StackTrace.current,
+  );
 
-  factory WebAuthnException.signatureVerification(String message, [StackTrace? stackTrace]) =>
-      WebAuthnException(
-        type: WebAuthnExceptionType.signatureVerification,
-        message: message,
-        stackTrace: stackTrace ?? StackTrace.current,
-      );
+  factory WebAuthnException.signatureVerification(
+    String message, [
+    StackTrace? stackTrace,
+  ]) => WebAuthnException(
+    type: WebAuthnExceptionType.signatureVerification,
+    message: message,
+    stackTrace: stackTrace ?? StackTrace.current,
+  );
 
-  factory WebAuthnException.timeout(String message, [StackTrace? stackTrace]) => WebAuthnException(
+  factory WebAuthnException.timeout(String message, [StackTrace? stackTrace]) =>
+      WebAuthnException(
         type: WebAuthnExceptionType.timeout,
         message: message,
         stackTrace: stackTrace ?? StackTrace.current,
       );
 
+  factory WebAuthnException.authorization(
+    String message, [
+    StackTrace? stackTrace,
+  ]) => WebAuthnException(
+    type: WebAuthnExceptionType.authorization,
+    message: message,
+    stackTrace: stackTrace ?? StackTrace.current,
+  );
+
   factory WebAuthnException.originMismatch(
     String expected,
     String actual, [
     StackTrace? stackTrace,
-  ]) =>
-      WebAuthnException(
-        type: WebAuthnExceptionType.originMismatch,
-        message: 'Origin mismatch. Expected: $expected, actual: $actual',
-        stackTrace: stackTrace ?? StackTrace.current,
-      );
+  ]) => WebAuthnException(
+    type: WebAuthnExceptionType.originMismatch,
+    message: 'Origin mismatch. Expected: $expected, actual: $actual',
+    stackTrace: stackTrace ?? StackTrace.current,
+  );
 }
 
 /// Специальное исключение для недействительных токенов авторизации
@@ -92,7 +109,7 @@ class InvalidTokenException extends RpcException {
 
   /// Недостаточно прав
   InvalidTokenException.insufficientPermissions([String? details])
-      : super(details ?? 'Недостаточно прав для выполнения операции');
+    : super(details ?? 'Недостаточно прав для выполнения операции');
 }
 
 class StackTraceConverter implements JsonConverter<StackTrace?, String?> {

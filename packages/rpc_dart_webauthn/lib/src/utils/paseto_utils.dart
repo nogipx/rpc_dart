@@ -19,9 +19,12 @@ class PasetoUtils {
     required List<int> secretKeyBytes,
     Version version = Version.v4,
     int tokenLifetime = 3600,
-  })  : _secretKey = SecretKeyData(secretKeyBytes),
-        _version = version,
-        _tokenLifetime = tokenLifetime;
+  }) : _secretKey = SecretKeyData(secretKeyBytes),
+       _version = version,
+       _tokenLifetime = tokenLifetime;
+
+  /// Время жизни токена, сконфигурированное для домена
+  int get tokenLifetime => _tokenLifetime;
 
   /// Создает PASETO токен с указанным контентом
   Future<String> createToken({

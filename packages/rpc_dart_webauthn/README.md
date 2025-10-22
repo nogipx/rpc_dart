@@ -194,7 +194,53 @@ await webAuthnCaller.finishRegistration(
 3. **Интеграция с другим сервисом:**
    - Сервис принимает PASETO из заголовка Authorization, вызывает `validateToken` домена и получает
      `WebAuthnCredentialPublic` + обновленный `WebAuthnAuthContext` для авторизационных решений.
+   - Для обновления токена без повторного прохода WebAuthn используйте `refreshToken` — метод
+     повторно выпускает PASETO с новым `jti`, переносит `sessionId` и продлевает срок действия
+     сессии. Старый токен автоматически добавляется в blacklist.
    - Для отзыва токенов доступны `revokeSession` и `revokeAllSessions`.
+
+## Жизненный цикл PASETO-токена
+
+1. **Выпуск токена**
+   - `finishAuthentication` создает PASETO при успешном assertion.
+   - Срок жизни (`expiresIn`) берется из `WebAuthnSettings.tokenLifetime` и синхронно сохраняется в
+     сессии (`ISessionRepository`).
+   - В payload токена помещаются `sessionId` и публичная часть credential — другие сервисы могут
+     их использовать для авторизационных решений.
+
+2. **Проверка токена внешними сервисами**
+   - Любой сервис, имеющий доступ к домену, вызывает `validateToken` и получает
+     `WebAuthnCredentialPublic` и `WebAuthnAuthContext`.
+   - `validateToken` проверяет срок действия, удостоверяется, что `jti` не находится в blacklist,
+     и что связанная сессия активна.
+
+3. **Обновление токена**
+   - Клиент передает действующий токен в `refreshToken`.
+   - Use case проверяет токен, гарантирует активность сессии, помещает прежний `jti` в blacklist и
+     продлевает срок жизни сессии.
+   - Возвращается `AuthResponse` с новым PASETO; новый токен содержит прежний `sessionId` и набор
+     скопов (или их подмножество, если запросить более узкий набор через `requestedScopes`).
+
+4. **Отзыв токена**
+   - `revokeSession` или `revokeAllSessions` помечают сессии как неактивные.
+   - Дополнительно можно вручную добавить `jti` в blacklist через `ITokenBlacklistRepository`.
+
+### Пример обновления токена на клиенте
+
+```dart
+final refreshResult = await webAuthnCaller.refreshToken(
+  const RefreshTokenParams(token: currentAccessToken),
+);
+
+if (!refreshResult.success) {
+  // Повторно запустить WebAuthn поток
+}
+
+final newToken = refreshResult.authResponse!.accessToken;
+```
+
+> 💡 После успешного обновления сохраните новый токен, а старый можно удалить из хранилища клиента —
+> домен уже поместил его `jti` в blacklist.
 
 ## Тестирование
 

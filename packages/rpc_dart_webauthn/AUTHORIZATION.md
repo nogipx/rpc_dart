@@ -33,6 +33,7 @@ enum WebAuthnOperation {
   
   // Управление токенами и сессиями
   validateToken,
+  refreshToken,
   revokeToken,
   isAuthenticated,
   revokeSession,
@@ -80,6 +81,7 @@ enum WebAuthnPermission {
 - `finishRegistration`
 - `startAuthentication`
 - `finishAuthentication`
+- `refreshToken` (передает токен в теле запроса и не использует заголовок Authorization)
 
 ## Интеграция в Responder
 

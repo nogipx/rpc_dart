@@ -7,18 +7,18 @@ void main() {
     late MemoryTokenBlacklistRepositoryImpl tokenBlacklistRepository;
     late PasetoUtils pasetoUtils;
     late RevokeSessionUseCase revokeSessionUseCase;
+    late MemoryWebAuthnRepositoryImpl webAuthnRepository;
 
     setUp(() {
       sessionRepository = MemorySessionRepositoryImpl();
       tokenBlacklistRepository = MemoryTokenBlacklistRepositoryImpl();
+      webAuthnRepository = MemoryWebAuthnRepositoryImpl();
 
       // Создаем PasetoUtils с тестовым ключом
       final secretKey = List.generate(32, (index) => index);
       pasetoUtils = PasetoUtils(secretKeyBytes: secretKey);
 
-      revokeSessionUseCase = RevokeSessionUseCase(
-        sessionRepository,
-      );
+      revokeSessionUseCase = RevokeSessionUseCase(sessionRepository);
     });
 
     test('Создание и валидация сессии', () async {
@@ -76,7 +76,9 @@ void main() {
       await sessionRepository.storeActiveSession('session-3', userId);
 
       // Проверяем количество активных сессий
-      final activeSessions = await sessionRepository.getUserActiveSessions(userId);
+      final activeSessions = await sessionRepository.getUserActiveSessions(
+        userId,
+      );
       expect(activeSessions.length, equals(3));
 
       // Отзываем все сессии
@@ -88,7 +90,9 @@ void main() {
       expect(result.revokedCount, equals(3));
 
       // Проверяем, что сессий больше нет
-      final remainingSessions = await sessionRepository.getUserActiveSessions(userId);
+      final remainingSessions = await sessionRepository.getUserActiveSessions(
+        userId,
+      );
       expect(remainingSessions.length, equals(0));
     });
 
@@ -109,7 +113,8 @@ void main() {
       expect(await tokenBlacklistRepository.isBlacklisted(tokenId), isTrue);
 
       // Получаем информацию о заблокированном токене
-      final blacklistedToken = await tokenBlacklistRepository.getBlacklistedToken(tokenId);
+      final blacklistedToken = await tokenBlacklistRepository
+          .getBlacklistedToken(tokenId);
       expect(blacklistedToken, isNotNull);
       expect(blacklistedToken!.tokenId, equals(tokenId));
       expect(blacklistedToken.reason, equals('Security breach'));
@@ -145,10 +150,7 @@ void main() {
       final token = await pasetoUtils.createToken(
         userId: userId,
         scopes: ['user', 'webauthn.authenticated'],
-        extra: {
-          'sessionId': sessionId,
-          'platform': 'web',
-        },
+        extra: {'sessionId': sessionId, 'platform': 'web'},
       );
 
       expect(token, isNotEmpty);
@@ -161,5 +163,75 @@ void main() {
       expect(payload.scopes, contains('user'));
       expect(payload.scopes, contains('webauthn.authenticated'));
     });
+
+    test(
+      'Обновление токена добавляет старый токен в blacklist и продлевает сессию',
+      () async {
+        final refreshTokenUseCase = RefreshTokenUseCase(
+          webAuthnRepository,
+          sessionRepository,
+          tokenBlacklistRepository,
+          pasetoUtils,
+        );
+
+        final credential = WebAuthnCredentialPrivate(
+          id: 'cred-1',
+          credentialId: 'credential-1',
+          userId: 'user-1',
+          publicKey: [1, 2, 3],
+          counter: 0,
+          createdAt: DateTime.now(),
+        );
+
+        await webAuthnRepository.saveCredential(credential);
+
+        final sessionId = 'session-refresh';
+        final originalExpiry = DateTime.now().add(const Duration(minutes: 5));
+
+        await sessionRepository.storeActiveSession(
+          sessionId,
+          credential.userId,
+          expiresAt: originalExpiry,
+          metadata: {'platform': 'web'},
+        );
+
+        final initialToken = await pasetoUtils.createToken(
+          userId: credential.userId,
+          scopes: const ['user', 'webauthn.authenticated'],
+          extra: {...credential.public.toJson(), 'sessionId': sessionId},
+        );
+
+        final initialPayload = await pasetoUtils.validateToken(initialToken);
+        expect(initialPayload, isNotNull);
+
+        final refreshResult = await refreshTokenUseCase.execute(
+          RefreshTokenParams(token: initialToken),
+        );
+
+        expect(refreshResult.success, isTrue);
+        final refreshedToken = refreshResult.authResponse!.accessToken;
+        expect(refreshedToken, isNot(initialToken));
+
+        final refreshedPayload = await pasetoUtils.validateToken(
+          refreshedToken,
+        );
+        expect(refreshedPayload, isNotNull);
+        expect(
+          refreshedPayload!.scopes,
+          containsAll(['user', 'webauthn.authenticated']),
+        );
+        expect(refreshedPayload.extra?['sessionId'], equals(sessionId));
+
+        final blacklisted = await tokenBlacklistRepository.isBlacklisted(
+          initialPayload!.jti,
+        );
+        expect(blacklisted, isTrue);
+
+        final session = await sessionRepository.getSession(sessionId);
+        expect(session, isNotNull);
+        expect(session!.expiresAt.isAfter(originalExpiry), isTrue);
+        expect(session.metadata['refreshedAt'], isNotNull);
+      },
+    );
   });
 }

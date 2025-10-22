@@ -3,6 +3,7 @@ abstract interface class ITokenBlacklistRepository {
   /// Добавляет токен в чёрный список
   Future<void> addToBlacklist(
     String tokenId, {
+    String? userId,
     DateTime? expiresAt,
     String? reason,
   });
@@ -43,7 +44,9 @@ class BlacklistedTokenInfo {
     return BlacklistedTokenInfo(
       tokenId: json['tokenId'] as String,
       userId: json['userId'] as String,
-      blacklistedAt: DateTime.fromMillisecondsSinceEpoch(json['blacklistedAt'] as int),
+      blacklistedAt: DateTime.fromMillisecondsSinceEpoch(
+        json['blacklistedAt'] as int,
+      ),
       expiresAt: json['expiresAt'] != null
           ? DateTime.fromMillisecondsSinceEpoch(json['expiresAt'] as int)
           : null,

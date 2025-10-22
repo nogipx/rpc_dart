@@ -10,7 +10,7 @@ import '../../rpc_dart_webauthn.dart';
 final class WebAuthnCaller extends RpcCallerContract
     implements IWebAuthnContract {
   WebAuthnCaller(RpcCallerEndpoint endpoint)
-      : super(IWebAuthnContract.serviceNameConst, endpoint);
+    : super(IWebAuthnContract.serviceNameConst, endpoint);
 
   @override
   String get serviceName => IWebAuthnContract.serviceNameConst;
@@ -19,54 +19,58 @@ final class WebAuthnCaller extends RpcCallerContract
 
   @override
   Future<StartRegistrationResult> startRegistration(
-      StartRegistrationParams params) {
+    StartRegistrationParams params,
+  ) {
     return endpoint
         .unaryRequest<StartRegistrationParams, StartRegistrationResult>(
-      serviceName: serviceName,
-      methodName: IWebAuthnContract.startRegistrationMethod,
-      requestCodec: StartRegistrationParams.codec,
-      responseCodec: StartRegistrationResult.codec,
-      request: params,
-    );
+          serviceName: serviceName,
+          methodName: IWebAuthnContract.startRegistrationMethod,
+          requestCodec: StartRegistrationParams.codec,
+          responseCodec: StartRegistrationResult.codec,
+          request: params,
+        );
   }
 
   @override
   Future<FinishRegistrationResult> finishRegistration(
-      FinishRegistrationParams params) {
+    FinishRegistrationParams params,
+  ) {
     return endpoint
         .unaryRequest<FinishRegistrationParams, FinishRegistrationResult>(
-      serviceName: serviceName,
-      methodName: IWebAuthnContract.finishRegistrationMethod,
-      requestCodec: FinishRegistrationParams.codec,
-      responseCodec: FinishRegistrationResult.codec,
-      request: params,
-    );
+          serviceName: serviceName,
+          methodName: IWebAuthnContract.finishRegistrationMethod,
+          requestCodec: FinishRegistrationParams.codec,
+          responseCodec: FinishRegistrationResult.codec,
+          request: params,
+        );
   }
 
   @override
   Future<StartAuthenticationResult> startAuthentication(
-      StartAuthenticationParams params) {
+    StartAuthenticationParams params,
+  ) {
     return endpoint
         .unaryRequest<StartAuthenticationParams, StartAuthenticationResult>(
-      serviceName: serviceName,
-      methodName: IWebAuthnContract.startAuthenticationMethod,
-      requestCodec: StartAuthenticationParams.codec,
-      responseCodec: StartAuthenticationResult.codec,
-      request: params,
-    );
+          serviceName: serviceName,
+          methodName: IWebAuthnContract.startAuthenticationMethod,
+          requestCodec: StartAuthenticationParams.codec,
+          responseCodec: StartAuthenticationResult.codec,
+          request: params,
+        );
   }
 
   @override
   Future<FinishAuthenticationResult> finishAuthentication(
-      FinishAuthenticationParams params) {
+    FinishAuthenticationParams params,
+  ) {
     return endpoint
         .unaryRequest<FinishAuthenticationParams, FinishAuthenticationResult>(
-      serviceName: serviceName,
-      methodName: IWebAuthnContract.finishAuthenticationMethod,
-      requestCodec: FinishAuthenticationParams.codec,
-      responseCodec: FinishAuthenticationResult.codec,
-      request: params,
-    );
+          serviceName: serviceName,
+          methodName: IWebAuthnContract.finishAuthenticationMethod,
+          requestCodec: FinishAuthenticationParams.codec,
+          responseCodec: FinishAuthenticationResult.codec,
+          request: params,
+        );
   }
 
   // ================ Управление учетными данными ================
@@ -84,15 +88,16 @@ final class WebAuthnCaller extends RpcCallerContract
 
   @override
   Future<RemoveCredentialResult> removeCredential(
-      RemoveCredentialParams params) {
+    RemoveCredentialParams params,
+  ) {
     return endpoint
         .unaryRequest<RemoveCredentialParams, RemoveCredentialResult>(
-      serviceName: serviceName,
-      methodName: IWebAuthnContract.removeCredentialMethod,
-      requestCodec: RemoveCredentialParams.codec,
-      responseCodec: RemoveCredentialResult.codec,
-      request: params,
-    );
+          serviceName: serviceName,
+          methodName: IWebAuthnContract.removeCredentialMethod,
+          requestCodec: RemoveCredentialParams.codec,
+          responseCodec: RemoveCredentialResult.codec,
+          request: params,
+        );
   }
 
   @override
@@ -120,6 +125,17 @@ final class WebAuthnCaller extends RpcCallerContract
   }
 
   @override
+  Future<RefreshTokenResult> refreshToken(RefreshTokenParams params) {
+    return endpoint.unaryRequest<RefreshTokenParams, RefreshTokenResult>(
+      serviceName: serviceName,
+      methodName: IWebAuthnContract.refreshTokenMethod,
+      requestCodec: RefreshTokenParams.codec,
+      responseCodec: RefreshTokenResult.codec,
+      request: params,
+    );
+  }
+
+  @override
   Future<RevokeSessionResult> revokeSession(RevokeSessionParams params) {
     return endpoint.unaryRequest<RevokeSessionParams, RevokeSessionResult>(
       serviceName: serviceName,
@@ -132,7 +148,8 @@ final class WebAuthnCaller extends RpcCallerContract
 
   @override
   Future<RevokeSessionResult> revokeAllSessions(
-      RevokeAllSessionsParams params) {
+    RevokeAllSessionsParams params,
+  ) {
     return endpoint.unaryRequest<RevokeAllSessionsParams, RevokeSessionResult>(
       serviceName: serviceName,
       methodName: IWebAuthnContract.revokeAllSessionsMethod,

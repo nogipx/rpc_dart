@@ -12,7 +12,9 @@ abstract interface class IWebAuthnAuthorizationService {
   });
 
   /// Извлекает контекст авторизации из токена
-  Future<WebAuthnAuthorizationContext?> extractAuthorizationContext(String token);
+  Future<WebAuthnAuthorizationContext?> extractAuthorizationContext(
+    String token,
+  );
 
   /// Проверяет, имеет ли пользователь определенное право
   bool hasPermission(
@@ -84,7 +86,9 @@ class WebAuthnAuthorizationService implements IWebAuthnAuthorizationService {
   }
 
   @override
-  Future<WebAuthnAuthorizationContext?> extractAuthorizationContext(String token) async {
+  Future<WebAuthnAuthorizationContext?> extractAuthorizationContext(
+    String token,
+  ) async {
     try {
       // Валидируем токен и извлекаем информацию
       final validateResult = await _validateTokenUseCase.execute(
@@ -137,7 +141,9 @@ class WebAuthnAuthorizationService implements IWebAuthnAuthorizationService {
   }) {
     // Определяем, работает ли пользователь со своими данными
     final isOwnData =
-        currentUserId != null && targetUserId != null && currentUserId == targetUserId;
+        currentUserId != null &&
+        targetUserId != null &&
+        currentUserId == targetUserId;
 
     switch (operation) {
       // Регистрация - базовые права
@@ -168,6 +174,7 @@ class WebAuthnAuthorizationService implements IWebAuthnAuthorizationService {
 
       // Управление токенами и сессиями
       case WebAuthnOperation.validateToken:
+      case WebAuthnOperation.refreshToken:
       case WebAuthnOperation.isAuthenticated:
         return [WebAuthnPermission.authenticateAsUser];
 
@@ -202,7 +209,10 @@ class WebAuthnAuthorizationService implements IWebAuthnAuthorizationService {
         if (targetSessionId != null &&
             authContext.sessionId != null &&
             targetSessionId != authContext.sessionId &&
-            !hasPermission(authContext.permissions, WebAuthnPermission.manageAnySessions)) {
+            !hasPermission(
+              authContext.permissions,
+              WebAuthnPermission.manageAnySessions,
+            )) {
           return AuthorizationResult.denied(
             'Нельзя отозвать чужую сессию без административных прав',
             'SESSION_ACCESS_DENIED',

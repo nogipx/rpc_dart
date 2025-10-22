@@ -23,6 +23,13 @@ abstract interface class ISessionRepository {
   /// Получает все активные сессии пользователя
   Future<List<SessionInfo>> getUserActiveSessions(String userId);
 
+  /// Продлевает срок действия сессии и при необходимости обновляет метаданные
+  Future<SessionInfo?> extendSession(
+    String sessionId, {
+    DateTime? newExpiresAt,
+    Map<String, dynamic>? metadataUpdates,
+  });
+
   /// Очищает истёкшие сессии
   Future<void> cleanupExpiredSessions();
 }

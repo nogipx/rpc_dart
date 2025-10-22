@@ -6,12 +6,14 @@ import '../../rpc_dart_webauthn.dart';
 /// В CORD архитектуре это серверная часть домена, которая обрабатывает
 /// входящие RPC вызовы и делегирует выполнение Use Cases.
 /// Инкапсулирует бизнес-логику и обеспечивает изоляцию домена.
-final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnContract {
+final class WebAuthnResponder extends RpcResponderContract
+    implements IWebAuthnContract {
   final StartRegistrationUseCase _startRegistrationUseCase;
   final FinishRegistrationUseCase _finishRegistrationUseCase;
   final StartAuthenticationUseCase _startAuthenticationUseCase;
   final FinishAuthenticationUseCase _finishAuthenticationUseCase;
   final ValidateTokenUseCase _validateTokenUseCase;
+  final RefreshTokenUseCase _refreshTokenUseCase;
   final RevokeSessionUseCase _revokeSessionUseCase;
   final IWebAuthnRepository _webAuthnRepository;
   final IWebAuthnAuthorizationService _authorizationService;
@@ -22,19 +24,21 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
     required StartAuthenticationUseCase startAuthenticationUseCase,
     required FinishAuthenticationUseCase finishAuthenticationUseCase,
     required ValidateTokenUseCase validateTokenUseCase,
+    required RefreshTokenUseCase refreshTokenUseCase,
     required RevokeSessionUseCase revokeSessionUseCase,
     required IWebAuthnRepository webAuthnRepository,
     required WebAuthnSettings settings,
     required IWebAuthnAuthorizationService authorizationService,
-  })  : _startRegistrationUseCase = startRegistrationUseCase,
-        _finishRegistrationUseCase = finishRegistrationUseCase,
-        _startAuthenticationUseCase = startAuthenticationUseCase,
-        _finishAuthenticationUseCase = finishAuthenticationUseCase,
-        _validateTokenUseCase = validateTokenUseCase,
-        _revokeSessionUseCase = revokeSessionUseCase,
-        _webAuthnRepository = webAuthnRepository,
-        _authorizationService = authorizationService,
-        super(IWebAuthnContract.serviceNameConst);
+  }) : _startRegistrationUseCase = startRegistrationUseCase,
+       _finishRegistrationUseCase = finishRegistrationUseCase,
+       _startAuthenticationUseCase = startAuthenticationUseCase,
+       _finishAuthenticationUseCase = finishAuthenticationUseCase,
+       _validateTokenUseCase = validateTokenUseCase,
+       _refreshTokenUseCase = refreshTokenUseCase,
+       _revokeSessionUseCase = revokeSessionUseCase,
+       _webAuthnRepository = webAuthnRepository,
+       _authorizationService = authorizationService,
+       super(IWebAuthnContract.serviceNameConst);
 
   @override
   void setup() {
@@ -100,6 +104,13 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
       responseCodec: ValidateTokenResult.codec,
     );
 
+    addUnaryMethod<RefreshTokenParams, RefreshTokenResult>(
+      methodName: IWebAuthnContract.refreshTokenMethod,
+      handler: refreshToken,
+      requestCodec: RefreshTokenParams.codec,
+      responseCodec: RefreshTokenResult.codec,
+    );
+
     addUnaryMethod<RevokeSessionParams, RevokeSessionResult>(
       methodName: IWebAuthnContract.revokeSessionMethod,
       handler: revokeSession,
@@ -140,7 +151,9 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
     }
 
     // Извлекаем контекст авторизации из токена
-    final authContext = await _authorizationService.extractAuthorizationContext(token);
+    final authContext = await _authorizationService.extractAuthorizationContext(
+      token,
+    );
     if (authContext == null) {
       throw InvalidTokenException.invalid();
     }
@@ -219,7 +232,9 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
         targetUserId: request.userId,
       );
 
-      final credentials = await _webAuthnRepository.getCredentialsByUserId(request.userId);
+      final credentials = await _webAuthnRepository.getCredentialsByUserId(
+        request.userId,
+      );
 
       if (credentials.isEmpty) {
         return GetUserInfoResult(
@@ -237,7 +252,8 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
     } catch (e) {
       return GetUserInfoResult(
         success: false,
-        errorMessage: 'Ошибка получения информации о пользователе: ${e.toString()}',
+        errorMessage:
+            'Ошибка получения информации о пользователе: ${e.toString()}',
       );
     }
   }
@@ -255,7 +271,9 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
         targetUserId: request.userId,
       );
 
-      final credential = await _webAuthnRepository.getCredentialById(request.credentialId);
+      final credential = await _webAuthnRepository.getCredentialById(
+        request.credentialId,
+      );
 
       if (credential == null) {
         return RemoveCredentialResult(
@@ -298,7 +316,9 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
         targetUserId: request.userId,
       );
 
-      final credentials = await _webAuthnRepository.getCredentialsByUserId(request.userId);
+      final credentials = await _webAuthnRepository.getCredentialsByUserId(
+        request.userId,
+      );
 
       return GetCredentialsResult(
         success: true,
@@ -321,7 +341,26 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
       final result = await _validateTokenUseCase.execute(request);
       return result;
     } catch (e) {
-      return ValidateTokenResult.failure('Ошибка валидации токена: ${e.toString()}');
+      return ValidateTokenResult.failure(
+        'Ошибка валидации токена: ${e.toString()}',
+      );
+    }
+  }
+
+  @override
+  Future<RefreshTokenResult> refreshToken(
+    RefreshTokenParams request, {
+    RpcContext? context,
+  }) async {
+    try {
+      final result = await _refreshTokenUseCase.execute(request);
+      return result;
+    } catch (e) {
+      return RefreshTokenResult.failure(
+        WebAuthnException.authentication(
+          'Ошибка обновления токена: ${e.toString()}',
+        ),
+      );
     }
   }
 
@@ -341,7 +380,9 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
       final result = await _revokeSessionUseCase.revokeSession(request);
       return result;
     } catch (e) {
-      return RevokeSessionResult.failure('Ошибка отзыва сессии: ${e.toString()}');
+      return RevokeSessionResult.failure(
+        'Ошибка отзыва сессии: ${e.toString()}',
+      );
     }
   }
 
@@ -361,7 +402,9 @@ final class WebAuthnResponder extends RpcResponderContract implements IWebAuthnC
       final result = await _revokeSessionUseCase.revokeAllSessions(request);
       return result;
     } catch (e) {
-      return RevokeSessionResult.failure('Ошибка отзыва всех сессий: ${e.toString()}');
+      return RevokeSessionResult.failure(
+        'Ошибка отзыва всех сессий: ${e.toString()}',
+      );
     }
   }
 }

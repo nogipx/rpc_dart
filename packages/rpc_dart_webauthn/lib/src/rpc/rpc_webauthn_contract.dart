@@ -15,6 +15,8 @@ export '../usecases/_index.dart'
         FinishAuthenticationResult,
         ValidateTokenParams,
         ValidateTokenResult,
+        RefreshTokenParams,
+        RefreshTokenResult,
         RevokeSessionParams,
         RevokeAllSessionsParams,
         RevokeSessionResult;
@@ -43,22 +45,31 @@ abstract interface class IWebAuthnContract implements IRpcContract {
   static const String removeCredentialMethod = 'removeCredential';
   static const String getCredentialsMethod = 'getCredentials';
   static const String validateTokenMethod = 'validateToken';
+  static const String refreshTokenMethod = 'refreshToken';
   static const String revokeSessionMethod = 'revokeSession';
   static const String revokeAllSessionsMethod = 'revokeAllSessions';
 
   // ================ Основные методы WebAuthn ================
 
   /// Начинает процесс регистрации WebAuthn
-  Future<StartRegistrationResult> startRegistration(StartRegistrationParams params);
+  Future<StartRegistrationResult> startRegistration(
+    StartRegistrationParams params,
+  );
 
   /// Завершает процесс регистрации WebAuthn
-  Future<FinishRegistrationResult> finishRegistration(FinishRegistrationParams params);
+  Future<FinishRegistrationResult> finishRegistration(
+    FinishRegistrationParams params,
+  );
 
   /// Начинает процесс аутентификации WebAuthn
-  Future<StartAuthenticationResult> startAuthentication(StartAuthenticationParams params);
+  Future<StartAuthenticationResult> startAuthentication(
+    StartAuthenticationParams params,
+  );
 
   /// Завершает процесс аутентификации WebAuthn
-  Future<FinishAuthenticationResult> finishAuthentication(FinishAuthenticationParams params);
+  Future<FinishAuthenticationResult> finishAuthentication(
+    FinishAuthenticationParams params,
+  );
 
   // ================ Управление учетными данными ================
 
@@ -66,7 +77,9 @@ abstract interface class IWebAuthnContract implements IRpcContract {
   Future<GetUserInfoResult> getUserInfo(GetUserInfoParams params);
 
   /// Удаляет учетные данные пользователя
-  Future<RemoveCredentialResult> removeCredential(RemoveCredentialParams params);
+  Future<RemoveCredentialResult> removeCredential(
+    RemoveCredentialParams params,
+  );
 
   /// Получает список всех учетных данных пользователя
   Future<GetCredentialsResult> getCredentials(GetCredentialsParams params);
@@ -75,6 +88,9 @@ abstract interface class IWebAuthnContract implements IRpcContract {
 
   /// Валидирует PASETO токен
   Future<ValidateTokenResult> validateToken(ValidateTokenParams params);
+
+  /// Обновляет PASETO токен, привязанный к активной сессии
+  Future<RefreshTokenResult> refreshToken(RefreshTokenParams params);
 
   /// Отзывает сессию пользователя
   Future<RevokeSessionResult> revokeSession(RevokeSessionParams params);
@@ -87,20 +103,24 @@ abstract interface class IWebAuthnContract implements IRpcContract {
 
 /// Параметры для получения информации о пользователе
 @freezed
-abstract class GetUserInfoParams with _$GetUserInfoParams implements IRpcSerializable {
-  const factory GetUserInfoParams({
-    required String userId,
-  }) = _GetUserInfoParams;
+abstract class GetUserInfoParams
+    with _$GetUserInfoParams
+    implements IRpcSerializable {
+  const factory GetUserInfoParams({required String userId}) =
+      _GetUserInfoParams;
 
   factory GetUserInfoParams.fromJson(Map<String, dynamic> json) =>
       _$GetUserInfoParamsFromJson(json);
 
-  static RpcCodec<GetUserInfoParams> get codec => RpcCodec(GetUserInfoParams.fromJson);
+  static RpcCodec<GetUserInfoParams> get codec =>
+      RpcCodec(GetUserInfoParams.fromJson);
 }
 
 /// Результат получения информации о пользователе
 @freezed
-abstract class GetUserInfoResult with _$GetUserInfoResult implements IRpcSerializable {
+abstract class GetUserInfoResult
+    with _$GetUserInfoResult
+    implements IRpcSerializable {
   const factory GetUserInfoResult({
     required bool success,
     WebAuthnUserInfo? userInfo,
@@ -110,12 +130,15 @@ abstract class GetUserInfoResult with _$GetUserInfoResult implements IRpcSeriali
   factory GetUserInfoResult.fromJson(Map<String, dynamic> json) =>
       _$GetUserInfoResultFromJson(json);
 
-  static RpcCodec<GetUserInfoResult> get codec => RpcCodec(GetUserInfoResult.fromJson);
+  static RpcCodec<GetUserInfoResult> get codec =>
+      RpcCodec(GetUserInfoResult.fromJson);
 }
 
 /// Параметры для удаления учетных данных
 @freezed
-abstract class RemoveCredentialParams with _$RemoveCredentialParams implements IRpcSerializable {
+abstract class RemoveCredentialParams
+    with _$RemoveCredentialParams
+    implements IRpcSerializable {
   const factory RemoveCredentialParams({
     required String userId,
     required String credentialId,
@@ -124,12 +147,15 @@ abstract class RemoveCredentialParams with _$RemoveCredentialParams implements I
   factory RemoveCredentialParams.fromJson(Map<String, dynamic> json) =>
       _$RemoveCredentialParamsFromJson(json);
 
-  static RpcCodec<RemoveCredentialParams> get codec => RpcCodec(RemoveCredentialParams.fromJson);
+  static RpcCodec<RemoveCredentialParams> get codec =>
+      RpcCodec(RemoveCredentialParams.fromJson);
 }
 
 /// Результат удаления учетных данных
 @freezed
-abstract class RemoveCredentialResult with _$RemoveCredentialResult implements IRpcSerializable {
+abstract class RemoveCredentialResult
+    with _$RemoveCredentialResult
+    implements IRpcSerializable {
   const factory RemoveCredentialResult({
     required bool success,
     String? message,
@@ -139,25 +165,30 @@ abstract class RemoveCredentialResult with _$RemoveCredentialResult implements I
   factory RemoveCredentialResult.fromJson(Map<String, dynamic> json) =>
       _$RemoveCredentialResultFromJson(json);
 
-  static RpcCodec<RemoveCredentialResult> get codec => RpcCodec(RemoveCredentialResult.fromJson);
+  static RpcCodec<RemoveCredentialResult> get codec =>
+      RpcCodec(RemoveCredentialResult.fromJson);
 }
 
 /// Параметры для получения списка учетных данных
 @freezed
-abstract class GetCredentialsParams with _$GetCredentialsParams implements IRpcSerializable {
-  const factory GetCredentialsParams({
-    required String userId,
-  }) = _GetCredentialsParams;
+abstract class GetCredentialsParams
+    with _$GetCredentialsParams
+    implements IRpcSerializable {
+  const factory GetCredentialsParams({required String userId}) =
+      _GetCredentialsParams;
 
   factory GetCredentialsParams.fromJson(Map<String, dynamic> json) =>
       _$GetCredentialsParamsFromJson(json);
 
-  static RpcCodec<GetCredentialsParams> get codec => RpcCodec(GetCredentialsParams.fromJson);
+  static RpcCodec<GetCredentialsParams> get codec =>
+      RpcCodec(GetCredentialsParams.fromJson);
 }
 
 /// Результат получения списка учетных данных
 @freezed
-abstract class GetCredentialsResult with _$GetCredentialsResult implements IRpcSerializable {
+abstract class GetCredentialsResult
+    with _$GetCredentialsResult
+    implements IRpcSerializable {
   const factory GetCredentialsResult({
     required bool success,
     @Default([]) List<WebAuthnCredentialPublic> credentials,
@@ -167,5 +198,6 @@ abstract class GetCredentialsResult with _$GetCredentialsResult implements IRpcS
   factory GetCredentialsResult.fromJson(Map<String, dynamic> json) =>
       _$GetCredentialsResultFromJson(json);
 
-  static RpcCodec<GetCredentialsResult> get codec => RpcCodec(GetCredentialsResult.fromJson);
+  static RpcCodec<GetCredentialsResult> get codec =>
+      RpcCodec(GetCredentialsResult.fromJson);
 }

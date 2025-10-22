@@ -56,25 +56,37 @@ void main() {
         expect(permissions, contains(WebAuthnPermission.viewAnyUserInfo));
       });
 
-      test('removeCredential требует manageOwnCredentials для своих данных', () {
-        final authService = TestAuthorizationHelper();
-        final permissions = authService.getRequiredPermissions(
-          WebAuthnOperation.removeCredential,
-          currentUserId: 'user1',
-          targetUserId: 'user1',
-        );
-        expect(permissions, contains(WebAuthnPermission.manageOwnCredentials));
-      });
+      test(
+        'removeCredential требует manageOwnCredentials для своих данных',
+        () {
+          final authService = TestAuthorizationHelper();
+          final permissions = authService.getRequiredPermissions(
+            WebAuthnOperation.removeCredential,
+            currentUserId: 'user1',
+            targetUserId: 'user1',
+          );
+          expect(
+            permissions,
+            contains(WebAuthnPermission.manageOwnCredentials),
+          );
+        },
+      );
 
-      test('removeCredential требует manageAnyCredentials для чужих данных', () {
-        final authService = TestAuthorizationHelper();
-        final permissions = authService.getRequiredPermissions(
-          WebAuthnOperation.removeCredential,
-          currentUserId: 'user1',
-          targetUserId: 'user2',
-        );
-        expect(permissions, contains(WebAuthnPermission.manageAnyCredentials));
-      });
+      test(
+        'removeCredential требует manageAnyCredentials для чужих данных',
+        () {
+          final authService = TestAuthorizationHelper();
+          final permissions = authService.getRequiredPermissions(
+            WebAuthnOperation.removeCredential,
+            currentUserId: 'user1',
+            targetUserId: 'user2',
+          );
+          expect(
+            permissions,
+            contains(WebAuthnPermission.manageAnyCredentials),
+          );
+        },
+      );
 
       test('revokeSession требует manageOwnSessions для своих сессий', () {
         final authService = TestAuthorizationHelper();
@@ -110,9 +122,18 @@ void main() {
 
         expect(context.currentUserId, equals('user1'));
         expect(context.permissions, hasLength(3));
-        expect(context.permissions, contains(WebAuthnPermission.authenticateAsUser));
-        expect(context.permissions, contains(WebAuthnPermission.manageOwnCredentials));
-        expect(context.permissions, contains(WebAuthnPermission.manageOwnSessions));
+        expect(
+          context.permissions,
+          contains(WebAuthnPermission.authenticateAsUser),
+        );
+        expect(
+          context.permissions,
+          contains(WebAuthnPermission.manageOwnCredentials),
+        );
+        expect(
+          context.permissions,
+          contains(WebAuthnPermission.manageOwnSessions),
+        );
       });
 
       test('создает контекст с административными правами', () {
@@ -127,8 +148,14 @@ void main() {
         );
 
         expect(context.currentUserId, equals('admin1'));
-        expect(context.permissions, contains(WebAuthnPermission.systemAdministration));
-        expect(context.permissions, contains(WebAuthnPermission.manageAnyCredentials));
+        expect(
+          context.permissions,
+          contains(WebAuthnPermission.systemAdministration),
+        );
+        expect(
+          context.permissions,
+          contains(WebAuthnPermission.manageAnyCredentials),
+        );
       });
     });
 
@@ -141,7 +168,10 @@ void main() {
       });
 
       test('создает результат отказа в авторизации', () {
-        final result = AuthorizationResult.denied('Access denied', 'INSUFFICIENT_PERMISSIONS');
+        final result = AuthorizationResult.denied(
+          'Access denied',
+          'INSUFFICIENT_PERMISSIONS',
+        );
         expect(result.isAuthorized, isFalse);
         expect(result.errorMessage, equals('Access denied'));
         expect(result.errorCode, equals('INSUFFICIENT_PERMISSIONS'));
@@ -178,7 +208,9 @@ class TestAuthorizationHelper {
   }) {
     // Определяем, работает ли пользователь со своими данными
     final isOwnData =
-        currentUserId != null && targetUserId != null && currentUserId == targetUserId;
+        currentUserId != null &&
+        targetUserId != null &&
+        currentUserId == targetUserId;
 
     switch (operation) {
       // Регистрация - базовые права
@@ -209,6 +241,7 @@ class TestAuthorizationHelper {
 
       // Управление токенами и сессиями
       case WebAuthnOperation.validateToken:
+      case WebAuthnOperation.refreshToken:
       case WebAuthnOperation.isAuthenticated:
         return [WebAuthnPermission.authenticateAsUser];
 

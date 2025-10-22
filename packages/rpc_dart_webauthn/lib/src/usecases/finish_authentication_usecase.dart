@@ -44,7 +44,10 @@ abstract class FinishAuthenticationResult
   factory FinishAuthenticationResult.success({
     required AuthResponse authResponse,
   }) {
-    return FinishAuthenticationResult(success: true, authResponse: authResponse);
+    return FinishAuthenticationResult(
+      success: true,
+      authResponse: authResponse,
+    );
   }
 
   // Фабричный метод для создания результата с ошибкой
@@ -67,14 +70,18 @@ class FinishAuthenticationUseCase {
     this._sessionRepository, {
     required WebAuthnSettings settings,
     required PasetoUtils pasetoUtils,
-  })  : _settings = settings,
-        _pasetoUtils = pasetoUtils;
+  }) : _settings = settings,
+       _pasetoUtils = pasetoUtils;
 
   // Выполнение usecase
-  Future<FinishAuthenticationResult> execute(FinishAuthenticationParams params) async {
+  Future<FinishAuthenticationResult> execute(
+    FinishAuthenticationParams params,
+  ) async {
     try {
       // 1. Проверяем, есть ли challenge и валиден ли он по времени
-      final isValid = await _challengeRepository.isValidTimestamp(params.userId);
+      final isValid = await _challengeRepository.isValidTimestamp(
+        params.userId,
+      );
       if (!isValid) {
         throw WebAuthnException.timeout('Challenge не валиден');
       }
@@ -89,14 +96,18 @@ class FinishAuthenticationUseCase {
       final credentialId = params.assertion.id;
 
       // 4. Получаем учетные данные из БД
-      final credential = await _webAuthnRepository.getCredentialById(credentialId);
+      final credential = await _webAuthnRepository.getCredentialById(
+        credentialId,
+      );
       if (credential == null) {
         throw WebAuthnException.credential('Учетные данные не найдены');
       }
 
       // 5. Проверяем, соответствует ли пользователь
       if (credential.userId != params.userId) {
-        throw WebAuthnException.credential('Учетные данные принадлежат другому пользователю');
+        throw WebAuthnException.credential(
+          'Учетные данные принадлежат другому пользователю',
+        );
       }
 
       // 6. Проверяем данные от клиента
@@ -127,8 +138,11 @@ class FinishAuthenticationUseCase {
       await _challengeRepository.removeChallenge(params.userId);
 
       // 9. Создаем сессию
+      final expiresInSeconds = _settings.tokenLifetime;
       final sessionId = const Uuid().v4();
-      final sessionExpiresAt = DateTime.now().add(Duration(seconds: params.expiresIn));
+      final sessionExpiresAt = DateTime.now().add(
+        Duration(seconds: expiresInSeconds),
+      );
 
       await _sessionRepository.storeActiveSession(
         sessionId,
@@ -136,7 +150,8 @@ class FinishAuthenticationUseCase {
         expiresAt: sessionExpiresAt,
         metadata: {
           'credentialId': credential.credentialId,
-          'platform': params.origin,
+          'platform': params.platform,
+          'origin': params.origin,
           'createdAt': DateTime.now().toIso8601String(),
         },
       );
@@ -145,23 +160,18 @@ class FinishAuthenticationUseCase {
       final pasetoToken = await _pasetoUtils.createToken(
         userId: credential.userId,
         scopes: params.scopes,
-        extra: {
-          ...credential.public.toJson(),
-          'sessionId': sessionId,
-        },
+        extra: {...credential.public.toJson(), 'sessionId': sessionId},
       );
 
       final authResponse = AuthResponse(
         accessToken: pasetoToken,
-        expiresIn: params.expiresIn,
+        expiresIn: expiresInSeconds,
         userId: credential.userId,
         credential: credential.public,
       );
 
       // Добавляем информацию о токене в результат
-      return FinishAuthenticationResult.success(
-        authResponse: authResponse,
-      );
+      return FinishAuthenticationResult.success(authResponse: authResponse);
     } on WebAuthnException catch (e) {
       return FinishAuthenticationResult.failure(e);
     } catch (e, stackTrace) {
@@ -187,7 +197,9 @@ class FinishAuthenticationUseCase {
 
     // 2. Проверяем тип операции
     if (clientData['type'] != 'webauthn.get') {
-      throw WebAuthnException.authentication('Неверный тип операции: ${clientData['type']}');
+      throw WebAuthnException.authentication(
+        'Неверный тип операции: ${clientData['type']}',
+      );
     }
 
     // 3. Проверяем challenge
@@ -246,7 +258,9 @@ class FinishAuthenticationUseCase {
 
     // 7. Проверяем rpIdHash
     final rpIdHash = authenticatorData.sublist(0, 32);
-    final calculatedRpIdHash = sha256.convert(utf8.encode(_settings.rpId)).bytes;
+    final calculatedRpIdHash = sha256
+        .convert(utf8.encode(_settings.rpId))
+        .bytes;
 
     if (!WebAuthnCryptoUtils.compareBytes(rpIdHash, calculatedRpIdHash)) {
       throw WebAuthnException.authentication(
@@ -256,7 +270,8 @@ class FinishAuthenticationUseCase {
 
     // 8. Проверяем счетчик
     final counterBytes = authenticatorData.sublist(33, 37);
-    final counter = (counterBytes[0] << 24) |
+    final counter =
+        (counterBytes[0] << 24) |
         (counterBytes[1] << 16) |
         (counterBytes[2] << 8) |
         counterBytes[3];
@@ -269,10 +284,15 @@ class FinishAuthenticationUseCase {
     }
 
     // 9. Хешируем clientDataJSON
-    final clientDataHash = sha256.convert(assertion.response.clientDataJSON).bytes;
+    final clientDataHash = sha256
+        .convert(assertion.response.clientDataJSON)
+        .bytes;
 
     // 10. Комбинируем данные для проверки подписи
-    final signedData = Uint8List.fromList([...authenticatorData, ...clientDataHash]);
+    final signedData = Uint8List.fromList([
+      ...authenticatorData,
+      ...clientDataHash,
+    ]);
 
     // 11. Проверяем, является ли ключ JSON-форматом (для P-256)
     final keyStr = utf8.decode(publicKey);

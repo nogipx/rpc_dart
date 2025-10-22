@@ -17,6 +17,7 @@ enum WebAuthnOperation {
 
   // Управление токенами и сессиями
   validateToken,
+  refreshToken,
   revokeToken,
   isAuthenticated,
   revokeSession,
@@ -29,7 +30,6 @@ enum WebAuthnPermission {
   manageOwnCredentials, // Управление своими учетными данными
   manageOwnSessions, // Управление своими сессиями
   authenticateAsUser, // Аутентификация как пользователь
-
   // Административные права
   manageAnyCredentials, // Управление любыми учетными данными
   manageAnySessions, // Управление любыми сессиями
@@ -65,7 +65,9 @@ abstract class WebAuthnAuthorizationContext
 
 /// Результат проверки авторизации
 @freezed
-abstract class AuthorizationResult with _$AuthorizationResult implements IRpcSerializable {
+abstract class AuthorizationResult
+    with _$AuthorizationResult
+    implements IRpcSerializable {
   const factory AuthorizationResult({
     /// Разрешена ли операция
     required bool isAuthorized,
@@ -80,7 +82,8 @@ abstract class AuthorizationResult with _$AuthorizationResult implements IRpcSer
   factory AuthorizationResult.fromJson(Map<String, dynamic> json) =>
       _$AuthorizationResultFromJson(json);
 
-  static RpcCodec<AuthorizationResult> get codec => RpcCodec(AuthorizationResult.fromJson);
+  static RpcCodec<AuthorizationResult> get codec =>
+      RpcCodec(AuthorizationResult.fromJson);
 
   /// Создает успешный результат авторизации
   factory AuthorizationResult.authorized() {

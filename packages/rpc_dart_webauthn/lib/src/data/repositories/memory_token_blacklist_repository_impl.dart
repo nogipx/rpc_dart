@@ -8,15 +8,15 @@ class MemoryTokenBlacklistRepositoryImpl implements ITokenBlacklistRepository {
   @override
   Future<void> addToBlacklist(
     String tokenId, {
+    String? userId,
     DateTime? expiresAt,
     String? reason,
   }) async {
-    // Для получения userId нужно парсить токен, но для простоты используем 'unknown'
-    const userId = 'unknown';
+    final resolvedUserId = userId ?? 'unknown';
 
     final blacklistedToken = BlacklistedTokenInfo(
       tokenId: tokenId,
-      userId: userId,
+      userId: resolvedUserId,
       blacklistedAt: DateTime.now(),
       expiresAt: expiresAt,
       reason: reason,
@@ -25,7 +25,7 @@ class MemoryTokenBlacklistRepositoryImpl implements ITokenBlacklistRepository {
     _blacklistedTokens[tokenId] = blacklistedToken;
 
     // Добавляем в список заблокированных токенов пользователя
-    _userBlacklistedTokens.putIfAbsent(userId, () => []).add(tokenId);
+    _userBlacklistedTokens.putIfAbsent(resolvedUserId, () => []).add(tokenId);
   }
 
   @override
@@ -69,7 +69,9 @@ class MemoryTokenBlacklistRepositoryImpl implements ITokenBlacklistRepository {
   }
 
   @override
-  Future<List<BlacklistedTokenInfo>> getUserBlacklistedTokens(String userId) async {
+  Future<List<BlacklistedTokenInfo>> getUserBlacklistedTokens(
+    String userId,
+  ) async {
     final userTokens = _userBlacklistedTokens[userId];
     if (userTokens == null) return [];
 
