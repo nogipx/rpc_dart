@@ -1,3 +1,12 @@
+## 0.4.0
+
+- Added per-event delivery hints that stay on-device and surface during upload
+  so applications can route sealed batches to custom backends.
+- Extended diagnostics snapshots to include delivery hints for easier
+  verification during development.
+- Migrated the local store to keep optional delivery metadata alongside
+  encrypted tokens.
+
 ## 0.3.0
 
 - Added fetch/acknowledge RPCs and a high-level `uploadPendingEvents()` helper

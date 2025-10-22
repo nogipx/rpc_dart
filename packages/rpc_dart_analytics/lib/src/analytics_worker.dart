@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:meta/meta.dart';
@@ -368,9 +369,21 @@ final class AnalyticsStorageManager {
       'CREATE TABLE IF NOT EXISTS analytics_events ('
       'id INTEGER PRIMARY KEY AUTOINCREMENT,'
       'created_at_ms INTEGER NOT NULL,'
-      'encrypted_token TEXT NOT NULL'
+      'encrypted_token TEXT NOT NULL,'
+      'delivery_hints TEXT'
       ')',
     );
+
+    final columns = await _storage.database
+        .customSelect('PRAGMA table_info(analytics_events)')
+        .get();
+    final hasDeliveryHints = columns
+        .any((row) => row.read<String>('name') == 'delivery_hints');
+    if (!hasDeliveryHints) {
+      await _storage.database.customStatement(
+        'ALTER TABLE analytics_events ADD COLUMN delivery_hints TEXT',
+      );
+    }
 
     _schemaReady = true;
   }
@@ -388,8 +401,19 @@ final class AnalyticsStorageManager {
             properties: request.properties == null
                 ? null
                 : Map<String, dynamic>.from(request.properties!),
+            deliveryHints: request.deliveryHints == null
+                ? null
+                : Map<String, dynamic>.from(request.deliveryHints!),
           )
         : null;
+    String? deliveryHintsJson;
+    if (request.deliveryHints != null) {
+      try {
+        deliveryHintsJson = jsonEncode(request.deliveryHints);
+      } catch (_) {
+        deliveryHintsJson = null;
+      }
+    }
     final encryptedToken = await Licensify.encryptDataForPublicKey(
       data: <String, dynamic>{
         'event': request.eventName,
@@ -400,11 +424,12 @@ final class AnalyticsStorageManager {
     );
 
     await _storage.database.customStatement(
-      'INSERT INTO analytics_events (created_at_ms, encrypted_token) '
-      'VALUES (?, ?)',
+      'INSERT INTO analytics_events (created_at_ms, encrypted_token, delivery_hints) '
+      'VALUES (?, ?, ?)',
       <Object?>[
         DateTime.now().toUtc().millisecondsSinceEpoch,
         encryptedToken,
+        deliveryHintsJson,
       ],
     );
 
@@ -481,7 +506,7 @@ final class AnalyticsStorageManager {
     await _ensureSchema();
     final rows = await _storage.database
         .customSelect(
-          'SELECT id, created_at_ms, encrypted_token '
+          'SELECT id, created_at_ms, encrypted_token, delivery_hints '
           'FROM analytics_events ORDER BY id ASC LIMIT ?',
           <Object?>[limit],
         )
@@ -489,14 +514,29 @@ final class AnalyticsStorageManager {
 
     final events = rows
         .map(
-          (row) => AnalyticsUploadEnvelope(
-            id: row.read<int>('id'),
-            createdAt: DateTime.fromMillisecondsSinceEpoch(
-              row.read<int>('created_at_ms'),
-              isUtc: true,
-            ).toUtc(),
-            encryptedToken: row.read<String>('encrypted_token'),
-          ),
+          (row) {
+            Map<String, dynamic>? hints;
+            final hintsJson = row.read<String?>('delivery_hints');
+            if (hintsJson != null && hintsJson.isNotEmpty) {
+              try {
+                final decoded = jsonDecode(hintsJson);
+                if (decoded is Map) {
+                  hints = Map<String, dynamic>.from(decoded as Map);
+                }
+              } catch (_) {
+                hints = null;
+              }
+            }
+            return AnalyticsUploadEnvelope(
+              id: row.read<int>('id'),
+              createdAt: DateTime.fromMillisecondsSinceEpoch(
+                row.read<int>('created_at_ms'),
+                isUtc: true,
+              ).toUtc(),
+              encryptedToken: row.read<String>('encrypted_token'),
+              deliveryHints: hints,
+            );
+          },
         )
         .toList(growable: false);
 

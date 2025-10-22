@@ -56,15 +56,20 @@ class RpcAnalytics {
   }
 
   /// Records a new analytics event.
+  ///
+  /// [deliveryHints] stay on-device and are surfaced when fetching upload
+  /// batches so the application can decide where to forward sealed events.
   Future<void> logEvent(
     String eventName, {
     Map<String, dynamic>? properties,
+    Map<String, dynamic>? deliveryHints,
     DateTime? timestamp,
   }) async {
     _throwIfDisposed();
     final request = AnalyticsLogEventRequest(
       eventName: eventName,
       properties: properties,
+      deliveryHints: deliveryHints,
       timestamp: (timestamp ?? DateTime.now()).toUtc(),
     );
 
@@ -97,6 +102,9 @@ class RpcAnalytics {
   }
 
   /// Fetches a batch of encrypted events ready to be uploaded.
+  ///
+  /// The returned envelopes include any [AnalyticsUploadEnvelope.deliveryHints]
+  /// that were supplied when logging the events.
   Future<AnalyticsUploadBatch> fetchForUpload({int limit = 50}) {
     _throwIfDisposed();
     if (limit <= 0) {
@@ -124,8 +132,10 @@ class RpcAnalytics {
   /// Convenience helper that iterates through stored events and uploads them.
   ///
   /// The provided [uploader] receives the encrypted batch; once it completes
-  /// without throwing, the events are removed from local storage. Returns the
-  /// total number of uploaded events.
+  /// without throwing, the events are removed from local storage. Use
+  /// [AnalyticsUploadEnvelope.deliveryHints] to decide which backend or
+  /// transport should receive the sealed payloads. Returns the total number of
+  /// uploaded events.
   Future<int> uploadPendingEvents(
     Future<void> Function(List<AnalyticsUploadEnvelope> events) uploader, {
     int batchSize = 50,

@@ -20,6 +20,8 @@ application.
 - 🛠️ Ships with optional in-memory diagnostics buffers for development builds.
 - ☁️ Exposes fetch + acknowledge APIs (and a helper) for forwarding sealed
   events to your backend.
+- 🎯 Supports per-event delivery hints so the app chooses how and where to send
+  encrypted batches.
 
 See `lib/rpc_dart_analytics.dart` for the public API surface.
 
@@ -34,6 +36,15 @@ final analytics = await RpcAnalytics.initialize(
 );
 
 await analytics.logEvent('app_launch');
+
+await analytics.logEvent(
+  'subscription_purchase',
+  properties: {'plan': 'pro'},
+  deliveryHints: {'route': 'billing'},
+);
+
+Delivery hints stay local to the device and are exposed when you fetch upload
+batches so the host app can decide which transport should handle them.
 ```
 
 ### Forwarding events to a backend
@@ -45,17 +56,41 @@ API, and acknowledge them so they are removed locally:
 ```dart
 final uploaded = await analytics.uploadPendingEvents(
   (events) async {
-    await backendClient.sendAnalytics(events.map((e) => <String, dynamic>{
-          'id': e.id,
-          'createdAt': e.createdAt.toIso8601String(),
-          'sealed': e.encryptedToken,
-        }));
+    // Route batches based on the delivery hints each event carries.
+    final marketingEvents = <Map<String, dynamic>>[];
+    final billingEvents = <Map<String, dynamic>>[];
+
+    for (final event in events) {
+      final target = event.deliveryHints?['route'];
+      final payload = <String, dynamic>{
+        'id': event.id,
+        'createdAt': event.createdAt.toIso8601String(),
+        'sealed': event.encryptedToken,
+      };
+
+      if (target == 'billing') {
+        billingEvents.add(payload);
+      } else {
+        marketingEvents.add(payload);
+      }
+    }
+
+    if (marketingEvents.isNotEmpty) {
+      await backendClient.sendAnalytics(marketingEvents);
+    }
+    if (billingEvents.isNotEmpty) {
+      await billingClient.sendAnalytics(billingEvents);
+    }
   },
   batchSize: 100,
 );
 
 debugPrint('Uploaded $uploaded events');
 ```
+
+Delivery hints never leave the device unencrypted; they simply help you decide
+which transport or API client should receive a batch before you forward the
+sealed payloads.
 
 If you prefer manual control, call `fetchForUpload()` to retrieve a batch and
 `acknowledgeUpload()` once your backend confirms persistence.

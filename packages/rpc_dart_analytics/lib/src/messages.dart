@@ -54,11 +54,13 @@ class AnalyticsLogEventRequest implements IRpcSerializable {
   const AnalyticsLogEventRequest({
     required this.eventName,
     this.properties,
+    this.deliveryHints,
     required this.timestamp,
   });
 
   final String eventName;
   final Map<String, dynamic>? properties;
+  final Map<String, dynamic>? deliveryHints;
   final DateTime timestamp;
 
   static const RpcCodec<AnalyticsLogEventRequest> codec =
@@ -68,11 +70,15 @@ class AnalyticsLogEventRequest implements IRpcSerializable {
 
   static AnalyticsLogEventRequest fromJson(Map<String, dynamic> json) {
     final rawProperties = json['properties'];
+    final rawHints = json['deliveryHints'];
     return AnalyticsLogEventRequest(
       eventName: json['eventName'] as String? ?? '',
       properties: rawProperties == null
           ? null
           : Map<String, dynamic>.from(rawProperties as Map),
+      deliveryHints: rawHints == null
+          ? null
+          : Map<String, dynamic>.from(rawHints as Map),
       timestamp: DateTime.parse(json['timestamp'] as String),
     );
   }
@@ -82,6 +88,7 @@ class AnalyticsLogEventRequest implements IRpcSerializable {
     return <String, dynamic>{
       'eventName': eventName,
       if (properties != null) 'properties': properties,
+      if (deliveryHints != null) 'deliveryHints': deliveryHints,
       'timestamp': timestamp.toUtc().toIso8601String(),
     };
   }
@@ -227,11 +234,13 @@ class AnalyticsDiagnosticsEvent implements IRpcSerializable {
     required this.eventName,
     required this.timestamp,
     this.properties,
+    this.deliveryHints,
   });
 
   final String eventName;
   final DateTime timestamp;
   final Map<String, dynamic>? properties;
+  final Map<String, dynamic>? deliveryHints;
 
   static const RpcCodec<AnalyticsDiagnosticsEvent> codec =
       RpcCodec<AnalyticsDiagnosticsEvent>.withDecoder(
@@ -240,12 +249,16 @@ class AnalyticsDiagnosticsEvent implements IRpcSerializable {
 
   static AnalyticsDiagnosticsEvent fromJson(Map<String, dynamic> json) {
     final rawProperties = json['properties'];
+    final rawHints = json['deliveryHints'];
     return AnalyticsDiagnosticsEvent(
       eventName: json['eventName'] as String? ?? '',
       timestamp: DateTime.parse(json['timestamp'] as String).toUtc(),
       properties: rawProperties == null
           ? null
           : Map<String, dynamic>.from(rawProperties as Map),
+      deliveryHints: rawHints == null
+          ? null
+          : Map<String, dynamic>.from(rawHints as Map),
     );
   }
 
@@ -255,6 +268,7 @@ class AnalyticsDiagnosticsEvent implements IRpcSerializable {
       'eventName': eventName,
       'timestamp': timestamp.toUtc().toIso8601String(),
       if (properties != null) 'properties': properties,
+      if (deliveryHints != null) 'deliveryHints': deliveryHints,
     };
   }
 }
@@ -336,6 +350,7 @@ class AnalyticsUploadEnvelope implements IRpcSerializable {
     required this.id,
     required this.createdAt,
     required this.encryptedToken,
+    this.deliveryHints,
   });
 
   /// Local database identifier, used for acknowledging uploads.
@@ -347,6 +362,9 @@ class AnalyticsUploadEnvelope implements IRpcSerializable {
   /// Licensify-sealed payload to forward to backend storage.
   final String encryptedToken;
 
+  /// Optional routing metadata that stays on-device in plaintext.
+  final Map<String, dynamic>? deliveryHints;
+
   static const RpcCodec<AnalyticsUploadEnvelope> codec =
       RpcCodec<AnalyticsUploadEnvelope>.withDecoder(
     AnalyticsUploadEnvelope.fromJson,
@@ -357,6 +375,9 @@ class AnalyticsUploadEnvelope implements IRpcSerializable {
       id: json['id'] as int? ?? -1,
       createdAt: DateTime.parse(json['createdAt'] as String).toUtc(),
       encryptedToken: json['encryptedToken'] as String? ?? '',
+      deliveryHints: json['deliveryHints'] == null
+          ? null
+          : Map<String, dynamic>.from(json['deliveryHints'] as Map),
     );
   }
 
@@ -366,6 +387,7 @@ class AnalyticsUploadEnvelope implements IRpcSerializable {
       'id': id,
       'createdAt': createdAt.toUtc().toIso8601String(),
       'encryptedToken': encryptedToken,
+      if (deliveryHints != null) 'deliveryHints': deliveryHints,
     };
   }
 }
