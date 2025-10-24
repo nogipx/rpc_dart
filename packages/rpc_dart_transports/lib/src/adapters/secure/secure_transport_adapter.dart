@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
 import 'package:licensify/licensify.dart';
@@ -12,6 +13,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 const _handshakeHeader = 'x-rpc-secure-handshake';
 const _metadataHeader = 'x-rpc-secure-metadata';
+const _handshakePeerKeyHeader = 'x-rpc-secure-peer-key';
 const _protocolLabel = 'rpc+secure/1';
 const _infoCallerToResponder = 'rpc:data:caller->responder';
 const _infoResponderToCaller = 'rpc:data:responder->caller';
@@ -21,11 +23,13 @@ class _HandshakeEnvelope {
     required this.token,
     required this.streamId,
     required this.isEndOfStream,
+    this.peerPublicKeyPaserk,
   });
 
   final String token;
   final int streamId;
   final bool isEndOfStream;
+  final String? peerPublicKeyPaserk;
 }
 
 enum SecureFrameFormat { verbose, compact }
@@ -75,9 +79,13 @@ class SecureTransportConfig {
 class SecureTransportKeyStore {
   const SecureTransportKeyStore({
     required this.privateKey,
-    required this.peerPublicKey,
+    this.publicKey,
+    this.peerPublicKey,
     this.transportId = '',
-  });
+  }) : assert(
+          peerPublicKey != null || publicKey != null,
+          'SecureTransportKeyStore requires either peerPublicKey or publicKey',
+        );
 
   /// Identifier advertised to the remote peer.
   final String transportId;
@@ -85,8 +93,11 @@ class SecureTransportKeyStore {
   /// Local signing key used to produce handshake tokens.
   final LicensifyPrivateKey privateKey;
 
+  /// Local public key advertised to remote peers when they don't have it cached.
+  final LicensifyPublicKey? publicKey;
+
   /// Remote signing key used to validate handshake tokens.
-  final LicensifyPublicKey peerPublicKey;
+  final LicensifyPublicKey? peerPublicKey;
 }
 
 enum _SecureFrameType { data, metadata }
@@ -322,11 +333,14 @@ class SecureTransportAdapter implements IRpcTransport {
     if (message.metadata != null) {
       final token = message.metadata!.getHeaderValue(_handshakeHeader);
       if (token != null && !_handshakeTokens.isClosed) {
+        final peerPublicKeyPaserk =
+            message.metadata!.getHeaderValue(_handshakePeerKeyHeader);
         _handshakeTokens.add(
           _HandshakeEnvelope(
             token: token,
             streamId: message.streamId,
             isEndOfStream: message.isEndOfStream,
+            peerPublicKeyPaserk: peerPublicKeyPaserk,
           ),
         );
         return;
@@ -394,9 +408,7 @@ class SecureTransportAdapter implements IRpcTransport {
     final helloToken = helloLicense.token;
     await _inner.sendMetadata(
       handshakeStreamId,
-      RpcMetadata([
-        RpcHeader(_handshakeHeader, helloToken),
-      ]),
+      _buildHandshakeMetadata(helloToken),
       endStream: true,
     );
 
@@ -405,10 +417,19 @@ class SecureTransportAdapter implements IRpcTransport {
       throw StateError('Responder returned handshake on unexpected stream');
     }
     final ackToken = ackEnvelope.token;
-    final ack = await Licensify.fromToken(
-      token: ackToken,
-      publicKey: _keyStore.peerPublicKey,
-    );
+    final ackResolution =
+        _resolvePeerPublicKey(ackEnvelope, peerRole: 'Responder');
+    late final License ack;
+    try {
+      ack = await Licensify.fromToken(
+        token: ackToken,
+        publicKey: ackResolution.key,
+      );
+    } finally {
+      if (ackResolution.owned) {
+        ackResolution.key.dispose();
+      }
+    }
 
     final ackFeatures = await ack.features;
     final ackMetadata = await ack.metadata ?? <String, dynamic>{};
@@ -475,10 +496,19 @@ class SecureTransportAdapter implements IRpcTransport {
     final helloEnvelope = await _waitForHandshakeToken();
     final handshakeStreamId = helloEnvelope.streamId;
     final helloToken = helloEnvelope.token;
-    final hello = await Licensify.fromToken(
-      token: helloToken,
-      publicKey: _keyStore.peerPublicKey,
-    );
+    final helloResolution =
+        _resolvePeerPublicKey(helloEnvelope, peerRole: 'Caller');
+    late final License hello;
+    try {
+      hello = await Licensify.fromToken(
+        token: helloToken,
+        publicKey: helloResolution.key,
+      );
+    } finally {
+      if (helloResolution.owned) {
+        helloResolution.key.dispose();
+      }
+    }
 
     final helloFeatures = await hello.features;
     final helloMetadata = await hello.metadata ?? <String, dynamic>{};
@@ -526,9 +556,7 @@ class SecureTransportAdapter implements IRpcTransport {
 
     await _inner.sendMetadata(
       handshakeStreamId,
-      RpcMetadata([
-        RpcHeader(_handshakeHeader, ackToken),
-      ]),
+      _buildHandshakeMetadata(ackToken),
       endStream: true,
     );
 
@@ -648,6 +676,49 @@ class SecureTransportAdapter implements IRpcTransport {
     } on TimeoutException catch (error) {
       throw StateError('Handshake timed out: ${error.message ?? ''}');
     }
+  }
+
+  ({LicensifyPublicKey key, bool owned}) _resolvePeerPublicKey(
+    _HandshakeEnvelope envelope, {
+    required String peerRole,
+  }) {
+    final configuredKey = _keyStore.peerPublicKey;
+    final advertisedPaserk = envelope.peerPublicKeyPaserk;
+
+    if (configuredKey != null) {
+      if (advertisedPaserk != null) {
+        final configuredPaserk = configuredKey.toPaserk();
+        if (configuredPaserk != advertisedPaserk) {
+          throw StateError(
+            '$peerRole advertised unexpected public key',
+          );
+        }
+      }
+      return (key: configuredKey, owned: false);
+    }
+
+    if (advertisedPaserk == null) {
+      throw StateError('$peerRole did not advertise public key');
+    }
+
+    return (
+      key: LicensifyPublicKey.fromPaserk(paserk: advertisedPaserk),
+      owned: true,
+    );
+  }
+
+  RpcMetadata _buildHandshakeMetadata(String token) {
+    final headers = <RpcHeader>[RpcHeader(_handshakeHeader, token)];
+    final localPublicKey = _keyStore.publicKey;
+    if (localPublicKey != null) {
+      headers.add(
+        RpcHeader(
+          _handshakePeerKeyHeader,
+          localPublicKey.toPaserk(),
+        ),
+      );
+    }
+    return RpcMetadata(headers);
   }
 
   Uint8List _serializeMetadata(RpcMetadata metadata) {
