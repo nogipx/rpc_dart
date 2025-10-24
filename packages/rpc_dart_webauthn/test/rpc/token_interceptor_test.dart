@@ -2,8 +2,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_webauthn/rpc_dart_webauthn.dart';
 import 'package:test/test.dart';
 
-class _TokenTestContract extends RpcResponderContract
-    implements IRpcContract {
+class _TokenTestContract extends RpcResponderContract implements IRpcContract {
   _TokenTestContract() : super('TokenTest');
 
   @override
@@ -44,8 +43,7 @@ class _TokenTestContract extends RpcResponderContract
 }
 
 class _TokenTestCaller extends RpcCallerContract {
-  _TokenTestCaller(RpcCallerEndpoint endpoint)
-      : super('TokenTest', endpoint);
+  _TokenTestCaller(RpcCallerEndpoint endpoint) : super('TokenTest', endpoint);
 
   Future<RpcString> publicEcho(RpcString message) {
     return endpoint.unaryRequest<RpcString, RpcString>(
@@ -85,7 +83,7 @@ void main() {
 
       responderEndpoint = RpcResponderEndpoint(transport: serverTransport);
       responderEndpoint.registerServiceContract(_TokenTestContract());
-      await responderEndpoint.start();
+      responderEndpoint.start();
 
       callerEndpoint = RpcCallerEndpoint(transport: clientTransport);
       caller = _TokenTestCaller(callerEndpoint);
