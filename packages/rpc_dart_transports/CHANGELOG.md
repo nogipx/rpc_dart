@@ -1,10 +1,13 @@
-## 1.4.0
+## 1.4.1
 
-- Remove dependency on io, compiles with web
 - **Improvement**: `SecureTransportAdapter` can bootstrap mutual trust even
   when `peerPublicKey` isn't preconfigured; peers now advertise their
   Licensify public keys during the handshake and validate mismatches to keep
   the exchange authenticated.
+
+## 1.4.0
+
+- Remove dependency on io, compiles with web
 
 ## 1.3.0
 
