@@ -108,7 +108,7 @@ void main() {
             store.state = state;
           },
           shouldRefreshOnError: (call, error) => true,
-          onRefreshFailed: (_, __) {},
+          onRefreshFailed: (_, __) async {},
         ),
       );
     });

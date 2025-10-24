@@ -98,7 +98,7 @@ class _WsSecureContext {
       callerTransport,
       keyStore: SecureTransportKeyStore(
         transportId: 'ws-secure-caller',
-        privateKey: callerKeys.privateKey,
+        keyPair: callerKeys,
         peerPublicKey: responderKeys.publicKey,
       ),
       logger: RpcLogger('ws-secure-caller'),
@@ -108,7 +108,7 @@ class _WsSecureContext {
       responderTransport,
       keyStore: SecureTransportKeyStore(
         transportId: 'ws-secure-responder',
-        privateKey: responderKeys.privateKey,
+        keyPair: responderKeys,
         peerPublicKey: callerKeys.publicKey,
       ),
       logger: RpcLogger('ws-secure-responder'),

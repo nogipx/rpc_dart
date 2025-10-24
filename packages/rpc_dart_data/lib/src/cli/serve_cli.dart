@@ -807,12 +807,12 @@ SecureWrapRuntimeConfig? _parseSecureWrapConfig(ArgResults args) {
   final transportId =
       (args['secure-wrap-transport-id'] as String?)?.trim() ?? '';
 
-  LicensifyPrivateKey privateKey;
+  LicensifyKeyPair keyPair;
   try {
-    privateKey = LicensifyPrivateKey.fromPaserkSecret(paserk: privateKeyRaw);
+    keyPair = LicensifyKeyPair.fromPaserkSecret(paserk: privateKeyRaw);
   } catch (error) {
     throw FormatException(
-        'Не удалось импортировать приватный ключ из PASERK: $error');
+        'Не удалось импортировать ключевую пару из PASERK: $error');
   }
 
   LicensifyPublicKey peerPublicKey;
@@ -861,7 +861,7 @@ SecureWrapRuntimeConfig? _parseSecureWrapConfig(ArgResults args) {
 
   return SecureWrapRuntimeConfig(
     keyStore: SecureTransportKeyStore(
-      privateKey: privateKey,
+      keyPair: keyPair,
       peerPublicKey: peerPublicKey,
       transportId: transportId,
     ),

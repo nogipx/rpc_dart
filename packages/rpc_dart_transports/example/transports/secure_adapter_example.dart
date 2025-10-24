@@ -20,7 +20,7 @@ Future<void> main() async {
     callerTransport,
     keyStore: SecureTransportKeyStore(
       transportId: 'demo-caller',
-      privateKey: callerKeys.privateKey,
+      keyPair: callerKeys,
       peerPublicKey: responderKeys.publicKey,
     ),
     logger: RpcLogger('SecureDemoCaller'),
@@ -30,7 +30,7 @@ Future<void> main() async {
     responderTransport,
     keyStore: SecureTransportKeyStore(
       transportId: 'demo-responder',
-      privateKey: responderKeys.privateKey,
+      keyPair: responderKeys,
       peerPublicKey: callerKeys.publicKey,
     ),
     logger: RpcLogger('SecureDemoResponder'),

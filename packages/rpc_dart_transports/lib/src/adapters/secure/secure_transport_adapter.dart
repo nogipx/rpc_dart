@@ -78,23 +78,25 @@ class SecureTransportConfig {
 /// Holds the long-term identity material used by the secure overlay.
 class SecureTransportKeyStore {
   const SecureTransportKeyStore({
-    required this.privateKey,
-    this.publicKey,
+    required this.keyPair,
     this.peerPublicKey,
     this.transportId = '',
   }) : assert(
-          peerPublicKey != null || publicKey != null,
-          'SecureTransportKeyStore requires either peerPublicKey or publicKey',
+          peerPublicKey != null || keyPair.publicKey != null,
+          'SecureTransportKeyStore requires either peerPublicKey or keyPair.publicKey',
         );
 
   /// Identifier advertised to the remote peer.
   final String transportId;
 
+  /// Local identity key pair used for handshake signing and advertisement.
+  final LicensifyKeyPair keyPair;
+
   /// Local signing key used to produce handshake tokens.
-  final LicensifyPrivateKey privateKey;
+  LicensifyPrivateKey get privateKey => keyPair.privateKey;
 
   /// Local public key advertised to remote peers when they don't have it cached.
-  final LicensifyPublicKey? publicKey;
+  LicensifyPublicKey? get publicKey => keyPair.publicKey;
 
   /// Remote signing key used to validate handshake tokens.
   final LicensifyPublicKey? peerPublicKey;

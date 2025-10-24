@@ -143,15 +143,16 @@ class WebAuthnTokenInterceptor extends IRpcInterceptor {
       return state;
     }
 
-    return _refreshToken(state.accessToken, call) ?? state;
+    final refreshed = await _refreshToken(state.accessToken, call);
+    return refreshed ?? state;
   }
 
-  Future<WebAuthnTokenState?>? _refreshToken(
+  Future<WebAuthnTokenState?> _refreshToken(
     String expiredToken,
     RpcMiddlewareContext call,
   ) {
     if (_ongoingRefresh != null) {
-      return _ongoingRefresh;
+      return _ongoingRefresh!;
     }
 
     final completer = Completer<WebAuthnTokenState?>();
@@ -176,7 +177,7 @@ class WebAuthnTokenInterceptor extends IRpcInterceptor {
       }
     }();
 
-    return _ongoingRefresh;
+    return _ongoingRefresh!;
   }
 
   RpcContext _contextWithToken(RpcContext original, String? token) {

@@ -36,7 +36,7 @@ void main() {
         pair.client,
         keyStore: SecureTransportKeyStore(
           transportId: 'caller',
-          privateKey: callerKeys.privateKey,
+          keyPair: callerKeys,
           peerPublicKey: responderKeys.publicKey,
         ),
         logger: callerLogger,
@@ -46,7 +46,7 @@ void main() {
         pair.server,
         keyStore: SecureTransportKeyStore(
           transportId: 'responder',
-          privateKey: responderKeys.privateKey,
+          keyPair: responderKeys,
           peerPublicKey: callerKeys.publicKey,
         ),
         logger: responderLogger,
@@ -79,8 +79,7 @@ void main() {
         pair.client,
         keyStore: SecureTransportKeyStore(
           transportId: 'caller',
-          privateKey: callerKeys.privateKey,
-          publicKey: callerKeys.publicKey,
+          keyPair: callerKeys,
         ),
       );
 
@@ -88,8 +87,7 @@ void main() {
         pair.server,
         keyStore: SecureTransportKeyStore(
           transportId: 'responder',
-          privateKey: responderKeys.privateKey,
-          publicKey: responderKeys.publicKey,
+          keyPair: responderKeys,
         ),
       );
 
@@ -119,7 +117,7 @@ void main() {
         pair.server,
         keyStore: SecureTransportKeyStore(
           transportId: 'responder',
-          privateKey: responderKeys.privateKey,
+          keyPair: responderKeys,
           peerPublicKey: callerKeys.publicKey,
         ),
         config: const SecureTransportConfig(
