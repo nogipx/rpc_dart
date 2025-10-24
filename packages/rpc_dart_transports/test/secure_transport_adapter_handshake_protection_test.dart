@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:licensify/licensify.dart';
 import 'package:rpc_dart/rpc_dart.dart';
@@ -66,6 +67,44 @@ void main() {
       final received = await receivedFuture.timeout(const Duration(seconds: 5));
 
       expect(received.payload, isNotNull);
+      expect(received.payload, payload);
+
+      await Future.wait([caller.close(), responder.close()]);
+    });
+
+    test('discovers peer keys dynamically during handshake', () async {
+      final pair = _LoopbackTransportPair();
+
+      final caller = SecureTransportAdapter.wrap(
+        pair.client,
+        keyStore: SecureTransportKeyStore(
+          transportId: 'caller',
+          privateKey: callerKeys.privateKey,
+          publicKey: callerKeys.publicKey,
+        ),
+      );
+
+      final responder = SecureTransportAdapter.wrap(
+        pair.server,
+        keyStore: SecureTransportKeyStore(
+          transportId: 'responder',
+          privateKey: responderKeys.privateKey,
+          publicKey: responderKeys.publicKey,
+        ),
+      );
+
+      await Future.wait([caller.ready, responder.ready]);
+
+      final streamId = caller.createStream();
+      final payload = Uint8List.fromList([9, 8, 7, 6]);
+      final receivedFuture = responder.incomingMessages
+          .where((message) =>
+              message.streamId == streamId && message.payload != null)
+          .first;
+
+      await caller.sendMessage(streamId, payload, endStream: true);
+      final received = await receivedFuture.timeout(const Duration(seconds: 5));
+
       expect(received.payload, payload);
 
       await Future.wait([caller.close(), responder.close()]);
