@@ -5,7 +5,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
 import 'package:licensify/licensify.dart';
@@ -81,10 +80,7 @@ class SecureTransportKeyStore {
     required this.keyPair,
     this.peerPublicKey,
     this.transportId = '',
-  }) : assert(
-          peerPublicKey != null || keyPair.publicKey != null,
-          'SecureTransportKeyStore requires either peerPublicKey or keyPair.publicKey',
-        );
+  });
 
   /// Identifier advertised to the remote peer.
   final String transportId;

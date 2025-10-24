@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:licensify/licensify.dart';
 import 'package:rpc_dart/rpc_dart.dart';
