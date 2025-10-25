@@ -154,6 +154,50 @@ void main() {
       await responder.close();
       await pair.client.close();
     });
+
+    test('enforces byte limit on buffered pre-handshake traffic', () async {
+      final pair = _LoopbackTransportPair();
+
+      final responder = SecureTransportAdapter.wrap(
+        pair.server,
+        keyStore: SecureTransportKeyStore(
+          transportId: 'responder',
+          keyPair: responderKeys,
+          peerPublicKey: callerKeys.publicKey,
+        ),
+        config: const SecureTransportConfig(
+          handshakeTimeout: Duration(milliseconds: 200),
+          pendingHandshakeMessageLimit: 8,
+          pendingHandshakeBufferBytes: 8,
+        ),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      pair.server.injectIncoming(
+        RpcTransportMessage.withPayload(
+          payload: Uint8List(8),
+          streamId: 1,
+        ),
+      );
+
+      pair.server.injectIncoming(
+        RpcTransportMessage.withPayload(
+          payload: Uint8List(1),
+          streamId: 1,
+        ),
+      );
+
+      await expectLater(
+        responder.ready,
+        throwsA(isA<StateError>()),
+      );
+
+      await pumpEventQueue(times: 3);
+      expect(responder.isClosed, isTrue);
+      await responder.close();
+      await pair.client.close();
+    });
   });
 }
 

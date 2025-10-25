@@ -44,7 +44,9 @@ class SecureTransportConfig {
     this.removeTransportId = false,
     this.removeProtocol = false,
     this.pendingHandshakeMessageLimit = 16,
-  }) : assert(pendingHandshakeMessageLimit >= 0);
+    this.pendingHandshakeBufferBytes = 1024 * 1024,
+  })  : assert(pendingHandshakeMessageLimit >= 0),
+        assert(pendingHandshakeBufferBytes >= 0);
 
   /// Maximum time to wait for handshake messages.
   final Duration handshakeTimeout;
@@ -72,6 +74,11 @@ class SecureTransportConfig {
   /// Значение `0` отключает буферизацию и приводит к немедленному отклонению
   /// любого сообщения до завершения аутентификации.
   final int pendingHandshakeMessageLimit;
+
+  /// Максимальный суммарный размер буферизованных сообщений до завершения handshake (в байтах).
+  ///
+  /// Значение `0` отключает буферизацию, даже если лимит по количеству сообщений больше нуля.
+  final int pendingHandshakeBufferBytes;
 }
 
 /// Holds the long-term identity material used by the secure overlay.
@@ -170,6 +177,7 @@ class SecureTransportAdapter implements IRpcTransport {
   final StreamController<_HandshakeEnvelope> _handshakeTokens =
       StreamController<_HandshakeEnvelope>();
   final List<RpcTransportMessage> _pendingMessages = <RpcTransportMessage>[];
+  int _pendingBufferedBytes = 0;
 
   late final StreamSubscription<RpcTransportMessage> _innerSubscription;
   late final Future<_SessionState> _handshakeFuture;
@@ -271,6 +279,9 @@ class SecureTransportAdapter implements IRpcTransport {
       session.dispose();
     }
 
+    _pendingMessages.clear();
+    _pendingBufferedBytes = 0;
+
     if (!_incomingController.isClosed) {
       await _incomingController.close();
     }
@@ -348,16 +359,25 @@ class SecureTransportAdapter implements IRpcTransport {
     final session = _session;
     if (session == null) {
       final limit = _config.pendingHandshakeMessageLimit;
-      if (limit == 0 || _pendingMessages.length >= limit) {
+      final messageSize = _estimateMessageSize(message);
+      final bufferLimit = _config.pendingHandshakeBufferBytes;
+      final exceedsBuffer = bufferLimit == 0 ||
+          (_pendingBufferedBytes + messageSize > bufferLimit);
+      if (limit == 0 ||
+          _pendingMessages.length >= limit ||
+          exceedsBuffer) {
         _logger?.warning(
           '[SecureTransportAdapter] Dropping pre-handshake message and closing connection '
-          '(streamId=${message.streamId}, buffered=${_pendingMessages.length}, limit=$limit)',
+          '(streamId=${message.streamId}, buffered=${_pendingMessages.length}, '
+          'bufferedBytes=$_pendingBufferedBytes, messageSize=$messageSize, '
+          'messageLimit=$limit, byteLimit=$bufferLimit)',
         );
         unawaited(close());
         return;
       }
 
       _pendingMessages.add(message);
+      _pendingBufferedBytes += messageSize;
       return;
     }
 
@@ -930,6 +950,7 @@ class SecureTransportAdapter implements IRpcTransport {
 
     final pending = List<RpcTransportMessage>.from(_pendingMessages);
     _pendingMessages.clear();
+    _pendingBufferedBytes = 0;
 
     for (final message in pending) {
       unawaited(_deliverProtectedMessage(message, _session!));
@@ -951,6 +972,25 @@ class SecureTransportAdapter implements IRpcTransport {
       ],
     );
     return Uint8List.fromList(digest.bytes);
+  }
+
+  int _estimateMessageSize(RpcTransportMessage message) {
+    var size = 0;
+
+    final metadata = message.metadata;
+    if (metadata != null) {
+      for (final header in metadata.headers) {
+        size += header.name.length;
+        size += header.value.length;
+      }
+    }
+
+    final payload = message.payload;
+    if (payload != null) {
+      size += payload.lengthInBytes;
+    }
+
+    return size;
   }
 
   Uint8List _hkdf(
