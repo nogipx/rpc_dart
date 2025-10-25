@@ -363,9 +363,7 @@ class SecureTransportAdapter implements IRpcTransport {
       final bufferLimit = _config.pendingHandshakeBufferBytes;
       final exceedsBuffer = bufferLimit == 0 ||
           (_pendingBufferedBytes + messageSize > bufferLimit);
-      if (limit == 0 ||
-          _pendingMessages.length >= limit ||
-          exceedsBuffer) {
+      if (limit == 0 || _pendingMessages.length >= limit || exceedsBuffer) {
         _logger?.warning(
           '[SecureTransportAdapter] Dropping pre-handshake message and closing connection '
           '(streamId=${message.streamId}, buffered=${_pendingMessages.length}, '

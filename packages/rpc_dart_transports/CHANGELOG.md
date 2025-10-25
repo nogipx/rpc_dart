@@ -1,3 +1,9 @@
+## 1.4.2
+
+- **Security**: Guard `SecureTransportAdapter` pre-handshake buffering with a
+  configurable byte cap so oversized floods can't exhaust process memory
+  before a secure session is established.
+
 ## 1.4.1
 
 - **Improvement**: `SecureTransportAdapter` can bootstrap mutual trust even
