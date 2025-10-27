@@ -55,7 +55,11 @@ class AuthenticatorData {
 
     final rpIdHash = data.sublist(0, 32);
     final flags = data[32];
-    final signCount = ByteData.view(data.buffer, 33, 4).getUint32(0, Endian.big);
+    final signCount = ByteData.view(
+      data.buffer,
+      33,
+      4,
+    ).getUint32(0, Endian.big);
 
     Uint8List? aaguid;
     Uint8List? credentialId;
@@ -64,14 +68,20 @@ class AuthenticatorData {
     if ((flags & 0x40) != 0) {
       // Если есть attested credential data
       if (data.length < 55) {
-        throw ArgumentError('Для аттестованных данных минимальная длина 55 байт');
+        throw ArgumentError(
+          'Для аттестованных данных минимальная длина 55 байт',
+        );
       }
 
       int offset = 37;
       aaguid = data.sublist(offset, offset + 16);
       offset += 16;
 
-      final credIdLen = ByteData.view(data.buffer, offset, 2).getUint16(0, Endian.big);
+      final credIdLen = ByteData.view(
+        data.buffer,
+        offset,
+        2,
+      ).getUint16(0, Endian.big);
       offset += 2;
 
       if (offset + credIdLen > data.length) {
@@ -163,15 +173,17 @@ class CosePublicKey {
     final rawMap = CborMap(<CborValue, CborValue>{});
     for (final entry in map.entries) {
       final key = entry.key is int
-          ? (entry.key as int >= 0 ? CborSmallInt(entry.key) : CborInt(BigInt.from(entry.key)))
+          ? (entry.key as int >= 0
+                ? CborSmallInt(entry.key)
+                : CborInt(BigInt.from(entry.key)))
           : CborString(entry.key.toString());
       final value = entry.value is List<int>
           ? CborBytes(Uint8List.fromList(entry.value))
           : entry.value is int
-              ? (entry.value as int >= 0
-                  ? CborSmallInt(entry.value)
-                  : CborInt(BigInt.from(entry.value)))
-              : CborString(entry.value.toString());
+          ? (entry.value as int >= 0
+                ? CborSmallInt(entry.value)
+                : CborInt(BigInt.from(entry.value)))
+          : CborString(entry.value.toString());
       rawMap[key] = value;
     }
 
@@ -214,11 +226,16 @@ class CosePublicKey {
     }
 
     throw ArgumentError(
-        'Поле $name ($key) отсутствует или имеет неверный тип: ${value.runtimeType}');
+      'Поле $name ($key) отсутствует или имеет неверный тип: ${value.runtimeType}',
+    );
   }
 
   /// Вспомогательный метод для извлечения bytes значений
-  static Uint8List? _getBytesValue(Map<dynamic, dynamic> map, dynamic key, String name) {
+  static Uint8List? _getBytesValue(
+    Map<dynamic, dynamic> map,
+    dynamic key,
+    String name,
+  ) {
     final value = map[key];
     if (value == null) return null;
     if (value is Uint8List) return Uint8List.fromList(value);
@@ -259,7 +276,9 @@ class CosePublicKey {
       }
     }
 
-    throw ArgumentError('Поле $name ($key) имеет неверный тип: ${value.runtimeType}');
+    throw ArgumentError(
+      'Поле $name ($key) имеет неверный тип: ${value.runtimeType}',
+    );
   }
 
   /// Признак того, что это ключ эллиптической кривой
@@ -285,7 +304,8 @@ enum AttestationStatementFormat {
   static AttestationStatementFormat fromString(String value) {
     return values.firstWhere(
       (format) => format.value == value,
-      orElse: () => throw ArgumentError('Неизвестный формат аттестации: $value'),
+      orElse: () =>
+          throw ArgumentError('Неизвестный формат аттестации: $value'),
     );
   }
 }
@@ -324,8 +344,15 @@ class AttestationResult {
   });
 
   /// Фабричный метод для создания успешного результата
-  factory AttestationResult.success({required String attestationType, List<List<int>>? trustPath}) {
-    return AttestationResult(success: true, attestationType: attestationType, trustPath: trustPath);
+  factory AttestationResult.success({
+    required String attestationType,
+    List<List<int>>? trustPath,
+  }) {
+    return AttestationResult(
+      success: true,
+      attestationType: attestationType,
+      trustPath: trustPath,
+    );
   }
 
   /// Фабричный метод для создания результата с ошибкой

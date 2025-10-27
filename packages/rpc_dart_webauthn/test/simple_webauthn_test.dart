@@ -12,14 +12,16 @@ class SimpleTestVectorAdapter {
   static WebAuthnRegistrationCredential createSimpleCredential() {
     // Создаем простые тестовые данные
     final challenge = List<int>.generate(32, (i) => i + 1); // простой challenge
-    final credentialId =
-        List<int>.generate(16, (i) => i * 2); // простой credential ID
+    final credentialId = List<int>.generate(
+      16,
+      (i) => i * 2,
+    ); // простой credential ID
 
     // Создаем простой clientDataJSON
     final clientData = {
       'type': 'webauthn.create',
       'challenge': base64Url.encode(challenge),
-      'origin': 'https://example.com'
+      'origin': 'https://example.com',
     };
     final clientDataJSON = utf8.encode(json.encode(clientData));
 
@@ -34,7 +36,7 @@ class SimpleTestVectorAdapter {
     // Длина credential ID (2 bytes big-endian)
     final credIdLength = [
       (credentialId.length >> 8) & 0xFF,
-      credentialId.length & 0xFF
+      credentialId.length & 0xFF,
     ];
 
     // Простой COSE public key для ES256
@@ -120,7 +122,9 @@ void main() {
         expect(decoded['fmt'], equals('none'));
         // CBOR декодер может возвращать List<int> вместо Uint8List
         expect(
-            decoded['authData'], anyOf([isA<Uint8List>(), isA<List<int>>()]));
+          decoded['authData'],
+          anyOf([isA<Uint8List>(), isA<List<int>>()]),
+        );
 
         print('✅ CBOR кодирование/декодирование работает!');
       });
@@ -134,8 +138,10 @@ void main() {
 
         expect(attestationObject, isMap);
         expect(attestationObject['fmt'], equals('none'));
-        expect(attestationObject['authData'],
-            anyOf([isA<Uint8List>(), isA<List<int>>()]));
+        expect(
+          attestationObject['authData'],
+          anyOf([isA<Uint8List>(), isA<List<int>>()]),
+        );
         expect(attestationObject['attStmt'], isMap);
 
         // Проверяем что authData имеет правильную длину
@@ -144,9 +150,9 @@ void main() {
             ? authDataRaw
             : Uint8List.fromList(authDataRaw as List<int>);
         expect(
-            authData.length,
-            greaterThan(
-                37)); // минимум для RP ID hash + flags + counter + AAGUID
+          authData.length,
+          greaterThan(37),
+        ); // минимум для RP ID hash + flags + counter + AAGUID
 
         print('✅ Структура attestationObject корректна!');
       });

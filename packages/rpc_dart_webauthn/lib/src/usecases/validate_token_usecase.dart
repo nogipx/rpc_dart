@@ -2,13 +2,16 @@ part of '_index.dart';
 
 /// Параметры для валидации токена
 @freezed
-abstract class ValidateTokenParams with _$ValidateTokenParams implements IRpcSerializable {
+abstract class ValidateTokenParams
+    with _$ValidateTokenParams
+    implements IRpcSerializable {
   factory ValidateTokenParams({
     required String token,
     WebAuthnAuthContext? context,
   }) = _ValidateTokenParams;
 
-  static IRpcCodec<ValidateTokenParams> get codec => RpcCodec(ValidateTokenParams.fromJson);
+  static IRpcCodec<ValidateTokenParams> get codec =>
+      RpcCodec(ValidateTokenParams.fromJson);
 
   factory ValidateTokenParams.fromJson(Map<String, dynamic> json) =>
       _$ValidateTokenParamsFromJson(json);
@@ -16,7 +19,9 @@ abstract class ValidateTokenParams with _$ValidateTokenParams implements IRpcSer
 
 /// Результат валидации токена
 @freezed
-abstract class ValidateTokenResult with _$ValidateTokenResult implements IRpcSerializable {
+abstract class ValidateTokenResult
+    with _$ValidateTokenResult
+    implements IRpcSerializable {
   factory ValidateTokenResult._({
     required bool isValid,
     WebAuthnCredentialPublic? credential,
@@ -25,7 +30,8 @@ abstract class ValidateTokenResult with _$ValidateTokenResult implements IRpcSer
     WebAuthnException? error,
   }) = _ValidateTokenResult;
 
-  static IRpcCodec<ValidateTokenResult> get codec => RpcCodec(ValidateTokenResult.fromJson);
+  static IRpcCodec<ValidateTokenResult> get codec =>
+      RpcCodec(ValidateTokenResult.fromJson);
 
   factory ValidateTokenResult.fromJson(Map<String, dynamic> json) =>
       _$ValidateTokenResultFromJson(json);
@@ -41,7 +47,10 @@ abstract class ValidateTokenResult with _$ValidateTokenResult implements IRpcSer
     );
   }
 
-  factory ValidateTokenResult.failure(String message, [WebAuthnException? error]) {
+  factory ValidateTokenResult.failure(
+    String message, [
+    WebAuthnException? error,
+  ]) {
     return ValidateTokenResult._(
       isValid: false,
       errorMessage: message,
@@ -73,7 +82,9 @@ class ValidateTokenUseCase {
       }
 
       // 2. Проверяем, не находится ли токен в чёрном списке
-      final isBlacklisted = await _tokenBlacklistRepository.isBlacklisted(tokenPayload.jti);
+      final isBlacklisted = await _tokenBlacklistRepository.isBlacklisted(
+        tokenPayload.jti,
+      );
       if (isBlacklisted) {
         return ValidateTokenResult.failure('Токен отозван');
       }
@@ -82,7 +93,9 @@ class ValidateTokenUseCase {
       final sessionId = tokenPayload.extra?['sessionId'] as String?;
       if (sessionId != null) {
         // Проверяем активность сессии
-        final isSessionActive = await _sessionRepository.isSessionActive(sessionId);
+        final isSessionActive = await _sessionRepository.isSessionActive(
+          sessionId,
+        );
         if (!isSessionActive) {
           return ValidateTokenResult.failure('Сессия неактивна или истекла');
         }
@@ -91,7 +104,9 @@ class ValidateTokenUseCase {
       // 4. Получаем учетные данные из токена
       final credentialData = tokenPayload.extra;
       if (credentialData == null) {
-        return ValidateTokenResult.failure('Токен не содержит данных учетных записей');
+        return ValidateTokenResult.failure(
+          'Токен не содержит данных учетных записей',
+        );
       }
 
       final credential = WebAuthnCredentialPublic.fromJson(
@@ -99,19 +114,23 @@ class ValidateTokenUseCase {
       );
 
       // 5. Проверяем, существуют ли учетные данные в репозитории
-      final existingCredential =
-          await _webAuthnRepository.getCredentialById(credential.credentialId);
+      final existingCredential = await _webAuthnRepository.getCredentialById(
+        credential.credentialId,
+      );
       if (existingCredential == null) {
         return ValidateTokenResult.failure('Учетные данные не найдены');
       }
 
       // 6. Проверяем соответствие пользователя
       if (existingCredential.userId != tokenPayload.sub) {
-        return ValidateTokenResult.failure('Несоответствие пользователя в токене');
+        return ValidateTokenResult.failure(
+          'Несоответствие пользователя в токене',
+        );
       }
 
       // 7. Создаем обновлённый контекст авторизации
-      final updatedContext = params.context?.copyWith(
+      final updatedContext =
+          params.context?.copyWith(
             isAuthenticated: true,
             credential: existingCredential.public,
             sessionId: sessionId,
@@ -133,7 +152,9 @@ class ValidateTokenUseCase {
     } on WebAuthnException catch (e) {
       return ValidateTokenResult.failure(e.message, e);
     } catch (e) {
-      return ValidateTokenResult.failure('Ошибка валидации токена: ${e.toString()}');
+      return ValidateTokenResult.failure(
+        'Ошибка валидации токена: ${e.toString()}',
+      );
     }
   }
 }

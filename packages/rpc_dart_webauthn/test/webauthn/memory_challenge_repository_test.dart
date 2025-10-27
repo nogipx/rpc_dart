@@ -7,7 +7,8 @@ void main() {
 
     setUp(() {
       repository = MemoryChallengeRepositoryImpl(
-          validDuration: Duration(milliseconds: 100));
+        validDuration: Duration(milliseconds: 100),
+      );
     });
 
     test('должен сохранять и получать challenge', () async {

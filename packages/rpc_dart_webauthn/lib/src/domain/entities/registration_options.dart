@@ -33,7 +33,9 @@ class RegistrationOptions implements IRpcSerializable {
         ? pubKeyCredsRaw.map((item) => item as Map<String, dynamic>).toList()
         : [];
 
-    final userJson = Map<String, dynamic>.from(json['publicKey']['user'] as Map<String, dynamic>);
+    final userJson = Map<String, dynamic>.from(
+      json['publicKey']['user'] as Map<String, dynamic>,
+    );
 
     final userHandle = WebAuthnSafeBase64.decode(userJson['id'] as String);
     final userName = userJson['name']?.toString() ?? '';
@@ -48,7 +50,8 @@ class RegistrationOptions implements IRpcSerializable {
       userName: userName,
       userDisplayName: userDisplayName,
       pubKeyCredParams: pubKeyCredParams,
-      authenticatorSelection: json['publicKey']['authenticatorSelection'] as Map<String, dynamic>,
+      authenticatorSelection:
+          json['publicKey']['authenticatorSelection'] as Map<String, dynamic>,
       timeout: int.parse(json['publicKey']['timeout'].toString()),
       attestation: json['publicKey']['attestation'],
     );
@@ -75,7 +78,8 @@ class RegistrationOptions implements IRpcSerializable {
   }
 
   /// RPC Codec для сериализации/десериализации
-  static RpcCodec<RegistrationOptions> get codec => RpcCodec(RegistrationOptions.fromJson);
+  static RpcCodec<RegistrationOptions> get codec =>
+      RpcCodec(RegistrationOptions.fromJson);
 
   RegistrationOptions copyWith({
     List<int>? challenge,
@@ -99,7 +103,8 @@ class RegistrationOptions implements IRpcSerializable {
       userName: userName ?? this.userName,
       userDisplayName: userDisplayName ?? this.userDisplayName,
       pubKeyCredParams: pubKeyCredParams ?? this.pubKeyCredParams,
-      authenticatorSelection: authenticatorSelection ?? this.authenticatorSelection,
+      authenticatorSelection:
+          authenticatorSelection ?? this.authenticatorSelection,
       timeout: timeout ?? this.timeout,
       attestation: attestation ?? this.attestation,
     );

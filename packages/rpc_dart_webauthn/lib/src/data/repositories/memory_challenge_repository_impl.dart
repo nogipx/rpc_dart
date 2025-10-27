@@ -6,13 +6,16 @@ class MemoryChallengeRepositoryImpl implements IChallengeRepository {
   final Map<String, Map<String, dynamic>> _store = {};
   final Duration _defaultValidDuration;
 
-  MemoryChallengeRepositoryImpl(
-      {Duration validDuration = const Duration(minutes: 10)})
-      : _defaultValidDuration = validDuration;
+  MemoryChallengeRepositoryImpl({
+    Duration validDuration = const Duration(minutes: 10),
+  }) : _defaultValidDuration = validDuration;
 
   @override
-  Future<void> storeChallenge(String userId, List<int> challenge,
-      {int? expiresInSeconds}) async {
+  Future<void> storeChallenge(
+    String userId,
+    List<int> challenge, {
+    int? expiresInSeconds,
+  }) async {
     final validDuration = expiresInSeconds != null
         ? Duration(seconds: expiresInSeconds)
         : _defaultValidDuration;

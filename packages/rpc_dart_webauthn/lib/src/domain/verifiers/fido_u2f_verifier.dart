@@ -19,7 +19,9 @@ class FidoU2fVerifier implements AttestationVerifier {
     try {
       // 1. Проверяем наличие сертификата и подписи
       if (!isValidFormat(attStmt)) {
-        return AttestationResult.failure('Неверный формат FIDO U2F attestation');
+        return AttestationResult.failure(
+          'Неверный формат FIDO U2F attestation',
+        );
       }
 
       final x5c = attStmt['x5c'] as List;
@@ -33,11 +35,15 @@ class FidoU2fVerifier implements AttestationVerifier {
 
       // Проверяем, что ключ сертификата является ECDSA P-256
       if (publicKey.parameters is! ECCurve_secp256r1) {
-        return AttestationResult.failure('Сертификат не содержит ECDSA P-256 ключ');
+        return AttestationResult.failure(
+          'Сертификат не содержит ECDSA P-256 ключ',
+        );
       }
 
       // Парсим данные authenticator data
-      final authData = AuthenticatorData.fromRawData(Uint8List.fromList(authenticatorData));
+      final authData = AuthenticatorData.fromRawData(
+        Uint8List.fromList(authenticatorData),
+      );
 
       // Извлекаем RP ID Hash
       final rpIdHash = authData.rpIdHash;
@@ -46,14 +52,18 @@ class FidoU2fVerifier implements AttestationVerifier {
       if (!authData.hasAttestedCredentialData ||
           authData.credentialId == null ||
           authData.credentialPublicKey == null) {
-        return AttestationResult.failure('AuthenticatorData не содержит учетных данных');
+        return AttestationResult.failure(
+          'AuthenticatorData не содержит учетных данных',
+        );
       }
 
       // Получаем credentialId
       final credentialId = authData.credentialId!;
 
       // Декодируем COSE публичный ключ
-      final coseKey = AppCborDecoder.decodeCosePublicKey(authData.credentialPublicKey!);
+      final coseKey = AppCborDecoder.decodeCosePublicKey(
+        authData.credentialPublicKey!,
+      );
 
       if (!coseKey.isEC) {
         return AttestationResult.failure('COSE ключ не является EC ключом');
@@ -68,19 +78,27 @@ class FidoU2fVerifier implements AttestationVerifier {
 
       // Создаем verification data для U2F формата
       // В U2F используется формат: 0x00 + rpIdHash + clientDataHash + credentialId + u2fPublicKey
-      final verificationData = [0x00] + rpIdHash + clientDataHash + credentialId + u2fPublicKey;
+      final verificationData =
+          [0x00] + rpIdHash + clientDataHash + credentialId + u2fPublicKey;
 
       // Проверяем подпись с использованием публичного ключа из сертификата
       final isValid = _verifySignature(publicKey, verificationData, sig);
 
       if (!isValid) {
-        return AttestationResult.failure('Недействительная подпись FIDO U2F attestation');
+        return AttestationResult.failure(
+          'Недействительная подпись FIDO U2F attestation',
+        );
       }
 
       // Проверка успешна, возвращаем результат с типом "Basic"
-      return AttestationResult.success(attestationType: 'Basic', trustPath: [certBytes]);
+      return AttestationResult.success(
+        attestationType: 'Basic',
+        trustPath: [certBytes],
+      );
     } catch (e) {
-      return AttestationResult.failure('Ошибка проверки FIDO U2F attestation: ${e.toString()}');
+      return AttestationResult.failure(
+        'Ошибка проверки FIDO U2F attestation: ${e.toString()}',
+      );
     }
   }
 
@@ -88,7 +106,9 @@ class FidoU2fVerifier implements AttestationVerifier {
   bool isValidFormat(Map<dynamic, dynamic> attStmt) {
     // Проверяем наличие x5c и sig в attestation statement
     final hasX5c =
-        attStmt.containsKey('x5c') && attStmt['x5c'] is List && (attStmt['x5c'] as List).isNotEmpty;
+        attStmt.containsKey('x5c') &&
+        attStmt['x5c'] is List &&
+        (attStmt['x5c'] as List).isNotEmpty;
     final hasSig = attStmt.containsKey('sig') && attStmt['sig'] is List<int>;
 
     return hasX5c && hasSig;
@@ -98,7 +118,9 @@ class FidoU2fVerifier implements AttestationVerifier {
   ECPublicKey _extractPublicKeyFromCertificate(List<int> certBytes) {
     try {
       // Парсим сертификат через x509_plus
-      final certAsn1 = ASN1Parser(Uint8List.fromList(certBytes)).nextObject() as ASN1Sequence;
+      final certAsn1 =
+          ASN1Parser(Uint8List.fromList(certBytes)).nextObject()
+              as ASN1Sequence;
       final cert = x509.X509Certificate.fromAsn1(certAsn1);
 
       final pub = cert.tbsCertificate.subjectPublicKeyInfo!.subjectPublicKey;
@@ -112,12 +134,18 @@ class FidoU2fVerifier implements AttestationVerifier {
       final q = ecParams.curve.createPoint(pub.xCoordinate, pub.yCoordinate);
       return ECPublicKey(q, ecParams);
     } catch (e) {
-      throw ArgumentError('Ошибка извлечения публичного ключа из сертификата: $e');
+      throw ArgumentError(
+        'Ошибка извлечения публичного ключа из сертификата: $e',
+      );
     }
   }
 
   // Проверка подписи с использованием ECDSA
-  bool _verifySignature(ECPublicKey publicKey, List<int> data, List<int> signature) {
+  bool _verifySignature(
+    ECPublicKey publicKey,
+    List<int> data,
+    List<int> signature,
+  ) {
     final signer = Signer('SHA-256/ECDSA');
     final params = PublicKeyParameter<ECPublicKey>(publicKey);
     signer.init(false, params);

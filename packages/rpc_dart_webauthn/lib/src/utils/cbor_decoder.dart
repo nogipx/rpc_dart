@@ -17,10 +17,15 @@ class AppCborDecoder {
       return _processDecodedAttestationObject(decoded);
     } on CborMalformedException catch (e, st) {
       throw WebAuthnException.registration(
-          'Ошибка декодирования attestationObject: некорректный формат CBOR. $e', st);
+        'Ошибка декодирования attestationObject: некорректный формат CBOR. $e',
+        st,
+      );
     } catch (e, st) {
       // Ловим любые другие неожиданные ошибки
-      throw WebAuthnException.registration('Ошибка декодирования attestationObject: $e', st);
+      throw WebAuthnException.registration(
+        'Ошибка декодирования attestationObject: $e',
+        st,
+      );
     }
   }
 
@@ -32,16 +37,25 @@ class AppCborDecoder {
       return _processCoseKey(decoded);
     } on CborMalformedException catch (e, st) {
       throw WebAuthnException.registration(
-          'Ошибка декодирования COSE ключ: некорректный формат CBOR. $e', st);
+        'Ошибка декодирования COSE ключ: некорректный формат CBOR. $e',
+        st,
+      );
     } catch (e, st) {
-      throw WebAuthnException.registration('Ошибка декодирования COSE ключ: $e', st);
+      throw WebAuthnException.registration(
+        'Ошибка декодирования COSE ключ: $e',
+        st,
+      );
     }
   }
 
   /// Обрабатывает декодированный attestationObject независимо от используемого декодера
-  static AttestationObjectResult _processDecodedAttestationObject(dynamic decoded) {
+  static AttestationObjectResult _processDecodedAttestationObject(
+    dynamic decoded,
+  ) {
     if (decoded is! Map) {
-      return AttestationObjectResult.failure('attestationObject не является CBOR Map');
+      return AttestationObjectResult.failure(
+        'attestationObject не является CBOR Map',
+      );
     }
 
     final decodedMap = <String, dynamic>{};
@@ -176,7 +190,9 @@ class AppCborDecoder {
   /// Обрабатывает декодированный COSE ключ
   static CosePublicKey _processCoseKey(dynamic coseKey) {
     if (coseKey is! Map) {
-      throw ArgumentError('COSE ключ не является Map, получен: ${coseKey.runtimeType}');
+      throw ArgumentError(
+        'COSE ключ не является Map, получен: ${coseKey.runtimeType}',
+      );
     }
 
     final keyMap = <dynamic, dynamic>{};
@@ -257,7 +273,8 @@ class AppCborDecoder {
         }
       }
       // Для Uint8Buffer напрямую конвертируем в List<int>
-      else if (value != null && value.runtimeType.toString().contains('Uint8Buffer')) {
+      else if (value != null &&
+          value.runtimeType.toString().contains('Uint8Buffer')) {
         try {
           value = List<int>.from(value);
         } catch (e) {
@@ -271,7 +288,9 @@ class AppCborDecoder {
     try {
       return CosePublicKey.fromMap(keyMap);
     } catch (e) {
-      final keysString = keyMap.keys.map((k) => '$k: ${keyMap[k]?.runtimeType}').join(', ');
+      final keysString = keyMap.keys
+          .map((k) => '$k: ${keyMap[k]?.runtimeType}')
+          .join(', ');
       throw ArgumentError(
         'Ошибка при преобразовании COSE карты в ключ. Ключи: {$keysString}. Ошибка: ${e.toString()}',
       );
@@ -283,7 +302,9 @@ class AppCborDecoder {
     try {
       return AuthenticatorData.fromRawData(Uint8List.fromList(authData));
     } catch (e) {
-      throw ArgumentError('Ошибка при парсинге authenticator data: ${e.toString()}');
+      throw ArgumentError(
+        'Ошибка при парсинге authenticator data: ${e.toString()}',
+      );
     }
   }
 }

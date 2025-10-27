@@ -6,22 +6,42 @@ void main() {
     group('encode', () {
       test('должен кодировать данные в base64url без паддингов', () {
         // 'Hello' -> 'SGVsbG8'
-        expect(WebAuthnSafeBase64.encode([72, 101, 108, 108, 111]), equals('SGVsbG8'));
+        expect(
+          WebAuthnSafeBase64.encode([72, 101, 108, 108, 111]),
+          equals('SGVsbG8'),
+        );
 
         // 'Hello, World!' -> 'SGVsbG8sIFdvcmxkIQ'
         expect(
-          WebAuthnSafeBase64.encode([72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33]),
+          WebAuthnSafeBase64.encode([
+            72,
+            101,
+            108,
+            108,
+            111,
+            44,
+            32,
+            87,
+            111,
+            114,
+            108,
+            100,
+            33,
+          ]),
           equals('SGVsbG8sIFdvcmxkIQ'),
         );
       });
 
-      test('должен кодировать данные без паддингов даже когда они требуются', () {
-        // 'A' -> 'QQ' (должно быть 'QQ==' с паддингами)
-        expect(WebAuthnSafeBase64.encode([65]), equals('QQ'));
+      test(
+        'должен кодировать данные без паддингов даже когда они требуются',
+        () {
+          // 'A' -> 'QQ' (должно быть 'QQ==' с паддингами)
+          expect(WebAuthnSafeBase64.encode([65]), equals('QQ'));
 
-        // 'AB' -> 'QUI' (должно быть 'QUI=' с паддингом)
-        expect(WebAuthnSafeBase64.encode([65, 66]), equals('QUI'));
-      });
+          // 'AB' -> 'QUI' (должно быть 'QUI=' с паддингом)
+          expect(WebAuthnSafeBase64.encode([65, 66]), equals('QUI'));
+        },
+      );
 
       test('должен кодировать пустой массив в пустую строку', () {
         expect(WebAuthnSafeBase64.encode([]), equals(''));
@@ -30,10 +50,27 @@ void main() {
 
     group('decode', () {
       test('должен декодировать base64url без паддингов', () {
-        expect(WebAuthnSafeBase64.decode('SGVsbG8'), equals([72, 101, 108, 108, 111])); // 'Hello'
+        expect(
+          WebAuthnSafeBase64.decode('SGVsbG8'),
+          equals([72, 101, 108, 108, 111]),
+        ); // 'Hello'
         expect(
           WebAuthnSafeBase64.decode('SGVsbG8sIFdvcmxkIQ'),
-          equals([72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33]), // 'Hello, World!'
+          equals([
+            72,
+            101,
+            108,
+            108,
+            111,
+            44,
+            32,
+            87,
+            111,
+            114,
+            108,
+            100,
+            33,
+          ]), // 'Hello, World!'
         );
       });
 
@@ -54,7 +91,9 @@ void main() {
 
       test('должен выбрасывать исключение при некорректных данных', () {
         expect(
-            () => WebAuthnSafeBase64.decode('ThisIsNotBase64!'), throwsA(isA<FormatException>()));
+          () => WebAuthnSafeBase64.decode('ThisIsNotBase64!'),
+          throwsA(isA<FormatException>()),
+        );
       });
     });
 

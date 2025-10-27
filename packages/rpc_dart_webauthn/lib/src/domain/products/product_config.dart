@@ -12,7 +12,11 @@ class ProductConfig {
   /// iOS Bundle ID
   final String iosBundleId;
 
-  ProductConfig({required this.webOrigin, required this.androidAppInfo, required this.iosBundleId});
+  ProductConfig({
+    required this.webOrigin,
+    required this.androidAppInfo,
+    required this.iosBundleId,
+  });
 
   /// Возвращает данные для .well-known/assetlinks.json (Android)
   List<Map<String, dynamic>> getAndroidAssetLinks() {

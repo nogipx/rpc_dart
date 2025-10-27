@@ -12,13 +12,15 @@ class MemoryWebAuthnRepositoryImpl implements IWebAuthnRepository {
 
   @override
   Future<WebAuthnCredentialPrivate?> getCredentialById(
-      String credentialId) async {
+    String credentialId,
+  ) async {
     return _credentials[credentialId];
   }
 
   @override
   Future<List<WebAuthnCredentialPrivate>> getCredentialsByUserId(
-      String userId) async {
+    String userId,
+  ) async {
     return _credentials.values.where((cred) => cred.userId == userId).toList();
   }
 

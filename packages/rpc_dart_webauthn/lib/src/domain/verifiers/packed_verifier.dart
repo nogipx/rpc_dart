@@ -49,7 +49,9 @@ class PackedVerifier implements AttestationVerifier {
         );
       }
     } catch (e) {
-      return AttestationResult.failure('Ошибка проверки Packed attestation: ${e.toString()}');
+      return AttestationResult.failure(
+        'Ошибка проверки Packed attestation: ${e.toString()}',
+      );
     }
   }
 
@@ -72,7 +74,9 @@ class PackedVerifier implements AttestationVerifier {
     } else if (sig is List) {
       return (sig).cast<int>();
     } else {
-      throw ArgumentError('Неподдерживаемый формат подписи: ${sig.runtimeType}');
+      throw ArgumentError(
+        'Неподдерживаемый формат подписи: ${sig.runtimeType}',
+      );
     }
   }
 
@@ -103,7 +107,9 @@ class PackedVerifier implements AttestationVerifier {
       );
 
       if (!isValid) {
-        return AttestationResult.failure('Недействительная подпись certificate-based attestation');
+        return AttestationResult.failure(
+          'Недействительная подпись certificate-based attestation',
+        );
       }
 
       // TODO: Реальная проверка цепочки сертификатов (trusted roots).
@@ -115,7 +121,9 @@ class PackedVerifier implements AttestationVerifier {
         trustPath: [certBytes],
       );
     } catch (e) {
-      return AttestationResult.failure('Ошибка certificate attestation: ${e.toString()}');
+      return AttestationResult.failure(
+        'Ошибка certificate attestation: ${e.toString()}',
+      );
     }
   }
 
@@ -128,16 +136,21 @@ class PackedVerifier implements AttestationVerifier {
   }) async {
     try {
       // Парсим authenticator data
-      final authData = AuthenticatorData.fromRawData(Uint8List.fromList(authenticatorData));
+      final authData = AuthenticatorData.fromRawData(
+        Uint8List.fromList(authenticatorData),
+      );
 
-      if (!authData.hasAttestedCredentialData || authData.credentialPublicKey == null) {
+      if (!authData.hasAttestedCredentialData ||
+          authData.credentialPublicKey == null) {
         return AttestationResult.failure(
           'Отсутствуют данные credential для Self attestation',
         );
       }
 
       // Декодируем COSE публичный ключ
-      final coseKey = AppCborDecoder.decodeCosePublicKey(authData.credentialPublicKey!);
+      final coseKey = AppCborDecoder.decodeCosePublicKey(
+        authData.credentialPublicKey!,
+      );
 
       // Проверяем, что алгоритм совпадает
       if (coseKey.algorithm != alg) {
@@ -157,12 +170,16 @@ class PackedVerifier implements AttestationVerifier {
       );
 
       if (!isValid) {
-        return AttestationResult.failure('Недействительная подпись self attestation');
+        return AttestationResult.failure(
+          'Недействительная подпись self attestation',
+        );
       }
 
       return AttestationResult.success(attestationType: 'Self');
     } catch (e) {
-      return AttestationResult.failure('Ошибка self attestation: ${e.toString()}');
+      return AttestationResult.failure(
+        'Ошибка self attestation: ${e.toString()}',
+      );
     }
   }
 
@@ -180,7 +197,9 @@ class PackedVerifier implements AttestationVerifier {
     } else if (certData is List) {
       return (certData).cast<int>();
     } else {
-      throw ArgumentError('Неподдерживаемый формат сертификата: ${certData.runtimeType}');
+      throw ArgumentError(
+        'Неподдерживаемый формат сертификата: ${certData.runtimeType}',
+      );
     }
   }
 
@@ -188,7 +207,9 @@ class PackedVerifier implements AttestationVerifier {
   ECPublicKey _extractPublicKeyFromCertificate(List<int> certBytes) {
     try {
       // Парсим сертификат через x509_plus
-      final certAsn1 = ASN1Parser(Uint8List.fromList(certBytes)).nextObject() as ASN1Sequence;
+      final certAsn1 =
+          ASN1Parser(Uint8List.fromList(certBytes)).nextObject()
+              as ASN1Sequence;
       final cert = x509.X509Certificate.fromAsn1(certAsn1);
 
       final pub = cert.tbsCertificate.subjectPublicKeyInfo!.subjectPublicKey;
@@ -202,7 +223,9 @@ class PackedVerifier implements AttestationVerifier {
       final q = ecParams.curve.createPoint(pub.xCoordinate, pub.yCoordinate);
       return ECPublicKey(q, ecParams);
     } catch (e) {
-      throw ArgumentError('Ошибка извлечения публичного ключа из сертификата: $e');
+      throw ArgumentError(
+        'Ошибка извлечения публичного ключа из сертификата: $e',
+      );
     }
   }
 
@@ -239,7 +262,10 @@ class PackedVerifier implements AttestationVerifier {
       final ecSignature = _decodeDERSignature(signature);
 
       // Проверяем подпись
-      final result = verifier.verifySignature(Uint8List.fromList(data), ecSignature);
+      final result = verifier.verifySignature(
+        Uint8List.fromList(data),
+        ecSignature,
+      );
       return result;
     } catch (e) {
       return false;
@@ -254,7 +280,9 @@ class PackedVerifier implements AttestationVerifier {
   }) {
     try {
       if (!coseKey.isEC) {
-        throw ArgumentError('Поддерживаются только EC ключи для self attestation');
+        throw ArgumentError(
+          'Поддерживаются только EC ключи для self attestation',
+        );
       }
 
       // Создаем EC публичный ключ из COSE данных
@@ -320,7 +348,9 @@ class PackedVerifier implements AttestationVerifier {
           signature = signature.sublist(0, 64);
           expectedLength = 32;
         } else {
-          throw ArgumentError('Неподдерживаемая длина raw подписи: ${signature.length}');
+          throw ArgumentError(
+            'Неподдерживаемая длина raw подписи: ${signature.length}',
+          );
         }
     }
 

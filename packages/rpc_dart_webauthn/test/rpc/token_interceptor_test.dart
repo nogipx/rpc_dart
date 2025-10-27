@@ -22,17 +22,11 @@ class _TokenTestContract extends RpcResponderContract implements IRpcContract {
     );
   }
 
-  Future<RpcString> publicEcho(
-    RpcString input, {
-    RpcContext? context,
-  }) async {
+  Future<RpcString> publicEcho(RpcString input, {RpcContext? context}) async {
     return input;
   }
 
-  Future<RpcString> securedEcho(
-    RpcString input, {
-    RpcContext? context,
-  }) async {
+  Future<RpcString> securedEcho(RpcString input, {RpcContext? context}) async {
     final header = context?.getHeader('authorization');
     if (header != 'Bearer fresh-token') {
       throw InvalidTokenException.expired();
@@ -116,12 +110,14 @@ void main() {
       await responderEndpoint.close();
     });
 
-    test('добавляет заголовок и не триггерит refresh для публичных методов',
-        () async {
-      final response = await caller.publicEcho('ping'.rpc);
-      expect(response.value, 'ping');
-      expect(refreshCount, 0);
-    });
+    test(
+      'добавляет заголовок и не триггерит refresh для публичных методов',
+      () async {
+        final response = await caller.publicEcho('ping'.rpc);
+        expect(response.value, 'ping');
+        expect(refreshCount, 0);
+      },
+    );
 
     test('обновляет токен если он просрочен до вызова', () async {
       store.state = WebAuthnTokenState(

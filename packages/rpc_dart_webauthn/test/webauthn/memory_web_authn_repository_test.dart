@@ -72,7 +72,10 @@ void main() {
 
       // Assert
       expect(user1Credentials.length, equals(2));
-      expect(user1Credentials.map((c) => c.id).toList()..sort(), equals(['1', '2']));
+      expect(
+        user1Credentials.map((c) => c.id).toList()..sort(),
+        equals(['1', '2']),
+      );
 
       expect(user2Credentials.length, equals(1));
       expect(user2Credentials.first.id, equals('3'));
@@ -99,13 +102,16 @@ void main() {
       expect(updated!.counter, equals(5));
     });
 
-    test('должен возвращать null при получении несуществующих учетных данных', () async {
-      // Act
-      final nonExistent = await repository.getCredentialById('non-existent');
+    test(
+      'должен возвращать null при получении несуществующих учетных данных',
+      () async {
+        // Act
+        final nonExistent = await repository.getCredentialById('non-existent');
 
-      // Assert
-      expect(nonExistent, isNull);
-    });
+        // Assert
+        expect(nonExistent, isNull);
+      },
+    );
 
     test(
       'должен возвращать пустой список при получении учетных данных несуществующего пользователя',

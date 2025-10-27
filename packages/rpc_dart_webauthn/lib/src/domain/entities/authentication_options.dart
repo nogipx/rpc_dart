@@ -17,8 +17,9 @@ class AuthenticationOptions implements IRpcSerializable {
 
   factory AuthenticationOptions.fromJson(Map<String, dynamic> json) {
     final dynamic credsRaw = json['publicKey']['allowCredentials'];
-    final List<Map<String, dynamic>> allowCredentials =
-        credsRaw is List ? credsRaw.map((item) => item as Map<String, dynamic>).toList() : [];
+    final List<Map<String, dynamic>> allowCredentials = credsRaw is List
+        ? credsRaw.map((item) => item as Map<String, dynamic>).toList()
+        : [];
 
     return AuthenticationOptions(
       challenge: WebAuthnSafeBase64.decode(json['publicKey']['challenge']),
@@ -44,7 +45,8 @@ class AuthenticationOptions implements IRpcSerializable {
   }
 
   /// RPC Codec для сериализации/десериализации
-  static RpcCodec<AuthenticationOptions> get codec => RpcCodec(AuthenticationOptions.fromJson);
+  static RpcCodec<AuthenticationOptions> get codec =>
+      RpcCodec(AuthenticationOptions.fromJson);
 
   AuthenticationOptions copyWith({
     List<int>? challenge,

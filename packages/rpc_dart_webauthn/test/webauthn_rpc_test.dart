@@ -35,7 +35,7 @@ class SimpleTestVectorAdapter {
     final clientData = {
       'type': 'webauthn.create',
       'challenge': base64Url.encode(actualChallenge),
-      'origin': origin ?? 'https://example.com'
+      'origin': origin ?? 'https://example.com',
     };
     final clientDataJSON = utf8.encode(json.encode(clientData));
 
@@ -50,7 +50,7 @@ class SimpleTestVectorAdapter {
     // Длина credential ID (2 bytes big-endian)
     final credIdLength = [
       (credentialId.length >> 8) & 0xFF,
-      credentialId.length & 0xFF
+      credentialId.length & 0xFF,
     ];
 
     // Простой COSE public key для ES256
@@ -83,10 +83,12 @@ class SimpleTestVectorAdapter {
     // Создаем простой attestationObject с правильными CBOR типами
     final cborMap = <cbor_lib.CborValue, cbor_lib.CborValue>{
       cbor_lib.CborString('fmt'): cbor_lib.CborString('none'),
-      cbor_lib.CborString('authData'):
-          cbor_lib.CborBytes(Uint8List.fromList(authData)),
-      cbor_lib.CborString('attStmt'):
-          cbor_lib.CborMap(<cbor_lib.CborValue, cbor_lib.CborValue>{}),
+      cbor_lib.CborString('authData'): cbor_lib.CborBytes(
+        Uint8List.fromList(authData),
+      ),
+      cbor_lib.CborString('attStmt'): cbor_lib.CborMap(
+        <cbor_lib.CborValue, cbor_lib.CborValue>{},
+      ),
     };
     final attestationObjectMap = cbor_lib.CborMap(cborMap);
 
@@ -131,15 +133,16 @@ void main() {
     group('Интеграционные тесты регистрации', () {
       test('1.1 Полный цикл регистрации с реальным респондером', () async {
         // Начинаем регистрацию через РЕАЛЬНЫЙ WebAuthnResponder
-        final startParams = StartRegistrationParams(
-          userId: 'testuser',
-        );
+        final startParams = StartRegistrationParams(userId: 'testuser');
 
         final startResult = await webAuthnCaller.startRegistration(startParams);
         expect(startResult.options, isNotNull);
         expect(startResult.error, isNull);
-        expect(startResult.options!.challenge.length, equals(32),
-            reason: 'Challenge должен быть 32 байта');
+        expect(
+          startResult.options!.challenge.length,
+          equals(32),
+          reason: 'Challenge должен быть 32 байта',
+        );
         expect(startResult.options!.rpId, equals('example.com'));
         expect(startResult.options!.rpName, equals('Example Corp'));
         expect(startResult.options!.userId, equals('testuser'));
@@ -160,8 +163,9 @@ void main() {
           origin: 'https://example.com',
         );
 
-        final finishResult =
-            await webAuthnCaller.finishRegistration(finishParams);
+        final finishResult = await webAuthnCaller.finishRegistration(
+          finishParams,
+        );
 
         // Debug output
         print('🔍 finishResult.success = ${finishResult.success}');
@@ -172,8 +176,11 @@ void main() {
         }
         print('🔍 finishResult.credential = ${finishResult.credential}');
 
-        expect(finishResult.success, isTrue,
-            reason: 'Регистрация должна пройти через реальный респондер');
+        expect(
+          finishResult.success,
+          isTrue,
+          reason: 'Регистрация должна пройти через реальный респондер',
+        );
         expect(finishResult.credential, isNotNull);
         expect(finishResult.credential!.userId, equals('testuser'));
         expect(finishResult.credential!.createdAt, isNotNull);
@@ -184,17 +191,18 @@ void main() {
         // Проверяем, что credential действительно сохранился в репозитории
         final savedCredentials = await domainResult.webAuthnRepository
             .getCredentialsByUserId('testuser');
-        expect(savedCredentials, isNotEmpty,
-            reason: 'Credential должен быть сохранен в реальном репозитории');
+        expect(
+          savedCredentials,
+          isNotEmpty,
+          reason: 'Credential должен быть сохранен в реальном репозитории',
+        );
         expect(savedCredentials.first.userId, equals('testuser'));
 
         print('✅ Credential сохранен в реальном репозитории');
       });
 
       test('1.2 Регистрация с некорректными данными должна падать', () async {
-        final startParams = StartRegistrationParams(
-          userId: 'testuser',
-        );
+        final startParams = StartRegistrationParams(userId: 'testuser');
 
         final startResult = await webAuthnCaller.startRegistration(startParams);
         expect(startResult.options, isNotNull);
@@ -203,10 +211,13 @@ void main() {
         final badCredential = WebAuthnRegistrationCredential(
           id: 'invalid-id',
           response: WebAuthnRegistrationResponse(
-            clientDataJSON:
-                Uint8List.fromList(utf8.encode('{"invalid": "json"}')),
-            attestationObject:
-                Uint8List.fromList([0xFF, 0xFF]), // некорректный CBOR
+            clientDataJSON: Uint8List.fromList(
+              utf8.encode('{"invalid": "json"}'),
+            ),
+            attestationObject: Uint8List.fromList([
+              0xFF,
+              0xFF,
+            ]), // некорректный CBOR
           ),
           type: 'public-key',
         );
@@ -217,11 +228,15 @@ void main() {
           origin: 'https://example.com',
         );
 
-        final finishResult =
-            await webAuthnCaller.finishRegistration(finishParams);
-        expect(finishResult.success, isFalse,
-            reason:
-                'Регистрация с некорректными данными должна падать в реальном респондере');
+        final finishResult = await webAuthnCaller.finishRegistration(
+          finishParams,
+        );
+        expect(
+          finishResult.success,
+          isFalse,
+          reason:
+              'Регистрация с некорректными данными должна падать в реальном респондере',
+        );
         expect(finishResult.error, isNotNull);
 
         print('✅ Некорректные данные правильно отклонены реальным респондером');
@@ -231,12 +246,11 @@ void main() {
     group('Интеграционные тесты аутентификации', () {
       test('2.1 Полный цикл аутентификации после регистрации', () async {
         // Сначала регистрируемся через реальный респондер
-        final startRegParams = StartRegistrationParams(
-          userId: 'authuser',
-        );
+        final startRegParams = StartRegistrationParams(userId: 'authuser');
 
-        final startRegResult =
-            await webAuthnCaller.startRegistration(startRegParams);
+        final startRegResult = await webAuthnCaller.startRegistration(
+          startRegParams,
+        );
         expect(startRegResult.options, isNotNull);
 
         final credential = SimpleTestVectorAdapter.createSimpleCredential(
@@ -250,19 +264,19 @@ void main() {
           origin: 'https://example.com',
         );
 
-        final regResult =
-            await webAuthnCaller.finishRegistration(finishRegParams);
+        final regResult = await webAuthnCaller.finishRegistration(
+          finishRegParams,
+        );
         expect(regResult.success, isTrue);
 
         print('✅ Регистрация для аутентификации завершена');
 
         // Теперь аутентифицируемся через реальный респондер
-        final startAuthParams = StartAuthenticationParams(
-          userId: 'authuser',
-        );
+        final startAuthParams = StartAuthenticationParams(userId: 'authuser');
 
-        final startAuthResult =
-            await webAuthnCaller.startAuthentication(startAuthParams);
+        final startAuthResult = await webAuthnCaller.startAuthentication(
+          startAuthParams,
+        );
         expect(startAuthResult.options, isNotNull);
         expect(startAuthResult.error, isNull);
         expect(startAuthResult.options!.challenge.length, equals(32));
@@ -271,10 +285,13 @@ void main() {
         print('✅ StartAuthentication работает через реальный RPC');
 
         // Проверяем, что challenge сохранился в реальном репозитории
-        final savedChallenge =
-            await domainResult.challengeRepository.getChallenge('authuser');
-        expect(savedChallenge, isNotNull,
-            reason: 'Challenge должен быть сохранен в реальном репозитории');
+        final savedChallenge = await domainResult.challengeRepository
+            .getChallenge('authuser');
+        expect(
+          savedChallenge,
+          isNotNull,
+          reason: 'Challenge должен быть сохранен в реальном репозитории',
+        );
 
         print('✅ Challenge сохранен в реальном репозитории');
       });
@@ -284,8 +301,9 @@ void main() {
       test('3.1 Получение списка учетных данных', () async {
         // Сначала создаем пользователя с учетными данными
         final startRegParams = StartRegistrationParams(userId: 'listuser');
-        final startRegResult =
-            await webAuthnCaller.startRegistration(startRegParams);
+        final startRegResult = await webAuthnCaller.startRegistration(
+          startRegParams,
+        );
         expect(startRegResult.options, isNotNull);
 
         final credential = SimpleTestVectorAdapter.createSimpleCredential(
@@ -298,21 +316,28 @@ void main() {
           origin: 'https://example.com',
         );
 
-        final regResult =
-            await webAuthnCaller.finishRegistration(finishRegParams);
+        final regResult = await webAuthnCaller.finishRegistration(
+          finishRegParams,
+        );
         expect(regResult.success, isTrue);
 
         // Теперь получаем список через реальный респондер (БЕЗ авторизации для простоты)
         final getCredsParams = GetCredentialsParams(userId: 'listuser');
 
         // Здесь мы ожидаем ошибку авторизации, так как не передаем токен
-        final credsResponse =
-            await webAuthnCaller.getCredentials(getCredsParams);
-        expect(credsResponse.success, isFalse,
-            reason:
-                'Запрос без авторизации должен падать в реальном респондере');
-        expect(credsResponse.errorMessage, contains('авторизации'),
-            reason: 'Ошибка должна быть связана с авторизацией');
+        final credsResponse = await webAuthnCaller.getCredentials(
+          getCredsParams,
+        );
+        expect(
+          credsResponse.success,
+          isFalse,
+          reason: 'Запрос без авторизации должен падать в реальном респондере',
+        );
+        expect(
+          credsResponse.errorMessage,
+          contains('авторизации'),
+          reason: 'Ошибка должна быть связана с авторизацией',
+        );
 
         print('✅ Проверка авторизации работает в реальном респондере');
       });
@@ -323,14 +348,16 @@ void main() {
         const userCount = 3; // Уменьшаем для быстроты тестов
 
         for (int i = 0; i < userCount; i++) {
-          final startParams = StartRegistrationParams(
-            userId: 'stress_user_$i',
-          );
+          final startParams = StartRegistrationParams(userId: 'stress_user_$i');
 
-          final startResult =
-              await webAuthnCaller.startRegistration(startParams);
-          expect(startResult.options, isNotNull,
-              reason: 'Challenge должен быть сгенерирован для stress_user_$i');
+          final startResult = await webAuthnCaller.startRegistration(
+            startParams,
+          );
+          expect(
+            startResult.options,
+            isNotNull,
+            reason: 'Challenge должен быть сгенерирован для stress_user_$i',
+          );
 
           final credential = SimpleTestVectorAdapter.createSimpleCredential(
             challenge: startResult.options!.challenge,
@@ -342,28 +369,36 @@ void main() {
             origin: 'https://example.com',
           );
 
-          final finishResult =
-              await webAuthnCaller.finishRegistration(finishParams);
+          final finishResult = await webAuthnCaller.finishRegistration(
+            finishParams,
+          );
 
           // Debug output
           print(
-              '🔍 stress_user_$i finishResult.success = ${finishResult.success}');
+            '🔍 stress_user_$i finishResult.success = ${finishResult.success}',
+          );
           if (!finishResult.success) {
             print('🔍 stress_user_$i error = ${finishResult.error}');
           }
 
-          expect(finishResult.success, isTrue,
-              reason:
-                  'Регистрация stress_user_$i должна пройти в реальном домене');
+          expect(
+            finishResult.success,
+            isTrue,
+            reason:
+                'Регистрация stress_user_$i должна пройти в реальном домене',
+          );
         }
 
         // Проверяем, что все пользователи сохранились в реальном репозитории
         for (int i = 0; i < userCount; i++) {
           final credentials = await domainResult.webAuthnRepository
               .getCredentialsByUserId('stress_user_$i');
-          expect(credentials, isNotEmpty,
-              reason:
-                  'Пользователь stress_user_$i должен быть в реальном репозитории');
+          expect(
+            credentials,
+            isNotEmpty,
+            reason:
+                'Пользователь stress_user_$i должен быть в реальном репозитории',
+          );
         }
 
         print('✅ Множественные регистрации работают в реальном домене');
@@ -378,8 +413,9 @@ void main() {
               userId: 'parallel_user_$i',
             );
 
-            final startResult =
-                await webAuthnCaller.startRegistration(startParams);
+            final startResult = await webAuthnCaller.startRegistration(
+              startParams,
+            );
             expect(startResult.options, isNotNull);
 
             final credential = SimpleTestVectorAdapter.createSimpleCredential(
@@ -398,9 +434,12 @@ void main() {
 
         final results = await Future.wait(futures);
         for (final result in results) {
-          expect(result.success, isTrue,
-              reason:
-                  'Параллельная регистрация должна работать в реальном домене');
+          expect(
+            result.success,
+            isTrue,
+            reason:
+                'Параллельная регистрация должна работать в реальном домене',
+          );
         }
 
         print('✅ Параллельные операции работают в реальном домене');
@@ -416,27 +455,40 @@ void main() {
 
         final result = await webAuthnCaller.startRegistration(complexParams);
         expect(result.options, isNotNull);
-        expect(result.options!.userId,
-            equals('serialization_test_пользователь_с_unicode_🚀'),
-            reason: 'Unicode символы должны корректно передаваться через RPC');
+        expect(
+          result.options!.userId,
+          equals('serialization_test_пользователь_с_unicode_🚀'),
+          reason: 'Unicode символы должны корректно передаваться через RPC',
+        );
 
         print('✅ RPC сериализация работает с unicode');
       });
 
       test('5.2 Проверка RPC endpoint health', () async {
         // Проверяем, что endpoints активны
-        expect(domainResult.clientEndpoint.isActive, isTrue,
-            reason: 'Client endpoint должен быть активен');
-        expect(domainResult.serverEndpoint.isActive, isTrue,
-            reason: 'Server endpoint должен быть активен');
+        expect(
+          domainResult.clientEndpoint.isActive,
+          isTrue,
+          reason: 'Client endpoint должен быть активен',
+        );
+        expect(
+          domainResult.serverEndpoint.isActive,
+          isTrue,
+          reason: 'Server endpoint должен быть активен',
+        );
 
         // Делаем простой вызов для проверки соединения
-        final healthCheckParams =
-            StartRegistrationParams(userId: 'health_check');
-        final result =
-            await webAuthnCaller.startRegistration(healthCheckParams);
-        expect(result.options, isNotNull,
-            reason: 'Health check через RPC должен работать');
+        final healthCheckParams = StartRegistrationParams(
+          userId: 'health_check',
+        );
+        final result = await webAuthnCaller.startRegistration(
+          healthCheckParams,
+        );
+        expect(
+          result.options,
+          isNotNull,
+          reason: 'Health check через RPC должен работать',
+        );
 
         print('✅ RPC endpoints работают корректно');
       });

@@ -20,7 +20,9 @@ class NoneVerifier implements AttestationVerifier {
 
       return AttestationResult.success(attestationType: 'None');
     } catch (e) {
-      return AttestationResult.failure('Ошибка проверки None attestation: ${e.toString()}');
+      return AttestationResult.failure(
+        'Ошибка проверки None attestation: ${e.toString()}',
+      );
     }
   }
 

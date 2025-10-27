@@ -2,13 +2,16 @@ part of '_index.dart';
 
 /// Параметры для отзыва сессии
 @freezed
-abstract class RevokeSessionParams with _$RevokeSessionParams implements IRpcSerializable {
+abstract class RevokeSessionParams
+    with _$RevokeSessionParams
+    implements IRpcSerializable {
   const factory RevokeSessionParams({
     required String sessionId,
     String? reason,
   }) = _RevokeSessionParams;
 
-  static IRpcCodec<RevokeSessionParams> get codec => RpcCodec(RevokeSessionParams.fromJson);
+  static IRpcCodec<RevokeSessionParams> get codec =>
+      RpcCodec(RevokeSessionParams.fromJson);
 
   factory RevokeSessionParams.fromJson(Map<String, dynamic> json) =>
       _$RevokeSessionParamsFromJson(json);
@@ -16,13 +19,16 @@ abstract class RevokeSessionParams with _$RevokeSessionParams implements IRpcSer
 
 /// Параметры для отзыва всех сессий пользователя
 @freezed
-abstract class RevokeAllSessionsParams with _$RevokeAllSessionsParams implements IRpcSerializable {
+abstract class RevokeAllSessionsParams
+    with _$RevokeAllSessionsParams
+    implements IRpcSerializable {
   const factory RevokeAllSessionsParams({
     required String userId,
     String? reason,
   }) = _RevokeAllSessionsParams;
 
-  static IRpcCodec<RevokeAllSessionsParams> get codec => RpcCodec(RevokeAllSessionsParams.fromJson);
+  static IRpcCodec<RevokeAllSessionsParams> get codec =>
+      RpcCodec(RevokeAllSessionsParams.fromJson);
 
   factory RevokeAllSessionsParams.fromJson(Map<String, dynamic> json) =>
       _$RevokeAllSessionsParamsFromJson(json);
@@ -30,7 +36,9 @@ abstract class RevokeAllSessionsParams with _$RevokeAllSessionsParams implements
 
 /// Результат отзыва сессий
 @freezed
-abstract class RevokeSessionResult with _$RevokeSessionResult implements IRpcSerializable {
+abstract class RevokeSessionResult
+    with _$RevokeSessionResult
+    implements IRpcSerializable {
   factory RevokeSessionResult._({
     required bool success,
     required int revokedCount,
@@ -38,7 +46,8 @@ abstract class RevokeSessionResult with _$RevokeSessionResult implements IRpcSer
     WebAuthnException? error,
   }) = _RevokeSessionResult;
 
-  static IRpcCodec<RevokeSessionResult> get codec => RpcCodec(RevokeSessionResult.fromJson);
+  static IRpcCodec<RevokeSessionResult> get codec =>
+      RpcCodec(RevokeSessionResult.fromJson);
 
   factory RevokeSessionResult.fromJson(Map<String, dynamic> json) =>
       _$RevokeSessionResultFromJson(json);
@@ -54,7 +63,10 @@ abstract class RevokeSessionResult with _$RevokeSessionResult implements IRpcSer
     );
   }
 
-  factory RevokeSessionResult.failure(String message, [WebAuthnException? error]) {
+  factory RevokeSessionResult.failure(
+    String message, [
+    WebAuthnException? error,
+  ]) {
     return RevokeSessionResult._(
       success: false,
       revokedCount: 0,
@@ -68,9 +80,7 @@ abstract class RevokeSessionResult with _$RevokeSessionResult implements IRpcSer
 class RevokeSessionUseCase {
   final ISessionRepository _sessionRepository;
 
-  RevokeSessionUseCase(
-    this._sessionRepository,
-  );
+  RevokeSessionUseCase(this._sessionRepository);
 
   /// Отзывает конкретную сессию
   Future<RevokeSessionResult> revokeSession(RevokeSessionParams params) async {
@@ -91,15 +101,21 @@ class RevokeSessionUseCase {
     } on WebAuthnException catch (e) {
       return RevokeSessionResult.failure(e.message, e);
     } catch (e) {
-      return RevokeSessionResult.failure('Ошибка отзыва сессии: ${e.toString()}');
+      return RevokeSessionResult.failure(
+        'Ошибка отзыва сессии: ${e.toString()}',
+      );
     }
   }
 
   /// Отзывает все сессии пользователя
-  Future<RevokeSessionResult> revokeAllSessions(RevokeAllSessionsParams params) async {
+  Future<RevokeSessionResult> revokeAllSessions(
+    RevokeAllSessionsParams params,
+  ) async {
     try {
       // 1. Получаем все активные сессии пользователя
-      final activeSessions = await _sessionRepository.getUserActiveSessions(params.userId);
+      final activeSessions = await _sessionRepository.getUserActiveSessions(
+        params.userId,
+      );
 
       if (activeSessions.isEmpty) {
         return RevokeSessionResult.success(
@@ -118,7 +134,9 @@ class RevokeSessionUseCase {
     } on WebAuthnException catch (e) {
       return RevokeSessionResult.failure(e.message, e);
     } catch (e) {
-      return RevokeSessionResult.failure('Ошибка отзыва сессий: ${e.toString()}');
+      return RevokeSessionResult.failure(
+        'Ошибка отзыва сессий: ${e.toString()}',
+      );
     }
   }
 }

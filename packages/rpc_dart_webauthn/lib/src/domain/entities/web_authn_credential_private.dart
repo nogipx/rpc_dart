@@ -10,7 +10,8 @@ part of '_index.dart';
 /// * Хранение учетных данных пользователя в репозитории
 /// * Проверка аутентификации при последующих входах пользователя
 /// * Защита от клонирования через отслеживание счетчика подписи
-class WebAuthnCredentialPrivate extends WebAuthnCredentialPublic implements IRpcSerializable {
+class WebAuthnCredentialPrivate extends WebAuthnCredentialPublic
+    implements IRpcSerializable {
   /// Публичный ключ аутентификатора в бинарном формате
   /// Используется для проверки подписи при аутентификации
   final List<int> publicKey;
@@ -66,11 +67,11 @@ class WebAuthnCredentialPrivate extends WebAuthnCredentialPublic implements IRpc
       RpcCodec(WebAuthnCredentialPrivate.fromJson);
 
   WebAuthnCredentialPublic get public => WebAuthnCredentialPublic(
-        id: id,
-        credentialId: credentialId,
-        userId: userId,
-        createdAt: createdAt,
-      );
+    id: id,
+    credentialId: credentialId,
+    userId: userId,
+    createdAt: createdAt,
+  );
 
   /// Создает копию объекта с обновленными полями
   ///

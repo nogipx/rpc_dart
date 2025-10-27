@@ -21,7 +21,8 @@ abstract class AuthResponse with _$AuthResponse implements IRpcSerializable {
   }) = _AuthResponse;
 
   /// Создает ответ из JSON
-  factory AuthResponse.fromJson(Map<String, dynamic> json) => _$AuthResponseFromJson(json);
+  factory AuthResponse.fromJson(Map<String, dynamic> json) =>
+      _$AuthResponseFromJson(json);
 
   /// RPC Codec для сериализации/десериализации
   static RpcCodec<AuthResponse> get codec => RpcCodec(AuthResponse.fromJson);

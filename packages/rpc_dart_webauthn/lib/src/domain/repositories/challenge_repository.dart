@@ -16,7 +16,11 @@ abstract class IChallengeRepository {
   /// [expiresInSeconds] - время жизни challenge в секундах (опционально)
   ///
   /// Throws [WebAuthnException] в случае ошибки при сохранении
-  Future<void> storeChallenge(String userId, List<int> challenge, {int? expiresInSeconds});
+  Future<void> storeChallenge(
+    String userId,
+    List<int> challenge, {
+    int? expiresInSeconds,
+  });
 
   /// Получение сохраненного challenge
   ///

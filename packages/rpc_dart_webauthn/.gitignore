@@ -1,9 +1,16 @@
-# https://dart.dev/guides/libraries/private-files
-# Created by `dart pub`
 .dart_tool/
+.fvm/
 
-# Avoid committing pubspec.lock for library packages; see
-# https://dart.dev/guides/libraries/private-files#pubspeclock.
+build/
 pubspec.lock
-.dart_tool/
-reports/
+**/examples
+
+coverage/
+.chats/
+
+*.bin
+*.pem
+.vscode/
+.idea/
+.docs/
+*.json

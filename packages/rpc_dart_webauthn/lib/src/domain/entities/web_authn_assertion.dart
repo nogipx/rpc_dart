@@ -3,7 +3,9 @@ part of '_index.dart';
 /// Модель, представляющая параметры утверждения WebAuthn от клиента
 /// Используется в процессе аутентификации
 @freezed
-abstract class WebAuthnAssertion with _$WebAuthnAssertion implements IRpcSerializable {
+abstract class WebAuthnAssertion
+    with _$WebAuthnAssertion
+    implements IRpcSerializable {
   const WebAuthnAssertion._();
 
   const factory WebAuthnAssertion({
@@ -15,7 +17,8 @@ abstract class WebAuthnAssertion with _$WebAuthnAssertion implements IRpcSeriali
       _$WebAuthnAssertionFromJson(json);
 
   /// RPC Codec для сериализации/десериализации
-  static RpcCodec<WebAuthnAssertion> get codec => RpcCodec(WebAuthnAssertion.fromJson);
+  static RpcCodec<WebAuthnAssertion> get codec =>
+      RpcCodec(WebAuthnAssertion.fromJson);
 
   Map<String, dynamic>? get decodedClientData {
     try {

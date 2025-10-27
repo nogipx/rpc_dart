@@ -2,7 +2,9 @@ part of '_index.dart';
 
 /// Модель контента PASETO токена
 @freezed
-abstract class PasetoTokenPayload with _$PasetoTokenPayload implements IRpcSerializable {
+abstract class PasetoTokenPayload
+    with _$PasetoTokenPayload
+    implements IRpcSerializable {
   const factory PasetoTokenPayload({
     /// Идентификатор пользователя
     required String sub,
@@ -28,5 +30,6 @@ abstract class PasetoTokenPayload with _$PasetoTokenPayload implements IRpcSeria
       _$PasetoTokenPayloadFromJson(json);
 
   /// RPC Codec для сериализации/десериализации
-  static RpcCodec<PasetoTokenPayload> get codec => RpcCodec(PasetoTokenPayload.fromJson);
+  static RpcCodec<PasetoTokenPayload> get codec =>
+      RpcCodec(PasetoTokenPayload.fromJson);
 }

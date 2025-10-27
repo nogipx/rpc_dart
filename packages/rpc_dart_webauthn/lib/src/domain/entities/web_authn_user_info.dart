@@ -1,7 +1,9 @@
 part of '_index.dart';
 
 @freezed
-abstract class WebAuthnUserInfo with _$WebAuthnUserInfo implements IRpcSerializable {
+abstract class WebAuthnUserInfo
+    with _$WebAuthnUserInfo
+    implements IRpcSerializable {
   const WebAuthnUserInfo._();
 
   const factory WebAuthnUserInfo({
@@ -10,10 +12,12 @@ abstract class WebAuthnUserInfo with _$WebAuthnUserInfo implements IRpcSerializa
     required WebAuthnException? error,
   }) = _WebAuthnUserInfo;
 
-  factory WebAuthnUserInfo.fromJson(Map<String, dynamic> json) => _$WebAuthnUserInfoFromJson(json);
+  factory WebAuthnUserInfo.fromJson(Map<String, dynamic> json) =>
+      _$WebAuthnUserInfoFromJson(json);
 
   /// RPC Codec для сериализации/десериализации
-  static RpcCodec<WebAuthnUserInfo> get codec => RpcCodec(WebAuthnUserInfo.fromJson);
+  static RpcCodec<WebAuthnUserInfo> get codec =>
+      RpcCodec(WebAuthnUserInfo.fromJson);
 
   factory WebAuthnUserInfo.success(
     List<WebAuthnCredentialPublic> credentials,

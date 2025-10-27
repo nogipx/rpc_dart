@@ -5,12 +5,16 @@ class ProductConfigAndroid {
   final String sha1;
   final String sha256;
 
-  const ProductConfigAndroid({required this.packageName, required this.sha256, this.sha1 = ''});
+  const ProductConfigAndroid({
+    required this.packageName,
+    required this.sha256,
+    this.sha1 = '',
+  });
 
   List<String> get keystoreFingerprints => [
-        if (sha1.isNotEmpty) sha1,
-        if (sha256.isNotEmpty) sha256,
-      ];
+    if (sha1.isNotEmpty) sha1,
+    if (sha256.isNotEmpty) sha256,
+  ];
 
   String get origin {
     String hexString = sha256.replaceAll(':', '');

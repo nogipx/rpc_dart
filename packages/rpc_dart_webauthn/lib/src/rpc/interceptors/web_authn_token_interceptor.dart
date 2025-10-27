@@ -50,28 +50,23 @@ class WebAuthnTokenState {
 typedef WebAuthnTokenProvider = FutureOr<WebAuthnTokenState?> Function();
 
 /// Сохраняет новое состояние токена после refresh.
-typedef WebAuthnTokenSaver = FutureOr<void> Function(
-  WebAuthnTokenState state,
-  AuthResponse response,
-);
+typedef WebAuthnTokenSaver =
+    FutureOr<void> Function(WebAuthnTokenState state, AuthResponse response);
 
 /// Колбэк, вызываемый при ошибке обновления токена.
-typedef WebAuthnRefreshFailureCallback = FutureOr<void> Function(
-  Object error,
-  StackTrace? stackTrace,
-);
+typedef WebAuthnRefreshFailureCallback =
+    FutureOr<void> Function(Object error, StackTrace? stackTrace);
 
 /// Выполняет обновление access-токена через WebAuthn-домен.
-typedef WebAuthnRefreshCallback = Future<AuthResponse?> Function(
-  String expiredToken,
-  RpcMiddlewareContext call,
-);
+typedef WebAuthnRefreshCallback =
+    Future<AuthResponse?> Function(
+      String expiredToken,
+      RpcMiddlewareContext call,
+    );
 
 /// Определяет, нужно ли пытаться обновить токен при ошибке RPC.
-typedef WebAuthnRefreshPredicate = bool Function(
-  RpcMiddlewareContext call,
-  Object error,
-);
+typedef WebAuthnRefreshPredicate =
+    bool Function(RpcMiddlewareContext call, Object error);
 
 /// Формирует значение заголовка Authorization.
 typedef WebAuthnHeaderValueBuilder = String Function(String token);
@@ -91,13 +86,14 @@ class WebAuthnTokenInterceptor extends IRpcInterceptor {
     this.refreshThreshold = const Duration(seconds: 30),
     this.refreshServiceName = IWebAuthnContract.serviceNameConst,
     this.refreshMethodName = IWebAuthnContract.refreshTokenMethod,
-  })  : _tokenProvider = tokenProvider,
-        _refreshCallback = refreshCallback,
-        _onTokenRefreshed = onTokenRefreshed,
-        _onRefreshFailed = onRefreshFailed,
-        _shouldRefreshOnError =
-            shouldRefreshOnError ?? WebAuthnTokenInterceptor._defaultShouldRefresh,
-        _headerValueBuilder = headerValueBuilder ?? _defaultHeaderValueBuilder;
+  }) : _tokenProvider = tokenProvider,
+       _refreshCallback = refreshCallback,
+       _onTokenRefreshed = onTokenRefreshed,
+       _onRefreshFailed = onRefreshFailed,
+       _shouldRefreshOnError =
+           shouldRefreshOnError ??
+           WebAuthnTokenInterceptor._defaultShouldRefresh,
+       _headerValueBuilder = headerValueBuilder ?? _defaultHeaderValueBuilder;
 
   final WebAuthnTokenProvider _tokenProvider;
   final WebAuthnRefreshCallback _refreshCallback;
@@ -118,10 +114,7 @@ class WebAuthnTokenInterceptor extends IRpcInterceptor {
 
   Future<WebAuthnTokenState?>? _ongoingRefresh;
 
-  static bool _defaultShouldRefresh(
-    RpcMiddlewareContext call,
-    Object error,
-  ) {
+  static bool _defaultShouldRefresh(RpcMiddlewareContext call, Object error) {
     final message = error.toString().toLowerCase();
     return message.contains('token') ||
         message.contains('unauth') ||
@@ -217,9 +210,7 @@ class WebAuthnTokenInterceptor extends IRpcInterceptor {
       return next(call.context, request);
     }
 
-    var tokenState = await Future<WebAuthnTokenState?>.value(
-      _tokenProvider(),
-    );
+    var tokenState = await Future<WebAuthnTokenState?>.value(_tokenProvider());
 
     if (tokenState != null) {
       tokenState = await _maybeRefreshToken(tokenState, call);
@@ -237,10 +228,7 @@ class WebAuthnTokenInterceptor extends IRpcInterceptor {
         rethrow;
       }
 
-      final refreshedState = await _refreshToken(
-        tokenState!.accessToken,
-        call,
-      );
+      final refreshedState = await _refreshToken(tokenState!.accessToken, call);
 
       if (refreshedState == null) {
         rethrow;

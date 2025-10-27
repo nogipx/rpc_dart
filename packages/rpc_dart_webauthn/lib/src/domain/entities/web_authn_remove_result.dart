@@ -1,7 +1,9 @@
 part of '_index.dart';
 
 @freezed
-abstract class WebAuthnRemoveResult with _$WebAuthnRemoveResult implements IRpcSerializable {
+abstract class WebAuthnRemoveResult
+    with _$WebAuthnRemoveResult
+    implements IRpcSerializable {
   const WebAuthnRemoveResult._();
 
   const factory WebAuthnRemoveResult({
@@ -13,7 +15,8 @@ abstract class WebAuthnRemoveResult with _$WebAuthnRemoveResult implements IRpcS
       _$WebAuthnRemoveResultFromJson(json);
 
   /// RPC Codec для сериализации/десериализации
-  static RpcCodec<WebAuthnRemoveResult> get codec => RpcCodec(WebAuthnRemoveResult.fromJson);
+  static RpcCodec<WebAuthnRemoveResult> get codec =>
+      RpcCodec(WebAuthnRemoveResult.fromJson);
 
   factory WebAuthnRemoveResult.success() {
     return WebAuthnRemoveResult(success: true, error: null);

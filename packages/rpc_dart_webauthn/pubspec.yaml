@@ -1,32 +1,35 @@
 name: rpc_dart_webauthn
-description: A starting point for Dart libraries or applications.
+description: RPC Webauthn implementation
 version: 1.0.0
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.8.0 <4.0.0'
 
 dependencies:
   paseto_dart: ^2.0.0
   rpc_dart: ^2.3.1
-  rpc_dart_transports: ^1.4.0
+  rpc_dart_transports: ^1.4.2
 
   equatable: ^2.0.7
-  cbor: ^6.3.6
+  cbor: ^6.3.7
   pointycastle: ^4.0.0
-  crypto: ^3.0.3
-  convert: ^3.1.1
-  asn1lib: ^1.5.2
+  crypto: ^3.0.6
+  convert: ^3.1.2
+  asn1lib: ^1.6.5
   x509_plus: ^0.3.3
   uuid: ^4.5.1
-  freezed_annotation: 3.0.0
+  freezed_annotation: ^3.1.0
   json_annotation: ^4.9.0
   collection: ^1.19.1
   crypto_keys_plus: ^0.5.0
 
 dev_dependencies:
-  build_runner: ^2.4.15
-  json_serializable: ^6.9.5
-  freezed: 3.0.6
-  lints: ^5.0.0
-  test: ^1.24.0
-  mockito: ^5.4.6
+  build_runner: ^2.10.1
+  json_serializable: ^6.11.1
+  freezed: ^3.2.3
+  lints: ^6.0.0
+  test: ^1.26.3
+  mockito: ^5.5.1

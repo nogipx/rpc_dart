@@ -5,7 +5,8 @@ part of '_index.dart';
 abstract class StartAuthenticationParams
     with _$StartAuthenticationParams
     implements IRpcSerializable {
-  const factory StartAuthenticationParams({required String userId}) = _StartAuthenticationParams;
+  const factory StartAuthenticationParams({required String userId}) =
+      _StartAuthenticationParams;
 
   static IRpcCodec<StartAuthenticationParams> get codec =>
       RpcCodec(StartAuthenticationParams.fromJson);
@@ -54,7 +55,9 @@ class StartAuthenticationUseCase {
   }) : _settings = settings;
 
   // Выполнение usecase
-  Future<StartAuthenticationResult> execute(StartAuthenticationParams params) async {
+  Future<StartAuthenticationResult> execute(
+    StartAuthenticationParams params,
+  ) async {
     // 1. Генерация случайного challenge
     final challenge = _generateRandomBytes(32);
 
@@ -66,11 +69,16 @@ class StartAuthenticationUseCase {
     );
 
     // 3. Получение всех учетных данных пользователя
-    final credentials = await _webAuthnRepository.getCredentialsByUserId(params.userId);
+    final credentials = await _webAuthnRepository.getCredentialsByUserId(
+      params.userId,
+    );
 
     if (credentials.isEmpty) {
-      final errorMessage = 'У пользователя нет зарегистрированных учетных данных';
-      return StartAuthenticationResult.failure(WebAuthnException.credential(errorMessage));
+      final errorMessage =
+          'У пользователя нет зарегистрированных учетных данных';
+      return StartAuthenticationResult.failure(
+        WebAuthnException.credential(errorMessage),
+      );
     }
 
     // 4. Формирование списка допустимых учетных данных
@@ -90,7 +98,9 @@ class StartAuthenticationUseCase {
       timeout: _settings.challengeTimeout * 1000, // в миллисекундах
       rpId: _settings.rpId,
       allowCredentials: allowCredentials,
-      userVerification: _settings.requireUserVerification ? 'required' : 'preferred',
+      userVerification: _settings.requireUserVerification
+          ? 'required'
+          : 'preferred',
     );
 
     return StartAuthenticationResult.success(options);

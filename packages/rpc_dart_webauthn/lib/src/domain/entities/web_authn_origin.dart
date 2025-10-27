@@ -96,7 +96,9 @@ class WebAuthnOriginConfig implements IOrigin {
   @override
   bool isValidOrigin(String origin, String platform) {
     final expectedOrigin = getOriginForPlatform(platform);
-    if (expectedOrigin.isEmpty) return true; // Если нет ожидаемого origin, считаем любой валидным
+    if (expectedOrigin.isEmpty) {
+      return true; // Если нет ожидаемого origin, считаем любой валидным
+    }
     return origin == expectedOrigin;
   }
 

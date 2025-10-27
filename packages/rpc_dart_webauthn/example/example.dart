@@ -185,14 +185,22 @@ Future<void> _testWellKnownEndpoints(String host, int port) async {
     }
 
     // Тест Android assetlinks.json
-    final androidRequest = await client.get(host, port, '/.well-known/assetlinks.json');
+    final androidRequest = await client.get(
+      host,
+      port,
+      '/.well-known/assetlinks.json',
+    );
     final androidResponse = await androidRequest.close();
     if (androidResponse.statusCode == 200) {
       print('      ✅ GET /.well-known/assetlinks.json - OK');
     }
 
     // Тест iOS apple-app-site-association
-    final iosRequest = await client.get(host, port, '/.well-known/apple-app-site-association');
+    final iosRequest = await client.get(
+      host,
+      port,
+      '/.well-known/apple-app-site-association',
+    );
     final iosResponse = await iosRequest.close();
     if (iosResponse.statusCode == 200) {
       print('      ✅ GET /.well-known/apple-app-site-association - OK');

@@ -38,7 +38,9 @@ abstract class FinishRegistrationResult
       _$FinishRegistrationResultFromJson(json);
 
   // Фабричный метод для создания успешного результата
-  factory FinishRegistrationResult.success(WebAuthnCredentialPublic credential) {
+  factory FinishRegistrationResult.success(
+    WebAuthnCredentialPublic credential,
+  ) {
     return FinishRegistrationResult(success: true, credential: credential);
   }
 
@@ -61,10 +63,14 @@ class FinishRegistrationUseCase {
   }) : _settings = settings;
 
   // Выполнение usecase
-  Future<FinishRegistrationResult> execute(FinishRegistrationParams params) async {
+  Future<FinishRegistrationResult> execute(
+    FinishRegistrationParams params,
+  ) async {
     try {
       // 1. Проверяем, есть ли challenge и валиден ли он по времени
-      final isValid = await _challengeRepository.isValidTimestamp(params.userId);
+      final isValid = await _challengeRepository.isValidTimestamp(
+        params.userId,
+      );
       if (!isValid) {
         throw WebAuthnException.timeout('Challenge не валиден');
       }
@@ -125,7 +131,9 @@ class FinishRegistrationUseCase {
 
     // 2. Проверяем тип операции
     if (clientData['type'] != 'webauthn.create') {
-      throw WebAuthnException.registration('Неверный тип операции: ${clientData['type']}');
+      throw WebAuthnException.registration(
+        'Неверный тип операции: ${clientData['type']}',
+      );
     }
 
     // 3. Проверяем challenge
@@ -143,7 +151,9 @@ class FinishRegistrationUseCase {
     );
 
     // 5. Хешируем clientDataJSON
-    final clientDataHash = sha256.convert(credential.response.clientDataJSON).bytes;
+    final clientDataHash = sha256
+        .convert(credential.response.clientDataJSON)
+        .bytes;
 
     // 6. Декодируем attestationObject
     final attestationObjectResult = AppCborDecoder.decodeAttestationObject(
@@ -165,17 +175,24 @@ class FinishRegistrationUseCase {
 
     // Проверяем RP ID hash
     final rpIdHash = sha256.convert(utf8.encode(_settings.rpId)).bytes;
-    if (!WebAuthnCryptoUtils.compareBytes(authenticatorData.rpIdHash, rpIdHash)) {
+    if (!WebAuthnCryptoUtils.compareBytes(
+      authenticatorData.rpIdHash,
+      rpIdHash,
+    )) {
       throw WebAuthnException.registration('RP ID hash не соответствует');
     }
 
     // Проверяем обязательные флаги
     if (!authenticatorData.isUserPresent) {
-      throw WebAuthnException.registration('Пользователь не присутствует при создании (UP flag)');
+      throw WebAuthnException.registration(
+        'Пользователь не присутствует при создании (UP flag)',
+      );
     }
 
     if (!authenticatorData.hasAttestedCredentialData) {
-      throw WebAuthnException.registration('Отсутствуют данные об учетных данных (AT flag)');
+      throw WebAuthnException.registration(
+        'Отсутствуют данные об учетных данных (AT flag)',
+      );
     }
 
     // 8. Проверяем аттестационное заявление с помощью соответствующего верификатора
@@ -193,10 +210,14 @@ class FinishRegistrationUseCase {
     }
 
     // 9. Извлекаем credentialId и publicKey
-    final credentialId = WebAuthnSafeBase64.encode(authenticatorData.credentialId!);
+    final credentialId = WebAuthnSafeBase64.encode(
+      authenticatorData.credentialId!,
+    );
 
     // 10. Преобразуем COSE публичный ключ в PEM формат для сохранения
-    final coseKey = AppCborDecoder.decodeCosePublicKey(authenticatorData.credentialPublicKey!);
+    final coseKey = AppCborDecoder.decodeCosePublicKey(
+      authenticatorData.credentialPublicKey!,
+    );
     final publicKeyBytes = WebAuthnCryptoUtils.coseKeyToPem(coseKey);
 
     // 11. Возвращаем успешный результат

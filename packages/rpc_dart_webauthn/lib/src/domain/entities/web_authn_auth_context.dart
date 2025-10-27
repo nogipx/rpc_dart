@@ -2,7 +2,9 @@ part of '_index.dart';
 
 /// Контекст авторизации WebAuthn
 @freezed
-abstract class WebAuthnAuthContext with _$WebAuthnAuthContext implements IRpcSerializable {
+abstract class WebAuthnAuthContext
+    with _$WebAuthnAuthContext
+    implements IRpcSerializable {
   const factory WebAuthnAuthContext({
     /// Идентификатор RP (Relying Party)
     required String rpId,
@@ -34,7 +36,8 @@ abstract class WebAuthnAuthContext with _$WebAuthnAuthContext implements IRpcSer
       _$WebAuthnAuthContextFromJson(json);
 
   /// RPC Codec для сериализации/десериализации
-  static RpcCodec<WebAuthnAuthContext> get codec => RpcCodec(WebAuthnAuthContext.fromJson);
+  static RpcCodec<WebAuthnAuthContext> get codec =>
+      RpcCodec(WebAuthnAuthContext.fromJson);
 }
 
 /// Результат валидации контекста авторизации

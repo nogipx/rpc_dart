@@ -18,7 +18,8 @@ class WebAuthnCryptoUtils {
     // Берем первые 14-15 символов для надежности и делаем mod для гарантии попадания в диапазон int
     var hexValue = digest.toString().substring(0, 14);
     var uniqueId =
-        int.parse(hexValue, radix: 16) % (1 << 53); // Безопасный диапазон для целых чисел
+        int.parse(hexValue, radix: 16) %
+        (1 << 53); // Безопасный диапазон для целых чисел
 
     return uniqueId;
   }
@@ -112,8 +113,12 @@ class WebAuthnCryptoUtils {
       // Старый формат - Map
       keyType = coseKeyInput[1] as int? ?? 0;
       curve = coseKeyInput[-1] as int?;
-      x = coseKeyInput[-2] != null ? (coseKeyInput[-2] as List<dynamic>).cast<int>() : null;
-      y = coseKeyInput[-3] != null ? (coseKeyInput[-3] as List<dynamic>).cast<int>() : null;
+      x = coseKeyInput[-2] != null
+          ? (coseKeyInput[-2] as List<dynamic>).cast<int>()
+          : null;
+      y = coseKeyInput[-3] != null
+          ? (coseKeyInput[-3] as List<dynamic>).cast<int>()
+          : null;
     } else {
       // Новый формат - CosePublicKey объект
       final coseKey = coseKeyInput;
@@ -198,7 +203,7 @@ class WebAuthnCryptoUtils {
     final keyMap = {
       'curve': curveName,
       'x': WebAuthnSafeBase64.encode(xBytes),
-      'y': WebAuthnSafeBase64.encode(yBytes)
+      'y': WebAuthnSafeBase64.encode(yBytes),
     };
 
     return json.encode(keyMap);
@@ -215,8 +220,12 @@ class WebAuthnCryptoUtils {
       final yBase64 = keyMap['y'] as String;
 
       // Преобразуем Base64 в BigInt
-      final x = decodeBigInt(Uint8List.fromList(WebAuthnSafeBase64.decode(xBase64)));
-      final y = decodeBigInt(Uint8List.fromList(WebAuthnSafeBase64.decode(yBase64)));
+      final x = decodeBigInt(
+        Uint8List.fromList(WebAuthnSafeBase64.decode(xBase64)),
+      );
+      final y = decodeBigInt(
+        Uint8List.fromList(WebAuthnSafeBase64.decode(yBase64)),
+      );
 
       // Выбираем кривую по имени
       ECDomainParameters curve;
@@ -356,7 +365,9 @@ class WebAuthnCryptoUtils {
 
     // Проверка на размер для raw формата r||s
     if (rawSignature.length != 64) {
-      throw ArgumentError('WebAuthn подпись должна быть 64 байта (32 для r + 32 для s)');
+      throw ArgumentError(
+        'WebAuthn подпись должна быть 64 байта (32 для r + 32 для s)',
+      );
     }
 
     // Разделяем r и s компоненты

@@ -2,7 +2,9 @@ part of '_index.dart';
 
 // Параметры для usecase
 @freezed
-abstract class StartRegistrationParams with _$StartRegistrationParams implements IRpcSerializable {
+abstract class StartRegistrationParams
+    with _$StartRegistrationParams
+    implements IRpcSerializable {
   const factory StartRegistrationParams({
     required String userId,
     List<int>? userHandle,
@@ -10,7 +12,8 @@ abstract class StartRegistrationParams with _$StartRegistrationParams implements
     String? displayName,
   }) = _StartRegistrationParams;
 
-  static IRpcCodec<StartRegistrationParams> get codec => RpcCodec(StartRegistrationParams.fromJson);
+  static IRpcCodec<StartRegistrationParams> get codec =>
+      RpcCodec(StartRegistrationParams.fromJson);
 
   factory StartRegistrationParams.fromJson(Map<String, dynamic> json) =>
       _$StartRegistrationParamsFromJson(json);
@@ -18,12 +21,17 @@ abstract class StartRegistrationParams with _$StartRegistrationParams implements
 
 // Результат выполнения usecase
 @freezed
-abstract class StartRegistrationResult with _$StartRegistrationResult implements IRpcSerializable {
+abstract class StartRegistrationResult
+    with _$StartRegistrationResult
+    implements IRpcSerializable {
   const StartRegistrationResult._();
-  const factory StartRegistrationResult({RegistrationOptions? options, WebAuthnException? error}) =
-      _StartRegistrationResult;
+  const factory StartRegistrationResult({
+    RegistrationOptions? options,
+    WebAuthnException? error,
+  }) = _StartRegistrationResult;
 
-  static IRpcCodec<StartRegistrationResult> get codec => RpcCodec(StartRegistrationResult.fromJson);
+  static IRpcCodec<StartRegistrationResult> get codec =>
+      RpcCodec(StartRegistrationResult.fromJson);
 
   factory StartRegistrationResult.fromJson(Map<String, dynamic> json) =>
       _$StartRegistrationResultFromJson(json);
@@ -83,8 +91,9 @@ class StartRegistrationUseCase {
         ],
         authenticatorSelection: {
           'authenticatorAttachment': 'platform',
-          'userVerification':
-              _settings.requireUserVerification ? 'required' : 'preferred',
+          'userVerification': _settings.requireUserVerification
+              ? 'required'
+              : 'preferred',
           'requireResidentKey': false,
         },
         timeout: _settings.challengeTimeout * 1000,
