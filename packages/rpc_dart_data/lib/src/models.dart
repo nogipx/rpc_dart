@@ -238,8 +238,8 @@ class CreateCollectionIndexResponse extends Equatable
 
   factory CreateCollectionIndexResponse.fromJson(Map<String, dynamic> json) {
     return CreateCollectionIndexResponse(
-      index:
-          CollectionIndex.fromJson(Map<String, dynamic>.from(json['index'] as Map)),
+      index: CollectionIndex.fromJson(
+          Map<String, dynamic>.from(json['index'] as Map)),
     );
   }
 

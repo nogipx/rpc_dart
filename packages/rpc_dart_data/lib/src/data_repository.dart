@@ -129,10 +129,9 @@ abstract class BaseDataRepository implements DataRepository {
         _idGenerator = idGenerator,
         _journal = changeJournal ?? InMemoryDataChangeJournal(),
         _changeController = StreamController<DataChangeEvent>.broadcast(),
-        _journalMaxEvents =
-            journalMaxEvents != null && journalMaxEvents < 1
-                ? null
-                : journalMaxEvents,
+        _journalMaxEvents = journalMaxEvents != null && journalMaxEvents < 1
+            ? null
+            : journalMaxEvents,
         _journalRetention =
             journalRetention != null && journalRetention.inMicroseconds <= 0
                 ? null
@@ -420,8 +419,8 @@ abstract class BaseDataRepository implements DataRepository {
   @override
   Future<ListRecordsResponse> list(ListRecordsRequest request) async {
     if (storage is AdvancedDataStorageAdapter) {
-      final response =
-          await (storage as AdvancedDataStorageAdapter).queryCollection(request);
+      final response = await (storage as AdvancedDataStorageAdapter)
+          .queryCollection(request);
       if (response != null) {
         return response;
       }
@@ -747,8 +746,8 @@ abstract class BaseDataRepository implements DataRepository {
     SearchRecordsRequest request,
   ) async {
     if (storage is AdvancedDataStorageAdapter) {
-      final response =
-          await (storage as AdvancedDataStorageAdapter).searchCollection(request);
+      final response = await (storage as AdvancedDataStorageAdapter)
+          .searchCollection(request);
       if (response != null) {
         return response;
       }
@@ -895,10 +894,10 @@ abstract class BaseDataRepository implements DataRepository {
       final subscription = _changeController.stream
           .where((event) => event.collection == request.collection)
           .listen(
-        listener.add,
-        onError: listener.addError,
-        onDone: listener.close,
-      );
+            listener.add,
+            onError: listener.addError,
+            onDone: listener.close,
+          );
 
       listener.onCancel = () async {
         await subscription.cancel();
