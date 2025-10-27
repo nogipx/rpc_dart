@@ -1,16 +1,17 @@
 name: rpc_flutter
-description: "A new Flutter package project."
+description: RPC for Flutter
 version: 0.0.1
-publish_to: none
-homepage:
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
-  flutter: ">=3.0.0 <4.0.0"
+  flutter: ">=3.0.0"
 
 dependencies:
   rpc_dart: ^2.3.1
-  rpc_dart_transports: ^1.4.0
+  rpc_dart_transports: ^1.4.2
   flutter_bloc: ^9.1.1
   flutter:
     sdk: flutter

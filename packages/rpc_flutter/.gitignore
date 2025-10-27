@@ -29,3 +29,17 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 /build/
 /coverage/
+.fvm/
+
+build/
+pubspec.lock
+**/examples
+
+coverage/
+.chats/
+
+*.bin
+*.pem
+.vscode/
+.docs/
+*.json
