@@ -436,6 +436,8 @@ class DriftDataStorageAdapter
   final Set<String> _ftsSeededCollections = <String>{};
   bool _ftsReady = false;
   static const int _ftsBatchSize = 200;
+  static const int _sqliteVariableLimit = 999;
+  static const int _recordUpsertArgumentCount = 6;
   static const String _ftsTableName = 'c_global_fts';
   static const int _sqliteInClauseBatchSize = 999;
   bool _indexRegistryReady = false;
@@ -989,6 +991,50 @@ class DriftDataStorageAdapter
       record.createdAt.microsecondsSinceEpoch,
       record.updatedAt.microsecondsSinceEpoch,
     ];
+  }
+
+  static const String _recordUpsertColumnsClause =
+      '(id, tenantId, payload, version, created_at, updated_at)';
+  static const String _recordUpsertValuesClause =
+      '(?, ?, ?, ?, ?, ?)';
+  static const String _recordUpsertConflictClause =
+      ' ON CONFLICT(id) DO UPDATE SET '
+      'tenantId = excluded.tenantId, '
+      'payload = excluded.payload, '
+      'version = excluded.version, '
+      'created_at = excluded.created_at, '
+      'updated_at = excluded.updated_at';
+
+  Future<void> _upsertRecordsIntoTable(
+    String tableName,
+    Iterable<DataRecord> records,
+  ) async {
+    final recordList =
+        records is List<DataRecord> ? records : records.toList(growable: false);
+    if (recordList.isEmpty) {
+      return;
+    }
+    final maxRecordsPerStatement =
+        _sqliteVariableLimit ~/ _recordUpsertArgumentCount;
+    final chunkSize = maxRecordsPerStatement > 0
+        ? maxRecordsPerStatement
+        : recordList.length;
+    for (final chunk in _chunk(recordList, chunkSize)) {
+      final sql = StringBuffer(
+        'INSERT INTO "$tableName" $_recordUpsertColumnsClause VALUES ',
+      );
+      final args = <Object?>[];
+      for (var index = 0; index < chunk.length; index++) {
+        if (index > 0) {
+          sql.write(', ');
+        }
+        sql.write(_recordUpsertValuesClause);
+        args.addAll(_recordToArguments(chunk[index]));
+      }
+      sql.write(_recordUpsertConflictClause);
+      _recordStatement(sql.toString(), args);
+      await _database.customStatement(sql.toString(), args);
+    }
   }
 
   String? _columnForField(String field) {
@@ -2097,17 +2143,7 @@ class DriftDataStorageAdapter
   Future<void> writeRecord(DataRecord record) async {
     final tableName = await _ensureTableForWrite(record.collection);
     await _database.transaction(() async {
-      await _database.customStatement(
-        'INSERT INTO "$tableName" (id, tenantId, payload, version, created_at, updated_at) '
-        'VALUES (?, ?, ?, ?, ?, ?) '
-        'ON CONFLICT(id) DO UPDATE SET '
-        'tenantId = excluded.tenantId, '
-        'payload = excluded.payload, '
-        'version = excluded.version, '
-        'created_at = excluded.created_at, '
-        'updated_at = excluded.updated_at',
-        _recordToArguments(record),
-      );
+      await _upsertRecordsIntoTable(tableName, [record]);
       await _updateFtsIndex(record.collection, tableName, record);
     });
   }
@@ -2137,19 +2173,7 @@ class DriftDataStorageAdapter
         final tableName = tableNames[collection]!;
         final recordsForTable = entry.value;
 
-        for (final record in recordsForTable) {
-          await _database.customStatement(
-            'INSERT INTO "$tableName" (id, tenantId, payload, version, created_at, updated_at) '
-            'VALUES (?, ?, ?, ?, ?, ?) '
-            'ON CONFLICT(id) DO UPDATE SET '
-            'tenantId = excluded.tenantId, '
-            'payload = excluded.payload, '
-            'version = excluded.version, '
-            'created_at = excluded.created_at, '
-            'updated_at = excluded.updated_at',
-            _recordToArguments(record),
-          );
-        }
+        await _upsertRecordsIntoTable(tableName, recordsForTable);
         await _upsertFtsBatch(collection, tableName, recordsForTable);
       }
     });
