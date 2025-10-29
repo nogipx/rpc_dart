@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -16,6 +17,9 @@ typedef SqlStatementObserver = void Function(
   String sql,
   List<Object?> arguments,
 );
+
+/// Callback invoked after the adapter finishes its built-in SQLite setup.
+typedef SqliteSetupHook = FutureOr<void> Function(sqlite.Database database);
 
 import 'change_journal.dart';
 import 'data_contract.dart';
@@ -390,12 +394,19 @@ class DriftDataStorageAdapter
   /// filtering.
   factory DriftDataStorageAdapter.memory({
     bool logStatements = false,
+    SqliteSetupHook? sqliteSetup,
     SqlStatementObserver? statementObserver,
   }) {
     return DriftDataStorageAdapter(
       NativeDatabase.memory(
         logStatements: logStatements,
-        setup: ensureJsonExtractFunction,
+        setup: (sqlite.Database database) async {
+          ensureJsonExtractFunction(database);
+          final hook = sqliteSetup;
+          if (hook != null) {
+            await hook(database);
+          }
+        },
       ),
       isInMemory: true,
       statementObserver: statementObserver,
@@ -407,6 +418,7 @@ class DriftDataStorageAdapter
     File file, {
     bool logStatements = false,
     SqlCipherKey? sqlCipherKey,
+    SqliteSetupHook? sqliteSetup,
     SqlStatementObserver? statementObserver,
   }) {
     file.parent.createSync(recursive: true);
@@ -414,11 +426,15 @@ class DriftDataStorageAdapter
       NativeDatabase(
         file,
         logStatements: logStatements,
-        setup: (sqlite.Database database) {
+        setup: (sqlite.Database database) async {
           if (sqlCipherKey != null) {
             sqlCipherKey.applyTo(database);
           }
           ensureJsonExtractFunction(database);
+          final hook = sqliteSetup;
+          if (hook != null) {
+            await hook(database);
+          }
         },
       ),
       statementObserver: statementObserver,

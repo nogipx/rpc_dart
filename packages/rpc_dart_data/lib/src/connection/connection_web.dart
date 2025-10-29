@@ -15,7 +15,13 @@ Uri _resolveWorkerUri(DriftConnectionOptions options) =>
 /// Opens the persistent database in the browser (OPFS / IndexedDB fallback).
 Future<DatabaseConnection> openMainDb({
   DriftConnectionOptions options = _defaultOptions,
+  SqliteSetupHook? sqliteSetup,
 }) async {
+  if (sqliteSetup != null) {
+    throw UnsupportedError(
+      'Custom SQLite setup is only available on IO platforms.',
+    );
+  }
   final db = await WasmDatabase.open(
     databaseName: options.webDatabaseName,
     sqlite3Uri: _resolveSqliteUri(options),
@@ -27,8 +33,12 @@ Future<DatabaseConnection> openMainDb({
 /// Opens the persistent database and wraps it into a [DriftDataStorageAdapter].
 Future<DriftDataStorageAdapter> openMainStorage({
   DriftConnectionOptions options = _defaultOptions,
+  SqliteSetupHook? sqliteSetup,
 }) async {
-  final connection = await openMainDb(options: options);
+  final connection = await openMainDb(
+    options: options,
+    sqliteSetup: sqliteSetup,
+  );
   final adapter = DriftDataStorageAdapter.connection(connection);
   try {
     await adapter.ensureReady();
@@ -70,7 +80,13 @@ Future<void> replaceMainDbFromBytes(
 Future<DatabaseConnection> openTempDbFromBytes(
   Uint8List bytes, {
   DriftConnectionOptions options = _defaultOptions,
+  SqliteSetupHook? sqliteSetup,
 }) async {
+  if (sqliteSetup != null) {
+    throw UnsupportedError(
+      'Custom SQLite setup is only available on IO platforms.',
+    );
+  }
   final probe = await WasmDatabase.probe(
     sqlite3Uri: _resolveSqliteUri(options),
     driftWorkerUri: _resolveWorkerUri(options),
@@ -88,10 +104,12 @@ Future<DatabaseConnection> openTempDbFromBytes(
 Future<DriftDataStorageAdapter> openTempStorageFromBytes(
   Uint8List bytes, {
   DriftConnectionOptions options = _defaultOptions,
+  SqliteSetupHook? sqliteSetup,
 }) async {
   final connection = await openTempDbFromBytes(
     bytes,
     options: options,
+    sqliteSetup: sqliteSetup,
   );
   return DriftDataStorageAdapter.connection(connection);
 }

@@ -11,6 +11,7 @@ Future<DatabaseConnection> openMainDb({
   DriftConnectionOptions options = DriftConnectionOptions.defaults,
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
+  SqliteSetupHook? sqliteSetup,
 }) async =>
     _unsupported();
 
@@ -18,6 +19,7 @@ Future<DriftDataStorageAdapter> openMainStorage({
   DriftConnectionOptions options = DriftConnectionOptions.defaults,
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
+  SqliteSetupHook? sqliteSetup,
 }) async =>
     _unsupported();
 
@@ -31,6 +33,7 @@ Future<DatabaseConnection> openTempDbFromBytes(
   Uint8List bytes, {
   DriftConnectionOptions options = DriftConnectionOptions.defaults,
   bool logStatements = false,
+  SqliteSetupHook? sqliteSetup,
 }) async =>
     _unsupported();
 
@@ -38,5 +41,6 @@ Future<DriftDataStorageAdapter> openTempStorageFromBytes(
   Uint8List bytes, {
   DriftConnectionOptions options = DriftConnectionOptions.defaults,
   bool logStatements = false,
+  SqliteSetupHook? sqliteSetup,
 }) async =>
     _unsupported();
