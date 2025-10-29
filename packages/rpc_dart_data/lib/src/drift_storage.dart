@@ -1781,12 +1781,12 @@ class DriftDataStorageAdapter
       pattern,
     ];
 
-    final filterConditions = <String>[];
-    final filterValues = <Object>[];
+    final baseFilterConditions = <String>[];
+    final baseFilterValues = <Object>[];
     if (!_translateFilter(
       request.filter,
-      filterConditions,
-      filterValues,
+      baseFilterConditions,
+      baseFilterValues,
       tableAlias: baseAlias,
     )) {
       throw RpcDataError.invalidArgument(
@@ -1794,6 +1794,8 @@ class DriftDataStorageAdapter
       );
     }
 
+    final queryFilterConditions = List<String>.from(baseFilterConditions);
+    final queryFilterValues = List<Object>.from(baseFilterValues);
     final cursor = request.options.cursor;
     if (cursor != null) {
       final exists = await _cursorExists(tableName, cursor);
@@ -1802,15 +1804,18 @@ class DriftDataStorageAdapter
           'Cursor $cursor is not valid for ${request.collection}',
         );
       }
-      filterConditions.add(
+      queryFilterConditions.add(
         '${_qualifiedColumn('id', tableAlias: baseAlias)} > ?',
       );
-      filterValues.add(cursor);
+      queryFilterValues.add(cursor);
     }
 
-    final whereClause = filterConditions.isEmpty
+    final queryWhereClause = queryFilterConditions.isEmpty
         ? ''
-        : 'WHERE ${filterConditions.join(' AND ')}';
+        : 'WHERE ${queryFilterConditions.join(' AND ')}';
+    final countWhereClause = baseFilterConditions.isEmpty
+        ? ''
+        : 'WHERE ${baseFilterConditions.join(' AND ')}';
 
     final fetchLimit = request.options.limit + 1;
     final querySql = StringBuffer(
@@ -1821,14 +1826,14 @@ class DriftDataStorageAdapter
       '$baseAlias.version, $baseAlias.created_at, $baseAlias.updated_at '
       'FROM "$tableName" $baseAlias '
       'JOIN fts_hits fts ON fts.id = $baseAlias.id '
-      '$whereClause '
+      '$queryWhereClause '
       'ORDER BY $baseAlias.id ASC '
       'LIMIT ? OFFSET ?',
     );
 
     final queryArgs = <Object>[
       ...ftsArgs,
-      ...filterValues,
+      ...queryFilterValues,
       fetchLimit,
       request.options.offset,
     ];
@@ -1866,11 +1871,11 @@ class DriftDataStorageAdapter
       'SELECT COUNT(*) AS count '
       'FROM "$tableName" $baseAlias '
       'JOIN fts_hits fts ON fts.id = $baseAlias.id '
-      '$whereClause',
+      '$countWhereClause',
     );
     final countArgs = <Object>[
       ...ftsArgs,
-      ...filterValues,
+      ...baseFilterValues,
     ];
     _recordStatement(countSql.toString(), countArgs);
     QueryRow countRow;
