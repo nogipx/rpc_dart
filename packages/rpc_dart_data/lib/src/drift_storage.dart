@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:licensify/licensify.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 /// Callback invoked whenever the adapter executes a SQL statement.
@@ -2265,11 +2266,17 @@ class DriftDataStorageAdapter
 }
 
 class DriftDataChangeJournal implements DataChangeJournal {
-  DriftDataChangeJournal(this._database, {bool clearOnOpen = false})
-      : _clearOnOpen = clearOnOpen;
+  DriftDataChangeJournal(
+    this._database, {
+    bool clearOnOpen = false,
+    RpcLogger? logger,
+  })  : _clearOnOpen = clearOnOpen,
+        _logger = (logger ?? RpcLogger('DriftDataChangeJournal'))
+            .child('Replay');
 
   final DriftDataDatabase _database;
   final bool _clearOnOpen;
+  final RpcLogger _logger;
   bool _tableReady = false;
   bool _clearedOnOpen = false;
 
@@ -2432,11 +2439,13 @@ class DriftDataChangeJournal implements DataChangeJournal {
         .customSelect(query.toString(), variables: variables)
         .get();
     final events = rows.map(_mapRow).toList(growable: false);
-    // DEBUG
     for (final event in events) {
-      // ignore: avoid_print
-      print('replay event: collection='
-          '${event.collection} id=${event.id} cursor=${event.cursor}');
+      await _logger.debug(
+        'Replaying change event '
+        'collection=${event.collection} '
+        'id=${event.id} '
+        'cursor=${event.cursor}',
+      );
     }
     return events;
   }
