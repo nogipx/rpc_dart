@@ -1030,7 +1030,7 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
       ExportDatabaseResponse(
         payload: json['payload'] as String,
         generatedAt: DateTime.parse(json['generatedAt'] as String),
-        formatVersion: json['formatVersion'] as String? ?? '1.0.0',
+        formatVersion: json['formatVersion'] as String? ?? '2.0.0',
         collectionCount: json['collectionCount'] as int? ?? 0,
         recordCount: json['recordCount'] as int? ?? 0,
       );

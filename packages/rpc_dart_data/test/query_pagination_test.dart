@@ -74,6 +74,17 @@ class _ThrowingAdapter implements DataStorageAdapter {
   }
 
   @override
+  Stream<List<DataRecord>> readCollectionChunks(
+    String collection, {
+    int chunkSize = BaseDataRepository.databaseExportChunkSize,
+  }) {
+    return _delegate.readCollectionChunks(
+      collection,
+      chunkSize: chunkSize,
+    );
+  }
+
+  @override
   Future<void> writeRecord(DataRecord record) {
     return _delegate.writeRecord(record);
   }

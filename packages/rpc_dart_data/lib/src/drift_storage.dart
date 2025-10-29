@@ -1655,6 +1655,42 @@ class DriftDataStorageAdapter
     return rows.map((row) => _mapRow(collection, row)).toList(growable: false);
   }
 
+  @override
+  Stream<List<DataRecord>> readCollectionChunks(
+    String collection, {
+    int chunkSize = BaseDataRepository.databaseExportChunkSize,
+  }) async* {
+    final tableName = await _ensureTableForRead(collection);
+    if (tableName == null) {
+      return;
+    }
+    final effectiveChunkSize =
+        chunkSize <= 0 ? BaseDataRepository.databaseExportChunkSize : chunkSize;
+    var offset = 0;
+    while (true) {
+      final rows = await _database
+          .customSelect(
+            'SELECT id, tenantId, payload, version, created_at, updated_at '
+            'FROM "$tableName" ORDER BY id LIMIT ? OFFSET ?',
+            variables: [
+              Variable<int>(effectiveChunkSize),
+              Variable<int>(offset),
+            ],
+          )
+          .get();
+      if (rows.isEmpty) {
+        break;
+      }
+      yield rows
+          .map((row) => _mapRow(collection, row))
+          .toList(growable: false);
+      offset += rows.length;
+      if (rows.length < effectiveChunkSize) {
+        break;
+      }
+    }
+  }
+
   Future<bool> _cursorExists(String tableName, String cursor) async {
     final exists = await _database.customSelect(
       'SELECT 1 FROM "$tableName" WHERE id = ? LIMIT 1',
