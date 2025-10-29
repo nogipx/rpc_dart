@@ -1603,6 +1603,39 @@ class DriftDataStorageAdapter
   }
 
   @override
+  Future<Map<String, DataRecord>> readRecords(
+    String collection,
+    Iterable<String> ids,
+  ) async {
+    final uniqueIds = ids.toSet();
+    if (uniqueIds.isEmpty) {
+      return const <String, DataRecord>{};
+    }
+
+    final tableName = await _ensureTableForRead(collection);
+    if (tableName == null) {
+      return const <String, DataRecord>{};
+    }
+
+    final placeholders = List.filled(uniqueIds.length, '?').join(', ');
+    final rows = await _database
+        .customSelect(
+          'SELECT id, tenantId, payload, version, created_at, updated_at '
+          'FROM "$tableName" WHERE id IN ($placeholders)',
+          variables:
+              uniqueIds.map((id) => Variable<String>(id)).toList(growable: false),
+        )
+        .get();
+
+    final result = <String, DataRecord>{};
+    for (final row in rows) {
+      final record = _mapRow(collection, row);
+      result[record.id] = record;
+    }
+    return result;
+  }
+
+  @override
   Future<List<DataRecord>> readCollection(
     String collection,
   ) async {

@@ -445,6 +445,118 @@ void main() {
     expect(storedUpdated.payload['status'], 'synced');
   });
 
+  test('bulk upsert processes multiple identifiers per request', () async {
+    final storage = DriftDataStorageAdapter.file(dbFile);
+    final repository = DriftDataRepository(storage: storage);
+    final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => repository.storage.dispose());
+    addTearDown(() async => env.dispose());
+
+    final ctx = buildContext();
+    final created = await env.client.create(
+      collection: 'notes',
+      payload: {'title': 'Original'},
+      context: ctx,
+    );
+    final existingTask = await env.client.create(
+      collection: 'tasks',
+      payload: {'title': 'First task'},
+      context: ctx,
+    );
+
+    final newNote = DataRecord(
+      id: 'imported-note',
+      collection: 'notes',
+      payload: const {'title': 'Imported'},
+      version: 1,
+      createdAt: DateTime.utc(2024, 1, 10, 12),
+      updatedAt: DateTime.utc(2024, 1, 10, 12),
+    );
+    final updatedNote = DataRecord(
+      id: created.id,
+      collection: created.collection,
+      payload: const {'title': 'Original', 'status': 'synced'},
+      version: created.version + 1,
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt.add(const Duration(hours: 1)),
+    );
+    final updatedTask = DataRecord(
+      id: existingTask.id,
+      collection: existingTask.collection,
+      payload: const {'title': 'First task', 'done': true},
+      version: existingTask.version + 1,
+      createdAt: existingTask.createdAt,
+      updatedAt: existingTask.updatedAt.add(const Duration(hours: 2)),
+    );
+
+    final upserted = await env.client.bulkUpsert(
+      records: [newNote, updatedNote, updatedTask],
+      context: ctx,
+    );
+
+    expect(upserted, hasLength(3));
+    expect(upserted.map((e) => e.id), containsAll([newNote.id, updatedNote.id, updatedTask.id]));
+
+    final fetchedNew = await env.client.get(
+      collection: 'notes',
+      id: newNote.id,
+      context: ctx,
+    );
+    expect(fetchedNew, isNotNull);
+    expect(fetchedNew!.payload['title'], 'Imported');
+
+    final fetchedNote = await env.client.get(
+      collection: created.collection,
+      id: created.id,
+      context: ctx,
+    );
+    expect(fetchedNote!.version, created.version + 1);
+    expect(fetchedNote.payload['status'], 'synced');
+
+    final fetchedTask = await env.client.get(
+      collection: existingTask.collection,
+      id: existingTask.id,
+      context: ctx,
+    );
+    expect(fetchedTask!.version, existingTask.version + 1);
+    expect(fetchedTask.payload['done'], isTrue);
+  });
+
+  test('bulk delete removes all provided identifiers', () async {
+    final storage = DriftDataStorageAdapter.file(dbFile);
+    final repository = DriftDataRepository(storage: storage);
+    final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => repository.storage.dispose());
+    addTearDown(() async => env.dispose());
+
+    final ctx = buildContext();
+    final created = <DataRecord>[];
+    for (var i = 0; i < 3; i++) {
+      created.add(
+        await env.client.create(
+          collection: 'notes',
+          payload: {'title': 'Note $i'},
+          context: ctx,
+        ),
+      );
+    }
+
+    final removed = await env.client.bulkDelete(
+      collection: 'notes',
+      ids: [created[0].id, created[1].id],
+      context: ctx,
+    );
+
+    expect(removed, 2);
+
+    final remaining = await env.client.list(
+      collection: 'notes',
+      context: ctx,
+    );
+
+    expect(remaining.records.map((e) => e.id).toList(), [created[2].id]);
+  });
+
   test('deleteCollection drops tables and registry entries', () async {
     final storage = DriftDataStorageAdapter.file(dbFile);
     final repository = DriftDataRepository(storage: storage);
