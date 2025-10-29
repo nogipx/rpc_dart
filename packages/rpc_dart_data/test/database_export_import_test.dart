@@ -262,5 +262,88 @@ void main() {
       await streamingRepo.dispose();
       await legacyRepo.dispose();
     });
+
+    test('streaming import handles large dumps without linear memory growth',
+        () async {
+      final trackingStorage = _TrackingInMemoryAdapter();
+      final repository = InMemoryDataRepository(storage: trackingStorage);
+      final collections = 3;
+      final recordsPerCollection =
+          BaseDataRepository.databaseImportBatchSize * 8;
+      final expectedFlushesPerCollection =
+          (recordsPerCollection / BaseDataRepository.databaseImportBatchSize)
+              .ceil();
+      final now = DateTime.utc(2024, 1, 1);
+      final buffer = StringBuffer();
+
+      buffer.writeln(
+        jsonEncode({
+          'type': 'header',
+          'formatVersion': '2.0.0',
+        }),
+      );
+
+      var totalRecords = 0;
+      for (var collectionIndex = 0; collectionIndex < collections; collectionIndex++) {
+        final collectionName = 'collection-$collectionIndex';
+        buffer.writeln(
+          jsonEncode({
+            'type': 'collection',
+            'name': collectionName,
+          }),
+        );
+        for (var i = 0; i < recordsPerCollection; i++) {
+          final record = DataRecord(
+            id: 'id-$collectionIndex-$i',
+            collection: collectionName,
+            payload: {'value': i},
+            version: 1,
+            createdAt: now.add(Duration(milliseconds: totalRecords)),
+            updatedAt: now.add(Duration(milliseconds: totalRecords)),
+          );
+          buffer.writeln(
+            jsonEncode({
+              'type': 'record',
+              'data': record.toJson(),
+            }),
+          );
+          totalRecords += 1;
+        }
+        buffer.writeln(jsonEncode({'type': 'collectionEnd'}));
+      }
+
+      buffer.writeln(
+        jsonEncode({
+          'type': 'footer',
+          'collectionCount': collections,
+          'recordCount': totalRecords,
+        }),
+      );
+
+      final response = await repository.importDatabase(
+        ImportDatabaseRequest(
+          payload: buffer.toString(),
+          replaceExisting: true,
+        ),
+      );
+
+      expect(response.collectionCount, collections);
+      expect(response.recordCount, totalRecords);
+
+      expect(trackingStorage.writeBatchSizes, isNotEmpty);
+      expect(
+        trackingStorage.writeBatchSizes.reduce(max),
+        lessThanOrEqualTo(BaseDataRepository.databaseImportBatchSize),
+      );
+      expect(
+        trackingStorage.writeBatchSizes.length,
+        greaterThanOrEqualTo(collections * expectedFlushesPerCollection),
+      );
+      final totalWritten = trackingStorage.writeBatchSizes
+          .fold<int>(0, (sum, batch) => sum + batch);
+      expect(totalWritten, totalRecords);
+
+      await repository.dispose();
+    });
   });
 }

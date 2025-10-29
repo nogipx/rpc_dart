@@ -357,7 +357,73 @@ abstract class BaseDataRepository implements DataRepository {
       }
     }
 
-    void validateSnapshot(List<String> lines) {
+    enum _SnapshotEntryType {
+      header,
+      collection,
+      record,
+      collectionEnd,
+      footer,
+    }
+
+    class _SnapshotParsedEntry {
+      _SnapshotParsedEntry.header()
+          : type = _SnapshotEntryType.header,
+            collection = null,
+            record = null,
+            declaredCollectionCount = null,
+            declaredRecordCount = null;
+
+      _SnapshotParsedEntry.collection(this.collection)
+          : type = _SnapshotEntryType.collection,
+            record = null,
+            declaredCollectionCount = null,
+            declaredRecordCount = null;
+
+      _SnapshotParsedEntry.record(this.record)
+          : type = _SnapshotEntryType.record,
+            collection = record?.collection,
+            declaredCollectionCount = null,
+            declaredRecordCount = null;
+
+      _SnapshotParsedEntry.collectionEnd()
+          : type = _SnapshotEntryType.collectionEnd,
+            collection = null,
+            record = null,
+            declaredCollectionCount = null,
+            declaredRecordCount = null;
+
+      _SnapshotParsedEntry.footer({
+        this.declaredCollectionCount,
+        this.declaredRecordCount,
+      })  : type = _SnapshotEntryType.footer,
+            collection = null,
+            record = null;
+
+      final _SnapshotEntryType type;
+      final String? collection;
+      final DataRecord? record;
+      final int? declaredCollectionCount;
+      final int? declaredRecordCount;
+    }
+
+    class _SnapshotValidationResult {
+      _SnapshotValidationResult({
+        required this.seenCollections,
+        required this.declaredCollectionCount,
+        required this.declaredRecordCount,
+        required this.actualRecordCount,
+      });
+
+      final Set<String> seenCollections;
+      final int? declaredCollectionCount;
+      final int? declaredRecordCount;
+      final int actualRecordCount;
+    }
+
+    Future<_SnapshotValidationResult> validateSnapshot(
+      Stream<String> lines, {
+      required Future<void> Function(_SnapshotParsedEntry entry) onEntry,
+    }) async {
       final seenCollections = <String>{};
       var headerSeen = false;
       var currentCollection = '';
@@ -365,7 +431,12 @@ abstract class BaseDataRepository implements DataRepository {
       int? declaredRecordCount;
       var actualRecordCount = 0;
 
-      for (final line in lines) {
+      await for (final rawLine in lines) {
+        final line = rawLine.trim();
+        if (line.isEmpty) {
+          continue;
+        }
+
         final entry = parseEntry(line);
         final type = entry['type'] as String?;
         if (type == null) {
@@ -389,6 +460,7 @@ abstract class BaseDataRepository implements DataRepository {
                 'Unsupported snapshot format "$formatVersion"',
               );
             }
+            await onEntry(_SnapshotParsedEntry.header());
             break;
           case 'collection':
             if (!headerSeen) {
@@ -415,6 +487,7 @@ abstract class BaseDataRepository implements DataRepository {
               );
             }
             currentCollection = name;
+            await onEntry(_SnapshotParsedEntry.collection(name));
             break;
           case 'record':
             if (!headerSeen) {
@@ -441,6 +514,7 @@ abstract class BaseDataRepository implements DataRepository {
               );
             }
             actualRecordCount += 1;
+            await onEntry(_SnapshotParsedEntry.record(record));
             break;
           case 'collectionEnd':
             if (currentCollection.isEmpty) {
@@ -449,6 +523,7 @@ abstract class BaseDataRepository implements DataRepository {
               );
             }
             currentCollection = '';
+            await onEntry(_SnapshotParsedEntry.collectionEnd());
             break;
           case 'footer':
             final declaredCollections = entry['collectionCount'];
@@ -459,6 +534,12 @@ abstract class BaseDataRepository implements DataRepository {
             if (declaredRecords is int) {
               declaredRecordCount = declaredRecords;
             }
+            await onEntry(
+              _SnapshotParsedEntry.footer(
+                declaredCollectionCount: declaredCollectionCount,
+                declaredRecordCount: declaredRecordCount,
+              ),
+            );
             break;
           default:
             throw RpcDataError.invalidArgument(
@@ -475,42 +556,20 @@ abstract class BaseDataRepository implements DataRepository {
           'Snapshot ended before closing collection "' + currentCollection + '"',
         );
       }
-      if (declaredCollectionCount != null &&
-          declaredCollectionCount != seenCollections.length) {
-        throw RpcDataError.invalidArgument(
-          'Snapshot collection count mismatch: expected ' +
-              declaredCollectionCount.toString() +
-              ', got ' +
-              seenCollections.length.toString(),
-        );
-      }
-      if (declaredRecordCount != null &&
-          declaredRecordCount != actualRecordCount) {
-        throw RpcDataError.invalidArgument(
-          'Snapshot record count mismatch: expected ' +
-              declaredRecordCount.toString() +
-              ', got ' +
-              actualRecordCount.toString(),
-        );
-      }
+
+      return _SnapshotValidationResult(
+        seenCollections: Set<String>.unmodifiable(seenCollections),
+        declaredCollectionCount: declaredCollectionCount,
+        declaredRecordCount: declaredRecordCount,
+        actualRecordCount: actualRecordCount,
+      );
     }
-
-    final lines = LineSplitter.split(payload)
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList(growable: false);
-
-    validateSnapshot(lines);
 
     final existingCollections = await storage.listCollections();
     final remainingCollections = existingCollections.toSet();
-    final seenCollections = <String>{};
     final pending = <DataRecord>[];
     var importedRecords = 0;
-    var headerSeen = false;
     var currentCollection = '';
-    int? declaredCollectionCount;
-    int? declaredRecordCount;
 
     Future<void> flushPending() async {
       if (pending.isEmpty) {
@@ -549,115 +608,34 @@ abstract class BaseDataRepository implements DataRepository {
       await storage.deleteCollection(collection);
     }
 
-    for (final line in lines) {
-      final entry = parseEntry(line);
-      final type = entry['type'] as String?;
-      if (type == null) {
-        throw RpcDataError.invalidArgument(
-          'Snapshot entry is missing a "type" attribute',
-        );
-      }
-
-      switch (type) {
-        case 'header':
-          if (headerSeen) {
-            throw RpcDataError.invalidArgument(
-              'Snapshot contains more than one header entry',
-            );
-          }
-          headerSeen = true;
-          final formatVersion =
-              entry['formatVersion'] as String? ?? _databaseFormatVersion;
-          if (formatVersion != _databaseFormatVersion) {
-            throw RpcDataError.invalidArgument(
-              'Unsupported snapshot format "$formatVersion"',
-            );
-          }
-          break;
-        case 'collection':
-          if (!headerSeen) {
-            throw RpcDataError.invalidArgument(
-              'Snapshot collection encountered before header',
-            );
-          }
-          await flushPending();
-          final name = entry['name'] as String?;
-          if (name == null || name.isEmpty) {
-            throw RpcDataError.invalidArgument(
-              'Snapshot collection entry is missing name',
-            );
-          }
-          if (!seenCollections.add(name)) {
-            throw RpcDataError.invalidArgument(
-              'Collection "' + name + '" appears multiple times',
-            );
-          }
-          await purgeCollection(name);
-          currentCollection = name;
-          break;
-        case 'record':
-          if (!headerSeen) {
-            throw RpcDataError.invalidArgument(
-              'Snapshot record encountered before header',
-            );
-          }
-          if (currentCollection.isEmpty) {
-            throw RpcDataError.invalidArgument(
-              'Snapshot record is not associated with a collection',
-            );
-          }
-          final data = entry['data'];
-          if (data is! Map) {
-            throw RpcDataError.invalidArgument(
-              'Snapshot record payload must be an object',
-            );
-          }
-          final record =
-              DataRecord.fromJson(Map<String, dynamic>.from(data as Map));
-          if (record.collection != currentCollection) {
-            throw RpcDataError.invalidArgument(
-              'Snapshot record collection mismatch for ' + record.id,
-            );
-          }
-          pending.add(record);
-          if (pending.length >= BaseDataRepository.databaseImportBatchSize) {
+    final validation = await validateSnapshot(
+      Stream<String>.fromIterable(LineSplitter.split(payload)),
+      onEntry: (entry) async {
+        switch (entry.type) {
+          case _SnapshotEntryType.header:
+            break;
+          case _SnapshotEntryType.collection:
             await flushPending();
-          }
-          break;
-        case 'collectionEnd':
-          if (currentCollection.isEmpty) {
-            throw RpcDataError.invalidArgument(
-              'Snapshot contains collectionEnd without collection start',
-            );
-          }
-          await flushPending();
-          currentCollection = '';
-          break;
-        case 'footer':
-          final declaredCollections = entry['collectionCount'];
-          final declaredRecords = entry['recordCount'];
-          if (declaredCollections is int) {
-            declaredCollectionCount = declaredCollections;
-          }
-          if (declaredRecords is int) {
-            declaredRecordCount = declaredRecords;
-          }
-          break;
-        default:
-          throw RpcDataError.invalidArgument(
-            'Unknown snapshot entry type "' + type + '"',
-          );
-      }
-    }
-
-    if (!headerSeen) {
-      throw RpcDataError.invalidArgument('Snapshot is missing header entry');
-    }
-    if (currentCollection.isNotEmpty) {
-      throw RpcDataError.invalidArgument(
-        'Snapshot ended before closing collection "' + currentCollection + '"',
-      );
-    }
+            final name = entry.collection!;
+            await purgeCollection(name);
+            currentCollection = name;
+            break;
+          case _SnapshotEntryType.record:
+            final record = entry.record!;
+            pending.add(record);
+            if (pending.length >= BaseDataRepository.databaseImportBatchSize) {
+              await flushPending();
+            }
+            break;
+          case _SnapshotEntryType.collectionEnd:
+            await flushPending();
+            currentCollection = '';
+            break;
+          case _SnapshotEntryType.footer:
+            break;
+        }
+      },
+    );
 
     await flushPending();
 
@@ -679,27 +657,28 @@ abstract class BaseDataRepository implements DataRepository {
       }
     }
 
-    if (declaredCollectionCount != null &&
-        declaredCollectionCount != seenCollections.length) {
+    if (validation.declaredCollectionCount != null &&
+        validation.declaredCollectionCount !=
+            validation.seenCollections.length) {
       throw RpcDataError.invalidArgument(
         'Snapshot declared ' +
-            declaredCollectionCount.toString() +
+            validation.declaredCollectionCount.toString() +
             ' collections but contained ' +
-            seenCollections.length.toString(),
+            validation.seenCollections.length.toString(),
       );
     }
-    if (declaredRecordCount != null &&
-        declaredRecordCount != importedRecords) {
+    if (validation.declaredRecordCount != null &&
+        validation.declaredRecordCount != importedRecords) {
       throw RpcDataError.invalidArgument(
         'Snapshot declared ' +
-            declaredRecordCount.toString() +
+            validation.declaredRecordCount.toString() +
             ' records but imported ' +
             importedRecords.toString(),
       );
     }
 
     return ImportDatabaseResponse(
-      collectionCount: seenCollections.length,
+      collectionCount: validation.seenCollections.length,
       recordCount: importedRecords,
       appliedAt: _clock(),
     );
