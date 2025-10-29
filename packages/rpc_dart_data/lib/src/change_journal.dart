@@ -57,18 +57,52 @@ abstract interface class DataChangeJournal {
 /// In-memory implementation of [DataChangeJournal]. Primarily used by the
 /// unit tests and the `InMemoryDataRepository` helper.
 final class InMemoryDataChangeJournal implements DataChangeJournal {
-  InMemoryDataChangeJournal() : _events = <String, List<DataChangeEvent>>{};
+  InMemoryDataChangeJournal()
+      : _events = <String, List<DataChangeEvent>>{},
+        _cursorIndex = <String, Map<String, int>>{};
 
   final Map<String, List<DataChangeEvent>> _events;
+  final Map<String, Map<String, int>> _cursorIndex;
   int _cursorSequence = 0;
 
   List<DataChangeEvent> _history(String collection) {
+    _cursorIndex.putIfAbsent(collection, () => <String, int>{});
     return _events.putIfAbsent(collection, () => <DataChangeEvent>[]);
   }
 
   String _nextCursor() {
     _cursorSequence += 1;
     return _cursorSequence.toString();
+  }
+
+  void _rebuildIndex(String collection) {
+    final history = _events[collection];
+    if (history == null || history.isEmpty) {
+      _cursorIndex[collection] = <String, int>{};
+      return;
+    }
+
+    final index = <String, int>{};
+    for (var i = 0; i < history.length; i += 1) {
+      index[history[i].cursor] = i;
+    }
+    _cursorIndex[collection] = index;
+  }
+
+  int _cursorPosition(String collection, String cursor) {
+    final index = _cursorIndex[collection]?[cursor];
+    if (index == null) {
+      return -1;
+    }
+    final history = _events[collection];
+    if (history == null || history.isEmpty) {
+      return -1;
+    }
+    if (index >= history.length || history[index].cursor != cursor) {
+      _rebuildIndex(collection);
+      return _cursorIndex[collection]?[cursor] ?? -1;
+    }
+    return index;
   }
 
   @override
@@ -89,7 +123,9 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
       cursor: _nextCursor(),
       occurredAt: occurredAt,
     );
-    _history(collection).add(event);
+    final history = _history(collection);
+    history.add(event);
+    _cursorIndex[collection]![event.cursor] = history.length - 1;
     return event;
   }
 
@@ -109,7 +145,9 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
       cursor: _nextCursor(),
       occurredAt: occurredAt,
     );
-    _history(collection).add(event);
+    final history = _history(collection);
+    history.add(event);
+    _cursorIndex[collection]![event.cursor] = history.length - 1;
     return Future.value(event);
   }
 
@@ -122,18 +160,19 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
     if (afterCursor == null) {
       return List<DataChangeEvent>.from(history);
     }
-    final index = history.indexWhere((event) => event.cursor == afterCursor);
-    if (index == -1) {
+    final position = _cursorPosition(collection, afterCursor);
+    if (position == -1) {
       throw RpcDataError.invalidArgument(
         'Cursor $afterCursor is not known for $collection',
       );
     }
-    return history.sublist(index + 1);
+    return history.sublist(position + 1);
   }
 
   @override
   Future<void> purgeCollection(String collection) async {
     _events.remove(collection);
+    _cursorIndex.remove(collection);
   }
 
   @override
@@ -152,11 +191,14 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
     if (maxEvents != null && maxEvents > 0 && history.length > maxEvents) {
       history.removeRange(0, history.length - maxEvents);
     }
+
+    _rebuildIndex(collection);
   }
 
   @override
   Future<void> dispose() async {
     _events.clear();
+    _cursorIndex.clear();
   }
 }
 
