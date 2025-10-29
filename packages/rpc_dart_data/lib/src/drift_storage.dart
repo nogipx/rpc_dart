@@ -436,6 +436,7 @@ class DriftDataStorageAdapter
   bool _ftsReady = false;
   static const int _ftsBatchSize = 200;
   static const String _ftsTableName = 'c_global_fts';
+  static const int _sqliteInClauseBatchSize = 999;
   bool _indexRegistryReady = false;
   final Map<String, List<_CollectionIndexMetadata>> _cachedCollectionIndexes =
       <String, List<_CollectionIndexMetadata>>{};
@@ -1600,6 +1601,42 @@ class DriftDataStorageAdapter
       return null;
     }
     return _mapRow(collection, row);
+  }
+
+  @override
+  Future<Map<String, DataRecord>> readRecords(
+    String collection,
+    Iterable<String> ids,
+  ) async {
+    final uniqueIds = ids.toSet();
+    if (uniqueIds.isEmpty) {
+      return const <String, DataRecord>{};
+    }
+
+    final tableName = await _ensureTableForRead(collection);
+    if (tableName == null) {
+      return const <String, DataRecord>{};
+    }
+
+    final result = <String, DataRecord>{};
+    final idList = uniqueIds.toList(growable: false);
+    for (final chunk in _chunk(idList, _sqliteInClauseBatchSize)) {
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+      final rows = await _database
+          .customSelect(
+            'SELECT id, tenantId, payload, version, created_at, updated_at '
+            'FROM "$tableName" WHERE id IN ($placeholders)',
+            variables:
+                chunk.map((id) => Variable<String>(id)).toList(growable: false),
+          )
+          .get();
+
+      for (final row in rows) {
+        final record = _mapRow(collection, row);
+        result[record.id] = record;
+      }
+    }
+    return result;
   }
 
   @override

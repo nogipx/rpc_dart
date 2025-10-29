@@ -61,6 +61,14 @@ class _ThrowingAdapter implements DataStorageAdapter {
   }
 
   @override
+  Future<Map<String, DataRecord>> readRecords(
+    String collection,
+    Iterable<String> ids,
+  ) {
+    return _delegate.readRecords(collection, ids);
+  }
+
+  @override
   Future<List<DataRecord>> readCollection(String collection) {
     return _delegate.readCollection(collection);
   }

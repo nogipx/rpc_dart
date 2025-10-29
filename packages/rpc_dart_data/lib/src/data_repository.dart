@@ -67,6 +67,11 @@ abstract interface class DataStorageAdapter {
     String id,
   );
 
+  Future<Map<String, DataRecord>> readRecords(
+    String collection,
+    Iterable<String> ids,
+  );
+
   Future<List<DataRecord>> readCollection(String collection);
 
   Future<List<String>> listCollections();
@@ -444,9 +449,28 @@ abstract class BaseDataRepository implements DataRepository {
     final writes = <DataRecord>[];
     final events = <MapEntry<DataChangeType, DataRecord>>[];
 
+    final groupedByCollection = <String, List<DataRecord>>{};
+    for (final record in request.records) {
+      groupedByCollection
+          .putIfAbsent(record.collection, () => <DataRecord>[])
+          .add(record);
+    }
+
+    final existingByCollection = <String, Map<String, DataRecord>>{};
+    for (final entry in groupedByCollection.entries) {
+      final ids = entry.value.map((record) => record.id).toSet();
+      if (ids.isEmpty) {
+        existingByCollection[entry.key] = const <String, DataRecord>{};
+        continue;
+      }
+      existingByCollection[entry.key] = await storage.readRecords(
+        entry.key,
+        ids,
+      );
+    }
+
     for (final incoming in request.records) {
-      final existing =
-          await storage.readRecord(incoming.collection, incoming.id);
+      final existing = existingByCollection[incoming.collection]?[incoming.id];
       if (existing == null) {
         writes.add(incoming);
         events.add(MapEntry(DataChangeType.created, incoming));
@@ -486,24 +510,25 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<int> bulkDelete(BulkDeleteRequest request) async {
-    final existing = <String, DataRecord>{};
-    for (final id in request.ids) {
-      final record = await storage.readRecord(request.collection, id);
-      if (record != null) {
-        existing[id] = record;
-      }
-    }
+    final existing = await storage.readRecords(
+      request.collection,
+      request.ids,
+    );
 
     final removed = await storage.deleteRecords(
       request.collection,
       request.ids,
     );
 
-    for (final entry in existing.entries) {
+    for (final id in request.ids) {
+      final record = existing[id];
+      if (record == null) {
+        continue;
+      }
       await _recordDeletion(
         request.collection,
-        entry.key,
-        entry.value.version + 1,
+        record.id,
+        record.version + 1,
       );
     }
 
@@ -1037,6 +1062,22 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
   Future<DataRecord?> readRecord(String collection, String id) async {
     final store = _collection(collection);
     return store[id];
+  }
+
+  @override
+  Future<Map<String, DataRecord>> readRecords(
+    String collection,
+    Iterable<String> ids,
+  ) async {
+    final store = _collection(collection);
+    final result = <String, DataRecord>{};
+    for (final id in ids) {
+      final record = store[id];
+      if (record != null) {
+        result[id] = record;
+      }
+    }
+    return result;
   }
 
   @override
