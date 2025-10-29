@@ -1,10 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:licensify/licensify.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
+
+/// Callback invoked whenever the adapter executes a SQL statement.
+///
+/// Primarily intended for integration tests and diagnostics to ensure that
+/// filters and pagination are delegated to the database engine.
+typedef SqlStatementObserver = void Function(
+  String sql,
+  List<Object?> arguments,
+);
 
 import 'change_journal.dart';
 import 'data_contract.dart';
@@ -335,20 +345,27 @@ class _CollectionIndexMetadata {
 
 /// Drift-based implementation of [DataStorageAdapter] backed by SQLite.
 class DriftDataStorageAdapter
-    implements
-        DataStorageAdapter,
-        AdvancedDataStorageAdapter,
-        CollectionIndexStorageAdapter {
-  DriftDataStorageAdapter._(this._database, this._inMemory);
+    implements DataStorageAdapter, CollectionIndexStorageAdapter {
+  DriftDataStorageAdapter._(
+    this._database,
+    this._inMemory, {
+    SqlStatementObserver? statementObserver,
+  }) : _statementObserver = statementObserver;
 
   /// Create an adapter backed by the provided Drift [executor].
+  ///
+  /// The optional [statementObserver] receives every SQL statement that the
+  /// adapter executes, together with bound arguments, enabling verification of
+  /// query plans in tests.
   factory DriftDataStorageAdapter(
     QueryExecutor executor, {
     bool isInMemory = false,
+    SqlStatementObserver? statementObserver,
   }) {
     return DriftDataStorageAdapter._(
       DriftDataDatabase(executor),
       isInMemory,
+      statementObserver: statementObserver,
     );
   }
 
@@ -356,21 +373,31 @@ class DriftDataStorageAdapter
   factory DriftDataStorageAdapter.connection(
     DatabaseConnection connection, {
     bool isInMemory = false,
+    SqlStatementObserver? statementObserver,
   }) {
     return DriftDataStorageAdapter._(
       DriftDataDatabase.connect(connection),
       isInMemory,
+      statementObserver: statementObserver,
     );
   }
 
   /// Create an adapter backed by an in-memory SQLite database.
-  factory DriftDataStorageAdapter.memory({bool logStatements = false}) {
+  ///
+  /// When [statementObserver] is provided, every query executed during tests is
+  /// surfaced to the callback, allowing assertions about pagination and
+  /// filtering.
+  factory DriftDataStorageAdapter.memory({
+    bool logStatements = false,
+    SqlStatementObserver? statementObserver,
+  }) {
     return DriftDataStorageAdapter(
       NativeDatabase.memory(
         logStatements: logStatements,
         setup: ensureJsonExtractFunction,
       ),
       isInMemory: true,
+      statementObserver: statementObserver,
     );
   }
 
@@ -379,6 +406,7 @@ class DriftDataStorageAdapter
     File file, {
     bool logStatements = false,
     SqlCipherKey? sqlCipherKey,
+    SqlStatementObserver? statementObserver,
   }) {
     file.parent.createSync(recursive: true);
     return DriftDataStorageAdapter(
@@ -392,11 +420,13 @@ class DriftDataStorageAdapter
           ensureJsonExtractFunction(database);
         },
       ),
+      statementObserver: statementObserver,
     );
   }
 
   final DriftDataDatabase _database;
   final bool _inMemory;
+  final SqlStatementObserver? _statementObserver;
 
   bool get isInMemory => _inMemory;
   bool _registryReady = false;
@@ -412,6 +442,14 @@ class DriftDataStorageAdapter
   final Set<String> _knownIndexNames = <String>{};
 
   DriftDataDatabase get database => _database;
+
+  void _recordStatement(String sql, Iterable<Object?> arguments) {
+    final observer = _statementObserver;
+    if (observer == null) {
+      return;
+    }
+    observer(sql, List<Object?>.from(arguments, growable: false));
+  }
 
   /// Ensures that the underlying SQLite database is present and consistent.
   ///
@@ -1589,11 +1627,13 @@ class DriftDataStorageAdapter
   }
 
   @override
-  Future<ListRecordsResponse?> queryCollection(
+  Future<ListRecordsResponse> queryCollection(
     ListRecordsRequest request,
   ) async {
     if (!_supportsSort(request.sort)) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Sorting by "${request.sort?.field ?? 'id'}" is not supported by Drift adapter.',
+      );
     }
 
     final tableName = await _ensureTableForRead(request.collection);
@@ -1608,14 +1648,18 @@ class DriftDataStorageAdapter
     final filterConditions = <String>[];
     final filterValues = <Object>[];
     if (!_translateFilter(request.filter, filterConditions, filterValues)) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Filter in ${request.collection} is not supported by Drift adapter.',
+      );
     }
 
     final sort = request.sort;
     final sortField = sort?.field ?? 'id';
     final sortColumn = _columnForField(sortField);
     if (sortColumn == null) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Sorting by "$sortField" is not supported by Drift adapter.',
+      );
     }
     final descending = sort?.descending ?? false;
 
@@ -1664,10 +1708,15 @@ class DriftDataStorageAdapter
       ..write(descending ? '" DESC' : '" ASC')
       ..write(', id ')
       ..write(descending ? 'DESC' : 'ASC')
-      ..write(' LIMIT ?');
+      ..write(' LIMIT ? OFFSET ?');
 
-    final queryVariables = _buildVariables(values)
-      ..add(Variable<int>(request.options.limit));
+    final queryArgs = <Object>[
+      ...values,
+      request.options.limit,
+      request.options.offset,
+    ];
+    _recordStatement(querySql.toString(), queryArgs);
+    final queryVariables = _buildVariables(queryArgs);
     final rows = await _database
         .customSelect(querySql.toString(), variables: queryVariables)
         .get();
@@ -1689,6 +1738,7 @@ class DriftDataStorageAdapter
           ..write(' WHERE ')
           ..write(filterConditions.join(' AND '));
       }
+      _recordStatement(countSql.toString(), filterValues);
       final countVariables = _buildVariables(filterValues);
       final row = await _database
           .customSelect(countSql.toString(), variables: countVariables)
@@ -1704,12 +1754,14 @@ class DriftDataStorageAdapter
   }
 
   @override
-  Future<SearchRecordsResponse?> searchCollection(
+  Future<SearchRecordsResponse> searchCollection(
     SearchRecordsRequest request,
   ) async {
     final pattern = _buildFtsMatchPattern(request.query);
     if (pattern == null) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Search query must contain at least one term.',
+      );
     }
 
     final tableName = await _ensureTableForRead(request.collection);
@@ -1729,17 +1781,21 @@ class DriftDataStorageAdapter
       pattern,
     ];
 
-    final filterConditions = <String>[];
-    final filterValues = <Object>[];
+    final baseFilterConditions = <String>[];
+    final baseFilterValues = <Object>[];
     if (!_translateFilter(
       request.filter,
-      filterConditions,
-      filterValues,
+      baseFilterConditions,
+      baseFilterValues,
       tableAlias: baseAlias,
     )) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Filter in ${request.collection} is not supported by Drift adapter.',
+      );
     }
 
+    final queryFilterConditions = List<String>.from(baseFilterConditions);
+    final queryFilterValues = List<Object>.from(baseFilterValues);
     final cursor = request.options.cursor;
     if (cursor != null) {
       final exists = await _cursorExists(tableName, cursor);
@@ -1748,15 +1804,18 @@ class DriftDataStorageAdapter
           'Cursor $cursor is not valid for ${request.collection}',
         );
       }
-      filterConditions.add(
+      queryFilterConditions.add(
         '${_qualifiedColumn('id', tableAlias: baseAlias)} > ?',
       );
-      filterValues.add(cursor);
+      queryFilterValues.add(cursor);
     }
 
-    final whereClause = filterConditions.isEmpty
+    final queryWhereClause = queryFilterConditions.isEmpty
         ? ''
-        : 'WHERE ${filterConditions.join(' AND ')}';
+        : 'WHERE ${queryFilterConditions.join(' AND ')}';
+    final countWhereClause = baseFilterConditions.isEmpty
+        ? ''
+        : 'WHERE ${baseFilterConditions.join(' AND ')}';
 
     final fetchLimit = request.options.limit + 1;
     final querySql = StringBuffer(
@@ -1767,16 +1826,18 @@ class DriftDataStorageAdapter
       '$baseAlias.version, $baseAlias.created_at, $baseAlias.updated_at '
       'FROM "$tableName" $baseAlias '
       'JOIN fts_hits fts ON fts.id = $baseAlias.id '
-      '$whereClause '
+      '$queryWhereClause '
       'ORDER BY $baseAlias.id ASC '
-      'LIMIT ?',
+      'LIMIT ? OFFSET ?',
     );
 
     final queryArgs = <Object>[
       ...ftsArgs,
-      ...filterValues,
+      ...queryFilterValues,
       fetchLimit,
+      request.options.offset,
     ];
+    _recordStatement(querySql.toString(), queryArgs);
     List<QueryRow> rows;
     try {
       rows = await _database
@@ -1810,17 +1871,19 @@ class DriftDataStorageAdapter
       'SELECT COUNT(*) AS count '
       'FROM "$tableName" $baseAlias '
       'JOIN fts_hits fts ON fts.id = $baseAlias.id '
-      '$whereClause',
+      '$countWhereClause',
     );
+    final countArgs = <Object>[
+      ...ftsArgs,
+      ...baseFilterValues,
+    ];
+    _recordStatement(countSql.toString(), countArgs);
     QueryRow countRow;
     try {
       countRow = await _database
           .customSelect(
             countSql.toString(),
-            variables: _buildVariables([
-              ...ftsArgs,
-              ...filterValues,
-            ]),
+            variables: _buildVariables(countArgs),
           )
           .getSingle();
     } on sqlite.SqliteException catch (error) {
@@ -1839,7 +1902,7 @@ class DriftDataStorageAdapter
   }
 
   @override
-  Future<AggregateMetricsResponse?> aggregateCollection(
+  Future<AggregateMetricsResponse> aggregateCollection(
     AggregateMetricsRequest request,
   ) async {
     if (request.metrics.isEmpty) {
@@ -1872,12 +1935,16 @@ class DriftDataStorageAdapter
         case 'min':
         case 'max':
           if (parts.length != 2) {
-            return null;
+            throw RpcDataError.invalidArgument(
+              'Unsupported metric definition "${entry.value}"',
+            );
           }
           final fieldName = parts[1];
           final expression = _fieldExpression(fieldName, tableAlias: 'b');
           if (expression == null) {
-            return null;
+            throw RpcDataError.invalidArgument(
+              'Field "$fieldName" is not supported in aggregates for ${request.collection}.',
+            );
           }
           final castExpression = 'CAST($expression AS REAL)';
           projections.add(
@@ -1886,7 +1953,9 @@ class DriftDataStorageAdapter
           metricOrder.add(metricName);
           continue;
         default:
-          return null;
+          throw RpcDataError.invalidArgument(
+            'Unknown aggregate operation "$op"',
+          );
       }
     }
 
@@ -1898,7 +1967,9 @@ class DriftDataStorageAdapter
       values,
       tableAlias: 'b',
     )) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Filter in ${request.collection} is not supported by Drift adapter.',
+      );
     }
 
     final selectClause = projections.join(', ');
@@ -1910,6 +1981,9 @@ class DriftDataStorageAdapter
         ..write(' WHERE ')
         ..write(conditions.join(' AND '));
     }
+    final Iterable<Object> statementArgs =
+        values.isEmpty ? const <Object>[] : values;
+    _recordStatement(sql.toString(), statementArgs);
     final selectable = values.isEmpty
         ? _database.customSelect(sql.toString())
         : _database.customSelect(

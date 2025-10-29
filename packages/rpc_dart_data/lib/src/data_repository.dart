@@ -87,21 +87,23 @@ abstract interface class DataStorageAdapter {
 
   Future<bool> deleteCollection(String collection);
 
-  Future<void> dispose();
-}
+  /// Execute a filtered query over a collection, applying sort and pagination
+  /// directly in the storage backend. Implementations should throw an
+  /// [RpcDataError] when the requested filter or sort is not supported.
+  Future<ListRecordsResponse> queryCollection(ListRecordsRequest request);
 
-/// Optional extensions that storage adapters can implement to offload heavy
-/// operations (filtering, pagination, aggregations) to the backend.
-abstract interface class AdvancedDataStorageAdapter {
-  Future<ListRecordsResponse?> queryCollection(ListRecordsRequest request);
+  /// Execute a search query against the backend, applying the provided filter
+  /// and pagination options at the storage layer. Implementations should throw
+  /// an [RpcDataError] when the request cannot be executed.
+  Future<SearchRecordsResponse> searchCollection(SearchRecordsRequest request);
 
-  Future<SearchRecordsResponse?> searchCollection(
-    SearchRecordsRequest request,
-  );
-
-  Future<AggregateMetricsResponse?> aggregateCollection(
+  /// Execute aggregate metrics in the storage backend. Implementations should
+  /// validate requested metrics and throw an [RpcDataError] if unsupported.
+  Future<AggregateMetricsResponse> aggregateCollection(
     AggregateMetricsRequest request,
   );
+
+  Future<void> dispose();
 }
 
 abstract interface class CollectionIndexStorageAdapter {
@@ -221,77 +223,6 @@ abstract class BaseDataRepository implements DataRepository {
     );
   }
 
-  dynamic _getFieldValue(DataRecord record, String field) {
-    switch (field) {
-      case 'id':
-        return record.id;
-      case 'collection':
-        return record.collection;
-      case 'tenantId':
-        return record.tenantId;
-      case 'version':
-        return record.version;
-      case 'createdAt':
-        return record.createdAt;
-      case 'updatedAt':
-        return record.updatedAt;
-      default:
-        return record.payload[field];
-    }
-  }
-
-  bool _matchesFilter(DataRecord record, RecordFilter? filter) {
-    if (filter == null) {
-      return true;
-    }
-
-    for (final entry in filter.equals.entries) {
-      final value = _getFieldValue(record, entry.key);
-      if (value != entry.value) {
-        return false;
-      }
-    }
-
-    for (final entry in filter.range.entries) {
-      final value = _getFieldValue(record, entry.key);
-      if (value is! num) {
-        return false;
-      }
-      final constraint = entry.value;
-      if (constraint.min != null) {
-        if (constraint.includeMin) {
-          if (value < constraint.min!) {
-            return false;
-          }
-        } else if (value <= constraint.min!) {
-          return false;
-        }
-      }
-      if (constraint.max != null) {
-        if (constraint.includeMax) {
-          if (value > constraint.max!) {
-            return false;
-          }
-        } else if (value >= constraint.max!) {
-          return false;
-        }
-      }
-    }
-
-    if (filter.containsTerms.isNotEmpty) {
-      final haystack = record.payload.values
-          .map((v) => v.toString().toLowerCase())
-          .join(' ');
-      for (final term in filter.containsTerms) {
-        if (!haystack.contains(term.toLowerCase())) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
   Map<String, dynamic> _serializeSnapshot(
     Map<String, List<DataRecord>> collections,
     DateTime generatedAt,
@@ -343,46 +274,23 @@ abstract class BaseDataRepository implements DataRepository {
     return Map<String, dynamic>.from(decoded);
   }
 
-  int _compare(DataRecord a, DataRecord b, SortOrder? sort) {
-    if (sort == null) {
-      return a.id.compareTo(b.id);
+  Future<T> _delegateToAdapter<T>(
+    Future<T> Function() operation,
+    String capability,
+  ) async {
+    try {
+      return await operation();
+    } on UnimplementedError catch (error) {
+      throw RpcDataError.internal(
+        'Storage adapter ${storage.runtimeType} does not support $capability.',
+        error: error,
+      );
+    } on UnsupportedError catch (error) {
+      throw RpcDataError.internal(
+        'Storage adapter ${storage.runtimeType} does not support $capability.',
+        error: error,
+      );
     }
-
-    final valueA = _getFieldValue(a, sort.field);
-    final valueB = _getFieldValue(b, sort.field);
-
-    int result;
-    if (valueA is Comparable && valueB is Comparable) {
-      // Сравниваем напрямую; valueA уже Comparable.
-      result = valueA.compareTo(valueB);
-    } else {
-      result = valueA.toString().compareTo(valueB.toString());
-    }
-
-    return sort.descending ? -result : result;
-  }
-
-  List<DataRecord> _filterAndSort(
-    List<DataRecord> records,
-    RecordFilter? filter,
-    SortOrder? sort,
-  ) {
-    final filtered =
-        records.where((record) => _matchesFilter(record, filter)).toList();
-    filtered.sort((a, b) => _compare(a, b, sort));
-    return filtered;
-  }
-
-  int _resolveStartIndex(List<DataRecord> records, String? cursor) {
-    if (cursor == null) {
-      return 0;
-    }
-    final index = records.indexWhere((record) => record.id == cursor);
-    if (index == -1) {
-      throw RpcDataError.invalidArgument(
-          'Cursor $cursor is not valid for selection');
-    }
-    return index + 1;
   }
 
   @override
@@ -418,32 +326,9 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<ListRecordsResponse> list(ListRecordsRequest request) async {
-    if (storage is AdvancedDataStorageAdapter) {
-      final response = await (storage as AdvancedDataStorageAdapter)
-          .queryCollection(request);
-      if (response != null) {
-        return response;
-      }
-    }
-
-    final collection = await storage.readCollection(request.collection);
-    final filtered = _filterAndSort(collection, request.filter, request.sort);
-
-    final startIndex = _resolveStartIndex(filtered, request.options.cursor);
-    final limit = request.options.limit;
-    final endIndex = startIndex >= filtered.length
-        ? filtered.length
-        : min(startIndex + limit, filtered.length);
-    final slice = filtered.sublist(startIndex, endIndex);
-    final nextCursor =
-        endIndex < filtered.length && slice.isNotEmpty ? slice.last.id : null;
-    final totalCount =
-        request.options.includeTotalCount ? filtered.length : null;
-
-    return ListRecordsResponse(
-      records: slice,
-      nextCursor: nextCursor,
-      totalCount: totalCount,
+    return _delegateToAdapter(
+      () => storage.queryCollection(request),
+      'list queries',
     );
   }
 
@@ -745,37 +630,9 @@ abstract class BaseDataRepository implements DataRepository {
   Future<SearchRecordsResponse> search(
     SearchRecordsRequest request,
   ) async {
-    if (storage is AdvancedDataStorageAdapter) {
-      final response = await (storage as AdvancedDataStorageAdapter)
-          .searchCollection(request);
-      if (response != null) {
-        return response;
-      }
-    }
-
-    final collection = await storage.readCollection(request.collection);
-    final filtered = _filterAndSort(collection, request.filter, null);
-    final query = request.query.toLowerCase();
-    final hits = filtered.where((record) {
-      final text = record.payload.values
-          .map((value) => value.toString().toLowerCase())
-          .join(' ');
-      return text.contains(query);
-    }).toList(growable: false);
-
-    final startIndex = _resolveStartIndex(hits, request.options.cursor);
-    final limit = request.options.limit;
-    final endIndex = startIndex >= hits.length
-        ? hits.length
-        : min(startIndex + limit, hits.length);
-    final slice = hits.sublist(startIndex, endIndex);
-    final nextCursor =
-        endIndex < hits.length && slice.isNotEmpty ? slice.last.id : null;
-
-    return SearchRecordsResponse(
-      records: slice,
-      totalHits: hits.length,
-      nextCursor: nextCursor,
+    return _delegateToAdapter(
+      () => storage.searchCollection(request),
+      'search queries',
     );
   }
 
@@ -783,63 +640,11 @@ abstract class BaseDataRepository implements DataRepository {
   Future<AggregateMetricsResponse> aggregate(
     AggregateMetricsRequest request,
   ) async {
-    if (storage is AdvancedDataStorageAdapter) {
-      final response = await (storage as AdvancedDataStorageAdapter)
-          .aggregateCollection(request);
-      if (response != null) {
-        return response;
-      }
-    }
-
-    final collection = await storage.readCollection(request.collection);
-    final filtered = _filterAndSort(collection, request.filter, null);
-    final metrics = <String, num>{};
-
-    for (final entry in request.metrics.entries) {
-      final metricName = entry.key;
-      final definition = entry.value;
-      if (definition == 'count') {
-        metrics[metricName] = filtered.length;
-        continue;
-      }
-
-      final parts = definition.split(':');
-      if (parts.length != 2) {
-        throw RpcDataError.invalidArgument(
-          'Unsupported metric definition "$definition"',
-        );
-      }
-      final op = parts[0];
-      final field = parts[1];
-      final values = filtered
-          .map((record) => _getFieldValue(record, field))
-          .whereType<num>()
-          .toList(growable: false);
-
-      switch (op) {
-        case 'sum':
-          metrics[metricName] =
-              values.fold<num>(0, (prev, element) => prev + element);
-          break;
-        case 'avg':
-          metrics[metricName] = values.isEmpty
-              ? 0
-              : values.reduce((a, b) => a + b) / values.length;
-          break;
-        case 'min':
-          metrics[metricName] = values.isEmpty ? 0 : values.reduce(min);
-          break;
-        case 'max':
-          metrics[metricName] = values.isEmpty ? 0 : values.reduce(max);
-          break;
-        default:
-          throw RpcDataError.invalidArgument(
-            'Unknown aggregate operation "$op"',
-          );
-      }
-    }
-
-    return AggregateMetricsResponse(metrics: metrics);
+    _validateAggregateMetrics(request);
+    return _delegateToAdapter(
+      () => storage.aggregateCollection(request),
+      'aggregate queries',
+    );
   }
 
   @override
@@ -1021,6 +826,203 @@ abstract class BaseDataRepository implements DataRepository {
   }
 }
 
+dynamic _recordFieldValue(DataRecord record, String field) {
+  switch (field) {
+    case 'id':
+      return record.id;
+    case 'collection':
+      return record.collection;
+    case 'tenantId':
+      return record.tenantId;
+    case 'version':
+      return record.version;
+    case 'createdAt':
+      return record.createdAt;
+    case 'updatedAt':
+      return record.updatedAt;
+    default:
+      return record.payload[field];
+  }
+}
+
+bool _recordMatchesFilter(DataRecord record, RecordFilter? filter) {
+  if (filter == null) {
+    return true;
+  }
+
+  for (final entry in filter.equals.entries) {
+    final value = _recordFieldValue(record, entry.key);
+    if (value != entry.value) {
+      return false;
+    }
+  }
+
+  for (final entry in filter.range.entries) {
+    final value = _recordFieldValue(record, entry.key);
+    if (value is! num) {
+      return false;
+    }
+    final constraint = entry.value;
+    if (constraint.min != null) {
+      if (constraint.includeMin) {
+        if (value < constraint.min!) {
+          return false;
+        }
+      } else if (value <= constraint.min!) {
+        return false;
+      }
+    }
+    if (constraint.max != null) {
+      if (constraint.includeMax) {
+        if (value > constraint.max!) {
+          return false;
+        }
+      } else if (value >= constraint.max!) {
+        return false;
+      }
+    }
+  }
+
+  if (filter.containsTerms.isNotEmpty) {
+    final haystack = record.payload.values
+        .map((value) => value.toString().toLowerCase())
+        .join(' ');
+    for (final term in filter.containsTerms) {
+      if (!haystack.contains(term.toLowerCase())) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+int _compareRecords(DataRecord a, DataRecord b, SortOrder? sort) {
+  if (sort == null) {
+    return a.id.compareTo(b.id);
+  }
+
+  final valueA = _recordFieldValue(a, sort.field);
+  final valueB = _recordFieldValue(b, sort.field);
+
+  int result;
+  if (valueA is Comparable && valueB is Comparable) {
+    result = valueA.compareTo(valueB);
+  } else {
+    result = valueA.toString().compareTo(valueB.toString());
+  }
+
+  return sort.descending ? -result : result;
+}
+
+List<DataRecord> _filterAndSortRecords(
+  Iterable<DataRecord> records,
+  RecordFilter? filter,
+  SortOrder? sort,
+) {
+  final filtered =
+      records.where((record) => _recordMatchesFilter(record, filter)).toList();
+  filtered.sort((a, b) => _compareRecords(a, b, sort));
+  return filtered;
+}
+
+int _resolveCursorStart(List<DataRecord> records, String? cursor) {
+  if (cursor == null) {
+    return 0;
+  }
+  final index = records.indexWhere((record) => record.id == cursor);
+  if (index == -1) {
+    throw RpcDataError.invalidArgument(
+      'Cursor $cursor is not valid for selection',
+    );
+  }
+  return index + 1;
+}
+
+Map<String, num> _computeAggregates(
+  Iterable<DataRecord> records,
+  Map<String, String> metrics,
+) {
+  final result = <String, num>{};
+  final entries = records.toList(growable: false);
+
+  for (final entry in metrics.entries) {
+    final definition = entry.value;
+    if (definition == 'count') {
+      result[entry.key] = entries.length;
+      continue;
+    }
+
+    final parts = definition.split(':');
+    if (parts.length != 2) {
+      throw RpcDataError.invalidArgument(
+        'Unsupported metric definition "$definition"',
+      );
+    }
+    final op = parts[0];
+    final field = parts[1];
+    final values = entries
+        .map((record) => _recordFieldValue(record, field))
+        .whereType<num>()
+        .toList(growable: false);
+
+    switch (op) {
+      case 'sum':
+        result[entry.key] =
+            values.fold<num>(0, (previousValue, element) => previousValue + element);
+        break;
+      case 'avg':
+        if (values.isEmpty) {
+          result[entry.key] = 0;
+        } else {
+          final total =
+              values.fold<num>(0, (previousValue, element) => previousValue + element);
+          result[entry.key] = total / values.length;
+        }
+        break;
+      case 'min':
+        result[entry.key] = values.isEmpty ? 0 : values.reduce(min);
+        break;
+      case 'max':
+        result[entry.key] = values.isEmpty ? 0 : values.reduce(max);
+        break;
+      default:
+        throw RpcDataError.invalidArgument(
+          'Unknown aggregate operation "$op"',
+        );
+    }
+  }
+
+  return result;
+}
+
+void _validateAggregateMetrics(AggregateMetricsRequest request) {
+  for (final entry in request.metrics.entries) {
+    final definition = entry.value;
+    if (definition == 'count') {
+      continue;
+    }
+    final parts = definition.split(':');
+    if (parts.length != 2) {
+      throw RpcDataError.invalidArgument(
+        'Unsupported metric definition "$definition"',
+      );
+    }
+    final op = parts[0];
+    switch (op) {
+      case 'sum':
+      case 'avg':
+      case 'min':
+      case 'max':
+        continue;
+      default:
+        throw RpcDataError.invalidArgument(
+          'Unknown aggregate operation "$op"',
+        );
+    }
+  }
+}
+
 /// In-memory адаптер, реализующий интерфейс `DataStorageAdapter` на обычных
 /// картах. Эту реализацию легко заменить на SQLite/Isar/Hive, не меняя
 /// бизнес-логику `BaseDataRepository`.
@@ -1044,8 +1046,63 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
   }
 
   @override
+  Future<ListRecordsResponse> queryCollection(
+    ListRecordsRequest request,
+  ) async {
+    final collection = await readCollection(request.collection);
+    final filtered =
+        _filterAndSortRecords(collection, request.filter, request.sort);
+    final cursorIndex = _resolveCursorStart(filtered, request.options.cursor);
+    final baseIndex = cursorIndex + request.options.offset;
+    final startIndex = min(filtered.length, max(0, baseIndex));
+    final endIndex = min(startIndex + request.options.limit, filtered.length);
+    final slice = filtered.sublist(startIndex, endIndex);
+    final nextCursor =
+        endIndex < filtered.length && slice.isNotEmpty ? slice.last.id : null;
+    final totalCount =
+        request.options.includeTotalCount ? filtered.length : null;
+
+    return ListRecordsResponse(
+      records: slice,
+      nextCursor: nextCursor,
+      totalCount: totalCount,
+    );
+  }
+
+  @override
   Future<List<String>> listCollections() async {
     return _storage.keys.toList(growable: false);
+  }
+
+  @override
+  Future<SearchRecordsResponse> searchCollection(
+    SearchRecordsRequest request,
+  ) async {
+    final collection = await readCollection(request.collection);
+    final filtered = _filterAndSortRecords(collection, request.filter, null);
+    final query = request.query.toLowerCase();
+    final hits = filtered
+        .where((record) {
+          final text = record.payload.values
+              .map((value) => value.toString().toLowerCase())
+              .join(' ');
+          return text.contains(query);
+        })
+        .toList(growable: false);
+
+    final cursorIndex = _resolveCursorStart(hits, request.options.cursor);
+    final baseIndex = cursorIndex + request.options.offset;
+    final startIndex = min(hits.length, max(0, baseIndex));
+    final endIndex = min(startIndex + request.options.limit, hits.length);
+    final slice = hits.sublist(startIndex, endIndex);
+    final nextCursor =
+        endIndex < hits.length && slice.isNotEmpty ? slice.last.id : null;
+
+    return SearchRecordsResponse(
+      records: slice,
+      totalHits: hits.length,
+      nextCursor: nextCursor,
+    );
   }
 
   @override
@@ -1091,6 +1148,17 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
   @override
   Future<void> dispose() async {
     _storage.clear();
+  }
+
+  @override
+  Future<AggregateMetricsResponse> aggregateCollection(
+    AggregateMetricsRequest request,
+  ) async {
+    _validateAggregateMetrics(request);
+    final collection = await readCollection(request.collection);
+    final filtered = _filterAndSortRecords(collection, request.filter, null);
+    final metrics = _computeAggregates(filtered, request.metrics);
+    return AggregateMetricsResponse(metrics: metrics);
   }
 }
 

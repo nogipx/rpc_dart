@@ -399,26 +399,31 @@ class SortOrder extends Equatable implements IRpcSerializable {
 class QueryOptions extends Equatable implements IRpcSerializable {
   const QueryOptions({
     this.limit = 20,
+    this.offset = 0,
     this.cursor,
     this.includeTotalCount = false,
-  });
+  })  : assert(limit > 0, 'limit must be greater than zero'),
+        assert(offset >= 0, 'offset cannot be negative');
 
   factory QueryOptions.fromJson(Map<String, dynamic> json) => QueryOptions(
         limit: json['limit'] as int? ?? 20,
+        offset: json['offset'] as int? ?? 0,
         cursor: json['cursor'] as String?,
         includeTotalCount: json['includeTotalCount'] as bool? ?? false,
       );
 
   final int limit;
+  final int offset;
   final String? cursor;
   final bool includeTotalCount;
 
   @override
-  List<Object?> get props => [limit, cursor, includeTotalCount];
+  List<Object?> get props => [limit, offset, cursor, includeTotalCount];
 
   @override
   Map<String, dynamic> toJson() => {
         'limit': limit,
+        'offset': offset,
         'cursor': cursor,
         'includeTotalCount': includeTotalCount,
       };
