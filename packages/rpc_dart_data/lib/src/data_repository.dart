@@ -971,21 +971,15 @@ abstract class BaseDataRepository implements DataRepository {
     final generatedAt = _clock();
     final collections = await storage.listCollections();
 
-    final computation = await _computeExportMetadata(
+    final computation = await _computeExportPayloadAndStream(
       request: request,
       generatedAt: generatedAt,
       collections: collections,
     );
 
-    final payloadStream = _buildExportStream(
-      generatedAt: generatedAt,
-      collections: collections,
-      recordCount: computation.recordCount,
-    );
-
     return ExportDatabaseResponse(
       payload: computation.payload,
-      payloadStream: payloadStream,
+      payloadStream: computation.payloadStream,
       generatedAt: generatedAt,
       formatVersion: _databaseFormatVersion,
       collectionCount: collections.length,
@@ -993,127 +987,80 @@ abstract class BaseDataRepository implements DataRepository {
     );
   }
 
-  Future<_ExportComputationResult> _computeExportMetadata({
+  Future<_ExportComputationResult> _computeExportPayloadAndStream({
     required ExportDatabaseRequest request,
     required DateTime generatedAt,
     required List<String> collections,
   }) async {
     final encoder = const JsonEncoder();
     final buffer = request.includePayloadString ? StringBuffer() : null;
+    final controller = StreamController<List<int>>();
+    final stream = controller.stream;
     var recordCount = 0;
 
-    void writeLine(Map<String, dynamic> entry) {
-      if (buffer == null) {
-        return;
-      }
-      buffer.writeln(encoder.convert(entry));
+    void emitLine(Map<String, dynamic> entry) {
+      final line = encoder.convert(entry);
+      controller.add(utf8.encode('$line\n'));
+      buffer?.writeln(line);
     }
 
-    void writeRecord(DataRecord record) {
-      if (buffer == null) {
-        return;
-      }
-      buffer.writeln(
-        encoder.convert({
-          'type': 'record',
-          'data': record.toJson(),
-        }),
-      );
-    }
-
-    writeLine({
-      'type': 'header',
-      'formatVersion': _databaseFormatVersion,
-      'generatedAt': generatedAt.toIso8601String(),
-    });
-
-    for (final collection in collections) {
-      writeLine({
-        'type': 'collection',
-        'name': collection,
-      });
-
-      await for (final chunk in storage.readCollectionChunks(
-        collection,
-        chunkSize: BaseDataRepository.databaseExportChunkSize,
-      )) {
-        if (chunk.isEmpty) {
-          continue;
-        }
-        for (final record in chunk) {
-          writeRecord(record);
-        }
-        recordCount += chunk.length;
-      }
-
-      writeLine({
-        'type': 'collectionEnd',
-        'name': collection,
+    void emitRecord(DataRecord record) {
+      recordCount += 1;
+      emitLine({
+        'type': 'record',
+        'data': record.toJson(),
       });
     }
 
-    writeLine({
-      'type': 'footer',
-      'collectionCount': collections.length,
-      'recordCount': recordCount,
-    });
+    try {
+      emitLine({
+        'type': 'header',
+        'formatVersion': _databaseFormatVersion,
+        'generatedAt': generatedAt.toIso8601String(),
+      });
+
+      for (final collection in collections) {
+        emitLine({
+          'type': 'collection',
+          'name': collection,
+        });
+
+        await for (final chunk in storage.readCollectionChunks(
+          collection,
+          chunkSize: BaseDataRepository.databaseExportChunkSize,
+        )) {
+          if (chunk.isEmpty) {
+            continue;
+          }
+          for (final record in chunk) {
+            emitRecord(record);
+          }
+        }
+
+        emitLine({
+          'type': 'collectionEnd',
+          'name': collection,
+        });
+      }
+
+      emitLine({
+        'type': 'footer',
+        'collectionCount': collections.length,
+        'recordCount': recordCount,
+      });
+    } catch (error, stackTrace) {
+      await controller.addError(error, stackTrace);
+      await controller.close();
+      rethrow;
+    }
+
+    await controller.close();
 
     return _ExportComputationResult(
       payload: buffer?.toString() ?? '',
       recordCount: recordCount,
+      payloadStream: stream,
     );
-  }
-
-  Stream<List<int>> _buildExportStream({
-    required DateTime generatedAt,
-    required List<String> collections,
-    required int recordCount,
-  }) async* {
-    final encoder = const JsonEncoder();
-
-    List<int> encodeLine(Map<String, dynamic> entry) {
-      final line = encoder.convert(entry);
-      return utf8.encode('$line\n');
-    }
-
-    yield encodeLine({
-      'type': 'header',
-      'formatVersion': _databaseFormatVersion,
-      'generatedAt': generatedAt.toIso8601String(),
-    });
-
-    for (final collection in collections) {
-      yield encodeLine({
-        'type': 'collection',
-        'name': collection,
-      });
-
-      await for (final chunk in storage.readCollectionChunks(
-        collection,
-        chunkSize: BaseDataRepository.databaseExportChunkSize,
-      )) {
-        if (chunk.isEmpty) {
-          continue;
-        }
-        for (final record in chunk) {
-          yield encodeLine({
-            'type': 'record',
-            'data': record.toJson(),
-          });
-        }
-      }
-
-      yield encodeLine({
-        'type': 'collectionEnd',
-        'name': collection,
-      });
-    }
-
-    yield encodeLine({
-      'type': 'footer',
-      'collectionCount': collections.length,
-      'recordCount': recordCount,
-    });
   }
 
   @override
@@ -1554,10 +1501,12 @@ class _ExportComputationResult {
   const _ExportComputationResult({
     required this.payload,
     required this.recordCount,
+    required this.payloadStream,
   });
 
   final String payload;
   final int recordCount;
+  final Stream<List<int>> payloadStream;
 }
 
 /// In-memory адаптер, реализующий интерфейс `DataStorageAdapter` на обычных
