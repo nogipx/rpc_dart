@@ -25,6 +25,7 @@ export 'src/drift_storage.dart'
         DriftDataRepository,
         DriftDataStorageAdapter,
         DriftDataDatabase,
+        SqliteSetupHook,
         SqlCipherKey,
         SqlCipherException;
 export 'src/models.dart';

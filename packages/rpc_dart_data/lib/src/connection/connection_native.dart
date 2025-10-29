@@ -51,15 +51,20 @@ NativeDatabase _createNativeDatabase(
   File file, {
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
+  SqliteSetupHook? sqliteSetup,
 }) {
   return NativeDatabase(
     file,
     logStatements: logStatements,
-    setup: (s3.Database database) {
+    setup: (s3.Database database) async {
       if (sqlCipherKey != null) {
         sqlCipherKey.applyTo(database);
       }
       ensureJsonExtractFunction(database);
+      final hook = sqliteSetup;
+      if (hook != null) {
+        await hook(database);
+      }
     },
   );
 }
@@ -69,6 +74,7 @@ Future<DatabaseConnection> openMainDb({
   DriftConnectionOptions options = _defaultOptions,
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
+  SqliteSetupHook? sqliteSetup,
 }) async {
   final file = await _resolveMainDbFile(options);
   return DatabaseConnection(
@@ -76,6 +82,7 @@ Future<DatabaseConnection> openMainDb({
       file,
       logStatements: logStatements,
       sqlCipherKey: sqlCipherKey,
+      sqliteSetup: sqliteSetup,
     ),
   );
 }
@@ -85,11 +92,13 @@ Future<DriftDataStorageAdapter> openMainStorage({
   DriftConnectionOptions options = _defaultOptions,
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
+  SqliteSetupHook? sqliteSetup,
 }) async {
   final connection = await openMainDb(
     options: options,
     logStatements: logStatements,
     sqlCipherKey: sqlCipherKey,
+    sqliteSetup: sqliteSetup,
   );
   final adapter = DriftDataStorageAdapter.connection(connection);
   try {
@@ -137,6 +146,7 @@ Future<DatabaseConnection> openTempDbFromBytes(
   Uint8List bytes, {
   DriftConnectionOptions options = _defaultOptions,
   bool logStatements = false,
+  SqliteSetupHook? sqliteSetup,
 }) async {
   final tmp = await _writeTempFile(
     bytes,
@@ -144,7 +154,11 @@ Future<DatabaseConnection> openTempDbFromBytes(
     prefix: 'temp',
   );
   return DatabaseConnection(
-    _createNativeDatabase(tmp, logStatements: logStatements),
+    _createNativeDatabase(
+      tmp,
+      logStatements: logStatements,
+      sqliteSetup: sqliteSetup,
+    ),
   );
 }
 
@@ -153,6 +167,7 @@ Future<DatabaseConnection> openInMemoryDbFromBytes(
   Uint8List bytes, {
   DriftConnectionOptions options = _defaultOptions,
   bool logStatements = false,
+  SqliteSetupHook? sqliteSetup,
 }) async {
   final tmp = await _writeTempFile(
     bytes,
@@ -170,7 +185,13 @@ Future<DatabaseConnection> openInMemoryDbFromBytes(
       NativeDatabase.opened(
         dst,
         logStatements: logStatements,
-        setup: ensureJsonExtractFunction,
+        setup: (s3.Database database) async {
+          ensureJsonExtractFunction(database);
+          final hook = sqliteSetup;
+          if (hook != null) {
+            await hook(database);
+          }
+        },
       ),
     );
   } finally {
@@ -186,11 +207,13 @@ Future<DriftDataStorageAdapter> openTempStorageFromBytes(
   Uint8List bytes, {
   DriftConnectionOptions options = _defaultOptions,
   bool logStatements = false,
+  SqliteSetupHook? sqliteSetup,
 }) async {
   final connection = await openInMemoryDbFromBytes(
     bytes,
     options: options,
     logStatements: logStatements,
+    sqliteSetup: sqliteSetup,
   );
   return DriftDataStorageAdapter.connection(connection);
 }
