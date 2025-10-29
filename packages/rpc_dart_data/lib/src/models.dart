@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:collection/collection.dart';
 import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
@@ -1004,16 +1007,22 @@ class ExportSnapshotResponse extends Equatable implements IRpcSerializable {
 
 @immutable
 class ExportDatabaseRequest extends Equatable implements IRpcSerializable {
-  const ExportDatabaseRequest();
+  const ExportDatabaseRequest({this.includePayloadString = true});
 
   factory ExportDatabaseRequest.fromJson(Map<String, dynamic> json) =>
-      const ExportDatabaseRequest();
+      ExportDatabaseRequest(
+        includePayloadString: json['includePayloadString'] as bool? ?? true,
+      );
+
+  final bool includePayloadString;
 
   @override
-  List<Object?> get props => const [];
+  List<Object?> get props => [includePayloadString];
 
   @override
-  Map<String, dynamic> toJson() => const {};
+  Map<String, dynamic> toJson() => {
+        'includePayloadString': includePayloadString,
+      };
 }
 
 @immutable
@@ -1024,6 +1033,7 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
     required this.formatVersion,
     required this.collectionCount,
     required this.recordCount,
+    this.payloadStream,
   });
 
   factory ExportDatabaseResponse.fromJson(Map<String, dynamic> json) =>
@@ -1040,6 +1050,20 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
   final String formatVersion;
   final int collectionCount;
   final int recordCount;
+  final Stream<List<int>>? payloadStream;
+
+  Stream<String> payloadLines({Encoding encoding = utf8}) {
+    final source = payloadStream;
+    if (source != null) {
+      return source
+          .transform(encoding.decoder)
+          .transform(const LineSplitter());
+    }
+
+    return Stream<String>.fromIterable(
+      const LineSplitter().convert(payload),
+    );
+  }
 
   @override
   List<Object?> get props => [

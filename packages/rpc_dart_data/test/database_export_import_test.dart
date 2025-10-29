@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -59,6 +60,41 @@ class _TrackingInMemoryAdapter extends InMemoryStorageAdapter {
         : List<DataRecord>.from(records, growable: false);
     writeBatchSizes.add(list.length);
     await super.writeRecords(list);
+  }
+}
+
+class _BackpressureInMemoryAdapter extends InMemoryStorageAdapter {
+  _BackpressureInMemoryAdapter({this.forcedChunkSize = 1});
+
+  final List<Completer<void>> _gates = <Completer<void>>[];
+  final int forcedChunkSize;
+
+  int get pendingChunks => _gates.length;
+
+  void allowNextChunk() {
+    if (_gates.isEmpty) {
+      throw StateError('No pending chunk requests to release');
+    }
+    _gates.removeAt(0).complete();
+  }
+
+  @override
+  Stream<List<DataRecord>> readCollectionChunks(
+    String collection, {
+    int chunkSize = BaseDataRepository.databaseExportChunkSize,
+  }) async* {
+    final records = await readCollection(collection);
+    if (records.isEmpty) {
+      return;
+    }
+    final effectiveChunkSize = max(1, forcedChunkSize);
+    for (var offset = 0; offset < records.length; offset += effectiveChunkSize) {
+      final gate = Completer<void>();
+      _gates.add(gate);
+      await gate.future;
+      final end = min(offset + effectiveChunkSize, records.length);
+      yield records.sublist(offset, end);
+    }
   }
 }
 
@@ -169,6 +205,7 @@ void main() {
       final export = await repository.exportDatabase(const ExportDatabaseRequest());
 
       expect(export.recordCount, recordCount);
+      expect(export.payloadStream, isNotNull);
       expect(trackingStorage.readChunkSizes, isNotEmpty);
       expect(
         trackingStorage.readChunkSizes.reduce(max),
@@ -178,6 +215,101 @@ void main() {
         trackingStorage.readChunkSizes.reduce((a, b) => a + b),
         recordCount,
       );
+
+      final streamedLines = await export
+          .payloadLines()
+          .take(3)
+          .map((line) => jsonDecode(line) as Map<String, dynamic>)
+          .toList();
+      expect(streamedLines.first['type'], 'header');
+      expect(streamedLines[1]['type'], 'collection');
+
+      await repository.dispose();
+    });
+
+    test('exportDatabase stream honours back-pressure for large collections',
+        () async {
+      final storage = _BackpressureInMemoryAdapter();
+      final repository = InMemoryDataRepository(storage: storage);
+      final now = DateTime.utc(2024, 1, 1);
+
+      final records = <DataRecord>[];
+      for (var i = 0; i < 2; i++) {
+        records.add(
+          DataRecord(
+            id: 'item-$i',
+            collection: 'controlled',
+            payload: {'value': i},
+            version: 1,
+            createdAt: now.add(Duration(seconds: i)),
+            updatedAt: now.add(Duration(seconds: i)),
+          ),
+        );
+      }
+      await storage.writeRecords(records);
+
+      final export = await repository.exportDatabase(
+        const ExportDatabaseRequest(includePayloadString: false),
+      );
+
+      expect(export.payload, isEmpty);
+      expect(export.payloadStream, isNotNull);
+
+      final iterator = export.payloadLines().iterator;
+
+      expect(await iterator.moveNext(), isTrue);
+      expect(
+        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+        'header',
+      );
+      expect(await iterator.moveNext(), isTrue);
+      expect(
+        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+        'collection',
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      expect(storage.pendingChunks, equals(1));
+
+      final stalled = iterator.moveNext().timeout(
+        const Duration(milliseconds: 100),
+        onTimeout: () => false,
+      );
+      expect(await stalled, isFalse);
+
+      storage.allowNextChunk();
+      expect(await iterator.moveNext(), isTrue);
+      expect(
+        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+        'record',
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      expect(storage.pendingChunks, equals(1));
+      final stalledAgain = iterator.moveNext().timeout(
+        const Duration(milliseconds: 100),
+        onTimeout: () => false,
+      );
+      expect(await stalledAgain, isFalse);
+
+      storage.allowNextChunk();
+      expect(await iterator.moveNext(), isTrue);
+      expect(
+        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+        'record',
+      );
+
+      expect(await iterator.moveNext(), isTrue);
+      expect(
+        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+        'collectionEnd',
+      );
+      expect(await iterator.moveNext(), isTrue);
+      expect(
+        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+        'footer',
+      );
+      expect(await iterator.moveNext(), isFalse);
 
       await repository.dispose();
     });
