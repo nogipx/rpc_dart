@@ -565,6 +565,30 @@ abstract class BaseDataRepository implements DataRepository {
       );
     }
 
+    final validation = await validateSnapshot(
+      Stream<String>.fromIterable(LineSplitter.split(payload)),
+    );
+
+    if (validation.declaredCollectionCount != null &&
+        validation.declaredCollectionCount !=
+            validation.seenCollections.length) {
+      throw RpcDataError.invalidArgument(
+        'Snapshot declared ' +
+            validation.declaredCollectionCount.toString() +
+            ' collections but contained ' +
+            validation.seenCollections.length.toString(),
+      );
+    }
+    if (validation.declaredRecordCount != null &&
+        validation.declaredRecordCount != validation.actualRecordCount) {
+      throw RpcDataError.invalidArgument(
+        'Snapshot declared ' +
+            validation.declaredRecordCount.toString() +
+            ' records but contained ' +
+            validation.actualRecordCount.toString(),
+      );
+    }
+
     final existingCollections = await storage.listCollections();
     final remainingCollections = existingCollections.toSet();
     final pending = <DataRecord>[];
@@ -608,7 +632,7 @@ abstract class BaseDataRepository implements DataRepository {
       await storage.deleteCollection(collection);
     }
 
-    final validation = await validateSnapshot(
+    await validateSnapshot(
       Stream<String>.fromIterable(LineSplitter.split(payload)),
       onEntry: (entry) async {
         switch (entry.type) {
@@ -639,6 +663,15 @@ abstract class BaseDataRepository implements DataRepository {
 
     await flushPending();
 
+    if (importedRecords != validation.actualRecordCount) {
+      throw RpcDataError.internal(
+        'Imported ' +
+            importedRecords.toString() +
+            ' records but snapshot contained ' +
+            validation.actualRecordCount.toString(),
+      );
+    }
+
     if (replaceExisting) {
       for (final collection in remainingCollections) {
         await for (final chunk in storage.readCollectionChunks(
@@ -655,26 +688,6 @@ abstract class BaseDataRepository implements DataRepository {
         }
         await storage.deleteCollection(collection);
       }
-    }
-
-    if (validation.declaredCollectionCount != null &&
-        validation.declaredCollectionCount !=
-            validation.seenCollections.length) {
-      throw RpcDataError.invalidArgument(
-        'Snapshot declared ' +
-            validation.declaredCollectionCount.toString() +
-            ' collections but contained ' +
-            validation.seenCollections.length.toString(),
-      );
-    }
-    if (validation.declaredRecordCount != null &&
-        validation.declaredRecordCount != importedRecords) {
-      throw RpcDataError.invalidArgument(
-        'Snapshot declared ' +
-            validation.declaredRecordCount.toString() +
-            ' records but imported ' +
-            importedRecords.toString(),
-      );
     }
 
     return ImportDatabaseResponse(
