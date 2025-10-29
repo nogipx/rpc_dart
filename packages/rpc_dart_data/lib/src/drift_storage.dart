@@ -335,10 +335,7 @@ class _CollectionIndexMetadata {
 
 /// Drift-based implementation of [DataStorageAdapter] backed by SQLite.
 class DriftDataStorageAdapter
-    implements
-        DataStorageAdapter,
-        AdvancedDataStorageAdapter,
-        CollectionIndexStorageAdapter {
+    implements DataStorageAdapter, CollectionIndexStorageAdapter {
   DriftDataStorageAdapter._(this._database, this._inMemory);
 
   /// Create an adapter backed by the provided Drift [executor].
@@ -1589,11 +1586,13 @@ class DriftDataStorageAdapter
   }
 
   @override
-  Future<ListRecordsResponse?> queryCollection(
+  Future<ListRecordsResponse> queryCollection(
     ListRecordsRequest request,
   ) async {
     if (!_supportsSort(request.sort)) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Sorting by "${request.sort?.field ?? 'id'}" is not supported by Drift adapter.',
+      );
     }
 
     final tableName = await _ensureTableForRead(request.collection);
@@ -1608,14 +1607,18 @@ class DriftDataStorageAdapter
     final filterConditions = <String>[];
     final filterValues = <Object>[];
     if (!_translateFilter(request.filter, filterConditions, filterValues)) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Filter in ${request.collection} is not supported by Drift adapter.',
+      );
     }
 
     final sort = request.sort;
     final sortField = sort?.field ?? 'id';
     final sortColumn = _columnForField(sortField);
     if (sortColumn == null) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Sorting by "$sortField" is not supported by Drift adapter.',
+      );
     }
     final descending = sort?.descending ?? false;
 
@@ -1664,10 +1667,11 @@ class DriftDataStorageAdapter
       ..write(descending ? '" DESC' : '" ASC')
       ..write(', id ')
       ..write(descending ? 'DESC' : 'ASC')
-      ..write(' LIMIT ?');
+      ..write(' LIMIT ? OFFSET ?');
 
     final queryVariables = _buildVariables(values)
-      ..add(Variable<int>(request.options.limit));
+      ..add(Variable<int>(request.options.limit))
+      ..add(Variable<int>(request.options.offset));
     final rows = await _database
         .customSelect(querySql.toString(), variables: queryVariables)
         .get();
@@ -1704,12 +1708,14 @@ class DriftDataStorageAdapter
   }
 
   @override
-  Future<SearchRecordsResponse?> searchCollection(
+  Future<SearchRecordsResponse> searchCollection(
     SearchRecordsRequest request,
   ) async {
     final pattern = _buildFtsMatchPattern(request.query);
     if (pattern == null) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Search query must contain at least one term.',
+      );
     }
 
     final tableName = await _ensureTableForRead(request.collection);
@@ -1737,7 +1743,9 @@ class DriftDataStorageAdapter
       filterValues,
       tableAlias: baseAlias,
     )) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Filter in ${request.collection} is not supported by Drift adapter.',
+      );
     }
 
     final cursor = request.options.cursor;
@@ -1769,13 +1777,14 @@ class DriftDataStorageAdapter
       'JOIN fts_hits fts ON fts.id = $baseAlias.id '
       '$whereClause '
       'ORDER BY $baseAlias.id ASC '
-      'LIMIT ?',
+      'LIMIT ? OFFSET ?',
     );
 
     final queryArgs = <Object>[
       ...ftsArgs,
       ...filterValues,
       fetchLimit,
+      request.options.offset,
     ];
     List<QueryRow> rows;
     try {
@@ -1839,7 +1848,7 @@ class DriftDataStorageAdapter
   }
 
   @override
-  Future<AggregateMetricsResponse?> aggregateCollection(
+  Future<AggregateMetricsResponse> aggregateCollection(
     AggregateMetricsRequest request,
   ) async {
     if (request.metrics.isEmpty) {
@@ -1872,12 +1881,16 @@ class DriftDataStorageAdapter
         case 'min':
         case 'max':
           if (parts.length != 2) {
-            return null;
+            throw RpcDataError.invalidArgument(
+              'Unsupported metric definition "${entry.value}"',
+            );
           }
           final fieldName = parts[1];
           final expression = _fieldExpression(fieldName, tableAlias: 'b');
           if (expression == null) {
-            return null;
+            throw RpcDataError.invalidArgument(
+              'Field "$fieldName" is not supported in aggregates for ${request.collection}.',
+            );
           }
           final castExpression = 'CAST($expression AS REAL)';
           projections.add(
@@ -1886,7 +1899,9 @@ class DriftDataStorageAdapter
           metricOrder.add(metricName);
           continue;
         default:
-          return null;
+          throw RpcDataError.invalidArgument(
+            'Unknown aggregate operation "$op"',
+          );
       }
     }
 
@@ -1898,7 +1913,9 @@ class DriftDataStorageAdapter
       values,
       tableAlias: 'b',
     )) {
-      return null;
+      throw RpcDataError.invalidArgument(
+        'Filter in ${request.collection} is not supported by Drift adapter.',
+      );
     }
 
     final selectClause = projections.join(', ');

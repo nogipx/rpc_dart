@@ -269,6 +269,9 @@ class PostgresAdapter implements DataStorageAdapter {
   // readRecord, writeRecord, deleteRecord, ... собственная реализация
   @override Future<DataRecord?> readRecord(String collection, String id) async { /* ... */ }
   // остальные методы
+  @override Future<ListRecordsResponse> queryCollection(ListRecordsRequest request) async { /* SQL с фильтрами */ }
+  @override Future<SearchRecordsResponse> searchCollection(SearchRecordsRequest request) async { /* FTS/ILIKE */ }
+  @override Future<AggregateMetricsResponse> aggregateCollection(AggregateMetricsRequest request) async { /* агрегации */ }
   @override Future<bool> deleteCollection(String collection) async { /* ... */ }
   @override Future<void> dispose() async {}
 }
