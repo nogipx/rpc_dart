@@ -1,10 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:licensify/licensify.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
+
+/// Callback invoked whenever the adapter executes a SQL statement.
+///
+/// Primarily intended for integration tests and diagnostics to ensure that
+/// filters and pagination are delegated to the database engine.
+typedef SqlStatementObserver = void Function(
+  String sql,
+  List<Object?> arguments,
+);
 
 import 'change_journal.dart';
 import 'data_contract.dart';
@@ -336,16 +346,26 @@ class _CollectionIndexMetadata {
 /// Drift-based implementation of [DataStorageAdapter] backed by SQLite.
 class DriftDataStorageAdapter
     implements DataStorageAdapter, CollectionIndexStorageAdapter {
-  DriftDataStorageAdapter._(this._database, this._inMemory);
+  DriftDataStorageAdapter._(
+    this._database,
+    this._inMemory, {
+    SqlStatementObserver? statementObserver,
+  }) : _statementObserver = statementObserver;
 
   /// Create an adapter backed by the provided Drift [executor].
+  ///
+  /// The optional [statementObserver] receives every SQL statement that the
+  /// adapter executes, together with bound arguments, enabling verification of
+  /// query plans in tests.
   factory DriftDataStorageAdapter(
     QueryExecutor executor, {
     bool isInMemory = false,
+    SqlStatementObserver? statementObserver,
   }) {
     return DriftDataStorageAdapter._(
       DriftDataDatabase(executor),
       isInMemory,
+      statementObserver: statementObserver,
     );
   }
 
@@ -353,21 +373,31 @@ class DriftDataStorageAdapter
   factory DriftDataStorageAdapter.connection(
     DatabaseConnection connection, {
     bool isInMemory = false,
+    SqlStatementObserver? statementObserver,
   }) {
     return DriftDataStorageAdapter._(
       DriftDataDatabase.connect(connection),
       isInMemory,
+      statementObserver: statementObserver,
     );
   }
 
   /// Create an adapter backed by an in-memory SQLite database.
-  factory DriftDataStorageAdapter.memory({bool logStatements = false}) {
+  ///
+  /// When [statementObserver] is provided, every query executed during tests is
+  /// surfaced to the callback, allowing assertions about pagination and
+  /// filtering.
+  factory DriftDataStorageAdapter.memory({
+    bool logStatements = false,
+    SqlStatementObserver? statementObserver,
+  }) {
     return DriftDataStorageAdapter(
       NativeDatabase.memory(
         logStatements: logStatements,
         setup: ensureJsonExtractFunction,
       ),
       isInMemory: true,
+      statementObserver: statementObserver,
     );
   }
 
@@ -376,6 +406,7 @@ class DriftDataStorageAdapter
     File file, {
     bool logStatements = false,
     SqlCipherKey? sqlCipherKey,
+    SqlStatementObserver? statementObserver,
   }) {
     file.parent.createSync(recursive: true);
     return DriftDataStorageAdapter(
@@ -389,11 +420,13 @@ class DriftDataStorageAdapter
           ensureJsonExtractFunction(database);
         },
       ),
+      statementObserver: statementObserver,
     );
   }
 
   final DriftDataDatabase _database;
   final bool _inMemory;
+  final SqlStatementObserver? _statementObserver;
 
   bool get isInMemory => _inMemory;
   bool _registryReady = false;
@@ -409,6 +442,14 @@ class DriftDataStorageAdapter
   final Set<String> _knownIndexNames = <String>{};
 
   DriftDataDatabase get database => _database;
+
+  void _recordStatement(String sql, Iterable<Object?> arguments) {
+    final observer = _statementObserver;
+    if (observer == null) {
+      return;
+    }
+    observer(sql, List<Object?>.from(arguments, growable: false));
+  }
 
   /// Ensures that the underlying SQLite database is present and consistent.
   ///
@@ -1669,9 +1710,13 @@ class DriftDataStorageAdapter
       ..write(descending ? 'DESC' : 'ASC')
       ..write(' LIMIT ? OFFSET ?');
 
-    final queryVariables = _buildVariables(values)
-      ..add(Variable<int>(request.options.limit))
-      ..add(Variable<int>(request.options.offset));
+    final queryArgs = <Object>[
+      ...values,
+      request.options.limit,
+      request.options.offset,
+    ];
+    _recordStatement(querySql.toString(), queryArgs);
+    final queryVariables = _buildVariables(queryArgs);
     final rows = await _database
         .customSelect(querySql.toString(), variables: queryVariables)
         .get();
@@ -1693,6 +1738,7 @@ class DriftDataStorageAdapter
           ..write(' WHERE ')
           ..write(filterConditions.join(' AND '));
       }
+      _recordStatement(countSql.toString(), filterValues);
       final countVariables = _buildVariables(filterValues);
       final row = await _database
           .customSelect(countSql.toString(), variables: countVariables)
@@ -1786,6 +1832,7 @@ class DriftDataStorageAdapter
       fetchLimit,
       request.options.offset,
     ];
+    _recordStatement(querySql.toString(), queryArgs);
     List<QueryRow> rows;
     try {
       rows = await _database
@@ -1821,15 +1868,17 @@ class DriftDataStorageAdapter
       'JOIN fts_hits fts ON fts.id = $baseAlias.id '
       '$whereClause',
     );
+    final countArgs = <Object>[
+      ...ftsArgs,
+      ...filterValues,
+    ];
+    _recordStatement(countSql.toString(), countArgs);
     QueryRow countRow;
     try {
       countRow = await _database
           .customSelect(
             countSql.toString(),
-            variables: _buildVariables([
-              ...ftsArgs,
-              ...filterValues,
-            ]),
+            variables: _buildVariables(countArgs),
           )
           .getSingle();
     } on sqlite.SqliteException catch (error) {
@@ -1927,6 +1976,9 @@ class DriftDataStorageAdapter
         ..write(' WHERE ')
         ..write(conditions.join(' AND '));
     }
+    final Iterable<Object> statementArgs =
+        values.isEmpty ? const <Object>[] : values;
+    _recordStatement(sql.toString(), statementArgs);
     final selectable = values.isEmpty
         ? _database.customSelect(sql.toString())
         : _database.customSelect(

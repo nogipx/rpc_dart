@@ -164,9 +164,15 @@ void main() {
   group('DriftDataStorageAdapter queries', () {
     late DriftDataStorageAdapter storage;
     late DriftDataRepository repository;
+    late List<({String sql, List<Object?> args})> statements;
 
     setUp(() {
-      storage = DriftDataStorageAdapter.memory();
+      statements = <({String sql, List<Object?> args})>[];
+      storage = DriftDataStorageAdapter.memory(
+        statementObserver: (sql, args) {
+          statements.add((sql: sql, args: List<Object?>.from(args)));
+        },
+      );
       repository = DriftDataRepository(storage: storage);
     });
 
@@ -190,6 +196,7 @@ void main() {
     test('list delegates pagination to SQLite', () async {
       await _seedTasks();
 
+      statements.clear();
       final response = await repository.list(
         const ListRecordsRequest(
           collection: 'tasks',
@@ -203,6 +210,21 @@ void main() {
       expect(response.records, hasLength(1));
       expect(response.records.single.payload['priority'], 2);
       expect(response.nextCursor, 'task-2');
+
+      final pagedQuery = statements.firstWhere(
+        (entry) =>
+            entry.sql.contains('FROM "tasks"') &&
+            entry.sql.contains('ORDER BY') &&
+            entry.sql.contains('LIMIT ? OFFSET ?'),
+      );
+      expect(pagedQuery.args.sublist(pagedQuery.args.length - 2), [1, 1]);
+
+      final countQuery = statements.firstWhere(
+        (entry) =>
+            entry.sql.contains('COUNT(*)') &&
+            entry.sql.contains('FROM "tasks"'),
+      );
+      expect(countQuery.args, contains('open'));
     });
 
     test('search honours offset on SQLite backend', () async {
@@ -216,6 +238,7 @@ void main() {
         );
       }
 
+      statements.clear();
       final response = await repository.search(
         const SearchRecordsRequest(
           collection: 'notes',
@@ -227,6 +250,14 @@ void main() {
       expect(response.records, hasLength(1));
       expect(response.totalHits, 3);
       expect(response.records.single.id, 'note-b');
+
+      final ftsQuery = statements.firstWhere(
+        (entry) =>
+            entry.sql.contains('MATCH ?') &&
+            entry.sql.contains('LIMIT ? OFFSET ?'),
+      );
+      expect(ftsQuery.args.last, 1);
+      expect(ftsQuery.args[ftsQuery.args.length - 2], 2);
     });
   });
 
