@@ -970,10 +970,55 @@ abstract class BaseDataRepository implements DataRepository {
   ) async {
     final generatedAt = _clock();
     final collections = await storage.listCollections();
+
+    final computation = await _computeExportMetadata(
+      request: request,
+      generatedAt: generatedAt,
+      collections: collections,
+    );
+
+    final payloadStream = _buildExportStream(
+      generatedAt: generatedAt,
+      collections: collections,
+      recordCount: computation.recordCount,
+    );
+
+    return ExportDatabaseResponse(
+      payload: computation.payload,
+      payloadStream: payloadStream,
+      generatedAt: generatedAt,
+      formatVersion: _databaseFormatVersion,
+      collectionCount: collections.length,
+      recordCount: computation.recordCount,
+    );
+  }
+
+  Future<_ExportComputationResult> _computeExportMetadata({
+    required ExportDatabaseRequest request,
+    required DateTime generatedAt,
+    required List<String> collections,
+  }) async {
     final encoder = const JsonEncoder();
-    final buffer = StringBuffer();
+    final buffer = request.includePayloadString ? StringBuffer() : null;
+    var recordCount = 0;
+
     void writeLine(Map<String, dynamic> entry) {
+      if (buffer == null) {
+        return;
+      }
       buffer.writeln(encoder.convert(entry));
+    }
+
+    void writeRecord(DataRecord record) {
+      if (buffer == null) {
+        return;
+      }
+      buffer.writeln(
+        encoder.convert({
+          'type': 'record',
+          'data': record.toJson(),
+        }),
+      );
     }
 
     writeLine({
@@ -982,7 +1027,6 @@ abstract class BaseDataRepository implements DataRepository {
       'generatedAt': generatedAt.toIso8601String(),
     });
 
-    var recordCount = 0;
     for (final collection in collections) {
       writeLine({
         'type': 'collection',
@@ -997,10 +1041,7 @@ abstract class BaseDataRepository implements DataRepository {
           continue;
         }
         for (final record in chunk) {
-          writeLine({
-            'type': 'record',
-            'data': record.toJson(),
-          });
+          writeRecord(record);
         }
         recordCount += chunk.length;
       }
@@ -1017,13 +1058,62 @@ abstract class BaseDataRepository implements DataRepository {
       'recordCount': recordCount,
     });
 
-    return ExportDatabaseResponse(
-      payload: buffer.toString(),
-      generatedAt: generatedAt,
-      formatVersion: _databaseFormatVersion,
-      collectionCount: collections.length,
+    return _ExportComputationResult(
+      payload: buffer?.toString() ?? '',
       recordCount: recordCount,
     );
+  }
+
+  Stream<List<int>> _buildExportStream({
+    required DateTime generatedAt,
+    required List<String> collections,
+    required int recordCount,
+  }) async* {
+    final encoder = const JsonEncoder();
+
+    List<int> encodeLine(Map<String, dynamic> entry) {
+      final line = encoder.convert(entry);
+      return utf8.encode('$line\n');
+    }
+
+    yield encodeLine({
+      'type': 'header',
+      'formatVersion': _databaseFormatVersion,
+      'generatedAt': generatedAt.toIso8601String(),
+    });
+
+    for (final collection in collections) {
+      yield encodeLine({
+        'type': 'collection',
+        'name': collection,
+      });
+
+      await for (final chunk in storage.readCollectionChunks(
+        collection,
+        chunkSize: BaseDataRepository.databaseExportChunkSize,
+      )) {
+        if (chunk.isEmpty) {
+          continue;
+        }
+        for (final record in chunk) {
+          yield encodeLine({
+            'type': 'record',
+            'data': record.toJson(),
+          });
+        }
+      }
+
+      yield encodeLine({
+        'type': 'collectionEnd',
+        'name': collection,
+      });
+    }
+
+    yield encodeLine({
+      'type': 'footer',
+      'collectionCount': collections.length,
+      'recordCount': recordCount,
+    });
   }
 
   @override
@@ -1458,6 +1548,16 @@ void _validateAggregateMetrics(AggregateMetricsRequest request) {
         );
     }
   }
+}
+
+class _ExportComputationResult {
+  const _ExportComputationResult({
+    required this.payload,
+    required this.recordCount,
+  });
+
+  final String payload;
+  final int recordCount;
 }
 
 /// In-memory адаптер, реализующий интерфейс `DataStorageAdapter` на обычных
