@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
@@ -24,6 +25,43 @@ Future<void> _seedSampleData(DataRepository repository) async {
   );
 }
 
+class _TrackingInMemoryAdapter extends InMemoryStorageAdapter {
+  bool failOnFullCollectionRead = false;
+  final List<int> readChunkSizes = <int>[];
+  final List<int> writeBatchSizes = <int>[];
+
+  @override
+  Future<List<DataRecord>> readCollection(String collection) {
+    if (failOnFullCollectionRead) {
+      throw StateError('readCollection should not be used during streaming export');
+    }
+    return super.readCollection(collection);
+  }
+
+  @override
+  Stream<List<DataRecord>> readCollectionChunks(
+    String collection, {
+    int chunkSize = BaseDataRepository.databaseExportChunkSize,
+  }) async* {
+    await for (final chunk in super.readCollectionChunks(
+      collection,
+      chunkSize: chunkSize,
+    )) {
+      readChunkSizes.add(chunk.length);
+      yield chunk;
+    }
+  }
+
+  @override
+  Future<void> writeRecords(Iterable<DataRecord> records) async {
+    final list = records is List<DataRecord>
+        ? records
+        : List<DataRecord>.from(records, growable: false);
+    writeBatchSizes.add(list.length);
+    await super.writeRecords(list);
+  }
+}
+
 void main() {
   group('Database export/import', () {
     late DriftDataRepository sourceRepository;
@@ -43,7 +81,7 @@ void main() {
       await targetRepository.dispose();
     });
 
-    test('exports database as plain JSON snapshot', () async {
+    test('exports database as NDJSON snapshot', () async {
       await _seedSampleData(sourceRepository);
 
       final exportResponse = await sourceRepository.exportDatabase(
@@ -54,11 +92,16 @@ void main() {
       expect(exportResponse.recordCount, 3);
       expect(exportResponse.payload, isNotEmpty);
 
-      final decoded = jsonDecode(exportResponse.payload);
-      expect(decoded, isA<Map<String, dynamic>>());
-      final snapshot = Map<String, dynamic>.from(decoded as Map);
-      expect(snapshot['formatVersion'], '1.0.0');
-      expect(snapshot['collections'], isA<Map<String, dynamic>>());
+      final lines = const LineSplitter().convert(exportResponse.payload);
+      expect(lines, isNotEmpty);
+
+      final header = jsonDecode(lines.first) as Map<String, dynamic>;
+      expect(header['type'], 'header');
+      expect(header['formatVersion'], '2.0.0');
+
+      final footer = jsonDecode(lines.last) as Map<String, dynamic>;
+      expect(footer['type'], 'footer');
+      expect(footer['recordCount'], 3);
     });
 
     test('importDatabase replaces existing data when requested', () async {
@@ -68,7 +111,6 @@ void main() {
         const ExportDatabaseRequest(),
       );
 
-      // add extra data to target to ensure it is removed during import
       final extra = await targetRepository.create(
         const CreateRecordRequest(
           collection: 'notes',
@@ -100,6 +142,125 @@ void main() {
         notes.records.map((e) => e.payload['title']).toSet(),
         containsAll({'First', 'Second'}),
       );
+    });
+
+    test('exportDatabase streams collections in chunks', () async {
+      final trackingStorage = _TrackingInMemoryAdapter();
+      final repository = InMemoryDataRepository(storage: trackingStorage);
+      final now = DateTime.utc(2024, 1, 1);
+
+      final recordCount = BaseDataRepository.databaseExportChunkSize * 3;
+      final records = <DataRecord>[];
+      for (var i = 0; i < recordCount; i++) {
+        records.add(
+          DataRecord(
+            id: 'item-$i',
+            collection: 'bulk',
+            payload: {'value': i},
+            version: 1,
+            createdAt: now.add(Duration(seconds: i)),
+            updatedAt: now.add(Duration(seconds: i)),
+          ),
+        );
+      }
+      await trackingStorage.writeRecords(records);
+
+      trackingStorage.failOnFullCollectionRead = true;
+      final export = await repository.exportDatabase(const ExportDatabaseRequest());
+
+      expect(export.recordCount, recordCount);
+      expect(trackingStorage.readChunkSizes, isNotEmpty);
+      expect(
+        trackingStorage.readChunkSizes.reduce(max),
+        lessThanOrEqualTo(BaseDataRepository.databaseExportChunkSize),
+      );
+      expect(
+        trackingStorage.readChunkSizes.reduce((a, b) => a + b),
+        recordCount,
+      );
+
+      await repository.dispose();
+    });
+
+    test('streaming import writes data in bounded batches', () async {
+      final sourceStorage = _TrackingInMemoryAdapter();
+      final sourceRepo = InMemoryDataRepository(storage: sourceStorage);
+      final now = DateTime.utc(2024, 1, 1);
+      final dataset = <String, List<DataRecord>>{
+        'notes': <DataRecord>[],
+        'tasks': <DataRecord>[],
+      };
+      final perCollection = BaseDataRepository.databaseImportBatchSize * 2;
+
+      for (var i = 0; i < perCollection; i++) {
+        dataset['notes']!.add(
+          DataRecord(
+            id: 'note-$i',
+            collection: 'notes',
+            payload: {'value': i},
+            version: 1,
+            createdAt: now.add(Duration(milliseconds: i)),
+            updatedAt: now.add(Duration(milliseconds: i)),
+          ),
+        );
+        dataset['tasks']!.add(
+          DataRecord(
+            id: 'task-$i',
+            collection: 'tasks',
+            payload: {'value': i},
+            version: 1,
+            createdAt: now.add(Duration(milliseconds: i + perCollection)),
+            updatedAt: now.add(Duration(milliseconds: i + perCollection)),
+          ),
+        );
+      }
+
+      for (final entry in dataset.entries) {
+        await sourceStorage.writeRecords(entry.value);
+      }
+
+      final export = await sourceRepo.exportDatabase(const ExportDatabaseRequest());
+
+      final streamingStorage = _TrackingInMemoryAdapter();
+      final streamingRepo = InMemoryDataRepository(storage: streamingStorage);
+      await streamingRepo.importDatabase(
+        ImportDatabaseRequest(
+          payload: export.payload,
+          replaceExisting: true,
+        ),
+      );
+
+      expect(streamingStorage.writeBatchSizes, isNotEmpty);
+      final maxStreamingBatch = streamingStorage.writeBatchSizes.reduce(max);
+      expect(
+        maxStreamingBatch,
+        lessThanOrEqualTo(BaseDataRepository.databaseImportBatchSize),
+      );
+
+      final legacyStorage = _TrackingInMemoryAdapter();
+      final legacyRepo = InMemoryDataRepository(storage: legacyStorage);
+      final legacyPayload = jsonEncode({
+        'formatVersion': '1.0.0',
+        'collections': dataset.map((key, value) => MapEntry(
+              key,
+              value.map((record) => record.toJson()).toList(growable: false),
+            )),
+      });
+
+      await legacyRepo.importDatabase(
+        ImportDatabaseRequest(
+          payload: legacyPayload,
+          replaceExisting: true,
+        ),
+      );
+
+      expect(legacyStorage.writeBatchSizes, isNotEmpty);
+      final maxLegacyBatch = legacyStorage.writeBatchSizes.reduce(max);
+      expect(maxLegacyBatch, greaterThan(maxStreamingBatch));
+
+      await sourceRepo.dispose();
+      await streamingRepo.dispose();
+      await legacyRepo.dispose();
     });
   });
 }
