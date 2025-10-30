@@ -1,10 +1,76 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:async/async.dart';
 import 'package:collection/collection.dart';
 import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
 import 'package:rpc_dart/rpc_dart.dart';
+
+class RpcStreamIterator<T> implements StreamIterator<T> {
+  RpcStreamIterator(Stream<T> stream) : _queue = StreamQueue<T>(stream);
+
+  final StreamQueue<T> _queue;
+  Future<bool>? _pending;
+  T? _current;
+  bool _isDone = false;
+
+  @override
+  T get current {
+    if (_current == null && !_isDone) {
+      throw StateError('No current event available. Call moveNext() first.');
+    }
+    return _current as T;
+  }
+
+  @override
+  Future<bool> moveNext() {
+    if (_isDone) {
+      return Future<bool>.value(false);
+    }
+    final pending = _pending;
+    if (pending != null) {
+      return pending;
+    }
+    final future = _advance();
+    _pending = future;
+    return future;
+  }
+
+  Future<bool> _advance() async {
+    try {
+      if (!await _queue.hasNext) {
+        _current = null;
+        _isDone = true;
+        return false;
+      }
+      _current = await _queue.next;
+      return true;
+    } finally {
+      _pending = null;
+    }
+  }
+
+  @override
+  Future<void> cancel() async {
+    _isDone = true;
+    _current = null;
+    final pending = _pending;
+    _pending = null;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {
+        // Ignore errors from the pending moveNext future when cancelling.
+      }
+    }
+    await _queue.cancel();
+  }
+}
+
+extension RpcStreamIteratorExtension<T> on Stream<T> {
+  RpcStreamIterator<T> get iterator => RpcStreamIterator<T>(this);
+}
 
 /// Тип изменения записи в потоке изменений.
 enum DataChangeType { created, updated, patched, deleted, snapshot }
@@ -1055,9 +1121,7 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
   Stream<String> payloadLines({Encoding encoding = utf8}) {
     final source = payloadStream;
     if (source != null) {
-      return source
-          .transform(encoding.decoder)
-          .transform(const LineSplitter());
+      return source.transform(encoding.decoder).transform(const LineSplitter());
     }
 
     return Stream<String>.fromIterable(

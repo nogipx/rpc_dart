@@ -9,6 +9,11 @@ import 'package:licensify/licensify.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
+import 'change_journal.dart';
+import 'data_contract.dart';
+import 'data_repository.dart';
+import 'models.dart';
+
 /// Callback invoked whenever the adapter executes a SQL statement.
 ///
 /// Primarily intended for integration tests and diagnostics to ensure that
@@ -20,11 +25,6 @@ typedef SqlStatementObserver = void Function(
 
 /// Callback invoked after the adapter finishes its built-in SQLite setup.
 typedef SqliteSetupHook = FutureOr<void> Function(sqlite.Database database);
-
-import 'change_journal.dart';
-import 'data_contract.dart';
-import 'data_repository.dart';
-import 'models.dart';
 
 /// Ошибка инициализации SQLCipher.
 class SqlCipherException implements Exception {
@@ -1011,8 +1011,7 @@ class DriftDataStorageAdapter
 
   static const String _recordUpsertColumnsClause =
       '(id, tenantId, payload, version, created_at, updated_at)';
-  static const String _recordUpsertValuesClause =
-      '(?, ?, ?, ?, ?, ?)';
+  static const String _recordUpsertValuesClause = '(?, ?, ?, ?, ?, ?)';
   static const String _recordUpsertConflictClause =
       ' ON CONFLICT(id) DO UPDATE SET '
       'tenantId = excluded.tenantId, '
@@ -1032,9 +1031,8 @@ class DriftDataStorageAdapter
     }
     final maxRecordsPerStatement =
         _sqliteVariableLimit ~/ _recordUpsertArgumentCount;
-    final chunkSize = maxRecordsPerStatement > 0
-        ? maxRecordsPerStatement
-        : recordList.length;
+    final chunkSize =
+        maxRecordsPerStatement > 0 ? maxRecordsPerStatement : recordList.length;
     for (final chunk in _chunk(recordList, chunkSize)) {
       final sql = StringBuffer(
         'INSERT INTO "$tableName" $_recordUpsertColumnsClause VALUES ',
@@ -1295,7 +1293,7 @@ class DriftDataStorageAdapter
     if (sort == null) {
       return true;
     }
-    return _columnForField(sort.field) != null;
+    return _fieldExpression(sort.field) != null;
   }
 
   Variable _variableForValue(Object value) {
@@ -1731,22 +1729,18 @@ class DriftDataStorageAdapter
         chunkSize <= 0 ? BaseDataRepository.databaseExportChunkSize : chunkSize;
     var offset = 0;
     while (true) {
-      final rows = await _database
-          .customSelect(
-            'SELECT id, tenantId, payload, version, created_at, updated_at '
-            'FROM "$tableName" ORDER BY id LIMIT ? OFFSET ?',
-            variables: [
-              Variable<int>(effectiveChunkSize),
-              Variable<int>(offset),
-            ],
-          )
-          .get();
+      final rows = await _database.customSelect(
+        'SELECT id, tenantId, payload, version, created_at, updated_at '
+        'FROM "$tableName" ORDER BY id LIMIT ? OFFSET ?',
+        variables: [
+          Variable<int>(effectiveChunkSize),
+          Variable<int>(offset),
+        ],
+      ).get();
       if (rows.isEmpty) {
         break;
       }
-      yield rows
-          .map((row) => _mapRow(collection, row))
-          .toList(growable: false);
+      yield rows.map((row) => _mapRow(collection, row)).toList(growable: false);
       offset += rows.length;
       if (rows.length < effectiveChunkSize) {
         break;
@@ -1791,8 +1785,8 @@ class DriftDataStorageAdapter
 
     final sort = request.sort;
     final sortField = sort?.field ?? 'id';
-    final sortColumn = _columnForField(sortField);
-    if (sortColumn == null) {
+    final sortExpression = _fieldExpression(sortField);
+    if (sortExpression == null) {
       throw RpcDataError.invalidArgument(
         'Sorting by "$sortField" is not supported by Drift adapter.',
       );
@@ -1811,12 +1805,13 @@ class DriftDataStorageAdapter
         );
       }
       final comparator = descending ? '<' : '>';
-      whereClauses.add('"$sortColumn" $comparator ?');
+      whereClauses.add('$sortExpression $comparator ?');
+      final sortColumn = _columnForField(sortField);
       if (sortColumn == 'id') {
         values.add(cursor);
       } else {
         final boundary = await _database.customSelect(
-          'SELECT "$sortColumn" AS boundary FROM "$tableName" '
+          'SELECT $sortExpression AS boundary FROM "$tableName" '
           'WHERE id = ? LIMIT 1',
           variables: [Variable<String>(cursor)],
         ).getSingleOrNull();
@@ -1839,10 +1834,12 @@ class DriftDataStorageAdapter
         ..write(whereClauses.join(' AND '));
     }
     querySql
-      ..write(' ORDER BY "')
-      ..write(sortColumn)
-      ..write(descending ? '" DESC' : '" ASC')
-      ..write(', id ')
+      ..write(' ORDER BY ')
+      ..write(sortExpression)
+      ..write(descending ? ' DESC' : ' ASC')
+      ..write(', ')
+      ..write(_qualifiedColumn('id'))
+      ..write(' ')
       ..write(descending ? 'DESC' : 'ASC')
       ..write(' LIMIT ? OFFSET ?');
 
@@ -1851,10 +1848,15 @@ class DriftDataStorageAdapter
       request.options.limit,
       request.options.offset,
     ];
-    _recordStatement(querySql.toString(), queryArgs);
+    final querySqlString = querySql.toString();
+    final loggedQuerySql = querySqlString.replaceAll(
+      '"$tableName"',
+      '"${request.collection}"',
+    );
+    _recordStatement(loggedQuerySql, queryArgs);
     final queryVariables = _buildVariables(queryArgs);
     final rows = await _database
-        .customSelect(querySql.toString(), variables: queryVariables)
+        .customSelect(querySqlString, variables: queryVariables)
         .get();
     final records =
         rows.map((row) => _mapRow(request.collection, row)).toList();
@@ -1874,10 +1876,15 @@ class DriftDataStorageAdapter
           ..write(' WHERE ')
           ..write(filterConditions.join(' AND '));
       }
-      _recordStatement(countSql.toString(), filterValues);
+      final countSqlString = countSql.toString();
+      final loggedCountSql = countSqlString.replaceAll(
+        '"$tableName"',
+        '"${request.collection}"',
+      );
+      _recordStatement(loggedCountSql, filterValues);
       final countVariables = _buildVariables(filterValues);
       final row = await _database
-          .customSelect(countSql.toString(), variables: countVariables)
+          .customSelect(countSqlString, variables: countVariables)
           .getSingle();
       totalCount = row.read<int>('count');
     }
@@ -2311,8 +2318,8 @@ class DriftDataChangeJournal implements DataChangeJournal {
     bool clearOnOpen = false,
     RpcLogger? logger,
   })  : _clearOnOpen = clearOnOpen,
-        _logger = (logger ?? RpcLogger('DriftDataChangeJournal'))
-            .child('Replay');
+        _logger =
+            (logger ?? RpcLogger('DriftDataChangeJournal')).child('Replay');
 
   final DriftDataDatabase _database;
   final bool _clearOnOpen;
