@@ -42,6 +42,14 @@ abstract interface class DataService {
     RpcContext? context,
   });
 
+  /// Выгружает всю коллекцию, последовательно проходя страницы `list`.
+  Future<List<DataRecord>> listAllRecords({
+    required String collection,
+    RecordFilter? filter,
+    SortOrder? sort,
+    RpcContext? context,
+  });
+
   Future<DataRecord> update({
     required String collection,
     required String id,
@@ -72,6 +80,12 @@ abstract interface class DataService {
 
   Future<List<DataRecord>> bulkUpsert({
     required Iterable<DataRecord> records,
+    RpcContext? context,
+  });
+
+  /// Потоковая версия массового upsert-а.
+  Future<List<DataRecord>> bulkUpsertStream({
+    required Stream<DataRecord> records,
     RpcContext? context,
   });
 
@@ -130,8 +144,26 @@ abstract interface class DataService {
   });
 
   /// Двунаправленная синхронизация офлайн-команд.
-  Stream<SyncChangeResponse> syncChanges(Stream<SyncChangeRequest> requests,
-      {RpcContext? context});
+  Stream<SyncChangeResponse> syncChanges(
+    Stream<SyncChangeRequest> requests, {
+    RpcContext? context,
+  });
+
+  /// Отправляет одиночную команду и дожидается подтверждения.
+  Future<SyncChangeResponse> pushAndAwaitAck({
+    required SyncChangeRequest request,
+    RpcContext? context,
+  });
+
+  /// Создает офлайн-очередь команд, привязанную к клиенту.
+  OfflineCommandQueue createOfflineQueue({
+    String? sessionId,
+    DateTime Function()? clock,
+    void Function(Object error, StackTrace stackTrace)? onError,
+  });
+
+  /// Закрывает RPC-подключение клиента.
+  Future<void> close();
 }
 
 /// Клиентская инкапсуляция. Хранит endpoint и caller и реализует интерфейс DataService.
@@ -186,6 +218,21 @@ class DataServiceClient implements DataService {
         sort: sort,
         options: options,
       ),
+      context: context,
+    );
+  }
+
+  @override
+  Future<List<DataRecord>> listAllRecords({
+    required String collection,
+    RecordFilter? filter,
+    SortOrder? sort,
+    RpcContext? context,
+  }) {
+    return _caller.listAllRecords(
+      collection,
+      filter: filter,
+      sort: sort,
       context: context,
     );
   }
@@ -264,9 +311,19 @@ class DataServiceClient implements DataService {
   Future<List<DataRecord>> bulkUpsert({
     required Iterable<DataRecord> records,
     RpcContext? context,
+  }) {
+    return bulkUpsertStream(
+      records: Stream<DataRecord>.fromIterable(records),
+      context: context,
+    );
+  }
+
+  @override
+  Future<List<DataRecord>> bulkUpsertStream({
+    required Stream<DataRecord> records,
+    RpcContext? context,
   }) async {
-    final response = await _caller
-        .bulkUpsert(Stream<DataRecord>.fromIterable(records), context: context);
+    final response = await _caller.bulkUpsert(records, context: context);
     return response.records;
   }
 
@@ -309,10 +366,7 @@ class DataServiceClient implements DataService {
     RpcContext? context,
   }) {
     return _caller.importDatabase(
-      ImportDatabaseRequest(
-        payload: payload,
-        replaceExisting: replaceExisting,
-      ),
+      ImportDatabaseRequest(payload: payload, replaceExisting: replaceExisting),
       context: context,
     );
   }
@@ -402,11 +456,36 @@ class DataServiceClient implements DataService {
   }
 
   @override
-  Stream<SyncChangeResponse> syncChanges(Stream<SyncChangeRequest> requests,
-      {RpcContext? context}) {
+  Stream<SyncChangeResponse> syncChanges(
+    Stream<SyncChangeRequest> requests, {
+    RpcContext? context,
+  }) {
     return _caller.syncChanges(requests, context: context);
   }
 
+  @override
+  Future<SyncChangeResponse> pushAndAwaitAck({
+    required SyncChangeRequest request,
+    RpcContext? context,
+  }) {
+    return _caller.pushAndAwaitAck(request, context: context);
+  }
+
+  @override
+  OfflineCommandQueue createOfflineQueue({
+    String? sessionId,
+    DateTime Function()? clock,
+    void Function(Object error, StackTrace stackTrace)? onError,
+  }) {
+    return OfflineCommandQueue(
+      _caller,
+      sessionId: sessionId,
+      clock: clock,
+      onError: onError,
+    );
+  }
+
+  @override
   Future<void> close() => _endpoint.close();
 }
 
