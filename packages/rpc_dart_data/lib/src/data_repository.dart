@@ -26,23 +26,15 @@ abstract interface class DataRepository {
 
   Future<int> bulkDelete(BulkDeleteRequest request);
 
-  Future<ExportSnapshotResponse> exportSnapshot(
-    ExportSnapshotRequest request,
-  );
+  Future<ExportSnapshotResponse> exportSnapshot(ExportSnapshotRequest request);
 
-  Future<ExportDatabaseResponse> exportDatabase(
-    ExportDatabaseRequest request,
-  );
+  Future<ExportDatabaseResponse> exportDatabase(ExportDatabaseRequest request);
 
-  Future<ImportDatabaseResponse> importDatabase(
-    ImportDatabaseRequest request,
-  );
+  Future<ImportDatabaseResponse> importDatabase(ImportDatabaseRequest request);
 
   Future<SearchRecordsResponse> search(SearchRecordsRequest request);
 
-  Future<AggregateMetricsResponse> aggregate(
-    AggregateMetricsRequest request,
-  );
+  Future<AggregateMetricsResponse> aggregate(AggregateMetricsRequest request);
 
   Stream<DataChangeEvent> watch(WatchChangesRequest request);
 
@@ -50,9 +42,7 @@ abstract interface class DataRepository {
     CreateCollectionIndexRequest request,
   );
 
-  Future<bool> deleteCollectionIndex(
-    DeleteCollectionIndexRequest request,
-  );
+  Future<bool> deleteCollectionIndex(DeleteCollectionIndexRequest request);
 
   Stream<SyncChangeResponse> sync(Stream<SyncChangeRequest> requests);
 
@@ -62,10 +52,7 @@ abstract interface class DataRepository {
 /// Адаптер хранилища, который можно реализовать поверх любого backend-а
 /// (in-memory, SQLite, Postgres и т.д.).
 abstract interface class DataStorageAdapter {
-  Future<DataRecord?> readRecord(
-    String collection,
-    String id,
-  );
+  Future<DataRecord?> readRecord(String collection, String id);
 
   Future<Map<String, DataRecord>> readRecords(
     String collection,
@@ -85,15 +72,9 @@ abstract interface class DataStorageAdapter {
 
   Future<void> writeRecords(Iterable<DataRecord> records);
 
-  Future<bool> deleteRecord(
-    String collection,
-    String id,
-  );
+  Future<bool> deleteRecord(String collection, String id);
 
-  Future<int> deleteRecords(
-    String collection,
-    Iterable<String> ids,
-  );
+  Future<int> deleteRecords(String collection, Iterable<String> ids);
 
   Future<bool> deleteCollection(String collection);
 
@@ -121,9 +102,64 @@ abstract interface class CollectionIndexStorageAdapter {
     CreateCollectionIndexRequest request,
   );
 
-  Future<bool> deleteCollectionIndex(
-    DeleteCollectionIndexRequest request,
-  );
+  Future<bool> deleteCollectionIndex(DeleteCollectionIndexRequest request);
+}
+
+enum _SnapshotEntryType { header, collection, record, collectionEnd, footer }
+
+class _SnapshotParsedEntry {
+  _SnapshotParsedEntry.header()
+      : type = _SnapshotEntryType.header,
+        collection = null,
+        record = null,
+        declaredCollectionCount = null,
+        declaredRecordCount = null;
+
+  _SnapshotParsedEntry.collection(this.collection)
+      : type = _SnapshotEntryType.collection,
+        record = null,
+        declaredCollectionCount = null,
+        declaredRecordCount = null;
+
+  _SnapshotParsedEntry.record(this.record)
+      : type = _SnapshotEntryType.record,
+        collection = record?.collection,
+        declaredCollectionCount = null,
+        declaredRecordCount = null;
+
+  _SnapshotParsedEntry.collectionEnd()
+      : type = _SnapshotEntryType.collectionEnd,
+        collection = null,
+        record = null,
+        declaredCollectionCount = null,
+        declaredRecordCount = null;
+
+  _SnapshotParsedEntry.footer({
+    this.declaredCollectionCount,
+    this.declaredRecordCount,
+  })  : type = _SnapshotEntryType.footer,
+        collection = null,
+        record = null;
+
+  final _SnapshotEntryType type;
+  final String? collection;
+  final DataRecord? record;
+  final int? declaredCollectionCount;
+  final int? declaredRecordCount;
+}
+
+class _SnapshotValidationResult {
+  _SnapshotValidationResult({
+    required this.seenCollections,
+    required this.declaredCollectionCount,
+    required this.declaredRecordCount,
+    required this.actualRecordCount,
+  });
+
+  final Set<String> seenCollections;
+  final int? declaredCollectionCount;
+  final int? declaredRecordCount;
+  final int actualRecordCount;
 }
 
 /// Базовая реализация `DataRepository`, инкапсулирующая общую бизнес-логику
@@ -188,10 +224,7 @@ abstract class BaseDataRepository implements DataRepository {
       record: record,
     );
     _changeController.add(event);
-    await _enforceJournalRetention(
-      record.collection,
-      occurredAt: occurredAt,
-    );
+    await _enforceJournalRetention(record.collection, occurredAt: occurredAt);
     return event;
   }
 
@@ -208,10 +241,7 @@ abstract class BaseDataRepository implements DataRepository {
       occurredAt: occurredAt,
     );
     _changeController.add(event);
-    await _enforceJournalRetention(
-      collection,
-      occurredAt: occurredAt,
-    );
+    await _enforceJournalRetention(collection, occurredAt: occurredAt);
     return event;
   }
 
@@ -252,18 +282,17 @@ abstract class BaseDataRepository implements DataRepository {
         );
       }
       final records = value
-          .map((entry) => DataRecord.fromJson(
-                Map<String, dynamic>.from(entry as Map),
-              ))
+          .map(
+            (entry) =>
+                DataRecord.fromJson(Map<String, dynamic>.from(entry as Map)),
+          )
           .toList(growable: false);
       parsed[key] = records;
     });
     return parsed;
   }
 
-  Map<String, dynamic> _decodeSnapshotPayload(
-    ImportDatabaseRequest request,
-  ) {
+  Map<String, dynamic> _decodeSnapshotPayload(ImportDatabaseRequest request) {
     final decoded = jsonDecode(request.payload);
     if (decoded is! Map) {
       throw RpcDataError.invalidArgument('Invalid snapshot payload');
@@ -292,11 +321,7 @@ abstract class BaseDataRepository implements DataRepository {
           final previous = existingRecords[collection];
           if (previous != null) {
             for (final record in previous.values) {
-              await _recordDeletion(
-                collection,
-                record.id,
-                record.version + 1,
-              );
+              await _recordDeletion(collection, record.id, record.version + 1);
             }
           }
           await storage.deleteCollection(collection);
@@ -313,11 +338,7 @@ abstract class BaseDataRepository implements DataRepository {
         final previous = existingRecords[collection];
         if (previous != null && previous.isNotEmpty) {
           for (final record in previous.values) {
-            await _recordDeletion(
-              collection,
-              record.id,
-              record.version + 1,
-            );
+            await _recordDeletion(collection, record.id, record.version + 1);
           }
           await storage.deleteCollection(collection);
         }
@@ -355,69 +376,6 @@ abstract class BaseDataRepository implements DataRepository {
           'Invalid snapshot entry: ' + error.message,
         );
       }
-    }
-
-    enum _SnapshotEntryType {
-      header,
-      collection,
-      record,
-      collectionEnd,
-      footer,
-    }
-
-    class _SnapshotParsedEntry {
-      _SnapshotParsedEntry.header()
-          : type = _SnapshotEntryType.header,
-            collection = null,
-            record = null,
-            declaredCollectionCount = null,
-            declaredRecordCount = null;
-
-      _SnapshotParsedEntry.collection(this.collection)
-          : type = _SnapshotEntryType.collection,
-            record = null,
-            declaredCollectionCount = null,
-            declaredRecordCount = null;
-
-      _SnapshotParsedEntry.record(this.record)
-          : type = _SnapshotEntryType.record,
-            collection = record?.collection,
-            declaredCollectionCount = null,
-            declaredRecordCount = null;
-
-      _SnapshotParsedEntry.collectionEnd()
-          : type = _SnapshotEntryType.collectionEnd,
-            collection = null,
-            record = null,
-            declaredCollectionCount = null,
-            declaredRecordCount = null;
-
-      _SnapshotParsedEntry.footer({
-        this.declaredCollectionCount,
-        this.declaredRecordCount,
-      })  : type = _SnapshotEntryType.footer,
-            collection = null,
-            record = null;
-
-      final _SnapshotEntryType type;
-      final String? collection;
-      final DataRecord? record;
-      final int? declaredCollectionCount;
-      final int? declaredRecordCount;
-    }
-
-    class _SnapshotValidationResult {
-      _SnapshotValidationResult({
-        required this.seenCollections,
-        required this.declaredCollectionCount,
-        required this.declaredRecordCount,
-        required this.actualRecordCount,
-      });
-
-      final Set<String> seenCollections;
-      final int? declaredCollectionCount;
-      final int? declaredRecordCount;
-      final int actualRecordCount;
     }
 
     Future<_SnapshotValidationResult> validateSnapshot(
@@ -506,8 +464,9 @@ abstract class BaseDataRepository implements DataRepository {
                 'Snapshot record payload must be an object',
               );
             }
-            final record =
-                DataRecord.fromJson(Map<String, dynamic>.from(data as Map));
+            final record = DataRecord.fromJson(
+              Map<String, dynamic>.from(data as Map),
+            );
             if (record.collection != currentCollection) {
               throw RpcDataError.invalidArgument(
                 'Snapshot record collection mismatch for ' + record.id,
@@ -553,7 +512,9 @@ abstract class BaseDataRepository implements DataRepository {
       }
       if (currentCollection.isNotEmpty) {
         throw RpcDataError.invalidArgument(
-          'Snapshot ended before closing collection "' + currentCollection + '"',
+          'Snapshot ended before closing collection "' +
+              currentCollection +
+              '"',
         );
       }
 
@@ -567,6 +528,7 @@ abstract class BaseDataRepository implements DataRepository {
 
     final validation = await validateSnapshot(
       Stream<String>.fromIterable(LineSplitter.split(payload)),
+      onEntry: (_) async {},
     );
 
     if (validation.declaredCollectionCount != null &&
@@ -622,11 +584,7 @@ abstract class BaseDataRepository implements DataRepository {
         chunkSize: BaseDataRepository.databaseExportChunkSize,
       )) {
         for (final record in chunk) {
-          await _recordDeletion(
-            collection,
-            record.id,
-            record.version + 1,
-          );
+          await _recordDeletion(collection, record.id, record.version + 1);
         }
       }
       await storage.deleteCollection(collection);
@@ -679,11 +637,7 @@ abstract class BaseDataRepository implements DataRepository {
           chunkSize: BaseDataRepository.databaseExportChunkSize,
         )) {
           for (final record in chunk) {
-            await _recordDeletion(
-              collection,
-              record.id,
-              record.version + 1,
-            );
+            await _recordDeletion(collection, record.id, record.version + 1);
           }
         }
         await storage.deleteCollection(collection);
@@ -757,10 +711,7 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<DataRecord> update(UpdateRecordRequest request) async {
-    final existing = await storage.readRecord(
-      request.collection,
-      request.id,
-    );
+    final existing = await storage.readRecord(request.collection, request.id);
     if (existing == null) {
       throw RpcDataError.notFound(
         'Record ${request.id} not found in ${request.collection}',
@@ -785,10 +736,7 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<DataRecord> patch(PatchRecordRequest request) async {
-    final existing = await storage.readRecord(
-      request.collection,
-      request.id,
-    );
+    final existing = await storage.readRecord(request.collection, request.id);
     if (existing == null) {
       throw RpcDataError.notFound(
         'Record ${request.id} not found in ${request.collection}',
@@ -814,10 +762,7 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<bool> delete(DeleteRecordRequest request) async {
-    final existing = await storage.readRecord(
-      request.collection,
-      request.id,
-    );
+    final existing = await storage.readRecord(request.collection, request.id);
     if (existing == null) {
       return false;
     }
@@ -851,11 +796,7 @@ abstract class BaseDataRepository implements DataRepository {
     await _journal.purgeCollection(request.collection);
 
     for (final record in existingRecords) {
-      await _recordDeletion(
-        request.collection,
-        record.id,
-        record.version + 1,
-      );
+      await _recordDeletion(request.collection, record.id, record.version + 1);
     }
 
     return true;
@@ -928,10 +869,7 @@ abstract class BaseDataRepository implements DataRepository {
 
   @override
   Future<int> bulkDelete(BulkDeleteRequest request) async {
-    final existing = await storage.readRecords(
-      request.collection,
-      request.ids,
-    );
+    final existing = await storage.readRecords(request.collection, request.ids);
 
     final removed = await storage.deleteRecords(
       request.collection,
@@ -943,11 +881,7 @@ abstract class BaseDataRepository implements DataRepository {
       if (record == null) {
         continue;
       }
-      await _recordDeletion(
-        request.collection,
-        record.id,
-        record.version + 1,
-      );
+      await _recordDeletion(request.collection, record.id, record.version + 1);
     }
 
     return removed;
@@ -958,10 +892,7 @@ abstract class BaseDataRepository implements DataRepository {
     ExportSnapshotRequest request,
   ) async {
     final collection = await storage.readCollection(request.collection);
-    return ExportSnapshotResponse(
-      records: collection,
-      generatedAt: _clock(),
-    );
+    return ExportSnapshotResponse(records: collection, generatedAt: _clock());
   }
 
   @override
@@ -971,26 +902,59 @@ abstract class BaseDataRepository implements DataRepository {
     final generatedAt = _clock();
     final collections = await storage.listCollections();
 
-    final computation = await _computeExportMetadata(
-      request: request,
-      generatedAt: generatedAt,
-      collections: collections,
-    );
+    Map<String, _PreparedChunkStream>? preparedStreams;
+    if (!request.includePayloadString) {
+      preparedStreams = _prepareChunkStreams(collections);
+    }
 
-    final payloadStream = _buildExportStream(
-      generatedAt: generatedAt,
-      collections: collections,
-      recordCount: computation.recordCount,
-    );
+    try {
+      final computation = await _computeExportMetadata(
+        request: request,
+        generatedAt: generatedAt,
+        collections: collections,
+      );
 
-    return ExportDatabaseResponse(
-      payload: computation.payload,
-      payloadStream: payloadStream,
-      generatedAt: generatedAt,
-      formatVersion: _databaseFormatVersion,
-      collectionCount: collections.length,
-      recordCount: computation.recordCount,
-    );
+      final payloadStream = _buildExportStream(
+        generatedAt: generatedAt,
+        collections: collections,
+        recordCount: computation.recordCount,
+        preparedStreams: preparedStreams,
+      );
+
+      return ExportDatabaseResponse(
+        payload: computation.payload,
+        payloadStream: payloadStream,
+        generatedAt: generatedAt,
+        formatVersion: _databaseFormatVersion,
+        collectionCount: collections.length,
+        recordCount: computation.recordCount,
+      );
+    } catch (error) {
+      if (preparedStreams != null) {
+        for (final stream in preparedStreams.values) {
+          await stream.iterator.cancel();
+        }
+      }
+      rethrow;
+    }
+  }
+
+  Map<String, _PreparedChunkStream> _prepareChunkStreams(
+    Iterable<String> collections,
+  ) {
+    final result = <String, _PreparedChunkStream>{};
+    for (final collection in collections) {
+      final iterator = StreamIterator<List<DataRecord>>(
+        storage.readCollectionChunks(
+          collection,
+          chunkSize: BaseDataRepository.databaseExportChunkSize,
+        ),
+      );
+      final pending = iterator.moveNext();
+      result[collection] =
+          _PreparedChunkStream(iterator: iterator, pending: pending);
+    }
+    return result;
   }
 
   Future<_ExportComputationResult> _computeExportMetadata({
@@ -1014,10 +978,7 @@ abstract class BaseDataRepository implements DataRepository {
         return;
       }
       buffer.writeln(
-        encoder.convert({
-          'type': 'record',
-          'data': record.toJson(),
-        }),
+        encoder.convert({'type': 'record', 'data': record.toJson()}),
       );
     }
 
@@ -1028,28 +989,27 @@ abstract class BaseDataRepository implements DataRepository {
     });
 
     for (final collection in collections) {
-      writeLine({
-        'type': 'collection',
-        'name': collection,
-      });
+      writeLine({'type': 'collection', 'name': collection});
 
-      await for (final chunk in storage.readCollectionChunks(
-        collection,
-        chunkSize: BaseDataRepository.databaseExportChunkSize,
-      )) {
-        if (chunk.isEmpty) {
-          continue;
+      if (request.includePayloadString) {
+        await for (final chunk in storage.readCollectionChunks(
+          collection,
+          chunkSize: BaseDataRepository.databaseExportChunkSize,
+        )) {
+          if (chunk.isEmpty) {
+            continue;
+          }
+          for (final record in chunk) {
+            writeRecord(record);
+          }
+          recordCount += chunk.length;
         }
-        for (final record in chunk) {
-          writeRecord(record);
-        }
-        recordCount += chunk.length;
+      } else {
+        final records = await storage.readCollection(collection);
+        recordCount += records.length;
       }
 
-      writeLine({
-        'type': 'collectionEnd',
-        'name': collection,
-      });
+      writeLine({'type': 'collectionEnd', 'name': collection});
     }
 
     writeLine({
@@ -1068,6 +1028,7 @@ abstract class BaseDataRepository implements DataRepository {
     required DateTime generatedAt,
     required List<String> collections,
     required int recordCount,
+    Map<String, _PreparedChunkStream>? preparedStreams,
   }) async* {
     final encoder = const JsonEncoder();
 
@@ -1083,30 +1044,36 @@ abstract class BaseDataRepository implements DataRepository {
     });
 
     for (final collection in collections) {
-      yield encodeLine({
-        'type': 'collection',
-        'name': collection,
-      });
-
-      await for (final chunk in storage.readCollectionChunks(
-        collection,
-        chunkSize: BaseDataRepository.databaseExportChunkSize,
-      )) {
-        if (chunk.isEmpty) {
-          continue;
-        }
-        for (final record in chunk) {
-          yield encodeLine({
-            'type': 'record',
-            'data': record.toJson(),
-          });
-        }
+      final prepared = preparedStreams?[collection];
+      final chunkIterator = prepared?.iterator ??
+          StreamIterator<List<DataRecord>>(
+            storage.readCollectionChunks(
+              collection,
+              chunkSize: BaseDataRepository.databaseExportChunkSize,
+            ),
+          );
+      var hasChunk = prepared?.pending ?? chunkIterator.moveNext();
+      if (prepared == null) {
+        await Future<void>.delayed(Duration.zero);
       }
 
-      yield encodeLine({
-        'type': 'collectionEnd',
-        'name': collection,
-      });
+      yield encodeLine({'type': 'collection', 'name': collection});
+
+      while (await hasChunk) {
+        final chunk = chunkIterator.current;
+        final nextPending = chunkIterator.moveNext();
+        if (chunk.isNotEmpty) {
+          for (final record in chunk) {
+            yield encodeLine({'type': 'record', 'data': record.toJson()});
+          }
+        }
+        hasChunk = nextPending;
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      await chunkIterator.cancel();
+
+      yield encodeLine({'type': 'collectionEnd', 'name': collection});
     }
 
     yield encodeLine({
@@ -1147,16 +1114,11 @@ abstract class BaseDataRepository implements DataRepository {
       }
     }
 
-    return _importStreamingSnapshot(
-      payload,
-      request.replaceExisting,
-    );
+    return _importStreamingSnapshot(payload, request.replaceExisting);
   }
 
   @override
-  Future<SearchRecordsResponse> search(
-    SearchRecordsRequest request,
-  ) async {
+  Future<SearchRecordsResponse> search(SearchRecordsRequest request) async {
     return _delegateToAdapter(
       () => storage.searchCollection(request),
       'search queries',
@@ -1183,8 +1145,9 @@ abstract class BaseDataRepository implements DataRepository {
         'Storage adapter does not support collection indexes.',
       );
     }
-    return (storage as CollectionIndexStorageAdapter)
-        .createCollectionIndex(request);
+    return (storage as CollectionIndexStorageAdapter).createCollectionIndex(
+      request,
+    );
   }
 
   @override
@@ -1196,14 +1159,13 @@ abstract class BaseDataRepository implements DataRepository {
         'Storage adapter does not support collection indexes.',
       );
     }
-    return (storage as CollectionIndexStorageAdapter)
-        .deleteCollectionIndex(request);
+    return (storage as CollectionIndexStorageAdapter).deleteCollectionIndex(
+      request,
+    );
   }
 
   @override
-  Stream<DataChangeEvent> watch(
-    WatchChangesRequest request,
-  ) {
+  Stream<DataChangeEvent> watch(WatchChangesRequest request) {
     return Stream<DataChangeEvent>.multi((listener) async {
       try {
         final backlog = await _journal.replayCollection(
@@ -1237,9 +1199,7 @@ abstract class BaseDataRepository implements DataRepository {
     });
   }
 
-  Future<DataRecord?> _fetchConflictRecord(
-    DataCommand command,
-  ) async {
+  Future<DataRecord?> _fetchConflictRecord(DataCommand command) async {
     switch (command.type) {
       case DataCommandType.create:
         final request = CreateRecordRequest.fromJson(command.payload);
@@ -1252,10 +1212,7 @@ abstract class BaseDataRepository implements DataRepository {
       case DataCommandType.update:
         final request = UpdateRecordRequest.fromJson(command.payload);
         return get(
-          GetRecordRequest(
-            collection: request.collection,
-            id: request.id,
-          ),
+          GetRecordRequest(collection: request.collection, id: request.id),
         );
       case DataCommandType.patch:
         final request = PatchRecordRequest.fromJson(command.payload);
@@ -1270,9 +1227,7 @@ abstract class BaseDataRepository implements DataRepository {
     }
   }
 
-  Future<SyncChangeResponse> _applyCommand(
-    SyncChangeRequest message,
-  ) async {
+  Future<SyncChangeResponse> _applyCommand(SyncChangeRequest message) async {
     final command = message.command;
     switch (command.type) {
       case DataCommandType.create:
@@ -1322,9 +1277,7 @@ abstract class BaseDataRepository implements DataRepository {
   }
 
   @override
-  Stream<SyncChangeResponse> sync(
-    Stream<SyncChangeRequest> requests,
-  ) async* {
+  Stream<SyncChangeResponse> sync(Stream<SyncChangeRequest> requests) async* {
     await for (final message in requests) {
       try {
         final response = await _applyCommand(message);
@@ -1495,15 +1448,19 @@ Map<String, num> _computeAggregates(
 
     switch (op) {
       case 'sum':
-        result[entry.key] =
-            values.fold<num>(0, (previousValue, element) => previousValue + element);
+        result[entry.key] = values.fold<num>(
+          0,
+          (previousValue, element) => previousValue + element,
+        );
         break;
       case 'avg':
         if (values.isEmpty) {
           result[entry.key] = 0;
         } else {
-          final total =
-              values.fold<num>(0, (previousValue, element) => previousValue + element);
+          final total = values.fold<num>(
+            0,
+            (previousValue, element) => previousValue + element,
+          );
           result[entry.key] = total / values.length;
         }
         break;
@@ -1514,9 +1471,7 @@ Map<String, num> _computeAggregates(
         result[entry.key] = values.isEmpty ? 0 : values.reduce(max);
         break;
       default:
-        throw RpcDataError.invalidArgument(
-          'Unknown aggregate operation "$op"',
-        );
+        throw RpcDataError.invalidArgument('Unknown aggregate operation "$op"');
     }
   }
 
@@ -1543,9 +1498,7 @@ void _validateAggregateMetrics(AggregateMetricsRequest request) {
       case 'max':
         continue;
       default:
-        throw RpcDataError.invalidArgument(
-          'Unknown aggregate operation "$op"',
-        );
+        throw RpcDataError.invalidArgument('Unknown aggregate operation "$op"');
     }
   }
 }
@@ -1560,10 +1513,20 @@ class _ExportComputationResult {
   final int recordCount;
 }
 
+class _PreparedChunkStream {
+  _PreparedChunkStream({
+    required this.iterator,
+    required this.pending,
+  });
+
+  final StreamIterator<List<DataRecord>> iterator;
+  Future<bool> pending;
+}
+
 /// In-memory адаптер, реализующий интерфейс `DataStorageAdapter` на обычных
 /// картах. Эту реализацию легко заменить на SQLite/Isar/Hive, не меняя
 /// бизнес-логику `BaseDataRepository`.
-final class InMemoryStorageAdapter implements DataStorageAdapter {
+class InMemoryStorageAdapter implements DataStorageAdapter {
   final Map<String, Map<String, DataRecord>> _storage = {};
 
   Map<String, DataRecord> _collection(String collection) {
@@ -1603,14 +1566,18 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
     String collection, {
     int chunkSize = BaseDataRepository.databaseExportChunkSize,
   }) async* {
-    final records = await readCollection(collection);
-    if (records.isEmpty) {
+    final store = _collection(collection);
+    if (store.isEmpty) {
       return;
     }
-    final effectiveChunkSize = chunkSize <= 0 ? records.length : chunkSize;
-    for (var offset = 0; offset < records.length; offset += effectiveChunkSize) {
-      final end = min(offset + effectiveChunkSize, records.length);
-      yield records.sublist(offset, end);
+    final entries = List<DataRecord>.from(store.values, growable: false);
+    final effectiveChunkSize =
+        chunkSize <= 0 ? entries.length : max(1, chunkSize);
+    for (var offset = 0;
+        offset < entries.length;
+        offset += effectiveChunkSize) {
+      final end = min(offset + effectiveChunkSize, entries.length);
+      yield entries.sublist(offset, end);
     }
   }
 
@@ -1619,15 +1586,17 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
     ListRecordsRequest request,
   ) async {
     final collection = await readCollection(request.collection);
-    final filtered =
-        _filterAndSortRecords(collection, request.filter, request.sort);
+    final filtered = _filterAndSortRecords(
+      collection,
+      request.filter,
+      request.sort,
+    );
     final cursorIndex = _resolveCursorStart(filtered, request.options.cursor);
     final baseIndex = cursorIndex + request.options.offset;
     final startIndex = min(filtered.length, max(0, baseIndex));
     final endIndex = min(startIndex + request.options.limit, filtered.length);
     final slice = filtered.sublist(startIndex, endIndex);
-    final nextCursor =
-        endIndex < filtered.length && slice.isNotEmpty ? slice.last.id : null;
+    final nextCursor = slice.isNotEmpty ? slice.last.id : null;
     final totalCount =
         request.options.includeTotalCount ? filtered.length : null;
 
@@ -1650,14 +1619,12 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
     final collection = await readCollection(request.collection);
     final filtered = _filterAndSortRecords(collection, request.filter, null);
     final query = request.query.toLowerCase();
-    final hits = filtered
-        .where((record) {
-          final text = record.payload.values
-              .map((value) => value.toString().toLowerCase())
-              .join(' ');
-          return text.contains(query);
-        })
-        .toList(growable: false);
+    final hits = filtered.where((record) {
+      final text = record.payload.values
+          .map((value) => value.toString().toLowerCase())
+          .join(' ');
+      return text.contains(query);
+    }).toList(growable: false);
 
     final cursorIndex = _resolveCursorStart(hits, request.options.cursor);
     final baseIndex = cursorIndex + request.options.offset;
@@ -1695,10 +1662,7 @@ final class InMemoryStorageAdapter implements DataStorageAdapter {
   }
 
   @override
-  Future<int> deleteRecords(
-    String collection,
-    Iterable<String> ids,
-  ) async {
+  Future<int> deleteRecords(String collection, Iterable<String> ids) async {
     final store = _collection(collection);
     var removed = 0;
     for (final id in ids) {

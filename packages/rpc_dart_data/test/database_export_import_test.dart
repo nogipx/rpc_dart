@@ -34,7 +34,8 @@ class _TrackingInMemoryAdapter extends InMemoryStorageAdapter {
   @override
   Future<List<DataRecord>> readCollection(String collection) {
     if (failOnFullCollectionRead) {
-      throw StateError('readCollection should not be used during streaming export');
+      throw StateError(
+          'readCollection should not be used during streaming export');
     }
     return super.readCollection(collection);
   }
@@ -88,7 +89,9 @@ class _BackpressureInMemoryAdapter extends InMemoryStorageAdapter {
       return;
     }
     final effectiveChunkSize = max(1, forcedChunkSize);
-    for (var offset = 0; offset < records.length; offset += effectiveChunkSize) {
+    for (var offset = 0;
+        offset < records.length;
+        offset += effectiveChunkSize) {
       final gate = Completer<void>();
       _gates.add(gate);
       await gate.future;
@@ -202,7 +205,8 @@ void main() {
       await trackingStorage.writeRecords(records);
 
       trackingStorage.failOnFullCollectionRead = true;
-      final export = await repository.exportDatabase(const ExportDatabaseRequest());
+      final export =
+          await repository.exportDatabase(const ExportDatabaseRequest());
 
       expect(export.recordCount, recordCount);
       expect(export.payloadStream, isNotNull);
@@ -272,9 +276,9 @@ void main() {
       expect(storage.pendingChunks, equals(1));
 
       final stalled = iterator.moveNext().timeout(
-        const Duration(milliseconds: 100),
-        onTimeout: () => false,
-      );
+            const Duration(milliseconds: 100),
+            onTimeout: () => false,
+          );
       expect(await stalled, isFalse);
 
       storage.allowNextChunk();
@@ -287,9 +291,9 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(storage.pendingChunks, equals(1));
       final stalledAgain = iterator.moveNext().timeout(
-        const Duration(milliseconds: 100),
-        onTimeout: () => false,
-      );
+            const Duration(milliseconds: 100),
+            onTimeout: () => false,
+          );
       expect(await stalledAgain, isFalse);
 
       storage.allowNextChunk();
@@ -351,7 +355,8 @@ void main() {
         await sourceStorage.writeRecords(entry.value);
       }
 
-      final export = await sourceRepo.exportDatabase(const ExportDatabaseRequest());
+      final export =
+          await sourceRepo.exportDatabase(const ExportDatabaseRequest());
 
       final streamingStorage = _TrackingInMemoryAdapter();
       final streamingRepo = InMemoryDataRepository(storage: streamingStorage);
@@ -416,7 +421,9 @@ void main() {
       );
 
       var totalRecords = 0;
-      for (var collectionIndex = 0; collectionIndex < collections; collectionIndex++) {
+      for (var collectionIndex = 0;
+          collectionIndex < collections;
+          collectionIndex++) {
         final collectionName = 'collection-$collectionIndex';
         buffer.writeln(
           jsonEncode({
