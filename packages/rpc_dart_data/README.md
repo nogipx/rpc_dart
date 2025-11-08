@@ -1,42 +1,29 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
-
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages). 
-
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages). 
--->
-
 # rpc_dart_data
 
-Высокоуровневый слой данных (CRUD + запросы + стримы + офлайн синхронизация) поверх `rpc_dart`. Предоставляет:
+`rpc_dart_data` is the high-level data layer (CRUD + queries + change streams + offline sync) that sits on top of [`rpc_dart`](https://pub.dev/packages/rpc_dart).
+It gives you a transport-agnostic contract, ready-to-use storage adapters, and utilities for building offline-friendly backends and clients.
 
-- Универсальный контракт `DataService` (create/get/list/update/patch/delete/deleteCollection)
-- Пакетные операции: bulkUpsert / bulkDelete
-- Поиск и метрики: search + aggregate (count / sum / avg / min / max)
-- Экспорт снимка коллекции (snapshot)
-- Полный экспорт/импорт базы с опциональным шифрованием
-- Реактивные изменения: watchChanges с курсорами
-- Offline-first: двунаправленный syncChanges + очередь команд `OfflineCommandQueue`
-- Оптимистичная конкуренция через версии записей
-- Опциональная авторизация через заголовок `authorization: Bearer ...` с проверкой по белому списку токенов
+## Feature highlights
+- **Unified `DataService` contract** with helpers for create/get/list/update/patch/delete/deleteCollection.
+- **Bulk workflows** via `bulkUpsert`, `bulkUpsertStream`, and `bulkDelete` to move large batches atomically.
+- **Search & aggregations** (`search`, `aggregate`) delegated to the storage adapter, including backend pagination.
+- **Streaming snapshots**: export/import the full database as NDJSON, stream it through `payloadStream`, or set `includePayloadString: false` to skip building large strings.
+- **Change streams & offline sync**: `watchChanges` with cursors, bidirectional `syncChanges`, and `OfflineCommandQueue` for durable command queues.
+- **SQLite/Drift adapter** with SQLCipher support and a `SqliteSetupHook` so you can register custom pragmas before the database is exposed to your code.
+- **Ready-made environments** (`DataServiceFactory.inMemory`) for tests, demos, and local prototyping.
 
-## Архитектура (слои)
-1. Transport (WebSocket / HTTP2 / isolate / TURN / in-memory) из `rpc_dart_transports`
-2. Endpoint (`RpcCallerEndpoint` / `RpcResponderEndpoint`)
-3. Контракт + кодеки (`IDataServiceContract` + RpcCodec<...>)
-4. Низкоуровневый слой (DataServiceCaller / DataServiceResponder)
-5. Repository + StorageAdapter (бизнес-логика + журнал событий)
-6. Фасад (DataServiceClient / DataServiceServer / DataServiceFactory / InMemoryDataServiceEnvironment)
-7. Утилиты офлайн (`OfflineCommandQueue`)
+## Architecture in seven layers
+1. **Transport** (WebSocket / HTTP/2 / isolates / TURN / in-memory) provided by `rpc_dart_transports`.
+2. **Endpoint** (`RpcCallerEndpoint` / `RpcResponderEndpoint`).
+3. **Contract + codecs** (`IDataServiceContract` and `RpcCodec<...>`).
+4. **Low-level plumbing** (`DataServiceCaller` / `DataServiceResponder`).
+5. **Repository + storage adapter** (`BaseDataRepository`, change journal, and the concrete adapter: in-memory or Drift).
+6. **Facade** (`DataServiceClient`, `DataServiceServer`, `DataServiceFactory`, `InMemoryDataServiceEnvironment`).
+7. **Offline utilities** such as `OfflineCommandQueue` and reconnection helpers.
 
-Вы переиспользуете 6-й уровень — остальное скрывается.
+Consumers usually interact only with layer 6 while everything below stays private.
 
-## Быстрый старт
+## Quick start
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
@@ -44,199 +31,86 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 Future<void> main() async {
   final env = await DataServiceFactory.inMemory();
   final client = env.client;
-  // Контекст с Authorization заголовком нужен только если сервер проверяет bearer токены.
   final ctx = RpcContext.withHeaders({'authorization': 'Bearer dev'});
 
-  final rec = await client.create(
+  final created = await client.create(
     collection: 'notes',
     payload: {'title': 'Hello', 'done': false},
     context: ctx,
   );
 
-  final watchSub = client
+  final sub = client
       .watchChanges(collection: 'notes', context: ctx)
-      .listen((e) => print('Change: ${e.type} id=${e.id} v=${e.version}'));
+      .listen((event) => print('change=${event.type} id=${event.id} v=${event.version}'));
 
   await client.patch(
     collection: 'notes',
-    id: rec.id,
-    expectedVersion: rec.version,
+    id: created.id,
+    expectedVersion: created.version,
     patch: const RecordPatch(set: {'done': true}),
     context: ctx,
   );
 
   await Future<void>.delayed(const Duration(milliseconds: 50));
-  await watchSub.cancel();
+  await sub.cancel();
   await env.dispose();
 }
 ```
-Полный пример см. `example/extended_demo.dart`.
+See `example/extended_demo.dart` for a larger walkthrough.
 
-## HTTP/2 сервис и компиляция
+## Streaming export and import
+`DataRepository.exportDatabase` writes every snapshot as newline-delimited JSON (NDJSON).
+Each line contains a `header`, `collection`, `record`, `collectionEnd`, or `footer` entry. You can either:
 
-В пакете есть консольный сервер `bin/serve.dart`, который можно запускать
-напрямую или собрать в автономный бинарь. Для компиляции используйте рецепт из
-`justfile`:
+- Work with the whole payload as a string (default), or
+- Set `ExportDatabaseRequest(includePayloadString: false)` and consume the `payloadStream` to keep memory flat while sending it over the wire.
 
-```bash
-just compile_serve [build/rpc_dart_data_serve] [-- <доп. флаги dart compile>]
+Imports accept the same format. When `replaceExisting` is `true`, missing collections are removed and re-created so the target repository matches the snapshot exactly. Legacy JSON (format version 1.0.0) is still accepted for backward compatibility, but it requires loading the entire blob in memory first.
+
+`ImportDatabaseRequest` always validates the snapshot stream before mutating any collections, and the importer processes records in `databaseImportBatchSize` chunks, so very large dumps no longer spike RAM usage.
+
+### Example: piping exported data
+```dart
+final export = await repository.exportDatabase(
+  const ExportDatabaseRequest(includePayloadString: false),
+);
+await for (final chunk in export.payloadStream!) {
+  sink.add(chunk); // write to file/socket/etc
+}
 ```
 
-Рецепт создаст каталог для результата и вызовет
-`fvm dart compile exe bin/serve.dart`. Путь до бинаря можно опустить — по
-умолчанию используется `build/rpc_dart_data_serve`.
-
-После сборки бинарный файл можно запускать независимо от SDK. Сервер обрабатывает
-сигналы `SIGINT`/`SIGTERM` и корректно завершает работу, закрывая HTTP/2
-соединения и репозиторий данных. По умолчанию он создаёт файл `data_service.sqlite`
-в рабочем каталоге процесса (см. `--database` ниже), поэтому без дополнительной
-конфигурации вы сразу получаете persistent-хранилище на диске. На этапе старта
-сервер автоматически разворачивает схему, если файл отсутствует, и выполняет
-быструю проверку целостности существующего файла, чтобы убедиться, что база готова
-к использованию перед обработкой запросов. В CLI доступны
-дополнительные опции:
-
-- `--daemon` (`-D`) — запускает сервер в фоне, создавая отсоединённый дочерний
-  процесс. В этом режиме основной процесс сразу завершает работу, а управление
-  переходит демону.
-- `--pid-file <path>` — путь до PID файла (по умолчанию `data_service.pid`).
-  Файл блокируется эксклюзивно и хранит PID активного процесса. При остановке
-  сервера блокировка снимается, а файл удаляется.
-- `--database-key <paserk>` — включает SQLCipher для файла SQLite. Принимает
-  только PASERK `k4.local` (XChaCha20) строку, полученную, например, через
-  `LicensifySymmetricKey.generateLocalKey().toPaserk()`. Ключ читается только
-  из CLI аргумента и не выводится в логи.
-- `--auth-token <value>` — добавляет статический bearer токен. Можно указать
-  несколько флагов, а также считать секреты из переменных окружения
-  (`--auth-token-env NAME`) или файла (`--auth-token-file path`). Если токены
-  не заданы, сервис предупреждает и работает без проверки заголовка `Authorization`.
-- `--secure-wrap` и связанные параметры — включают шифрование/аутентификацию
-  поверх HTTP/2 через Licensify. Ключи передаются **только** в формате PASERK:
-  `--secure-wrap-private-key` принимает строку `k4.secret`, а
-  `--secure-wrap-peer-key` — `k4.public` удалённого пира. Дополнительно можно
-  настроить формат кадров (`--secure-wrap-frame-format`), таймауты handshake и
-  поведение паддинга.
-- `--relay` — подключает сервис к TURN relay из пакета `rpc_dart_transports`.
-  Укажите адрес/порт (`--relay-host`, `--relay-port`), идентификатор публикации
-  (`--relay-service-id`), а также опциональные метаданные `key=value` через
-  `--relay-metadata`. Метаданные сериализуются в JSON и отправляются в описании
-  сервиса, что позволяет клиентам получить transportId secure wrap и другие
-  параметры для автоконфигурации.
-
-Если демон не может захватить PID файл (например, уже запущен другой экземпляр),
-он завершится с ошибкой. Для корректной работы фонового режима запускайте
-команду через `dart run bin/serve.dart` или через скомпилированный бинарь.
-
-## Использование за backend-ом
-
-Для сервисного сценария, когда единственный клиент — ваш backend, включите
-аутентификацию через bearer токены и храните их в секрете окружения. Пример
-запуска:
-
-```bash
-rpc-data serve \
-  --host 127.0.0.1 --port 9042 \
-  --database /var/lib/rpc_data.sqlite \
-  --auth-token-env DATA_SERVICE_TOKEN
-```
-
-Backend передаёт заголовок `Authorization: Bearer $DATA_SERVICE_TOKEN` при
-каждом RPC-вызове. Токены можно прокинуть через менеджер секретов, volume или
-отдельный файл с ограниченными правами. При необходимости заведите несколько
-токенов (для разных сервисов) и укажите их множественными флагами `--auth-token`
-или через отдельные переменные окружения.
-
-### Почему конечных клиентов лучше подключать через backend
-
-`rpc_dart_data` не предназначен для прямой работы с тысячами независимых
-пользовательских устройств. Даже при включённом SecureWrap и белых списках
-токенов остаются ограничения:
-
-- **Аутентификация и авторизация.** Сервис проверяет только bearer токены и
-  не умеет управлять сессиями, квотами или политиками доступа на уровне
-  отдельных пользователей. Любой клиент, получивший токен, получит полный
-  доступ к коллекциям.
-- **Изоляция трафика.** Каждое устройство держит собственное HTTP/2
-  соединение/стримы. При десятках тысяч одновременно подключённых клиентов
-  потребуется следить за лимитами file descriptor'ов, таймаутами Keep-Alive и
-  объёмом change-журнала, что обычно проще решать на backend-слое.
-- **Бизнес-логика и согласованность.** Конфликты версий решаются только
-  оптимистичной блокировкой (`expectedVersion`). Backend может централизованно
-  управлять транзакциями, координировать записи и применять дополнительные
-  проверки, прежде чем пускать изменения в общую базу.
-
-Поэтому рекомендуемый профиль: backend держит постоянное соединение и
-выполняет операции от имени пользователей, а внешние клиенты общаются только с
-backend'ом. Это даёт контроль над безопасностью, возможностью кешировать
-результаты и масштабировать нагрузку привычными способами.
-
-### Как разделять данные нескольких клиентов
-
-`rpc_dart_data` не вводит собственных понятий организаций/аккаунтов, поэтому
-разделение данных реализуется на backend-уровне. Практический подход выглядит так:
-
-1. **Назначьте tenant-id.** Backend присваивает каждому клиенту (или проекту)
-   уникальный идентификатор и хранит его в своей сессии/токене.
-2. **Пространство имён коллекций.** Для изоляции создавайте коллекции с
-   префиксом `tenantId`. Например, пользователь `acme` работает с коллекцией
-   `acme__orders`, а `beta` — с `beta__orders`. Такое «порождение» таблиц
-   нормально для десятков/сотен клиентов: SQLite создаёт их по требованию,
-   каждая коллекция получает собственные индексы, а операции других
-   tenant-ов не блокируют друг друга. Если же счёт идёт на тысячи коллекций,
-   становится сложнее выполнять миграции и управлять правами, поэтому в этом
-   случае переключайтесь на следующий вариант с полем фильтрации.
-3. **Поле фильтрации.** Если неудобно плодить коллекции, добавьте в записи поле
-   `tenantId` и оборачивайте все запросы через backend, который автоматически
-   вставляет фильтр `where: {'tenantId': currentTenant}`. Для Drift-адаптера
-   включите индекс по полям `tenantId`/`updatedAt`, чтобы выборки и
-   пагинация оставались эффективными.
-4. **Доступ по контракту.** Клиентские токены не выдают напрямую; вместо этого
-   backend проверяет, к какому tenant относится запрос, и вызывает RPC-метод
-   от своего имени, подставляя корректный `tenantId`/префикс.
-
-Такой шаблон даёт чёткую изоляцию данных и упрощает эксплуатацию: можно
-добавлять новых клиентов, не меняя схему базы, а при необходимости переносить
-tenant в отдельный экземпляр сервиса — просто скопируйте соответствующие
-коллекции.
-
-## Экспорт и импорт базы данных
-
-`DataRepository.exportDatabase` возвращает снимок всех коллекций в формате NDJSON (по одной JSON-записи на строку).
-Первая строка — `header` с `formatVersion`, `generatedAt` и служебной информацией. Далее идут блоки
-`collection`/`record`/`collectionEnd` для каждой коллекции и завершающий `footer` с агрегатами.
-Репозиторий больше не занимается шифрованием: держите сервис в защищённой среде или шифруйте
-данные на уровне прикладного кода, если это требуется политиками безопасности.
-
-### Импорт базы данных
-
-`ImportDatabaseRequest` принимает тот же NDJSON. По умолчанию новые записи заливаются поверх
-существующих. Если указать `replaceExisting: true`, репозиторий очистит отсутствующие коллекции
-и удалит старые записи перед импортом. Для обратной совместимости поддерживается и устаревший
-JSON-формат (`formatVersion: 1.0.0`), но он требует загрузки всего снимка в память.
-
-## Offline очередь и синхронизация
+## Offline queue and sync commands
 ```dart
 final env = await DataServiceFactory.inMemory();
 final client = env.client;
-final ctx = RpcContext.withHeaders({'authorization':'Bearer x'});
-final queue = OfflineCommandQueue(client.rawCaller, sessionId: 'device-1');
+final ctx = RpcContext.withHeaders({'authorization': 'Bearer x'});
+final queue = client.createOfflineQueue(sessionId: 'device-1');
 
-// Локально (офлайн) формируем команду create и сериализуем
-final cmd = queue.buildCreateCommand(
-  const CreateRecordRequest(collection: 'tasks', payload: {'title':'Draft'}),
+final command = queue.buildCreateCommand(
+  const CreateRecordRequest(collection: 'tasks', payload: {'title': 'Draft'}),
 );
-final json = cmd.toJson();
+final persistedJson = command.toJson();
 
-// Позже (онлайн) восстанавливаем и отправляем
-final ackFuture = queue.enqueueCommand(DataCommand.fromJson(json), autoStart: false, context: ctx);
+final ackFuture = queue.enqueueCommand(
+  DataCommand.fromJson(persistedJson),
+  autoStart: false,
+  context: ctx,
+);
 await queue.start(context: ctx);
 await queue.flushPending();
 final ack = await ackFuture;
-print('Applied=${ack.applied} id=${ack.record?.id}');
+print('applied=${ack.applied} id=${ack.record?.id}');
 ```
-Используйте `resolveConflicts=false` в `enqueueCommand` если хотите падать при конфликте, иначе придёт `conflict` + `error` в ответе и команда не будет выброшена.
+Use `enqueueCommand(..., resolveConflicts: false)` if you prefer the queue to stop on conflicts instead of retrying automatically.
 
-## Агрегаты
+`DataServiceClient` now includes:
+- `listAllRecords` – paginates through `list()` until the entire collection is in memory.
+- `bulkUpsertStream` – streams large batches directly to the repository.
+- `pushAndAwaitAck` – sends a single sync command and waits for the response.
+- `createOfflineQueue` – a convenience constructor for `OfflineCommandQueue`.
+- `close` – shuts down the underlying RPC endpoint.
+
+## Aggregations
 ```dart
 final metrics = await client.aggregate(
   collection: 'orders',
@@ -251,141 +125,56 @@ final metrics = await client.aggregate(
 );
 print(metrics.metrics);
 ```
+The repository validates metric expressions and delegates supported work to the storage adapter.
 
-В файловом профиле подсчёт (`count`) выполняется на стороне SQLite, тогда как
-`sum`/`avg`/`min`/`max` пока остаются в памяти — их можно подключать выборочно
-через собственные адаптеры.
+## Change streams and optimistic concurrency
+- `watchChanges` accepts an optional `cursor`, so clients can resume after a reconnect.
+- Drift/SQLite keeps a persistent `change_journal` table, allowing cursors to survive restarts.
+- `update` and `patch` require an `expectedVersion`. A mismatch triggers `RpcDataError.conflict(...)` (or a transport `RpcException`).
 
-## Стрим изменений
-`watchChanges` принимает опциональный `cursor` — можно продолжить с точки останова. Для Drift/SQLite адаптера журнал изменений хранится в таблице `change_journal`, поэтому после рестарта можно восстановить курсоры и догнать изменения. In-memory профиль продолжает использовать оперативную память и предназначен только для тестов.
-
-## Конфликты
-- `update` требует `expectedVersion`, совпадающий с текущей версией записи.
-- `patch` требует точного совпадения `expectedVersion`.
-- При нарушении получите `RpcDataError.conflict(...)` (или базовый `RpcException`, если перешло через границу транспорта), в офлайн sync — `SyncChangeResponse(applied=false, conflict=...)`.
-
-## Расширение / кастомное хранилище
-Реализуйте `DataStorageAdapter`:
+## Extending the storage layer
+Implement `DataStorageAdapter` to plug in any backend (PostgreSQL, Elastic, Firestore, ...):
 ```dart
 class PostgresAdapter implements DataStorageAdapter {
-  // readRecord, writeRecord, deleteRecord, ... собственная реализация
-  @override Future<DataRecord?> readRecord(String collection, String id) async { /* ... */ }
-  // остальные методы
-  @override Future<ListRecordsResponse> queryCollection(ListRecordsRequest request) async { /* SQL с фильтрами */ }
-  @override Future<SearchRecordsResponse> searchCollection(SearchRecordsRequest request) async { /* FTS/ILIKE */ }
-  @override Future<AggregateMetricsResponse> aggregateCollection(AggregateMetricsRequest request) async { /* агрегации */ }
-  @override Future<bool> deleteCollection(String collection) async { /* ... */ }
-  @override Future<void> dispose() async {}
+  @override
+  Future<DataRecord?> readRecord(String collection, String id) async {
+    // Query your store and return DataRecord when a row exists.
+  }
+
+  @override
+  Future<ListRecordsResponse> queryCollection(ListRecordsRequest request) async {
+    // Apply filters + pagination server-side.
+  }
+
+  // Implement searchCollection, aggregateCollection, writeRecords, deleteCollection, etc.
 }
-
-final repo = InMemoryDataRepository(storage: InMemoryStorageAdapter()); // по умолчанию
-// или свой:
-final server = DataServiceFactory.createServer(
-  transport: myTransport,
-  repository: InMemoryDataRepository(storage: /* ваш адаптер */),
-);
 ```
+Adapters participate in streaming export/import by overriding `readCollectionChunks`, and they can expose custom indices via `CollectionIndexStorageAdapter` if needed.
 
-## Drift + SQLite хранилище
-Пакет включает готовый адаптер `DriftDataStorageAdapter`, который хранит записи в SQLite
-через [drift](https://drift.simonbinder.eu/). Его можно использовать как in-memory БД или
-persisted файл:
+## Drift/SQLite profile
+`DriftDataStorageAdapter` ships as the default single-node implementation:
+- Creates per-collection tables on demand plus indexes on `version`, `created_at`, and `updated_at`.
+- Delegates filtering, sorting, and pagination to SQL for predictable O(log N) plans.
+- Uses batched UPSERT statements to keep `writeRecords` fast even when thousands of rows are updated.
+- Supports SQLCipher by passing a `SqlCipherKey` or a `SqliteSetupHook` that registers additional pragmas.
+- Stores `watch()` / `sync()` events in a durable journal, so cursor-based clients recover after restarts.
 
-```dart
-final storage = DriftDataStorageAdapter.file(
-  File('data.sqlite3'),
-  sqlCipherKey: SqlCipherKey.fromPaserk(
-    paserk: 'k4.local....', // храните отдельно и передавайте при запуске
-  ),
-);
-final repository = DriftDataRepository(storage: storage);
-final env = await DataServiceFactory.inMemory(repository: repository);
-
-final ctx = RpcContext.withHeaders({'authorization': 'Bearer demo'});
-await env.client.create(collection: 'notes', payload: {'title': 'Hello'}, context: ctx);
-```
-
-Если системная библиотека SQLite собрана без SQLCipher, адаптер выбросит
-`SqlCipherException` при первом открытии файла. Убедитесь, что рантайм подхватывает
-`libsqlcipher` (или другую совместимую сборку) и доступен `PRAGMA cipher_version`.
-
-Для тестов или демо можно использовать in-memory вариант:
-
-```dart
-final storage = DriftDataStorageAdapter.memory();
-```
-
-При вызове `dispose()` на репозитории/сервисе подключение к SQLite закрывается автоматически.
-
-Каждая коллекция хранится в отдельной таблице. Адаптер автоматически регистрирует коллекцию
-в служебной таблице `collection_registry` и создаёт dedicated-таблицу при первой записи.
-Имя таблицы генерируется из названия коллекции: символы за пределами `[a-zA-Z0-9_]`
-нормализуются. Это позволяет держать коллекции изолированно и упрощает бэкапы/миграции:
-
-```text
-sqlite> .tables
-collection_registry   c_notes   c_tasks
-```
-
-Чтение из ещё не созданной коллекции вернёт пустой список и не создаст таблицу, пока не
-произойдёт первая запись.
-
-Коллекцию можно удалить вызовом `deleteCollection(collection: 'archive')` на `DataService`.
-Адаптер удалит таблицу и запись в `collection_registry`, не затрагивая другие коллекции.
-
-В версии single-node дополнительно создаются индексы на `version`, `created_at` и `updated_at`,
-а методы `list()` и `aggregate(count)` делегируются в SQLite. Это даёт предсказуемые
-O(log N) планы выполнения даже при десятках тысяч записей в коллекции и сводит к минимуму
-издержки на сетевую передачу.
-
-## Тесты
-Рекомендуем smoke тест (пример добавлен в `test/data_service_facade_test.dart`).
-Запуск:
+## Testing
+Smoke tests are located in `test/data_service_facade_test.dart`. Run the whole suite with:
 ```bash
 dart test --concurrency=1 -r compact
 ```
 
-## Примеры
-- `example/quick_start.dart` — минимальный
-- `example/offline_sync.dart` — офлайн очередь
-- `example/extended_demo.dart` — полный сценарий
+## Examples
+- `example/quick_start.dart`
+- `example/offline_sync.dart`
+- `example/extended_demo.dart`
 
-## Планы / идеи
-- Плагинные политики разрешения конфликтов (last-write-wins, merge payload)
-- Настраиваемый retention журнала изменений и TTL для коллекций
-- Расширенные сценарии поиска (FTS5, гео-запросы) поверх SQLite
-- Production адаптеры для других СУБД (Isar / Postgres)
+## Production checklist
+- Schedule regular backups using `exportDatabase`; periodically restore them into a staging environment with `importDatabase`.
+- Restrict RPC access through a reverse proxy with authentication and rate limiting.
+- Monitor the SQLite database and change-journal size (e.g., via `sqlite3` CLI or metrics collectors).
+- Keep an eye on the [CHANGELOG](CHANGELOG.md) for breaking changes and new capabilities.
 
-## Single-node профиль для «поднял и пользуюсь»
-
-`rpc_dart_data` поставляется с готовой конфигурацией для одного узла,
-способной выдержать порядка 10 000 активных пользователей в сутки на обычном
-SSD-инстансе. Ключевые кирпичики уже на месте:
-
-- **Персистентное хранилище по умолчанию.** CLI `serve` запускает сервис с
-  файловым `DriftDataStorageAdapter.file(...)`, автоматически создаёт каталоги
-  и при необходимости включает SQLCipher.
-- **Журнал изменений переживает рестарт.** События `watch()`/`sync()`
-  фиксируются в таблице `change_journal`, поэтому офлайн-клиенты восстанавливают
-  курсоры даже после обновления процесса.
-- **Серверная фильтрация и индексы.** `DriftDataStorageAdapter` умеет
-  выполнять `list()` поверх SQL (фильтры, пагинация, сортировки по `id`/`createdAt`/`updatedAt`)
-  и создаёт индексы на ключевых столбцах. Клиент перестаёт сканировать всю коллекцию.
-- **Атомарные bulk операции.** `bulkUpsert` агрегирует записи и отдаёт их в
-  `writeRecords`, который выполняет транзакцию и батчевые UPSERT-запросы на стороне
-  SQLite. В случае ошибки состояние коллекции не разъезжается.
-- **Экспорт/импорт и офлайн-очередь.** Резервные копии можно снимать через
-  `exportDatabase`, а фоновые клиенты используют `OfflineCommandQueue` для
-  консистентной синхронизации.
-
-Что ещё стоит сделать в продакшне:
-
-- Настроить регулярный бэкап (cron + `exportDatabase`) и проверять
-  `importDatabase` на стенде.
-- Ограничить доступ до RPC через reverse proxy с аутентификацией и rate limiting.
-- Отслеживать размер файла БД и журнала (например, через `sqlite3` CLI).
-- Следить за релизными заметками в [CHANGELOG.md](CHANGELOG.md).
-
-
-## Лицензия
-См. LICENSE (наследует лицензионную политику родительского репо).
+## License
+[MIT](LICENSE)

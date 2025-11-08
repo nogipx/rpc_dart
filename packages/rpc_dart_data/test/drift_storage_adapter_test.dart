@@ -495,7 +495,8 @@ void main() {
     );
 
     expect(upserted, hasLength(3));
-    expect(upserted.map((e) => e.id), containsAll([newNote.id, updatedNote.id, updatedTask.id]));
+    expect(upserted.map((e) => e.id),
+        containsAll([newNote.id, updatedNote.id, updatedTask.id]));
 
     final fetchedNew = await env.client.get(
       collection: 'notes',
