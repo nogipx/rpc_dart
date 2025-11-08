@@ -171,10 +171,7 @@ void main(List<String> arguments) {
     exitCode = 64;
     return;
   }
-  if (needsInlayGeometry &&
-      raiseHeight != null &&
-      baseHeight != null &&
-      baseHeight <= raiseHeight) {
+  if (needsInlayGeometry && baseHeight <= raiseHeight) {
     stderr.writeln('Inlay geometry requires --base-height > --raise-height.');
     exitCode = 64;
     return;

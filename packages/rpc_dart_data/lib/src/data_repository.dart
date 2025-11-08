@@ -370,10 +370,10 @@ abstract class BaseDataRepository implements DataRepository {
         if (decoded is! Map) {
           throw const FormatException('Entry is not an object');
         }
-        return Map<String, dynamic>.from(decoded as Map);
+        return Map<String, dynamic>.from(decoded);
       } on FormatException catch (error) {
         throw RpcDataError.invalidArgument(
-          'Invalid snapshot entry: ' + error.message,
+          'Invalid snapshot entry: ${error.message}',
         );
       }
     }
@@ -428,9 +428,7 @@ abstract class BaseDataRepository implements DataRepository {
             }
             if (currentCollection.isNotEmpty) {
               throw RpcDataError.invalidArgument(
-                'Snapshot opened a new collection before closing "' +
-                    currentCollection +
-                    '"',
+                'Snapshot opened a new collection before closing "$currentCollection"',
               );
             }
             final name = entry['name'] as String?;
@@ -441,7 +439,7 @@ abstract class BaseDataRepository implements DataRepository {
             }
             if (!seenCollections.add(name)) {
               throw RpcDataError.invalidArgument(
-                'Collection "' + name + '" appears multiple times',
+                'Collection "$name" appears multiple times',
               );
             }
             currentCollection = name;
@@ -465,11 +463,11 @@ abstract class BaseDataRepository implements DataRepository {
               );
             }
             final record = DataRecord.fromJson(
-              Map<String, dynamic>.from(data as Map),
+              Map<String, dynamic>.from(data),
             );
             if (record.collection != currentCollection) {
               throw RpcDataError.invalidArgument(
-                'Snapshot record collection mismatch for ' + record.id,
+                'Snapshot record collection mismatch for ${record.id}',
               );
             }
             actualRecordCount += 1;
@@ -502,7 +500,7 @@ abstract class BaseDataRepository implements DataRepository {
             break;
           default:
             throw RpcDataError.invalidArgument(
-              'Unknown snapshot entry type "' + type + '"',
+              'Unknown snapshot entry type "$type"',
             );
         }
       }
@@ -512,9 +510,7 @@ abstract class BaseDataRepository implements DataRepository {
       }
       if (currentCollection.isNotEmpty) {
         throw RpcDataError.invalidArgument(
-          'Snapshot ended before closing collection "' +
-              currentCollection +
-              '"',
+          'Snapshot ended before closing collection "$currentCollection"',
         );
       }
 
@@ -535,19 +531,13 @@ abstract class BaseDataRepository implements DataRepository {
         validation.declaredCollectionCount !=
             validation.seenCollections.length) {
       throw RpcDataError.invalidArgument(
-        'Snapshot declared ' +
-            validation.declaredCollectionCount.toString() +
-            ' collections but contained ' +
-            validation.seenCollections.length.toString(),
+        'Snapshot declared ${validation.declaredCollectionCount} collections but contained ${validation.seenCollections.length}',
       );
     }
     if (validation.declaredRecordCount != null &&
         validation.declaredRecordCount != validation.actualRecordCount) {
       throw RpcDataError.invalidArgument(
-        'Snapshot declared ' +
-            validation.declaredRecordCount.toString() +
-            ' records but contained ' +
-            validation.actualRecordCount.toString(),
+        'Snapshot declared ${validation.declaredRecordCount} records but contained ${validation.actualRecordCount}',
       );
     }
 
@@ -623,10 +613,7 @@ abstract class BaseDataRepository implements DataRepository {
 
     if (importedRecords != validation.actualRecordCount) {
       throw RpcDataError.internal(
-        'Imported ' +
-            importedRecords.toString() +
-            ' records but snapshot contained ' +
-            validation.actualRecordCount.toString(),
+        'Imported $importedRecords records but snapshot contained ${validation.actualRecordCount}',
       );
     }
 

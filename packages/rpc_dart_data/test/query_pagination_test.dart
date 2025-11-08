@@ -2,8 +2,7 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 
 class _TestRepository extends BaseDataRepository {
-  _TestRepository(DataStorageAdapter storage)
-      : super(storage, clock: () => DateTime.utc(2024, 1, 1));
+  _TestRepository(super.storage) : super(clock: () => DateTime.utc(2024, 1, 1));
 }
 
 class _ThrowingAdapter implements DataStorageAdapter {
@@ -26,7 +25,8 @@ class _ThrowingAdapter implements DataStorageAdapter {
   }
 
   @override
-  Future<ListRecordsResponse> queryCollection(ListRecordsRequest request) async {
+  Future<ListRecordsResponse> queryCollection(
+      ListRecordsRequest request) async {
     throw UnimplementedError('list');
   }
 
@@ -109,7 +109,7 @@ void main() {
       await repository.dispose();
     });
 
-    Future<void> _seedTasks() async {
+    Future<void> seedTasks() async {
       final now = DateTime.utc(2024, 1, 1);
       for (var i = 0; i < 5; i++) {
         final status = i.isEven ? 'open' : 'closed';
@@ -127,7 +127,7 @@ void main() {
     }
 
     test('list applies filter, sort, limit and offset', () async {
-      await _seedTasks();
+      await seedTasks();
 
       final response = await repository.list(
         const ListRecordsRequest(
@@ -199,7 +199,7 @@ void main() {
       await repository.dispose();
     });
 
-    Future<void> _seedTasks() async {
+    Future<void> seedTasks() async {
       for (var i = 0; i < 5; i++) {
         final status = i.isEven ? 'open' : 'closed';
         await repository.create(
@@ -213,7 +213,7 @@ void main() {
     }
 
     test('list delegates pagination to SQLite', () async {
-      await _seedTasks();
+      await seedTasks();
 
       statements.clear();
       final response = await repository.list(

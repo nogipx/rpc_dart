@@ -16,6 +16,8 @@ topics:
 dependencies:
   rpc_dart: ^2.3.1
   rpc_dart_transports: ^1.4.0
+  universal_io: ^2.2.2
+  crypto: ^3.0.6
 
 dev_dependencies:
   lints: ^5.1.1

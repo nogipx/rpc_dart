@@ -65,10 +65,10 @@ class _TrackingInMemoryAdapter extends InMemoryStorageAdapter {
 }
 
 class _BackpressureInMemoryAdapter extends InMemoryStorageAdapter {
-  _BackpressureInMemoryAdapter({this.forcedChunkSize = 1});
+  _BackpressureInMemoryAdapter();
 
   final List<Completer<void>> _gates = <Completer<void>>[];
-  final int forcedChunkSize;
+  final int forcedChunkSize = 1;
 
   int get pendingChunks => _gates.length;
 

@@ -16,7 +16,7 @@ void main() {
       await journal.dispose();
     });
 
-    Future<DataChangeEvent> _writeEvent(String collection, int index) {
+    Future<DataChangeEvent> writeEvent(String collection, int index) {
       return journal.recordChange(
         type: DataChangeType.created,
         collection: collection,
@@ -35,9 +35,9 @@ void main() {
     }
 
     test('replay returns backlog after a known cursor', () async {
-      final first = await _writeEvent('tasks', 0);
-      final second = await _writeEvent('tasks', 1);
-      final third = await _writeEvent('tasks', 2);
+      final first = await writeEvent('tasks', 0);
+      final second = await writeEvent('tasks', 1);
+      final third = await writeEvent('tasks', 2);
 
       final replayed = await journal.replayCollection(
         'tasks',
@@ -52,7 +52,7 @@ void main() {
     test('replay throws when cursor was pruned', () async {
       final cursors = <String>[];
       for (var i = 0; i < 5; i++) {
-        cursors.add((await _writeEvent('tasks', i)).cursor);
+        cursors.add((await writeEvent('tasks', i)).cursor);
       }
 
       await journal.prune(collection: 'tasks', maxEvents: 2);
@@ -66,7 +66,7 @@ void main() {
     test('replay after prune returns remaining events', () async {
       final events = <DataChangeEvent>[];
       for (var i = 0; i < 10; i++) {
-        events.add(await _writeEvent('tasks', i));
+        events.add(await writeEvent('tasks', i));
       }
 
       final toKeepAfter = events[events.length - 3].cursor;
@@ -89,7 +89,7 @@ void main() {
       const total = 10000;
       final stored = <String>[];
       for (var i = 0; i < total; i++) {
-        final event = await _writeEvent('jobs', i);
+        final event = await writeEvent('jobs', i);
         if (i % 2000 == 0) {
           stored.add(event.cursor);
         }
@@ -104,13 +104,13 @@ void main() {
     });
 
     test('purge removes collection backlog and index', () async {
-      await _writeEvent('logs', 0);
+      await writeEvent('logs', 0);
       await journal.purgeCollection('logs');
 
       final replayed = await journal.replayCollection('logs');
       expect(replayed, isEmpty);
 
-      await _writeEvent('logs', 1);
+      await writeEvent('logs', 1);
       final afterPurge = await journal.replayCollection('logs');
       expect(afterPurge, hasLength(1));
     });
