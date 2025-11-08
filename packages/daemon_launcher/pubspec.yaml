@@ -1,0 +1,17 @@
+name: daemon_launcher
+version: 0.1.0
+publish_to: none
+
+description: Utilities for launching and supervising daemon processes.
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  universal_io: ^2.2.2
+  rpc_dart: ^2.3.1
+  path: ^1.9.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.24.0
