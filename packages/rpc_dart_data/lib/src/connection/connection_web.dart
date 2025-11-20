@@ -1,56 +1,54 @@
-import 'dart:typed_data';
-
 import 'package:rpc_dart_data/rpc_dart_data.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
-Never _unsupported() => throw UnsupportedError(
-      'sqlite3-based storage is not available on web platforms yet.',
-    );
+const _defaultOptions = SqliteConnectionOptions.defaults;
 
-Future<DatabaseConnection> openMainDb({
-  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
+Future<DatabaseConnection> _openDatabase(
+  sqlite.Database database, {
+  SqlCipherKey? sqlCipherKey,
+  SqliteSetupHook? sqliteSetup,
+}) async {
+  if (sqlCipherKey != null) {
+    sqlCipherKey.applyTo(database);
+  }
+  ensureJsonExtractFunction(database);
+  final hook = sqliteSetup;
+  if (hook != null) {
+    await hook(database);
+  }
+  return DatabaseConnection(database);
+}
+
+/// Открывает файл на веб-платформе (использует in-memory базу).
+Future<DatabaseConnection> openFileDb({
+  SqliteConnectionOptions options = _defaultOptions,
+  bool logStatements = false,
+  SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
 }) async {
   options;
-  sqliteSetup;
-  return _unsupported();
+  logStatements;
+  final database = sqlite.sqlite3.openInMemory();
+  return _openDatabase(
+    database,
+    sqlCipherKey: sqlCipherKey,
+    sqliteSetup: sqliteSetup,
+  );
 }
 
-Future<SqliteDataStorageAdapter> openMainStorage({
-  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
+/// Открывает в памяти базу на вебе.
+Future<DatabaseConnection> openInMemoryDb({
+  SqliteConnectionOptions options = _defaultOptions,
+  bool logStatements = false,
+  SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
 }) async {
   options;
-  sqliteSetup;
-  return _unsupported();
-}
-
-Future<Never> replaceMainDbFromBytes(
-  Uint8List bytes, {
-  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
-}) async {
-  options;
-  bytes;
-  return _unsupported();
-}
-
-Future<DatabaseConnection> openTempDbFromBytes(
-  Uint8List bytes, {
-  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
-  SqliteSetupHook? sqliteSetup,
-}) async {
-  options;
-  sqliteSetup;
-  bytes;
-  return _unsupported();
-}
-
-Future<SqliteDataStorageAdapter> openTempStorageFromBytes(
-  Uint8List bytes, {
-  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
-  SqliteSetupHook? sqliteSetup,
-}) async {
-  options;
-  sqliteSetup;
-  bytes;
-  return _unsupported();
+  logStatements;
+  final database = sqlite.sqlite3.openInMemory();
+  return _openDatabase(
+    database,
+    sqlCipherKey: sqlCipherKey,
+    sqliteSetup: sqliteSetup,
+  );
 }

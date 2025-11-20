@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 void main() {
   group('SqliteDataStorageAdapter expression indexes', () {
     test('createCollectionIndex creates json expression index', () async {
-      final adapter = await openMainStorage();
+      final adapter = await SqliteDataStorageAdapter.memory();
       addTearDown(() async {
         await adapter.dispose();
       });
@@ -54,7 +54,7 @@ void main() {
     });
 
     test('deleteCollectionIndex removes json expression index', () async {
-      final adapter = await openMainStorage();
+      final adapter = await SqliteDataStorageAdapter.memory();
       addTearDown(() async {
         await adapter.dispose();
       });
