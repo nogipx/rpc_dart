@@ -5,7 +5,7 @@ import 'dart:math';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 
-Future<void> _seedSampleData(DataRepository repository) async {
+Future<void> _seedSampleData(IDataRepository repository) async {
   await repository.create(
     const CreateRecordRequest(
       collection: 'notes',

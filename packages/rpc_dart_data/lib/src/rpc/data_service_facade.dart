@@ -1,173 +1,10 @@
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
-
-import 'data_caller.dart';
-import 'data_repository.dart';
-import 'data_responder.dart';
-import 'models.dart';
-
-/// Высокоуровневый фасад, инкапсулирующий работу с RPC-слоем для сервиса данных.
-///
-/// Цели:
-/// * Спрятать детали RpcCallerEndpoint / RpcResponderEndpoint от прикладного кода;
-/// * Дать единый интерфейс для развёртывания сервиса (server side) и вызова (client side);
-/// * Упростить создание in-memory окружения (тесты, демо, локальный dev);
-/// * Сконцентрировать продвинутые настройки (dataTransferMode, repository и т.п.) в одном месте.
-///
-/// При необходимости можно обратиться к низкоуровневым классам напрямую (DataServiceCaller
-/// и DataServiceResponder) — они продолжают работать как прежде.
-
-/// Унифицированный интерфейс CRUD/Query операций.
-/// Возвращает уже "распакованные" данные вместо *Response объектов где это логично.
-abstract interface class DataService {
-  Future<DataRecord> create({
-    required String collection,
-    required Map<String, dynamic> payload,
-    String? id,
-    RpcContext? context,
-  });
-
-  Future<DataRecord?> get({
-    required String collection,
-    required String id,
-    RpcContext? context,
-  });
-
-  Future<ListRecordsResponse> list({
-    required String collection,
-    RecordFilter? filter,
-    SortOrder? sort,
-    QueryOptions options,
-    RpcContext? context,
-  });
-
-  /// Выгружает всю коллекцию, последовательно проходя страницы `list`.
-  Future<List<DataRecord>> listAllRecords({
-    required String collection,
-    RecordFilter? filter,
-    SortOrder? sort,
-    RpcContext? context,
-  });
-
-  Future<DataRecord> update({
-    required String collection,
-    required String id,
-    required int expectedVersion,
-    required Map<String, dynamic> payload,
-    RpcContext? context,
-  });
-
-  Future<DataRecord> patch({
-    required String collection,
-    required String id,
-    required int expectedVersion,
-    required RecordPatch patch,
-    RpcContext? context,
-  });
-
-  Future<bool> delete({
-    required String collection,
-    required String id,
-    int? expectedVersion,
-    RpcContext? context,
-  });
-
-  Future<bool> deleteCollection({
-    required String collection,
-    RpcContext? context,
-  });
-
-  Future<List<DataRecord>> bulkUpsert({
-    required Iterable<DataRecord> records,
-    RpcContext? context,
-  });
-
-  /// Потоковая версия массового upsert-а.
-  Future<List<DataRecord>> bulkUpsertStream({
-    required Stream<DataRecord> records,
-    RpcContext? context,
-  });
-
-  Future<int> bulkDelete({
-    required String collection,
-    required List<String> ids,
-    RpcContext? context,
-  });
-
-  Future<ExportSnapshotResponse> exportSnapshot({
-    required String collection,
-    RpcContext? context,
-  });
-
-  Future<ExportDatabaseResponse> exportDatabase({RpcContext? context});
-
-  Future<ImportDatabaseResponse> importDatabase({
-    required String payload,
-    bool replaceExisting = true,
-    RpcContext? context,
-  });
-
-  Future<SearchRecordsResponse> search({
-    required String collection,
-    required String query,
-    RecordFilter? filter,
-    QueryOptions options,
-    RpcContext? context,
-  });
-
-  Future<AggregateMetricsResponse> aggregate({
-    required String collection,
-    RecordFilter? filter,
-    Map<String, String> metrics,
-    RpcContext? context,
-  });
-
-  Future<CollectionIndex> createCollectionIndex({
-    required String collection,
-    required String path,
-    String? indexName,
-    RpcContext? context,
-  });
-
-  Future<bool> deleteCollectionIndex({
-    required String collection,
-    required String path,
-    String? indexName,
-    RpcContext? context,
-  });
-
-  Stream<DataChangeEvent> watchChanges({
-    required String collection,
-    String? cursor,
-    RpcContext? context,
-  });
-
-  /// Двунаправленная синхронизация офлайн-команд.
-  Stream<SyncChangeResponse> syncChanges(
-    Stream<SyncChangeRequest> requests, {
-    RpcContext? context,
-  });
-
-  /// Отправляет одиночную команду и дожидается подтверждения.
-  Future<SyncChangeResponse> pushAndAwaitAck({
-    required SyncChangeRequest request,
-    RpcContext? context,
-  });
-
-  /// Создает офлайн-очередь команд, привязанную к клиенту.
-  OfflineCommandQueue createOfflineQueue({
-    String? sessionId,
-    DateTime Function()? clock,
-    void Function(Object error, StackTrace stackTrace)? onError,
-  });
-
-  /// Закрывает RPC-подключение клиента.
-  Future<void> close();
-}
+import 'package:rpc_dart_data/rpc_dart_data.dart';
 
 /// Клиентская инкапсуляция. Хранит endpoint и caller и реализует интерфейс DataService.
-class DataServiceClient implements DataService {
+class DataServiceClient implements IDataService {
   DataServiceClient(this._endpoint, this._caller);
 
   final RpcCallerEndpoint _endpoint;
@@ -494,18 +331,18 @@ class DataServiceServer {
   DataServiceServer({
     required RpcResponderEndpoint endpoint,
     required DataServiceResponder responder,
-    required DataRepository repository,
+    required IDataRepository repository,
   })  : _endpoint = endpoint,
         _responder = responder,
         _repository = repository;
 
   final RpcResponderEndpoint _endpoint;
   final DataServiceResponder _responder;
-  final DataRepository _repository;
+  final IDataRepository _repository;
 
   RpcResponderEndpoint get endpoint => _endpoint;
   DataServiceResponder get rawResponder => _responder;
-  DataRepository get repository => _repository;
+  IDataRepository get repository => _repository;
 
   Future<void> start() async {
     _endpoint.registerServiceContract(_responder);
@@ -515,87 +352,5 @@ class DataServiceServer {
   Future<void> close() async {
     await _endpoint.close();
     await _responder.dispose();
-  }
-}
-
-/// Результат helper-а для быстрого развёртывания in-memory окружения.
-class InMemoryDataServiceEnvironment {
-  InMemoryDataServiceEnvironment({
-    required this.client,
-    required this.server,
-    required this.clientTransport,
-    required this.serverTransport,
-  });
-
-  final DataServiceClient client;
-  final DataServiceServer server;
-  final IRpcTransport clientTransport;
-  final IRpcTransport serverTransport;
-
-  Future<void> dispose() async {
-    await client.close();
-    await server.close();
-  }
-}
-
-/// Утилиты для создания сервиса/клиента.
-class DataServiceFactory {
-  const DataServiceFactory._();
-
-  /// Создать серверную часть поверх произвольного транспорта и репозитория.
-  static DataServiceServer createServer({
-    required IRpcTransport transport,
-    required DataRepository repository,
-    String debugLabel = 'DataServiceServer',
-  }) {
-    final endpoint = RpcResponderEndpoint(
-      transport: transport,
-      debugLabel: debugLabel,
-    );
-    final responder = DataServiceResponder(repository: repository);
-    return DataServiceServer(
-      endpoint: endpoint,
-      responder: responder,
-      repository: repository,
-    );
-  }
-
-  /// Создать клиентскую часть.
-  static DataServiceClient createClient({
-    required IRpcTransport transport,
-    String debugLabel = 'DataServiceClient',
-  }) {
-    final endpoint = RpcCallerEndpoint(
-      transport: transport,
-      debugLabel: debugLabel,
-    );
-    final caller = DataServiceCaller(endpoint);
-    return DataServiceClient(endpoint, caller);
-  }
-
-  /// Полный in-memory стенд: transport pair + репозиторий.
-  static Future<InMemoryDataServiceEnvironment> inMemory({
-    DataRepository? repository,
-    String serverLabel = 'DataResponder',
-    String clientLabel = 'DataCaller',
-  }) async {
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-    final repo = repository ?? InMemoryDataRepository();
-    final server = createServer(
-      transport: serverTransport,
-      repository: repo,
-      debugLabel: serverLabel,
-    );
-    await server.start();
-    final client = createClient(
-      transport: clientTransport,
-      debugLabel: clientLabel,
-    );
-    return InMemoryDataServiceEnvironment(
-      client: client,
-      server: server,
-      clientTransport: clientTransport,
-      serverTransport: serverTransport,
-    );
   }
 }

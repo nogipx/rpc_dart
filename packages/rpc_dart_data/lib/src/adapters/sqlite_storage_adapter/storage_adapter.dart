@@ -3,16 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
-
-import '../change_journal.dart';
-import '../connection/database_connection.dart';
-import '../data_contract.dart';
-import '../data_repository.dart';
-import '../models.dart';
-import 'database.dart';
-import 'json_support.dart';
-import 'sql_cipher.dart';
 
 part 'storage_adapter_fts.dart';
 part 'storage_adapter_query.dart';
@@ -38,9 +30,9 @@ const String _collectionIndexRegistryTable =
 const String _changeJournalTable = '${_systemCollectionPrefix}change_journal';
 const String _ftsTableName = '${_systemCollectionPrefix}global_fts';
 
-/// SQLite-based implementation of [DataStorageAdapter] backed by SQLite.
+/// SQLite-based implementation of [IDataStorageAdapter] backed by SQLite.
 class SqliteDataStorageAdapter
-    implements DataStorageAdapter, CollectionIndexStorageAdapter {
+    implements IDataStorageAdapter, ICollectionIndexStorageAdapter {
   SqliteDataStorageAdapter._(
     this._database,
     this._inMemory, {
@@ -1421,31 +1413,4 @@ class SqliteDataChangeJournal implements DataChangeJournal {
   Future<void> dispose() async {
     // No resources to release – the parent repository closes the database.
   }
-}
-
-/// Convenience repository that uses [SqliteDataStorageAdapter].
-class SqliteDataRepository extends BaseDataRepository {
-  SqliteDataRepository({
-    required SqliteDataStorageAdapter storage,
-    DateTime Function()? clock,
-    String Function(String collection)? idGenerator,
-    DataChangeJournal? changeJournal,
-    int? journalMaxEvents = BaseDataRepository.defaultJournalMaxEvents,
-    Duration? journalRetention = BaseDataRepository.defaultJournalRetention,
-  }) : super(
-          storage,
-          clock: clock,
-          idGenerator: idGenerator,
-          changeJournal: changeJournal ??
-              SqliteDataChangeJournal(
-                storage.database,
-                clearOnOpen: storage.isInMemory,
-              ),
-          journalMaxEvents: journalMaxEvents,
-          journalRetention: journalRetention,
-        );
-
-  @override
-  SqliteDataStorageAdapter get storage =>
-      super.storage as SqliteDataStorageAdapter;
 }

@@ -3,8 +3,8 @@ import 'dart:collection';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
+import '../models.dart';
 import 'data_contract.dart';
-import 'models.dart';
 
 class DataServiceCaller extends RpcCallerContract
     implements IDataServiceContract {

@@ -5,7 +5,7 @@ class _TestRepository extends BaseDataRepository {
   _TestRepository(super.storage) : super(clock: () => DateTime.utc(2024, 1, 1));
 }
 
-class _ThrowingAdapter implements DataStorageAdapter {
+class _ThrowingAdapter implements IDataStorageAdapter {
   _ThrowingAdapter(this._delegate);
 
   final InMemoryStorageAdapter _delegate;

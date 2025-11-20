@@ -4,12 +4,12 @@ import 'package:test/test.dart';
 
 void main() {
   group('DataService RPC layer', () {
-    late DataRepository repository;
+    late IDataRepository repository;
     late DataServiceClient client;
     late DataServiceServer server;
 
     Future<void> startServer({
-      DataRepository? repo,
+      IDataRepository? repo,
       Iterable<String> allowedBearerTokens = const [],
     }) async {
       repository = repo ?? InMemoryDataRepository();
@@ -103,7 +103,7 @@ void main() {
   });
 }
 
-class _ThrowingRepository implements DataRepository {
+class _ThrowingRepository implements IDataRepository {
   @override
   Future<DataRecord> create(CreateRecordRequest request) =>
       throw StateError('boom');

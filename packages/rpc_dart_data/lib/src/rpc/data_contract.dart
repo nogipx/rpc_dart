@@ -1,7 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
-import 'models.dart';
+import '../models.dart';
 
 /// Контракт сервиса данных с именем DataService.
 abstract interface class IDataServiceContract implements IRpcContract {

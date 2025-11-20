@@ -1,6 +1,4 @@
-import 'package:rpc_dart_data/src/change_journal.dart';
-import 'package:rpc_dart_data/src/data_contract.dart';
-import 'package:rpc_dart_data/src/models.dart';
+import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 
 void main() {

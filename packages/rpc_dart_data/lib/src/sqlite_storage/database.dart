@@ -8,11 +8,11 @@ class SqliteDataDatabase {
 
   final sqlite.Database database;
 
-  _SqliteSelectQuery customSelect(
+  SqliteSelectQuery customSelect(
     String sql, {
     List<Object?> variables = const [],
   }) {
-    return _SqliteSelectQuery(database, sql, variables);
+    return SqliteSelectQuery(database, sql, variables);
   }
 
   Future<void> customStatement(
@@ -56,8 +56,8 @@ class SqliteDataDatabase {
   }
 }
 
-class _SqliteSelectQuery {
-  _SqliteSelectQuery(
+class SqliteSelectQuery {
+  SqliteSelectQuery(
     this.database,
     this.sql,
     this.variables,

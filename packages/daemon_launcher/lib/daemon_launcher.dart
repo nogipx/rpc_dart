@@ -1,4 +1,4 @@
-library daemon_launcher;
+library;
 
 export 'src/daemon_launcher.dart';
 export 'src/daemon_log.dart';

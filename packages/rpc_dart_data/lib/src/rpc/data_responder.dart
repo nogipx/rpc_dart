@@ -1,15 +1,12 @@
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
-
-import 'data_contract.dart';
-import 'data_repository.dart';
-import 'models.dart';
+import 'package:rpc_dart_data/rpc_dart_data.dart';
 
 class DataServiceResponder extends RpcResponderContract
     implements IDataServiceContract {
   DataServiceResponder({
-    required DataRepository repository,
+    required IDataRepository repository,
     bool disposeRepositoryOnClose = true,
     Iterable<String> allowedBearerTokens = const [],
   })  : _repository = repository,
@@ -23,7 +20,7 @@ class DataServiceResponder extends RpcResponderContract
           dataTransferMode: RpcDataTransferMode.codec,
         );
 
-  final DataRepository _repository;
+  final IDataRepository _repository;
   final Set<String> _allowedBearerTokens;
 
   /// Управляет тем, должен ли [dispose] закрывать репозиторий.
