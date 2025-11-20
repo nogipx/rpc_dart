@@ -2,10 +2,10 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('DriftDataStorageAdapter.writeRecords', () {
+  group('SqliteDataStorageAdapter.writeRecords', () {
     test('batches SQL statements for multi-record writes', () async {
       final executed = <({String sql, List<Object?> args})>[];
-      final storage = DriftDataStorageAdapter.memory(
+      final storage = await SqliteDataStorageAdapter.memory(
         statementObserver: (sql, arguments) {
           if (sql.startsWith('INSERT INTO "c_notes"')) {
             executed.add((sql: sql, args: arguments));
@@ -39,7 +39,7 @@ void main() {
     });
 
     test('upserts bulk updates atomically', () async {
-      final storage = DriftDataStorageAdapter.memory();
+      final storage = await SqliteDataStorageAdapter.memory();
       addTearDown(storage.dispose);
 
       final baseTime = DateTime.utc(2024, 5, 1);

@@ -2,16 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:licensify/licensify.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
-import 'change_journal.dart';
-import 'data_contract.dart';
-import 'data_repository.dart';
-import 'models.dart';
+import '../change_journal.dart';
+import '../connection/database_connection.dart';
+import '../data_contract.dart';
+import '../data_repository.dart';
+import '../models.dart';
+
+import 'database.dart';
+import 'json_support.dart';
+import 'sql_cipher.dart';
 
 /// Callback invoked whenever the adapter executes a SQL statement.
 ///
@@ -24,314 +26,6 @@ typedef SqlStatementObserver = void Function(
 
 /// Callback invoked after the adapter finishes its built-in SQLite setup.
 typedef SqliteSetupHook = FutureOr<void> Function(sqlite.Database database);
-
-/// Ошибка инициализации SQLCipher.
-class SqlCipherException implements Exception {
-  SqlCipherException(this.message, {this.cause});
-
-  final String message;
-  final Object? cause;
-
-  @override
-  String toString() {
-    if (cause == null) {
-      return 'SqlCipherException: $message';
-    }
-    return 'SqlCipherException: $message (cause: $cause)';
-  }
-}
-
-/// Контейнер с материалом ключа SQLCipher, передаваемый из CLI.
-///
-/// Ключ передаётся в виде PASERK `k4.local` (XChaCha20). При применении
-/// преобразуется в шестнадцатеричную строку и вводится через `PRAGMA key`.
-/// После единственного использования нулируется в памяти.
-class SqlCipherKey {
-  SqlCipherKey._(this._keyBytes);
-
-  factory SqlCipherKey.fromBytes({required Uint8List keyBytes}) {
-    if (keyBytes.isEmpty) {
-      throw const FormatException('SQLCipher key must not be empty.');
-    }
-    return SqlCipherKey._(Uint8List.fromList(keyBytes));
-  }
-
-  factory SqlCipherKey.fromPaserk({required String paserk}) {
-    final trimmed = paserk.trim();
-    if (trimmed.isEmpty) {
-      throw const FormatException('Пустой PASERK ключ SQLCipher.');
-    }
-
-    try {
-      final symmetricKey = LicensifySymmetricKey.fromPaserk(paserk: trimmed);
-      return symmetricKey.executeWithKeyBytes((keyBytes) {
-        return SqlCipherKey.fromBytes(keyBytes: Uint8List.fromList(keyBytes));
-      });
-    } on FormatException catch (error) {
-      throw FormatException(
-        'Некорректный PASERK ключ SQLCipher: ${error.message}',
-      );
-    } catch (error) {
-      throw FormatException(
-        'Не удалось прочитать PASERK ключ SQLCipher: $error',
-      );
-    }
-  }
-
-  final Uint8List _keyBytes;
-  bool _consumed = false;
-
-  void applyTo(
-    sqlite.Database database, {
-    bool verifyCipher = true,
-    bool enforceMemorySecurity = true,
-  }) {
-    if (_consumed) {
-      throw StateError('SQLCipher key material has already been consumed.');
-    }
-
-    final hexKey = _encodeHex(_keyBytes);
-    try {
-      database.execute("PRAGMA key = \"x'$hexKey'\";");
-
-      if (verifyCipher) {
-        _assertCipherAvailable(database);
-      }
-
-      if (enforceMemorySecurity) {
-        database.execute('PRAGMA cipher_memory_security = ON;');
-      }
-    } on sqlite.SqliteException catch (error) {
-      throw SqlCipherException(
-        'Ошибка применения настроек SQLCipher: ${error.message}',
-        cause: error,
-      );
-    } finally {
-      _zeroBytes(_keyBytes);
-      _consumed = true;
-    }
-  }
-
-  static void _assertCipherAvailable(sqlite.Database database) {
-    try {
-      final result = database.select('PRAGMA cipher_version;');
-      if (result.isEmpty) {
-        throw SqlCipherException(
-          'SQLCipher не активирован: PRAGMA cipher_version вернул пустое значение.',
-        );
-      }
-    } on sqlite.SqliteException catch (error) {
-      throw SqlCipherException(
-        'Сборка SQLite не поддерживает SQLCipher (cipher_version недоступен).',
-        cause: error,
-      );
-    }
-  }
-
-  static String _encodeHex(Uint8List bytes) {
-    final buffer = StringBuffer();
-    for (final byte in bytes) {
-      buffer.write(byte.toRadixString(16).padLeft(2, '0'));
-    }
-    return buffer.toString();
-  }
-
-  static void _zeroBytes(Uint8List bytes) {
-    for (var i = 0; i < bytes.length; i += 1) {
-      bytes[i] = 0;
-    }
-  }
-}
-
-/// Ensures that a deterministic [json_extract] function is available on the
-/// underlying SQLite [database].
-///
-/// SQLCipher builds may omit the JSON1 extension, which prevents the creation
-/// of expression indexes on JSON payload fields. When the built-in function is
-/// missing, this method registers a minimal Dart-backed implementation that
-/// supports the subset of JSON path expressions used by rpc_dart.
-void ensureJsonExtractFunction(sqlite.Database database) {
-  try {
-    database.select(
-      r"""SELECT json_extract('{"v":1}', '$."v"')""",
-    );
-    return;
-  } on sqlite.SqliteException catch (error) {
-    final message = error.message;
-    if (!message.contains('no such function: json_extract')) {
-      rethrow;
-    }
-  }
-
-  database.createFunction(
-    functionName: 'json_extract',
-    argumentCount: const sqlite.AllowedArgumentCount(2),
-    deterministic: true,
-    directOnly: false,
-    function: _jsonExtractFallback,
-  );
-}
-
-Object? _jsonExtractFallback(List<Object?> arguments) {
-  if (arguments.length < 2) {
-    return null;
-  }
-
-  final source = arguments[0];
-  final pathArg = arguments[1];
-  if (source == null || pathArg == null) {
-    return null;
-  }
-
-  final jsonText = _jsonStringFromValue(source);
-  if (jsonText == null) {
-    return null;
-  }
-
-  final path = pathArg.toString();
-  if (path.isEmpty) {
-    return null;
-  }
-
-  try {
-    final root = jsonDecode(jsonText);
-    final tokens = _parseJsonPathTokens(path);
-    if (tokens.isEmpty) {
-      final normalized = path.trim();
-      if (normalized == r'$') {
-        return _jsonValueToSqlValue(root);
-      }
-      return null;
-    }
-    final value = _walkJsonPath(root, tokens);
-    return _jsonValueToSqlValue(value);
-  } catch (_) {
-    return null;
-  }
-}
-
-String? _jsonStringFromValue(Object? source) {
-  if (source is String) {
-    return source;
-  }
-  if (source is List<int>) {
-    return utf8.decode(source, allowMalformed: true);
-  }
-  return null;
-}
-
-List<Object> _parseJsonPathTokens(String path) {
-  final tokens = <Object>[];
-  var index = 0;
-
-  if (path.startsWith(r'$')) {
-    index += 1;
-  }
-
-  while (index < path.length) {
-    final current = path[index];
-    if (current == '.') {
-      index += 1;
-      if (index >= path.length) {
-        break;
-      }
-      if (path[index] == '"') {
-        index += 1;
-        final buffer = StringBuffer();
-        while (index < path.length) {
-          final char = path[index];
-          if (char == '\\') {
-            if (index + 1 < path.length) {
-              buffer.write(path[index + 1]);
-              index += 2;
-              continue;
-            }
-            index += 1;
-            continue;
-          }
-          if (char == '"') {
-            index += 1;
-            break;
-          }
-          buffer.write(char);
-          index += 1;
-        }
-        tokens.add(buffer.toString());
-        continue;
-      }
-    }
-
-    if (current == '[') {
-      final end = path.indexOf(']', index + 1);
-      if (end == -1) {
-        break;
-      }
-      final indexValue = int.tryParse(path.substring(index + 1, end));
-      if (indexValue != null) {
-        tokens.add(indexValue);
-      }
-      index = end + 1;
-      continue;
-    }
-
-    index += 1;
-  }
-
-  return tokens;
-}
-
-dynamic _walkJsonPath(dynamic root, List<Object> tokens) {
-  var current = root;
-  for (final token in tokens) {
-    if (token is String) {
-      if (current is Map<String, dynamic>) {
-        current = current[token];
-        continue;
-      }
-      return null;
-    }
-    if (token is int) {
-      if (current is List && token >= 0 && token < current.length) {
-        current = current[token];
-        continue;
-      }
-      return null;
-    }
-    return null;
-  }
-  return current;
-}
-
-Object? _jsonValueToSqlValue(Object? value) {
-  if (value == null) {
-    return null;
-  }
-  if (value is num || value is String) {
-    return value;
-  }
-  if (value is bool) {
-    return value ? 1 : 0;
-  }
-  if (value is List || value is Map) {
-    return jsonEncode(value);
-  }
-  return value.toString();
-}
-
-class DriftDataDatabase extends GeneratedDatabase {
-  DriftDataDatabase(super.executor);
-
-  DriftDataDatabase.connect(super.connection) : super.connect();
-
-  @override
-  int get schemaVersion => 1;
-
-  @override
-  Iterable<TableInfo<Table, Object?>> get allTables => const [];
-
-  @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => const [];
-}
 
 class _CollectionIndexMetadata {
   const _CollectionIndexMetadata({
@@ -347,40 +41,36 @@ class _CollectionIndexMetadata {
   final String expression;
 }
 
-/// Drift-based implementation of [DataStorageAdapter] backed by SQLite.
-class DriftDataStorageAdapter
+/// SQLite-based implementation of [DataStorageAdapter] backed by SQLite.
+class SqliteDataStorageAdapter
     implements DataStorageAdapter, CollectionIndexStorageAdapter {
-  DriftDataStorageAdapter._(
+  SqliteDataStorageAdapter._(
     this._database,
     this._inMemory, {
     SqlStatementObserver? statementObserver,
   }) : _statementObserver = statementObserver;
 
-  /// Create an adapter backed by the provided Drift [executor].
-  ///
-  /// The optional [statementObserver] receives every SQL statement that the
-  /// adapter executes, together with bound arguments, enabling verification of
-  /// query plans in tests.
-  factory DriftDataStorageAdapter(
-    QueryExecutor executor, {
+  /// Create an adapter backed by an existing [DatabaseConnection].
+  factory SqliteDataStorageAdapter.connection(
+    DatabaseConnection connection, {
     bool isInMemory = false,
     SqlStatementObserver? statementObserver,
   }) {
-    return DriftDataStorageAdapter._(
-      DriftDataDatabase(executor),
+    return SqliteDataStorageAdapter._(
+      SqliteDataDatabase(connection.database),
       isInMemory,
       statementObserver: statementObserver,
     );
   }
 
-  /// Create an adapter backed by an existing [DatabaseConnection].
-  factory DriftDataStorageAdapter.connection(
-    DatabaseConnection connection, {
+  /// Create an adapter backed by the provided sqlite3 [database].
+  factory SqliteDataStorageAdapter.fromDatabase(
+    sqlite.Database database, {
     bool isInMemory = false,
     SqlStatementObserver? statementObserver,
   }) {
-    return DriftDataStorageAdapter._(
-      DriftDataDatabase.connect(connection),
+    return SqliteDataStorageAdapter._(
+      SqliteDataDatabase(database),
       isInMemory,
       statementObserver: statementObserver,
     );
@@ -391,56 +81,78 @@ class DriftDataStorageAdapter
   /// When [statementObserver] is provided, every query executed during tests is
   /// surfaced to the callback, allowing assertions about pagination and
   /// filtering.
-  factory DriftDataStorageAdapter.memory({
+  static Future<SqliteDataStorageAdapter> memory({
     bool logStatements = false,
     SqliteSetupHook? sqliteSetup,
     SqlStatementObserver? statementObserver,
-  }) {
-    return DriftDataStorageAdapter(
-      NativeDatabase.memory(
-        logStatements: logStatements,
-        setup: (sqlite.Database database) async {
-          ensureJsonExtractFunction(database);
-          final hook = sqliteSetup;
-          if (hook != null) {
-            await hook(database);
-          }
-        },
-      ),
-      isInMemory: true,
-      statementObserver: statementObserver,
-    );
+  }) async {
+    if (logStatements) {
+      // Logging is not available with the sqlite3 executor yet.
+    }
+    final database = sqlite.sqlite3.openInMemory();
+    try {
+      await _initializeDatabase(
+        database,
+        sqlCipherKey: null,
+        sqliteSetup: sqliteSetup,
+      );
+      return SqliteDataStorageAdapter._(
+        SqliteDataDatabase(database),
+        true,
+        statementObserver: statementObserver,
+      );
+    } catch (_) {
+      database.dispose();
+      rethrow;
+    }
   }
 
   /// Create an adapter backed by a file on disk.
-  factory DriftDataStorageAdapter.file(
+  static Future<SqliteDataStorageAdapter> file(
     File file, {
     bool logStatements = false,
     SqlCipherKey? sqlCipherKey,
     SqliteSetupHook? sqliteSetup,
     SqlStatementObserver? statementObserver,
-  }) {
+  }) async {
     file.parent.createSync(recursive: true);
-    return DriftDataStorageAdapter(
-      NativeDatabase(
-        file,
-        logStatements: logStatements,
-        setup: (sqlite.Database database) async {
-          if (sqlCipherKey != null) {
-            sqlCipherKey.applyTo(database);
-          }
-          ensureJsonExtractFunction(database);
-          final hook = sqliteSetup;
-          if (hook != null) {
-            await hook(database);
-          }
-        },
-      ),
-      statementObserver: statementObserver,
-    );
+    if (logStatements) {
+      // Logging is not available with the sqlite3 executor yet.
+    }
+    final database = sqlite.sqlite3.open(file.path);
+    try {
+      await _initializeDatabase(
+        database,
+        sqlCipherKey: sqlCipherKey,
+        sqliteSetup: sqliteSetup,
+      );
+      return SqliteDataStorageAdapter._(
+        SqliteDataDatabase(database),
+        false,
+        statementObserver: statementObserver,
+      );
+    } catch (_) {
+      database.dispose();
+      rethrow;
+    }
   }
 
-  final DriftDataDatabase _database;
+  static Future<void> _initializeDatabase(
+    sqlite.Database database, {
+    SqlCipherKey? sqlCipherKey,
+    SqliteSetupHook? sqliteSetup,
+  }) async {
+    if (sqlCipherKey != null) {
+      sqlCipherKey.applyTo(database);
+    }
+    ensureJsonExtractFunction(database);
+    final hook = sqliteSetup;
+    if (hook != null) {
+      await hook(database);
+    }
+  }
+
+  final SqliteDataDatabase _database;
   final bool _inMemory;
   final SqlStatementObserver? _statementObserver;
 
@@ -460,7 +172,7 @@ class DriftDataStorageAdapter
       <String, List<_CollectionIndexMetadata>>{};
   final Set<String> _knownIndexNames = <String>{};
 
-  DriftDataDatabase get database => _database;
+  SqliteDataDatabase get database => _database;
 
   void _recordStatement(String sql, Iterable<Object?> arguments) {
     final observer = _statementObserver;
@@ -479,7 +191,7 @@ class DriftDataStorageAdapter
     await _ensureRegistry();
     await _ensureIndexRegistry();
     await _ensureFts();
-    final journal = DriftDataChangeJournal(_database);
+    final journal = SqliteDataChangeJournal(_database);
     await journal.ensureReady();
 
     if (validateIntegrity) {
@@ -554,7 +266,7 @@ class DriftDataStorageAdapter
       'SELECT table_name FROM collection_registry '
       'WHERE collection = ? LIMIT 1',
       variables: [
-        Variable<String>(collection),
+        collection,
       ],
     ).getSingleOrNull();
     if (row == null) {
@@ -572,8 +284,8 @@ class DriftDataStorageAdapter
     final row = await _database.customSelect(
       'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
       variables: [
-        Variable<String>('table'),
-        Variable<String>(tableName),
+        'table',
+        tableName,
       ],
     ).getSingleOrNull();
     final exists = row != null;
@@ -696,7 +408,7 @@ class DriftDataStorageAdapter
       'SELECT path, index_name, expression '
       'FROM collection_index_registry WHERE collection = ? '
       'ORDER BY path',
-      variables: [Variable<String>(collection)],
+      variables: [collection],
     ).get();
     final indexes = rows
         .map(
@@ -719,8 +431,8 @@ class DriftDataStorageAdapter
     final row = await _database.customSelect(
       'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
       variables: [
-        const Variable<String>('index'),
-        Variable<String>(indexName),
+        'index',
+        indexName,
       ],
     ).getSingleOrNull();
     final exists = row != null;
@@ -827,7 +539,7 @@ class DriftDataStorageAdapter
 
       final collision = await _database.customSelect(
         'SELECT 1 FROM collection_registry WHERE table_name = ? LIMIT 1',
-        variables: [Variable<String>(candidate)],
+        variables: [candidate],
       ).getSingleOrNull();
       if (collision == null && !await _tableExists(candidate)) {
         await _database.transaction(() async {
@@ -860,7 +572,7 @@ class DriftDataStorageAdapter
           await _database.customStatement(
             'INSERT INTO collection_registry (collection, table_name) '
             'VALUES (?, ?)',
-            [collection, candidate],
+            variables: [collection, candidate],
           );
         });
         _knownTables.add(candidate);
@@ -950,7 +662,7 @@ class DriftDataStorageAdapter
     }
     final exists = await _database.customSelect(
       'SELECT 1 FROM "$_ftsTableName" WHERE collection = ? LIMIT 1',
-      variables: [Variable<String>(collection)],
+      variables: [collection],
     ).getSingleOrNull();
     if (exists != null) {
       _ftsSeededCollections.add(collection);
@@ -970,7 +682,7 @@ class DriftDataStorageAdapter
     _ftsSeededCollections.add(collection);
   }
 
-  DataRecord _mapRow(String collection, QueryRow row) {
+  DataRecord _mapRow(String collection, sqlite.Row row) {
     final payloadJson = row.read<String>('payload');
     final decoded = jsonDecode(payloadJson);
     if (decoded is! Map<String, dynamic>) {
@@ -983,7 +695,7 @@ class DriftDataStorageAdapter
     return DataRecord(
       id: row.read<String>('id'),
       collection: collection,
-      tenantId: row.data['tenantId'] as String?,
+      tenantId: row.read<String?>('tenantId'),
       payload: Map<String, dynamic>.from(decoded),
       version: row.read<int>('version'),
       createdAt: DateTime.fromMicrosecondsSinceEpoch(
@@ -1046,7 +758,7 @@ class DriftDataStorageAdapter
       }
       sql.write(_recordUpsertConflictClause);
       _recordStatement(sql.toString(), args);
-      await _database.customStatement(sql.toString(), args);
+      await _database.customStatement(sql.toString(), variables: args);
     }
   }
 
@@ -1295,29 +1007,8 @@ class DriftDataStorageAdapter
     return _fieldExpression(sort.field) != null;
   }
 
-  Variable _variableForValue(Object value) {
-    if (value is int) {
-      return Variable<int>(value);
-    }
-    if (value is double) {
-      return Variable<double>(value);
-    }
-    if (value is num) {
-      return Variable<double>(value.toDouble());
-    }
-    if (value is String) {
-      return Variable<String>(value);
-    }
-    if (value is bool) {
-      return Variable<bool>(value);
-    }
-    throw UnsupportedError(
-      'Unsupported variable type ${value.runtimeType} for Drift adapter.',
-    );
-  }
-
-  List<Variable> _buildVariables(Iterable<Object> values) {
-    return values.map(_variableForValue).toList();
+  List<Object?> _buildVariables(Iterable<Object> values) {
+    return values.toList(growable: false);
   }
 
   String? _buildFtsMatchPattern(String query) {
@@ -1425,12 +1116,12 @@ class DriftDataStorageAdapter
       final placeholders = List.filled(ids.length, '?').join(', ');
       await _database.customStatement(
         'DELETE FROM "$ftsTable" WHERE collection = ? AND id IN ($placeholders)',
-        [collection, ...ids],
+        variables: [collection, ...ids],
       );
       for (final record in chunk) {
         await _database.customStatement(
           'INSERT INTO "$ftsTable" (collection, id, content) VALUES (?, ?, ?)',
-          [collection, record.id, _prepareSearchText(record)],
+          variables: [collection, record.id, _prepareSearchText(record)],
         );
       }
     }
@@ -1450,7 +1141,7 @@ class DriftDataStorageAdapter
       final placeholders = List.filled(chunk.length, '?').join(', ');
       await _database.customStatement(
         'DELETE FROM "$ftsTable" WHERE collection = ? AND id IN ($placeholders)',
-        [collection, ...chunk],
+        variables: [collection, ...chunk],
       );
     }
   }
@@ -1486,8 +1177,8 @@ class DriftDataStorageAdapter
       'SELECT index_name, expression FROM collection_index_registry '
       'WHERE collection = ? AND path = ? LIMIT 1',
       variables: [
-        Variable<String>(collection),
-        Variable<String>(path),
+        collection,
+        path,
       ],
     ).getSingleOrNull();
 
@@ -1532,7 +1223,7 @@ class DriftDataStorageAdapter
           'INSERT INTO collection_index_registry '
           '(collection, path, index_name, expression) '
           'VALUES (?, ?, ?, ?)',
-          [
+          variables: [
             collection,
             path,
             indexName,
@@ -1598,8 +1289,8 @@ class DriftDataStorageAdapter
       'SELECT index_name FROM collection_index_registry '
       'WHERE collection = ? AND path = ? LIMIT 1',
       variables: [
-        Variable<String>(collection),
-        Variable<String>(path),
+        collection,
+        path,
       ],
     ).getSingleOrNull();
 
@@ -1622,7 +1313,7 @@ class DriftDataStorageAdapter
         await _database.customStatement(
           'DELETE FROM collection_index_registry '
           'WHERE collection = ? AND path = ?',
-          [collection, path],
+          variables: [collection, path],
         );
         await _database.customStatement(
           'DROP INDEX IF EXISTS "$indexName"',
@@ -1655,7 +1346,7 @@ class DriftDataStorageAdapter
     final row = await _database.customSelect(
       'SELECT id, tenantId, payload, version, created_at, updated_at '
       'FROM "$tableName" WHERE id = ? LIMIT 1',
-      variables: [Variable<String>(id)],
+      variables: [id],
     ).getSingleOrNull();
     if (row == null) {
       return null;
@@ -1686,8 +1377,7 @@ class DriftDataStorageAdapter
           .customSelect(
             'SELECT id, tenantId, payload, version, created_at, updated_at '
             'FROM "$tableName" WHERE id IN ($placeholders)',
-            variables:
-                chunk.map((id) => Variable<String>(id)).toList(growable: false),
+            variables: chunk,
           )
           .get();
 
@@ -1732,8 +1422,8 @@ class DriftDataStorageAdapter
         'SELECT id, tenantId, payload, version, created_at, updated_at '
         'FROM "$tableName" ORDER BY id LIMIT ? OFFSET ?',
         variables: [
-          Variable<int>(effectiveChunkSize),
-          Variable<int>(offset),
+          effectiveChunkSize,
+          offset,
         ],
       ).get();
       if (rows.isEmpty) {
@@ -1750,7 +1440,7 @@ class DriftDataStorageAdapter
   Future<bool> _cursorExists(String tableName, String cursor) async {
     final exists = await _database.customSelect(
       'SELECT 1 FROM "$tableName" WHERE id = ? LIMIT 1',
-      variables: [Variable<String>(cursor)],
+      variables: [cursor],
     ).getSingleOrNull();
     return exists != null;
   }
@@ -1761,7 +1451,7 @@ class DriftDataStorageAdapter
   ) async {
     if (!_supportsSort(request.sort)) {
       throw RpcDataError.invalidArgument(
-        'Sorting by "${request.sort?.field ?? 'id'}" is not supported by Drift adapter.',
+        'Sorting by "${request.sort?.field ?? 'id'}" is not supported by SQLite adapter.',
       );
     }
 
@@ -1778,7 +1468,7 @@ class DriftDataStorageAdapter
     final filterValues = <Object>[];
     if (!_translateFilter(request.filter, filterConditions, filterValues)) {
       throw RpcDataError.invalidArgument(
-        'Filter in ${request.collection} is not supported by Drift adapter.',
+        'Filter in ${request.collection} is not supported by SQLite adapter.',
       );
     }
 
@@ -1787,7 +1477,7 @@ class DriftDataStorageAdapter
     final sortExpression = _fieldExpression(sortField);
     if (sortExpression == null) {
       throw RpcDataError.invalidArgument(
-        'Sorting by "$sortField" is not supported by Drift adapter.',
+        'Sorting by "$sortField" is not supported by SQLite adapter.',
       );
     }
     final descending = sort?.descending ?? false;
@@ -1812,7 +1502,7 @@ class DriftDataStorageAdapter
         final boundary = await _database.customSelect(
           'SELECT $sortExpression AS boundary FROM "$tableName" '
           'WHERE id = ? LIMIT 1',
-          variables: [Variable<String>(cursor)],
+          variables: [cursor],
         ).getSingleOrNull();
         if (boundary == null) {
           throw RpcDataError.invalidArgument(
@@ -1932,7 +1622,7 @@ class DriftDataStorageAdapter
       tableAlias: baseAlias,
     )) {
       throw RpcDataError.invalidArgument(
-        'Filter in ${request.collection} is not supported by Drift adapter.',
+        'Filter in ${request.collection} is not supported by SQLite adapter.',
       );
     }
 
@@ -1980,7 +1670,7 @@ class DriftDataStorageAdapter
       request.options.offset,
     ];
     _recordStatement(querySql.toString(), queryArgs);
-    List<QueryRow> rows;
+    List<sqlite.Row> rows;
     try {
       rows = await _database
           .customSelect(
@@ -2020,7 +1710,7 @@ class DriftDataStorageAdapter
       ...baseFilterValues,
     ];
     _recordStatement(countSql.toString(), countArgs);
-    QueryRow countRow;
+    sqlite.Row countRow;
     try {
       countRow = await _database
           .customSelect(
@@ -2110,7 +1800,7 @@ class DriftDataStorageAdapter
       tableAlias: 'b',
     )) {
       throw RpcDataError.invalidArgument(
-        'Filter in ${request.collection} is not supported by Drift adapter.',
+        'Filter in ${request.collection} is not supported by SQLite adapter.',
       );
     }
 
@@ -2135,7 +1825,7 @@ class DriftDataStorageAdapter
     final row = await selectable.getSingle();
     final metrics = <String, num>{};
     for (final metric in metricOrder) {
-      final dynamic rawValue = row.data[metric];
+      final dynamic rawValue = row.read<Object>(metric);
       if (rawValue is num) {
         metrics[metric] = rawValue;
       } else if (rawValue is String) {
@@ -2212,9 +1902,12 @@ class DriftDataStorageAdapter
     }
     var affected = 0;
     await _database.transaction(() async {
-      await _database.customStatement('DELETE FROM "$tableName" WHERE id = ?', [
-        id,
-      ]);
+      await _database.customStatement(
+        'DELETE FROM "$tableName" WHERE id = ?',
+        variables: [
+          id,
+        ],
+      );
       final changeRow =
           await _database.customSelect('SELECT changes() AS count').getSingle();
       affected = changeRow.read<int>('count');
@@ -2244,7 +1937,7 @@ class DriftDataStorageAdapter
         final placeholders = List.filled(chunk.length, '?').join(', ');
         await _database.customStatement(
           'DELETE FROM "$tableName" WHERE id IN ($placeholders)',
-          chunk,
+          variables: chunk,
         );
       }
       final changeRow =
@@ -2273,12 +1966,12 @@ class DriftDataStorageAdapter
       );
       await _database.customStatement(
         'DELETE FROM collection_registry WHERE collection = ?',
-        [collection],
+        variables: [collection],
       );
       if (_ftsReady) {
         await _database.customStatement(
           'DELETE FROM "$_ftsTableName" WHERE collection = ?',
-          [collection],
+          variables: [collection],
         );
       }
       if (existingIndexes.isNotEmpty) {
@@ -2289,7 +1982,7 @@ class DriftDataStorageAdapter
         }
         await _database.customStatement(
           'DELETE FROM collection_index_registry WHERE collection = ?',
-          [collection],
+          variables: [collection],
         );
       }
     });
@@ -2311,16 +2004,16 @@ class DriftDataStorageAdapter
   }
 }
 
-class DriftDataChangeJournal implements DataChangeJournal {
-  DriftDataChangeJournal(
+class SqliteDataChangeJournal implements DataChangeJournal {
+  SqliteDataChangeJournal(
     this._database, {
     bool clearOnOpen = false,
     RpcLogger? logger,
   })  : _clearOnOpen = clearOnOpen,
         _logger =
-            (logger ?? RpcLogger('DriftDataChangeJournal')).child('Replay');
+            (logger ?? RpcLogger('SqliteDataChangeJournal')).child('Replay');
 
-  final DriftDataDatabase _database;
+  final SqliteDataDatabase _database;
   final bool _clearOnOpen;
   final RpcLogger _logger;
   bool _tableReady = false;
@@ -2370,12 +2063,12 @@ class DriftDataChangeJournal implements DataChangeJournal {
       '(collection, record_id, change_type, payload, version, occurred_at) '
       'VALUES (?, ?, ?, ?, ?, ?)',
       variables: [
-        Variable<String>(collection),
-        Variable<String>(id),
-        Variable<String>(type.name),
-        Variable<String>(payload),
-        Variable<int>(version),
-        Variable<int>(occurredAt.microsecondsSinceEpoch),
+        collection,
+        id,
+        type.name,
+        payload,
+        version,
+        occurredAt.microsecondsSinceEpoch,
       ],
     );
     return DataChangeEvent(
@@ -2389,7 +2082,7 @@ class DriftDataChangeJournal implements DataChangeJournal {
     );
   }
 
-  DataChangeEvent _mapRow(QueryRow row) {
+  DataChangeEvent _mapRow(sqlite.Row row) {
     final typeName = row.read<String>('change_type');
     final type =
         DataChangeType.values.firstWhere((value) => value.name == typeName);
@@ -2457,8 +2150,8 @@ class DriftDataChangeJournal implements DataChangeJournal {
         'SELECT 1 FROM change_journal '
         'WHERE collection = ? AND sequence = ? LIMIT 1',
         variables: [
-          Variable<String>(collection),
-          Variable<int>(afterSequence),
+          collection,
+          afterSequence,
         ],
       ).getSingleOrNull();
       if (exists == null) {
@@ -2468,8 +2161,8 @@ class DriftDataChangeJournal implements DataChangeJournal {
       }
     }
 
-    final variables = <Variable>[
-      Variable<String>(collection),
+    final variables = <Object?>[
+      collection,
     ];
     final query = StringBuffer(
       'SELECT sequence, collection, record_id, change_type, payload, '
@@ -2477,7 +2170,7 @@ class DriftDataChangeJournal implements DataChangeJournal {
     );
     if (afterSequence != null) {
       query.write(' AND sequence > ?');
-      variables.add(Variable<int>(afterSequence));
+      variables.add(afterSequence);
     }
     query.write(' ORDER BY sequence ASC');
 
@@ -2507,7 +2200,7 @@ class DriftDataChangeJournal implements DataChangeJournal {
       await _database.customStatement(
         'DELETE FROM change_journal '
         'WHERE collection = ? AND occurred_at < ?',
-        [
+        variables: [
           collection,
           retainAfter.microsecondsSinceEpoch,
         ],
@@ -2516,7 +2209,7 @@ class DriftDataChangeJournal implements DataChangeJournal {
     if (maxEvents != null && maxEvents > 0) {
       final countRow = await _database.customSelect(
         'SELECT COUNT(*) AS count FROM change_journal WHERE collection = ?',
-        variables: [Variable<String>(collection)],
+        variables: [collection],
       ).getSingle();
       final count = countRow.read<int>('count');
       if (count > maxEvents) {
@@ -2525,8 +2218,8 @@ class DriftDataChangeJournal implements DataChangeJournal {
           'WHERE collection = ? ORDER BY sequence DESC '
           'LIMIT 1 OFFSET ?',
           variables: [
-            Variable<String>(collection),
-            Variable<int>(maxEvents - 1),
+            collection,
+            maxEvents - 1,
           ],
         ).getSingleOrNull();
         if (thresholdRow != null) {
@@ -2534,7 +2227,7 @@ class DriftDataChangeJournal implements DataChangeJournal {
           await _database.customStatement(
             'DELETE FROM change_journal '
             'WHERE collection = ? AND sequence < ?',
-            [collection, threshold],
+            variables: [collection, threshold],
           );
         }
       }
@@ -2546,7 +2239,7 @@ class DriftDataChangeJournal implements DataChangeJournal {
     await _ensureTable();
     await _database.customStatement(
       'DELETE FROM change_journal WHERE collection = ?',
-      [collection],
+      variables: [collection],
     );
   }
 
@@ -2556,10 +2249,10 @@ class DriftDataChangeJournal implements DataChangeJournal {
   }
 }
 
-/// Convenience repository that uses [DriftDataStorageAdapter].
-class DriftDataRepository extends BaseDataRepository {
-  DriftDataRepository({
-    required DriftDataStorageAdapter storage,
+/// Convenience repository that uses [SqliteDataStorageAdapter].
+class SqliteDataRepository extends BaseDataRepository {
+  SqliteDataRepository({
+    required SqliteDataStorageAdapter storage,
     DateTime Function()? clock,
     String Function(String collection)? idGenerator,
     DataChangeJournal? changeJournal,
@@ -2570,7 +2263,7 @@ class DriftDataRepository extends BaseDataRepository {
           clock: clock,
           idGenerator: idGenerator,
           changeJournal: changeJournal ??
-              DriftDataChangeJournal(
+              SqliteDataChangeJournal(
                 storage.database,
                 clearOnOpen: storage.isInMemory,
               ),
@@ -2579,6 +2272,6 @@ class DriftDataRepository extends BaseDataRepository {
         );
 
   @override
-  DriftDataStorageAdapter get storage =>
-      super.storage as DriftDataStorageAdapter;
+  SqliteDataStorageAdapter get storage =>
+      super.storage as SqliteDataStorageAdapter;
 }

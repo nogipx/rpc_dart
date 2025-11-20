@@ -180,19 +180,19 @@ void main() {
     });
   });
 
-  group('DriftDataStorageAdapter queries', () {
-    late DriftDataStorageAdapter storage;
-    late DriftDataRepository repository;
+  group('SqliteDataStorageAdapter queries', () {
+    late SqliteDataStorageAdapter storage;
+    late SqliteDataRepository repository;
     late List<({String sql, List<Object?> args})> statements;
 
-    setUp(() {
+    setUp(() async {
       statements = <({String sql, List<Object?> args})>[];
-      storage = DriftDataStorageAdapter.memory(
+      storage = await SqliteDataStorageAdapter.memory(
         statementObserver: (sql, args) {
           statements.add((sql: sql, args: List<Object?>.from(args)));
         },
       );
-      repository = DriftDataRepository(storage: storage);
+      repository = SqliteDataRepository(storage: storage);
     });
 
     tearDown(() async {

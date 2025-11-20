@@ -8,7 +8,7 @@
 - `DataServiceClient` gained high-level helpers: `listAllRecords`, `bulkUpsertStream`,
   `pushAndAwaitAck`, `createOfflineQueue`, and `close`.
 - Storage adapters can expose custom SQLite setup logic through `SqliteSetupHook`, and
-  the Drift adapter batches UPSERT statements plus supports chunked `readRecords` to reduce I/O.
+  the SQLite adapter batches UPSERT statements plus supports chunked `readRecords` to reduce I/O.
 - Introduced `RpcStreamIterator` (based on `StreamQueue`) so all streaming exports respect
   consumer demand.
 - Documentation rewritten in English and aligned with the new streaming/offline features.
@@ -17,7 +17,7 @@
 
 - Добавлен персистентный журнал изменений для `watch()` и `sync()` с поддержкой
   восстановления курсоров после рестарта.
-- Drift-хранилище научилось создавать индексы, выполнять фильтрацию и
+- SQLite-хранилище научилось создавать индексы, выполнять фильтрацию и
   пагинацию на стороне SQL, а также использовать SQLCipher-ключ из PASERK.
 - Для подготовки multi-tenant сценариев таблицы коллекций теперь включают
   столбец `tenantId` с индексом и поддержкой фильтрации/сортировки.

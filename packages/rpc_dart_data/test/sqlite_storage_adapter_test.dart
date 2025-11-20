@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart' as drift;
 import 'package:path/path.dart' as p;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
@@ -13,7 +12,7 @@ void main() {
   final skip = false;
 
   Future<void> resetDatabase() async {
-    final storage = DriftDataStorageAdapter.file(dbFile);
+    final storage = await SqliteDataStorageAdapter.file(dbFile);
     try {
       final tables = await storage.database
           .customSelect(
@@ -47,9 +46,9 @@ void main() {
         'authorization': 'Bearer test-token',
       });
 
-  test('Drift storage adapter supports CRUD lifecycle', skip: skip, () async {
-    final storage = DriftDataStorageAdapter.file(dbFile);
-    final repository = DriftDataRepository(storage: storage);
+  test('SQLite storage adapter supports CRUD lifecycle', skip: skip, () async {
+    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
     addTearDown(() async => env.dispose());
@@ -105,14 +104,14 @@ void main() {
     expect(afterDelete, isNull);
   });
 
-  test('Drift storage adapter persists records on disk', skip: skip, () async {
+  test('SQLite storage adapter persists records on disk', skip: skip, () async {
     Future<
         ({
           InMemoryDataServiceEnvironment env,
-          DriftDataRepository repository,
+          SqliteDataRepository repository,
         })> openEnv() async {
-      final storage = DriftDataStorageAdapter.file(dbFile);
-      final repository = DriftDataRepository(storage: storage);
+      final storage = await SqliteDataStorageAdapter.file(dbFile);
+      final repository = SqliteDataRepository(storage: storage);
       final env = await DataServiceFactory.inMemory(repository: repository);
       return (env: env, repository: repository);
     }
@@ -151,8 +150,8 @@ void main() {
 
   test('creates isolated tables per collection on demand', skip: skip,
       () async {
-    final storage = DriftDataStorageAdapter.file(dbFile);
-    final repository = DriftDataRepository(storage: storage);
+    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
     addTearDown(() async => env.dispose());
@@ -205,10 +204,10 @@ void main() {
     Future<
         ({
           InMemoryDataServiceEnvironment env,
-          DriftDataRepository repository,
+          SqliteDataRepository repository,
         })> startSession(String name) async {
-      final storage = DriftDataStorageAdapter.file(dbFile);
-      final repository = DriftDataRepository(storage: storage);
+      final storage = await SqliteDataStorageAdapter.file(dbFile);
+      final repository = SqliteDataRepository(storage: storage);
       final env = await DataServiceFactory.inMemory(
         repository: repository,
         serverLabel: 'DataResponder-$name',
@@ -374,8 +373,8 @@ void main() {
   });
 
   test('bulk upsert preserves provided record metadata', () async {
-    final storage = DriftDataStorageAdapter.file(dbFile);
-    final repository = DriftDataRepository(storage: storage);
+    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
     addTearDown(() async => env.dispose());
@@ -446,8 +445,8 @@ void main() {
   });
 
   test('bulk upsert processes multiple identifiers per request', () async {
-    final storage = DriftDataStorageAdapter.file(dbFile);
-    final repository = DriftDataRepository(storage: storage);
+    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
     addTearDown(() async => env.dispose());
@@ -524,8 +523,8 @@ void main() {
   });
 
   test('bulk delete removes all provided identifiers', () async {
-    final storage = DriftDataStorageAdapter.file(dbFile);
-    final repository = DriftDataRepository(storage: storage);
+    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
     addTearDown(() async => env.dispose());
@@ -559,8 +558,8 @@ void main() {
   });
 
   test('deleteCollection drops tables and registry entries', () async {
-    final storage = DriftDataStorageAdapter.file(dbFile);
-    final repository = DriftDataRepository(storage: storage);
+    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
     addTearDown(() async => env.dispose());
@@ -611,7 +610,7 @@ void main() {
 
     final registryRows = await storage.database.customSelect(
       'SELECT collection FROM collection_registry WHERE collection = ?',
-      variables: [drift.Variable<String>('archive')],
+      variables: ['archive'],
     ).get();
     expect(registryRows, isEmpty);
 
@@ -629,8 +628,8 @@ void main() {
   });
 
   test('search respects cursor-based pagination', () async {
-    final storage = DriftDataStorageAdapter.file(dbFile);
-    final repository = DriftDataRepository(storage: storage);
+    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
     addTearDown(() async => env.dispose());

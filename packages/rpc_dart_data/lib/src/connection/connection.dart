@@ -1,3 +1,4 @@
+export 'database_connection.dart';
 export 'options.dart';
 
 export 'connection_unsupported.dart'

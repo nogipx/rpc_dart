@@ -1,46 +1,68 @@
-import 'package:drift/drift.dart';
+import 'dart:typed_data';
 
-import '../drift_storage.dart';
-import 'options.dart';
+import 'package:rpc_dart_data/rpc_dart_data.dart';
 
 Never _unsupported() => throw UnsupportedError(
-      'Drift connections are not supported on this platform.',
+      'sqlite3 connections are not supported on this platform.',
     );
 
 Future<DatabaseConnection> openMainDb({
-  DriftConnectionOptions options = DriftConnectionOptions.defaults,
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
-}) async =>
-    _unsupported();
+}) async {
+  options;
+  logStatements;
+  sqlCipherKey;
+  sqliteSetup;
+  return _unsupported();
+}
 
-Future<DriftDataStorageAdapter> openMainStorage({
-  DriftConnectionOptions options = DriftConnectionOptions.defaults,
+Future<SqliteDataStorageAdapter> openMainStorage({
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
-}) async =>
-    _unsupported();
+}) async {
+  options;
+  logStatements;
+  sqlCipherKey;
+  sqliteSetup;
+  return _unsupported();
+}
 
-Future<void> replaceMainDbFromBytes(
+Future<Never> replaceMainDbFromBytes(
   Uint8List bytes, {
-  DriftConnectionOptions options = DriftConnectionOptions.defaults,
-}) async =>
-    _unsupported();
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
+}) async {
+  options;
+  bytes;
+  return _unsupported();
+}
 
 Future<DatabaseConnection> openTempDbFromBytes(
   Uint8List bytes, {
-  DriftConnectionOptions options = DriftConnectionOptions.defaults,
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
   bool logStatements = false,
   SqliteSetupHook? sqliteSetup,
-}) async =>
-    _unsupported();
+}) async {
+  options;
+  logStatements;
+  sqliteSetup;
+  bytes;
+  return _unsupported();
+}
 
-Future<DriftDataStorageAdapter> openTempStorageFromBytes(
+Future<SqliteDataStorageAdapter> openTempStorageFromBytes(
   Uint8List bytes, {
-  DriftConnectionOptions options = DriftConnectionOptions.defaults,
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
   bool logStatements = false,
   SqliteSetupHook? sqliteSetup,
-}) async =>
-    _unsupported();
+}) async {
+  options;
+  logStatements;
+  sqliteSetup;
+  bytes;
+  return _unsupported();
+}

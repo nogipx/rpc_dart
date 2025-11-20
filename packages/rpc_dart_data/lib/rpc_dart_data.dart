@@ -20,12 +20,5 @@ export 'src/data_service_facade.dart'
         DataServiceServer,
         DataServiceFactory,
         InMemoryDataServiceEnvironment;
-export 'src/drift_storage.dart'
-    show
-        DriftDataRepository,
-        DriftDataStorageAdapter,
-        DriftDataDatabase,
-        SqliteSetupHook,
-        SqlCipherKey,
-        SqlCipherException;
+export 'src/sqlite_storage.dart';
 export 'src/models.dart';

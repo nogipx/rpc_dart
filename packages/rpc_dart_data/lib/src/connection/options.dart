@@ -1,9 +1,9 @@
 import 'package:meta/meta.dart';
 
-/// Cross-platform configuration for opening Drift databases.
+/// Cross-platform configuration for opening SQLite databases.
 @immutable
-class DriftConnectionOptions {
-  const DriftConnectionOptions({
+class SqliteConnectionOptions {
+  const SqliteConnectionOptions({
     this.nativePath,
     this.nativeFileName = 'data_service.sqlite',
     this.nativeTempDirectory,
@@ -36,12 +36,12 @@ class DriftConnectionOptions {
   /// Location of the `sqlite3.wasm` asset for web builds.
   final Uri? webSqliteWasmUri;
 
-  /// Location of the drift worker JavaScript for web builds.
+  /// Location of the worker JavaScript for web builds.
   final Uri? webWorkerUri;
 
   /// Logical name for the persistent database on web builds.
   final String webDatabaseName;
 
   /// Default configuration shared across helper APIs.
-  static const DriftConnectionOptions defaults = DriftConnectionOptions();
+  static const SqliteConnectionOptions defaults = SqliteConnectionOptions();
 }

@@ -1,115 +1,56 @@
-import 'package:drift/drift.dart';
-import 'package:drift/wasm.dart';
+import 'dart:typed_data';
 
-import '../drift_storage.dart';
-import 'options.dart';
+import 'package:rpc_dart_data/rpc_dart_data.dart';
 
-const _defaultOptions = DriftConnectionOptions.defaults;
-
-Uri _resolveSqliteUri(DriftConnectionOptions options) =>
-    options.webSqliteWasmUri ?? Uri.parse('sqlite3.wasm');
-
-Uri _resolveWorkerUri(DriftConnectionOptions options) =>
-    options.webWorkerUri ?? Uri.parse('drift_worker.dart.js');
-
-/// Opens the persistent database in the browser (OPFS / IndexedDB fallback).
-Future<DatabaseConnection> openMainDb({
-  DriftConnectionOptions options = _defaultOptions,
-  SqliteSetupHook? sqliteSetup,
-}) async {
-  if (sqliteSetup != null) {
-    throw UnsupportedError(
-      'Custom SQLite setup is only available on IO platforms.',
+Never _unsupported() => throw UnsupportedError(
+      'sqlite3-based storage is not available on web platforms yet.',
     );
-  }
-  final db = await WasmDatabase.open(
-    databaseName: options.webDatabaseName,
-    sqlite3Uri: _resolveSqliteUri(options),
-    driftWorkerUri: _resolveWorkerUri(options),
-  );
-  return db.resolvedExecutor;
-}
 
-/// Opens the persistent database and wraps it into a [DriftDataStorageAdapter].
-Future<DriftDataStorageAdapter> openMainStorage({
-  DriftConnectionOptions options = _defaultOptions,
+Future<DatabaseConnection> openMainDb({
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
   SqliteSetupHook? sqliteSetup,
 }) async {
-  final connection = await openMainDb(
-    options: options,
-    sqliteSetup: sqliteSetup,
-  );
-  final adapter = DriftDataStorageAdapter.connection(connection);
-  try {
-    await adapter.ensureReady();
-  } catch (error) {
-    await adapter.dispose();
-    rethrow;
-  }
-  return adapter;
+  options;
+  sqliteSetup;
+  return _unsupported();
 }
 
-/// Replaces the persistent database contents with the provided [bytes].
-Future<void> replaceMainDbFromBytes(
-  Uint8List bytes, {
-  DriftConnectionOptions options = _defaultOptions,
+Future<SqliteDataStorageAdapter> openMainStorage({
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
+  SqliteSetupHook? sqliteSetup,
 }) async {
-  final sqliteUri = _resolveSqliteUri(options);
-  final workerUri = _resolveWorkerUri(options);
-
-  final probe = await WasmDatabase.probe(
-    sqlite3Uri: sqliteUri,
-    driftWorkerUri: workerUri,
-    databaseName: options.webDatabaseName,
-  );
-
-  for (final existing in probe.existingDatabases) {
-    await probe.deleteDatabase(existing);
-  }
-
-  final opened = await WasmDatabase.open(
-    databaseName: options.webDatabaseName,
-    sqlite3Uri: sqliteUri,
-    driftWorkerUri: workerUri,
-    initializeDatabase: () async => bytes,
-  );
-  await opened.resolvedExecutor.close();
+  options;
+  sqliteSetup;
+  return _unsupported();
 }
 
-/// Opens an ephemeral in-memory database seeded with [bytes].
+Future<Never> replaceMainDbFromBytes(
+  Uint8List bytes, {
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
+}) async {
+  options;
+  bytes;
+  return _unsupported();
+}
+
 Future<DatabaseConnection> openTempDbFromBytes(
   Uint8List bytes, {
-  DriftConnectionOptions options = _defaultOptions,
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
   SqliteSetupHook? sqliteSetup,
 }) async {
-  if (sqliteSetup != null) {
-    throw UnsupportedError(
-      'Custom SQLite setup is only available on IO platforms.',
-    );
-  }
-  final probe = await WasmDatabase.probe(
-    sqlite3Uri: _resolveSqliteUri(options),
-    driftWorkerUri: _resolveWorkerUri(options),
-  );
-
-  final name = 'tmp_${DateTime.now().microsecondsSinceEpoch}';
-  return probe.open(
-    WasmStorageImplementation.inMemory,
-    name,
-    initializeDatabase: () async => bytes,
-  );
+  options;
+  sqliteSetup;
+  bytes;
+  return _unsupported();
 }
 
-/// Opens an ephemeral [DriftDataStorageAdapter] seeded with [bytes].
-Future<DriftDataStorageAdapter> openTempStorageFromBytes(
+Future<SqliteDataStorageAdapter> openTempStorageFromBytes(
   Uint8List bytes, {
-  DriftConnectionOptions options = _defaultOptions,
+  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
   SqliteSetupHook? sqliteSetup,
 }) async {
-  final connection = await openTempDbFromBytes(
-    bytes,
-    options: options,
-    sqliteSetup: sqliteSetup,
-  );
-  return DriftDataStorageAdapter.connection(connection);
+  options;
+  sqliteSetup;
+  bytes;
+  return _unsupported();
 }

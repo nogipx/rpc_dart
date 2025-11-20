@@ -103,15 +103,15 @@ class _BackpressureInMemoryAdapter extends InMemoryStorageAdapter {
 
 void main() {
   group('Database export/import', () {
-    late DriftDataRepository sourceRepository;
-    late DriftDataRepository targetRepository;
+    late SqliteDataRepository sourceRepository;
+    late SqliteDataRepository targetRepository;
 
-    setUp(() {
-      sourceRepository = DriftDataRepository(
-        storage: DriftDataStorageAdapter.memory(),
+    setUp(() async {
+      sourceRepository = SqliteDataRepository(
+        storage: await SqliteDataStorageAdapter.memory(),
       );
-      targetRepository = DriftDataRepository(
-        storage: DriftDataStorageAdapter.memory(),
+      targetRepository = SqliteDataRepository(
+        storage: await SqliteDataStorageAdapter.memory(),
       );
     });
 

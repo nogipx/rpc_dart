@@ -660,7 +660,7 @@ void _configureDataServiceArguments(ArgParser parser) {
     'database',
     abbr: 'd',
     defaultsTo: 'data_service.sqlite',
-    help: 'Путь до SQLite файла для Drift-хранилища.',
+    help: 'Путь до файла SQLite-хранилища.',
   );
   parser.addOption(
     'database-key',
@@ -691,7 +691,7 @@ void _configureDataServiceArguments(ArgParser parser) {
 Future<ServeCliApplication> _buildDataServiceApplication(
     ServeCliRuntime runtime) async {
   final databasePath = runtime.args['database'] as String;
-  final storage = DriftDataStorageAdapter.file(
+  final storage = await SqliteDataStorageAdapter.file(
     File(databasePath),
     sqlCipherKey: runtime.sqlCipherKey,
   );
@@ -701,7 +701,7 @@ Future<ServeCliApplication> _buildDataServiceApplication(
     await storage.dispose();
     rethrow;
   }
-  final repository = DriftDataRepository(storage: storage);
+  final repository = SqliteDataRepository(storage: storage);
 
   DataServiceResponder createResponder() => DataServiceResponder(
         repository: repository,

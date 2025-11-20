@@ -1,13 +1,11 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Variable;
-import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('DriftDataStorageAdapter expression indexes', () {
+  group('SqliteDataStorageAdapter expression indexes', () {
     test('createCollectionIndex creates json expression index', () async {
       final adapter = await openMainStorage();
       addTearDown(() async {
@@ -29,8 +27,8 @@ void main() {
       final indexRow = await adapter.database.customSelect(
         'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
         variables: const [
-          Variable<String>('index'),
-          Variable<String>(indexName),
+          'index',
+          indexName,
         ],
       ).getSingleOrNull();
 
@@ -43,8 +41,8 @@ void main() {
         'SELECT expression FROM collection_index_registry '
         'WHERE collection = ? AND path = ?',
         variables: const [
-          Variable<String>(collection),
-          Variable<String>(path),
+          collection,
+          path,
         ],
       ).getSingleOrNull();
 
@@ -76,8 +74,8 @@ void main() {
       final beforeDelete = await adapter.database.customSelect(
         'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
         variables: const [
-          Variable<String>('index'),
-          Variable<String>(indexName),
+          'index',
+          indexName,
         ],
       ).getSingleOrNull();
       expect(beforeDelete, isNotNull);
@@ -95,8 +93,8 @@ void main() {
       final afterDelete = await adapter.database.customSelect(
         'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
         variables: const [
-          Variable<String>('index'),
-          Variable<String>(indexName),
+          'index',
+          indexName,
         ],
       ).getSingleOrNull();
       expect(afterDelete, isNull);
@@ -105,8 +103,8 @@ void main() {
         'SELECT 1 FROM collection_index_registry '
         'WHERE collection = ? AND path = ? LIMIT 1',
         variables: const [
-          Variable<String>(collection),
-          Variable<String>(path),
+          collection,
+          path,
         ],
       ).getSingleOrNull();
       expect(registryRow, isNull);
@@ -122,8 +120,8 @@ void main() {
       final recreated = await adapter.database.customSelect(
         'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
         variables: const [
-          Variable<String>('index'),
-          Variable<String>(indexName),
+          'index',
+          indexName,
         ],
       ).getSingleOrNull();
       expect(recreated, isNotNull);
@@ -150,7 +148,7 @@ void main() {
         updatedAt: now,
       );
 
-      final adapter1 = DriftDataStorageAdapter(NativeDatabase(dbFile));
+      final adapter1 = await SqliteDataStorageAdapter.file(dbFile);
       try {
         await adapter1.writeRecord(record);
 
@@ -169,14 +167,14 @@ void main() {
         await adapter1.database.customStatement(
           'INSERT INTO collection_index_registry '
           '(collection, path, index_name, expression) VALUES (?, ?, ?, ?)',
-          ['tasks', 'priority', indexName, expression],
+          variables: ['tasks', 'priority', indexName, expression],
         );
 
         final existingIndex = await adapter1.database.customSelect(
           'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
           variables: const [
-            Variable<String>('index'),
-            Variable<String>(indexName),
+            'index',
+            indexName,
           ],
         ).getSingleOrNull();
         expect(existingIndex, isNull);
@@ -184,13 +182,13 @@ void main() {
         await adapter1.dispose();
       }
 
-      final adapter2 = DriftDataStorageAdapter(NativeDatabase(dbFile));
+      final adapter2 = await SqliteDataStorageAdapter.file(dbFile);
       try {
         final beforeEnsure = await adapter2.database.customSelect(
           'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
           variables: const [
-            Variable<String>('index'),
-            Variable<String>('priority_idx'),
+            'index',
+            'priority_idx',
           ],
         ).getSingleOrNull();
         expect(beforeEnsure, isNull);
@@ -204,8 +202,8 @@ void main() {
         final indexRow = await adapter2.database.customSelect(
           'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
           variables: const [
-            Variable<String>('index'),
-            Variable<String>('priority_idx'),
+            'index',
+            'priority_idx',
           ],
         ).getSingleOrNull();
 

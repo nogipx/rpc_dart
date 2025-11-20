@@ -1,16 +1,13 @@
 import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqlite3/sqlite3.dart' as s3;
+import 'package:rpc_dart_data/rpc_dart_data.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
-import '../drift_storage.dart';
-import 'options.dart';
+const _defaultOptions = SqliteConnectionOptions.defaults;
 
-const _defaultOptions = DriftConnectionOptions.defaults;
-
-Future<File> _resolveMainDbFile(DriftConnectionOptions options) async {
+Future<File> _resolveMainDbFile(SqliteConnectionOptions options) async {
   final explicitPath = options.nativePath;
   final targetPath =
       explicitPath ?? p.join(Directory.current.path, options.nativeFileName);
@@ -19,7 +16,7 @@ Future<File> _resolveMainDbFile(DriftConnectionOptions options) async {
   return file;
 }
 
-Directory _resolveTempDirectory(DriftConnectionOptions options) {
+Directory _resolveTempDirectory(SqliteConnectionOptions options) {
   final tempPath = options.nativeTempDirectory;
   if (tempPath == null) {
     return Directory.systemTemp;
@@ -33,7 +30,7 @@ Directory _resolveTempDirectory(DriftConnectionOptions options) {
 
 Future<File> _writeTempFile(
   Uint8List bytes, {
-  required DriftConnectionOptions options,
+  required SqliteConnectionOptions options,
   String prefix = 'temp',
 }) async {
   final dir = _resolveTempDirectory(options);
@@ -47,49 +44,61 @@ Future<File> _writeTempFile(
   return file;
 }
 
-NativeDatabase _createNativeDatabase(
-  File file, {
-  bool logStatements = false,
+Future<void> _configureDatabase(
+  sqlite.Database database, {
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
-}) {
-  return NativeDatabase(
-    file,
-    logStatements: logStatements,
-    setup: (s3.Database database) async {
-      if (sqlCipherKey != null) {
-        sqlCipherKey.applyTo(database);
-      }
-      ensureJsonExtractFunction(database);
-      final hook = sqliteSetup;
-      if (hook != null) {
-        await hook(database);
-      }
-    },
-  );
+}) async {
+  if (sqlCipherKey != null) {
+    sqlCipherKey.applyTo(database);
+  }
+  ensureJsonExtractFunction(database);
+  final hook = sqliteSetup;
+  if (hook != null) {
+    await hook(database);
+  }
+}
+
+Future<DatabaseConnection> _openConnection(
+  File file, {
+  SqlCipherKey? sqlCipherKey,
+  SqliteSetupHook? sqliteSetup,
+}) async {
+  final database = sqlite.sqlite3.open(file.path);
+  try {
+    await _configureDatabase(
+      database,
+      sqlCipherKey: sqlCipherKey,
+      sqliteSetup: sqliteSetup,
+    );
+  } catch (error) {
+    database.dispose();
+    rethrow;
+  }
+  return DatabaseConnection(database);
 }
 
 /// Opens the persistent database on IO platforms.
 Future<DatabaseConnection> openMainDb({
-  DriftConnectionOptions options = _defaultOptions,
+  SqliteConnectionOptions options = _defaultOptions,
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
 }) async {
   final file = await _resolveMainDbFile(options);
-  return DatabaseConnection(
-    _createNativeDatabase(
-      file,
-      logStatements: logStatements,
-      sqlCipherKey: sqlCipherKey,
-      sqliteSetup: sqliteSetup,
-    ),
+  if (logStatements) {
+    // Statement logging is not available in this implementation.
+  }
+  return _openConnection(
+    file,
+    sqlCipherKey: sqlCipherKey,
+    sqliteSetup: sqliteSetup,
   );
 }
 
-/// Opens the persistent database and wraps it into a [DriftDataStorageAdapter].
-Future<DriftDataStorageAdapter> openMainStorage({
-  DriftConnectionOptions options = _defaultOptions,
+/// Opens the persistent database and wraps it into a [SqliteDataStorageAdapter].
+Future<SqliteDataStorageAdapter> openMainStorage({
+  SqliteConnectionOptions options = _defaultOptions,
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
@@ -100,7 +109,7 @@ Future<DriftDataStorageAdapter> openMainStorage({
     sqlCipherKey: sqlCipherKey,
     sqliteSetup: sqliteSetup,
   );
-  final adapter = DriftDataStorageAdapter.connection(connection);
+  final adapter = SqliteDataStorageAdapter.connection(connection);
   try {
     await adapter.ensureReady();
   } catch (error) {
@@ -115,7 +124,7 @@ Future<DriftDataStorageAdapter> openMainStorage({
 /// The caller is responsible for re-opening their database after the import.
 Future<void> replaceMainDbFromBytes(
   Uint8List bytes, {
-  DriftConnectionOptions options = _defaultOptions,
+  SqliteConnectionOptions options = _defaultOptions,
 }) async {
   final target = await _resolveMainDbFile(options);
   final tmp = await _writeTempFile(
@@ -124,7 +133,7 @@ Future<void> replaceMainDbFromBytes(
     prefix: 'import',
   );
 
-  final backupDb = s3.sqlite3.open(tmp.path);
+  final backupDb = sqlite.sqlite3.open(tmp.path);
   try {
     if (target.existsSync()) {
       target.deleteSync();
@@ -144,7 +153,7 @@ Future<void> replaceMainDbFromBytes(
 /// deleting the underlying file when it is no longer needed.
 Future<DatabaseConnection> openTempDbFromBytes(
   Uint8List bytes, {
-  DriftConnectionOptions options = _defaultOptions,
+  SqliteConnectionOptions options = _defaultOptions,
   bool logStatements = false,
   SqliteSetupHook? sqliteSetup,
 }) async {
@@ -153,47 +162,42 @@ Future<DatabaseConnection> openTempDbFromBytes(
     options: options,
     prefix: 'temp',
   );
-  return DatabaseConnection(
-    _createNativeDatabase(
-      tmp,
-      logStatements: logStatements,
-      sqliteSetup: sqliteSetup,
-    ),
+  if (logStatements) {
+    // Statement logging is not available in this implementation.
+  }
+  return _openConnection(
+    tmp,
+    sqliteSetup: sqliteSetup,
   );
 }
 
 /// Opens an in-memory database preloaded with [bytes].
 Future<DatabaseConnection> openInMemoryDbFromBytes(
   Uint8List bytes, {
-  DriftConnectionOptions options = _defaultOptions,
+  SqliteConnectionOptions options = _defaultOptions,
   bool logStatements = false,
   SqliteSetupHook? sqliteSetup,
 }) async {
+  if (logStatements) {
+    // Statement logging is not available in this implementation.
+  }
   final tmp = await _writeTempFile(
     bytes,
     options: options,
     prefix: 'import',
   );
 
-  final src = s3.sqlite3.open(tmp.path);
-  final dst = s3.sqlite3.openInMemory();
+  final src = sqlite.sqlite3.open(tmp.path);
+  final dst = sqlite.sqlite3.openInMemory();
   try {
     await for (final _ in src.backup(dst)) {
       // Copy pages until completed.
     }
-    return DatabaseConnection(
-      NativeDatabase.opened(
-        dst,
-        logStatements: logStatements,
-        setup: (s3.Database database) async {
-          ensureJsonExtractFunction(database);
-          final hook = sqliteSetup;
-          if (hook != null) {
-            await hook(database);
-          }
-        },
-      ),
+    await _configureDatabase(
+      dst,
+      sqliteSetup: sqliteSetup,
     );
+    return DatabaseConnection(dst);
   } finally {
     src.dispose();
     if (tmp.existsSync()) {
@@ -202,10 +206,10 @@ Future<DatabaseConnection> openInMemoryDbFromBytes(
   }
 }
 
-/// Opens an in-memory [DriftDataStorageAdapter] seeded with [bytes].
-Future<DriftDataStorageAdapter> openTempStorageFromBytes(
+/// Opens an in-memory [SqliteDataStorageAdapter] seeded with [bytes].
+Future<SqliteDataStorageAdapter> openTempStorageFromBytes(
   Uint8List bytes, {
-  DriftConnectionOptions options = _defaultOptions,
+  SqliteConnectionOptions options = _defaultOptions,
   bool logStatements = false,
   SqliteSetupHook? sqliteSetup,
 }) async {
@@ -215,5 +219,5 @@ Future<DriftDataStorageAdapter> openTempStorageFromBytes(
     logStatements: logStatements,
     sqliteSetup: sqliteSetup,
   );
-  return DriftDataStorageAdapter.connection(connection);
+  return SqliteDataStorageAdapter.connection(connection);
 }

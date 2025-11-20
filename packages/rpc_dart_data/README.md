@@ -9,7 +9,7 @@ It gives you a transport-agnostic contract, ready-to-use storage adapters, and u
 - **Search & aggregations** (`search`, `aggregate`) delegated to the storage adapter, including backend pagination.
 - **Streaming snapshots**: export/import the full database as NDJSON, stream it through `payloadStream`, or set `includePayloadString: false` to skip building large strings.
 - **Change streams & offline sync**: `watchChanges` with cursors, bidirectional `syncChanges`, and `OfflineCommandQueue` for durable command queues.
-- **SQLite/Drift adapter** with SQLCipher support and a `SqliteSetupHook` so you can register custom pragmas before the database is exposed to your code.
+- **SQLite adapter** with SQLCipher support and a `SqliteSetupHook` so you can register custom pragmas before the database is exposed to your code.
 - **Ready-made environments** (`DataServiceFactory.inMemory`) for tests, demos, and local prototyping.
 
 ## Architecture in seven layers
@@ -17,7 +17,7 @@ It gives you a transport-agnostic contract, ready-to-use storage adapters, and u
 2. **Endpoint** (`RpcCallerEndpoint` / `RpcResponderEndpoint`).
 3. **Contract + codecs** (`IDataServiceContract` and `RpcCodec<...>`).
 4. **Low-level plumbing** (`DataServiceCaller` / `DataServiceResponder`).
-5. **Repository + storage adapter** (`BaseDataRepository`, change journal, and the concrete adapter: in-memory or Drift).
+5. **Repository + storage adapter** (`BaseDataRepository`, change journal, and the concrete adapter: in-memory or SQLite).
 6. **Facade** (`DataServiceClient`, `DataServiceServer`, `DataServiceFactory`, `InMemoryDataServiceEnvironment`).
 7. **Offline utilities** such as `OfflineCommandQueue` and reconnection helpers.
 
@@ -129,7 +129,7 @@ The repository validates metric expressions and delegates supported work to the 
 
 ## Change streams and optimistic concurrency
 - `watchChanges` accepts an optional `cursor`, so clients can resume after a reconnect.
-- Drift/SQLite keeps a persistent `change_journal` table, allowing cursors to survive restarts.
+- SQLite keeps a persistent `change_journal` table, allowing cursors to survive restarts.
 - `update` and `patch` require an `expectedVersion`. A mismatch triggers `RpcDataError.conflict(...)` (or a transport `RpcException`).
 
 ## Extending the storage layer
@@ -151,8 +151,8 @@ class PostgresAdapter implements DataStorageAdapter {
 ```
 Adapters participate in streaming export/import by overriding `readCollectionChunks`, and they can expose custom indices via `CollectionIndexStorageAdapter` if needed.
 
-## Drift/SQLite profile
-`DriftDataStorageAdapter` ships as the default single-node implementation:
+## SQLite profile
+`SqliteDataStorageAdapter` ships as the default single-node implementation:
 - Creates per-collection tables on demand plus indexes on `version`, `created_at`, and `updated_at`.
 - Delegates filtering, sorting, and pagination to SQL for predictable O(log N) plans.
 - Uses batched UPSERT statements to keep `writeRecords` fast even when thousands of rows are updated.
