@@ -6,7 +6,7 @@ extension _FtsSupport on SqliteDataStorageAdapter {
       return;
     }
     await _database.customStatement(
-      'CREATE VIRTUAL TABLE IF NOT EXISTS "${SqliteDataStorageAdapter._ftsTableName}" '
+      'CREATE VIRTUAL TABLE IF NOT EXISTS "$_ftsTableName" '
       'USING fts5(collection UNINDEXED, id UNINDEXED, content, '
       'tokenize="unicode61 remove_diacritics 2")',
     );
@@ -19,7 +19,7 @@ extension _FtsSupport on SqliteDataStorageAdapter {
       return;
     }
     final exists = await _database.customSelect(
-      'SELECT 1 FROM "${SqliteDataStorageAdapter._ftsTableName}" WHERE collection = ? LIMIT 1',
+      'SELECT 1 FROM "$_ftsTableName" WHERE collection = ? LIMIT 1',
       variables: [collection],
     ).getSingleOrNull();
     if (exists != null) {
@@ -50,7 +50,7 @@ extension _FtsSupport on SqliteDataStorageAdapter {
     if (pending.isEmpty) {
       return;
     }
-    final ftsTable = SqliteDataStorageAdapter._ftsTableName;
+    final ftsTable = _ftsTableName;
 
     for (final chunk
         in _chunk(pending, SqliteDataStorageAdapter._ftsBatchSize)) {
@@ -78,7 +78,7 @@ extension _FtsSupport on SqliteDataStorageAdapter {
     if (idList.isEmpty || !_ftsReady) {
       return;
     }
-    final ftsTable = SqliteDataStorageAdapter._ftsTableName;
+    final ftsTable = _ftsTableName;
     for (final chunk
         in _chunk(idList, SqliteDataStorageAdapter._ftsBatchSize)) {
       final placeholders = List.filled(chunk.length, '?').join(', ');

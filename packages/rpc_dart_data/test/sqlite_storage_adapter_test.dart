@@ -23,9 +23,10 @@ void main() {
 
       for (final row in tables) {
         final tableName = row.read<String>('name');
-        if (tableName == 'collection_registry') {
-          await storage.database
-              .customStatement('DELETE FROM collection_registry');
+        if (tableName == 's_collection_registry') {
+          await storage.database.customStatement(
+            'DELETE FROM "s_collection_registry"',
+          );
         } else {
           await storage.database
               .customStatement('DROP TABLE IF EXISTS "$tableName"');
@@ -181,12 +182,12 @@ void main() {
     final tableNames = tables.map((row) => row.read<String>('name')).toList();
     expect(
       tableNames,
-      containsAll(['collection_registry', 'c_notes', 'c_tasks']),
+      containsAll(['s_collection_registry', 'c_notes', 'c_tasks']),
     );
 
     final registryRows = await storage.database
         .customSelect(
-          'SELECT collection, table_name FROM collection_registry ORDER BY collection',
+          'SELECT collection, table_name FROM "s_collection_registry" ORDER BY collection',
         )
         .get();
     final registryMap = <String, String>{
@@ -357,12 +358,12 @@ void main() {
     expect(
       tableNames,
       containsAll(
-          ['collection_registry', 'c_logs', 'c_metrics', 'c_notes', 'c_tasks']),
+          ['s_collection_registry', 'c_logs', 'c_metrics', 'c_notes', 'c_tasks']),
     );
 
     final registryRows = await repo2.storage.database
         .customSelect(
-          'SELECT collection, table_name FROM collection_registry ORDER BY collection',
+          'SELECT collection, table_name FROM "s_collection_registry" ORDER BY collection',
         )
         .get();
     final registry = <String, String>{
@@ -609,7 +610,7 @@ void main() {
     expect(tableNamesAfter, isNot(contains('c_archive')));
 
     final registryRows = await storage.database.customSelect(
-      'SELECT collection FROM collection_registry WHERE collection = ?',
+      'SELECT collection FROM "s_collection_registry" WHERE collection = ?',
       variables: ['archive'],
     ).get();
     expect(registryRows, isEmpty);

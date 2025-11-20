@@ -38,7 +38,7 @@ void main() {
       expect(sql, contains('payload'));
 
       final registryRow = await adapter.database.customSelect(
-        'SELECT expression FROM collection_index_registry '
+        'SELECT expression FROM "s_collection_index_registry" '
         'WHERE collection = ? AND path = ?',
         variables: const [
           collection,
@@ -100,7 +100,7 @@ void main() {
       expect(afterDelete, isNull);
 
       final registryRow = await adapter.database.customSelect(
-        'SELECT 1 FROM collection_index_registry '
+        'SELECT 1 FROM "s_collection_index_registry" '
         'WHERE collection = ? AND path = ? LIMIT 1',
         variables: const [
           collection,
@@ -153,7 +153,7 @@ void main() {
         await adapter1.writeRecord(record);
 
         await adapter1.database.customStatement(
-          'CREATE TABLE IF NOT EXISTS collection_index_registry ('
+          'CREATE TABLE IF NOT EXISTS "s_collection_index_registry" ('
           'collection TEXT NOT NULL, '
           'path TEXT NOT NULL, '
           'index_name TEXT NOT NULL UNIQUE, '
@@ -165,7 +165,7 @@ void main() {
         const indexName = 'priority_idx';
         const expression = "json_extract(payload, '\$.\"priority\"')";
         await adapter1.database.customStatement(
-          'INSERT INTO collection_index_registry '
+          'INSERT INTO "s_collection_index_registry" '
           '(collection, path, index_name, expression) VALUES (?, ?, ?, ?)',
           variables: ['tasks', 'priority', indexName, expression],
         );

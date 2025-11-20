@@ -20,7 +20,7 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
       return;
     }
     await _database.customStatement(
-      'CREATE TABLE IF NOT EXISTS collection_registry ('
+      'CREATE TABLE IF NOT EXISTS "$_collectionRegistryTable" ('
       'collection TEXT NOT NULL PRIMARY KEY, '
       'table_name TEXT NOT NULL UNIQUE'
       ')',
@@ -33,7 +33,7 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
       return;
     }
     await _database.customStatement(
-      'CREATE TABLE IF NOT EXISTS collection_index_registry ('
+      'CREATE TABLE IF NOT EXISTS "$_collectionIndexRegistryTable" ('
       'collection TEXT NOT NULL, '
       'path TEXT NOT NULL, '
       'index_name TEXT NOT NULL UNIQUE, '
@@ -47,7 +47,7 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
   Future<String?> _lookupTable(String collection) async {
     await _ensureRegistry();
     final row = await _database.customSelect(
-      'SELECT table_name FROM collection_registry '
+      'SELECT table_name FROM "$_collectionRegistryTable" '
       'WHERE collection = ? LIMIT 1',
       variables: [
         collection,
@@ -190,7 +190,7 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
     await _ensureIndexRegistry();
     final rows = await _database.customSelect(
       'SELECT path, index_name, expression '
-      'FROM collection_index_registry WHERE collection = ? '
+      'FROM "$_collectionIndexRegistryTable" WHERE collection = ? '
       'ORDER BY path',
       variables: [collection],
     ).get();
@@ -322,7 +322,7 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
       final candidate = 'c_$normalizedCollection$suffix';
 
       final collision = await _database.customSelect(
-        'SELECT 1 FROM collection_registry WHERE table_name = ? LIMIT 1',
+        'SELECT 1 FROM "$_collectionRegistryTable" WHERE table_name = ? LIMIT 1',
         variables: [candidate],
       ).getSingleOrNull();
       if (collision == null && !await _tableExists(candidate)) {
@@ -354,7 +354,7 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
             'ON "$candidate" (tenantId)',
           );
           await _database.customStatement(
-            'INSERT INTO collection_registry (collection, table_name) '
+            'INSERT INTO "$_collectionRegistryTable" (collection, table_name) '
             'VALUES (?, ?)',
             variables: [collection, candidate],
           );

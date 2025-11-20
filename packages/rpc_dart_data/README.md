@@ -129,7 +129,7 @@ The repository validates metric expressions and delegates supported work to the 
 
 ## Change streams and optimistic concurrency
 - `watchChanges` accepts an optional `cursor`, so clients can resume after a reconnect.
-- SQLite keeps a persistent `change_journal` table, allowing cursors to survive restarts.
+- SQLite keeps a persistent `s_change_journal` table, allowing cursors to survive restarts.
 - `update` and `patch` require an `expectedVersion`. A mismatch triggers `RpcDataError.conflict(...)` (or a transport `RpcException`).
 
 ## Extending the storage layer

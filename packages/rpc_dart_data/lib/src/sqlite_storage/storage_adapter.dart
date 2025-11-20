@@ -10,14 +10,13 @@ import '../connection/database_connection.dart';
 import '../data_contract.dart';
 import '../data_repository.dart';
 import '../models.dart';
-
 import 'database.dart';
 import 'json_support.dart';
 import 'sql_cipher.dart';
 
-part 'storage_adapter_registry.dart';
-part 'storage_adapter_query.dart';
 part 'storage_adapter_fts.dart';
+part 'storage_adapter_query.dart';
+part 'storage_adapter_registry.dart';
 
 /// Callback invoked whenever the adapter executes a SQL statement.
 ///
@@ -30,6 +29,15 @@ typedef SqlStatementObserver = void Function(
 
 /// Callback invoked after the adapter finishes its built-in SQLite setup.
 typedef SqliteSetupHook = FutureOr<void> Function(sqlite.Database database);
+
+const String _systemCollectionPrefix = 's_';
+const String _collectionRegistryTable =
+    '${_systemCollectionPrefix}collection_registry';
+const String _collectionIndexRegistryTable =
+    '${_systemCollectionPrefix}collection_index_registry';
+const String _changeJournalTable = '${_systemCollectionPrefix}change_journal';
+const String _ftsTableName = '${_systemCollectionPrefix}global_fts';
+
 
 /// SQLite-based implementation of [DataStorageAdapter] backed by SQLite.
 class SqliteDataStorageAdapter
@@ -155,7 +163,6 @@ class SqliteDataStorageAdapter
   static const int _ftsBatchSize = 200;
   static const int _sqliteVariableLimit = 999;
   static const int _recordUpsertArgumentCount = 6;
-  static const String _ftsTableName = 'c_global_fts';
   static const int _sqliteInClauseBatchSize = 999;
   bool _indexRegistryReady = false;
   final Map<String, List<_CollectionIndexMetadata>> _cachedCollectionIndexes =
@@ -203,7 +210,7 @@ class SqliteDataStorageAdapter
 
     final registryRows = await _database
         .customSelect(
-          'SELECT collection, table_name FROM collection_registry',
+          'SELECT collection, table_name FROM "$_collectionRegistryTable"',
         )
         .get();
 
@@ -340,7 +347,7 @@ class SqliteDataStorageAdapter
     await _ensureIndexRegistry();
 
     final existingRow = await _database.customSelect(
-      'SELECT index_name, expression FROM collection_index_registry '
+      'SELECT index_name, expression FROM "$_collectionIndexRegistryTable" '
       'WHERE collection = ? AND path = ? LIMIT 1',
       variables: [
         collection,
@@ -386,7 +393,7 @@ class SqliteDataStorageAdapter
     try {
       await _database.transaction(() async {
         await _database.customStatement(
-          'INSERT INTO collection_index_registry '
+          'INSERT INTO "$_collectionIndexRegistryTable" '
           '(collection, path, index_name, expression) '
           'VALUES (?, ?, ?, ?)',
           variables: [
@@ -452,7 +459,7 @@ class SqliteDataStorageAdapter
     await _ensureIndexRegistry();
 
     final row = await _database.customSelect(
-      'SELECT index_name FROM collection_index_registry '
+      'SELECT index_name FROM "$_collectionIndexRegistryTable" '
       'WHERE collection = ? AND path = ? LIMIT 1',
       variables: [
         collection,
@@ -477,7 +484,7 @@ class SqliteDataStorageAdapter
     try {
       await _database.transaction(() async {
         await _database.customStatement(
-          'DELETE FROM collection_index_registry '
+          'DELETE FROM "$_collectionIndexRegistryTable" '
           'WHERE collection = ? AND path = ?',
           variables: [collection, path],
         );
@@ -1009,7 +1016,7 @@ class SqliteDataStorageAdapter
     await _ensureRegistry();
     final rows = await _database
         .customSelect(
-          'SELECT collection FROM collection_registry ORDER BY collection',
+          'SELECT collection FROM "$_collectionRegistryTable" ORDER BY collection',
         )
         .get();
     return rows
@@ -1131,7 +1138,7 @@ class SqliteDataStorageAdapter
         'DROP TABLE IF EXISTS "$tableName"',
       );
       await _database.customStatement(
-        'DELETE FROM collection_registry WHERE collection = ?',
+        'DELETE FROM "$_collectionRegistryTable" WHERE collection = ?',
         variables: [collection],
       );
       if (_ftsReady) {
@@ -1147,7 +1154,7 @@ class SqliteDataStorageAdapter
           );
         }
         await _database.customStatement(
-          'DELETE FROM collection_index_registry WHERE collection = ?',
+          'DELETE FROM "$_collectionIndexRegistryTable" WHERE collection = ?',
           variables: [collection],
         );
       }
@@ -1189,7 +1196,9 @@ class SqliteDataChangeJournal implements DataChangeJournal {
 
   Future<void> _ensureTable() async {
     if (_clearOnOpen && !_clearedOnOpen) {
-      await _database.customStatement('DROP TABLE IF EXISTS change_journal');
+      await _database.customStatement(
+        'DROP TABLE IF EXISTS "$_changeJournalTable"',
+      );
       _clearedOnOpen = true;
       _tableReady = false;
     }
@@ -1197,7 +1206,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
       return;
     }
     await _database.customStatement(
-      'CREATE TABLE IF NOT EXISTS change_journal ('
+      'CREATE TABLE IF NOT EXISTS "$_changeJournalTable" ('
       'sequence INTEGER PRIMARY KEY AUTOINCREMENT, '
       'collection TEXT NOT NULL, '
       'record_id TEXT NOT NULL, '
@@ -1209,7 +1218,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
     );
     await _database.customStatement(
       'CREATE INDEX IF NOT EXISTS change_journal_collection_sequence '
-      'ON change_journal(collection, sequence)',
+      'ON "$_changeJournalTable"(collection, sequence)',
     );
     _tableReady = true;
   }
@@ -1225,7 +1234,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
     await _ensureTable();
     final payload = encodeRecordPayload(record);
     final sequence = await _database.customInsert(
-      'INSERT INTO change_journal '
+      'INSERT INTO "$_changeJournalTable" '
       '(collection, record_id, change_type, payload, version, occurred_at) '
       'VALUES (?, ?, ?, ?, ?, ?)',
       variables: [
@@ -1313,7 +1322,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
     if (afterCursor != null) {
       afterSequence = parseCursor(afterCursor);
       final exists = await _database.customSelect(
-        'SELECT 1 FROM change_journal '
+        'SELECT 1 FROM "$_changeJournalTable" '
         'WHERE collection = ? AND sequence = ? LIMIT 1',
         variables: [
           collection,
@@ -1332,7 +1341,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
     ];
     final query = StringBuffer(
       'SELECT sequence, collection, record_id, change_type, payload, '
-      'version, occurred_at FROM change_journal WHERE collection = ?',
+      'version, occurred_at FROM "$_changeJournalTable" WHERE collection = ?',
     );
     if (afterSequence != null) {
       query.write(' AND sequence > ?');
@@ -1364,7 +1373,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
     await _ensureTable();
     if (retainAfter != null) {
       await _database.customStatement(
-        'DELETE FROM change_journal '
+        'DELETE FROM "$_changeJournalTable" '
         'WHERE collection = ? AND occurred_at < ?',
         variables: [
           collection,
@@ -1374,13 +1383,13 @@ class SqliteDataChangeJournal implements DataChangeJournal {
     }
     if (maxEvents != null && maxEvents > 0) {
       final countRow = await _database.customSelect(
-        'SELECT COUNT(*) AS count FROM change_journal WHERE collection = ?',
+        'SELECT COUNT(*) AS count FROM "$_changeJournalTable" WHERE collection = ?',
         variables: [collection],
       ).getSingle();
       final count = countRow.read<int>('count');
       if (count > maxEvents) {
         final thresholdRow = await _database.customSelect(
-          'SELECT sequence FROM change_journal '
+          'SELECT sequence FROM "$_changeJournalTable" '
           'WHERE collection = ? ORDER BY sequence DESC '
           'LIMIT 1 OFFSET ?',
           variables: [
@@ -1391,7 +1400,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
         if (thresholdRow != null) {
           final threshold = thresholdRow.read<int>('sequence');
           await _database.customStatement(
-            'DELETE FROM change_journal '
+            'DELETE FROM "$_changeJournalTable" '
             'WHERE collection = ? AND sequence < ?',
             variables: [collection, threshold],
           );
@@ -1404,7 +1413,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
   Future<void> purgeCollection(String collection) async {
     await _ensureTable();
     await _database.customStatement(
-      'DELETE FROM change_journal WHERE collection = ?',
+      'DELETE FROM "$_changeJournalTable" WHERE collection = ?',
       variables: [collection],
     );
   }
