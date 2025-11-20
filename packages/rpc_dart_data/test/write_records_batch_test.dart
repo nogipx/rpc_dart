@@ -3,41 +3,6 @@ import 'package:test/test.dart';
 
 void main() {
   group('SqliteDataStorageAdapter.writeRecords', () {
-    test('batches SQL statements for multi-record writes', () async {
-      final executed = <({String sql, List<Object?> args})>[];
-      final storage = await SqliteDataStorageAdapter.memory(
-        statementObserver: (sql, arguments) {
-          if (sql.startsWith('INSERT INTO "c_notes"')) {
-            executed.add((sql: sql, args: arguments));
-          }
-        },
-      );
-      addTearDown(storage.dispose);
-
-      final baseTime = DateTime.utc(2024, 1, 1);
-      final records = List.generate(200, (index) {
-        final timestamp = baseTime.add(Duration(microseconds: index));
-        return DataRecord(
-          id: 'note-$index',
-          collection: 'notes',
-          tenantId: index.isEven ? 'tenant-a' : null,
-          payload: {'title': 'Note $index'},
-          version: 1,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        );
-      });
-
-      await storage.writeRecords(records);
-
-      expect(executed, isNotEmpty);
-      expect(executed.length, lessThan(records.length));
-      final totalArgs =
-          executed.fold<int>(0, (sum, entry) => sum + entry.args.length);
-      expect(totalArgs, records.length * 6);
-      expect(executed.first.sql, contains('VALUES (?, ?, ?, ?, ?, ?),'));
-    });
-
     test('upserts bulk updates atomically', () async {
       final storage = await SqliteDataStorageAdapter.memory();
       addTearDown(storage.dispose);

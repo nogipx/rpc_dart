@@ -357,8 +357,13 @@ void main() {
     final tableNames = tables.map((row) => row.read<String>('name')).toList();
     expect(
       tableNames,
-      containsAll(
-          ['s_collection_registry', 'c_logs', 'c_metrics', 'c_notes', 'c_tasks']),
+      containsAll([
+        's_collection_registry',
+        'c_logs',
+        'c_metrics',
+        'c_notes',
+        'c_tasks'
+      ]),
     );
 
     final registryRows = await repo2.storage.database

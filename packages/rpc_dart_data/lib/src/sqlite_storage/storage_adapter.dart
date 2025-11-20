@@ -38,7 +38,6 @@ const String _collectionIndexRegistryTable =
 const String _changeJournalTable = '${_systemCollectionPrefix}change_journal';
 const String _ftsTableName = '${_systemCollectionPrefix}global_fts';
 
-
 /// SQLite-based implementation of [DataStorageAdapter] backed by SQLite.
 class SqliteDataStorageAdapter
     implements DataStorageAdapter, CollectionIndexStorageAdapter {
