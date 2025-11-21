@@ -60,6 +60,12 @@ class DataServiceClient implements IDataService {
   }
 
   @override
+  Future<List<String>> listCollections({RpcContext? context}) async {
+    final response = await _caller.listCollections(context: context);
+    return response.collections;
+  }
+
+  @override
   Future<List<DataRecord>> listAllRecords({
     required String collection,
     RecordFilter? filter,

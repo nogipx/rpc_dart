@@ -36,6 +36,8 @@ abstract interface class IDataService {
     RpcContext? context,
   });
 
+  Future<List<String>> listCollections({RpcContext? context});
+
   /// Выгружает всю коллекцию, последовательно проходя страницы `list`.
   Future<List<DataRecord>> listAllRecords({
     required String collection,

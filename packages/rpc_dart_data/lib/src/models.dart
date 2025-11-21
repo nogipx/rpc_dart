@@ -759,6 +759,40 @@ class ListRecordsResponse extends Equatable implements IRpcSerializable {
 }
 
 @immutable
+class ListCollectionsRequest extends Equatable implements IRpcSerializable {
+  const ListCollectionsRequest();
+
+  factory ListCollectionsRequest.fromJson(Map<String, dynamic> _) =>
+      const ListCollectionsRequest();
+
+  @override
+  List<Object?> get props => const [];
+
+  @override
+  Map<String, dynamic> toJson() => const {};
+}
+
+@immutable
+class ListCollectionsResponse extends Equatable implements IRpcSerializable {
+  const ListCollectionsResponse({required this.collections});
+
+  factory ListCollectionsResponse.fromJson(Map<String, dynamic> json) =>
+      ListCollectionsResponse(
+        collections: List<String>.from(json['collections'] as List? ?? const []),
+      );
+
+  final List<String> collections;
+
+  @override
+  List<Object?> get props => [collections];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'collections': collections,
+      };
+}
+
+@immutable
 class UpdateRecordRequest extends Equatable implements IRpcSerializable {
   const UpdateRecordRequest({
     required this.collection,

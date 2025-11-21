@@ -100,6 +100,19 @@ void main() {
         ),
       );
     });
+
+    test('listCollections exposes registered collection names', () async {
+      await startServer();
+      await repository.create(
+        const CreateRecordRequest(collection: 'notes', payload: {'tag': 'alpha'}),
+      );
+      await repository.create(
+        const CreateRecordRequest(collection: 'tasks', payload: {'tag': 'beta'}),
+      );
+
+      final collections = await client.listCollections();
+      expect(collections.toSet(), containsAll({'notes', 'tasks'}));
+    });
   });
 }
 
@@ -115,6 +128,9 @@ class _ThrowingRepository implements IDataRepository {
   @override
   Future<ListRecordsResponse> list(ListRecordsRequest request) =>
       throw UnimplementedError();
+
+  @override
+  Future<List<String>> listCollections() => throw UnimplementedError();
 
   @override
   Future<DataRecord> update(UpdateRecordRequest request) =>

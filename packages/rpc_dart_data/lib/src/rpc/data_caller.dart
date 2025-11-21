@@ -56,6 +56,18 @@ class DataServiceCaller extends RpcCallerContract
     );
   }
 
+  Future<ListCollectionsResponse> listCollections({
+    RpcContext? context,
+  }) {
+    return callUnary(
+      methodName: IDataServiceContract.listCollections,
+      request: const ListCollectionsRequest(),
+      requestCodec: listCollectionsRequestCodec,
+      responseCodec: listCollectionsResponseCodec,
+      context: context,
+    );
+  }
+
   Future<UpdateRecordResponse> updateRecord(
     UpdateRecordRequest request, {
     RpcContext? context,

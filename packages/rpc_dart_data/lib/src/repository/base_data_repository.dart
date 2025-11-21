@@ -535,6 +535,11 @@ abstract class BaseDataRepository implements IDataRepository {
   }
 
   @override
+  Future<List<String>> listCollections() {
+    return storage.listCollections();
+  }
+
+  @override
   Future<DataRecord> update(UpdateRecordRequest request) async {
     final existing = await storage.readRecord(request.collection, request.id);
     if (existing == null) {

@@ -17,6 +17,9 @@ abstract interface class IDataServiceContract implements IRpcContract {
   /// Метод листинга записей.
   static const String listRecords = 'listRecords';
 
+  /// Запрос списка коллекций.
+  static const String listCollections = 'listCollections';
+
   /// Полное обновление записи.
   static const String updateRecord = 'updateRecord';
 
@@ -149,6 +152,10 @@ const RpcCodec<ListRecordsRequest> listRequestCodec =
     RpcCodec.withDecoder(ListRecordsRequest.fromJson);
 const RpcCodec<ListRecordsResponse> listResponseCodec =
     RpcCodec.withDecoder(ListRecordsResponse.fromJson);
+const RpcCodec<ListCollectionsRequest> listCollectionsRequestCodec =
+    RpcCodec.withDecoder(ListCollectionsRequest.fromJson);
+const RpcCodec<ListCollectionsResponse> listCollectionsResponseCodec =
+    RpcCodec.withDecoder(ListCollectionsResponse.fromJson);
 const RpcCodec<UpdateRecordRequest> updateRequestCodec =
     RpcCodec.withDecoder(UpdateRecordRequest.fromJson);
 const RpcCodec<UpdateRecordResponse> updateResponseCodec =

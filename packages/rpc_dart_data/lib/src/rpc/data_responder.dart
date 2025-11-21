@@ -55,6 +55,14 @@ class DataServiceResponder extends RpcResponderContract
       description: 'Постраничный список с фильтрацией и сортировкой',
     );
 
+    addUnaryMethod<ListCollectionsRequest, ListCollectionsResponse>(
+      methodName: IDataServiceContract.listCollections,
+      handler: _handleListCollections,
+      requestCodec: listCollectionsRequestCodec,
+      responseCodec: listCollectionsResponseCodec,
+      description: 'Список существующих коллекций',
+    );
+
     addUnaryMethod<UpdateRecordRequest, UpdateRecordResponse>(
       methodName: IDataServiceContract.updateRecord,
       handler: _handleUpdate,
@@ -204,6 +212,17 @@ class DataServiceResponder extends RpcResponderContract
     RpcContext? context,
   }) async {
     return _runSafely(context, () => _repository.list(request));
+  }
+
+  Future<ListCollectionsResponse> _handleListCollections(
+    ListCollectionsRequest request, {
+    RpcContext? context,
+  }) async {
+    final collections = await _runSafely(
+      context,
+      () => _repository.listCollections(),
+    );
+    return ListCollectionsResponse(collections: collections);
   }
 
   Future<UpdateRecordResponse> _handleUpdate(

@@ -20,6 +20,8 @@ abstract interface class IDataRepository {
 
   Future<int> bulkDelete(BulkDeleteRequest request);
 
+  Future<List<String>> listCollections();
+
   Future<ExportSnapshotResponse> exportSnapshot(ExportSnapshotRequest request);
 
   Future<ExportDatabaseResponse> exportDatabase(ExportDatabaseRequest request);
