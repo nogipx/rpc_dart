@@ -104,10 +104,12 @@ void main() {
     test('listCollections exposes registered collection names', () async {
       await startServer();
       await repository.create(
-        const CreateRecordRequest(collection: 'notes', payload: {'tag': 'alpha'}),
+        const CreateRecordRequest(
+            collection: 'notes', payload: {'tag': 'alpha'}),
       );
       await repository.create(
-        const CreateRecordRequest(collection: 'tasks', payload: {'tag': 'beta'}),
+        const CreateRecordRequest(
+            collection: 'tasks', payload: {'tag': 'beta'}),
       );
 
       final collections = await client.listCollections();

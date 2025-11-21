@@ -1,3 +1,12 @@
+## 2.0.0
+
+- Added `ListCollectionsRequest/ListCollectionsResponse` plus RPC support (`IDataServiceContract`, caller, responder, `IDataService`) so remote clients can ask “what collections exist?” without scanning data manually.
+- Extended repositories/adapters with `listCollections()` and wired the RPC integration test to cover the new flow, ensuring collection names come straight from storage.
+- Broadened RPC coverage by refactoring codecs, contracts, and facades while introducing suites for change journals, models, JSON helpers, SQLite/daemon helpers, SQLCipher, and RPC authorization/exception paths—lifting previously low coverage areas.
+- Confirmed `SqliteDataStorageAdapter` already provides FTS5 and exposes `SqliteSetupHook` so callers can enable WAL/PRAGMA hooks before traffic hits the database.
+- Documented that `SqliteDataDatabase.transaction` wraps `BEGIN/COMMIT/ROLLBACK`, giving true SQLite transactions for batch updates and journaled change streams.
+- Removed the `drift` and `rpc_dart_transports` runtime dependencies to keep the package lean—everything now routes through the core storage adapters and RPC helpers already shipped here.
+
 ## 1.2.0
 
 - Added streaming NDJSON exports with `payloadStream` plus the ability to skip the in-memory

@@ -3,7 +3,7 @@
 `rpc_dart_data` is the high-level data layer (CRUD + queries + change streams + offline sync) that sits on top of [`rpc_dart`](https://pub.dev/packages/rpc_dart).
 It gives you a transport-agnostic contract, ready-to-use storage adapters, and utilities for building offline-friendly backends and clients.
 
-## Feature highlights
+-## Feature highlights
 - **Unified `DataService` contract** with helpers for create/get/list/update/patch/delete/deleteCollection.
 - **Bulk workflows** via `bulkUpsert`, `bulkUpsertStream`, and `bulkDelete` to move large batches atomically.
 - **Search & aggregations** (`search`, `aggregate`) delegated to the storage adapter, including backend pagination.
@@ -11,9 +11,12 @@ It gives you a transport-agnostic contract, ready-to-use storage adapters, and u
 - **Change streams & offline sync**: `watchChanges` with cursors, bidirectional `syncChanges`, and `OfflineCommandQueue` for durable command queues.
 - **SQLite adapter** with SQLCipher support and a `SqliteSetupHook` so you can register custom pragmas before the database is exposed to your code.
 - **Ready-made environments** (`DataServiceFactory.inMemory`) for tests, demos, and local prototyping.
+- **Collection discovery**: RPC `listCollections()` queries the storage adapter for the current list of collection names so clients can introspect available datasets without enumerating all records.
+
+This package now depends directly only on `rpc_dart`, `sqlite3`, and helpers such as `licensify`/`args`. The former `drift` and `rpc_dart_transports` dependencies were removed so the core data layer stays lean—plug in whatever transport or storage adapter fits your architecture.
 
 ## Architecture in seven layers
-1. **Transport** (WebSocket / HTTP/2 / isolates / TURN / in-memory) provided by `rpc_dart_transports`.
+1. **Transport** (WebSocket / HTTP/2 / isolates / TURN / in-memory) provided by `rpc_dart` implementations (you can plug in any `IRpcTransport`; this package now relies on the transports shipped by `rpc_dart` instead of bundling `rpc_dart_transports` directly).
 2. **Endpoint** (`RpcCallerEndpoint` / `RpcResponderEndpoint`).
 3. **Contract + codecs** (`IDataServiceContract` and `RpcCodec<...>`).
 4. **Low-level plumbing** (`DataServiceCaller` / `DataServiceResponder`).
@@ -131,6 +134,16 @@ The repository validates metric expressions and delegates supported work to the 
 - `watchChanges` accepts an optional `cursor`, so clients can resume after a reconnect.
 - SQLite keeps a persistent `s_change_journal` table, allowing cursors to survive restarts.
 - `update` and `patch` require an `expectedVersion`. A mismatch triggers `RpcDataError.conflict(...)` (or a transport `RpcException`).
+
+## Listing collections
+Call `DataServiceClient.listCollections()` to retrieve the current catalog of collection names without enumerating records.
+
+```dart
+final collections = await client.listCollections(context: ctx);
+print('collections: ${collections.join(', ')}');
+```
+
+The RPC experience simply forwards to `DataStorageAdapter.listCollections()`, so the result reflects whatever tables your adapter created.
 
 ## Extending the storage layer
 Implement `DataStorageAdapter` to plug in any backend (PostgreSQL, Elastic, Firestore, ...):

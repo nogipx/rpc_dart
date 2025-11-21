@@ -778,7 +778,8 @@ class ListCollectionsResponse extends Equatable implements IRpcSerializable {
 
   factory ListCollectionsResponse.fromJson(Map<String, dynamic> json) =>
       ListCollectionsResponse(
-        collections: List<String>.from(json['collections'] as List? ?? const []),
+        collections:
+            List<String>.from(json['collections'] as List? ?? const []),
       );
 
   final List<String> collections;
