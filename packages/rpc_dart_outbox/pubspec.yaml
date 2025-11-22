@@ -1,0 +1,19 @@
+name: rpc_dart_outbox
+version: 0.1.0
+description: Pluggable outbox module built on rpc_dart_data for durable event delivery.
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  rpc_dart: ^2.3.1
+  rpc_dart_data: ^2.0.0
+  equatable: ^2.0.7
+  meta: ^1.16.0
+
+dev_dependencies:
+  lints: ^5.1.1
+  test: ^1.26.3

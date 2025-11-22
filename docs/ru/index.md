@@ -49,5 +49,6 @@ dart pub add rpc_dart_transports
 - [Быстрый старт](getting-started.md)
 - [Основные концепции](core-concepts.md)
 - [Архитектура](architecture.md)
+- [Подключаемый outbox-модуль](guides/outbox-module.md)
 - [Репозиторий проекта](https://github.com/nogipx/rpc_dart)
 - [Пакет на pub.dev](https://pub.dev/packages/rpc_dart)
