@@ -7,6 +7,7 @@ import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:sqlite3/common.dart' as sqlite;
 
 import '../../sqlite_storage/sqlite_loader.dart' as sqlite_loader;
+import '../../sqlite_storage/sqlite_cipher_loader.dart';
 
 part 'storage_adapter_fts.dart';
 part 'storage_adapter_query.dart';
@@ -110,6 +111,9 @@ class SqliteDataStorageAdapter
     file.parent.createSync(recursive: true);
     if (logStatements) {
       // Logging is not available with the sqlite3 executor yet.
+    }
+    if (sqlCipherKey != null) {
+      configureSqlCipherDynamicLibrary();
     }
     final database = sqlite_loader.openFile(file.path);
     try {

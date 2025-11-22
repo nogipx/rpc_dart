@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:rpc_dart_data/rpc_dart_data.dart';
+import 'package:rpc_dart_data/src/sqlite_storage/sqlite_cipher_loader.dart';
 import 'package:sqlite3/common.dart' as sqlite;
 import 'package:sqlite3/sqlite3.dart' as sqlite_ffi;
 
@@ -60,6 +61,9 @@ Future<DatabaseConnection> openFileDb({
   if (logStatements) {
     // Логирование пока не реализовано.
   }
+  if (sqlCipherKey != null) {
+    configureSqlCipherDynamicLibrary();
+  }
   final database = sqlite_ffi.sqlite3.open(file.path);
   return _openDatabase(
     database,
@@ -77,6 +81,9 @@ Future<DatabaseConnection> openInMemoryDb({
 }) async {
   if (logStatements) {
     // Логирование пока не реализовано.
+  }
+  if (sqlCipherKey != null) {
+    configureSqlCipherDynamicLibrary();
   }
   final database = sqlite_ffi.sqlite3.openInMemory();
   return _openDatabase(

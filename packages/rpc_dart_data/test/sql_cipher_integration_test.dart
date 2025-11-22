@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:licensify/licensify.dart';
 import 'package:path/path.dart' as p;
@@ -10,25 +11,17 @@ import 'package:test/test.dart';
 
 void main() {
   group('SQLCipher file I/O', () {
-    late final String dbPath;
+    late String dbPath;
+    final keyBytes = Uint8List.fromList(List.generate(32, (i) => i));
 
     setUp(() async {
       dbPath = p.join(Directory.current.path, 'encrypted.sqlite');
-      print(dbPath);
-      await File(dbPath).create();
-    });
-
-    tearDown(() async {
-      // await dbFile.delete(recursive: true);
+      await File(dbPath).parent.create(recursive: true);
     });
 
     test('encrypts a real file and rejects access without the key', () async {
-      if (!_supportsSqlCipher()) {
-        print('No support sqlcipher');
-        return; // Skip when the bundled sqlite3 is not built with SQLCipher.
-      }
-
-      final paserk = Licensify.generateEncryptionKey().toPaserk();
+      final paserk =
+          LicensifySymmetricKey.xchacha20(keyBytes: keyBytes).toPaserk();
 
       final connection = await openFileDb(
         options: SqliteConnectionOptions(nativePath: dbPath),
@@ -36,10 +29,10 @@ void main() {
       );
 
       connection.database.execute(
-        'CREATE TABLE secrets(id TEXT PRIMARY KEY, body TEXT);',
+        'CREATE TABLE IF NOT EXISTS secrets(id TEXT PRIMARY KEY, body TEXT);',
       );
       connection.database.execute(
-        "INSERT INTO secrets(id, body) VALUES ('note-1', 'top secret');",
+        "INSERT OR REPLACE INTO secrets(id, body) VALUES ('note-1', 'top secret');",
       );
       await connection.close();
 
@@ -69,16 +62,4 @@ void main() {
       dbWithoutKey.dispose();
     });
   });
-}
-
-bool _supportsSqlCipher() {
-  final database = sqlite.sqlite3.openInMemory();
-  try {
-    final result = database.select('PRAGMA cipher_version;');
-    return result.isNotEmpty;
-  } on sqlite.SqliteException {
-    return false;
-  } finally {
-    database.dispose();
-  }
 }
