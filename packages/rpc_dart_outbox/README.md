@@ -18,9 +18,12 @@ void main() async {
   final data = InMemoryDataRepository();
   final outbox = OutboxRepository(repository: data);
 
-  await outbox.enqueue(payload: {'type': 'email', 'userId': '123'});
+  await outbox.enqueue(
+    topic: 'emails',
+    payload: {'type': 'email', 'userId': '123'},
+  );
 
-  final jobs = await outbox.claim(limit: 1);
+  final jobs = await outbox.claim(limit: 1, topic: 'emails');
   // отправляем письмо
   await outbox.acknowledge(jobs.first.id);
 }
@@ -29,6 +32,7 @@ void main() async {
 ## Возможности
 - Дедупликация по `dedupKey`.
 - claim с блокировкой и счетчиком попыток.
+- Роутинг по `topic`, чтобы разные воркеры забирали свои батчи.
 - Перевод задач в `delivered`, `failed` или повторная постановка через
   `retryLater`.
 

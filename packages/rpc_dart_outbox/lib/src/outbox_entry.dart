@@ -9,6 +9,7 @@ import 'outbox_status.dart';
 class OutboxEntry extends Equatable implements IRpcSerializable {
   const OutboxEntry({
     required this.id,
+    required this.topic,
     required this.payload,
     required this.status,
     required this.attempts,
@@ -28,6 +29,7 @@ class OutboxEntry extends Equatable implements IRpcSerializable {
 
     return OutboxEntry(
       id: record.id,
+      topic: payload['topic'] as String? ?? 'default',
       payload: Map<String, dynamic>.from(
           payload['event'] as Map? ?? const <String, dynamic>{}),
       status: _statusFromPayload(payload['status']),
@@ -43,6 +45,7 @@ class OutboxEntry extends Equatable implements IRpcSerializable {
   }
 
   final String id;
+  final String topic;
   final Map<String, dynamic> payload;
   final OutboxStatus status;
   final int attempts;
@@ -55,6 +58,7 @@ class OutboxEntry extends Equatable implements IRpcSerializable {
 
   OutboxEntry copyWith({
     Map<String, dynamic>? payload,
+    String? topic,
     OutboxStatus? status,
     int? attempts,
     DateTime? availableAt,
@@ -65,6 +69,7 @@ class OutboxEntry extends Equatable implements IRpcSerializable {
   }) {
     return OutboxEntry(
       id: id,
+      topic: topic ?? this.topic,
       payload: payload ?? this.payload,
       status: status ?? this.status,
       attempts: attempts ?? this.attempts,
@@ -80,6 +85,7 @@ class OutboxEntry extends Equatable implements IRpcSerializable {
   Map<String, dynamic> toStoragePayload() {
     return {
       'status': status.name,
+      'topic': topic,
       'event': payload,
       'attempts': attempts,
       'availableAtEpoch': availableAt.microsecondsSinceEpoch,
@@ -93,6 +99,7 @@ class OutboxEntry extends Equatable implements IRpcSerializable {
     return {
       'id': id,
       'status': status.name,
+      'topic': topic,
       'payload': payload,
       'attempts': attempts,
       'availableAt': availableAt.toIso8601String(),
@@ -107,6 +114,7 @@ class OutboxEntry extends Equatable implements IRpcSerializable {
   @override
   List<Object?> get props => [
         id,
+        topic,
         payload,
         status,
         attempts,

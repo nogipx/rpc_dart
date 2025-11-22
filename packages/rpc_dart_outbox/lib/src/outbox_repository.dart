@@ -27,6 +27,7 @@ class OutboxRepository {
 
   Future<OutboxEntry> enqueue({
     required Map<String, dynamic> payload,
+    required String topic,
     String? dedupKey,
     DateTime? availableAt,
   }) async {
@@ -39,6 +40,7 @@ class OutboxRepository {
 
     final entryPayload = OutboxEntry(
       id: '',
+      topic: topic,
       payload: payload,
       status: OutboxStatus.pending,
       attempts: 0,
@@ -63,37 +65,31 @@ class OutboxRepository {
   Future<List<OutboxEntry>> claim({
     int limit = 10,
     Duration? lockDuration,
+    String? topic,
+    List<String>? topics,
   }) async {
     final now = _clock();
-    final response = await repository.list(
-      ListRecordsRequest(
-        collection: collectionName,
-        filter: RecordFilter(
-          equals: {'status': OutboxStatus.pending.name},
-          range: {
-            'availableAtEpoch': RangeFilter(max: now.microsecondsSinceEpoch),
-          },
-        ),
-        sort: const SortOrder(field: 'availableAtEpoch'),
-        options: QueryOptions(limit: limit),
-      ),
-    );
-
     final lock = lockDuration ?? defaultLockDuration;
     final claimed = <OutboxEntry>[];
-    for (final record in response.records) {
-      final entry = OutboxEntry.fromRecord(record);
-      final patched = await _patchEntry(
-        record,
-        set: {
-          'status': OutboxStatus.processing.name,
-          'availableAtEpoch': now.add(lock).microsecondsSinceEpoch,
-          'attempts': entry.attempts + 1,
-        },
-        unset: const ['lastError'],
-      );
-      claimed.add(patched);
+
+    final topicList = topics ?? (topic != null ? [topic] : null);
+    if (topicList == null || topicList.isEmpty) {
+      claimed.addAll(await _claimBatch(now: now, limit: limit, lock: lock));
+      return claimed;
     }
+
+    for (final item in topicList) {
+      if (claimed.length >= limit) break;
+      final remaining = limit - claimed.length;
+      final batch = await _claimBatch(
+        now: now,
+        limit: remaining,
+        lock: lock,
+        topic: item,
+      );
+      claimed.addAll(batch);
+    }
+
     return claimed;
   }
 
@@ -157,6 +153,48 @@ class OutboxRepository {
     );
 
     return patched;
+  }
+
+  Future<List<OutboxEntry>> _claimBatch({
+    required DateTime now,
+    required int limit,
+    required Duration lock,
+    String? topic,
+  }) async {
+    final equalsFilter = {
+      'status': OutboxStatus.pending.name,
+      if (topic != null) 'topic': topic,
+    };
+
+    final response = await repository.list(
+      ListRecordsRequest(
+        collection: collectionName,
+        filter: RecordFilter(
+          equals: equalsFilter,
+          range: {
+            'availableAtEpoch': RangeFilter(max: now.microsecondsSinceEpoch),
+          },
+        ),
+        sort: const SortOrder(field: 'availableAtEpoch'),
+        options: QueryOptions(limit: limit),
+      ),
+    );
+
+    final claimed = <OutboxEntry>[];
+    for (final record in response.records) {
+      final entry = OutboxEntry.fromRecord(record);
+      final patched = await _patchEntry(
+        record,
+        set: {
+          'status': OutboxStatus.processing.name,
+          'availableAtEpoch': now.add(lock).microsecondsSinceEpoch,
+          'attempts': entry.attempts + 1,
+        },
+        unset: const ['lastError'],
+      );
+      claimed.add(patched);
+    }
+    return claimed;
   }
 
   Future<DataRecord?> _loadRecord(String id) async {

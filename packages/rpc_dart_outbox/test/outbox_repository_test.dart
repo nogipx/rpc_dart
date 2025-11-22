@@ -15,9 +15,12 @@ void main() {
 
   test('enqueue and claim move entry to processing and increment attempts',
       () async {
-    final created = await outbox.enqueue(payload: {'type': 'email'});
+    final created = await outbox.enqueue(
+      payload: {'type': 'email'},
+      topic: 'emails',
+    );
 
-    final claimed = await outbox.claim(limit: 1);
+    final claimed = await outbox.claim(limit: 1, topic: 'emails');
     expect(claimed, hasLength(1));
     expect(claimed.first.id, created.id);
     expect(claimed.first.status, OutboxStatus.processing);
@@ -25,16 +28,16 @@ void main() {
   });
 
   test('acknowledge transitions entry to delivered', () async {
-    await outbox.enqueue(payload: {'type': 'email'});
-    final claimed = await outbox.claim(limit: 1);
+    await outbox.enqueue(payload: {'type': 'email'}, topic: 'emails');
+    final claimed = await outbox.claim(limit: 1, topic: 'emails');
 
     final acked = await outbox.acknowledge(claimed.first.id);
     expect(acked?.status, OutboxStatus.delivered);
   });
 
   test('retryLater delays the next claim until the delay passes', () async {
-    await outbox.enqueue(payload: {'type': 'email'});
-    final claimed = await outbox.claim(limit: 1);
+    await outbox.enqueue(payload: {'type': 'email'}, topic: 'emails');
+    final claimed = await outbox.claim(limit: 1, topic: 'emails');
 
     await outbox.retryLater(claimed.first.id, delay: const Duration(minutes: 5));
 
@@ -51,14 +54,44 @@ void main() {
   test('dedupKey avoids inserting duplicates', () async {
     final first = await outbox.enqueue(
       payload: {'type': 'email', 'userId': '1'},
+      topic: 'emails',
       dedupKey: 'email-1',
     );
     final second = await outbox.enqueue(
       payload: {'type': 'email', 'userId': '1'},
+      topic: 'emails',
       dedupKey: 'email-1',
     );
 
     expect(second.id, first.id);
     expect(second.payload, first.payload);
+  });
+
+  test('claim can filter by topic', () async {
+    await outbox.enqueue(payload: {'type': 'email'}, topic: 'emails');
+    await outbox.enqueue(payload: {'type': 'sms'}, topic: 'notifications');
+
+    final emailBatch = await outbox.claim(limit: 5, topic: 'emails');
+    expect(emailBatch, hasLength(1));
+    expect(emailBatch.first.topic, 'emails');
+
+    // notifications still pending because topic mismatch in previous claim
+    final notifBatch = await outbox.claim(limit: 5, topic: 'notifications');
+    expect(notifBatch, hasLength(1));
+    expect(notifBatch.first.topic, 'notifications');
+  });
+
+  test('claim can iterate multiple topics until limit reached', () async {
+    await outbox.enqueue(payload: {'type': 'email1'}, topic: 'emails');
+    await outbox.enqueue(payload: {'type': 'email2'}, topic: 'emails');
+    await outbox.enqueue(payload: {'type': 'sms1'}, topic: 'notifications');
+
+    final batch = await outbox.claim(
+      limit: 2,
+      topics: const ['notifications', 'emails'],
+    );
+
+    expect(batch, hasLength(2));
+    expect(batch.map((e) => e.topic), containsAll(['notifications', 'emails']));
   });
 }
