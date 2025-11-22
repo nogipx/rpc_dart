@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:sqlite3/sqlite3.dart' as sqlite;
+import 'package:sqlite3/common.dart' as sqlite;
 
 /// Minimal reimplementation of a sqlite3 executor.
 class SqliteDataDatabase {
   SqliteDataDatabase(this.database);
 
-  final sqlite.Database database;
+  final sqlite.CommonDatabase database;
 
   SqliteSelectQuery customSelect(
     String sql, {
@@ -63,7 +63,7 @@ class SqliteSelectQuery {
     this.variables,
   );
 
-  final sqlite.Database database;
+  final sqlite.CommonDatabase database;
   final String sql;
   final List<Object?> variables;
 

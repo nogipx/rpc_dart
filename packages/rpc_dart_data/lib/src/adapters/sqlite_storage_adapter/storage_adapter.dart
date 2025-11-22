@@ -4,7 +4,9 @@ import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
-import 'package:sqlite3/sqlite3.dart' as sqlite;
+import 'package:sqlite3/common.dart' as sqlite;
+
+import '../../sqlite_storage/sqlite_loader.dart' as sqlite_loader;
 
 part 'storage_adapter_fts.dart';
 part 'storage_adapter_query.dart';
@@ -20,7 +22,8 @@ typedef SqlStatementObserver = void Function(
 );
 
 /// Callback invoked after the adapter finishes its built-in SQLite setup.
-typedef SqliteSetupHook = FutureOr<void> Function(sqlite.Database database);
+typedef SqliteSetupHook = FutureOr<void> Function(
+    sqlite.CommonDatabase database);
 
 const String _systemCollectionPrefix = 's_';
 const String _collectionRegistryTable =
@@ -54,7 +57,7 @@ class SqliteDataStorageAdapter
 
   /// Create an adapter backed by the provided sqlite3 [database].
   factory SqliteDataStorageAdapter.fromDatabase(
-    sqlite.Database database, {
+    sqlite.CommonDatabase database, {
     bool isInMemory = false,
     SqlStatementObserver? statementObserver,
   }) {
@@ -78,7 +81,7 @@ class SqliteDataStorageAdapter
     if (logStatements) {
       // Logging is not available with the sqlite3 executor yet.
     }
-    final database = sqlite.sqlite3.openInMemory();
+    final database = sqlite_loader.openInMemory();
     try {
       await _initializeDatabase(
         database,
@@ -108,7 +111,7 @@ class SqliteDataStorageAdapter
     if (logStatements) {
       // Logging is not available with the sqlite3 executor yet.
     }
-    final database = sqlite.sqlite3.open(file.path);
+    final database = sqlite_loader.openFile(file.path);
     try {
       await _initializeDatabase(
         database,
@@ -127,7 +130,7 @@ class SqliteDataStorageAdapter
   }
 
   static Future<void> _initializeDatabase(
-    sqlite.Database database, {
+    sqlite.CommonDatabase database, {
     SqlCipherKey? sqlCipherKey,
     SqliteSetupHook? sqliteSetup,
   }) async {

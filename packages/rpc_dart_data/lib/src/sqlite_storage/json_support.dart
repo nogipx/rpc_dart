@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'package:sqlite3/sqlite3.dart' as sqlite;
+import 'package:sqlite3/common.dart' as sqlite;
 
 /// Ensures that [json_extract] is available on the provided SQLite database.
-void ensureJsonExtractFunction(sqlite.Database database) {
+void ensureJsonExtractFunction(sqlite.CommonDatabase database) {
   try {
     database.select(
       r"""SELECT json_extract('1', '$')""",

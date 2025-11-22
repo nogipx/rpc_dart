@@ -2,7 +2,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:rpc_dart_data/rpc_dart_data.dart';
-import 'package:sqlite3/sqlite3.dart' as sqlite;
+import 'package:sqlite3/common.dart' as sqlite;
+import 'package:sqlite3/sqlite3.dart' as sqlite_ffi;
 
 const _defaultOptions = SqliteConnectionOptions.defaults;
 
@@ -16,7 +17,7 @@ Future<File> _resolveMainDbFile(SqliteConnectionOptions options) async {
 }
 
 Future<void> _configureDatabase(
-  sqlite.Database database, {
+  sqlite.CommonDatabase database, {
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
 }) async {
@@ -31,7 +32,7 @@ Future<void> _configureDatabase(
 }
 
 Future<DatabaseConnection> _openDatabase(
-  sqlite.Database database, {
+  sqlite.CommonDatabase database, {
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
 }) async {
@@ -59,7 +60,7 @@ Future<DatabaseConnection> openFileDb({
   if (logStatements) {
     // Логирование пока не реализовано.
   }
-  final database = sqlite.sqlite3.open(file.path);
+  final database = sqlite_ffi.sqlite3.open(file.path);
   return _openDatabase(
     database,
     sqlCipherKey: sqlCipherKey,
@@ -77,7 +78,7 @@ Future<DatabaseConnection> openInMemoryDb({
   if (logStatements) {
     // Логирование пока не реализовано.
   }
-  final database = sqlite.sqlite3.openInMemory();
+  final database = sqlite_ffi.sqlite3.openInMemory();
   return _openDatabase(
     database,
     sqlCipherKey: sqlCipherKey,

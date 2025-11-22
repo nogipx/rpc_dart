@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:licensify/licensify.dart';
-import 'package:sqlite3/sqlite3.dart' as sqlite;
+import 'package:sqlite3/common.dart' as sqlite;
 
 /// SQLCipher-specific exception wrapper with optional underlying cause.
 class SqlCipherException implements Exception {
@@ -59,21 +59,22 @@ class SqlCipherKey {
   bool _consumed = false;
 
   void applyTo(
-    sqlite.Database database, {
-    bool verifyCipher = true,
+    sqlite.CommonDatabase database, {
     bool enforceMemorySecurity = true,
   }) {
     if (_consumed) {
       throw StateError('SQLCipher key material has already been consumed.');
     }
 
-    final hexKey = _encodeHex(_keyBytes);
     try {
+      // Fail fast: if the binary does not expose cipher pragmas, do not
+      // continue with an unencrypted database.
+      _assertCipherAvailable(database);
+
+      final hexKey = _encodeHex(_keyBytes);
       database.execute("PRAGMA key = \"x'$hexKey'\";");
 
-      if (verifyCipher) {
-        _assertCipherAvailable(database);
-      }
+      _assertCipherAvailable(database);
 
       if (enforceMemorySecurity) {
         database.execute('PRAGMA cipher_memory_security = ON;');
@@ -89,12 +90,18 @@ class SqlCipherKey {
     }
   }
 
-  static void _assertCipherAvailable(sqlite.Database database) {
+  static void _assertCipherAvailable(sqlite.CommonDatabase database) {
     try {
       final result = database.select('PRAGMA cipher_version;');
       if (result.isEmpty) {
         throw SqlCipherException(
           'SQLCipher не активирован: PRAGMA cipher_version вернул пустое значение.',
+        );
+      }
+      final version = result.single.values.first;
+      if (version == null || version.toString().trim().isEmpty) {
+        throw SqlCipherException(
+          'SQLCipher не активирован: cipher_version пустой.',
         );
       }
     } on sqlite.SqliteException catch (error) {
