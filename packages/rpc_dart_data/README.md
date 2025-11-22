@@ -9,7 +9,7 @@ It gives you a transport-agnostic contract, ready-to-use storage adapters, and u
 - **Search & aggregations** (`search`, `aggregate`) delegated to the storage adapter, including backend pagination.
 - **Streaming snapshots**: export/import the full database as NDJSON, stream it through `payloadStream`, or set `includePayloadString: false` to skip building large strings.
 - **Change streams & offline sync**: `watchChanges` with cursors, bidirectional `syncChanges`, and `OfflineCommandQueue` for durable command queues.
-- **SQLite adapter** with SQLCipher support and a `SqliteSetupHook` so you can register custom pragmas before the database is exposed to your code.
+- **SQLite adapter** with SQLCipher support (auto-loads `libsqlcipher` when a key is provided, uses `sqlite3mc.wasm` on web) and a `SqliteSetupHook` so you can register custom pragmas before the database is exposed to your code.
 - **Ready-made environments** (`DataServiceFactory.inMemory`) for tests, demos, and local prototyping.
 - **Collection discovery**: RPC `listCollections()` queries the storage adapter for the current list of collection names so clients can introspect available datasets without enumerating all records.
 
@@ -169,7 +169,10 @@ Adapters participate in streaming export/import by overriding `readCollectionChu
 - Creates per-collection tables on demand plus indexes on `version`, `created_at`, and `updated_at`.
 - Delegates filtering, sorting, and pagination to SQL for predictable O(log N) plans.
 - Uses batched UPSERT statements to keep `writeRecords` fast even when thousands of rows are updated.
-- Supports SQLCipher by passing a `SqlCipherKey` or a `SqliteSetupHook` that registers additional pragmas.
+- SQLCipher:
+  - Pass a `SqlCipherKey` to enable encryption; the runtime will auto-load `libsqlcipher` on macOS/Linux (checks `SQLITE3_LIB_DIR`/`SQLITE3_LIB_NAME` or common Homebrew paths) before opening the database and will fail fast if cipher pragmas are missing.
+  - On the web, the adapter uses the `sqlite3mc.wasm` build (SQLite3MultipleCiphers) by default; set `webSqliteWasmUri` to a custom location if you host your own WASM.
+  - You can still register extra PRAGMA via `SqliteSetupHook` for fine-tuning.
 - Stores `watch()` / `sync()` events in a durable journal, so cursor-based clients recover after restarts.
 
 ## Testing

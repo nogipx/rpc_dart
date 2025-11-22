@@ -20,8 +20,7 @@ void configureSqlCipherDynamicLibrary({String? libraryPath}) {
     return;
   }
 
-  final resolved =
-      libraryPath ?? _fromEnv(os!) ?? _fromCommonLocations(os!);
+  final resolved = libraryPath ?? _fromEnv(os!) ?? _fromCommonLocations(os!);
   if (resolved == null) {
     return;
   }

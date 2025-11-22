@@ -1,3 +1,9 @@
+## 2.1.0
+
+- SQLCipher: when a `SqlCipherKey` is provided, the library now automatically overrides the loaded SQLite binary on macOS/Linux to use SQLCipher (`SQLITE3_LIB_DIR`/`SQLITE3_LIB_NAME` or common Homebrew paths) before opening the database; still fails fast when cipher pragmas are missing so encrypted DBs can’t silently fall back to plaintext.
+- Web: switched the WASM loader to `sqlite3mc.wasm` (SQLite3MultipleCiphers) by default so cipher-enabled builds work consistently across platforms; still respects a custom `webSqliteWasmUri` if supplied.
+- Refined SQLCipher helpers and tests to support repeated open/close cycles on the same encrypted file (idempotent table creation, stable paths).
+
 ## 2.0.0
 
 - Added `ListCollectionsRequest/ListCollectionsResponse` plus RPC support (`IDataServiceContract`, caller, responder, `IDataService`) so remote clients can ask “what collections exist?” without scanning data manually.
