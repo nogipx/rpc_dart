@@ -1,3 +1,8 @@
+## 2.1.1
+
+- Expanded `IDataService` API docs in English with detailed semantics for pagination, optimistic locking, bulk ops, exports/imports, search/aggregate, indexes, change streams, offline sync, and shutdown guidance.
+- Breaking: `DataServiceCaller`, `DataServiceResponder`, and the facade/server factories now require an explicit `RpcDataTransferMode` in constructors; wire this through when instantiating clients/servers.
+
 ## 2.1.0
 
 - SQLCipher: when a `SqlCipherKey` is provided, the library now automatically overrides the loaded SQLite binary on macOS/Linux to use SQLCipher (`SQLITE3_LIB_DIR`/`SQLITE3_LIB_NAME` or common Homebrew paths) before opening the database; still fails fast when cipher pragmas are missing so encrypted DBs can’t silently fall back to plaintext.
