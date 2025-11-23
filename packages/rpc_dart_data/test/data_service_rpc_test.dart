@@ -21,6 +21,7 @@ void main() {
       final responder = DataServiceResponder(
         repository: repository,
         allowedBearerTokens: allowedBearerTokens,
+        transferMode: RpcDataTransferMode.zeroCopy,
       );
       server = DataServiceServer(
         endpoint: endpoint,
@@ -33,7 +34,10 @@ void main() {
         transport: clientTransport,
         debugLabel: 'rpc-client',
       );
-      final caller = DataServiceCaller(callerEndpoint);
+      final caller = DataServiceCaller(
+        endpoint: callerEndpoint,
+        transferMode: RpcDataTransferMode.zeroCopy,
+      );
       client = DataServiceClient(callerEndpoint, caller);
     }
 

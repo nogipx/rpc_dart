@@ -9,16 +9,18 @@ class DataServiceFactory {
   static DataServiceServer createServer({
     required IRpcTransport transport,
     required IDataRepository repository,
+    RpcDataTransferMode transferMode = RpcDataTransferMode.codec,
     String debugLabel = 'DataServiceServer',
   }) {
-    final endpoint = RpcResponderEndpoint(
-      transport: transport,
-      debugLabel: debugLabel,
-    );
-    final responder = DataServiceResponder(repository: repository);
     return DataServiceServer(
-      endpoint: endpoint,
-      responder: responder,
+      endpoint: RpcResponderEndpoint(
+        transport: transport,
+        debugLabel: debugLabel,
+      ),
+      responder: DataServiceResponder(
+        repository: repository,
+        transferMode: transferMode,
+      ),
       repository: repository,
     );
   }
@@ -26,13 +28,17 @@ class DataServiceFactory {
   /// Создать клиентскую часть.
   static DataServiceClient createClient({
     required IRpcTransport transport,
+    RpcDataTransferMode transferMode = RpcDataTransferMode.codec,
     String debugLabel = 'DataServiceClient',
   }) {
     final endpoint = RpcCallerEndpoint(
       transport: transport,
       debugLabel: debugLabel,
     );
-    final caller = DataServiceCaller(endpoint);
+    final caller = DataServiceCaller(
+      endpoint: endpoint,
+      transferMode: transferMode,
+    );
     return DataServiceClient(endpoint, caller);
   }
 
@@ -48,11 +54,13 @@ class DataServiceFactory {
       transport: serverTransport,
       repository: repo,
       debugLabel: serverLabel,
+      transferMode: RpcDataTransferMode.zeroCopy,
     );
     await server.start();
     final client = createClient(
       transport: clientTransport,
       debugLabel: clientLabel,
+      transferMode: RpcDataTransferMode.zeroCopy,
     );
     return InMemoryDataServiceEnvironment(
       client: client,

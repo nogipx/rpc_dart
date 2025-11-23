@@ -9,6 +9,7 @@ class DataServiceResponder extends RpcResponderContract
     required IDataRepository repository,
     bool disposeRepositoryOnClose = true,
     Iterable<String> allowedBearerTokens = const [],
+    required RpcDataTransferMode transferMode,
   })  : _repository = repository,
         _disposeRepositoryOnClose = disposeRepositoryOnClose,
         _allowedBearerTokens = {
@@ -17,7 +18,7 @@ class DataServiceResponder extends RpcResponderContract
         },
         super(
           IDataServiceContract.name,
-          dataTransferMode: RpcDataTransferMode.codec,
+          dataTransferMode: transferMode,
         );
 
   final IDataRepository _repository;

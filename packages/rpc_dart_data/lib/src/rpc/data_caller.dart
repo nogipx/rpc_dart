@@ -8,13 +8,13 @@ import 'data_contract.dart';
 
 class DataServiceCaller extends RpcCallerContract
     implements IDataServiceContract {
-  DataServiceCaller(
-    RpcCallerEndpoint endpoint, {
-    RpcDataTransferMode mode = RpcDataTransferMode.codec,
+  DataServiceCaller({
+    required RpcCallerEndpoint endpoint,
+    required RpcDataTransferMode transferMode,
   }) : super(
           IDataServiceContract.name,
           endpoint,
-          dataTransferMode: mode,
+          dataTransferMode: transferMode,
         );
 
   Future<CreateRecordResponse> createRecord(
