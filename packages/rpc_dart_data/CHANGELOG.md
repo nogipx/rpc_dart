@@ -1,3 +1,10 @@
+## 2.2.0
+
+- Breaking: removed `tenantId` from `DataRecord`, adapters, and SQLite schema/indexing. Multi-tenant isolation now belongs to higher layers; table footprint and indexes are smaller.
+- Correct optimistic locking: SQLite writes now use conditional INSERT/UPDATE/DELETE (version-guarded upsert, version-aware delete) and surface `RpcDataError.conflict` when the incoming version is stale. Bulk upsert detects per-record conflicts.
+- SQLite search ranks by relevance (`bm25`) then `id`, fixing alphabetical ordering, and `RecordFilter.containsTerms` is supported for parity with in-memory adapter.
+- Delete APIs accept `expectedVersion` end-to-end (storage + repository) to prevent stale deletions.
+
 ## 2.1.1
 
 - Expanded `IDataService` API docs in English with detailed semantics for pagination, optimistic locking, bulk ops, exports/imports, search/aggregate, indexes, change streams, offline sync, and shutdown guidance.
