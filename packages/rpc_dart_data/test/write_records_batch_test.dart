@@ -13,7 +13,6 @@ void main() {
         return DataRecord(
           id: 'record-$index',
           collection: 'bulk',
-          tenantId: index.isOdd ? 'tenant-b' : null,
           payload: {'value': index},
           version: 1,
           createdAt: timestamp,
@@ -28,7 +27,6 @@ void main() {
             (record) => DataRecord(
               id: record.id,
               collection: record.collection,
-              tenantId: record.tenantId,
               payload: {
                 'value': record.payload['value'],
                 'updated': true,
@@ -54,7 +52,6 @@ void main() {
         expect(stored.payload, update.payload);
         expect(stored.updatedAt, update.updatedAt);
         expect(stored.createdAt, update.createdAt);
-        expect(stored.tenantId, update.tenantId);
       }
     });
   });

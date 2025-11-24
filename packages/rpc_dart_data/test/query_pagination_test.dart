@@ -36,8 +36,16 @@ class _ThrowingAdapter implements IDataStorageAdapter {
   }
 
   @override
-  Future<bool> deleteRecord(String collection, String id) {
-    return _delegate.deleteRecord(collection, id);
+  Future<bool> deleteRecord(
+    String collection,
+    String id, {
+    int? expectedVersion,
+  }) {
+    return _delegate.deleteRecord(
+      collection,
+      id,
+      expectedVersion: expectedVersion,
+    );
   }
 
   @override

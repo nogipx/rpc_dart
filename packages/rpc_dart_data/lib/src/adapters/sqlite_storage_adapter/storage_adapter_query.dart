@@ -5,8 +5,6 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
     switch (field) {
       case 'id':
         return 'id';
-      case 'tenantId':
-        return 'tenantId';
       case 'version':
         return 'version';
       case 'createdAt':
@@ -94,7 +92,6 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
     if (column != null) {
       switch (column) {
         case 'id':
-        case 'tenantId':
           return value.toString();
         case 'version':
           if (value is num) {
@@ -218,7 +215,15 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
       return true;
     }
     if (filter.containsTerms.isNotEmpty) {
-      return false;
+      final payloadColumn = _payloadColumn(tableAlias: tableAlias);
+      for (final term in filter.containsTerms) {
+        final normalized = term.trim().toLowerCase();
+        if (normalized.isEmpty) {
+          continue;
+        }
+        conditions.add('LOWER($payloadColumn) LIKE ?');
+        values.add('%$normalized%');
+      }
     }
     if (!_applyEquals(
       filter,
@@ -285,11 +290,6 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
       ..write(record.id)
       ..write(' ')
       ..write(record.collection);
-    if (record.tenantId != null && record.tenantId!.isNotEmpty) {
-      buffer
-        ..write(' ')
-        ..write(record.tenantId);
-    }
     buffer
       ..write(' version ')
       ..write(record.version.toString());

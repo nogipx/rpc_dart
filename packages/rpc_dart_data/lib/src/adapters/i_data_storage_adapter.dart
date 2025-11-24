@@ -23,7 +23,8 @@ abstract interface class IDataStorageAdapter {
 
   Future<void> writeRecords(Iterable<DataRecord> records);
 
-  Future<bool> deleteRecord(String collection, String id);
+  Future<bool> deleteRecord(String collection, String id,
+      {int? expectedVersion});
 
   Future<int> deleteRecords(String collection, Iterable<String> ids);
 

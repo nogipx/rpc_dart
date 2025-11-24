@@ -133,8 +133,21 @@ class InMemoryStorageAdapter implements IDataStorageAdapter {
   }
 
   @override
-  Future<bool> deleteRecord(String collection, String id) async {
+  Future<bool> deleteRecord(
+    String collection,
+    String id, {
+    int? expectedVersion,
+  }) async {
     final store = _collection(collection);
+    final existing = store[id];
+    if (existing == null) {
+      return false;
+    }
+    if (expectedVersion != null && existing.version != expectedVersion) {
+      throw RpcDataError.conflict(
+        'Expected version $expectedVersion, got ${existing.version}',
+      );
+    }
     return store.remove(id) != null;
   }
 
@@ -331,8 +344,6 @@ dynamic _recordFieldValue(DataRecord record, String field) {
       return record.id;
     case 'collection':
       return record.collection;
-    case 'tenantId':
-      return record.tenantId;
     case 'version':
       return record.version;
     case 'createdAt':

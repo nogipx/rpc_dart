@@ -330,7 +330,6 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
           await _database.customStatement(
             'CREATE TABLE IF NOT EXISTS "$candidate" ('
             'id TEXT PRIMARY KEY, '
-            'tenantId TEXT, '
             'payload TEXT NOT NULL, '
             'version INTEGER NOT NULL, '
             'created_at INTEGER NOT NULL, '
@@ -350,17 +349,12 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
             'ON "$candidate" (updated_at)',
           );
           await _database.customStatement(
-            'CREATE INDEX IF NOT EXISTS "${candidate}_idx_tenant_id" '
-            'ON "$candidate" (tenantId)',
-          );
-          await _database.customStatement(
             'INSERT INTO "$_collectionRegistryTable" (collection, table_name) '
             'VALUES (?, ?)',
             variables: [collection, candidate],
           );
         });
         _knownTables.add(candidate);
-        _tenantPreparedTables.add(candidate);
         return candidate;
       }
       attempt += 1;
@@ -375,7 +369,6 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
     if (!await _tableExists(table)) {
       return null;
     }
-    await _ensureTenantSupport(table);
     await _ensureCollectionIndexes(collection, table);
     await _ensureFtsSeeded(collection, table);
     return table;
@@ -388,7 +381,6 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
         await _database.customStatement(
           'CREATE TABLE IF NOT EXISTS "$existing" ('
           'id TEXT PRIMARY KEY, '
-          'tenantId TEXT, '
           'payload TEXT NOT NULL, '
           'version INTEGER NOT NULL, '
           'created_at INTEGER NOT NULL, '
@@ -397,33 +389,11 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
         );
         _knownTables.add(existing);
       }
-      await _ensureTenantSupport(existing);
       await _ensureCollectionIndexes(collection, existing);
       return existing;
     }
     final table = await _createTable(collection);
-    await _ensureTenantSupport(table);
     await _ensureCollectionIndexes(collection, table);
     return table;
-  }
-
-  Future<void> _ensureTenantSupport(String tableName) async {
-    if (_tenantPreparedTables.contains(tableName)) {
-      return;
-    }
-    final rows =
-        await _database.customSelect('PRAGMA table_info("$tableName")').get();
-    final hasTenantColumn =
-        rows.any((row) => row.read<String>('name').toLowerCase() == 'tenantid');
-    if (!hasTenantColumn) {
-      await _database.customStatement(
-        'ALTER TABLE "$tableName" ADD COLUMN tenantId TEXT',
-      );
-    }
-    await _database.customStatement(
-      'CREATE INDEX IF NOT EXISTS "${tableName}_idx_tenant_id" '
-      'ON "$tableName" (tenantId)',
-    );
-    _tenantPreparedTables.add(tableName);
   }
 }

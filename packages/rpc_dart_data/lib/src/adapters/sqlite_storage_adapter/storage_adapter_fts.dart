@@ -28,7 +28,7 @@ extension _FtsSupport on SqliteDataStorageAdapter {
     }
     final rows = await _database
         .customSelect(
-          'SELECT id, tenantId, payload, version, created_at, updated_at '
+          'SELECT id, payload, version, created_at, updated_at '
           'FROM "$tableName"',
         )
         .get();

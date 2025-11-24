@@ -6,8 +6,8 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:sqlite3/common.dart' as sqlite;
 
-import '../../sqlite_storage/sqlite_loader.dart' as sqlite_loader;
 import '../../sqlite_storage/sqlite_cipher_loader.dart';
+import '../../sqlite_storage/sqlite_loader.dart' as sqlite_loader;
 
 part 'storage_adapter_fts.dart';
 part 'storage_adapter_query.dart';
@@ -155,12 +155,11 @@ class SqliteDataStorageAdapter
   bool get isInMemory => _inMemory;
   bool _registryReady = false;
   final Set<String> _knownTables = <String>{};
-  final Set<String> _tenantPreparedTables = <String>{};
   final Set<String> _ftsSeededCollections = <String>{};
   bool _ftsReady = false;
   static const int _ftsBatchSize = 200;
   static const int _sqliteVariableLimit = 999;
-  static const int _recordUpsertArgumentCount = 6;
+  static const int _recordUpsertArgumentCount = 5;
   static const int _sqliteInClauseBatchSize = 999;
   bool _indexRegistryReady = false;
   final Map<String, List<_CollectionIndexMetadata>> _cachedCollectionIndexes =
@@ -221,7 +220,6 @@ class SqliteDataStorageAdapter
           'Registered collection "$collection" is missing table "$tableName".',
         );
       }
-      await _ensureTenantSupport(tableName);
       await _ensureCollectionIndexes(collection, tableName);
     }
   }
@@ -239,7 +237,6 @@ class SqliteDataStorageAdapter
     return DataRecord(
       id: row.read<String>('id'),
       collection: collection,
-      tenantId: row.read<String?>('tenantId'),
       payload: Map<String, dynamic>.from(decoded),
       version: row.read<int>('version'),
       createdAt: DateTime.fromMicrosecondsSinceEpoch(
@@ -256,7 +253,6 @@ class SqliteDataStorageAdapter
   List<Object?> _recordToArguments(DataRecord record) {
     return [
       record.id,
-      record.tenantId,
       jsonEncode(record.payload),
       record.version,
       record.createdAt.microsecondsSinceEpoch,
@@ -265,25 +261,26 @@ class SqliteDataStorageAdapter
   }
 
   static const String _recordUpsertColumnsClause =
-      '(id, tenantId, payload, version, created_at, updated_at)';
-  static const String _recordUpsertValuesClause = '(?, ?, ?, ?, ?, ?)';
+      '(id, payload, version, created_at, updated_at)';
+  static const String _recordUpsertValuesClause = '(?, ?, ?, ?, ?)';
   static const String _recordUpsertConflictClause =
       ' ON CONFLICT(id) DO UPDATE SET '
-      'tenantId = excluded.tenantId, '
       'payload = excluded.payload, '
       'version = excluded.version, '
-      'created_at = excluded.created_at, '
-      'updated_at = excluded.updated_at';
+      'created_at = created_at, '
+      'updated_at = excluded.updated_at '
+      'WHERE excluded.version > version';
 
-  Future<void> _upsertRecordsIntoTable(
+  Future<int> _upsertRecordsIntoTable(
     String tableName,
     Iterable<DataRecord> records,
   ) async {
     final recordList =
         records is List<DataRecord> ? records : records.toList(growable: false);
     if (recordList.isEmpty) {
-      return;
+      return 0;
     }
+    var totalAffected = 0;
     final maxRecordsPerStatement =
         _sqliteVariableLimit ~/ _recordUpsertArgumentCount;
     final chunkSize =
@@ -303,7 +300,11 @@ class SqliteDataStorageAdapter
       sql.write(_recordUpsertConflictClause);
       _recordStatement(sql.toString(), args);
       await _database.customStatement(sql.toString(), variables: args);
+      final changeRow =
+          await _database.customSelect('SELECT changes() AS count').getSingle();
+      totalAffected += changeRow.read<int>('count');
     }
+    return totalAffected;
   }
 
   Iterable<List<T>> _chunk<T>(List<T> items, int size) sync* {
@@ -515,7 +516,7 @@ class SqliteDataStorageAdapter
       return null;
     }
     final row = await _database.customSelect(
-      'SELECT id, tenantId, payload, version, created_at, updated_at '
+      'SELECT id, payload, version, created_at, updated_at '
       'FROM "$tableName" WHERE id = ? LIMIT 1',
       variables: [id],
     ).getSingleOrNull();
@@ -546,7 +547,7 @@ class SqliteDataStorageAdapter
       final placeholders = List.filled(chunk.length, '?').join(', ');
       final rows = await _database
           .customSelect(
-            'SELECT id, tenantId, payload, version, created_at, updated_at '
+            'SELECT id, payload, version, created_at, updated_at '
             'FROM "$tableName" WHERE id IN ($placeholders)',
             variables: chunk,
           )
@@ -570,7 +571,7 @@ class SqliteDataStorageAdapter
     }
     final rows = await _database
         .customSelect(
-          'SELECT id, tenantId, payload, version, created_at, updated_at FROM "$tableName"',
+          'SELECT id, payload, version, created_at, updated_at FROM "$tableName"',
         )
         .get();
     return rows.map((row) => _mapRow(collection, row)).toList(growable: false);
@@ -590,7 +591,7 @@ class SqliteDataStorageAdapter
     var offset = 0;
     while (true) {
       final rows = await _database.customSelect(
-        'SELECT id, tenantId, payload, version, created_at, updated_at '
+        'SELECT id, payload, version, created_at, updated_at '
         'FROM "$tableName" ORDER BY id LIMIT ? OFFSET ?',
         variables: [
           effectiveChunkSize,
@@ -685,7 +686,7 @@ class SqliteDataStorageAdapter
     }
 
     final querySql = StringBuffer(
-      'SELECT id, tenantId, payload, version, created_at, updated_at '
+      'SELECT id, payload, version, created_at, updated_at '
       'FROM "$tableName"',
     );
     if (whereClauses.isNotEmpty) {
@@ -823,14 +824,16 @@ class SqliteDataStorageAdapter
     final fetchLimit = request.options.limit + 1;
     final querySql = StringBuffer(
       'WITH fts_hits AS ('
-      'SELECT id FROM "$_ftsTableName" WHERE collection = ? AND content MATCH ?'
+      'SELECT id, bm25("$_ftsTableName") AS rank '
+      'FROM "$_ftsTableName" WHERE collection = ? AND content MATCH ?'
       ') '
-      'SELECT $baseAlias.id, $baseAlias.tenantId, $baseAlias.payload, '
-      '$baseAlias.version, $baseAlias.created_at, $baseAlias.updated_at '
+      'SELECT $baseAlias.id, $baseAlias.payload, '
+      '$baseAlias.version, $baseAlias.created_at, $baseAlias.updated_at, '
+      'fts.rank '
       'FROM "$tableName" $baseAlias '
       'JOIN fts_hits fts ON fts.id = $baseAlias.id '
       '$queryWhereClause '
-      'ORDER BY $baseAlias.id ASC '
+      'ORDER BY fts.rank ASC, $baseAlias.id ASC '
       'LIMIT ? OFFSET ?',
     );
 
@@ -1025,10 +1028,23 @@ class SqliteDataStorageAdapter
   @override
   Future<void> writeRecord(DataRecord record) async {
     final tableName = await _ensureTableForWrite(record.collection);
-    await _database.transaction(() async {
-      await _upsertRecordsIntoTable(tableName, [record]);
+    final affected = await _database.transaction(() async {
+      final writes = await _upsertRecordsIntoTable(tableName, [record]);
       await _updateFtsIndex(record.collection, tableName, record);
+      return writes;
     });
+    if (affected == 0) {
+      final row = await _database.customSelect(
+        'SELECT version FROM "$tableName" WHERE id = ? LIMIT 1',
+        variables: [record.id],
+      ).getSingleOrNull();
+      if (row != null) {
+        final existingVersion = row.read<int>('version');
+        throw RpcDataError.conflict(
+          'Record ${record.id} in ${record.collection} is at version $existingVersion; incoming ${record.version} is not newer.',
+        );
+      }
+    }
   }
 
   @override
@@ -1050,34 +1066,73 @@ class SqliteDataStorageAdapter
       tableNames[entry.key] = await _ensureTableForWrite(entry.key);
     }
 
+    final conflicts = <String, List<DataRecord>>{};
+
     await _database.transaction(() async {
       for (final entry in recordsByCollection.entries) {
         final collection = entry.key;
         final tableName = tableNames[collection]!;
         final recordsForTable = entry.value;
 
-        await _upsertRecordsIntoTable(tableName, recordsForTable);
+        final affected =
+            await _upsertRecordsIntoTable(tableName, recordsForTable);
         await _upsertFtsBatch(collection, tableName, recordsForTable);
+
+        if (affected < recordsForTable.length) {
+          conflicts[collection] = recordsForTable;
+        }
       }
     });
+
+    if (conflicts.isNotEmpty) {
+      for (final entry in conflicts.entries) {
+        final collection = entry.key;
+        final ids = entry.value.map((record) => record.id).toList();
+        final tableName = tableNames[collection]!;
+        final placeholders = List.filled(ids.length, '?').join(', ');
+        final rows = await _database
+            .customSelect(
+              'SELECT id, version FROM "$tableName" WHERE id IN ($placeholders)',
+              variables: ids,
+            )
+            .get();
+        final versions = {
+          for (final row in rows)
+            row.read<String>('id'): row.read<int>('version')
+        };
+        for (final record in entry.value) {
+          final existingVersion = versions[record.id];
+          if (existingVersion != null && existingVersion >= record.version) {
+            throw RpcDataError.conflict(
+              'Record ${record.id} in $collection is at version $existingVersion; incoming ${record.version} is not newer.',
+            );
+          }
+        }
+      }
+    }
   }
 
   @override
   Future<bool> deleteRecord(
     String collection,
-    String id,
-  ) async {
+    String id, {
+    int? expectedVersion,
+  }) async {
     final tableName = await _ensureTableForRead(collection);
     if (tableName == null) {
       return false;
     }
     var affected = 0;
     await _database.transaction(() async {
+      final sql = StringBuffer('DELETE FROM "$tableName" WHERE id = ?');
+      final args = <Object>[id];
+      if (expectedVersion != null) {
+        sql.write(' AND version = ?');
+        args.add(expectedVersion);
+      }
       await _database.customStatement(
-        'DELETE FROM "$tableName" WHERE id = ?',
-        variables: [
-          id,
-        ],
+        sql.toString(),
+        variables: args,
       );
       final changeRow =
           await _database.customSelect('SELECT changes() AS count').getSingle();
@@ -1159,7 +1214,6 @@ class SqliteDataStorageAdapter
     });
 
     _knownTables.remove(tableName);
-    _tenantPreparedTables.remove(tableName);
     if (existingIndexes.isNotEmpty) {
       for (final metadata in existingIndexes) {
         _knownIndexNames.remove(metadata.indexName);

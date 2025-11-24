@@ -604,7 +604,11 @@ abstract class BaseDataRepository implements IDataRepository {
       );
     }
 
-    final removed = await storage.deleteRecord(request.collection, request.id);
+    final removed = await storage.deleteRecord(
+      request.collection,
+      request.id,
+      expectedVersion: request.expectedVersion,
+    );
     if (removed) {
       await _recordDeletion(
         request.collection,
@@ -676,7 +680,6 @@ abstract class BaseDataRepository implements IDataRepository {
       final updated = DataRecord(
         id: existing.id,
         collection: existing.collection,
-        tenantId: incoming.tenantId ?? existing.tenantId,
         payload: incoming.payload,
         version: incoming.version,
         createdAt: existing.createdAt,
