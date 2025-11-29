@@ -20,3 +20,31 @@ Transport implementations for [RPC Dart](https://pub.dev/packages/rpc_dart). Pro
 - WebSocketTransport — bidirectional real-time transport with reconnection and optional multiplexing.
 - IsolateTransport — efficient communication between Dart isolates, supports zero-copy for in-process objects.
 - Http2Transport — HTTP/2 based transport with gRPC-compatible framing, TLS support and stream multiplexing.
+- Http1Transport — unary-only HTTP/1.1 fallback that wraps every request in a POST and adds `x-rpc-integrity` checksums to guarantee payload integrity when a full gRPC stack is unavailable.
+
+### HTTP/1.1 transport (unary only)
+
+When you cannot rely on HTTP/2 but still need RPC calls, `RpcHttp1CallerTransport`/`RpcHttp1Server` send a single unary request per RPC and rely on `x-rpc-integrity` (SHA256 over the framed payload) so both sides can detect tampering. There is no multiplexing or streaming—each call closes the request/response pair as soon as the body is exchanged. Example:
+
+```dart
+final server = RpcHttp1Server.createWithContracts(
+  host: 'localhost',
+  port: 8081,
+  contracts: [MyServiceContract()],
+);
+await server.start();
+
+final transport = RpcHttp1CallerTransport.connect(
+  Uri.parse('http://localhost:8081'),
+);
+final caller = RpcCallerEndpoint(transport: transport);
+
+final response = await caller.unaryRequest<RpcString, RpcString>(
+  serviceName: 'MyService',
+  methodName: 'Echo',
+  requestCodec: RpcString.codec,
+  responseCodec: RpcString.codec,
+  request: RpcString('hello over HTTP/1.1'),
+);
+print('Server replied: ${response.value}');
+```

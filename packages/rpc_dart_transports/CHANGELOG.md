@@ -1,3 +1,10 @@
+## 1.5.0
+
+- **Feature**: Added HTTP/1.1 transports for unary-only fallbacks, including caller/responder/server helpers with SHA256 `x-rpc-integrity` headers and a guard that rejects non-unary methods with `UNIMPLEMENTED` (`lib/src/transports/http/rpc_http1_caller_transport.dart:1`, `lib/src/transports/http/rpc_http1_responder_transport.dart:1`, `lib/src/transports/http/rpc_http1_server.dart:1`).
+- **Testing**: Added regression coverage for large payloads and verified that streaming calls receive the expected error (`test/http1_rpc_integration_test.dart:34`, `test/http1_rpc_integration_test.dart:70`).
+
+## Unreleased
+
 ## 1.4.2
 
 - **Security**: Guard `SecureTransportAdapter` pre-handshake buffering with a
