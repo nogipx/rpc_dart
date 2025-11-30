@@ -1,6 +1,6 @@
 import 'package:rpc_dart/rpc_dart.dart';
 
-import '../lib/calculator_contract.dart';
+import 'package:rpc_dart_generator_consumer/calculator_contract.dart';
 
 /// Concrete responder that wires generated registration to your implementation.
 class CalculatorResponder extends CalculatorContractResponder {

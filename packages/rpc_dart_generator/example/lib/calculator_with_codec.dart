@@ -1,5 +1,7 @@
 // ignore_for_file: uri_has_not_been_generated
 
+// ignore_for_file: override_on_non_overriding_member
+
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
@@ -7,14 +9,13 @@ import 'package:rpc_dart_generator/rpc_dart_generator.dart';
 
 part 'calculator_with_codec.g.dart';
 
-/// Контракт с автоматическим RpcCodec<T>.withDecoder(T.fromJson).
 @RpcService(name: 'CalculatorCodec', transferMode: RpcDataTransferMode.zeroCopy)
 abstract class ICalculatorCodecContract {
   @RpcMethod(name: 'sum', description: 'Sum with default RpcCodec')
   Future<SumResponse> sum(SumRequest request, {RpcContext? context});
 }
 
-class SumRequest {
+class SumRequest implements IRpcSerializable {
   SumRequest({required this.values});
 
   final List<double> values;
@@ -28,7 +29,7 @@ class SumRequest {
   Map<String, dynamic> toJson() => {'values': values};
 }
 
-class SumResponse {
+class SumResponse implements IRpcSerializable {
   SumResponse({required this.result});
 
   final double result;

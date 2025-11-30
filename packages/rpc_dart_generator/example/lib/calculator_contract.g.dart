@@ -23,7 +23,7 @@ final class CalculatorContractCaller extends RpcCallerContract
   CalculatorContractCaller(
     RpcCallerEndpoint endpoint, {
     String? serviceNameOverride,
-    RpcDataTransferMode dataTransferMode = RpcDataTransferMode.auto,
+    RpcDataTransferMode dataTransferMode = RpcDataTransferMode.zeroCopy,
   }) : super(
          serviceNameOverride ?? CalculatorContractNames.service,
          endpoint,
@@ -34,10 +34,6 @@ final class CalculatorContractCaller extends RpcCallerContract
   Future<SumResponse> sum(SumRequest request, {RpcContext? context}) {
     return callUnary<SumRequest, SumResponse>(
       methodName: CalculatorContractNames.sum,
-      requestCodec: const RpcCodec<SumRequest>.withDecoder(SumRequest.fromJson),
-      responseCodec: const RpcCodec<SumResponse>.withDecoder(
-        SumResponse.fromJson,
-      ),
       request: request,
       context: context,
     );
@@ -57,7 +53,7 @@ abstract class CalculatorContractResponder extends RpcResponderContract
     implements ICalculatorContract {
   CalculatorContractResponder({
     String? serviceNameOverride,
-    RpcDataTransferMode dataTransferMode = RpcDataTransferMode.auto,
+    RpcDataTransferMode dataTransferMode = RpcDataTransferMode.zeroCopy,
   }) : super(
          serviceNameOverride ?? CalculatorContractNames.service,
          dataTransferMode: dataTransferMode,
@@ -68,10 +64,6 @@ abstract class CalculatorContractResponder extends RpcResponderContract
     addUnaryMethod<SumRequest, SumResponse>(
       methodName: CalculatorContractNames.sum,
       handler: sum,
-      requestCodec: const RpcCodec<SumRequest>.withDecoder(SumRequest.fromJson),
-      responseCodec: const RpcCodec<SumResponse>.withDecoder(
-        SumResponse.fromJson,
-      ),
     );
     addServerStreamMethod<SumRequest, SumResponse>(
       methodName: CalculatorContractNames.numbers,

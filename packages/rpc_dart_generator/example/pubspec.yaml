@@ -6,8 +6,8 @@ environment:
 
 dependencies:
   rpc_dart: ^2.3.1
-  rpc_dart_generator:
-    path: ..
 
 dev_dependencies:
   build_runner: ^2.10.4
+  rpc_dart_generator:
+    path: ..
