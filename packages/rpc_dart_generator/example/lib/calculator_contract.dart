@@ -16,6 +16,9 @@ abstract class ICalculatorContract {
   Stream<SumResponse> numbers(SumRequest request, {RpcContext? context});
 }
 
+/// Быстрые ссылки на имена сервиса и методов.
+typedef CalculatorNames = CalculatorContractNames;
+
 class SumRequest implements IRpcSerializable {
   SumRequest({required this.values});
 

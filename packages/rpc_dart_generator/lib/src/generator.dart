@@ -226,6 +226,9 @@ class _Emitter {
     b.writeln('class $className {');
     b.writeln('  const $className._();');
     b.writeln("  static const service = '${service.name}';");
+    b.writeln(
+      r"  static String instance(String suffix) => '\$service\_$suffix';",
+    );
     for (final method in methods) {
       b.writeln(
         "  static const ${method.declarationName} = '${method.methodName}';",
@@ -246,9 +249,10 @@ class _Emitter {
     );
     b.writeln('  $className(');
     b.writeln('    RpcCallerEndpoint endpoint, {');
+    b.writeln('    String? serviceNameOverride,');
     b.writeln('    RpcDataTransferMode dataTransferMode = $defaultTransfer,');
     b.writeln('  }) : super(');
-    b.writeln('          ${_baseName}Names.service,');
+    b.writeln('          serviceNameOverride ?? ${_baseName}Names.service,');
     b.writeln('          endpoint,');
     b.writeln('          dataTransferMode: dataTransferMode,');
     b.writeln('        );');
@@ -272,9 +276,10 @@ class _Emitter {
       'implements ${classElement.name} {',
     );
     b.writeln('  $className({');
+    b.writeln('    String? serviceNameOverride,');
     b.writeln('    RpcDataTransferMode dataTransferMode = $defaultTransfer,');
     b.writeln('  }) : super(');
-    b.writeln('          ${_baseName}Names.service,');
+    b.writeln('          serviceNameOverride ?? ${_baseName}Names.service,');
     b.writeln('          dataTransferMode: dataTransferMode,');
     b.writeln('        );');
     b.writeln();

@@ -53,6 +53,7 @@ class Foo implements IRpcSerializable {
                 contains('final class CalcCaller'),
                 contains('abstract class CalcResponder'),
                 contains("static const service = 'Calc'"),
+                contains("static String instance(String suffix)"),
                 contains("static const sum = 'sum'"),
                 contains('methodName: CalcNames.sum'),
                 contains("addUnaryMethod<Foo, Foo>"),

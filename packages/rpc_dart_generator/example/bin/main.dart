@@ -4,7 +4,8 @@ import '../lib/calculator_contract.dart';
 
 /// Concrete responder that wires generated registration to your implementation.
 class CalculatorResponder extends CalculatorContractResponder {
-  CalculatorResponder() : super();
+  CalculatorResponder({String? serviceName})
+    : super(serviceNameOverride: serviceName);
 
   @override
   Stream<SumResponse> numbers(
@@ -18,6 +19,9 @@ class CalculatorResponder extends CalculatorContractResponder {
 
   @override
   Future<SumResponse> sum(SumRequest request, {RpcContext? context}) async {
+    if (serviceName == CalculatorContractNames.instance('beta')) {
+      return SumResponse(result: 1);
+    }
     final total = request.values.fold<double>(0, (a, b) => a + b);
     return SumResponse(result: total);
   }
@@ -28,6 +32,9 @@ Future<void> main() async {
 
   final responderEndpoint = RpcResponderEndpoint(transport: responderTransport);
   responderEndpoint.registerServiceContract(CalculatorResponder());
+  responderEndpoint.registerServiceContract(
+    CalculatorResponder(serviceName: CalculatorContractNames.instance('beta')),
+  );
   responderEndpoint.start();
 
   final caller = CalculatorContractCaller(

@@ -13,6 +13,7 @@ part of 'calculator_contract.dart';
 class CalculatorContractNames {
   const CalculatorContractNames._();
   static const service = 'Calculator';
+  static String instance(String suffix) => '\$service\_$suffix';
   static const sum = 'sum';
   static const numbers = 'numbers';
 }
@@ -21,9 +22,10 @@ final class CalculatorContractCaller extends RpcCallerContract
     implements ICalculatorContract {
   CalculatorContractCaller(
     RpcCallerEndpoint endpoint, {
+    String? serviceNameOverride,
     RpcDataTransferMode dataTransferMode = RpcDataTransferMode.auto,
   }) : super(
-         CalculatorContractNames.service,
+         serviceNameOverride ?? CalculatorContractNames.service,
          endpoint,
          dataTransferMode: dataTransferMode,
        );
@@ -50,9 +52,10 @@ final class CalculatorContractCaller extends RpcCallerContract
 abstract class CalculatorContractResponder extends RpcResponderContract
     implements ICalculatorContract {
   CalculatorContractResponder({
+    String? serviceNameOverride,
     RpcDataTransferMode dataTransferMode = RpcDataTransferMode.auto,
   }) : super(
-         CalculatorContractNames.service,
+         serviceNameOverride ?? CalculatorContractNames.service,
          dataTransferMode: dataTransferMode,
        );
 
