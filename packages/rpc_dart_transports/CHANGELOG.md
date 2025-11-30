@@ -1,3 +1,7 @@
+## 1.5.1
+
+- **Fix**: Preserve the base URI path when building HTTP/1.1 unary requests so callers wrapped with a prefix no longer lose their mount point during _buildMethodUri_ (`lib/src/transports/http/rpc_http1_caller_transport.dart:158`).
+
 ## 1.5.0
 
 - **Feature**: Added HTTP/1.1 transports for unary-only fallbacks, including caller/responder/server helpers with SHA256 `x-rpc-integrity` headers and a guard that rejects non-unary methods with `UNIMPLEMENTED` (`lib/src/transports/http/rpc_http1_caller_transport.dart:1`, `lib/src/transports/http/rpc_http1_responder_transport.dart:1`, `lib/src/transports/http/rpc_http1_server.dart:1`).

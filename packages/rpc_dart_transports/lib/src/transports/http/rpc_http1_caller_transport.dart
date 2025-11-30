@@ -156,8 +156,20 @@ final class RpcHttp1CallerTransport extends RpcBaseTransport {
   }
 
   Uri _buildMethodUri(String methodPath) {
-    final normalized = methodPath.startsWith('/') ? methodPath : '/$methodPath';
-    return _baseUri.replace(path: normalized);
+    final normalizedPath =
+        methodPath.startsWith('/') ? methodPath.substring(1) : methodPath;
+    final baseSegments =
+        _baseUri.pathSegments.where((segment) => segment.isNotEmpty);
+    final methodSegments = normalizedPath.isEmpty
+        ? const <String>[]
+        : normalizedPath.split('/').where((segment) => segment.isNotEmpty);
+    final combinedSegments = [
+      ...baseSegments,
+      ...methodSegments,
+    ];
+    final combinedPath =
+        combinedSegments.isEmpty ? '/' : '/${combinedSegments.join('/')}';
+    return _baseUri.replace(path: combinedPath);
   }
 
   Future<void> _processResponse(
