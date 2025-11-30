@@ -8,8 +8,6 @@ builders:
   rpc_dart:
     import: "package:rpc_dart_generator/builder.dart"
     builder_factories: ["rpcDartBuilder"]
-    build_extensions: {".dart": [".rpc_dart_generator.g.part"]}
+    build_extensions: {".dart": [".g.dart"]}
     auto_apply: dependents
-    build_to: cache
-    required_inputs: [".dart"]
-    runs_before: ["source_gen|combining_builder"]
+    build_to: source

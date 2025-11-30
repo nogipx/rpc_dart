@@ -47,15 +47,18 @@ class Foo implements IRpcSerializable {
           packageConfig: packageConfig,
           readerWriter: readerWriter,
           outputs: {
-            'rpc_dart_generator|lib/input.rpc_dart_generator.g.part':
-                decodedMatches(
-                  allOf([
-                    contains('class ICalcCaller'),
-                    contains('class ICalcResponder'),
-                    contains("addUnaryMethod<Foo, Foo>"),
-                    contains("addServerStreamMethod<Foo, Foo>"),
-                  ]),
-                ),
+            'rpc_dart_generator|lib/input.g.dart': decodedMatches(
+              allOf([
+                contains('class CalcNames'),
+                contains('final class CalcCaller'),
+                contains('abstract class CalcResponder'),
+                contains("static const service = 'Calc'"),
+                contains("static const sum = 'sum'"),
+                contains('methodName: CalcNames.sum'),
+                contains("addUnaryMethod<Foo, Foo>"),
+                contains("addServerStreamMethod<Foo, Foo>"),
+              ]),
+            ),
           },
         );
       },

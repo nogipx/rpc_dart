@@ -1,0 +1,13 @@
+name: rpc_dart_generator_consumer
+description: Example consumer of rpc_dart and rpc_dart_generator
+publish_to: "none"
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  rpc_dart: ^2.3.1
+  rpc_dart_generator:
+    path: ..
+
+dev_dependencies:
+  build_runner: ^2.10.4
