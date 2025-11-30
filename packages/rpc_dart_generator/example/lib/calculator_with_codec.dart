@@ -5,25 +5,16 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_generator/rpc_dart_generator.dart';
 
-part 'calculator_contract.g.dart';
+part 'calculator_with_codec.g.dart';
 
-@RpcService(name: 'Calculator')
-abstract class ICalculatorContract {
-  @RpcMethod(name: 'sum')
+/// Контракт с автоматическим RpcCodec<T>.withDecoder(T.fromJson).
+@RpcService(name: 'CalculatorCodec', transferMode: RpcDataTransferMode.zeroCopy)
+abstract class ICalculatorCodecContract {
+  @RpcMethod(name: 'sum', description: 'Sum with default RpcCodec')
   Future<SumResponse> sum(SumRequest request, {RpcContext? context});
-
-  @RpcMethod(
-    name: 'numbers',
-    kind: RpcMethodKind.serverStream,
-    transferMode: RpcDataTransferMode.zeroCopy,
-  )
-  Stream<SumResponse> numbers(SumRequest request, {RpcContext? context});
 }
 
-/// Быстрые ссылки на имена сервиса и методов.
-typedef CalculatorNames = CalculatorContractNames;
-
-class SumRequest implements IRpcSerializable {
+class SumRequest {
   SumRequest({required this.values});
 
   final List<double> values;
@@ -37,7 +28,7 @@ class SumRequest implements IRpcSerializable {
   Map<String, dynamic> toJson() => {'values': values};
 }
 
-class SumResponse implements IRpcSerializable {
+class SumResponse {
   SumResponse({required this.result});
 
   final double result;

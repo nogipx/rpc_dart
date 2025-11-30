@@ -7,7 +7,7 @@ import 'package:build/build.dart';
 import 'package:dart_style/dart_style.dart';
 import 'package:pub_semver/pub_semver.dart';
 import 'package:rpc_dart/rpc_dart.dart'
-    show IRpcSerializable, RpcContext, RpcDataTransferMode;
+    show IRpcSerializable, RpcCodec, RpcContext, RpcDataTransferMode;
 import 'package:source_gen/source_gen.dart';
 
 import 'annotations.dart';
@@ -47,7 +47,11 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
 
     final serviceMeta = _parseService(annotation);
     final baseName = _baseNameFor(element);
-    final methods = _collectMethods(element, baseName);
+    final methods = _collectMethods(
+      element,
+      baseName,
+      serviceMeta.transferMode,
+    );
 
     _validateUniqueMethodNames(methods);
 
@@ -103,14 +107,18 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     return name;
   }
 
-  List<_MethodMeta> _collectMethods(ClassElement element, String baseName) {
+  List<_MethodMeta> _collectMethods(
+    ClassElement element,
+    String baseName,
+    RpcDataTransferMode serviceMode,
+  ) {
     final methods = <_MethodMeta>[];
     for (final method in element.methods) {
       final rpcAnno = _rpcMethodChecker.firstAnnotationOf(method);
       if (rpcAnno == null) continue;
 
       final reader = ConstantReader(rpcAnno);
-      final meta = _parseMethod(method, reader, baseName);
+      final meta = _parseMethod(method, reader, baseName, serviceMode);
       methods.add(meta);
     }
 
@@ -126,6 +134,7 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     MethodElement method,
     ConstantReader reader,
     String baseName,
+    RpcDataTransferMode serviceMode,
   ) {
     final name = reader.peek('name')?.stringValue ?? '';
     if (name.trim().isEmpty) {
@@ -138,10 +147,20 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     final kindAccessor = reader.peek('kind')?.revive().accessor;
     final kind = _kindFromAccessor(kindAccessor) ?? RpcMethodKind.unary;
 
-    final signature = _SignatureParser(method, kind, baseName).parse();
+    final transferAccessor = reader.peek('transferMode')?.revive().accessor;
+    final effectiveMode =
+        _transferFromAccessor(transferAccessor) ?? serviceMode;
+
+    final signature = _SignatureParser(
+      method,
+      kind,
+      baseName,
+      effectiveMode,
+    ).parse();
 
     final requestCodecType = reader.peek('requestCodec')?.typeValue;
     final responseCodecType = reader.peek('responseCodec')?.typeValue;
+    final transferMode = _transferFromAccessor(transferAccessor);
 
     return _MethodMeta(
       methodName: name,
@@ -151,6 +170,7 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
       signature: signature,
       requestCodecType: requestCodecType,
       responseCodecType: responseCodecType,
+      transferMode: transferMode,
     );
   }
 
@@ -259,7 +279,9 @@ class _Emitter {
     b.writeln();
 
     for (final method in methods) {
-      b.writeln(method.signature.callerMethodImpl(method));
+      b.writeln(
+        method.signature.callerMethodImpl(method, service.transferMode),
+      );
       b.writeln();
     }
 
@@ -286,7 +308,9 @@ class _Emitter {
     b.writeln('  @override');
     b.writeln('  void setup() {');
     for (final method in methods) {
-      b.writeln('    ${method.signature.addRegistration(method)};');
+      b.writeln(
+        '    ${method.signature.addRegistration(method, service.transferMode)};',
+      );
     }
     b.writeln('  }');
 
@@ -296,11 +320,12 @@ class _Emitter {
 }
 
 class _SignatureParser {
-  _SignatureParser(this.element, this.kind, this.baseName);
+  _SignatureParser(this.element, this.kind, this.baseName, this.effectiveMode);
 
   final MethodElement element;
   final RpcMethodKind kind;
   final String baseName;
+  final RpcDataTransferMode effectiveMode;
 
   _Signature parse() {
     _validateParameters();
@@ -397,10 +422,10 @@ class _SignatureParser {
     }
 
     final requestType = _expectNonStream(request.type, 'Unary запрос');
-    _assertSerializable(requestType, request);
+    _assertSerializable(requestType, request, effectiveMode);
 
     final responseType = _extractFutureGeneric(returnType);
-    _assertSerializable(responseType, element);
+    _assertSerializable(responseType, element, effectiveMode);
 
     return _Signature(
       element: element,
@@ -424,10 +449,10 @@ class _SignatureParser {
       );
     }
     final requestType = _expectNonStream(request.type, 'ServerStream запрос');
-    _assertSerializable(requestType, request);
+    _assertSerializable(requestType, request, effectiveMode);
 
     final responseType = _extractStreamGeneric(returnType);
-    _assertSerializable(responseType, element);
+    _assertSerializable(responseType, element, effectiveMode);
 
     return _Signature(
       element: element,
@@ -446,10 +471,10 @@ class _SignatureParser {
   ) {
     final streamType = _expectStream(request?.type, 'ClientStream запрос');
     final innerRequest = streamType.typeArguments.first;
-    _assertSerializable(innerRequest, request);
+    _assertSerializable(innerRequest, request, effectiveMode);
 
     final responseType = _extractFutureGeneric(returnType);
-    _assertSerializable(responseType, element);
+    _assertSerializable(responseType, element, effectiveMode);
 
     return _Signature(
       element: element,
@@ -469,11 +494,11 @@ class _SignatureParser {
   ) {
     final streamType = _expectStream(request?.type, 'Bidirectional запрос');
     final innerRequest = streamType.typeArguments.first;
-    _assertSerializable(innerRequest, request);
+    _assertSerializable(innerRequest, request, effectiveMode);
 
     final responseStream = _expectStream(returnType, 'Bidirectional ответ');
     final innerResponse = responseStream.typeArguments.first;
-    _assertSerializable(innerResponse, element);
+    _assertSerializable(innerResponse, element, effectiveMode);
 
     return _Signature(
       element: element,
@@ -530,7 +555,14 @@ class _SignatureParser {
     return stream.typeArguments.first;
   }
 
-  void _assertSerializable(DartType type, Element? errorTarget) {
+  void _assertSerializable(
+    DartType type,
+    Element? errorTarget,
+    RpcDataTransferMode effectiveMode,
+  ) {
+    if (effectiveMode == RpcDataTransferMode.zeroCopy) {
+      return;
+    }
     if (_serializableChecker.isAssignableFromType(type)) return;
     if (type.isDartCoreString ||
         type.isDartCoreInt ||
@@ -574,7 +606,7 @@ class _Signature {
   final bool isRequestStream;
   final bool isResponseStream;
 
-  String callerMethodImpl(_MethodMeta meta) {
+  String callerMethodImpl(_MethodMeta meta, RpcDataTransferMode serviceMode) {
     final buffer = StringBuffer();
     final returnType = element.returnType.getDisplayString(
       withNullability: true,
@@ -589,7 +621,7 @@ class _Signature {
       '  $returnType ${element.name}(${_buildParam(requestTypeStr)}) {',
     );
     buffer.writeln(
-      '    return ${_callExpression(meta.methodName, requestTypeStr, responseTypeStr)};',
+      '    return ${_callExpression(meta, requestTypeStr, responseTypeStr, serviceMode)};',
     );
     buffer.writeln('  }');
     return buffer.toString();
@@ -605,30 +637,58 @@ class _Signature {
   }
 
   String _callExpression(
-    String rpcMethodName,
+    _MethodMeta meta,
     String requestTypeStr,
     String responseTypeStr,
+    RpcDataTransferMode serviceMode,
   ) {
     final contextArg = hasContext ? ', context: context' : '';
     final requestVar = isRequestStream ? 'requests' : 'request';
+    final effectiveMode = meta.transferMode ?? serviceMode;
+    final useCodec = _shouldUseCodec(meta, effectiveMode);
+
+    final requestCodec = _codecArg(
+      label: 'requestCodec',
+      isResponse: false,
+      meta: meta,
+      targetType: requestTypeStr,
+      useCodec: useCodec,
+    );
+    final responseCodec = _codecArg(
+      label: 'responseCodec',
+      isResponse: true,
+      meta: meta,
+      targetType: responseTypeStr,
+      useCodec: useCodec,
+    );
+
+    String _args(String mainArg) {
+      final parts = StringBuffer();
+      parts.write('methodName: ${baseName}Names.${meta.declarationName}, ');
+      if (requestCodec.isNotEmpty) parts.write(requestCodec);
+      if (responseCodec.isNotEmpty) parts.write(responseCodec);
+      parts.write(mainArg);
+      if (hasContext) parts.write(contextArg);
+      return parts.toString();
+    }
 
     switch (kind) {
       case RpcMethodKind.unary:
         return 'callUnary<$requestTypeStr, $responseTypeStr>('
-            "methodName: ${baseName}Names.$rpcMethodName, request: $requestVar$contextArg)";
+            "${_args('request: $requestVar')})";
       case RpcMethodKind.serverStream:
         return 'callServerStream<$requestTypeStr, $responseTypeStr>('
-            "methodName: ${baseName}Names.$rpcMethodName, request: $requestVar$contextArg)";
+            "${_args('request: $requestVar')})";
       case RpcMethodKind.clientStream:
         return 'callClientStream<$requestTypeStr, $responseTypeStr>('
-            "methodName: ${baseName}Names.$rpcMethodName, requests: $requestVar$contextArg)";
+            "${_args('requests: $requestVar')})";
       case RpcMethodKind.bidirectionalStream:
         return 'callBidirectionalStream<$requestTypeStr, $responseTypeStr>('
-            "methodName: ${baseName}Names.$rpcMethodName, requests: $requestVar$contextArg)";
+            "${_args('requests: $requestVar')})";
     }
   }
 
-  String addRegistration(_MethodMeta meta) {
+  String addRegistration(_MethodMeta meta, RpcDataTransferMode serviceMode) {
     final requestTypeStr = requestType.getDisplayString(withNullability: true);
     final responseTypeStr = responseType.getDisplayString(
       withNullability: true,
@@ -638,12 +698,21 @@ class _Signature {
         ? ''
         : "description: '${_escape(meta.description!)}', ";
 
-    final requestCodec = meta.requestCodecType == null
-        ? ''
-        : 'requestCodec: const ${meta.requestCodecType!.getDisplayString(withNullability: false)}(), ';
-    final responseCodec = meta.responseCodecType == null
-        ? ''
-        : 'responseCodec: const ${meta.responseCodecType!.getDisplayString(withNullability: false)}(), ';
+    final effectiveMode = meta.transferMode ?? serviceMode;
+    final useCodec = _shouldUseCodec(meta, effectiveMode);
+
+    final requestCodec = _codecString(
+      isResponse: false,
+      useDefault: useCodec,
+      providedCodecType: meta.requestCodecType,
+      targetType: requestTypeStr,
+    );
+    final responseCodec = _codecString(
+      isResponse: true,
+      useDefault: useCodec,
+      providedCodecType: meta.responseCodecType,
+      targetType: responseTypeStr,
+    );
 
     switch (kind) {
       case RpcMethodKind.unary:
@@ -655,6 +724,46 @@ class _Signature {
       case RpcMethodKind.bidirectionalStream:
         return "addBidirectionalStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, ${description}${requestCodec}${responseCodec})";
     }
+  }
+
+  bool _shouldUseCodec(_MethodMeta meta, RpcDataTransferMode effectiveMode) {
+    if (effectiveMode == RpcDataTransferMode.zeroCopy) return false;
+    if (meta.requestCodecType != null || meta.responseCodecType != null) {
+      return true;
+    }
+    // transferMode auto/codec → подставляем дефолтный RpcCodec
+    return true;
+  }
+
+  String _codecString({
+    required bool isResponse,
+    required bool useDefault,
+    required DartType? providedCodecType,
+    required String targetType,
+  }) {
+    final label = isResponse ? 'responseCodec' : 'requestCodec';
+    if (!useDefault) return '';
+    if (providedCodecType != null) {
+      return '$label: const ${providedCodecType.getDisplayString(withNullability: false)}(), ';
+    }
+    return '$label: const RpcCodec<$targetType>.withDecoder($targetType.fromJson), ';
+  }
+
+  String _codecArg({
+    required String label,
+    required bool isResponse,
+    required _MethodMeta meta,
+    required String targetType,
+    required bool useCodec,
+  }) {
+    if (!useCodec) return '';
+    final codecType = isResponse
+        ? meta.responseCodecType
+        : meta.requestCodecType;
+    if (codecType != null) {
+      return '$label: const ${codecType.getDisplayString(withNullability: false)}(), ';
+    }
+    return '$label: const RpcCodec<$targetType>.withDecoder($targetType.fromJson), ';
   }
 
   String _escape(String value) => value.replaceAll("'", "\\'");
@@ -681,6 +790,7 @@ class _MethodMeta {
     this.description,
     this.requestCodecType,
     this.responseCodecType,
+    this.transferMode,
   });
 
   final String methodName;
@@ -690,6 +800,7 @@ class _MethodMeta {
   final String? description;
   final DartType? requestCodecType;
   final DartType? responseCodecType;
+  final RpcDataTransferMode? transferMode;
 }
 
 extension<E> on Iterable<E> {

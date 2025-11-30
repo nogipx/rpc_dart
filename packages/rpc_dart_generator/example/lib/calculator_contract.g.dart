@@ -34,6 +34,10 @@ final class CalculatorContractCaller extends RpcCallerContract
   Future<SumResponse> sum(SumRequest request, {RpcContext? context}) {
     return callUnary<SumRequest, SumResponse>(
       methodName: CalculatorContractNames.sum,
+      requestCodec: const RpcCodec<SumRequest>.withDecoder(SumRequest.fromJson),
+      responseCodec: const RpcCodec<SumResponse>.withDecoder(
+        SumResponse.fromJson,
+      ),
       request: request,
       context: context,
     );
@@ -64,6 +68,10 @@ abstract class CalculatorContractResponder extends RpcResponderContract
     addUnaryMethod<SumRequest, SumResponse>(
       methodName: CalculatorContractNames.sum,
       handler: sum,
+      requestCodec: const RpcCodec<SumRequest>.withDecoder(SumRequest.fromJson),
+      responseCodec: const RpcCodec<SumResponse>.withDecoder(
+        SumResponse.fromJson,
+      ),
     );
     addServerStreamMethod<SumRequest, SumResponse>(
       methodName: CalculatorContractNames.numbers,
