@@ -1,3 +1,11 @@
+## 2.3.4
+
+- fix lints package compatibility
+
+## 2.3.3
+
+- fix test package compatibility
+
 ## 2.3.2
 
 - Added annotations for codegeneration
