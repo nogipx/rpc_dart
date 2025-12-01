@@ -1,3 +1,7 @@
+## 2.3.2
+
+- Added annotations for codegeneration
+
 ## 2.3.1
 
 - Optimize ping requests

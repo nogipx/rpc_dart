@@ -218,7 +218,7 @@ abstract class RpcBaseTransport implements IRpcTransport {
 class RpcTransportUtils {
   RpcTransportUtils._(); // Приватный конструктор для статического класса
 
-  /// Создает метаданные из Map<String, String>
+  /// Создает метаданные из Map(String, String)
   static RpcMetadata createMetadata(Map<String, String> headers) {
     final headerList = headers.entries
         .map((entry) => RpcHeader(entry.key, entry.value))
