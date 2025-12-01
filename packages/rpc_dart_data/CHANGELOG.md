@@ -1,3 +1,7 @@
+## 2.2.1
+
+- Web: fixed dart2js/wasm build failures by parsing 64-bit FNV constants as `BigInt`, keeping stable index-name hashes without exceeding JS number precision.
+
 ## 2.2.0
 
 - Breaking: removed `tenantId` from `DataRecord`, adapters, and SQLite schema/indexing. Multi-tenant isolation now belongs to higher layers; table footprint and indexes are smaller.

@@ -95,15 +95,17 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
     return sanitized;
   }
 
-  static int _stableHash(String input) {
-    const int fnvOffset = 0xcbf29ce484222325;
-    const int fnvPrime = 0x100000001b3;
-    var hash = fnvOffset;
+  static final BigInt _fnvOffset = BigInt.parse('cbf29ce484222325', radix: 16);
+  static final BigInt _fnvPrime = BigInt.parse('100000001b3', radix: 16);
+  static final BigInt _mask64 = (BigInt.one << 64) - BigInt.one;
+
+  static BigInt _stableHash(String input) {
+    var hash = _fnvOffset;
     for (final unit in input.codeUnits) {
-      hash ^= unit;
-      hash = (hash * fnvPrime) & 0xFFFFFFFFFFFFFFFF;
+      hash ^= BigInt.from(unit);
+      hash = (hash * _fnvPrime) & _mask64;
     }
-    return hash & 0xFFFFFFFFFFFFFFFF;
+    return hash & _mask64;
   }
 
   String _normalizeIndexSegment(String value) {
