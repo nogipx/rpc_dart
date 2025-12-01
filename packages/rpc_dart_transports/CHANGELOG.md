@@ -1,3 +1,8 @@
+## 1.6.0
+
+- WebSocket: added optional chunking for large gRPC frames (`enableChunking`, `chunkSizeBytes`, `maxChunkedMessageBytes` on caller/responder constructors). Off by default for compatibility; uses a flag + chunk header and reassembles before gRPC parsing.
+- Robustness: logs chunk sends, enforces a max assembled size, and rejects duplicate/inconsistent chunks.
+
 ## 1.5.1
 
 - **Fix**: Preserve the base URI path when building HTTP/1.1 unary requests so callers wrapped with a prefix no longer lose their mount point during _buildMethodUri_ (`lib/src/transports/http/rpc_http1_caller_transport.dart:158`).

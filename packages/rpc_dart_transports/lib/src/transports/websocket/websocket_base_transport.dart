@@ -30,6 +30,9 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   /// Активные парсеры для каждого stream
   final Map<int, RpcMessageParser> _streamParsers = {};
 
+  /// Буфер для сборки чанков gRPC frame'ов (chunked WebSocket сообщения)
+  final Map<int, _ChunkAssembly> _chunkAssemblies = {};
+
   /// Флаг закрытия транспорта
   bool _closed = false;
 
@@ -47,11 +50,29 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     WebSocketChannel channel, {
     RpcLogger? logger,
     Future<WebSocketChannel> Function()? reconnectFactory,
+    int chunkSizeBytes = 64 * 1024,
+    int maxChunkedMessageBytes = 64 * 1024 * 1024,
+    bool enableChunking = false,
   })  : _channel = channel,
         _reconnectFactory = reconnectFactory,
-        _logger = logger {
+        _logger = logger,
+        _chunkSizeBytes = chunkSizeBytes > 0 ? chunkSizeBytes : 64 * 1024,
+        _maxChunkedMessageBytes = maxChunkedMessageBytes > 0
+            ? maxChunkedMessageBytes
+            : 64 * 1024 * 1024,
+        _enableChunking = enableChunking {
     _setupListener();
   }
+
+  /// Размер чанка для WebSocket сообщений (когда payload слишком большой)
+  final int _chunkSizeBytes;
+
+  /// Максимальный объем, который можно собрать из чанков для одного сообщения
+  final int _maxChunkedMessageBytes;
+
+  /// Разрешает chunking для совместимости: по умолчанию выключено
+  /// чтобы не ломать wire-формат для старых пиров.
+  final bool _enableChunking;
 
   /// Получает менеджер Stream ID из rpc_dart (реализуется в подкластах)
   RpcStreamIdManager get idManager;
@@ -93,6 +114,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
         final flags = bytes[4];
         final isEndOfStream = (flags & 0x01) != 0;
         final isMetadata = (flags & 0x02) != 0;
+        final isChunked = (flags & 0x04) != 0;
 
         // Извлекаем payload
         final payload = bytes.sublist(5);
@@ -102,7 +124,12 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
           _handleMetadataMessage(streamId, payload, isEndOfStream);
         } else {
           // Обрабатываем данные через парсер
-          _handleDataMessage(streamId, payload, isEndOfStream);
+          _handleDataMessage(
+            streamId,
+            payload,
+            isEndOfStream,
+            isChunked: isChunked,
+          );
         }
       }
     } catch (e, stackTrace) {
@@ -161,8 +188,18 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   }
 
   /// Обрабатывает сообщение с данными
-  void _handleDataMessage(int streamId, Uint8List payload, bool isEndOfStream) {
+  void _handleDataMessage(
+    int streamId,
+    Uint8List payload,
+    bool isEndOfStream, {
+    required bool isChunked,
+  }) {
     try {
+      if (isChunked) {
+        _handleChunkedData(streamId, payload, isEndOfStream);
+        return;
+      }
+
       // Если это только флаг завершения без данных
       if (isEndOfStream && payload.isEmpty) {
         final transportMessage = RpcTransportMessage(
@@ -175,6 +212,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
         // Очищаем парсер при завершении потока
         _streamParsers.remove(streamId);
+        _chunkAssemblies.remove(streamId);
         idManager.releaseId(streamId);
         return;
       }
@@ -214,6 +252,101 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  /// Сборка chunked WebSocket сообщений в единый gRPC frame
+  void _handleChunkedData(
+    int streamId,
+    Uint8List payload,
+    bool isEndOfStream,
+  ) {
+    const chunkHeaderSize = 8; // 2 + 2 + 4
+    if (payload.length < chunkHeaderSize) {
+      _logger?.warning(
+        'Chunked payload слишком короткий (${payload.length} байт) для stream $streamId',
+      );
+      return;
+    }
+
+    final chunkIndex = (payload[0] << 8) | payload[1];
+    final chunkCount = (payload[2] << 8) | payload[3];
+    final declaredLen = (payload[4] << 24) |
+        (payload[5] << 16) |
+        (payload[6] << 8) |
+        payload[7];
+
+    if (chunkCount == 0 || chunkIndex >= chunkCount) {
+      _logger?.warning(
+        'Некорректные параметры chunking (index=$chunkIndex, count=$chunkCount) для stream $streamId',
+      );
+      return;
+    }
+
+    final data = payload.sublist(chunkHeaderSize);
+    if (data.length != declaredLen) {
+      _logger?.warning(
+        'Chunk length mismatch для stream $streamId: заявлено $declaredLen, фактически ${data.length}',
+      );
+      return;
+    }
+
+    final assembly = _chunkAssemblies.putIfAbsent(
+      streamId,
+      () => _ChunkAssembly(chunkCount),
+    );
+
+    if (assembly.chunkCount != chunkCount) {
+      _logger?.warning(
+        'Несогласованный chunkCount для stream $streamId (ожидалось ${assembly.chunkCount}, пришло $chunkCount)',
+      );
+      _chunkAssemblies.remove(streamId);
+      return;
+    }
+
+    if (assembly.received[chunkIndex] != null) {
+      _logger?.warning(
+        'Дубликат chunk $chunkIndex/$chunkCount для stream $streamId',
+      );
+      return;
+    }
+
+    final nextTotal = assembly.totalBytes + data.length;
+    if (nextTotal > _maxChunkedMessageBytes) {
+      _logger?.error(
+        'Превышен лимит сборки chunked сообщения для stream $streamId: $nextTotal > $_maxChunkedMessageBytes',
+      );
+      _chunkAssemblies.remove(streamId);
+      return;
+    }
+
+    assembly.received[chunkIndex] = data;
+    assembly.totalBytes = nextTotal;
+    assembly.completedChunks += 1;
+
+    if (assembly.completedChunks < assembly.chunkCount) {
+      return; // Ждем остальные чанки
+    }
+
+    // Все чанки собраны — склеиваем и продолжаем обычный пайплайн
+    final builder = BytesBuilder(copy: false);
+    for (final chunk in assembly.received) {
+      if (chunk == null) {
+        _logger?.warning('Пропущен chunk при сборке stream $streamId');
+        _chunkAssemblies.remove(streamId);
+        return;
+      }
+      builder.add(chunk);
+    }
+
+    _chunkAssemblies.remove(streamId);
+    final merged = builder.takeBytes();
+
+    _handleDataMessage(
+      streamId,
+      merged,
+      isEndOfStream,
+      isChunked: false,
+    );
   }
 
   /// Обрабатывает ошибку WebSocket соединения
@@ -420,8 +553,13 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       // Кодируем данные через gRPC формат
       final encoded = RpcMessageFrame.encode(data);
 
-      // Отправляем с обычными флагами
-      await _sendWithHeader(streamId, encoded, endStream: endStream);
+      // Если payload больше лимита - режем на чанки
+      if (_enableChunking && encoded.length > _chunkSizeBytes) {
+        await _sendChunked(streamId, encoded, endStream: endStream);
+      } else {
+        // Отправляем с обычными флагами
+        await _sendWithHeader(streamId, encoded, endStream: endStream);
+      }
 
       _logger?.debug(
         'Отправлено сообщение для stream $streamId, размер: ${data.length} байт, endStream: $endStream',
@@ -467,6 +605,9 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     Uint8List payload, {
     bool isMetadata = false,
     bool endStream = false,
+    bool isChunked = false,
+    int chunkIndex = 0,
+    int chunkCount = 1,
   }) async {
     final header = Uint8List(5);
 
@@ -480,14 +621,82 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     int flags = 0;
     if (endStream) flags |= 0x01;
     if (isMetadata) flags |= 0x02;
+    if (isChunked) flags |= 0x04;
     header[4] = flags;
 
-    // Объединяем заголовок и payload
-    final message = Uint8List(header.length + payload.length);
-    message.setRange(0, header.length, header);
-    message.setRange(header.length, message.length, payload);
+    Uint8List message;
+    if (isChunked) {
+      // Доп. заголовок для чанков: [chunkIndex:2][chunkCount:2][chunkLen:4]
+      final chunkHeader = Uint8List(8);
+      chunkHeader[0] = (chunkIndex >> 8) & 0xFF;
+      chunkHeader[1] = chunkIndex & 0xFF;
+      chunkHeader[2] = (chunkCount >> 8) & 0xFF;
+      chunkHeader[3] = chunkCount & 0xFF;
+      final chunkLen = payload.length;
+      chunkHeader[4] = (chunkLen >> 24) & 0xFF;
+      chunkHeader[5] = (chunkLen >> 16) & 0xFF;
+      chunkHeader[6] = (chunkLen >> 8) & 0xFF;
+      chunkHeader[7] = chunkLen & 0xFF;
+
+      message = Uint8List(header.length + chunkHeader.length + payload.length);
+      message.setRange(0, header.length, header);
+      message.setRange(
+          header.length, header.length + chunkHeader.length, chunkHeader);
+      message.setRange(
+        header.length + chunkHeader.length,
+        message.length,
+        payload,
+      );
+    } else {
+      // Объединяем заголовок и payload
+      message = Uint8List(header.length + payload.length);
+      message.setRange(0, header.length, header);
+      message.setRange(header.length, message.length, payload);
+    }
 
     _channel.sink.add(message);
+  }
+
+  /// Отправляет крупный payload чанками, эмулируя frame-инг HTTP/2
+  Future<void> _sendChunked(
+    int streamId,
+    Uint8List payload, {
+    required bool endStream,
+  }) async {
+    final totalLength = payload.length;
+    final chunkCount = (totalLength / _chunkSizeBytes).ceil();
+    if (chunkCount > 0xFFFF) {
+      throw StateError(
+        'Слишком большой payload для chunking ($chunkCount чанков > 65535)',
+      );
+    }
+
+    _logger?.debug(
+      'Chunking payload for stream $streamId: '
+      'length=$totalLength bytes, chunkSize=$_chunkSizeBytes, chunks=$chunkCount, endStream=$endStream',
+    );
+
+    var offset = 0;
+    for (var idx = 0; idx < chunkCount; idx++) {
+      final remaining = totalLength - offset;
+      final len = remaining > _chunkSizeBytes ? _chunkSizeBytes : remaining;
+      final chunk = Uint8List.sublistView(payload, offset, offset + len);
+      offset += len;
+
+      _logger?.debug(
+        'Sending chunk ${idx + 1}/$chunkCount for stream $streamId, '
+        'len=$len, endStream=${endStream && idx == chunkCount - 1}',
+      );
+
+      await _sendWithHeader(
+        streamId,
+        chunk,
+        isChunked: true,
+        chunkIndex: idx,
+        chunkCount: chunkCount,
+        endStream: endStream && idx == chunkCount - 1,
+      );
+    }
   }
 
   @override
@@ -496,6 +705,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
     _closed = true;
     _streamParsers.clear();
+    _chunkAssemblies.clear();
 
     final subscription = _channelSubscription;
     _channelSubscription = null;
@@ -524,4 +734,15 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   }) async {
     throw UnimplementedError('Unsupport direct object sending');
   }
+}
+
+/// Буфер для сборки chunked сообщений
+class _ChunkAssembly {
+  _ChunkAssembly(this.chunkCount)
+      : received = List<Uint8List?>.filled(chunkCount, null, growable: false);
+
+  final int chunkCount;
+  final List<Uint8List?> received;
+  int completedChunks = 0;
+  int totalBytes = 0;
 }

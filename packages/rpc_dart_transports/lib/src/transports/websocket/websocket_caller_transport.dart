@@ -31,6 +31,9 @@ class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
     super.channel, {
     super.logger,
     super.reconnectFactory,
+    super.chunkSizeBytes,
+    super.maxChunkedMessageBytes,
+    super.enableChunking,
   });
 
   /// Фабричный метод для создания клиентского WebSocket транспорта
@@ -43,6 +46,9 @@ class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
     Uri uri, {
     Iterable<String>? protocols,
     RpcLogger? logger,
+    int chunkSizeBytes = 64 * 1024,
+    int maxChunkedMessageBytes = 64 * 1024 * 1024,
+    bool enableChunking = false,
   }) {
     WebSocketChannel openChannel() =>
         WebSocketChannel.connect(uri, protocols: protocols);
@@ -52,6 +58,9 @@ class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
       channel,
       logger: logger,
       reconnectFactory: () async => openChannel(),
+      chunkSizeBytes: chunkSizeBytes,
+      maxChunkedMessageBytes: maxChunkedMessageBytes,
+      enableChunking: enableChunking,
     );
   }
 

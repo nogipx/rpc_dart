@@ -26,7 +26,13 @@ class RpcWebSocketResponderTransport extends RpcWebSocketTransportBase {
   ///
   /// [channel] WebSocket канал для коммуникации
   /// [logger] Опциональный логгер для отладки
-  RpcWebSocketResponderTransport(super.channel, {super.logger});
+  RpcWebSocketResponderTransport(
+    super.channel, {
+    super.logger,
+    super.chunkSizeBytes,
+    super.maxChunkedMessageBytes,
+    super.enableChunking,
+  });
 
   @override
   bool get supportsZeroCopy => false;

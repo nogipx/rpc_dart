@@ -48,3 +48,9 @@ final response = await caller.unaryRequest<RpcString, RpcString>(
 );
 print('Server replied: ${response.value}');
 ```
+
+#### WebSocket transport notes
+
+- Формат кадра: `[streamId:4][flags:1][gRPC_frame...]`, где gRPC_frame — 5-байтовый префикс gRPC + payload.
+- Для больших сообщений можно включить чанкование по WebSocket (`enableChunking: true` в `RpcWebSocketTransportBase` конструкторах в `rpc_dart_transports`). Это режет gRPC frame на куски с дополнительным chunk-header и собирает обратно на приёме.
+- По умолчанию чанкование выключено ради обратной совместимости: включайте только если обе стороны используют версию с поддержкой chunked флагов.

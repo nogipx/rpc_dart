@@ -350,6 +350,53 @@ void main() {
 
       await clientTransport.close();
     });
+
+    test('chunked WebSocket сообщения собираются в единый gRPC frame',
+        () async {
+      final chunkSize = 50 * 1024; // 4 чанка при 200_000 байт
+      final payload = Uint8List(200000);
+      for (var i = 0; i < payload.length; i++) {
+        payload[i] = i % 256;
+      }
+
+      final clientTransport = RpcWebSocketCallerTransport.connect(
+        Uri.parse('ws://localhost:${server.port}'),
+        logger: RpcLogger('TestClient'),
+        enableChunking: true,
+        chunkSizeBytes: chunkSize,
+        maxChunkedMessageBytes: 300000,
+      );
+      final serverSocket = await nextServerSocket();
+      final serverTransport = RpcWebSocketResponderTransport(
+        IOWebSocketChannel(serverSocket),
+        logger: RpcLogger('TestServer'),
+        enableChunking: true,
+        chunkSizeBytes: chunkSize,
+        maxChunkedMessageBytes: 300000,
+      );
+
+      final streamId = clientTransport.createStream();
+      final serverMessages = <RpcTransportMessage>[];
+      final sub = serverTransport.incomingMessages.listen(serverMessages.add);
+
+      await clientTransport.sendMessage(
+        streamId,
+        payload,
+        endStream: true,
+      );
+
+      await pump();
+
+      expect(serverMessages.length, 1);
+      final msg = serverMessages.single;
+      expect(msg.payload, isNotNull);
+      expect(msg.payload, equals(payload));
+      expect(msg.isEndOfStream, isTrue);
+
+      await sub.cancel();
+      await clientTransport.close();
+      await serverTransport.close();
+    });
   });
 }
 
