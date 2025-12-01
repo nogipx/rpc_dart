@@ -6,14 +6,18 @@ import 'package:build/build.dart';
 import 'package:dart_style/dart_style.dart';
 import 'package:pub_semver/pub_semver.dart';
 import 'package:rpc_dart/rpc_dart.dart'
-    show IRpcSerializable, RpcContext, RpcDataTransferMode;
+    show
+        IRpcSerializable,
+        RpcContext,
+        RpcDataTransferMode,
+        RpcMethod,
+        RpcMethodKind,
+        RpcService;
 import 'package:source_gen/source_gen.dart';
-
-import 'annotations.dart';
 
 final _rpcMethodChecker = const TypeChecker.typeNamed(
   RpcMethod,
-  inPackage: 'rpc_dart_generator',
+  inPackage: 'rpc_dart',
 );
 final _serializableChecker = const TypeChecker.typeNamed(
   IRpcSerializable,

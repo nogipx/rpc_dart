@@ -6,10 +6,6 @@ Code generator for caller/responder wrappers in [rpc_dart].
 - Generates a `final` caller and an `abstract` responder (you implement handlers; `setup()` registers them).
 - Codecs: by default inserts `RpcCodec<T>.withDecoder(T.fromJson)`; if `transferMode` is `zeroCopy` no codecs/serialization checks are added.
 
-## Requirements
-- Use with `build_runner` (`dart run build_runner build`) and add it to `dev_dependencies`.
-- Add `rpc_dart_generator` to `dev_dependencies` of the consuming package (generator is not needed at runtime).
-
 ## Annotations
 - `@RpcService(name, transferMode?)` — declares service name and default transfer mode (`auto`/`codec`/`zeroCopy`).
 - `@RpcMethod(name, kind, requestCodec?, responseCodec?, transferMode?)` — method id, RPC kind, optional codecs and per-method transfer mode.

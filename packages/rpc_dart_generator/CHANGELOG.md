@@ -1,3 +1,6 @@
+## 0.1.1
+- Move annotations to core library
+
 ## 0.1.0
 - Added `@RpcService/@RpcMethod` generator with `Names` class (service/method constants, `Names.instance` for multiple instances).
 - Generated `final` caller, `abstract` responder; responder registers methods in `setup`, you implement handlers.
