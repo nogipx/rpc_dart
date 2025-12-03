@@ -44,7 +44,7 @@ Future<DatabaseConnection> _openDatabase(
       sqliteSetup: sqliteSetup,
     );
   } catch (error) {
-    database.dispose();
+    database.close();
     rethrow;
   }
   return DatabaseConnection(database);

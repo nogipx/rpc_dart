@@ -12,10 +12,10 @@ class DataServiceCaller extends RpcCallerContract
     required RpcCallerEndpoint endpoint,
     required RpcDataTransferMode transferMode,
   }) : super(
-          IDataServiceContract.name,
-          endpoint,
-          dataTransferMode: transferMode,
-        );
+         IDataServiceContract.name,
+         endpoint,
+         dataTransferMode: transferMode,
+       );
 
   Future<CreateRecordResponse> createRecord(
     CreateRecordRequest request, {
@@ -56,9 +56,7 @@ class DataServiceCaller extends RpcCallerContract
     );
   }
 
-  Future<ListCollectionsResponse> listCollections({
-    RpcContext? context,
-  }) {
+  Future<ListCollectionsResponse> listCollections({RpcContext? context}) {
     return callUnary(
       methodName: IDataServiceContract.listCollections,
       request: const ListCollectionsRequest(),
@@ -320,10 +318,10 @@ class OfflineCommandQueue {
     String? sessionId,
     DateTime Function()? clock,
     void Function(Object error, StackTrace stackTrace)? onError,
-  })  : _clock = clock ?? (() => DateTime.now().toUtc()),
-        _sessionId = sessionId ?? _defaultSessionId(),
-        _onError = onError,
-        _requestController = StreamController<SyncChangeRequest>();
+  }) : _clock = clock ?? (() => DateTime.now().toUtc()),
+       _sessionId = sessionId ?? _defaultSessionId(),
+       _onError = onError,
+       _requestController = StreamController<SyncChangeRequest>();
 
   final DataServiceCaller _caller;
   final String _sessionId;

@@ -6,10 +6,13 @@ import 'package:path/path.dart' as p;
 import 'package:rpc_dart_data/src/connection/connection_native.dart';
 import 'package:rpc_dart_data/src/connection/options.dart';
 import 'package:rpc_dart_data/src/sqlite_storage/sql_cipher.dart';
+import 'package:rpc_dart_data/src/sqlite_storage/sqlite_cipher_loader.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:test/test.dart';
 
 void main() {
+  final cipherAvailable = isSqlCipherAvailable;
+
   group('SQLCipher file I/O', () {
     late String dbPath;
     final keyBytes = Uint8List.fromList(List.generate(32, (i) => i));
@@ -20,8 +23,16 @@ void main() {
     });
 
     test('encrypts a real file and rejects access without the key', () async {
-      final paserk =
-          LicensifySymmetricKey.xchacha20(keyBytes: keyBytes).toPaserk();
+      expect(
+        cipherAvailable,
+        isTrue,
+        reason:
+            'SQLCipher/MultipleCiphers assets must be available for this test',
+      );
+
+      final paserk = LicensifySymmetricKey.xchacha20(
+        keyBytes: keyBytes,
+      ).toPaserk();
 
       final connection = await openFileDb(
         options: SqliteConnectionOptions(nativePath: dbPath),
@@ -59,7 +70,7 @@ void main() {
           ),
         ),
       );
-      dbWithoutKey.dispose();
+      dbWithoutKey.close();
     });
   });
 }

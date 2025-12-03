@@ -8,5 +8,5 @@ class DatabaseConnection {
 
   final sqlite.CommonDatabase database;
 
-  Future<void> close() => Future.sync(() => database.dispose());
+  Future<void> close() => Future.sync(() => database.close());
 }

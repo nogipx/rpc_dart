@@ -1,8 +1,8 @@
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 
 Never _unsupported() => throw UnsupportedError(
-      'sqlite3 connections are not supported on this platform.',
-    );
+  'sqlite3 connections are not supported on this platform.',
+);
 
 Future<DatabaseConnection> openFileDb({
   SqliteConnectionOptions options = SqliteConnectionOptions.defaults,

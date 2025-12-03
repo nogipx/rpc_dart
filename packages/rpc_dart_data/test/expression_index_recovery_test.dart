@@ -24,27 +24,25 @@ void main() {
         ),
       );
 
-      final indexRow = await adapter.database.customSelect(
-        'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
-        variables: const [
-          'index',
-          indexName,
-        ],
-      ).getSingleOrNull();
+      final indexRow = await adapter.database
+          .customSelect(
+            'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
+            variables: const ['index', indexName],
+          )
+          .getSingleOrNull();
 
       expect(indexRow, isNotNull);
       final sql = indexRow!.read<String>('sql');
       expect(sql, contains('json_extract'));
       expect(sql, contains('payload'));
 
-      final registryRow = await adapter.database.customSelect(
-        'SELECT expression FROM "s_collection_index_registry" '
-        'WHERE collection = ? AND path = ?',
-        variables: const [
-          collection,
-          path,
-        ],
-      ).getSingleOrNull();
+      final registryRow = await adapter.database
+          .customSelect(
+            'SELECT expression FROM "s_collection_index_registry" '
+            'WHERE collection = ? AND path = ?',
+            variables: const [collection, path],
+          )
+          .getSingleOrNull();
 
       expect(registryRow, isNotNull);
       expect(
@@ -71,13 +69,12 @@ void main() {
         ),
       );
 
-      final beforeDelete = await adapter.database.customSelect(
-        'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-        variables: const [
-          'index',
-          indexName,
-        ],
-      ).getSingleOrNull();
+      final beforeDelete = await adapter.database
+          .customSelect(
+            'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+            variables: const ['index', indexName],
+          )
+          .getSingleOrNull();
       expect(beforeDelete, isNotNull);
 
       final removed = await adapter.deleteCollectionIndex(
@@ -90,23 +87,21 @@ void main() {
 
       expect(removed, isTrue);
 
-      final afterDelete = await adapter.database.customSelect(
-        'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-        variables: const [
-          'index',
-          indexName,
-        ],
-      ).getSingleOrNull();
+      final afterDelete = await adapter.database
+          .customSelect(
+            'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+            variables: const ['index', indexName],
+          )
+          .getSingleOrNull();
       expect(afterDelete, isNull);
 
-      final registryRow = await adapter.database.customSelect(
-        'SELECT 1 FROM "s_collection_index_registry" '
-        'WHERE collection = ? AND path = ? LIMIT 1',
-        variables: const [
-          collection,
-          path,
-        ],
-      ).getSingleOrNull();
+      final registryRow = await adapter.database
+          .customSelect(
+            'SELECT 1 FROM "s_collection_index_registry" '
+            'WHERE collection = ? AND path = ? LIMIT 1',
+            variables: const [collection, path],
+          )
+          .getSingleOrNull();
       expect(registryRow, isNull);
 
       await adapter.createCollectionIndex(
@@ -117,20 +112,20 @@ void main() {
         ),
       );
 
-      final recreated = await adapter.database.customSelect(
-        'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
-        variables: const [
-          'index',
-          indexName,
-        ],
-      ).getSingleOrNull();
+      final recreated = await adapter.database
+          .customSelect(
+            'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
+            variables: const ['index', indexName],
+          )
+          .getSingleOrNull();
       expect(recreated, isNotNull);
       expect(recreated!.read<String>('sql'), contains('json_extract'));
     });
 
     test('restores missing indexes from registry metadata', () async {
-      final tempDir =
-          await Directory.systemTemp.createTemp('rpc_dart_data_test');
+      final tempDir = await Directory.systemTemp.createTemp(
+        'rpc_dart_data_test',
+      );
       addTearDown(() async {
         if (await tempDir.exists()) {
           await tempDir.delete(recursive: true);
@@ -170,13 +165,12 @@ void main() {
           variables: ['tasks', 'priority', indexName, expression],
         );
 
-        final existingIndex = await adapter1.database.customSelect(
-          'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-          variables: const [
-            'index',
-            indexName,
-          ],
-        ).getSingleOrNull();
+        final existingIndex = await adapter1.database
+            .customSelect(
+              'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+              variables: const ['index', indexName],
+            )
+            .getSingleOrNull();
         expect(existingIndex, isNull);
       } finally {
         await adapter1.dispose();
@@ -184,13 +178,12 @@ void main() {
 
       final adapter2 = await SqliteDataStorageAdapter.file(dbFile);
       try {
-        final beforeEnsure = await adapter2.database.customSelect(
-          'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-          variables: const [
-            'index',
-            'priority_idx',
-          ],
-        ).getSingleOrNull();
+        final beforeEnsure = await adapter2.database
+            .customSelect(
+              'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+              variables: const ['index', 'priority_idx'],
+            )
+            .getSingleOrNull();
         expect(beforeEnsure, isNull);
 
         final updatedRecord = record.copyWith(
@@ -199,13 +192,12 @@ void main() {
         );
         await adapter2.writeRecord(updatedRecord);
 
-        final indexRow = await adapter2.database.customSelect(
-          'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
-          variables: const [
-            'index',
-            'priority_idx',
-          ],
-        ).getSingleOrNull();
+        final indexRow = await adapter2.database
+            .customSelect(
+              'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?',
+              variables: const ['index', 'priority_idx'],
+            )
+            .getSingleOrNull();
 
         expect(indexRow, isNotNull);
         expect(indexRow!.read<String>('sql'), contains('json_extract'));

@@ -28,8 +28,9 @@ void main() {
             'DELETE FROM "s_collection_registry"',
           );
         } else {
-          await storage.database
-              .customStatement('DROP TABLE IF EXISTS "$tableName"');
+          await storage.database.customStatement(
+            'DROP TABLE IF EXISTS "$tableName"',
+          );
         }
       }
     } finally {
@@ -43,9 +44,8 @@ void main() {
     }
   });
 
-  RpcContext buildContext() => RpcContext.withHeaders({
-        'authorization': 'Bearer test-token',
-      });
+  RpcContext buildContext() =>
+      RpcContext.withHeaders({'authorization': 'Bearer test-token'});
 
   test('SQLite storage adapter supports CRUD lifecycle', skip: skip, () async {
     final storage = await SqliteDataStorageAdapter.file(dbFile);
@@ -107,10 +107,9 @@ void main() {
 
   test('SQLite storage adapter persists records on disk', skip: skip, () async {
     Future<
-        ({
-          InMemoryDataServiceEnvironment env,
-          SqliteDataRepository repository,
-        })> openEnv() async {
+      ({InMemoryDataServiceEnvironment env, SqliteDataRepository repository})
+    >
+    openEnv() async {
       final storage = await SqliteDataStorageAdapter.file(dbFile);
       final repository = SqliteDataRepository(storage: storage);
       final env = await DataServiceFactory.inMemory(repository: repository);
@@ -149,8 +148,7 @@ void main() {
     expect(fetched!.payload['title'], 'Persisted');
   });
 
-  test('creates isolated tables per collection on demand', skip: skip,
-      () async {
+  test('creates isolated tables per collection on demand', skip: skip, () async {
     final storage = await SqliteDataStorageAdapter.file(dbFile);
     final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
@@ -194,189 +192,181 @@ void main() {
       for (final row in registryRows)
         row.read<String>('collection'): row.read<String>('table_name'),
     };
-    expect(
-      registryMap,
-      equals({'notes': 'c_notes', 'tasks': 'c_tasks'}),
-    );
+    expect(registryMap, equals({'notes': 'c_notes', 'tasks': 'c_tasks'}));
   });
 
-  test('supports multi-session clients working with many collections',
-      skip: skip, () async {
-    Future<
-        ({
-          InMemoryDataServiceEnvironment env,
-          SqliteDataRepository repository,
-        })> startSession(String name) async {
-      final storage = await SqliteDataStorageAdapter.file(dbFile);
-      final repository = SqliteDataRepository(storage: storage);
-      final env = await DataServiceFactory.inMemory(
-        repository: repository,
-        serverLabel: 'DataResponder-$name',
-        clientLabel: 'DataCaller-$name',
+  test(
+    'supports multi-session clients working with many collections',
+    skip: skip,
+    () async {
+      Future<
+        ({InMemoryDataServiceEnvironment env, SqliteDataRepository repository})
+      >
+      startSession(String name) async {
+        final storage = await SqliteDataStorageAdapter.file(dbFile);
+        final repository = SqliteDataRepository(storage: storage);
+        final env = await DataServiceFactory.inMemory(
+          repository: repository,
+          serverLabel: 'DataResponder-$name',
+          clientLabel: 'DataCaller-$name',
+        );
+        return (env: env, repository: repository);
+      }
+
+      final session1 = await startSession('session1');
+      final env1 = session1.env;
+      final repo1 = session1.repository;
+
+      final ctxAlice = RpcContext.withHeaders({
+        'authorization': 'Bearer alice',
+      });
+      final ctxBob = RpcContext.withHeaders({'authorization': 'Bearer bob'});
+      final ctxCharlie = RpcContext.withHeaders({
+        'authorization': 'Bearer charlie',
+      });
+
+      final aliceNote = await env1.client.create(
+        collection: 'notes',
+        payload: {'title': 'Product ideas', 'owner': 'alice'},
+        context: ctxAlice,
       );
-      return (env: env, repository: repository);
-    }
 
-    final session1 = await startSession('session1');
-    final env1 = session1.env;
-    final repo1 = session1.repository;
+      final bobTask = await env1.client.create(
+        collection: 'tasks',
+        payload: {
+          'title': 'Ship drift integration',
+          'status': 'pending',
+          'owner': 'bob',
+        },
+        context: ctxBob,
+      );
 
-    final ctxAlice = RpcContext.withHeaders({
-      'authorization': 'Bearer alice',
-    });
-    final ctxBob = RpcContext.withHeaders({
-      'authorization': 'Bearer bob',
-    });
-    final ctxCharlie = RpcContext.withHeaders({
-      'authorization': 'Bearer charlie',
-    });
+      final systemLog = await env1.client.create(
+        collection: 'logs',
+        payload: {'event': 'boot', 'actor': 'system'},
+        context: ctxCharlie,
+      );
 
-    final aliceNote = await env1.client.create(
-      collection: 'notes',
-      payload: {
-        'title': 'Product ideas',
-        'owner': 'alice',
-      },
-      context: ctxAlice,
-    );
+      final bobTaskPatched = await env1.client.patch(
+        collection: 'tasks',
+        id: bobTask.id,
+        expectedVersion: bobTask.version,
+        patch: const RecordPatch(set: {'status': 'done'}),
+        context: ctxBob,
+      );
 
-    final bobTask = await env1.client.create(
-      collection: 'tasks',
-      payload: {
-        'title': 'Ship drift integration',
-        'status': 'pending',
-        'owner': 'bob',
-      },
-      context: ctxBob,
-    );
+      final notesList = await env1.client.list(
+        collection: 'notes',
+        context: ctxAlice,
+      );
+      expect(
+        notesList.records.map((record) => record.id),
+        contains(aliceNote.id),
+      );
+      expect(
+        notesList.records.map((record) => record.id),
+        isNot(contains(bobTask.id)),
+      );
 
-    final systemLog = await env1.client.create(
-      collection: 'logs',
-      payload: {
-        'event': 'boot',
-        'actor': 'system',
-      },
-      context: ctxCharlie,
-    );
+      final tasksList = await env1.client.list(
+        collection: 'tasks',
+        context: ctxBob,
+      );
+      final tasksById = {
+        for (final record in tasksList.records) record.id: record,
+      };
+      expect(tasksById[bobTask.id]!.payload['status'], 'done');
 
-    final bobTaskPatched = await env1.client.patch(
-      collection: 'tasks',
-      id: bobTask.id,
-      expectedVersion: bobTask.version,
-      patch: const RecordPatch(set: {'status': 'done'}),
-      context: ctxBob,
-    );
+      final logsList = await env1.client.list(
+        collection: 'logs',
+        context: ctxCharlie,
+      );
+      expect(logsList.records.length, 1);
+      expect(logsList.records.single.payload['event'], 'boot');
 
-    final notesList = await env1.client.list(
-      collection: 'notes',
-      context: ctxAlice,
-    );
-    expect(
-        notesList.records.map((record) => record.id), contains(aliceNote.id));
-    expect(
-      notesList.records.map((record) => record.id),
-      isNot(contains(bobTask.id)),
-    );
+      await env1.dispose();
+      await repo1.storage.dispose();
 
-    final tasksList = await env1.client.list(
-      collection: 'tasks',
-      context: ctxBob,
-    );
-    final tasksById = {
-      for (final record in tasksList.records) record.id: record,
-    };
-    expect(tasksById[bobTask.id]!.payload['status'], 'done');
+      final session2 = await startSession('session2');
+      final env2 = session2.env;
+      final repo2 = session2.repository;
+      addTearDown(() async {
+        await env2.dispose();
+        await repo2.storage.dispose();
+      });
+      final auditCtx = RpcContext.withHeaders({
+        'authorization': 'Bearer auditor',
+      });
 
-    final logsList = await env1.client.list(
-      collection: 'logs',
-      context: ctxCharlie,
-    );
-    expect(logsList.records.length, 1);
-    expect(logsList.records.single.payload['event'], 'boot');
+      final persistedTask = await env2.client.get(
+        collection: 'tasks',
+        id: bobTask.id,
+        context: auditCtx,
+      );
+      expect(persistedTask, isNotNull);
+      expect(persistedTask!.payload['status'], 'done');
+      expect(persistedTask.version, bobTaskPatched.version);
 
-    await env1.dispose();
-    await repo1.storage.dispose();
+      final persistedNotes = await env2.client.list(
+        collection: 'notes',
+        context: auditCtx,
+      );
+      expect(
+        persistedNotes.records.map((record) => record.id),
+        contains(aliceNote.id),
+      );
 
-    final session2 = await startSession('session2');
-    final env2 = session2.env;
-    final repo2 = session2.repository;
-    addTearDown(() async {
-      await env2.dispose();
-      await repo2.storage.dispose();
-    });
-    final auditCtx = RpcContext.withHeaders({
-      'authorization': 'Bearer auditor',
-    });
+      final persistedLog = await env2.client.get(
+        collection: 'logs',
+        id: systemLog.id,
+        context: auditCtx,
+      );
+      expect(persistedLog, isNotNull);
 
-    final persistedTask = await env2.client.get(
-      collection: 'tasks',
-      id: bobTask.id,
-      context: auditCtx,
-    );
-    expect(persistedTask, isNotNull);
-    expect(persistedTask!.payload['status'], 'done');
-    expect(persistedTask.version, bobTaskPatched.version);
+      final metricsRecord = await env2.client.create(
+        collection: 'metrics',
+        payload: {'key': 'uptime', 'value': 99.9},
+        context: auditCtx,
+      );
 
-    final persistedNotes = await env2.client.list(
-      collection: 'notes',
-      context: auditCtx,
-    );
-    expect(
-      persistedNotes.records.map((record) => record.id),
-      contains(aliceNote.id),
-    );
+      final metricsList = await env2.client.list(
+        collection: 'metrics',
+        context: auditCtx,
+      );
+      expect(
+        metricsList.records.map((record) => record.id),
+        contains(metricsRecord.id),
+      );
 
-    final persistedLog = await env2.client.get(
-      collection: 'logs',
-      id: systemLog.id,
-      context: auditCtx,
-    );
-    expect(persistedLog, isNotNull);
+      final tables = await repo2.storage.database
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+          )
+          .get();
+      final tableNames = tables.map((row) => row.read<String>('name')).toList();
+      expect(
+        tableNames,
+        containsAll([
+          's_collection_registry',
+          'c_logs',
+          'c_metrics',
+          'c_notes',
+          'c_tasks',
+        ]),
+      );
 
-    final metricsRecord = await env2.client.create(
-      collection: 'metrics',
-      payload: {
-        'key': 'uptime',
-        'value': 99.9,
-      },
-      context: auditCtx,
-    );
-
-    final metricsList = await env2.client.list(
-      collection: 'metrics',
-      context: auditCtx,
-    );
-    expect(metricsList.records.map((record) => record.id),
-        contains(metricsRecord.id));
-
-    final tables = await repo2.storage.database
-        .customSelect(
-          "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
-        )
-        .get();
-    final tableNames = tables.map((row) => row.read<String>('name')).toList();
-    expect(
-      tableNames,
-      containsAll([
-        's_collection_registry',
-        'c_logs',
-        'c_metrics',
-        'c_notes',
-        'c_tasks'
-      ]),
-    );
-
-    final registryRows = await repo2.storage.database
-        .customSelect(
-          'SELECT collection, table_name FROM "s_collection_registry" ORDER BY collection',
-        )
-        .get();
-    final registry = <String, String>{
-      for (final row in registryRows)
-        row.read<String>('collection'): row.read<String>('table_name'),
-    };
-    expect(registry.keys, containsAll(['logs', 'metrics', 'notes', 'tasks']));
-  });
+      final registryRows = await repo2.storage.database
+          .customSelect(
+            'SELECT collection, table_name FROM "s_collection_registry" ORDER BY collection',
+          )
+          .get();
+      final registry = <String, String>{
+        for (final row in registryRows)
+          row.read<String>('collection'): row.read<String>('table_name'),
+      };
+      expect(registry.keys, containsAll(['logs', 'metrics', 'notes', 'tasks']));
+    },
+  );
 
   test('bulk upsert preserves provided record metadata', () async {
     final storage = await SqliteDataStorageAdapter.file(dbFile);
@@ -500,8 +490,10 @@ void main() {
     );
 
     expect(upserted, hasLength(3));
-    expect(upserted.map((e) => e.id),
-        containsAll([newNote.id, updatedNote.id, updatedTask.id]));
+    expect(
+      upserted.map((e) => e.id),
+      containsAll([newNote.id, updatedNote.id, updatedTask.id]),
+    );
 
     final fetchedNew = await env.client.get(
       collection: 'notes',
@@ -555,10 +547,7 @@ void main() {
 
     expect(removed, 2);
 
-    final remaining = await env.client.list(
-      collection: 'notes',
-      context: ctx,
-    );
+    final remaining = await env.client.list(collection: 'notes', context: ctx);
 
     expect(remaining.records.map((e) => e.id).toList(), [created[2].id]);
   });
@@ -610,14 +599,17 @@ void main() {
           "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
         )
         .get();
-    final tableNamesAfter =
-        tableRows.map((row) => row.read<String>('name')).toList();
+    final tableNamesAfter = tableRows
+        .map((row) => row.read<String>('name'))
+        .toList();
     expect(tableNamesAfter, isNot(contains('c_archive')));
 
-    final registryRows = await storage.database.customSelect(
-      'SELECT collection FROM "s_collection_registry" WHERE collection = ?',
-      variables: ['archive'],
-    ).get();
+    final registryRows = await storage.database
+        .customSelect(
+          'SELECT collection FROM "s_collection_registry" WHERE collection = ?',
+          variables: ['archive'],
+        )
+        .get();
     expect(registryRows, isEmpty);
 
     final secondDelete = await env.client.deleteCollection(
@@ -647,10 +639,7 @@ void main() {
       final record = await env.client.create(
         collection: 'notes',
         id: id,
-        payload: {
-          'title': 'Note $id',
-          'body': 'note body $id',
-        },
+        payload: {'title': 'Note $id', 'body': 'note body $id'},
         context: ctx,
       );
       ids.add(record.id);
@@ -667,7 +656,9 @@ void main() {
     expect(firstPage.records, hasLength(2));
     expect(firstPage.nextCursor, isNotNull);
     expect(
-        ids.containsAll(firstPage.records.map((record) => record.id)), isTrue);
+      ids.containsAll(firstPage.records.map((record) => record.id)),
+      isTrue,
+    );
 
     final secondPage = await env.client.search(
       collection: 'notes',
@@ -679,12 +670,9 @@ void main() {
     expect(secondPage.records, hasLength(1));
     expect(secondPage.nextCursor, isNull);
     expect(ids.contains(secondPage.records.single.id), isTrue);
-    expect(
-      {
-        ...firstPage.records.map((record) => record.id),
-        ...secondPage.records.map((record) => record.id),
-      },
-      equals(ids),
-    );
+    expect({
+      ...firstPage.records.map((record) => record.id),
+      ...secondPage.records.map((record) => record.id),
+    }, equals(ids));
   });
 }

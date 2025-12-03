@@ -22,16 +22,13 @@ class SqliteDataDatabase {
     return Future.sync(() => database.execute(sql, variables));
   }
 
-  Future<int> customInsert(
-    String sql, {
-    List<Object?> variables = const [],
-  }) {
+  Future<int> customInsert(String sql, {List<Object?> variables = const []}) {
     return Future.sync(() {
       final stmt = database.prepare(sql);
       try {
         stmt.execute(variables);
       } finally {
-        stmt.dispose();
+        stmt.close();
       }
       return database.lastInsertRowId;
     });
@@ -52,16 +49,12 @@ class SqliteDataDatabase {
   }
 
   Future<void> close() {
-    return Future.sync(() => database.dispose());
+    return Future.sync(() => database.close());
   }
 }
 
 class SqliteSelectQuery {
-  SqliteSelectQuery(
-    this.database,
-    this.sql,
-    this.variables,
-  );
+  SqliteSelectQuery(this.database, this.sql, this.variables);
 
   final sqlite.CommonDatabase database;
   final String sql;
@@ -78,7 +71,8 @@ class SqliteSelectQuery {
     }
     if (rows.length > 1) {
       throw StateError(
-          'Expected at most 1 row but query returned ${rows.length}.');
+        'Expected at most 1 row but query returned ${rows.length}.',
+      );
     }
     return rows.first;
   }

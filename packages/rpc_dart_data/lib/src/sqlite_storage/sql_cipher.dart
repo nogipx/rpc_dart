@@ -67,6 +67,13 @@ class SqlCipherKey {
     }
 
     try {
+      // SQLite3MultipleCiphers: tell the engine to use the SQLCipher codec and
+      // legacy page format before applying the key so existing SQLCipher
+      // databases remain compatible.
+      // Choose SQLCipher-compatible codec and legacy page format first.
+      database.execute("PRAGMA cipher = 'sqlcipher';");
+      database.execute('PRAGMA legacy = 4;');
+
       // Fail fast: if the binary does not expose cipher pragmas, do not
       // continue with an unencrypted database.
       _assertCipherAvailable(database);
@@ -93,16 +100,19 @@ class SqlCipherKey {
   static void _assertCipherAvailable(sqlite.CommonDatabase database) {
     try {
       final result = database.select('PRAGMA cipher_version;');
-      if (result.isEmpty) {
-        throw SqlCipherException(
-          'SQLCipher не активирован: PRAGMA cipher_version вернул пустое значение.',
+      final version = result.isNotEmpty ? result.single.values.first : null;
+      final hasVersion =
+          version != null && version.toString().trim().isNotEmpty;
+      if (!hasVersion) {
+        final cipherRows = database.select('PRAGMA cipher;');
+        final hasSqlcipherCipher = cipherRows.any(
+          (row) => row.values.any((value) => '$value' == 'sqlcipher'),
         );
-      }
-      final version = result.single.values.first;
-      if (version == null || version.toString().trim().isEmpty) {
-        throw SqlCipherException(
-          'SQLCipher не активирован: cipher_version пустой.',
-        );
+        if (!hasSqlcipherCipher) {
+          throw SqlCipherException(
+            'SQLCipher не активирован: cipher_version пустой и провайдер не выставлен.',
+          );
+        }
       }
     } on sqlite.SqliteException catch (error) {
       throw SqlCipherException(

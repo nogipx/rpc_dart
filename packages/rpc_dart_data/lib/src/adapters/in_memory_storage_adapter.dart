@@ -48,11 +48,14 @@ class InMemoryStorageAdapter implements IDataStorageAdapter {
       return;
     }
     final entries = List<DataRecord>.from(store.values, growable: false);
-    final effectiveChunkSize =
-        chunkSize <= 0 ? entries.length : max(1, chunkSize);
-    for (var offset = 0;
-        offset < entries.length;
-        offset += effectiveChunkSize) {
+    final effectiveChunkSize = chunkSize <= 0
+        ? entries.length
+        : max(1, chunkSize);
+    for (
+      var offset = 0;
+      offset < entries.length;
+      offset += effectiveChunkSize
+    ) {
       final end = min(offset + effectiveChunkSize, entries.length);
       yield entries.sublist(offset, end);
     }
@@ -74,8 +77,9 @@ class InMemoryStorageAdapter implements IDataStorageAdapter {
     final endIndex = min(startIndex + request.options.limit, filtered.length);
     final slice = filtered.sublist(startIndex, endIndex);
     final nextCursor = slice.isNotEmpty ? slice.last.id : null;
-    final totalCount =
-        request.options.includeTotalCount ? filtered.length : null;
+    final totalCount = request.options.includeTotalCount
+        ? filtered.length
+        : null;
 
     return ListRecordsResponse(
       records: slice,
@@ -96,20 +100,23 @@ class InMemoryStorageAdapter implements IDataStorageAdapter {
     final collection = await readCollection(request.collection);
     final filtered = _filterAndSortRecords(collection, request.filter, null);
     final query = request.query.toLowerCase();
-    final hits = filtered.where((record) {
-      final text = record.payload.values
-          .map((value) => value.toString().toLowerCase())
-          .join(' ');
-      return text.contains(query);
-    }).toList(growable: false);
+    final hits = filtered
+        .where((record) {
+          final text = record.payload.values
+              .map((value) => value.toString().toLowerCase())
+              .join(' ');
+          return text.contains(query);
+        })
+        .toList(growable: false);
 
     final cursorIndex = _resolveCursorStart(hits, request.options.cursor);
     final baseIndex = cursorIndex + request.options.offset;
     final startIndex = min(hits.length, max(0, baseIndex));
     final endIndex = min(startIndex + request.options.limit, hits.length);
     final slice = hits.sublist(startIndex, endIndex);
-    final nextCursor =
-        endIndex < hits.length && slice.isNotEmpty ? slice.last.id : null;
+    final nextCursor = endIndex < hits.length && slice.isNotEmpty
+        ? slice.last.id
+        : null;
 
     return SearchRecordsResponse(
       records: slice,
@@ -190,8 +197,9 @@ List<DataRecord> _filterAndSortRecords(
   RecordFilter? filter,
   SortOrder? sort,
 ) {
-  final filtered =
-      records.where((record) => _recordMatchesFilter(record, filter)).toList();
+  final filtered = records
+      .where((record) => _recordMatchesFilter(record, filter))
+      .toList();
   filtered.sort((a, b) => _compareRecords(a, b, sort));
   return filtered;
 }

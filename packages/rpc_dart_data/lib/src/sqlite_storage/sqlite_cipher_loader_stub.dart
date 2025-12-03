@@ -2,3 +2,5 @@
 void configureSqlCipherDynamicLibrary({String? libraryPath}) {
   libraryPath;
 }
+
+bool get isSqlCipherAvailable => false;

@@ -10,17 +10,18 @@ class SqliteDataRepository extends BaseDataRepository {
     int? journalMaxEvents = BaseDataRepository.defaultJournalMaxEvents,
     Duration? journalRetention = BaseDataRepository.defaultJournalRetention,
   }) : super(
-          storage,
-          clock: clock,
-          idGenerator: idGenerator,
-          changeJournal: changeJournal ??
-              SqliteDataChangeJournal(
-                storage.database,
-                clearOnOpen: storage.isInMemory,
-              ),
-          journalMaxEvents: journalMaxEvents,
-          journalRetention: journalRetention,
-        );
+         storage,
+         clock: clock,
+         idGenerator: idGenerator,
+         changeJournal:
+             changeJournal ??
+             SqliteDataChangeJournal(
+               storage.database,
+               clearOnOpen: storage.isInMemory,
+             ),
+         journalMaxEvents: journalMaxEvents,
+         journalRetention: journalRetention,
+       );
 
   @override
   SqliteDataStorageAdapter get storage =>

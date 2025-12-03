@@ -10,16 +10,13 @@ class DataServiceResponder extends RpcResponderContract
     bool disposeRepositoryOnClose = true,
     Iterable<String> allowedBearerTokens = const [],
     required RpcDataTransferMode transferMode,
-  })  : _repository = repository,
-        _disposeRepositoryOnClose = disposeRepositoryOnClose,
-        _allowedBearerTokens = {
-          for (final token in allowedBearerTokens)
-            if (token.trim().isNotEmpty) token.trim(),
-        },
-        super(
-          IDataServiceContract.name,
-          dataTransferMode: transferMode,
-        );
+  }) : _repository = repository,
+       _disposeRepositoryOnClose = disposeRepositoryOnClose,
+       _allowedBearerTokens = {
+         for (final token in allowedBearerTokens)
+           if (token.trim().isNotEmpty) token.trim(),
+       },
+       super(IDataServiceContract.name, dataTransferMode: transferMode);
 
   final IDataRepository _repository;
   final Set<String> _allowedBearerTokens;
@@ -190,10 +187,7 @@ class DataServiceResponder extends RpcResponderContract
     CreateRecordRequest request, {
     RpcContext? context,
   }) async {
-    final record = await _runSafely(
-      context,
-      () => _repository.create(request),
-    );
+    final record = await _runSafely(context, () => _repository.create(request));
     return CreateRecordResponse(record: record);
   }
 
@@ -201,10 +195,7 @@ class DataServiceResponder extends RpcResponderContract
     GetRecordRequest request, {
     RpcContext? context,
   }) async {
-    final record = await _runSafely(
-      context,
-      () => _repository.get(request),
-    );
+    final record = await _runSafely(context, () => _repository.get(request));
     return GetRecordResponse(record: record);
   }
 
@@ -230,10 +221,7 @@ class DataServiceResponder extends RpcResponderContract
     UpdateRecordRequest request, {
     RpcContext? context,
   }) async {
-    final record = await _runSafely(
-      context,
-      () => _repository.update(request),
-    );
+    final record = await _runSafely(context, () => _repository.update(request));
     return UpdateRecordResponse(record: record);
   }
 
@@ -241,10 +229,7 @@ class DataServiceResponder extends RpcResponderContract
     PatchRecordRequest request, {
     RpcContext? context,
   }) async {
-    final record = await _runSafely(
-      context,
-      () => _repository.patch(request),
-    );
+    final record = await _runSafely(context, () => _repository.patch(request));
     return PatchRecordResponse(record: record);
   }
 
@@ -300,30 +285,21 @@ class DataServiceResponder extends RpcResponderContract
     ExportSnapshotRequest request, {
     RpcContext? context,
   }) async {
-    return _runSafely(
-      context,
-      () => _repository.exportSnapshot(request),
-    );
+    return _runSafely(context, () => _repository.exportSnapshot(request));
   }
 
   Future<ExportDatabaseResponse> _handleExportDatabase(
     ExportDatabaseRequest request, {
     RpcContext? context,
   }) async {
-    return _runSafely(
-      context,
-      () => _repository.exportDatabase(request),
-    );
+    return _runSafely(context, () => _repository.exportDatabase(request));
   }
 
   Future<ImportDatabaseResponse> _handleImportDatabase(
     ImportDatabaseRequest request, {
     RpcContext? context,
   }) async {
-    return _runSafely(
-      context,
-      () => _repository.importDatabase(request),
-    );
+    return _runSafely(context, () => _repository.importDatabase(request));
   }
 
   Future<SearchRecordsResponse> _handleSearch(

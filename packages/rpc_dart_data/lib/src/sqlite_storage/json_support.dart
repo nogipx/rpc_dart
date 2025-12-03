@@ -5,9 +5,7 @@ import 'package:sqlite3/common.dart' as sqlite;
 /// Ensures that [json_extract] is available on the provided SQLite database.
 void ensureJsonExtractFunction(sqlite.CommonDatabase database) {
   try {
-    database.select(
-      r"""SELECT json_extract('1', '$')""",
-    );
+    database.select(r"""SELECT json_extract('1', '$')""");
     return;
   } on sqlite.SqliteException catch (error) {
     final message = error.message;

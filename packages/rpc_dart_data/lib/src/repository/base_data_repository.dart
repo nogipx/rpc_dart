@@ -11,17 +11,17 @@ abstract class BaseDataRepository implements IDataRepository {
     DataChangeJournal? changeJournal,
     int? journalMaxEvents = defaultJournalMaxEvents,
     Duration? journalRetention = defaultJournalRetention,
-  })  : _clock = clock ?? (() => DateTime.now().toUtc()),
-        _idGenerator = idGenerator,
-        _journal = changeJournal ?? InMemoryDataChangeJournal(),
-        _changeController = StreamController<DataChangeEvent>.broadcast(),
-        _journalMaxEvents = journalMaxEvents != null && journalMaxEvents < 1
-            ? null
-            : journalMaxEvents,
-        _journalRetention =
-            journalRetention != null && journalRetention.inMicroseconds <= 0
-                ? null
-                : journalRetention;
+  }) : _clock = clock ?? (() => DateTime.now().toUtc()),
+       _idGenerator = idGenerator,
+       _journal = changeJournal ?? InMemoryDataChangeJournal(),
+       _changeController = StreamController<DataChangeEvent>.broadcast(),
+       _journalMaxEvents = journalMaxEvents != null && journalMaxEvents < 1
+           ? null
+           : journalMaxEvents,
+       _journalRetention =
+           journalRetention != null && journalRetention.inMicroseconds <= 0
+           ? null
+           : journalRetention;
 
   static const String _databaseFormatVersion = '2.0.0';
   static const String _legacyDatabaseFormatVersion = '1.0.0';
@@ -41,7 +41,7 @@ abstract class BaseDataRepository implements IDataRepository {
 
   String _generateId(String collection) {
     if (_idGenerator != null) {
-      return _idGenerator!(collection);
+      return _idGenerator(collection);
     }
     final suffix = _random.nextInt(1 << 32).toRadixString(16);
     final timestamp = _clock().microsecondsSinceEpoch;
@@ -87,7 +87,7 @@ abstract class BaseDataRepository implements IDataRepository {
     String collection, {
     required DateTime occurredAt,
   }) async {
-    final maxEvents = _journalMaxEvents != null && _journalMaxEvents! > 0
+    final maxEvents = _journalMaxEvents != null && _journalMaxEvents > 0
         ? _journalMaxEvents
         : null;
     final retention = _journalRetention;
@@ -300,9 +300,7 @@ abstract class BaseDataRepository implements IDataRepository {
                 'Snapshot record payload must be an object',
               );
             }
-            final record = DataRecord.fromJson(
-              Map<String, dynamic>.from(data),
-            );
+            final record = DataRecord.fromJson(Map<String, dynamic>.from(data));
             if (record.collection != currentCollection) {
               throw RpcDataError.invalidArgument(
                 'Snapshot record collection mismatch for ${record.id}',
@@ -784,8 +782,10 @@ abstract class BaseDataRepository implements IDataRepository {
         ),
       );
       final pending = iterator.moveNext();
-      result[collection] =
-          _PreparedChunkStream(iterator: iterator, pending: pending);
+      result[collection] = _PreparedChunkStream(
+        iterator: iterator,
+        pending: pending,
+      );
     }
     return result;
   }
@@ -878,7 +878,8 @@ abstract class BaseDataRepository implements IDataRepository {
 
     for (final collection in collections) {
       final prepared = preparedStreams?[collection];
-      final chunkIterator = prepared?.iterator ??
+      final chunkIterator =
+          prepared?.iterator ??
           StreamIterator<List<DataRecord>>(
             storage.readCollectionChunks(
               collection,
@@ -1142,37 +1143,37 @@ enum _SnapshotEntryType { header, collection, record, collectionEnd, footer }
 
 class _SnapshotParsedEntry {
   _SnapshotParsedEntry.header()
-      : type = _SnapshotEntryType.header,
-        collection = null,
-        record = null,
-        declaredCollectionCount = null,
-        declaredRecordCount = null;
+    : type = _SnapshotEntryType.header,
+      collection = null,
+      record = null,
+      declaredCollectionCount = null,
+      declaredRecordCount = null;
 
   _SnapshotParsedEntry.collection(this.collection)
-      : type = _SnapshotEntryType.collection,
-        record = null,
-        declaredCollectionCount = null,
-        declaredRecordCount = null;
+    : type = _SnapshotEntryType.collection,
+      record = null,
+      declaredCollectionCount = null,
+      declaredRecordCount = null;
 
   _SnapshotParsedEntry.record(this.record)
-      : type = _SnapshotEntryType.record,
-        collection = record?.collection,
-        declaredCollectionCount = null,
-        declaredRecordCount = null;
+    : type = _SnapshotEntryType.record,
+      collection = record?.collection,
+      declaredCollectionCount = null,
+      declaredRecordCount = null;
 
   _SnapshotParsedEntry.collectionEnd()
-      : type = _SnapshotEntryType.collectionEnd,
-        collection = null,
-        record = null,
-        declaredCollectionCount = null,
-        declaredRecordCount = null;
+    : type = _SnapshotEntryType.collectionEnd,
+      collection = null,
+      record = null,
+      declaredCollectionCount = null,
+      declaredRecordCount = null;
 
   _SnapshotParsedEntry.footer({
     this.declaredCollectionCount,
     this.declaredRecordCount,
-  })  : type = _SnapshotEntryType.footer,
-        collection = null,
-        record = null;
+  }) : type = _SnapshotEntryType.footer,
+       collection = null,
+       record = null;
 
   final _SnapshotEntryType type;
   final String? collection;
@@ -1206,10 +1207,7 @@ class _ExportComputationResult {
 }
 
 class _PreparedChunkStream {
-  _PreparedChunkStream({
-    required this.iterator,
-    required this.pending,
-  });
+  _PreparedChunkStream({required this.iterator, required this.pending});
 
   final StreamIterator<List<DataRecord>> iterator;
   Future<bool> pending;

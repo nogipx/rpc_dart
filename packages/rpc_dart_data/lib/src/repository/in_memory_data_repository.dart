@@ -10,10 +10,10 @@ final class InMemoryDataRepository extends BaseDataRepository {
     int? journalMaxEvents = BaseDataRepository.defaultJournalMaxEvents,
     Duration? journalRetention = BaseDataRepository.defaultJournalRetention,
   }) : super(
-          storage ?? InMemoryStorageAdapter(),
-          clock: clock,
-          idGenerator: idGenerator,
-          journalMaxEvents: journalMaxEvents,
-          journalRetention: journalRetention,
-        );
+         storage ?? InMemoryStorageAdapter(),
+         clock: clock,
+         idGenerator: idGenerator,
+         journalMaxEvents: journalMaxEvents,
+         journalRetention: journalRetention,
+       );
 }

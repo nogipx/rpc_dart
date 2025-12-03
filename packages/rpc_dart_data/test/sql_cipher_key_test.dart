@@ -25,19 +25,18 @@ void main() {
     });
 
     test(
-        'applyTo raises when SQLCipher support is missing and consumes the key',
-        () {
-      final key =
-          SqlCipherKey.fromBytes(keyBytes: Uint8List.fromList([1, 2, 3, 4]));
-      final database = sqlite3.openInMemory();
+      'applyTo raises when SQLCipher support is missing and consumes the key',
+      () {
+        final key = SqlCipherKey.fromBytes(
+          keyBytes: Uint8List.fromList([1, 2, 3, 4]),
+        );
+        final database = sqlite3.openInMemory();
 
-      expect(
-        () => key.applyTo(database),
-        throwsA(isA<SqlCipherException>()),
-      );
+        expect(() => key.applyTo(database), throwsA(isA<SqlCipherException>()));
 
-      expect(() => key.applyTo(database), throwsStateError);
-    });
+        expect(() => key.applyTo(database), throwsStateError);
+      },
+    );
   });
 
   test('SqlCipherException includes cause in toString', () {

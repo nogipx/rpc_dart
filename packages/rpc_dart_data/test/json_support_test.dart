@@ -13,7 +13,7 @@ void main() {
         );
         expect(row.single['extracted'], 1);
       } finally {
-        database.dispose();
+        database.close();
       }
     });
   });

@@ -64,8 +64,9 @@ void main() {
         ),
       );
 
-      final context =
-          RpcContext.withHeaders({'authorization': 'Bearer valid-token'});
+      final context = RpcContext.withHeaders({
+        'authorization': 'Bearer valid-token',
+      });
       final record = await client.create(
         collection: 'notes',
         payload: {'title': 'Authorized'},
@@ -78,7 +79,8 @@ void main() {
     test('deadline expiry is detected before repository execution', () async {
       await startServer();
       final expiredContext = RpcContext.withDeadline(
-          DateTime.now().subtract(const Duration(minutes: 1)));
+        DateTime.now().subtract(const Duration(minutes: 1)),
+      );
 
       await expectLater(
         () => client.list(collection: 'logs', context: expiredContext),
@@ -86,34 +88,37 @@ void main() {
       );
     });
 
-    test('repository exceptions are wrapped as internal RpcDataError',
-        () async {
-      await startServer(repo: _ThrowingRepository());
+    test(
+      'repository exceptions are wrapped as internal RpcDataError',
+      () async {
+        await startServer(repo: _ThrowingRepository());
 
-      await expectLater(
-        () => client.create(
-          collection: 'notes',
-          payload: {'title': 'boom'},
-        ),
-        throwsA(
-          isA<Exception>().having(
-            (error) => error.toString(),
-            'message',
-            contains('Unhandled repository error'),
+        await expectLater(
+          () => client.create(collection: 'notes', payload: {'title': 'boom'}),
+          throwsA(
+            isA<Exception>().having(
+              (error) => error.toString(),
+              'message',
+              contains('Unhandled repository error'),
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('listCollections exposes registered collection names', () async {
       await startServer();
       await repository.create(
         const CreateRecordRequest(
-            collection: 'notes', payload: {'tag': 'alpha'}),
+          collection: 'notes',
+          payload: {'tag': 'alpha'},
+        ),
       );
       await repository.create(
         const CreateRecordRequest(
-            collection: 'tasks', payload: {'tag': 'beta'}),
+          collection: 'tasks',
+          payload: {'tag': 'beta'},
+        ),
       );
 
       final collections = await client.listCollections();
@@ -164,18 +169,18 @@ class _ThrowingRepository implements IDataRepository {
 
   @override
   Future<ExportSnapshotResponse> exportSnapshot(
-          ExportSnapshotRequest request) =>
-      throw UnimplementedError();
+    ExportSnapshotRequest request,
+  ) => throw UnimplementedError();
 
   @override
   Future<ExportDatabaseResponse> exportDatabase(
-          ExportDatabaseRequest request) =>
-      throw UnimplementedError();
+    ExportDatabaseRequest request,
+  ) => throw UnimplementedError();
 
   @override
   Future<ImportDatabaseResponse> importDatabase(
-          ImportDatabaseRequest request) =>
-      throw UnimplementedError();
+    ImportDatabaseRequest request,
+  ) => throw UnimplementedError();
 
   @override
   Future<SearchRecordsResponse> search(SearchRecordsRequest request) =>
@@ -191,8 +196,8 @@ class _ThrowingRepository implements IDataRepository {
 
   @override
   Future<CollectionIndex> createCollectionIndex(
-          CreateCollectionIndexRequest request) =>
-      throw UnimplementedError();
+    CreateCollectionIndexRequest request,
+  ) => throw UnimplementedError();
 
   @override
   Future<bool> deleteCollectionIndex(DeleteCollectionIndexRequest request) =>

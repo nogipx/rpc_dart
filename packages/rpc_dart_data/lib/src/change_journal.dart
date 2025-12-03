@@ -58,8 +58,8 @@ abstract interface class DataChangeJournal {
 /// unit tests and the `InMemoryDataRepository` helper.
 final class InMemoryDataChangeJournal implements DataChangeJournal {
   InMemoryDataChangeJournal()
-      : _events = <String, List<DataChangeEvent>>{},
-        _cursorIndex = <String, Map<String, int>>{};
+    : _events = <String, List<DataChangeEvent>>{},
+      _cursorIndex = <String, Map<String, int>>{};
 
   final Map<String, List<DataChangeEvent>> _events;
   final Map<String, Map<String, int>> _cursorIndex;

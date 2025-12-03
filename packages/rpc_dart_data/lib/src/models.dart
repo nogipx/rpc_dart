@@ -114,12 +114,12 @@ class DataCommand extends Equatable implements IRpcSerializable {
   });
 
   factory DataCommand.fromJson(Map<String, dynamic> json) => DataCommand(
-        commandId: json['commandId'] as String,
-        sessionId: json['sessionId'] as String,
-        type: _commandTypeFromJson(json['type'] as String),
-        payload: Map<String, dynamic>.from(json['payload'] as Map),
-        issuedAt: DateTime.parse(json['issuedAt'] as String),
-      );
+    commandId: json['commandId'] as String,
+    sessionId: json['sessionId'] as String,
+    type: _commandTypeFromJson(json['type'] as String),
+    payload: Map<String, dynamic>.from(json['payload'] as Map),
+    issuedAt: DateTime.parse(json['issuedAt'] as String),
+  );
 
   /// Уникальный идентификатор команды, генерируемый клиентом.
   final String commandId;
@@ -141,12 +141,12 @@ class DataCommand extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'commandId': commandId,
-        'sessionId': sessionId,
-        'type': _commandTypeToJson(type),
-        'payload': payload,
-        'issuedAt': issuedAt.toIso8601String(),
-      };
+    'commandId': commandId,
+    'sessionId': sessionId,
+    'type': _commandTypeToJson(type),
+    'payload': payload,
+    'issuedAt': issuedAt.toIso8601String(),
+  };
 }
 
 /// Неизменяемая запись данных.
@@ -199,13 +199,13 @@ class DataRecord implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'collection': collection,
-        'payload': payload,
-        'version': version,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'collection': collection,
+    'payload': payload,
+    'version': version,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   @override
   bool operator ==(Object other) {
@@ -220,13 +220,13 @@ class DataRecord implements IRpcSerializable {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        collection,
-        version,
-        createdAt,
-        updatedAt,
-        _payloadEquality.hash(payload),
-      );
+    id,
+    collection,
+    version,
+    createdAt,
+    updatedAt,
+    _payloadEquality.hash(payload),
+  );
 }
 
 @immutable
@@ -254,10 +254,10 @@ class CollectionIndex extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'path': path,
-        'indexName': indexName,
-      };
+    'collection': collection,
+    'path': path,
+    'indexName': indexName,
+  };
 }
 
 @immutable
@@ -286,10 +286,10 @@ class CreateCollectionIndexRequest extends Equatable
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'path': path,
-        if (indexName != null) 'indexName': indexName,
-      };
+    'collection': collection,
+    'path': path,
+    if (indexName != null) 'indexName': indexName,
+  };
 }
 
 @immutable
@@ -300,7 +300,8 @@ class CreateCollectionIndexResponse extends Equatable
   factory CreateCollectionIndexResponse.fromJson(Map<String, dynamic> json) {
     return CreateCollectionIndexResponse(
       index: CollectionIndex.fromJson(
-          Map<String, dynamic>.from(json['index'] as Map)),
+        Map<String, dynamic>.from(json['index'] as Map),
+      ),
     );
   }
 
@@ -310,9 +311,7 @@ class CreateCollectionIndexResponse extends Equatable
   List<Object?> get props => [index];
 
   @override
-  Map<String, dynamic> toJson() => {
-        'index': index.toJson(),
-      };
+  Map<String, dynamic> toJson() => {'index': index.toJson()};
 }
 
 @immutable
@@ -341,10 +340,10 @@ class DeleteCollectionIndexRequest extends Equatable
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'path': path,
-        if (indexName != null) 'indexName': indexName,
-      };
+    'collection': collection,
+    'path': path,
+    if (indexName != null) 'indexName': indexName,
+  };
 }
 
 @immutable
@@ -353,9 +352,7 @@ class DeleteCollectionIndexResponse extends Equatable
   const DeleteCollectionIndexResponse({required this.deleted});
 
   factory DeleteCollectionIndexResponse.fromJson(Map<String, dynamic> json) {
-    return DeleteCollectionIndexResponse(
-      deleted: json['deleted'] as bool,
-    );
+    return DeleteCollectionIndexResponse(deleted: json['deleted'] as bool);
   }
 
   final bool deleted;
@@ -364,9 +361,7 @@ class DeleteCollectionIndexResponse extends Equatable
   List<Object?> get props => [deleted];
 
   @override
-  Map<String, dynamic> toJson() => {
-        'deleted': deleted,
-      };
+  Map<String, dynamic> toJson() => {'deleted': deleted};
 }
 
 @immutable
@@ -380,11 +375,15 @@ class RecordFilter extends Equatable implements IRpcSerializable {
   factory RecordFilter.fromJson(Map<String, dynamic> json) {
     return RecordFilter(
       equals: Map<String, dynamic>.from(json['equals'] as Map? ?? const {}),
-      range: (json['range'] as Map? ?? const {}).map((key, value) => MapEntry(
+      range: (json['range'] as Map? ?? const {}).map(
+        (key, value) => MapEntry(
           key as String,
-          RangeFilter.fromJson(Map<String, dynamic>.from(value as Map)))),
-      containsTerms:
-          List<String>.from(json['containsTerms'] as List? ?? const []),
+          RangeFilter.fromJson(Map<String, dynamic>.from(value as Map)),
+        ),
+      ),
+      containsTerms: List<String>.from(
+        json['containsTerms'] as List? ?? const [],
+      ),
     );
   }
 
@@ -397,16 +396,20 @@ class RecordFilter extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'equals': equals,
-        'range': range.map((key, value) => MapEntry(key, value.toJson())),
-        'containsTerms': containsTerms,
-      };
+    'equals': equals,
+    'range': range.map((key, value) => MapEntry(key, value.toJson())),
+    'containsTerms': containsTerms,
+  };
 }
 
 @immutable
 class RangeFilter extends Equatable implements IRpcSerializable {
-  const RangeFilter(
-      {this.min, this.max, this.includeMin = true, this.includeMax = true});
+  const RangeFilter({
+    this.min,
+    this.max,
+    this.includeMin = true,
+    this.includeMax = true,
+  });
 
   factory RangeFilter.fromJson(Map<String, dynamic> json) {
     return RangeFilter(
@@ -427,11 +430,11 @@ class RangeFilter extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'min': min,
-        'max': max,
-        'includeMin': includeMin,
-        'includeMax': includeMax,
-      };
+    'min': min,
+    'max': max,
+    'includeMin': includeMin,
+    'includeMax': includeMax,
+  };
 }
 
 @immutable
@@ -439,9 +442,9 @@ class SortOrder extends Equatable implements IRpcSerializable {
   const SortOrder({required this.field, this.descending = false});
 
   factory SortOrder.fromJson(Map<String, dynamic> json) => SortOrder(
-        field: json['field'] as String,
-        descending: json['descending'] as bool? ?? false,
-      );
+    field: json['field'] as String,
+    descending: json['descending'] as bool? ?? false,
+  );
 
   final String field;
   final bool descending;
@@ -450,10 +453,7 @@ class SortOrder extends Equatable implements IRpcSerializable {
   List<Object?> get props => [field, descending];
 
   @override
-  Map<String, dynamic> toJson() => {
-        'field': field,
-        'descending': descending,
-      };
+  Map<String, dynamic> toJson() => {'field': field, 'descending': descending};
 }
 
 @immutable
@@ -463,15 +463,15 @@ class QueryOptions extends Equatable implements IRpcSerializable {
     this.offset = 0,
     this.cursor,
     this.includeTotalCount = false,
-  })  : assert(limit > 0, 'limit must be greater than zero'),
-        assert(offset >= 0, 'offset cannot be negative');
+  }) : assert(limit > 0, 'limit must be greater than zero'),
+       assert(offset >= 0, 'offset cannot be negative');
 
   factory QueryOptions.fromJson(Map<String, dynamic> json) => QueryOptions(
-        limit: json['limit'] as int? ?? 20,
-        offset: json['offset'] as int? ?? 0,
-        cursor: json['cursor'] as String?,
-        includeTotalCount: json['includeTotalCount'] as bool? ?? false,
-      );
+    limit: json['limit'] as int? ?? 20,
+    offset: json['offset'] as int? ?? 0,
+    cursor: json['cursor'] as String?,
+    includeTotalCount: json['includeTotalCount'] as bool? ?? false,
+  );
 
   final int limit;
   final int offset;
@@ -483,11 +483,11 @@ class QueryOptions extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'limit': limit,
-        'offset': offset,
-        'cursor': cursor,
-        'includeTotalCount': includeTotalCount,
-      };
+    'limit': limit,
+    'offset': offset,
+    'cursor': cursor,
+    'includeTotalCount': includeTotalCount,
+  };
 }
 
 @immutable
@@ -495,9 +495,9 @@ class RecordPatch extends Equatable implements IRpcSerializable {
   const RecordPatch({this.set = const {}, this.unset = const []});
 
   factory RecordPatch.fromJson(Map<String, dynamic> json) => RecordPatch(
-        set: Map<String, dynamic>.from(json['set'] as Map? ?? const {}),
-        unset: List<String>.from(json['unset'] as List? ?? const []),
-      );
+    set: Map<String, dynamic>.from(json['set'] as Map? ?? const {}),
+    unset: List<String>.from(json['unset'] as List? ?? const []),
+  );
 
   final Map<String, dynamic> set;
   final List<String> unset;
@@ -514,10 +514,7 @@ class RecordPatch extends Equatable implements IRpcSerializable {
   List<Object?> get props => [set, unset];
 
   @override
-  Map<String, dynamic> toJson() => {
-        'set': set,
-        'unset': unset,
-      };
+  Map<String, dynamic> toJson() => {'set': set, 'unset': unset};
 }
 
 @immutable
@@ -534,14 +531,16 @@ class DataChangeEvent extends Equatable implements IRpcSerializable {
 
   factory DataChangeEvent.fromJson(Map<String, dynamic> json) =>
       DataChangeEvent(
-        type: DataChangeType.values
-            .firstWhere((e) => e.name == (json['type'] as String)),
+        type: DataChangeType.values.firstWhere(
+          (e) => e.name == (json['type'] as String),
+        ),
         collection: json['collection'] as String,
         id: json['id'] as String,
         record: json['record'] == null
             ? null
             : DataRecord.fromJson(
-                Map<String, dynamic>.from(json['record'] as Map)),
+                Map<String, dynamic>.from(json['record'] as Map),
+              ),
         version: json['version'] as int,
         cursor: json['cursor'] as String,
         occurredAt: DateTime.parse(json['occurredAt'] as String),
@@ -556,29 +555,36 @@ class DataChangeEvent extends Equatable implements IRpcSerializable {
   final DateTime occurredAt;
 
   DataChangeEvent copyWith({String? cursor}) => DataChangeEvent(
-        type: type,
-        collection: collection,
-        id: id,
-        record: record,
-        version: version,
-        cursor: cursor ?? this.cursor,
-        occurredAt: occurredAt,
-      );
+    type: type,
+    collection: collection,
+    id: id,
+    record: record,
+    version: version,
+    cursor: cursor ?? this.cursor,
+    occurredAt: occurredAt,
+  );
 
   @override
-  List<Object?> get props =>
-      [type, collection, id, record, version, cursor, occurredAt];
+  List<Object?> get props => [
+    type,
+    collection,
+    id,
+    record,
+    version,
+    cursor,
+    occurredAt,
+  ];
 
   @override
   Map<String, dynamic> toJson() => {
-        'type': type.name,
-        'collection': collection,
-        'id': id,
-        'record': record?.toJson(),
-        'version': version,
-        'cursor': cursor,
-        'occurredAt': occurredAt.toIso8601String(),
-      };
+    'type': type.name,
+    'collection': collection,
+    'id': id,
+    'record': record?.toJson(),
+    'version': version,
+    'cursor': cursor,
+    'occurredAt': occurredAt.toIso8601String(),
+  };
 }
 
 @immutable
@@ -605,10 +611,10 @@ class CreateRecordRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'payload': payload,
-        'id': id,
-      };
+    'collection': collection,
+    'payload': payload,
+    'id': id,
+  };
 }
 
 @immutable
@@ -618,7 +624,8 @@ class CreateRecordResponse extends Equatable implements IRpcSerializable {
   factory CreateRecordResponse.fromJson(Map<String, dynamic> json) =>
       CreateRecordResponse(
         record: DataRecord.fromJson(
-            Map<String, dynamic>.from(json['record'] as Map)),
+          Map<String, dynamic>.from(json['record'] as Map),
+        ),
       );
 
   final DataRecord record;
@@ -647,10 +654,7 @@ class GetRecordRequest extends Equatable implements IRpcSerializable {
   List<Object?> get props => [collection, id];
 
   @override
-  Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'id': id,
-      };
+  Map<String, dynamic> toJson() => {'collection': collection, 'id': id};
 }
 
 @immutable
@@ -662,7 +666,8 @@ class GetRecordResponse extends Equatable implements IRpcSerializable {
         record: json['record'] == null
             ? null
             : DataRecord.fromJson(
-                Map<String, dynamic>.from(json['record'] as Map)),
+                Map<String, dynamic>.from(json['record'] as Map),
+              ),
       );
 
   final DataRecord? record;
@@ -689,15 +694,18 @@ class ListRecordsRequest extends Equatable implements IRpcSerializable {
         filter: json['filter'] == null
             ? null
             : RecordFilter.fromJson(
-                Map<String, dynamic>.from(json['filter'] as Map)),
+                Map<String, dynamic>.from(json['filter'] as Map),
+              ),
         sort: json['sort'] == null
             ? null
             : SortOrder.fromJson(
-                Map<String, dynamic>.from(json['sort'] as Map)),
+                Map<String, dynamic>.from(json['sort'] as Map),
+              ),
         options: json['options'] == null
             ? const QueryOptions()
             : QueryOptions.fromJson(
-                Map<String, dynamic>.from(json['options'] as Map)),
+                Map<String, dynamic>.from(json['options'] as Map),
+              ),
       );
 
   final String collection;
@@ -710,11 +718,11 @@ class ListRecordsRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'filter': filter?.toJson(),
-        'sort': sort?.toJson(),
-        'options': options.toJson(),
-      };
+    'collection': collection,
+    'filter': filter?.toJson(),
+    'sort': sort?.toJson(),
+    'options': options.toJson(),
+  };
 }
 
 @immutable
@@ -729,7 +737,8 @@ class ListRecordsResponse extends Equatable implements IRpcSerializable {
       ListRecordsResponse(
         records: (json['records'] as List? ?? const [])
             .map(
-                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+              (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
             .toList(growable: false),
         nextCursor: json['nextCursor'] as String?,
         totalCount: json['totalCount'] as int?,
@@ -744,10 +753,10 @@ class ListRecordsResponse extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'records': records.map((e) => e.toJson()).toList(growable: false),
-        'nextCursor': nextCursor,
-        'totalCount': totalCount,
-      };
+    'records': records.map((e) => e.toJson()).toList(growable: false),
+    'nextCursor': nextCursor,
+    'totalCount': totalCount,
+  };
 }
 
 @immutable
@@ -770,8 +779,9 @@ class ListCollectionsResponse extends Equatable implements IRpcSerializable {
 
   factory ListCollectionsResponse.fromJson(Map<String, dynamic> json) =>
       ListCollectionsResponse(
-        collections:
-            List<String>.from(json['collections'] as List? ?? const []),
+        collections: List<String>.from(
+          json['collections'] as List? ?? const [],
+        ),
       );
 
   final List<String> collections;
@@ -780,9 +790,7 @@ class ListCollectionsResponse extends Equatable implements IRpcSerializable {
   List<Object?> get props => [collections];
 
   @override
-  Map<String, dynamic> toJson() => {
-        'collections': collections,
-      };
+  Map<String, dynamic> toJson() => {'collections': collections};
 }
 
 @immutable
@@ -812,11 +820,11 @@ class UpdateRecordRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'id': id,
-        'expectedVersion': expectedVersion,
-        'payload': payload,
-      };
+    'collection': collection,
+    'id': id,
+    'expectedVersion': expectedVersion,
+    'payload': payload,
+  };
 }
 
 @immutable
@@ -826,7 +834,8 @@ class UpdateRecordResponse extends Equatable implements IRpcSerializable {
   factory UpdateRecordResponse.fromJson(Map<String, dynamic> json) =>
       UpdateRecordResponse(
         record: DataRecord.fromJson(
-            Map<String, dynamic>.from(json['record'] as Map)),
+          Map<String, dynamic>.from(json['record'] as Map),
+        ),
       );
 
   final DataRecord record;
@@ -853,7 +862,8 @@ class PatchRecordRequest extends Equatable implements IRpcSerializable {
         id: json['id'] as String,
         expectedVersion: json['expectedVersion'] as int,
         patch: RecordPatch.fromJson(
-            Map<String, dynamic>.from(json['patch'] as Map)),
+          Map<String, dynamic>.from(json['patch'] as Map),
+        ),
       );
 
   final String collection;
@@ -866,11 +876,11 @@ class PatchRecordRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'id': id,
-        'expectedVersion': expectedVersion,
-        'patch': patch.toJson(),
-      };
+    'collection': collection,
+    'id': id,
+    'expectedVersion': expectedVersion,
+    'patch': patch.toJson(),
+  };
 }
 
 @immutable
@@ -880,7 +890,8 @@ class PatchRecordResponse extends Equatable implements IRpcSerializable {
   factory PatchRecordResponse.fromJson(Map<String, dynamic> json) =>
       PatchRecordResponse(
         record: DataRecord.fromJson(
-            Map<String, dynamic>.from(json['record'] as Map)),
+          Map<String, dynamic>.from(json['record'] as Map),
+        ),
       );
 
   final DataRecord record;
@@ -916,10 +927,10 @@ class DeleteRecordRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'id': id,
-        'expectedVersion': expectedVersion,
-      };
+    'collection': collection,
+    'id': id,
+    'expectedVersion': expectedVersion,
+  };
 }
 
 @immutable
@@ -978,7 +989,8 @@ class BulkUpsertRequest extends Equatable implements IRpcSerializable {
       BulkUpsertRequest(
         records: (json['records'] as List)
             .map(
-                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+              (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
             .toList(growable: false),
       );
 
@@ -989,8 +1001,8 @@ class BulkUpsertRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'records': records.map((e) => e.toJson()).toList(growable: false),
-      };
+    'records': records.map((e) => e.toJson()).toList(growable: false),
+  };
 }
 
 @immutable
@@ -1001,7 +1013,8 @@ class BulkUpsertResponse extends Equatable implements IRpcSerializable {
       BulkUpsertResponse(
         records: (json['records'] as List)
             .map(
-                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+              (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
             .toList(growable: false),
       );
 
@@ -1012,8 +1025,8 @@ class BulkUpsertResponse extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'records': records.map((e) => e.toJson()).toList(growable: false),
-      };
+    'records': records.map((e) => e.toJson()).toList(growable: false),
+  };
 }
 
 @immutable
@@ -1033,10 +1046,7 @@ class BulkDeleteRequest extends Equatable implements IRpcSerializable {
   List<Object?> get props => [collection, ids];
 
   @override
-  Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'ids': ids,
-      };
+  Map<String, dynamic> toJson() => {'collection': collection, 'ids': ids};
 }
 
 @immutable
@@ -1073,14 +1083,17 @@ class ExportSnapshotRequest extends Equatable implements IRpcSerializable {
 
 @immutable
 class ExportSnapshotResponse extends Equatable implements IRpcSerializable {
-  const ExportSnapshotResponse(
-      {required this.records, required this.generatedAt});
+  const ExportSnapshotResponse({
+    required this.records,
+    required this.generatedAt,
+  });
 
   factory ExportSnapshotResponse.fromJson(Map<String, dynamic> json) =>
       ExportSnapshotResponse(
         records: (json['records'] as List)
             .map(
-                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+              (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
             .toList(growable: false),
         generatedAt: DateTime.parse(json['generatedAt'] as String),
       );
@@ -1093,9 +1106,9 @@ class ExportSnapshotResponse extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'records': records.map((e) => e.toJson()).toList(growable: false),
-        'generatedAt': generatedAt.toIso8601String(),
-      };
+    'records': records.map((e) => e.toJson()).toList(growable: false),
+    'generatedAt': generatedAt.toIso8601String(),
+  };
 }
 
 @immutable
@@ -1114,8 +1127,8 @@ class ExportDatabaseRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'includePayloadString': includePayloadString,
-      };
+    'includePayloadString': includePayloadString,
+  };
 }
 
 @immutable
@@ -1151,28 +1164,26 @@ class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
       return source.transform(encoding.decoder).transform(const LineSplitter());
     }
 
-    return Stream<String>.fromIterable(
-      const LineSplitter().convert(payload),
-    );
+    return Stream<String>.fromIterable(const LineSplitter().convert(payload));
   }
 
   @override
   List<Object?> get props => [
-        payload,
-        generatedAt,
-        formatVersion,
-        collectionCount,
-        recordCount,
-      ];
+    payload,
+    generatedAt,
+    formatVersion,
+    collectionCount,
+    recordCount,
+  ];
 
   @override
   Map<String, dynamic> toJson() => {
-        'payload': payload,
-        'generatedAt': generatedAt.toIso8601String(),
-        'formatVersion': formatVersion,
-        'collectionCount': collectionCount,
-        'recordCount': recordCount,
-      };
+    'payload': payload,
+    'generatedAt': generatedAt.toIso8601String(),
+    'formatVersion': formatVersion,
+    'collectionCount': collectionCount,
+    'recordCount': recordCount,
+  };
 }
 
 @immutable
@@ -1196,9 +1207,9 @@ class ImportDatabaseRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'payload': payload,
-        'replaceExisting': replaceExisting,
-      };
+    'payload': payload,
+    'replaceExisting': replaceExisting,
+  };
 }
 
 @immutable
@@ -1225,10 +1236,10 @@ class ImportDatabaseResponse extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'collectionCount': collectionCount,
-        'recordCount': recordCount,
-        'appliedAt': appliedAt.toIso8601String(),
-      };
+    'collectionCount': collectionCount,
+    'recordCount': recordCount,
+    'appliedAt': appliedAt.toIso8601String(),
+  };
 }
 
 @immutable
@@ -1247,11 +1258,13 @@ class SearchRecordsRequest extends Equatable implements IRpcSerializable {
         filter: json['filter'] == null
             ? null
             : RecordFilter.fromJson(
-                Map<String, dynamic>.from(json['filter'] as Map)),
+                Map<String, dynamic>.from(json['filter'] as Map),
+              ),
         options: json['options'] == null
             ? const QueryOptions()
             : QueryOptions.fromJson(
-                Map<String, dynamic>.from(json['options'] as Map)),
+                Map<String, dynamic>.from(json['options'] as Map),
+              ),
       );
 
   final String collection;
@@ -1264,11 +1277,11 @@ class SearchRecordsRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'query': query,
-        'filter': filter?.toJson(),
-        'options': options.toJson(),
-      };
+    'collection': collection,
+    'query': query,
+    'filter': filter?.toJson(),
+    'options': options.toJson(),
+  };
 }
 
 @immutable
@@ -1283,7 +1296,8 @@ class SearchRecordsResponse extends Equatable implements IRpcSerializable {
       SearchRecordsResponse(
         records: (json['records'] as List)
             .map(
-                (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+              (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
             .toList(growable: false),
         totalHits: json['totalHits'] as int,
         nextCursor: json['nextCursor'] as String?,
@@ -1298,10 +1312,10 @@ class SearchRecordsResponse extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'records': records.map((e) => e.toJson()).toList(growable: false),
-        'totalHits': totalHits,
-        'nextCursor': nextCursor,
-      };
+    'records': records.map((e) => e.toJson()).toList(growable: false),
+    'totalHits': totalHits,
+    'nextCursor': nextCursor,
+  };
 }
 
 @immutable
@@ -1318,7 +1332,8 @@ class AggregateMetricsRequest extends Equatable implements IRpcSerializable {
         filter: json['filter'] == null
             ? null
             : RecordFilter.fromJson(
-                Map<String, dynamic>.from(json['filter'] as Map)),
+                Map<String, dynamic>.from(json['filter'] as Map),
+              ),
         metrics: Map<String, String>.from(json['metrics'] as Map? ?? const {}),
       );
 
@@ -1331,10 +1346,10 @@ class AggregateMetricsRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'filter': filter?.toJson(),
-        'metrics': metrics,
-      };
+    'collection': collection,
+    'filter': filter?.toJson(),
+    'metrics': metrics,
+  };
 }
 
 @immutable
@@ -1372,10 +1387,7 @@ class WatchChangesRequest extends Equatable implements IRpcSerializable {
   List<Object?> get props => [collection, cursor];
 
   @override
-  Map<String, dynamic> toJson() => {
-        'collection': collection,
-        'cursor': cursor,
-      };
+  Map<String, dynamic> toJson() => {'collection': collection, 'cursor': cursor};
 }
 
 @immutable
@@ -1390,7 +1402,8 @@ class SyncChangeRequest extends Equatable implements IRpcSerializable {
       SyncChangeRequest(
         requestId: json['requestId'] as String,
         command: DataCommand.fromJson(
-            Map<String, dynamic>.from(json['command'] as Map)),
+          Map<String, dynamic>.from(json['command'] as Map),
+        ),
         resolveConflicts: json['resolveConflicts'] as bool? ?? true,
       );
 
@@ -1403,10 +1416,10 @@ class SyncChangeRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'requestId': requestId,
-        'command': command.toJson(),
-        'resolveConflicts': resolveConflicts,
-      };
+    'requestId': requestId,
+    'command': command.toJson(),
+    'resolveConflicts': resolveConflicts,
+  };
 }
 
 @immutable
@@ -1428,11 +1441,13 @@ class SyncChangeResponse extends Equatable implements IRpcSerializable {
         record: json['record'] == null
             ? null
             : DataRecord.fromJson(
-                Map<String, dynamic>.from(json['record'] as Map)),
+                Map<String, dynamic>.from(json['record'] as Map),
+              ),
         conflict: json['conflict'] == null
             ? null
             : DataRecord.fromJson(
-                Map<String, dynamic>.from(json['conflict'] as Map)),
+                Map<String, dynamic>.from(json['conflict'] as Map),
+              ),
         error: json['error'] as String?,
       );
 
@@ -1446,16 +1461,22 @@ class SyncChangeResponse extends Equatable implements IRpcSerializable {
   bool get hasConflict => conflict != null;
 
   @override
-  List<Object?> get props =>
-      [requestId, commandId, applied, record, conflict, error];
+  List<Object?> get props => [
+    requestId,
+    commandId,
+    applied,
+    record,
+    conflict,
+    error,
+  ];
 
   @override
   Map<String, dynamic> toJson() => {
-        'requestId': requestId,
-        'commandId': commandId,
-        'applied': applied,
-        'record': record?.toJson(),
-        'conflict': conflict?.toJson(),
-        'error': error,
-      };
+    'requestId': requestId,
+    'commandId': commandId,
+    'applied': applied,
+    'record': record?.toJson(),
+    'conflict': conflict?.toJson(),
+    'error': error,
+  };
 }

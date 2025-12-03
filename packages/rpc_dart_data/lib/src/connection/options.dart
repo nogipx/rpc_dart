@@ -10,14 +10,8 @@ class SqliteConnectionOptions {
     this.webSqliteWasmUri,
     this.webWorkerUri,
     this.webDatabaseName = 'app_db',
-  })  : assert(
-          nativeFileName.length > 0,
-          'nativeFileName must not be empty',
-        ),
-        assert(
-          webDatabaseName.length > 0,
-          'webDatabaseName must not be empty',
-        );
+  }) : assert(nativeFileName.length > 0, 'nativeFileName must not be empty'),
+       assert(webDatabaseName.length > 0, 'webDatabaseName must not be empty');
 
   /// Absolute or relative path to the persistent database file on IO platforms.
   ///

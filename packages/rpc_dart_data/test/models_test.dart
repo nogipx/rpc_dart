@@ -71,8 +71,12 @@ void main() {
 
   group('Filters and options', () {
     test('RangeFilter serializes round-trip', () {
-      final filter =
-          RangeFilter(min: 1, max: 2, includeMin: false, includeMax: true);
+      final filter = RangeFilter(
+        min: 1,
+        max: 2,
+        includeMin: false,
+        includeMax: true,
+      );
       expect(RangeFilter.fromJson(filter.toJson()), equals(filter));
     });
 
@@ -82,10 +86,7 @@ void main() {
     });
 
     test('QueryOptions validates bounds', () {
-      expect(
-        () => QueryOptions(limit: 0),
-        throwsA(isA<AssertionError>()),
-      );
+      expect(() => QueryOptions(limit: 0), throwsA(isA<AssertionError>()));
       expect(
         () => QueryOptions(limit: 1, offset: -1),
         throwsA(isA<AssertionError>()),
@@ -93,17 +94,19 @@ void main() {
     });
   });
 
-  test('RpcStreamIterator moves through a stream and cancels cleanly',
-      () async {
-    final controller = StreamController<int>();
-    final iterator = controller.stream.iterator;
-    controller.add(1);
-    controller.close();
+  test(
+    'RpcStreamIterator moves through a stream and cancels cleanly',
+    () async {
+      final controller = StreamController<int>();
+      final iterator = controller.stream.iterator;
+      controller.add(1);
+      controller.close();
 
-    expect(() => iterator.current, throwsStateError);
-    expect(await iterator.moveNext(), isTrue);
-    expect(iterator.current, 1);
-    expect(await iterator.moveNext(), isFalse);
-    await iterator.cancel();
-  });
+      expect(() => iterator.current, throwsStateError);
+      expect(await iterator.moveNext(), isTrue);
+      expect(iterator.current, 1);
+      expect(await iterator.moveNext(), isFalse);
+      await iterator.cancel();
+    },
+  );
 }

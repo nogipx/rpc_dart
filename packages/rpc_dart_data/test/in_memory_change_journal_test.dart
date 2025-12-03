@@ -94,8 +94,10 @@ void main() {
       }
 
       for (final cursor in stored) {
-        final replayed =
-            await journal.replayCollection('jobs', afterCursor: cursor);
+        final replayed = await journal.replayCollection(
+          'jobs',
+          afterCursor: cursor,
+        );
         final parsedCursor = int.parse(cursor);
         expect(replayed.length, total - parsedCursor);
       }

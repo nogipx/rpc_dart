@@ -17,14 +17,12 @@ part 'storage_adapter_registry.dart';
 ///
 /// Primarily intended for integration tests and diagnostics to ensure that
 /// filters and pagination are delegated to the database engine.
-typedef SqlStatementObserver = void Function(
-  String sql,
-  List<Object?> arguments,
-);
+typedef SqlStatementObserver =
+    void Function(String sql, List<Object?> arguments);
 
 /// Callback invoked after the adapter finishes its built-in SQLite setup.
-typedef SqliteSetupHook = FutureOr<void> Function(
-    sqlite.CommonDatabase database);
+typedef SqliteSetupHook =
+    FutureOr<void> Function(sqlite.CommonDatabase database);
 
 const String _systemCollectionPrefix = 's_';
 const String _collectionRegistryTable =
@@ -95,7 +93,7 @@ class SqliteDataStorageAdapter
         statementObserver: statementObserver,
       );
     } catch (_) {
-      database.dispose();
+      database.close();
       rethrow;
     }
   }
@@ -128,7 +126,7 @@ class SqliteDataStorageAdapter
         statementObserver: statementObserver,
       );
     } catch (_) {
-      database.dispose();
+      database.close();
       rethrow;
     }
   }
@@ -189,8 +187,9 @@ class SqliteDataStorageAdapter
     await journal.ensureReady();
 
     if (validateIntegrity) {
-      final quickCheckRows =
-          await _database.customSelect('PRAGMA quick_check').get();
+      final quickCheckRows = await _database
+          .customSelect('PRAGMA quick_check')
+          .get();
       final issues = <String>[];
       for (final row in quickCheckRows) {
         final value = row.read<String>('quick_check');
@@ -275,16 +274,18 @@ class SqliteDataStorageAdapter
     String tableName,
     Iterable<DataRecord> records,
   ) async {
-    final recordList =
-        records is List<DataRecord> ? records : records.toList(growable: false);
+    final recordList = records is List<DataRecord>
+        ? records
+        : records.toList(growable: false);
     if (recordList.isEmpty) {
       return 0;
     }
     var totalAffected = 0;
     final maxRecordsPerStatement =
         _sqliteVariableLimit ~/ _recordUpsertArgumentCount;
-    final chunkSize =
-        maxRecordsPerStatement > 0 ? maxRecordsPerStatement : recordList.length;
+    final chunkSize = maxRecordsPerStatement > 0
+        ? maxRecordsPerStatement
+        : recordList.length;
     for (final chunk in _chunk(recordList, chunkSize)) {
       final sql = StringBuffer(
         'INSERT INTO "$tableName" $_recordUpsertColumnsClause VALUES ',
@@ -300,8 +301,9 @@ class SqliteDataStorageAdapter
       sql.write(_recordUpsertConflictClause);
       _recordStatement(sql.toString(), args);
       await _database.customStatement(sql.toString(), variables: args);
-      final changeRow =
-          await _database.customSelect('SELECT changes() AS count').getSingle();
+      final changeRow = await _database
+          .customSelect('SELECT changes() AS count')
+          .getSingle();
       totalAffected += changeRow.read<int>('count');
     }
     return totalAffected;
@@ -345,14 +347,13 @@ class SqliteDataStorageAdapter
     final tableName = await _ensureTableForWrite(collection);
     await _ensureIndexRegistry();
 
-    final existingRow = await _database.customSelect(
-      'SELECT index_name, expression FROM "$_collectionIndexRegistryTable" '
-      'WHERE collection = ? AND path = ? LIMIT 1',
-      variables: [
-        collection,
-        path,
-      ],
-    ).getSingleOrNull();
+    final existingRow = await _database
+        .customSelect(
+          'SELECT index_name, expression FROM "$_collectionIndexRegistryTable" '
+          'WHERE collection = ? AND path = ? LIMIT 1',
+          variables: [collection, path],
+        )
+        .getSingleOrNull();
 
     if (existingRow != null) {
       final existingName = existingRow.read<String>('index_name');
@@ -384,8 +385,9 @@ class SqliteDataStorageAdapter
       collection: collection,
       tableName: tableName,
       path: path,
-      customName:
-          providedName != null && providedName.isNotEmpty ? providedName : null,
+      customName: providedName != null && providedName.isNotEmpty
+          ? providedName
+          : null,
     );
     final expression = _jsonExtractExpression(path);
 
@@ -395,12 +397,7 @@ class SqliteDataStorageAdapter
           'INSERT INTO "$_collectionIndexRegistryTable" '
           '(collection, path, index_name, expression) '
           'VALUES (?, ?, ?, ?)',
-          variables: [
-            collection,
-            path,
-            indexName,
-            expression,
-          ],
+          variables: [collection, path, indexName, expression],
         );
         await _database.customStatement(
           'CREATE INDEX IF NOT EXISTS "$indexName" '
@@ -412,10 +409,7 @@ class SqliteDataStorageAdapter
       if (message.contains('UNIQUE') || message.contains('unique')) {
         throw RpcDataError.invalidArgument(
           'Index name "$indexName" is already in use.',
-          details: {
-            'collection': collection,
-            'path': path,
-          },
+          details: {'collection': collection, 'path': path},
         );
       }
       throw RpcDataError.internal(
@@ -457,14 +451,13 @@ class SqliteDataStorageAdapter
     final path = _normalizeJsonFieldName(rawPath);
     await _ensureIndexRegistry();
 
-    final row = await _database.customSelect(
-      'SELECT index_name FROM "$_collectionIndexRegistryTable" '
-      'WHERE collection = ? AND path = ? LIMIT 1',
-      variables: [
-        collection,
-        path,
-      ],
-    ).getSingleOrNull();
+    final row = await _database
+        .customSelect(
+          'SELECT index_name FROM "$_collectionIndexRegistryTable" '
+          'WHERE collection = ? AND path = ? LIMIT 1',
+          variables: [collection, path],
+        )
+        .getSingleOrNull();
 
     if (row == null) {
       return false;
@@ -487,9 +480,7 @@ class SqliteDataStorageAdapter
           'WHERE collection = ? AND path = ?',
           variables: [collection, path],
         );
-        await _database.customStatement(
-          'DROP INDEX IF EXISTS "$indexName"',
-        );
+        await _database.customStatement('DROP INDEX IF EXISTS "$indexName"');
       });
     } on sqlite.SqliteException catch (error) {
       throw RpcDataError.internal(
@@ -507,19 +498,18 @@ class SqliteDataStorageAdapter
   }
 
   @override
-  Future<DataRecord?> readRecord(
-    String collection,
-    String id,
-  ) async {
+  Future<DataRecord?> readRecord(String collection, String id) async {
     final tableName = await _ensureTableForRead(collection);
     if (tableName == null) {
       return null;
     }
-    final row = await _database.customSelect(
-      'SELECT id, payload, version, created_at, updated_at '
-      'FROM "$tableName" WHERE id = ? LIMIT 1',
-      variables: [id],
-    ).getSingleOrNull();
+    final row = await _database
+        .customSelect(
+          'SELECT id, payload, version, created_at, updated_at '
+          'FROM "$tableName" WHERE id = ? LIMIT 1',
+          variables: [id],
+        )
+        .getSingleOrNull();
     if (row == null) {
       return null;
     }
@@ -562,9 +552,7 @@ class SqliteDataStorageAdapter
   }
 
   @override
-  Future<List<DataRecord>> readCollection(
-    String collection,
-  ) async {
+  Future<List<DataRecord>> readCollection(String collection) async {
     final tableName = await _ensureTableForRead(collection);
     if (tableName == null) {
       return const [];
@@ -586,18 +574,18 @@ class SqliteDataStorageAdapter
     if (tableName == null) {
       return;
     }
-    final effectiveChunkSize =
-        chunkSize <= 0 ? BaseDataRepository.databaseExportChunkSize : chunkSize;
+    final effectiveChunkSize = chunkSize <= 0
+        ? BaseDataRepository.databaseExportChunkSize
+        : chunkSize;
     var offset = 0;
     while (true) {
-      final rows = await _database.customSelect(
-        'SELECT id, payload, version, created_at, updated_at '
-        'FROM "$tableName" ORDER BY id LIMIT ? OFFSET ?',
-        variables: [
-          effectiveChunkSize,
-          offset,
-        ],
-      ).get();
+      final rows = await _database
+          .customSelect(
+            'SELECT id, payload, version, created_at, updated_at '
+            'FROM "$tableName" ORDER BY id LIMIT ? OFFSET ?',
+            variables: [effectiveChunkSize, offset],
+          )
+          .get();
       if (rows.isEmpty) {
         break;
       }
@@ -610,10 +598,12 @@ class SqliteDataStorageAdapter
   }
 
   Future<bool> _cursorExists(String tableName, String cursor) async {
-    final exists = await _database.customSelect(
-      'SELECT 1 FROM "$tableName" WHERE id = ? LIMIT 1',
-      variables: [cursor],
-    ).getSingleOrNull();
+    final exists = await _database
+        .customSelect(
+          'SELECT 1 FROM "$tableName" WHERE id = ? LIMIT 1',
+          variables: [cursor],
+        )
+        .getSingleOrNull();
     return exists != null;
   }
 
@@ -671,11 +661,13 @@ class SqliteDataStorageAdapter
       if (sortColumn == 'id') {
         values.add(cursor);
       } else {
-        final boundary = await _database.customSelect(
-          'SELECT $sortExpression AS boundary FROM "$tableName" '
-          'WHERE id = ? LIMIT 1',
-          variables: [cursor],
-        ).getSingleOrNull();
+        final boundary = await _database
+            .customSelect(
+              'SELECT $sortExpression AS boundary FROM "$tableName" '
+              'WHERE id = ? LIMIT 1',
+              variables: [cursor],
+            )
+            .getSingleOrNull();
         if (boundary == null) {
           throw RpcDataError.invalidArgument(
             'Cursor $cursor is not valid for ${request.collection}',
@@ -719,8 +711,9 @@ class SqliteDataStorageAdapter
     final rows = await _database
         .customSelect(querySqlString, variables: queryVariables)
         .get();
-    final records =
-        rows.map((row) => _mapRow(request.collection, row)).toList();
+    final records = rows
+        .map((row) => _mapRow(request.collection, row))
+        .toList();
 
     String? nextCursor;
     if (records.length == request.options.limit) {
@@ -780,10 +773,7 @@ class SqliteDataStorageAdapter
     await _ensureFtsSeeded(request.collection, tableName);
     final baseAlias = 'b';
 
-    final ftsArgs = <Object>[
-      request.collection,
-      pattern,
-    ];
+    final ftsArgs = <Object>[request.collection, pattern];
 
     final baseFilterConditions = <String>[];
     final baseFilterValues = <Object>[];
@@ -879,10 +869,7 @@ class SqliteDataStorageAdapter
       'JOIN fts_hits fts ON fts.id = $baseAlias.id '
       '$countWhereClause',
     );
-    final countArgs = <Object>[
-      ...ftsArgs,
-      ...baseFilterValues,
-    ];
+    final countArgs = <Object>[...ftsArgs, ...baseFilterValues];
     _recordStatement(countSql.toString(), countArgs);
     sqlite.Row countRow;
     try {
@@ -918,9 +905,7 @@ class SqliteDataStorageAdapter
     final tableName = await _ensureTableForRead(request.collection);
     if (tableName == null) {
       return AggregateMetricsResponse(
-        metrics: {
-          for (final entry in request.metrics.entries) entry.key: 0,
-        },
+        metrics: {for (final entry in request.metrics.entries) entry.key: 0},
       );
     }
 
@@ -979,16 +964,15 @@ class SqliteDataStorageAdapter
     }
 
     final selectClause = projections.join(', ');
-    final sql = StringBuffer(
-      'SELECT $selectClause FROM "$tableName" b',
-    );
+    final sql = StringBuffer('SELECT $selectClause FROM "$tableName" b');
     if (conditions.isNotEmpty) {
       sql
         ..write(' WHERE ')
         ..write(conditions.join(' AND '));
     }
-    final Iterable<Object> statementArgs =
-        values.isEmpty ? const <Object>[] : values;
+    final Iterable<Object> statementArgs = values.isEmpty
+        ? const <Object>[]
+        : values;
     _recordStatement(sql.toString(), statementArgs);
     final selectable = values.isEmpty
         ? _database.customSelect(sql.toString())
@@ -1034,10 +1018,12 @@ class SqliteDataStorageAdapter
       return writes;
     });
     if (affected == 0) {
-      final row = await _database.customSelect(
-        'SELECT version FROM "$tableName" WHERE id = ? LIMIT 1',
-        variables: [record.id],
-      ).getSingleOrNull();
+      final row = await _database
+          .customSelect(
+            'SELECT version FROM "$tableName" WHERE id = ? LIMIT 1',
+            variables: [record.id],
+          )
+          .getSingleOrNull();
       if (row != null) {
         final existingVersion = row.read<int>('version');
         throw RpcDataError.conflict(
@@ -1048,9 +1034,7 @@ class SqliteDataStorageAdapter
   }
 
   @override
-  Future<void> writeRecords(
-    Iterable<DataRecord> records,
-  ) async {
+  Future<void> writeRecords(Iterable<DataRecord> records) async {
     if (records.isEmpty) {
       return;
     }
@@ -1074,8 +1058,10 @@ class SqliteDataStorageAdapter
         final tableName = tableNames[collection]!;
         final recordsForTable = entry.value;
 
-        final affected =
-            await _upsertRecordsIntoTable(tableName, recordsForTable);
+        final affected = await _upsertRecordsIntoTable(
+          tableName,
+          recordsForTable,
+        );
         await _upsertFtsBatch(collection, tableName, recordsForTable);
 
         if (affected < recordsForTable.length) {
@@ -1098,7 +1084,7 @@ class SqliteDataStorageAdapter
             .get();
         final versions = {
           for (final row in rows)
-            row.read<String>('id'): row.read<int>('version')
+            row.read<String>('id'): row.read<int>('version'),
         };
         for (final record in entry.value) {
           final existingVersion = versions[record.id];
@@ -1130,12 +1116,10 @@ class SqliteDataStorageAdapter
         sql.write(' AND version = ?');
         args.add(expectedVersion);
       }
-      await _database.customStatement(
-        sql.toString(),
-        variables: args,
-      );
-      final changeRow =
-          await _database.customSelect('SELECT changes() AS count').getSingle();
+      await _database.customStatement(sql.toString(), variables: args);
+      final changeRow = await _database
+          .customSelect('SELECT changes() AS count')
+          .getSingle();
       affected = changeRow.read<int>('count');
     });
     if (affected > 0) {
@@ -1145,10 +1129,7 @@ class SqliteDataStorageAdapter
   }
 
   @override
-  Future<int> deleteRecords(
-    String collection,
-    Iterable<String> ids,
-  ) async {
+  Future<int> deleteRecords(String collection, Iterable<String> ids) async {
     if (ids.isEmpty) {
       return 0;
     }
@@ -1166,8 +1147,9 @@ class SqliteDataStorageAdapter
           variables: chunk,
         );
       }
-      final changeRow =
-          await _database.customSelect('SELECT changes() AS count').getSingle();
+      final changeRow = await _database
+          .customSelect('SELECT changes() AS count')
+          .getSingle();
       affected = changeRow.read<int>('count');
     });
     if (affected > 0) {
@@ -1187,9 +1169,7 @@ class SqliteDataStorageAdapter
 
     await _ensureRegistry();
     await _database.transaction(() async {
-      await _database.customStatement(
-        'DROP TABLE IF EXISTS "$tableName"',
-      );
+      await _database.customStatement('DROP TABLE IF EXISTS "$tableName"');
       await _database.customStatement(
         'DELETE FROM "$_collectionRegistryTable" WHERE collection = ?',
         variables: [collection],
@@ -1234,9 +1214,10 @@ class SqliteDataChangeJournal implements DataChangeJournal {
     this._database, {
     bool clearOnOpen = false,
     RpcLogger? logger,
-  })  : _clearOnOpen = clearOnOpen,
-        _logger =
-            (logger ?? RpcLogger('SqliteDataChangeJournal')).child('Replay');
+  }) : _clearOnOpen = clearOnOpen,
+       _logger = (logger ?? RpcLogger('SqliteDataChangeJournal')).child(
+         'Replay',
+       );
 
   final SqliteDataDatabase _database;
   final bool _clearOnOpen;
@@ -1311,8 +1292,9 @@ class SqliteDataChangeJournal implements DataChangeJournal {
 
   DataChangeEvent _mapRow(sqlite.Row row) {
     final typeName = row.read<String>('change_type');
-    final type =
-        DataChangeType.values.firstWhere((value) => value.name == typeName);
+    final type = DataChangeType.values.firstWhere(
+      (value) => value.name == typeName,
+    );
     final payload = row.read<String?>('payload');
     final occurredAtMicros = row.read<int>('occurred_at');
     return DataChangeEvent(
@@ -1373,14 +1355,13 @@ class SqliteDataChangeJournal implements DataChangeJournal {
     int? afterSequence;
     if (afterCursor != null) {
       afterSequence = parseCursor(afterCursor);
-      final exists = await _database.customSelect(
-        'SELECT 1 FROM "$_changeJournalTable" '
-        'WHERE collection = ? AND sequence = ? LIMIT 1',
-        variables: [
-          collection,
-          afterSequence,
-        ],
-      ).getSingleOrNull();
+      final exists = await _database
+          .customSelect(
+            'SELECT 1 FROM "$_changeJournalTable" '
+            'WHERE collection = ? AND sequence = ? LIMIT 1',
+            variables: [collection, afterSequence],
+          )
+          .getSingleOrNull();
       if (exists == null) {
         throw RpcDataError.invalidArgument(
           'Cursor $afterCursor is not known for $collection',
@@ -1388,9 +1369,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
       }
     }
 
-    final variables = <Object?>[
-      collection,
-    ];
+    final variables = <Object?>[collection];
     final query = StringBuffer(
       'SELECT sequence, collection, record_id, change_type, payload, '
       'version, occurred_at FROM "$_changeJournalTable" WHERE collection = ?',
@@ -1427,28 +1406,26 @@ class SqliteDataChangeJournal implements DataChangeJournal {
       await _database.customStatement(
         'DELETE FROM "$_changeJournalTable" '
         'WHERE collection = ? AND occurred_at < ?',
-        variables: [
-          collection,
-          retainAfter.microsecondsSinceEpoch,
-        ],
+        variables: [collection, retainAfter.microsecondsSinceEpoch],
       );
     }
     if (maxEvents != null && maxEvents > 0) {
-      final countRow = await _database.customSelect(
-        'SELECT COUNT(*) AS count FROM "$_changeJournalTable" WHERE collection = ?',
-        variables: [collection],
-      ).getSingle();
+      final countRow = await _database
+          .customSelect(
+            'SELECT COUNT(*) AS count FROM "$_changeJournalTable" WHERE collection = ?',
+            variables: [collection],
+          )
+          .getSingle();
       final count = countRow.read<int>('count');
       if (count > maxEvents) {
-        final thresholdRow = await _database.customSelect(
-          'SELECT sequence FROM "$_changeJournalTable" '
-          'WHERE collection = ? ORDER BY sequence DESC '
-          'LIMIT 1 OFFSET ?',
-          variables: [
-            collection,
-            maxEvents - 1,
-          ],
-        ).getSingleOrNull();
+        final thresholdRow = await _database
+            .customSelect(
+              'SELECT sequence FROM "$_changeJournalTable" '
+              'WHERE collection = ? ORDER BY sequence DESC '
+              'LIMIT 1 OFFSET ?',
+              variables: [collection, maxEvents - 1],
+            )
+            .getSingleOrNull();
         if (thresholdRow != null) {
           final threshold = thresholdRow.read<int>('sequence');
           await _database.customStatement(

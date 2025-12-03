@@ -338,9 +338,9 @@ class DataServiceServer {
     required RpcResponderEndpoint endpoint,
     required DataServiceResponder responder,
     required IDataRepository repository,
-  })  : _endpoint = endpoint,
-        _responder = responder,
-        _repository = repository;
+  }) : _endpoint = endpoint,
+       _responder = responder,
+       _repository = repository;
 
   final RpcResponderEndpoint _endpoint;
   final DataServiceResponder _responder;

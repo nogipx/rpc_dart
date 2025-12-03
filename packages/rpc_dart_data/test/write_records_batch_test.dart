@@ -27,10 +27,7 @@ void main() {
             (record) => DataRecord(
               id: record.id,
               collection: record.collection,
-              payload: {
-                'value': record.payload['value'],
-                'updated': true,
-              },
+              payload: {'value': record.payload['value'], 'updated': true},
               version: record.version + 1,
               createdAt: record.createdAt,
               updatedAt: record.updatedAt.add(const Duration(days: 1)),
@@ -42,9 +39,7 @@ void main() {
 
       final persisted = await storage.readCollection('bulk');
       expect(persisted, hasLength(initialRecords.length));
-      final persistedById = {
-        for (final record in persisted) record.id: record,
-      };
+      final persistedById = {for (final record in persisted) record.id: record};
       for (final update in updates) {
         final stored = persistedById[update.id];
         expect(stored, isNotNull, reason: 'missing record ${update.id}');

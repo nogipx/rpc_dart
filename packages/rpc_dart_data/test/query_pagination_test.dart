@@ -26,7 +26,8 @@ class _ThrowingAdapter implements IDataStorageAdapter {
 
   @override
   Future<ListRecordsResponse> queryCollection(
-      ListRecordsRequest request) async {
+    ListRecordsRequest request,
+  ) async {
     throw UnimplementedError('list');
   }
 
@@ -86,10 +87,7 @@ class _ThrowingAdapter implements IDataStorageAdapter {
     String collection, {
     int chunkSize = BaseDataRepository.databaseExportChunkSize,
   }) {
-    return _delegate.readCollectionChunks(
-      collection,
-      chunkSize: chunkSize,
-    );
+    return _delegate.readCollectionChunks(collection, chunkSize: chunkSize);
   }
 
   @override

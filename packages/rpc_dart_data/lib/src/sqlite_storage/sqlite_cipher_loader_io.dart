@@ -1,61 +1,46 @@
-import 'dart:ffi';
 import 'dart:io';
 
-import 'package:path/path.dart' as p;
-import 'package:sqlite3/open.dart' as sqlite_open;
+import 'package:sqlite3/sqlite3.dart' as sqlite_ffi;
 
-/// Configures sqlite3 to load a SQLCipher-enabled library on supported
-/// platforms (currently macOS and Linux) before any database is opened.
-///
-/// The resolver checks, in order:
-/// 1) [libraryPath] if provided explicitly.
-/// 2) `SQLITE3_LIB_DIR` + `SQLITE3_LIB_NAME` (or `sqlcipher` by default).
-/// 3) Common Homebrew locations on macOS.
-///
-/// If no suitable library is found, the override is not installed.
-void configureSqlCipherDynamicLibrary({String? libraryPath}) {
-  final os = sqlite_open.open.os;
-  if (os != sqlite_open.OperatingSystem.macOS &&
-      os != sqlite_open.OperatingSystem.linux) {
-    return;
-  }
+/// sqlite3 3.x loads native libraries via build hooks. SQLCipher-aware builds
+/// must be provided through `native_assets.yaml` (for example by pointing
+/// sqlite3 at a system-installed `sqlcipher` library). The runtime override
+/// previously done here is no longer supported, so this hook is a no-op kept
+/// for API compatibility.
+void configureSqlCipherDynamicLibrary({String? libraryPath}) {}
 
-  final resolved = libraryPath ?? _fromEnv(os!) ?? _fromCommonLocations(os!);
-  if (resolved == null) {
-    return;
-  }
+/// Whether the current sqlite3 build exposes SQLCipher primitives.
+bool get isSqlCipherAvailable =>
+    sqlite_ffi.sqlite3.usedCompileOption('SQLITE_HAS_CODEC') ||
+    sqlite_ffi.sqlite3.usedCompileOption('HAS_CODEC') ||
+    _hasCipherPragmaSupport();
 
-  sqlite_open.open.overrideFor(
-    os!,
-    () => DynamicLibrary.open(resolved),
-  );
-}
-
-String? _fromEnv(sqlite_open.OperatingSystem os) {
-  final dir = Platform.environment['SQLITE3_LIB_DIR'];
-  if (dir == null || dir.trim().isEmpty) {
-    return null;
-  }
-  final name = (Platform.environment['SQLITE3_LIB_NAME'] ?? 'sqlcipher').trim();
-  if (name.isEmpty) {
-    return null;
-  }
-  final suffix = os == sqlite_open.OperatingSystem.macOS ? 'dylib' : 'so';
-  final candidate = p.join(dir, 'lib$name.$suffix');
-  return File(candidate).existsSync() ? candidate : null;
-}
-
-String? _fromCommonLocations(sqlite_open.OperatingSystem os) {
-  if (os == sqlite_open.OperatingSystem.macOS) {
-    const candidates = [
-      '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib',
-      '/usr/local/opt/sqlcipher/lib/libsqlcipher.dylib',
-    ];
-    for (final path in candidates) {
-      if (File(path).existsSync()) {
-        return path;
-      }
+bool _hasCipherPragmaSupport() {
+  try {
+    const probePath = '/tmp/sqlite_cipher_check.sqlite';
+    final db = sqlite_ffi.sqlite3.open(probePath);
+    try {
+      // Some builds (sqlite3mc) expose cipher details only after selecting a
+      // provider and working on a file-backed database.
+      db.execute("PRAGMA cipher = 'sqlcipher';");
+      final cipherRows = db.select('PRAGMA cipher;');
+      final hasSqlcipherCipher = cipherRows.any(
+        (row) => row.values.any((value) => '$value' == 'sqlcipher'),
+      );
+      db.execute('PRAGMA legacy = 4;');
+      db.execute("PRAGMA key = 'sqlite3mc-probe';");
+      final result = db.select('PRAGMA cipher_version;');
+      final value = result.isNotEmpty
+          ? result.single.values.first?.toString().trim()
+          : null;
+      return hasSqlcipherCipher || (value != null && value.isNotEmpty);
+    } finally {
+      db.close();
+      try {
+        File(probePath).deleteSync();
+      } catch (_) {}
     }
+  } catch (_) {
+    return false;
   }
-  return null;
 }

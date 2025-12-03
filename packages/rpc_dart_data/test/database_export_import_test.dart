@@ -35,7 +35,8 @@ class _TrackingInMemoryAdapter extends InMemoryStorageAdapter {
   Future<List<DataRecord>> readCollection(String collection) {
     if (failOnFullCollectionRead) {
       throw StateError(
-          'readCollection should not be used during streaming export');
+        'readCollection should not be used during streaming export',
+      );
     }
     return super.readCollection(collection);
   }
@@ -89,9 +90,11 @@ class _BackpressureInMemoryAdapter extends InMemoryStorageAdapter {
       return;
     }
     final effectiveChunkSize = max(1, forcedChunkSize);
-    for (var offset = 0;
-        offset < records.length;
-        offset += effectiveChunkSize) {
+    for (
+      var offset = 0;
+      offset < records.length;
+      offset += effectiveChunkSize
+    ) {
       final gate = Completer<void>();
       _gates.add(gate);
       await gate.future;
@@ -205,8 +208,9 @@ void main() {
       await trackingStorage.writeRecords(records);
 
       trackingStorage.failOnFullCollectionRead = true;
-      final export =
-          await repository.exportDatabase(const ExportDatabaseRequest());
+      final export = await repository.exportDatabase(
+        const ExportDatabaseRequest(),
+      );
 
       expect(export.recordCount, recordCount);
       expect(export.payloadStream, isNotNull);
@@ -231,92 +235,94 @@ void main() {
       await repository.dispose();
     });
 
-    test('exportDatabase stream honours back-pressure for large collections',
-        () async {
-      final storage = _BackpressureInMemoryAdapter();
-      final repository = InMemoryDataRepository(storage: storage);
-      final now = DateTime.utc(2024, 1, 1);
+    test(
+      'exportDatabase stream honours back-pressure for large collections',
+      () async {
+        final storage = _BackpressureInMemoryAdapter();
+        final repository = InMemoryDataRepository(storage: storage);
+        final now = DateTime.utc(2024, 1, 1);
 
-      final records = <DataRecord>[];
-      for (var i = 0; i < 2; i++) {
-        records.add(
-          DataRecord(
-            id: 'item-$i',
-            collection: 'controlled',
-            payload: {'value': i},
-            version: 1,
-            createdAt: now.add(Duration(seconds: i)),
-            updatedAt: now.add(Duration(seconds: i)),
-          ),
+        final records = <DataRecord>[];
+        for (var i = 0; i < 2; i++) {
+          records.add(
+            DataRecord(
+              id: 'item-$i',
+              collection: 'controlled',
+              payload: {'value': i},
+              version: 1,
+              createdAt: now.add(Duration(seconds: i)),
+              updatedAt: now.add(Duration(seconds: i)),
+            ),
+          );
+        }
+        await storage.writeRecords(records);
+
+        final export = await repository.exportDatabase(
+          const ExportDatabaseRequest(includePayloadString: false),
         );
-      }
-      await storage.writeRecords(records);
 
-      final export = await repository.exportDatabase(
-        const ExportDatabaseRequest(includePayloadString: false),
-      );
+        expect(export.payload, isEmpty);
+        expect(export.payloadStream, isNotNull);
 
-      expect(export.payload, isEmpty);
-      expect(export.payloadStream, isNotNull);
+        final iterator = export.payloadLines().iterator;
 
-      final iterator = export.payloadLines().iterator;
+        expect(await iterator.moveNext(), isTrue);
+        expect(
+          (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+          'header',
+        );
+        expect(await iterator.moveNext(), isTrue);
+        expect(
+          (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+          'collection',
+        );
 
-      expect(await iterator.moveNext(), isTrue);
-      expect(
-        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
-        'header',
-      );
-      expect(await iterator.moveNext(), isTrue);
-      expect(
-        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
-        'collection',
-      );
+        await Future<void>.delayed(Duration.zero);
+        expect(storage.pendingChunks, equals(1));
 
-      await Future<void>.delayed(Duration.zero);
-      expect(storage.pendingChunks, equals(1));
+        final stalled = iterator.moveNext().timeout(
+          const Duration(milliseconds: 100),
+          onTimeout: () => false,
+        );
+        expect(await stalled, isFalse);
 
-      final stalled = iterator.moveNext().timeout(
-            const Duration(milliseconds: 100),
-            onTimeout: () => false,
-          );
-      expect(await stalled, isFalse);
+        storage.allowNextChunk();
+        expect(await iterator.moveNext(), isTrue);
+        expect(
+          (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+          'record',
+        );
 
-      storage.allowNextChunk();
-      expect(await iterator.moveNext(), isTrue);
-      expect(
-        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
-        'record',
-      );
+        await Future<void>.delayed(Duration.zero);
+        expect(storage.pendingChunks, equals(1));
+        final stalledAgain = iterator.moveNext().timeout(
+          const Duration(milliseconds: 100),
+          onTimeout: () => false,
+        );
+        expect(await stalledAgain, isFalse);
 
-      await Future<void>.delayed(Duration.zero);
-      expect(storage.pendingChunks, equals(1));
-      final stalledAgain = iterator.moveNext().timeout(
-            const Duration(milliseconds: 100),
-            onTimeout: () => false,
-          );
-      expect(await stalledAgain, isFalse);
+        storage.allowNextChunk();
+        expect(await iterator.moveNext(), isTrue);
+        expect(
+          (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+          'record',
+        );
 
-      storage.allowNextChunk();
-      expect(await iterator.moveNext(), isTrue);
-      expect(
-        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
-        'record',
-      );
+        expect(await iterator.moveNext(), isTrue);
+        expect(
+          (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+          'collectionEnd',
+        );
+        expect(await iterator.moveNext(), isTrue);
+        expect(
+          (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
+          'footer',
+        );
+        expect(await iterator.moveNext(), isFalse);
 
-      expect(await iterator.moveNext(), isTrue);
-      expect(
-        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
-        'collectionEnd',
-      );
-      expect(await iterator.moveNext(), isTrue);
-      expect(
-        (jsonDecode(iterator.current) as Map<String, dynamic>)['type'],
-        'footer',
-      );
-      expect(await iterator.moveNext(), isFalse);
-
-      await repository.dispose();
-    });
+        await repository.dispose();
+      },
+    );
 
     test('streaming import writes data in bounded batches', () async {
       final sourceStorage = _TrackingInMemoryAdapter();
@@ -355,16 +361,14 @@ void main() {
         await sourceStorage.writeRecords(entry.value);
       }
 
-      final export =
-          await sourceRepo.exportDatabase(const ExportDatabaseRequest());
+      final export = await sourceRepo.exportDatabase(
+        const ExportDatabaseRequest(),
+      );
 
       final streamingStorage = _TrackingInMemoryAdapter();
       final streamingRepo = InMemoryDataRepository(storage: streamingStorage);
       await streamingRepo.importDatabase(
-        ImportDatabaseRequest(
-          payload: export.payload,
-          replaceExisting: true,
-        ),
+        ImportDatabaseRequest(payload: export.payload, replaceExisting: true),
       );
 
       expect(streamingStorage.writeBatchSizes, isNotEmpty);
@@ -378,17 +382,16 @@ void main() {
       final legacyRepo = InMemoryDataRepository(storage: legacyStorage);
       final legacyPayload = jsonEncode({
         'formatVersion': '1.0.0',
-        'collections': dataset.map((key, value) => MapEntry(
-              key,
-              value.map((record) => record.toJson()).toList(growable: false),
-            )),
+        'collections': dataset.map(
+          (key, value) => MapEntry(
+            key,
+            value.map((record) => record.toJson()).toList(growable: false),
+          ),
+        ),
       });
 
       await legacyRepo.importDatabase(
-        ImportDatabaseRequest(
-          payload: legacyPayload,
-          replaceExisting: true,
-        ),
+        ImportDatabaseRequest(payload: legacyPayload, replaceExisting: true),
       );
 
       expect(legacyStorage.writeBatchSizes, isNotEmpty);
@@ -400,89 +403,86 @@ void main() {
       await legacyRepo.dispose();
     });
 
-    test('streaming import handles large dumps without linear memory growth',
-        () async {
-      final trackingStorage = _TrackingInMemoryAdapter();
-      final repository = InMemoryDataRepository(storage: trackingStorage);
-      final collections = 3;
-      final recordsPerCollection =
-          BaseDataRepository.databaseImportBatchSize * 8;
-      final expectedFlushesPerCollection =
-          (recordsPerCollection / BaseDataRepository.databaseImportBatchSize)
-              .ceil();
-      final now = DateTime.utc(2024, 1, 1);
-      final buffer = StringBuffer();
+    test(
+      'streaming import handles large dumps without linear memory growth',
+      () async {
+        final trackingStorage = _TrackingInMemoryAdapter();
+        final repository = InMemoryDataRepository(storage: trackingStorage);
+        final collections = 3;
+        final recordsPerCollection =
+            BaseDataRepository.databaseImportBatchSize * 8;
+        final expectedFlushesPerCollection =
+            (recordsPerCollection / BaseDataRepository.databaseImportBatchSize)
+                .ceil();
+        final now = DateTime.utc(2024, 1, 1);
+        final buffer = StringBuffer();
 
-      buffer.writeln(
-        jsonEncode({
-          'type': 'header',
-          'formatVersion': '2.0.0',
-        }),
-      );
+        buffer.writeln(
+          jsonEncode({'type': 'header', 'formatVersion': '2.0.0'}),
+        );
 
-      var totalRecords = 0;
-      for (var collectionIndex = 0;
+        var totalRecords = 0;
+        for (
+          var collectionIndex = 0;
           collectionIndex < collections;
-          collectionIndex++) {
-        final collectionName = 'collection-$collectionIndex';
+          collectionIndex++
+        ) {
+          final collectionName = 'collection-$collectionIndex';
+          buffer.writeln(
+            jsonEncode({'type': 'collection', 'name': collectionName}),
+          );
+          for (var i = 0; i < recordsPerCollection; i++) {
+            final record = DataRecord(
+              id: 'id-$collectionIndex-$i',
+              collection: collectionName,
+              payload: {'value': i},
+              version: 1,
+              createdAt: now.add(Duration(milliseconds: totalRecords)),
+              updatedAt: now.add(Duration(milliseconds: totalRecords)),
+            );
+            buffer.writeln(
+              jsonEncode({'type': 'record', 'data': record.toJson()}),
+            );
+            totalRecords += 1;
+          }
+          buffer.writeln(jsonEncode({'type': 'collectionEnd'}));
+        }
+
         buffer.writeln(
           jsonEncode({
-            'type': 'collection',
-            'name': collectionName,
+            'type': 'footer',
+            'collectionCount': collections,
+            'recordCount': totalRecords,
           }),
         );
-        for (var i = 0; i < recordsPerCollection; i++) {
-          final record = DataRecord(
-            id: 'id-$collectionIndex-$i',
-            collection: collectionName,
-            payload: {'value': i},
-            version: 1,
-            createdAt: now.add(Duration(milliseconds: totalRecords)),
-            updatedAt: now.add(Duration(milliseconds: totalRecords)),
-          );
-          buffer.writeln(
-            jsonEncode({
-              'type': 'record',
-              'data': record.toJson(),
-            }),
-          );
-          totalRecords += 1;
-        }
-        buffer.writeln(jsonEncode({'type': 'collectionEnd'}));
-      }
 
-      buffer.writeln(
-        jsonEncode({
-          'type': 'footer',
-          'collectionCount': collections,
-          'recordCount': totalRecords,
-        }),
-      );
+        final response = await repository.importDatabase(
+          ImportDatabaseRequest(
+            payload: buffer.toString(),
+            replaceExisting: true,
+          ),
+        );
 
-      final response = await repository.importDatabase(
-        ImportDatabaseRequest(
-          payload: buffer.toString(),
-          replaceExisting: true,
-        ),
-      );
+        expect(response.collectionCount, collections);
+        expect(response.recordCount, totalRecords);
 
-      expect(response.collectionCount, collections);
-      expect(response.recordCount, totalRecords);
+        expect(trackingStorage.writeBatchSizes, isNotEmpty);
+        expect(
+          trackingStorage.writeBatchSizes.reduce(max),
+          lessThanOrEqualTo(BaseDataRepository.databaseImportBatchSize),
+        );
+        expect(
+          trackingStorage.writeBatchSizes.length,
+          greaterThanOrEqualTo(collections * expectedFlushesPerCollection),
+        );
+        final totalWritten = trackingStorage.writeBatchSizes.fold<int>(
+          0,
+          (sum, batch) => sum + batch,
+        );
+        expect(totalWritten, totalRecords);
 
-      expect(trackingStorage.writeBatchSizes, isNotEmpty);
-      expect(
-        trackingStorage.writeBatchSizes.reduce(max),
-        lessThanOrEqualTo(BaseDataRepository.databaseImportBatchSize),
-      );
-      expect(
-        trackingStorage.writeBatchSizes.length,
-        greaterThanOrEqualTo(collections * expectedFlushesPerCollection),
-      );
-      final totalWritten = trackingStorage.writeBatchSizes
-          .fold<int>(0, (sum, batch) => sum + batch);
-      expect(totalWritten, totalRecords);
-
-      await repository.dispose();
-    });
+        await repository.dispose();
+      },
+    );
   });
 }

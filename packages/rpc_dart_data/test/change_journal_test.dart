@@ -79,8 +79,9 @@ void main() {
       final remaining = await journal.replayCollection('jobs');
       expect(remaining, hasLength(2));
       expect(
-        remaining.first.occurredAt
-            .compareTo(now.add(const Duration(minutes: 2))),
+        remaining.first.occurredAt.compareTo(
+          now.add(const Duration(minutes: 2)),
+        ),
         greaterThanOrEqualTo(0),
       );
     });

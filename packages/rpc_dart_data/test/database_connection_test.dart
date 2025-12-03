@@ -8,9 +8,6 @@ void main() {
     final connection = DatabaseConnection(database);
 
     connection.close();
-    expect(
-      () => database.select('SELECT 1;'),
-      throwsStateError,
-    );
+    expect(() => database.select('SELECT 1;'), throwsStateError);
   });
 }

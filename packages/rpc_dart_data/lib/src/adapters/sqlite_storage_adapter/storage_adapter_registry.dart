@@ -46,13 +46,13 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
 
   Future<String?> _lookupTable(String collection) async {
     await _ensureRegistry();
-    final row = await _database.customSelect(
-      'SELECT table_name FROM "$_collectionRegistryTable" '
-      'WHERE collection = ? LIMIT 1',
-      variables: [
-        collection,
-      ],
-    ).getSingleOrNull();
+    final row = await _database
+        .customSelect(
+          'SELECT table_name FROM "$_collectionRegistryTable" '
+          'WHERE collection = ? LIMIT 1',
+          variables: [collection],
+        )
+        .getSingleOrNull();
     if (row == null) {
       return null;
     }
@@ -65,13 +65,12 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
     if (_knownTables.contains(tableName)) {
       return true;
     }
-    final row = await _database.customSelect(
-      'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-      variables: [
-        'table',
-        tableName,
-      ],
-    ).getSingleOrNull();
+    final row = await _database
+        .customSelect(
+          'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+          variables: ['table', tableName],
+        )
+        .getSingleOrNull();
     final exists = row != null;
     if (exists) {
       _knownTables.add(tableName);
@@ -127,9 +126,9 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
   String _autoIndexName(String tableName, String path) {
     final normalizedTable = tableName.toLowerCase();
     final normalizedPath = _normalizeIndexSegment(path);
-    final hash = _stableHash('$normalizedTable::$path')
-        .toRadixString(16)
-        .padLeft(16, '0');
+    final hash = _stableHash(
+      '$normalizedTable::$path',
+    ).toRadixString(16).padLeft(16, '0');
     var base = '${normalizedTable}_idx_$normalizedPath';
     if (base.length > 48) {
       base = base.substring(0, 48);
@@ -190,12 +189,14 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
       return cached;
     }
     await _ensureIndexRegistry();
-    final rows = await _database.customSelect(
-      'SELECT path, index_name, expression '
-      'FROM "$_collectionIndexRegistryTable" WHERE collection = ? '
-      'ORDER BY path',
-      variables: [collection],
-    ).get();
+    final rows = await _database
+        .customSelect(
+          'SELECT path, index_name, expression '
+          'FROM "$_collectionIndexRegistryTable" WHERE collection = ? '
+          'ORDER BY path',
+          variables: [collection],
+        )
+        .get();
     final indexes = rows
         .map(
           (row) => _CollectionIndexMetadata(
@@ -214,13 +215,12 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
     if (_knownIndexNames.contains(indexName)) {
       return true;
     }
-    final row = await _database.customSelect(
-      'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-      variables: [
-        'index',
-        indexName,
-      ],
-    ).getSingleOrNull();
+    final row = await _database
+        .customSelect(
+          'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+          variables: ['index', indexName],
+        )
+        .getSingleOrNull();
     final exists = row != null;
     if (exists) {
       _knownIndexNames.add(indexName);
@@ -323,10 +323,12 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
       final suffix = attempt == 0 ? '' : '_$attempt';
       final candidate = 'c_$normalizedCollection$suffix';
 
-      final collision = await _database.customSelect(
-        'SELECT 1 FROM "$_collectionRegistryTable" WHERE table_name = ? LIMIT 1',
-        variables: [candidate],
-      ).getSingleOrNull();
+      final collision = await _database
+          .customSelect(
+            'SELECT 1 FROM "$_collectionRegistryTable" WHERE table_name = ? LIMIT 1',
+            variables: [candidate],
+          )
+          .getSingleOrNull();
       if (collision == null && !await _tableExists(candidate)) {
         await _database.transaction(() async {
           await _database.customStatement(

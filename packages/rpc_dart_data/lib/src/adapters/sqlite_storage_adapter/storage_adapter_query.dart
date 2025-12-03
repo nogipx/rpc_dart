@@ -16,10 +16,7 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
     }
   }
 
-  String _qualifiedColumn(
-    String column, {
-    String? tableAlias,
-  }) {
+  String _qualifiedColumn(String column, {String? tableAlias}) {
     if (tableAlias == null || tableAlias.isEmpty) {
       return '"$column"';
     }
@@ -45,8 +42,9 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
 
   String _jsonPathLiteral(String field) {
     final normalized = _normalizeJsonFieldName(field);
-    final segments =
-        normalized.split('.').where((segment) => segment.isNotEmpty);
+    final segments = normalized
+        .split('.')
+        .where((segment) => segment.isNotEmpty);
     final buffer = StringBuffer(r'$');
     for (final segment in segments) {
       final escaped = segment.replaceAll('"', r'\"');
@@ -58,19 +56,13 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
     return "'${buffer.toString()}'";
   }
 
-  String _jsonExtractExpression(
-    String field, {
-    String? tableAlias,
-  }) {
+  String _jsonExtractExpression(String field, {String? tableAlias}) {
     final source = _payloadColumn(tableAlias: tableAlias);
     final path = _jsonPathLiteral(field);
     return 'json_extract($source, $path)';
   }
 
-  String? _fieldExpression(
-    String field, {
-    String? tableAlias,
-  }) {
+  String? _fieldExpression(String field, {String? tableAlias}) {
     final normalizedField = _normalizeJsonFieldName(field);
     final column = _columnForField(field) ?? _columnForField(normalizedField);
     if (column != null) {
@@ -176,11 +168,7 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
       }
       final constraint = entry.value;
       if (constraint.min != null) {
-        final min = _normalizeValue(
-          entry.key,
-          constraint.min,
-          forRange: true,
-        );
+        final min = _normalizeValue(entry.key, constraint.min, forRange: true);
         if (min == null) {
           return false;
         }
@@ -189,11 +177,7 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
         values.add(min);
       }
       if (constraint.max != null) {
-        final max = _normalizeValue(
-          entry.key,
-          constraint.max,
-          forRange: true,
-        );
+        final max = _normalizeValue(entry.key, constraint.max, forRange: true);
         if (max == null) {
           return false;
         }
@@ -225,20 +209,10 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
         values.add('%$normalized%');
       }
     }
-    if (!_applyEquals(
-      filter,
-      conditions,
-      values,
-      tableAlias: tableAlias,
-    )) {
+    if (!_applyEquals(filter, conditions, values, tableAlias: tableAlias)) {
       return false;
     }
-    if (!_applyRanges(
-      filter,
-      conditions,
-      values,
-      tableAlias: tableAlias,
-    )) {
+    if (!_applyRanges(filter, conditions, values, tableAlias: tableAlias)) {
       return false;
     }
     return true;
@@ -264,8 +238,9 @@ extension _QueryHelpers on SqliteDataStorageAdapter {
     if (tokens.isEmpty) {
       return null;
     }
-    final wildcardTokens =
-        tokens.map((token) => '${token.replaceAll('"', '""')}*').join(' ');
+    final wildcardTokens = tokens
+        .map((token) => '${token.replaceAll('"', '""')}*')
+        .join(' ');
     return wildcardTokens;
   }
 
