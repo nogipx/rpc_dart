@@ -9,7 +9,8 @@ It gives you a transport-agnostic contract, ready-to-use storage adapters, and u
 - **Search & aggregations** (`search`, `aggregate`) delegated to the storage adapter, including backend pagination.
 - **Streaming snapshots**: export/import the full database as NDJSON, stream it through `payloadStream`, or set `includePayloadString: false` to skip building large strings.
 - **Change streams & offline sync**: `watchChanges` with cursors, bidirectional `syncChanges`, and `OfflineCommandQueue` for durable command queues.
-- **SQLite adapter** with SQLCipher support (auto-loads `libsqlcipher` when a key is provided, uses `sqlite3mc.wasm` on web) and a `SqliteSetupHook` so you can register custom pragmas before the database is exposed to your code.
+- **SQLite adapter** with SQLCipher support out-of-the-box via SQLite3MultipleCiphers (`hooks.user_defines.sqlite3.source: sqlite3mc`), no system `libsqlcipher` needed; web uses `sqlite3mc.wasm`. `SqliteSetupHook` lets you register custom pragmas before the database is exposed to your code.
+  - Pass a `SqlCipherKey` to enable encryption; the runtime fails fast if cipher pragmas are missing.
 - **Ready-made environments** (`DataServiceFactory.inMemory`) for tests, demos, and local prototyping.
 - **Collection discovery**: RPC `listCollections()` queries the storage adapter for the current list of collection names so clients can introspect available datasets without enumerating all records.
 

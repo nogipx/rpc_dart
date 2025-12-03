@@ -1,3 +1,10 @@
+## 3.0.0
+
+- Breaking: upgraded to `sqlite3` 3.x, which loads native binaries via hooks/native assets; the old `DynamicLibrary` override path is gone.
+- Encryption: SQLCipher works out of the box via SQLite3MultipleCiphers (`hooks.user_defines.sqlite3.source: sqlite3mc`), no system `libsqlcipher` required; web uses `sqlite3mc.wasm`.
+- API: replaced `dispose()` with `close()` on sqlite objects per sqlite3 3.x requirements.
+- SQLCipher helper now sets SQLCipher compatibility pragmas (`cipher='sqlcipher'`, `legacy=4`) before applying the key and detects support in sqlite3mc builds.
+
 ## 2.2.1
 
 - Web: fixed dart2js/wasm build failures by parsing 64-bit FNV constants as `BigInt`, keeping stable index-name hashes without exceeding JS number precision.

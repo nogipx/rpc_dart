@@ -143,7 +143,10 @@ void main() {
         updatedAt: now,
       );
 
-      final adapter1 = await SqliteDataStorageAdapter.file(dbFile);
+      final connection1 = await openFileDb(
+        options: SqliteConnectionOptions(nativePath: dbFile.path),
+      );
+      final adapter1 = SqliteDataStorageAdapter.connection(connection1);
       try {
         await adapter1.writeRecord(record);
 
@@ -176,7 +179,10 @@ void main() {
         await adapter1.dispose();
       }
 
-      final adapter2 = await SqliteDataStorageAdapter.file(dbFile);
+      final connection2 = await openFileDb(
+        options: SqliteConnectionOptions(nativePath: dbFile.path),
+      );
+      final adapter2 = SqliteDataStorageAdapter.connection(connection2);
       try {
         final beforeEnsure = await adapter2.database
             .customSelect(

@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:sqlite3/common.dart' as sqlite;
 
-import '../../sqlite_storage/sqlite_cipher_loader.dart';
 import '../../sqlite_storage/sqlite_loader.dart' as sqlite_loader;
 
 part 'storage_adapter_fts.dart';
@@ -54,19 +52,6 @@ class SqliteDataStorageAdapter
     );
   }
 
-  /// Create an adapter backed by the provided sqlite3 [database].
-  factory SqliteDataStorageAdapter.fromDatabase(
-    sqlite.CommonDatabase database, {
-    bool isInMemory = false,
-    SqlStatementObserver? statementObserver,
-  }) {
-    return SqliteDataStorageAdapter._(
-      SqliteDataDatabase(database),
-      isInMemory,
-      statementObserver: statementObserver,
-    );
-  }
-
   /// Create an adapter backed by an in-memory SQLite database.
   ///
   /// When [statementObserver] is provided, every query executed during tests is
@@ -90,39 +75,6 @@ class SqliteDataStorageAdapter
       return SqliteDataStorageAdapter._(
         SqliteDataDatabase(database),
         true,
-        statementObserver: statementObserver,
-      );
-    } catch (_) {
-      database.close();
-      rethrow;
-    }
-  }
-
-  /// Create an adapter backed by a file on disk.
-  static Future<SqliteDataStorageAdapter> file(
-    File file, {
-    bool logStatements = false,
-    SqlCipherKey? sqlCipherKey,
-    SqliteSetupHook? sqliteSetup,
-    SqlStatementObserver? statementObserver,
-  }) async {
-    file.parent.createSync(recursive: true);
-    if (logStatements) {
-      // Logging is not available with the sqlite3 executor yet.
-    }
-    if (sqlCipherKey != null) {
-      configureSqlCipherDynamicLibrary();
-    }
-    final database = sqlite_loader.openFile(file.path);
-    try {
-      await _initializeDatabase(
-        database,
-        sqlCipherKey: sqlCipherKey,
-        sqliteSetup: sqliteSetup,
-      );
-      return SqliteDataStorageAdapter._(
-        SqliteDataDatabase(database),
-        false,
         statementObserver: statementObserver,
       );
     } catch (_) {

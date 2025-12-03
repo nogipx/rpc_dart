@@ -11,8 +11,15 @@ void main() {
   );
   final skip = false;
 
+  Future<SqliteDataStorageAdapter> openAdapter() async {
+    final connection = await openFileDb(
+      options: SqliteConnectionOptions(nativePath: dbFile.path),
+    );
+    return SqliteDataStorageAdapter.connection(connection);
+  }
+
   Future<void> resetDatabase() async {
-    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final storage = await openAdapter();
     try {
       final tables = await storage.database
           .customSelect(
@@ -48,7 +55,7 @@ void main() {
       RpcContext.withHeaders({'authorization': 'Bearer test-token'});
 
   test('SQLite storage adapter supports CRUD lifecycle', skip: skip, () async {
-    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final storage = await openAdapter();
     final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
@@ -110,7 +117,7 @@ void main() {
       ({InMemoryDataServiceEnvironment env, SqliteDataRepository repository})
     >
     openEnv() async {
-      final storage = await SqliteDataStorageAdapter.file(dbFile);
+      final storage = await openAdapter();
       final repository = SqliteDataRepository(storage: storage);
       final env = await DataServiceFactory.inMemory(repository: repository);
       return (env: env, repository: repository);
@@ -149,7 +156,7 @@ void main() {
   });
 
   test('creates isolated tables per collection on demand', skip: skip, () async {
-    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final storage = await openAdapter();
     final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
@@ -203,7 +210,7 @@ void main() {
         ({InMemoryDataServiceEnvironment env, SqliteDataRepository repository})
       >
       startSession(String name) async {
-        final storage = await SqliteDataStorageAdapter.file(dbFile);
+        final storage = await openAdapter();
         final repository = SqliteDataRepository(storage: storage);
         final env = await DataServiceFactory.inMemory(
           repository: repository,
@@ -369,7 +376,7 @@ void main() {
   );
 
   test('bulk upsert preserves provided record metadata', () async {
-    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final storage = await openAdapter();
     final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
@@ -441,7 +448,7 @@ void main() {
   });
 
   test('bulk upsert processes multiple identifiers per request', () async {
-    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final storage = await openAdapter();
     final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
@@ -521,7 +528,7 @@ void main() {
   });
 
   test('bulk delete removes all provided identifiers', () async {
-    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final storage = await openAdapter();
     final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
@@ -553,7 +560,7 @@ void main() {
   });
 
   test('deleteCollection drops tables and registry entries', () async {
-    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final storage = await openAdapter();
     final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
@@ -626,7 +633,7 @@ void main() {
   });
 
   test('search respects cursor-based pagination', () async {
-    final storage = await SqliteDataStorageAdapter.file(dbFile);
+    final storage = await openAdapter();
     final repository = SqliteDataRepository(storage: storage);
     final env = await DataServiceFactory.inMemory(repository: repository);
     addTearDown(() async => repository.storage.dispose());
