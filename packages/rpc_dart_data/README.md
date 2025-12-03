@@ -176,22 +176,5 @@ Adapters participate in streaming export/import by overriding `readCollectionChu
   - You can still register extra PRAGMA via `SqliteSetupHook` for fine-tuning.
 - Stores `watch()` / `sync()` events in a durable journal, so cursor-based clients recover after restarts.
 
-## Testing
-Smoke tests are located in `test/data_service_facade_test.dart`. Run the whole suite with:
-```bash
-dart test --concurrency=1 -r compact
-```
-
-## Examples
-- `example/quick_start.dart`
-- `example/offline_sync.dart`
-- `example/extended_demo.dart`
-
-## Production checklist
-- Schedule regular backups using `exportDatabase`; periodically restore them into a staging environment with `importDatabase`.
-- Restrict RPC access through a reverse proxy with authentication and rate limiting.
-- Monitor the SQLite database and change-journal size (e.g., via `sqlite3` CLI or metrics collectors).
-- Keep an eye on the [CHANGELOG](CHANGELOG.md) for breaking changes and new capabilities.
-
 ## License
 [MIT](LICENSE)

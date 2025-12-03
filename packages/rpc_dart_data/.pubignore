@@ -14,13 +14,10 @@ LICENSES/
 bin/
 build/
 .idea/
-**/examples
 packages/
-example/*
-!example/example.dart
 benchmark/
 benchmark_results/
 lib/diagnostics/
 lib/diagnostics.dart
 logo/logo.svg
-*.sqlite
+*.sqlite*

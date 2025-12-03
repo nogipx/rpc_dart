@@ -145,7 +145,10 @@ abstract interface class IDataService {
   /// Exports the entire database.
   ///
   /// Can be heavy and may be disabled by policy.
-  Future<ExportDatabaseResponse> exportDatabase({RpcContext? context});
+  Future<ExportDatabaseResponse> exportDatabase({
+    bool includePayloadString = false,
+    RpcContext? context,
+  });
 
   /// Imports the database from a serialized dump.
   ///

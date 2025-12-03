@@ -195,9 +195,12 @@ class DataServiceClient implements IDataService {
   }
 
   @override
-  Future<ExportDatabaseResponse> exportDatabase({RpcContext? context}) {
+  Future<ExportDatabaseResponse> exportDatabase({
+    bool includePayloadString = false,
+    RpcContext? context,
+  }) {
     return _caller.exportDatabase(
-      const ExportDatabaseRequest(),
+      ExportDatabaseRequest(includePayloadString: includePayloadString),
       context: context,
     );
   }
