@@ -1,3 +1,11 @@
+## 3.1.0
+
+- Schema validation: enforced on create/update/patch/bulk/import (including RPC); per-collection policy flags with defaults, nested object/array support, detailed validation errors; `skipValidation` remains admin-only.
+- Schema registry: SQLite tables for active/history schemas, policy, migration checkpoints/logs/errors; export/import includes schemas and validates on import.
+- Migrations: server-side runner with checkpoints/logging, index/FTS rebuild after migration, fail-fast vs collect errors (errors block activation). Migrations are now bound to a specific collection (`MigrationDefinition.collection`), and a single `SchemaValidationEngine` is shared in `SqliteDataRepository`.
+- RPC surface trimmed: migration RPC methods removed from public client; list/get/setPolicy remain for diagnostics, migrations executed server-side via repository/runner helpers.
+- Examples/tests updated to use `MigrationRunnerHelper` and schema validation over RPC; added patch validation coverage and nested schema tests.
+
 ## 3.0.0
 
 - Breaking: upgraded to `sqlite3` 3.x, which loads native binaries via hooks/native assets; the old `DynamicLibrary` override path is gone.

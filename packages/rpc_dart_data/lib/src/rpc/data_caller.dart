@@ -118,6 +118,42 @@ class DataServiceCaller extends RpcCallerContract
     );
   }
 
+  Future<ListSchemasResponse> listSchemas({RpcContext? context}) {
+    return callUnary(
+      methodName: IDataServiceContract.listSchemas,
+      request: const ListSchemasRequest(),
+      requestCodec: listSchemasRequestCodec,
+      responseCodec: listSchemasResponseCodec,
+      context: context,
+    );
+  }
+
+  Future<GetSchemaResponse> getSchema(
+    GetSchemaRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary(
+      methodName: IDataServiceContract.getSchema,
+      request: request,
+      requestCodec: getSchemaRequestCodec,
+      responseCodec: getSchemaResponseCodec,
+      context: context,
+    );
+  }
+
+  Future<SetSchemaPolicyResponse> setSchemaPolicy(
+    SetSchemaPolicyRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary(
+      methodName: IDataServiceContract.setSchemaPolicy,
+      request: request,
+      requestCodec: setSchemaPolicyRequestCodec,
+      responseCodec: setSchemaPolicyResponseCodec,
+      context: context,
+    );
+  }
+
   Future<BulkUpsertResponse> bulkUpsert(
     Stream<DataRecord> records, {
     RpcContext? context,

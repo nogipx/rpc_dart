@@ -18,6 +18,7 @@ extension _FtsSupport on SqliteDataStorageAdapter {
     if (_ftsSeededCollections.contains(collection)) {
       return;
     }
+    // Used for initial seed and for rebuilds after migrations.
     final exists = await _database
         .customSelect(
           'SELECT 1 FROM "$_ftsTableName" WHERE collection = ? LIMIT 1',

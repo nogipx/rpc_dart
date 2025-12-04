@@ -21,3 +21,4 @@ lib/diagnostics/
 lib/diagnostics.dart
 logo/logo.svg
 *.sqlite*
+doc/

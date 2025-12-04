@@ -43,4 +43,16 @@ abstract interface class IDataRepository {
   Stream<SyncChangeResponse> sync(Stream<SyncChangeRequest> requests);
 
   Future<void> dispose();
+
+  Future<ListSchemasResponse> listSchemas();
+
+  Future<GetSchemaResponse> getSchema(GetSchemaRequest request);
+
+  Future<SetSchemaPolicyResponse> setSchemaPolicy(
+    SetSchemaPolicyRequest request,
+  );
+
+  Future<StartMigrationResponse> startMigration(StartMigrationRequest request);
+
+  Future<MigrationStatusResponse> getMigrationStatus(String collection);
 }

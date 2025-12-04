@@ -332,6 +332,39 @@ class DataServiceClient implements IDataService {
   }
 
   @override
+  Future<ListSchemasResponse> listSchemas({RpcContext? context}) {
+    return _caller.listSchemas(context: context);
+  }
+
+  @override
+  Future<GetSchemaResponse> getSchema({
+    required String collection,
+    RpcContext? context,
+  }) {
+    return _caller.getSchema(
+      GetSchemaRequest(collection: collection),
+      context: context,
+    );
+  }
+
+  @override
+  Future<SetSchemaPolicyResponse> setSchemaPolicy({
+    required String collection,
+    required bool enabled,
+    required bool requireValidation,
+    RpcContext? context,
+  }) {
+    return _caller.setSchemaPolicy(
+      SetSchemaPolicyRequest(
+        collection: collection,
+        enabled: enabled,
+        requireValidation: requireValidation,
+      ),
+      context: context,
+    );
+  }
+
+  @override
   Future<void> close() => _endpoint.close();
 }
 

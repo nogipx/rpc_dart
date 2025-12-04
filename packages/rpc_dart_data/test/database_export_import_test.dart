@@ -485,4 +485,39 @@ void main() {
       },
     );
   });
+
+  test('export includes schemas when present', () async {
+    final repo = SqliteDataRepository(
+      storage: await SqliteDataStorageAdapter.memory(),
+    );
+    final schemaRegistry = (repo.storage).schemaRegistry;
+    await schemaRegistry.upsertSchema(
+      collection: 'notes',
+      version: 1,
+      schema: const {
+        'type': 'object',
+        'required': ['title'],
+        'properties': {
+          'title': {'type': 'string'},
+        },
+      },
+      policy: const CollectionSchemaPolicy(
+        enabled: true,
+        requireValidation: true,
+      ),
+    );
+    await _seedSampleData(repo);
+
+    final exportResponse = await repo.exportDatabase(
+      const ExportDatabaseRequest(),
+    );
+    final lines = const LineSplitter().convert(exportResponse.payload);
+    expect(lines.length, greaterThan(2));
+    final schemaLine = jsonDecode(lines[1]) as Map<String, dynamic>;
+    expect(schemaLine['type'], 'schema');
+    expect(schemaLine['collection'], 'notes');
+    expect(schemaLine['version'], 1);
+    expect((schemaLine['schema'] as Map)['properties'], contains('title'));
+    await repo.dispose();
+  });
 }

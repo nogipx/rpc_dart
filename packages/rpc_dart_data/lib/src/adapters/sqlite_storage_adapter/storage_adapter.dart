@@ -10,6 +10,7 @@ import '../../sqlite_storage/sqlite_loader.dart' as sqlite_loader;
 part 'storage_adapter_fts.dart';
 part 'storage_adapter_query.dart';
 part 'storage_adapter_registry.dart';
+part 'storage_adapter_schema.dart';
 
 /// Callback invoked whenever the adapter executes a SQL statement.
 ///
@@ -27,6 +28,16 @@ const String _collectionRegistryTable =
     '${_systemCollectionPrefix}collection_registry';
 const String _collectionIndexRegistryTable =
     '${_systemCollectionPrefix}collection_index_registry';
+const String _collectionSchemaTable =
+    '${_systemCollectionPrefix}collection_schemas';
+const String _collectionSchemaHistoryTable =
+    '${_systemCollectionPrefix}collection_schema_history';
+const String _collectionMigrationCheckpointTable =
+    '${_systemCollectionPrefix}collection_migration_checkpoint';
+const String _collectionMigrationLogTable =
+    '${_systemCollectionPrefix}collection_migration_log';
+const String _collectionMigrationErrorsTable =
+    '${_systemCollectionPrefix}collection_migration_errors';
 const String _changeJournalTable = '${_systemCollectionPrefix}change_journal';
 const String _ftsTableName = '${_systemCollectionPrefix}global_fts';
 
@@ -115,8 +126,25 @@ class SqliteDataStorageAdapter
   final Map<String, List<_CollectionIndexMetadata>> _cachedCollectionIndexes =
       <String, List<_CollectionIndexMetadata>>{};
   final Set<String> _knownIndexNames = <String>{};
+  SqliteCollectionSchemaRegistry? _schemaRegistry;
 
   SqliteDataDatabase get database => _database;
+
+  SqliteCollectionSchemaRegistry get schemaRegistry =>
+      _schemaRegistry ??= SqliteCollectionSchemaRegistry(
+        _database,
+        defaultPolicy: const CollectionSchemaPolicy(),
+      );
+
+  /// Rebuilds collection indexes and FTS data. Intended for migrations.
+  Future<void> rebuildCollectionStructures(String collection) async {
+    final table = await _lookupTable(collection);
+    if (table == null) {
+      return;
+    }
+    await _ensureCollectionIndexes(collection, table);
+    await _ensureFtsSeeded(collection, table);
+  }
 
   void _recordStatement(String sql, Iterable<Object?> arguments) {
     final observer = _statementObserver;
@@ -133,6 +161,7 @@ class SqliteDataStorageAdapter
   /// catch structural corruption early.
   Future<void> ensureReady({bool validateIntegrity = true}) async {
     await _ensureRegistry();
+    await schemaRegistry.ensureReady();
     await _ensureIndexRegistry();
     await _ensureFts();
     final journal = SqliteDataChangeJournal(_database);

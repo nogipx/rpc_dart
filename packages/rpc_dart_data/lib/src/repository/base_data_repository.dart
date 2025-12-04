@@ -11,6 +11,7 @@ abstract class BaseDataRepository implements IDataRepository {
     DataChangeJournal? changeJournal,
     int? journalMaxEvents = defaultJournalMaxEvents,
     Duration? journalRetention = defaultJournalRetention,
+    SchemaValidationEngine? schemaValidation,
   }) : _clock = clock ?? (() => DateTime.now().toUtc()),
        _idGenerator = idGenerator,
        _journal = changeJournal ?? InMemoryDataChangeJournal(),
@@ -21,7 +22,8 @@ abstract class BaseDataRepository implements IDataRepository {
        _journalRetention =
            journalRetention != null && journalRetention.inMicroseconds <= 0
            ? null
-           : journalRetention;
+           : journalRetention,
+       _schemaValidation = schemaValidation;
 
   static const String _databaseFormatVersion = '2.0.0';
   static const String _legacyDatabaseFormatVersion = '1.0.0';
@@ -38,6 +40,47 @@ abstract class BaseDataRepository implements IDataRepository {
   final int? _journalMaxEvents;
   final Duration? _journalRetention;
   final Random _random = Random();
+  final SchemaValidationEngine? _schemaValidation;
+
+  Future<void> _applySchemas(Iterable<_SnapshotSchemaEntry> schemas) async {
+    if (schemas.isEmpty) {
+      return;
+    }
+    final engine = _schemaValidation;
+    if (engine == null) {
+      return;
+    }
+    await engine.ensureReady();
+    for (final schema in schemas) {
+      await engine.saveSchema(
+        collection: schema.collection,
+        version: schema.version,
+        schema: schema.schema,
+        policy: CollectionSchemaPolicy(
+          enabled: schema.enabled,
+          requireValidation: schema.requireValidation,
+        ),
+      );
+    }
+    await engine.refresh();
+  }
+
+  Future<void> _validatePayload(
+    String collection,
+    Map<String, dynamic> payload, {
+    bool skipValidation = false,
+  }) async {
+    final validator = _schemaValidation;
+    if (validator == null) {
+      return;
+    }
+    await validator.ensureReady();
+    await validator.validateOrThrow(
+      collection: collection,
+      payload: payload,
+      skipValidation: skipValidation,
+    );
+  }
 
   String _generateId(String collection) {
     if (_idGenerator != null) {
@@ -130,6 +173,46 @@ abstract class BaseDataRepository implements IDataRepository {
     return parsed;
   }
 
+  List<_SnapshotSchemaEntry> _parseSnapshotSchemas(
+    Map<String, dynamic> snapshot,
+  ) {
+    final rawSchemas = snapshot['schemas'];
+    if (rawSchemas == null) {
+      return const [];
+    }
+    if (rawSchemas is! Map) {
+      throw RpcDataError.invalidArgument('Snapshot field "schemas" is invalid');
+    }
+    final result = <_SnapshotSchemaEntry>[];
+    final asMap = Map<String, dynamic>.from(rawSchemas);
+    for (final entry in asMap.entries) {
+      final schemaMap = entry.value;
+      if (schemaMap is! Map) {
+        throw RpcDataError.invalidArgument(
+          'Schema entry for ${entry.key} must be an object',
+        );
+      }
+      final parsed = Map<String, dynamic>.from(schemaMap);
+      final version = parsed['version'] as int? ?? 1;
+      final schema = parsed['schema'];
+      if (schema is! Map) {
+        throw RpcDataError.invalidArgument(
+          'Schema definition for ${entry.key} must be an object',
+        );
+      }
+      result.add(
+        _SnapshotSchemaEntry(
+          collection: entry.key,
+          version: version,
+          schema: Map<String, dynamic>.from(schema),
+          enabled: parsed['enabled'] as bool? ?? true,
+          requireValidation: parsed['requireValidation'] as bool? ?? true,
+        ),
+      );
+    }
+    return result;
+  }
+
   Map<String, dynamic> _decodeSnapshotPayload(ImportDatabaseRequest request) {
     final decoded = jsonDecode(request.payload);
     if (decoded is! Map) {
@@ -140,8 +223,9 @@ abstract class BaseDataRepository implements IDataRepository {
 
   Future<ImportDatabaseResponse> _importParsedCollections(
     Map<String, List<DataRecord>> collections,
-    bool replaceExisting,
-  ) async {
+    bool replaceExisting, {
+    bool skipValidation = false,
+  }) async {
     final existingCollections = await storage.listCollections();
     final existingRecords = <String, Map<String, DataRecord>>{};
     if (replaceExisting) {
@@ -183,6 +267,13 @@ abstract class BaseDataRepository implements IDataRepository {
       }
 
       if (records.isNotEmpty) {
+        for (final record in records) {
+          await _validatePayload(
+            record.collection,
+            record.payload,
+            skipValidation: skipValidation,
+          );
+        }
         await storage.writeRecords(records);
         for (final record in records) {
           await _recordEvent(DataChangeType.snapshot, record);
@@ -200,8 +291,9 @@ abstract class BaseDataRepository implements IDataRepository {
 
   Future<ImportDatabaseResponse> _importStreamingSnapshot(
     String payload,
-    bool replaceExisting,
-  ) async {
+    bool replaceExisting, {
+    bool skipValidation = false,
+  }) async {
     Map<String, dynamic> parseEntry(String line) {
       try {
         final decoded = jsonDecode(line);
@@ -257,6 +349,40 @@ abstract class BaseDataRepository implements IDataRepository {
               );
             }
             await onEntry(_SnapshotParsedEntry.header());
+            break;
+          case 'schema':
+            if (!headerSeen) {
+              throw RpcDataError.invalidArgument(
+                'Snapshot schema encountered before header',
+              );
+            }
+            final name = entry['collection'] as String?;
+            if (name == null || name.isEmpty) {
+              throw RpcDataError.invalidArgument(
+                'Snapshot schema entry is missing collection',
+              );
+            }
+            final schemaJson = entry['schema'];
+            if (schemaJson is! Map) {
+              throw RpcDataError.invalidArgument(
+                'Snapshot schema for $name must be an object',
+              );
+            }
+            final version = entry['version'] as int? ?? 1;
+            final enabled = entry['enabled'] as bool? ?? true;
+            final requireValidation =
+                entry['requireValidation'] as bool? ?? true;
+            await onEntry(
+              _SnapshotParsedEntry.schema(
+                _SnapshotSchemaEntry(
+                  collection: name,
+                  version: version,
+                  schema: Map<String, dynamic>.from(schemaJson),
+                  enabled: enabled,
+                  requireValidation: requireValidation,
+                ),
+              ),
+            );
             break;
           case 'collection':
             if (!headerSeen) {
@@ -392,6 +518,13 @@ abstract class BaseDataRepository implements IDataRepository {
           'Snapshot contains records outside of a collection block',
         );
       }
+      for (final record in pending) {
+        await _validatePayload(
+          record.collection,
+          record.payload,
+          skipValidation: skipValidation,
+        );
+      }
       await storage.writeRecords(pending);
       for (final record in pending) {
         await _recordEvent(DataChangeType.snapshot, record);
@@ -421,6 +554,12 @@ abstract class BaseDataRepository implements IDataRepository {
       onEntry: (entry) async {
         switch (entry.type) {
           case _SnapshotEntryType.header:
+            break;
+          case _SnapshotEntryType.schema:
+            final schema = entry.schema;
+            if (schema != null) {
+              await _applySchemas([schema]);
+            }
             break;
           case _SnapshotEntryType.collection:
             await flushPending();
@@ -506,6 +645,11 @@ abstract class BaseDataRepository implements IDataRepository {
 
     final now = _clock();
     final id = request.id ?? _generateId(request.collection);
+    await _validatePayload(
+      request.collection,
+      request.payload,
+      skipValidation: request.skipValidation,
+    );
     final record = DataRecord(
       id: id,
       collection: request.collection,
@@ -557,6 +701,11 @@ abstract class BaseDataRepository implements IDataRepository {
       version: existing.version + 1,
       updatedAt: _clock(),
     );
+    await _validatePayload(
+      request.collection,
+      updated.payload,
+      skipValidation: request.skipValidation,
+    );
     await storage.writeRecord(updated);
     await _recordEvent(DataChangeType.updated, updated);
     return updated;
@@ -582,6 +731,11 @@ abstract class BaseDataRepository implements IDataRepository {
       payload: newPayload,
       version: existing.version + 1,
       updatedAt: _clock(),
+    );
+    await _validatePayload(
+      request.collection,
+      updated.payload,
+      skipValidation: request.skipValidation,
     );
     await storage.writeRecord(updated);
     await _recordEvent(DataChangeType.patched, updated);
@@ -689,6 +843,13 @@ abstract class BaseDataRepository implements IDataRepository {
     }
 
     if (writes.isNotEmpty) {
+      for (final record in writes) {
+        await _validatePayload(
+          record.collection,
+          record.payload,
+          skipValidation: request.skipValidation,
+        );
+      }
       await storage.writeRecords(writes);
       for (final entry in events) {
         await _recordEvent(entry.key, entry.value);
@@ -732,6 +893,7 @@ abstract class BaseDataRepository implements IDataRepository {
   ) async {
     final generatedAt = _clock();
     final collections = await storage.listCollections();
+    final schemas = await _exportSchemas();
 
     Map<String, _PreparedChunkStream>? preparedStreams;
     if (!request.includePayloadString) {
@@ -743,12 +905,14 @@ abstract class BaseDataRepository implements IDataRepository {
         request: request,
         generatedAt: generatedAt,
         collections: collections,
+        schemas: schemas,
       );
 
       final payloadStream = _buildExportStream(
         generatedAt: generatedAt,
         collections: collections,
         recordCount: computation.recordCount,
+        schemas: schemas,
         preparedStreams: preparedStreams,
       );
 
@@ -790,10 +954,30 @@ abstract class BaseDataRepository implements IDataRepository {
     return result;
   }
 
+  Future<List<_SnapshotSchemaEntry>> _exportSchemas() async {
+    final engine = _schemaValidation;
+    if (engine == null) {
+      return const [];
+    }
+    final active = await engine.loadAllSchemas();
+    return active.values
+        .map(
+          (schema) => _SnapshotSchemaEntry(
+            collection: schema.collection,
+            version: schema.version,
+            schema: schema.schema,
+            enabled: schema.policy.enabled,
+            requireValidation: schema.policy.requireValidation,
+          ),
+        )
+        .toList(growable: false);
+  }
+
   Future<_ExportComputationResult> _computeExportMetadata({
     required ExportDatabaseRequest request,
     required DateTime generatedAt,
     required List<String> collections,
+    required List<_SnapshotSchemaEntry> schemas,
   }) async {
     final encoder = const JsonEncoder();
     final buffer = request.includePayloadString ? StringBuffer() : null;
@@ -820,6 +1004,16 @@ abstract class BaseDataRepository implements IDataRepository {
       'formatVersion': _databaseFormatVersion,
       'generatedAt': generatedAt.toIso8601String(),
     });
+    for (final schema in schemas) {
+      writeLine({
+        'type': 'schema',
+        'collection': schema.collection,
+        'version': schema.version,
+        'schema': schema.schema,
+        'enabled': schema.enabled,
+        'requireValidation': schema.requireValidation,
+      });
+    }
 
     for (final collection in collections) {
       writeLine({'type': 'collection', 'name': collection});
@@ -861,6 +1055,7 @@ abstract class BaseDataRepository implements IDataRepository {
     required DateTime generatedAt,
     required List<String> collections,
     required int recordCount,
+    required List<_SnapshotSchemaEntry> schemas,
     Map<String, _PreparedChunkStream>? preparedStreams,
   }) async* {
     final encoder = const JsonEncoder();
@@ -875,6 +1070,16 @@ abstract class BaseDataRepository implements IDataRepository {
       'formatVersion': _databaseFormatVersion,
       'generatedAt': generatedAt.toIso8601String(),
     });
+    for (final schema in schemas) {
+      yield encodeLine({
+        'type': 'schema',
+        'collection': schema.collection,
+        'version': schema.version,
+        'schema': schema.schema,
+        'enabled': schema.enabled,
+        'requireValidation': schema.requireValidation,
+      });
+    }
 
     for (final collection in collections) {
       final prepared = preparedStreams?[collection];
@@ -942,13 +1147,23 @@ abstract class BaseDataRepository implements IDataRepository {
           );
         }
         final collections = _parseSnapshotCollections(snapshot);
-        return _importParsedCollections(collections, request.replaceExisting);
+        final schemas = _parseSnapshotSchemas(snapshot);
+        await _applySchemas(schemas);
+        return _importParsedCollections(
+          collections,
+          request.replaceExisting,
+          skipValidation: request.skipValidation,
+        );
       } on FormatException {
         // Not a legacy snapshot, fall through to the streaming parser.
       }
     }
 
-    return _importStreamingSnapshot(payload, request.replaceExisting);
+    return _importStreamingSnapshot(
+      payload,
+      request.replaceExisting,
+      skipValidation: request.skipValidation,
+    );
   }
 
   @override
@@ -1137,14 +1352,122 @@ abstract class BaseDataRepository implements IDataRepository {
     await _journal.dispose();
     await storage.dispose();
   }
+
+  @override
+  Future<ListSchemasResponse> listSchemas() async {
+    final engine = _schemaValidation;
+    if (engine == null) {
+      throw RpcDataError.invalidArgument('Schema validation is disabled');
+    }
+    final schemas = await engine.loadAllSchemas();
+    return ListSchemasResponse(
+      schemas: schemas.values
+          .map(
+            (s) => SchemaInfo(
+              collection: s.collection,
+              version: s.version,
+              enabled: s.policy.enabled,
+              requireValidation: s.policy.requireValidation,
+              schema: s.schema,
+              updatedAt: s.updatedAt,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  @override
+  Future<GetSchemaResponse> getSchema(GetSchemaRequest request) async {
+    final engine = _schemaValidation;
+    if (engine == null) {
+      throw RpcDataError.invalidArgument('Schema validation is disabled');
+    }
+    final schema = await engine.getSchema(request.collection);
+    return GetSchemaResponse(
+      schema: schema == null
+          ? null
+          : SchemaInfo(
+              collection: schema.collection,
+              version: schema.version,
+              enabled: schema.policy.enabled,
+              requireValidation: schema.policy.requireValidation,
+              schema: schema.schema,
+              updatedAt: schema.updatedAt,
+            ),
+    );
+  }
+
+  @override
+  Future<SetSchemaPolicyResponse> setSchemaPolicy(
+    SetSchemaPolicyRequest request,
+  ) async {
+    final engine = _schemaValidation;
+    if (engine == null) {
+      throw RpcDataError.invalidArgument('Schema validation is disabled');
+    }
+    await engine.setPolicy(
+      collection: request.collection,
+      policy: CollectionSchemaPolicy(
+        enabled: request.enabled,
+        requireValidation: request.requireValidation,
+      ),
+    );
+    final schema = await engine.getSchema(request.collection);
+    if (schema == null) {
+      throw RpcDataError.invalidArgument(
+        'Schema for ${request.collection} is not registered yet.',
+      );
+    }
+    return SetSchemaPolicyResponse(
+      schema: SchemaInfo(
+        collection: schema.collection,
+        version: schema.version,
+        enabled: schema.policy.enabled,
+        requireValidation: schema.policy.requireValidation,
+        schema: schema.schema,
+        updatedAt: schema.updatedAt,
+      ),
+    );
+  }
+
+  @override
+  Future<StartMigrationResponse> startMigration(
+    StartMigrationRequest request,
+  ) async {
+    throw RpcDataError.invalidArgument(
+      'Migrations over RPC are not supported by this repository.',
+    );
+  }
+
+  @override
+  Future<MigrationStatusResponse> getMigrationStatus(String collection) async {
+    throw RpcDataError.invalidArgument(
+      'Migration status over RPC is not supported by this repository.',
+    );
+  }
 }
 
-enum _SnapshotEntryType { header, collection, record, collectionEnd, footer }
+enum _SnapshotEntryType {
+  header,
+  schema,
+  collection,
+  record,
+  collectionEnd,
+  footer,
+}
 
 class _SnapshotParsedEntry {
   _SnapshotParsedEntry.header()
     : type = _SnapshotEntryType.header,
       collection = null,
+      record = null,
+      schema = null,
+      declaredCollectionCount = null,
+      declaredRecordCount = null;
+
+  _SnapshotParsedEntry.schema(this.schema)
+    : type = _SnapshotEntryType.schema,
+      collection = schema?.collection,
       record = null,
       declaredCollectionCount = null,
       declaredRecordCount = null;
@@ -1152,12 +1475,14 @@ class _SnapshotParsedEntry {
   _SnapshotParsedEntry.collection(this.collection)
     : type = _SnapshotEntryType.collection,
       record = null,
+      schema = null,
       declaredCollectionCount = null,
       declaredRecordCount = null;
 
   _SnapshotParsedEntry.record(this.record)
     : type = _SnapshotEntryType.record,
       collection = record?.collection,
+      schema = null,
       declaredCollectionCount = null,
       declaredRecordCount = null;
 
@@ -1165,6 +1490,7 @@ class _SnapshotParsedEntry {
     : type = _SnapshotEntryType.collectionEnd,
       collection = null,
       record = null,
+      schema = null,
       declaredCollectionCount = null,
       declaredRecordCount = null;
 
@@ -1173,11 +1499,13 @@ class _SnapshotParsedEntry {
     this.declaredRecordCount,
   }) : type = _SnapshotEntryType.footer,
        collection = null,
-       record = null;
+       record = null,
+       schema = null;
 
   final _SnapshotEntryType type;
   final String? collection;
   final DataRecord? record;
+  final _SnapshotSchemaEntry? schema;
   final int? declaredCollectionCount;
   final int? declaredRecordCount;
 }
@@ -1194,6 +1522,22 @@ class _SnapshotValidationResult {
   final int? declaredCollectionCount;
   final int? declaredRecordCount;
   final int actualRecordCount;
+}
+
+class _SnapshotSchemaEntry {
+  const _SnapshotSchemaEntry({
+    required this.collection,
+    required this.version,
+    required this.schema,
+    required this.enabled,
+    required this.requireValidation,
+  });
+
+  final String collection;
+  final int version;
+  final Map<String, dynamic> schema;
+  final bool enabled;
+  final bool requireValidation;
 }
 
 class _ExportComputationResult {

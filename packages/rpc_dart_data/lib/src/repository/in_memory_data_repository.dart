@@ -9,11 +9,15 @@ final class InMemoryDataRepository extends BaseDataRepository {
     String Function(String collection)? idGenerator,
     int? journalMaxEvents = BaseDataRepository.defaultJournalMaxEvents,
     Duration? journalRetention = BaseDataRepository.defaultJournalRetention,
+    SchemaValidationEngine? schemaValidation,
   }) : super(
          storage ?? InMemoryStorageAdapter(),
          clock: clock,
          idGenerator: idGenerator,
          journalMaxEvents: journalMaxEvents,
          journalRetention: journalRetention,
+         schemaValidation:
+             schemaValidation ??
+             SchemaValidationEngine(registry: InMemorySchemaRegistry()),
        );
 }

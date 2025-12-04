@@ -209,4 +209,38 @@ class _ThrowingRepository implements IDataRepository {
 
   @override
   Future<void> dispose() async {}
+
+  @override
+  Future<GetSchemaResponse> getSchema(GetSchemaRequest request) {
+    // TODO: implement getSchema
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ListSchemasResponse> listSchemas() {
+    // TODO: implement listSchemas
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SetSchemaPolicyResponse> setSchemaPolicy(
+    SetSchemaPolicyRequest request,
+  ) {
+    // TODO: implement setSchemaPolicy
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StartMigrationResponse> startMigration(
+    StartMigrationRequest request,
+  ) {
+    // Not used in these tests.
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MigrationStatusResponse> getMigrationStatus(String collection) {
+    // Not used in these tests.
+    throw UnimplementedError();
+  }
 }

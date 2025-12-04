@@ -65,6 +65,15 @@ abstract interface class IDataServiceContract implements IRpcContract {
   /// Двунаправленная синхронизация офлайн клиента.
   static const String syncChanges = 'syncChanges';
 
+  /// Получение списка активных схем.
+  static const String listSchemas = 'listSchemas';
+
+  /// Получение схемы коллекции.
+  static const String getSchema = 'getSchema';
+
+  /// Изменение политики схемы коллекции.
+  static const String setSchemaPolicy = 'setSchemaPolicy';
+
   @override
   String get serviceName => IDataServiceContract.name;
 }
@@ -198,6 +207,20 @@ const RpcCodec<ImportDatabaseRequest> importDatabaseRequestCodec =
     RpcCodec.withDecoder(ImportDatabaseRequest.fromJson);
 const RpcCodec<ImportDatabaseResponse> importDatabaseResponseCodec =
     RpcCodec.withDecoder(ImportDatabaseResponse.fromJson);
+const RpcCodec<ListSchemasRequest> listSchemasRequestCodec =
+    RpcCodec.withDecoder(ListSchemasRequest.fromJson);
+const RpcCodec<ListSchemasResponse> listSchemasResponseCodec =
+    RpcCodec.withDecoder(ListSchemasResponse.fromJson);
+const RpcCodec<GetSchemaRequest> getSchemaRequestCodec = RpcCodec.withDecoder(
+  GetSchemaRequest.fromJson,
+);
+const RpcCodec<GetSchemaResponse> getSchemaResponseCodec = RpcCodec.withDecoder(
+  GetSchemaResponse.fromJson,
+);
+const RpcCodec<SetSchemaPolicyRequest> setSchemaPolicyRequestCodec =
+    RpcCodec.withDecoder(SetSchemaPolicyRequest.fromJson);
+const RpcCodec<SetSchemaPolicyResponse> setSchemaPolicyResponseCodec =
+    RpcCodec.withDecoder(SetSchemaPolicyResponse.fromJson);
 const RpcCodec<SearchRecordsRequest> searchRequestCodec = RpcCodec.withDecoder(
   SearchRecordsRequest.fromJson,
 );

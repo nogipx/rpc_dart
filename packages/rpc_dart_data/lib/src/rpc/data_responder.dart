@@ -181,6 +181,31 @@ class DataServiceResponder extends RpcResponderContract
       description:
           'Двунаправленная синхронизация офлайн клиента (command queue)',
     );
+
+    addUnaryMethod<ListSchemasRequest, ListSchemasResponse>(
+      methodName: IDataServiceContract.listSchemas,
+      handler: _handleListSchemas,
+      requestCodec: listSchemasRequestCodec,
+      responseCodec: listSchemasResponseCodec,
+      description: 'Список активных схем коллекций',
+    );
+
+    addUnaryMethod<GetSchemaRequest, GetSchemaResponse>(
+      methodName: IDataServiceContract.getSchema,
+      handler: _handleGetSchema,
+      requestCodec: getSchemaRequestCodec,
+      responseCodec: getSchemaResponseCodec,
+      description: 'Получение схемы коллекции',
+    );
+
+    addUnaryMethod<SetSchemaPolicyRequest, SetSchemaPolicyResponse>(
+      methodName: IDataServiceContract.setSchemaPolicy,
+      handler: _handleSetSchemaPolicy,
+      requestCodec: setSchemaPolicyRequestCodec,
+      responseCodec: setSchemaPolicyResponseCodec,
+      description: 'Установка политики схемы коллекции',
+    );
+
   }
 
   Future<CreateRecordResponse> _handleCreate(
@@ -314,6 +339,27 @@ class DataServiceResponder extends RpcResponderContract
     RpcContext? context,
   }) async {
     return _runSafely(context, () => _repository.aggregate(request));
+  }
+
+  Future<ListSchemasResponse> _handleListSchemas(
+    ListSchemasRequest request, {
+    RpcContext? context,
+  }) async {
+    return _runSafely(context, () => _repository.listSchemas());
+  }
+
+  Future<GetSchemaResponse> _handleGetSchema(
+    GetSchemaRequest request, {
+    RpcContext? context,
+  }) async {
+    return _runSafely(context, () => _repository.getSchema(request));
+  }
+
+  Future<SetSchemaPolicyResponse> _handleSetSchemaPolicy(
+    SetSchemaPolicyRequest request, {
+    RpcContext? context,
+  }) async {
+    return _runSafely(context, () => _repository.setSchemaPolicy(request));
   }
 
   Future<CreateCollectionIndexResponse> _handleCreateIndex(

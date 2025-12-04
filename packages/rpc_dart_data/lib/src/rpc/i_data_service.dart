@@ -241,6 +241,23 @@ abstract interface class IDataService {
     void Function(Object error, StackTrace stackTrace)? onError,
   });
 
+  /// List active schemas.
+  Future<ListSchemasResponse> listSchemas({RpcContext? context});
+
+  /// Get schema for a collection.
+  Future<GetSchemaResponse> getSchema({
+    required String collection,
+    RpcContext? context,
+  });
+
+  /// Set schema policy (enable/require) for a collection.
+  Future<SetSchemaPolicyResponse> setSchemaPolicy({
+    required String collection,
+    required bool enabled,
+    required bool requireValidation,
+    RpcContext? context,
+  });
+
   /// Closes the client RPC connection and releases associated resources.
   ///
   /// Call when shutting down app/test to close sockets and cancel active streams.

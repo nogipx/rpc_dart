@@ -3,18 +3,17 @@
 `rpc_dart_data` is the high-level data layer (CRUD + queries + change streams + offline sync) that sits on top of [`rpc_dart`](https://pub.dev/packages/rpc_dart).
 It gives you a transport-agnostic contract, ready-to-use storage adapters, and utilities for building offline-friendly backends and clients.
 
--## Feature highlights
+## Feature highlights
 - **Unified `DataService` contract** with helpers for create/get/list/update/patch/delete/deleteCollection.
 - **Bulk workflows** via `bulkUpsert`, `bulkUpsertStream`, and `bulkDelete` to move large batches atomically.
 - **Search & aggregations** (`search`, `aggregate`) delegated to the storage adapter, including backend pagination.
 - **Streaming snapshots**: export/import the full database as NDJSON, stream it through `payloadStream`, or set `includePayloadString: false` to skip building large strings.
 - **Change streams & offline sync**: `watchChanges` with cursors, bidirectional `syncChanges`, and `OfflineCommandQueue` for durable command queues.
+- **Schema validation & migrations**: per-collection schema registry (nested objects/arrays), validation on all write/import RPCs, optional `skipValidation` for admin paths. Server-side migrations with checkpoints/logs and automatic index/FTS rebuilds after success; migrations are bound to a collection and run via repository helpers.
 - **SQLite adapter** with SQLCipher support out-of-the-box via SQLite3MultipleCiphers (`hooks.user_defines.sqlite3.source: sqlite3mc`), no system `libsqlcipher` needed; web uses `sqlite3mc.wasm`. `SqliteSetupHook` lets you register custom pragmas before the database is exposed to your code.
-  - Pass a `SqlCipherKey` to enable encryption; the runtime fails fast if cipher pragmas are missing.
+- Pass a `SqlCipherKey` to enable encryption; the runtime fails fast if cipher pragmas are missing.
 - **Ready-made environments** (`DataServiceFactory.inMemory`) for tests, demos, and local prototyping.
 - **Collection discovery**: RPC `listCollections()` queries the storage adapter for the current list of collection names so clients can introspect available datasets without enumerating all records.
-
-This package now depends directly only on `rpc_dart`, `sqlite3`, and helpers such as `licensify`/`args`. The former `drift` and `rpc_dart_transports` dependencies were removed so the core data layer stays lean—plug in whatever transport or storage adapter fits your architecture.
 
 ## Architecture in seven layers
 1. **Transport** (WebSocket / HTTP/2 / isolates / TURN / in-memory) provided by `rpc_dart` implementations (you can plug in any `IRpcTransport`; this package now relies on the transports shipped by `rpc_dart` instead of bundling `rpc_dart_transports` directly).
@@ -81,6 +80,49 @@ final export = await repository.exportDatabase(
 await for (final chunk in export.payloadStream!) {
   sink.add(chunk); // write to file/socket/etc
 }
+```
+
+## Schema validation and migrations
+- Per-collection schemas (nested objects/arrays) live in a registry; validation runs on create/update/patch/bulk/import over RPC unless `skipValidation=true` (admin-only).
+- Default policy is controlled via `SchemaValidationConfig(defaultSchemaEnabled, defaultRequireValidation)`; per-collection overrides use `setSchemaPolicy`.
+- Migrations are server-side only: register declarative steps with `MigrationDefinition` (bound to a `collection`) and run them via `MigrationRunnerHelper` or `SqliteDataRepository.runMigration`. Migration success activates the new schema and rebuilds indexes/FTS; any errors keep the checkpoint and block activation.
+
+Minimal server-side wiring:
+```dart
+final storage = await SqliteDataStorageAdapter.memory();
+final repo = SqliteDataRepository(storage: storage);
+final migrations = MigrationPlan.forCollection('notes')
+  .initial(
+    migrationId: 'notes_init_v1',
+    toVersion: 1,
+    schema: {
+      'type': 'object',
+      'required': ['title'],
+      'properties': {
+        'title': {'type': 'string'},
+      },
+    },
+  )
+  .next(
+    migrationId: 'notes_add_slug_v2',
+    toVersion: 2,
+    schema: {
+      'type': 'object',
+      'required': ['title', 'slug'],
+      'properties': {
+        'title': {'type': 'string'},
+        'slug': {'type': 'string'},
+      },
+    },
+    transformer: (payload) => {...payload, 'slug': (payload['title'] as String).toLowerCase()},
+  )
+  .build();
+
+final helper = MigrationRunnerHelper(
+  repository: repo,
+  migrations: migrations,
+);
+await helper.applyPendingMigrations(); // idempotent across restarts; checkpoints are persisted.
 ```
 
 ## Offline queue and sync commands
