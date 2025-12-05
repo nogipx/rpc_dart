@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:licensify/licensify.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 
 /// Minimal in-memory transport with a file-backed SQLite adapter.
@@ -15,9 +14,6 @@ Future<void> main() async {
     dbFile.deleteSync();
   }
 
-  final cipherKey = SqlCipherKey.fromPaserk(
-    paserk: Licensify.generateEncryptionKey().toPaserk(),
-  );
   final connection = await openFileDb(
     options: SqliteConnectionOptions(nativeFileName: dbFile.path),
     // Add your own PRAGMAs or WAL config here.

@@ -8,31 +8,6 @@ void main() {
       () async {
         final storage = await SqliteDataStorageAdapter.memory();
         final repo = SqliteDataRepository(storage: storage);
-        final plan = MigrationPlan.forCollection('notes')
-            .initial(
-              migrationId: 'init_v1',
-              toVersion: 1,
-              schema: {
-                'type': 'object',
-                'required': ['title'],
-                'properties': {
-                  'title': {'type': 'string'},
-                },
-              },
-            )
-            .next(
-              migrationId: 'v1_to_v2',
-              toVersion: 2,
-              schema: {
-                'type': 'object',
-                'required': ['title', 'slug'],
-                'properties': {
-                  'title': {'type': 'string'},
-                  'slug': {'type': 'string'},
-                },
-              },
-              transformer: _addSlug,
-            );
         await repo.create(
           const CreateRecordRequest(
             collection: 'notes',

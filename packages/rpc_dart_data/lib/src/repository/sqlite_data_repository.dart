@@ -37,7 +37,7 @@ class SqliteDataRepository extends BaseDataRepository {
     required SchemaValidationEngine schemaValidation,
     bool rebuildIndexesAfterMigration = true,
   }) : _rebuildIndexesAfterMigration = rebuildIndexesAfterMigration,
-       _schemaValidation = schemaValidation,
+       schemaValidationEngine = schemaValidation,
        super(
          storage,
          clock: clock,
@@ -59,9 +59,7 @@ class SqliteDataRepository extends BaseDataRepository {
 
   final bool _rebuildIndexesAfterMigration;
 
-  @override
-  final SchemaValidationEngine _schemaValidation;
-  SchemaValidationEngine get schemaValidationEngine => _schemaValidation;
+  final SchemaValidationEngine schemaValidationEngine;
 
   Future<void> rebuildIndexesAndFts(String collection) async {
     await storage.rebuildCollectionStructures(collection);
@@ -76,7 +74,7 @@ class SqliteDataRepository extends BaseDataRepository {
     SchemaMigrationOptions options = const SchemaMigrationOptions(),
     String? migrationId,
   }) {
-    return _schemaValidation.runMigration(
+    return schemaValidationEngine.runMigration(
       storage: storage,
       collection: collection,
       fromVersion: fromVersion,
@@ -122,7 +120,7 @@ class SqliteDataRepository extends BaseDataRepository {
   @override
   Future<MigrationStatusResponse> getMigrationStatus(String collection) async {
     final checkpoint = await storage.schemaRegistry.loadCheckpoint(collection);
-    final active = await _schemaValidation.getSchema(collection);
+    final active = await schemaValidationEngine.getSchema(collection);
     final registered = _migrationsForCollection(
       collection,
     ).where((m) => m.toVersion > (active?.version ?? 0)).toList();

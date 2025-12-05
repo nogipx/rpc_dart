@@ -190,7 +190,6 @@ void main() {
     });
 
     test('saves checkpoint on failure and resumes', () async {
-      final failOnId = 'items-2'; // deterministic ids follow pattern
       final result = await engine.runMigration(
         storage: storage,
         collection: 'items',
