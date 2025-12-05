@@ -10,9 +10,6 @@ class DataServiceClient implements IDataService {
   final RpcCallerEndpoint _endpoint;
   final DataServiceCaller _caller;
 
-  RpcCallerEndpoint get endpoint => _endpoint;
-  DataServiceCaller get rawCaller => _caller;
-
   @override
   Future<DataRecord> create({
     required String collection,
