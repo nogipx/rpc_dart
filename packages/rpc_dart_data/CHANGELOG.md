@@ -1,3 +1,8 @@
+## 3.2.0
+
+- Breaking: removed offline sync/command queue APIs (`syncChanges`/`pushAndAwaitAck`/`OfflineCommandQueue`, `DataCommand`/SyncChange models) to focus on online CRUD/search/watch; RPC contract, caller/responder, and repository helpers are trimmed accordingly.
+- Breaking: removed aggregate metrics API and adapter implementations; clients should compute metrics externally if needed.
+
 ## 3.1.0
 
 - Schema validation: enforced on create/update/patch/bulk/import (including RPC); per-collection policy flags with defaults, nested object/array support, detailed validation errors; `skipValidation` remains admin-only.
