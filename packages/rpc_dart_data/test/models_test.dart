@@ -4,22 +4,6 @@ import 'package:rpc_dart_data/src/models.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('DataCommand', () {
-    test('serializes/deserializes via JSON', () {
-      final command = DataCommand(
-        commandId: 'command-1',
-        sessionId: 'session-1',
-        type: DataCommandType.patch,
-        payload: {'id': 'task-1'},
-        issuedAt: DateTime.utc(2024, 1, 1),
-      );
-
-      final json = command.toJson();
-      final deserialised = DataCommand.fromJson(json);
-      expect(deserialised, equals(command));
-    });
-  });
-
   group('DataRecord', () {
     final created = DateTime.utc(2024, 1, 1);
     final record = DataRecord(

@@ -66,7 +66,9 @@ class MigrationPlan {
     final ids = <String>{};
     for (final m in _definitions) {
       if (!ids.add(m.migrationId)) {
-        throw StateError('Duplicate migrationId ${m.migrationId} for $collection');
+        throw StateError(
+          'Duplicate migrationId ${m.migrationId} for $collection',
+        );
       }
     }
     return List<MigrationDefinition>.unmodifiable(_definitions);

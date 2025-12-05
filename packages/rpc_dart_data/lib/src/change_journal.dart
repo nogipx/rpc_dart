@@ -7,8 +7,7 @@ import 'dart:convert';
 import 'models.dart';
 import 'rpc/data_contract.dart';
 
-/// Persists and replays change events for [DataRepository.watch] and
-/// `syncChanges` cursors.
+/// Persists and replays change events for [DataRepository.watch] cursors.
 abstract interface class DataChangeJournal {
   /// Records a change event and returns the materialised [DataChangeEvent]
   /// including the assigned cursor.

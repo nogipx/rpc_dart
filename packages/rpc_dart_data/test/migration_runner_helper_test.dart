@@ -3,92 +3,95 @@ import 'package:test/test.dart';
 
 void main() {
   group('MigrationRunnerHelper', () {
-    test('bootstraps schema from initial definition when none exists', () async {
-      final storage = await SqliteDataStorageAdapter.memory();
-      final repo = SqliteDataRepository(storage: storage);
-      final plan = MigrationPlan.forCollection('notes')
-          .initial(
-            migrationId: 'init_v1',
-            toVersion: 1,
-            schema: {
-              'type': 'object',
-              'required': ['title'],
-              'properties': {
-                'title': {'type': 'string'},
+    test(
+      'bootstraps schema from initial definition when none exists',
+      () async {
+        final storage = await SqliteDataStorageAdapter.memory();
+        final repo = SqliteDataRepository(storage: storage);
+        final plan = MigrationPlan.forCollection('notes')
+            .initial(
+              migrationId: 'init_v1',
+              toVersion: 1,
+              schema: {
+                'type': 'object',
+                'required': ['title'],
+                'properties': {
+                  'title': {'type': 'string'},
+                },
               },
-            },
-          )
-          .next(
-            migrationId: 'v1_to_v2',
-            toVersion: 2,
-            schema: {
-              'type': 'object',
-              'required': ['title', 'slug'],
-              'properties': {
-                'title': {'type': 'string'},
-                'slug': {'type': 'string'},
+            )
+            .next(
+              migrationId: 'v1_to_v2',
+              toVersion: 2,
+              schema: {
+                'type': 'object',
+                'required': ['title', 'slug'],
+                'properties': {
+                  'title': {'type': 'string'},
+                  'slug': {'type': 'string'},
+                },
               },
-            },
-            transformer: _addSlug,
-          );
-      await repo.create(
-        const CreateRecordRequest(
-          collection: 'notes',
-          payload: {'title': 'Runner'},
-        ),
-      );
-      await repo.create(
-        const CreateRecordRequest(
-          collection: 'notes',
-          payload: {'title': 'Runner'},
-        ),
-      );
-
-      final helper = MigrationRunnerHelper(
-        repository: repo,
-        migrations: const [
-          MigrationDefinition.initial(
+              transformer: _addSlug,
+            );
+        await repo.create(
+          const CreateRecordRequest(
             collection: 'notes',
-            migrationId: 'init_v1',
-            toVersion: 1,
-            schema: {
-              'type': 'object',
-              'required': ['title'],
-              'properties': {
-                'title': {'type': 'string'},
-              },
-            },
+            payload: {'title': 'Runner'},
           ),
-          MigrationDefinition(
+        );
+        await repo.create(
+          const CreateRecordRequest(
             collection: 'notes',
-            migrationId: 'v1_to_v2',
-            fromVersion: 1,
-            toVersion: 2,
-            schema: {
-              'type': 'object',
-              'required': ['title', 'slug'],
-              'properties': {
-                'title': {'type': 'string'},
-                'slug': {'type': 'string'},
-              },
-            },
-            transformer: _addSlug,
+            payload: {'title': 'Runner'},
           ),
-        ],
-      );
+        );
 
-      await helper.applyPendingMigrations();
+        final helper = MigrationRunnerHelper(
+          repository: repo,
+          migrations: const [
+            MigrationDefinition.initial(
+              collection: 'notes',
+              migrationId: 'init_v1',
+              toVersion: 1,
+              schema: {
+                'type': 'object',
+                'required': ['title'],
+                'properties': {
+                  'title': {'type': 'string'},
+                },
+              },
+            ),
+            MigrationDefinition(
+              collection: 'notes',
+              migrationId: 'v1_to_v2',
+              fromVersion: 1,
+              toVersion: 2,
+              schema: {
+                'type': 'object',
+                'required': ['title', 'slug'],
+                'properties': {
+                  'title': {'type': 'string'},
+                  'slug': {'type': 'string'},
+                },
+              },
+              transformer: _addSlug,
+            ),
+          ],
+        );
 
-      final schema = await repo.schemaValidationEngine.getSchema('notes');
-      expect(schema?.version, 2);
-      final listed = await repo.list(
-        const ListRecordsRequest(collection: 'notes'),
-      );
-      expect(listed.records, isNotEmpty);
-      final payload = listed.records.first.payload;
-      expect(payload['slug'], 'runner');
-      await repo.dispose();
-    });
+        await helper.applyPendingMigrations();
+
+        final schema = await repo.schemaValidationEngine.getSchema('notes');
+        expect(schema?.version, 2);
+        final listed = await repo.list(
+          const ListRecordsRequest(collection: 'notes'),
+        );
+        expect(listed.records, isNotEmpty);
+        final payload = listed.records.first.payload;
+        expect(payload['slug'], 'runner');
+        await repo.dispose();
+      },
+    );
 
     test('applies pending migrations in order without RPC', () async {
       final storage = await SqliteDataStorageAdapter.memory();

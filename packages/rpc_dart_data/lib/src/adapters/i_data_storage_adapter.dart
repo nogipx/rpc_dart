@@ -43,12 +43,6 @@ abstract interface class IDataStorageAdapter {
   /// an [RpcDataError] when the request cannot be executed.
   Future<SearchRecordsResponse> searchCollection(SearchRecordsRequest request);
 
-  /// Execute aggregate metrics in the storage backend. Implementations should
-  /// validate requested metrics and throw an [RpcDataError] if unsupported.
-  Future<AggregateMetricsResponse> aggregateCollection(
-    AggregateMetricsRequest request,
-  );
-
   Future<void> dispose();
 }
 

@@ -172,17 +172,6 @@ abstract interface class IDataService {
     RpcContext? context,
   });
 
-  /// Calculates aggregates over a collection with an optional filter.
-  ///
-  /// `metrics` keys represent aggregate expressions/names (e.g., `count`, `sum:price`);
-  /// exact syntax is defined by the implementation.
-  Future<AggregateMetricsResponse> aggregate({
-    required String collection,
-    RecordFilter? filter,
-    Map<String, String> metrics,
-    RpcContext? context,
-  });
-
   /// Creates an index on the specified field path.
   ///
   /// `path` follows the backend’s notation (JSON pointer/dot path). `indexName` lets you
@@ -212,33 +201,6 @@ abstract interface class IDataService {
     required String collection,
     String? cursor,
     RpcContext? context,
-  });
-
-  /// Bidirectional synchronization of offline commands.
-  ///
-  /// The client streams commands; the service streams back acknowledgements/results.
-  /// Used to reconcile offline work and handle conflicts.
-  Stream<SyncChangeResponse> syncChanges(
-    Stream<SyncChangeRequest> requests, {
-    RpcContext? context,
-  });
-
-  /// Sends a single command and waits for its acknowledgement.
-  ///
-  /// Convenience wrapper over `syncChanges` for one-off calls without stream management.
-  Future<SyncChangeResponse> pushAndAwaitAck({
-    required SyncChangeRequest request,
-    RpcContext? context,
-  });
-
-  /// Creates an offline command queue bound to the client.
-  ///
-  /// Lets you accumulate actions while offline and sync them via `syncChanges`.
-  /// `sessionId` ties the queue to a user/device; `clock` can be overridden in tests.
-  OfflineCommandQueue createOfflineQueue({
-    String? sessionId,
-    DateTime Function()? clock,
-    void Function(Object error, StackTrace stackTrace)? onError,
   });
 
   /// List active schemas.

@@ -141,14 +141,6 @@ class DataServiceResponder extends RpcResponderContract
       description: 'Полнотекстовый поиск по коллекции',
     );
 
-    addUnaryMethod<AggregateMetricsRequest, AggregateMetricsResponse>(
-      methodName: IDataServiceContract.aggregateMetrics,
-      handler: _handleAggregate,
-      requestCodec: aggregateRequestCodec,
-      responseCodec: aggregateResponseCodec,
-      description: 'Агрегирование по полям',
-    );
-
     addUnaryMethod<CreateCollectionIndexRequest, CreateCollectionIndexResponse>(
       methodName: IDataServiceContract.createCollectionIndex,
       handler: _handleCreateIndex,
@@ -171,15 +163,6 @@ class DataServiceResponder extends RpcResponderContract
       requestCodec: watchRequestCodec,
       responseCodec: changeEventCodec,
       description: 'Стрим изменений коллекции с курсором',
-    );
-
-    addBidirectionalMethod<SyncChangeRequest, SyncChangeResponse>(
-      methodName: IDataServiceContract.syncChanges,
-      handler: _handleSync,
-      requestCodec: syncRequestCodec,
-      responseCodec: syncResponseCodec,
-      description:
-          'Двунаправленная синхронизация офлайн клиента (command queue)',
     );
 
     addUnaryMethod<ListSchemasRequest, ListSchemasResponse>(
@@ -205,7 +188,6 @@ class DataServiceResponder extends RpcResponderContract
       responseCodec: setSchemaPolicyResponseCodec,
       description: 'Установка политики схемы коллекции',
     );
-
   }
 
   Future<CreateRecordResponse> _handleCreate(
@@ -334,13 +316,6 @@ class DataServiceResponder extends RpcResponderContract
     return _runSafely(context, () => _repository.search(request));
   }
 
-  Future<AggregateMetricsResponse> _handleAggregate(
-    AggregateMetricsRequest request, {
-    RpcContext? context,
-  }) async {
-    return _runSafely(context, () => _repository.aggregate(request));
-  }
-
   Future<ListSchemasResponse> _handleListSchemas(
     ListSchemasRequest request, {
     RpcContext? context,
@@ -394,19 +369,6 @@ class DataServiceResponder extends RpcResponderContract
         throw error;
       }
       throw RpcDataError.internal('Failed to stream changes', error: error);
-    });
-  }
-
-  Stream<SyncChangeResponse> _handleSync(
-    Stream<SyncChangeRequest> requests, {
-    RpcContext? context,
-  }) {
-    _ensureAuthorized(context);
-    return _repository.sync(requests).handleError((error, stackTrace) {
-      if (error is RpcDataError) {
-        throw error;
-      }
-      throw RpcDataError.internal('Failed to sync changes', error: error);
     });
   }
 

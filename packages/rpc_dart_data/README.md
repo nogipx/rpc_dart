@@ -1,14 +1,14 @@
 # rpc_dart_data
 
-`rpc_dart_data` is the high-level data layer (CRUD + queries + change streams + offline sync) that sits on top of [`rpc_dart`](https://pub.dev/packages/rpc_dart).
-It gives you a transport-agnostic contract, ready-to-use storage adapters, and utilities for building offline-friendly backends and clients.
+`rpc_dart_data` is the high-level data layer (CRUD + queries + change streams) that sits on top of [`rpc_dart`](https://pub.dev/packages/rpc_dart).
+It gives you a transport-agnostic contract, ready-to-use storage adapters, and utilities for building resilient backends and clients.
 
 ## Feature highlights
 - **Unified `DataService` contract** with helpers for create/get/list/update/patch/delete/deleteCollection.
 - **Bulk workflows** via `bulkUpsert`, `bulkUpsertStream`, and `bulkDelete` to move large batches atomically.
-- **Search & aggregations** (`search`, `aggregate`) delegated to the storage adapter, including backend pagination.
+- **Search** delegated to the storage adapter, including backend pagination.
 - **Streaming snapshots**: export/import the full database as NDJSON, stream it through `payloadStream`, or set `includePayloadString: false` to skip building large strings.
-- **Change streams & offline sync**: `watchChanges` with cursors, bidirectional `syncChanges`, and `OfflineCommandQueue` for durable command queues.
+- **Change streams**: `watchChanges` with cursors.
 - **Schema validation & migrations**: per-collection schema registry (nested objects/arrays), validation on all write/import RPCs, optional `skipValidation` for admin paths. Server-side migrations with checkpoints/logs and automatic index/FTS rebuilds after success; migrations are bound to a collection and run via repository helpers.
 - **SQLite adapter** with SQLCipher support out-of-the-box via SQLite3MultipleCiphers (`hooks.user_defines.sqlite3.source: sqlite3mc`), no system `libsqlcipher` needed; web uses `sqlite3mc.wasm`. `SqliteSetupHook` lets you register custom pragmas before the database is exposed to your code.
 - Pass a `SqlCipherKey` to enable encryption; the runtime fails fast if cipher pragmas are missing.
@@ -22,8 +22,6 @@ It gives you a transport-agnostic contract, ready-to-use storage adapters, and u
 4. **Low-level plumbing** (`DataServiceCaller` / `DataServiceResponder`).
 5. **Repository + storage adapter** (`BaseDataRepository`, change journal, and the concrete adapter: in-memory or SQLite).
 6. **Facade** (`DataServiceClient`, `DataServiceServer`, `DataServiceFactory`, `InMemoryDataServiceEnvironment`).
-7. **Offline utilities** such as `OfflineCommandQueue` and reconnection helpers.
-
 Consumers usually interact only with layer 6 while everything below stays private.
 
 ## Quick start
@@ -125,54 +123,6 @@ final helper = MigrationRunnerHelper(
 await helper.applyPendingMigrations(); // idempotent across restarts; checkpoints are persisted.
 ```
 
-## Offline queue and sync commands
-```dart
-final env = await DataServiceFactory.inMemory();
-final client = env.client;
-final ctx = RpcContext.withHeaders({'authorization': 'Bearer x'});
-final queue = client.createOfflineQueue(sessionId: 'device-1');
-
-final command = queue.buildCreateCommand(
-  const CreateRecordRequest(collection: 'tasks', payload: {'title': 'Draft'}),
-);
-final persistedJson = command.toJson();
-
-final ackFuture = queue.enqueueCommand(
-  DataCommand.fromJson(persistedJson),
-  autoStart: false,
-  context: ctx,
-);
-await queue.start(context: ctx);
-await queue.flushPending();
-final ack = await ackFuture;
-print('applied=${ack.applied} id=${ack.record?.id}');
-```
-Use `enqueueCommand(..., resolveConflicts: false)` if you prefer the queue to stop on conflicts instead of retrying automatically.
-
-`DataServiceClient` now includes:
-- `listAllRecords` – paginates through `list()` until the entire collection is in memory.
-- `bulkUpsertStream` – streams large batches directly to the repository.
-- `pushAndAwaitAck` – sends a single sync command and waits for the response.
-- `createOfflineQueue` – a convenience constructor for `OfflineCommandQueue`.
-- `close` – shuts down the underlying RPC endpoint.
-
-## Aggregations
-```dart
-final metrics = await client.aggregate(
-  collection: 'orders',
-  metrics: {
-    'countAll': 'count',
-    'sumPrice': 'sum:price',
-    'avgPrice': 'avg:price',
-    'minPrice': 'min:price',
-    'maxPrice': 'max:price',
-  },
-  context: ctx,
-);
-print(metrics.metrics);
-```
-The repository validates metric expressions and delegates supported work to the storage adapter.
-
 ## Change streams and optimistic concurrency
 - `watchChanges` accepts an optional `cursor`, so clients can resume after a reconnect.
 - SQLite keeps a persistent `s_change_journal` table, allowing cursors to survive restarts.
@@ -202,7 +152,7 @@ class PostgresAdapter implements DataStorageAdapter {
     // Apply filters + pagination server-side.
   }
 
-  // Implement searchCollection, aggregateCollection, writeRecords, deleteCollection, etc.
+  // Implement searchCollection, writeRecords, deleteCollection, etc.
 }
 ```
 Adapters participate in streaming export/import by overriding `readCollectionChunks`, and they can expose custom indices via `CollectionIndexStorageAdapter` if needed.
@@ -216,7 +166,7 @@ Adapters participate in streaming export/import by overriding `readCollectionChu
   - Pass a `SqlCipherKey` to enable encryption; the runtime will auto-load `libsqlcipher` on macOS/Linux (checks `SQLITE3_LIB_DIR`/`SQLITE3_LIB_NAME` or common Homebrew paths) before opening the database and will fail fast if cipher pragmas are missing.
   - On the web, the adapter uses the `sqlite3mc.wasm` build (SQLite3MultipleCiphers) by default; set `webSqliteWasmUri` to a custom location if you host your own WASM.
   - You can still register extra PRAGMA via `SqliteSetupHook` for fine-tuning.
-- Stores `watch()` / `sync()` events in a durable journal, so cursor-based clients recover after restarts.
+- Stores `watch()` events in a durable journal, so cursor-based clients recover after restarts.
 
 ## License
 [MIT](LICENSE)

@@ -29,14 +29,14 @@ class MigrationDefinition {
     required Map<String, dynamic> schema,
     SchemaMigrationOptions options = const SchemaMigrationOptions(),
   }) : this(
-          collection: collection,
-          migrationId: migrationId,
-          fromVersion: 0,
-          toVersion: toVersion,
-          schema: schema,
-          transformer: _identityTransformer,
-          options: options,
-        );
+         collection: collection,
+         migrationId: migrationId,
+         fromVersion: 0,
+         toVersion: toVersion,
+         schema: schema,
+         transformer: _identityTransformer,
+         options: options,
+       );
 }
 
 Map<String, dynamic> _identityTransformer(Map<String, dynamic> payload) =>

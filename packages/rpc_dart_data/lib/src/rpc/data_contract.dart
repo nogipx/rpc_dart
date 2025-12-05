@@ -50,9 +50,6 @@ abstract interface class IDataServiceContract implements IRpcContract {
   /// Поиск записей.
   static const String searchRecords = 'searchRecords';
 
-  /// Расчет агрегатов.
-  static const String aggregateMetrics = 'aggregateMetrics';
-
   /// Создание выраженного индекса по JSON-полю.
   static const String createCollectionIndex = 'createCollectionIndex';
 
@@ -61,9 +58,6 @@ abstract interface class IDataServiceContract implements IRpcContract {
 
   /// Подписка на поток изменений.
   static const String watchChanges = 'watchChanges';
-
-  /// Двунаправленная синхронизация офлайн клиента.
-  static const String syncChanges = 'syncChanges';
 
   /// Получение списка активных схем.
   static const String listSchemas = 'listSchemas';
@@ -226,10 +220,6 @@ const RpcCodec<SearchRecordsRequest> searchRequestCodec = RpcCodec.withDecoder(
 );
 const RpcCodec<SearchRecordsResponse> searchResponseCodec =
     RpcCodec.withDecoder(SearchRecordsResponse.fromJson);
-const RpcCodec<AggregateMetricsRequest> aggregateRequestCodec =
-    RpcCodec.withDecoder(AggregateMetricsRequest.fromJson);
-const RpcCodec<AggregateMetricsResponse> aggregateResponseCodec =
-    RpcCodec.withDecoder(AggregateMetricsResponse.fromJson);
 const RpcCodec<CreateCollectionIndexRequest> createIndexRequestCodec =
     RpcCodec.withDecoder(CreateCollectionIndexRequest.fromJson);
 const RpcCodec<CreateCollectionIndexResponse> createIndexResponseCodec =
@@ -243,10 +233,4 @@ const RpcCodec<WatchChangesRequest> watchRequestCodec = RpcCodec.withDecoder(
 );
 const RpcCodec<DataChangeEvent> changeEventCodec = RpcCodec.withDecoder(
   DataChangeEvent.fromJson,
-);
-const RpcCodec<SyncChangeRequest> syncRequestCodec = RpcCodec.withDecoder(
-  SyncChangeRequest.fromJson,
-);
-const RpcCodec<SyncChangeResponse> syncResponseCodec = RpcCodec.withDecoder(
-  SyncChangeResponse.fromJson,
 );

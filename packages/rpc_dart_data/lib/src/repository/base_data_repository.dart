@@ -1175,16 +1175,6 @@ abstract class BaseDataRepository implements IDataRepository {
   }
 
   @override
-  Future<AggregateMetricsResponse> aggregate(
-    AggregateMetricsRequest request,
-  ) async {
-    return _delegateToAdapter(
-      () => storage.aggregateCollection(request),
-      'aggregate queries',
-    );
-  }
-
-  @override
   Future<CollectionIndex> createCollectionIndex(
     CreateCollectionIndexRequest request,
   ) async {
@@ -1245,105 +1235,6 @@ abstract class BaseDataRepository implements IDataRepository {
         await subscription.cancel();
       };
     });
-  }
-
-  Future<DataRecord?> _fetchConflictRecord(DataCommand command) async {
-    switch (command.type) {
-      case DataCommandType.create:
-        final request = CreateRecordRequest.fromJson(command.payload);
-        if (request.id == null) {
-          return null;
-        }
-        return get(
-          GetRecordRequest(collection: request.collection, id: request.id!),
-        );
-      case DataCommandType.update:
-        final request = UpdateRecordRequest.fromJson(command.payload);
-        return get(
-          GetRecordRequest(collection: request.collection, id: request.id),
-        );
-      case DataCommandType.patch:
-        final request = PatchRecordRequest.fromJson(command.payload);
-        return get(
-          GetRecordRequest(collection: request.collection, id: request.id),
-        );
-      case DataCommandType.delete:
-        final request = DeleteRecordRequest.fromJson(command.payload);
-        return get(
-          GetRecordRequest(collection: request.collection, id: request.id),
-        );
-    }
-  }
-
-  Future<SyncChangeResponse> _applyCommand(SyncChangeRequest message) async {
-    final command = message.command;
-    switch (command.type) {
-      case DataCommandType.create:
-        final request = CreateRecordRequest.fromJson(command.payload);
-        final record = await create(request);
-        return SyncChangeResponse(
-          requestId: message.requestId,
-          commandId: command.commandId,
-          applied: true,
-          record: record,
-        );
-      case DataCommandType.update:
-        final request = UpdateRecordRequest.fromJson(command.payload);
-        final record = await update(request);
-        return SyncChangeResponse(
-          requestId: message.requestId,
-          commandId: command.commandId,
-          applied: true,
-          record: record,
-        );
-      case DataCommandType.patch:
-        final request = PatchRecordRequest.fromJson(command.payload);
-        final record = await patch(request);
-        return SyncChangeResponse(
-          requestId: message.requestId,
-          commandId: command.commandId,
-          applied: true,
-          record: record,
-        );
-      case DataCommandType.delete:
-        final request = DeleteRecordRequest.fromJson(command.payload);
-        final removed = await delete(request);
-        if (!removed) {
-          // Отсутствие записи не считаем ошибкой — команда идемпотентна.
-          return SyncChangeResponse(
-            requestId: message.requestId,
-            commandId: command.commandId,
-            applied: true,
-          );
-        }
-        return SyncChangeResponse(
-          requestId: message.requestId,
-          commandId: command.commandId,
-          applied: true,
-        );
-    }
-  }
-
-  @override
-  Stream<SyncChangeResponse> sync(Stream<SyncChangeRequest> requests) async* {
-    await for (final message in requests) {
-      try {
-        final response = await _applyCommand(message);
-        yield response;
-      } on RpcDataError catch (error) {
-        final conflict = await _fetchConflictRecord(message.command);
-        yield SyncChangeResponse(
-          requestId: message.requestId,
-          commandId: message.command.commandId,
-          applied: false,
-          conflict: conflict,
-          error: error.message,
-        );
-        if (!message.resolveConflicts) {
-          rethrow;
-        }
-      }
-    }
   }
 
   @override

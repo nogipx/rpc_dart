@@ -30,8 +30,6 @@ abstract interface class IDataRepository {
 
   Future<SearchRecordsResponse> search(SearchRecordsRequest request);
 
-  Future<AggregateMetricsResponse> aggregate(AggregateMetricsRequest request);
-
   Stream<DataChangeEvent> watch(WatchChangesRequest request);
 
   Future<CollectionIndex> createCollectionIndex(
@@ -39,8 +37,6 @@ abstract interface class IDataRepository {
   );
 
   Future<bool> deleteCollectionIndex(DeleteCollectionIndexRequest request);
-
-  Stream<SyncChangeResponse> sync(Stream<SyncChangeRequest> requests);
 
   Future<void> dispose();
 

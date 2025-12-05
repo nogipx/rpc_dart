@@ -187,10 +187,6 @@ class _ThrowingRepository implements IDataRepository {
       throw UnimplementedError();
 
   @override
-  Future<AggregateMetricsResponse> aggregate(AggregateMetricsRequest request) =>
-      throw UnimplementedError();
-
-  @override
   Stream<DataChangeEvent> watch(WatchChangesRequest request) =>
       throw UnimplementedError();
 
@@ -201,10 +197,6 @@ class _ThrowingRepository implements IDataRepository {
 
   @override
   Future<bool> deleteCollectionIndex(DeleteCollectionIndexRequest request) =>
-      throw UnimplementedError();
-
-  @override
-  Stream<SyncChangeResponse> sync(Stream<SyncChangeRequest> requests) =>
       throw UnimplementedError();
 
   @override
@@ -231,9 +223,7 @@ class _ThrowingRepository implements IDataRepository {
   }
 
   @override
-  Future<StartMigrationResponse> startMigration(
-    StartMigrationRequest request,
-  ) {
+  Future<StartMigrationResponse> startMigration(StartMigrationRequest request) {
     // Not used in these tests.
     throw UnimplementedError();
   }

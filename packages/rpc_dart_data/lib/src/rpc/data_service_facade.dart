@@ -237,23 +237,6 @@ class DataServiceClient implements IDataService {
   }
 
   @override
-  Future<AggregateMetricsResponse> aggregate({
-    required String collection,
-    RecordFilter? filter,
-    Map<String, String> metrics = const {},
-    RpcContext? context,
-  }) {
-    return _caller.aggregateMetrics(
-      AggregateMetricsRequest(
-        collection: collection,
-        filter: filter,
-        metrics: metrics,
-      ),
-      context: context,
-    );
-  }
-
-  @override
   Future<CollectionIndex> createCollectionIndex({
     required String collection,
     required String path,
@@ -298,36 +281,6 @@ class DataServiceClient implements IDataService {
     return _caller.watchChanges(
       WatchChangesRequest(collection: collection, cursor: cursor),
       context: context,
-    );
-  }
-
-  @override
-  Stream<SyncChangeResponse> syncChanges(
-    Stream<SyncChangeRequest> requests, {
-    RpcContext? context,
-  }) {
-    return _caller.syncChanges(requests, context: context);
-  }
-
-  @override
-  Future<SyncChangeResponse> pushAndAwaitAck({
-    required SyncChangeRequest request,
-    RpcContext? context,
-  }) {
-    return _caller.pushAndAwaitAck(request, context: context);
-  }
-
-  @override
-  OfflineCommandQueue createOfflineQueue({
-    String? sessionId,
-    DateTime Function()? clock,
-    void Function(Object error, StackTrace stackTrace)? onError,
-  }) {
-    return OfflineCommandQueue(
-      _caller,
-      sessionId: sessionId,
-      clock: clock,
-      onError: onError,
     );
   }
 

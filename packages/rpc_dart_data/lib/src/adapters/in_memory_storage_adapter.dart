@@ -179,17 +179,6 @@ class InMemoryStorageAdapter implements IDataStorageAdapter {
   Future<void> dispose() async {
     _storage.clear();
   }
-
-  @override
-  Future<AggregateMetricsResponse> aggregateCollection(
-    AggregateMetricsRequest request,
-  ) async {
-    _validateAggregateMetrics(request);
-    final collection = await readCollection(request.collection);
-    final filtered = _filterAndSortRecords(collection, request.filter, null);
-    final metrics = _computeAggregates(filtered, request.metrics);
-    return AggregateMetricsResponse(metrics: metrics);
-  }
 }
 
 List<DataRecord> _filterAndSortRecords(
@@ -215,65 +204,6 @@ int _resolveCursorStart(List<DataRecord> records, String? cursor) {
     );
   }
   return index + 1;
-}
-
-Map<String, num> _computeAggregates(
-  Iterable<DataRecord> records,
-  Map<String, String> metrics,
-) {
-  final result = <String, num>{};
-  final entries = records.toList(growable: false);
-
-  for (final entry in metrics.entries) {
-    final definition = entry.value;
-    if (definition == 'count') {
-      result[entry.key] = entries.length;
-      continue;
-    }
-
-    final parts = definition.split(':');
-    if (parts.length != 2) {
-      throw RpcDataError.invalidArgument(
-        'Unsupported metric definition "$definition"',
-      );
-    }
-    final op = parts[0];
-    final field = parts[1];
-    final values = entries
-        .map((record) => _recordFieldValue(record, field))
-        .whereType<num>()
-        .toList(growable: false);
-
-    switch (op) {
-      case 'sum':
-        result[entry.key] = values.fold<num>(
-          0,
-          (previousValue, element) => previousValue + element,
-        );
-        break;
-      case 'avg':
-        if (values.isEmpty) {
-          result[entry.key] = 0;
-        } else {
-          final total = values.fold<num>(
-            0,
-            (previousValue, element) => previousValue + element,
-          );
-          result[entry.key] = total / values.length;
-        }
-        break;
-      case 'min':
-        result[entry.key] = values.isEmpty ? 0 : values.reduce(min);
-        break;
-      case 'max':
-        result[entry.key] = values.isEmpty ? 0 : values.reduce(max);
-        break;
-      default:
-        throw RpcDataError.invalidArgument('Unknown aggregate operation "$op"');
-    }
-  }
-
-  return result;
 }
 
 bool _recordMatchesFilter(DataRecord record, RecordFilter? filter) {
@@ -360,30 +290,5 @@ dynamic _recordFieldValue(DataRecord record, String field) {
       return record.updatedAt;
     default:
       return record.payload[field];
-  }
-}
-
-void _validateAggregateMetrics(AggregateMetricsRequest request) {
-  for (final entry in request.metrics.entries) {
-    final definition = entry.value;
-    if (definition == 'count') {
-      continue;
-    }
-    final parts = definition.split(':');
-    if (parts.length != 2) {
-      throw RpcDataError.invalidArgument(
-        'Unsupported metric definition "$definition"',
-      );
-    }
-    final op = parts[0];
-    switch (op) {
-      case 'sum':
-      case 'avg':
-      case 'min':
-      case 'max':
-        continue;
-      default:
-        throw RpcDataError.invalidArgument('Unknown aggregate operation "$op"');
-    }
   }
 }

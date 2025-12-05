@@ -11,13 +11,6 @@ class _ThrowingAdapter implements IDataStorageAdapter {
   final InMemoryStorageAdapter _delegate;
 
   @override
-  Future<AggregateMetricsResponse> aggregateCollection(
-    AggregateMetricsRequest request,
-  ) async {
-    throw UnimplementedError('aggregate');
-  }
-
-  @override
   Future<SearchRecordsResponse> searchCollection(
     SearchRecordsRequest request,
   ) async {

@@ -1,5 +1,5 @@
 name: rpc_dart_data
-description: Data service layer (CRUD + querying + offline sync) built on rpc_dart.
+description: Data service layer (CRUD + querying + change streams) built on rpc_dart.
 version: 3.1.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
