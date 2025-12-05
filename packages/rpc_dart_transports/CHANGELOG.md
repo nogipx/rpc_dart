@@ -1,3 +1,9 @@
+## Unreleased
+
+## 1.6.1
+
+- Web: conditionally export the isolate transport and add a stub so web builds no longer pull in `dart:isolate`.
+
 ## 1.6.0
 
 - WebSocket: added optional chunking for large gRPC frames (`enableChunking`, `chunkSizeBytes`, `maxChunkedMessageBytes` on caller/responder constructors). Off by default for compatibility; uses a flag + chunk header and reassembles before gRPC parsing.
@@ -11,8 +17,6 @@
 
 - **Feature**: Added HTTP/1.1 transports for unary-only fallbacks, including caller/responder/server helpers with SHA256 `x-rpc-integrity` headers and a guard that rejects non-unary methods with `UNIMPLEMENTED` (`lib/src/transports/http/rpc_http1_caller_transport.dart:1`, `lib/src/transports/http/rpc_http1_responder_transport.dart:1`, `lib/src/transports/http/rpc_http1_server.dart:1`).
 - **Testing**: Added regression coverage for large payloads and verified that streaming calls receive the expected error (`test/http1_rpc_integration_test.dart:34`, `test/http1_rpc_integration_test.dart:70`).
-
-## Unreleased
 
 ## 1.4.2
 
