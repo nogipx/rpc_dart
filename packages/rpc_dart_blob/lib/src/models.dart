@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
 import 'package:rpc_dart/rpc_dart.dart';

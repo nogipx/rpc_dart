@@ -47,8 +47,4 @@ abstract interface class IDataRepository {
   Future<SetSchemaPolicyResponse> setSchemaPolicy(
     SetSchemaPolicyRequest request,
   );
-
-  Future<StartMigrationResponse> startMigration(StartMigrationRequest request);
-
-  Future<MigrationStatusResponse> getMigrationStatus(String collection);
 }

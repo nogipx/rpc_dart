@@ -1,3 +1,11 @@
+## 3.3.0
+
+- Breaking: removed `skipValidation` flags from all RPC models and repository paths; schema validation is always enforced when a schema is enabled/requireValidation=true.
+- Added `SchemaValidationConfig.allowOverrideMigrations` guard; override migrations now require explicit config and still validate transformed payloads, while recording schema history.
+- Migration RPC surface removed; migrations run only server-side via repository/helpers.
+- Initial migrations can supply a transformer; schema overrides write to `collection_schema_history`.
+- Docs/examples updated; schema toggle now via policy only (no skip flags); `maxPayloadBytes` guard removed.
+
 ## 3.2.0
 
 - Breaking: removed offline sync/command queue APIs (`syncChanges`/`pushAndAwaitAck`/`OfflineCommandQueue`, `DataCommand`/SyncChange models) to focus on online CRUD/search/watch; RPC contract, caller/responder, and repository helpers are trimmed accordingly.
@@ -5,7 +13,7 @@
 
 ## 3.1.0
 
-- Schema validation: enforced on create/update/patch/bulk/import (including RPC); per-collection policy flags with defaults, nested object/array support, detailed validation errors; `skipValidation` remains admin-only.
+- Schema validation: enforced on create/update/patch/bulk/import (including RPC); per-collection policy flags with defaults, nested object/array support, detailed validation errors.
 - Schema registry: SQLite tables for active/history schemas, policy, migration checkpoints/logs/errors; export/import includes schemas and validates on import.
 - Migrations: server-side runner with checkpoints/logging, index/FTS rebuild after migration, fail-fast vs collect errors (errors block activation). Migrations are now bound to a specific collection (`MigrationDefinition.collection`), and a single `SchemaValidationEngine` is shared in `SqliteDataRepository`.
 - RPC surface trimmed: migration RPC methods removed from public client; list/get/setPolicy remain for diagnostics, migrations executed server-side via repository/runner helpers.

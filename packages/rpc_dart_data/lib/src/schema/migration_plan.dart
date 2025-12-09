@@ -13,6 +13,7 @@ class MigrationPlan {
     required String migrationId,
     required int toVersion,
     required Map<String, dynamic> schema,
+    SchemaTransformer transformer = _identityTransformer,
     SchemaMigrationOptions options = const SchemaMigrationOptions(),
   }) {
     _definitions.add(
@@ -21,6 +22,7 @@ class MigrationPlan {
         migrationId: migrationId,
         toVersion: toVersion,
         schema: schema,
+        transformer: transformer,
         options: options,
       ),
     );
@@ -78,3 +80,6 @@ class MigrationPlan {
   static MigrationPlan forCollection(String collection) =>
       MigrationPlan._(collection);
 }
+
+Map<String, dynamic> _identityTransformer(Map<String, dynamic> payload) =>
+    payload;

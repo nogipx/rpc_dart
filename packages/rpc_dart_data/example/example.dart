@@ -103,10 +103,8 @@ Future<void> main() async {
     migrations: [...notesMigrations.build()],
   );
   await helper.applyPendingMigrations();
-  final status = await serverRepo.getMigrationStatus('notes');
-  print(
-    'migration status completed=${status.completed} to=${status.toVersion}',
-  );
+  final schema = await serverRepo.schemaValidationEngine.getSchema('notes');
+  print('active schema version=${schema?.version}');
 
   final created = await client.create(
     collection: 'notes',
@@ -148,8 +146,9 @@ Future<void> main() async {
   print(
     'schemas: ${schemas.schemas.map((s) => '${s.collection}@${s.version}')}',
   );
-  final schema = await client.getSchema(collection: 'notes');
-  print('active schema for notes v=${schema.schema?.version}');
+  final fetchedSchema = await client.getSchema(collection: 'notes');
+  final activeSchema = fetchedSchema.schema;
+  print('active schema for notes v=${activeSchema?.version}');
   // Toggle policy via RPC (e.g., ensure validation is on).
   await client.setSchemaPolicy(
     collection: 'notes',

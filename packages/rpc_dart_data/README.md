@@ -9,7 +9,7 @@ It gives you a transport-agnostic contract, ready-to-use storage adapters, and u
 - **Search** delegated to the storage adapter, including backend pagination.
 - **Streaming snapshots**: export/import the full database as NDJSON, stream it through `payloadStream`, or set `includePayloadString: false` to skip building large strings.
 - **Change streams**: `watchChanges` with cursors.
-- **Schema validation & migrations**: per-collection schema registry (nested objects/arrays), validation on all write/import RPCs, optional `skipValidation` for admin paths. Server-side migrations with checkpoints/logs and automatic index/FTS rebuilds after success; migrations are bound to a collection and run via repository helpers.
+- **Schema validation & migrations**: per-collection schema registry (nested objects/arrays), validation on all write/import RPCs. Server-side migrations with checkpoints/logs and automatic index/FTS rebuilds after success; migrations are bound to a collection and run via repository helpers.
 - **SQLite adapter** with SQLCipher support out-of-the-box via SQLite3MultipleCiphers (`hooks.user_defines.sqlite3.source: sqlite3mc`), no system `libsqlcipher` needed; web uses `sqlite3mc.wasm`. `SqliteSetupHook` lets you register custom pragmas before the database is exposed to your code.
 - Pass a `SqlCipherKey` to enable encryption; the runtime fails fast if cipher pragmas are missing.
 - **Ready-made environments** (`DataServiceFactory.inMemory`) for tests, demos, and local prototyping.
@@ -81,7 +81,7 @@ await for (final chunk in export.payloadStream!) {
 ```
 
 ## Schema validation and migrations
-- Per-collection schemas (nested objects/arrays) live in a registry; validation runs on create/update/patch/bulk/import over RPC unless `skipValidation=true` (admin-only).
+- Per-collection schemas (nested objects/arrays) live in a registry; validation runs on create/update/patch/bulk/import over RPC.
 - Default policy is controlled via `SchemaValidationConfig(defaultSchemaEnabled, defaultRequireValidation)`; per-collection overrides use `setSchemaPolicy`.
 - Migrations are server-side only: register declarative steps with `MigrationDefinition` (bound to a `collection`) and run them via `MigrationRunnerHelper` or `SqliteDataRepository.runMigration`. Migration success activates the new schema and rebuilds indexes/FTS; any errors keep the checkpoint and block activation.
 

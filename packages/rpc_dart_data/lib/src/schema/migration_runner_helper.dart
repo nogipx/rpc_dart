@@ -34,7 +34,8 @@ class MigrationRunnerHelper {
     var activeVersion = schema?.version ?? 0;
 
     for (final migration in _migrations) {
-      if (migration.fromVersion != activeVersion) {
+      final isOverride = migration.options.overrideSchema;
+      if (!isOverride && migration.fromVersion != activeVersion) {
         continue;
       }
       final result = await _repository.runMigration(

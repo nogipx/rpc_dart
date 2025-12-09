@@ -27,6 +27,7 @@ class MigrationDefinition {
     required String migrationId,
     required int toVersion,
     required Map<String, dynamic> schema,
+    SchemaTransformer transformer = _identityTransformer,
     SchemaMigrationOptions options = const SchemaMigrationOptions(),
   }) : this(
          collection: collection,
@@ -34,7 +35,7 @@ class MigrationDefinition {
          fromVersion: 0,
          toVersion: toVersion,
          schema: schema,
-         transformer: _identityTransformer,
+         transformer: transformer,
          options: options,
        );
 }

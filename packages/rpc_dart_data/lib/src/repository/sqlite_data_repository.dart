@@ -92,55 +92,6 @@ class SqliteDataRepository extends BaseDataRepository {
     );
   }
 
-  @override
-  Future<StartMigrationResponse> startMigration(
-    StartMigrationRequest request,
-  ) async {
-    final transformer = _lookupMigration(
-      request.collection,
-      request.migrationId,
-    );
-    if (transformer == null) {
-      throw RpcDataError.invalidArgument(
-        'Unknown migrationId ${request.migrationId} for ${request.collection}',
-      );
-    }
-    final result = await runMigration(
-      collection: request.collection,
-      fromVersion: request.fromVersion,
-      toVersion: request.toVersion,
-      newSchema: transformer.schema,
-      transformer: transformer.transformer,
-      options: transformer.options ?? const SchemaMigrationOptions(),
-      migrationId: request.migrationId,
-    );
-    return StartMigrationResponse(accepted: result.errors.isEmpty);
-  }
-
-  @override
-  Future<MigrationStatusResponse> getMigrationStatus(String collection) async {
-    final checkpoint = await storage.schemaRegistry.loadCheckpoint(collection);
-    final active = await schemaValidationEngine.getSchema(collection);
-    final registered = _migrationsForCollection(
-      collection,
-    ).where((m) => m.toVersion > (active?.version ?? 0)).toList();
-    final targetVersion =
-        checkpoint?.toVersion ??
-        (registered.isNotEmpty
-            ? registered.map((m) => m.toVersion).reduce((a, b) => a > b ? a : b)
-            : (active?.version ?? 0));
-    return MigrationStatusResponse(
-      collection: collection,
-      migrationId: checkpoint?.migrationId ?? '',
-      fromVersion: checkpoint?.fromVersion ?? active?.version ?? 0,
-      toVersion: targetVersion,
-      processed: 0,
-      updated: 0,
-      errors: const [],
-      completed: checkpoint == null,
-    );
-  }
-
   /// Server-side registry of migration transformers keyed by collection+migrationId.
   final Map<String, _RegisteredMigration> _migrationTransformers =
       <String, _RegisteredMigration>{};
@@ -181,19 +132,6 @@ class SqliteDataRepository extends BaseDataRepository {
         options: migration.options,
       );
     }
-  }
-
-  _RegisteredMigration? _lookupMigration(
-    String collection,
-    String migrationId,
-  ) {
-    return _migrationTransformers[_migrationKey(collection, migrationId)];
-  }
-
-  Iterable<_RegisteredMigration> _migrationsForCollection(String collection) {
-    return _migrationTransformers.values.where(
-      (m) => m.collection == collection,
-    );
   }
 }
 

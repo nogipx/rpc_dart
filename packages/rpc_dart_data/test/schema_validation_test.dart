@@ -16,6 +16,7 @@ void main() {
         config: const SchemaValidationConfig(
           defaultSchemaEnabled: true,
           defaultRequireValidation: true,
+          allowOverrideMigrations: true,
         ),
       );
       repository = InMemoryDataRepository(
@@ -60,18 +61,7 @@ void main() {
       );
     });
 
-    test('allows skipValidation flag', () async {
-      final record = await repository.create(
-        const CreateRecordRequest(
-          collection: 'notes',
-          payload: {},
-          skipValidation: true,
-        ),
-      );
-      expect(record.id, isNotEmpty);
-    });
-
-    test('importDatabase enforces schema unless skipped', () async {
+    test('importDatabase enforces schema', () async {
       final now = DateTime.utc(2024, 1, 1);
       final invalid = DataRecord(
         id: 'n1',
@@ -98,11 +88,6 @@ void main() {
           isA<RpcDataError>().having((e) => e.code, 'code', 'INVALID_ARGUMENT'),
         ),
       );
-
-      final bypassed = await repository.importDatabase(
-        ImportDatabaseRequest(payload: payload, skipValidation: true),
-      );
-      expect(bypassed.recordCount, 1);
     });
 
     test('migration runner upgrades documents', () async {
@@ -140,6 +125,107 @@ void main() {
       final active = await engine.getSchema('notes');
       expect(active?.version, 2);
     });
+
+    test(
+      'override schema gated by config and normalizes data when allowed',
+      () async {
+        // Start with schema v1 and dirty data that would fail validation.
+        await engine.saveSchema(
+          collection: 'notes',
+          version: 1,
+          schema: {
+            'type': 'object',
+            'required': ['title'],
+            'properties': {
+              'title': {'type': 'string'},
+            },
+          },
+          policy: const CollectionSchemaPolicy(
+            enabled: true,
+            requireValidation: true,
+          ),
+        );
+        final now = DateTime.utc(2024, 1, 1);
+        await storage.writeRecord(
+          DataRecord(
+            id: 'n1',
+            collection: 'notes',
+            payload: const {'title': 123},
+            version: 1,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        // Without overrideSchema, mismatched fromVersion should fail fast.
+        expect(
+          () => engine.runMigration(
+            storage: storage,
+            collection: 'notes',
+            fromVersion: 0, // does not match active 1
+            toVersion: 2,
+            newSchema: {
+              'type': 'object',
+              'required': ['title'],
+              'properties': {
+                'title': {'type': 'string'},
+              },
+            },
+            transformer: (payload) => payload,
+          ),
+          throwsA(isA<RpcDataError>()),
+        );
+
+        // Disallow override via config.
+        final lockedEngine = SchemaValidationEngine(
+          registry: InMemorySchemaRegistry(),
+          config: const SchemaValidationConfig(
+            defaultSchemaEnabled: true,
+            defaultRequireValidation: true,
+            allowOverrideMigrations: false,
+          ),
+        );
+        expect(
+          () => lockedEngine.runMigration(
+            storage: storage,
+            collection: 'notes',
+            fromVersion: 0,
+            toVersion: 2,
+            newSchema: const {},
+            transformer: (payload) => payload,
+            options: const SchemaMigrationOptions(overrideSchema: true),
+          ),
+          throwsA(isA<RpcDataError>()),
+        );
+
+        final result = await engine.runMigration(
+          storage: storage,
+          collection: 'notes',
+          fromVersion: 0, // mismatch, but allowed with overrideSchema
+          toVersion: 2,
+          newSchema: {
+            'type': 'object',
+            'required': ['title'],
+            'properties': {
+              'title': {'type': 'string'},
+            },
+          },
+          transformer: (payload) => {
+            ...payload,
+            'title': payload['title'].toString(),
+          },
+          options: const SchemaMigrationOptions(overrideSchema: true),
+        );
+
+        expect(result.errors, isEmpty);
+        final active = await engine.getSchema('notes');
+        expect(active?.version, 2);
+        final loaded = await repository.list(
+          const ListRecordsRequest(collection: 'notes'),
+        );
+        expect(loaded.records.single.payload['title'], isA<String>());
+      },
+    );
   });
 
   group('Schema migration checkpoints', () {

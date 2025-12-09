@@ -329,4 +329,21 @@ class SqliteCollectionSchemaRegistry implements CollectionSchemaRegistry {
       variables: [collection],
     );
   }
+
+  @override
+  Future<void> recordSchemaHistory({
+    required String collection,
+    required int version,
+    required Map<String, dynamic> schema,
+    String? migrationId,
+  }) async {
+    await ensureReady();
+    final now = DateTime.now().toUtc().microsecondsSinceEpoch;
+    await _database.customStatement(
+      'INSERT OR REPLACE INTO "$_collectionSchemaHistoryTable" '
+      '(collection, version, schema_json, created_at, migration_id) '
+      'VALUES (?, ?, ?, ?, ?)',
+      variables: [collection, version, jsonEncode(schema), now, migrationId],
+    );
+  }
 }

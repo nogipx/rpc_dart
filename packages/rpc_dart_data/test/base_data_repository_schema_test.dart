@@ -120,11 +120,11 @@ void main() {
         ),
       );
 
-      // With skipValidation succeeds.
-      final success = await repository.bulkUpsert(
-        BulkUpsertRequest(records: [valid, invalid], skipValidation: true),
+      // Without skipValidation, bulkUpsert rejects invalid record.
+      await expectLater(
+        repository.bulkUpsert(BulkUpsertRequest(records: [valid, invalid])),
+        throwsA(isA<RpcDataError>()),
       );
-      expect(success, hasLength(2));
     });
   });
 }

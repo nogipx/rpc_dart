@@ -67,19 +67,14 @@ abstract class BaseDataRepository implements IDataRepository {
 
   Future<void> _validatePayload(
     String collection,
-    Map<String, dynamic> payload, {
-    bool skipValidation = false,
-  }) async {
+    Map<String, dynamic> payload,
+  ) async {
     final validator = _schemaValidation;
     if (validator == null) {
       return;
     }
     await validator.ensureReady();
-    await validator.validateOrThrow(
-      collection: collection,
-      payload: payload,
-      skipValidation: skipValidation,
-    );
+    await validator.validateOrThrow(collection: collection, payload: payload);
   }
 
   String _generateId(String collection) {
@@ -223,9 +218,8 @@ abstract class BaseDataRepository implements IDataRepository {
 
   Future<ImportDatabaseResponse> _importParsedCollections(
     Map<String, List<DataRecord>> collections,
-    bool replaceExisting, {
-    bool skipValidation = false,
-  }) async {
+    bool replaceExisting,
+  ) async {
     final existingCollections = await storage.listCollections();
     final existingRecords = <String, Map<String, DataRecord>>{};
     if (replaceExisting) {
@@ -268,11 +262,7 @@ abstract class BaseDataRepository implements IDataRepository {
 
       if (records.isNotEmpty) {
         for (final record in records) {
-          await _validatePayload(
-            record.collection,
-            record.payload,
-            skipValidation: skipValidation,
-          );
+          await _validatePayload(record.collection, record.payload);
         }
         await storage.writeRecords(records);
         for (final record in records) {
@@ -291,9 +281,8 @@ abstract class BaseDataRepository implements IDataRepository {
 
   Future<ImportDatabaseResponse> _importStreamingSnapshot(
     String payload,
-    bool replaceExisting, {
-    bool skipValidation = false,
-  }) async {
+    bool replaceExisting,
+  ) async {
     Map<String, dynamic> parseEntry(String line) {
       try {
         final decoded = jsonDecode(line);
@@ -519,11 +508,7 @@ abstract class BaseDataRepository implements IDataRepository {
         );
       }
       for (final record in pending) {
-        await _validatePayload(
-          record.collection,
-          record.payload,
-          skipValidation: skipValidation,
-        );
+        await _validatePayload(record.collection, record.payload);
       }
       await storage.writeRecords(pending);
       for (final record in pending) {
@@ -645,11 +630,7 @@ abstract class BaseDataRepository implements IDataRepository {
 
     final now = _clock();
     final id = request.id ?? _generateId(request.collection);
-    await _validatePayload(
-      request.collection,
-      request.payload,
-      skipValidation: request.skipValidation,
-    );
+    await _validatePayload(request.collection, request.payload);
     final record = DataRecord(
       id: id,
       collection: request.collection,
@@ -701,11 +682,7 @@ abstract class BaseDataRepository implements IDataRepository {
       version: existing.version + 1,
       updatedAt: _clock(),
     );
-    await _validatePayload(
-      request.collection,
-      updated.payload,
-      skipValidation: request.skipValidation,
-    );
+    await _validatePayload(request.collection, updated.payload);
     await storage.writeRecord(updated);
     await _recordEvent(DataChangeType.updated, updated);
     return updated;
@@ -732,11 +709,7 @@ abstract class BaseDataRepository implements IDataRepository {
       version: existing.version + 1,
       updatedAt: _clock(),
     );
-    await _validatePayload(
-      request.collection,
-      updated.payload,
-      skipValidation: request.skipValidation,
-    );
+    await _validatePayload(request.collection, updated.payload);
     await storage.writeRecord(updated);
     await _recordEvent(DataChangeType.patched, updated);
     return updated;
@@ -844,11 +817,7 @@ abstract class BaseDataRepository implements IDataRepository {
 
     if (writes.isNotEmpty) {
       for (final record in writes) {
-        await _validatePayload(
-          record.collection,
-          record.payload,
-          skipValidation: request.skipValidation,
-        );
+        await _validatePayload(record.collection, record.payload);
       }
       await storage.writeRecords(writes);
       for (final entry in events) {
@@ -1149,21 +1118,13 @@ abstract class BaseDataRepository implements IDataRepository {
         final collections = _parseSnapshotCollections(snapshot);
         final schemas = _parseSnapshotSchemas(snapshot);
         await _applySchemas(schemas);
-        return _importParsedCollections(
-          collections,
-          request.replaceExisting,
-          skipValidation: request.skipValidation,
-        );
+        return _importParsedCollections(collections, request.replaceExisting);
       } on FormatException {
         // Not a legacy snapshot, fall through to the streaming parser.
       }
     }
 
-    return _importStreamingSnapshot(
-      payload,
-      request.replaceExisting,
-      skipValidation: request.skipValidation,
-    );
+    return _importStreamingSnapshot(payload, request.replaceExisting);
   }
 
   @override
@@ -1318,22 +1279,6 @@ abstract class BaseDataRepository implements IDataRepository {
         schema: schema.schema,
         updatedAt: schema.updatedAt,
       ),
-    );
-  }
-
-  @override
-  Future<StartMigrationResponse> startMigration(
-    StartMigrationRequest request,
-  ) async {
-    throw RpcDataError.invalidArgument(
-      'Migrations over RPC are not supported by this repository.',
-    );
-  }
-
-  @override
-  Future<MigrationStatusResponse> getMigrationStatus(String collection) async {
-    throw RpcDataError.invalidArgument(
-      'Migration status over RPC is not supported by this repository.',
     );
   }
 }

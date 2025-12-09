@@ -520,7 +520,6 @@ class CreateRecordRequest extends Equatable implements IRpcSerializable {
     required this.collection,
     required this.payload,
     this.id,
-    this.skipValidation = false,
   });
 
   factory CreateRecordRequest.fromJson(Map<String, dynamic> json) =>
@@ -528,23 +527,20 @@ class CreateRecordRequest extends Equatable implements IRpcSerializable {
         collection: json['collection'] as String,
         payload: Map<String, dynamic>.from(json['payload'] as Map),
         id: json['id'] as String?,
-        skipValidation: json['skipValidation'] as bool? ?? false,
       );
 
   final String collection;
   final Map<String, dynamic> payload;
   final String? id;
-  final bool skipValidation;
 
   @override
-  List<Object?> get props => [collection, payload, id, skipValidation];
+  List<Object?> get props => [collection, payload, id];
 
   @override
   Map<String, dynamic> toJson() => {
     'collection': collection,
     'payload': payload,
     'id': id,
-    'skipValidation': skipValidation,
   };
 }
 
@@ -731,7 +727,6 @@ class UpdateRecordRequest extends Equatable implements IRpcSerializable {
     required this.id,
     required this.expectedVersion,
     required this.payload,
-    this.skipValidation = false,
   });
 
   factory UpdateRecordRequest.fromJson(Map<String, dynamic> json) =>
@@ -740,23 +735,15 @@ class UpdateRecordRequest extends Equatable implements IRpcSerializable {
         id: json['id'] as String,
         expectedVersion: json['expectedVersion'] as int,
         payload: Map<String, dynamic>.from(json['payload'] as Map),
-        skipValidation: json['skipValidation'] as bool? ?? false,
       );
 
   final String collection;
   final String id;
   final int expectedVersion;
   final Map<String, dynamic> payload;
-  final bool skipValidation;
 
   @override
-  List<Object?> get props => [
-    collection,
-    id,
-    expectedVersion,
-    payload,
-    skipValidation,
-  ];
+  List<Object?> get props => [collection, id, expectedVersion, payload];
 
   @override
   Map<String, dynamic> toJson() => {
@@ -764,7 +751,6 @@ class UpdateRecordRequest extends Equatable implements IRpcSerializable {
     'id': id,
     'expectedVersion': expectedVersion,
     'payload': payload,
-    'skipValidation': skipValidation,
   };
 }
 
@@ -795,7 +781,6 @@ class PatchRecordRequest extends Equatable implements IRpcSerializable {
     required this.id,
     required this.expectedVersion,
     required this.patch,
-    this.skipValidation = false,
   });
 
   factory PatchRecordRequest.fromJson(Map<String, dynamic> json) =>
@@ -806,23 +791,15 @@ class PatchRecordRequest extends Equatable implements IRpcSerializable {
         patch: RecordPatch.fromJson(
           Map<String, dynamic>.from(json['patch'] as Map),
         ),
-        skipValidation: json['skipValidation'] as bool? ?? false,
       );
 
   final String collection;
   final String id;
   final int expectedVersion;
   final RecordPatch patch;
-  final bool skipValidation;
 
   @override
-  List<Object?> get props => [
-    collection,
-    id,
-    expectedVersion,
-    patch,
-    skipValidation,
-  ];
+  List<Object?> get props => [collection, id, expectedVersion, patch];
 
   @override
   Map<String, dynamic> toJson() => {
@@ -830,7 +807,6 @@ class PatchRecordRequest extends Equatable implements IRpcSerializable {
     'id': id,
     'expectedVersion': expectedVersion,
     'patch': patch.toJson(),
-    'skipValidation': skipValidation,
   };
 }
 
@@ -934,7 +910,7 @@ class DeleteCollectionResponse extends Equatable implements IRpcSerializable {
 
 @immutable
 class BulkUpsertRequest extends Equatable implements IRpcSerializable {
-  const BulkUpsertRequest({required this.records, this.skipValidation = false});
+  const BulkUpsertRequest({required this.records});
 
   factory BulkUpsertRequest.fromJson(Map<String, dynamic> json) =>
       BulkUpsertRequest(
@@ -943,19 +919,16 @@ class BulkUpsertRequest extends Equatable implements IRpcSerializable {
               (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)),
             )
             .toList(growable: false),
-        skipValidation: json['skipValidation'] as bool? ?? false,
       );
 
   final List<DataRecord> records;
-  final bool skipValidation;
 
   @override
-  List<Object?> get props => [records, skipValidation];
+  List<Object?> get props => [records];
 
   @override
   Map<String, dynamic> toJson() => {
     'records': records.map((e) => e.toJson()).toList(growable: false),
-    'skipValidation': skipValidation,
   };
 }
 
@@ -1145,28 +1118,24 @@ class ImportDatabaseRequest extends Equatable implements IRpcSerializable {
   const ImportDatabaseRequest({
     required this.payload,
     this.replaceExisting = true,
-    this.skipValidation = false,
   });
 
   factory ImportDatabaseRequest.fromJson(Map<String, dynamic> json) =>
       ImportDatabaseRequest(
         payload: json['payload'] as String,
         replaceExisting: json['replaceExisting'] as bool? ?? true,
-        skipValidation: json['skipValidation'] as bool? ?? false,
       );
 
   final String payload;
   final bool replaceExisting;
-  final bool skipValidation;
 
   @override
-  List<Object?> get props => [payload, replaceExisting, skipValidation];
+  List<Object?> get props => [payload, replaceExisting];
 
   @override
   Map<String, dynamic> toJson() => {
     'payload': payload,
     'replaceExisting': replaceExisting,
-    'skipValidation': skipValidation,
   };
 }
 
@@ -1374,132 +1343,8 @@ class SetSchemaPolicyResponse extends Equatable implements IRpcSerializable {
   Map<String, dynamic> toJson() => {'schema': schema.toJson()};
 }
 
-@immutable
-class StartMigrationRequest extends Equatable implements IRpcSerializable {
-  const StartMigrationRequest({
-    required this.collection,
-    required this.fromVersion,
-    required this.toVersion,
-    required this.migrationId,
-  });
-
-  factory StartMigrationRequest.fromJson(Map<String, dynamic> json) =>
-      StartMigrationRequest(
-        collection: json['collection'] as String,
-        fromVersion: json['fromVersion'] as int,
-        toVersion: json['toVersion'] as int,
-        migrationId: json['migrationId'] as String,
-      );
-
-  final String collection;
-  final int fromVersion;
-  final int toVersion;
-  final String migrationId;
-
-  @override
-  List<Object?> get props => [collection, fromVersion, toVersion, migrationId];
-
-  @override
-  Map<String, dynamic> toJson() => {
-    'collection': collection,
-    'fromVersion': fromVersion,
-    'toVersion': toVersion,
-    'migrationId': migrationId,
-  };
-}
-
-@immutable
-class StartMigrationResponse extends Equatable implements IRpcSerializable {
-  const StartMigrationResponse({required this.accepted});
-
-  factory StartMigrationResponse.fromJson(Map<String, dynamic> json) =>
-      StartMigrationResponse(accepted: json['accepted'] as bool? ?? false);
-
-  final bool accepted;
-
-  @override
-  List<Object?> get props => [accepted];
-
-  @override
-  Map<String, dynamic> toJson() => {'accepted': accepted};
-}
-
-@immutable
-class MigrationStatusResponse extends Equatable implements IRpcSerializable {
-  const MigrationStatusResponse({
-    required this.collection,
-    required this.migrationId,
-    required this.fromVersion,
-    required this.toVersion,
-    required this.processed,
-    required this.updated,
-    required this.errors,
-    required this.completed,
-  });
-
-  factory MigrationStatusResponse.fromJson(Map<String, dynamic> json) =>
-      MigrationStatusResponse(
-        collection: json['collection'] as String,
-        migrationId: json['migrationId'] as String,
-        fromVersion: json['fromVersion'] as int,
-        toVersion: json['toVersion'] as int,
-        processed: json['processed'] as int? ?? 0,
-        updated: json['updated'] as int? ?? 0,
-        errors: (json['errors'] as List? ?? const [])
-            .map((e) => e.toString())
-            .toList(growable: false),
-        completed: json['completed'] as bool? ?? false,
-      );
-
-  final String collection;
-  final String migrationId;
-  final int fromVersion;
-  final int toVersion;
-  final int processed;
-  final int updated;
-  final List<String> errors;
-  final bool completed;
-
-  @override
-  List<Object?> get props => [
-    collection,
-    migrationId,
-    fromVersion,
-    toVersion,
-    processed,
-    updated,
-    errors,
-    completed,
-  ];
-
-  @override
-  Map<String, dynamic> toJson() => {
-    'collection': collection,
-    'migrationId': migrationId,
-    'fromVersion': fromVersion,
-    'toVersion': toVersion,
-    'processed': processed,
-    'updated': updated,
-    'errors': errors,
-    'completed': completed,
-  };
-}
-
-@immutable
-class GetMigrationRequest extends Equatable implements IRpcSerializable {
-  const GetMigrationRequest({required this.collection});
-
-  factory GetMigrationRequest.fromJson(Map<String, dynamic> json) =>
-      GetMigrationRequest(collection: json['collection'] as String);
-
-  final String collection;
-
-  @override
-  List<Object?> get props => [collection];
-
-  @override
-  Map<String, dynamic> toJson() => {'collection': collection};
-}
+// Migration RPC models removed from public surface; migrations are performed
+// through internal helpers and repositories, not exposed over RPC.
 
 @immutable
 class SearchRecordsRequest extends Equatable implements IRpcSerializable {

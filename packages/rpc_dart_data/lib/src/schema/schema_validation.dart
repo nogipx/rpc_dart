@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:meta/meta.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 
@@ -100,16 +98,27 @@ class SchemaValidationConfig {
     this.defaultSchemaEnabled = false,
     this.defaultRequireValidation = true,
     this.maxValidationErrors = 50,
-    this.maxPayloadBytes = 1024 * 1024,
     this.maxDepth = 64,
+    this.allowOverrideMigrations = false,
   });
 
+  /// When false, schema validation is entirely disabled for all collections.
   final bool strictValidation;
+
+  /// Whether newly created collections default to schema enforcement enabled.
   final bool defaultSchemaEnabled;
+
+  /// Whether newly created collections default to requiring validation.
   final bool defaultRequireValidation;
+
+  /// Upper bound on how many validation errors to return per payload.
   final int maxValidationErrors;
-  final int maxPayloadBytes;
+
+  /// Maximum allowed nesting depth when walking payloads (defense against DoS).
   final int maxDepth;
+
+  /// Allows override migrations (force schema replacement) when true.
+  final bool allowOverrideMigrations;
 
   CollectionSchemaPolicy defaultPolicy() => CollectionSchemaPolicy(
     enabled: defaultSchemaEnabled,
@@ -127,13 +136,30 @@ class SchemaMigrationOptions {
     this.batchSize = 512,
     this.failFast = true,
     this.maxErrors = 10,
-    this.skipValidation = false,
+    this.overrideSchema = false,
   });
 
   final int batchSize;
   final bool failFast;
   final int maxErrors;
-  final bool skipValidation;
+
+  /// When true, allows forcing schema replacement even if an active version
+  /// already exists; migration will normalize data and overwrite the registry.
+  final bool overrideSchema;
+
+  SchemaMigrationOptions copyWith({
+    int? batchSize,
+    bool? failFast,
+    int? maxErrors,
+    bool? overrideSchema,
+  }) {
+    return SchemaMigrationOptions(
+      batchSize: batchSize ?? this.batchSize,
+      failFast: failFast ?? this.failFast,
+      maxErrors: maxErrors ?? this.maxErrors,
+      overrideSchema: overrideSchema ?? this.overrideSchema,
+    );
+  }
 }
 
 @immutable
@@ -228,6 +254,14 @@ abstract interface class CollectionSchemaRegistry {
   Future<void> saveCheckpoint(SchemaMigrationCheckpoint checkpoint) async {}
 
   Future<void> clearCheckpoint(String collection) async {}
+
+  /// Optional hook to store historical schema versions.
+  Future<void> recordSchemaHistory({
+    required String collection,
+    required int version,
+    required Map<String, dynamic> schema,
+    String? migrationId,
+  }) async {}
 }
 
 /// Simple in-memory registry used by tests and the in-memory adapter.
@@ -326,6 +360,16 @@ class InMemorySchemaRegistry implements CollectionSchemaRegistry {
   Future<void> clearCheckpoint(String collection) async {
     _checkpoints.remove(collection);
   }
+
+  @override
+  Future<void> recordSchemaHistory({
+    required String collection,
+    required int version,
+    required Map<String, dynamic> schema,
+    String? migrationId,
+  }) async {
+    // In-memory registry: history storage is not required for tests.
+  }
 }
 
 /// Lightweight JSON Schema-like validator (subset) with predictable errors.
@@ -340,10 +384,9 @@ class SchemaValidator {
 
   Future<List<SchemaValidationError>> validate(
     String collection,
-    Map<String, dynamic> payload, {
-    bool skipValidation = false,
-  }) async {
-    if (!config.strictValidation || skipValidation) {
+    Map<String, dynamic> payload,
+  ) async {
+    if (!config.strictValidation) {
       return const [];
     }
 
@@ -351,17 +394,6 @@ class SchemaValidator {
     final policy = active?.policy ?? config.defaultPolicy();
     if (!policy.enabled || !policy.requireValidation) {
       return const [];
-    }
-
-    final encoded = jsonEncode(payload);
-    if (encoded.length > config.maxPayloadBytes) {
-      return [
-        SchemaValidationError(
-          path: r'$',
-          rule: 'maxPayloadBytes',
-          message: 'Payload exceeds ${config.maxPayloadBytes} bytes',
-        ),
-      ];
     }
 
     final errors = <SchemaValidationError>[];
@@ -640,13 +672,8 @@ class SchemaValidationEngine {
   Future<void> validateOrThrow({
     required String collection,
     required Map<String, dynamic> payload,
-    bool skipValidation = false,
   }) async {
-    final errors = await _validator.validate(
-      collection,
-      payload,
-      skipValidation: skipValidation,
-    );
+    final errors = await _validator.validate(collection, payload);
     if (errors.isEmpty) {
       return;
     }
@@ -679,13 +706,23 @@ class SchemaValidationEngine {
     await ensureReady();
     final now = clock ?? DateTime.now;
     final current = await _registry.getActiveSchema(collection);
-    if (current != null && current.version != fromVersion) {
+    if (!options.overrideSchema &&
+        current != null &&
+        current.version != fromVersion) {
       throw RpcDataError.invalidArgument(
         'Active schema for $collection is ${current.version}, expected $fromVersion',
       );
     }
+    if (options.overrideSchema && !config.allowOverrideMigrations) {
+      throw RpcDataError.permissionDenied(
+        'Schema override migrations are disabled by configuration',
+      );
+    }
+    final effectiveFromVersion = options.overrideSchema && current != null
+        ? current.version
+        : fromVersion;
     final checkpoint = await _registry.loadCheckpoint(collection);
-    final effectiveFrom = checkpoint?.fromVersion ?? fromVersion;
+    final effectiveFrom = checkpoint?.fromVersion ?? effectiveFromVersion;
     final effectiveTo = checkpoint?.toVersion ?? toVersion;
     String? startAfterId;
     if (checkpoint != null &&
@@ -732,11 +769,7 @@ class SchemaValidationEngine {
           processed += 1;
           try {
             final nextPayload = transformer(record.payload);
-            await validateOrThrow(
-              collection: collection,
-              payload: nextPayload,
-              skipValidation: options.skipValidation,
-            );
+            await validateOrThrow(collection: collection, payload: nextPayload);
             final nextRecord = record.copyWith(
               payload: nextPayload,
               version: record.version + 1,
@@ -804,6 +837,12 @@ class SchemaValidationEngine {
           version: effectiveTo,
           schema: newSchema,
           policy: current?.policy,
+        );
+        await _registry.recordSchemaHistory(
+          collection: collection,
+          version: effectiveTo,
+          schema: newSchema,
+          migrationId: migrationId,
         );
         await refresh();
         await _registry.clearCheckpoint(collection);
