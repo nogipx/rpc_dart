@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
 import '../adapters/i_blob_storage_adapter.dart';
@@ -17,10 +20,14 @@ class BlobServiceFactory {
     required IRpcTransport transport,
     required IBlobStorageAdapter storage,
     RpcDataTransferMode transferMode = RpcDataTransferMode.codec,
+    int? maxChunkBytes,
     String debugLabel = 'BlobServiceServer',
   }) {
     final responder = BlobServiceResponder(
-      service: BlobService(storage: storage),
+      service: BlobService(
+        storage: storage,
+        maxChunkBytes: maxChunkBytes,
+      ),
       transferMode: transferMode,
     );
     final endpoint = RpcResponderEndpoint(
@@ -38,6 +45,7 @@ class BlobServiceFactory {
   static BlobServiceClient createClient({
     required IRpcTransport transport,
     RpcDataTransferMode transferMode = RpcDataTransferMode.codec,
+    int uploadChunkBytes = BlobServiceClient.defaultChunkBytes,
     String debugLabel = 'BlobServiceClient',
   }) {
     final endpoint = RpcCallerEndpoint(
@@ -48,7 +56,11 @@ class BlobServiceFactory {
       endpoint: endpoint,
       transferMode: transferMode,
     );
-    return BlobServiceClient(endpoint, caller);
+    return BlobServiceClient(
+      endpoint,
+      caller,
+      uploadChunkBytes: uploadChunkBytes,
+    );
   }
 
   /// Full in-memory setup: paired transports + SQLite in-memory storage.
@@ -57,6 +69,8 @@ class BlobServiceFactory {
     String serverLabel = 'BlobResponder',
     String clientLabel = 'BlobCaller',
     RpcDataTransferMode transferMode = RpcDataTransferMode.codec,
+    int uploadChunkBytes = BlobServiceClient.defaultChunkBytes,
+    int? maxChunkBytes,
   }) async {
     final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
     final backingStorage = storage ?? SqliteBlobStorageAdapter.memory();
@@ -64,12 +78,14 @@ class BlobServiceFactory {
       transport: serverTransport,
       storage: backingStorage,
       transferMode: transferMode,
+      maxChunkBytes: maxChunkBytes,
       debugLabel: serverLabel,
     );
     await server.start();
     final client = createClient(
       transport: clientTransport,
       transferMode: transferMode,
+      uploadChunkBytes: uploadChunkBytes,
       debugLabel: clientLabel,
     );
     return InMemoryBlobServiceEnvironment(
@@ -113,10 +129,18 @@ class BlobServiceServer {
 
 /// Client wrapper: holds endpoint and caller.
 class BlobServiceClient implements IBlobClient {
-  BlobServiceClient(this._endpoint, this._caller);
+  BlobServiceClient(
+    this._endpoint,
+    this._caller, {
+    int uploadChunkBytes = defaultChunkBytes,
+  }) : assert(uploadChunkBytes > 0, 'uploadChunkBytes must be positive'),
+       _uploadChunkBytes = uploadChunkBytes;
 
   final RpcCallerEndpoint _endpoint;
   final BlobServiceCaller _caller;
+  final int _uploadChunkBytes;
+
+  static const int defaultChunkBytes = 256 * 1024;
 
   RpcCallerEndpoint get endpoint => _endpoint;
   BlobServiceCaller get caller => _caller;
@@ -129,29 +153,24 @@ class BlobServiceClient implements IBlobClient {
     int? length,
     String? contentType,
     String? checksum,
+    ChecksumAlgorithm checksumAlgorithm = ChecksumAlgorithm.sha256,
+    bool attachChunkChecksums = false,
     Map<String, String> metadata = const {},
     int? expectedVersion,
     RpcContext? context,
   }) async {
-    final data = await bytes.fold<BytesBuilder>(BytesBuilder(), (b, chunk) {
-      b.add(chunk);
-      return b;
-    });
-    final payload = data.takeBytes();
     return putBlob(
-      Stream<BlobUploadChunk>.value(
-        BlobUploadChunk(
-          collection: collection,
-          blobId: id ?? '',
-          offset: 0,
-          bytes: payload,
-          totalLength: length ?? payload.length,
-          contentType: contentType,
-          checksum: checksum,
-          metadata: metadata,
-          expectedVersion: expectedVersion,
-          last: true,
-        ),
+      _chunkUpload(
+        collection: collection,
+        id: id,
+        bytes: bytes,
+        length: length,
+        contentType: contentType,
+        checksum: checksum,
+        checksumAlgorithm: checksumAlgorithm,
+        attachChunkChecksums: attachChunkChecksums,
+        metadata: metadata,
+        expectedVersion: expectedVersion,
       ),
       context: context,
     );
@@ -229,6 +248,81 @@ class BlobServiceClient implements IBlobClient {
       _caller.listCollections(context: context);
 
   Future<void> close() => _endpoint.close();
+
+  Stream<BlobUploadChunk> _chunkUpload({
+    required String collection,
+    required Stream<Uint8List> bytes,
+    String? id,
+    int? length,
+    String? contentType,
+    String? checksum,
+    ChecksumAlgorithm checksumAlgorithm = ChecksumAlgorithm.sha256,
+    bool attachChunkChecksums = false,
+    Map<String, String> metadata = const {},
+    int? expectedVersion,
+  }) async* {
+    final buffer = <int>[];
+    var offset = 0;
+    var firstChunk = true;
+    await for (final chunk in bytes) {
+      if (chunk.isNotEmpty) {
+        buffer.addAll(chunk);
+      } else if (buffer.isEmpty && firstChunk && chunk.isEmpty) {
+        // Allow zero-length chunk to start stream.
+      }
+      while (buffer.length >= _uploadChunkBytes) {
+        final data = Uint8List.fromList(
+          buffer.sublist(0, _uploadChunkBytes),
+        );
+        buffer.removeRange(0, _uploadChunkBytes);
+        yield BlobUploadChunk(
+          collection: collection,
+          blobId: id ?? '',
+          offset: offset,
+          bytes: data,
+          totalLength: firstChunk ? length : null,
+          contentType: firstChunk ? contentType : null,
+          checksum: firstChunk ? checksum : null,
+          checksumAlgorithm: firstChunk ? checksumAlgorithm : null,
+          chunkChecksum: attachChunkChecksums
+              ? _hashChunk(data, checksumAlgorithm)
+              : null,
+          metadata: firstChunk ? metadata : const {},
+          expectedVersion: firstChunk ? expectedVersion : null,
+          last: false,
+        );
+        offset += data.length;
+        firstChunk = false;
+      }
+    }
+
+    // Emit the remainder (or a zero-length sentinel) as the final chunk.
+    final remaining = Uint8List.fromList(buffer);
+    yield BlobUploadChunk(
+      collection: collection,
+      blobId: id ?? '',
+      offset: offset,
+      bytes: remaining,
+      totalLength: firstChunk ? (length ?? remaining.length) : null,
+      contentType: firstChunk ? contentType : null,
+      checksum: firstChunk ? checksum : null,
+      checksumAlgorithm: firstChunk ? checksumAlgorithm : null,
+      chunkChecksum: attachChunkChecksums
+          ? _hashChunk(remaining, checksumAlgorithm)
+          : null,
+      metadata: firstChunk ? metadata : const {},
+      expectedVersion: firstChunk ? expectedVersion : null,
+      last: true,
+    );
+  }
+
+  String? _hashChunk(Uint8List data, ChecksumAlgorithm algorithm) {
+    if (data.isEmpty) return null;
+    switch (algorithm) {
+      case ChecksumAlgorithm.sha256:
+        return sha256.convert(data).toString();
+    }
+  }
 }
 
 /// Client-facing contract mirroring IDataService style.
@@ -240,6 +334,8 @@ abstract interface class IBlobClient {
     int? length,
     String? contentType,
     String? checksum,
+    ChecksumAlgorithm checksumAlgorithm = ChecksumAlgorithm.sha256,
+    bool attachChunkChecksums = false,
     Map<String, String> metadata,
     int? expectedVersion,
     RpcContext? context,

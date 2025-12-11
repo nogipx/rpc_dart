@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:async/async.dart';
+import 'package:crypto/crypto.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
 import '../adapters/i_blob_storage_adapter.dart';
@@ -11,9 +13,14 @@ import '../rpc/i_blob_service.dart';
 ///
 /// Validates chunk ordering/length and streams data through the adapter.
 class BlobService implements IBlobService {
-  BlobService({required IBlobStorageAdapter storage}) : _storage = storage;
+  BlobService({
+    required IBlobStorageAdapter storage,
+    int? maxChunkBytes,
+  }) : _storage = storage,
+       _maxChunkBytes = maxChunkBytes;
 
   final IBlobStorageAdapter _storage;
+  final int? _maxChunkBytes;
 
   @override
   Future<PutBlobResponse> putBlob(
@@ -28,11 +35,14 @@ class BlobService implements IBlobService {
     if (first.offset != 0) {
       throw StateError('First chunk must start at offset 0.');
     }
+    _assertChunkSize(first);
 
     int seen = 0;
     int expectedOffset = 0;
     int? declaredLength = first.totalLength;
     final metadata = first.metadata;
+    BlobUploadChunk lastChunk = first;
+    final checksumAlgorithm = first.checksumAlgorithm ?? ChecksumAlgorithm.sha256;
 
     Stream<Uint8List> byteStream() async* {
       BlobUploadChunk current = first;
@@ -43,15 +53,24 @@ class BlobService implements IBlobService {
             'expected $expectedOffset.',
           );
         }
+        _assertChunkSize(current);
+        _verifyChunkChecksum(current, checksumAlgorithm);
         seen += current.bytes.length;
         expectedOffset += current.bytes.length;
         declaredLength ??= current.totalLength;
+        lastChunk = current;
         yield current.bytes;
         final hasNext = await queue.hasNext;
         if (!hasNext) {
           break;
         }
+        if (current.last) {
+          throw StateError('Chunk marked last but stream continues.');
+        }
         current = await queue.next;
+      }
+      if (!lastChunk.last) {
+        throw StateError('Upload stream ended without last=true on the final chunk.');
       }
       if (declaredLength != null && declaredLength != seen) {
         throw StateError(
@@ -68,6 +87,7 @@ class BlobService implements IBlobService {
         contentType: first.contentType,
         length: declaredLength,
         checksum: first.checksum,
+        checksumAlgorithm: checksumAlgorithm,
         metadata: metadata,
         expectedVersion: first.expectedVersion,
       ),
@@ -94,6 +114,8 @@ class BlobService implements IBlobService {
     }
 
     final offsetStart = result.rangeStart ?? 0;
+    final rangeStart = result.rangeStart;
+    final rangeEnd = result.rangeEnd;
     var offset = offsetStart;
     final queue = StreamQueue(result.bytes);
     var firstFrame = true;
@@ -105,6 +127,8 @@ class BlobService implements IBlobService {
         offset: offset,
         bytes: chunk,
         descriptor: firstFrame ? result.descriptor : null,
+        rangeStart: firstFrame ? rangeStart : null,
+        rangeEnd: firstFrame ? rangeEnd : null,
         last: !hasMore,
       );
       firstFrame = false;
@@ -149,5 +173,27 @@ class BlobService implements IBlobService {
   }) async {
     final collections = await _storage.listCollections();
     return ListCollectionsResponse(collections: collections);
+  }
+
+  void _assertChunkSize(BlobUploadChunk chunk) {
+    if (_maxChunkBytes != null && chunk.bytes.length > _maxChunkBytes!) {
+      throw StateError(
+        'Chunk size ${chunk.bytes.length} exceeds maxChunkBytes $_maxChunkBytes',
+      );
+    }
+  }
+
+  void _verifyChunkChecksum(BlobUploadChunk chunk, ChecksumAlgorithm algorithm) {
+    if (chunk.chunkChecksum == null) {
+      return;
+    }
+    switch (algorithm) {
+      case ChecksumAlgorithm.sha256:
+        final digest = sha256.convert(chunk.bytes).toString();
+        if (digest.toLowerCase() != chunk.chunkChecksum!.toLowerCase()) {
+          throw StateError('Chunk checksum mismatch at offset ${chunk.offset}');
+        }
+        return;
+    }
   }
 }

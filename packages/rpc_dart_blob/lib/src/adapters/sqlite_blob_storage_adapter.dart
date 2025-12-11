@@ -19,13 +19,20 @@ typedef Clock = DateTime Function();
 /// optimistic versioning per `(collection, id)` pair. Intended for local/dev
 /// deployments where an embedded store is preferable to S3/minio.
 class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
-  SqliteBlobStorageAdapter._(this._database, {int? maxBlobBytes, Clock? clock})
-    : _maxBlobBytes = maxBlobBytes,
-      _clock = clock ?? DateTime.now;
+  SqliteBlobStorageAdapter._(
+    this._database, {
+    int? maxBlobBytes,
+    int readChunkBytes = _defaultReadChunkBytes,
+    Clock? clock,
+  }) : assert(readChunkBytes > 0, 'readChunkBytes must be positive'),
+       _maxBlobBytes = maxBlobBytes,
+       _readChunkBytes = readChunkBytes,
+       _clock = clock ?? DateTime.now;
 
   /// Create an in-memory adapter (useful for tests).
   factory SqliteBlobStorageAdapter.memory({
     int? maxBlobBytes,
+    int readChunkBytes = _defaultReadChunkBytes,
     Clock? clock,
     SqlCipherKey? sqlCipherKey,
   }) {
@@ -35,6 +42,7 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
       return SqliteBlobStorageAdapter._(
         db,
         maxBlobBytes: maxBlobBytes,
+        readChunkBytes: readChunkBytes,
         clock: clock,
       );
     } catch (_) {
@@ -47,6 +55,7 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
   factory SqliteBlobStorageAdapter.file(
     String path, {
     int? maxBlobBytes,
+    int readChunkBytes = _defaultReadChunkBytes,
     Clock? clock,
     bool enableWal = true,
     SqlCipherKey? sqlCipherKey,
@@ -57,6 +66,7 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
       return SqliteBlobStorageAdapter._(
         db,
         maxBlobBytes: maxBlobBytes,
+        readChunkBytes: readChunkBytes,
         clock: clock,
       );
     } catch (_) {
@@ -90,10 +100,12 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
 
   final sqlite.CommonDatabase _database;
   final int? _maxBlobBytes;
+  final int _readChunkBytes;
   final Clock _clock;
   bool _closed = false;
   final Map<String, String> _tableCache = <String, String>{};
   static const String _registryTable = 'blob_collections';
+  static const int _defaultReadChunkBytes = 256 * 1024;
 
   @override
   Future<BlobDescriptor?> headBlob(String collection, String id) async {
@@ -110,7 +122,7 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     if (rows.isEmpty) {
       return null;
     }
-    return _mapDescriptor(rows.first);
+    return _mapDescriptor(rows.first, includeMetadata: true);
   }
 
   @override
@@ -160,10 +172,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     }
     final row = rows.first;
     final payload = row['payload'] as Uint8List;
-    final descriptor = _mapDescriptor(row);
+    final descriptor = _mapDescriptor(row, includeMetadata: true);
     return BlobReadResult(
       descriptor: descriptor,
-      bytes: Stream<Uint8List>.value(payload),
+      bytes: _chunkedPayload(payload),
       rangeStart: rangeStart,
       rangeEnd: rangeEnd,
     );
@@ -183,7 +195,11 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       );
     }
     if (request.checksum != null) {
-      _verifyChecksum(payload, request.checksum!);
+      _verifyChecksum(
+        payload,
+        request.checksum!,
+        algorithm: request.checksumAlgorithm,
+      );
     }
 
     final now = _clock();
@@ -380,7 +396,13 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     );
 
     final hasMore = rows.length > limit;
-    final items = rows.take(limit).map(_mapDescriptor).toList(growable: false);
+    final items = rows
+        .take(limit)
+        .map((row) => _mapDescriptor(
+          row,
+          includeMetadata: request.includeMetadata,
+        ))
+        .toList(growable: false);
     String? nextCursor;
     if (hasMore) {
       final row = rows[limit];
@@ -418,7 +440,7 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     }
   }
 
-  BlobDescriptor _mapDescriptor(sqlite.Row row) {
+  BlobDescriptor _mapDescriptor(sqlite.Row row, {required bool includeMetadata}) {
     return BlobDescriptor(
       id: row['id'] as String,
       collection: row['collection'] as String,
@@ -428,7 +450,7 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       updatedAt: DateTime.parse(row['updated_at'] as String),
       contentType: row['content_type'] as String?,
       checksum: row['checksum'] as String?,
-      metadata: _decodeMetadata(row['metadata']),
+      metadata: includeMetadata ? _decodeMetadata(row['metadata']) : const {},
     );
   }
 
@@ -475,8 +497,15 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     return bytes;
   }
 
-  void _verifyChecksum(Uint8List payload, String checksumHex) {
-    final digest = sha256.convert(payload).toString();
+  void _verifyChecksum(
+    Uint8List payload,
+    String checksumHex, {
+    ChecksumAlgorithm? algorithm,
+  }) {
+    final algo = algorithm ?? ChecksumAlgorithm.sha256;
+    final digest = switch (algo) {
+      ChecksumAlgorithm.sha256 => sha256.convert(payload).toString(),
+    };
     if (digest.toLowerCase() != checksumHex.toLowerCase()) {
       throw StateError('Checksum mismatch for blob payload');
     }
@@ -578,6 +607,18 @@ CREATE TABLE IF NOT EXISTS $quoted (
   String _quoteIdentifier(String value) {
     final escaped = value.replaceAll('"', '""');
     return '"$escaped"';
+  }
+
+  Stream<Uint8List> _chunkedPayload(Uint8List payload) async* {
+    if (payload.isEmpty) {
+      yield payload;
+      return;
+    }
+    final chunkSize = max(1, _readChunkBytes);
+    for (var i = 0; i < payload.length; i += chunkSize) {
+      final end = min(payload.length, i + chunkSize);
+      yield Uint8List.sublistView(payload, i, end);
+    }
   }
 }
 

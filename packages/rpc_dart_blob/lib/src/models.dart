@@ -2,6 +2,8 @@ import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
+enum ChecksumAlgorithm { sha256 }
+
 @immutable
 class BlobDescriptor extends Equatable implements IRpcSerializable {
   const BlobDescriptor({
@@ -272,6 +274,8 @@ class BlobUploadChunk extends Equatable implements IRpcSerializable {
     this.totalLength,
     this.contentType,
     this.checksum,
+    this.chunkChecksum,
+    this.checksumAlgorithm,
     this.metadata = const {},
     this.expectedVersion,
     this.last = false,
@@ -288,6 +292,10 @@ class BlobUploadChunk extends Equatable implements IRpcSerializable {
       totalLength: json['totalLength'] as int?,
       contentType: json['contentType'] as String?,
       checksum: json['checksum'] as String?,
+      chunkChecksum: json['chunkChecksum'] as String?,
+      checksumAlgorithm: _checksumAlgorithmFromJson(
+        json['checksumAlgorithm'],
+      ),
       metadata: Map<String, String>.from(json['metadata'] as Map? ?? const {}),
       expectedVersion: json['expectedVersion'] as int?,
       last: json['last'] as bool? ?? false,
@@ -301,6 +309,8 @@ class BlobUploadChunk extends Equatable implements IRpcSerializable {
   final int? totalLength;
   final String? contentType;
   final String? checksum;
+  final String? chunkChecksum;
+  final ChecksumAlgorithm? checksumAlgorithm;
   final Map<String, String> metadata;
   final int? expectedVersion;
   final bool last;
@@ -314,6 +324,8 @@ class BlobUploadChunk extends Equatable implements IRpcSerializable {
     totalLength,
     contentType,
     checksum,
+    chunkChecksum,
+    checksumAlgorithm,
     metadata,
     expectedVersion,
     last,
@@ -328,6 +340,9 @@ class BlobUploadChunk extends Equatable implements IRpcSerializable {
     if (totalLength != null) 'totalLength': totalLength,
     if (contentType != null) 'contentType': contentType,
     if (checksum != null) 'checksum': checksum,
+    if (chunkChecksum != null) 'chunkChecksum': chunkChecksum,
+    if (checksumAlgorithm != null)
+      'checksumAlgorithm': checksumAlgorithm!.name,
     if (metadata.isNotEmpty) 'metadata': metadata,
     if (expectedVersion != null) 'expectedVersion': expectedVersion,
     if (last) 'last': last,
@@ -341,6 +356,8 @@ class BlobDownloadFrame extends Equatable implements IRpcSerializable {
     required this.offset,
     required this.bytes,
     this.descriptor,
+    this.rangeStart,
+    this.rangeEnd,
     this.last = false,
   });
 
@@ -355,6 +372,8 @@ class BlobDownloadFrame extends Equatable implements IRpcSerializable {
           : BlobDescriptor.fromJson(
               Map<String, dynamic>.from(json['descriptor'] as Map),
             ),
+      rangeStart: json['rangeStart'] as int?,
+      rangeEnd: json['rangeEnd'] as int?,
       last: json['last'] as bool? ?? false,
     );
   }
@@ -362,16 +381,27 @@ class BlobDownloadFrame extends Equatable implements IRpcSerializable {
   final int offset;
   final Uint8List bytes;
   final BlobDescriptor? descriptor;
+  final int? rangeStart;
+  final int? rangeEnd;
   final bool last;
 
   @override
-  List<Object?> get props => [offset, bytes, descriptor, last];
+  List<Object?> get props => [
+    offset,
+    bytes,
+    descriptor,
+    rangeStart,
+    rangeEnd,
+    last,
+  ];
 
   @override
   Map<String, dynamic> toJson() => {
     'offset': offset,
     'data': bytes,
     if (descriptor != null) 'descriptor': descriptor!.toJson(),
+    if (rangeStart != null) 'rangeStart': rangeStart,
+    if (rangeEnd != null) 'rangeEnd': rangeEnd,
     if (last) 'last': last,
   };
 }
@@ -441,4 +471,19 @@ Uint8List _bytesFromJsonValue(Object? raw) {
     return Uint8List.fromList(raw);
   }
   throw ArgumentError.value(raw, 'data', 'Unsupported byte representation');
+}
+
+ChecksumAlgorithm? _checksumAlgorithmFromJson(Object? raw) {
+  if (raw == null) return null;
+  if (raw is String) {
+    switch (raw.toLowerCase()) {
+      case 'sha256':
+        return ChecksumAlgorithm.sha256;
+    }
+  }
+  throw ArgumentError.value(
+    raw,
+    'checksumAlgorithm',
+    'Unsupported checksum algorithm',
+  );
 }

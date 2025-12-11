@@ -55,6 +55,7 @@ class BlobWriteRequest {
     this.contentType,
     this.length,
     this.checksum,
+    this.checksumAlgorithm,
     this.metadata = const {},
     this.expectedVersion,
   });
@@ -65,6 +66,7 @@ class BlobWriteRequest {
   final String? contentType;
   final int? length;
   final String? checksum;
+  final ChecksumAlgorithm? checksumAlgorithm;
   final Map<String, String> metadata;
   final int? expectedVersion;
 }

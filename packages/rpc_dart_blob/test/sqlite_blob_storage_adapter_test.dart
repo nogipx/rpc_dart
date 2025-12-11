@@ -179,6 +179,27 @@ void main() {
     expect(page2.nextCursor, isNull);
   });
 
+  test('list respects includeMetadata flag', () async {
+    await adapter.writeBlob(
+      BlobWriteRequest(
+        collection: 'meta',
+        id: 'm1',
+        bytes: Stream.value(Uint8List.fromList([1])),
+        metadata: const {'x': 'y'},
+      ),
+    );
+
+    final without = await adapter.listBlobs(
+      const ListBlobsRequest(collection: 'meta', includeMetadata: false),
+    );
+    expect(without.items.single.metadata, isEmpty);
+
+    final withMeta = await adapter.listBlobs(
+      const ListBlobsRequest(collection: 'meta', includeMetadata: true),
+    );
+    expect(withMeta.items.single.metadata['x'], 'y');
+  });
+
   test('listCollections returns created collections', () async {
     Future<void> write(String collection, String id) async {
       await adapter.writeBlob(

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_blob/rpc_dart_blob.dart';
@@ -76,6 +77,28 @@ void main() {
 
       final collections = await client.listCollections();
       expect(collections.collections, contains('rpc'));
+    });
+
+    test('range get returns offsets and range metadata', () async {
+      final bytes = Uint8List.fromList(List.generate(16, (i) => i + 1));
+      await client.putBytes(
+        collection: 'rpc',
+        id: 'range-id',
+        bytes: Stream.value(bytes),
+        length: bytes.length,
+      );
+
+      final frames = await client
+          .get('rpc', 'range-id', rangeStart: 4, rangeEnd: 10)
+          .toList();
+
+      expect(frames, isNotEmpty);
+      expect(frames.first.rangeStart, 4);
+      expect(frames.first.rangeEnd, 10);
+      expect(frames.first.offset, 4);
+      expect(frames.first.descriptor?.id, 'range-id');
+      expect(_collectFrames(frames), Uint8List.fromList(bytes.sublist(4, 10)));
+      expect(frames.last.last, isTrue);
     });
   });
 }
