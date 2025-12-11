@@ -1,0 +1,8 @@
+.dart_tool/
+.buildlog/
+build/
+.flutter-plugins*
+.packages
+.idea/
+.vscode/
+**/*.iml

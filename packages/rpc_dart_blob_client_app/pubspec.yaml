@@ -1,0 +1,30 @@
+name: rpc_dart_blob_client_app
+description: Flutter UI client for rpc_dart_blob collections and uploads.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: '>=3.10.0 <4.0.0'
+  flutter: '>=3.24.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  crypto: ^3.0.7
+  file_picker: ^8.1.2
+  mime: ^1.0.6
+  path: ^1.9.0
+  rpc_dart:
+    path: ../rpc_dart
+  rpc_dart_blob:
+    path: ../rpc_dart_blob
+  rpc_dart_transports:
+    path: ../rpc_dart_transports
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
