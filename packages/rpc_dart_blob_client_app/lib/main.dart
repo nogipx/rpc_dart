@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io' as io;
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
@@ -8,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_blob/rpc_dart_blob.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
@@ -46,7 +46,9 @@ class BlobClientController {
     await close();
     final storage = databasePath == null || databasePath.isEmpty
         ? SqliteBlobStorageAdapter.memory()
-        : SqliteBlobStorageAdapter.file(databasePath);
+        // WAL создаёт .wal/.shm рядом с файлом, что ломается в песочнице macOS.
+        // Для пользовательского файла предпочитаем обычный журнал.
+        : SqliteBlobStorageAdapter.file(databasePath, enableWal: false);
     _inMemoryEnv = await BlobServiceFactory.inMemory(storage: storage);
     _client = _inMemoryEnv!.client;
   }
@@ -55,9 +57,7 @@ class BlobClientController {
     await close();
     final transport = RpcWebSocketCallerTransport.connect(uri);
     _transport = transport;
-    _client = BlobServiceFactory.createClient(
-      transport: transport,
-    );
+    _client = BlobServiceFactory.createClient(transport: transport);
   }
 
   Future<void> close() async {
@@ -81,7 +81,9 @@ class BlobDashboardPage extends StatefulWidget {
 
 class _BlobDashboardPageState extends State<BlobDashboardPage> {
   final _controller = BlobClientController();
-  final _wsUrlController = TextEditingController(text: 'ws://localhost:8080/ws');
+  final _wsUrlController = TextEditingController(
+    text: 'ws://localhost:8080/ws',
+  );
   final _collectionController = TextEditingController(text: 'default');
   final _idController = TextEditingController();
   final _metadataController = TextEditingController();
@@ -112,9 +114,7 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('rpc_dart_blob Flutter клиент'),
-      ),
+      appBar: AppBar(title: const Text('rpc_dart_blob Flutter клиент')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -265,7 +265,8 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
                     decoration: const InputDecoration(
                       labelText: 'Текущая коллекция',
                       border: OutlineInputBorder(),
-                      helperText: 'Можно задать новую строку — коллекция появится при загрузке',
+                      helperText:
+                          'Можно задать новую строку — коллекция появится при загрузке',
                     ),
                   ),
                 ),
@@ -342,7 +343,8 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
                   children: [
                     Switch(
                       value: _attachChunkChecksums,
-                      onChanged: (v) => setState(() => _attachChunkChecksums = v),
+                      onChanged: (v) =>
+                          setState(() => _attachChunkChecksums = v),
                     ),
                     const Text('Чексуммы чанков'),
                   ],
@@ -380,6 +382,7 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
   }
 
   Widget _buildBlobsCard() {
+    final hasData = _blobs.isNotEmpty;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -389,15 +392,22 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Блобов: ${_blobs.length}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Текущая коллекция: ${_selectedCollection ?? 'не выбрана'}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text('Записей: ${_blobs.length}'),
+                  ],
                 ),
                 Wrap(
                   spacing: 8,
                   children: [
                     IconButton(
-                      onPressed: _controller.isConnected && _selectedCollection != null
+                      onPressed:
+                          _controller.isConnected && _selectedCollection != null
                           ? () => _loadBlobs(_selectedCollection)
                           : null,
                       icon: const Icon(Icons.refresh),
@@ -417,44 +427,78 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
               ],
             ),
             const SizedBox(height: 8),
-            if (_blobs.isEmpty)
+            if (_busy) const LinearProgressIndicator(minHeight: 4),
+            const SizedBox(height: 12),
+            if (!hasData)
               const Text('Пока нет записей в выбранной коллекции.')
             else
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _blobs.length,
-                separatorBuilder: (_, __) => const Divider(),
-                itemBuilder: (context, index) {
-                  final blob = _blobs[index];
-                  return ListTile(
-                    title: Text(blob.id),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Размер: ${blob.length} байт — ${blob.contentType ?? 'тип неизвестен'}'),
-                        Text('Версия ${blob.version} • Обновлён: ${blob.updatedAt.toIso8601String()}'),
-                        if (blob.metadata.isNotEmpty)
-                          Text('Метаданные: ${blob.metadata}'),
-                      ],
-                    ),
-                    trailing: Wrap(
-                      spacing: 4,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.download),
-                          tooltip: 'Скачать в память',
-                          onPressed: () => _downloadBlob(blob),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 16,
+                  headingRowHeight: 44,
+                  dataRowMinHeight: 44,
+                  dataRowMaxHeight: 72,
+                  columns: const [
+                    DataColumn(label: Text('ID')),
+                    DataColumn(label: Text('Размер')),
+                    DataColumn(label: Text('MIME')),
+                    DataColumn(label: Text('Версия')),
+                    DataColumn(label: Text('Обновлён')),
+                    DataColumn(label: Text('Метаданные')),
+                    DataColumn(label: Text('Действия')),
+                  ],
+                  rows: _blobs.map((blob) {
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 200),
+                            child: Text(
+                              blob.id,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          tooltip: 'Удалить',
-                          onPressed: () => _deleteBlob(blob),
+                        DataCell(Text('${blob.length} байт')),
+                        DataCell(Text(blob.contentType ?? '—')),
+                        DataCell(Text('v${blob.version}')),
+                        DataCell(Text(_formatDate(blob.updatedAt))),
+                        DataCell(
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 280),
+                            child: Text(
+                              _formatMetadata(blob.metadata),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 3,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.download),
+                                tooltip: 'Скачать в память',
+                                onPressed: () => _downloadBlob(blob),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                tooltip: 'Удалить',
+                                onPressed: () => _deleteBlob(blob),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
-                    ),
-                  );
-                },
+                    );
+                  }).toList(),
+                ),
               ),
           ],
         ),
@@ -463,12 +507,17 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
   }
 
   Future<void> _pickDatabaseFile() async {
-    final path = await FilePicker.platform.saveFile(
-      dialogTitle: 'Укажите файл SQLite для хранилища',
-      fileName: 'blob_store.sqlite',
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Выберите файл SQLite хранилища',
+      type: FileType.any,
     );
-    if (!mounted || path == null) return;
-    setState(() => _databasePath = path);
+    if (!mounted || result == null || result.files.isEmpty) return;
+    final file = result.files.first.path;
+    if (file == null || file.isEmpty) {
+      _showSnack('Невозможно использовать выбранный файл', isError: true);
+      return;
+    }
+    setState(() => _databasePath = file);
   }
 
   Future<void> _connect() async {
@@ -480,10 +529,30 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
 
     try {
       if (_mode == ConnectionMode.inMemory) {
-        await _controller.connectInMemory(databasePath: _databasePath);
-        _status = _databasePath == null || _databasePath!.isEmpty
-            ? 'In-memory сервер запущен'
-            : 'Запущено с БД $_databasePath';
+        final preparedPath = await _prepareDatabasePath(_databasePath);
+        String? status;
+        try {
+          await _controller.connectInMemory(databasePath: preparedPath);
+          status = _databasePath == null || _databasePath!.isEmpty
+              ? 'In-memory сервер запущен'
+              : 'Запущено с БД $_databasePath';
+        } catch (error) {
+          final isPathProvided =
+              preparedPath != null && preparedPath.trim().isNotEmpty;
+          final isPermissionIssue = error.toString().contains('code 14');
+          if (isPathProvided && isPermissionIssue) {
+            final fallback = await _copyDbToTemp(preparedPath!);
+            if (fallback != null) {
+              await _controller.connectInMemory(databasePath: fallback);
+              status = 'БД скопирована в sandbox: $fallback';
+              _showSnack(
+                'Исходный файл недоступен, работаем с копией: $fallback',
+              );
+            }
+          }
+          if (status == null) rethrow;
+        }
+        _status = status ?? 'In-memory сервер запущен';
       } else {
         final raw = _wsUrlController.text.trim();
         if (raw.isEmpty) throw const FormatException('Укажите URL');
@@ -502,6 +571,37 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
       if (mounted) {
         setState(() => _connecting = false);
       }
+    }
+  }
+
+  /// Ensures the chosen DB file and its directory exist before opening SQLite.
+  Future<String?> _prepareDatabasePath(String? path) async {
+    if (path == null || path.isEmpty) return null;
+    try {
+      final file = io.File(path);
+      await file.parent.create(recursive: true);
+      if (!await file.exists()) {
+        await file.create();
+      }
+      return file.path;
+    } catch (error) {
+      _showSnack('Не удалось подготовить файл БД: $error', isError: true);
+      return null;
+    }
+  }
+
+  /// Copies a database file into a writable temp dir when sandbox blocks access.
+  Future<String?> _copyDbToTemp(String sourcePath) async {
+    try {
+      final source = io.File(sourcePath);
+      if (!await source.exists()) return null;
+      final tempDir = await io.Directory.systemTemp.createTemp('rpc_blob_db_');
+      final targetPath = p.join(tempDir.path, p.basename(sourcePath));
+      await source.copy(targetPath);
+      return targetPath;
+    } catch (error) {
+      _showSnack('Не удалось скопировать БД в sandbox: $error', isError: true);
+      return null;
     }
   }
 
@@ -577,8 +677,10 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
     final file = result.files.single;
 
     final metadata = _parseMetadata();
-    final blobId = _idController.text.trim().isEmpty ? null : _idController.text.trim();
-    final contentType = file.mimeType ?? lookupMimeType(file.name);
+    final blobId = _idController.text.trim().isEmpty
+        ? null
+        : _idController.text.trim();
+    final contentType = lookupMimeType(file.name);
 
     setState(() => _busy = true);
     try {
@@ -594,7 +696,9 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
         attachChunkChecksums: _attachChunkChecksums,
         metadata: metadata,
       );
-      _showSnack('Загружено: ${response.descriptor.id} (${response.descriptor.length} байт)');
+      _showSnack(
+        'Загружено: ${response.descriptor.id} (${response.descriptor.length} байт)',
+      );
       _idController.clear();
       await _loadBlobs(_selectedCollection);
     } catch (error) {
@@ -606,11 +710,15 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
 
   Future<Stream<Uint8List>> _openFileStream(PlatformFile file) async {
     if (kIsWeb || file.path == null) {
-      final bytes = file.bytes ?? await file.readStream!.fold<BytesBuilder>(
-        BytesBuilder(),
-        (builder, chunk) => builder..add(chunk),
-      ).then((builder) => builder.takeBytes());
-      return Stream.value(bytes);
+      final bytes =
+          file.bytes ??
+          await file.readStream!
+              .fold<BytesBuilder>(
+                BytesBuilder(),
+                (builder, chunk) => builder..add(chunk),
+              )
+              .then((builder) => builder.takeBytes());
+      return Stream.value(bytes ?? Uint8List(0));
     }
     final ioFile = io.File(file.path!);
     return ioFile.openRead().map((chunk) => Uint8List.fromList(chunk));
@@ -619,11 +727,15 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
   Future<String?> _computeChecksum(PlatformFile file) async {
     try {
       if (kIsWeb || file.path == null) {
-        final data = file.bytes ?? await file.readStream!.fold<BytesBuilder>(
-          BytesBuilder(),
-          (builder, chunk) => builder..add(chunk),
-        ).then((builder) => builder.takeBytes());
-        return sha256.convert(data).toString();
+        final data =
+            file.bytes ??
+            await file.readStream!
+                .fold<BytesBuilder>(
+                  BytesBuilder(),
+                  (builder, chunk) => builder..add(chunk),
+                )
+                .then((builder) => builder.takeBytes());
+        return sha256.convert(data ?? Uint8List(0)).toString();
       }
       final digest = await sha256.bind(io.File(file.path!).openRead()).first;
       return digest.toString();
@@ -644,6 +756,16 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
       }
     }
     return result;
+  }
+
+  String _formatMetadata(Map<String, String> metadata) {
+    if (metadata.isEmpty) return '—';
+    return metadata.entries.map((e) => '${e.key}=${e.value}').join(', ');
+  }
+
+  String _formatDate(DateTime date) {
+    final local = date.toLocal().toIso8601String();
+    return local.split('.').first.replaceFirst('T', ' ');
   }
 
   Future<void> _downloadBlob(BlobDescriptor blob) async {
@@ -670,7 +792,11 @@ class _BlobDashboardPageState extends State<BlobDashboardPage> {
     if (client == null) return;
     setState(() => _busy = true);
     try {
-      await client.delete(blob.collection, blob.id, expectedVersion: blob.version);
+      await client.delete(
+        blob.collection,
+        blob.id,
+        expectedVersion: blob.version,
+      );
       _showSnack('Удалено: ${blob.id}');
       await _loadBlobs(blob.collection);
     } catch (error) {
