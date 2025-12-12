@@ -542,8 +542,6 @@ void main() {
               return true;
             }
 
-            // ignore: avoid_print
-            print('UNEXPECTED ROUTER ERROR: $error (${error.runtimeType})');
             return false;
           }
 

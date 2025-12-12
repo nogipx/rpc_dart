@@ -149,7 +149,6 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     if (message.isMetadataOnly && message.methodPath != null) {
       _handleMetadataMessage(state, message);
-      return;
     }
 
     final hasPayload = !message.isMetadataOnly &&
@@ -165,6 +164,30 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     }
   }
 
+  Future<void> _sendGrpcErrorAndCleanup({
+    required int streamId,
+    required int status,
+    required String message,
+    RpcContext? context,
+  }) async {
+    try {
+      await transport.sendMetadata(
+        streamId,
+        RpcMetadata.forTrailer(status, message: message),
+        endStream: true,
+      );
+    } catch (error, stackTrace) {
+      logger.error(
+        'Не удалось отправить gRPC ошибку [$status] для streamId=$streamId',
+        rpcContext: context,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      await _cleanupStream(streamId);
+    }
+  }
+
   void _handleMetadataMessage(
     RpcResponderStreamState state,
     RpcTransportMessage message,
@@ -174,6 +197,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     if (parsed == null) {
       logger.warning('Некорректный путь метода: $methodPath');
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Invalid method path: $methodPath',
+        ),
+      );
       return;
     }
 
@@ -212,6 +242,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         streamId: state.id,
         methodKey: methodKey,
       );
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.unimplemented,
+          message: 'Method $methodKey is not registered',
+          context: context,
+        ),
+      );
       return;
     }
 
@@ -231,6 +269,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       final parsed = _parseMethodPath(message.methodPath!);
       if (parsed == null) {
         logger.warning('Некорректный путь метода: ${message.methodPath}');
+        unawaited(
+          _sendGrpcErrorAndCleanup(
+            streamId: state.id,
+            status: RpcStatus.invalidArgument,
+            message: 'Invalid method path: ${message.methodPath}',
+          ),
+        );
         return;
       }
 
@@ -260,6 +305,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         context: context,
         streamId: state.id,
         methodKey: methodKey,
+      );
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.unimplemented,
+          message: 'Method $methodKey is not registered',
+          context: context,
+        ),
       );
       return;
     }
@@ -297,12 +350,34 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     final binding = _registry.lookup(methodKey);
     if (binding == null) {
-      unawaited(_cleanupStream(state.id));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.unimplemented,
+          message: 'Method $methodKey is not registered',
+          context: state.cachedContext,
+        ),
+      );
       return;
     }
 
     if (binding.type == RpcMethodType.clientStream) {
       unawaited(_ensureResponder(state, binding));
+      return;
+    }
+
+    // Unary/server-stream/bidi require at least one request message. If the
+    // client ends the request stream before sending any payload, fail fast and
+    // cleanup the per-stream state to avoid leaks.
+    if (state.responder == null && state.lastPayloadMessage == null) {
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Request stream closed without any payload for $methodKey',
+          context: state.cachedContext,
+        ),
+      );
     }
   }
 
@@ -383,7 +458,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
       state.responder = responder;
 
+      var handled = false;
+
       processor.requests.listen((request) async {
+        if (handled) {
+          return;
+        }
+        handled = true;
         try {
           final response = await handleUnary<Object, Object>(
             serviceName: binding.serviceName,
@@ -399,6 +480,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           );
           await processor.send(response);
           await processor.finishSending();
+          await _cleanupStream(streamId);
         } catch (error, stackTrace) {
           contextLogger.error(
             'Ошибка в zero-copy унарном методе [streamId: $streamId]',
@@ -409,15 +491,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           final errorMessage =
               error is RpcException ? error.message : error.toString();
           await processor.sendError(RpcStatus.internal, errorMessage);
+          await _cleanupStream(streamId);
         }
       });
 
-      final savedMessage = state.takeLastPayload();
-      final initialMessages =
-          savedMessage != null ? [savedMessage] : const <RpcTransportMessage>[];
-
       responder.bindToMessageStream(
-        _streamStartingWith(streamId, initialMessages),
+        _stateBoundStream(
+          state,
+          streamId,
+          consumePreBindBuffer: true,
+        ),
       );
       return;
     }
@@ -452,7 +535,10 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     state.responder = responder;
 
-    final savedMessage = state.takeLastPayload();
+    final preBindMessages = state.takePreBindBufferedMessages();
+    final savedMessage = preBindMessages.isNotEmpty
+        ? preBindMessages.first
+        : state.takeLastPayload();
     if (savedMessage != null) {
       if (savedMessage.isDirect && savedMessage.directPayload != null) {
         await responder.handleDirectMessage(savedMessage);
@@ -460,6 +546,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         await responder.handleMessage(savedMessage);
       }
     }
+
+    await _cleanupStream(streamId);
   }
 
   Future<void> _ensureClientStreamResponder(
@@ -500,11 +588,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       );
 
       state.responder = responder;
+      unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
 
       final savedMessages =
           state.takeClientBufferedMessages(markEndOfStream: true);
       responder.bindToMessageStream(
-        _streamStartingWith(streamId, savedMessages),
+        _stateBoundStream(
+          state,
+          streamId,
+          initialMessages: savedMessages,
+        ),
       );
       return;
     }
@@ -542,11 +635,16 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     );
 
     state.responder = responder;
+    unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
 
     final savedMessages =
         state.takeClientBufferedMessages(markEndOfStream: true);
     responder.bindToMessageStream(
-      _streamStartingWith(streamId, savedMessages),
+      _stateBoundStream(
+        state,
+        streamId,
+        initialMessages: savedMessages,
+      ),
     );
   }
 
@@ -588,13 +686,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       );
 
       state.responder = responder;
-
-      final savedMessage = state.takeLastPayload();
-      final initialMessages =
-          savedMessage != null ? [savedMessage] : const <RpcTransportMessage>[];
+      unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
 
       responder.bindToMessageStream(
-        _streamStartingWith(streamId, initialMessages),
+        _stateBoundStream(
+          state,
+          streamId,
+          consumePreBindBuffer: true,
+        ),
       );
       return;
     }
@@ -626,13 +725,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     );
 
     state.responder = responder;
-
-    final savedMessage = state.takeLastPayload();
-    final initialMessages =
-        savedMessage != null ? [savedMessage] : const <RpcTransportMessage>[];
+    unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
 
     responder.bindToMessageStream(
-      _streamStartingWith(streamId, initialMessages),
+      _stateBoundStream(
+        state,
+        streamId,
+        consumePreBindBuffer: true,
+      ),
     );
   }
 
@@ -660,13 +760,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       );
 
       state.responder = responder;
-
-      final savedMessage = state.takeLastPayload();
-      final initialMessages =
-          savedMessage != null ? [savedMessage] : const <RpcTransportMessage>[];
+      unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
 
       responder.bindToMessageStream(
-        _streamStartingWith(streamId, initialMessages),
+        _stateBoundStream(
+          state,
+          streamId,
+          consumePreBindBuffer: true,
+        ),
       );
 
       unawaited(() async {
@@ -719,13 +820,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     );
 
     state.responder = responder;
-
-    final savedMessage = state.takeLastPayload();
-    final initialMessages =
-        savedMessage != null ? [savedMessage] : const <RpcTransportMessage>[];
+    unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
 
     responder.bindToMessageStream(
-      _streamStartingWith(streamId, initialMessages),
+      _stateBoundStream(
+        state,
+        streamId,
+        consumePreBindBuffer: true,
+      ),
     );
 
     unawaited(() async {
@@ -858,17 +960,42 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     }
   }
 
-  Stream<RpcTransportMessage> _streamStartingWith(
-    int streamId,
-    Iterable<RpcTransportMessage> initialMessages,
-  ) async* {
-    for (final message in initialMessages) {
-      yield message;
+  Stream<RpcTransportMessage> _stateBoundStream(
+    RpcResponderStreamState state,
+    int streamId, {
+    Iterable<RpcTransportMessage> initialMessages =
+        const <RpcTransportMessage>[],
+    bool consumePreBindBuffer = false,
+  }) {
+    final controller = StreamController<RpcTransportMessage>();
+    late final StreamSubscription<RpcTransportMessage> subscription;
+
+    subscription = transport.getMessagesForStream(streamId).listen(
+          controller.add,
+          onError: controller.addError,
+          onDone: () => unawaited(controller.close()),
+        );
+
+    // Ensure we do not lose messages that arrive while emitting buffered ones.
+    subscription.pause();
+    state.markBoundToMessageStream();
+
+    final merged = <RpcTransportMessage>[
+      if (consumePreBindBuffer) ...state.takePreBindBufferedMessages(),
+      ...initialMessages,
+    ];
+
+    for (final message in merged) {
+      controller.add(message);
     }
 
-    await for (final message in transport.getMessagesForStream(streamId)) {
-      yield message;
-    }
+    subscription.resume();
+
+    controller.onCancel = () async {
+      await subscription.cancel();
+    };
+
+    return controller.stream;
   }
 
   RpcContext _cacheContext(

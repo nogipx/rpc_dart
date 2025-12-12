@@ -142,6 +142,47 @@ Manages server streams: create client streams, publish messages, filter recipien
 - Use RpcException and RpcStatus for error propagation.
 - RpcContext carries headers, trace id and other metadata.
 
+#### Cancellation and deadlines (cooperative)
+
+RPC Dart uses cooperative cancellation:
+
+- The framework can stop routing messages for a cancelled call and will clean up internal stream state.
+- Your business handler must *cooperate* by checking `RpcContext` (`cancellationToken` / `deadline`) and exiting early, otherwise it may keep running and hold resources.
+
+Client-side:
+
+```dart
+final token = RpcCancellationToken();
+final ctx = RpcContext.withCancellation(token).withTimeout(const Duration(seconds: 2));
+
+final future = callerEndpoint.unaryRequest<RpcString, RpcString>(
+  serviceName: 'MyService',
+  methodName: 'LongOperation',
+  requestCodec: RpcString.codec,
+  responseCodec: RpcString.codec,
+  request: const RpcString('start'),
+  context: ctx,
+);
+
+token.cancel('User requested cancel');
+await future; // throws RpcCancelledException (if handler cooperates)
+```
+
+Server-side (handler):
+
+```dart
+Future<RpcString> longOperation(RpcString request, {RpcContext? context}) async {
+  for (var i = 0; i < 1000; i++) {
+    context?.cancellationToken?.throwIfCancelled();
+    if (context?.isExpired == true) {
+      throw RpcDeadlineExceededException(context!.deadline!, Duration.zero);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  return const RpcString('done');
+}
+```
+
 ### Testing
 
 - Unit: mock Caller interfaces.
@@ -150,4 +191,3 @@ Manages server streams: create client streams, publish messages, filter recipien
 ### Additional resources
 
 - Extra transports and examples: package [rpc_dart_transports](https://pub.dev/packages/rpc_dart_transports).
-

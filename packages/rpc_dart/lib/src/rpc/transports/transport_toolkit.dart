@@ -176,7 +176,13 @@ abstract class RpcBaseTransport implements IRpcTransport {
         message.payload!,
         endStream: message.isEndOfStream,
       );
-    } else if (message.isDirect && supportsZeroCopy) {
+    } else if (message.isDirect) {
+      if (!supportsZeroCopy) {
+        throw UnsupportedError(
+          'Транспорт $runtimeType не поддерживает zero-copy. '
+          'Передайте payload или используйте транспорт с supportsZeroCopy=true.',
+        );
+      }
       await sendDirectObject(
         message.streamId,
         message.directPayload!,

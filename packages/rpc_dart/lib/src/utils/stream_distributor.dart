@@ -187,13 +187,30 @@ class StreamDistributor<T extends IRpcSerializable> {
     _checkNotDisposed();
 
     // Проверяем, не существует ли уже стрим с таким ID
-    if (_clientStreams.containsKey(clientId)) {
+    final existingWrapper = _clientStreams[clientId];
+    if (existingWrapper != null) {
+      if (!existingWrapper.controller.isClosed) {
+        _logger?.warning(
+          'Стрим с ID $clientId уже существует, возвращается существующий',
+        );
+        if (onCancel != null) {
+          _logger?.warning(
+            'Параметр onCancel игнорируется для существующего стрима: $clientId',
+          );
+        }
+        existingWrapper.updateLastActivity();
+        return existingWrapper.controller.stream;
+      }
+
       _logger?.warning(
-        'Стрим с ID $clientId уже существует, создается дублирующий стрим',
+        'Стрим с ID $clientId найден, но уже закрыт; создается новый',
       );
-    } else {
-      _logger?.info('Создание нового стрима для клиента: $clientId');
+      _clientStreams.remove(clientId);
+      _metrics.decrementCurrentStreams();
+      unawaited(existingWrapper.dispose());
     }
+
+    _logger?.info('Создание нового стрима для клиента: $clientId');
 
     // Создаем контроллер с поддержкой паузы/возобновления
     final clientController = StreamController<T>.broadcast(
@@ -206,7 +223,15 @@ class StreamDistributor<T extends IRpcSerializable> {
           _logger?.internal(
             'Автоматическое закрытие стрима при отмене подписки: $clientId',
           );
-          closeClientStream(clientId);
+          unawaited(
+            closeClientStream(clientId).catchError((e, StackTrace stackTrace) {
+              _logger?.error(
+                'Ошибка при автоматическом закрытии стрима: $clientId',
+                error: e,
+                stackTrace: stackTrace,
+              );
+            }),
+          );
         }
       },
     );

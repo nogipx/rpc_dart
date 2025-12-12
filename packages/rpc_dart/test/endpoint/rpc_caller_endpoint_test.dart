@@ -152,13 +152,6 @@ void main() {
     });
 
     test('Серверный стрим возвращает все ожидаемые сообщения', () async {
-      print('=== УПРОЩЕННЫЙ ТЕСТ СЕРВЕРНОГО СТРИМА ===');
-
-      // Регистрируем обработчик событий
-      final responses = <TestResponse>[];
-      final completer = Completer<void>();
-
-      // Запускаем серверный стрим
       final stream = callerEndpoint.serverStream<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'ServerStreamMethod',
@@ -167,47 +160,17 @@ void main() {
         request: TestRequest('Stream request'),
       );
 
-      print('Подписка на стрим...');
-      final subscription = stream.listen(
-        (response) {
-          print('Получен ответ: ${response.message}');
-          responses.add(response);
-          if (responses.length >= 3) {
-            completer.complete();
-          }
-        },
-        onError: (e, stack) {
-          print('Ошибка в стриме: $e');
-          completer.completeError(e, stack);
-        },
-        onDone: () {
-          print('Стрим завершен, получено ответов: ${responses.length}');
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
-        },
+      final responses =
+          await stream.take(3).toList().timeout(const Duration(seconds: 5));
+
+      expect(responses.length, 3);
+      expect(responses[0].message, equals('Reply 1 to: Stream request'));
+      expect(responses[1].message, equals('Reply 2 to: Stream request'));
+      expect(responses[2].message, equals('Reply 3 to: Stream request'));
+      expect(
+        testService.callLog,
+        contains('ServerStreamMethod: Stream request'),
       );
-
-      try {
-        // Ждем максимум 5 секунд
-        await completer.future.timeout(Duration(seconds: 5));
-        await subscription.cancel();
-
-        print('Результат: получено ${responses.length} ответов');
-        expect(
-          responses.length,
-          greaterThanOrEqualTo(1),
-          reason: 'Должен получить хотя бы 1 ответ',
-        );
-
-        if (responses.isNotEmpty) {
-          expect(responses.first.message, contains('Stream request'));
-        }
-      } catch (e) {
-        await subscription.cancel();
-        print('Тест не прошел: $e');
-        expect(false, isTrue, reason: 'Тест упал с ошибкой: $e');
-      }
     });
 
     test('Клиентский стрим корректно отправляет все сообщения', () async {
@@ -218,8 +181,6 @@ void main() {
         TestRequest('Message 3'),
       ]);
 
-      print('Начало теста клиентского стрима');
-
       // Получаем функцию ответа
       final getResponse =
           callerEndpoint.clientStream<TestRequest, TestResponse>(
@@ -229,19 +190,13 @@ void main() {
         responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
       );
 
-      print('Клиентский стрим создан');
-
       // Вызываем getResponse для отправки всех сообщений и получения ответа
-      print('Вызов getResponse для отправки сообщений и получения ответа');
       final response = await getResponse(requestStream).timeout(
         Duration(seconds: 10),
         onTimeout: () {
-          print('Таймаут при ожидании ответа');
           throw TimeoutException('Таймаут ожидания ответа');
         },
       );
-
-      print('Ответ получен успешно!');
 
       // Проверяем результат
       expect(
@@ -257,11 +212,6 @@ void main() {
     test('Двунаправленный стрим работает в обоих направлениях', () async {
       // Создаем стрим запросов
       final controller = StreamController<TestRequest>();
-      print('Начало теста двунаправленного стрима');
-
-      // Создаем список для сбора ответов
-      final responses = <TestResponse>[];
-      final responseCompleter = Completer<List<TestResponse>>();
 
       // Запускаем двунаправленный стрим
       final responseStream =
@@ -273,108 +223,40 @@ void main() {
         requests: controller.stream,
       );
 
-      print('Двунаправленный стрим создан, настраиваем обработку ответов');
-
-      // Слушаем ответы
-      final subscription = responseStream.listen(
-        (response) {
-          print('Получен ответ: ${response.message}');
-          responses.add(response);
-          // Когда получили все 3 ответа, завершаем
-          if (responses.length == 3) {
-            if (!responseCompleter.isCompleted) {
-              responseCompleter.complete(responses);
-            }
-          }
-        },
-        onError: (error, stackTrace) {
-          print('Ошибка в стриме ответов: $error');
-          print(stackTrace);
-          if (!responseCompleter.isCompleted) {
-            responseCompleter.completeError(error, stackTrace);
-          }
-        },
-        onDone: () {
-          print(
-            'Стрим ответов завершен, получено ответов: ${responses.length}',
-          );
-          if (!responseCompleter.isCompleted) {
-            responseCompleter.complete(responses);
-          }
-        },
-      );
+      // ВАЖНО: начинаем слушать ответы до отправки запросов
+      final responsesFuture = responseStream.take(3).toList();
 
       // Небольшая задержка перед отправкой запросов для стабильности
       await Future.delayed(Duration(milliseconds: 1));
 
       // Отправляем запросы с увеличенными интервалами
-      print('Отправка запроса 1');
       controller.add(TestRequest('Bi Message 1'));
       await Future.delayed(Duration(milliseconds: 1));
 
-      print('Отправка запроса 2');
       controller.add(TestRequest('Bi Message 2'));
       await Future.delayed(Duration(milliseconds: 1));
 
-      print('Отправка запроса 3');
       controller.add(TestRequest('Bi Message 3'));
       await Future.delayed(Duration(milliseconds: 1));
 
-      print('Закрытие потока запросов');
       // Закрываем контроллер, сигнализируя конец потока запросов
       await controller.close();
 
-      // Даем больше времени на получение всех ответов
-      await Future.delayed(Duration(milliseconds: 1));
-      print('Ожидание получения всех ответов...');
+      final allResponses =
+          await responsesFuture.timeout(const Duration(seconds: 5));
 
-      try {
-        // Ждем получения всех ответов с увеличенным таймаутом
-        final allResponses = await responseCompleter.future.timeout(
-          Duration(seconds: 15),
-          onTimeout: () {
-            print(
-              'Таймаут при ожидании ответов, получено: ${responses.length}',
-            );
-            if (responses.length >= 3) {
-              return responses; // Если успели получить достаточно ответов, считаем успешным
-            }
-            throw TimeoutException('Таймаут ожидания ответов');
-          },
-        );
+      expect(allResponses.length, equals(3));
+      expect(allResponses[0].message, equals('Echo: Bi Message 1'));
+      expect(allResponses[1].message, equals('Echo: Bi Message 2'));
+      expect(allResponses[2].message, equals('Echo: Bi Message 3'));
 
-        print('Получены все ответы: ${allResponses.length}');
-
-        // Проверяем результаты
-        expect(allResponses.length, equals(3));
-        if (allResponses.isNotEmpty) {
-          expect(allResponses[0].message, equals('Echo: Bi Message 1'));
-        }
-        if (allResponses.length > 1) {
-          expect(allResponses[1].message, equals('Echo: Bi Message 2'));
-        }
-        if (allResponses.length > 2) {
-          expect(allResponses[2].message, equals('Echo: Bi Message 3'));
-        }
-
-        expect(testService.callLog, contains('BidirectionalMethod: начат'));
-        expect(
-          testService.callLog,
-          contains('BidirectionalMethod: Bi Message 1'),
-        );
-        expect(
-          testService.callLog,
-          contains('BidirectionalMethod: Bi Message 2'),
-        );
-        expect(
-          testService.callLog,
-          contains('BidirectionalMethod: Bi Message 3'),
-        );
-      } finally {
-        // Отменяем подписку
-        await subscription.cancel();
-        print('Подписка отменена');
-      }
+      expect(testService.callLog, contains('BidirectionalMethod: начат'));
+      expect(
+          testService.callLog, contains('BidirectionalMethod: Bi Message 1'));
+      expect(
+          testService.callLog, contains('BidirectionalMethod: Bi Message 2'));
+      expect(
+          testService.callLog, contains('BidirectionalMethod: Bi Message 3'));
     });
 
     test('Закрытие эндпоинта корректно освобождает ресурсы', () async {

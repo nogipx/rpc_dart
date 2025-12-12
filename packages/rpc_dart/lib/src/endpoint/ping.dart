@@ -115,6 +115,15 @@ final class RpcEndpointPingExchange {
         final headersMap = metadataToMap(message.metadata!);
 
         if (!headersMap.containsKey(RpcConstants.grpcStatusHeader)) {
+          if (message.isEndOfStream) {
+            completeError(
+              StateError(
+                'Ping stream завершен без трейлеров [streamId: $streamId]',
+              ),
+            );
+            return;
+          }
+
           logger.internal(
             'Получены начальные метаданные ответа ping [streamId: $streamId]',
           );

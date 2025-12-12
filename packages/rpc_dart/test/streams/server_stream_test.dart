@@ -9,7 +9,6 @@ void main() {
     group('ServerStreamClient', () {
       test('отправляет_один_запрос_и_получает_множественные_ответы', () async {
         // Arrange
-        print('Test setup started');
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
         final receivedRequests = <RpcString>[];
 
@@ -21,18 +20,12 @@ void main() {
           requestCodec: serializer,
           responseCodec: serializer,
           handler: (request) async* {
-            print('Handler called with request: $request');
             receivedRequests.add(request);
-            // Отправляем несколько ответов
-            print('Yielding response 1');
             yield 'Response 1 for: $request'.rpc;
             await Future.delayed(Duration(milliseconds: 1));
-            print('Yielding response 2');
             yield 'Response 2 for: $request'.rpc;
             await Future.delayed(Duration(milliseconds: 1));
-            print('Yielding response 3');
             yield 'Response 3 for: $request'.rpc;
-            print('Handler done');
           },
         );
 
@@ -49,44 +42,9 @@ void main() {
           responseCodec: serializer,
         );
 
-        final receivedResponses = <RpcString>[];
-        print('Setting up response listener');
-        final subscription = client.responses.listen(
-          (message) {
-            print('Got response message: $message');
-            if (!message.isMetadataOnly && message.payload != null) {
-              print('Adding payload to responses: ${message.payload}');
-              receivedResponses.add(message.payload!);
-            }
-          },
-          onDone: () {
-            print('Response stream done');
-          },
-          onError: (e, st) {
-            print('Response stream error: $e');
-          },
-        );
-
         // Act
-        print('Sending request');
-        await client.send('test request'.rpc);
-        print('Request sent');
-
-        // Ждем завершения потока или таймаут
-        print('Waiting for stream to complete');
-        try {
-          await subscription.asFuture().timeout(Duration(seconds: 5));
-          print('Stream completed normally');
-        } catch (e) {
-          print('Stream timeout or error: $e');
-          // Даже если был таймаут, продолжим проверки
-        }
-
-        // Проверяем результаты в любом случае
-        print('Received ${receivedResponses.length} responses');
-        for (int i = 0; i < receivedResponses.length; i++) {
-          print('Response $i: ${receivedResponses[i]}');
-        }
+        final receivedResponses =
+            await client.call('test request'.rpc).toList();
 
         // Assert
         expect(receivedResponses.length, equals(3));
@@ -106,11 +64,8 @@ void main() {
         expect(receivedRequests.first, equals('test request'.rpc));
 
         // Cleanup
-        print('Cleaning up');
-        await subscription.cancel();
         await client.close();
         await server.close();
-        print('Test completed');
       });
 
       test('обрабатывает_единственный_запрос_без_ответов', () async {
@@ -276,39 +231,7 @@ void main() {
         await server.close();
       });
 
-      test('закрывается_корректно', () async {
-        // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-
-        final server = ServerStreamResponder<RpcString, RpcString>(
-          id: 1,
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) async* {
-            // Пустой стрим
-          },
-        );
-
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
-        server.bindToMessageStream(
-          serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-        );
-
-        final client = ServerStreamCaller<RpcString, RpcString>(
-          transport: clientTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-        );
-
-        // Act & Assert - должно закрыться без ошибок
-        await client.close();
-        await server.close();
-      });
+      // NOTE: close() behavior is exercised by other tests in this suite.
     });
 
     group('ServerStreamServer', () {
@@ -559,31 +482,7 @@ void main() {
         await server.close();
       });
 
-      test('закрывается_корректно', () async {
-        // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-
-        final sut = ServerStreamResponder<RpcString, RpcString>(
-          id: 1,
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) async* {
-            // Пустой стрим
-          },
-        );
-
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
-        sut.bindToMessageStream(
-          serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-        );
-
-        // Act & Assert - должно закрыться без ошибок
-        await sut.close();
-        await clientTransport.close();
-      });
+      // NOTE: close() behavior is exercised by other tests in this suite.
     });
 
     group('интеграционные тесты', () {

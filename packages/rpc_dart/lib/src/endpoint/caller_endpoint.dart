@@ -10,6 +10,23 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
   /// Ключ: "serviceName/methodName", Значение: мапа requestId -> токен отмены
   final Map<String, Map<String, RpcCancellationToken>> _cancellationTokens = {};
 
+  void _untrackRequest(
+    String serviceName,
+    String methodName,
+    String requestId,
+  ) {
+    final key = _createMethodKey(serviceName, methodName);
+    final methodTokens = _cancellationTokens[key];
+    if (methodTokens == null) {
+      return;
+    }
+
+    methodTokens.remove(requestId);
+    if (methodTokens.isEmpty) {
+      _cancellationTokens.remove(key);
+    }
+  }
+
   @override
   Map<String, Object?> collectEndpointMetrics() {
     final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
@@ -376,37 +393,43 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
     final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
-    return handleUnary<TRequest, TResponse>(
-      serviceName: serviceName,
-      methodName: methodName,
-      context: enhancedContext,
-      request: request,
-      handler: (ctx, normalizedRequest) async {
-        if (isZeroCopy) {
-          final processor = CallProcessor<TRequest, TResponse>(
-            transport: transport,
-            serviceName: serviceName,
-            methodName: methodName,
-            context: ctx,
-            logger: logger,
-          );
-
-          return _executeUniversalUnaryCall(
-            processor: processor,
-            request: normalizedRequest,
-          );
-        }
-
-        return UnaryCaller<TRequest, TResponse>(
+    return () async {
+      try {
+        return await handleUnary<TRequest, TResponse>(
           serviceName: serviceName,
           methodName: methodName,
-          transport: transport,
-          requestCodec: requestCodec!,
-          responseCodec: responseCodec!,
-          context: ctx,
-        ).call(normalizedRequest);
-      },
-    );
+          context: enhancedContext,
+          request: request,
+          handler: (ctx, normalizedRequest) async {
+            if (isZeroCopy) {
+              final processor = CallProcessor<TRequest, TResponse>(
+                transport: transport,
+                serviceName: serviceName,
+                methodName: methodName,
+                context: ctx,
+                logger: logger,
+              );
+
+              return _executeUniversalUnaryCall(
+                processor: processor,
+                request: normalizedRequest,
+              );
+            }
+
+            return UnaryCaller<TRequest, TResponse>(
+              serviceName: serviceName,
+              methodName: methodName,
+              transport: transport,
+              requestCodec: requestCodec!,
+              responseCodec: responseCodec!,
+              context: ctx,
+            ).call(normalizedRequest);
+          },
+        );
+      } finally {
+        _untrackRequest(serviceName, methodName, enhancedContext.requestId);
+      }
+    }();
   }
 
   /// Внутренняя реализация универсального унарного вызова
@@ -521,7 +544,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
     final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
-    return handleServerStream<TRequest, TResponse>(
+    final stream = handleServerStream<TRequest, TResponse>(
       serviceName: serviceName,
       methodName: methodName,
       context: enhancedContext,
@@ -540,6 +563,14 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         return caller.call(normalizedRequest);
       },
     );
+
+    return () async* {
+      try {
+        yield* stream;
+      } finally {
+        _untrackRequest(serviceName, methodName, enhancedContext.requestId);
+      }
+    }();
   }
 
   /// Создает client stream для отправки множественных запросов и получения одного ответа
@@ -555,30 +586,34 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       'Создание client stream builder для $serviceName/$methodName',
     );
 
-    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
-    final enhancedContext = _effectiveContext(context, serviceName, methodName);
-
     return (Stream<C> requests) async {
       logger.internal('Выполнение client stream для $serviceName/$methodName');
-      return handleClientStream<C, R>(
-        serviceName: serviceName,
-        methodName: methodName,
-        context: enhancedContext,
-        requests: requests,
-        handler: (ctx, normalizedRequests) {
-          final caller = ClientStreamCaller<C, R>(
-            transport: transport,
-            serviceName: serviceName,
-            methodName: methodName,
-            requestCodec: requestCodec,
-            responseCodec: responseCodec,
-            context: ctx,
-            logger: logger,
-          );
+      final enhancedContext =
+          _effectiveContext(context, serviceName, methodName);
 
-          return caller.call(normalizedRequests);
-        },
-      );
+      try {
+        return await handleClientStream<C, R>(
+          serviceName: serviceName,
+          methodName: methodName,
+          context: enhancedContext,
+          requests: requests,
+          handler: (ctx, normalizedRequests) {
+            final caller = ClientStreamCaller<C, R>(
+              transport: transport,
+              serviceName: serviceName,
+              methodName: methodName,
+              requestCodec: requestCodec,
+              responseCodec: responseCodec,
+              context: ctx,
+              logger: logger,
+            );
+
+            return caller.call(normalizedRequests);
+          },
+        );
+      } finally {
+        _untrackRequest(serviceName, methodName, enhancedContext.requestId);
+      }
     };
   }
 
@@ -635,6 +670,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
             return;
           }
           isCleaned = true;
+          _untrackRequest(serviceName, methodName, enhancedContext.requestId);
           await responseSubscription?.cancel();
           await requestSubscription?.cancel();
           await caller.close();

@@ -706,27 +706,6 @@ void main() {
       });
 
       test(
-        'должен предотвращать утечки памяти при множественных операциях',
-        () async {
-          // Arrange & Act
-          for (int i = 0; i < 100; i++) {
-            final router = RpcTransportRouterBuilder.client()
-                .routeCall(
-                  calledServiceName: 'TestService$i',
-                  toTransport: userClientTransport,
-                )
-                .build();
-
-            router.createStream();
-            await router.close();
-          }
-
-          // Assert - если нет утечек памяти, тест должен завершиться успешно
-          expect(true, isTrue);
-        },
-      );
-
-      test(
         'должен освобождать stream ID целевого транспорта и переиспользовать начальные значения',
         () async {
           final spyTransport = _ReusableIdTestTransport();

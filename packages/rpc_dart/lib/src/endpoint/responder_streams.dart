@@ -11,9 +11,11 @@ final class RpcResponderStreamState {
   String? methodKey;
   RpcTransportMessage? metadataMessage;
   RpcTransportMessage? lastPayloadMessage;
+  final List<RpcTransportMessage> _preBindBufferedMessages = [];
   final List<RpcTransportMessage> _clientBufferedMessages = [];
   RpcContext? _cachedContext;
   IRpcResponder? responder;
+  bool _boundToMessageStream = false;
 
   bool get hasMethod => methodKey != null;
 
@@ -22,6 +24,12 @@ final class RpcResponderStreamState {
   bool get hasBufferedClientMessages => _clientBufferedMessages.isNotEmpty;
 
   bool get hasResponder => responder != null;
+
+  bool get isBoundToMessageStream => _boundToMessageStream;
+
+  void markBoundToMessageStream() {
+    _boundToMessageStream = true;
+  }
 
   void setMethodKey(String newMethodKey) {
     if (methodKey != newMethodKey) {
@@ -40,9 +48,28 @@ final class RpcResponderStreamState {
     required bool bufferForClientStream,
   }) {
     lastPayloadMessage = message;
+
+    // For bidirectional/server-stream/unary methods we can receive multiple
+    // payload messages before the responder is bound to the per-stream message
+    // stream. Since transports are broadcast streams (no replay), buffer
+    // everything pre-bind to avoid losing messages.
+    if (!bufferForClientStream && !_boundToMessageStream) {
+      _preBindBufferedMessages.add(message);
+    }
+
     if (bufferForClientStream) {
       _clientBufferedMessages.add(message);
     }
+  }
+
+  List<RpcTransportMessage> takePreBindBufferedMessages() {
+    if (_preBindBufferedMessages.isEmpty) {
+      return const [];
+    }
+
+    final messages = List<RpcTransportMessage>.from(_preBindBufferedMessages);
+    _preBindBufferedMessages.clear();
+    return messages;
   }
 
   RpcTransportMessage? takeLastPayload() {

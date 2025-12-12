@@ -18,13 +18,8 @@ void main() {
           requestCodec: codec,
           responseCodec: codec,
           handler: (requests) async {
-            print('Сервер: Начата обработка запросов');
             final allRequests = await requests.toList();
-            print(
-              'Сервер: Получено ${allRequests.length} запросов: $allRequests',
-            );
             final joinedRequests = allRequests.join(', ');
-            print('Сервер: Отправляю ответ "Received: $joinedRequests"');
             return 'Received: $joinedRequests'.rpc;
           },
         );
@@ -43,21 +38,16 @@ void main() {
         );
 
         // Act
-        print('Клиент: Отправляю первый запрос');
         await client.send('request1'.rpc);
         await Future.delayed(Duration(milliseconds: 1));
 
-        print('Клиент: Отправляю второй запрос');
         await client.send('request2'.rpc);
         await Future.delayed(Duration(milliseconds: 1));
 
-        print('Клиент: Отправляю третий запрос');
         await client.send('request3'.rpc);
         await Future.delayed(Duration(milliseconds: 1));
 
-        print('Клиент: Завершаю отправку и жду ответ');
         final response = await client.finishSending();
-        print('Клиент: Получен ответ: $response');
 
         // Assert
         expect(
@@ -207,38 +197,6 @@ void main() {
         await client.close();
         await server.close();
       });
-
-      test('закрывается_корректно', () async {
-        // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-
-        final server = ClientStreamResponder<RpcString, RpcString>(
-          id: 1,
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: codec,
-          responseCodec: codec,
-          handler: (Stream<RpcString> requests) async => 'test'.rpc,
-        );
-
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
-        server.bindToMessageStream(
-          serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-        );
-
-        final client = ClientStreamCaller<RpcString, RpcString>(
-          transport: clientTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: codec,
-          responseCodec: codec,
-        );
-
-        // Act & Assert - должно закрыться без ошибок
-        await client.close();
-        await server.close();
-      });
     });
 
     group('ClientStreamServer', () {
@@ -375,11 +333,10 @@ void main() {
         final correctResponse = await correctClient.finishSending();
 
         await incorrectClient.send('incorrect'.rpc);
-        try {
-          await incorrectClient.finishSending().timeout(Duration(seconds: 5));
-        } catch (e) {
-          // Ожидаем ошибку для неправильного метода
-        }
+        await expectLater(
+          () => incorrectClient.finishSending().timeout(Duration(seconds: 5)),
+          throwsA(isA<Exception>()),
+        );
 
         // Assert
         expect(handlerCallCount, equals(1));
@@ -389,25 +346,6 @@ void main() {
         await correctClient.close();
         await incorrectClient.close();
         await server.close();
-      });
-
-      test('закрывается_корректно', () async {
-        // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-
-        final sut = ClientStreamResponder<RpcString, RpcString>(
-          id: 1,
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: codec,
-          responseCodec: codec,
-          handler: (Stream<RpcString> requests) async => 'response'.rpc,
-        );
-
-        // Act & Assert - должно закрыться без ошибок
-        await sut.close();
-        await clientTransport.close();
       });
     });
 

@@ -4,6 +4,7 @@
 
 import 'dart:typed_data';
 
+import 'errors.dart';
 import '../logs/_logs.dart';
 import 'protocol.dart';
 
@@ -39,8 +40,13 @@ final class _MessageParserState {
 /// несовпадения границ HTTP/2 фреймов и сообщений gRPC.
 final class RpcMessageParser {
   final RpcLogger? _logger;
+  final int _maxMessageLength;
 
-  RpcMessageParser({RpcLogger? logger}) : _logger = logger;
+  RpcMessageParser({
+    RpcLogger? logger,
+    int maxMessageLength = 64 * 1024 * 1024,
+  })  : _logger = logger,
+        _maxMessageLength = maxMessageLength;
 
   /// Внутреннее состояние парсера
   final _MessageParserState _state = _MessageParserState();
@@ -81,8 +87,24 @@ final class RpcMessageParser {
           final header = RpcMessageFrame.parseHeader(
             Uint8List.fromList(_state.buffer),
           );
+          if (header.isCompressed) {
+            _state.buffer.clear();
+            _state.reset();
+            throw RpcException(
+              'Compressed gRPC frames are not supported by this parser',
+            );
+          }
           _state.isCompressed = header.isCompressed;
           _state.expectedMessageLength = header.messageLength;
+
+          if (_state.expectedMessageLength! > _maxMessageLength) {
+            final length = _state.expectedMessageLength!;
+            _state.buffer.clear();
+            _state.reset();
+            throw RpcException(
+              'gRPC frame payload is too large: $length bytes (max: $_maxMessageLength)',
+            );
+          }
 
           // Удаляем заголовок из буфера
           _state.buffer = _state.buffer.sublist(
@@ -94,7 +116,9 @@ final class RpcMessageParser {
             error: e,
             stackTrace: trace,
           );
-          return result; // Возвращаем то, что есть, при ошибке
+          _state.buffer.clear();
+          _state.reset();
+          rethrow;
         }
       }
 

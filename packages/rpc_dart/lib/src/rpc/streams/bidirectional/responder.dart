@@ -20,6 +20,15 @@ final class BidirectionalStreamResponder<TRequest extends Object,
   @override
   final int id;
 
+  final Completer<void> _doneCompleter = Completer<void>();
+
+  Future<void> get done => _doneCompleter.future;
+
+  void _completeDone() {
+    if (_doneCompleter.isCompleted) return;
+    _doneCompleter.complete();
+  }
+
   /// Внутренний процессор стрима
   late final StreamProcessor<TRequest, TResponse> _processor;
 
@@ -163,7 +172,11 @@ final class BidirectionalStreamResponder<TRequest extends Object,
   Future<void> sendError(int statusCode, String message) async {
     if (!_isActive) return;
 
-    await _processor.sendError(statusCode, message);
+    try {
+      await _processor.sendError(statusCode, message);
+    } finally {
+      _completeDone();
+    }
   }
 
   /// Завершает отправку ответов
@@ -173,7 +186,11 @@ final class BidirectionalStreamResponder<TRequest extends Object,
   Future<void> finishReceiving() async {
     if (!_isActive) return;
 
-    await _processor.finishSending();
+    try {
+      await _processor.finishSending();
+    } finally {
+      _completeDone();
+    }
   }
 
   /// Закрывает стрим и освобождает ресурсы
@@ -186,5 +203,6 @@ final class BidirectionalStreamResponder<TRequest extends Object,
       _responseController.close(); // НЕ ждём завершения
     }
     await _processor.close();
+    _completeDone();
   }
 }

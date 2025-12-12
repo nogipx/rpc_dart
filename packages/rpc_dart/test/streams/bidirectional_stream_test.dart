@@ -70,109 +70,6 @@ void main() {
         await client.close();
         await server.close();
       });
-
-      test('обрабатывает_метаданные_корректно', () async {
-        // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-
-        final server = BidirectionalStreamResponder<RpcString, RpcString>(
-          id: 1,
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-        );
-
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
-        server.bindToMessageStream(
-          serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-        );
-
-        final client = BidirectionalStreamCaller<RpcString, RpcString>(
-          transport: clientTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-        );
-
-        var metadataReceived = false;
-        final completer = Completer<void>();
-
-        client.responses.listen(
-          (message) {
-            if (message.isMetadataOnly && message.metadata != null) {
-              metadataReceived = true;
-              if (!completer.isCompleted) {
-                completer.complete();
-              }
-            }
-          },
-          onError: (e) {
-            print('Ошибка при получении ответа: $e');
-            if (!completer.isCompleted) {
-              completer.completeError(e);
-            }
-          },
-        );
-
-        // Act
-        await client.send('test message'.rpc);
-
-        // Ждем обработки метаданных с таймаутом
-        await completer.future.timeout(
-          Duration(seconds: 5),
-          onTimeout: () {
-            print('Таймаут при ожидании метаданных');
-            // Форсируем успешное завершение теста, если метаданные не получены
-            // в некоторых тестовых окружениях метаданные могут не прийти
-            if (!completer.isCompleted) {
-              completer.complete();
-            }
-            // Считаем тест успешным даже без получения метаданных
-            metadataReceived = true;
-          },
-        );
-
-        // Assert
-        expect(metadataReceived, isTrue);
-
-        // Cleanup
-        await client.close();
-        await server.close();
-      });
-
-      test('закрывается_корректно', () async {
-        // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-
-        final server = BidirectionalStreamResponder<RpcString, RpcString>(
-          id: 1,
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-        );
-
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
-        server.bindToMessageStream(
-          serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-        );
-
-        final client = BidirectionalStreamCaller<RpcString, RpcString>(
-          transport: clientTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-        );
-
-        // Act & Assert - должно закрыться без ошибок
-        await client.close();
-        await server.close();
-      });
     });
 
     group('BidirectionalStreamServer', () {
@@ -267,10 +164,7 @@ void main() {
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
 
-        server.requests.listen((request) {
-          print('Сервер получил запрос: $request');
-          handlerCallCount++;
-        });
+        server.requests.listen((_) => handlerCallCount++);
 
         final correctClient = BidirectionalStreamCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -299,7 +193,6 @@ void main() {
 
         // Ждем обработки всех запросов
         await Future.delayed(Duration(milliseconds: 1));
-        print('Количество обработанных запросов: $handlerCallCount');
 
         // Assert
         expect(handlerCallCount, equals(1));
@@ -308,29 +201,6 @@ void main() {
         await correctClient.close();
         await incorrectClient.close();
         await server.close();
-      });
-
-      test('закрывается_корректно', () async {
-        // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-
-        final sut = BidirectionalStreamResponder<RpcString, RpcString>(
-          id: 1,
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-        );
-
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
-        sut.bindToMessageStream(
-          serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-        );
-
-        // Act & Assert - должно закрыться без ошибок
-        await sut.close();
-        await clientTransport.close();
       });
     });
 

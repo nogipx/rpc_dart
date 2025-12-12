@@ -44,10 +44,19 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Контроллер потока исходящих ответов
   final StreamController<TResponse> _responseController =
-      StreamController<TResponse>();
+      StreamController<TResponse>(sync: true);
+
+  /// Подписка на поток исходящих ответов.
+  StreamSubscription<TResponse>? _responseSubscription;
 
   /// Подписка на входящий поток сообщений
   StreamSubscription? _messageSubscription;
+
+  /// Последовательность отправки ответов, чтобы гарантировать порядок и
+  /// возможность дождаться завершения отправки перед трейлерами.
+  Future<void> _sendSequence = Future<void>.value();
+
+  bool _trailerSent = false;
 
   /// Флаг активности процессора
   bool _isActive = true;
@@ -116,77 +125,54 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Настраивает обработку исходящих ответов
   void _setupResponseHandler() {
-    _responseController.stream.listen(
-      (response) async {
-        if (!_isActive) return;
+    _responseSubscription = _responseController.stream.listen(
+      (response) {
+        _sendSequence = _sendSequence.then((_) async {
+          if (!_isActive) return;
 
-        _logger?.internal(
-          'Отправка ответа для $_methodPath [streamId: $_streamId]',
-        );
-        try {
-          if (_isZeroCopy) {
-            // Zero-copy путь
-            _logger?.internal(
-              'Zero-copy отправка ответа [streamId: $_streamId]',
-            );
-            await _transport.sendDirectObject(_streamId, response);
-            _logger?.internal(
-              'Zero-copy ответ отправлен для $_methodPath [streamId: $_streamId]',
-            );
-          } else {
-            // Сериализация для сетевых транспортов
-            final serialized = _responseCodec!.serialize(response);
-            _logger?.internal(
-              'Ответ сериализован, размер: ${serialized.length} байт [streamId: $_streamId]',
-            );
-
-            final framedMessage = RpcMessageFrame.encode(serialized);
-            await _transport.sendMessage(_streamId, framedMessage);
-
-            _logger?.internal(
-              'Ответ отправлен для $_methodPath [streamId: $_streamId]',
-            );
-          }
-        } catch (e, stackTrace) {
-          // Проверяем, не закрыт ли транспорт
-          if (e.toString().contains('Transport is closed') ||
-              e.toString().contains('closed')) {
-            _logger?.internal(
-              'Транспорт закрыт, пропускаем отправку ответа [streamId: $_streamId]',
-            );
-            return;
-          }
-          _logger?.error(
-            'Ошибка при отправке ответа [streamId: $_streamId]',
-            error: e,
-            stackTrace: stackTrace,
-          );
-        }
-      },
-      onDone: () async {
-        if (!_isActive) return;
-
-        try {
-          final trailers = RpcMetadata.forTrailer(RpcStatus.ok);
-          await _transport.sendMetadata(_streamId, trailers, endStream: true);
           _logger?.internal(
-            'Трейлер отправлен для $_methodPath [streamId: $_streamId]',
+            'Отправка ответа для $_methodPath [streamId: $_streamId]',
           );
-        } catch (e, stackTrace) {
-          // Проверяем, не закрыт ли транспорт
-          if (e.toString().contains('Transport is closed') ||
-              e.toString().contains('closed')) {
-            _logger?.internal(
-              'Транспорт закрыт, пропускаем отправку трейлера [streamId: $_streamId]',
+          try {
+            if (_isZeroCopy) {
+              // Zero-copy путь
+              _logger?.internal(
+                'Zero-copy отправка ответа [streamId: $_streamId]',
+              );
+              await _transport.sendDirectObject(_streamId, response);
+              _logger?.internal(
+                'Zero-copy ответ отправлен для $_methodPath [streamId: $_streamId]',
+              );
+            } else {
+              // Сериализация для сетевых транспортов
+              final serialized = _responseCodec!.serialize(response);
+              _logger?.internal(
+                'Ответ сериализован, размер: ${serialized.length} байт [streamId: $_streamId]',
+              );
+
+              final framedMessage = RpcMessageFrame.encode(serialized);
+              await _transport.sendMessage(_streamId, framedMessage);
+
+              _logger?.internal(
+                'Ответ отправлен для $_methodPath [streamId: $_streamId]',
+              );
+            }
+          } catch (e, stackTrace) {
+            // Проверяем, не закрыт ли транспорт
+            if (e.toString().contains('Transport is closed') ||
+                e.toString().contains('closed')) {
+              _logger?.internal(
+                'Транспорт закрыт, пропускаем отправку ответа [streamId: $_streamId]',
+              );
+              return;
+            }
+            _logger?.error(
+              'Ошибка при отправке ответа [streamId: $_streamId]',
+              error: e,
+              stackTrace: stackTrace,
             );
-            return;
           }
-          _logger?.error(
-            'Ошибка при отправке трейлера [streamId: $_streamId]',
-            error: e,
-            stackTrace: stackTrace,
-          );
-        }
+        });
       },
       onError: (error, stackTrace) {
         _logger?.error(
@@ -196,6 +182,32 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         );
       },
     );
+  }
+
+  Future<void> _sendOkTrailerIfNeeded() async {
+    if (_trailerSent) return;
+    _trailerSent = true;
+
+    try {
+      final trailers = RpcMetadata.forTrailer(RpcStatus.ok);
+      await _transport.sendMetadata(_streamId, trailers, endStream: true);
+      _logger?.internal(
+        'Трейлер отправлен для $_methodPath [streamId: $_streamId]',
+      );
+    } catch (e, stackTrace) {
+      if (e.toString().contains('Transport is closed') ||
+          e.toString().contains('closed')) {
+        _logger?.internal(
+          'Транспорт закрыт, пропускаем отправку трейлера [streamId: $_streamId]',
+        );
+        return;
+      }
+      _logger?.error(
+        'Ошибка при отправке трейлера [streamId: $_streamId]',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Привязывает процессор к потоку сообщений от endpoint'а
@@ -427,8 +439,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       'Отправка ошибки клиенту: $statusCode - $message [streamId: $_streamId]',
     );
 
+    // Дожидаемся завершения всех ранее запланированных отправок ответов,
+    // чтобы не отправить error trailer "между" сообщениями.
+    await _sendSequence;
+
     if (!_responseController.isClosed) {
-      _responseController.close();
+      await _responseController.close();
     }
 
     try {
@@ -467,6 +483,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       }
 
       _logger?.internal('Ошибка отправлена клиенту [streamId: $_streamId]');
+      _trailerSent = true;
     } catch (e, stackTrace) {
       // Проверяем, не закрыт ли транспорт
       if (e.toString().contains('Transport is closed') ||
@@ -492,9 +509,13 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       'Завершение отправки ответов для $_methodPath [streamId: $_streamId]',
     );
 
+    await _sendSequence;
+
     if (!_responseController.isClosed) {
       await _responseController.close();
     }
+
+    await _sendOkTrailerIfNeeded();
   }
 
   /// Закрывает процессор и освобождает ресурсы
@@ -512,6 +533,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
     unawaited(_cancellationSubscription?.cancel());
     _cancellationSubscription = null;
+
+    unawaited(_responseSubscription?.cancel());
+    _responseSubscription = null;
 
     if (!_requestController.isClosed) {
       _requestController.close();

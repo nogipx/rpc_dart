@@ -1,3 +1,16 @@
+## 2.3.6
+
+- Fix: responder endpoint now fails fast with proper gRPC status for invalid/unknown methods and cleans up per-stream state (prevents server-side leaks)
+- Fix: prevent losing pre-bind stream messages in responder endpoint (buffer + safe bind)
+- Fix: StreamProcessor now serializes response sending and emits trailers deterministically
+- Fix: ping now fails fast if the stream ends without gRPC trailers (prevents hangs)
+- Security: RpcMessageParser enforces a max frame payload size (configurable)
+
+## 2.3.5
+
+- Fix: clean up RpcCallerEndpoint cancellation token registry after completed calls (prevents memory growth in long-lived clients)
+- Docs: document cooperative cancellation and deadlines
+
 ## 2.3.4
 
 - fix lints package compatibility

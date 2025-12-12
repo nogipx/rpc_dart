@@ -18,6 +18,15 @@ final class ClientStreamResponder<TRequest extends Object,
   @override
   final int id;
 
+  final Completer<void> _doneCompleter = Completer<void>();
+
+  Future<void> get done => _doneCompleter.future;
+
+  void _completeDone() {
+    if (_doneCompleter.isCompleted) return;
+    _doneCompleter.complete();
+  }
+
   /// Внутренний процессор стрима
   late final StreamProcessor<TRequest, TResponse> _processor;
 
@@ -118,6 +127,8 @@ final class ClientStreamResponder<TRequest extends Object,
           error: e,
           stackTrace: stackTrace,
         );
+      } finally {
+        _completeDone();
       }
     }).catchError((error, stackTrace) async {
       _logger?.error(
@@ -125,12 +136,17 @@ final class ClientStreamResponder<TRequest extends Object,
         error: error,
         stackTrace: stackTrace,
       );
-      await _processor.sendError(RpcStatus.internal, error.toString());
+      try {
+        await _processor.sendError(RpcStatus.internal, error.toString());
+      } finally {
+        _completeDone();
+      }
     });
   }
 
   /// Закрывает стрим и освобождает ресурсы
   Future<void> close() async {
     await _processor.close();
+    _completeDone();
   }
 }

@@ -4,6 +4,8 @@
 
 import 'dart:typed_data';
 
+import 'errors.dart';
+
 /// Константы протокола gRPC.
 ///
 /// Содержит все фиксированные значения, используемые в протоколе gRPC,
@@ -152,11 +154,18 @@ abstract interface class RpcMessageFrame {
   /// Выбрасывает Exception при неверной длине входных данных
   static RpcMessageHeader parseHeader(Uint8List headerBytes) {
     if (headerBytes.length < RpcConstants.messagePrefixSize) {
-      throw Exception('Неверная длина заголовка сообщения');
+      throw RpcException('Неверная длина заголовка gRPC сообщения');
     }
 
-    final isCompressed = headerBytes[RpcConstants.compressionFlagIndex] ==
-        RpcConstants.compressed;
+    final compressionFlag = headerBytes[RpcConstants.compressionFlagIndex];
+    if (compressionFlag != RpcConstants.noCompression &&
+        compressionFlag != RpcConstants.compressed) {
+      throw RpcException(
+        'Некорректный compression flag в gRPC сообщении: $compressionFlag',
+      );
+    }
+
+    final isCompressed = compressionFlag == RpcConstants.compressed;
 
     final length = (headerBytes[RpcConstants.messageLengthIndex] << 24) |
         (headerBytes[RpcConstants.messageLengthIndex + 1] << 16) |

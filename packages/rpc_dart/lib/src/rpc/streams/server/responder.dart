@@ -19,6 +19,15 @@ final class ServerStreamResponder<TRequest extends Object,
   @override
   final int id;
 
+  final Completer<void> _doneCompleter = Completer<void>();
+
+  Future<void> get done => _doneCompleter.future;
+
+  void _completeDone() {
+    if (_doneCompleter.isCompleted) return;
+    _doneCompleter.complete();
+  }
+
   /// Внутренний процессор стрима
   late final StreamProcessor<TRequest, TResponse> _processor;
 
@@ -152,6 +161,7 @@ final class ServerStreamResponder<TRequest extends Object,
             // Завершаем отправку ответов
             await _processor.finishSending();
             _logger?.internal('Отправка ответов завершена [id: $id]');
+            _completeDone();
           } catch (error, trace) {
             _logger?.error(
               'Ошибка при обработке запроса [id: $id]',
@@ -159,6 +169,7 @@ final class ServerStreamResponder<TRequest extends Object,
               stackTrace: trace,
             );
             await _processor.sendError(RpcStatus.internal, error.toString());
+            _completeDone();
           }
         } else {
           _logger?.internal(
@@ -183,5 +194,6 @@ final class ServerStreamResponder<TRequest extends Object,
   Future<void> close() async {
     await _subscription?.cancel();
     await _processor.close();
+    _completeDone();
   }
 }

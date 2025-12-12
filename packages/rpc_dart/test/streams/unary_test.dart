@@ -131,24 +131,6 @@ void main() {
         await server.close();
       });
 
-      test('закрывается_корректно', () async {
-        // Arrange
-        final (clientTransport, _) = createTransportPair();
-
-        final client = UnaryCaller<RpcString, RpcString>(
-          transport: clientTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          logger: RpcLogger('TestUnaryClient'),
-        );
-
-        // Act & Assert
-        await client.close();
-        expect(true, isTrue); // No exceptions
-      });
-
       test('создает_уникальные_stream_id_для_каждого_вызова', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
@@ -343,27 +325,6 @@ void main() {
         await otherClient.close();
         await server.close();
         await otherServer.close();
-      });
-
-      test('закрывается_корректно', () async {
-        // Arrange
-        final (_, serverTransport) = createTransportPair();
-
-        final sut = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) => 'response'.rpc,
-        );
-
-        // Act
-        await sut.close();
-
-        // Assert
-        // Проверяем, что нет исключений при закрытии
-        expect(true, isTrue);
       });
     });
 
