@@ -49,7 +49,6 @@ abstract interface class RpcIsolateTransport {
     void entrypointWrapper(List<dynamic> args) {
       // Извлекаем параметры
       final hostSendPort = args[0] as SendPort;
-      final isolateId = args[1] as String;
       final customParams = args[2] as Map<String, dynamic>;
       final userEntrypoint = args[3] as RpcIsolateEntrypoint;
       final policy = RpcSecurityPolicy.fromMap(

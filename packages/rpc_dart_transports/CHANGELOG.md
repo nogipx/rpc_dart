@@ -1,5 +1,12 @@
 ## Unreleased
 
+## 1.7.0
+
+- Added `RpcSecurityPolicy` support across all transports (WebSocket/HTTP2/HTTP1/Isolate) to standardize limits and metadata validation.
+- **Breaking**: WebSocket transports now accept `RpcSecurityPolicy policy` for limits (instead of ad-hoc limit parameters such as `maxChunkedMessageBytes`).
+- HTTP/2 transports now validate incoming metadata and apply policy limits to gRPC message parsing.
+- Isolate transport now propagates policy to worker isolates and enforces basic active-stream limits.
+
 ## 1.6.1
 
 - Web: conditionally export the isolate transport and add a stub so web builds no longer pull in `dart:isolate`.

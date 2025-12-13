@@ -1,6 +1,6 @@
 name: rpc_dart_transports
 description: RPC Dart Transports library
-version: 1.6.1
+version: 1.7.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -13,12 +13,8 @@ topics:
   - isolate
   - network
 
-dependency_overrides:
-  rpc_dart:
-    path: ../rpc_dart
-
 dependencies:
-  rpc_dart: ^2.3.4
+  rpc_dart: ^2.4.0
   licensify: ^4.4.0
   web_socket_channel: ^3.0.3
   http2: ^2.3.1
