@@ -1,3 +1,7 @@
+## 3.3.1
+
+- Update rpc_dart to 2.4.0
+
 ## 3.3.0
 
 - Breaking: removed `skipValidation` flags from all RPC models and repository paths; schema validation is always enforced when a schema is enabled/requireValidation=true.

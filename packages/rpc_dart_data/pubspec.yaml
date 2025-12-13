@@ -1,6 +1,6 @@
 name: rpc_dart_data
 description: Data service layer (CRUD + querying + change streams) built on rpc_dart.
-version: 3.3.0
+version: 3.3.1
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -14,7 +14,7 @@ hooks:
       source: sqlite3mc
 
 dependencies:
-  rpc_dart: ^2.3.4
+  rpc_dart: ^2.4.0
   licensify: ^4.4.0
   equatable: ^2.0.7
   collection: ^1.19.1
