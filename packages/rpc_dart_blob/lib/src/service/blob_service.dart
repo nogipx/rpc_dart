@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:async/async.dart';
 import 'package:crypto/crypto.dart';
@@ -13,11 +12,9 @@ import '../rpc/i_blob_service.dart';
 ///
 /// Validates chunk ordering/length and streams data through the adapter.
 class BlobService implements IBlobService {
-  BlobService({
-    required IBlobStorageAdapter storage,
-    int? maxChunkBytes,
-  }) : _storage = storage,
-       _maxChunkBytes = maxChunkBytes;
+  BlobService({required IBlobStorageAdapter storage, int? maxChunkBytes})
+    : _storage = storage,
+      _maxChunkBytes = maxChunkBytes;
 
   final IBlobStorageAdapter _storage;
   final int? _maxChunkBytes;
@@ -42,7 +39,8 @@ class BlobService implements IBlobService {
     int? declaredLength = first.totalLength;
     final metadata = first.metadata;
     BlobUploadChunk lastChunk = first;
-    final checksumAlgorithm = first.checksumAlgorithm ?? ChecksumAlgorithm.sha256;
+    final checksumAlgorithm =
+        first.checksumAlgorithm ?? ChecksumAlgorithm.sha256;
 
     Stream<Uint8List> byteStream() async* {
       BlobUploadChunk current = first;
@@ -70,7 +68,9 @@ class BlobService implements IBlobService {
         current = await queue.next;
       }
       if (!lastChunk.last) {
-        throw StateError('Upload stream ended without last=true on the final chunk.');
+        throw StateError(
+          'Upload stream ended without last=true on the final chunk.',
+        );
       }
       if (declaredLength != null && declaredLength != seen) {
         throw StateError(
@@ -176,14 +176,17 @@ class BlobService implements IBlobService {
   }
 
   void _assertChunkSize(BlobUploadChunk chunk) {
-    if (_maxChunkBytes != null && chunk.bytes.length > _maxChunkBytes!) {
+    if (_maxChunkBytes != null && chunk.bytes.length > _maxChunkBytes) {
       throw StateError(
         'Chunk size ${chunk.bytes.length} exceeds maxChunkBytes $_maxChunkBytes',
       );
     }
   }
 
-  void _verifyChunkChecksum(BlobUploadChunk chunk, ChecksumAlgorithm algorithm) {
+  void _verifyChunkChecksum(
+    BlobUploadChunk chunk,
+    ChecksumAlgorithm algorithm,
+  ) {
     if (chunk.chunkChecksum == null) {
       return;
     }

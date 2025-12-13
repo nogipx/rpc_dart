@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:crypto/crypto.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
@@ -24,10 +22,7 @@ class BlobServiceFactory {
     String debugLabel = 'BlobServiceServer',
   }) {
     final responder = BlobServiceResponder(
-      service: BlobService(
-        storage: storage,
-        maxChunkBytes: maxChunkBytes,
-      ),
+      service: BlobService(storage: storage, maxChunkBytes: maxChunkBytes),
       transferMode: transferMode,
     );
     final endpoint = RpcResponderEndpoint(
@@ -271,9 +266,7 @@ class BlobServiceClient implements IBlobClient {
         // Allow zero-length chunk to start stream.
       }
       while (buffer.length >= _uploadChunkBytes) {
-        final data = Uint8List.fromList(
-          buffer.sublist(0, _uploadChunkBytes),
-        );
+        final data = Uint8List.fromList(buffer.sublist(0, _uploadChunkBytes));
         buffer.removeRange(0, _uploadChunkBytes);
         yield BlobUploadChunk(
           collection: collection,
