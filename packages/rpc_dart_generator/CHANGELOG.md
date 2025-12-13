@@ -1,3 +1,6 @@
+## 0.1.2
+- Dependency resolution: allow `analyzer ^8.1.1` (drop `source_gen_test` which required analyzer 9).
+
 ## 0.1.1
 - Move annotations to core library
 
