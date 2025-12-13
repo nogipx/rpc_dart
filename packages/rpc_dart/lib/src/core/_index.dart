@@ -4,6 +4,7 @@
 
 export 'errors.dart';
 export 'health.dart';
+export 'compression.dart';
 export 'metadata.dart';
 export 'message.dart';
 export 'parser.dart';

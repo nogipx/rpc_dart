@@ -80,7 +80,7 @@ final class RpcResponderPingHandler {
             ),
             RpcHeader(
               RpcConstants.grpcMessageHeader,
-              'Ping handling error: $error',
+              RpcMetadata.encodeGrpcMessage('Ping handling error: $error'),
             ),
           ]),
           endStream: true,

@@ -179,10 +179,11 @@ final class ServerStreamCaller<TRequest extends Object,
                     RpcConstants.grpcMessageHeader,
                   ) ??
                   'Unknown error';
+              final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
               _logger?.error(
-                'Серверный стрим завершился с ошибкой: $status - $message',
+                'Серверный стрим завершился с ошибкой: $status - $decodedMessage',
               );
-              throw Exception('gRPC error $status: $message');
+              throw Exception('gRPC error $status: $decodedMessage');
             }
           }
         }

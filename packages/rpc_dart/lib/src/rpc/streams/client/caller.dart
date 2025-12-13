@@ -125,13 +125,14 @@ final class ClientStreamCaller<TRequest extends Object,
                   RpcConstants.grpcMessageHeader,
                 ) ??
                 '';
+            final decodedMessage = RpcMetadata.decodeGrpcMessage(errorMessage);
             _logger?.error(
-              'Получен ошибочный статус-код: $statusCode - $errorMessage',
+              'Получен ошибочный статус-код: $statusCode - $decodedMessage',
             );
 
             if (!_responseCompleter.isCompleted) {
               _responseCompleter.completeError(
-                Exception('gRPC error $statusCode: $errorMessage'),
+                Exception('gRPC error $statusCode: $decodedMessage'),
               );
             }
             return;

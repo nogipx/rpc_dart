@@ -192,6 +192,67 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     RpcResponderStreamState state,
     RpcTransportMessage message,
   ) {
+    final metadata = message.metadata;
+    if (metadata == null) {
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Missing metadata',
+        ),
+      );
+      return;
+    }
+
+    final httpMethod = metadata.getHeaderValue(':method');
+    if (httpMethod != null && httpMethod.toUpperCase() != 'POST') {
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Invalid :method for gRPC',
+        ),
+      );
+      return;
+    }
+
+    final contentType = metadata.getHeaderValue(RpcConstants.contentTypeHeader);
+    if (contentType != null &&
+        !contentType.toLowerCase().startsWith(RpcConstants.grpcContentType)) {
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Invalid content-type for gRPC',
+        ),
+      );
+      return;
+    }
+
+    final te = metadata.getHeaderValue('te');
+    if (te != null && !te.toLowerCase().contains('trailers')) {
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Invalid te header for gRPC',
+        ),
+      );
+      return;
+    }
+
+    final grpcEncoding = metadata.getHeaderValue(RpcConstants.grpcEncodingHeader);
+    if (grpcEncoding != null && !RpcGrpcCompression.isSupported(grpcEncoding)) {
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.unimplemented,
+          message: 'Unsupported grpc-encoding: $grpcEncoding',
+        ),
+      );
+      return;
+    }
+
     final methodPath = message.methodPath!;
     final parsed = _parseMethodPath(methodPath);
 
@@ -889,7 +950,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
           ),
           RpcHeader(
             RpcConstants.grpcMessageHeader,
-            'Zero-copy method $methodKey требует транспорт с поддержкой zero-copy',
+            RpcMetadata.encodeGrpcMessage(
+              'Zero-copy method $methodKey требует транспорт с поддержкой zero-copy',
+            ),
           ),
         ]),
         endStream: true,
@@ -1042,23 +1105,42 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     var context = RpcContext.withHeaders(headers);
 
-    final deadlineHeader = headers['x-deadline'];
-    if (deadlineHeader != null) {
-      try {
-        final deadlineMs = int.parse(deadlineHeader);
-        final deadline = DateTime.fromMillisecondsSinceEpoch(deadlineMs);
-        context = context.withDeadline(deadline);
-        logger.internal('Установлен deadline из заголовков: $deadline');
-      } catch (_) {
-        logger.warning('Некорректный deadline в заголовках: $deadlineHeader');
+    final timeoutHeader = context.getHeader(RpcConstants.grpcTimeoutHeader);
+    if (timeoutHeader != null) {
+      final timeout = RpcMetadata.parseGrpcTimeout(timeoutHeader);
+      if (timeout != null) {
+        context = context.withDeadline(DateTime.now().add(timeout));
+        logger.internal('Установлен grpc-timeout: $timeout');
+      } else {
+        logger.warning('Некорректный grpc-timeout: $timeoutHeader');
+      }
+    } else {
+      final deadlineHeader = context.getHeader('x-deadline');
+      if (deadlineHeader != null) {
+        try {
+          final deadlineMs = int.parse(deadlineHeader);
+          final deadline = DateTime.fromMillisecondsSinceEpoch(deadlineMs);
+          context = context.withDeadline(deadline);
+          logger.internal('Установлен deadline из заголовков: $deadline');
+        } catch (_) {
+          logger.warning('Некорректный deadline в заголовках: $deadlineHeader');
+        }
       }
     }
 
-    final clientTraceId = headers['x-trace-id'];
+    String truncateForLog(String value, {int max = 200}) {
+      final sanitized = value.replaceAll('\r', ' ').replaceAll('\n', ' ');
+      if (sanitized.length <= max) return sanitized;
+      return '${sanitized.substring(0, max)}…';
+    }
+
+    final clientTraceId = context.getHeader('x-trace-id');
 
     if (clientTraceId != null) {
       context = context.withTraceId(clientTraceId);
-      logger.internal('Используем trace ID от клиента: $clientTraceId');
+      logger.internal(
+        'Используем trace ID от клиента: ${truncateForLog(clientTraceId)}',
+      );
     } else {
       final tracingContext = RpcContextUtils.withTracing();
       final generatedTraceId = tracingContext.traceId!;
@@ -1130,9 +1212,25 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   }
 
   (String, String)? _parseMethodPath(String methodPath) {
+    if (methodPath.isEmpty || methodPath.length > 512) {
+      return null;
+    }
+    if (methodPath.contains('\r') || methodPath.contains('\n')) {
+      return null;
+    }
+
     final parts = methodPath.split('/');
 
     if (parts.length != 3 || parts[0].isNotEmpty) {
+      return null;
+    }
+
+    if (parts[1].isEmpty || parts[2].isEmpty) {
+      return null;
+    }
+
+    final tokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
+    if (!tokenPattern.hasMatch(parts[1]) || !tokenPattern.hasMatch(parts[2])) {
       return null;
     }
 

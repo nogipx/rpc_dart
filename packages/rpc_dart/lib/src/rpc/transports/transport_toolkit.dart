@@ -226,9 +226,27 @@ class RpcTransportUtils {
 
   /// Создает метаданные из Map(String, String)
   static RpcMetadata createMetadata(Map<String, String> headers) {
-    final headerList = headers.entries
-        .map((entry) => RpcHeader(entry.key, entry.value))
-        .toList();
+    final headerList = <RpcHeader>[];
+    for (final entry in headers.entries) {
+      final name = entry.key.trim().toLowerCase();
+      final value = entry.value;
+      if (name.isEmpty ||
+          name.startsWith(':') ||
+          name.length > 128 ||
+          value.length > 8 * 1024 ||
+          name.contains('\r') ||
+          name.contains('\n') ||
+          value.contains('\r') ||
+          value.contains('\n') ||
+          name.contains('\u0000') ||
+          value.contains('\u0000')) {
+        continue;
+      }
+      headerList.add(RpcHeader(name, value));
+      if (headerList.length >= 128) {
+        break;
+      }
+    }
     return RpcMetadata(headerList);
   }
 
@@ -236,7 +254,24 @@ class RpcTransportUtils {
   static Map<String, String> metadataToHeaders(RpcMetadata metadata) {
     final result = <String, String>{};
     for (final header in metadata.headers) {
-      result[header.name] = header.value;
+      final name = header.name.trim().toLowerCase();
+      final value = header.value;
+      if (name.isEmpty ||
+          name.startsWith(':') ||
+          name.length > 128 ||
+          value.length > 8 * 1024 ||
+          name.contains('\r') ||
+          name.contains('\n') ||
+          value.contains('\r') ||
+          value.contains('\n') ||
+          name.contains('\u0000') ||
+          value.contains('\u0000')) {
+        continue;
+      }
+      result[name] = value;
+      if (result.length >= 128) {
+        break;
+      }
     }
     return result;
   }

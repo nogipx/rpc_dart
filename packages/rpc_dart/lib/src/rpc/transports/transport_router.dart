@@ -63,8 +63,10 @@ final class RpcTransportRouter implements IRpcTransport {
   RpcTransportRouter._({
     required List<PrioritizedRoutingRule> routingRules,
     RpcLogger? logger,
+    int maxActiveStreams = 10000,
   })  : _idManager = RpcStreamIdManager(isClient: true), // Всегда клиентский
-        _logger = logger ?? RpcLogger('TransportRouter') {
+        _logger = logger ?? RpcLogger('TransportRouter'),
+        _maxActiveStreams = maxActiveStreams {
     // Сортируем правила по приоритету (высший приоритет первым)
     _routingRules.addAll(routingRules);
     _routingRules.sort((a, b) => b.priority.compareTo(a.priority));
@@ -78,6 +80,8 @@ final class RpcTransportRouter implements IRpcTransport {
     }
     _logger.internal('  - Роль: client (Router всегда клиентский)');
   }
+
+  final int _maxActiveStreams;
 
   /// Создает подписку на ответы для конкретного stream'а
   void _subscribeToResponsesForStream(
@@ -220,22 +224,62 @@ final class RpcTransportRouter implements IRpcTransport {
 
     final headers = <String, String>{};
     for (final header in message.metadata!.headers) {
-      headers[header.name] = header.value;
+      if (!header.name.startsWith(':') &&
+          header.name != RpcConstants.contentTypeHeader &&
+          header.name != 'te') {
+        headers[header.name] = header.value;
+      }
     }
 
     return RpcContext.withHeaders(headers);
   }
 
+  String _summarizeHeadersForLog(RpcContext? context) {
+    if (context == null || context.headers.isEmpty) {
+      return 'headers=0';
+    }
+
+    const redactedKeys = <String>{
+      'authorization',
+      'cookie',
+      'set-cookie',
+      'x-api-key',
+    };
+
+    final keys = context.headers.keys.toList()..sort();
+    final safeKeys = keys.take(24).map(
+          (k) => redactedKeys.contains(k) ? '$k=<redacted>' : k,
+        );
+    final suffix = keys.length > 24 ? ', ...' : '';
+    return 'headers=${keys.length} keys=[${safeKeys.join(', ')}$suffix]';
+  }
+
+  String _truncateForLog(String? value, {int max = 200}) {
+    if (value == null) return 'null';
+    value = value.replaceAll('\r', ' ').replaceAll('\n', ' ');
+    if (value.length <= max) return value;
+    return '${value.substring(0, max)}…';
+  }
+
+  String _summarizeMetadataForLog(RpcMetadata metadata) {
+    final names = metadata.headers.map((h) => h.name).toList()..sort();
+    final shown = names.take(24);
+    final suffix = names.length > 24 ? ', ...' : '';
+    return 'headers=${names.length} names=[${shown.join(', ')}$suffix]';
+  }
+
   /// Главная логика роутинга - выбирает транспорт по приоритету правил
   IRpcTransport _selectTransport(RpcTransportMessage message) {
     final context = _extractContextFromMessage(message);
-    final serviceName = context?.getHeader('x-route-service');
     final methodPath = message.methodPath;
+    final serviceName = _serviceNameFromMethodPath(methodPath) ??
+        context?.getHeader('x-route-service');
 
     _logger.internal(
-      'Роутинг для service="$serviceName", method="$methodPath"',
+      'Роутинг для service="${_truncateForLog(serviceName)}", '
+      'method="${_truncateForLog(methodPath)}"',
     );
-    _logger.internal('Все заголовки контекста: ${context?.headers}');
+    _logger.internal('Контекст роутинга: ${_summarizeHeadersForLog(context)}');
 
     // Проверяем правила в порядке убывания приоритета
     for (final rule in _routingRules) {
@@ -256,6 +300,16 @@ final class RpcTransportRouter implements IRpcTransport {
       'Не найден транспорт для роутинга: service="$serviceName", method="$methodPath". '
       'Убедитесь, что добавлено соответствующее правило роутинга.',
     );
+  }
+
+  String? _serviceNameFromMethodPath(String? methodPath) {
+    if (methodPath == null) return null;
+    if (methodPath.isEmpty || methodPath.length > 512) return null;
+    if (!methodPath.startsWith('/')) return null;
+    final parts = methodPath.substring(1).split('/');
+    if (parts.length != 2) return null;
+    if (parts[0].isEmpty || parts[1].isEmpty) return null;
+    return parts[0];
   }
 
   @override
@@ -281,14 +335,20 @@ final class RpcTransportRouter implements IRpcTransport {
     bool endStream = false,
   }) async {
     if (_closed) throw StateError('TransportRouter is closed');
+    if (_streamTransports.length >= _maxActiveStreams &&
+        !_streamTransports.containsKey(streamId)) {
+      throw RpcException(
+        'TransportRouter activeStreams limit reached: $_maxActiveStreams',
+      );
+    }
 
     _logger.internal(
       'Sending metadata: streamId=$streamId, endStream=$endStream',
     );
-    _logger.internal('Metadata method path: ${metadata.methodPath}');
     _logger.internal(
-      'Metadata headers: ${metadata.headers.map((h) => '${h.name}=${h.value}').join(', ')}',
+      'Metadata method path: ${_truncateForLog(metadata.methodPath)}',
     );
+    _logger.internal('Metadata: ${_summarizeMetadataForLog(metadata)}');
 
     // Создаем временное сообщение для роутинга
     final routingMessage = RpcTransportMessage(
@@ -605,6 +665,7 @@ final class RpcTransportRouter implements IRpcTransport {
 final class RpcTransportRouterBuilder {
   final List<PrioritizedRoutingRule> _routingRules = [];
   RpcLogger? _logger;
+  int _maxActiveStreams = 10000;
 
   /// Создает Builder для клиентского Router'а
   ///
@@ -628,6 +689,14 @@ final class RpcTransportRouterBuilder {
   /// Устанавливает логгер
   RpcTransportRouterBuilder logger(RpcLogger logger) {
     _logger = logger;
+    return this;
+  }
+
+  RpcTransportRouterBuilder maxActiveStreams(int value) {
+    if (value <= 0) {
+      throw ArgumentError.value(value, 'value', 'Must be > 0');
+    }
+    _maxActiveStreams = value;
     return this;
   }
 
@@ -726,6 +795,10 @@ final class RpcTransportRouterBuilder {
       );
     }
 
-    return RpcTransportRouter._(routingRules: _routingRules, logger: _logger);
+    return RpcTransportRouter._(
+      routingRules: _routingRules,
+      logger: _logger,
+      maxActiveStreams: _maxActiveStreams,
+    );
   }
 }

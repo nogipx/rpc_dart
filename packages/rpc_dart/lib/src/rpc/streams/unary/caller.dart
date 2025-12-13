@@ -53,6 +53,8 @@ final class UnaryCaller<TRequest, TResponse> {
   /// Парсер для обработки фрагментированных сообщений
   late final RpcMessageParser _parser;
 
+  String? _peerGrpcEncoding;
+
   /// Создает клиент унарного вызова
   ///
   /// [transport] Транспортный уровень
@@ -77,7 +79,18 @@ final class UnaryCaller<TRequest, TResponse> {
         _responseSerializer = responseCodec,
         _context = context {
     _logger = logger?.child('UnaryCaller');
-    _parser = RpcMessageParser(logger: _logger);
+    _parser = RpcMessageParser(
+      logger: _logger,
+      decompressor: (payload) {
+        final encoding = _peerGrpcEncoding;
+        if (encoding == null || encoding == RpcGrpcCompression.identity) {
+          throw RpcException(
+            'Compressed gRPC payload received without grpc-encoding',
+          );
+        }
+        return RpcGrpcCompression.decompress(payload, encoding: encoding);
+      },
+    );
     _methodPath = '/$_serviceName/$_methodName';
     _logger?.internal(
       'Создан унарный клиент для $_methodPath${_context != null ? ' с контекстом' : ''}',
@@ -199,12 +212,18 @@ final class UnaryCaller<TRequest, TResponse> {
           } else if (message.isMetadataOnly && message.metadata != null) {
             // Получили метаданные (возможно трейлеры)
             _logger?.internal('Получены метаданные [streamId: $streamId]');
+            final encoding = message.metadata!.getHeaderValue(
+              RpcConstants.grpcEncodingHeader,
+            );
+            if (encoding != null) {
+              _peerGrpcEncoding = encoding;
+            }
             final statusCode = message.metadata!.getHeaderValue(
               RpcConstants.grpcStatusHeader,
             );
 
             if (statusCode != null && message.isEndOfStream) {
-              final code = int.parse(statusCode);
+              final code = int.tryParse(statusCode) ?? RpcStatus.unknown;
               _logger?.internal(
                 'Получен статус завершения: $code [streamId: $streamId]',
               );
@@ -213,11 +232,13 @@ final class UnaryCaller<TRequest, TResponse> {
                       RpcConstants.grpcMessageHeader,
                     ) ??
                     '';
+                final decodedMessage =
+                    RpcMetadata.decodeGrpcMessage(errorMessage);
                 _logger?.error(
-                  'Ошибка gRPC: $code - $errorMessage [streamId: $streamId]',
+                  'Ошибка gRPC: $code - $decodedMessage [streamId: $streamId]',
                 );
                 completer.completeError(
-                  Exception('gRPC error $code: $errorMessage'),
+                  Exception('gRPC error $code: $decodedMessage'),
                 );
               }
             }
@@ -259,6 +280,15 @@ final class UnaryCaller<TRequest, TResponse> {
 
         // Передаем deadline серверу
         if (_context!.deadline != null) {
+          final timeout = _context!.remainingTime;
+          if (timeout != null) {
+            headers.add(
+              RpcHeader(
+                RpcConstants.grpcTimeoutHeader,
+                RpcMetadata.encodeGrpcTimeout(timeout),
+              ),
+            );
+          }
           headers.add(
             RpcHeader(
               'x-deadline',
@@ -287,10 +317,24 @@ final class UnaryCaller<TRequest, TResponse> {
         // Стандартная сериализация для других транспортов
         _logger?.internal('Сериализация запроса [streamId: $streamId]');
         final serializedRequest = _requestSerializer.serialize(request);
+        final requestEncoding = _context?.getHeader(
+          RpcConstants.grpcEncodingHeader,
+        );
+        final useCompression = requestEncoding != null &&
+            requestEncoding != RpcGrpcCompression.identity;
+        final payload = useCompression
+            ? RpcGrpcCompression.compress(
+                serializedRequest,
+                encoding: requestEncoding,
+              )
+            : serializedRequest;
         _logger?.internal(
           'Запрос сериализован, размер: ${serializedRequest.length} байт [streamId: $streamId]',
         );
-        final framedRequest = RpcMessageFrame.encode(serializedRequest);
+        final framedRequest = RpcMessageFrame.encode(
+          payload,
+          compressed: useCompression,
+        );
         _logger?.internal(
           'Отправка запроса и закрытие потока запросов [streamId: $streamId]',
         );

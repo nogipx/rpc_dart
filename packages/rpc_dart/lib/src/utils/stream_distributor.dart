@@ -86,7 +86,7 @@ class StreamDistributor<T extends IRpcSerializable> {
     );
 
     _logger?.internal(
-      'Публикация данных в основной контроллер: размер=${event.toString().length} символов',
+      'Публикация данных в основной контроллер: type=${event.runtimeType}',
     );
     _mainController.add(wrappedEvent);
 
@@ -140,7 +140,10 @@ class StreamDistributor<T extends IRpcSerializable> {
       metadata: enrichedMetadata,
     );
 
-    _logger?.internal('Публикация фильтрованных данных: $wrappedEvent');
+    _logger?.internal(
+      'Публикация фильтрованных данных: clients=${targetClients.length}, '
+      'type=${event.runtimeType}',
+    );
     _mainController.add(wrappedEvent);
 
     // Обновляем метрики
@@ -230,6 +233,7 @@ class StreamDistributor<T extends IRpcSerializable> {
                 error: e,
                 stackTrace: stackTrace,
               );
+              return false;
             }),
           );
         }
@@ -313,7 +317,7 @@ class StreamDistributor<T extends IRpcSerializable> {
       // Извлекаем оригинальное сообщение из обертки
       clientController.add(wrappedEvent.message);
       _logger?.internal(
-        'Отправка данных клиенту $clientId: размер=${wrappedEvent.message.toString().length} символов',
+        'Отправка данных клиенту $clientId: type=${wrappedEvent.message.runtimeType}',
       );
 
       // Обновляем метрики
@@ -736,10 +740,53 @@ class _DistributorMetrics {
   void incrementErrors() => _errors++;
 
   void recordMessageSize(IRpcSerializable message) {
-    // Примерная оценка размера сообщения на основе JSON представления
-    final size = message.toString().length;
+    final json = message.toJson();
+    final size = _estimateJsonSize(json);
     _messageSizeSum += size;
     _messageSizeCount++;
+  }
+
+  static int _estimateJsonSize(
+    Object? value, {
+    int maxNodes = 256,
+    int maxString = 1024,
+  }) {
+    var nodes = 0;
+
+    int visit(Object? current) {
+      if (nodes++ >= maxNodes) return 0;
+      if (current == null) return 0;
+
+      if (current is String) {
+        return current.length > maxString ? maxString : current.length;
+      }
+      if (current is num) return 8;
+      if (current is bool) return 1;
+
+      if (current is List) {
+        var sum = 2;
+        for (final item in current) {
+          sum += visit(item);
+          if (nodes >= maxNodes) break;
+        }
+        return sum;
+      }
+
+      if (current is Map) {
+        var sum = 2;
+        for (final entry in current.entries) {
+          sum += visit(entry.key);
+          sum += visit(entry.value);
+          if (nodes >= maxNodes) break;
+        }
+        return sum;
+      }
+
+      // Unknown type in toJson() output - do not call toString().
+      return 8;
+    }
+
+    return visit(value);
   }
 
   /// Создает снимок текущих метрик
@@ -832,6 +879,6 @@ class _StreamMessage<T extends IRpcSerializable> {
 
   @override
   String toString() {
-    return 'StreamMessage{message: $message, streamId: $streamId, metadata: $metadata}';
+    return 'StreamMessage{messageType: ${message.runtimeType}, streamId: $streamId, metadataKeys: ${metadata?.length ?? 0}}';
   }
 }

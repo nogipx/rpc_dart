@@ -140,12 +140,13 @@ final class RpcEndpointPingExchange {
         if (statusCode != RpcStatus.ok) {
           final statusMessage =
               headersMap[RpcConstants.grpcMessageHeader] ?? 'Unknown error';
+          final decodedMessage = RpcMetadata.decodeGrpcMessage(statusMessage);
           logger.warning(
-            'Ping завершился с ошибкой: status=$statusCode, message=$statusMessage [streamId: $streamId]',
+            'Ping завершился с ошибкой: status=$statusCode, message=$decodedMessage [streamId: $streamId]',
           );
           completeError(
             RpcException(
-              'Ping failed with status $statusCode: $statusMessage',
+              'Ping failed with status $statusCode: $decodedMessage',
             ),
           );
           return;

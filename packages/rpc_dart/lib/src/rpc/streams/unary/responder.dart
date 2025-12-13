@@ -96,7 +96,18 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         _context = context {
     _handler = handler;
     _logger = logger?.child('UnaryResponder');
-    _parser = RpcMessageParser(logger: _logger);
+    _parser = RpcMessageParser(
+      logger: _logger,
+      decompressor: (payload) {
+        final encoding = _context?.getHeader(RpcConstants.grpcEncodingHeader);
+        if (encoding == null || encoding == RpcGrpcCompression.identity) {
+          throw RpcException(
+            'Compressed gRPC payload received without grpc-encoding',
+          );
+        }
+        return RpcGrpcCompression.decompress(payload, encoding: encoding);
+      },
+    );
     _methodPath = '/$_serviceName/$_methodName';
     _logger?.internal(
       'Создан унарный сервер для $_methodPath${_context?.cancellationToken != null ? " с cancellation token" : ""}',

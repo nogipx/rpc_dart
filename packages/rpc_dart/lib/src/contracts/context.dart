@@ -7,6 +7,13 @@ part of '_index.dart';
 /// RPC Context в стиле gRPC - содержит метаданные вызова,
 /// таймауты, токены отмены и другую контекстную информацию
 final class RpcContext {
+  static const int _maxHeaderCount = 128;
+  static const int _maxHeaderNameLength = 128;
+  static const int _maxHeaderValueLength = 8 * 1024;
+  static const int _maxTotalHeaderBytes = 64 * 1024;
+
+  static final RegExp _headerNamePattern = RegExp(r'^[0-9a-z_.-]+$');
+
   /// Заголовки/метаданные запроса
   final Map<String, String> _headers;
 
@@ -41,7 +48,7 @@ final class RpcContext {
 
   /// Создает контекст с заголовками
   factory RpcContext.withHeaders(Map<String, String> headers) =>
-      RpcContext._(headers: headers);
+      RpcContext._(headers: _sanitizeHeaders(headers));
 
   /// Создает контекст с deadline
   factory RpcContext.withDeadline(DateTime deadline) =>
@@ -62,10 +69,10 @@ final class RpcContext {
   /// Создает копию контекста с дополнительными заголовками
   RpcContext withAdditionalHeaders(Map<String, String> additionalHeaders) {
     final newHeaders = Map<String, String>.from(_headers);
-    newHeaders.addAll(additionalHeaders);
+    newHeaders.addAll(_sanitizeHeaders(additionalHeaders));
 
     return RpcContext._(
-      headers: newHeaders,
+      headers: _sanitizeHeaders(newHeaders),
       deadline: deadline,
       cancellationToken: cancellationToken,
       traceId: traceId,
@@ -124,10 +131,54 @@ final class RpcContext {
   }
 
   /// Получает значение заголовка
-  String? getHeader(String key) => _headers[key];
+  String? getHeader(String key) => _headers[_normalizeHeaderName(key)];
 
   /// Получает все заголовки (только для чтения)
   Map<String, String> get headers => Map.unmodifiable(_headers);
+
+  static bool _containsInvalidHeaderChars(String value) {
+    for (var i = 0; i < value.length; i++) {
+      final codeUnit = value.codeUnitAt(i);
+      if (codeUnit == 0x0A || codeUnit == 0x0D || codeUnit == 0x00) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static String _normalizeHeaderName(String key) => key.trim().toLowerCase();
+
+  static Map<String, String> _sanitizeHeaders(Map<String, String> headers) {
+    final sanitized = <String, String>{};
+    var totalBytes = 0;
+
+    for (final entry in headers.entries) {
+      final key = _normalizeHeaderName(entry.key);
+      if (key.isEmpty ||
+          key.startsWith(':') ||
+          key.length > _maxHeaderNameLength ||
+          !_headerNamePattern.hasMatch(key) ||
+          _containsInvalidHeaderChars(key)) {
+        continue;
+      }
+
+      final value = entry.value;
+      if (value.length > _maxHeaderValueLength ||
+          _containsInvalidHeaderChars(value)) {
+        continue;
+      }
+
+      totalBytes += key.length + value.length;
+      if (sanitized.length >= _maxHeaderCount ||
+          totalBytes > _maxTotalHeaderBytes) {
+        break;
+      }
+
+      sanitized[key] = value;
+    }
+
+    return sanitized;
+  }
 
   /// Получает значение из контекста
   T? getValue<T>(Object key) => _values[key] as T?;
@@ -153,9 +204,21 @@ final class RpcContext {
 
   /// Генерирует уникальный ID запроса
   static String _generateRequestId() {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final random = (timestamp * 31) % 10000;
-    return 'req_${timestamp}_$random';
+    final bytes = Uint8List(16);
+    try {
+      final secure = Random.secure();
+      for (var i = 0; i < bytes.length; i++) {
+        bytes[i] = secure.nextInt(256);
+      }
+    } catch (_) {
+      final fallback = Random(DateTime.now().microsecondsSinceEpoch);
+      for (var i = 0; i < bytes.length; i++) {
+        bytes[i] = fallback.nextInt(256);
+      }
+    }
+
+    final token = base64UrlEncode(bytes).replaceAll('=', '');
+    return 'req_$token';
   }
 
   @override

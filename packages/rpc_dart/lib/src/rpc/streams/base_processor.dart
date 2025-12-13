@@ -35,6 +35,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Парсер для обработки фрагментированных сообщений (только для сериализации)
   RpcMessageParser? _parser;
 
+  String? _peerGrpcEncoding;
+
   /// Режим работы процессора
   final bool _isZeroCopy;
 
@@ -93,7 +95,18 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           'Для zero-copy не передавайте кодеки (null).',
         );
       }
-      _parser = RpcMessageParser(logger: _logger);
+      _parser = RpcMessageParser(
+        logger: _logger,
+        decompressor: (payload) {
+          final encoding = _context?.getHeader(RpcConstants.grpcEncodingHeader);
+          if (encoding == null || encoding == RpcGrpcCompression.identity) {
+            throw RpcException(
+              'Compressed gRPC payload received without grpc-encoding',
+            );
+          }
+          return RpcGrpcCompression.decompress(payload, encoding: encoding);
+        },
+      );
     } else {
       // Zero-copy режим: требуется поддержка zero-copy транспортом
       if (!transport.supportsZeroCopy) {
@@ -465,7 +478,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
         if (message.isNotEmpty) {
           errorHeaders.add(
-            RpcHeader(RpcConstants.grpcMessageHeader, message),
+            RpcHeader(
+              RpcConstants.grpcMessageHeader,
+              RpcMetadata.encodeGrpcMessage(message),
+            ),
           );
         }
 
@@ -615,6 +631,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Парсер для обработки фрагментированных сообщений (только для сериализации)
   RpcMessageParser? _parser;
 
+  String? _peerGrpcEncoding;
+
   /// Режим работы процессора
   final bool _isZeroCopy;
 
@@ -666,7 +684,18 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           'Для zero-copy не передавайте кодеки (null).',
         );
       }
-      _parser = RpcMessageParser(logger: _logger);
+      _parser = RpcMessageParser(
+        logger: _logger,
+        decompressor: (payload) {
+          final encoding = _peerGrpcEncoding;
+          if (encoding == null || encoding == RpcGrpcCompression.identity) {
+            throw RpcException(
+              'Compressed gRPC payload received without grpc-encoding',
+            );
+          }
+          return RpcGrpcCompression.decompress(payload, encoding: encoding);
+        },
+      );
     } else {
       // Zero-copy режим: требуется поддержка zero-copy транспортом
       if (!transport.supportsZeroCopy) {
@@ -736,7 +765,21 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
               'Запрос сериализован, размер: ${serialized.length} байт [streamId: $_streamId]',
             );
 
-            final framedMessage = RpcMessageFrame.encode(serialized);
+            final requestEncoding =
+                _context?.getHeader(RpcConstants.grpcEncodingHeader);
+            final useCompression = requestEncoding != null &&
+                requestEncoding != RpcGrpcCompression.identity;
+            final payload = useCompression
+                ? RpcGrpcCompression.compress(
+                    serialized,
+                    encoding: requestEncoding,
+                  )
+                : serialized;
+
+            final framedMessage = RpcMessageFrame.encode(
+              payload,
+              compressed: useCompression,
+            );
             await _transport.sendMessage(_streamId, framedMessage);
 
             _logger?.internal(
@@ -842,6 +885,16 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
       // Передаем deadline серверу
       if (_context!.deadline != null) {
+        final timeout = _context!.remainingTime;
+        if (timeout != null) {
+          headers.add(
+            RpcHeader(
+              RpcConstants.grpcTimeoutHeader,
+              RpcMetadata.encodeGrpcTimeout(timeout),
+            ),
+          );
+        }
+
         headers.add(
           RpcHeader(
             'x-deadline',
@@ -991,6 +1044,13 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     try {
       // Обрабатываем метаданные
       if (message.isMetadataOnly) {
+        final encoding = message.metadata?.getHeaderValue(
+          RpcConstants.grpcEncodingHeader,
+        );
+        if (encoding != null) {
+          _peerGrpcEncoding = encoding;
+        }
+
         final rpcMessage = RpcMessage.withMetadata<TResponse>(
           message.metadata!,
           isEndOfStream: message.isEndOfStream,

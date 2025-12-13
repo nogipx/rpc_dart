@@ -114,6 +114,15 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     headers.add(RpcHeader('x-request-id', routingContext.requestId));
 
     if (routingContext.deadline != null) {
+      final timeout = routingContext.remainingTime;
+      if (timeout != null) {
+        headers.add(
+          RpcHeader(
+            RpcConstants.grpcTimeoutHeader,
+            RpcMetadata.encodeGrpcTimeout(timeout),
+          ),
+        );
+      }
       headers.add(
         RpcHeader(
           'x-deadline',
@@ -460,7 +469,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
                     RpcConstants.grpcMessageHeader,
                   ) ??
                   'Unknown error';
-              throw Exception('gRPC error $status: $message');
+              final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
+              throw Exception('gRPC error $status: $decodedMessage');
             }
           }
         }

@@ -4,6 +4,8 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart'
     show IRpcCodec, IRpcSerializable, RpcCallerEndpoint;

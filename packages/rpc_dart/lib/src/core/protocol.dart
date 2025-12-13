@@ -32,6 +32,18 @@ abstract interface class RpcConstants {
   /// HTTP заголовок, содержащий сообщение об ошибке
   static const String grpcMessageHeader = 'grpc-message';
 
+  /// gRPC header carrying timeout for the call (e.g. "10S", "100m")
+  static const String grpcTimeoutHeader = 'grpc-timeout';
+
+  /// gRPC header specifying message compression algorithm (e.g. "gzip", "identity")
+  static const String grpcEncodingHeader = 'grpc-encoding';
+
+  /// gRPC header specifying what encodings the peer accepts (e.g. "gzip,identity")
+  static const String grpcAcceptEncodingHeader = 'grpc-accept-encoding';
+
+  /// gRPC binary status details (base64-encoded in HTTP/2 headers)
+  static const String grpcStatusDetailsBinHeader = 'grpc-status-details-bin';
+
   /// HTTP заголовок для типа контента
   static const String contentTypeHeader = 'content-type';
 

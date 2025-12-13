@@ -41,12 +41,22 @@ final class _MessageParserState {
 final class RpcMessageParser {
   final RpcLogger? _logger;
   final int _maxMessageLength;
+  final int _maxBufferedBytes;
+  final Uint8List Function(Uint8List payload)? _decompressor;
+  final int _maxMessagesPerChunk;
 
   RpcMessageParser({
     RpcLogger? logger,
     int maxMessageLength = 64 * 1024 * 1024,
+    int? maxBufferedBytes,
+    Uint8List Function(Uint8List payload)? decompressor,
+    int maxMessagesPerChunk = 1024,
   })  : _logger = logger,
-        _maxMessageLength = maxMessageLength;
+        _maxMessageLength = maxMessageLength,
+        _maxBufferedBytes = maxBufferedBytes ??
+            (maxMessageLength + RpcConstants.messagePrefixSize),
+        _decompressor = decompressor,
+        _maxMessagesPerChunk = maxMessagesPerChunk;
 
   /// Внутреннее состояние парсера
   final _MessageParserState _state = _MessageParserState();
@@ -78,6 +88,14 @@ final class RpcMessageParser {
 
     // Добавляем данные в буфер
     _state.buffer.addAll(data);
+    if (_state.buffer.length > _maxBufferedBytes) {
+      final buffered = _state.buffer.length;
+      _state.buffer.clear();
+      _state.reset();
+      throw RpcException(
+        'gRPC frame buffer overflow: $buffered bytes (max: $_maxBufferedBytes)',
+      );
+    }
 
     // Обрабатываем буфер, пока можем извлекать сообщения
     while (_state.buffer.length >= RpcConstants.messagePrefixSize) {
@@ -85,15 +103,10 @@ final class RpcMessageParser {
       if (_state.expectedMessageLength == null) {
         try {
           final header = RpcMessageFrame.parseHeader(
-            Uint8List.fromList(_state.buffer),
+            Uint8List.fromList(
+              _state.buffer.sublist(0, RpcConstants.messagePrefixSize),
+            ),
           );
-          if (header.isCompressed) {
-            _state.buffer.clear();
-            _state.reset();
-            throw RpcException(
-              'Compressed gRPC frames are not supported by this parser',
-            );
-          }
           _state.isCompressed = header.isCompressed;
           _state.expectedMessageLength = header.messageLength;
 
@@ -129,7 +142,34 @@ final class RpcMessageParser {
           0,
           _state.expectedMessageLength!,
         );
-        result.add(Uint8List.fromList(messageBytes));
+        var payload = Uint8List.fromList(messageBytes);
+        if (_state.isCompressed) {
+          final decompressor = _decompressor;
+          if (decompressor == null) {
+            _state.buffer.clear();
+            _state.reset();
+            throw RpcException(
+              'Compressed gRPC frame received but no decompressor configured',
+            );
+          }
+          payload = decompressor(payload);
+          if (payload.length > _maxMessageLength) {
+            final length = payload.length;
+            _state.buffer.clear();
+            _state.reset();
+            throw RpcException(
+              'Decompressed gRPC payload is too large: $length bytes (max: $_maxMessageLength)',
+            );
+          }
+        }
+        result.add(payload);
+        if (result.length > _maxMessagesPerChunk) {
+          _state.buffer.clear();
+          _state.reset();
+          throw RpcException(
+            'Too many gRPC messages in a single chunk: ${result.length} (max: $_maxMessagesPerChunk)',
+          );
+        }
 
         // Обновляем буфер, удаляя обработанное сообщение
         _state.buffer = _state.buffer.sublist(_state.expectedMessageLength!);
