@@ -29,8 +29,8 @@ class RpcWebSocketResponderTransport extends RpcWebSocketTransportBase {
   RpcWebSocketResponderTransport(
     super.channel, {
     super.logger,
+    super.policy,
     super.chunkSizeBytes,
-    super.maxChunkedMessageBytes,
     super.enableChunking,
   });
 

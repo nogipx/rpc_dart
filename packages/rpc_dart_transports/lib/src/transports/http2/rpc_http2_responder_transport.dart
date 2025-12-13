@@ -45,11 +45,15 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
   /// Логгер
   final RpcLogger? _logger;
 
+  final RpcSecurityPolicy _policy;
+
   RpcHttp2ResponderTransport({
     required http2.ServerTransportConnection connection,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     RpcLogger? logger,
   })  : _connection = connection,
-        _logger = logger?.child('Http2ServerTransport') {
+        _logger = logger?.child('Http2ServerTransport'),
+        _policy = policy {
     _setupConnectionListener();
   }
 
@@ -169,6 +173,7 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
 
     // Конвертируем HTTP/2 headers в RPC метаданные
     final metadata = http2HeadersToRpcMetadata(message.headers);
+    _policy.validateMetadata(metadata);
 
     // Создаем транспортное сообщение
     final transportMessage = RpcTransportMessage(
@@ -189,9 +194,20 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
   void _handleIncomingData(int streamId, http2.DataStreamMessage message) {
     try {
       // Получаем или создаем парсер для этого stream
+      if (_streamParsers.length >= _policy.maxActiveStreams &&
+          !_streamParsers.containsKey(streamId)) {
+        throw RpcException(
+          'Too many active streams: ${_streamParsers.length} (max: ${_policy.maxActiveStreams})',
+        );
+      }
       final parser = _streamParsers.putIfAbsent(
         streamId,
-        () => RpcMessageParser(logger: _logger?.child('Parser-$streamId')),
+        () => RpcMessageParser(
+          logger: _logger?.child('Parser-$streamId'),
+          maxMessageLength: _policy.maxMessageLengthBytes,
+          maxBufferedBytes: _policy.maxBufferedBytes,
+          maxMessagesPerChunk: _policy.maxMessagesPerChunk,
+        ),
       );
 
       // Распаковываем gRPC frame(s) используя RpcMessageParser

@@ -31,8 +31,8 @@ class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
     super.channel, {
     super.logger,
     super.reconnectFactory,
+    super.policy,
     super.chunkSizeBytes,
-    super.maxChunkedMessageBytes,
     super.enableChunking,
   });
 
@@ -46,8 +46,8 @@ class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
     Uri uri, {
     Iterable<String>? protocols,
     RpcLogger? logger,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int chunkSizeBytes = 64 * 1024,
-    int maxChunkedMessageBytes = 64 * 1024 * 1024,
     bool enableChunking = false,
   }) {
     WebSocketChannel openChannel() =>
@@ -58,8 +58,8 @@ class RpcWebSocketCallerTransport extends RpcWebSocketTransportBase {
       channel,
       logger: logger,
       reconnectFactory: () async => openChannel(),
+      policy: policy,
       chunkSizeBytes: chunkSizeBytes,
-      maxChunkedMessageBytes: maxChunkedMessageBytes,
       enableChunking: enableChunking,
     );
   }

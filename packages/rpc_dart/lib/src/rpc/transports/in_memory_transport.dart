@@ -29,6 +29,8 @@ class RpcInMemoryTransport implements IRpcTransport {
   /// Менеджер Stream ID, управляющий генерацией идентификаторов по HTTP/2 спецификации
   final RpcStreamIdManager _idManager;
 
+  final RpcSecurityPolicy _policy;
+
   /// Активные streams (минимальное отслеживание)
   final Set<int> _activeStreams = <int>{};
 
@@ -48,7 +50,9 @@ class RpcInMemoryTransport implements IRpcTransport {
   RpcInMemoryTransport._(
     this._outgoingController, {
     bool isClient = true, // Клиент использует нечетные ID, сервер - четные
-  }) : _idManager = RpcStreamIdManager(isClient: isClient);
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  })  : _idManager = RpcStreamIdManager(isClient: isClient),
+        _policy = policy;
 
   @override
   bool get isClient => _idManager.isClient;
@@ -83,6 +87,11 @@ class RpcInMemoryTransport implements IRpcTransport {
   @override
   int createStream() {
     // Убираем try-catch для максимальной скорости
+    if (_activeStreams.length >= _policy.maxActiveStreams) {
+      throw StateError(
+        'Too many active streams: ${_activeStreams.length} (max: ${_policy.maxActiveStreams})',
+      );
+    }
     final streamId = _idManager.generateId();
     _activeStreams.add(streamId);
     return streamId;
@@ -112,6 +121,7 @@ class RpcInMemoryTransport implements IRpcTransport {
   }) async {
     // Быстрая проверка закрытия для предотвращения ошибок
     if (_closed || _outgoingController.isClosed) return;
+    _policy.validateMetadata(metadata);
 
     final message = RpcTransportMessage(
       metadata: metadata,
@@ -302,7 +312,9 @@ class RpcInMemoryTransport implements IRpcTransport {
   /// Возвращает кортеж (клиентский транспорт, серверный транспорт)
   ///
   /// ВАЖНО: При закрытии одного транспорта автоматически закрывается второй
-  static (IRpcTransport, IRpcTransport) pair() {
+  static (IRpcTransport, IRpcTransport) pair({
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  }) {
     // Создаем НЕ broadcast контроллеры для максимальной скорости
     final clientToServerController = StreamController<RpcTransportMessage>();
     final serverToClientController = StreamController<RpcTransportMessage>();
@@ -311,11 +323,13 @@ class RpcInMemoryTransport implements IRpcTransport {
     final clientTransport = RpcInMemoryTransport._(
       clientToServerController,
       isClient: true,
+      policy: policy,
     );
 
     final serverTransport = RpcInMemoryTransport._(
       serverToClientController,
       isClient: false,
+      policy: policy,
     );
 
     // УСТАНАВЛИВАЕМ ВЗАИМНЫЕ ССЫЛКИ для автоматического закрытия

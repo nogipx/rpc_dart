@@ -53,42 +53,25 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     RpcLogger? logger,
     Future<WebSocketChannel> Function()? reconnectFactory,
     int chunkSizeBytes = 64 * 1024,
-    int maxChunkedMessageBytes = 64 * 1024 * 1024,
-    int maxWebSocketMessageBytes = 64 * 1024 * 1024,
-    int maxMessageLengthBytes = 16 * 1024 * 1024,
-    int? maxBufferedBytes,
-    int maxMetadataBytes = 64 * 1024,
-    int maxHeaders = 128,
-    int maxHeaderNameBytes = 128,
-    int maxHeaderValueBytes = 8 * 1024,
-    int maxActiveStreams = 4096,
-    int maxChunkCount = 1024,
-    bool closeOnProtocolError = true,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     bool enableChunking = false,
   })  : _channel = channel,
         _reconnectFactory = reconnectFactory,
         _logger = logger,
         _chunkSizeBytes = chunkSizeBytes > 0 ? chunkSizeBytes : 64 * 1024,
-        _maxChunkedMessageBytes = maxChunkedMessageBytes > 0
-            ? maxChunkedMessageBytes
-            : 64 * 1024 * 1024,
-        _maxWebSocketMessageBytes = maxWebSocketMessageBytes > 0
-            ? maxWebSocketMessageBytes
-            : 64 * 1024 * 1024,
-        _maxMessageLengthBytes = maxMessageLengthBytes > 0
-            ? maxMessageLengthBytes
-            : 16 * 1024 * 1024,
-        _maxBufferedBytes = (maxBufferedBytes != null && maxBufferedBytes > 0)
-            ? maxBufferedBytes
-            : null,
-        _maxMetadataBytes = maxMetadataBytes > 0 ? maxMetadataBytes : 64 * 1024,
-        _maxHeaders = maxHeaders > 0 ? maxHeaders : 128,
-        _maxHeaderNameBytes = maxHeaderNameBytes > 0 ? maxHeaderNameBytes : 128,
-        _maxHeaderValueBytes =
-            maxHeaderValueBytes > 0 ? maxHeaderValueBytes : 8 * 1024,
-        _maxActiveStreams = maxActiveStreams > 0 ? maxActiveStreams : 4096,
-        _maxChunkCount = maxChunkCount > 0 ? maxChunkCount : 1024,
-        _closeOnProtocolError = closeOnProtocolError,
+        _maxChunkedMessageBytes = policy.maxChunkedMessageBytes,
+        _maxWebSocketMessageBytes = policy.maxWebSocketMessageBytes,
+        _maxMessageLengthBytes = policy.maxMessageLengthBytes,
+        _maxBufferedBytes = policy.maxBufferedBytes,
+        _maxMessagesPerChunk = policy.maxMessagesPerChunk,
+        _maxMetadataBytes = policy.maxMetadataBytes,
+        _maxHeaders = policy.maxHeaders,
+        _maxHeaderNameBytes = policy.maxHeaderNameBytes,
+        _maxHeaderValueBytes = policy.maxHeaderValueBytes,
+        _maxActiveStreams = policy.maxActiveStreams,
+        _maxChunkCount = policy.maxChunkCount,
+        _maxMethodPathLength = policy.maxMethodPathLength,
+        _closeOnProtocolError = policy.closeOnProtocolError,
         _enableChunking = enableChunking {
     _setupListener();
   }
@@ -108,6 +91,9 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   /// Лимит на буферизацию фрагментов для одного stream (парсер)
   final int? _maxBufferedBytes;
 
+  /// Максимум сообщений, которые можно извлечь из одного фрагмента
+  final int _maxMessagesPerChunk;
+
   /// Максимальный размер метаданных (JSON payload) для одного сообщения
   final int _maxMetadataBytes;
 
@@ -125,6 +111,9 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
   /// Максимально допустимое число чанков в одном chunked сообщении (защита от DoS)
   final int _maxChunkCount;
+
+  /// Максимальная длина `methodPath`
+  final int _maxMethodPathLength;
 
   /// Закрывать соединение при нарушении протокола
   final bool _closeOnProtocolError;
@@ -279,7 +268,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       final methodPath = jsonData['methodPath'] as String?;
       if (methodPath != null &&
           (methodPath.isEmpty ||
-              methodPath.length > 1024 ||
+              methodPath.length > _maxMethodPathLength ||
               !methodPath.startsWith('/'))) {
         _protocolViolation(
           'Invalid methodPath in metadata (streamId: $streamId)',
@@ -352,6 +341,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
           logger: _logger?.child('Parser-$streamId'),
           maxMessageLength: _maxMessageLengthBytes,
           maxBufferedBytes: _maxBufferedBytes,
+          maxMessagesPerChunk: _maxMessagesPerChunk,
         ),
       );
 

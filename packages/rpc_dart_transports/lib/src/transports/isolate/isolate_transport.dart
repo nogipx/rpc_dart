@@ -41,6 +41,7 @@ abstract interface class RpcIsolateTransport {
     Map<String, dynamic>? customParams,
     String isolateId = 'default',
     String? debugName,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) async {
     final name = debugName ?? 'rpc-isolate-$isolateId';
 
@@ -51,6 +52,9 @@ abstract interface class RpcIsolateTransport {
       final isolateId = args[1] as String;
       final customParams = args[2] as Map<String, dynamic>;
       final userEntrypoint = args[3] as RpcIsolateEntrypoint;
+      final policy = RpcSecurityPolicy.fromMap(
+        (args[4] as Map).cast<String, Object?>(),
+      );
 
       // Создаем порт для получения сообщений
       final receivePort = ReceivePort();
@@ -86,6 +90,7 @@ abstract interface class RpcIsolateTransport {
           final transport = _IsolateWorkerTransport(
             hostSendPort: mainHostSendPort,
             messageStream: messageController.stream,
+            policy: policy,
           );
 
           // Вызываем пользовательскую функцию, передавая транспорт
@@ -107,6 +112,7 @@ abstract interface class RpcIsolateTransport {
           isolateId,
           customParams ?? {},
           entrypoint, // Передаем пользовательскую функцию в изолят
+          policy.toMap(),
         ],
         debugName: name,
         onError: errorPort.sendPort,
@@ -135,6 +141,7 @@ abstract interface class RpcIsolateTransport {
     final hostTransport = _IsolateHostTransport(
       workerSendPort: workerSendPort,
       receivePort: hostReceivePort,
+      policy: policy,
     );
 
     // Функция для завершения изолята
@@ -171,11 +178,15 @@ class _IsolateHostTransport implements IRpcTransport {
 
   bool _isClosed = false;
 
+  final RpcSecurityPolicy _policy;
+
   _IsolateHostTransport({
     required SendPort workerSendPort,
     required ReceivePort receivePort,
+    required RpcSecurityPolicy policy,
   })  : _workerSendPort = workerSendPort,
-        _receivePort = receivePort {
+        _receivePort = receivePort,
+        _policy = policy {
     // Настраиваем обработку входящих сообщений
     _receivePort.listen(
       _handleMessage,
@@ -298,6 +309,11 @@ class _IsolateHostTransport implements IRpcTransport {
 
   @override
   int createStream() {
+    if (_streamSendingFinished.length >= _policy.maxActiveStreams) {
+      throw StateError(
+        'Too many active streams: ${_streamSendingFinished.length} (max: ${_policy.maxActiveStreams})',
+      );
+    }
     final streamId = _nextStreamId;
     _nextStreamId += 2; // Хост использует нечетные ID (1, 3, 5, ...)
     _streamSendingFinished[streamId] = false;
@@ -311,6 +327,7 @@ class _IsolateHostTransport implements IRpcTransport {
     bool endStream = false,
   }) async {
     if (_isClosed) return;
+    _policy.validateMetadata(metadata);
 
     _workerSendPort.send(
       _IsolateMessage(
@@ -439,11 +456,15 @@ class _IsolateWorkerTransport implements IRpcTransport {
   bool _isClosed = false;
   late StreamSubscription _subscription;
 
+  final RpcSecurityPolicy _policy;
+
   _IsolateWorkerTransport({
     required SendPort hostSendPort,
     required Stream<dynamic> messageStream,
+    required RpcSecurityPolicy policy,
   })  : _hostSendPort = hostSendPort,
-        _messageStream = messageStream {
+        _messageStream = messageStream,
+        _policy = policy {
     // Настраиваем обработку входящих сообщений
     _subscription = _messageStream.listen(
       _handleMessage,
@@ -568,6 +589,11 @@ class _IsolateWorkerTransport implements IRpcTransport {
 
   @override
   int createStream() {
+    if (_streamSendingFinished.length >= _policy.maxActiveStreams) {
+      throw StateError(
+        'Too many active streams: ${_streamSendingFinished.length} (max: ${_policy.maxActiveStreams})',
+      );
+    }
     final streamId = _nextStreamId;
     _nextStreamId += 2; // Воркер использует четные ID (2, 4, 6, ...)
     _streamSendingFinished[streamId] = false;
@@ -581,6 +607,7 @@ class _IsolateWorkerTransport implements IRpcTransport {
     bool endStream = false,
   }) async {
     if (_isClosed) return;
+    _policy.validateMetadata(metadata);
 
     _hostSendPort.send(
       _IsolateMessage(

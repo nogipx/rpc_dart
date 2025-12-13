@@ -13,6 +13,7 @@ import 'rpc_http1_common.dart';
 final class RpcHttp1ResponderTransport extends RpcTransportBase {
   final HttpRequest _request;
   final RpcLogger? _logger;
+  final RpcSecurityPolicy _policy;
   final Completer<void> _requestCompletion = Completer<void>();
   bool _started = false;
 
@@ -25,14 +26,16 @@ final class RpcHttp1ResponderTransport extends RpcTransportBase {
   RpcHttp1ResponderTransport({
     required HttpRequest request,
     RpcLogger? logger,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   })  : _request = request,
         _logger = logger?.child('Http1ResponderTransport'),
+        _policy = policy,
         super(isClient: false) {
     final headerValue = request.headers.value(kRpcStreamIdHeader);
     _streamId = headerValue != null
         ? int.tryParse(headerValue) ?? generateStreamId()
         : generateStreamId();
-    _requestMetadata = httpRequestToRpcMetadata(_request);
+    _requestMetadata = httpRequestToRpcMetadata(_request, policy: _policy);
   }
 
   Future<void> get requestCompleted => _requestCompletion.future;
@@ -197,7 +200,7 @@ final class RpcHttp1ResponderTransport extends RpcTransportBase {
     final metadata =
         _responseMetadata ?? RpcMetadata.forServerInitialResponse();
     final response = _request.response;
-    applyRpcMetadataToHttpResponse(response, metadata);
+    applyRpcMetadataToHttpResponse(response, metadata, policy: _policy);
     response.headers.contentType ??= ContentType.parse(kRpcGrpcContentType);
 
     final bodyBytes = _responsePayload.takeBytes();

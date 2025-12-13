@@ -401,7 +401,7 @@ void main() {
         logger: RpcLogger('TestClient'),
         enableChunking: true,
         chunkSizeBytes: chunkSize,
-        maxChunkedMessageBytes: 300000,
+        policy: const RpcSecurityPolicy(maxChunkedMessageBytes: 300000),
       );
       final serverSocket = await nextServerSocket();
       final serverTransport = RpcWebSocketResponderTransport(
@@ -409,7 +409,7 @@ void main() {
         logger: RpcLogger('TestServer'),
         enableChunking: true,
         chunkSizeBytes: chunkSize,
-        maxChunkedMessageBytes: 300000,
+        policy: const RpcSecurityPolicy(maxChunkedMessageBytes: 300000),
       );
 
       final streamId = clientTransport.createStream();

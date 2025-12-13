@@ -14,6 +14,7 @@ final class RpcHttp1CallerTransport extends RpcTransportBase {
   final Uri _baseUri;
   final HttpClient _httpClient;
   final RpcLogger? _logger;
+  final RpcSecurityPolicy _policy;
 
   final Map<int, _Http1StreamContext> _pendingStreams = {};
 
@@ -21,20 +22,24 @@ final class RpcHttp1CallerTransport extends RpcTransportBase {
     required Uri baseUri,
     required HttpClient httpClient,
     RpcLogger? logger,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   })  : _baseUri = baseUri,
         _httpClient = httpClient,
         _logger = logger?.child('Http1CallerTransport'),
+        _policy = policy,
         super(isClient: true);
 
   factory RpcHttp1CallerTransport.connect(
     Uri baseUri, {
     RpcLogger? logger,
     HttpClient? httpClient,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
     return RpcHttp1CallerTransport._(
       baseUri: baseUri,
       httpClient: httpClient ?? HttpClient(),
       logger: logger,
+      policy: policy,
     );
   }
 
@@ -137,7 +142,7 @@ final class RpcHttp1CallerTransport extends RpcTransportBase {
       request.headers.contentType = ContentType.parse(kRpcGrpcContentType);
       request.headers.contentLength = bodyBytes.length;
       request.headers.set(kRpcStreamIdHeader, streamId.toString());
-      applyRpcMetadataToHttpRequest(request, metadata);
+      applyRpcMetadataToHttpRequest(request, metadata, policy: _policy);
       request.headers.set(kRpcIntegrityHeader, computeRpcIntegrity(bodyBytes));
 
       if (bodyBytes.isNotEmpty) {
@@ -194,7 +199,7 @@ final class RpcHttp1CallerTransport extends RpcTransportBase {
       throw RpcException('Integrity mismatch on stream $streamId');
     }
 
-    final metadata = httpResponseToRpcMetadata(response);
+    final metadata = httpResponseToRpcMetadata(response, policy: _policy);
     final metadataMessage = RpcTransportMessage(
       streamId: streamId,
       metadata: metadata,

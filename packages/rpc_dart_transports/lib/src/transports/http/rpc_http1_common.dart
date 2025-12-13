@@ -48,7 +48,11 @@ Uint8List ensureGrpcFrame(Uint8List data) {
 
 /// Преобразует RPC метаданные в заголовки HTTP/1.1 запроса.
 void applyRpcMetadataToHttpRequest(
-    HttpClientRequest request, RpcMetadata metadata) {
+  HttpClientRequest request,
+  RpcMetadata metadata, {
+  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+}) {
+  policy.validateMetadata(metadata);
   for (final header in metadata.headers) {
     if (header.name.startsWith(':')) continue;
     request.headers.add(header.name, header.value);
@@ -56,16 +60,24 @@ void applyRpcMetadataToHttpRequest(
 }
 
 /// Преобразует HTTP/1.1 ответ в RPC метаданные.
-RpcMetadata httpResponseToRpcMetadata(HttpClientResponse response) {
+RpcMetadata httpResponseToRpcMetadata(
+  HttpClientResponse response, {
+  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+}) {
   final headers = <RpcHeader>[
     RpcHeader(':status', response.statusCode.toString())
   ];
   _appendHeaders(headers, response.headers, skipHeader: kRpcIntegrityHeader);
-  return RpcMetadata(headers);
+  final metadata = RpcMetadata(headers);
+  policy.validateMetadata(metadata);
+  return metadata;
 }
 
 /// Преобразует HTTP/1.1 запрос в RPC метаданные.
-RpcMetadata httpRequestToRpcMetadata(HttpRequest request) {
+RpcMetadata httpRequestToRpcMetadata(
+  HttpRequest request, {
+  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+}) {
   final authority = request.headers.value(HttpHeaders.hostHeader) ??
       (request.uri.authority.isEmpty
           ? request.uri.path
@@ -79,12 +91,18 @@ RpcMetadata httpRequestToRpcMetadata(HttpRequest request) {
   ];
 
   _appendHeaders(headers, request.headers, skipHeader: kRpcIntegrityHeader);
-  return RpcMetadata(headers);
+  final metadata = RpcMetadata(headers);
+  policy.validateMetadata(metadata);
+  return metadata;
 }
 
 /// Применяет RPC метаданные к HTTP/1.1 ответу.
 void applyRpcMetadataToHttpResponse(
-    HttpResponse response, RpcMetadata metadata) {
+  HttpResponse response,
+  RpcMetadata metadata, {
+  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+}) {
+  policy.validateMetadata(metadata);
   for (final header in metadata.headers) {
     if (header.name == ':status') {
       final parsed = int.tryParse(header.value);

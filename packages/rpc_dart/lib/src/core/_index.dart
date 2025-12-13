@@ -9,4 +9,5 @@ export 'metadata.dart';
 export 'message.dart';
 export 'parser.dart';
 export 'protocol.dart';
+export 'security_policy.dart';
 export 'transport.dart';

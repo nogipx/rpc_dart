@@ -55,6 +55,8 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   /// Логгер
   final RpcLogger? _logger;
 
+  final RpcSecurityPolicy _policy;
+
   RpcHttp2CallerTransport._({
     required http2.ClientTransportConnection connection,
     required Future<http2.ClientTransportConnection> Function()
@@ -62,19 +64,22 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     required String host,
     required int port,
     required String scheme,
+    required RpcSecurityPolicy policy,
     RpcLogger? logger,
   })  : _connection = connection,
         _connectionFactory = connectionFactory,
         _host = host,
         _port = port,
         _scheme = scheme,
-        _logger = logger?.child('Http2ClientTransport');
+        _logger = logger?.child('Http2ClientTransport'),
+        _policy = policy;
 
   /// Создает клиентский HTTP/2 транспорт через защищенное соединение
   static Future<RpcHttp2CallerTransport> secureConnect({
     required String host,
     int port = 443,
     RpcLogger? logger,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) async {
     logger?.internal('Создание защищенного HTTP/2 соединения с $host:$port');
 
@@ -98,6 +103,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       host: host,
       port: port,
       scheme: 'https',
+      policy: policy,
       logger: logger,
     );
   }
@@ -107,6 +113,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     required String host,
     int port = 80,
     RpcLogger? logger,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) async {
     logger?.internal('Создание HTTP/2 соединения с $host:$port');
 
@@ -125,6 +132,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       host: host,
       port: port,
       scheme: 'http',
+      policy: policy,
       logger: logger,
     );
   }
@@ -342,6 +350,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   ) {
     // Конвертируем HTTP/2 headers в RPC метаданные
     final metadata = http2HeadersToRpcMetadata(message.headers);
+    _policy.validateMetadata(metadata);
 
     // Создаем транспортное сообщение
     final transportMessage = RpcTransportMessage(
@@ -364,9 +373,20 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   ) {
     try {
       // Получаем или создаем парсер для этого stream
+      if (_streamParsers.length >= _policy.maxActiveStreams &&
+          !_streamParsers.containsKey(streamId)) {
+        throw RpcException(
+          'Too many active streams: ${_streamParsers.length} (max: ${_policy.maxActiveStreams})',
+        );
+      }
       final parser = _streamParsers.putIfAbsent(
         streamId,
-        () => RpcMessageParser(logger: _logger?.child('Parser-$streamId')),
+        () => RpcMessageParser(
+          logger: _logger?.child('Parser-$streamId'),
+          maxMessageLength: _policy.maxMessageLengthBytes,
+          maxBufferedBytes: _policy.maxBufferedBytes,
+          maxMessagesPerChunk: _policy.maxMessagesPerChunk,
+        ),
       );
 
       // Распаковываем gRPC frame(s) используя RpcMessageParser

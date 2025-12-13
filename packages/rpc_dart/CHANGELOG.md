@@ -1,15 +1,11 @@
-## 2.3.6
+## 2.4.0
 
-- Fix: responder endpoint now fails fast with proper gRPC status for invalid/unknown methods and cleans up per-stream state (prevents server-side leaks)
-- Fix: prevent losing pre-bind stream messages in responder endpoint (buffer + safe bind)
-- Fix: StreamProcessor now serializes response sending and emits trailers deterministically
-- Fix: ping now fails fast if the stream ends without gRPC trailers (prevents hangs)
-- Security: RpcMessageParser enforces a max frame payload size (configurable)
-
-## 2.3.5
-
-- Fix: clean up RpcCallerEndpoint cancellation token registry after completed calls (prevents memory growth in long-lived clients)
-- Docs: document cooperative cancellation and deadlines
+- Breaking: removed transport toolkit (`transport_toolkit.dart`) from the public API surface.
+- Added `RpcSecurityPolicy` to centralize transport/parser limits and metadata validation.
+- Security: `grpc-message` is now percent-encoded per gRPC HTTP/2 spec; added `decodeGrpcMessage` helper.
+- Protocol: client request metadata now includes `grpc-accept-encoding` (advertises supported message encodings).
+- Fix: clean up `RpcCallerEndpoint` cancellation token registry after completed calls (prevents memory growth in long-lived clients).
+- Security: `RpcInMemoryTransport` now enforces policy limits (metadata validation, active stream cap); `pair()` accepts an optional `policy`.
 
 ## 2.3.4
 
