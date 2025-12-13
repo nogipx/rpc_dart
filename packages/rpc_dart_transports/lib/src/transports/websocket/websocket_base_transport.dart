@@ -33,6 +33,8 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   /// Буфер для сборки чанков gRPC frame'ов (chunked WebSocket сообщения)
   final Map<int, _ChunkAssembly> _chunkAssemblies = {};
 
+  final Set<int> _activeStreams = <int>{};
+
   /// Флаг закрытия транспорта
   bool _closed = false;
 
@@ -52,6 +54,16 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     Future<WebSocketChannel> Function()? reconnectFactory,
     int chunkSizeBytes = 64 * 1024,
     int maxChunkedMessageBytes = 64 * 1024 * 1024,
+    int maxWebSocketMessageBytes = 64 * 1024 * 1024,
+    int maxMessageLengthBytes = 16 * 1024 * 1024,
+    int? maxBufferedBytes,
+    int maxMetadataBytes = 64 * 1024,
+    int maxHeaders = 128,
+    int maxHeaderNameBytes = 128,
+    int maxHeaderValueBytes = 8 * 1024,
+    int maxActiveStreams = 4096,
+    int maxChunkCount = 1024,
+    bool closeOnProtocolError = true,
     bool enableChunking = false,
   })  : _channel = channel,
         _reconnectFactory = reconnectFactory,
@@ -60,6 +72,23 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
         _maxChunkedMessageBytes = maxChunkedMessageBytes > 0
             ? maxChunkedMessageBytes
             : 64 * 1024 * 1024,
+        _maxWebSocketMessageBytes = maxWebSocketMessageBytes > 0
+            ? maxWebSocketMessageBytes
+            : 64 * 1024 * 1024,
+        _maxMessageLengthBytes = maxMessageLengthBytes > 0
+            ? maxMessageLengthBytes
+            : 16 * 1024 * 1024,
+        _maxBufferedBytes = (maxBufferedBytes != null && maxBufferedBytes > 0)
+            ? maxBufferedBytes
+            : null,
+        _maxMetadataBytes = maxMetadataBytes > 0 ? maxMetadataBytes : 64 * 1024,
+        _maxHeaders = maxHeaders > 0 ? maxHeaders : 128,
+        _maxHeaderNameBytes = maxHeaderNameBytes > 0 ? maxHeaderNameBytes : 128,
+        _maxHeaderValueBytes =
+            maxHeaderValueBytes > 0 ? maxHeaderValueBytes : 8 * 1024,
+        _maxActiveStreams = maxActiveStreams > 0 ? maxActiveStreams : 4096,
+        _maxChunkCount = maxChunkCount > 0 ? maxChunkCount : 1024,
+        _closeOnProtocolError = closeOnProtocolError,
         _enableChunking = enableChunking {
     _setupListener();
   }
@@ -69,6 +98,36 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
   /// Максимальный объем, который можно собрать из чанков для одного сообщения
   final int _maxChunkedMessageBytes;
+
+  /// Максимальный размер одного WebSocket сообщения (включая заголовок протокола)
+  final int _maxWebSocketMessageBytes;
+
+  /// Лимит на длину полезной нагрузки одного gRPC сообщения (после распаковки)
+  final int _maxMessageLengthBytes;
+
+  /// Лимит на буферизацию фрагментов для одного stream (парсер)
+  final int? _maxBufferedBytes;
+
+  /// Максимальный размер метаданных (JSON payload) для одного сообщения
+  final int _maxMetadataBytes;
+
+  /// Максимум заголовков в метаданных
+  final int _maxHeaders;
+
+  /// Максимальная длина имени заголовка
+  final int _maxHeaderNameBytes;
+
+  /// Максимальная длина значения заголовка
+  final int _maxHeaderValueBytes;
+
+  /// Максимальное число активных stream'ов/парсеров (защита от DoS)
+  final int _maxActiveStreams;
+
+  /// Максимально допустимое число чанков в одном chunked сообщении (защита от DoS)
+  final int _maxChunkCount;
+
+  /// Закрывать соединение при нарушении протокола
+  final bool _closeOnProtocolError;
 
   /// Разрешает chunking для совместимости: по умолчанию выключено
   /// чтобы не ломать wire-формат для старых пиров.
@@ -100,21 +159,41 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       if (message is List<int>) {
         final bytes = Uint8List.fromList(message);
 
+        if (bytes.length > _maxWebSocketMessageBytes) {
+          _protocolViolation(
+            'WebSocket message too large: ${bytes.length} > $_maxWebSocketMessageBytes',
+          );
+          return;
+        }
+
         // Минимум 5 байт: streamId (4) + flags (1)
         if (bytes.length < 5) {
-          _logger?.warning('Слишком короткое сообщение: ${bytes.length} байт');
+          _protocolViolation(
+            'WebSocket message too short: ${bytes.length} bytes',
+          );
           return;
         }
 
         // Извлекаем streamId (big-endian)
         final streamId =
             (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+        if (streamId <= 0) {
+          _protocolViolation('Invalid streamId: $streamId');
+          return;
+        }
 
         // Извлекаем флаги
         final flags = bytes[4];
         final isEndOfStream = (flags & 0x01) != 0;
         final isMetadata = (flags & 0x02) != 0;
         final isChunked = (flags & 0x04) != 0;
+
+        if (isChunked && !_enableChunking) {
+          _protocolViolation(
+            'Chunked frames are not enabled but received isChunked=1',
+          );
+          return;
+        }
 
         // Извлекаем payload
         final payload = bytes.sublist(5);
@@ -123,6 +202,13 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
           // Обрабатываем метаданные
           _handleMetadataMessage(streamId, payload, isEndOfStream);
         } else {
+          if (!_activeStreams.contains(streamId) &&
+              (payload.isNotEmpty || isEndOfStream)) {
+            _protocolViolation(
+              'Data received for unknown streamId: $streamId',
+            );
+            return;
+          }
           // Обрабатываем данные через парсер
           _handleDataMessage(
             streamId,
@@ -148,25 +234,58 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     bool isEndOfStream,
   ) {
     try {
+      if (payload.length > _maxMetadataBytes) {
+        _protocolViolation(
+          'Metadata payload too large: ${payload.length} > $_maxMetadataBytes (streamId: $streamId)',
+        );
+        return;
+      }
+
+      if (_activeStreams.length >= _maxActiveStreams &&
+          !_activeStreams.contains(streamId)) {
+        _protocolViolation(
+          'Too many active streams: ${_activeStreams.length} (max: $_maxActiveStreams)',
+        );
+        return;
+      }
+
       // Десериализуем метаданные из JSON
       final jsonStr = utf8.decode(payload);
       final jsonData = json.decode(jsonStr) as Map<String, dynamic>;
 
       final headers = <RpcHeader>[];
       if (jsonData['headers'] is List) {
+        var added = 0;
         for (final headerData in jsonData['headers'] as List) {
+          if (added >= _maxHeaders) break;
           if (headerData is Map<String, dynamic>) {
-            headers.add(
-              RpcHeader(
-                headerData['name'] as String,
-                headerData['value'] as String,
-              ),
-            );
+            final name = headerData['name'];
+            final value = headerData['value'];
+            if (name is! String || value is! String) continue;
+
+            if (!_isValidHeaderName(name) || !_isValidHeaderValue(value)) {
+              _protocolViolation(
+                'Invalid header in metadata (streamId: $streamId)',
+              );
+              return;
+            }
+
+            headers.add(RpcHeader(name, value));
+            added += 1;
           }
         }
       }
 
       final methodPath = jsonData['methodPath'] as String?;
+      if (methodPath != null &&
+          (methodPath.isEmpty ||
+              methodPath.length > 1024 ||
+              !methodPath.startsWith('/'))) {
+        _protocolViolation(
+          'Invalid methodPath in metadata (streamId: $streamId)',
+        );
+        return;
+      }
       final metadata = RpcMetadata(headers);
 
       final transportMessage = RpcTransportMessage(
@@ -177,7 +296,11 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       );
 
       _incomingController.add(transportMessage);
+      _activeStreams.add(streamId);
       _logger?.debug('Получены метаданные для stream $streamId');
+      if (isEndOfStream) {
+        _onStreamEnd(streamId);
+      }
     } catch (e, stackTrace) {
       _logger?.error(
         'Ошибка при парсинге метаданных: $e',
@@ -210,17 +333,26 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
         _incomingController.add(transportMessage);
         _logger?.debug('Получен флаг завершения для stream $streamId');
 
-        // Очищаем парсер при завершении потока
-        _streamParsers.remove(streamId);
-        _chunkAssemblies.remove(streamId);
-        idManager.releaseId(streamId);
+        _onStreamEnd(streamId);
+        return;
+      }
+
+      if (_streamParsers.length >= _maxActiveStreams &&
+          !_streamParsers.containsKey(streamId)) {
+        _protocolViolation(
+          'Too many active stream parsers: ${_streamParsers.length} (max: $_maxActiveStreams)',
+        );
         return;
       }
 
       // Получаем или создаем парсер для этого stream
       final parser = _streamParsers.putIfAbsent(
         streamId,
-        () => RpcMessageParser(logger: _logger?.child('Parser-$streamId')),
+        () => RpcMessageParser(
+          logger: _logger?.child('Parser-$streamId'),
+          maxMessageLength: _maxMessageLengthBytes,
+          maxBufferedBytes: _maxBufferedBytes,
+        ),
       );
 
       // Парсим gRPC сообщения
@@ -242,8 +374,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
       // Очищаем парсер при завершении потока
       if (isEndOfStream) {
-        _streamParsers.remove(streamId);
-        idManager.releaseId(streamId);
+        _onStreamEnd(streamId);
       }
     } catch (e, stackTrace) {
       _logger?.error(
@@ -262,8 +393,8 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   ) {
     const chunkHeaderSize = 8; // 2 + 2 + 4
     if (payload.length < chunkHeaderSize) {
-      _logger?.warning(
-        'Chunked payload слишком короткий (${payload.length} байт) для stream $streamId',
+      _protocolViolation(
+        'Chunked payload too short (${payload.length} bytes) for stream $streamId',
       );
       return;
     }
@@ -275,17 +406,19 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
         (payload[6] << 8) |
         payload[7];
 
-    if (chunkCount == 0 || chunkIndex >= chunkCount) {
-      _logger?.warning(
-        'Некорректные параметры chunking (index=$chunkIndex, count=$chunkCount) для stream $streamId',
+    if (chunkCount == 0 ||
+        chunkIndex >= chunkCount ||
+        chunkCount > _maxChunkCount) {
+      _protocolViolation(
+        'Invalid chunk params (index=$chunkIndex, count=$chunkCount, max=$_maxChunkCount) for stream $streamId',
       );
       return;
     }
 
     final data = payload.sublist(chunkHeaderSize);
     if (data.length != declaredLen) {
-      _logger?.warning(
-        'Chunk length mismatch для stream $streamId: заявлено $declaredLen, фактически ${data.length}',
+      _protocolViolation(
+        'Chunk length mismatch for stream $streamId: declared $declaredLen, actual ${data.length}',
       );
       return;
     }
@@ -296,16 +429,16 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     );
 
     if (assembly.chunkCount != chunkCount) {
-      _logger?.warning(
-        'Несогласованный chunkCount для stream $streamId (ожидалось ${assembly.chunkCount}, пришло $chunkCount)',
+      _protocolViolation(
+        'Inconsistent chunkCount for stream $streamId (expected ${assembly.chunkCount}, got $chunkCount)',
       );
       _chunkAssemblies.remove(streamId);
       return;
     }
 
     if (assembly.received[chunkIndex] != null) {
-      _logger?.warning(
-        'Дубликат chunk $chunkIndex/$chunkCount для stream $streamId',
+      _protocolViolation(
+        'Duplicate chunk $chunkIndex/$chunkCount for stream $streamId',
       );
       return;
     }
@@ -446,6 +579,8 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     }
 
     _streamParsers.clear();
+    _chunkAssemblies.clear();
+    _activeStreams.clear();
 
     try {
       _channel = await _reconnectFactory!();
@@ -486,7 +621,9 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     }
 
     // Используем встроенный менеджер из rpc_dart
-    return idManager.generateId();
+    final streamId = idManager.generateId();
+    _activeStreams.add(streamId);
+    return streamId;
   }
 
   @override
@@ -495,6 +632,8 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
     // Очищаем парсер
     _streamParsers.remove(streamId);
+    _chunkAssemblies.remove(streamId);
+    _activeStreams.remove(streamId);
 
     // Используем встроенный менеджер из rpc_dart
     return idManager.releaseId(streamId);
@@ -519,6 +658,11 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
       final jsonStr = json.encode(metadataJson);
       final payload = utf8.encode(jsonStr);
+      if (payload.length > _maxMetadataBytes) {
+        throw StateError(
+          'Metadata payload too large: ${payload.length} > $_maxMetadataBytes',
+        );
+      }
 
       // Отправляем с флагом метаданных
       await _sendWithHeader(
@@ -557,6 +701,11 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       if (_enableChunking && encoded.length > _chunkSizeBytes) {
         await _sendChunked(streamId, encoded, endStream: endStream);
       } else {
+        if (encoded.length + 5 > _maxWebSocketMessageBytes) {
+          throw StateError(
+            'Encoded message exceeds maxWebSocketMessageBytes: ${encoded.length + 5} > $_maxWebSocketMessageBytes',
+          );
+        }
         // Отправляем с обычными флагами
         await _sendWithHeader(streamId, encoded, endStream: endStream);
       }
@@ -566,7 +715,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       );
 
       if (endStream) {
-        idManager.releaseId(streamId);
+        _onStreamEnd(streamId);
       }
     } catch (e, stackTrace) {
       _logger?.error(
@@ -588,7 +737,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       // Отправляем пустое сообщние с флагом завершения
       await _sendWithHeader(streamId, Uint8List(0), endStream: true);
 
-      idManager.releaseId(streamId);
+      _onStreamEnd(streamId);
     } catch (e, stackTrace) {
       _logger?.error(
         'Ошибка при завершении отправки: $e',
@@ -654,6 +803,12 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       message.setRange(header.length, message.length, payload);
     }
 
+    if (message.length > _maxWebSocketMessageBytes) {
+      throw StateError(
+        'WebSocket message exceeds maxWebSocketMessageBytes: ${message.length} > $_maxWebSocketMessageBytes',
+      );
+    }
+
     _channel.sink.add(message);
   }
 
@@ -668,6 +823,11 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     if (chunkCount > 0xFFFF) {
       throw StateError(
         'Слишком большой payload для chunking ($chunkCount чанков > 65535)',
+      );
+    }
+    if (chunkCount > _maxChunkCount) {
+      throw StateError(
+        'Chunking would exceed maxChunkCount ($chunkCount > $_maxChunkCount)',
       );
     }
 
@@ -706,6 +866,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     _closed = true;
     _streamParsers.clear();
     _chunkAssemblies.clear();
+    _activeStreams.clear();
 
     final subscription = _channelSubscription;
     _channelSubscription = null;
@@ -733,6 +894,44 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     bool endStream = false,
   }) async {
     throw UnimplementedError('Unsupport direct object sending');
+  }
+
+  void _onStreamEnd(int streamId) {
+    _streamParsers.remove(streamId);
+    _chunkAssemblies.remove(streamId);
+    _activeStreams.remove(streamId);
+
+    // Освобождаем streamId только если он выглядит как "локально инициированный".
+    // Это защищает от ситуации, когда peer шлёт сообщения с ID, совпадающими с
+    // локальными правилами генерации, и пытается влиять на allocator.
+    final isLocallyInitiated = isClient ? streamId.isOdd : streamId.isEven;
+    if (isLocallyInitiated) {
+      idManager.releaseId(streamId);
+    }
+  }
+
+  void _protocolViolation(String message) {
+    _logger?.warning('WebSocket protocol violation: $message');
+    if (_closeOnProtocolError) {
+      unawaited(close());
+    }
+  }
+
+  bool _isValidHeaderName(String name) {
+    if (name.isEmpty || name.length > _maxHeaderNameBytes) return false;
+    for (final unit in name.codeUnits) {
+      if (unit <= 0x20 || unit == 0x7F) return false;
+      if (unit == 0x0D || unit == 0x0A || unit == 0x00) return false;
+    }
+    return true;
+  }
+
+  bool _isValidHeaderValue(String value) {
+    if (value.length > _maxHeaderValueBytes) return false;
+    for (final unit in value.codeUnits) {
+      if (unit == 0x0D || unit == 0x0A || unit == 0x00) return false;
+    }
+    return true;
   }
 }
 

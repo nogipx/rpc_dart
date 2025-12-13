@@ -18,7 +18,7 @@ void main() {
         );
 
         // Assert
-        expect(metadata.headers.length, equals(6));
+        expect(metadata.headers.length, equals(7));
         expect(_getHeaderValue(metadata, ':method'), equals('POST'));
         expect(
           _getHeaderValue(metadata, ':path'),
@@ -31,6 +31,10 @@ void main() {
           equals(RpcConstants.grpcContentType),
         );
         expect(_getHeaderValue(metadata, 'te'), equals('trailers'));
+        expect(
+          _getHeaderValue(metadata, RpcConstants.grpcAcceptEncodingHeader),
+          contains('identity'),
+        );
       });
 
       test('использует_пустой_хост_по_умолчанию', () {
@@ -111,7 +115,7 @@ void main() {
         );
         expect(
           _getHeaderValue(metadata, RpcConstants.grpcMessageHeader),
-          equals(message),
+          equals(RpcMetadata.encodeGrpcMessage(message)),
         );
       });
 
@@ -217,7 +221,7 @@ void main() {
         final serviceName = metadata.serviceName;
 
         // Assert
-        expect(serviceName, equals(''));
+        expect(serviceName, isNull);
       });
     });
 

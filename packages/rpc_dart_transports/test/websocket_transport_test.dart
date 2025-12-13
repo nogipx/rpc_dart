@@ -195,15 +195,24 @@ void main() {
       final serverMessages = <RpcTransportMessage>[];
       final sub = serverTransport.incomingMessages.listen(serverMessages.add);
 
+      final metadata = RpcMetadata.forClientRequestWithPath(
+        '/test.Service/TestMethod',
+      );
+      await clientTransport.sendMetadata(streamId, metadata);
+
       final testData = Uint8List.fromList([1, 2, 3, 4, 5]);
       await clientTransport.sendMessage(streamId, testData);
 
       await pump();
 
-      expect(serverMessages.length, 1);
-      final m = serverMessages.first;
-      expect(m.streamId, streamId);
-      expect(m.payload, equals(testData));
+      expect(serverMessages.length, 2);
+      final metaMsg = serverMessages.first;
+      expect(metaMsg.streamId, streamId);
+      expect(metaMsg.metadata, isNotNull);
+
+      final dataMsg = serverMessages.last;
+      expect(dataMsg.streamId, streamId);
+      expect(dataMsg.payload, equals(testData));
 
       await sub.cancel();
       await clientTransport.close();
@@ -230,6 +239,15 @@ void main() {
       final cSub = clientTransport.incomingMessages.listen(clientMsgs.add);
       final sSub = serverTransport.incomingMessages.listen(serverMsgs.add);
 
+      await clientTransport.sendMetadata(
+        clientStreamId,
+        RpcMetadata.forClientRequestWithPath('/test.Service/ClientMethod'),
+      );
+      await serverTransport.sendMetadata(
+        serverStreamId,
+        RpcMetadata.forServerInitialResponse(),
+      );
+
       final clientData = Uint8List.fromList([10, 20, 30]);
       await clientTransport.sendMessage(clientStreamId, clientData);
 
@@ -239,14 +257,16 @@ void main() {
       await pump();
 
       // Сервер получил от клиента
-      expect(serverMsgs.length, 1);
+      expect(serverMsgs.length, 2);
       expect(serverMsgs.first.streamId, clientStreamId);
-      expect(serverMsgs.first.payload, equals(clientData));
+      expect(serverMsgs.first.metadata, isNotNull);
+      expect(serverMsgs.last.payload, equals(clientData));
 
       // Клиент получил от сервера
-      expect(clientMsgs.length, 1);
+      expect(clientMsgs.length, 2);
       expect(clientMsgs.first.streamId, serverStreamId);
-      expect(clientMsgs.first.payload, equals(serverData));
+      expect(clientMsgs.first.metadata, isNotNull);
+      expect(clientMsgs.last.payload, equals(serverData));
 
       await cSub.cancel();
       await sSub.cancel();
@@ -270,16 +290,23 @@ void main() {
       final serverMessages = <RpcTransportMessage>[];
       final sub = serverTransport.incomingMessages.listen(serverMessages.add);
 
+      await clientTransport.sendMetadata(
+        streamId,
+        RpcMetadata.forClientRequestWithPath('/test.Service/TestMethod'),
+      );
+
       final data = Uint8List.fromList([1, 2, 3]);
       await clientTransport.sendMessage(streamId, data);
       await clientTransport.finishSending(streamId);
 
       await pump();
 
-      expect(serverMessages.length, 2);
-      final dataMsg = serverMessages[0];
-      final endMsg = serverMessages[1];
+      expect(serverMessages.length, 3);
+      final metaMsg = serverMessages[0];
+      final dataMsg = serverMessages[1];
+      final endMsg = serverMessages[2];
 
+      expect(metaMsg.metadata, isNotNull);
       expect(dataMsg.payload, equals(data));
       expect(dataMsg.isEndOfStream, isFalse);
 
@@ -311,14 +338,24 @@ void main() {
       final data1 = Uint8List.fromList([1, 1, 1]);
       final data2 = Uint8List.fromList([2, 2, 2]);
 
+      await clientTransport.sendMetadata(
+        id1,
+        RpcMetadata.forClientRequestWithPath('/test.Service/One'),
+      );
+      await clientTransport.sendMetadata(
+        id2,
+        RpcMetadata.forClientRequestWithPath('/test.Service/Two'),
+      );
+
       await clientTransport.sendMessage(id1, data1);
       await clientTransport.sendMessage(id2, data2);
 
       await pump();
 
-      expect(stream1Msgs.length, 1);
+      expect(stream1Msgs.length, 2);
       expect(stream1Msgs.first.streamId, id1);
-      expect(stream1Msgs.first.payload, equals(data1));
+      expect(stream1Msgs.first.metadata, isNotNull);
+      expect(stream1Msgs.last.payload, equals(data1));
 
       await sub.cancel();
       await clientTransport.close();
@@ -379,6 +416,11 @@ void main() {
       final serverMessages = <RpcTransportMessage>[];
       final sub = serverTransport.incomingMessages.listen(serverMessages.add);
 
+      await clientTransport.sendMetadata(
+        streamId,
+        RpcMetadata.forClientRequestWithPath('/test.Service/Chunked'),
+      );
+
       await clientTransport.sendMessage(
         streamId,
         payload,
@@ -387,8 +429,8 @@ void main() {
 
       await pump();
 
-      expect(serverMessages.length, 1);
-      final msg = serverMessages.single;
+      expect(serverMessages.length, 2);
+      final msg = serverMessages.last;
       expect(msg.payload, isNotNull);
       expect(msg.payload, equals(payload));
       expect(msg.isEndOfStream, isTrue);

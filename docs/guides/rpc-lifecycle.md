@@ -112,9 +112,9 @@ shared `RpcContext`.
 - Observe **diagnostics** by calling `RpcCallerEndpoint.health()` or
   `RpcResponderEndpoint.health()`, which aggregate transport status and endpoint
   metrics into `RpcEndpointHealth` snapshots.
-- Custom **transports** hook into stages 2 and 5. Implement `IRpcTransport` (or
-  derive from `RpcBaseTransport`) to connect RPC Dart to any messaging fabric
-  without altering caller/responder code.
+- Custom **transports** hook into stages 2 and 5. Implement `IRpcTransport` to
+  connect RPC Dart to any messaging fabric without altering caller/responder
+  code.
 
 Understanding these steps makes it easier to decide where to add logging,
 metrics, retries, or protocol extensions while keeping application logic clean

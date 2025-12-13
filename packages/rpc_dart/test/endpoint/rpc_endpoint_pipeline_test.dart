@@ -75,7 +75,7 @@ void main() {
             'mw2 request 2',
             'outer before 4',
             'inner before 14',
-            'handler request 42 headers {initial: value, A: yes, B: true}',
+            'handler request 42 headers {initial: value, a: yes, b: true}',
             'inner after 47',
             'outer after 94',
             'mw2 response 194',

@@ -63,26 +63,14 @@ await server.start();
 
 ## Расширение транспорта
 
-`RpcWebSocketTransportBase` предоставляет те же хуки, что и другие транспорты
-набора инструментов. Можно комбинировать mixin'ы для буферизации или
-автоматического переподключения:
+Для низкоуровневого контроля можно расширить `RpcWebSocketTransportBase` из
+`rpc_dart_transports` (или обернуть готовые caller/responder транспорты) и
+реализовать собственную политику переподключения/буферизации/ограничения
+скорости. Важно, чтобы `incomingMessages` оставался согласованным, а все данные
+с wire-уровня проходили строгую валидацию.
 
-```dart
-class ResilientWebSocketTransport extends RpcWebSocketTransportBase
-with RpcAutoReconnect, RpcMessageBuffering {
-  ResilientWebSocketTransport(WebSocketChannel channel)
-  : super(channel, logger: RpcLogger('ResilientWs'));
-
-  @override
-  RpcStreamIdManager get idManager => RpcStreamIdManager(isClient: true);
-
-  @override
-  bool get isClient => true;
-}
-```
-
-Используйте `RpcZeroCopySupport` только для транспотов внутри одного процесса:
-в большинстве случаев WebSocket передаёт сериализованные полезные данные.
+Если транспорт пересекает границы процесса или сети, держите `supportsZeroCopy`
+выключенным.
 
 ## Диагностика
 

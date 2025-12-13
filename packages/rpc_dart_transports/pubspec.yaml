@@ -13,6 +13,10 @@ topics:
   - isolate
   - network
 
+dependency_overrides:
+  rpc_dart:
+    path: ../rpc_dart
+
 dependencies:
   rpc_dart: ^2.3.4
   licensify: ^4.4.0

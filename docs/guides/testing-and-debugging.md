@@ -87,40 +87,109 @@ await subscription.cancel();
 
 ## Faking transports
 
-When you need to simulate edge cases (packet loss, reconnection, buffering)
-extend `RpcBaseTransport` in tests. The base class already handles stream ID
-management and incoming message dispatch, so you only implement the behaviour
-under test.
+When you need to simulate edge cases (packet loss, reconnects, buffering),
+implement `IRpcTransport` in tests. Keeping the transport fake in-memory makes
+it easy to deterministically trigger failure modes.
 
 ```dart
-class FlakyTransport extends RpcBaseTransport {
-  FlakyTransport() : super(isClient: true);
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:rpc_dart/rpc_dart.dart';
+
+class FlakyTransport implements IRpcTransport {
+  final _incoming = StreamController<RpcTransportMessage>.broadcast();
+  final _ids = RpcStreamIdManager(isClient: true);
+  var _closed = false;
 
   bool dropNextMessage = false;
 
   @override
-  Future<void> sendMessage(int streamId, Uint8List data, {bool endStream = false}) async {
+  bool get isClient => true;
+
+  @override
+  bool get isClosed => _closed;
+
+  @override
+  bool get supportsZeroCopy => false;
+
+  @override
+  Stream<RpcTransportMessage> get incomingMessages => _incoming.stream;
+
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
+      incomingMessages.where((m) => m.streamId == streamId);
+
+  @override
+  int createStream() => _ids.generateId();
+
+  @override
+  bool releaseStreamId(int streamId) => _ids.releaseId(streamId);
+
+  @override
+  Future<void> sendMetadata(
+    int streamId,
+    RpcMetadata metadata, {
+    bool endStream = false,
+  }) async {}
+
+  @override
+  Future<void> sendMessage(
+    int streamId,
+    Uint8List data, {
+    bool endStream = false,
+  }) async {
     if (dropNextMessage) {
       dropNextMessage = false;
-      return; // simulate packet loss
+      return;
     }
-    addIncomingMessage(RpcTransportMessage.withPayload(
-      payload: data,
-      streamId: streamId,
-      isEndOfStream: endStream,
-    ));
+
+    _incoming.add(
+      RpcTransportMessage(
+        streamId: streamId,
+        payload: data,
+        isEndOfStream: endStream,
+      ),
+    );
   }
 
   @override
-  Future<void> sendMetadata(int streamId, RpcMetadata metadata, {bool endStream = false}) async {}
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {
+    throw UnsupportedError('Zero-copy is disabled in this transport');
+  }
 
   @override
   Future<void> finishSending(int streamId) async {}
+
+  @override
+  Future<RpcHealthStatus> health() async => RpcHealthStatus.healthy(
+        component: runtimeType.toString(),
+        message: 'OK',
+        details: {'isClosed': _closed},
+      );
+
+  @override
+  Future<RpcHealthStatus> reconnect() async => RpcHealthStatus.degraded(
+        component: runtimeType.toString(),
+        message: 'Reconnect is not implemented for this fake transport',
+        details: {'supported': false},
+      );
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await _incoming.close();
+  }
 }
 ```
 
-Combine flaky transports with the real endpoints to exercise retry logic and
-error handling paths.
+Combine flaky transports with real endpoints to exercise retry logic and error
+handling paths.
 
 ## Leveraging logging in tests
 

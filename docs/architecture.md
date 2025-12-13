@@ -420,7 +420,7 @@ final cacheService = CacheServiceCaller(
 ### 3. Load balancing
 
 Use multiple transports together with `RpcTransportRouter` or build a custom
-transport by extending `RpcBaseTransport`. You can rotate between several
+transport by implementing `IRpcTransport`. You can rotate between several
 `RpcHttp2CallerTransport` instances or route based on metadata such as tenant ID
 and latency.
 

@@ -7,9 +7,10 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
+import '../_base_transport.dart';
 import 'rpc_http1_common.dart';
 
-final class RpcHttp1CallerTransport extends RpcBaseTransport {
+final class RpcHttp1CallerTransport extends RpcTransportBase {
   final Uri _baseUri;
   final HttpClient _httpClient;
   final RpcLogger? _logger;
@@ -23,7 +24,7 @@ final class RpcHttp1CallerTransport extends RpcBaseTransport {
   })  : _baseUri = baseUri,
         _httpClient = httpClient,
         _logger = logger?.child('Http1CallerTransport'),
-        super(isClient: true, logger: logger?.child('Http1CallerTransport'));
+        super(isClient: true);
 
   factory RpcHttp1CallerTransport.connect(
     Uri baseUri, {

@@ -7,9 +7,10 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
+import '../_base_transport.dart';
 import 'rpc_http1_common.dart';
 
-final class RpcHttp1ResponderTransport extends RpcBaseTransport {
+final class RpcHttp1ResponderTransport extends RpcTransportBase {
   final HttpRequest _request;
   final RpcLogger? _logger;
   final Completer<void> _requestCompletion = Completer<void>();
@@ -26,8 +27,7 @@ final class RpcHttp1ResponderTransport extends RpcBaseTransport {
     RpcLogger? logger,
   })  : _request = request,
         _logger = logger?.child('Http1ResponderTransport'),
-        super(
-            isClient: false, logger: logger?.child('Http1ResponderTransport')) {
+        super(isClient: false) {
     final headerValue = request.headers.value(kRpcStreamIdHeader);
     _streamId = headerValue != null
         ? int.tryParse(headerValue) ?? generateStreamId()

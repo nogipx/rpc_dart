@@ -161,7 +161,9 @@ void main() {
         equals(RpcStatus.internal.toString()),
       );
       expect(
-        trailer.getHeaderValue(RpcConstants.grpcMessageHeader),
+        RpcMetadata.decodeGrpcMessage(
+          trailer.getHeaderValue(RpcConstants.grpcMessageHeader) ?? '',
+        ),
         contains('Ping handling error'),
       );
     });

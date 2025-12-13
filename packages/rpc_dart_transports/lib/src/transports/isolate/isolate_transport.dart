@@ -52,8 +52,6 @@ abstract interface class RpcIsolateTransport {
       final customParams = args[2] as Map<String, dynamic>;
       final userEntrypoint = args[3] as RpcIsolateEntrypoint;
 
-      print('ИЗОЛЯТ: Запущен с ID $isolateId');
-
       // Создаем порт для получения сообщений
       final receivePort = ReceivePort();
 
@@ -61,17 +59,26 @@ abstract interface class RpcIsolateTransport {
       final messageController = StreamController<dynamic>.broadcast();
 
       // Перенаправляем сообщения из receivePort в контроллер
-      receivePort.listen((message) {
-        messageController.add(message);
-      });
+      receivePort.listen(
+        (message) => messageController.add(message),
+        onDone: () {
+          if (!messageController.isClosed) {
+            messageController.close();
+          }
+        },
+      );
 
       // Отправляем SendPort обратно в основной поток
       hostSendPort.send(receivePort.sendPort);
 
       // Ожидаем SendPort для основной коммуникации
+      var initialized = false;
       messageController.stream.listen((message) {
         if (message is _IsolateMessage &&
             message.type == _IsolateMessageType.init) {
+          if (initialized) return;
+          initialized = true;
+
           // Получаем SendPort для основной коммуникации
           final mainHostSendPort = message.data as SendPort;
 
@@ -89,6 +96,8 @@ abstract interface class RpcIsolateTransport {
 
     // Канал для начальной инициализации
     final initPort = ReceivePort();
+    final errorPort = ReceivePort();
+    final exitPort = ReceivePort();
 
     // Создаем и запускаем изолят с нашей оберткой
     final isolate = await Isolate.spawn(
@@ -99,7 +108,13 @@ abstract interface class RpcIsolateTransport {
           customParams ?? {},
           entrypoint, // Передаем пользовательскую функцию в изолят
         ],
-        debugName: name);
+        debugName: name,
+        onError: errorPort.sendPort,
+        onExit: exitPort.sendPort);
+
+    // Consume errors from the isolate so intentional crashes do not fail tests.
+    final errorSub = errorPort.listen((_) {});
+    final exitSub = exitPort.listen((_) {});
 
     // Ожидаем SendPort от изолята
     final workerSendPort = await initPort.first as SendPort;
@@ -126,6 +141,11 @@ abstract interface class RpcIsolateTransport {
     void killIsolate() {
       hostTransport.close();
       isolate.kill(priority: Isolate.immediate);
+      initPort.close();
+      errorPort.close();
+      exitPort.close();
+      errorSub.cancel();
+      exitSub.cancel();
     }
 
     return (transport: hostTransport, kill: killIsolate);
@@ -170,51 +190,67 @@ class _IsolateHostTransport implements IRpcTransport {
   void _handleMessage(dynamic message) {
     if (message is! _IsolateMessage) return;
 
-    switch (message.type) {
-      case _IsolateMessageType.metadata:
-        final metadata = message.data as RpcMetadata;
-        _messageController.add(
-          RpcTransportMessage(
-            metadata: metadata,
-            isEndOfStream: message.isEndOfStream,
-            streamId: message.streamId,
-            methodPath: message.methodPath,
-          ),
-        );
-        break;
+    if (_isClosed || _messageController.isClosed) return;
 
-      case _IsolateMessageType.data:
-        final data = message.data as Uint8List;
-        _messageController.add(
-          RpcTransportMessage(
-            payload: data,
-            isEndOfStream: message.isEndOfStream,
-            streamId: message.streamId,
-            methodPath: message.methodPath,
-          ),
-        );
-        break;
+    try {
+      if (message.streamId < 0) {
+        return;
+      }
 
-      case _IsolateMessageType.directObject:
-        // Передаем объект напрямую через directPayload поле
-        _messageController.add(
-          RpcTransportMessage(
-            streamId: message.streamId,
-            isEndOfStream: message.isEndOfStream,
-            directPayload: message.data, // Объект передается как directPayload
-          ),
-        );
-        break;
+      switch (message.type) {
+        case _IsolateMessageType.metadata:
+          if (message.streamId == 0) return;
+          final metadata = message.data as RpcMetadata;
+          _messageController.add(
+            RpcTransportMessage(
+              metadata: metadata,
+              isEndOfStream: message.isEndOfStream,
+              streamId: message.streamId,
+              methodPath: message.methodPath,
+            ),
+          );
+          break;
 
-      case _IsolateMessageType.finish:
-        _messageController.add(
-          RpcTransportMessage(isEndOfStream: true, streamId: message.streamId),
-        );
-        break;
+        case _IsolateMessageType.data:
+          if (message.streamId == 0) return;
+          final data = message.data as Uint8List;
+          _messageController.add(
+            RpcTransportMessage(
+              payload: data,
+              isEndOfStream: message.isEndOfStream,
+              streamId: message.streamId,
+              methodPath: message.methodPath,
+            ),
+          );
+          break;
 
-      default:
-        // Игнорируем другие типы сообщений
-        break;
+        case _IsolateMessageType.directObject:
+          if (message.streamId == 0) return;
+          _messageController.add(
+            RpcTransportMessage(
+              streamId: message.streamId,
+              isEndOfStream: message.isEndOfStream,
+              directPayload: message.data,
+            ),
+          );
+          break;
+
+        case _IsolateMessageType.finish:
+          if (message.streamId == 0) return;
+          _messageController.add(
+            RpcTransportMessage(
+                isEndOfStream: true, streamId: message.streamId),
+          );
+          break;
+
+        default:
+          // Игнорируем другие типы сообщений
+          break;
+      }
+    } catch (_) {
+      // Неверный формат сообщения между изолятами — считаем нарушением протокола.
+      // Закрываем, чтобы не оставить транспорт в полурабочем состоянии.
+      unawaited(close());
     }
   }
 
@@ -422,55 +458,69 @@ class _IsolateWorkerTransport implements IRpcTransport {
   void _handleMessage(dynamic message) {
     if (message is! _IsolateMessage) return;
 
-    switch (message.type) {
-      case _IsolateMessageType.metadata:
-        final metadata = message.data as RpcMetadata;
-        _messageController.add(
-          RpcTransportMessage(
-            metadata: metadata,
-            isEndOfStream: message.isEndOfStream,
-            streamId: message.streamId,
-            methodPath: message.methodPath,
-          ),
-        );
-        break;
+    if (_isClosed || _messageController.isClosed) return;
 
-      case _IsolateMessageType.data:
-        final data = message.data as Uint8List;
-        _messageController.add(
-          RpcTransportMessage(
-            payload: data,
-            isEndOfStream: message.isEndOfStream,
-            streamId: message.streamId,
-            methodPath: message.methodPath,
-          ),
-        );
-        break;
+    try {
+      if (message.streamId < 0) {
+        return;
+      }
 
-      case _IsolateMessageType.directObject:
-        // Передаем объект напрямую через directPayload поле
-        _messageController.add(
-          RpcTransportMessage(
-            streamId: message.streamId,
-            isEndOfStream: message.isEndOfStream,
-            directPayload: message.data, // Объект передается как directPayload
-          ),
-        );
-        break;
+      switch (message.type) {
+        case _IsolateMessageType.metadata:
+          if (message.streamId == 0) return;
+          final metadata = message.data as RpcMetadata;
+          _messageController.add(
+            RpcTransportMessage(
+              metadata: metadata,
+              isEndOfStream: message.isEndOfStream,
+              streamId: message.streamId,
+              methodPath: message.methodPath,
+            ),
+          );
+          break;
 
-      case _IsolateMessageType.finish:
-        _messageController.add(
-          RpcTransportMessage(isEndOfStream: true, streamId: message.streamId),
-        );
-        break;
+        case _IsolateMessageType.data:
+          if (message.streamId == 0) return;
+          final data = message.data as Uint8List;
+          _messageController.add(
+            RpcTransportMessage(
+              payload: data,
+              isEndOfStream: message.isEndOfStream,
+              streamId: message.streamId,
+              methodPath: message.methodPath,
+            ),
+          );
+          break;
 
-      case _IsolateMessageType.close:
-        close();
-        break;
+        case _IsolateMessageType.directObject:
+          if (message.streamId == 0) return;
+          _messageController.add(
+            RpcTransportMessage(
+              streamId: message.streamId,
+              isEndOfStream: message.isEndOfStream,
+              directPayload: message.data,
+            ),
+          );
+          break;
 
-      default:
-        // Игнорируем другие типы сообщений
-        break;
+        case _IsolateMessageType.finish:
+          if (message.streamId == 0) return;
+          _messageController.add(
+            RpcTransportMessage(
+                isEndOfStream: true, streamId: message.streamId),
+          );
+          break;
+
+        case _IsolateMessageType.close:
+          unawaited(close());
+          break;
+
+        default:
+          // Игнорируем другие типы сообщений
+          break;
+      }
+    } catch (_) {
+      unawaited(close());
     }
   }
 

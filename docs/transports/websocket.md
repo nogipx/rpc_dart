@@ -62,25 +62,14 @@ from a `WebSocketChannel` and pass it to `RpcResponderEndpoint`.
 
 ## Extending the transport
 
-`RpcWebSocketTransportBase` exposes the same hooks as other transports in the
-toolkit. You can combine mixins to add buffering or automatic reconnection:
+For lower-level control you can extend `RpcWebSocketTransportBase` from
+`rpc_dart_transports` (or wrap the provided caller/responder transports) and
+add your own reconnection/backpressure/buffering policy. The core requirement
+is to keep `incomingMessages` consistent and to validate any bytes you accept
+from the wire.
 
-```dart
-class ResilientWebSocketTransport extends RpcWebSocketTransportBase
-with RpcAutoReconnect, RpcMessageBuffering {
-  ResilientWebSocketTransport(WebSocketChannel channel)
-  : super(channel, logger: RpcLogger('ResilientWs'));
-
-  @override
-  RpcStreamIdManager get idManager => RpcStreamIdManager(isClient: true);
-
-  @override
-  bool get isClient => true;
-}
-```
-
-Use `RpcZeroCopySupport` only for transports that remain inside a single
-process; WebSocket transports normally serialise payloads for the wire.
+Keep `supportsZeroCopy` disabled for any transport that crosses a process or
+network boundary.
 
 ## Diagnostics
 

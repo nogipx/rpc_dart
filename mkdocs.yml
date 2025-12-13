@@ -25,7 +25,6 @@ nav:
       - Isolate: transports/isolate.md
       - TURN relay: transports/turn-relay.md
       - Encrypted overlay: transports/encryption.md
-      - Transport toolkit: transports/transport-toolkit.md
   - Русский:
       - Обзор: ru/index.md
       - Быстрый старт: ru/getting-started.md

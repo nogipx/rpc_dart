@@ -241,7 +241,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       return;
     }
 
-    final grpcEncoding = metadata.getHeaderValue(RpcConstants.grpcEncodingHeader);
+    final grpcEncoding =
+        metadata.getHeaderValue(RpcConstants.grpcEncodingHeader);
     if (grpcEncoding != null && !RpcGrpcCompression.isSupported(grpcEncoding)) {
       unawaited(
         _sendGrpcErrorAndCleanup(

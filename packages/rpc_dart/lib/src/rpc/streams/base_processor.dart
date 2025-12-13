@@ -35,8 +35,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Парсер для обработки фрагментированных сообщений (только для сериализации)
   RpcMessageParser? _parser;
 
-  String? _peerGrpcEncoding;
-
   /// Режим работы процессора
   final bool _isZeroCopy;
 
