@@ -1,3 +1,11 @@
+## 3.4.0
+
+- Postgres adapter: per-collection JSONB tables with server-side filters/sort/pagination/FTS in Postgres, JSON-path indexes, change journal and schema registry tables.
+- Import from SQLite into Postgres without changing contracts (export/import stay at repository level).
+- All system timestamps (createdAt/updatedAt/occurredAt) are stored in UTC; added UTC coverage for SQLite and Postgres.
+- JSON path validation in the Postgres adapter (segment sanitization) to block SQL injection via sort/filter/index fields.
+- Postgres integration tests (CRUD, filters/indexes, FTS, UTC) plus SQLite→Postgres import test; SQLite tests now assert UTC.
+
 ## 3.3.1
 
 - Update rpc_dart to 2.4.0

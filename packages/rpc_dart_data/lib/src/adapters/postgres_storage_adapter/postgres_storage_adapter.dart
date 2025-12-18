@@ -17,8 +17,8 @@ class PostgresConnectionOptions {
   final String tablePrefix;
 }
 
-class _PgTableNames {
-  _PgTableNames({required this.schema, required this.prefix});
+class PgTableNames {
+  PgTableNames({required this.schema, required this.prefix});
 
   final String schema;
   final String prefix;
@@ -67,10 +67,10 @@ class PostgresDataStorageAdapter
     required this.tablePrefix,
     required bool ownsConnection,
   }) : _ownsConnection = ownsConnection,
-       _names = _PgTableNames(schema: schema, prefix: tablePrefix),
+       _names = PgTableNames(schema: schema, prefix: tablePrefix),
        schemaRegistry = PostgresSchemaRegistry(
          _connection,
-         names: _PgTableNames(schema: schema, prefix: tablePrefix),
+         names: PgTableNames(schema: schema, prefix: tablePrefix),
        );
 
   static Future<PostgresDataStorageAdapter> connect({
@@ -92,7 +92,7 @@ class PostgresDataStorageAdapter
 
   final Connection _connection;
   final bool _ownsConnection;
-  final _PgTableNames _names;
+  final PgTableNames _names;
   final Map<String, String> _tableCache = <String, String>{};
   final Set<String> _knownTables = <String>{};
   final Set<String> _knownIndexes = <String>{};
@@ -1295,10 +1295,10 @@ class PostgresDataChangeJournal implements DataChangeJournal {
     this._connection, {
     String schema = 'public',
     String tablePrefix = '',
-  }) : _names = _PgTableNames(schema: schema, prefix: tablePrefix);
+  }) : _names = PgTableNames(schema: schema, prefix: tablePrefix);
 
   final Connection _connection;
-  final _PgTableNames _names;
+  final PgTableNames _names;
   bool _ready = false;
 
   Future<void> ensureReady() async {
@@ -1487,13 +1487,13 @@ CREATE TABLE IF NOT EXISTS ${_names.changeJournal} (
 class PostgresSchemaRegistry implements CollectionSchemaRegistry {
   PostgresSchemaRegistry(
     this._connection, {
-    required _PgTableNames names,
+    required PgTableNames names,
     CollectionSchemaPolicy? defaultPolicy,
   }) : _names = names,
        _defaultPolicy = defaultPolicy ?? const CollectionSchemaPolicy();
 
   final Connection _connection;
-  final _PgTableNames _names;
+  final PgTableNames _names;
   final CollectionSchemaPolicy _defaultPolicy;
   bool _ready = false;
 
