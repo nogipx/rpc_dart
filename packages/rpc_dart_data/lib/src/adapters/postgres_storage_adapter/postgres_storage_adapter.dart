@@ -1,11 +1,14 @@
-part of '_index.dart';
+import 'dart:convert';
+
+import 'package:postgres/postgres.dart';
+import 'package:rpc_dart_data/rpc_dart_data.dart';
 
 class PostgresConnectionOptions {
   const PostgresConnectionOptions({
     required this.endpoint,
     this.settings,
     this.schema = 'public',
-    this.tablePrefix = 'rpc_data_',
+    this.tablePrefix = '',
   });
 
   final Endpoint endpoint;
@@ -1291,7 +1294,7 @@ class PostgresDataChangeJournal implements DataChangeJournal {
   PostgresDataChangeJournal(
     this._connection, {
     String schema = 'public',
-    String tablePrefix = 'rpc_data_',
+    String tablePrefix = '',
   }) : _names = _PgTableNames(schema: schema, prefix: tablePrefix);
 
   final Connection _connection;

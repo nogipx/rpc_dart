@@ -1,4 +1,4 @@
-part of '_index.dart';
+import 'package:rpc_dart_data/rpc_dart_data.dart';
 
 /// Repository backed by [PostgresDataStorageAdapter].
 class PostgresDataRepository extends BaseDataRepository {
