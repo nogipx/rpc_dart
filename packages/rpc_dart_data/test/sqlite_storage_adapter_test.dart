@@ -112,6 +112,36 @@ void main() {
     expect(afterDelete, isNull);
   });
 
+  test('SQLite adapter stores timestamps in UTC', skip: skip, () async {
+    final storage = await openAdapter();
+    final repository = SqliteDataRepository(storage: storage);
+    final env = await DataServiceFactory.inMemory(repository: repository);
+    addTearDown(() async => repository.storage.dispose());
+    addTearDown(() async => env.dispose());
+
+    final ctx = buildContext();
+    final created = await env.client.create(
+      collection: 'utc',
+      payload: {'title': 'utc-check'},
+      context: ctx,
+    );
+
+    expect(created.createdAt.isUtc, isTrue);
+    expect(created.updatedAt.isUtc, isTrue);
+
+    final updated = await env.client.update(
+      collection: 'utc',
+      id: created.id,
+      expectedVersion: created.version,
+      payload: {'title': 'utc-check-2'},
+      context: ctx,
+    );
+
+    expect(updated.createdAt.isUtc, isTrue);
+    expect(updated.updatedAt.isUtc, isTrue);
+    expect(updated.updatedAt.isAfter(created.updatedAt), isTrue);
+  });
+
   test('SQLite storage adapter persists records on disk', skip: skip, () async {
     Future<
       ({InMemoryDataServiceEnvironment env, SqliteDataRepository repository})

@@ -8,3 +8,4 @@ part 'base_data_repository.dart';
 part 'i_data_repository.dart';
 part 'in_memory_data_repository.dart';
 part 'sqlite_data_repository.dart';
+part 'postgres_data_repository.dart';

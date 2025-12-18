@@ -11,6 +11,7 @@ It gives you a transport-agnostic contract, ready-to-use storage adapters, and u
 - **Change streams**: `watchChanges` with cursors.
 - **Schema validation & migrations**: per-collection schema registry (nested objects/arrays), validation on all write/import RPCs. Server-side migrations with checkpoints/logs and automatic index/FTS rebuilds after success; migrations are bound to a collection and run via repository helpers.
 - **SQLite adapter** with SQLCipher support out-of-the-box via SQLite3MultipleCiphers (`hooks.user_defines.sqlite3.source: sqlite3mc`), no system `libsqlcipher` needed; web uses `sqlite3mc.wasm`. `SqliteSetupHook` lets you register custom pragmas before the database is exposed to your code.
+- **PostgreSQL adapter (alpha)**: одна коллекция = отдельная таблица с JSONB, оптимистичная конкуренция; фильтры/сортировка/пагинация/FTS выполняются в Postgres (GIN over `to_tsvector`).
 - Pass a `SqlCipherKey` to enable encryption; the runtime fails fast if cipher pragmas are missing.
 - **Ready-made environments** (`DataServiceFactory.inMemory`) for tests, demos, and local prototyping.
 - **Collection discovery**: RPC `listCollections()` queries the storage adapter for the current list of collection names so clients can introspect available datasets without enumerating all records.
