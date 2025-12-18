@@ -398,10 +398,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     final hasMore = rows.length > limit;
     final items = rows
         .take(limit)
-        .map((row) => _mapDescriptor(
-          row,
-          includeMetadata: request.includeMetadata,
-        ))
+        .map(
+          (row) =>
+              _mapDescriptor(row, includeMetadata: request.includeMetadata),
+        )
         .toList(growable: false);
     String? nextCursor;
     if (hasMore) {
@@ -440,7 +440,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     }
   }
 
-  BlobDescriptor _mapDescriptor(sqlite.Row row, {required bool includeMetadata}) {
+  BlobDescriptor _mapDescriptor(
+    sqlite.Row row, {
+    required bool includeMetadata,
+  }) {
     return BlobDescriptor(
       id: row['id'] as String,
       collection: row['collection'] as String,

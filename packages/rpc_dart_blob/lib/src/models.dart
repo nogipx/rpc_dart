@@ -16,6 +16,7 @@ class BlobDescriptor extends Equatable implements IRpcSerializable {
     this.contentType,
     this.checksum,
     this.metadata = const {},
+    this.downloadUrl,
   });
 
   factory BlobDescriptor.fromJson(Map<String, dynamic> json) {
@@ -29,6 +30,7 @@ class BlobDescriptor extends Equatable implements IRpcSerializable {
       contentType: json['contentType'] as String?,
       checksum: json['checksum'] as String?,
       metadata: Map<String, String>.from(json['metadata'] as Map? ?? const {}),
+      downloadUrl: json['downloadUrl'] as String?,
     );
   }
 
@@ -41,6 +43,7 @@ class BlobDescriptor extends Equatable implements IRpcSerializable {
   final String? contentType;
   final String? checksum;
   final Map<String, String> metadata;
+  final String? downloadUrl;
 
   @override
   List<Object?> get props => [
@@ -53,6 +56,7 @@ class BlobDescriptor extends Equatable implements IRpcSerializable {
     contentType,
     checksum,
     metadata,
+    downloadUrl,
   ];
 
   @override
@@ -66,6 +70,7 @@ class BlobDescriptor extends Equatable implements IRpcSerializable {
     if (contentType != null) 'contentType': contentType,
     if (checksum != null) 'checksum': checksum,
     if (metadata.isNotEmpty) 'metadata': metadata,
+    if (downloadUrl != null) 'downloadUrl': downloadUrl,
   };
 }
 
@@ -293,9 +298,7 @@ class BlobUploadChunk extends Equatable implements IRpcSerializable {
       contentType: json['contentType'] as String?,
       checksum: json['checksum'] as String?,
       chunkChecksum: json['chunkChecksum'] as String?,
-      checksumAlgorithm: _checksumAlgorithmFromJson(
-        json['checksumAlgorithm'],
-      ),
+      checksumAlgorithm: _checksumAlgorithmFromJson(json['checksumAlgorithm']),
       metadata: Map<String, String>.from(json['metadata'] as Map? ?? const {}),
       expectedVersion: json['expectedVersion'] as int?,
       last: json['last'] as bool? ?? false,
@@ -341,8 +344,7 @@ class BlobUploadChunk extends Equatable implements IRpcSerializable {
     if (contentType != null) 'contentType': contentType,
     if (checksum != null) 'checksum': checksum,
     if (chunkChecksum != null) 'chunkChecksum': chunkChecksum,
-    if (checksumAlgorithm != null)
-      'checksumAlgorithm': checksumAlgorithm!.name,
+    if (checksumAlgorithm != null) 'checksumAlgorithm': checksumAlgorithm!.name,
     if (metadata.isNotEmpty) 'metadata': metadata,
     if (expectedVersion != null) 'expectedVersion': expectedVersion,
     if (last) 'last': last,
@@ -486,4 +488,15 @@ ChecksumAlgorithm? _checksumAlgorithmFromJson(Object? raw) {
     'checksumAlgorithm',
     'Unsupported checksum algorithm',
   );
+}
+
+extension Uint8ListStreamX on Stream<Uint8List> {
+  /// Collect the entire byte stream into a single [Uint8List].
+  Future<Uint8List> collectBytes() async {
+    final builder = BytesBuilder();
+    await for (final chunk in this) {
+      builder.add(chunk);
+    }
+    return builder.takeBytes();
+  }
 }

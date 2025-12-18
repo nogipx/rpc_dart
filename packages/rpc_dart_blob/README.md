@@ -59,10 +59,28 @@ final env = await BlobServiceFactory.inMemory(
 final client = env.client;
 ```
 
+### S3/MinIO adapter
+```dart
+final storage = S3BlobStorageAdapter.connect(
+  bucket: 'blobs',
+  endPoint: 'minio.local', // or s3.amazonaws.com
+  port: 9000,
+  accessKey: '<access>',
+  secretKey: '<secret>',
+  useSSL: false,
+  prefix: 'rpc/', // optional
+);
+final server = BlobServiceFactory.createServer(
+  transport: transport,
+  storage: storage,
+);
+```
+Descriptors returned from S3 include a short-lived presigned download URL (`downloadUrl`).
+
 ## Goals
 - Separate contract for blobs (`BlobService`) so `rpc_dart_data` stays focused on JSON records.
 - Stream-first API (client-stream upload, server-stream download) with optimistic versioning.
-- Pluggable storage adapters (filesystem, SQLite for dev/tests, S3/minio later).
+- Pluggable storage adapters (SQLite for dev/tests, S3/MinIO for object storage; bucket must exist).
 - Export/import-friendly framing (header + binary chunks) without loading whole files in memory.
 
 ## Layout
@@ -71,4 +89,4 @@ final client = env.client;
 - `lib/src/rpc` — contract, caller/responder wiring, service interface (client-stream upload, server-stream download; chunks are base64-framed for now).
 
 ## Status
-Initial skeleton. Includes `SqliteBlobStorageAdapter` for local/dev storage (payloads kept in `BLOB` columns with optimistic versioning). Each collection gets its own SQLite table (registered in `blob_collections`) to isolate indexes and vacuum/backup scope. `BlobService` provides a default server implementation on top of any `IBlobStorageAdapter`. The API is intentionally small to evolve toward zero-copy binary framing (replace base64 chunks with transport-native binary when ready).
+Includes `SqliteBlobStorageAdapter` for local/dev storage (payloads kept in `BLOB` columns with optimistic versioning) and `S3BlobStorageAdapter` for S3-compatible backends (AWS, MinIO, Ceph) storing blobs as `<prefix><collection>/<id>` with metadata-based versioning. `BlobService` provides a default server implementation on top of any `IBlobStorageAdapter`. The API is intentionally small to evolve toward zero-copy binary framing (replace base64 chunks with transport-native binary when ready).
