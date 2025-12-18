@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
-import 'package:rpc_dart_data/rpc_dart_data.dart';
+import 'package:rpc_dart_data/rpc_dart_data.dart' hide Connection;
 
 class PostgresConnectionOptions {
   const PostgresConnectionOptions({

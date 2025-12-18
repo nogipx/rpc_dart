@@ -1,7 +1,10 @@
 import 'dart:async';
 
-import 'package:postgres/postgres.dart' show Connection;
 import 'package:rpc_dart_data/rpc_dart_data.dart';
+
+// Dummy stand-in so the web build does not pull in the real Postgres package,
+// which depends on dart:io.
+typedef Connection = Object;
 
 /// Stub for platforms where Postgres is not available (e.g., web).
 class PostgresDataStorageAdapter

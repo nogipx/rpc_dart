@@ -1,3 +1,7 @@
+## 3.4.1
+
+- Wasm compatibility
+
 ## 3.4.0
 
 - Postgres adapter: per-collection JSONB tables with server-side filters/sort/pagination/FTS in Postgres, JSON-path indexes, change journal and schema registry tables.
