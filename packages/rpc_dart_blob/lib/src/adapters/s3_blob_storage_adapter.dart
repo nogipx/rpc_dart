@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:minio/minio.dart';
 import 'package:minio/models.dart';
+import 'package:minio/src/minio_client.dart' as minio_internal;
+import 'package:xml/xml.dart' as xml;
 
 import '../models.dart';
 import 'i_blob_storage_adapter.dart';
@@ -61,6 +63,7 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
   final String bucket;
   final String _prefix;
   final S3Clock _clock;
+  minio_internal.MinioClient? _rawClient;
 
   static const _metaVersion = 'rpc-version';
   static const _metaCreatedAt = 'rpc-created-at';
@@ -72,8 +75,15 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     final key = _objectKey(collection, id);
     try {
       final stat = await _client.statObject(bucket, key);
+      final tags = await _getObjectTags(key);
       final url = await _presignedUrl(key);
-      return _descriptorFromStat(collection, id, stat, downloadUrl: url);
+      return _descriptorFromStat(
+        collection,
+        id,
+        stat,
+        downloadUrl: url,
+        tags: tags,
+      );
     } on MinioError catch (e) {
       if (_isNotFound(e)) return null;
       rethrow;
@@ -256,6 +266,7 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     String id,
     StatObjectResult stat, {
     String? downloadUrl,
+    Map<String, String> tags = const {},
   }) {
     final meta = <String, String>{};
     final rawMeta = stat.metaData ?? const <String, String?>{};
@@ -287,6 +298,12 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
             key == 'content-type' ||
             key == 'etag',
       );
+
+    if (tags.isNotEmpty) {
+      tags.forEach((tagKey, tagValue) {
+        userMetadata.putIfAbsent(tagKey, () => tagValue);
+      });
+    }
 
     return BlobDescriptor(
       id: id,
@@ -386,6 +403,35 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
       );
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<Map<String, String>> _getObjectTags(String key) async {
+    try {
+      final client = _rawClient ??= minio_internal.MinioClient(_client);
+      final response = await client.request(
+        method: 'GET',
+        bucket: bucket,
+        object: key,
+        resource: 'tagging',
+      );
+      if (response.statusCode != 200) return const <String, String>{};
+
+      final document = xml.XmlDocument.parse(response.body);
+      final tags = <String, String>{};
+      for (final tag in document.findAllElements('Tag')) {
+        final tagKey = tag.getElement('Key')?.text;
+        final tagValue = tag.getElement('Value')?.text;
+        if (tagKey != null && tagValue != null) {
+          tags[tagKey] = tagValue;
+        }
+      }
+      return tags;
+    } on MinioError catch (e) {
+      if (_isNotFound(e)) return const <String, String>{};
+      rethrow;
+    } catch (_) {
+      return const <String, String>{};
     }
   }
 }

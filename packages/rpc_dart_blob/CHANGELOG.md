@@ -1,3 +1,8 @@
+## 1.0.1
+
+- S3 adapter now fetches object tags (`?tagging`) and merges them into `BlobDescriptor.metadata` without overwriting metadata provided on upload.
+- Added `xml` dependency to parse S3 tag responses.
+
 ## 1.0.0
 
 - Added `S3BlobStorageAdapter` (S3/MinIO/Ceph-compatible) storing blobs under `<prefix><collection>/<id>` with metadata-based versioning and optimistic checks.
