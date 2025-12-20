@@ -1,3 +1,9 @@
+## 3.4.2
+
+- `IDataStorageAdapter` now requires `ensureReady`, Postgres adapter aligns readiness with schema/journal/index validation.
+- Migration runner accepts a migration-capable repository interface (works with Postgres/SQLite), and Postgres repository exposes migration helpers.
+- README/doc tweaks for migration helper wording.
+
 ## 3.4.1
 
 - Wasm compatibility

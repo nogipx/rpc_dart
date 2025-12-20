@@ -3,6 +3,9 @@ part of '_index.dart';
 /// Адаптер хранилища, который можно реализовать поверх любого backend-а
 /// (in-memory, SQLite, Postgres и т.д.).
 abstract interface class IDataStorageAdapter {
+  /// Ensure the underlying storage is initialised and ready to serve traffic.
+  Future<void> ensureReady({bool validateIntegrity = true});
+
   Future<DataRecord?> readRecord(String collection, String id);
 
   Future<Map<String, DataRecord>> readRecords(

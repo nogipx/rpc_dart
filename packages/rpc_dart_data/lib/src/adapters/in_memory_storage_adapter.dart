@@ -11,6 +11,12 @@ class InMemoryStorageAdapter implements IDataStorageAdapter {
   }
 
   @override
+  Future<void> ensureReady({bool validateIntegrity = true}) async {
+    // In-memory adapter has no persistent state to validate.
+    if (validateIntegrity) {}
+  }
+
+  @override
   Future<DataRecord?> readRecord(String collection, String id) async {
     final store = _collection(collection);
     return store[id];

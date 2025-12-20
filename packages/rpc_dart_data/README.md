@@ -86,7 +86,7 @@ await for (final chunk in export.payloadStream!) {
 ## Schema validation and migrations
 - Per-collection schemas (nested objects/arrays) live in a registry; validation runs on create/update/patch/bulk/import over RPC.
 - Default policy is controlled via `SchemaValidationConfig(defaultSchemaEnabled, defaultRequireValidation)`; per-collection overrides use `setSchemaPolicy`.
-- Migrations are server-side only: register declarative steps with `MigrationDefinition` (bound to a `collection`) and run them via `MigrationRunnerHelper` or `SqliteDataRepository.runMigration`. Migration success activates the new schema and rebuilds indexes/FTS; any errors keep the checkpoint and block activation.
+- Migrations are server-side only: register declarative steps with `MigrationDefinition` (bound to a `collection`) and run them via `MigrationRunnerHelper` or a migration-capable repository (`SqliteDataRepository`/`PostgresDataRepository`). Migration success activates the new schema and rebuilds indexes/FTS; any errors keep the checkpoint and block activation.
 
 Minimal server-side wiring:
 ```dart

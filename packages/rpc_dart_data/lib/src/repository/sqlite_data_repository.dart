@@ -1,7 +1,8 @@
 part of '_index.dart';
 
 /// Convenience repository that uses [SqliteDataStorageAdapter].
-class SqliteDataRepository extends BaseDataRepository {
+class SqliteDataRepository extends BaseDataRepository
+    implements MigrationCapableRepository {
   factory SqliteDataRepository({
     required SqliteDataStorageAdapter storage,
     DateTime Function()? clock,
@@ -59,12 +60,14 @@ class SqliteDataRepository extends BaseDataRepository {
 
   final bool _rebuildIndexesAfterMigration;
 
+  @override
   final SchemaValidationEngine schemaValidationEngine;
 
   Future<void> rebuildIndexesAndFts(String collection) async {
     await storage.rebuildCollectionStructures(collection);
   }
 
+  @override
   Future<SchemaMigrationResult> runMigration({
     required String collection,
     required int fromVersion,
@@ -121,6 +124,7 @@ class SqliteDataRepository extends BaseDataRepository {
   }
 
   /// Registers a list of declarative migrations.
+  @override
   void registerMigrations(Iterable<MigrationDefinition> migrations) {
     for (final migration in migrations) {
       registerMigration(

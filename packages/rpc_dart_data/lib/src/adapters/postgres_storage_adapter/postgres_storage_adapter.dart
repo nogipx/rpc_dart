@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
-import 'package:rpc_dart_data/rpc_dart_data.dart' hide Connection;
+import 'package:rpc_dart_data/rpc_dart_data.dart';
 
 class PostgresConnectionOptions {
   const PostgresConnectionOptions({
@@ -163,6 +163,24 @@ class PostgresDataStorageAdapter
     return result.isNotEmpty;
   }
 
+  Future<bool> _indexExists(String indexName) async {
+    if (_knownIndexes.contains(indexName)) {
+      return true;
+    }
+    final result = await _connection.execute(
+      Sql.named(
+        'SELECT 1 FROM pg_indexes WHERE schemaname = @schema '
+        'AND indexname = @name LIMIT 1',
+      ),
+      parameters: {'schema': schema, 'name': indexName},
+    );
+    final exists = result.isNotEmpty;
+    if (exists) {
+      _knownIndexes.add(indexName);
+    }
+    return exists;
+  }
+
   Future<String?> _lookupTable(String collection) async {
     final row = await _connection.execute(
       Sql.named(
@@ -211,12 +229,46 @@ CREATE TABLE IF NOT EXISTS $table (
     await _registerTable(collection, table);
   }
 
+  Future<void> _ensureIndexExists(
+    String table,
+    _PgIndexMetadata metadata,
+  ) async {
+    if (await _indexExists(metadata.indexName)) {
+      return;
+    }
+    try {
+      final selector = _jsonTextSelector(metadata.path);
+      await _connection.execute(
+        'CREATE INDEX IF NOT EXISTS ${_names._q(metadata.indexName)} '
+        'ON $table ( ($selector) )',
+      );
+      _knownIndexes.add(metadata.indexName);
+    } catch (error) {
+      throw RpcDataError.internal(
+        'Failed to ensure index ${metadata.indexName} on $table',
+        error: error,
+      );
+    }
+  }
+
+  Future<void> _ensureCollectionIndexes(String collection, String table) async {
+    final indexes = await _loadCollectionIndexes(collection);
+    if (indexes.isEmpty) {
+      return;
+    }
+    for (final metadata in indexes) {
+      await _ensureIndexExists(table, metadata);
+    }
+  }
+
   String _rawTableName(String qualified) {
     final parts = qualified.split('.');
     return parts.isNotEmpty ? parts.last.replaceAll('"', '') : qualified;
   }
 
-  Future<void> ensureReady() async {
+  @override
+  Future<void> ensureReady({bool validateIntegrity = true}) async {
+    if (validateIntegrity) {}
     if (_ready) {
       return;
     }
@@ -240,6 +292,29 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       'ON ${_names.indexRegistry} (collection, path)',
     );
     await schemaRegistry.ensureReady();
+    final journal = PostgresDataChangeJournal(
+      _connection,
+      schema: schema,
+      tablePrefix: tablePrefix,
+    );
+    await journal.ensureReady();
+
+    final registryRows = await _connection.execute(
+      'SELECT collection, table_name FROM ${_names.collectionRegistry}',
+    );
+    for (final row in registryRows) {
+      final data = row.toColumnMap();
+      final collection = data['collection'] as String;
+      final table = data['table_name'] as String;
+      final exists = await _tableExists(table);
+      if (!exists) {
+        throw RpcDataError.internal(
+          'Registered collection "$collection" is missing table "$table".',
+        );
+      }
+      _knownTables.add(table);
+      await _ensureCollectionIndexes(collection, table);
+    }
     _ready = true;
   }
 

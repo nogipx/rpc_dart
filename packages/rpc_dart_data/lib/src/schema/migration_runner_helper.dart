@@ -1,16 +1,33 @@
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 
+/// Repository contract for running declarative migrations.
+abstract interface class MigrationCapableRepository {
+  SchemaValidationEngine get schemaValidationEngine;
+
+  Future<SchemaMigrationResult> runMigration({
+    required String collection,
+    required int fromVersion,
+    required int toVersion,
+    required Map<String, dynamic> newSchema,
+    required SchemaTransformer transformer,
+    SchemaMigrationOptions options = const SchemaMigrationOptions(),
+    String? migrationId,
+  });
+
+  void registerMigrations(Iterable<MigrationDefinition> migrations);
+}
+
 /// Helper to apply pending migrations in order, comparing active schema
 /// version with registered migrations.
 class MigrationRunnerHelper {
   MigrationRunnerHelper({
-    required SqliteDataRepository repository,
+    required MigrationCapableRepository repository,
     required List<MigrationDefinition> migrations,
   }) : _repository = repository,
        _migrations = List<MigrationDefinition>.from(migrations, growable: false)
          ..sort((a, b) => a.fromVersion.compareTo(b.fromVersion));
 
-  final SqliteDataRepository _repository;
+  final MigrationCapableRepository _repository;
   final List<MigrationDefinition> _migrations;
 
   /// Registers migrations on the server and applies any pending ones in order.

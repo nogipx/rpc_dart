@@ -159,6 +159,7 @@ class SqliteDataStorageAdapter
   /// Creates base tables when the database is empty and validates existing
   /// metadata before accepting traffic. A fast integrity check is executed to
   /// catch structural corruption early.
+  @override
   Future<void> ensureReady({bool validateIntegrity = true}) async {
     await _ensureRegistry();
     await schemaRegistry.ensureReady();

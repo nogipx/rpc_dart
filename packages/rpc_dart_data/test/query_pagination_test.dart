@@ -92,6 +92,11 @@ class _ThrowingAdapter implements IDataStorageAdapter {
   Future<void> writeRecords(Iterable<DataRecord> records) {
     return _delegate.writeRecords(records);
   }
+
+  @override
+  Future<void> ensureReady({bool validateIntegrity = true}) {
+    return _delegate.ensureReady(validateIntegrity: validateIntegrity);
+  }
 }
 
 void main() {
