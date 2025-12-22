@@ -1,6 +1,6 @@
 name: rpc_dart_blob
 description: Streamed blob storage contract and adapters for rpc_dart (binary/object storage alongside rpc_dart_data).
-version: 1.0.1
+version: 1.0.2
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

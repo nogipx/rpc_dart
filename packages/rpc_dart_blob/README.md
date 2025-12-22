@@ -68,14 +68,17 @@ final storage = S3BlobStorageAdapter.connect(
   accessKey: '<access>',
   secretKey: '<secret>',
   useSSL: false,
-  prefix: 'rpc/', // optional
+  options: const S3BlobStorageOptions(
+    prefix: 'rpc/', // optional
+    presignTtlSeconds: 3600, // optional, default 3600
+  ),
 );
 final server = BlobServiceFactory.createServer(
   transport: transport,
   storage: storage,
 );
 ```
-Descriptors returned from S3 include a short-lived presigned download URL (`downloadUrl`).
+Descriptors returned from S3 include a short-lived presigned download URL (`downloadUrl`). Use `S3BlobStorageOptions.downloadUrlMapper` if the raw presigned link needs to be rewritten (e.g., swap an internal S3 endpoint for an external proxy/CDN). `S3BlobStorageOptions` also configures prefix/clock and `presignTtlSeconds` (link lifetime).
 
 ## Goals
 - Separate contract for blobs (`BlobService`) so `rpc_dart_data` stays focused on JSON records.

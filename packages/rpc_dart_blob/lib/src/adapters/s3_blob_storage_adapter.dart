@@ -14,6 +14,29 @@ import 'i_blob_storage_adapter.dart';
 
 typedef S3Clock = DateTime Function();
 
+const int kDefaultPresignTtlSeconds = 3600;
+
+class S3BlobStorageOptions {
+  const S3BlobStorageOptions({
+    this.prefix,
+    this.clock,
+    this.downloadUrlMapper,
+    this.presignTtlSeconds,
+  });
+
+  /// Optional key prefix for all objects (e.g., "env/app/").
+  final String? prefix;
+
+  /// Override the clock used for timestamps (primarily for tests).
+  final S3Clock? clock;
+
+  /// Hook to rewrite presigned download URLs (e.g., swap internal endpoint to CDN).
+  final String Function(String url)? downloadUrlMapper;
+
+  /// TTL for presigned download URLs in seconds (must be positive).
+  final int? presignTtlSeconds;
+}
+
 /// S3-compatible adapter (works with AWS S3, MinIO, Ceph, etc).
 ///
 /// Stores blobs as individual objects under `<prefix><collection>/<id>`.
@@ -23,11 +46,15 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
   S3BlobStorageAdapter({
     required Minio client,
     required this.bucket,
-    String? prefix,
-    S3Clock? clock,
+    S3BlobStorageOptions options = const S3BlobStorageOptions(),
   }) : _client = client,
-       _prefix = _normalizePrefix(prefix),
-       _clock = clock ?? DateTime.now;
+       _prefix = _normalizePrefix(options.prefix),
+       _clock = options.clock ?? DateTime.now,
+       downloadUrlMapper = options.downloadUrlMapper,
+       _presignTtlSeconds =
+           options.presignTtlSeconds ?? kDefaultPresignTtlSeconds {
+    assert(_presignTtlSeconds > 0, 'presignTtlSeconds must be positive');
+  }
 
   /// Convenience factory to create a MinIO/S3 client.
   factory S3BlobStorageAdapter.connect({
@@ -38,9 +65,8 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     required String secretKey,
     String? sessionToken,
     bool useSSL = true,
-    String? prefix,
-    S3Clock? clock,
     bool pathStyle = false,
+    S3BlobStorageOptions options = const S3BlobStorageOptions(),
   }) {
     final client = Minio(
       endPoint: endPoint,
@@ -54,8 +80,7 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     return S3BlobStorageAdapter(
       client: client,
       bucket: bucket,
-      prefix: prefix,
-      clock: clock,
+      options: options,
     );
   }
 
@@ -63,12 +88,13 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
   final String bucket;
   final String _prefix;
   final S3Clock _clock;
+  final String Function(String url)? downloadUrlMapper;
+  final int _presignTtlSeconds;
   minio_internal.MinioClient? _rawClient;
 
   static const _metaVersion = 'rpc-version';
   static const _metaCreatedAt = 'rpc-created-at';
   static const _metaUpdatedAt = 'rpc-updated-at';
-  static const _defaultPresignTtlSeconds = 3600;
 
   @override
   Future<BlobDescriptor?> headBlob(String collection, String id) async {
@@ -396,11 +422,12 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
 
   Future<String?> _presignedUrl(String key) async {
     try {
-      return await _client.presignedGetObject(
+      final url = await _client.presignedGetObject(
         bucket,
         key,
-        expires: _defaultPresignTtlSeconds,
+        expires: _presignTtlSeconds,
       );
+      return downloadUrlMapper == null ? url : downloadUrlMapper!(url);
     } catch (_) {
       return null;
     }
