@@ -6,8 +6,10 @@ environment:
 
 dependencies:
   rpc_dart: ^2.3.2
+  json_annotation: ^4.9.0
 
 dev_dependencies:
   build_runner: ^2.10.4
+  json_serializable: ^6.9.0
   rpc_dart_generator:
     path: ..

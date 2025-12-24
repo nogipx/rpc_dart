@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:json_annotation/json_annotation.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_generator/rpc_dart_generator.dart';
 
@@ -20,12 +21,24 @@ abstract class ICalculatorContract {
   Stream<SumResponse> numbers(SumRequest request, {RpcContext? context});
 }
 
+@JsonSerializable()
 class SumRequest {
   SumRequest({required this.values});
   final List<double> values;
+
+  factory SumRequest.fromJson(Map<String, dynamic> json) =>
+      _$SumRequestFromJson(json);
+
+  Map<String, dynamic> toJson() => _$SumRequestToJson(this);
 }
 
+@JsonSerializable()
 class SumResponse {
   SumResponse({required this.result});
   final double result;
+
+  factory SumResponse.fromJson(Map<String, dynamic> json) =>
+      _$SumResponseFromJson(json);
+
+  Map<String, dynamic> toJson() => _$SumResponseToJson(this);
 }

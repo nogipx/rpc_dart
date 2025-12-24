@@ -5,6 +5,7 @@ Code generator for caller/responder wrappers in [rpc_dart].
 - Generates `Names` (service + method constants, `Names.instance(suffix)` for multiple instances).
 - Generates a `final` caller and an `abstract` responder (you implement handlers; `setup()` registers them).
 - Codecs: by default inserts `RpcCodec<T>.withDecoder(T.fromJson)`; if `transferMode` is `zeroCopy` no codecs/serialization checks are added.
+- Cooperative with other `source_gen` builders: uses `SharedPartBuilder`/`combining_builder` to merge into the same `*.g.dart` instead of writing it directly.
 
 ## Annotations
 - `@RpcService(name, transferMode?)` — declares service name and default transfer mode (`auto`/`codec`/`zeroCopy`).
@@ -49,6 +50,8 @@ abstract class ICalculatorCodecContract {
 fvm dart pub get
 fvm dart run build_runner build
 ```
+
+The builder emits `.rpc_dart.g.part` fragments to the build cache; `source_gen|combining_builder` produces the final `*.g.dart`, allowing rpc_dart output to live alongside other generators (e.g. `json_serializable`) without collisions.
 
 ## Transfer modes
 - `auto`/`codec`: if codecs are absent → default `RpcCodec<T>.withDecoder(T.fromJson)`; if provided → use them.

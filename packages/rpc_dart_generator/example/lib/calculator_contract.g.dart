@@ -1,13 +1,30 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
-// dart format width=80
 
 part of 'calculator_contract.dart';
+
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+SumRequest _$SumRequestFromJson(Map<String, dynamic> json) => SumRequest(
+  values: (json['values'] as List<dynamic>)
+      .map((e) => (e as num).toDouble())
+      .toList(),
+);
+
+Map<String, dynamic> _$SumRequestToJson(SumRequest instance) =>
+    <String, dynamic>{'values': instance.values};
+
+SumResponse _$SumResponseFromJson(Map<String, dynamic> json) =>
+    SumResponse(result: (json['result'] as num).toDouble());
+
+Map<String, dynamic> _$SumResponseToJson(SumResponse instance) =>
+    <String, dynamic>{'result': instance.result};
 
 // **************************************************************************
 // RpcDartGenerator
 // **************************************************************************
 
-// GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, unused_element
 
 class CalculatorContractNames {

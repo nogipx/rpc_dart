@@ -47,7 +47,7 @@ class Foo implements IRpcSerializable {
           packageConfig: packageConfig,
           readerWriter: readerWriter,
           outputs: {
-            'rpc_dart_generator|lib/input.g.dart': decodedMatches(
+            'rpc_dart_generator|lib/input.rpc_dart.g.part': decodedMatches(
               allOf([
                 contains('class CalcNames'),
                 contains('final class CalcCaller'),

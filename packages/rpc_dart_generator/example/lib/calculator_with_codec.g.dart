@@ -1,5 +1,4 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
-// dart format width=80
 
 part of 'calculator_with_codec.dart';
 
@@ -7,7 +6,6 @@ part of 'calculator_with_codec.dart';
 // RpcDartGenerator
 // **************************************************************************
 
-// GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, unused_element
 
 class CalculatorCodecContractNames {

@@ -29,7 +29,12 @@ final _contextChecker = const TypeChecker.typeNamed(
 );
 
 class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
-  RpcDartGenerator();
+  RpcDartGenerator([BuilderOptions? options])
+      : _options = options ?? BuilderOptions({});
+
+  // BuilderOptions reserved for future config.
+  // ignore: unused_field
+  final BuilderOptions _options;
 
   @override
   FutureOr<String> generateForAnnotatedElement(
@@ -226,7 +231,6 @@ class _Emitter {
 
   String build() {
     final buffer = StringBuffer();
-    buffer.writeln('// GENERATED CODE - DO NOT MODIFY BY HAND');
     buffer.writeln("// ignore_for_file: type=lint, unused_element");
     buffer.writeln();
 

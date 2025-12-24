@@ -1,3 +1,8 @@
+## 0.1.3
+- Switch to `SharedPartBuilder` + `combining_builder` to avoid `.g.dart` output collisions with other source_gen builders.
+- Intermediate output renamed to `.rpc_dart.g.part` and written to cache; final `.g.dart` remains produced by the combiner.
+- Example updated to run alongside `json_serializable` in the same `.g.dart`.
+
 ## 0.1.2
 - Dependency resolution: allow `analyzer ^8.1.1` (drop `source_gen_test` which required analyzer 9).
 
