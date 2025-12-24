@@ -4,19 +4,7 @@
 
 part of '_index.dart';
 
-/// Универсальный процессор для обработки стримов.
-///
-/// Автоматически определяет режим работы:
-/// - Zero-copy для RpcInMemoryTransport (кодеки не нужны)
-/// - Сериализация для сетевых транспортов (кодеки обязательны)
-///
-/// Преимущества:
-/// - Нет race condition с транспортом
-/// - Переиспользование логики между типами стримов
-/// - Четкое разделение ответственности
-/// - Работа с любыми типами объектов (не только IRpcSerializable)
-/// - Автоматическая оптимизация для in-memory транспорта
-/// - Поддержка cancellation token для прерывания операций
+/// Shared stream processor: zero-copy when no codecs (zero-copy transport required), otherwise serialized.
 final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final RpcLogger? _logger;
   final IRpcTransport _transport;
@@ -26,45 +14,44 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final IRpcCodec<TRequest>? _requestCodec;
   final IRpcCodec<TResponse>? _responseCodec;
 
-  /// RPC контекст с токеном отмены и метаданными
+  /// RPC context with cancellation/metadata.
   final RpcContext? _context;
 
-  /// Подписка на отмену операции
+  /// Cancellation subscription.
   StreamSubscription? _cancellationSubscription;
 
-  /// Парсер для обработки фрагментированных сообщений (только для сериализации)
+  /// Parser for fragmented messages (serialization mode only).
   RpcMessageParser? _parser;
 
-  /// Режим работы процессора
+  /// Whether zero-copy mode is active.
   final bool _isZeroCopy;
 
-  /// Контроллер потока входящих запросов
+  /// Incoming requests controller.
   final StreamController<TRequest> _requestController =
       StreamController<TRequest>();
 
-  /// Контроллер потока исходящих ответов
+  /// Outgoing responses controller.
   final StreamController<TResponse> _responseController =
       StreamController<TResponse>(sync: true);
 
-  /// Подписка на поток исходящих ответов.
+  /// Subscription to outgoing responses.
   StreamSubscription<TResponse>? _responseSubscription;
 
-  /// Подписка на входящий поток сообщений
+  /// Subscription to incoming transport messages.
   StreamSubscription? _messageSubscription;
 
-  /// Последовательность отправки ответов, чтобы гарантировать порядок и
-  /// возможность дождаться завершения отправки перед трейлерами.
+  /// Send sequence to preserve order and await completion before trailers.
   Future<void> _sendSequence = Future<void>.value();
 
   bool _trailerSent = false;
 
-  /// Флаг активности процессора
+  /// Processor active flag.
   bool _isActive = true;
 
-  /// Флаг отправки начальных метаданных
+  /// Indicates initial metadata sent.
   bool _initialMetadataSent = false;
 
-  /// Путь метода в формате /ServiceName/MethodName
+  /// Method path `/Service/Method`.
   late final String _methodPath;
 
   StreamProcessor({
@@ -85,12 +72,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         _responseCodec = responseCodec,
         _context = context,
         _logger = logger?.child('StreamProcessor') {
-    // Валидация: для режима сериализации кодеки обязательны
+    // Serialization requires codecs.
     if (!_isZeroCopy) {
       if (_requestCodec == null || _responseCodec == null) {
         throw ArgumentError(
-          'Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).',
+          'Codecs are required for serialization mode. '
+          'For zero-copy leave codecs null.',
         );
       }
       _parser = RpcMessageParser(
@@ -106,11 +93,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         },
       );
     } else {
-      // Zero-copy режим: требуется поддержка zero-copy транспортом
+      // Zero-copy requires transport support.
       if (!transport.supportsZeroCopy) {
         throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.',
+          'Zero-copy mode requires a transport with zero-copy support. '
+          'Provide codecs for network transports.',
         );
       }
     }
@@ -118,23 +105,23 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     _methodPath = '/$_serviceName/$_methodName';
 
     _logger?.internal(
-      'Создан ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor для $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " с cancellation token" : ""}',
+      'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
     );
 
     _setupCancellationMonitoring();
     _setupResponseHandler();
   }
 
-  /// Поток входящих запросов от клиента
+  /// Incoming request stream.
   Stream<TRequest> get requests => _requestController.stream;
 
-  /// Активен ли процессор
+  /// Whether processor is active.
   bool get isActive => _isActive;
 
-  /// Режим zero-copy
+  /// Zero-copy mode flag.
   bool get isZeroCopy => _isZeroCopy;
 
-  /// Настраивает обработку исходящих ответов
+  /// Configures outgoing response handling.
   void _setupResponseHandler() {
     _responseSubscription = _responseController.stream.listen(
       (response) {
@@ -142,43 +129,43 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           if (!_isActive) return;
 
           _logger?.internal(
-            'Отправка ответа для $_methodPath [streamId: $_streamId]',
+            'Sending response for $_methodPath [streamId: $_streamId]',
           );
           try {
             if (_isZeroCopy) {
-              // Zero-copy путь
+              // Zero-copy path
               _logger?.internal(
-                'Zero-copy отправка ответа [streamId: $_streamId]',
+                'Zero-copy send [streamId: $_streamId]',
               );
               await _transport.sendDirectObject(_streamId, response);
               _logger?.internal(
-                'Zero-copy ответ отправлен для $_methodPath [streamId: $_streamId]',
+                'Zero-copy response sent for $_methodPath [streamId: $_streamId]',
               );
             } else {
-              // Сериализация для сетевых транспортов
+              // Serialization for network transports
               final serialized = _responseCodec!.serialize(response);
               _logger?.internal(
-                'Ответ сериализован, размер: ${serialized.length} байт [streamId: $_streamId]',
+                'Response serialized (${serialized.length} bytes) [streamId: $_streamId]',
               );
 
               final framedMessage = RpcMessageFrame.encode(serialized);
               await _transport.sendMessage(_streamId, framedMessage);
 
               _logger?.internal(
-                'Ответ отправлен для $_methodPath [streamId: $_streamId]',
+                'Response sent for $_methodPath [streamId: $_streamId]',
               );
             }
           } catch (e, stackTrace) {
-            // Проверяем, не закрыт ли транспорт
+            // Skip if transport closed
             if (e.toString().contains('Transport is closed') ||
                 e.toString().contains('closed')) {
               _logger?.internal(
-                'Транспорт закрыт, пропускаем отправку ответа [streamId: $_streamId]',
+                'Transport closed, skipping response send [streamId: $_streamId]',
               );
               return;
             }
             _logger?.error(
-              'Ошибка при отправке ответа [streamId: $_streamId]',
+              'Failed to send response [streamId: $_streamId]',
               error: e,
               stackTrace: stackTrace,
             );
@@ -187,7 +174,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       },
       onError: (error, stackTrace) {
         _logger?.error(
-          'Ошибка в потоке ответов для $_methodPath [streamId: $_streamId]',
+          'Error in response stream for $_methodPath [streamId: $_streamId]',
           error: error,
           stackTrace: stackTrace,
         );
@@ -203,25 +190,25 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       final trailers = RpcMetadata.forTrailer(RpcStatus.ok);
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
       _logger?.internal(
-        'Трейлер отправлен для $_methodPath [streamId: $_streamId]',
+        'Trailer sent for $_methodPath [streamId: $_streamId]',
       );
     } catch (e, stackTrace) {
       if (e.toString().contains('Transport is closed') ||
           e.toString().contains('closed')) {
         _logger?.internal(
-          'Транспорт закрыт, пропускаем отправку трейлера [streamId: $_streamId]',
+          'Transport closed, skipping trailer send [streamId: $_streamId]',
         );
         return;
       }
       _logger?.error(
-        'Ошибка при отправке трейлера [streamId: $_streamId]',
+        'Failed to send trailer [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
       );
     }
   }
 
-  /// Привязывает процессор к потоку сообщений от endpoint'а
+  /// Binds the processor to an endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
     if (_messageSubscription != null) {
       _logger?.logRpcWarning(
@@ -260,26 +247,25 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       },
     );
 
-    // НЕ отправляем начальные метаданные при подключении
-    // Они будут отправлены при первом успешном ответе
-    // или пропущены при ошибке (error response отправляется напрямую)
+    // Initial metadata is not sent on bind; it is sent with the first response
+    // or skipped when sending an immediate error.
   }
 
-  /// Проверяет токен отмены и выбрасывает исключение если отменен
+  /// Checks cancellation token and throws if cancelled.
   void _checkCancellation() {
     _context?.cancellationToken?.throwIfCancelled();
   }
 
-  /// Обрабатывает входящее сообщение
+  /// Handles an incoming transport message.
   void _handleMessage(RpcTransportMessage message) {
     if (!_isActive) return;
 
-    // Проверяем отмену перед обработкой каждого сообщения
+    // Check cancellation before handling each message.
     try {
       _checkCancellation();
     } catch (e) {
       _logger?.internal(
-        'Сообщение пропущено из-за отмены [streamId: $_streamId]',
+        'Message skipped due to cancellation [streamId: $_streamId]',
       );
       return;
     }
@@ -295,16 +281,16 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       isDirectPayload: message.isDirect,
     );
 
-    // Zero-copy: обрабатываем прямой объект
+    // Zero-copy: direct object.
     if (message.isDirect && message.directPayload != null) {
       _processDirectMessage(message.directPayload!);
     }
-    // Обрабатываем сообщения с данными (стандартная сериализация)
+    // Serialized payload.
     else if (!message.isMetadataOnly && message.payload != null) {
       _processDataMessage(message.payload!);
     }
 
-    // Обрабатываем конец потока
+    // End of stream.
     if (message.isEndOfStream) {
       _logger?.logStreamFinished(
         methodPath: _methodPath,
@@ -317,7 +303,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
-  /// Zero-copy: обрабатывает прямой объект без сериализации
+  /// Zero-copy: processes a direct object without serialization.
   void _processDirectMessage(Object directPayload) {
     try {
       final request = directPayload as TRequest;
@@ -347,7 +333,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
-  /// Обрабатывает сообщение с данными (только для режима сериализации)
+  /// Processes a serialized message (serialization mode only).
   void _processDataMessage(List<int> messageBytes) {
     if (_isZeroCopy) {
       _logger?.logRpcWarning(
@@ -365,7 +351,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     );
 
     try {
-      // Конвертируем List<int> в Uint8List для парсера
+      // Convert to Uint8List for parser.
       final uint8Message = messageBytes is Uint8List
           ? messageBytes
           : Uint8List.fromList(messageBytes);
@@ -415,19 +401,19 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
-  /// Отправляет ответ клиенту
+  /// Sends a response to the client.
   Future<void> send(TResponse response) async {
     if (!_isActive) {
-      _logger?.warning('Попытка отправить ответ в неактивный процессор');
+      _logger?.warning('Attempted to send response on inactive processor');
       return;
     }
 
-    // Проверяем отмену перед отправкой ответа
+    // Check cancellation before sending a response.
     try {
       _checkCancellation();
     } catch (e) {
       _logger?.internal(
-        'Ответ не отправлен из-за отмены [streamId: $_streamId]',
+        'Response skipped due to cancellation [streamId: $_streamId]',
       );
       return;
     }
@@ -435,23 +421,22 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     if (!_responseController.isClosed) {
       _responseController.add(response);
     } else {
-      _logger?.warning('Попытка отправить ответ в закрытый контроллер');
+      _logger?.warning('Attempted to send response to closed controller');
     }
   }
 
-  /// Отправляет ошибку клиенту
+  /// Sends an error to the client.
   Future<void> sendError(int statusCode, String message) async {
     if (!_isActive) {
-      _logger?.warning('Попытка отправить ошибку в неактивный процессор');
+      _logger?.warning('Attempted to send error on inactive processor');
       return;
     }
 
     _logger?.error(
-      'Отправка ошибки клиенту: $statusCode - $message [streamId: $_streamId]',
+      'Sending error to client: $statusCode - $message [streamId: $_streamId]',
     );
 
-    // Дожидаемся завершения всех ранее запланированных отправок ответов,
-    // чтобы не отправить error trailer "между" сообщениями.
+    // Wait for pending sends to avoid interleaving the error trailer.
     await _sendSequence;
 
     if (!_responseController.isClosed) {
@@ -459,14 +444,14 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     try {
-      // Если начальные метаданные не были отправлены, отправляем error response сразу
+      // If initial metadata was not sent, send an error response immediately.
       if (!_initialMetadataSent) {
         _logger?.internal(
-          'Отправка ошибки без начальных метаданных [streamId: $_streamId]',
+          'Sending error without initial metadata [streamId: $_streamId]',
         );
-        // Создаем комбинированные метаданные: начальный response + error trailer
+        // Create combined metadata: initial response + error trailer.
         final errorHeaders = [
-          RpcHeader(':status', '200'), // HTTP 200 для gRPC
+          RpcHeader(':status', '200'), // HTTP 200 for gRPC
           RpcHeader(
             RpcConstants.contentTypeHeader,
             RpcConstants.grpcContentType,
@@ -491,36 +476,36 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         );
         _initialMetadataSent = true;
       } else {
-        // Начальные метаданные уже отправлены, отправляем только trailer
+        // Initial metadata already sent; send trailer only.
         final trailers = RpcMetadata.forTrailer(statusCode, message: message);
         await _transport.sendMetadata(_streamId, trailers, endStream: true);
       }
 
-      _logger?.internal('Ошибка отправлена клиенту [streamId: $_streamId]');
+      _logger?.internal('Error sent to client [streamId: $_streamId]');
       _trailerSent = true;
     } catch (e, stackTrace) {
-      // Проверяем, не закрыт ли транспорт
+      // Skip if transport is closed.
       if (e.toString().contains('Transport is closed') ||
           e.toString().contains('closed')) {
         _logger?.internal(
-          'Транспорт закрыт, пропускаем отправку ошибки [streamId: $_streamId]',
+          'Transport closed, skipping error send [streamId: $_streamId]',
         );
         return;
       }
       _logger?.error(
-        'Ошибка при отправке ошибки клиенту [streamId: $_streamId]',
+        'Failed to send error to client [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
       );
     }
   }
 
-  /// Завершает отправку ответов
+  /// Finishes sending responses.
   Future<void> finishSending() async {
     if (!_isActive) return;
 
     _logger?.internal(
-      'Завершение отправки ответов для $_methodPath [streamId: $_streamId]',
+      'Finishing response send for $_methodPath [streamId: $_streamId]',
     );
 
     await _sendSequence;
@@ -532,16 +517,16 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     await _sendOkTrailerIfNeeded();
   }
 
-  /// Закрывает процессор и освобождает ресурсы
+  /// Closes the processor and frees resources.
   Future<void> close() async {
     if (!_isActive) return;
 
     _logger?.internal(
-      'Закрытие StreamProcessor для $_methodPath [streamId: $_streamId]',
+      'Closing StreamProcessor for $_methodPath [streamId: $_streamId]',
     );
     _isActive = false;
 
-    // Отменяем все подписки
+    // Cancel all subscriptions.
     unawaited(_messageSubscription?.cancel());
     _messageSubscription = null;
 
@@ -560,14 +545,14 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
-  /// Настраивает мониторинг отмены операции
+  /// Sets up cancellation monitoring.
   void _setupCancellationMonitoring() {
     if (_context?.cancellationToken != null) {
       _cancellationSubscription =
           _context!.cancellationToken!.cancelled.asStream().listen(
         (_) {
           _logger?.internal(
-            'Операция отменена, закрываем процессор [streamId: $_streamId]',
+            'Operation cancelled, shutting down processor [streamId: $_streamId]',
           );
           _isActive = false;
 
@@ -582,13 +567,13 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
             _responseController.addError(cancelledException);
           }
 
-          // Отменяем подписки
+          // Cancel subscriptions.
           _messageSubscription?.cancel();
           _cancellationSubscription?.cancel();
         },
         onError: (error, stackTrace) {
           _logger?.error(
-            'Ошибка при мониторинге отмены [streamId: $_streamId]',
+            'Error monitoring cancellation [streamId: $_streamId]',
             error: error,
             stackTrace: stackTrace,
           );
@@ -598,19 +583,19 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   }
 }
 
-/// Универсальный процессор для клиентских вызовов RPC стримов.
+/// Shared processor for client RPC stream calls.
 ///
-/// Автоматически определяет режим работы:
-/// - Zero-copy для RpcInMemoryTransport (кодеки не нужны)
-/// - Сериализация для сетевых транспортов (кодеки обязательны)
+/// Automatically selects mode:
+/// - Zero-copy for in-memory transport (codecs not needed)
+/// - Serialization for network transports (codecs required)
 ///
-/// Преимущества:
-/// - Переиспользование кода между типами стримов
-/// - Отсутствие race condition
-/// - Четкое разделение ответственности
-/// - Тестируемость без внепроцессных зависимостей
-/// - Работа с любыми типами объектов (не только IRpcSerializable)
-/// - Автоматическая оптимизация для in-memory транспорта
+/// Benefits:
+/// - Reuse across stream call types
+/// - Avoids race conditions
+/// - Clear separation of concerns
+/// - Testable without out-of-process dependencies
+/// - Works with any object types, not just IRpcSerializable
+/// - Auto-optimized for in-memory transport
 final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   final RpcLogger? _logger;
   final IRpcTransport _transport;
@@ -620,41 +605,41 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   final IRpcCodec<TRequest>? _requestCodec;
   final IRpcCodec<TResponse>? _responseCodec;
 
-  /// RPC контекст для передачи метаданных, таймаутов и отмены
+  /// RPC context for metadata, timeouts, and cancellation.
   final RpcContext? _context;
 
-  /// Подписка на отмену операции
+  /// Cancellation subscription.
   StreamSubscription? _cancellationSubscription;
 
-  /// Парсер для обработки фрагментированных сообщений (только для сериализации)
+  /// Parser for fragmented messages (serialization mode only).
   RpcMessageParser? _parser;
 
   String? _peerGrpcEncoding;
 
-  /// Режим работы процессора
+  /// Processor mode flag.
   final bool _isZeroCopy;
 
-  /// Контроллер потока исходящих запросов
+  /// Outgoing request controller.
   final StreamController<TRequest> _requestController =
       StreamController<TRequest>();
 
-  /// Контроллер потока входящих ответов
+  /// Incoming response controller.
   final StreamController<RpcMessage<TResponse>> _responseController =
       StreamController<RpcMessage<TResponse>>();
 
-  /// Подписка на исходящие запросы
+  /// Outgoing request subscription.
   StreamSubscription? _requestSubscription;
 
-  /// Подписка на входящие ответы
+  /// Incoming response subscription.
   StreamSubscription? _responseSubscription;
 
-  /// Флаг активности процессора
+  /// Processor active flag.
   bool _isActive = true;
 
-  /// Флаг отправки начальных метаданных
+  /// Whether initial metadata was sent.
   bool _initialMetadataSent = false;
 
-  /// Путь метода в формате /ServiceName/MethodName
+  /// Method path in /Service/Method format.
   late final String _methodPath;
 
   CallProcessor({
@@ -674,12 +659,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         _responseCodec = responseCodec,
         _context = context,
         _logger = logger?.child('CallProcessor') {
-    // Валидация: для режима сериализации кодеки обязательны
+    // Validation: codecs are required for serialization mode.
     if (!_isZeroCopy) {
       if (_requestCodec == null || _responseCodec == null) {
         throw ArgumentError(
-          'Кодеки обязательны для режима сериализации. '
-          'Для zero-copy не передавайте кодеки (null).',
+          'Codecs are required for serialization mode. '
+          'For zero-copy leave codecs null.',
         );
       }
       _parser = RpcMessageParser(
@@ -695,11 +680,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         },
       );
     } else {
-      // Zero-copy режим: требуется поддержка zero-copy транспортом
+      // Zero-copy mode requires transport support.
       if (!transport.supportsZeroCopy) {
         throw ArgumentError(
-          'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-          'Для сетевых транспортов передайте кодеки.',
+          'Zero-copy mode requires a transport with zero-copy support. '
+          'Provide codecs for network transports.',
         );
       }
     }
@@ -707,10 +692,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     _methodPath = '/$_serviceName/$_methodName';
 
     _logger?.internal(
-      'Создан ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor для $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " с cancellation token" : ""}',
+      'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
     );
 
-    // Проверяем контекст перед началом работы
+    // Validate context before starting.
     _checkContextBeforeCall();
 
     _setupCancellationMonitoring();
@@ -718,49 +703,49 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     _setupResponseHandler();
   }
 
-  /// Поток входящих ответов от сервера
+  /// Incoming responses from server.
   Stream<RpcMessage<TResponse>> get responses => _responseController.stream;
 
-  /// Активен ли процессор
+  /// Whether processor is active.
   bool get isActive => _isActive;
 
-  /// ID стрима
+  /// Stream ID.
   int get streamId => _streamId;
 
-  /// Режим zero-copy
+  /// Zero-copy mode flag.
   bool get isZeroCopy => _isZeroCopy;
 
-  /// Настраивает обработку исходящих запросов
+  /// Configures outgoing request handling.
   void _setupRequestHandler() {
     _requestSubscription = _requestController.stream.listen(
       (request) async {
         if (!_isActive) return;
 
         try {
-          // Отправляем начальные метаданные при первом запросе
+          // Send initial metadata with the first request.
           if (!_initialMetadataSent) {
             await _sendInitialMetadata();
             _initialMetadataSent = true;
           }
 
           _logger?.internal(
-            'Отправка запроса для $_methodPath [streamId: $_streamId]',
+            'Sending request for $_methodPath [streamId: $_streamId]',
           );
 
           if (_isZeroCopy) {
-            // Zero-copy путь
+            // Zero-copy path.
             _logger?.internal(
-              'Zero-copy отправка запроса [streamId: $_streamId]',
+              'Zero-copy request send [streamId: $_streamId]',
             );
             await _transport.sendDirectObject(_streamId, request);
             _logger?.internal(
-              'Zero-copy запрос отправлен для $_methodPath [streamId: $_streamId]',
+              'Zero-copy request sent for $_methodPath [streamId: $_streamId]',
             );
           } else {
-            // Сериализация для сетевых транспортов
+            // Serialization for network transports.
             final serialized = _requestCodec!.serialize(request);
             _logger?.internal(
-              'Запрос сериализован, размер: ${serialized.length} байт [streamId: $_streamId]',
+              'Request serialized (${serialized.length} bytes) [streamId: $_streamId]',
             );
 
             final requestEncoding =
@@ -781,12 +766,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             await _transport.sendMessage(_streamId, framedMessage);
 
             _logger?.internal(
-              'Запрос отправлен для $_methodPath [streamId: $_streamId]',
+              'Request sent for $_methodPath [streamId: $_streamId]',
             );
           }
         } catch (e, stackTrace) {
           _logger?.error(
-            'Ошибка при отправке запроса [streamId: $_streamId]',
+            'Failed to send request [streamId: $_streamId]',
             error: e,
             stackTrace: stackTrace,
           );
@@ -794,8 +779,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             _responseController.addError(e, stackTrace);
           }
 
-          // 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке роутинга немедленно завершаем обработку
-          // Это предотвратит дальнейшую отправку запросов и заставит stream завершиться с ошибкой
+          // Critical: on routing error stop immediately to prevent further sends.
           if (!_requestController.isClosed) {
             _requestController.close();
           }
@@ -807,11 +791,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         try {
           await _transport.finishSending(_streamId);
           _logger?.internal(
-            'finishSending выполнен для $_methodPath [streamId: $_streamId]',
+            'finishSending completed for $_methodPath [streamId: $_streamId]',
           );
         } catch (e, stackTrace) {
           _logger?.error(
-            'Ошибка при завершении отправки запросов [streamId: $_streamId]',
+            'Failed to finish sending requests [streamId: $_streamId]',
             error: e,
             stackTrace: stackTrace,
           );
@@ -819,7 +803,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       },
       onError: (error, stackTrace) {
         _logger?.error(
-          'Ошибка в потоке запросов для $_methodPath [streamId: $_streamId]',
+          'Error in request stream for $_methodPath [streamId: $_streamId]',
           error: error,
           stackTrace: stackTrace,
         );
@@ -830,13 +814,13 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     );
   }
 
-  /// Настраивает обработку входящих ответов
+  /// Configures incoming response handling.
   void _setupResponseHandler() {
     _responseSubscription = _transport.getMessagesForStream(_streamId).listen(
       _handleResponse,
       onError: (error, stackTrace) {
         _logger?.error(
-          'Ошибка в потоке ответов',
+          'Error in response stream',
           error: error,
           stackTrace: stackTrace,
         );
@@ -846,7 +830,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       },
       onDone: () {
         _logger?.internal(
-          'Поток ответов завершен для $_methodPath [streamId: $_streamId]',
+          'Response stream completed for $_methodPath [streamId: $_streamId]',
         );
         if (!_responseController.isClosed) {
           _responseController.close();
@@ -855,10 +839,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     );
   }
 
-  /// Отправляет начальные метаданные с поддержкой контекста
+  /// Sends initial metadata with context support.
   Future<void> _sendInitialMetadata() async {
     _logger?.internal(
-      'Отправка начальных метаданных для $_methodPath [streamId: $_streamId]',
+      'Sending initial metadata for $_methodPath [streamId: $_streamId]',
     );
 
     final baseMetadata = RpcMetadata.forClientRequest(
@@ -866,22 +850,22 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       _methodName,
     );
 
-    // Создаем новые метаданные с заголовками из контекста
+    // Build metadata with context headers.
     final headers = List<RpcHeader>.from(baseMetadata.headers);
 
     if (_context != null) {
-      // Добавляем пользовательские заголовки из контекста
+      // Add custom headers from context.
       for (final entry in _context!.headers.entries) {
         headers.add(RpcHeader(entry.key, entry.value));
       }
 
-      // Добавляем специальные заголовки RPC
+      // Add RPC-specific headers.
       if (_context!.traceId != null) {
         headers.add(RpcHeader('x-trace-id', _context!.traceId!));
       }
       headers.add(RpcHeader('x-request-id', _context!.requestId));
 
-      // Передаем deadline серверу
+      // Propagate deadline to server.
       if (_context!.deadline != null) {
         final timeout = _context!.remainingTime;
         if (timeout != null) {
@@ -901,20 +885,19 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         );
       }
 
-      // Context values остаются ЛОКАЛЬНЫМИ - не передаются через сеть (соответствует стандарту gRPC)
-      // Только headers передаются через HTTP/2 заголовки
+      // Context values stay local (per gRPC); only headers cross the wire.
 
       _logger?.internal(
-        'Добавлены заголовки контекста: ${_context!.headers.length} пользовательских + системные [streamId: $_streamId]',
+        'Context headers added: ${_context!.headers.length} custom + system [streamId: $_streamId]',
       );
     } else {
-      // Даже для null контекста добавляем базовый request-id
+      // Add a base request-id even when context is null.
       final requestId =
-          RpcContext.empty().requestId; // Генерируем базовый request-id
+          RpcContext.empty().requestId; // Generate base request-id
       headers.add(RpcHeader('x-request-id', requestId));
 
       _logger?.internal(
-        'Добавлен базовый request-id для null контекста [streamId: $_streamId]',
+        'Added base request-id for null context [streamId: $_streamId]',
       );
     }
 
@@ -922,28 +905,28 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     await _transport.sendMetadata(_streamId, metadata);
 
     _logger?.internal(
-      'Начальные метаданные отправлены для $_methodPath [streamId: $_streamId]',
+      'Initial metadata sent for $_methodPath [streamId: $_streamId]',
     );
   }
 
-  /// Настраивает мониторинг отмены операции для CallProcessor
+  /// Sets up cancellation monitoring for CallProcessor.
   void _setupCancellationMonitoring() {
     if (_context?.cancellationToken != null) {
       _cancellationSubscription =
           _context!.cancellationToken!.cancelled.asStream().listen(
         (_) async {
           _logger?.internal(
-            'Операция отменена клиентом, отправляем уведомление серверу [streamId: $_streamId]',
+            'Operation cancelled by client, notifying server [streamId: $_streamId]',
           );
 
           try {
-            // Отправляем специальное сообщение отмены серверу
+            // Send a cancellation notice to the server.
             final reason = _context!.cancellationToken!.reason ??
                 'Operation cancelled by client';
             await _sendCancellationToServer(reason);
           } catch (e, stackTrace) {
             _logger?.error(
-              'Ошибка при отправке уведомления об отмене [streamId: $_streamId]',
+              'Failed to send cancellation notice [streamId: $_streamId]',
               error: e,
               stackTrace: stackTrace,
             );
@@ -961,14 +944,14 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             _responseController.addError(cancelledException);
           }
 
-          // Отменяем подписки
+          // Cancel subscriptions.
           await _requestSubscription?.cancel();
           await _responseSubscription?.cancel();
           _cancellationSubscription?.cancel();
         },
         onError: (error, stackTrace) {
           _logger?.error(
-            'Ошибка при мониторинге отмены [streamId: $_streamId]',
+            'Error monitoring cancellation [streamId: $_streamId]',
             error: error,
             stackTrace: stackTrace,
           );
@@ -977,10 +960,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
-  /// Отправляет уведомление об отмене серверу
+  /// Sends a cancellation notice to the server.
   Future<void> _sendCancellationToServer(String reason) async {
     try {
-      // Создаем специальные метаданные с уведомлением об отмене
+      // Build metadata with cancellation details.
       final cancellationHeaders = [
         RpcHeader('x-client-cancelled', 'true'),
         RpcHeader('x-cancellation-reason', reason),
@@ -993,7 +976,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       final cancellationMetadata = RpcMetadata(cancellationHeaders);
 
       _logger?.internal(
-        'Отправка уведомления об отмене серверу [streamId: $_streamId]',
+        'Sending cancellation notice to server [streamId: $_streamId]',
       );
 
       await _transport.sendMetadata(
@@ -1003,44 +986,44 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       );
 
       _logger?.internal(
-        'Уведомление об отмене отправлено серверу [streamId: $_streamId]',
+        'Cancellation notice sent to server [streamId: $_streamId]',
       );
     } catch (e, stackTrace) {
       _logger?.error(
-        'Ошибка при отправке метаданных отмены [streamId: $_streamId]',
+        'Failed to send cancellation metadata [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
       );
     }
   }
 
-  /// Проверяет состояние контекста перед вызовом
+  /// Validates context before making the call.
   void _checkContextBeforeCall() {
     if (_context == null) return;
 
-    // Проверяем отмену
+    // Check cancellation.
     _context!.cancellationToken?.throwIfCancelled();
 
-    // Проверяем deadline
+    // Check deadline.
     if (_context!.isExpired) {
       throw RpcDeadlineExceededException(_context!.deadline!, Duration.zero);
     }
 
     _logger?.internal(
-      'Контекст проверен: requestId=${_context!.requestId}, traceId=${_context!.traceId} [streamId: $_streamId]',
+      'Context verified: requestId=${_context!.requestId}, traceId=${_context!.traceId} [streamId: $_streamId]',
     );
   }
 
-  /// Обрабатывает входящий ответ
+  /// Handles an incoming response.
   void _handleResponse(RpcTransportMessage message) {
     if (!_isActive) return;
 
     _logger?.internal(
-      'Обработка ответа [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}, isDirect: ${message.isDirect}]',
+      'Handling response [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}, isDirect: ${message.isDirect}]',
     );
 
     try {
-      // Обрабатываем метаданные
+      // Handle metadata.
       if (message.isMetadataOnly) {
         final encoding = message.metadata?.getHeaderValue(
           RpcConstants.grpcEncodingHeader,
@@ -1057,24 +1040,24 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         if (!_responseController.isClosed) {
           _responseController.add(rpcMessage);
           _logger?.internal(
-            'Метаданные добавлены в поток ответов [streamId: $_streamId]',
+            'Metadata pushed to response stream [streamId: $_streamId]',
           );
         }
       }
 
-      // Zero-copy: обрабатываем прямой объект
+      // Zero-copy: process direct object.
       if (message.isDirect && message.directPayload != null) {
         _processDirectResponse(message.directPayload!);
       }
-      // Обрабатываем сообщения с данными (стандартная сериализация)
+      // Handle serialized payload.
       else if (!message.isMetadataOnly && message.payload != null) {
         _processResponseData(message.payload!);
       }
 
-      // Завершаем поток при получении END_STREAM
+      // Finish stream on END_STREAM.
       if (message.isEndOfStream) {
         _logger?.internal(
-          'Получен END_STREAM, закрываем поток ответов [streamId: $_streamId]',
+          'END_STREAM received, closing response stream [streamId: $_streamId]',
         );
         if (!_responseController.isClosed) {
           _responseController.close();
@@ -1082,7 +1065,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       }
     } catch (e, stackTrace) {
       _logger?.error(
-        'Ошибка при обработке ответа [streamId: $_streamId]',
+        'Failed to process response [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
       );
@@ -1092,10 +1075,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
-  /// Zero-copy: обрабатывает прямой объект ответа без сериализации
+  /// Zero-copy: handles a direct response object without serialization.
   void _processDirectResponse(Object directPayload) {
     _logger?.internal(
-      'Zero-copy обработка прямого ответа [streamId: $_streamId, type: ${directPayload.runtimeType}]',
+      'Zero-copy response handling [streamId: $_streamId, type: ${directPayload.runtimeType}]',
     );
 
     try {
@@ -1105,16 +1088,16 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       if (!_responseController.isClosed) {
         _responseController.add(rpcMessage);
         _logger?.internal(
-          'Zero-copy ответ добавлен в поток ответов [streamId: $_streamId]',
+          'Zero-copy response added to response stream [streamId: $_streamId]',
         );
       } else {
         _logger?.warning(
-          'Zero-copy: не могу добавить ответ в закрытый контроллер [streamId: $_streamId]',
+          'Zero-copy: cannot add response to closed controller [streamId: $_streamId]',
         );
       }
     } catch (e, stackTrace) {
       _logger?.error(
-        'Zero-copy ошибка при обработке прямого ответа [streamId: $_streamId]',
+        'Zero-copy direct response handling error [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
       );
@@ -1124,7 +1107,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
-  /// Обрабатывает данные ответа (только для режима сериализации)
+  /// Processes response data (serialization mode only).
   void _processResponseData(List<int> messageBytes) {
     if (_isZeroCopy) {
       _logger?.logRpcWarning(
@@ -1136,7 +1119,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     _logger?.internal(
-      'Получен ответ размером: ${messageBytes.length} байт [streamId: $_streamId]',
+      'Received response payload: ${messageBytes.length} bytes [streamId: $_streamId]',
     );
 
     try {
@@ -1146,13 +1129,13 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
       final messages = _parser!(uint8Message);
       _logger?.internal(
-        'Парсер извлек ${messages.length} сообщений из фрейма [streamId: $_streamId]',
+        'Parser extracted ${messages.length} messages from frame [streamId: $_streamId]',
       );
 
       for (var msgBytes in messages) {
         try {
           _logger?.internal(
-            'Десериализация ответа размером ${msgBytes.length} байт [streamId: $_streamId]',
+            'Deserializing response of ${msgBytes.length} bytes [streamId: $_streamId]',
           );
           final response = _responseCodec!.deserialize(msgBytes);
 
@@ -1161,16 +1144,16 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           if (!_responseController.isClosed) {
             _responseController.add(rpcMessage);
             _logger?.internal(
-              'Ответ десериализован и добавлен в поток ответов [streamId: $_streamId]',
+              'Deserialized response added to stream [streamId: $_streamId]',
             );
           } else {
             _logger?.warning(
-              'Не могу добавить ответ в закрытый контроллер [streamId: $_streamId]',
+              'Cannot add response to closed controller [streamId: $_streamId]',
             );
           }
         } catch (e, stackTrace) {
           _logger?.error(
-            'Ошибка при десериализации ответа [streamId: $_streamId]',
+            'Failed to deserialize response [streamId: $_streamId]',
             error: e,
             stackTrace: stackTrace,
           );
@@ -1181,7 +1164,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       }
     } catch (e, stackTrace) {
       _logger?.error(
-        'Ошибка при парсинге ответа [streamId: $_streamId]',
+        'Failed to parse response [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
       );
@@ -1191,26 +1174,26 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
-  /// Отправляет запрос серверу
+  /// Sends a request to the server.
   Future<void> send(TRequest request) async {
     if (!_isActive) {
-      _logger?.warning('Попытка отправить запрос в неактивный процессор');
+      _logger?.warning('Attempted to send request on inactive processor');
       return;
     }
 
     if (!_requestController.isClosed) {
       _requestController.add(request);
     } else {
-      _logger?.warning('Попытка отправить запрос в закрытый контроллер');
+      _logger?.warning('Attempted to send request to closed controller');
     }
   }
 
-  /// Завершает отправку запросов
+  /// Finishes sending requests.
   Future<void> finishSending() async {
     if (!_isActive) return;
 
     _logger?.internal(
-      'Завершение отправки запросов для $_methodPath [streamId: $_streamId]',
+      'Finishing request send for $_methodPath [streamId: $_streamId]',
     );
 
     if (!_requestController.isClosed) {
@@ -1218,12 +1201,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
-  /// Закрывает процессор и освобождает ресурсы
+  /// Closes the processor and releases resources.
   Future<void> close() async {
     if (!_isActive) return;
 
     _logger?.internal(
-      'Закрытие CallProcessor для $_methodPath [streamId: $_streamId]',
+      'Closing CallProcessor for $_methodPath [streamId: $_streamId]',
     );
     _isActive = false;
 

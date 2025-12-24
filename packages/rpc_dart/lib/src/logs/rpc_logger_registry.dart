@@ -5,52 +5,59 @@
 part of '_logs.dart';
 
 /// {@template rpc_logger_registry}
-/// Реестр логгеров для RPC библиотеки
+/// Logger registry for the RPC library.
 ///
-/// Позволяет регистрировать и получать экземпляры логгеров по имени.
-/// Также предоставляет глобальный экземпляр для удобства.
+/// Registers and retrieves logger instances by name and exposes a global
+/// registry instance.
 /// {@endtemplate}
 final class _RpcLoggerRegistry {
-  /// Статический фабричный метод для создания нового логгера
+  /// Is logging disabled
+  static bool _isDisabled = false;
+
+  /// Optional factory used to create new loggers.
   static RpcLoggerFactory? _factory;
 
-  /// Глобальный экземпляр реестра
+  /// Global registry instance.
   static final _RpcLoggerRegistry instance = _RpcLoggerRegistry._();
 
-  /// Карта зарегистрированных логгеров
+  /// Stored loggers keyed by name.
   final Map<String, RpcLogger> _loggers = {};
 
-  /// Создает новый реестр логгеров
+  /// Creates a new registry.
   _RpcLoggerRegistry._();
 
-  /// Получает логгер с указанным именем
+  /// Returns a logger by name, creating it if missing.
   ///
-  /// Если логгер с таким именем не найден, создает новый
-  /// Если передан context, создает контекстно-осведомленный логгер
+  /// When [context] is provided, returns a context-aware wrapper.
   RpcLogger get(
     String name, {
     RpcLoggerColors? colors,
     String? label,
     RpcContext? context,
   }) {
-    // Создаем базовый логгер
+    // Create the base logger.
     RpcLogger baseLogger;
 
-    if (_factory == null) {
-      baseLogger = _loggers[name] ??= DefaultRpcLogger(
-        name,
-        colors: colors ?? const RpcLoggerColors(),
-        label: label,
-      );
+    if (_isDisabled) {
+      _loggers.clear();
+      baseLogger = _disabled;
     } else {
-      baseLogger = _loggers[name] ??= _factory!(
-        name,
-        colors: colors ?? const RpcLoggerColors(),
-        label: label,
-      );
+      if (_factory == null) {
+        baseLogger = _loggers[name] ??= DefaultRpcLogger(
+          name,
+          colors: colors ?? const RpcLoggerColors(),
+          label: label,
+        );
+      } else {
+        baseLogger = _loggers[name] ??= _factory!(
+          name,
+          colors: colors ?? const RpcLoggerColors(),
+          label: label,
+        );
+      }
     }
 
-    // Если передан контекст, оборачиваем в контекстно-осведомленный логгер
+    // Wrap with context when provided.
     if (context != null) {
       return RpcContextAwareLogger(baseLogger, context);
     }
@@ -58,13 +65,98 @@ final class _RpcLoggerRegistry {
     return baseLogger;
   }
 
-  /// Удаляет логгер с указанным именем
+  /// Removes a logger by name.
   void remove(String name) {
     _loggers.remove(name);
   }
 
-  /// Очищает все зарегистрированные логгеры
+  /// Clears all registered loggers.
   void clear() {
     _loggers.clear();
   }
+}
+
+const _disabled = _DisabledRpcLogger();
+
+final class _DisabledRpcLogger implements RpcLogger {
+  const _DisabledRpcLogger();
+
+  @override
+  RpcLogger child(String childName, {String? label}) {
+    return this;
+  }
+
+  @override
+  Future<void> critical(String message,
+      {String? context,
+      String? requestId,
+      String? traceId,
+      Object? error,
+      StackTrace? stackTrace,
+      Map<String, dynamic>? data,
+      AnsiColor? color,
+      RpcContext? rpcContext}) async {}
+
+  @override
+  Future<void> debug(String message,
+      {String? context,
+      String? requestId,
+      String? traceId,
+      Map<String, dynamic>? data,
+      AnsiColor? color,
+      RpcContext? rpcContext}) async {}
+
+  @override
+  Future<void> error(String message,
+      {String? context,
+      String? requestId,
+      String? traceId,
+      Object? error,
+      StackTrace? stackTrace,
+      Map<String, dynamic>? data,
+      AnsiColor? color,
+      RpcContext? rpcContext}) async {}
+
+  @override
+  Future<void> info(String message,
+      {String? context,
+      String? requestId,
+      String? traceId,
+      Map<String, dynamic>? data,
+      AnsiColor? color,
+      RpcContext? rpcContext}) async {}
+
+  @override
+  Future<void> internal(String message,
+      {String? context,
+      String? requestId,
+      String? traceId,
+      Map<String, dynamic>? data,
+      AnsiColor? color,
+      RpcContext? rpcContext}) async {}
+
+  @override
+  Future<void> log(
+      {required RpcLoggerLevel level,
+      required String message,
+      String? context,
+      String? requestId,
+      String? traceId,
+      Object? error,
+      StackTrace? stackTrace,
+      Map<String, dynamic>? data,
+      AnsiColor? color,
+      RpcContext? rpcContext}) async {}
+
+  @override
+  String get name => '';
+
+  @override
+  Future<void> warning(String message,
+      {String? context,
+      String? requestId,
+      String? traceId,
+      Map<String, dynamic>? data,
+      AnsiColor? color,
+      RpcContext? rpcContext}) async {}
 }

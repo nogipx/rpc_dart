@@ -4,7 +4,7 @@
 
 part of '_index.dart';
 
-/// Базовый класс для всех RPC эндпоинтов
+/// Base class for all RPC endpoints.
 abstract base class RpcEndpointBase {
   final IRpcTransport _transport;
   final List<IRpcMiddleware> _middlewares = [];
@@ -21,8 +21,7 @@ abstract base class RpcEndpointBase {
     this.loggerColors,
   }) : _transport = transport;
 
-  /// Собирает метрики эндпоинта, которые будут добавлены в отчет о состоянии.
-  /// Наследники могут переопределить метод и добавить свои показатели.
+  /// Collects endpoint metrics for health reporting; subclasses may extend.
   Map<String, Object?> collectEndpointMetrics() {
     final metrics = <String, Object?>{
       'isActive': _isActive,
@@ -115,7 +114,7 @@ abstract base class RpcEndpointBase {
     }
   }
 
-  /// Возвращает снимок состояния эндпоинта и его транспорта.
+  /// Returns a health snapshot for the endpoint and its transport.
   Future<RpcEndpointHealth> health({RpcHealthStatus? transportOverride}) async {
     final transportStatus = transportOverride ?? await _safeTransportHealth();
     final endpointStatus = _createEndpointStatus(transportStatus);
@@ -126,7 +125,7 @@ abstract base class RpcEndpointBase {
     );
   }
 
-  /// Пытается переподключить транспорт и возвращает обновленный отчет о состоянии.
+  /// Attempts to reconnect the transport and returns an updated health report.
   Future<RpcEndpointHealth> reconnect() async {
     RpcHealthStatus transportStatus;
 
@@ -175,12 +174,12 @@ abstract base class RpcEndpointBase {
 
   IRpcTransport get transport => _transport;
 
-  /// Запускает эндпоинт
+  /// Starts the endpoint.
   void start() {
     logger.internal('Запуск RPC эндпоинта');
   }
 
-  /// Останавливает эндпоинт
+  /// Stops the endpoint.
   void stop() {
     logger.internal('Остановка RPC эндпоинта');
   }

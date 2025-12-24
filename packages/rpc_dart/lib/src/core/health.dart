@@ -2,45 +2,45 @@
 //
 // SPDX-License-Identifier: MIT
 
-/// Уровень состояния компонента RPC.
+/// Health level of an RPC component.
 ///
-/// Значения перечислены по возрастанию серьезности для удобного сравнения.
+/// Listed in ascending severity for easy comparison.
 enum RpcHealthLevel {
-  /// Компонент полностью работоспособен.
+  /// Component is fully operational.
   healthy,
 
-  /// Компонент выполняет переподключение либо ожидает внешние ресурсы,
-  /// временно недоступен для работы, но процесс восстановления уже запущен.
+  /// Component is reconnecting or waiting for external resources; temporarily
+  /// unavailable, but recovery is in progress.
   reconnecting,
 
-  /// Компонент работает, но имеются ограничения (например, деградировавший
-  /// транспорт или потеря некоторых возможностей).
+  /// Component is operating with limitations (e.g., degraded transport or
+  /// reduced capabilities).
   degraded,
 
-  /// Компонент недоступен из-за ошибки.
+  /// Component is unavailable due to an error.
   unhealthy,
 
-  /// Компонент окончательно закрыт и не может быть использован.
+  /// Component has been closed and cannot be used.
   closed,
 }
 
-/// Снимок состояния компонента системы.
+/// Snapshot of a component's health.
 ///
-/// Используется как результат проверки health() и reconnect().
+/// Used as the result of `health()` and `reconnect()`.
 class RpcHealthStatus {
-  /// Имя компонента, для которого сформирован статус.
+  /// Component name for which the status was produced.
   final String component;
 
-  /// Текущий уровень состояния.
+  /// Current health level.
   final RpcHealthLevel level;
 
-  /// Краткое описание состояния.
+  /// Brief description of the state.
   final String message;
 
-  /// Дополнительные диагностические данные.
+  /// Additional diagnostic data.
   final Map<String, Object?> details;
 
-  /// Время формирования снимка состояния.
+  /// Timestamp when the snapshot was taken.
   final DateTime timestamp;
 
   RpcHealthStatus({
@@ -53,11 +53,10 @@ class RpcHealthStatus {
         details = Map.unmodifiable(details ?? const {}),
         timestamp = timestamp ?? DateTime.now();
 
-  /// Возвращает true, если компонент находится в полностью работоспособном
-  /// состоянии без деградации.
+  /// Returns true when the component is fully operational without degradation.
   bool get isHealthy => level == RpcHealthLevel.healthy;
 
-  /// Создает статус для полностью работоспособного компонента.
+  /// Builds a status for a healthy component.
   factory RpcHealthStatus.healthy({
     required String component,
     String message = 'Component healthy',
@@ -70,7 +69,7 @@ class RpcHealthStatus {
         details: details,
       );
 
-  /// Создает статус для компонента в состоянии деградации.
+  /// Builds a status for a degraded component.
   factory RpcHealthStatus.degraded({
     required String component,
     String message = 'Component degraded',
@@ -83,7 +82,7 @@ class RpcHealthStatus {
         details: details,
       );
 
-  /// Создает статус для компонента, выполняющего переподключение.
+  /// Builds a status for a reconnecting component.
   factory RpcHealthStatus.reconnecting({
     required String component,
     String message = 'Component reconnecting',
@@ -96,7 +95,7 @@ class RpcHealthStatus {
         details: details,
       );
 
-  /// Создает статус для компонента с ошибкой.
+  /// Builds a status for an unhealthy component.
   factory RpcHealthStatus.unhealthy({
     required String component,
     String message = 'Component unhealthy',
@@ -109,7 +108,7 @@ class RpcHealthStatus {
         details: details,
       );
 
-  /// Создает статус для окончательно закрытого компонента.
+  /// Builds a status for a closed component.
   factory RpcHealthStatus.closed({
     required String component,
     String message = 'Component closed',
@@ -123,9 +122,9 @@ class RpcHealthStatus {
       );
 }
 
-/// Расширение для сравнения серьезности уровней здоровья.
+/// Extension to compare health-level severity.
 extension RpcHealthLevelSeverity on RpcHealthLevel {
-  /// Целочисленная серьезность уровня. Чем больше значение, тем хуже состояние.
+  /// Integer severity score; higher means worse state.
   int get severity => switch (this) {
         RpcHealthLevel.healthy => 0,
         RpcHealthLevel.reconnecting => 1,

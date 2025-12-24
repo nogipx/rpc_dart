@@ -8,36 +8,31 @@ import 'errors.dart';
 import '../logs/_logs.dart';
 import 'protocol.dart';
 
-/// Состояние процесса парсинга входящих данных потока gRPC.
+/// Internal state for parsing incoming gRPC stream data.
 ///
-/// Управляет буферизацией и состоянием парсинга при обработке
-/// фрагментированных сообщений gRPC. Сообщения могут приходить
-/// по частям или несколько сообщений в одном фрагменте.
+/// Manages buffering and parse state for fragmented gRPC messages, which may
+/// arrive split across fragments or multiple messages per fragment.
 final class _MessageParserState {
-  /// Текущий накопительный буфер данных
+  /// Current accumulated buffer.
   List<int> buffer = [];
 
-  /// Ожидаемая длина текущего сообщения (null, если заголовок еще не прочитан)
+  /// Expected length of the current message (null until the header is read).
   int? expectedMessageLength;
 
-  /// Флаг сжатия для текущего обрабатываемого сообщения
+  /// Compression flag for the message being processed.
   bool isCompressed = false;
 
-  /// Сбрасывает состояние для обработки следующего сообщения.
-  ///
-  /// Вызывается после успешного извлечения полного сообщения
-  /// для подготовки к обработке следующего.
+  /// Resets state so the next message can be processed.
   void reset() {
     expectedMessageLength = null;
     isCompressed = false;
   }
 }
 
-/// Парсер для обработки фрагментированных сообщений gRPC.
+/// Parser that reassembles fragmented gRPC messages.
 ///
-/// Отвечает за правильную сборку полных сообщений из фрагментированных
-/// потоков данных, поступающих через HTTP/2 DATA фреймы. Решает проблему
-/// несовпадения границ HTTP/2 фреймов и сообщений gRPC.
+/// Collects full messages from HTTP/2 DATA frames where gRPC payloads may not
+/// align with frame boundaries.
 final class RpcMessageParser {
   final RpcLogger? _logger;
   final int _maxMessageLength;
@@ -58,24 +53,23 @@ final class RpcMessageParser {
         _decompressor = decompressor,
         _maxMessagesPerChunk = maxMessagesPerChunk;
 
-  /// Внутреннее состояние парсера
+  /// Internal parser state.
   final _MessageParserState _state = _MessageParserState();
 
-  /// Обрабатывает входящий фрагмент данных и извлекает полные сообщения.
+  /// Processes an incoming data fragment and returns complete messages.
   ///
-  /// Накапливает входящие данные в буфере и извлекает из него полные сообщения,
-  /// используя информацию о длине из 5-байтного префикса. Может извлечь
-  /// несколько сообщений из одного фрагмента или продолжить накопление
-  /// для получения полного сообщения.
+  /// Accumulates data in a buffer and uses the 5-byte prefix to extract
+  /// complete messages. Can emit multiple messages from one fragment or keep
+  /// buffering until a full message is available.
   ///
-  /// [data] Новый фрагмент входящих данных
-  /// Возвращает список полных сообщений, извлеченных из данных
+  /// [data] New chunk of incoming data.
+  /// Returns the list of complete messages extracted.
   List<Uint8List> call(Uint8List data) {
     try {
       return _call(data);
     } catch (e, trace) {
       _logger?.error(
-        'Ошибка при парсинге данных: $e',
+        'Failed to parse incoming data: $e',
         error: e,
         stackTrace: trace,
       );
@@ -86,7 +80,7 @@ final class RpcMessageParser {
   List<Uint8List> _call(Uint8List data) {
     final result = <Uint8List>[];
 
-    // Добавляем данные в буфер
+    // Append data to the buffer.
     _state.buffer.addAll(data);
     if (_state.buffer.length > _maxBufferedBytes) {
       final buffered = _state.buffer.length;
@@ -97,9 +91,9 @@ final class RpcMessageParser {
       );
     }
 
-    // Обрабатываем буфер, пока можем извлекать сообщения
+    // Process buffer while messages can be extracted.
     while (_state.buffer.length >= RpcConstants.messagePrefixSize) {
-      // Если мы еще не знаем длину сообщения, извлекаем ее из заголовка
+      // If length is unknown yet, extract it from the header.
       if (_state.expectedMessageLength == null) {
         try {
           final header = RpcMessageFrame.parseHeader(
@@ -119,13 +113,13 @@ final class RpcMessageParser {
             );
           }
 
-          // Удаляем заголовок из буфера
+          // Remove the header from the buffer.
           _state.buffer = _state.buffer.sublist(
             RpcConstants.messagePrefixSize,
           );
         } catch (e, trace) {
           _logger?.error(
-            'Ошибка при парсинге заголовка: $e',
+            'Failed to parse frame header: $e',
             error: e,
             stackTrace: trace,
           );
@@ -135,9 +129,9 @@ final class RpcMessageParser {
         }
       }
 
-      // Если у нас достаточно данных для полного сообщения
+      // If we have enough data for a complete message.
       if (_state.buffer.length >= _state.expectedMessageLength!) {
-        // Извлекаем сообщение
+        // Extract the message.
         final messageBytes = _state.buffer.sublist(
           0,
           _state.expectedMessageLength!,
@@ -171,19 +165,19 @@ final class RpcMessageParser {
           );
         }
 
-        // Обновляем буфер, удаляя обработанное сообщение
+        // Drop processed bytes from the buffer.
         _state.buffer = _state.buffer.sublist(_state.expectedMessageLength!);
 
-        // Сбрасываем состояние для следующего сообщения
+        // Reset for the next message.
         _state.reset();
       } else {
-        // Недостаточно данных для полного сообщения, нужно ждать
+        // Not enough data yet; wait for the next chunk.
         break;
       }
     }
 
     _logger?.internal(
-      'Обработка завершена, извлечено сообщений: ${result.length}',
+      'Chunk processed, messages extracted: ${result.length}',
     );
     return result;
   }

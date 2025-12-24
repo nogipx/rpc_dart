@@ -10,46 +10,45 @@ import 'errors.dart';
 import 'health.dart';
 import 'metadata.dart';
 
-/// Сообщение транспортного уровня с поддержкой Stream ID.
+/// Transport-layer message with Stream ID support.
 ///
-/// Представляет различные типы сообщений, которые могут передаваться
-/// через транспортный уровень, включая метаданные и полезную нагрузку.
-/// Каждое сообщение привязано к конкретному HTTP/2 stream (RPC вызову).
+/// Represents payload and metadata traveling over a transport and bound to a
+/// specific HTTP/2 stream (an RPC call).
 ///
-/// ZERO-COPY OPTIMIZATION: Поддерживает передачу объектов напрямую
-/// без сериализации для inmemory транспорта.
+/// ZERO-COPY OPTIMIZATION: Supports passing objects directly without
+/// serialization for in-memory transports.
 final class RpcTransportMessage {
-  /// Полезная нагрузка сообщения (сериализованные данные)
+  /// Serialized payload bytes.
   final Uint8List? payload;
 
-  /// ZERO-COPY: Прямая ссылка на объект (для inmemory транспорта)
-  /// ⚠️ Используется только внутри одного процесса!
-  /// ⚠️ Объект должен быть immutable или клонирован!
+  /// ZERO-COPY: Direct reference to an object (for in-memory transport).
+  /// ⚠️ Use only inside a single process.
+  /// ⚠️ Object must be immutable or cloned.
   final Object? directPayload;
 
-  /// Связанные метаданные
+  /// Associated metadata.
   final RpcMetadata? metadata;
 
-  /// Флаг, указывающий, что это последнее сообщение в потоке
+  /// Whether this is the final message in the stream.
   final bool isEndOfStream;
 
-  /// Путь метода в формате /ServiceName/MethodName
+  /// Method path in `/ServiceName/MethodName` format.
   final String? methodPath;
 
-  /// Уникальный идентификатор HTTP/2 stream для этого RPC вызова
+  /// HTTP/2 stream identifier for this RPC call.
   final int streamId;
 
-  /// Флаг, указывающий, что сообщение содержит только метаданные
+  /// True when the message contains only metadata.
   bool get isMetadataOnly =>
       metadata != null && payload == null && directPayload == null;
 
-  /// Флаг, указывающий что передается объект напрямую (ZERO-COPY оптимизация)
+  /// True when a direct object is being sent (zero-copy optimization).
   bool get isDirect => directPayload != null;
 
-  /// Флаг, указывающий что передаются сериализованные байты
+  /// True when serialized bytes are present.
   bool get isSerialized => payload != null;
 
-  /// Создает сообщение транспортного уровня
+  /// Creates a transport message.
   RpcTransportMessage({
     this.payload,
     this.directPayload,
@@ -60,10 +59,10 @@ final class RpcTransportMessage {
   }) : assert(
           (payload != null) ^ (directPayload != null) ||
               (payload == null && directPayload == null),
-          'Можно указать либо payload, либо directPayload, но не оба одновременно',
+          'Specify either payload or directPayload, not both',
         );
 
-  /// Фабрика для создания сообщения с сериализованными данными (обычный режим)
+  /// Factory for serialized-payload message (standard mode).
   factory RpcTransportMessage.withPayload({
     required Uint8List payload,
     RpcMetadata? metadata,
@@ -79,7 +78,7 @@ final class RpcTransportMessage {
         streamId: streamId,
       );
 
-  /// Фабрика для создания сообщения с прямым объектом (ZERO-COPY режим)
+  /// Factory for direct-object message (zero-copy mode).
   factory RpcTransportMessage.withDirectObject({
     required Object directPayload,
     RpcMetadata? metadata,
@@ -95,7 +94,7 @@ final class RpcTransportMessage {
         streamId: streamId,
       );
 
-  /// Фабрика для создания сообщения только с метаданными
+  /// Factory for metadata-only message.
   factory RpcTransportMessage.withMetadata({
     required RpcMetadata metadata,
     bool isEndOfStream = false,
@@ -110,150 +109,129 @@ final class RpcTransportMessage {
       );
 }
 
-/// Абстрактный интерфейс транспортного уровня с поддержкой мультиплексирования по Stream ID.
+/// Transport interface with Stream ID multiplexing.
 ///
-/// Определяет контракт для транспортных реализаций различных протоколов
-/// (HTTP/2, WebSockets, изоляты и др.). Поддерживает мультиплексирование
-/// по уникальным Stream ID согласно спецификации gRPC.
+/// Contract for transports over different protocols (HTTP/2, WebSockets,
+/// isolates, etc.) that multiplex by Stream ID per gRPC spec.
 abstract class IRpcTransport {
-  /// Возвращает true, если это клиентский транспорт (генерирует нечетные Stream ID),
-  /// false - если серверный транспорт (генерирует четные Stream ID)
+  /// True for client transport (generates odd Stream IDs), false for server
+  /// transport (even Stream IDs).
   bool get isClient;
 
   bool get isClosed;
 
-  /// Возвращает true, если транспорт поддерживает zero-copy операции
-  /// (передачу объектов без сериализации через sendDirectObject).
+  /// Whether the transport supports zero-copy operations (sendDirectObject).
   ///
-  /// Позволяет избежать явной проверки типа транспорта и делает код более гибким.
+  /// Helps avoid explicit type checks for transports.
   bool get supportsZeroCopy => false;
 
-  /// Создает новый HTTP/2 stream для RPC вызова.
+  /// Creates a new HTTP/2 stream for an RPC call.
   ///
-  /// Возвращает уникальный Stream ID, который будет использоваться
-  /// для всех сообщений этого RPC вызова.
+  /// Returns a unique Stream ID that will be used for all messages of the call.
   int createStream();
 
-  /// Освобождает ID стрима, чтобы он мог быть переиспользован в будущем.
+  /// Releases a stream ID so it can be reused later.
   ///
-  /// Вызывается после завершения потока и очистки всех связанных ресурсов.
-  /// [streamId] Уникальный идентификатор HTTP/2 stream для освобождения
-  /// Возвращает true, если ID был успешно освобожден
+  /// Called after a stream finishes and its resources are cleared.
   bool releaseStreamId(int streamId);
 
-  /// Отправляет метаданные для конкретного stream.
+  /// Sends metadata for a stream.
   ///
-  /// [streamId] Уникальный идентификатор HTTP/2 stream
-  /// [metadata] Метаданные для отправки
-  /// [endStream] Флаг завершения потока данных
+  /// [streamId] HTTP/2 stream identifier.
+  /// [metadata] Metadata to send.
+  /// [endStream] Whether to end the stream after sending.
   Future<void> sendMetadata(
     int streamId,
     RpcMetadata metadata, {
     bool endStream = false,
   });
 
-  /// Отправляет сообщение для конкретного stream.
+  /// Sends a framed message for a stream.
   ///
-  /// [streamId] Уникальный идентификатор HTTP/2 stream
-  /// [data] Байты gRPC-фрейма (5-байтовый префикс + полезная нагрузка)
-  /// [endStream] Флаг завершения потока данных
+  /// [streamId] HTTP/2 stream identifier.
+  /// [data] gRPC frame bytes (5-byte prefix + payload).
+  /// [endStream] Whether to end the stream after sending.
   Future<void> sendMessage(
     int streamId,
     Uint8List data, {
     bool endStream = false,
   });
 
-  /// ZERO-COPY: Отправляет объект напрямую без сериализации (опционально).
+  /// ZERO-COPY: Sends an object directly without serialization (optional).
   ///
-  /// ⚠️ По умолчанию НЕ поддерживается! Только транспорты с `supportsZeroCopy = true`
-  /// переопределяют этот метод для реальной zero-copy передачи объектов по ссылке.
-  /// Проверьте `transport.supportsZeroCopy` перед вызовом.
-  ///
-  /// [streamId] Уникальный идентификатор HTTP/2 stream
-  /// [object] Объект для отправки
-  /// [endStream] Флаг завершения потока данных
+  /// ⚠️ Not supported by default. Only transports with `supportsZeroCopy = true`
+  /// override this to truly pass objects by reference. Check
+  /// `transport.supportsZeroCopy` before calling.
   Future<void> sendDirectObject(
     int streamId,
     Object object, {
     bool endStream = false,
   }) async {
     throw UnsupportedError(
-      'Транспорт не поддерживает прямую передачу объектов. '
-      'Используйте sendMessage() с сериализацией или транспорт с поддержкой zero-copy.',
+      'Transport does not support direct object transfer. '
+      'Use sendMessage() with serialization or a zero-copy capable transport.',
     );
   }
 
-  /// Поток всех входящих сообщений от удаленной стороны.
+  /// Stream of all incoming messages from the remote side.
   ///
-  /// Объединяет входящие метаданные и данные в единый поток RpcTransportMessage.
-  /// Каждый элемент потока содержит информацию о Stream ID для маршрутизации.
+  /// Merges incoming metadata and data into a single stream; each entry carries
+  /// the Stream ID for routing.
   Stream<RpcTransportMessage> get incomingMessages;
 
-  /// Создает отфильтрованный поток сообщений для конкретного stream.
-  ///
-  /// [streamId] Уникальный идентификатор HTTP/2 stream
-  /// Возвращает поток сообщений только для указанного stream
+  /// Returns a filtered stream for a specific stream ID.
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
     return incomingMessages.where((message) => message.streamId == streamId);
   }
 
-  /// Завершает отправку данных для конкретного stream.
-  ///
-  /// [streamId] Уникальный идентификатор HTTP/2 stream
+  /// Finishes sending data for a stream.
   Future<void> finishSending(int streamId);
 
-  /// Закрывает транспортное соединение.
-  ///
-  /// Освобождает все связанные ресурсы и закрывает базовое соединение.
+  /// Closes the transport connection and releases resources.
   Future<void> close();
 
-  /// Проверяет состояние транспорта и возвращает диагностический снимок.
+  /// Checks transport health and returns diagnostics.
   Future<RpcHealthStatus> health();
 
-  /// Пытается восстановить соединение транспорта. Если транспорт не поддерживает
-  /// переподключение, он должен вернуть статус с уровнем [RpcHealthLevel.degraded]
-  /// или [RpcHealthLevel.unhealthy] с признаком `supported: false` в деталях.
+  /// Attempts to restore transport connectivity. If unsupported, return a
+  /// status with [RpcHealthLevel.degraded] or [RpcHealthLevel.unhealthy] and
+  /// `supported: false` in details.
   Future<RpcHealthStatus> reconnect();
 }
 
-/// Менеджер Stream ID для HTTP/2 соединений.
+/// Stream ID manager for HTTP/2 connections.
 ///
-/// Управляет генерацией и контролем идентификаторов потоков согласно
-/// спецификации HTTP/2 (RFC 7540):
-/// - Клиенты используют нечетные ID (1, 3, 5...)
-/// - Серверы используют четные ID (2, 4, 6...)
-/// - ID 0 зарезервирован для управления соединением
-/// - Максимальное значение ID - 2^31-1 (2,147,483,647)
+/// Generates and tracks stream IDs per HTTP/2 (RFC 7540):
+/// - Clients use odd IDs (1, 3, 5…)
+/// - Servers use even IDs (2, 4, 6…)
+/// - ID 0 is reserved for connection control
+/// - Max ID is 2^31-1 (2,147,483,647)
 ///
-/// При достижении максимального значения ID менеджер пытается переиспользовать
-/// освобожденные идентификаторы (если активные потоки не занимают весь диапазон).
-/// Если же все возможные Stream ID находятся в использовании, выбрасывается
-/// [RpcException] и требуется дождаться освобождения либо переподключить транспорт.
+/// When the max ID is reached, released IDs are reused if available; otherwise
+/// [RpcException] is thrown and the transport must wait or reconnect.
 final class RpcStreamIdManager {
-  /// Максимально допустимое значение ID (2^31-1)
+  /// Maximum allowed ID (2^31-1).
   static const int maxId = 0x7FFFFFFF; // 2,147,483,647
 
-  /// Определяет роль (клиент/сервер) для генерации ID
+  /// Determines role (client/server) for ID generation.
   final bool isClient;
 
-  /// Последний сгенерированный ID
+  /// Last generated ID.
   int _lastId;
 
-  /// Максимальное значение ID, которое может быть назначено с учетом четности
+  /// Upper bound considering parity.
   final int _maxAssignableId;
 
-  /// Первый допустимый ID для текущей роли (1 для клиента, 2 для сервера)
+  /// First valid ID for the role (1 for client, 2 for server).
   final int _firstAssignableId;
 
-  /// Набор активных (используемых) ID
+  /// Active IDs in use.
   final SplayTreeSet<int> _activeIds = SplayTreeSet<int>();
 
-  /// Создает менеджер ID с указанной ролью.
+  /// Creates an ID manager for a given role.
   ///
-  /// [isClient] Если true - генерирует ID для клиента (нечетные),
-  ///            иначе - для сервера (четные)
-  /// [customMaxId] Позволяет задать альтернативный верхний предел ID
-  ///               (используется в тестах и специализированных транспортах).
+  /// [isClient] True to generate client (odd) IDs; false for server (even).
+  /// [customMaxId] Optional custom upper bound (tests, specialized transports).
   RpcStreamIdManager({
     required this.isClient,
     int? customMaxId,
@@ -264,7 +242,7 @@ final class RpcStreamIdManager {
           maxIdOverride: customMaxId,
         );
 
-  /// Вычисляет верхнюю границу ID с учетом четности роли.
+  /// Computes the upper ID bound respecting parity.
   static int _computeMaxAssignableId({
     required bool isClient,
     int? maxIdOverride,
@@ -278,19 +256,18 @@ final class RpcStreamIdManager {
       throw ArgumentError.value(
         effectiveMax,
         'customMaxId',
-        'Недостаточно допустимых значений Stream ID для указанной роли',
+        'Not enough valid Stream IDs available for this role',
       );
     }
 
     return adjustedMax;
   }
 
-  /// Генерирует новый уникальный ID для потока.
+  /// Generates a new unique stream ID.
   ///
-  /// Возвращает новый ID согласно роли (клиент/сервер).
-  /// Выбрасывает исключение, если достигнут максимальный ID.
+  /// Throws if the maximum ID is reached and no reusable IDs exist.
   int generateId() {
-    // Вычисляем следующий ID в зависимости от роли
+    // Compute next ID based on role.
     final nextId = _lastId + 2;
 
     if (nextId <= _maxAssignableId) {
@@ -299,7 +276,7 @@ final class RpcStreamIdManager {
       return nextId;
     }
 
-    // Если все потоки завершены, можем безопасно перезапустить последовательность
+    // If no active streams, safely restart the sequence.
     if (_activeIds.isEmpty) {
       final restartId = _firstAssignableId;
       _lastId = restartId;
@@ -310,8 +287,8 @@ final class RpcStreamIdManager {
     final recycledId = _findReusableId();
     if (recycledId == null) {
       throw RpcException(
-        'Все $_sideLabel Stream ID заняты. '
-        'Дождитесь завершения активных потоков или установите новое соединение.',
+        'All $_sideLabel Stream IDs are in use. '
+        'Wait for active streams to finish or establish a new connection.',
       );
     }
 
@@ -319,35 +296,26 @@ final class RpcStreamIdManager {
     return recycledId;
   }
 
-  /// Освобождает ID после завершения потока.
-  ///
-  /// [streamId] ID, который больше не используется
-  /// Возвращает true, если ID был успешно освобожден
+  /// Releases an ID after stream completion.
   bool releaseId(int streamId) {
     return _activeIds.remove(streamId);
   }
 
-  /// Проверяет, является ли ID активным (используемым).
-  ///
-  /// [streamId] Проверяемый ID
-  /// Возвращает true, если ID активен
+  /// Returns true if the ID is currently active.
   bool isActive(int streamId) {
     return _activeIds.contains(streamId);
   }
 
-  /// Возвращает количество активных (используемых) ID.
+  /// Number of active IDs.
   int get activeCount => _activeIds.length;
 
-  /// Сбрасывает состояние менеджера.
-  ///
-  /// Очищает все активные ID и сбрасывает счетчик.
-  /// Используется при переустановке соединения.
+  /// Resets manager state (clears active IDs and counters).
   void reset() {
     _activeIds.clear();
     _lastId = isClient ? -1 : 0;
   }
 
-  String get _sideLabel => isClient ? 'клиентские' : 'серверные';
+  String get _sideLabel => isClient ? 'client' : 'server';
 
   int? _findReusableId() {
     var candidate = _firstAssignableId;

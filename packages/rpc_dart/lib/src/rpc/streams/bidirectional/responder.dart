@@ -4,15 +4,7 @@
 
 part of '../_index.dart';
 
-/// 🚀 Универсальная серверная часть двунаправленного стриминга
-///
-/// Автоматически определяет режим работы:
-/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-/// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
-///
-/// Обеспечивает полную реализацию серверной стороны двунаправленного
-/// стриминга RPC. Обрабатывает входящие запросы от клиента и позволяет
-/// отправлять ответы асинхронно, независимо от получения запросов.
+/// Bidirectional stream responder: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Handles incoming requests and sends responses independently.
 final class BidirectionalStreamResponder<TRequest extends Object,
     TResponse extends Object> implements IRpcResponder {
   late final RpcLogger? _logger;
@@ -29,22 +21,13 @@ final class BidirectionalStreamResponder<TRequest extends Object,
     _doneCompleter.complete();
   }
 
-  /// Внутренний процессор стрима
+  /// Stream processor.
   late final StreamProcessor<TRequest, TResponse> _processor;
 
-  /// Флаг активности респондера
+  /// Responder activity flag.
   bool _isActive = true;
 
-  /// Создает универсальный серверный двунаправленный стрим
-  ///
-  /// [id] Идентификатор стрима
-  /// [transport] Транспортный уровень
-  /// [serviceName] Имя сервиса (например, "ChatService")
-  /// [methodName] Имя метода (например, "Connect")
-  /// [requestCodec] Кодек для десериализации запросов (null для zero-copy)
-  /// [responseCodec] Кодек для сериализации ответов (null для zero-copy)
-  /// [context] RPC контекст с токеном отмены
-  /// [logger] Опциональный логгер
+  /// Creates a bidirectional stream responder.
   BidirectionalStreamResponder({
     required this.id,
     required IRpcTransport transport,
@@ -57,25 +40,25 @@ final class BidirectionalStreamResponder<TRequest extends Object,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
-    // Zero-copy режим: требуется RpcInMemoryTransport
+    // Zero-copy requires transport support.
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-        'Для сетевых транспортов передайте кодеки.',
+        'Zero-copy mode requires a transport with zero-copy support. '
+        'Provide codecs for network transports.',
       );
     }
 
-    // Режим сериализации: кодеки обязательны
+    // Serialization mode: codecs required.
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
       throw ArgumentError(
-        'Кодеки обязательны для режима сериализации. '
-        'Для zero-copy не передавайте кодеки (null).',
+        'Codecs are required for serialization mode. '
+        'For zero-copy leave codecs null.',
       );
     }
 
     _logger = logger?.child('BidirectionalResponder');
     _logger?.internal(
-      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamResponder для $serviceName.$methodName [id: $id]',
+      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamResponder for $serviceName.$methodName [id: $id]',
     );
 
     _processor = StreamProcessor<TRequest, TResponse>(
@@ -89,30 +72,26 @@ final class BidirectionalStreamResponder<TRequest extends Object,
       logger: _logger,
     );
 
-    // НЕ инициализируем переадресацию автоматически - только по требованию
+    // Response forwarding is initialized only when needed.
   }
 
-  /// Поток входящих запросов от клиента.
-  ///
-  /// Предоставляет доступ к потоку запросов, получаемых от клиента.
-  /// Бизнес-логика может подписаться на этот поток для обработки запросов.
-  /// Поток завершается, когда клиент завершает свою часть стрима.
+  /// Incoming requests from the client; completes when the client closes its side.
   Stream<TRequest> get requests => _processor.requests;
 
-  /// Удобный sink для отправки ответов (автоматически перенаправляет к send)
+  /// Convenience sink to send responses (forwards to send()).
   StreamSink<TResponse> get responseSink {
     _initResponseForwarding();
     return _responseController.sink;
   }
 
-  /// Контроллер для исходящих ответов
+  /// Controller for outgoing responses.
   final StreamController<TResponse> _responseController =
       StreamController<TResponse>();
 
-  /// Подписка на исходящие ответы
+  /// Subscription for outgoing responses.
   StreamSubscription? _responseSubscription;
 
-  /// Инициализирует переадресацию ответов
+  /// Initializes response forwarding.
   void _initResponseForwarding() {
     if (_responseSubscription != null) return;
 
@@ -121,23 +100,23 @@ final class BidirectionalStreamResponder<TRequest extends Object,
         try {
           await _processor.send(
             response,
-          ); // Используем напрямую _processor, избегая циклической зависимости
-          _logger?.internal('Ответ отправлен через responseSink [id: $id]');
+          ); // Use processor directly to avoid cyclic dependency.
+          _logger?.internal('Response sent via responseSink [id: $id]');
         } catch (e, stackTrace) {
           _logger?.error(
-            'Ошибка при отправке ответа через responseSink [id: $id]',
+            'Failed to send response via responseSink [id: $id]',
             error: e,
             stackTrace: stackTrace,
           );
         }
       },
       onDone: () async {
-        _logger?.internal('Поток ответов завершен [id: $id]');
+        _logger?.internal('Response stream completed [id: $id]');
         await finishReceiving();
       },
       onError: (error, stackTrace) {
         _logger?.error(
-          'Ошибка в потоке ответов [id: $id]',
+          'Error in response stream [id: $id]',
           error: error,
           stackTrace: stackTrace,
         );
@@ -145,19 +124,17 @@ final class BidirectionalStreamResponder<TRequest extends Object,
     );
   }
 
-  /// Привязывает респондер к потоку сообщений от endpoint'а
+  /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger?.internal('Привязка к потоку сообщений [id: $id]');
+    _logger?.internal('Binding to message stream [id: $id]');
     _processor.bindToMessageStream(messageStream);
   }
 
-  /// Отправляет ответ клиенту
-  ///
-  /// [response] Ответ для отправки клиенту
+  /// Sends a response to the client.
   Future<void> send(TResponse response) async {
     if (!_isActive) {
       _logger?.warning(
-        'Попытка отправить ответ в неактивный респондер [id: $id]',
+        'Attempted to send response on inactive responder [id: $id]',
       );
       return;
     }
@@ -165,10 +142,7 @@ final class BidirectionalStreamResponder<TRequest extends Object,
     await _processor.send(response);
   }
 
-  /// Отправляет ошибку клиенту
-  ///
-  /// [statusCode] Код статуса ошибки (например, RpcStatus.INTERNAL)
-  /// [message] Сообщение об ошибке
+  /// Sends an error to the client.
   Future<void> sendError(int statusCode, String message) async {
     if (!_isActive) return;
 
@@ -179,10 +153,7 @@ final class BidirectionalStreamResponder<TRequest extends Object,
     }
   }
 
-  /// Завершает отправку ответов
-  ///
-  /// Вызывается когда сервер больше не будет отправлять ответы.
-  /// После этого вызова отправка ответов невозможна.
+  /// Finishes sending responses; call when server has no more responses.
   Future<void> finishReceiving() async {
     if (!_isActive) return;
 
@@ -193,14 +164,14 @@ final class BidirectionalStreamResponder<TRequest extends Object,
     }
   }
 
-  /// Закрывает стрим и освобождает ресурсы
+  /// Closes the stream and releases resources.
   Future<void> close() async {
     if (!_isActive) return;
 
     _isActive = false;
     await _responseSubscription?.cancel();
     if (!_responseController.isClosed) {
-      _responseController.close(); // НЕ ждём завершения
+      _responseController.close(); // Do not await completion.
     }
     await _processor.close();
     _completeDone();

@@ -101,7 +101,7 @@ void main() {
             isA<Exception>().having(
               (e) => e.toString(),
               'message',
-              contains('Неверная длина заголовка'),
+              contains('Invalid gRPC message header length'),
             ),
           ),
         );

@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
-import '../utils/transport_wrappers.dart';
 import 'package:test/test.dart';
 
+import '../utils/transport_wrappers.dart';
+
 void main() {
-  setUpAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.none));
+  setUpAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.disabled));
   tearDownAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info));
 
   group('RpcEndpointPingExchange', () {

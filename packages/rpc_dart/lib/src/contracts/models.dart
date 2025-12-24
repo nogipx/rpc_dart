@@ -4,22 +4,22 @@
 
 part of '_index.dart';
 
-/// Режимы передачи данных в RPC контрактах
+/// Data transfer modes in RPC contracts.
 enum RpcDataTransferMode {
-  /// Zero-copy режим - прямая передача объектов без сериализации
-  /// Работает только с InMemoryTransport
+  /// Zero-copy mode — direct object passing without serialization.
+  /// Works only with InMemoryTransport.
   zeroCopy,
 
-  /// Режим с кодеками - сериализация через IRpcCodec
-  /// Работает с любыми транспортами
+  /// Codec mode — serialization via IRpcCodec.
+  /// Works with any transport.
   codec,
 
-  /// Автоматический режим - определение на основе наличия кодеков
-  /// Если кодеки указаны → codec, иначе → zeroCopy
+  /// Auto mode — picks based on codec presence (codecs → codec mode, otherwise
+  /// zeroCopy).
   auto,
 }
 
-/// Типы RPC методов
+/// RPC method types.
 enum RpcMethodType {
   unaryRequest,
   serverStream,
@@ -27,7 +27,7 @@ enum RpcMethodType {
   bidirectionalStream,
 }
 
-/// Регистрация метода в контракте
+/// Method registration within a contract.
 final class RpcMethodRegistration<TRequest extends IRpcSerializable,
     TResponse extends IRpcSerializable> {
   final String name;
@@ -46,7 +46,7 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
     required this.responseCodec,
   });
 
-  /// Безопасный вызов unary handler'а с типизацией и контекстом
+  /// Type-safe unary handler invocation with context.
   Future<TResponse> callUnaryHandler(
     RpcContext context,
     TRequest request,
@@ -56,7 +56,7 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
     return await typedHandler(request, context: context);
   }
 
-  /// Безопасный вызов server stream handler'а с типизацией и контекстом
+  /// Type-safe server-stream handler invocation with context.
   Stream<TResponse> callServerStreamHandler(
     RpcContext context,
     TRequest request,
@@ -66,7 +66,7 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
     return typedHandler(request, context: context);
   }
 
-  /// Безопасный вызов client stream handler'а с типизацией и контекстом
+  /// Type-safe client-stream handler invocation with context.
   Future<TResponse> callClientStreamHandler(
     RpcContext context,
     Stream<TRequest> requests,
@@ -78,7 +78,7 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
     return await typedHandler(requests, context: context);
   }
 
-  /// Безопасный вызов bidirectional stream handler'а с типизацией и контекстом
+  /// Type-safe bidirectional-stream handler invocation with context.
   Stream<TResponse> callBidirectionalStreamHandler(
     RpcContext context,
     Stream<TRequest> requests,
@@ -90,18 +90,18 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
     return typedHandler(requests, context: context);
   }
 
-  /// Безопасный cast потока запросов к нужному типу
+  /// Safely casts the incoming request stream.
   Stream<TRequest> castRequestStream(Stream<IRpcSerializable> stream) {
     return stream.cast<TRequest>();
   }
 
-  /// Безопасный cast ответа к базовому типу
+  /// Safely casts the response to the base type.
   IRpcSerializable castResponse(TResponse response) {
     return response as IRpcSerializable;
   }
 }
 
-/// 🚀 ZERO-COPY: Регистрация метода без IRpcSerializable ограничений
+/// 🚀 ZERO-COPY: Method registration without IRpcSerializable bounds.
 final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     TResponse extends Object> {
   final String name;
@@ -116,7 +116,7 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     required this.description,
   });
 
-  /// Безопасный вызов unary handler'а с типизацией и контекстом
+  /// Type-safe unary handler invocation with context.
   Future<TResponse> callUnaryHandler(
     RpcContext context,
     TRequest request,
@@ -126,7 +126,7 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     return await typedHandler(request, context: context);
   }
 
-  /// Безопасный вызов server stream handler'а с типизацией и контекстом
+  /// Type-safe server-stream handler invocation with context.
   Stream<TResponse> callServerStreamHandler(
     RpcContext context,
     TRequest request,
@@ -136,7 +136,7 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     return typedHandler(request, context: context);
   }
 
-  /// Безопасный вызов client stream handler'а с типизацией и контекстом
+  /// Type-safe client-stream handler invocation with context.
   Future<TResponse> callClientStreamHandler(
     RpcContext context,
     Stream<TRequest> requests,
@@ -148,7 +148,7 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     return await typedHandler(requests, context: context);
   }
 
-  /// Безопасный вызов bidirectional stream handler'а с типизацией и контекстом
+  /// Type-safe bidirectional-stream handler invocation with context.
   Stream<TResponse> callBidirectionalStreamHandler(
     RpcContext context,
     Stream<TRequest> requests,

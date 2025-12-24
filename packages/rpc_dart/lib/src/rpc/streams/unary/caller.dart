@@ -4,66 +4,38 @@
 
 part of '../_index.dart';
 
-/// Клиентская часть унарного вызова с поддержкой Stream ID.
-///
-/// Отправляет один запрос и получает один ответ.
-/// Соответствует gRPC Unary RPC паттерну (1→1).
-/// Каждый вызов создает собственный HTTP/2 stream с уникальным ID.
-///
-/// Пример использования:
-/// ```dart
-/// final client = UnaryClient<String, String>(
-///   transport: transport,
-///   serviceName: 'GreetingService',
-///   methodName: 'SayHello',
-///   requestSerializer: stringSerializer,
-///   responseSerializer: stringSerializer,
-/// );
-///
-/// final response = await client.call('Привет!');
-/// print("Ответ: $response");
-///
-/// await client.close();
-/// ```
+/// Unary client: sends one request, gets one response (per call stream ID).
 final class UnaryCaller<TRequest, TResponse> {
-  /// Транспорт для коммуникации
+  /// Transport.
   final IRpcTransport _transport;
 
-  /// Имя сервиса
+  /// Service name.
   final String _serviceName;
 
-  /// Имя метода
+  /// Method name.
   final String _methodName;
 
-  /// Путь метода в формате /ServiceName/MethodName
+  /// Method path `/Service/Method`.
   late final String _methodPath;
 
-  /// Сериализатор запросов
+  /// Request codec.
   final IRpcCodec<TRequest> _requestSerializer;
 
-  /// Сериализатор ответов
+  /// Response codec.
   final IRpcCodec<TResponse> _responseSerializer;
 
-  /// RPC контекст для передачи метаданных, таймаутов и отмены
+  /// RPC context.
   final RpcContext? _context;
 
-  /// Логгер
+  /// Logger.
   late final RpcLogger? _logger;
 
-  /// Парсер для обработки фрагментированных сообщений
+  /// Frame parser.
   late final RpcMessageParser _parser;
 
   String? _peerGrpcEncoding;
 
-  /// Создает клиент унарного вызова
-  ///
-  /// [transport] Транспортный уровень
-  /// [serviceName] Имя сервиса (например, "GreetingService")
-  /// [methodName] Имя метода (например, "SayHello")
-  /// [requestCodec] Кодек для сериализации запроса
-  /// [responseCodec] Кодек для десериализации ответа
-  /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
-  /// [logger] Опциональный логгер
+  /// Creates a unary client.
   UnaryCaller({
     required IRpcTransport transport,
     required String serviceName,
@@ -93,41 +65,37 @@ final class UnaryCaller<TRequest, TResponse> {
     );
     _methodPath = '/$_serviceName/$_methodName';
     _logger?.internal(
-      'Создан унарный клиент для $_methodPath${_context != null ? ' с контекстом' : ''}',
+      'Created unary client for $_methodPath${_context != null ? ' with context' : ''}',
     );
   }
 
-  /// Выполняет унарный вызов
-  ///
-  /// [request] Объект запроса
-  /// [timeout] Таймаут вызова (опционально, если не задан - использует из контекста)
-  /// Возвращает ответ сервера
+  /// Executes the unary call.
   Future<TResponse> call(TRequest request, {Duration? timeout}) async {
-    // Проверяем отмену и deadline в контексте
+    // Check cancellation and deadline from context.
     _checkContextBeforeCall();
 
-    // Определяем timeout: из параметра, контекста или по умолчанию
+    // Determine timeout: parameter, context, or default.
     final remainingTime = _context?.remainingTime;
     final effectiveTimeout =
         timeout ?? remainingTime ?? const Duration(seconds: 30);
 
-    // Создаем новый stream для этого вызова
+    // Create a new stream for this call.
     final streamId = _transport.createStream();
 
-    _logger?.internal('Унарный вызов $_methodPath начат [streamId: $streamId]');
+    _logger?.internal('Unary call $_methodPath started [streamId: $streamId]');
 
     final completer = Completer<TResponse>();
     StreamSubscription? subscription;
     StreamSubscription? cancellationSubscription;
 
     try {
-      // Если есть токен отмены, подписываемся на него
+      // Subscribe to cancellation token if present.
       if (_context?.cancellationToken != null) {
         cancellationSubscription =
             _context!.cancellationToken!.cancelled.asStream().listen((_) {
           if (!completer.isCompleted) {
             _logger?.warning(
-              'Операция отменена по cancellation token [streamId: $streamId]',
+              'Operation cancelled via cancellation token [streamId: $streamId]',
             );
             completer.completeError(
               RpcCancelledException(
@@ -139,31 +107,32 @@ final class UnaryCaller<TRequest, TResponse> {
         });
       }
 
-      // Подписываемся на ответы для этого stream
-      _logger?.internal('Настройка подписки на ответы [streamId: $streamId]');
+      // Subscribe to responses for this stream.
+      _logger
+          ?.internal('Configuring response subscription [streamId: $streamId]');
       subscription = _transport.getMessagesForStream(streamId).listen(
         (message) async {
           if (message.isDirect && message.directPayload != null) {
-            // Zero-copy: получили объект напрямую
+            // Zero-copy: received object directly.
             _logger?.internal(
-              'Zero-copy ответ получен [streamId: $streamId]',
+              'Zero-copy response received [streamId: $streamId]',
             );
             try {
               final response = message.directPayload as TResponse;
               if (!completer.isCompleted) {
                 _logger?.internal(
-                  'Zero-copy унарный вызов $_methodPath успешно завершен [streamId: $streamId]',
+                  'Zero-copy unary call $_methodPath completed [streamId: $streamId]',
                 );
                 completer.complete(response);
               } else {
                 _logger?.warning(
-                  'Получен лишний zero-copy ответ после завершения вызова [streamId: $streamId]',
+                  'Extra zero-copy response after call completion [streamId: $streamId]',
                 );
               }
             } catch (e, stackTrace) {
               if (!completer.isCompleted) {
                 _logger?.error(
-                  'Ошибка при обработке zero-copy ответа [streamId: $streamId]',
+                  'Failed to process zero-copy response [streamId: $streamId]',
                   error: e,
                   stackTrace: stackTrace,
                 );
@@ -171,38 +140,38 @@ final class UnaryCaller<TRequest, TResponse> {
               }
             }
           } else if (!message.isMetadataOnly && message.payload != null) {
-            // Получили данные ответа (стандартная сериализация)
+            // Received response data (serialized).
             _logger?.internal(
-              'Получено сообщение от транспорта размером: ${message.payload!.length} байт [streamId: $streamId]',
+              'Received transport message of ${message.payload!.length} bytes [streamId: $streamId]',
             );
             try {
-              // Используем парсер для извлечения сообщений из фрейма с префиксом
+              // Use parser to extract messages from framed payload.
               final messages = _parser(message.payload!);
               _logger?.internal(
-                'Парсер извлек ${messages.length} сообщений из фрейма [streamId: $streamId]',
+                'Parser extracted ${messages.length} messages from frame [streamId: $streamId]',
               );
 
               for (final msgBytes in messages) {
                 _logger?.internal(
-                  'Десериализация ответа размером ${msgBytes.length} байт [streamId: $streamId]',
+                  'Deserializing response of ${msgBytes.length} bytes [streamId: $streamId]',
                 );
                 final response = _responseSerializer.deserialize(msgBytes);
                 if (!completer.isCompleted) {
                   _logger?.internal(
-                    'Унарный вызов $_methodPath успешно завершен [streamId: $streamId]',
+                    'Unary call $_methodPath completed [streamId: $streamId]',
                   );
                   completer.complete(response);
-                  break; // Для унарного вызова нужен только первый ответ
+                  break; // Only first response is needed for unary call.
                 } else {
                   _logger?.warning(
-                    'Получен лишний ответ после завершения вызова [streamId: $streamId]',
+                    'Extra response after call completion [streamId: $streamId]',
                   );
                 }
               }
             } catch (e, stackTrace) {
               if (!completer.isCompleted) {
                 _logger?.error(
-                  'Ошибка при обработке ответа [streamId: $streamId]',
+                  'Failed to process response [streamId: $streamId]',
                   error: e,
                   stackTrace: stackTrace,
                 );
@@ -210,8 +179,8 @@ final class UnaryCaller<TRequest, TResponse> {
               }
             }
           } else if (message.isMetadataOnly && message.metadata != null) {
-            // Получили метаданные (возможно трейлеры)
-            _logger?.internal('Получены метаданные [streamId: $streamId]');
+            // Received metadata (possibly trailers).
+            _logger?.internal('Metadata received [streamId: $streamId]');
             final encoding = message.metadata!.getHeaderValue(
               RpcConstants.grpcEncodingHeader,
             );
@@ -225,7 +194,7 @@ final class UnaryCaller<TRequest, TResponse> {
             if (statusCode != null && message.isEndOfStream) {
               final code = int.tryParse(statusCode) ?? RpcStatus.unknown;
               _logger?.internal(
-                'Получен статус завершения: $code [streamId: $streamId]',
+                'Completion status received: $code [streamId: $streamId]',
               );
               if (code != RpcStatus.ok && !completer.isCompleted) {
                 final errorMessage = message.metadata!.getHeaderValue(
@@ -235,7 +204,7 @@ final class UnaryCaller<TRequest, TResponse> {
                 final decodedMessage =
                     RpcMetadata.decodeGrpcMessage(errorMessage);
                 _logger?.error(
-                  'Ошибка gRPC: $code - $decodedMessage [streamId: $streamId]',
+                  'gRPC error: $code - $decodedMessage [streamId: $streamId]',
                 );
                 completer.completeError(
                   Exception('gRPC error $code: $decodedMessage'),
@@ -246,7 +215,7 @@ final class UnaryCaller<TRequest, TResponse> {
         },
         onError: (error, stackTrace) {
           _logger?.error(
-            'Ошибка от транспорта [streamId: $streamId]',
+            'Transport error [streamId: $streamId]',
             error: error,
             stackTrace: stackTrace,
           );
@@ -256,29 +225,29 @@ final class UnaryCaller<TRequest, TResponse> {
         },
       );
 
-      // Отправляем метаданные инициализации с заголовками из контекста
-      _logger?.internal('Отправка начальных метаданных [streamId: $streamId]');
+      // Send initial metadata with context headers.
+      _logger?.internal('Sending initial metadata [streamId: $streamId]');
       final baseMetadata = RpcMetadata.forClientRequest(
         _serviceName,
         _methodName,
       );
 
-      // Создаем новые метаданные с заголовками из контекста
+      // Build metadata with context headers.
       final headers = List<RpcHeader>.from(baseMetadata.headers);
 
       if (_context != null) {
-        // Добавляем пользовательские заголовки из контекста
+        // Add custom context headers.
         for (final entry in _context!.headers.entries) {
           headers.add(RpcHeader(entry.key, entry.value));
         }
 
-        // Добавляем специальные заголовки RPC
+        // Add RPC-specific headers.
         if (_context!.traceId != null) {
           headers.add(RpcHeader('x-trace-id', _context!.traceId!));
         }
         headers.add(RpcHeader('x-request-id', _context!.requestId));
 
-        // Передаем deadline серверу
+        // Send deadline to server.
         if (_context!.deadline != null) {
           final timeout = _context!.remainingTime;
           if (timeout != null) {
@@ -298,24 +267,24 @@ final class UnaryCaller<TRequest, TResponse> {
         }
 
         _logger?.internal(
-          'Добавлены заголовки контекста: ${_context!.headers.length} пользовательских + системные',
+          'Context headers added: ${_context!.headers.length} custom + system',
         );
       }
 
       final metadata = RpcMetadata(headers);
       await _transport.sendMetadata(streamId, metadata);
 
-      // Zero-copy оптимизация для поддерживающих транспортов
+      // Zero-copy optimization for supporting transports.
       if (_transport.supportsZeroCopy) {
-        _logger?.internal('Zero-copy отправка запроса [streamId: $streamId]');
+        _logger?.internal('Zero-copy request send [streamId: $streamId]');
         await _transport.sendDirectObject(
           streamId,
           request as Object,
           endStream: true,
         );
       } else {
-        // Стандартная сериализация для других транспортов
-        _logger?.internal('Сериализация запроса [streamId: $streamId]');
+        // Standard serialization for other transports.
+        _logger?.internal('Serializing request [streamId: $streamId]');
         final serializedRequest = _requestSerializer.serialize(request);
         final requestEncoding = _context?.getHeader(
           RpcConstants.grpcEncodingHeader,
@@ -329,27 +298,27 @@ final class UnaryCaller<TRequest, TResponse> {
               )
             : serializedRequest;
         _logger?.internal(
-          'Запрос сериализован, размер: ${serializedRequest.length} байт [streamId: $streamId]',
+          'Request serialized, size: ${serializedRequest.length} bytes [streamId: $streamId]',
         );
         final framedRequest = RpcMessageFrame.encode(
           payload,
           compressed: useCompression,
         );
         _logger?.internal(
-          'Отправка запроса и закрытие потока запросов [streamId: $streamId]',
+          'Sending request and closing request stream [streamId: $streamId]',
         );
         await _transport.sendMessage(streamId, framedRequest, endStream: true);
       }
 
-      // Ждем ответ с таймаутом, если указан
+      // Await response with timeout if provided.
       _logger?.internal(
-        'Установлен таймаут ожидания ответа: $effectiveTimeout [streamId: $streamId]',
+        'Response timeout set to $effectiveTimeout [streamId: $streamId]',
       );
       return await completer.future.timeout(
         effectiveTimeout,
         onTimeout: () {
           _logger?.error(
-            'Тайм-аут ожидания ответа: $effectiveTimeout [streamId: $streamId]',
+            'Response timeout: $effectiveTimeout [streamId: $streamId]',
           );
           throw TimeoutException(
             'Call timeout: $effectiveTimeout',
@@ -359,42 +328,40 @@ final class UnaryCaller<TRequest, TResponse> {
       );
     } catch (e, stackTrace) {
       _logger?.error(
-        'Ошибка при выполнении унарного вызова $_methodPath [streamId: $streamId]',
+        'Unary call $_methodPath failed [streamId: $streamId]',
         error: e,
         stackTrace: stackTrace,
       );
       rethrow;
     } finally {
-      // В любом случае отписываемся от потока ответов
-      _logger?.internal('Отмена подписки на ответы [streamId: $streamId]');
+      // Always cancel response stream subscription.
+      _logger
+          ?.internal('Cancelling response subscription [streamId: $streamId]');
       await subscription?.cancel();
       await cancellationSubscription?.cancel();
     }
   }
 
-  /// Закрывает клиент и освобождает ресурсы
-  ///
-  /// ВНИМАНИЕ: Не закрывает транспорт, так как он может использоваться
-  /// другими клиентами. Транспорт должен закрываться явно.
+  /// Closes the client; transport remains open.
   Future<void> close() async {
-    // Клиент не владеет транспортом, поэтому не закрываем его
-    _logger?.internal('Унарный клиент $_methodPath закрыт');
+    // Client does not own the transport, so do not close it.
+    _logger?.internal('Unary client $_methodPath closed');
   }
 
-  /// Проверяет контекст перед выполнением вызова
+  /// Validates context before call.
   void _checkContextBeforeCall() {
     if (_context == null) return;
 
-    // Проверяем отмену
+    // Check cancellation.
     _context!.cancellationToken?.throwIfCancelled();
 
-    // Проверяем deadline
+    // Check deadline.
     if (_context!.isExpired) {
       throw RpcDeadlineExceededException(_context!.deadline!, Duration.zero);
     }
 
     _logger?.internal(
-      'Контекст проверен: requestId=${_context!.requestId}, traceId=${_context!.traceId}',
+      'Context verified: requestId=${_context!.requestId}, traceId=${_context!.traceId}',
     );
   }
 }

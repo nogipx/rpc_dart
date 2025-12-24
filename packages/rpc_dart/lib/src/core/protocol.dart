@@ -6,30 +6,29 @@ import 'dart:typed_data';
 
 import 'errors.dart';
 
-/// Константы протокола gRPC.
+/// gRPC protocol constants.
 ///
-/// Содержит все фиксированные значения, используемые в протоколе gRPC,
-/// что обеспечивает единообразие и устраняет "магические числа" в коде.
+/// Centralizes fixed values to avoid magic numbers and maintain consistency.
 abstract interface class RpcConstants {
-  /// Размер префикса сообщения в байтах (1 байт флаг + 4 байта длина)
+  /// Message prefix size in bytes (1 byte flag + 4 bytes length).
   static const int messagePrefixSize = 5;
 
-  /// Позиция флага сжатия в префиксе
+  /// Compression-flag index inside the prefix.
   static const int compressionFlagIndex = 0;
 
-  /// Позиция начала поля длины сообщения в префиксе
+  /// Start index of the message-length field.
   static const int messageLengthIndex = 1;
 
-  /// Если сообщение не сжато, используется это значение
+  /// Flag value for uncompressed message.
   static const int noCompression = 0;
 
-  /// Если сообщение сжато, используется это значение
+  /// Flag value for compressed message.
   static const int compressed = 1;
 
-  /// HTTP заголовок, содержащий статус gRPC
+  /// HTTP header carrying gRPC status.
   static const String grpcStatusHeader = 'grpc-status';
 
-  /// HTTP заголовок, содержащий сообщение об ошибке
+  /// HTTP header carrying gRPC error message.
   static const String grpcMessageHeader = 'grpc-message';
 
   /// gRPC header carrying timeout for the call (e.g. "10S", "100m")
@@ -44,111 +43,108 @@ abstract interface class RpcConstants {
   /// gRPC binary status details (base64-encoded in HTTP/2 headers)
   static const String grpcStatusDetailsBinHeader = 'grpc-status-details-bin';
 
-  /// HTTP заголовок для типа контента
+  /// HTTP header for content type.
   static const String contentTypeHeader = 'content-type';
 
-  /// Тип контента для gRPC
+  /// Content type for gRPC.
   static const String grpcContentType = 'application/grpc';
 }
 
-/// Стандартные коды состояний gRPC.
+/// Standard gRPC status codes.
 ///
-/// Определяет все возможные статусы завершения операций gRPC.
-/// Ключевые статусы:
-/// - OK (0): успешное выполнение
-/// - CANCELLED (1): операция была отменена
-/// - DEADLINE_EXCEEDED (4): превышено время ожидания
-/// - INTERNAL (13): внутренняя ошибка сервера
-/// - UNAVAILABLE (14): сервис недоступен
+/// Enumerates completion statuses such as:
+/// - OK (0): success
+/// - CANCELLED (1): operation cancelled
+/// - DEADLINE_EXCEEDED (4): timeout
+/// - INTERNAL (13): server internal error
+/// - UNAVAILABLE (14): service unavailable
 abstract interface class RpcStatus {
-  /// Успешное выполнение
+  /// Successful completion.
   static const int ok = 0;
 
-  /// Операция отменена
+  /// Operation cancelled.
   static const int cancelled = 1;
 
-  /// Неизвестная ошибка
+  /// Unknown error.
   static const int unknown = 2;
 
-  /// Неверный аргумент
+  /// Invalid argument.
   static const int invalidArgument = 3;
 
-  /// Превышено время ожидания
+  /// Deadline exceeded.
   static const int deadlineExceeded = 4;
 
-  /// Ресурс не найден
+  /// Resource not found.
   static const int notFound = 5;
 
-  /// Ресурс уже существует
+  /// Resource already exists.
   static const int alreadyExists = 6;
 
-  /// Отказано в доступе
+  /// Permission denied.
   static const int permissionDenied = 7;
 
-  /// Ресурс исчерпан
+  /// Resource exhausted.
   static const int resourceExhausted = 8;
 
-  /// Предусловие не выполнено
+  /// Precondition failed.
   static const int failedPrecondition = 9;
 
-  /// Операция прервана
+  /// Operation aborted.
   static const int aborted = 10;
 
-  /// Выход за пределы диапазона
+  /// Out of range.
   static const int outOfRange = 11;
 
-  /// Не реализовано
+  /// Not implemented.
   static const int unimplemented = 12;
 
-  /// Внутренняя ошибка
+  /// Internal error.
   static const int internal = 13;
 
-  /// Сервис недоступен
+  /// Service unavailable.
   static const int unavailable = 14;
 
-  /// Потеря данных
+  /// Data loss.
   static const int dataLoss = 15;
 
-  /// Не аутентифицирован
+  /// Unauthenticated.
   static const int unauthenticated = 16;
 }
 
-/// Утилитарный класс для работы с форматом сообщений gRPC.
+/// Utilities for gRPC message framing.
 ///
-/// Обеспечивает упаковку и распаковку сообщений в соответствии
-/// со стандартом gRPC - добавление 5-байтного префикса к сериализованным данным
-/// и извлечение информации из этого префикса.
+/// Handles packing/unpacking messages with the 5-byte prefix required by gRPC
+/// and extracting compression and length information.
 ///
-/// Формат префикса:
-/// - 1-й байт: флаг сжатия (0 или 1)
-/// - 2-5-й байты: длина сообщения (uint32, big-endian)
+/// Prefix format:
+/// - Byte 1: compression flag (0 or 1)
+/// - Bytes 2-5: message length (uint32, big-endian)
 abstract interface class RpcMessageFrame {
-  /// Упаковывает сообщение в формат gRPC с 5-байтным префиксом.
+  /// Packs a message with the gRPC 5-byte prefix.
   ///
-  /// Добавляет к сериализованному сообщению стандартный 5-байтный префикс,
-  /// содержащий информацию о сжатии и длине сообщения.
+  /// Prepends the standard prefix describing compression and payload length.
   ///
-  /// [messageBytes] Байты сериализованного сообщения
-  /// [compressed] Флаг, указывающий, сжато ли сообщение
-  /// Возвращает полностью упакованное сообщение с префиксом
+  /// [messageBytes] Serialized message bytes.
+  /// [compressed] Whether the payload is compressed.
+  /// Returns the fully framed message.
   static Uint8List encode(Uint8List messageBytes, {bool compressed = false}) {
     final result = List<int>.filled(
       RpcConstants.messagePrefixSize + messageBytes.length,
       0,
     );
 
-    // Устанавливаем флаг сжатия
+    // Write compression flag.
     result[RpcConstants.compressionFlagIndex] =
         compressed ? RpcConstants.compressed : RpcConstants.noCompression;
 
-    // Устанавливаем длину сообщения (big-endian)
+    // Write message length (big-endian).
     final length = messageBytes.length;
     result[RpcConstants.messageLengthIndex] = (length >> 24) & 0xFF;
     result[RpcConstants.messageLengthIndex + 1] = (length >> 16) & 0xFF;
     result[RpcConstants.messageLengthIndex + 2] = (length >> 8) & 0xFF;
     result[RpcConstants.messageLengthIndex + 3] = length & 0xFF;
 
-    // Копируем данные сообщения
+    // Copy payload bytes.
     for (int i = 0; i < messageBytes.length; i++) {
       result[RpcConstants.messagePrefixSize + i] = messageBytes[i];
     }
@@ -156,24 +152,22 @@ abstract interface class RpcMessageFrame {
     return Uint8List.fromList(result);
   }
 
-  /// Парсит заголовок сообщения, извлекая информацию о сжатии и длине.
+  /// Parses the message header extracting compression and length info.
   ///
-  /// Анализирует 5-байтный префикс сообщения gRPC и извлекает
-  /// информацию о сжатии и длине полезной нагрузки.
+  /// Expects the 5-byte gRPC prefix.
   ///
-  /// [headerBytes] Байты, содержащие префикс сообщения (должно быть >= 5 байт)
-  /// Возвращает структуру с информацией о сжатии и длине сообщения
-  /// Выбрасывает Exception при неверной длине входных данных
+  /// [headerBytes] Prefix bytes (length must be >= 5).
+  /// Returns header info or throws on invalid input length.
   static RpcMessageHeader parseHeader(Uint8List headerBytes) {
     if (headerBytes.length < RpcConstants.messagePrefixSize) {
-      throw RpcException('Неверная длина заголовка gRPC сообщения');
+      throw RpcException('Invalid gRPC message header length');
     }
 
     final compressionFlag = headerBytes[RpcConstants.compressionFlagIndex];
     if (compressionFlag != RpcConstants.noCompression &&
         compressionFlag != RpcConstants.compressed) {
       throw RpcException(
-        'Некорректный compression flag в gRPC сообщении: $compressionFlag',
+        'Invalid compression flag in gRPC message: $compressionFlag',
       );
     }
 
@@ -188,17 +182,16 @@ abstract interface class RpcMessageFrame {
   }
 }
 
-/// Информация, извлеченная из 5-байтного префикса сообщения gRPC.
+/// Information extracted from the 5-byte gRPC message prefix.
 ///
-/// Хранит данные о сжатии и длине сообщения, полученные при
-/// парсинге префикса сообщения.
+/// Holds compression and length details parsed from the prefix.
 final class RpcMessageHeader {
-  /// Флаг, указывающий, сжато ли сообщение
+  /// Whether the message is compressed.
   final bool isCompressed;
 
-  /// Длина полезной нагрузки сообщения в байтах
+  /// Payload length in bytes.
   final int messageLength;
 
-  /// Создает объект с информацией о заголовке сообщения
+  /// Creates a header description.
   RpcMessageHeader(this.isCompressed, this.messageLength);
 }

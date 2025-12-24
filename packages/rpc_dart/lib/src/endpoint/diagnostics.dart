@@ -4,15 +4,15 @@
 
 part of '_index.dart';
 
-/// Результат проверки состояния RPC эндпоинта.
+/// Health report for an RPC endpoint.
 final class RpcEndpointHealth {
-  /// Снимок состояния самого эндпоинта.
+  /// Endpoint health snapshot.
   final RpcHealthStatus endpointStatus;
 
-  /// Состояние зависимостей эндпоинта (как правило, транспорта).
+  /// Health of endpoint dependencies (typically transport).
   final Map<String, RpcHealthStatus> dependencies;
 
-  /// Время формирования отчета.
+  /// Report timestamp.
   final DateTime timestamp;
 
   RpcEndpointHealth({
@@ -22,12 +22,11 @@ final class RpcEndpointHealth {
   })  : dependencies = Map.unmodifiable(dependencies ?? const {}),
         timestamp = timestamp ?? DateTime.now();
 
-  /// Возвращает true, если эндпоинт и все зависимости находятся в рабочем
-  /// состоянии.
+  /// True when the endpoint and all dependencies are healthy.
   bool get isHealthy =>
       endpointStatus.isHealthy &&
       dependencies.values.every((status) => status.isHealthy);
 
-  /// Состояние основного транспорта эндпоинта (если присутствует).
+  /// Health status of the primary transport (if present).
   RpcHealthStatus? get transportStatus => dependencies['transport'];
 }

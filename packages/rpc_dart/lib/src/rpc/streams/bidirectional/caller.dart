@@ -4,43 +4,18 @@
 
 part of '../_index.dart';
 
-/// 🚀 Универсальная клиентская часть двунаправленного стриминга
-///
-/// Автоматически определяет режим работы:
-/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-/// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
-///
-/// Обеспечивает полную реализацию клиентской стороны двунаправленного
-/// стриминга (Bidirectional Streaming RPC). Позволяет клиенту отправлять
-/// поток запросов серверу и одновременно получать поток ответов.
-/// НЕТ ограничений - полная свобода отправки и получения.
+/// Bidirectional stream caller: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Sends and receives concurrently with no ordering restrictions.
 final class BidirectionalStreamCaller<TRequest extends Object,
     TResponse extends Object> {
   late final RpcLogger? _logger;
 
-  /// Внутренний процессор стрима
+  /// Stream processor.
   late final CallProcessor<TRequest, TResponse> _processor;
 
-  /// Поток входящих ответов от сервера.
-  ///
-  /// Предоставляет доступ к потоку ответов, получаемых от сервера.
-  /// Каждый элемент может быть:
-  /// - Сообщение с полезной нагрузкой (payload)
-  /// - Сообщение с метаданными (metadata)
-  ///
-  /// Поток завершается при получении трейлера с END_STREAM
-  /// или при возникновении ошибки.
+  /// Incoming responses from the server (payload or metadata); completes on end-of-stream or error.
   Stream<RpcMessage<TResponse>> get responses => _processor.responses;
 
-  /// Создает универсальный клиентский двунаправленный стрим
-  ///
-  /// [transport] Транспортный уровень
-  /// [serviceName] Имя сервиса (например, "ChatService")
-  /// [methodName] Имя метода (например, "Connect")
-  /// [requestCodec] Кодек для сериализации запросов (null для zero-copy)
-  /// [responseCodec] Кодек для десериализации ответов (null для zero-copy)
-  /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
-  /// [logger] Опциональный логгер
+  /// Creates a bidirectional stream caller.
   BidirectionalStreamCaller({
     required IRpcTransport transport,
     required String serviceName,
@@ -52,25 +27,25 @@ final class BidirectionalStreamCaller<TRequest extends Object,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
-    // Zero-copy режим: требуется RpcInMemoryTransport
+    // Zero-copy requires transport support.
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-        'Для сетевых транспортов передайте кодеки.',
+        'Zero-copy mode requires a transport with zero-copy support. '
+        'Provide codecs for network transports.',
       );
     }
 
-    // Режим сериализации: кодеки обязательны
+    // Serialization mode: codecs required.
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
       throw ArgumentError(
-        'Кодеки обязательны для режима сериализации. '
-        'Для zero-copy не передавайте кодеки (null).',
+        'Codecs are required for serialization mode. '
+        'For zero-copy leave codecs null.',
       );
     }
 
     _logger = logger?.child('BidirectionalCaller');
     _logger?.internal(
-      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamCaller для $serviceName.$methodName',
+      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamCaller for $serviceName.$methodName',
     );
 
     _processor = CallProcessor<TRequest, TResponse>(
@@ -84,33 +59,26 @@ final class BidirectionalStreamCaller<TRequest extends Object,
     );
   }
 
-  /// Отправляет запрос серверу
-  ///
-  /// ✅ Можно вызывать МНОГО раз (нет ограничений)
-  /// [request] Объект запроса для отправки
+  /// Sends a request to the server (can be called multiple times).
   Future<void> send(TRequest request) async {
-    _logger?.internal('Отправка запроса в двунаправленный стрим: $request');
+    _logger?.internal('Sending request to bidirectional stream: $request');
     await _processor.send(request);
   }
 
-  /// Завершает отправку запросов
-  ///
-  /// Сигнализирует серверу, что клиент закончил отправку запросов.
-  /// После вызова этого метода новые запросы отправлять нельзя.
-  /// Поток ответов продолжает работать до завершения сервером.
+  /// Finishes sending requests; responses may continue until server completes.
   Future<void> finishSending() async {
     await _processor.finishSending();
   }
 
-  /// Поток ответов с автоматическим извлечением payload (удобный для zero-copy)
+  /// Response stream yielding payloads (zero-copy friendly).
   Stream<TResponse> get payloadResponses async* {
     await for (final response in responses) {
       if (response.payload != null) {
-        _logger?.internal('Получен ответ в bidirectional стриме');
+        _logger?.internal('Received response in bidirectional stream');
         yield response.payload!;
       }
 
-      // Проверяем статус в метаданных
+      // Check status in metadata.
       if (response.metadata != null) {
         final statusStr = response.metadata!.getHeaderValue(
           RpcConstants.grpcStatusHeader,
@@ -124,7 +92,7 @@ final class BidirectionalStreamCaller<TRequest extends Object,
                 'Unknown error';
             final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
             _logger?.error(
-              'Bidirectional стрим завершился с ошибкой: $status - $decodedMessage',
+              'Bidirectional stream ended with error: $status - $decodedMessage',
             );
             throw Exception('gRPC error $status: $decodedMessage');
           }
@@ -133,7 +101,7 @@ final class BidirectionalStreamCaller<TRequest extends Object,
     }
   }
 
-  /// Поток запросов для отправки серверу (удобный интерфейс для zero-copy)
+  /// Request sink for sending to the server (zero-copy friendly).
   StreamSink<TRequest>? _requestSink;
 
   StreamSink<TRequest> get requestSink {
@@ -142,17 +110,17 @@ final class BidirectionalStreamCaller<TRequest extends Object,
       controller.stream.listen(
         (request) async {
           _logger?.internal(
-            'Отправка запроса в bidirectional стриме: $request',
+            'Sending request in bidirectional stream: $request',
           );
           await send(request);
         },
         onDone: () async {
-          _logger?.internal('Поток запросов завершен');
+          _logger?.internal('Request stream completed');
           await finishSending();
         },
         onError: (error, stackTrace) {
           _logger?.error(
-            'Ошибка в потоке запросов',
+            'Error in request stream',
             error: error,
             stackTrace: stackTrace,
           );
@@ -163,13 +131,11 @@ final class BidirectionalStreamCaller<TRequest extends Object,
     return _requestSink!;
   }
 
-  /// Закрывает стрим и освобождает ресурсы
-  ///
-  /// Полностью завершает стрим, освобождая все ресурсы.
+  /// Closes the stream and releases resources.
   Future<void> close() async {
-    _logger?.internal('Закрытие BidirectionalStreamCaller');
+    _logger?.internal('Closing BidirectionalStreamCaller');
     if (_requestSink != null) {
-      _requestSink!.close(); // НЕ ждём завершения
+      _requestSink!.close(); // Do not await completion.
     }
     await _processor.close();
   }

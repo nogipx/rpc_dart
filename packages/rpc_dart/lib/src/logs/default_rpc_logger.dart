@@ -4,11 +4,11 @@
 
 part of '_logs.dart';
 
-/// Реализация фильтра по умолчанию, основанная на минимальном уровне логирования
+/// Default filter based on minimum log level.
 class DefaultRpcLoggerFilter implements IRpcLoggerFilter {
   final RpcLoggerLevel minLogLevel;
 
-  DefaultRpcLoggerFilter(this.minLogLevel);
+  const DefaultRpcLoggerFilter(this.minLogLevel);
 
   @override
   bool shouldLog(RpcLoggerLevel level, String source) {
@@ -16,7 +16,7 @@ class DefaultRpcLoggerFilter implements IRpcLoggerFilter {
   }
 }
 
-/// Реализация форматтера по умолчанию
+/// Default log formatter.
 class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
   final String? label;
 
@@ -68,10 +68,10 @@ class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
     final header =
         '[$formattedTime] ${prefix.padRight(4)} • $labelStr$source$contextStr$traceStr$requestStr';
 
-    // Разбиваем длинное сообщение на строки с отступами
+    // Split multi-line messages with indentation.
     final messageLines = message.split('\n');
 
-    // Для ошибок добавляем специальное форматирование с рамкой
+    // For errors add framed formatting.
     String content;
     if (level == RpcLoggerLevel.error || level == RpcLoggerLevel.critical) {
       final formattedMessage =
@@ -86,27 +86,27 @@ class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
   }
 }
 
-/// Консольная реализация логгера
+/// Console logger implementation.
 class DefaultRpcLogger implements RpcLogger {
   @override
   final String name;
 
-  /// Флаг вывода логов в консоль
+  /// Whether console output is enabled.
   final bool _consoleLoggingEnabled;
 
-  /// Флаг использования цветов при выводе логов в консоль
+  /// Whether color output is enabled.
   final bool _coloredLoggingEnabled;
 
-  /// Настройки цветов для разных уровней логирования
+  /// Color palette for levels.
   final RpcLoggerColors _colors;
 
-  /// Фильтр логов
+  /// Log filter.
   final IRpcLoggerFilter _filter;
 
-  /// Форматтер логов
+  /// Log formatter.
   final IRpcLoggerFormatter _formatter;
 
-  /// Создает новый логгер с указанными параметрами
+  /// Creates a new logger with the given parameters.
   DefaultRpcLogger(
     this.name, {
     RpcLoggerColors colors = const RpcLoggerColors(),
@@ -136,16 +136,16 @@ class DefaultRpcLogger implements RpcLogger {
     AnsiColor? color,
     RpcContext? rpcContext,
   }) async {
-    // Проверяем, нужно ли логировать это сообщение
+    // Check whether this message should be logged.
     if (!_filter.shouldLog(level, name)) {
       return;
     }
 
-    // Извлекаем trace ID из контекста, если он не указан явно
+    // Use IDs from context when not explicitly provided.
     final actualTraceId = traceId ?? rpcContext?.traceId;
     final actualRequestId = requestId ?? rpcContext?.requestId;
 
-    // Выводим в консоль, если включено
+    // Emit to console if enabled.
     if (_consoleLoggingEnabled) {
       _logToConsole(
         level: level,
@@ -160,7 +160,7 @@ class DefaultRpcLogger implements RpcLogger {
     }
   }
 
-  /// Отображает лог в консоли
+  /// Renders a log entry to the console.
   void _logToConsole({
     required RpcLoggerLevel level,
     required String message,
@@ -173,7 +173,7 @@ class DefaultRpcLogger implements RpcLogger {
   }) {
     final timestamp = DateTime.now();
 
-    // Создаем сообщение с включенными деталями ошибки для ERROR и CRITICAL
+    // Include error details for ERROR and CRITICAL.
     String fullMessage = message;
     if (level == RpcLoggerLevel.error || level == RpcLoggerLevel.critical) {
       if (error != null) {
@@ -194,19 +194,19 @@ class DefaultRpcLogger implements RpcLogger {
       traceId: traceId,
     );
 
-    // Если включен цветной вывод, используем цвет только для заголовка
+    // When color output is on, color only the header.
     if (_coloredLoggingEnabled) {
       final actualColor = color ?? _colors.colorForLevel(level);
 
-      // Выводим заголовок с цветом
+      // Print colored header.
       print('${actualColor.code}${formattedLog.header}${AnsiColor.reset.code}');
 
-      // Выводим содержимое без цвета
+      // Print content without color.
       if (formattedLog.content.isNotEmpty) {
         print(formattedLog.content);
       }
 
-      // Вывод деталей ошибки только для обычных (не ERROR/CRITICAL) уровней
+      // Show error details only for non-ERROR/CRITICAL levels.
       if ((level != RpcLoggerLevel.error && level != RpcLoggerLevel.critical) &&
           error != null) {
         print('  Error details: $error');
@@ -217,13 +217,13 @@ class DefaultRpcLogger implements RpcLogger {
         print('  Stack trace: \n$stackTrace');
       }
     } else {
-      // Обычный вывод без цвета
+      // Regular output without color.
       print(formattedLog.header);
       if (formattedLog.content.isNotEmpty) {
         print(formattedLog.content);
       }
 
-      // Вывод деталей ошибки только для обычных (не ERROR/CRITICAL) уровней
+      // Show error details only for non-ERROR/CRITICAL levels.
       if ((level != RpcLoggerLevel.error && level != RpcLoggerLevel.critical) &&
           error != null) {
         print('  Error details: $error');
@@ -258,7 +258,6 @@ class DefaultRpcLogger implements RpcLogger {
     );
   }
 
-  /// Отправляет лог уровня debug
   @override
   Future<void> debug(
     String message, {

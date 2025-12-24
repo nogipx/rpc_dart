@@ -4,21 +4,21 @@
 
 part of '_index.dart';
 
-/// Обертка для числового значения
+/// Wrapper for a numeric value.
 class RpcNum extends RpcPrimitiveMessage<num> {
   const RpcNum(super.value);
 
-  /// Создает RpcNum из JSON
+  /// Creates RpcNum from JSON.
   factory RpcNum.fromJson(Map<String, dynamic> json) {
     try {
       final v = json['v'];
       if (v == null) return const RpcNum(0);
       if (v is num) return RpcNum(v);
 
-      // Пробуем преобразовать в число
+      // Attempt to parse as number.
       final asDouble = double.tryParse(v.toString());
       if (asDouble != null) {
-        // Если это целое число, преобразуем в int
+        // Convert to int when the value is whole.
         if (asDouble == asDouble.toInt()) {
           return RpcNum(asDouble.toInt());
         }
@@ -36,7 +36,7 @@ class RpcNum extends RpcPrimitiveMessage<num> {
   @override
   String toString() => value.toString();
 
-  // Арифметические операторы
+  // Arithmetic operators.
   RpcNum operator +(Object other) => RpcNum(value + _extractNum(other));
   RpcNum operator -(Object other) => RpcNum(value - _extractNum(other));
   RpcNum operator *(Object other) => RpcNum(value * _extractNum(other));
@@ -106,11 +106,11 @@ class RpcNum extends RpcPrimitiveMessage<num> {
   }
 }
 
-/// Обертка для целочисленного значения
+/// Wrapper for an integer value.
 class RpcInt extends RpcPrimitiveMessage<int> {
   const RpcInt(super.value);
 
-  /// Создает RpcInt из JSON
+  /// Creates RpcInt from JSON.
   factory RpcInt.fromJson(Map<String, dynamic> json) {
     try {
       final v = json['v'];
@@ -128,7 +128,7 @@ class RpcInt extends RpcPrimitiveMessage<int> {
   @override
   String toString() => value.toString();
 
-  // Арифметические операторы
+  // Arithmetic operators.
   RpcInt operator +(Object other) => RpcInt(value + _extractInt(other));
   RpcInt operator -(Object other) => RpcInt(value - _extractInt(other));
   RpcInt operator *(Object other) => RpcInt(value * _extractInt(other));
@@ -191,11 +191,11 @@ class RpcInt extends RpcPrimitiveMessage<int> {
   }
 }
 
-/// Обертка для дробного числа
+/// Wrapper for a double value.
 class RpcDouble extends RpcPrimitiveMessage<double> {
   const RpcDouble(super.value);
 
-  /// Создает RpcDouble из JSON
+  /// Creates RpcDouble from JSON.
   factory RpcDouble.fromJson(Map<String, dynamic> json) {
     try {
       final v = json['v'];
@@ -203,7 +203,7 @@ class RpcDouble extends RpcPrimitiveMessage<double> {
       if (v is double) return RpcDouble(v);
       if (v is num) return RpcDouble(v.toDouble());
 
-      // Пробуем преобразовать в double
+      // Attempt to parse as double.
       final asDouble = double.tryParse(v.toString());
       if (asDouble != null) {
         return RpcDouble(asDouble);
@@ -221,7 +221,7 @@ class RpcDouble extends RpcPrimitiveMessage<double> {
   @override
   String toString() => value.toString();
 
-  // Арифметические операторы
+  // Arithmetic operators.
   RpcDouble operator +(Object other) =>
       RpcDouble(value + _extractDouble(other));
   RpcDouble operator -(Object other) =>

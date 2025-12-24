@@ -4,29 +4,24 @@
 
 part of '_logs.dart';
 
-/// ANSI цвета для вывода в консоль
+/// ANSI colors for console output.
 ///
-/// Предоставляет константы для цветного форматирования текста в консоли
-/// с использованием ANSI escape-последовательностей.
+/// Provides constants for color formatting using ANSI escape sequences.
 ///
-/// Пример использования:
+/// Example:
 /// ```dart
-/// print('${AnsiColor.green.code}Текст зеленого цвета${AnsiColor.reset.code}');
-/// print('${AnsiColor.bold.code}${AnsiColor.red.code}Жирный красный${AnsiColor.reset.code}');
+/// print('${AnsiColor.green.code}Green text${AnsiColor.reset.code}');
+/// print('${AnsiColor.bold.code}${AnsiColor.red.code}Bold red${AnsiColor.reset.code}');
 /// ```
 enum AnsiColor {
-  // ============================================================================
-  // Управляющие последовательности
-  // ============================================================================
+  // Control sequences.
   reset('\x1B[0m'),
   bold('\x1B[1m'),
   italic('\x1B[3m'),
   underline('\x1B[4m'),
   strikethrough('\x1B[9m'),
 
-  // ============================================================================
-  // Обычные цвета
-  // ============================================================================
+  // Standard colors.
   black('\x1B[0;30m'),
   red('\x1B[0;31m'),
   green('\x1B[0;32m'),
@@ -36,9 +31,7 @@ enum AnsiColor {
   cyan('\x1B[0;36m'),
   white('\x1B[0;37m'),
 
-  // ============================================================================
-  // Жирные цвета
-  // ============================================================================
+  // Bold colors.
   boldBlack('\x1B[1;30m'),
   boldRed('\x1B[1;31m'),
   boldGreen('\x1B[1;32m'),
@@ -48,9 +41,7 @@ enum AnsiColor {
   boldCyan('\x1B[1;36m'),
   boldWhite('\x1B[1;37m'),
 
-  // ============================================================================
-  // Подчеркнутые цвета
-  // ============================================================================
+  // Underlined colors.
   underlineBlack('\x1B[4;30m'),
   underlineRed('\x1B[4;31m'),
   underlineGreen('\x1B[4;32m'),
@@ -60,9 +51,7 @@ enum AnsiColor {
   underlineCyan('\x1B[4;36m'),
   underlineWhite('\x1B[4;37m'),
 
-  // ============================================================================
-  // Фоновые цвета
-  // ============================================================================
+  // Background colors.
   bgBlack('\x1B[40m'),
   bgRed('\x1B[41m'),
   bgGreen('\x1B[42m'),
@@ -72,9 +61,7 @@ enum AnsiColor {
   bgCyan('\x1B[46m'),
   bgWhite('\x1B[47m'),
 
-  // ============================================================================
-  // Яркие цвета (High Intensity)
-  // ============================================================================
+  // Bright (high intensity) colors.
   brightBlack('\x1B[0;90m'),
   brightRed('\x1B[0;91m'),
   brightGreen('\x1B[0;92m'),
@@ -84,9 +71,7 @@ enum AnsiColor {
   brightCyan('\x1B[0;96m'),
   brightWhite('\x1B[0;97m'),
 
-  // ============================================================================
-  // Жирные яркие цвета (Bold High Intensity)
-  // ============================================================================
+  // Bold bright (high intensity).
   boldBrightBlack('\x1B[1;90m'),
   boldBrightRed('\x1B[1;91m'),
   boldBrightGreen('\x1B[1;92m'),
@@ -96,9 +81,7 @@ enum AnsiColor {
   boldBrightCyan('\x1B[1;96m'),
   boldBrightWhite('\x1B[1;97m'),
 
-  // ============================================================================
-  // Яркие фоновые цвета (High Intensity Background)
-  // ============================================================================
+  // Bright backgrounds.
   bgBrightBlack('\x1B[0;100m'),
   bgBrightRed('\x1B[0;101m'),
   bgBrightGreen('\x1B[0;102m'),
@@ -111,45 +94,34 @@ enum AnsiColor {
   final String code;
   const AnsiColor(this.code);
 
-  /// Комбинирует текущий цвет с другим стилем
-  ///
-  /// Пример:
-  /// ```dart
-  /// final redBold = AnsiColor.red.combine(AnsiColor.bold);
-  /// print('${redBold}Красный жирный текст${AnsiColor.reset.code}');
-  /// ```
+  /// Combines the current color with another style.
   String combine(AnsiColor other) => code + other.code;
 
-  /// Применяет цвет к тексту и автоматически сбрасывает
-  ///
-  /// Пример:
-  /// ```dart
-  /// print(AnsiColor.green.wrap('Зеленый текст'));
-  /// ```
+  /// Wraps text with the color and resets it automatically.
   String wrap(String text) => '$code$text${AnsiColor.reset.code}';
 }
 
-/// Настройки цветов для разных уровней логирования
+/// Color configuration for logging levels.
 class RpcLoggerColors {
-  /// Цвет для логов уровня internal
+  /// Color for internal logs.
   final AnsiColor internal;
 
-  /// Цвет для логов уровня debug
+  /// Color for debug logs.
   final AnsiColor debug;
 
-  /// Цвет для логов уровня info
+  /// Color for info logs.
   final AnsiColor info;
 
-  /// Цвет для логов уровня warning
+  /// Color for warning logs.
   final AnsiColor warning;
 
-  /// Цвет для логов уровня error
+  /// Color for error logs.
   final AnsiColor error;
 
-  /// Цвет для логов уровня critical
+  /// Color for critical logs.
   final AnsiColor critical;
 
-  /// Создаёт настройки цветов с указанными значениями
+  /// Creates a palette with explicit values.
   const RpcLoggerColors({
     this.internal = AnsiColor.brightBlack,
     this.debug = AnsiColor.cyan,
@@ -159,7 +131,7 @@ class RpcLoggerColors {
     this.critical = AnsiColor.brightRed,
   });
 
-  /// Создаёт настройки с одним цветом для всех уровней
+  /// Creates a palette using one color for every level.
   const RpcLoggerColors.singleColor(AnsiColor color)
       : internal = color,
         debug = color,
@@ -168,7 +140,7 @@ class RpcLoggerColors {
         error = color,
         critical = color;
 
-  /// Яркая цветовая схема
+  /// Bright color scheme.
   const RpcLoggerColors.bright()
       : internal = AnsiColor.brightBlack,
         debug = AnsiColor.brightCyan,
@@ -177,7 +149,7 @@ class RpcLoggerColors {
         error = AnsiColor.brightRed,
         critical = AnsiColor.boldBrightRed;
 
-  /// Жирная цветовая схема
+  /// Bold color scheme.
   const RpcLoggerColors.bold()
       : internal = AnsiColor.boldBlack,
         debug = AnsiColor.boldCyan,
@@ -186,7 +158,7 @@ class RpcLoggerColors {
         error = AnsiColor.boldRed,
         critical = AnsiColor.boldBrightRed;
 
-  /// Получает цвет для указанного уровня логирования
+  /// Returns the color for a logging level.
   AnsiColor colorForLevel(RpcLoggerLevel level) {
     switch (level) {
       case RpcLoggerLevel.internal:

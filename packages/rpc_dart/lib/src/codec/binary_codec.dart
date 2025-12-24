@@ -4,11 +4,11 @@
 
 part of '_index.dart';
 
-/// Универсальный бинарный кодек.
+/// Generic binary codec wrapper.
 ///
-/// Позволяет подключить произвольную бинарную сериализацию (например, Protocol
-/// Buffers) без необходимости добавлять внешние зависимости в ядро. Пользователь
-/// передает функции преобразования в байты и обратно.
+/// Lets callers plug in any binary serializer (e.g., Protocol Buffers) without
+/// adding dependencies to the core. Conversion callbacks handle the actual
+/// encoding/decoding.
 class RpcBinaryCodec<T> implements IRpcCodec<T> {
   final Uint8List Function(T value) _toBytes;
   final T Function(Uint8List bytes) _fromBytes;

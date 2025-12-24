@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
+
 import '../utils/transport_wrappers.dart';
 
 final class _ThrowingCodec<T> implements IRpcCodec<T> {
@@ -13,7 +14,7 @@ final class _ThrowingCodec<T> implements IRpcCodec<T> {
 }
 
 void main() {
-  setUpAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.none));
+  setUpAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.disabled));
   tearDownAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info));
 
   group('base_processor.dart: coverage', () {

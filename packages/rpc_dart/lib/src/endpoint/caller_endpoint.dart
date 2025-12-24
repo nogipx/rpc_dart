@@ -4,10 +4,10 @@
 
 part of '_index.dart';
 
-/// Клиентский RPC эндпоинт для отправки запросов
+/// Client-side RPC endpoint for sending requests.
 final class RpcCallerEndpoint extends RpcEndpointBase {
-  /// Реестр токенов отмены для активных вызовов
-  /// Ключ: "serviceName/methodName", Значение: мапа requestId -> токен отмены
+  /// Registry of cancellation tokens for active calls.
+  /// Key: "serviceName/methodName", Value: map of requestId -> token.
   final Map<String, Map<String, RpcCancellationToken>> _cancellationTokens = {};
 
   void _untrackRequest(
@@ -60,34 +60,34 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     _validateClientTransport();
   }
 
-  /// Выполняет ping-запрос к responder эндпоинту и возвращает результат.
+  /// Performs a ping to a responder endpoint and returns the result.
   Future<RpcEndpointPingResult> ping({
     Duration? timeout,
     RpcContext? context,
   }) async {
     if (!isActive) {
       throw StateError(
-        'RpcCallerEndpoint закрыт и не может выполнять ping',
+        'RpcCallerEndpoint is closed and cannot perform ping',
       );
     }
 
     if (transport.isClosed) {
       throw StateError(
-        'Транспорт закрыт и не может отправлять ping',
+        'Transport is closed and cannot send ping',
       );
     }
 
     final streamId = transport.createStream();
     final sentAt = DateTime.now().toUtc();
 
-    logger.internal('Подготовка ping запроса [streamId: $streamId]');
+    logger.internal('Preparing ping request [streamId: $streamId]');
 
     final baseContext = _ensureContext(context);
     final routingContext = baseContext.withAdditionalHeaders({
       'x-route-service': RpcEndpointPingProtocol.serviceName,
     });
 
-    // Проверяем отмену и deadline до отправки ping.
+    // Check cancellation and deadline before sending ping.
     routingContext.cancellationToken?.throwIfCancelled();
     if (routingContext.isExpired) {
       throw RpcDeadlineExceededException(
@@ -153,13 +153,12 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     );
   }
 
-  /// Создает ключ для реестра токенов из имени сервиса и метода
+  /// Builds a cancellation registry key from service and method names.
   String _createMethodKey(String serviceName, String methodName) {
     return '$serviceName/$methodName';
   }
 
-  /// Получает токен отмены для указанного метода и requestId
-  /// Возвращает null, если токен не найден
+  /// Returns the cancellation token for a method/requestId, or null if absent.
   RpcCancellationToken? getCancellationToken(
     String serviceName,
     String methodName,
@@ -169,8 +168,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     return _cancellationTokens[key]?[requestId];
   }
 
-  /// Получает все токены отмены для указанного метода
-  /// Возвращает пустую мапу, если метод не найден
+  /// Returns all cancellation tokens for a method (empty map when missing).
   Map<String, RpcCancellationToken> getCancellationTokensForMethod(
     String serviceName,
     String methodName,
@@ -179,8 +177,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     return Map.unmodifiable(_cancellationTokens[key] ?? {});
   }
 
-  /// Отменяет конкретный вызов по requestId
-  /// Возвращает true, если токен был найден и отменен
+  /// Cancels a specific call by requestId; returns true if found.
   bool cancelRequest(
     String serviceName,
     String methodName,
@@ -200,15 +197,14 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
           _cancellationTokens.remove(key);
         }
 
-        logger.internal('Отменен запрос: $key[$requestId]');
+        logger.internal('Request cancelled: $key[$requestId]');
         return true;
       }
     }
     return false;
   }
 
-  /// Отменяет вызов для указанного метода (все активные вызовы этого метода)
-  /// Возвращает количество отмененных токенов
+  /// Cancels all active calls for the given method; returns cancelled count.
   int cancelMethod(String serviceName, String methodName, [String? reason]) {
     final key = _createMethodKey(serviceName, methodName);
     final methodTokens = _cancellationTokens[key];
@@ -224,7 +220,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     return 0;
   }
 
-  /// Отменяет все активные вызовы
+  /// Cancels all active calls.
   void cancelAllMethods([String? reason]) {
     int totalCancelled = 0;
     for (final methodTokens in _cancellationTokens.values) {
@@ -234,10 +230,10 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       }
     }
     _cancellationTokens.clear();
-    logger.internal('Отменены все активные вызовы ($totalCancelled)');
+    logger.internal('Cancelled all active calls ($totalCancelled)');
   }
 
-  /// Отменяет все методы указанного сервиса
+  /// Cancels all methods of the specified service.
   void cancelServiceMethods(String serviceName, [String? reason]) {
     final servicePrefix = '$serviceName/';
     final methodKeys = _cancellationTokens.keys
@@ -255,14 +251,14 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     }
 
     logger.internal(
-      'Отменены все методы сервиса $serviceName ($totalCancelled вызовов)',
+      'Cancelled all methods of service $serviceName ($totalCancelled calls)',
     );
   }
 
-  /// Проверяет, что транспорт является клиентским (генерирует нечетные Stream ID)
+  /// Ensures the transport is client-side (generates odd Stream IDs).
   void _validateClientTransport() {
     try {
-      // Проверяем роль транспорта через интерфейс
+      // Validate transport role via interface.
       if (!transport.isClient) {
         throw ArgumentError(
           'CRITICAL ERROR: RpcCallerEndpoint requires CLIENT transport!\n'
@@ -281,37 +277,37 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     } catch (e) {
       if (e is ArgumentError) rethrow;
 
-      logger.warning('Не удалось проверить роль транспорта: $e');
-      // В случае ошибки при проверке продолжаем работу с предупреждением
+      logger.warning('Failed to validate transport role: $e');
+      // Continue with a warning if validation fails.
     }
   }
 
-  /// Создает или дополняет RpcContext для клиентского запроса
-  /// Автоматически генерирует trace ID если контекст не передан или не содержит trace ID
+  /// Creates or enriches RpcContext for a client request.
+  /// Auto-generates trace ID when absent.
   RpcContext _ensureContext(RpcContext? context) {
     if (context?.traceId != null) {
-      // Контекст уже содержит trace ID - используем как есть
-      logger.internal('Используем существующий trace ID: ${context!.traceId}');
+      // Context already has trace ID.
+      logger.internal('Using existing trace ID: ${context!.traceId}');
       return context;
     }
 
     if (context != null) {
-      // Контекст есть, но нет trace ID - добавляем его
+      // Add trace ID to existing context.
       final tracingContext = RpcContextUtils.withTracing();
       final enhancedContext = context.withTraceId(tracingContext.traceId!);
       logger.internal(
-        'Добавлен trace ID к существующему контексту: ${enhancedContext.traceId}',
+        'Attached trace ID to existing context: ${enhancedContext.traceId}',
       );
       return enhancedContext;
     }
 
-    // Контекста нет - создаем новый с trace ID
+    // No context provided—create a new one with trace ID.
     final newContext = RpcContextUtils.withTracing();
-    logger.internal('Создан новый контекст с trace ID: ${newContext.traceId}');
+    logger.internal('Created new context with trace ID: ${newContext.traceId}');
     return newContext;
   }
 
-  /// Обогащает контекст токеном отмены для Transport Router
+  /// Enriches context with a cancellation token for the Transport Router.
   RpcContext _enhanceContext(
     RpcContext userContext,
     String serviceName,
@@ -324,7 +320,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     final token = userContext.cancellationToken ?? RpcCancellationToken();
     final requestId = userContext.requestId;
 
-    // Инициализируем мапу для метода, если её нет
+    // Initialize method map when missing.
     _cancellationTokens[key] ??= <String, RpcCancellationToken>{};
     _cancellationTokens[key]![requestId] = token;
 
@@ -340,31 +336,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
   ) =>
       _enhanceContext(_ensureContext(userContext), serviceName, methodName);
 
-  /// 🚀 Универсальный унарный request
-  ///
-  /// Автоматически определяет режим работы:
-  /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
-  ///
-  /// Примеры:
-  /// ```dart
-  /// // Сериализация
-  /// final result = await endpoint.unaryRequest<MyRequest, MyResponse>(
-  ///   serviceName: 'Service',
-  ///   methodName: 'Method',
-  ///   requestCodec: myRequestCodec,
-  ///   responseCodec: myResponseCodec,
-  ///   request: MyRequest('data'),
-  /// );
-  ///
-  /// // Zero-copy (только для RpcInMemoryTransport)
-  /// final result = await endpoint.unaryRequest<String, String>(
-  ///   serviceName: 'Service',
-  ///   methodName: 'Method',
-  ///   request: 'hello',
-  ///   // кодеки не указываем → zero-copy
-  /// );
-  /// ```
+  /// Unified unary request: codecs → serialized; no codecs → zero-copy (zero-copy capable transport only).
   Future<TResponse>
       unaryRequest<TRequest extends Object, TResponse extends Object>({
     required String serviceName,
@@ -374,7 +346,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
-    // Проверяем активность эндпоинта
+    // Ensure endpoint is active.
     if (!isActive) {
       throw StateError(
         'RpcCallerEndpoint закрыт и не может обрабатывать запросы',
@@ -383,23 +355,23 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
-    // Zero-copy режим: требуется поддержка zero-copy транспортом
+    // Zero-copy mode requires transport support.
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-        'Для сетевых транспортов передайте кодеки.',
+        'Zero-copy mode requires a transport that supports zero-copy. '
+        'For network transports provide codecs.',
       );
     }
 
-    // Режим сериализации: кодеки обязательны
+    // Serialization mode requires codecs.
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
       throw ArgumentError(
-        'Кодеки обязательны для режима сериализации. '
-        'Для zero-copy не передавайте кодеки (null).',
+        'Codecs are required for serialization mode. '
+        'For zero-copy, omit codecs (null).',
       );
     }
 
-    // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
+    // Auto-create/enrich context with trace ID and routing headers.
     final enhancedContext = _effectiveContext(context, serviceName, methodName);
 
     return () async {
@@ -441,7 +413,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     }();
   }
 
-  /// Внутренняя реализация универсального унарного вызова
+  /// Internal implementation of the unified unary call.
   Future<TResponse> _executeUniversalUnaryCall<TRequest extends Object,
           TResponse extends Object>(
       {required CallProcessor<TRequest, TResponse> processor,
@@ -484,35 +456,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     }
   }
 
-  /// 🚀 Универсальный server stream
-  ///
-  /// Автоматически определяет режим работы:
-  /// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-  /// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
-  ///
-  /// Примеры:
-  /// ```dart
-  /// // Сериализация
-  /// await for (final response in endpoint.serverStream<MyRequest, MyResponse>(
-  ///   serviceName: 'Service',
-  ///   methodName: 'StreamMethod',
-  ///   requestCodec: myRequestCodec,
-  ///   responseCodec: myResponseCodec,
-  ///   request: MyRequest('data'),
-  /// )) {
-  ///   print(response.value);
-  /// }
-  ///
-  /// // Zero-copy (только для RpcInMemoryTransport)
-  /// await for (final response in endpoint.serverStream<String, String>(
-  ///   serviceName: 'Service',
-  ///   methodName: 'StreamMethod',
-  ///   request: 'hello',
-  ///   // кодеки не указываем → zero-copy
-  /// )) {
-  ///   print(response);
-  /// }
-  /// ```
+  /// Unified server-stream request: codecs → serialized; no codecs → zero-copy (zero-copy capable transport only).
   Stream<TResponse>
       serverStream<TRequest extends Object, TResponse extends Object>({
     required String serviceName,
@@ -583,7 +527,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     }();
   }
 
-  /// Создает client stream для отправки множественных запросов и получения одного ответа
+  /// Creates a client stream to send multiple requests and receive one response.
   Future<R> Function(Stream<C>)
       clientStream<C extends Object, R extends Object>({
     required String serviceName,
@@ -627,7 +571,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     };
   }
 
-  /// Создает bidirectional stream builder
+  /// Creates a bidirectional stream builder.
   Stream<R> bidirectionalStream<C extends Object, R extends Object>({
     required String serviceName,
     required String methodName,

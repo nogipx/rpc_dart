@@ -4,11 +4,11 @@
 
 part of '_index.dart';
 
-/// Обертка для строкового значения
+/// Wrapper for a string value.
 class RpcString extends RpcPrimitiveMessage<String> {
   const RpcString(super.value);
 
-  /// Создает RpcString из JSON
+  /// Creates RpcString from JSON.
   factory RpcString.fromJson(Map<String, dynamic> json) {
     try {
       final v = json['v'];

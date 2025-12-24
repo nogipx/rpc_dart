@@ -7,10 +7,10 @@ import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart' show IRpcSerializable;
 
-/// Реализация CBOR (Concise Binary Object Representation) для RPC
-/// Формат описан в RFC 7049: https://tools.ietf.org/html/rfc7049
+/// CBOR (Concise Binary Object Representation) implementation for RPC.
+/// Format reference: RFC 7049 https://tools.ietf.org/html/rfc7049
 abstract interface class CborCodec {
-  /// Константы для мажорных типов
+  /// Major type constants.
   static const int _majorTypeUnsignedInt = 0;
   static const int _majorTypeNegativeInt = 1;
   static const int _majorTypeByteString = 2;
@@ -20,55 +20,55 @@ abstract interface class CborCodec {
   static const int _majorTypeTag = 6;
   static const int _majorTypeSimple = 7;
 
-  /// Константы для дополнительной информации
+  /// Additional info constants.
   static const int _additionalInfoIndefiniteLength = 31;
   static const int _additionalInfoOneByteFollow = 24;
   static const int _additionalInfoTwoByteFollow = 25;
   static const int _additionalInfoFourByteFollow = 26;
   static const int _additionalInfoEightByteFollow = 27;
 
-  /// Специальные значения
+  /// Special values.
   static const int _simpleValueFalse = 20;
   static const int _simpleValueTrue = 21;
   static const int _simpleValueNull = 22;
   static const int _simpleValueUndefined = 23;
   static const int _simpleValueBreak = 31;
 
-  /// Кодирует Map(String, dynamic) в байты CBOR
+  /// Encodes Map<String, dynamic> into CBOR bytes.
   static Uint8List encode(Map<String, dynamic> value) {
     final writer = _FastCborWriter();
     writer.writeMap(value);
     return writer.toBytes();
   }
 
-  /// Декодирует CBOR байты в Dart объекты
+  /// Decodes CBOR bytes into Dart objects.
   static Map<String, dynamic> decode(Uint8List bytes) {
     final reader = _FastCborReader(bytes);
     return reader.readMap();
   }
 
-  /// Небезопасное кодирование любого значения в байты CBOR
-  /// НЕ проверяет типы Map - принимает любые Map типы
-  /// Используется для тестирования и специальных случаев
+  /// Unsafe encoding of any value into CBOR bytes.
+  /// Does not validate map key types; accepts any Map variant.
+  /// Intended for tests and special cases.
   static Uint8List encodeUnsafe(dynamic value) {
     return _encode(value, strictMapTypes: false);
   }
 
-  /// Небезопасное декодирование CBOR байтов
-  /// Возвращает dynamic вместо строго типизированного Map(String, dynamic)
-  /// Используется для тестирования и специальных случаев
+  /// Unsafe decoding of CBOR bytes.
+  /// Returns dynamic instead of Map<String, dynamic>.
+  /// Intended for tests and special cases.
   static dynamic decodeUnsafe(Uint8List bytes) {
     final reader = _CborReader(bytes);
     return reader.readValue();
   }
 
-  /// Кодирует любое значение в байты CBOR
-  /// Если передан Map, он должен быть Map(String, dynamic) при strictMapTypes=true
+  /// Encodes any value into CBOR bytes.
+  /// When [strictMapTypes] is true, Map inputs must be Map<String, dynamic>.
   static Uint8List _encode(dynamic value, {bool strictMapTypes = true}) {
-    // Проверяем, что если передана Map, то она имеет тип Map<String, dynamic>
+    // Ensure map inputs use string keys when strict typing is requested.
     if (strictMapTypes && value is Map && value is! Map<String, dynamic>) {
       throw ArgumentError(
-        'CborCodec.encode принимает только Map<String, dynamic>, получено несовместимый тип Map',
+        'CborCodec.encode expects Map<String, dynamic>; received an incompatible Map type',
       );
     }
 
@@ -77,7 +77,7 @@ abstract interface class CborCodec {
     return builder.toBytes();
   }
 
-  /// Рекурсивно кодирует значение в CBOR
+  /// Recursively encodes a value into CBOR.
   static void _encodeValue(dynamic value, BytesBuilder builder) {
     if (value == null) {
       _encodeNull(builder);
@@ -96,7 +96,7 @@ abstract interface class CborCodec {
     } else if (value is Map) {
       _encodeMap(value, builder);
     } else if (value is IRpcSerializable) {
-      // Для IRpcSerializable используем toJson(), который возвращает Map<String, dynamic>
+      // For IRpcSerializable use toJson(), which returns Map<String, dynamic>.
       _encodeMap(value.toJson(), builder);
     } else {
       try {
@@ -109,18 +109,18 @@ abstract interface class CborCodec {
           _encodeString(json.toString(), builder);
         }
       } catch (e) {
-        // Для неизвестных типов преобразуем в строку
+        // Fallback to string for unknown types.
         _encodeString(value.toString(), builder);
       }
     }
   }
 
-  /// Кодирует null
+  /// Encodes null.
   static void _encodeNull(BytesBuilder builder) {
     builder.addByte(_getMajorTypeByte(_majorTypeSimple, _simpleValueNull));
   }
 
-  /// Кодирует bool
+  /// Encodes a bool.
   static void _encodeBool(bool value, BytesBuilder builder) {
     builder.addByte(
       _getMajorTypeByte(
@@ -130,7 +130,7 @@ abstract interface class CborCodec {
     );
   }
 
-  /// Кодирует int
+  /// Encodes an int.
   static void _encodeInt(int value, BytesBuilder builder) {
     if (value >= 0) {
       _encodePositiveInt(value, builder);
@@ -139,7 +139,7 @@ abstract interface class CborCodec {
     }
   }
 
-  /// Кодирует положительное число
+  /// Encodes a positive integer.
   static void _encodePositiveInt(int value, BytesBuilder builder) {
     if (value <= 23) {
       builder.addByte(_getMajorTypeByte(_majorTypeUnsignedInt, value));
@@ -170,7 +170,7 @@ abstract interface class CborCodec {
         ),
       );
 
-      // Правильное кодирование 64-битного числа согласно RFC 7049
+      // Correct 64-bit integer encoding per RFC 7049.
       builder.addByte((value >> 56) & 0xFF);
       builder.addByte((value >> 48) & 0xFF);
       builder.addByte((value >> 40) & 0xFF);
@@ -182,7 +182,7 @@ abstract interface class CborCodec {
     }
   }
 
-  /// Кодирует отрицательное число
+  /// Encodes a negative integer.
   static void _encodeNegativeInt(int value, BytesBuilder builder) {
     if (value <= 23) {
       builder.addByte(_getMajorTypeByte(_majorTypeNegativeInt, value));
@@ -213,7 +213,7 @@ abstract interface class CborCodec {
         ),
       );
 
-      // Правильное кодирование 64-битного числа согласно RFC 7049
+      // Correct 64-bit integer encoding per RFC 7049.
       builder.addByte((value >> 56) & 0xFF);
       builder.addByte((value >> 48) & 0xFF);
       builder.addByte((value >> 40) & 0xFF);
@@ -225,40 +225,40 @@ abstract interface class CborCodec {
     }
   }
 
-  /// Кодирует double
+  /// Encodes a double.
   static void _encodeDouble(double value, BytesBuilder builder) {
-    // Для float используем IEEE 754 64-bit (Double)
+    // Use IEEE 754 64-bit doubles.
     builder.addByte(
       _getMajorTypeByte(_majorTypeSimple, _additionalInfoEightByteFollow),
     );
 
-    // Конвертируем double в bytes в формате IEEE 754
+    // Convert the double to IEEE 754 bytes.
     final ByteData data = ByteData(8);
-    data.setFloat64(0, value, Endian.big); // Используем big-endian по RFC 7049
+    data.setFloat64(0, value, Endian.big); // RFC 7049 uses big-endian.
 
-    // Добавляем байты
+    // Append bytes.
     for (int i = 0; i < 8; i++) {
       builder.addByte(data.getUint8(i));
     }
   }
 
-  /// Кодирует строку
+  /// Encodes a string.
   static void _encodeString(String value, BytesBuilder builder) {
-    // Кодируем строку как массив UTF-8 байтов
+    // Encode the string as UTF-8 bytes.
     final utf8Bytes = utf8.encode(value);
 
-    // Стандартное кодирование для строк по RFC 7049
+    // Standard string encoding per RFC 7049.
     _encodeLength(_majorTypeTextString, utf8Bytes.length, builder);
     builder.add(utf8Bytes);
   }
 
-  /// Кодирует бинарную строку
+  /// Encodes a binary string.
   static void _encodeByteString(Uint8List bytes, BytesBuilder builder) {
     _encodeLength(_majorTypeByteString, bytes.length, builder);
     builder.add(bytes);
   }
 
-  /// Кодирует список
+  /// Encodes a list.
   static void _encodeList(List<dynamic> list, BytesBuilder builder) {
     _encodeLength(_majorTypeArray, list.length, builder);
     for (final item in list) {
@@ -266,17 +266,17 @@ abstract interface class CborCodec {
     }
   }
 
-  /// Кодирует карту (словарь)
+  /// Encodes a map.
   static void _encodeMap(Map<dynamic, dynamic> map, BytesBuilder builder) {
     _encodeLength(_majorTypeMap, map.length, builder);
 
-    // RFC 7049 рекомендует сортировать ключи для детерминированного кодирования
+    // RFC 7049 recommends sorting keys for deterministic encoding.
     final keys = map.keys.toList()
       ..sort((a, b) {
-        // Сначала преобразуем к строкам, а затем сравниваем
+        // Convert to strings first, then compare.
         final aString = a.toString();
         final bString = b.toString();
-        // Сравниваем побайтово
+        // Byte-by-byte comparison.
         final aBytes = utf8.encode(aString);
         final bBytes = utf8.encode(bString);
         for (int i = 0; i < aBytes.length && i < bBytes.length; i++) {
@@ -288,13 +288,13 @@ abstract interface class CborCodec {
       });
 
     for (final key in keys) {
-      // Для совместимости всегда кодируем ключи как строки
+      // Encode keys as strings for compatibility.
       _encodeString(key.toString(), builder);
       _encodeValue(map[key], builder);
     }
   }
 
-  /// Кодирует длину
+  /// Encodes the length prefix.
   static void _encodeLength(int majorType, int length, BytesBuilder builder) {
     if (length <= 23) {
       builder.addByte(_getMajorTypeByte(majorType, length));
@@ -332,15 +332,15 @@ abstract interface class CborCodec {
     }
   }
 
-  /// Формирует байт заголовка
+  /// Builds the header byte.
   static int _getMajorTypeByte(int majorType, int additionalInfo) {
     return (majorType << 5) | (additionalInfo & 0x1F);
   }
 
-  /// Преобразует Map(dynamic, dynamic) в Map(String, dynamic)
+  /// Converts Map<dynamic, dynamic> to Map<String, dynamic>.
   static Map<String, dynamic> _ensureStringKeys(Map<dynamic, dynamic> map) {
     return map.map((key, value) {
-      // Рекурсивно обрабатываем вложенные карты
+      // Recursively process nested maps.
       if (value is Map) {
         value = _ensureStringKeys(value);
       } else if (value is List) {
@@ -350,7 +350,7 @@ abstract interface class CborCodec {
     });
   }
 
-  /// Обрабатывает элементы списка, преобразуя вложенные карты
+  /// Processes list items, converting nested maps.
   static List<dynamic> _processListItems(List<dynamic> list) {
     return list.map((item) {
       if (item is Map) {
@@ -363,14 +363,14 @@ abstract interface class CborCodec {
   }
 }
 
-/// Вспомогательный класс для чтения CBOR данных
+/// Helper reader for CBOR data.
 class _CborReader {
   final Uint8List _bytes;
   int _offset = 0;
 
   _CborReader(this._bytes);
 
-  /// Читает следующее значение из потока байт
+  /// Reads the next value from the byte stream.
   dynamic readValue() {
     if (_offset >= _bytes.length) {
       throw FormatException('Unexpected end of CBOR data');
@@ -394,7 +394,7 @@ class _CborReader {
       case CborCodec._majorTypeMap:
         return _readMap(additionalInfo);
       case CborCodec._majorTypeTag:
-        // Для простоты просто пропускаем тег и читаем значение
+        // Skip the tag and read the value.
         _readUnsignedInt(additionalInfo);
         return readValue();
       case CborCodec._majorTypeSimple:
@@ -404,7 +404,7 @@ class _CborReader {
     }
   }
 
-  /// Читает беззнаковое целое число
+  /// Reads an unsigned integer.
   int _readUnsignedInt(int additionalInfo) {
     if (additionalInfo < 24) {
       return additionalInfo;
@@ -421,7 +421,7 @@ class _CborReader {
             (_readByte() << 8) |
             _readByte();
       case CborCodec._additionalInfoEightByteFollow:
-        // Читаем 8 байт как big-endian значение
+        // Read 8 bytes as a big-endian integer.
         int result = 0;
         for (int i = 0; i < 8; i++) {
           result = (result << 8) | _readByte();
@@ -434,7 +434,7 @@ class _CborReader {
     }
   }
 
-  /// Читает бинарную строку
+  /// Reads a byte string.
   Uint8List _readByteString(int additionalInfo) {
     final length = _readLength(additionalInfo);
 
@@ -447,7 +447,7 @@ class _CborReader {
     return result;
   }
 
-  /// Читает текстовую строку
+  /// Reads a text string.
   String _readTextString(int additionalInfo) {
     final length = _readLength(additionalInfo);
 
@@ -465,12 +465,12 @@ class _CborReader {
     }
   }
 
-  /// Читает массив
+  /// Reads an array.
   List<dynamic> _readArray(int additionalInfo) {
     if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
       final result = <dynamic>[];
 
-      // Читаем элементы до break маркера
+      // Consume elements until a break marker appears.
       while (true) {
         if (_offset >= _bytes.length) {
           throw FormatException(
@@ -478,17 +478,17 @@ class _CborReader {
           );
         }
 
-        // Проверяем наличие break маркера
+        // Check for the break marker.
         if (_bytes[_offset] ==
             CborCodec._getMajorTypeByte(
               CborCodec._majorTypeSimple,
               CborCodec._simpleValueBreak,
             )) {
-          _offset++; // Пропускаем break маркер
+          _offset++; // Skip the break marker.
           break;
         }
 
-        // Читаем элемент
+        // Read next element.
         result.add(readValue());
       }
 
@@ -505,12 +505,12 @@ class _CborReader {
     return result;
   }
 
-  /// Читает карту (словарь)
+  /// Reads a map.
   Map<String, dynamic> _readMap(int additionalInfo) {
     if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
       final result = <String, dynamic>{};
 
-      // Читаем пары ключ-значение до break маркера
+      // Read key/value pairs until a break marker is found.
       while (true) {
         if (_offset >= _bytes.length) {
           throw FormatException(
@@ -518,17 +518,17 @@ class _CborReader {
           );
         }
 
-        // Проверяем наличие break маркера
+        // Check for the break marker.
         if (_bytes[_offset] ==
             CborCodec._getMajorTypeByte(
               CborCodec._majorTypeSimple,
               CborCodec._simpleValueBreak,
             )) {
-          _offset++; // Пропускаем break маркер
+          _offset++; // Skip the break marker.
           break;
         }
 
-        // Читаем пару ключ-значение
+        // Read a key/value pair.
         final key = readValue();
         final value = readValue();
         result[key.toString()] = value;
@@ -549,7 +549,7 @@ class _CborReader {
     return result;
   }
 
-  /// Читает простое значение
+  /// Reads a simple value.
   dynamic _readSimpleValue(int additionalInfo) {
     switch (additionalInfo) {
       case CborCodec._simpleValueFalse:
@@ -559,14 +559,14 @@ class _CborReader {
       case CborCodec._simpleValueNull:
         return null;
       case CborCodec._simpleValueUndefined:
-        // Для Dart undefined аналогичен null
+        // Dart treats undefined as null.
         return null;
       case CborCodec._simpleValueBreak:
         throw FormatException(
           'Unexpected break value outside indefinite-length item',
         );
       case CborCodec._additionalInfoEightByteFollow:
-        // IEEE 754 Double
+        // IEEE 754 Double.
         final byteData = ByteData(8);
         for (int i = 0; i < 8; i++) {
           byteData.setUint8(i, _readByte());
@@ -574,21 +574,21 @@ class _CborReader {
         return byteData.getFloat64(
           0,
           Endian.big,
-        ); // Используем big-endian по RFC 7049
+        ); // Use big-endian per RFC 7049.
       default:
         if (additionalInfo >= 0 && additionalInfo <= 19) {
-          // Простые значения 0-19
+          // Simple values 0-19.
           return additionalInfo;
         }
         if (additionalInfo == CborCodec._additionalInfoOneByteFollow) {
-          // Расширенное простое значение (1 байт)
+          // Extended simple value (1 byte).
           return _readByte();
         }
         throw FormatException('Unknown simple value: $additionalInfo');
     }
   }
 
-  /// Читает длину
+  /// Reads a length field.
   int _readLength(int additionalInfo) {
     if (additionalInfo < 24) {
       return additionalInfo;
@@ -607,7 +607,7 @@ class _CborReader {
     }
   }
 
-  /// Читает один байт
+  /// Reads a single byte.
   int _readByte() {
     if (_offset >= _bytes.length) {
       throw FormatException('Unexpected end of CBOR data');
@@ -616,15 +616,15 @@ class _CborReader {
   }
 }
 
-/// OPTIMIZED: Быстрый CBOR ридер для Map(String, dynamic)
-/// Убирает лишние проверки и конвертации типов
+/// OPTIMIZED: Fast CBOR reader for Map<String, dynamic>.
+/// Avoids redundant checks and type conversions.
 class _FastCborReader {
   final Uint8List _bytes;
   int _offset = 0;
 
   _FastCborReader(this._bytes);
 
-  /// Читает Map(String, dynamic) напрямую (без промежуточных конвертаций)
+  /// Reads Map<String, dynamic> directly without extra conversions.
   Map<String, dynamic> readMap() {
     if (_offset >= _bytes.length) {
       throw FormatException('Unexpected end of CBOR data');
@@ -641,15 +641,15 @@ class _FastCborReader {
     return _readMapFast(additionalInfo);
   }
 
-  /// Быстрое чтение карты с оптимизациями
+  /// Fast map reading with minimal overhead.
   Map<String, dynamic> _readMapFast(int additionalInfo) {
     final length = _readLength(additionalInfo);
     final result = <String, dynamic>{};
 
     for (int i = 0; i < length; i++) {
-      // Читаем ключ (всегда строка)
+      // Keys are always strings.
       final key = _readStringFast();
-      // Читаем значение
+      // Then read the value.
       final value = _readValueFast();
       result[key] = value;
     }
@@ -657,7 +657,7 @@ class _FastCborReader {
     return result;
   }
 
-  /// Быстрое чтение строки без кеширования
+  /// Fast string read without caching.
   String _readStringFast() {
     final byte = _bytes[_offset++];
     final majorType = byte >> 5;
@@ -683,7 +683,7 @@ class _FastCborReader {
     }
   }
 
-  /// Быстрое чтение значения с оптимизациями
+  /// Fast value read optimized for hot paths.
   dynamic _readValueFast() {
     if (_offset >= _bytes.length) {
       throw FormatException('Unexpected end of CBOR data');
@@ -693,14 +693,14 @@ class _FastCborReader {
     final majorType = byte >> 5;
     final additionalInfo = byte & 0x1F;
 
-    // Оптимизируем для наиболее частых типов
+    // Optimized for the most common types.
     switch (majorType) {
       case CborCodec._majorTypeUnsignedInt:
         return _readUnsignedIntFast(additionalInfo);
       case CborCodec._majorTypeNegativeInt:
         return -_readUnsignedIntFast(additionalInfo) - 1;
       case CborCodec._majorTypeTextString:
-        // Откатываемся на 1 байт назад и читаем строку
+        // Step back one byte and read as string.
         _offset--;
         return _readStringFast();
       case CborCodec._majorTypeByteString:
@@ -716,7 +716,7 @@ class _FastCborReader {
     }
   }
 
-  /// Быстрое чтение unsigned int
+  /// Fast unsigned int read.
   int _readUnsignedIntFast(int additionalInfo) {
     if (additionalInfo < 24) {
       return additionalInfo;
@@ -743,7 +743,7 @@ class _FastCborReader {
     }
   }
 
-  /// Быстрое чтение byte string
+  /// Fast byte string read.
   Uint8List _readByteStringFast(int additionalInfo) {
     final length = _readLength(additionalInfo);
 
@@ -756,7 +756,7 @@ class _FastCborReader {
     return result;
   }
 
-  /// Быстрое чтение массива
+  /// Fast array read.
   List<dynamic> _readArrayFast(int additionalInfo) {
     final length = _readLength(additionalInfo);
     final result = <dynamic>[];
@@ -768,7 +768,7 @@ class _FastCborReader {
     return result;
   }
 
-  /// Быстрое чтение простых значений
+  /// Fast read for simple values.
   dynamic _readSimpleValueFast(int additionalInfo) {
     switch (additionalInfo) {
       case CborCodec._simpleValueFalse:
@@ -778,7 +778,7 @@ class _FastCborReader {
       case CborCodec._simpleValueNull:
         return null;
       case CborCodec._additionalInfoEightByteFollow:
-        // IEEE 754 Double - inline для скорости
+        // Inline IEEE 754 double for speed.
         final byteData = ByteData(8);
         for (int i = 0; i < 8; i++) {
           byteData.setUint8(i, _readByteFast());
@@ -792,7 +792,7 @@ class _FastCborReader {
     }
   }
 
-  /// Быстрое чтение длины
+  /// Fast length read.
   int _readLength(int additionalInfo) {
     if (additionalInfo < 24) {
       return additionalInfo;
@@ -800,7 +800,7 @@ class _FastCborReader {
     return _readUnsignedIntFast(additionalInfo);
   }
 
-  /// Быстрое чтение одного байта (inline)
+  /// Inline fast single-byte read.
   int _readByteFast() {
     if (_offset >= _bytes.length) {
       throw FormatException('Unexpected end of CBOR data');
@@ -809,25 +809,25 @@ class _FastCborReader {
   }
 }
 
-/// OPTIMIZED: Быстрый CBOR writer для Map(String, dynamic)
-/// Убирает лишние проверки и конвертации типов
+/// OPTIMIZED: Fast CBOR writer for Map<String, dynamic>.
+/// Avoids redundant checks and type conversions.
 class _FastCborWriter {
   final BytesBuilder _builder = BytesBuilder();
 
-  /// Возвращает закодированные байты
+  /// Returns encoded bytes.
   Uint8List toBytes() => _builder.toBytes();
 
-  /// Кодирует Map(String, dynamic) в байты CBOR
+  /// Encodes Map<String, dynamic> into CBOR bytes.
   void writeMap(Map<String, dynamic> value) {
     _writeLength(CborCodec._majorTypeMap, value.length);
 
-    // RFC 7049 рекомендует сортировать ключи для детерминированного кодирования
+    // RFC 7049 recommends sorting keys for deterministic encoding.
     final keys = value.keys.toList()
       ..sort((a, b) {
-        // Сначала преобразуем к строкам, а затем сравниваем
+        // Convert to strings first, then compare.
         final aString = a.toString();
         final bString = b.toString();
-        // Сравниваем побайтово
+        // Byte-by-byte comparison.
         final aBytes = utf8.encode(aString);
         final bBytes = utf8.encode(bString);
         for (int i = 0; i < aBytes.length && i < bBytes.length; i++) {
@@ -839,13 +839,13 @@ class _FastCborWriter {
       });
 
     for (final key in keys) {
-      // Для совместимости всегда кодируем ключи как строки
+      // Encode keys as strings for compatibility.
       _writeString(key.toString());
       _writeValue(value[key]);
     }
   }
 
-  /// Кодирует значение в байты CBOR
+  /// Encodes a value into CBOR bytes.
   void _writeValue(dynamic value) {
     if (value == null) {
       _writeNull();
@@ -864,7 +864,7 @@ class _FastCborWriter {
     } else if (value is Map) {
       _writeMap(value);
     } else if (value is IRpcSerializable) {
-      // Для IRpcSerializable используем toJson(), который возвращает Map<String, dynamic>
+      // For IRpcSerializable use toJson(), which returns Map<String, dynamic>.
       _writeMap(value.toJson());
     } else {
       try {
@@ -877,20 +877,20 @@ class _FastCborWriter {
           _writeString(json.toString());
         }
       } catch (e) {
-        // Для неизвестных типов преобразуем в строку
+        // Fallback to string for unknown types.
         _writeString(value.toString());
       }
     }
   }
 
-  /// Кодирует null
+  /// Encodes null.
   void _writeNull() {
     _builder.addByte(
       _getMajorTypeByte(CborCodec._majorTypeSimple, CborCodec._simpleValueNull),
     );
   }
 
-  /// Кодирует bool
+  /// Encodes a bool.
   void _writeBool(bool value) {
     _builder.addByte(
       _getMajorTypeByte(
@@ -900,7 +900,7 @@ class _FastCborWriter {
     );
   }
 
-  /// Кодирует int
+  /// Encodes an int.
   void _writeInt(int value) {
     if (value >= 0) {
       _writePositiveInt(value);
@@ -909,7 +909,7 @@ class _FastCborWriter {
     }
   }
 
-  /// Кодирует положительное число
+  /// Encodes a positive integer.
   void _writePositiveInt(int value) {
     if (value <= 23) {
       _builder.addByte(
@@ -951,7 +951,7 @@ class _FastCborWriter {
         ),
       );
 
-      // Правильное кодирование 64-битного числа согласно RFC 7049
+      // Correct 64-bit integer encoding per RFC 7049.
       _builder.addByte((value >> 56) & 0xFF);
       _builder.addByte((value >> 48) & 0xFF);
       _builder.addByte((value >> 40) & 0xFF);
@@ -963,7 +963,7 @@ class _FastCborWriter {
     }
   }
 
-  /// Кодирует отрицательное число
+  /// Encodes a negative integer.
   void _writeNegativeInt(int value) {
     if (value <= 23) {
       _builder.addByte(
@@ -1005,7 +1005,7 @@ class _FastCborWriter {
         ),
       );
 
-      // Правильное кодирование 64-битного числа согласно RFC 7049
+      // Correct 64-bit integer encoding per RFC 7049.
       _builder.addByte((value >> 56) & 0xFF);
       _builder.addByte((value >> 48) & 0xFF);
       _builder.addByte((value >> 40) & 0xFF);
@@ -1017,9 +1017,9 @@ class _FastCborWriter {
     }
   }
 
-  /// Кодирует double
+  /// Encodes a double.
   void _writeDouble(double value) {
-    // Для float используем IEEE 754 64-bit (Double)
+    // Use IEEE 754 64-bit (double).
     _builder.addByte(
       _getMajorTypeByte(
         CborCodec._majorTypeSimple,
@@ -1027,33 +1027,33 @@ class _FastCborWriter {
       ),
     );
 
-    // Конвертируем double в bytes в формате IEEE 754
+    // Convert double to bytes in IEEE 754 format.
     final ByteData data = ByteData(8);
-    data.setFloat64(0, value, Endian.big); // Используем big-endian по RFC 7049
+    data.setFloat64(0, value, Endian.big); // RFC 7049 uses big-endian.
 
-    // Добавляем байты
+    // Append bytes.
     for (int i = 0; i < 8; i++) {
       _builder.addByte(data.getUint8(i));
     }
   }
 
-  /// Кодирует строку
+  /// Encodes a string.
   void _writeString(String value) {
-    // Кодируем строку как массив UTF-8 байтов
+    // Encode the string as UTF-8 bytes.
     final utf8Bytes = utf8.encode(value);
 
-    // Стандартное кодирование для строк по RFC 7049
+    // Standard string encoding per RFC 7049.
     _writeLength(CborCodec._majorTypeTextString, utf8Bytes.length);
     _builder.add(utf8Bytes);
   }
 
-  /// Кодирует бинарную строку
+  /// Encodes a binary string.
   void _writeByteString(Uint8List bytes) {
     _writeLength(CborCodec._majorTypeByteString, bytes.length);
     _builder.add(bytes);
   }
 
-  /// Кодирует список
+  /// Encodes a list.
   void _writeList(List<dynamic> list) {
     _writeLength(CborCodec._majorTypeArray, list.length);
     for (final item in list) {
@@ -1061,17 +1061,17 @@ class _FastCborWriter {
     }
   }
 
-  /// Кодирует карту (словарь)
+  /// Encodes a map.
   void _writeMap(Map<dynamic, dynamic> map) {
     _writeLength(CborCodec._majorTypeMap, map.length);
 
-    // RFC 7049 рекомендует сортировать ключи для детерминированного кодирования
+    // RFC 7049 recommends sorting keys for deterministic encoding.
     final keys = map.keys.toList()
       ..sort((a, b) {
-        // Сначала преобразуем к строкам, а затем сравниваем
+        // Convert to strings first, then compare.
         final aString = a.toString();
         final bString = b.toString();
-        // Сравниваем побайтово
+        // Byte-by-byte comparison.
         final aBytes = utf8.encode(aString);
         final bBytes = utf8.encode(bString);
         for (int i = 0; i < aBytes.length && i < bBytes.length; i++) {
@@ -1083,13 +1083,13 @@ class _FastCborWriter {
       });
 
     for (final key in keys) {
-      // Для совместимости всегда кодируем ключи как строки
+      // Encode keys as strings for compatibility.
       _writeString(key.toString());
       _writeValue(map[key]);
     }
   }
 
-  /// Кодирует длину
+  /// Encodes the length prefix.
   void _writeLength(int majorType, int length) {
     if (length <= 23) {
       _builder.addByte(_getMajorTypeByte(majorType, length));
@@ -1127,7 +1127,7 @@ class _FastCborWriter {
     }
   }
 
-  /// Формирует байт заголовка
+  /// Builds the header byte.
   int _getMajorTypeByte(int majorType, int additionalInfo) {
     return (majorType << 5) | (additionalInfo & 0x1F);
   }

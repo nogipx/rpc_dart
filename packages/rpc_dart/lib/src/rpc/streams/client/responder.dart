@@ -4,13 +4,7 @@
 
 part of '../_index.dart';
 
-/// 🚀 Универсальная серверная часть клиентского стриминга
-///
-/// Автоматически определяет режим работы:
-/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-/// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
-///
-/// Получает поток запросов и отправляет один ответ.
+/// Server-side handler for client streaming: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Consumes a request stream and returns one response.
 final class ClientStreamResponder<TRequest extends Object,
     TResponse extends Object> implements IRpcResponder {
   late final RpcLogger? _logger;
@@ -27,23 +21,13 @@ final class ClientStreamResponder<TRequest extends Object,
     _doneCompleter.complete();
   }
 
-  /// Внутренний процессор стрима
+  /// Stream processor.
   late final StreamProcessor<TRequest, TResponse> _processor;
 
-  /// Флаг, указывающий, что обработчик запущен
+  /// True when handler started.
   bool _handlerStarted = false;
 
-  /// Создает универсальный сервер клиентского стриминга
-  ///
-  /// [id] Идентификатор стрима
-  /// [transport] Транспортный уровень
-  /// [serviceName] Имя сервиса (например, "DataService")
-  /// [methodName] Имя метода (например, "ProcessData")
-  /// [requestCodec] Кодек для десериализации запросов (null для zero-copy)
-  /// [responseCodec] Кодек для сериализации ответа (null для zero-copy)
-  /// [handler] Функция-обработчик, вызываемая для обработки потока запросов
-  /// [context] RPC контекст с токеном отмены
-  /// [logger] Опциональный логгер
+  /// Creates a client-stream responder.
   ClientStreamResponder({
     required this.id,
     required IRpcTransport transport,
@@ -57,25 +41,25 @@ final class ClientStreamResponder<TRequest extends Object,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
-    // Zero-copy режим: требуется RpcInMemoryTransport
+    // Zero-copy requires transport support.
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-        'Для сетевых транспортов передайте кодеки.',
+        'Zero-copy mode requires a transport with zero-copy support. '
+        'Provide codecs for network transports.',
       );
     }
 
-    // Режим сериализации: кодеки обязательны
+    // Serialization requires codecs.
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
       throw ArgumentError(
-        'Кодеки обязательны для режима сериализации. '
-        'Для zero-copy не передавайте кодеки (null).',
+        'Codecs are required for serialization mode. '
+        'For zero-copy leave codecs null.',
       );
     }
 
     _logger = logger?.child('ClientResponder');
     _logger?.internal(
-      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamResponder для $serviceName.$methodName [id: $id]',
+      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamResponder for $serviceName.$methodName [id: $id]',
     );
 
     _processor = StreamProcessor<TRequest, TResponse>(
@@ -92,9 +76,9 @@ final class ClientStreamResponder<TRequest extends Object,
     _setupRequestHandler(handler);
   }
 
-  /// Привязывает респондер к потоку сообщений от endpoint'а
+  /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger?.internal('Привязка к потоку сообщений [id: $id]');
+    _logger?.internal('Binding to message stream [id: $id]');
     _processor.bindToMessageStream(messageStream);
   }
 
@@ -102,28 +86,28 @@ final class ClientStreamResponder<TRequest extends Object,
     Future<TResponse> Function(Stream<TRequest> requests) handler,
   ) {
     if (_handlerStarted) {
-      _logger?.warning('Обработчик запросов уже запущен [id: $id]');
+      _logger?.warning('Request handler already started [id: $id]');
       return;
     }
 
     _handlerStarted = true;
     _logger?.internal(
-      'Настройка обработчика запросов для клиентского стрима [id: $id]',
+      'Configuring request handler for client stream [id: $id]',
     );
 
-    // Вызываем обработчик напрямую с потоком запросов
+    // Invoke handler directly with the request stream.
     handler(_processor.requests).then((response) async {
       _logger?.internal(
-        'Обработчик завершен, отправляем ответ: $response [id: $id]',
+        'Handler completed, sending response: $response [id: $id]',
       );
 
       try {
         await _processor.send(response);
         await _processor.finishSending();
-        _logger?.internal('Ответ успешно отправлен клиенту [id: $id]');
+        _logger?.internal('Response delivered to client [id: $id]');
       } catch (e, stackTrace) {
         _logger?.error(
-          'Ошибка при отправке ответа клиенту [id: $id]',
+          'Failed to send response to client [id: $id]',
           error: e,
           stackTrace: stackTrace,
         );
@@ -132,7 +116,7 @@ final class ClientStreamResponder<TRequest extends Object,
       }
     }).catchError((error, stackTrace) async {
       _logger?.error(
-        'Ошибка при обработке клиентского стрима [id: $id]',
+        'Client stream handling failed [id: $id]',
         error: error,
         stackTrace: stackTrace,
       );
@@ -144,7 +128,7 @@ final class ClientStreamResponder<TRequest extends Object,
     });
   }
 
-  /// Закрывает стрим и освобождает ресурсы
+  /// Closes the stream and releases resources.
   Future<void> close() async {
     await _processor.close();
     _completeDone();

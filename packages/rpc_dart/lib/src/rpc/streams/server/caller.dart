@@ -4,56 +4,18 @@
 
 part of '../_index.dart';
 
-/// 🚀 Универсальный клиент серверного стриминга
-///
-/// Автоматически определяет режим работы:
-/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-/// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
-///
-/// Позволяет отправить ОДИН запрос и получить поток ответов.
-/// Соблюдает семантику серверного стрима - после отправки запроса
-/// автоматически завершает отправку и предоставляет только поток ответов.
-///
-/// Примеры использования:
-/// ```dart
-/// // Сериализация
-/// final client = ServerStreamCaller<MyRequest, MyResponse>(
-///   transport: clientTransport,
-///   serviceName: "DataService",
-///   methodName: "GetData",
-///   requestCodec: myRequestCodec,
-///   responseCodec: myResponseCodec,
-///   context: context,
-/// );
-///
-/// // Zero-copy (только для RpcInMemoryTransport)
-/// final client = ServerStreamCaller<String, String>(
-///   transport: inMemoryTransport,
-///   serviceName: "DataService",
-///   methodName: "GetData",
-///   // кодеки не указываем → автоматически zero-copy
-///   context: context,
-/// );
-/// ```
+/// Server-stream caller: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Sends one request, receives a response stream.
 final class ServerStreamCaller<TRequest extends Object,
     TResponse extends Object> {
   late final RpcLogger? _logger;
 
-  /// Внутренний процессор стрима
+  /// Stream processor.
   late final CallProcessor<TRequest, TResponse> _processor;
 
-  /// Флаг отправки запроса (можно отправить только один!)
+  /// Ensures only one request is sent.
   bool _requestSent = false;
 
-  /// Создает универсальный клиент серверного стриминга
-  ///
-  /// [transport] Транспортный уровень
-  /// [serviceName] Имя сервиса (например, "DataService")
-  /// [methodName] Имя метода (например, "GetData")
-  /// [requestCodec] Кодек для сериализации запроса (null для zero-copy)
-  /// [responseCodec] Кодек для десериализации ответов (null для zero-copy)
-  /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
-  /// [logger] Опциональный логгер
+  /// Creates a server-stream caller.
   ServerStreamCaller({
     required IRpcTransport transport,
     required String serviceName,
@@ -65,25 +27,25 @@ final class ServerStreamCaller<TRequest extends Object,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
-    // Zero-copy режим: требуется RpcInMemoryTransport
+    // Zero-copy mode: requires in-memory transport.
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-        'Для сетевых транспортов передайте кодеки.',
+        'Zero-copy mode requires a transport with zero-copy support. '
+        'Provide codecs for network transports.',
       );
     }
 
-    // Режим сериализации: кодеки обязательны
+    // Serialization mode: codecs required.
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
       throw ArgumentError(
-        'Кодеки обязательны для режима сериализации. '
-        'Для zero-copy не передавайте кодеки (null).',
+        'Codecs are required for serialization mode. '
+        'For zero-copy leave codecs null.',
       );
     }
 
     _logger = logger?.child('ServerCaller');
     _logger?.internal(
-      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamCaller для $serviceName.$methodName',
+      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamCaller for $serviceName.$methodName',
     );
 
     _processor = CallProcessor<TRequest, TResponse>(
@@ -97,46 +59,33 @@ final class ServerStreamCaller<TRequest extends Object,
     );
   }
 
-  /// Поток ответов от сервера
-  ///
-  /// Предоставляет доступ к потоку ответов, получаемых от сервера.
-  /// Поток завершается, когда сервер завершает отправку ответов
-  /// или при возникновении ошибки.
+  /// Response stream (completes when server finishes or on error).
   Stream<RpcMessage<TResponse>> get responses => _processor.responses;
 
-  /// Отправляет единственный запрос серверу
-  ///
-  /// ⚠️ ОГРАНИЧЕНИЕ: Можно вызвать только ОДИН раз!
-  /// После отправки запроса автоматически завершает поток отправки.
-  ///
-  /// [request] Объект запроса для отправки
-  /// Throws [StateError] если запрос уже был отправлен
+  /// Sends the single request; may be called only once.
   Future<void> send(TRequest request) async {
     if (_requestSent) {
       throw StateError(
-        'ServerStream позволяет отправить только один запрос! '
-        'Запрос уже был отправлен.',
+        'ServerStream allows only one request; it was already sent.',
       );
     }
 
     _logger?.internal(
-      'Отправка единственного запроса в серверный стрим: $request',
+      'Sending single request to server stream: $request',
     );
 
     try {
-      _requestSent =
-          true; // Устанавливаем флаг СРАЗУ, чтобы не было повторных вызовов
+      _requestSent = true; // Set flag immediately to block duplicates.
 
-      // Отправляем запрос через процессор
+      // Send the request via processor.
       await _processor.send(request);
-      _logger?.internal('Запрос успешно отправлен через CallProcessor');
+      _logger?.internal('Request sent via CallProcessor');
 
-      // Автоматически завершаем отправку, чтобы сигнализировать серверу
-      // что у нас только один запрос (семантика серверного стрима)
+      // Finish sending to signal only one request (server-stream semantics).
       await _processor.finishSending();
     } catch (e, stackTrace) {
       _logger?.error(
-        'Ошибка при отправке запроса в серверный стрим',
+        'Failed to send request to server stream',
         error: e,
         stackTrace: stackTrace,
       );
@@ -144,30 +93,24 @@ final class ServerStreamCaller<TRequest extends Object,
     }
   }
 
-  /// Выполняет серверный стрим вызов (удобный метод для zero-copy)
-  ///
-  /// Отправляет запрос и возвращает поток ответов напрямую.
-  /// Автоматически закрывает ресурсы после завершения.
-  ///
-  /// [request] Объект запроса для отправки
-  /// Возвращает поток [TResponse] ответов
+  /// Convenience helper to send a request and yield responses.
   Stream<TResponse> call(TRequest request) async* {
-    _logger?.internal('Выполнение серверного стрим вызова');
+    _logger?.internal('Executing server stream call');
 
     try {
-      // Отправляем запрос
+      // Send request.
       await send(request);
 
-      _logger?.internal('Запрос отправлен, ожидаем поток ответов');
+      _logger?.internal('Request sent, awaiting response stream');
 
-      // Обрабатываем поток ответов
+      // Process response stream.
       await for (final response in responses) {
         if (response.payload != null) {
-          _logger?.internal('Получен ответ от сервера');
+          _logger?.internal('Received response from server');
           yield response.payload!;
         }
 
-        // Проверяем статус в метаданных
+        // Inspect status in metadata.
         if (response.metadata != null) {
           final statusStr = response.metadata!.getHeaderValue(
             RpcConstants.grpcStatusHeader,
@@ -181,7 +124,7 @@ final class ServerStreamCaller<TRequest extends Object,
                   'Unknown error';
               final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
               _logger?.error(
-                'Серверный стрим завершился с ошибкой: $status - $decodedMessage',
+                'Server stream ended with error: $status - $decodedMessage',
               );
               throw Exception('gRPC error $status: $decodedMessage');
             }
@@ -189,18 +132,18 @@ final class ServerStreamCaller<TRequest extends Object,
         }
       }
 
-      _logger?.internal('Серверный стрим завершен');
+      _logger?.internal('Server stream completed');
     } catch (e) {
-      _logger?.error('Ошибка при серверном стрим вызове', error: e);
+      _logger?.error('Server stream call failed', error: e);
       rethrow;
     } finally {
       await close();
     }
   }
 
-  /// Закрывает стрим и освобождает ресурсы
+  /// Closes the caller and releases resources.
   Future<void> close() async {
-    _logger?.internal('Закрытие ServerStreamCaller');
+    _logger?.internal('Closing ServerStreamCaller');
     await _processor.close();
   }
 }

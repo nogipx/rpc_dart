@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-/// Базовое исключение для RPC ядра.
+/// Base exception for the RPC core.
 ///
-/// Используется для сигнализации о внутренних ошибках уровня фреймворка,
-/// таких как исчерпание доступных Stream ID или некорректная конфигурация.
+/// Signals framework-level issues such as depleted Stream IDs or invalid
+/// configuration.
 class RpcException implements Exception {
   final String message;
 

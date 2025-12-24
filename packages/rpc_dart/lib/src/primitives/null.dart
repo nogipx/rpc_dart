@@ -4,7 +4,7 @@
 
 part of '_index.dart';
 
-/// Обертка для null
+/// Wrapper for null.
 class RpcNull extends RpcPrimitiveMessage<void> {
   const RpcNull() : super(null);
 

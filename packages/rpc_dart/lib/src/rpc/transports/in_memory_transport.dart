@@ -7,49 +7,38 @@ import 'dart:typed_data';
 
 import '../../core/_index.dart';
 
-/// Сверхбыстрый транспорт для обмена сообщениями в памяти со Stream ID.
-///
-/// Оптимизирован для минимальных накладных расходов - почти zero-cost абстракция.
-/// Убраны все ненужные проверки и операции из горячих путей.
-/// Поддерживает мультиплексирование по уникальным Stream ID согласно gRPC спецификации.
-///
-/// ZERO-COPY SUPPORT: Поддерживает передачу объектов напрямую без сериализации
-/// через метод sendDirectObject() - максимальная производительность для inmemory!
-///
-/// ВНИМАНИЕ: Эта реализация оптимизирована для скорости, а не для безопасности.
-/// Предполагается корректное использование API без ошибок программиста.
+/// High-speed in-memory transport with Stream ID multiplexing.
+/// Zero-copy is supported via `sendDirectObject`; optimized for performance,
+/// assumes trusted usage.
 class RpcInMemoryTransport implements IRpcTransport {
-  /// Контроллер для отправки сообщений партнерскому транспорту (НЕ broadcast для скорости)
+  /// Outgoing controller (non-broadcast for speed).
   final StreamController<RpcTransportMessage> _outgoingController;
 
-  /// Контроллер для управления потоком входящих сообщений (broadcast для множественных подписок)
+  /// Incoming controller (broadcast).
   final StreamController<RpcTransportMessage> _incomingController =
       StreamController<RpcTransportMessage>.broadcast();
 
-  /// Менеджер Stream ID, управляющий генерацией идентификаторов по HTTP/2 спецификации
+  /// Stream ID manager.
   final RpcStreamIdManager _idManager;
 
   final RpcSecurityPolicy _policy;
 
-  /// Активные streams (минимальное отслеживание)
+  /// Active stream IDs.
   final Set<int> _activeStreams = <int>{};
 
-  /// Флаг закрытия (volatile для быстрой проверки)
+  /// Closed flag.
   bool _closed = false;
 
-  /// Подписка на партнерский транспорт (для разрыва связи при закрытии)
+  /// Subscription to partner transport.
   StreamSubscription<RpcTransportMessage>? _partnerSubscription;
 
-  /// Ссылка на партнерский транспорт (для автоматического закрытия)
+  /// Partner transport reference.
   RpcInMemoryTransport? _partner;
 
-  /// Создает новый сверхбыстрый транспорт для обмена сообщениями в памяти
-  ///
-  /// [_outgoingController] Контроллер для отправки сообщений партнеру
-  /// [isClient] Флаг клиентского транспорта (влияет на генерацию Stream ID)
+  /// Internal constructor.
   RpcInMemoryTransport._(
     this._outgoingController, {
-    bool isClient = true, // Клиент использует нечетные ID, сервер - четные
+    bool isClient = true, // Client uses odd IDs, server uses even.
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   })  : _idManager = RpcStreamIdManager(isClient: isClient),
         _policy = policy;
@@ -61,17 +50,17 @@ class RpcInMemoryTransport implements IRpcTransport {
   Stream<RpcTransportMessage> get incomingMessages =>
       _incomingController.stream;
 
-  /// Возвращает true, если транспорт закрыт
+  /// True when transport is closed.
   @override
   bool get isClosed => _closed;
 
-  /// RpcInMemoryTransport поддерживает zero-copy операции! 🚀
+  /// Zero-copy supported.
   @override
   bool get supportsZeroCopy => true;
 
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
-    // Простейшая фильтрация С broadcast поддержкой для множественных подписок
+    // Simple filtering with broadcast support.
     return _incomingController.stream
         .where((message) => message.streamId == streamId)
         .asBroadcastStream();
@@ -79,14 +68,14 @@ class RpcInMemoryTransport implements IRpcTransport {
 
   @override
   bool releaseStreamId(int streamId) {
-    // Быстрый путь без проверок закрытия
+    // Fast path without closed checks.
     _activeStreams.remove(streamId);
     return _idManager.releaseId(streamId);
   }
 
   @override
   int createStream() {
-    // Убираем try-catch для максимальной скорости
+    // Skip try-catch for speed.
     if (_activeStreams.length >= _policy.maxActiveStreams) {
       throw StateError(
         'Too many active streams: ${_activeStreams.length} (max: ${_policy.maxActiveStreams})',
@@ -97,16 +86,15 @@ class RpcInMemoryTransport implements IRpcTransport {
     return streamId;
   }
 
-  /// ГОРЯЧИЙ ПУТЬ: Добавляет входящее сообщение в поток
-  /// Оптимизировано с минимальной проверкой закрытия
+  /// Adds an incoming message with minimal overhead.
   void _addIncomingMessage(RpcTransportMessage message) {
-    // Быстрая проверка закрытия (только для критических ошибок)
+    // Fast closed check (critical path only).
     if (_closed || _incomingController.isClosed) return;
 
-    // Прямое добавление без проверок для максимальной скорости
+    // Direct add without extra checks for speed.
     _incomingController.add(message);
 
-    // Быстрая очистка при END_STREAM (без дополнительных проверок)
+    // Fast cleanup on END_STREAM.
     if (message.isEndOfStream) {
       _activeStreams.remove(message.streamId);
       _idManager.releaseId(message.streamId);
@@ -119,7 +107,7 @@ class RpcInMemoryTransport implements IRpcTransport {
     RpcMetadata metadata, {
     bool endStream = false,
   }) async {
-    // Быстрая проверка закрытия для предотвращения ошибок
+    // Fast closed check to avoid errors.
     if (_closed || _outgoingController.isClosed) return;
     _policy.validateMetadata(metadata);
 
@@ -130,10 +118,10 @@ class RpcInMemoryTransport implements IRpcTransport {
       streamId: streamId,
     );
 
-    // Прямая отправка
+    // Direct send.
     _outgoingController.add(message);
 
-    // Быстрая очистка при endStream
+    // Fast cleanup on endStream.
     if (endStream) {
       _activeStreams.remove(streamId);
       _idManager.releaseId(streamId);
@@ -146,7 +134,7 @@ class RpcInMemoryTransport implements IRpcTransport {
     Uint8List data, {
     bool endStream = false,
   }) async {
-    // Быстрая проверка закрытия для предотвращения ошибок
+    // Fast closed check to avoid errors.
     if (_closed || _outgoingController.isClosed) return;
 
     final message = RpcTransportMessage(
@@ -155,10 +143,10 @@ class RpcInMemoryTransport implements IRpcTransport {
       streamId: streamId,
     );
 
-    // Прямая отправка
+    // Direct send.
     _outgoingController.add(message);
 
-    // Быстрая очистка при endStream
+    // Fast cleanup on endStream.
     if (endStream) {
       _activeStreams.remove(streamId);
       _idManager.releaseId(streamId);
@@ -171,8 +159,8 @@ class RpcInMemoryTransport implements IRpcTransport {
     Object object, {
     bool endStream = false,
   }) async {
-    // ZERO-COPY IMPLEMENTATION! 🚀
-    // Быстрая проверка закрытия для предотвращения ошибок
+    // Zero-copy implementation.
+    // Fast closed check to avoid errors.
     if (_closed || _outgoingController.isClosed) return;
 
     final message = RpcTransportMessage(
@@ -181,10 +169,10 @@ class RpcInMemoryTransport implements IRpcTransport {
       streamId: streamId,
     );
 
-    // Прямая отправка объекта по ссылке - никакой сериализации!
+    // Directly send the object by reference—no serialization.
     _outgoingController.add(message);
 
-    // Быстрая очистка при endStream
+    // Fast cleanup on endStream.
     if (endStream) {
       _activeStreams.remove(streamId);
       _idManager.releaseId(streamId);
@@ -193,7 +181,7 @@ class RpcInMemoryTransport implements IRpcTransport {
 
   @override
   Future<void> finishSending(int streamId) async {
-    // Упрощенная версия с проверкой закрытия
+    // Simplified version with closed check.
     if (_closed || _outgoingController.isClosed) return;
 
     if (_activeStreams.remove(streamId)) {
@@ -277,24 +265,23 @@ class RpcInMemoryTransport implements IRpcTransport {
 
     _closed = true;
 
-    // ИСПРАВЛЕНИЕ DEADLOCK: Сначала разрываем связь с партнером
+    // Deadlock fix: break the partner link first.
     await _partnerSubscription?.cancel();
     _partnerSubscription = null;
 
-    // АВТОМАТИЧЕСКОЕ ЗАКРЫТИЕ ПАРТНЕРА: При закрытии одного транспорта закрываем второй
+    // Auto-close partner: closing one transport closes the other.
     final partner = _partner;
     if (partner != null && !partner._closed) {
-      _partner = null; // Убираем ссылку, чтобы избежать взаимной рекурсии
-      partner._partner = null; // Убираем обратную ссылку
-      partner
-          .close(); // Закрываем партнера (без await, чтобы избежать deadlock)
+      _partner = null; // Drop reference to avoid recursive calls.
+      partner._partner = null; // Drop back-reference.
+      partner.close(); // Close partner without await to avoid deadlock.
     }
 
-    // Очищаем состояние
+    // Clear state.
     _activeStreams.clear();
     _idManager.reset();
 
-    // Теперь безопасно закрываем контроллеры БЕЗ риска deadlock
+    // Safely close controllers without deadlock risk.
     try {
       if (!_incomingController.isClosed) {
         await _incomingController.close();
@@ -303,23 +290,19 @@ class RpcInMemoryTransport implements IRpcTransport {
         await _outgoingController.close();
       }
     } catch (e) {
-      // Игнорируем ошибки закрытия уже закрытых контроллеров
+      // Ignore errors when controllers are already closed.
     }
   }
 
-  /// Создает пару соединенных сверхбыстрых транспортов
-  ///
-  /// Возвращает кортеж (клиентский транспорт, серверный транспорт)
-  ///
-  /// ВАЖНО: При закрытии одного транспорта автоматически закрывается второй
+  /// Creates a paired client/server in-memory transport; closing one closes both.
   static (IRpcTransport, IRpcTransport) pair({
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
-    // Создаем НЕ broadcast контроллеры для максимальной скорости
+    // Create non-broadcast controllers for maximum speed.
     final clientToServerController = StreamController<RpcTransportMessage>();
     final serverToClientController = StreamController<RpcTransportMessage>();
 
-    // Создаем оптимизированные транспорты
+    // Create optimized transports.
     final clientTransport = RpcInMemoryTransport._(
       clientToServerController,
       isClient: true,
@@ -332,11 +315,11 @@ class RpcInMemoryTransport implements IRpcTransport {
       policy: policy,
     );
 
-    // УСТАНАВЛИВАЕМ ВЗАИМНЫЕ ССЫЛКИ для автоматического закрытия
+    // Set mutual references for automatic closing.
     clientTransport._partner = serverTransport;
     serverTransport._partner = clientTransport;
 
-    // ИСПРАВЛЕНИЕ DEADLOCK: Сохраняем ссылки на подписки для правильного закрытия
+    // Deadlock fix: keep subscription references for proper closing.
     clientTransport._partnerSubscription =
         clientToServerController.stream.listen(
       serverTransport._addIncomingMessage,
@@ -346,7 +329,7 @@ class RpcInMemoryTransport implements IRpcTransport {
         }
       },
       onError: (error) {
-        // Игнорируем ошибки от закрытых стримов
+        // Ignore errors from closed streams.
       },
     );
 
@@ -359,7 +342,7 @@ class RpcInMemoryTransport implements IRpcTransport {
         }
       },
       onError: (error) {
-        // Игнорируем ошибки от закрытых стримов
+        // Ignore errors from closed streams.
       },
     );
 

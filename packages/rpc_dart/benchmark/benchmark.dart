@@ -19,7 +19,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// • Real-world contract scenarios
 /// • Scalability and concurrency testing
 void main(List<String> args) async {
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.none);
+  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.disabled);
 
   final cli = BenchmarkCLI();
   final config = cli.parseArguments(args);

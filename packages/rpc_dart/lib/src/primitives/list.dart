@@ -4,30 +4,27 @@
 
 part of '_index.dart';
 
-/// Специализированный список для работы с объектами, реализующими IRpcSerializable
+/// Specialized list for objects implementing IRpcSerializable.
 ///
-/// Предоставляет возможность сериализации/десериализации списка объектов,
-/// при этом гарантируя типобезопасность и совместимость с RPC механизмами.
+/// Provides serialization/deserialization while keeping type safety and RPC
+/// compatibility.
 class RpcList<T extends IRpcSerializable> implements IRpcSerializable {
-  /// Внутренний список объектов
+  /// Backing list.
   final List<T> _items;
 
-  /// Создаёт пустой список
+  /// Creates an empty list.
   RpcList() : _items = [];
 
-  /// Создаёт список на основе существующего
+  /// Creates a list from an existing collection.
   RpcList.from(List<T> items) : _items = List<T>.from(items);
 
-  /// Создаёт список с заданным размером и заполняет его значениями
+  /// Creates a fixed-length list filled with [fill].
   RpcList.filled(int length, T fill) : _items = List<T>.filled(length, fill);
 
-  /// Создаёт пустой список с указанной ёмкостью
+  /// Creates an empty growable list with optional capacity hint.
   RpcList.empty({int capacity = 0}) : _items = List<T>.empty(growable: true);
 
-  /// Создаёт список из JSON-представления
-  ///
-  /// [json] - JSON-представление списка
-  /// [fromJson] - функция для создания объектов типа T из Map(String, dynamic)
+  /// Creates a list from a JSON representation.
   static RpcList<T> fromJsonRaw<T extends IRpcSerializable>(
     List<dynamic> json,
     T Function(Map<String, dynamic>) fromJson,
@@ -57,69 +54,69 @@ class RpcList<T extends IRpcSerializable> implements IRpcSerializable {
     return {'items': _items.map((item) => item.toJson()).toList()};
   }
 
-  /// Длина списка
+  /// Length of the list.
   int get length => _items.length;
 
-  /// Проверка на пустоту
+  /// True when the list is empty.
   bool get isEmpty => _items.isEmpty;
 
-  /// Проверка, не пуст ли список
+  /// True when the list is not empty.
   bool get isNotEmpty => _items.isNotEmpty;
 
-  /// Доступ к элементу по индексу
+  /// Indexer access.
   T operator [](int index) => _items[index];
 
-  /// Установка элемента по индексу
+  /// Sets a value by index.
   void operator []=(int index, T value) {
     _items[index] = value;
   }
 
-  /// Добавление элемента в конец списка
+  /// Adds an element to the end.
   void add(T value) {
     _items.add(value);
   }
 
-  /// Добавление всех элементов из другого списка
+  /// Adds all elements from another iterable.
   void addAll(Iterable<T> items) {
     _items.addAll(items);
   }
 
-  /// Удаление элемента из списка
+  /// Removes an element.
   bool remove(T value) {
     return _items.remove(value);
   }
 
-  /// Удаление элемента по индексу
+  /// Removes by index.
   T removeAt(int index) {
     return _items.removeAt(index);
   }
 
-  /// Очистка списка
+  /// Clears the list.
   void clear() {
     _items.clear();
   }
 
-  /// Получение итератора
+  /// Returns an iterator.
   Iterator<T> get iterator => _items.iterator;
 
-  /// Получение внутреннего списка (неизменяемая копия)
+  /// Returns an unmodifiable copy.
   List<T> toList() => List.unmodifiable(_items);
 
-  /// Получение внутреннего списка (модифицируемая копия)
+  /// Returns a mutable copy.
   List<T> toMutableList() => List.from(_items);
 
-  /// Преобразование в Iterable для удобного использования с методами коллекций
+  /// Maps items for convenient collection methods.
   Iterable<R> map<R>(R Function(T) f) => _items.map(f);
 
-  /// Применение функции к каждому элементу
+  /// Applies a function to each element.
   void forEach(void Function(T) f) => _items.forEach(f);
 
-  /// Фильтрация элементов
+  /// Filters elements.
   RpcList<T> where(bool Function(T) test) {
     return RpcList<T>.from(_items.where(test).toList());
   }
 
-  /// Сортировка списка по компаратору
+  /// Sorts items with an optional comparator.
   void sort([int Function(T a, T b)? compare]) {
     _items.sort(compare);
   }

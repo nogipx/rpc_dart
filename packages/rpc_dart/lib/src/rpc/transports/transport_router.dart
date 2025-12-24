@@ -8,18 +8,11 @@ import '../../contracts/_index.dart';
 import '../../core/_index.dart';
 import '../../logs/_logs.dart';
 
-/// Функция условия для роутинга RPC вызовов
-///
-/// Принимает:
-/// - [serviceName] - имя сервиса из заголовка 'x-route-service'
-/// - [methodPath] - путь метода в формате /ServiceName/MethodName
-/// - [context] - RPC контекст с заголовками и метаданными
-///
-/// Возвращает true, если правило должно применяться к данному вызову
+/// Predicate used to decide whether a routing rule applies.
 typedef RpcRoutingCondition = bool Function(
     String? serviceName, String? methodPath, RpcContext? context);
 
-/// Правило роутинга с приоритетом
+/// Routing rule with a priority value.
 typedef PrioritizedRoutingRule = ({
   IRpcTransport transport,
   String description,
@@ -27,107 +20,100 @@ typedef PrioritizedRoutingRule = ({
   RpcRoutingCondition matches,
 });
 
-/// Transport Router - умный прокси для маршрутизации RPC вызовов между транспортами
-///
-/// Использует декларативные правила с приоритетами для гибкой настройки роутинга.
-/// Правила проверяются в порядке убывания приоритета (высший приоритет первым).
-///
-/// Автоматически извлекает serviceName из headers 'x-route-service',
-/// который добавляется RpcCallerEndpoint при каждом вызове.
+/// Proxy that routes RPC calls to transports using prioritized rules.
+/// Extracts `serviceName` from the `x-route-service` header set by caller endpoints.
 final class RpcTransportRouter implements IRpcTransport {
-  /// Все правила роутинга, отсортированные по приоритету (убывание)
+  /// All routing rules sorted by priority (descending).
   final List<PrioritizedRoutingRule> _routingRules = [];
 
-  /// Менеджер Stream ID
+  /// Stream ID manager.
   final RpcStreamIdManager _idManager;
 
-  /// Контроллер для входящих сообщений
+  /// Controller for incoming messages.
   final StreamController<RpcTransportMessage> _incomingController =
       StreamController<RpcTransportMessage>.broadcast();
 
-  /// Маппинг клиентского stream ID к транспорту
+  /// Maps client stream ID to the target transport.
   final Map<int, IRpcTransport> _streamTransports = {};
 
-  /// Маппинг клиентского stream ID к серверному stream ID
+  /// Maps client stream ID to server stream ID.
   final Map<int, int> _clientToServerStreamMapping = {};
 
-  /// Активные подписки на потоки ответов для каждого stream'а
+  /// Active response subscriptions per stream.
   final Map<int, StreamSubscription> _responseSubscriptions = {};
 
-  /// Логгер
+  /// Logger.
   final RpcLogger _logger;
 
-  /// Флаг закрытия
+  /// Close flag.
   bool _closed = false;
 
   RpcTransportRouter._({
     required List<PrioritizedRoutingRule> routingRules,
     RpcLogger? logger,
     int maxActiveStreams = 10000,
-  })  : _idManager = RpcStreamIdManager(isClient: true), // Всегда клиентский
+  })  : _idManager = RpcStreamIdManager(isClient: true), // Always client-side
         _logger = logger ?? RpcLogger('TransportRouter'),
         _maxActiveStreams = maxActiveStreams {
-    // Сортируем правила по приоритету (высший приоритет первым)
+    // Sort rules by priority (highest first).
     _routingRules.addAll(routingRules);
     _routingRules.sort((a, b) => b.priority.compareTo(a.priority));
 
     _logger.internal(
-      'Transport Router создан с ${_routingRules.length} правилами:',
+      'Transport Router initialized with ${_routingRules.length} rules:',
     );
     for (int i = 0; i < _routingRules.length; i++) {
       final rule = _routingRules[i];
       _logger.internal('  ${i + 1}. [P${rule.priority}] ${rule.description}');
     }
-    _logger.internal('  - Роль: client (Router всегда клиентский)');
+    _logger.internal('  - Role: client (router is always client-side)');
   }
 
   final int _maxActiveStreams;
 
-  /// Создает подписку на ответы для конкретного stream'а
+  /// Creates a response subscription for a specific stream.
   void _subscribeToResponsesForStream(
     int clientStreamId,
     int serverStreamId,
     IRpcTransport transport,
   ) {
     _logger.internal(
-      '🔔 Подписываемся на ответы: клиент[$clientStreamId] <- сервер[$serverStreamId] через $transport',
+      'Subscribing to responses: client[$clientStreamId] <- server[$serverStreamId] via $transport',
     );
 
-    // 🔥 ИСПРАВЛЕНИЕ: Слушаем ВХОДЯЩИЕ сообщения от транспорта, а не исходящие!
-    // Когда роутер отправляет в transport, ответы придут через transport.incomingMessages
+    // Listen to incoming transport messages (responses arrive via incomingMessages).
     final subscription = transport.incomingMessages
         .where((message) => message.streamId == serverStreamId)
         .listen(
       (message) {
         _logger.internal(
-          '🔄 ПОЛУЧЕН ответ от transport: сервер[$serverStreamId] -> клиент[$clientStreamId], payload=${message.payload != null ? "есть" : "нет"}, isEndOfStream=${message.isEndOfStream}',
+          'Received response from transport: server[$serverStreamId] -> client[$clientStreamId], payload=${message.payload != null ? "present" : "absent"}, isEndOfStream=${message.isEndOfStream}',
         );
 
-        // 🔄 КЛЮЧЕВАЯ ЛОГИКА: Перенаправляем ответы с правильным stream ID
+        // Core logic: forward responses with the correct stream ID.
         final redirectedMessage = RpcTransportMessage(
           payload: message.payload,
           metadata: message.metadata,
           isEndOfStream: message.isEndOfStream,
           methodPath: message.methodPath,
-          streamId: clientStreamId, // 👈 Подменяем stream ID!
-          // ИСПРАВЛЕНИЕ: Сохраняем zero-copy данные
+          streamId: clientStreamId, // Replace stream ID.
+          // Keep zero-copy payload.
           directPayload: message.directPayload,
         );
 
         _logger.internal(
-          '🔄 Перенаправляем ответ: сервер[$serverStreamId] -> клиент[$clientStreamId]',
+          'Forwarding response: server[$serverStreamId] -> client[$clientStreamId]',
         );
         _incomingController.add(redirectedMessage);
 
-        // ❌ НЕ ОЧИЩАЕМ здесь! Очистка будет в onDone
-        // Для предотвращения двойной очистки (и при isEndOfStream, и при onDone)
+        // Cleanup is handled in onDone to avoid double cleanup.
       },
       onError: (error) {
         _logger.error(
-          '❌ ОШИБКА в транспорте stream $serverStreamId',
+          'Transport error in stream $serverStreamId',
           error: error,
         );
-        // При ошибке тоже нужна очистка
+        // Cleanup is required on errors too.
         _cleanupStream(clientStreamId, serverStreamId);
       },
       onDone: () {
@@ -145,10 +131,9 @@ final class RpcTransportRouter implements IRpcTransport {
     );
   }
 
-  /// Очищает ресурсы для завершенного stream'а и возвращает true, если были
-  /// освобождены клиентский или серверный Stream ID
+  /// Cleans up resources for a completed stream and returns true if a client or server stream ID was released.
   bool _cleanupStream(int clientStreamId, int serverStreamId) {
-    // 🔥 ЗАЩИТА ОТ ПОВТОРНОЙ ОЧИСТКИ: Проверяем, есть ли еще данные для очистки
+    // Guard against double cleanup.
     if (!_streamTransports.containsKey(clientStreamId) &&
         !_clientToServerStreamMapping.containsKey(clientStreamId) &&
         !_responseSubscriptions.containsKey(clientStreamId)) {
@@ -218,7 +203,7 @@ final class RpcTransportRouter implements IRpcTransport {
     return clientIdReleased || serverIdReleased;
   }
 
-  /// Извлекает RpcContext из метаданных сообщения
+  /// Extracts an RpcContext from message metadata.
   RpcContext? _extractContextFromMessage(RpcTransportMessage message) {
     if (message.metadata == null) return null;
 
@@ -268,7 +253,7 @@ final class RpcTransportRouter implements IRpcTransport {
     return 'headers=${names.length} names=[${shown.join(', ')}$suffix]';
   }
 
-  /// Главная логика роутинга - выбирает транспорт по приоритету правил
+  /// Core routing logic selects a transport by rule priority.
   IRpcTransport _selectTransport(RpcTransportMessage message) {
     final context = _extractContextFromMessage(message);
     final methodPath = message.methodPath;
@@ -276,29 +261,28 @@ final class RpcTransportRouter implements IRpcTransport {
         context?.getHeader('x-route-service');
 
     _logger.internal(
-      'Роутинг для service="${_truncateForLog(serviceName)}", '
+      'Routing for service="${_truncateForLog(serviceName)}", '
       'method="${_truncateForLog(methodPath)}"',
     );
-    _logger.internal('Контекст роутинга: ${_summarizeHeadersForLog(context)}');
+    _logger.internal('Routing context: ${_summarizeHeadersForLog(context)}');
 
-    // Проверяем правила в порядке убывания приоритета
+    // Evaluate rules in descending priority.
     for (final rule in _routingRules) {
       _logger.debug(
-        'Проверяем правило [P${rule.priority}]: ${rule.description}',
+        'Checking rule [P${rule.priority}]: ${rule.description}',
       );
 
       if (rule.matches(serviceName, methodPath, context)) {
         _logger.internal(
-          '✓ Найдено совпадение [P${rule.priority}]: ${rule.description}',
+          'Matched rule [P${rule.priority}]: ${rule.description}',
         );
         return rule.transport;
       }
     }
 
-    // Если ни одно правило не сработало - явная ошибка
     throw RpcException(
-      'Не найден транспорт для роутинга: service="$serviceName", method="$methodPath". '
-      'Убедитесь, что добавлено соответствующее правило роутинга.',
+      'No transport found for routing: service="$serviceName", method="$methodPath". '
+      'Add a matching routing rule.',
     );
   }
 
@@ -320,7 +304,7 @@ final class RpcTransportRouter implements IRpcTransport {
 
   @override
   bool releaseStreamId(int streamId) {
-    // Очищаем все маппинги для данного stream ID
+    // Clear all mappings for the given stream ID.
     final serverStreamId = _clientToServerStreamMapping[streamId];
     if (serverStreamId != null) {
       return _cleanupStream(streamId, serverStreamId);
@@ -350,7 +334,7 @@ final class RpcTransportRouter implements IRpcTransport {
     );
     _logger.internal('Metadata: ${_summarizeMetadataForLog(metadata)}');
 
-    // Создаем временное сообщение для роутинга
+    // Build a temporary message for routing.
     final routingMessage = RpcTransportMessage(
       metadata: metadata,
       streamId: streamId,
@@ -360,19 +344,19 @@ final class RpcTransportRouter implements IRpcTransport {
 
     _logger.internal('Selecting transport for routing...');
 
-    // Выбираем транспорт
+    // Select transport.
     final transport = _selectTransport(routingMessage);
 
     _logger.internal('Selected transport: $transport');
 
-    // 🔄 ВАЖНО: Создаем новый stream ID на целевом транспорте
+    // Create a new stream ID on the target transport.
     final serverStreamId = transport.createStream();
 
     _logger.internal(
       'Created stream IDs: client[$streamId] -> server[$serverStreamId]',
     );
 
-    // Сохраняем все маппинги
+    // Store all mappings.
     _streamTransports[streamId] = transport;
     _clientToServerStreamMapping[streamId] = serverStreamId;
 
@@ -380,11 +364,11 @@ final class RpcTransportRouter implements IRpcTransport {
       'Stream ID mapping: client[$streamId] -> server[$serverStreamId]',
     );
 
-    // Подписываемся на ответы для этого конкретного stream'а
+    // Subscribe to responses for this stream.
     _logger.internal('Creating response subscription...');
     _subscribeToResponsesForStream(streamId, serverStreamId, transport);
 
-    // Перенаправляем вызов с НОВЫМ stream ID
+    // Forward the call using the new stream ID.
     _logger.internal('Sending metadata to target transport...');
     await transport.sendMetadata(
       serverStreamId,
@@ -403,27 +387,26 @@ final class RpcTransportRouter implements IRpcTransport {
   }) async {
     if (_closed) throw StateError('TransportRouter is closed');
 
-    // Используем сохраненный транспорт для данного stream
+    // Use the saved transport for this stream.
     final transport = _streamTransports[streamId];
     if (transport == null) {
       throw StateError(
-        'Транспорт не найден для stream $streamId. '
-        'Возможно, метаданные не были отправлены сначала.',
+        'Transport not found for stream $streamId. Metadata likely was not sent first.',
       );
     }
 
-    // Получаем серверный stream ID
+    // Resolve server stream ID.
     final serverStreamId = _clientToServerStreamMapping[streamId];
     if (serverStreamId == null) {
       throw StateError(
-        'Серверный stream ID не найден для клиентского stream $streamId',
+        'Server stream ID not found for client stream $streamId',
       );
     }
 
     await transport.sendMessage(serverStreamId, data, endStream: endStream);
 
-    // ❌ НЕ ОЧИЩАЕМ здесь! Очистка должна происходить только при получении END_STREAM ответа
-    // Для унарных запросов endStream=true означает завершение отправки, но ответ еще не получен
+    // Do not clean here; cleanup happens after END_STREAM response.
+    // For unary calls, endStream=true marks send completion while response is pending.
   }
 
   @override
@@ -434,24 +417,23 @@ final class RpcTransportRouter implements IRpcTransport {
   }) async {
     if (_closed) throw StateError('TransportRouter is closed');
 
-    // Используем сохраненный транспорт для данного stream
+    // Use the saved transport for this stream.
     final transport = _streamTransports[streamId];
     if (transport == null) {
       throw StateError(
-        'Транспорт не найден для stream $streamId. '
-        'Возможно, метаданные не были отправлены сначала.',
+        'Transport not found for stream $streamId. Metadata likely was not sent first.',
       );
     }
 
-    // Получаем серверный stream ID
+    // Resolve server stream ID.
     final serverStreamId = _clientToServerStreamMapping[streamId];
     if (serverStreamId == null) {
       throw StateError(
-        'Серверный stream ID не найден для клиентского stream $streamId',
+        'Server stream ID not found for client stream $streamId',
       );
     }
 
-    // Проксируем zero-copy вызов в целевой транспорт
+    // Proxy zero-copy call to the target transport.
     await transport.sendDirectObject(
       serverStreamId,
       object,
@@ -468,7 +450,7 @@ final class RpcTransportRouter implements IRpcTransport {
 
     if (transport != null && serverStreamId != null) {
       await transport.finishSending(serverStreamId);
-      // ✅ Маппинг будет очищен в _cleanupStream когда придет END_STREAM ответ
+      // Mapping is cleared in _cleanupStream when END_STREAM arrives.
     }
   }
 
@@ -620,25 +602,25 @@ final class RpcTransportRouter implements IRpcTransport {
     if (_closed) return;
     _closed = true;
 
-    _logger.internal('Закрытие TransportRouter...');
+    _logger.internal('Closing TransportRouter...');
 
-    // Отписываемся от всех транспортов
+    // Cancel all transport subscriptions.
     for (final subscription in _responseSubscriptions.values) {
       await subscription.cancel();
     }
     _responseSubscriptions.clear();
 
-    // Закрываем контроллер
+    // Close controller.
     await _incomingController.close();
 
-    // Очищаем состояние
+    // Clear state.
     _streamTransports.clear();
     _clientToServerStreamMapping.clear();
 
-    _logger.internal('TransportRouter закрыт');
+    _logger.internal('TransportRouter closed');
   }
 
-  /// Статистика роутера
+  /// Router statistics.
   Map<String, dynamic> get statistics => {
         'totalRules': _routingRules.length,
         'rulesByPriority': {
@@ -654,39 +636,28 @@ final class RpcTransportRouter implements IRpcTransport {
   @override
   bool get isClosed => _closed;
 
-  /// Router поддерживает zero-copy, если его поддерживает хотя бы один из роутируемых транспортов
+  /// Router supports zero-copy if any routed transport does.
   @override
   bool get supportsZeroCopy {
     return _routingRules.any((rule) => rule.transport.supportsZeroCopy);
   }
 }
 
-/// Builder для создания Transport Router с приоритетами
+/// Builder for a prioritized Transport Router.
 final class RpcTransportRouterBuilder {
   final List<PrioritizedRoutingRule> _routingRules = [];
   RpcLogger? _logger;
   int _maxActiveStreams = 10000;
 
-  /// Создает Builder для клиентского Router'а
-  ///
-  /// Router генерирует нечетные Stream ID (1, 3, 5...) и используется
-  /// для отправки запросов на серверы. Все добавляемые транспорты должны
-  /// быть клиентскими (нечетные Stream ID).
-  ///
-  /// ```dart
-  /// final router = RpcTransportRouterBuilder.client()
-  ///   .routeService(fromService: 'UserService', toTransport: userClientTransport)
-  ///   .build();
-  /// ```
+  /// Creates a client-side router builder (odd Stream IDs only).
   factory RpcTransportRouterBuilder.client() => RpcTransportRouterBuilder._();
 
-  /// Создает обычный Builder (всегда клиентский)
+  /// Default builder (always client-side).
   factory RpcTransportRouterBuilder() => RpcTransportRouterBuilder._();
 
-  /// Приватный конструктор
   RpcTransportRouterBuilder._();
 
-  /// Устанавливает логгер
+  /// Sets a logger.
   RpcTransportRouterBuilder logger(RpcLogger logger) {
     _logger = logger;
     return this;
@@ -700,41 +671,33 @@ final class RpcTransportRouterBuilder {
     return this;
   }
 
-  /// Проверяет, что транспорт является клиентским
+  /// Ensures the transport is client-side.
   void _validateTransportRole(IRpcTransport transport) {
-    // Для проверки создаем тестовый stream и анализируем его ID
+    // Create a test stream and inspect its ID.
     late final int testStreamId;
     try {
       testStreamId = transport.createStream();
     } catch (e) {
-      // Если не удалось создать stream - может быть транспорт закрыт
-      // В этом случае пропускаем проверку с предупреждением
-      _logger?.warning('Не удалось проверить роль транспорта: $e');
+      // If creation fails (transport closed?), skip with a warning.
+      _logger?.warning('Could not verify transport role: $e');
       return;
     }
 
-    final isTransportClient = testStreamId.isOdd; // нечетные = клиент
+    final isTransportClient = testStreamId.isOdd; // odd = client
 
-    // Освобождаем тестовый stream
+    // Release the test stream.
     transport.releaseStreamId(testStreamId);
 
-    // Router всегда требует клиентские транспорты
+    // Router always requires client transports.
     if (!isTransportClient) {
       throw ArgumentError(
-        'Неправильная роль транспорта! '
-        'Router требует клиентские транспорты (Stream ID: нечетные), '
-        'но передан серверный транспорт (Stream ID: $testStreamId).',
+        'Invalid transport role: router requires client transports (odd Stream IDs), '
+        'but a server transport was provided (Stream ID: $testStreamId).',
       );
     }
   }
 
-  /// Направляет конкретный сервис в указанный транспорт
-  ///
-  /// [calledServiceName] - имя сервиса, запросы к которому нужно перенаправить
-  /// [toTransport] - целевой транспорт, куда будут направлены запросы
-  /// [priority] - приоритет правила (чем выше, тем раньше проверяется)
-  ///
-  /// Пример: `.routeCall(calledServiceName: 'UserService', toTransport: userTransport, priority: 100)`
+  /// Routes a specific service to a transport.
   RpcTransportRouterBuilder routeCall({
     required String calledServiceName,
     required IRpcTransport toTransport,
@@ -752,23 +715,7 @@ final class RpcTransportRouterBuilder {
     return this;
   }
 
-  /// Добавляет условное правило роутинга с детальным контролем
-  ///
-  /// [toTransport] - целевой транспорт для направления запросов
-  /// [whenCondition] - функция-условие для определения, применять ли это правило
-  /// [priority] - приоритет правила (чем выше, тем раньше проверяется)
-  /// [description] - описание правила для отладки
-  ///
-  /// Пример:
-  /// ```dart
-  /// .routeWhen(
-  ///   toTransport: premiumTransport,
-  ///   whenCondition: (service, method, context) =>
-  ///     service == 'UserService' && context?.getHeader('x-tier') == 'premium',
-  ///   priority: 100,
-  ///   description: 'Premium пользователи на отдельный сервис'
-  /// )
-  /// ```
+  /// Adds a conditional routing rule.
   RpcTransportRouterBuilder routeWhen({
     required IRpcTransport toTransport,
     required RpcRoutingCondition whenCondition,
@@ -786,12 +733,12 @@ final class RpcTransportRouterBuilder {
     return this;
   }
 
-  /// Создает Router
+  /// Builds the router instance.
   RpcTransportRouter build() {
     if (_routingRules.isEmpty) {
       throw ArgumentError(
-        'Transport Router должен иметь как минимум одно правило роутинга. '
-        'Добавьте правила через routeCall или routeWhen.',
+        'Transport Router requires at least one routing rule. '
+        'Add rules via routeCall or routeWhen.',
       );
     }
 

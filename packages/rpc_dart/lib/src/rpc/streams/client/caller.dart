@@ -4,62 +4,24 @@
 
 part of '../_index.dart';
 
-/// 🚀 Универсальная клиентская часть клиентского стриминга
-///
-/// Автоматически определяет режим работы:
-/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-/// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
-///
-/// Позволяет отправить поток запросов и получить ОДИН ответ.
-/// Соблюдает семантику клиентского стрима - можно отправлять много запросов,
-/// но ответ только один после завершения отправки.
-///
-/// Примеры использования:
-/// ```dart
-/// // Сериализация
-/// final client = ClientStreamCaller<MyRequest, MyResponse>(
-///   transport: clientTransport,
-///   serviceName: "DataService",
-///   methodName: "ProcessData",
-///   requestCodec: myRequestCodec,
-///   responseCodec: myResponseCodec,
-///   context: context,
-/// );
-///
-/// // Zero-copy (только для RpcInMemoryTransport)
-/// final client = ClientStreamCaller<String, String>(
-///   transport: inMemoryTransport,
-///   serviceName: "DataService",
-///   methodName: "ProcessData",
-///   // кодеки не указываем → автоматически zero-copy
-///   context: context,
-/// );
-/// ```
+/// Client streaming caller: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Sends many requests, receives one response.
 final class ClientStreamCaller<TRequest extends Object,
     TResponse extends Object> {
   late final RpcLogger? _logger;
 
-  /// Внутренний процессор стрима
+  /// Stream processor.
   late final CallProcessor<TRequest, TResponse> _processor;
 
-  /// Обещание с результатом запроса
+  /// Completer with the response.
   final Completer<TResponse> _responseCompleter = Completer<TResponse>();
 
-  /// Подписка на поток ответов
+  /// Subscription to responses.
   StreamSubscription? _subscription;
 
-  /// Флаг завершения отправки
+  /// Marks send completion.
   bool _sendingFinished = false;
 
-  /// Создает универсальный клиент клиентского стриминга
-  ///
-  /// [transport] Транспортный уровень
-  /// [serviceName] Имя сервиса (например, "DataService")
-  /// [methodName] Имя метода (например, "ProcessData")
-  /// [requestCodec] Кодек для сериализации запросов (null для zero-copy)
-  /// [responseCodec] Кодек для десериализации ответа (null для zero-copy)
-  /// [context] RPC контекст с метаданными, таймаутами и настройками отмены
-  /// [logger] Опциональный логгер
+  /// Creates a client-stream caller.
   ClientStreamCaller({
     required IRpcTransport transport,
     required String serviceName,
@@ -71,25 +33,25 @@ final class ClientStreamCaller<TRequest extends Object,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
-    // Zero-copy режим: требуется RpcInMemoryTransport
+    // Zero-copy requires transport support.
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-        'Для сетевых транспортов передайте кодеки.',
+        'Zero-copy mode requires a transport with zero-copy support. '
+        'Provide codecs for network transports.',
       );
     }
 
-    // Режим сериализации: кодеки обязательны
+    // Serialization mode: codecs required.
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
       throw ArgumentError(
-        'Кодеки обязательны для режима сериализации. '
-        'Для zero-copy не передавайте кодеки (null).',
+        'Codecs are required for serialization mode. '
+        'For zero-copy leave codecs null.',
       );
     }
 
     _logger = logger?.child('ClientCaller');
     _logger?.internal(
-      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamCaller для $serviceName.$methodName',
+      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamCaller for $serviceName.$methodName',
     );
 
     _processor = CallProcessor<TRequest, TResponse>(
@@ -105,20 +67,20 @@ final class ClientStreamCaller<TRequest extends Object,
     _setupResponseHandler();
   }
 
-  /// Настраивает обработчик ответов
+  /// Configures response handler.
   void _setupResponseHandler() {
     _subscription = _processor.responses.listen(
       (rpcMessage) {
         _logger?.internal(
-          'Получен ответ от сервера: isMetadataOnly=${rpcMessage.isMetadataOnly}, isEndOfStream=${rpcMessage.isEndOfStream}',
+          'Received response from server: isMetadataOnly=${rpcMessage.isMetadataOnly}, isEndOfStream=${rpcMessage.isEndOfStream}',
         );
 
-        // Проверяем на ошибки в метаданных (трейлерах)
+        // Check for errors in metadata/trailers.
         if (rpcMessage.isMetadataOnly && rpcMessage.metadata != null) {
           final statusCode = rpcMessage.metadata!.getHeaderValue(
             RpcConstants.grpcStatusHeader,
           );
-          _logger?.internal('Статус-код из метаданных: $statusCode');
+          _logger?.internal('Status code from metadata: $statusCode');
 
           if (statusCode != null && statusCode != '0') {
             final errorMessage = rpcMessage.metadata!.getHeaderValue(
@@ -127,7 +89,7 @@ final class ClientStreamCaller<TRequest extends Object,
                 '';
             final decodedMessage = RpcMetadata.decodeGrpcMessage(errorMessage);
             _logger?.error(
-              'Получен ошибочный статус-код: $statusCode - $decodedMessage',
+              'Received error status code: $statusCode - $decodedMessage',
             );
 
             if (!_responseCompleter.isCompleted) {
@@ -138,31 +100,30 @@ final class ClientStreamCaller<TRequest extends Object,
             return;
           }
 
-          // Если это положительный финальный статус (код 0) и у нас еще нет ответа,
-          // отправляем ошибку, т.к. мы ожидаем получить данные
+          // If final status OK (0) but no payload, fail because data was expected.
           if (statusCode == '0' &&
               rpcMessage.isEndOfStream &&
               !_responseCompleter.isCompleted) {
-            _logger?.warning('Получен статус OK, но нет данных в ответе');
+            _logger?.warning('Status OK but no response payload');
             _responseCompleter.completeError(
-              Exception('Стрим завершен без данных в ответе'),
+              Exception('Stream closed without response payload'),
             );
           }
         }
 
-        // Обрабатываем нормальные ответы с данными
+        // Handle responses with payload.
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
           _logger?.internal(
-            'Получена полезная нагрузка: ${rpcMessage.payload}',
+            'Received payload: ${rpcMessage.payload}',
           );
           _responseCompleter.complete(rpcMessage.payload!);
         }
       },
       onError: (error, stackTrace) {
         _logger?.error(
-          'Ошибка в потоке ответов',
+          'Error in response stream',
           error: error,
           stackTrace: stackTrace,
         );
@@ -171,75 +132,66 @@ final class ClientStreamCaller<TRequest extends Object,
         }
       },
       onDone: () {
-        _logger?.internal('Поток ответов завершен');
+        _logger?.internal('Response stream completed');
         if (!_responseCompleter.isCompleted) {
-          // Проверяем, не было ли это вызвано закрытием транспорта
+          // Might be transport close; surface error if still pending.
           try {
             _responseCompleter.completeError(
-              Exception('Стрим закрыт без получения ответа'),
+              Exception('Stream closed without receiving response'),
             );
           } catch (e) {
-            // Если completer уже завершен, ничего не делаем
-            _logger?.internal('Completer уже завершен, пропускаем ошибку: $e');
+            // If completer already finished, ignore.
+            _logger
+                ?.internal('Completer already completed, skipping error: $e');
           }
         }
       },
     );
   }
 
-  /// Отправляет запрос в поток
-  ///
-  /// ✅ Можно вызывать МНОГО раз до finishSending()
-  /// [request] Объект запроса для отправки
-  /// Throws [StateError] если отправка уже завершена
+  /// Sends a request into the stream. Safe to call multiple times until finishSending().
   Future<void> send(TRequest request) async {
     if (_sendingFinished) {
       throw StateError(
-        'Отправка запросов уже завершена! '
-        'Вызовите finishSending() для получения ответа.',
+        'Sending already completed. Call finishSending() to get the response.',
       );
     }
 
-    _logger?.internal('Отправка запроса в клиентский стрим: $request');
+    _logger?.internal('Sending request to client stream: $request');
     await _processor.send(request);
   }
 
-  /// Завершает отправку запросов и ожидает единственный ответ
+  /// Completes sending requests and waits for a single response.
   ///
-  /// ⚠️ ОГРАНИЧЕНИЕ: Возвращает только ОДИН ответ!
-  /// После вызова этого метода нельзя отправлять новые запросы.
-  ///
-  /// Returns [Future<TResponse>] единственный ответ от сервера
-  /// Throws [TimeoutException] если ответ не получен в течение 30 секунд
-  /// Throws [StateError] если отправка уже была завершена
+  /// Returns the single server response; times out after 30s.
   Future<TResponse> finishSending() async {
     if (_sendingFinished) {
-      throw StateError('Отправка уже была завершена ранее!');
+      throw StateError('Sending was already completed earlier.');
     }
 
     _sendingFinished = true;
 
     try {
-      // Завершаем отправку запросов
+      // Finish sending requests.
       await _processor.finishSending();
-      _logger?.internal('Отправка завершена, ожидание ответа');
+      _logger?.internal('Send complete, waiting for response');
 
-      // Ожидаем единственный ответ с таймаутом
+      // Await single response with timeout.
       return await _responseCompleter.future.timeout(
         Duration(seconds: 30),
         onTimeout: () {
-          _logger?.error('Таймаут ожидания ответа');
-          // Освобождаем ресурсы при таймауте
+          _logger?.error('Response wait timed out');
+          // Free resources on timeout.
           unawaited(close());
           throw TimeoutException(
-            'Таймаут ожидания ответа от сервера',
+            'Response wait timeout from server',
             Duration(seconds: 30),
           );
         },
       );
     } catch (e, stackTrace) {
       _logger?.error(
-        'Ошибка при завершении отправки',
+        'Failed to finish sending',
         error: e,
         stackTrace: stackTrace,
       );
@@ -248,44 +200,38 @@ final class ClientStreamCaller<TRequest extends Object,
         _responseCompleter.completeError(e, stackTrace);
       }
 
-      // Освобождаем ресурсы и закрываем транспорт
+      // Free resources and close transport.
       unawaited(close());
       rethrow;
     }
   }
 
-  /// Выполняет клиентский стрим вызов (удобный метод для zero-copy)
-  ///
-  /// Отправляет поток запросов и возвращает единственный ответ.
-  /// Автоматически закрывает ресурсы после завершения.
-  ///
-  /// [requests] Поток запросов для отправки
-  /// Возвращает единственный [TResponse] ответ
+  /// Convenience: send a request stream and return the single response (auto-closes).
   Future<TResponse> call(Stream<TRequest> requests) async {
-    _logger?.internal('Выполнение клиентского стрим вызова');
+    _logger?.internal('Executing client stream call');
 
     try {
-      // Отправляем поток запросов
+      // Send the request stream.
       await for (final request in requests) {
-        _logger?.internal('Отправка запроса: $request');
+        _logger?.internal('Sending request: $request');
         await send(request);
       }
 
-      _logger?.internal('Поток запросов завершен, ожидаем ответ');
+      _logger?.internal('Request stream finished, awaiting response');
 
-      // Завершаем отправку и получаем ответ
+      // Finish sending and get the response.
       return await finishSending();
     } catch (e) {
-      _logger?.error('Ошибка при клиентском стрим вызове', error: e);
+      _logger?.error('Client stream call failed', error: e);
       rethrow;
     } finally {
       await close();
     }
   }
 
-  /// Закрывает стрим и освобождает ресурсы
+  /// Closes the stream and releases resources.
   Future<void> close() async {
-    _logger?.internal('Закрытие ClientStreamCaller');
+    _logger?.internal('Closing ClientStreamCaller');
     await _subscription?.cancel();
     await _processor.close();
   }

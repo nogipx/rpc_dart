@@ -8,46 +8,44 @@ import 'dart:typed_data';
 import 'compression.dart';
 import 'protocol.dart';
 
-/// Представляет отдельный HTTP/2 заголовок.
+/// Represents a single HTTP/2 header.
 ///
-/// HTTP/2 передает заголовки в бинарном виде через HPACK-сжатие, но
-/// на уровне API они представлены в виде пар "имя-значение".
-/// Специальные заголовки в HTTP/2 начинаются с двоеточия (например, :path).
+/// HTTP/2 carries headers via HPACK-encoded binary, but at the API level they
+/// are name/value pairs. Pseudo headers start with a colon (e.g., :path).
 final class RpcHeader {
-  /// Имя заголовка
+  /// Header name.
   final String name;
 
-  /// Значение заголовка
+  /// Header value.
   final String value;
 
-  /// Создает заголовок с указанным именем и значением
+  /// Creates a header with the given name and value.
   const RpcHeader(this.name, this.value);
 }
 
-/// Метаданные запроса или ответа (набор HTTP/2 заголовков).
+/// Request/response metadata (a set of HTTP/2 headers).
 ///
-/// В gRPC метаданные передаются через HTTP/2 заголовки и трейлеры.
-/// Этот класс обеспечивает удобный доступ к ним и содержит
-/// фабричные методы для создания стандартных наборов заголовков.
+/// gRPC ships metadata through HTTP/2 headers and trailers. This class offers
+/// convenient access plus factories for common header sets.
 final class RpcMetadata {
   static const int _maxGrpcMessageLength = 1024;
   static const int _maxMethodTokenLength = 128;
   static final RegExp _methodTokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
   static final RegExp _percentTriplet = RegExp(r'%[0-9A-Fa-f]{2}');
 
-  /// Список заголовков, составляющих метаданные
+  /// Headers that comprise the metadata.
   final List<RpcHeader> headers;
 
-  /// Создает метаданные из списка заголовков
+  /// Builds metadata from a list of headers.
   const RpcMetadata(this.headers);
 
-  /// Создает метаданные для клиентского запроса.
+  /// Creates metadata for a client request.
   ///
-  /// Формирует необходимые HTTP/2 заголовки для инициализации gRPC вызова.
-  /// [serviceName] Имя сервиса (например, "ChatService")
-  /// [methodName] Имя метода (например, "Send")
-  /// [host] Хост-заголовок (опционально)
-  /// Возвращает метаданные, готовые для отправки при инициализации запроса.
+  /// Builds the HTTP/2 headers needed to start a gRPC call.
+  /// [serviceName] Service name (e.g., "ChatService")
+  /// [methodName] Method name (e.g., "Send")
+  /// [host] Optional host header.
+  /// Returns metadata ready to send with the initial request.
   static RpcMetadata forClientRequest(
     String serviceName,
     String methodName, {
@@ -73,11 +71,11 @@ final class RpcMetadata {
     ]);
   }
 
-  /// Создает метаданные для клиентского запроса с готовым путем.
+  /// Creates client metadata when the method path is already computed.
   ///
-  /// Упрощенная версия для случаев, когда путь уже сформирован.
-  /// [methodPath] Путь метода в формате /ServiceName/MethodName
-  /// [host] Хост-заголовок (опционально)
+  /// Simplified variant for situations when the path already exists.
+  /// [methodPath] Method path in `/ServiceName/MethodName` format.
+  /// [host] Optional host header.
   static RpcMetadata forClientRequestWithPath(
     String methodPath, {
     String host = '',
@@ -86,7 +84,7 @@ final class RpcMetadata {
       throw ArgumentError.value(
         methodPath,
         'methodPath',
-        'Некорректный путь метода (ожидается /Service/Method)',
+        'Invalid method path (expected /Service/Method)',
       );
     }
     return RpcMetadata([
@@ -106,11 +104,11 @@ final class RpcMetadata {
     ]);
   }
 
-  /// Создает начальные метаданные для ответа сервера.
+  /// Creates initial metadata for a server response.
   ///
-  /// Формирует HTTP/2 заголовки, которые сервер отправляет клиенту
-  /// при получении запроса, до отправки каких-либо данных.
-  /// Возвращает метаданные, готовые для отправки в начале ответа.
+  /// Forms the HTTP/2 headers the server sends upon receiving a request before
+  /// streaming any data.
+  /// Returns metadata ready to send at the start of a response.
   static RpcMetadata forServerInitialResponse() {
     return const RpcMetadata([
       RpcHeader(':status', '200'),
@@ -121,13 +119,12 @@ final class RpcMetadata {
     ]);
   }
 
-  /// Создает метаданные для финального трейлера.
+  /// Creates metadata for the final trailer.
   ///
-  /// Формирует заголовки-трейлеры, которые отправляются в конце потока
-  /// и содержат статус выполнения операции gRPC.
-  /// [statusCode] Код завершения gRPC (см. RpcStatus)
-  /// [message] Дополнительное сообщение (обычно при ошибке)
-  /// Возвращает метаданные-трейлеры для завершения потока.
+  /// Builds trailers sent at the end of the stream carrying the gRPC status.
+  /// [statusCode] Completion code (see RpcStatus).
+  /// [message] Optional message (usually on error).
+  /// Returns trailer metadata for stream completion.
   static RpcMetadata forTrailer(
     int statusCode, {
     String message = '',
@@ -240,10 +237,9 @@ final class RpcMetadata {
     }
   }
 
-  /// Находит значение заголовка по его имени.
+  /// Finds a header value by name.
   ///
-  /// [name] Имя искомого заголовка
-  /// Возвращает значение заголовка или null, если заголовок не найден.
+  /// Returns the header value or null if the header is missing.
   String? getHeaderValue(String name) {
     for (var header in headers) {
       if (header.name == name) {
@@ -253,16 +249,15 @@ final class RpcMetadata {
     return null;
   }
 
-  /// Извлекает путь метода из метаданных.
+  /// Extracts the method path from metadata.
   ///
-  /// Ищет заголовок :path и возвращает его значение.
-  /// Возвращает null, если заголовок не найден.
+  /// Returns the :path header value or null if it is absent.
   String? get methodPath => getHeaderValue(':path');
 
-  /// Извлекает имя сервиса из пути метода.
+  /// Extracts the service name from the method path.
   ///
-  /// Парсит путь вида /ServiceName/MethodName и возвращает ServiceName.
-  /// Возвращает null, если путь некорректен или не найден.
+  /// Parses `/ServiceName/MethodName` and returns `ServiceName`, or null if the
+  /// path is missing or malformed.
   String? get serviceName {
     final path = methodPath;
     if (path == null || !path.startsWith('/')) return null;
@@ -272,10 +267,10 @@ final class RpcMetadata {
     return parts[0];
   }
 
-  /// Извлекает имя метода из пути метода.
+  /// Extracts the method name from the method path.
   ///
-  /// Парсит путь вида /ServiceName/MethodName и возвращает MethodName.
-  /// Возвращает null, если путь некорректен или не найден.
+  /// Parses `/ServiceName/MethodName` and returns `MethodName`, or null if the
+  /// path is missing or malformed.
   String? get methodName {
     final path = methodPath;
     if (path == null || !path.startsWith('/')) return null;
@@ -395,7 +390,7 @@ final class RpcMetadata {
       throw ArgumentError.value(
         value,
         label,
-        'Некорректное имя (разрешены A-Z a-z 0-9 _ . -)',
+        'Invalid name (allowed: A-Z a-z 0-9 _ . -)',
       );
     }
   }

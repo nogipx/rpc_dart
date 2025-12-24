@@ -13,7 +13,7 @@ part 'extensions.dart';
 
 typedef RpcMessageProducer = String Function(String);
 
-/// Базовый класс для всех примитивных типов сообщений
+/// Base class for all primitive message types.
 abstract class RpcPrimitiveMessage<T> implements IRpcSerializable {
   final T value;
 
@@ -28,7 +28,7 @@ abstract class RpcPrimitiveMessage<T> implements IRpcSerializable {
   @override
   int get hashCode => value.hashCode;
 
-  /// Сериализует примитивное значение в чисто бинарном формате
+  /// Serializes primitive value to JSON-ready map.
   @override
   Map<String, dynamic> toJson() => {'v': value};
 

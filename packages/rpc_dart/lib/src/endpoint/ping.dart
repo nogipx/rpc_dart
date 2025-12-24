@@ -4,54 +4,54 @@
 
 part of '_index.dart';
 
-/// Константы и метаданные протокола ping между эндпоинтами.
+/// Ping protocol constants and metadata between endpoints.
 abstract final class RpcEndpointPingProtocol {
-  /// Имя служебного сервиса для ping запросов.
+  /// Service name for ping requests.
   static const String serviceName = '_rpc.System';
 
-  /// Имя служебного метода для ping запросов.
+  /// Method name for ping requests.
   static const String methodName = 'Ping';
 
-  /// Полный ключ метода (service.method).
+  /// Method key in `service.method` form.
   static const String methodKey = '$serviceName.$methodName';
 
-  /// HTTP/2 путь метода /Service/Method.
+  /// HTTP/2 path `/Service/Method`.
   static const String methodPath = '/$serviceName/$methodName';
 
-  /// Заголовок с отметкой времени отправки ping от клиента.
+  /// Header with client ping timestamp.
   static const String requestTimestampHeader = 'x-rpc-ping-timestamp';
 
-  /// Заголовок с отметкой времени обработки ping на стороне responder.
+  /// Header with responder processing timestamp.
   static const String responseTimestampHeader = 'x-rpc-pong-timestamp';
 
-  /// Заголовок с debug label responder эндпоинта.
+  /// Header with responder endpoint debug label.
   static const String responseDebugLabelHeader = 'x-rpc-pong-endpoint';
 
-  /// Заголовок с типом транспорта responder эндпоинта.
+  /// Header with responder transport type.
   static const String responseTransportHeader = 'x-rpc-pong-transport';
 }
 
-/// Результат ping-запроса между эндпоинтами.
+/// Ping result between endpoints.
 final class RpcEndpointPingResult {
-  /// Время отправки ping-запроса.
+  /// Timestamp when the ping was sent.
   final DateTime sentAt;
 
-  /// Время получения ответа.
+  /// Timestamp when the response was received.
   final DateTime receivedAt;
 
-  /// Полный круговой трип (RTT) ping-запроса.
+  /// Full round-trip time.
   final Duration roundTrip;
 
-  /// Отметка времени обработки ping на responder, если была передана.
+  /// Responder processing timestamp, if provided.
   final DateTime? responderTimestamp;
 
-  /// Debug label responder эндпоинта, если указан.
+  /// Responder endpoint debug label, if provided.
   final String? responderDebugLabel;
 
-  /// Тип транспорта responder эндпоинта, если передан.
+  /// Responder transport type, if provided.
   final String? responderTransportType;
 
-  /// Все заголовки ответа в удобном для чтения формате.
+  /// Response headers in readable form.
   final Map<String, String> responseHeaders;
 
   RpcEndpointPingResult({
@@ -65,7 +65,7 @@ final class RpcEndpointPingResult {
   }) : responseHeaders = Map.unmodifiable(responseHeaders ?? const {});
 }
 
-/// Управляет отправкой ping-запроса и обработкой ответа для эндпоинта.
+/// Manages sending a ping and handling its response for an endpoint.
 final class RpcEndpointPingExchange {
   final IRpcTransport transport;
   final RpcLogger logger;

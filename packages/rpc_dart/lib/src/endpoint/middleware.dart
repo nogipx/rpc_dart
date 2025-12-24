@@ -4,10 +4,9 @@
 
 part of '_index.dart';
 
-/// Контекст выполнения middleware и interceptors.
-///
-/// Передается во все обработчики жизненного цикла запроса и ответа,
-/// содержит ссылку на эндпоинт, имя сервиса/метода и текущий [RpcContext].
+/// Middleware/interceptor context passed through request/response lifecycle.
+/// Provides endpoint reference, service/method names, and the current
+/// [RpcContext].
 class RpcMiddlewareContext {
   final RpcEndpointBase endpoint;
   final String serviceName;
@@ -21,12 +20,12 @@ class RpcMiddlewareContext {
     required this.context,
   });
 
-  /// Обновляет [context] на новое значение.
+  /// Updates the stored [context].
   void updateContext(RpcContext newContext) {
     context = newContext;
   }
 
-  /// Создает новый контекст с обновленными полями.
+  /// Creates a copy with updated fields.
   RpcMiddlewareContext copyWith({
     RpcEndpointBase? endpoint,
     String? serviceName,
@@ -42,17 +41,16 @@ class RpcMiddlewareContext {
   }
 }
 
-/// Базовый интерфейс для middleware.
+/// Base interface for middleware.
 ///
-/// Позволяет модифицировать запросы/ответы перед передачей дальше по конвейеру.
-/// Реализации могут возвращать новый экземпляр или исходный объект.
+/// Allows request/response mutation before passing to the next component.
+/// Implementations may return a new instance or the original object.
 abstract class IRpcMiddleware {
   const IRpcMiddleware();
 
-  /// Вызывается перед исполнением пользовательского обработчика.
+  /// Called before the user handler executes.
   ///
-  /// Возвращаемое значение будет передано следующему middleware или
-  /// перехватчику. По умолчанию возвращается исходный [request].
+  /// Returned value is passed to the next middleware/interceptor.
   FutureOr<TRequest> processRequest<TRequest>(
     RpcMiddlewareContext call,
     TRequest request,
@@ -60,11 +58,10 @@ abstract class IRpcMiddleware {
     return request;
   }
 
-  /// Вызывается после получения результата пользовательского обработчика.
+  /// Called after the user handler returns a result.
   ///
-  /// Возвращаемое значение будет передано следующему middleware или
-  /// возвращено вызывающей стороне. По умолчанию возвращается исходный
-  /// [response].
+  /// Returned value is passed to the next middleware/interceptor or back to
+  /// the caller.
   FutureOr<TResponse> processResponse<TResponse>(
     RpcMiddlewareContext call,
     TResponse response,
@@ -73,7 +70,7 @@ abstract class IRpcMiddleware {
   }
 }
 
-/// Тип обработчика следующего шага для унарного вызова.
+/// Handler type for the next step of a unary call.
 typedef RpcUnaryNext<TRequest, TResponse> = Future<TResponse> Function(
     RpcContext context, TRequest request);
 
@@ -94,18 +91,17 @@ typedef RpcBidirectionalStreamNext<TRequest, TResponse>
   Stream<TRequest> requests,
 );
 
-/// Интерфейс перехватчиков (interceptors).
+/// Interceptor interface.
 ///
-/// Позволяет оборачивать пользовательский обработчик и, при необходимости,
-/// прерывать выполнение цепочки, возвращая собственный результат.
+/// Wraps user handlers and may short-circuit the chain by returning a custom
+/// result.
 abstract class IRpcInterceptor {
   const IRpcInterceptor();
 
-  /// Перехватчик унарного вызова.
+  /// Unary call interceptor.
   ///
-  /// Реализация может изменить контекст/запрос и должна вызвать [next], чтобы
-  /// передать управление дальше. При отсутствии необходимости в логике можно
-  /// просто вызвать `return next(call.context, request);`.
+  /// Implementations may mutate context/request and must call [next] to
+  /// continue. For pass-through, call `return next(call.context, request);`.
   Future<TResponse> interceptUnary<TRequest, TResponse>(
     RpcMiddlewareContext call,
     TRequest request,

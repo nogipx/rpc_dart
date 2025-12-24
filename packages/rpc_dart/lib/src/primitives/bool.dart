@@ -4,33 +4,31 @@
 
 part of '_index.dart';
 
-/// Обертка для булевого значения
+/// Wrapper for a boolean value.
 class RpcBool extends RpcPrimitiveMessage<bool> {
-  /// Создает новый объект RpcBool
+  /// Creates a new RpcBool.
   ///
-  /// [value] - булево значение, которое будет храниться в объекте
+  /// [value] Boolean value to store.
   ///
-  /// RpcBool используется для представления булевых значений в контексте RPC
-  /// и обеспечивает единообразную сериализацию/десериализацию таких значений
-  /// в различных форматах.
+  /// Provides consistent serialization/deserialization for booleans in RPC.
   const RpcBool(super.value);
 
-  /// Создает RpcBool из JSON
+  /// Creates RpcBool from JSON.
   factory RpcBool.fromJson(Map<String, dynamic> json) {
     try {
       final v = json['v'];
       if (v == null) return const RpcBool(false);
       if (v is bool) return RpcBool(v);
 
-      // Преобразование числовых значений
+      // Convert numeric values.
       if (v is num) return RpcBool(v != 0);
 
-      // Преобразование строковых значений
+      // Convert string values.
       final vStr = v.toString().toLowerCase().trim();
       if (vStr == 'true' || vStr == '1') return const RpcBool(true);
       if (vStr == 'false' || vStr == '0') return const RpcBool(false);
 
-      // Для всех других случаев
+      // Fallback for anything else.
       return const RpcBool(false);
     } catch (e) {
       return const RpcBool(false);

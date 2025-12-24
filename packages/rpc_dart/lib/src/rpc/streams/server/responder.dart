@@ -4,14 +4,7 @@
 
 part of '../_index.dart';
 
-/// 🚀 Универсальная серверная часть серверного стриминга
-///
-/// Автоматически определяет режим работы:
-/// - Кодеки указаны → Сериализация (работает с любыми транспортами)
-/// - Кодеки НЕ указаны (null) → Zero-copy (только транспорты с поддержкой zero-copy)
-///
-/// Получает один запрос и отправляет поток ответов.
-/// Использует универсальный StreamProcessor для обработки без race condition.
+/// Server-stream responder: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Handles one request and streams responses.
 final class ServerStreamResponder<TRequest extends Object,
     TResponse extends Object> implements IRpcResponder {
   late final RpcLogger? _logger;
@@ -28,26 +21,16 @@ final class ServerStreamResponder<TRequest extends Object,
     _doneCompleter.complete();
   }
 
-  /// Внутренний процессор стрима
+  /// Stream processor.
   late final StreamProcessor<TRequest, TResponse> _processor;
 
-  /// Подписка на входящие запросы
+  /// Incoming request subscription.
   StreamSubscription? _subscription;
 
-  /// Флаг обработки первого запроса
+  /// True after the first request is handled.
   bool _requestHandled = false;
 
-  /// Создает универсальный сервер серверного стриминга
-  ///
-  /// [id] Идентификатор стрима
-  /// [transport] Транспортный уровень
-  /// [serviceName] Имя сервиса (например, "DataService")
-  /// [methodName] Имя метода (например, "GetData")
-  /// [requestCodec] Кодек для десериализации запроса (null для zero-copy)
-  /// [responseCodec] Кодек для сериализации ответов (null для zero-copy)
-  /// [handler] Функция-обработчик, вызываемая для обработки запроса
-  /// [context] RPC контекст с токеном отмены
-  /// [logger] Опциональный логгер
+  /// Creates a server-stream responder.
   ServerStreamResponder({
     required this.id,
     required IRpcTransport transport,
@@ -61,25 +44,25 @@ final class ServerStreamResponder<TRequest extends Object,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
-    // Zero-copy режим: требуется RpcInMemoryTransport
+    // Zero-copy requires transport support.
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-        'Zero-copy режим требует транспорт с поддержкой zero-copy. '
-        'Для сетевых транспортов передайте кодеки.',
+        'Zero-copy mode requires a transport with zero-copy support. '
+        'Provide codecs for network transports.',
       );
     }
 
-    // Режим сериализации: кодеки обязательны
+    // Serialization mode: codecs required.
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
       throw ArgumentError(
-        'Кодеки обязательны для режима сериализации. '
-        'Для zero-copy не передавайте кодеки (null).',
+        'Codecs are required for serialization mode. '
+        'For zero-copy leave codecs null.',
       );
     }
 
     _logger = logger?.child('ServerResponder');
     _logger?.internal(
-      'Создание ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamResponder для $serviceName.$methodName [id: $id]',
+      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamResponder for $serviceName.$methodName [id: $id]',
     );
 
     _processor = StreamProcessor<TRequest, TResponse>(
@@ -96,58 +79,58 @@ final class ServerStreamResponder<TRequest extends Object,
     _setupRequestHandler(handler);
   }
 
-  /// Привязывает респондер к потоку сообщений от endpoint'а
+  /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger?.internal('Привязка к потоку сообщений [id: $id]');
+    _logger?.internal('Binding to message stream [id: $id]');
     _processor.bindToMessageStream(messageStream);
   }
 
-  /// Настраивает обработчик запросов для серверного стрима
+  /// Configures the server-stream request handler.
   void _setupRequestHandler(
     Stream<TResponse> Function(TRequest request) handler,
   ) {
     _logger?.internal(
-      'Настройка обработчика запросов для серверного стрима [id: $id]',
+      'Configuring request handler for server stream [id: $id]',
     );
 
     _subscription = _processor.requests.listen(
       (request) async {
         _logger?.internal(
-          'Получен запрос для серверного стрима: $request [id: $id]',
+          'Received request for server stream: $request [id: $id]',
         );
 
         if (!_requestHandled) {
           _logger?.internal(
-            'Обработка первого запроса для серверного стрима [id: $id]',
+            'Processing first request for server stream [id: $id]',
           );
           _requestHandled = true;
 
           try {
-            _logger?.internal('Вызов обработчика запроса [id: $id]');
+            _logger?.internal('Invoking request handler [id: $id]');
             final handlerStream = handler(request);
             _logger?.internal(
-              'Обработчик успешно вызван, получен стрим ответов [id: $id]',
+              'Handler invoked, response stream received [id: $id]',
             );
 
             _logger?.internal(
-              'Начинаем обработку потока ответов от обработчика [id: $id]',
+              'Processing response stream from handler [id: $id]',
             );
 
             int responseCount = 0;
             await for (var response in handlerStream) {
               responseCount++;
               _logger?.internal(
-                'Получен ответ #$responseCount от обработчика: $response [id: $id]',
+                'Received response #$responseCount from handler: $response [id: $id]',
               );
 
               try {
                 await _processor.send(response);
                 _logger?.internal(
-                  'Ответ #$responseCount успешно отправлен клиенту [id: $id]',
+                  'Response #$responseCount sent to client [id: $id]',
                 );
               } catch (e, stackTrace) {
                 _logger?.error(
-                  'Ошибка при отправке ответа #$responseCount клиенту [id: $id]',
+                  'Failed to send response #$responseCount to client [id: $id]',
                   error: e,
                   stackTrace: stackTrace,
                 );
@@ -155,16 +138,16 @@ final class ServerStreamResponder<TRequest extends Object,
             }
 
             _logger?.internal(
-              'Поток ответов от обработчика завершен, всего ответов: $responseCount [id: $id]',
+              'Handler response stream completed, total responses: $responseCount [id: $id]',
             );
 
-            // Завершаем отправку ответов
+            // Finish sending responses.
             await _processor.finishSending();
-            _logger?.internal('Отправка ответов завершена [id: $id]');
+            _logger?.internal('Response sending finished [id: $id]');
             _completeDone();
           } catch (error, trace) {
             _logger?.error(
-              'Ошибка при обработке запроса [id: $id]',
+              'Request handling failed [id: $id]',
               error: error,
               stackTrace: trace,
             );
@@ -173,24 +156,24 @@ final class ServerStreamResponder<TRequest extends Object,
           }
         } else {
           _logger?.internal(
-            'Игнорирование дополнительного запроса (первый уже обработан) [id: $id]',
+            'Ignoring extra request (first already handled) [id: $id]',
           );
         }
       },
       onError: (error, stackTrace) {
         _logger?.error(
-          'Ошибка в потоке запросов [id: $id]',
+          'Error in request stream [id: $id]',
           error: error,
           stackTrace: stackTrace,
         );
       },
       onDone: () {
-        _logger?.internal('Поток запросов завершен [id: $id]');
+        _logger?.internal('Request stream completed [id: $id]');
       },
     );
   }
 
-  /// Закрывает стрим и освобождает ресурсы
+  /// Closes the stream and releases resources.
   Future<void> close() async {
     await _subscription?.cancel();
     await _processor.close();

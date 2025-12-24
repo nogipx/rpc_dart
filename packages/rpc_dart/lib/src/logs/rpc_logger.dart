@@ -4,7 +4,7 @@
 
 part of '_logs.dart';
 
-/// Уровни логирования
+/// Logging levels.
 enum RpcLoggerLevel {
   internal,
   debug,
@@ -12,11 +12,11 @@ enum RpcLoggerLevel {
   warning,
   error,
   critical,
-  none;
+  disabled;
 
-  /// Создание из строки JSON
+  /// Creates a level from JSON string.
   static RpcLoggerLevel fromJson(String json) {
-    return values.firstWhere((e) => e.name == json, orElse: () => none);
+    return values.firstWhere((e) => e.name == json, orElse: () => disabled);
   }
 }
 
@@ -27,26 +27,26 @@ typedef RpcLoggerFactory = RpcLogger Function(
   RpcContext? context,
 });
 
-/// Интерфейс для фильтрации логов
+/// Log filter contract.
 abstract interface class IRpcLoggerFilter {
-  /// Проверяет, нужно ли логировать сообщение с указанным уровнем и источником
+  /// Returns true if the message should be logged for the given level/source.
   bool shouldLog(RpcLoggerLevel level, String source);
 }
 
-/// Результат форматирования лога с разделением на заголовок и содержимое
+/// Formatting result split into header and content.
 class LogFormattingResult {
-  /// Заголовок сообщения
+  /// Message header.
   final String header;
 
-  /// Содержимое сообщения
+  /// Message body content.
   final String content;
 
   LogFormattingResult(this.header, this.content);
 }
 
-/// Интерфейс для форматирования логов
+/// Contract for log formatting.
 abstract interface class IRpcLoggerFormatter {
-  /// Форматирует сообщение лога, возвращая заголовок и содержимое раздельно
+  /// Formats a log entry, returning header and content separately.
   LogFormattingResult format(
     DateTime timestamp,
     RpcLoggerLevel level,
@@ -59,17 +59,16 @@ abstract interface class IRpcLoggerFormatter {
 }
 
 /// {@template rpc_logger}
-/// Логгер для RPC библиотеки
+/// Logger for the RPC library.
 ///
-/// Позволяет создавать экземпляры логгеров с разными настройками
-/// и независимо управлять логированием разных компонентов.
+/// Supports multiple logger instances with independent configuration.
 /// {@endtemplate}
 ///
 abstract interface class RpcLogger {
-  /// Имя логгера, обычно название компонента или модуля
+  /// Logger name, usually a component or module.
   String get name;
 
-  /// Создает новый логгер с указанным именем
+  /// Creates a new logger with the given name.
   factory RpcLogger(
     String loggerName, {
     RpcLoggerColors? colors,
@@ -86,7 +85,7 @@ abstract interface class RpcLogger {
 
   RpcLogger child(String childName, {String? label});
 
-  /// Отправляет лог с указанным уровнем в сервис диагностики
+  /// Sends a log entry with the specified level.
   Future<void> log({
     required RpcLoggerLevel level,
     required String message,
@@ -100,7 +99,7 @@ abstract interface class RpcLogger {
     RpcContext? rpcContext,
   });
 
-  /// Отправляет лог уровня debug
+  /// Sends an internal-level log.
   Future<void> internal(
     String message, {
     String? context,
@@ -111,7 +110,7 @@ abstract interface class RpcLogger {
     RpcContext? rpcContext,
   });
 
-  /// Отправляет лог уровня debug
+  /// Sends a debug-level log.
   Future<void> debug(
     String message, {
     String? context,
@@ -122,7 +121,7 @@ abstract interface class RpcLogger {
     RpcContext? rpcContext,
   });
 
-  /// Отправляет лог уровня info
+  /// Sends an info-level log.
   Future<void> info(
     String message, {
     String? context,
@@ -133,7 +132,7 @@ abstract interface class RpcLogger {
     RpcContext? rpcContext,
   });
 
-  /// Отправляет лог уровня warning
+  /// Sends a warning-level log.
   Future<void> warning(
     String message, {
     String? context,
@@ -144,7 +143,7 @@ abstract interface class RpcLogger {
     RpcContext? rpcContext,
   });
 
-  /// Отправляет лог уровня error
+  /// Sends an error-level log.
   Future<void> error(
     String message, {
     String? context,
@@ -157,7 +156,7 @@ abstract interface class RpcLogger {
     RpcContext? rpcContext,
   });
 
-  /// Отправляет лог уровня critical
+  /// Sends a critical-level log.
   Future<void> critical(
     String message, {
     String? context,
@@ -171,30 +170,45 @@ abstract interface class RpcLogger {
   });
 
   // ============================================================================
-  // Logger Settings - перенесено из RpcLogger
+  // Logger Settings - moved from RpcLogger.
   // ============================================================================
 
   static RpcLoggerLevel _defaultMinLogLevel = RpcLoggerLevel.info;
 
-  /// Устанавливает минимальный уровень логирования по умолчанию
+  /// Sets the default minimal log level.
   static void setDefaultMinLogLevel(RpcLoggerLevel level) {
+    if (level == RpcLoggerLevel.disabled) {
+      disableLogger();
+    } else {
+      enableLogger();
+    }
     _defaultMinLogLevel = level;
   }
 
-  /// Получает текущий минимальный уровень логирования по умолчанию
+  /// Gets the current default minimal log level.
   static RpcLoggerLevel get defaultMinLogLevel => _defaultMinLogLevel;
 
-  /// Устанавливает пользовательскую фабрику логгеров
+  /// Sets a custom logger factory.
   static void setLoggerFactory(RpcLoggerFactory factory) {
     _RpcLoggerRegistry._factory = factory;
   }
 
-  /// Удаляет логгер по имени из реестра
+  /// Sets a custom logger factory.
+  static void enableLogger() {
+    _RpcLoggerRegistry._isDisabled = false;
+  }
+
+  /// Sets a custom logger factory.
+  static void disableLogger() {
+    _RpcLoggerRegistry._isDisabled = true;
+  }
+
+  /// Removes a logger by name from the registry.
   static void removeLogger(String loggerName) {
     _RpcLoggerRegistry.instance.remove(loggerName);
   }
 
-  /// Очищает все логгеры из реестра
+  /// Clears all loggers from the registry.
   static void clearLoggers() {
     _RpcLoggerRegistry.instance.clear();
   }

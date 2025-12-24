@@ -4,7 +4,7 @@
 
 part of '_index.dart';
 
-/// Серверный RPC эндпоинт для обработки запросов
+/// Server-side RPC endpoint that handles incoming requests.
 final class RpcResponderEndpoint extends RpcEndpointBase {
   final RpcResponderMethodRegistry _registry = RpcResponderMethodRegistry();
   final RpcResponderStreamStore _streams = RpcResponderStreamStore();

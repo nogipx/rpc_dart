@@ -4,18 +4,18 @@
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-/// Контекстно-осведомленный логгер, который автоматически использует RpcContext
+/// Context-aware logger that automatically uses RpcContext.
 ///
-/// Обертывает обычный RpcLogger и автоматически передает trace ID и request ID
-/// из привязанного RpcContext во все вызовы логирования
+/// Wraps a base RpcLogger and forwards trace/request IDs from the attached
+/// RpcContext into every log call.
 final class RpcContextAwareLogger implements RpcLogger {
   final RpcLogger _baseLogger;
   final RpcContext _context;
 
-  /// Создает контекстный логгер с привязанным контекстом
+  /// Creates a context-aware logger bound to [RpcContext].
   RpcContextAwareLogger(this._baseLogger, this._context);
 
-  /// Создает дочерний контекстный логгер с тем же контекстом
+  /// Creates a child context-aware logger with the same context.
   @override
   RpcContextAwareLogger child(String childName, {String? label}) {
     return RpcContextAwareLogger(
@@ -27,7 +27,7 @@ final class RpcContextAwareLogger implements RpcLogger {
   @override
   String get name => _baseLogger.name;
 
-  // Все методы логирования автоматически используют _context
+  // All logging methods automatically fall back to _context.
   @override
   Future<void> internal(
     String message, {
@@ -45,12 +45,10 @@ final class RpcContextAwareLogger implements RpcLogger {
       traceId: traceId,
       data: data,
       color: color,
-      rpcContext:
-          rpcContext ?? _context, // Автоматически используем наш контекст
+      rpcContext: rpcContext ?? _context,
     );
   }
 
-  /// Отправляет лог уровня debug
   @override
   Future<void> debug(
     String message, {
@@ -187,71 +185,57 @@ final class RpcContextAwareLogger implements RpcLogger {
       stackTrace: stackTrace,
       data: data,
       color: color,
-      rpcContext:
-          rpcContext ?? _context, // Автоматически используем наш контекст
+      rpcContext: rpcContext ?? _context,
     );
   }
 }
 
-/// Mixin для компонентов, которые хотят автоматически использовать контекстное логирование
+/// Mixin for components that want automatic context-aware logging.
 ///
-/// Автоматически создает и обновляет контекстные логгеры при изменении RpcContext
-///
-/// Пример использования:
-/// ```dart
-/// class MyService with RpcContextualLogging {
-///   @override
-///   String get loggerName => 'MyService';
-///
-///   void processRequest(RpcContext context) {
-///     updateContext(context); // Обновляем контекст
-///     contextLogger.info('Processing request'); // Автоматически использует context
-///   }
-/// }
-/// ```
+/// Rebuilds context loggers when the RpcContext changes.
 mixin RpcContextualLogging {
-  /// Название логгера (должно быть переопределено)
+  /// Logger name (must be overridden).
   String get loggerName;
 
-  /// Базовый логгер
+  /// Base logger.
   RpcLogger? _baseLogger;
 
-  /// Текущий контекст
+  /// Current context.
   RpcContext? _currentContext;
 
-  /// Контекстный логгер
+  /// Context-aware logger.
   RpcLogger? _contextLogger;
 
-  /// Получает базовый логгер (создает если нужно)
+  /// Returns the base logger (lazy initialized).
   RpcLogger get baseLogger {
     return _baseLogger ??= RpcLogger(loggerName);
   }
 
-  /// Получает контекстный логгер (создает если нужно)
+  /// Returns a context-aware logger (lazy initialized).
   RpcLogger get contextLogger {
     if (_currentContext != null) {
-      // Если есть контекст - возвращаем контекстный логгер
+      // Use context-aware logger when context exists.
       return _contextLogger ??= baseLogger.withContext(_currentContext!);
     }
 
-    // Если контекста нет - возвращаем базовый логгер
+    // Fallback to base logger when no context.
     return baseLogger;
   }
 
-  /// Обновляет контекст и пересоздает контекстный логгер
+  /// Updates the context and resets the context logger.
   void updateContext(RpcContext? context) {
-    if (_currentContext == context) return; // Нет изменений
+    if (_currentContext == context) return; // No changes.
 
     _currentContext = context;
-    _contextLogger = null; // Пересоздадим при следующем обращении
+    _contextLogger = null; // Recreate on next access.
   }
 
-  /// Создает дочерний контекстный логгер
+  /// Creates a child context-aware logger.
   RpcLogger createChildLogger(String childName) {
     return contextLogger.child(childName);
   }
 
-  /// Логирует с автоматическим использованием контекста
+  /// Logs while automatically applying context.
   Future<void> logWithContext(
     RpcLoggerLevel level,
     String message, {
@@ -270,7 +254,7 @@ mixin RpcContextualLogging {
     );
   }
 
-  /// Удобные методы для логирования с контекстом
+  /// Convenience helpers for context-aware logging.
   Future<void> infoWithContext(
     String message, {
     String? context,

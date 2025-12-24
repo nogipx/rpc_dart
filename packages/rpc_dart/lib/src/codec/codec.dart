@@ -4,22 +4,22 @@
 
 part of '_index.dart';
 
-/// CBOR сериализатор для RPC сообщений
+/// CBOR serializer for RPC messages.
 class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
   final T Function(Map<String, dynamic> json)? _fromJson;
 
-  /// Создает CBOR сериализатор
-  /// [fromJson] - функция для создания объекта из JSON Map
+  /// Creates a CBOR serializer.
+  /// [fromJson] builds an object from a JSON map.
   const RpcCodec([T Function(Map<String, dynamic> json)? fromJson])
       : _fromJson = fromJson;
 
-  /// Создает CBOR сериализатор с обязательным декодером
+  /// Creates a CBOR serializer with a required decoder.
   const RpcCodec.withDecoder(T Function(Map<String, dynamic> json) fromJson)
       : _fromJson = fromJson;
 
   @override
   Uint8List serialize(T message) {
-    // Получаем JSON представление объекта
+    // Obtain the JSON representation first.
     final json = message.toJson();
 
     return CborCodec.encode(json);
@@ -30,30 +30,30 @@ class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
     final decoder = _fromJson;
     if (decoder == null) {
       throw StateError(
-        'RpcCodec не может десериализовать данные без функции fromJson. '
-        'Создайте экземпляр через RpcCodec.withDecoder или передайте fromJson в конструктор.',
+        'RpcCodec cannot deserialize data without a fromJson function. '
+        'Create an instance via RpcCodec.withDecoder or pass fromJson to the constructor.',
       );
     }
 
     final decoded = CborCodec.decode(bytes);
 
-    // CborCodec.decode теперь всегда возвращает Map<String, dynamic>
+    // CborCodec.decode always returns Map<String, dynamic>.
     return decoder(decoded);
   }
 
-  /// Статический хелпер для десериализации CBOR
+  /// Static helper for CBOR deserialization.
   static T fromBytes<T extends IRpcSerializable>({
     required Uint8List bytes,
     required T Function(Map<String, dynamic>) fromJson,
   }) {
     final decoded = CborCodec.decode(bytes);
 
-    // CborCodec.decode уже возвращает Map<String, dynamic>
+    // CborCodec.decode already returns Map<String, dynamic>.
     return fromJson(decoded);
   }
 }
 
-// Преобразование LinkedMap<dynamic, dynamic> в Map<String, dynamic>
+// Converts LinkedMap<dynamic, dynamic> to Map<String, dynamic>.
 Map<String, dynamic> convertMap(Map<dynamic, dynamic> map) {
   return map.map((key, value) => MapEntry(key.toString(), value));
 }
