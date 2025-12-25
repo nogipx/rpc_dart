@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
@@ -63,8 +65,62 @@ class TestLargeObject {
   }
 }
 
+@pragma('vm:entry-point')
+void _transferableEchoServer(
+  IRpcTransport transport,
+  Map<String, dynamic> params,
+) {
+  transport.incomingMessages.listen((message) async {
+    if (!message.isDirect || message.directPayload == null) return;
+    final payload = message.directPayload;
+
+    if (payload is TransferableTypedData) {
+      final bytes = payload.materialize().asUint8List();
+      final roundtrip = TransferableTypedData.fromList([bytes]);
+      await transport.sendDirectObject(
+        message.streamId,
+        roundtrip,
+        endStream: true,
+      );
+    }
+  });
+}
+
 void main() {
   group('RpcIsolateTransport', () {
+    group('TransferableTypedData', () {
+      test('directObject передает TransferableTypedData туда-обратно без копий',
+          () async {
+        final result = await RpcIsolateTransport.spawn(
+          entrypoint: _transferableEchoServer,
+          customParams: const {},
+          isolateId: 'transferable-echo',
+        );
+
+        final transport = result.transport;
+        final streamId = transport.createStream();
+
+        final original = Uint8List.fromList(List<int>.generate(256, (i) => i));
+        final transfer = TransferableTypedData.fromList([original]);
+
+        final responseFuture = transport
+            .getMessagesForStream(streamId)
+            .where((msg) => msg.isDirect && msg.directPayload != null)
+            .map((msg) => msg.directPayload)
+            .cast<TransferableTypedData>()
+            .first
+            .timeout(const Duration(seconds: 2));
+
+        await transport.sendDirectObject(streamId, transfer);
+        final receivedTransfer = await responseFuture;
+
+        final roundtrip = receivedTransfer.materialize().asUint8List();
+        expect(roundtrip, orderedEquals(original));
+
+        result.kill();
+      });
+    });
+
     group('spawn factory', () {
       test('создает_изолят_и_возвращает_транспорт', () async {
         // Arrange & Act

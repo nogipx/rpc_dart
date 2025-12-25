@@ -190,22 +190,11 @@ void main() {
         // Act 4 - проверяем что crashed worker действительно мертв
         print('💀 Проверяем что crashed worker действительно мертв...');
 
-        final crashStreamId3 = crashResult.transport.createStream();
-        final shouldTimeout = crashResult.transport
-            .getMessagesForStream(crashStreamId3)
-            .where((msg) => msg.isDirect)
-            .first
-            .timeout(Duration(milliseconds: 500));
-
-        try {
-          await crashResult.transport.sendDirectObject(crashStreamId3, 'PING');
-          await shouldTimeout;
-          fail('Crashed worker не должен отвечать');
-        } on TimeoutException {
-          print(
-            '✅ Crashed worker действительно мертв (timeout при попытке связи)',
-          );
-        }
+        await _waitForClosed(crashResult.transport);
+        final health = await crashResult.transport.health();
+        expect(health.level,
+            anyOf(RpcHealthLevel.closed, RpcHealthLevel.unhealthy));
+        print('✅ Crashed worker отмечен как закрытый/ошибочный');
       } finally {
         // Cleanup
         await crashResult.transport.close();
@@ -310,4 +299,23 @@ void main() {
       }
     });
   });
+}
+
+Future<void> _waitForClosed(
+  IRpcTransport transport, {
+  Duration timeout = const Duration(seconds: 2),
+  Duration interval = const Duration(milliseconds: 50),
+}) async {
+  final stopwatch = Stopwatch()..start();
+  while (stopwatch.elapsed < timeout) {
+    if (transport.isClosed) {
+      return;
+    }
+    final health = await transport.health();
+    if (health.level == RpcHealthLevel.closed ||
+        health.level == RpcHealthLevel.unhealthy) {
+      return;
+    }
+    await Future.delayed(interval);
+  }
 }

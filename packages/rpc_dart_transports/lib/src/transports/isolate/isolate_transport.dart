@@ -6,6 +6,7 @@
 
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
@@ -63,7 +64,24 @@ abstract interface class RpcIsolateTransport {
 
       // Перенаправляем сообщения из receivePort в контроллер
       receivePort.listen(
-        (message) => messageController.add(message),
+        (message) {
+          if (messageController.isClosed) {
+            return;
+          }
+
+          if (message is _IsolateMessage &&
+              message.type == _IsolateMessageType.close &&
+              message.streamId == 0) {
+            messageController.add(message);
+            receivePort.close();
+            if (!messageController.isClosed) {
+              messageController.close();
+            }
+            return;
+          }
+
+          messageController.add(message);
+        },
         onDone: () {
           if (!messageController.isClosed) {
             messageController.close();
@@ -75,27 +93,39 @@ abstract interface class RpcIsolateTransport {
       hostSendPort.send(receivePort.sendPort);
 
       // Ожидаем SendPort для основной коммуникации
-      var initialized = false;
-      messageController.stream.listen((message) {
-        if (message is _IsolateMessage &&
-            message.type == _IsolateMessageType.init) {
-          if (initialized) return;
-          initialized = true;
+      () async {
+        try {
+          final initMessage = await messageController.stream.firstWhere(
+            (message) =>
+                message is _IsolateMessage &&
+                message.type == _IsolateMessageType.init,
+          ) as _IsolateMessage;
 
           // Получаем SendPort для основной коммуникации
-          final mainHostSendPort = message.data as SendPort;
+          final mainHostSendPort = initMessage.data as SendPort;
 
           // Создаем транспорт воркера с поддержкой Stream ID
           final transport = _IsolateWorkerTransport(
             hostSendPort: mainHostSendPort,
             messageStream: messageController.stream,
+            onShutdown: () {
+              receivePort.close();
+              if (!messageController.isClosed) {
+                messageController.close();
+              }
+            },
             policy: policy,
           );
 
           // Вызываем пользовательскую функцию, передавая транспорт
           userEntrypoint(transport, customParams);
+        } catch (_) {
+          if (!messageController.isClosed) {
+            await messageController.close();
+          }
+          receivePort.close();
         }
-      });
+      }();
     }
 
     // Канал для начальной инициализации
@@ -117,12 +147,42 @@ abstract interface class RpcIsolateTransport {
         onError: errorPort.sendPort,
         onExit: exitPort.sendPort);
 
-    // Consume errors from the isolate so intentional crashes do not fail tests.
-    final errorSub = errorPort.listen((_) {});
-    final exitSub = exitPort.listen((_) {});
+    _IsolateHostTransport? hostTransport;
+    Object? pendingRemoteError;
+    String? pendingRemoteStackTrace;
+    var pendingRemoteExit = false;
+
+    // Consume errors and exit signals from the isolate.
+    late final StreamSubscription errorSub;
+    late final StreamSubscription exitSub;
+
+    errorSub = errorPort.listen((errorData) {
+      final parsed = _parseIsolateError(errorData);
+      pendingRemoteError = parsed.$1;
+      pendingRemoteStackTrace = parsed.$2;
+      hostTransport?._updateRemoteState(
+        remoteError: parsed.$1,
+        remoteStackTrace: parsed.$2,
+      );
+      unawaited(hostTransport?._closeInternal(
+        notifyRemote: false,
+        remoteError: parsed.$1,
+        remoteStackTrace: parsed.$2,
+      ));
+    });
+
+    exitSub = exitPort.listen((_) {
+      pendingRemoteExit = true;
+      hostTransport?._updateRemoteState(remoteExited: true);
+      unawaited(hostTransport?._closeInternal(
+        notifyRemote: false,
+        remoteExited: true,
+      ));
+    });
 
     // Ожидаем SendPort от изолята
     final workerSendPort = await initPort.first as SendPort;
+    initPort.close();
 
     // Создаем порт для основной коммуникации
     final hostReceivePort = ReceivePort();
@@ -137,15 +197,33 @@ abstract interface class RpcIsolateTransport {
     );
 
     // Создаем хост-транспорт с поддержкой Stream ID
-    final hostTransport = _IsolateHostTransport(
+    hostTransport = _IsolateHostTransport(
       workerSendPort: workerSendPort,
       receivePort: hostReceivePort,
       policy: policy,
     );
 
+    if (pendingRemoteError != null) {
+      hostTransport._updateRemoteState(
+        remoteError: pendingRemoteError,
+        remoteStackTrace: pendingRemoteStackTrace,
+      );
+      unawaited(hostTransport._closeInternal(
+        notifyRemote: false,
+        remoteError: pendingRemoteError,
+        remoteStackTrace: pendingRemoteStackTrace,
+      ));
+    } else if (pendingRemoteExit) {
+      hostTransport._updateRemoteState(remoteExited: true);
+      unawaited(hostTransport._closeInternal(
+        notifyRemote: false,
+        remoteExited: true,
+      ));
+    }
+
     // Функция для завершения изолята
     void killIsolate() {
-      hostTransport.close();
+      hostTransport?.close();
       isolate.kill(priority: Isolate.immediate);
       initPort.close();
       errorPort.close();
@@ -156,6 +234,34 @@ abstract interface class RpcIsolateTransport {
 
     return (transport: hostTransport, kill: killIsolate);
   }
+}
+
+(Object?, String?) _parseIsolateError(dynamic errorData) {
+  if (errorData is List && errorData.isNotEmpty) {
+    final error = errorData[0];
+    final stack = errorData.length > 1 ? errorData[1]?.toString() : null;
+    return (error, stack);
+  }
+
+  if (errorData is RemoteError) {
+    return (errorData, errorData.stackTrace.toString());
+  }
+
+  return (errorData, null);
+}
+
+Uint8List _materializeBytes(dynamic data) {
+  if (data is TransferableTypedData) {
+    return data.materialize().asUint8List();
+  }
+
+  if (data is Uint8List) {
+    return data;
+  }
+
+  throw StateError(
+    'Unsupported data type for isolate message payload: ${data.runtimeType}',
+  );
 }
 
 /// Транспорт на стороне хоста (основной поток) с поддержкой Stream ID
@@ -176,6 +282,9 @@ class _IsolateHostTransport implements IRpcTransport {
   final Map<int, bool> _streamSendingFinished = <int, bool>{};
 
   bool _isClosed = false;
+  bool _remoteExited = false;
+  Object? _remoteError;
+  String? _remoteStackTrace;
 
   final RpcSecurityPolicy _policy;
 
@@ -195,6 +304,58 @@ class _IsolateHostTransport implements IRpcTransport {
         }
       },
     );
+  }
+
+  void _updateRemoteState({
+    bool? remoteExited,
+    Object? remoteError,
+    String? remoteStackTrace,
+  }) {
+    if (remoteExited == true) {
+      _remoteExited = true;
+    }
+    if (remoteError != null) {
+      _remoteError = remoteError;
+    }
+    if (remoteStackTrace != null) {
+      _remoteStackTrace = remoteStackTrace;
+    }
+  }
+
+  Future<void> _closeInternal({
+    required bool notifyRemote,
+    bool remoteExited = false,
+    Object? remoteError,
+    String? remoteStackTrace,
+  }) async {
+    _updateRemoteState(
+      remoteExited: remoteExited,
+      remoteError: remoteError,
+      remoteStackTrace: remoteStackTrace,
+    );
+    if (_isClosed) return;
+
+    _isClosed = true;
+    _streamSendingFinished.clear();
+
+    if (notifyRemote) {
+      try {
+        _workerSendPort.send(
+          _IsolateMessage(
+            type: _IsolateMessageType.close,
+            streamId: 0, // Специальный ID для сообщений управления
+          ),
+        );
+      } catch (_) {
+        // Ignore send failures during shutdown.
+      }
+    }
+
+    _receivePort.close();
+
+    if (!_messageController.isClosed) {
+      await _messageController.close();
+    }
   }
 
   void _handleMessage(dynamic message) {
@@ -223,7 +384,7 @@ class _IsolateHostTransport implements IRpcTransport {
 
         case _IsolateMessageType.data:
           if (message.streamId == 0) return;
-          final data = message.data as Uint8List;
+          final data = _materializeBytes(message.data);
           _messageController.add(
             RpcTransportMessage(
               payload: data,
@@ -253,6 +414,16 @@ class _IsolateHostTransport implements IRpcTransport {
           );
           break;
 
+        case _IsolateMessageType.close:
+          if (message.streamId != 0) return;
+          unawaited(
+            _closeInternal(
+              notifyRemote: false,
+              remoteExited: true,
+            ),
+          );
+          break;
+
         default:
           // Игнорируем другие типы сообщений
           break;
@@ -276,11 +447,30 @@ class _IsolateHostTransport implements IRpcTransport {
         'isClosed': _isClosed,
         'messageControllerClosed': _messageController.isClosed,
         'activeStreams': _streamSendingFinished.length,
+        'remoteExited': _remoteExited,
+        'remoteError': _remoteError?.toString(),
+        'remoteStackTrace': _remoteStackTrace,
       };
 
   @override
   Future<RpcHealthStatus> health() async {
     final details = _healthDetails();
+
+    if (_remoteError != null) {
+      return RpcHealthStatus.unhealthy(
+        component: runtimeType.toString(),
+        message: 'Isolate worker crashed',
+        details: details,
+      );
+    }
+
+    if (_remoteExited) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'Isolate worker exited',
+        details: details,
+      );
+    }
 
     if (_messageController.isClosed || _isClosed) {
       return RpcHealthStatus.closed(
@@ -319,6 +509,15 @@ class _IsolateHostTransport implements IRpcTransport {
     return streamId;
   }
 
+  void _sendToWorker(_IsolateMessage message) {
+    try {
+      _workerSendPort.send(message);
+    } catch (error, stackTrace) {
+      unawaited(_closeInternal(notifyRemote: true));
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
   @override
   Future<void> sendMetadata(
     int streamId,
@@ -328,7 +527,7 @@ class _IsolateHostTransport implements IRpcTransport {
     if (_isClosed) return;
     _policy.validateMetadata(metadata);
 
-    _workerSendPort.send(
+    _sendToWorker(
       _IsolateMessage(
         type: _IsolateMessageType.metadata,
         streamId: streamId,
@@ -351,11 +550,13 @@ class _IsolateHostTransport implements IRpcTransport {
   }) async {
     if (_isClosed) return;
 
-    _workerSendPort.send(
+    final transferable = TransferableTypedData.fromList([data]);
+
+    _sendToWorker(
       _IsolateMessage(
         type: _IsolateMessageType.data,
         streamId: streamId,
-        data: data,
+        data: transferable,
         isEndOfStream: endStream,
       ),
     );
@@ -374,7 +575,7 @@ class _IsolateHostTransport implements IRpcTransport {
     }
 
     _streamSendingFinished[streamId] = true;
-    _workerSendPort.send(
+    _sendToWorker(
       _IsolateMessage(type: _IsolateMessageType.finish, streamId: streamId),
     );
   }
@@ -387,23 +588,7 @@ class _IsolateHostTransport implements IRpcTransport {
 
   @override
   Future<void> close() async {
-    if (_isClosed) return;
-
-    _isClosed = true;
-    _streamSendingFinished.clear();
-
-    _workerSendPort.send(
-      _IsolateMessage(
-        type: _IsolateMessageType.close,
-        streamId: 0, // Специальный ID для сообщений управления
-      ),
-    );
-
-    _receivePort.close();
-
-    if (!_messageController.isClosed) {
-      await _messageController.close();
-    }
+    await _closeInternal(notifyRemote: true);
   }
 
   @override
@@ -417,7 +602,7 @@ class _IsolateHostTransport implements IRpcTransport {
   }) async {
     if (_isClosed) return;
 
-    _workerSendPort.send(
+    _sendToWorker(
       _IsolateMessage(
         type: _IsolateMessageType.directObject,
         streamId: streamId,
@@ -442,6 +627,7 @@ class _IsolateWorkerTransport implements IRpcTransport {
 
   final SendPort _hostSendPort;
   final Stream<dynamic> _messageStream;
+  final void Function() _onShutdown;
 
   final StreamController<RpcTransportMessage> _messageController =
       StreamController<RpcTransportMessage>.broadcast();
@@ -454,25 +640,59 @@ class _IsolateWorkerTransport implements IRpcTransport {
 
   bool _isClosed = false;
   late StreamSubscription _subscription;
+  bool _shutdownNotified = false;
 
   final RpcSecurityPolicy _policy;
 
   _IsolateWorkerTransport({
     required SendPort hostSendPort,
     required Stream<dynamic> messageStream,
+    required void Function() onShutdown,
     required RpcSecurityPolicy policy,
   })  : _hostSendPort = hostSendPort,
         _messageStream = messageStream,
+        _onShutdown = onShutdown,
         _policy = policy {
     // Настраиваем обработку входящих сообщений
     _subscription = _messageStream.listen(
       _handleMessage,
       onDone: () {
-        if (!_messageController.isClosed) {
-          _messageController.close();
-        }
+        unawaited(_closeInternal(notifyRemote: false));
       },
     );
+  }
+
+  void _notifyShutdown() {
+    if (_shutdownNotified) return;
+    _shutdownNotified = true;
+    _onShutdown();
+  }
+
+  Future<void> _closeInternal({required bool notifyRemote}) async {
+    if (_isClosed) return;
+
+    _isClosed = true;
+    _streamSendingFinished.clear();
+    _notifyShutdown();
+
+    if (notifyRemote) {
+      try {
+        _hostSendPort.send(
+          _IsolateMessage(
+            type: _IsolateMessageType.close,
+            streamId: 0, // Специальный ID для сообщений управления
+          ),
+        );
+      } catch (_) {
+        // Ignore send failures during shutdown.
+      }
+    }
+
+    await _subscription.cancel();
+
+    if (!_messageController.isClosed) {
+      await _messageController.close();
+    }
   }
 
   void _handleMessage(dynamic message) {
@@ -501,7 +721,7 @@ class _IsolateWorkerTransport implements IRpcTransport {
 
         case _IsolateMessageType.data:
           if (message.streamId == 0) return;
-          final data = message.data as Uint8List;
+          final data = _materializeBytes(message.data);
           _messageController.add(
             RpcTransportMessage(
               payload: data,
@@ -532,7 +752,7 @@ class _IsolateWorkerTransport implements IRpcTransport {
           break;
 
         case _IsolateMessageType.close:
-          unawaited(close());
+          unawaited(_closeInternal(notifyRemote: false));
           break;
 
         default:
@@ -599,6 +819,15 @@ class _IsolateWorkerTransport implements IRpcTransport {
     return streamId;
   }
 
+  void _sendToHost(_IsolateMessage message) {
+    try {
+      _hostSendPort.send(message);
+    } catch (error, stackTrace) {
+      unawaited(_closeInternal(notifyRemote: true));
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
   @override
   Future<void> sendMetadata(
     int streamId,
@@ -608,7 +837,7 @@ class _IsolateWorkerTransport implements IRpcTransport {
     if (_isClosed) return;
     _policy.validateMetadata(metadata);
 
-    _hostSendPort.send(
+    _sendToHost(
       _IsolateMessage(
         type: _IsolateMessageType.metadata,
         streamId: streamId,
@@ -631,11 +860,13 @@ class _IsolateWorkerTransport implements IRpcTransport {
   }) async {
     if (_isClosed) return;
 
-    _hostSendPort.send(
+    final transferable = TransferableTypedData.fromList([data]);
+
+    _sendToHost(
       _IsolateMessage(
         type: _IsolateMessageType.data,
         streamId: streamId,
-        data: data,
+        data: transferable,
         isEndOfStream: endStream,
       ),
     );
@@ -654,7 +885,7 @@ class _IsolateWorkerTransport implements IRpcTransport {
     }
 
     _streamSendingFinished[streamId] = true;
-    _hostSendPort.send(
+    _sendToHost(
       _IsolateMessage(type: _IsolateMessageType.finish, streamId: streamId),
     );
   }
@@ -667,16 +898,7 @@ class _IsolateWorkerTransport implements IRpcTransport {
 
   @override
   Future<void> close() async {
-    if (_isClosed) return;
-
-    _isClosed = true;
-    _streamSendingFinished.clear();
-
-    await _subscription.cancel();
-
-    if (!_messageController.isClosed) {
-      await _messageController.close();
-    }
+    await _closeInternal(notifyRemote: true);
   }
 
   @override
@@ -690,7 +912,7 @@ class _IsolateWorkerTransport implements IRpcTransport {
   }) async {
     if (_isClosed) return;
 
-    _hostSendPort.send(
+    _sendToHost(
       _IsolateMessage(
         type: _IsolateMessageType.directObject,
         streamId: streamId,
