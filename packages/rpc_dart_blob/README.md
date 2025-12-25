@@ -71,6 +71,12 @@ final storage = S3BlobStorageAdapter.connect(
   options: const S3BlobStorageOptions(
     prefix: 'rpc/', // optional
     presignTtlSeconds: 3600, // optional, default 3600
+    // If MinIO/S3 sits behind a reverse proxy and public host differs, presign directly on it:
+    presignEndpoint: 'files.example.com',
+    presignPort: 443,
+    presignUseSSL: true,
+    presignPathStyle: true, // optional; keep false if virtual-host style works
+    presignRegion: 'us-east-1', // required to avoid region lookup during presign
   ),
 );
 final server = BlobServiceFactory.createServer(
@@ -78,7 +84,7 @@ final server = BlobServiceFactory.createServer(
   storage: storage,
 );
 ```
-Descriptors returned from S3 include a short-lived presigned download URL (`downloadUrl`). Use `S3BlobStorageOptions.downloadUrlMapper` if the raw presigned link needs to be rewritten (e.g., swap an internal S3 endpoint for an external proxy/CDN). `S3BlobStorageOptions` also configures prefix/clock and `presignTtlSeconds` (link lifetime).
+Descriptors returned from S3 include a short-lived presigned download URL (`downloadUrl`). Prefer `presignEndpoint`/`presignPort`/`presignUseSSL`/`presignPathStyle` when the public host differs from the internal one — the URL will be signed directly for the external host. Set `presignRegion` explicitly to avoid any region lookup when generating presigns. `S3BlobStorageOptions` also configures prefix/clock and `presignTtlSeconds` (link lifetime).
 
 ## Goals
 - Separate contract for blobs (`BlobService`) so `rpc_dart_data` stays focused on JSON records.

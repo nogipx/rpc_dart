@@ -20,8 +20,12 @@ class S3BlobStorageOptions {
   const S3BlobStorageOptions({
     this.prefix,
     this.clock,
-    this.downloadUrlMapper,
     this.presignTtlSeconds,
+    this.presignEndpoint,
+    this.presignPort,
+    this.presignUseSSL,
+    this.presignPathStyle,
+    this.presignRegion = 'us-east-1',
   });
 
   /// Optional key prefix for all objects (e.g., "env/app/").
@@ -30,11 +34,24 @@ class S3BlobStorageOptions {
   /// Override the clock used for timestamps (primarily for tests).
   final S3Clock? clock;
 
-  /// Hook to rewrite presigned download URLs (e.g., swap internal endpoint to CDN).
-  final String Function(String url)? downloadUrlMapper;
-
   /// TTL for presigned download URLs in seconds (must be positive).
   final int? presignTtlSeconds;
+
+  /// Override endpoint used only for presigned URLs (data plane stays on the
+  /// primary client).
+  final String? presignEndpoint;
+
+  /// Override port used only for presigned URLs.
+  final int? presignPort;
+
+  /// Override scheme for presigned URLs.
+  final bool? presignUseSSL;
+
+  /// Override path style for presigned URLs.
+  final bool? presignPathStyle;
+
+  /// Region used for presigned URLs (required to avoid region lookups).
+  final String? presignRegion;
 }
 
 /// S3-compatible adapter (works with AWS S3, MinIO, Ceph, etc).
@@ -48,9 +65,9 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     required this.bucket,
     S3BlobStorageOptions options = const S3BlobStorageOptions(),
   }) : _client = client,
+       _presignClient = _buildPresignClient(client, options),
        _prefix = _normalizePrefix(options.prefix),
        _clock = options.clock ?? DateTime.now,
-       downloadUrlMapper = options.downloadUrlMapper,
        _presignTtlSeconds =
            options.presignTtlSeconds ?? kDefaultPresignTtlSeconds {
     assert(_presignTtlSeconds > 0, 'presignTtlSeconds must be positive');
@@ -85,10 +102,10 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
   }
 
   final Minio _client;
+  final Minio _presignClient;
   final String bucket;
   final String _prefix;
   final S3Clock _clock;
-  final String Function(String url)? downloadUrlMapper;
   final int _presignTtlSeconds;
   minio_internal.MinioClient? _rawClient;
 
@@ -422,12 +439,12 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
 
   Future<String?> _presignedUrl(String key) async {
     try {
-      final url = await _client.presignedGetObject(
+      final url = await _presignClient.presignedGetObject(
         bucket,
         key,
         expires: _presignTtlSeconds,
       );
-      return downloadUrlMapper == null ? url : downloadUrlMapper!(url);
+      return url;
     } catch (_) {
       return null;
     }
@@ -460,5 +477,48 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     } catch (_) {
       return const <String, String>{};
     }
+  }
+
+  static Minio _buildPresignClient(Minio client, S3BlobStorageOptions options) {
+    final region = options.presignRegion ?? client.region;
+    if (region == null) {
+      throw ArgumentError(
+        'S3BlobStorageOptions.presignRegion is required to presign URLs '
+        'without issuing a region lookup request.',
+      );
+    }
+
+    final hasOverrides =
+        options.presignEndpoint != null ||
+        options.presignPort != null ||
+        options.presignUseSSL != null ||
+        options.presignPathStyle != null;
+    if (!hasOverrides) {
+      // Reuse client but ensure region is set to skip network lookup.
+      if (client.region != null) return client;
+      return Minio(
+        endPoint: client.endPoint,
+        port: client.port,
+        accessKey: client.accessKey,
+        secretKey: client.secretKey,
+        sessionToken: client.sessionToken,
+        useSSL: client.useSSL,
+        region: region,
+        pathStyle: client.pathStyle,
+        enableTrace: client.enableTrace,
+      );
+    }
+
+    return Minio(
+      endPoint: options.presignEndpoint ?? client.endPoint,
+      port: options.presignPort ?? client.port,
+      accessKey: client.accessKey,
+      secretKey: client.secretKey,
+      sessionToken: client.sessionToken,
+      useSSL: options.presignUseSSL ?? client.useSSL,
+      region: region,
+      pathStyle: options.presignPathStyle ?? client.pathStyle,
+      enableTrace: client.enableTrace,
+    );
   }
 }

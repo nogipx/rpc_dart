@@ -10,7 +10,7 @@ void main() {
   const bucket = 'blobs';
   const accessKey = 'minioadmin';
   const secretKey = 'minioadmin';
-  const port = 9004;
+  const port = 9001;
   const useSSL = false;
   const pathStyle = true;
 
