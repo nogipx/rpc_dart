@@ -84,7 +84,7 @@ final server = BlobServiceFactory.createServer(
   storage: storage,
 );
 ```
-Descriptors returned from S3 include a short-lived presigned download URL (`downloadUrl`). Prefer `presignEndpoint`/`presignPort`/`presignUseSSL`/`presignPathStyle` when the public host differs from the internal one — the URL will be signed directly for the external host. Set `presignRegion` explicitly to avoid any region lookup when generating presigns. `S3BlobStorageOptions` also configures prefix/clock and `presignTtlSeconds` (link lifetime).
+Descriptors returned from S3 include a download URL (`downloadUrl`). The adapter now auto-detects public access: if bucket policy allows anonymous `s3:GetObject`, it returns a plain URL; otherwise it presigns. Prefer `presignEndpoint`/`presignPort`/`presignUseSSL`/`presignPathStyle` when the public host differs from the internal one — the URL (presigned or plain) will use those host overrides. Set `presignRegion` explicitly to avoid any region lookup when generating presigns. `S3BlobStorageOptions` also configures prefix/clock and `presignTtlSeconds` (link lifetime).
 
 ## Goals
 - Separate contract for blobs (`BlobService`) so `rpc_dart_data` stays focused on JSON records.

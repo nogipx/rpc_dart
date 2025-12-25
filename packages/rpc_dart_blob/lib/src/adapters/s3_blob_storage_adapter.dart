@@ -65,11 +65,11 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     required this.bucket,
     S3BlobStorageOptions options = const S3BlobStorageOptions(),
   }) : _client = client,
-       _presignClient = _buildPresignClient(client, options),
+      _presignClient = _buildPresignClient(client, options),
        _prefix = _normalizePrefix(options.prefix),
        _clock = options.clock ?? DateTime.now,
        _presignTtlSeconds =
-           options.presignTtlSeconds ?? kDefaultPresignTtlSeconds {
+            options.presignTtlSeconds ?? kDefaultPresignTtlSeconds {
     assert(_presignTtlSeconds > 0, 'presignTtlSeconds must be positive');
   }
 
@@ -108,6 +108,8 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
   final S3Clock _clock;
   final int _presignTtlSeconds;
   minio_internal.MinioClient? _rawClient;
+  minio_internal.MinioClient? _presignRawClient;
+  bool? _bucketPublic;
 
   static const _metaVersion = 'rpc-version';
   static const _metaCreatedAt = 'rpc-created-at';
@@ -119,7 +121,7 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     try {
       final stat = await _client.statObject(bucket, key);
       final tags = await _getObjectTags(key);
-      final url = await _presignedUrl(key);
+      final url = await _downloadUrl(key);
       return _descriptorFromStat(
         collection,
         id,
@@ -217,7 +219,7 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
         contentType: request.contentType,
         checksum: _etagLikeChecksum(collected),
         metadata: request.metadata,
-        downloadUrl: await _presignedUrl(key),
+        downloadUrl: await _downloadUrl(key),
       ),
     );
   }
@@ -437,6 +439,11 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     return digest;
   }
 
+  Future<String?> _downloadUrl(String key) async {
+    final isPublic = await _isBucketPublic();
+    return isPublic ? _publicUrl(key) : _presignedUrl(key);
+  }
+
   Future<String?> _presignedUrl(String key) async {
     try {
       final url = await _presignClient.presignedGetObject(
@@ -448,6 +455,67 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<String?> _publicUrl(String key) async {
+    try {
+      final client = _presignRawClient ??= minio_internal.MinioClient(
+        _presignClient,
+      );
+      final uri = client.getRequestUrl(bucket, key, null, null);
+      return uri.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> _isBucketPublic() async {
+    if (_bucketPublic != null) return _bucketPublic!;
+
+    try {
+      final policy = await _client.getBucketPolicy(bucket);
+      final statements = policy?['Statement'];
+      final allowsPublicGet = statements is Iterable &&
+          statements.any(_allowsPublicGetObject);
+      _bucketPublic = allowsPublicGet;
+    } catch (_) {
+      _bucketPublic = false;
+    }
+    return _bucketPublic!;
+  }
+
+  bool _allowsPublicGetObject(dynamic statement) {
+    if (statement is! Map) return false;
+    final effect = statement['Effect']?.toString().toLowerCase();
+    if (effect != 'allow') return false;
+    if (!_isPublicPrincipal(statement['Principal'])) return false;
+    return _allowsGetObjectAction(statement['Action']);
+  }
+
+  bool _isPublicPrincipal(dynamic principal) {
+    if (principal == null) return false;
+    if (principal == '*') return true;
+    if (principal is String && principal.trim() == '*') return true;
+    if (principal is Map) {
+      final aws = principal['AWS'] ?? principal['AWS:'];
+      if (aws == null) return false;
+      if (aws == '*') return true;
+      if (aws is Iterable && aws.contains('*')) return true;
+      if (aws is String && aws.trim() == '*') return true;
+    }
+    return false;
+  }
+
+  bool _allowsGetObjectAction(dynamic actions) {
+    if (actions == null) return false;
+    if (actions is String) {
+      final action = actions.toLowerCase();
+      return action == 's3:getobject' || action == 's3:*' || action == '*';
+    }
+    if (actions is Iterable) {
+      return actions.any(_allowsGetObjectAction);
+    }
+    return false;
   }
 
   Future<Map<String, String>> _getObjectTags(String key) async {
