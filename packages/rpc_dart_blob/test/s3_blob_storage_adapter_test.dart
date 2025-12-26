@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 /// Requires existing bucket `blobs` with accessKey=minio / secretKey=minio123.
 void main() {
   const endPoint = 'localhost';
-  const bucket = 'blobs';
+  const bucket = 'test';
   const accessKey = 'minioadmin';
   const secretKey = 'minioadmin';
   const port = 9001;

@@ -1,4 +1,7 @@
-## Unreleased
+## 1.7.1
+
+- Isolate transport: propagate worker crashes/exits to host health, close channels cleanly, and tolerate shutdown signals even when streams remain open.
+- Added zero-copy isolate handling for `TransferableTypedData` plus lifecycle regression tests for crash/close flows.
 
 ## 1.7.0
 

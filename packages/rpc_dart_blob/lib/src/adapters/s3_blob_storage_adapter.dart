@@ -65,11 +65,11 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     required this.bucket,
     S3BlobStorageOptions options = const S3BlobStorageOptions(),
   }) : _client = client,
-      _presignClient = _buildPresignClient(client, options),
+       _presignClient = _buildPresignClient(client, options),
        _prefix = _normalizePrefix(options.prefix),
        _clock = options.clock ?? DateTime.now,
        _presignTtlSeconds =
-            options.presignTtlSeconds ?? kDefaultPresignTtlSeconds {
+           options.presignTtlSeconds ?? kDefaultPresignTtlSeconds {
     assert(_presignTtlSeconds > 0, 'presignTtlSeconds must be positive');
   }
 
@@ -475,8 +475,8 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
     try {
       final policy = await _client.getBucketPolicy(bucket);
       final statements = policy?['Statement'];
-      final allowsPublicGet = statements is Iterable &&
-          statements.any(_allowsPublicGetObject);
+      final allowsPublicGet =
+          statements is Iterable && statements.any(_allowsPublicGetObject);
       _bucketPublic = allowsPublicGet;
     } catch (_) {
       _bucketPublic = false;

@@ -6,7 +6,6 @@
 
 import 'dart:async';
 import 'dart:isolate';
-import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
