@@ -1,3 +1,9 @@
+## 3.4.4
+
+- SQLite: chunked reads switch to keyset pagination to avoid large OFFSET scans; `queryCollection` now uses keyset pagination for cursors (OFFSET kept only when explicitly requested); bulk FTS updates insert per chunk in a single statement after one delete.
+- SQLite: batched `writeRecords` checks existing versions once before upsert and throws conflicts without an extra SELECT per conflict.
+- Postgres: chunked reads and `queryCollection` use keyset pagination (OFFSET only when explicitly requested); batched writes prefetch versions once to surface conflicts without a second query.
+
 ## 3.4.3
 
 - Web: `SqliteConnectionOptions` adds `webVfsMode` (opfs/inMemory/custom), `webFileName`, and optional `webCustomVfs`. Web connections now follow the drift-style path: OPFS default, fall back to IndexedDB, then in-memory when OPFS is unavailable.

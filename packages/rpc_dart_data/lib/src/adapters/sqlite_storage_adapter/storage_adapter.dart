@@ -559,20 +559,27 @@ class SqliteDataStorageAdapter
     final effectiveChunkSize = chunkSize <= 0
         ? BaseDataRepository.databaseExportChunkSize
         : chunkSize;
-    var offset = 0;
+    String? lastId;
     while (true) {
+      final query = StringBuffer(
+        'SELECT id, payload, version, created_at, updated_at '
+        'FROM "$tableName"',
+      );
+      final variables = <Object>[];
+      if (lastId != null) {
+        query.write(' WHERE id > ?');
+        variables.add(lastId);
+      }
+      query.write(' ORDER BY id LIMIT ?');
+      variables.add(effectiveChunkSize);
       final rows = await _database
-          .customSelect(
-            'SELECT id, payload, version, created_at, updated_at '
-            'FROM "$tableName" ORDER BY id LIMIT ? OFFSET ?',
-            variables: [effectiveChunkSize, offset],
-          )
+          .customSelect(query.toString(), variables: variables)
           .get();
       if (rows.isEmpty) {
         break;
       }
       yield rows.map((row) => _mapRow(collection, row)).toList(growable: false);
-      offset += rows.length;
+      lastId = rows.last.read<String>('id');
       if (rows.length < effectiveChunkSize) {
         break;
       }
@@ -630,6 +637,7 @@ class SqliteDataStorageAdapter
     final values = List<Object>.from(filterValues);
 
     final cursor = request.options.cursor;
+    final useKeyset = cursor != null;
     if (cursor != null) {
       final exists = await _cursorExists(tableName, cursor);
       if (!exists) {
@@ -638,10 +646,10 @@ class SqliteDataStorageAdapter
         );
       }
       final comparator = descending ? '<' : '>';
-      whereClauses.add('$sortExpression $comparator ?');
       final sortColumn = _columnForField(sortField);
+      Object boundaryValue;
       if (sortColumn == 'id') {
-        values.add(cursor);
+        boundaryValue = cursor;
       } else {
         final boundary = await _database
             .customSelect(
@@ -655,8 +663,14 @@ class SqliteDataStorageAdapter
             'Cursor $cursor is not valid for ${request.collection}',
           );
         }
-        values.add(boundary.read<Object>('boundary'));
+        boundaryValue = boundary.read<Object>('boundary');
       }
+      whereClauses.add(
+        '($sortExpression $comparator ? OR '
+        '($sortExpression = ? AND ${_qualifiedColumn('id')} '
+        '$comparator ?))',
+      );
+      values.addAll([boundaryValue, boundaryValue, cursor]);
     }
 
     final querySql = StringBuffer(
@@ -675,14 +689,16 @@ class SqliteDataStorageAdapter
       ..write(', ')
       ..write(_qualifiedColumn('id'))
       ..write(' ')
-      ..write(descending ? 'DESC' : 'ASC')
-      ..write(' LIMIT ? OFFSET ?');
+      ..write(descending ? 'DESC' : 'ASC');
 
-    final queryArgs = <Object>[
-      ...values,
-      request.options.limit,
-      request.options.offset,
-    ];
+    final useOffset = !useKeyset && request.options.offset > 0;
+
+    querySql.write(' LIMIT ?');
+    final queryArgs = <Object>[...values, request.options.limit];
+    if (useOffset) {
+      querySql.write(' OFFSET ?');
+      queryArgs.add(request.options.offset);
+    }
     final querySqlString = querySql.toString();
     final loggedQuerySql = querySqlString.replaceAll(
       '"$tableName"',
@@ -930,13 +946,27 @@ class SqliteDataStorageAdapter
       tableNames[entry.key] = await _ensureTableForWrite(entry.key);
     }
 
-    final conflicts = <String, List<DataRecord>>{};
-
     await _database.transaction(() async {
       for (final entry in recordsByCollection.entries) {
         final collection = entry.key;
         final tableName = tableNames[collection]!;
         final recordsForTable = entry.value;
+        final ids = recordsForTable.map((record) => record.id).toList();
+
+        Map<String, int> existingVersions = const <String, int>{};
+        if (ids.isNotEmpty) {
+          final placeholders = List.filled(ids.length, '?').join(', ');
+          final rows = await _database
+              .customSelect(
+                'SELECT id, version FROM "$tableName" WHERE id IN ($placeholders)',
+                variables: ids,
+              )
+              .get();
+          existingVersions = {
+            for (final row in rows)
+              row.read<String>('id'): row.read<int>('version'),
+          };
+        }
 
         final affected = await _upsertRecordsIntoTable(
           tableName,
@@ -945,37 +975,17 @@ class SqliteDataStorageAdapter
         await _upsertFtsBatch(collection, tableName, recordsForTable);
 
         if (affected < recordsForTable.length) {
-          conflicts[collection] = recordsForTable;
-        }
-      }
-    });
-
-    if (conflicts.isNotEmpty) {
-      for (final entry in conflicts.entries) {
-        final collection = entry.key;
-        final ids = entry.value.map((record) => record.id).toList();
-        final tableName = tableNames[collection]!;
-        final placeholders = List.filled(ids.length, '?').join(', ');
-        final rows = await _database
-            .customSelect(
-              'SELECT id, version FROM "$tableName" WHERE id IN ($placeholders)',
-              variables: ids,
-            )
-            .get();
-        final versions = {
-          for (final row in rows)
-            row.read<String>('id'): row.read<int>('version'),
-        };
-        for (final record in entry.value) {
-          final existingVersion = versions[record.id];
-          if (existingVersion != null && existingVersion >= record.version) {
-            throw RpcDataError.conflict(
-              'Record ${record.id} in $collection is at version $existingVersion; incoming ${record.version} is not newer.',
-            );
+          for (final record in recordsForTable) {
+            final existingVersion = existingVersions[record.id];
+            if (existingVersion != null && existingVersion >= record.version) {
+              throw RpcDataError.conflict(
+                'Record ${record.id} in $collection is at version $existingVersion; incoming ${record.version} is not newer.',
+              );
+            }
           }
         }
       }
-    }
+    });
   }
 
   @override

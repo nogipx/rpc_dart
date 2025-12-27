@@ -66,12 +66,20 @@ extension _FtsSupport on SqliteDataStorageAdapter {
         'DELETE FROM "$ftsTable" WHERE collection = ? AND id IN ($placeholders)',
         variables: [collection, ...ids],
       );
-      for (final record in chunk) {
-        await _database.customStatement(
-          'INSERT INTO "$ftsTable" (collection, id, content) VALUES (?, ?, ?)',
-          variables: [collection, record.id, _prepareSearchText(record)],
-        );
+      final values = StringBuffer();
+      final variables = <Object>[];
+      for (var index = 0; index < chunk.length; index++) {
+        if (index > 0) {
+          values.write(', ');
+        }
+        values.write('(?, ?, ?)');
+        final record = chunk[index];
+        variables.addAll([collection, record.id, _prepareSearchText(record)]);
       }
+      await _database.customStatement(
+        'INSERT INTO "$ftsTable" (collection, id, content) VALUES $values',
+        variables: variables,
+      );
     }
     _ftsSeededCollections.add(collection);
   }

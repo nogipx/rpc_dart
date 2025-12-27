@@ -404,16 +404,21 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     final effectiveChunkSize = chunkSize <= 0
         ? BaseDataRepository.databaseExportChunkSize
         : chunkSize;
-    var offset = 0;
+    String? lastId;
     while (true) {
+      final parameters = <String, Object?>{'limit': effectiveChunkSize};
+      final query = StringBuffer(
+        'SELECT id, payload, version, created_at, updated_at '
+        'FROM $table ',
+      );
+      if (lastId != null) {
+        query.write('WHERE id > @cursor ');
+        parameters['cursor'] = lastId;
+      }
+      query.write('ORDER BY id LIMIT @limit');
       final result = await _connection.execute(
-        Sql.named(
-          'SELECT id, payload, version, created_at, updated_at '
-          'FROM $table '
-          'ORDER BY id '
-          'LIMIT @limit OFFSET @offset',
-        ),
-        parameters: {'limit': effectiveChunkSize, 'offset': offset},
+        Sql.named(query.toString()),
+        parameters: parameters,
       );
       if (result.isEmpty) {
         break;
@@ -421,7 +426,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       yield result
           .map((row) => _mapRow(row, collectionOverride: collection))
           .toList(growable: false);
-      offset += result.length;
+      lastId = result.last.toColumnMap()['id'] as String;
       if (result.length < effectiveChunkSize) {
         break;
       }
@@ -468,6 +473,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     }
 
     final cursor = request.options.cursor;
+    final useKeyset = cursor != null;
     if (cursor != null) {
       final exists = await _cursorExists(table, cursor);
       if (!exists) {
@@ -487,9 +493,6 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       );
     }
 
-    final limitParam = _addParam(params, request.options.limit);
-    final offsetParam = _addParam(params, request.options.offset);
-
     final querySql = StringBuffer(
       'SELECT id, payload, version, created_at, updated_at '
       'FROM $table ',
@@ -504,11 +507,20 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       ..write(sortExpression)
       ..write(descending ? ' DESC' : ' ASC')
       ..write(', id ')
-      ..write(descending ? 'DESC' : 'ASC')
+      ..write(descending ? 'DESC' : 'ASC');
+
+    final useOffset = !useKeyset && request.options.offset > 0;
+
+    final limitParam = _addParam(params, request.options.limit);
+    querySql
       ..write(' LIMIT ')
-      ..write(limitParam)
-      ..write(' OFFSET ')
-      ..write(offsetParam);
+      ..write(limitParam);
+    if (useOffset) {
+      final offsetParam = _addParam(params, request.options.offset);
+      querySql
+        ..write(' OFFSET ')
+        ..write(offsetParam);
+    }
 
     final result = await _connection.execute(
       Sql.named(querySql.toString()),
@@ -699,12 +711,14 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     }
     for (final entry in byCollection.entries) {
       final table = await _ensureTableForWrite(entry.key);
+      final ids = entry.value.map((r) => r.id).toList(growable: false);
+      final existingVersions = ids.isEmpty
+          ? const <String, int>{}
+          : await _fetchVersions(table, ids);
       final affected = await _upsertRecords(table, entry.value);
       if (affected < entry.value.length) {
-        final ids = entry.value.map((r) => r.id).toList();
-        final versions = await _fetchVersions(table, ids);
         for (final record in entry.value) {
-          final existing = versions[record.id];
+          final existing = existingVersions[record.id];
           if (existing != null && existing >= record.version) {
             throw RpcDataError.conflict(
               'Record ${record.id} in ${record.collection} is at version '
