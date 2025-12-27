@@ -1,3 +1,7 @@
+## 3.4.3
+
+- Web: `SqliteConnectionOptions` adds `webVfsMode` (opfs/inMemory/custom), `webFileName`, and optional `webCustomVfs`. Web connections now follow the drift-style path: OPFS default, fall back to IndexedDB, then in-memory when OPFS is unavailable.
+
 ## 3.4.2
 
 - `IDataStorageAdapter` now requires `ensureReady`, Postgres adapter aligns readiness with schema/journal/index validation.

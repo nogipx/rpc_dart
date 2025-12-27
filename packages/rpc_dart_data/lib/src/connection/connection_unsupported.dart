@@ -5,7 +5,7 @@ Never _unsupported() => throw UnsupportedError(
 );
 
 Future<DatabaseConnection> openFileDb({
-  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
+  SqliteConnectionOptions options = const SqliteConnectionOptions(),
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
@@ -18,7 +18,7 @@ Future<DatabaseConnection> openFileDb({
 }
 
 Future<DatabaseConnection> openInMemoryDb({
-  SqliteConnectionOptions options = SqliteConnectionOptions.defaults,
+  SqliteConnectionOptions options = const SqliteConnectionOptions(),
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,

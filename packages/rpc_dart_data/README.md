@@ -15,7 +15,7 @@ It gives you a transport-agnostic contract, ready-to-use storage adapters, and u
 - **Collection discovery**: RPC `listCollections()` queries the storage adapter for the current list of collection names so clients can introspect available datasets without enumerating all records.
 
 ## Adapters
-- **SQLite adapter** with SQLCipher support out-of-the-box via SQLite3MultipleCiphers (`hooks.user_defines.sqlite3.source: sqlite3mc`), no system `libsqlcipher` needed; web uses `sqlite3mc.wasm`. `SqliteSetupHook` lets you register custom pragmas before the database is exposed to your code.
+- **SQLite adapter** with SQLCipher support out-of-the-box via SQLite3MultipleCiphers (`hooks.user_defines.sqlite3.source: sqlite3mc`), no system `libsqlcipher` needed; web uses `sqlite3mc.wasm` and now defaults to OPFS persistence (drift-style fallback to IndexedDB, then in-memory). `SqliteSetupHook` lets you register custom pragmas before the database is exposed to your code, and `SqliteConnectionOptions.webVfsMode` / `webFileName` let you pick OPFS vs in-memory and the path/name used on the web (OPFS uses `/database` inside the chosen path).
 - **PostgreSQL adapter (alpha)**: one collection per JSONB table, optimistic concurrency; filters/sorting/pagination/FTS execute inside Postgres (GIN over `to_tsvector`).
 
 ## Architecture in seven layers

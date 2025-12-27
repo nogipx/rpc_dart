@@ -6,8 +6,6 @@ import 'package:rpc_dart_data/src/sqlite_storage/sqlite_cipher_loader.dart';
 import 'package:sqlite3/common.dart' as sqlite;
 import 'package:sqlite3/sqlite3.dart' as sqlite_ffi;
 
-const _defaultOptions = SqliteConnectionOptions.defaults;
-
 Future<File> _resolveMainDbFile(SqliteConnectionOptions options) async {
   final explicitPath = options.nativePath;
   final targetPath =
@@ -52,7 +50,7 @@ Future<DatabaseConnection> _openDatabase(
 
 /// Открывает файл на IO-платформе.
 Future<DatabaseConnection> openFileDb({
-  SqliteConnectionOptions options = _defaultOptions,
+  SqliteConnectionOptions options = const SqliteConnectionOptions(),
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,
@@ -74,7 +72,7 @@ Future<DatabaseConnection> openFileDb({
 
 /// Открывает временную (in-memory) базу.
 Future<DatabaseConnection> openInMemoryDb({
-  SqliteConnectionOptions options = _defaultOptions,
+  SqliteConnectionOptions options = const SqliteConnectionOptions(),
   bool logStatements = false,
   SqlCipherKey? sqlCipherKey,
   SqliteSetupHook? sqliteSetup,

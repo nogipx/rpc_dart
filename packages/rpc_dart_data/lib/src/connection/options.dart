@@ -1,4 +1,8 @@
 import 'package:meta/meta.dart';
+import 'package:sqlite3/common.dart' as sqlite;
+
+/// VFS mode used by the web connection.
+enum WebVfsMode { opfs, inMemory, custom }
 
 /// Cross-platform configuration for opening SQLite databases.
 @immutable
@@ -10,8 +14,10 @@ class SqliteConnectionOptions {
     this.webSqliteWasmUri,
     this.webWorkerUri,
     this.webDatabaseName = 'app_db',
-  }) : assert(nativeFileName.length > 0, 'nativeFileName must not be empty'),
-       assert(webDatabaseName.length > 0, 'webDatabaseName must not be empty');
+    this.webVfsMode = WebVfsMode.opfs,
+    this.webFileName = 'app.db',
+    this.webCustomVfs,
+  });
 
   /// Absolute or relative path to the persistent database file on IO platforms.
   ///
@@ -36,6 +42,22 @@ class SqliteConnectionOptions {
   /// Logical name for the persistent database on web builds.
   final String webDatabaseName;
 
+  /// Virtual file system to use in web builds.
+  ///
+  /// The default is [WebVfsMode.opfs], which persists data in OPFS and falls
+  /// back to IndexedDB (then in-memory) when OPFS is unavailable.
+  final WebVfsMode webVfsMode;
+
+  /// File name used by the web VFS (OPFS or in-memory).
+  ///
+  /// For OPFS (via `SimpleOpfsFileSystem`), this acts as the storage path and
+  /// the underlying SQLite file name is fixed to `/database`. A leading slash
+  /// will be added automatically when missing.
+  final String? webFileName;
+
+  /// Custom VFS to register when [webVfsMode] is [WebVfsMode.custom].
+  final sqlite.VirtualFileSystem? webCustomVfs;
+
   /// Default configuration shared across helper APIs.
-  static const SqliteConnectionOptions defaults = SqliteConnectionOptions();
+  static final SqliteConnectionOptions defaults = SqliteConnectionOptions();
 }
