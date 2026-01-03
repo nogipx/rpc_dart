@@ -195,27 +195,27 @@ class DataServiceCaller extends RpcCallerContract
     );
   }
 
-  Future<ExportDatabaseResponse> exportDatabase(
+  Stream<DatabaseChunk> exportDatabase(
     ExportDatabaseRequest request, {
     RpcContext? context,
   }) {
-    return callUnary(
+    return callServerStream(
       methodName: IDataServiceContract.exportDatabase,
       request: request,
       requestCodec: exportDatabaseRequestCodec,
-      responseCodec: exportDatabaseResponseCodec,
+      responseCodec: databaseChunkCodec,
       context: context,
     );
   }
 
   Future<ImportDatabaseResponse> importDatabase(
-    ImportDatabaseRequest request, {
+    Stream<DatabaseChunk> request, {
     RpcContext? context,
   }) {
-    return callUnary(
+    return callClientStream(
       methodName: IDataServiceContract.importDatabase,
-      request: request,
-      requestCodec: importDatabaseRequestCodec,
+      requests: request,
+      requestCodec: databaseChunkCodec,
       responseCodec: importDatabaseResponseCodec,
       context: context,
     );

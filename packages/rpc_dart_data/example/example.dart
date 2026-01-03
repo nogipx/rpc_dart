@@ -209,8 +209,8 @@ Future<void> _versionConflict(
 }
 
 Future<void> _exportSnapshot(DataServiceClient client) async {
-  final export = await client.exportDatabase(includePayloadString: false);
-  await for (final chunk in export.payloadStream!) {
+  final export = client.exportDatabase();
+  await for (final chunk in export) {
     print(utf8.decode(chunk));
   }
 }

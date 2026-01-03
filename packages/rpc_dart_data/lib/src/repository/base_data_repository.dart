@@ -30,7 +30,6 @@ abstract class BaseDataRepository implements IDataRepository {
        _schemaValidation = schemaValidation;
 
   static const String _databaseFormatVersion = '2.0.0';
-  static const String _legacyDatabaseFormatVersion = '1.0.0';
   static const int defaultJournalMaxEvents = 5000;
   static const Duration defaultJournalRetention = Duration(days: 7);
   static const int databaseExportChunkSize = 512;
@@ -212,79 +211,8 @@ abstract class BaseDataRepository implements IDataRepository {
     return result;
   }
 
-  Map<String, dynamic> _decodeSnapshotPayload(ImportDatabaseRequest request) {
-    final decoded = jsonDecode(request.payload);
-    if (decoded is! Map) {
-      throw RpcDataError.invalidArgument('Invalid snapshot payload');
-    }
-    return Map<String, dynamic>.from(decoded);
-  }
-
-  Future<ImportDatabaseResponse> _importParsedCollections(
-    Map<String, List<DataRecord>> collections,
-    bool replaceExisting,
-  ) async {
-    final existingCollections = await storage.listCollections();
-    final existingRecords = <String, Map<String, DataRecord>>{};
-    if (replaceExisting) {
-      for (final collection in existingCollections) {
-        final records = await storage.readCollection(collection);
-        existingRecords[collection] = {
-          for (final record in records) record.id: record,
-        };
-      }
-    }
-
-    if (replaceExisting) {
-      for (final collection in existingCollections) {
-        if (!collections.containsKey(collection)) {
-          final previous = existingRecords[collection];
-          if (previous != null) {
-            for (final record in previous.values) {
-              await _recordDeletion(collection, record.id, record.version + 1);
-            }
-          }
-          await storage.deleteCollection(collection);
-        }
-      }
-    }
-
-    var importedRecords = 0;
-    for (final entry in collections.entries) {
-      final collection = entry.key;
-      final records = entry.value;
-
-      if (replaceExisting) {
-        final previous = existingRecords[collection];
-        if (previous != null && previous.isNotEmpty) {
-          for (final record in previous.values) {
-            await _recordDeletion(collection, record.id, record.version + 1);
-          }
-          await storage.deleteCollection(collection);
-        }
-      }
-
-      if (records.isNotEmpty) {
-        for (final record in records) {
-          await _validatePayload(record.collection, record.payload);
-        }
-        await storage.writeRecords(records);
-        for (final record in records) {
-          await _recordEvent(DataChangeType.snapshot, record);
-        }
-        importedRecords += records.length;
-      }
-    }
-
-    return ImportDatabaseResponse(
-      collectionCount: collections.length,
-      recordCount: importedRecords,
-      appliedAt: _clock(),
-    );
-  }
-
   Future<ImportDatabaseResponse> _importStreamingSnapshot(
-    String payload,
+    Stream<String> lines,
     bool replaceExisting,
   ) async {
     Map<String, dynamic> parseEntry(String line) {
@@ -301,206 +229,17 @@ abstract class BaseDataRepository implements IDataRepository {
       }
     }
 
-    Future<_SnapshotValidationResult> validateSnapshot(
-      Stream<String> lines, {
-      required Future<void> Function(_SnapshotParsedEntry entry) onEntry,
-    }) async {
-      final seenCollections = <String>{};
-      var headerSeen = false;
-      var currentCollection = '';
-      int? declaredCollectionCount;
-      int? declaredRecordCount;
-      var actualRecordCount = 0;
-
-      await for (final rawLine in lines) {
-        final line = rawLine.trim();
-        if (line.isEmpty) {
-          continue;
-        }
-
-        final entry = parseEntry(line);
-        final type = entry['type'] as String?;
-        if (type == null) {
-          throw RpcDataError.invalidArgument(
-            'Snapshot entry is missing a "type" attribute',
-          );
-        }
-
-        switch (type) {
-          case 'header':
-            if (headerSeen) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot contains more than one header entry',
-              );
-            }
-            headerSeen = true;
-            final formatVersion =
-                entry['formatVersion'] as String? ?? _databaseFormatVersion;
-            if (formatVersion != _databaseFormatVersion) {
-              throw RpcDataError.invalidArgument(
-                'Unsupported snapshot format "$formatVersion"',
-              );
-            }
-            await onEntry(_SnapshotParsedEntry.header());
-            break;
-          case 'schema':
-            if (!headerSeen) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot schema encountered before header',
-              );
-            }
-            final name = entry['collection'] as String?;
-            if (name == null || name.isEmpty) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot schema entry is missing collection',
-              );
-            }
-            final schemaJson = entry['schema'];
-            if (schemaJson is! Map) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot schema for $name must be an object',
-              );
-            }
-            final version = entry['version'] as int? ?? 1;
-            final enabled = entry['enabled'] as bool? ?? true;
-            final requireValidation =
-                entry['requireValidation'] as bool? ?? true;
-            await onEntry(
-              _SnapshotParsedEntry.schema(
-                _SnapshotSchemaEntry(
-                  collection: name,
-                  version: version,
-                  schema: Map<String, dynamic>.from(schemaJson),
-                  enabled: enabled,
-                  requireValidation: requireValidation,
-                ),
-              ),
-            );
-            break;
-          case 'collection':
-            if (!headerSeen) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot collection encountered before header',
-              );
-            }
-            if (currentCollection.isNotEmpty) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot opened a new collection before closing "$currentCollection"',
-              );
-            }
-            final name = entry['name'] as String?;
-            if (name == null || name.isEmpty) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot collection entry is missing name',
-              );
-            }
-            if (!seenCollections.add(name)) {
-              throw RpcDataError.invalidArgument(
-                'Collection "$name" appears multiple times',
-              );
-            }
-            currentCollection = name;
-            await onEntry(_SnapshotParsedEntry.collection(name));
-            break;
-          case 'record':
-            if (!headerSeen) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot record encountered before header',
-              );
-            }
-            if (currentCollection.isEmpty) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot record is not associated with a collection',
-              );
-            }
-            final data = entry['data'];
-            if (data is! Map) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot record payload must be an object',
-              );
-            }
-            final record = DataRecord.fromJson(Map<String, dynamic>.from(data));
-            if (record.collection != currentCollection) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot record collection mismatch for ${record.id}',
-              );
-            }
-            actualRecordCount += 1;
-            await onEntry(_SnapshotParsedEntry.record(record));
-            break;
-          case 'collectionEnd':
-            if (currentCollection.isEmpty) {
-              throw RpcDataError.invalidArgument(
-                'Snapshot contains collectionEnd without collection start',
-              );
-            }
-            currentCollection = '';
-            await onEntry(_SnapshotParsedEntry.collectionEnd());
-            break;
-          case 'footer':
-            final declaredCollections = entry['collectionCount'];
-            final declaredRecords = entry['recordCount'];
-            if (declaredCollections is int) {
-              declaredCollectionCount = declaredCollections;
-            }
-            if (declaredRecords is int) {
-              declaredRecordCount = declaredRecords;
-            }
-            await onEntry(
-              _SnapshotParsedEntry.footer(
-                declaredCollectionCount: declaredCollectionCount,
-                declaredRecordCount: declaredRecordCount,
-              ),
-            );
-            break;
-          default:
-            throw RpcDataError.invalidArgument(
-              'Unknown snapshot entry type "$type"',
-            );
-        }
-      }
-
-      if (!headerSeen) {
-        throw RpcDataError.invalidArgument('Snapshot is missing header entry');
-      }
-      if (currentCollection.isNotEmpty) {
-        throw RpcDataError.invalidArgument(
-          'Snapshot ended before closing collection "$currentCollection"',
-        );
-      }
-
-      return _SnapshotValidationResult(
-        seenCollections: Set<String>.unmodifiable(seenCollections),
-        declaredCollectionCount: declaredCollectionCount,
-        declaredRecordCount: declaredRecordCount,
-        actualRecordCount: actualRecordCount,
-      );
-    }
-
-    final validation = await validateSnapshot(
-      Stream<String>.fromIterable(LineSplitter.split(payload)),
-      onEntry: (_) async {},
-    );
-
-    if (validation.declaredCollectionCount != null &&
-        validation.declaredCollectionCount !=
-            validation.seenCollections.length) {
-      throw RpcDataError.invalidArgument(
-        'Snapshot declared ${validation.declaredCollectionCount} collections but contained ${validation.seenCollections.length}',
-      );
-    }
-    if (validation.declaredRecordCount != null &&
-        validation.declaredRecordCount != validation.actualRecordCount) {
-      throw RpcDataError.invalidArgument(
-        'Snapshot declared ${validation.declaredRecordCount} records but contained ${validation.actualRecordCount}',
-      );
-    }
-
     final existingCollections = await storage.listCollections();
     final remainingCollections = existingCollections.toSet();
+    final seenCollections = <String>{};
     final pending = <DataRecord>[];
-    var importedRecords = 0;
+
+    var headerSeen = false;
     var currentCollection = '';
+    int? declaredCollectionCount;
+    int? declaredRecordCount;
+    var actualRecordCount = 0;
+    var importedRecords = 0;
 
     Future<void> flushPending() async {
       if (pending.isEmpty) {
@@ -538,46 +277,175 @@ abstract class BaseDataRepository implements IDataRepository {
       await storage.deleteCollection(collection);
     }
 
-    await validateSnapshot(
-      Stream<String>.fromIterable(LineSplitter.split(payload)),
-      onEntry: (entry) async {
-        switch (entry.type) {
-          case _SnapshotEntryType.header:
-            break;
-          case _SnapshotEntryType.schema:
-            final schema = entry.schema;
-            if (schema != null) {
-              await _applySchemas([schema]);
-            }
-            break;
-          case _SnapshotEntryType.collection:
+    await for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) {
+        continue;
+      }
+
+      final entry = parseEntry(line);
+      final type = entry['type'] as String?;
+      if (type == null) {
+        throw RpcDataError.invalidArgument(
+          'Snapshot entry is missing a "type" attribute',
+        );
+      }
+
+      switch (type) {
+        case 'header':
+          if (headerSeen) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot contains more than one header entry',
+            );
+          }
+          headerSeen = true;
+          final formatVersion =
+              entry['formatVersion'] as String? ?? _databaseFormatVersion;
+          if (formatVersion != _databaseFormatVersion) {
+            throw RpcDataError.invalidArgument(
+              'Unsupported snapshot format "$formatVersion"',
+            );
+          }
+          break;
+        case 'schema':
+          if (!headerSeen) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot schema encountered before header',
+            );
+          }
+          final name = entry['collection'] as String?;
+          if (name == null || name.isEmpty) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot schema entry is missing collection',
+            );
+          }
+          final schemaJson = entry['schema'];
+          if (schemaJson is! Map) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot schema for $name must be an object',
+            );
+          }
+          final version = entry['version'] as int? ?? 1;
+          final enabled = entry['enabled'] as bool? ?? true;
+          final requireValidation =
+              entry['requireValidation'] as bool? ?? true;
+          await _applySchemas([
+            _SnapshotSchemaEntry(
+              collection: name,
+              version: version,
+              schema: Map<String, dynamic>.from(schemaJson),
+              enabled: enabled,
+              requireValidation: requireValidation,
+            ),
+          ]);
+          break;
+        case 'collection':
+          if (!headerSeen) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot collection encountered before header',
+            );
+          }
+          if (currentCollection.isNotEmpty) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot opened a new collection before closing "$currentCollection"',
+            );
+          }
+          final name = entry['name'] as String?;
+          if (name == null || name.isEmpty) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot collection entry is missing name',
+            );
+          }
+          if (!seenCollections.add(name)) {
+            throw RpcDataError.invalidArgument(
+              'Collection "$name" appears multiple times',
+            );
+          }
+          await flushPending();
+          await purgeCollection(name);
+          currentCollection = name;
+          break;
+        case 'record':
+          if (!headerSeen) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot record encountered before header',
+            );
+          }
+          if (currentCollection.isEmpty) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot record is not associated with a collection',
+            );
+          }
+          final data = entry['data'];
+          if (data is! Map) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot record payload must be an object',
+            );
+          }
+          final record = DataRecord.fromJson(Map<String, dynamic>.from(data));
+          if (record.collection != currentCollection) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot record collection mismatch for ${record.id}',
+            );
+          }
+          actualRecordCount += 1;
+          pending.add(record);
+          if (pending.length >= BaseDataRepository.databaseImportBatchSize) {
             await flushPending();
-            final name = entry.collection!;
-            await purgeCollection(name);
-            currentCollection = name;
-            break;
-          case _SnapshotEntryType.record:
-            final record = entry.record!;
-            pending.add(record);
-            if (pending.length >= BaseDataRepository.databaseImportBatchSize) {
-              await flushPending();
-            }
-            break;
-          case _SnapshotEntryType.collectionEnd:
-            await flushPending();
-            currentCollection = '';
-            break;
-          case _SnapshotEntryType.footer:
-            break;
-        }
-      },
-    );
+          }
+          break;
+        case 'collectionEnd':
+          if (currentCollection.isEmpty) {
+            throw RpcDataError.invalidArgument(
+              'Snapshot contains collectionEnd without collection start',
+            );
+          }
+          await flushPending();
+          currentCollection = '';
+          break;
+        case 'footer':
+          final declaredCollections = entry['collectionCount'];
+          final declaredRecords = entry['recordCount'];
+          if (declaredCollections is int) {
+            declaredCollectionCount = declaredCollections;
+          }
+          if (declaredRecords is int) {
+            declaredRecordCount = declaredRecords;
+          }
+          break;
+        default:
+          throw RpcDataError.invalidArgument(
+            'Unknown snapshot entry type "$type"',
+          );
+      }
+    }
 
     await flushPending();
 
-    if (importedRecords != validation.actualRecordCount) {
+    if (!headerSeen) {
+      throw RpcDataError.invalidArgument('Snapshot is missing header entry');
+    }
+    if (currentCollection.isNotEmpty) {
+      throw RpcDataError.invalidArgument(
+        'Snapshot ended before closing collection "$currentCollection"',
+      );
+    }
+
+    if (declaredCollectionCount != null &&
+        declaredCollectionCount != seenCollections.length) {
+      throw RpcDataError.invalidArgument(
+        'Snapshot declared $declaredCollectionCount collections but contained ${seenCollections.length}',
+      );
+    }
+    if (declaredRecordCount != null &&
+        declaredRecordCount != actualRecordCount) {
+      throw RpcDataError.invalidArgument(
+        'Snapshot declared $declaredRecordCount records but contained $actualRecordCount',
+      );
+    }
+    if (importedRecords != actualRecordCount) {
       throw RpcDataError.internal(
-        'Imported $importedRecords records but snapshot contained ${validation.actualRecordCount}',
+        'Imported $importedRecords records but snapshot contained $actualRecordCount',
       );
     }
 
@@ -596,7 +464,7 @@ abstract class BaseDataRepository implements IDataRepository {
     }
 
     return ImportDatabaseResponse(
-      collectionCount: validation.seenCollections.length,
+      collectionCount: seenCollections.length,
       recordCount: importedRecords,
       appliedAt: _clock(),
     );
@@ -861,70 +729,63 @@ abstract class BaseDataRepository implements IDataRepository {
   }
 
   @override
-  Future<ExportDatabaseResponse> exportDatabase(
+  Stream<Uint8List> exportDatabase(
     ExportDatabaseRequest request,
-  ) async {
+  ) async* {
     final generatedAt = _clock();
     final collections = await storage.listCollections();
     final schemas = await _exportSchemas();
+    final encoder = const JsonEncoder();
+    var recordCount = 0;
 
-    Map<String, _PreparedChunkStream>? preparedStreams;
-    if (!request.includePayloadString) {
-      preparedStreams = _prepareChunkStreams(collections);
+    Uint8List encodeLine(Map<String, dynamic> entry) {
+      final line = encoder.convert(entry);
+      return Uint8List.fromList(utf8.encode('$line\n'));
     }
 
-    try {
-      final computation = await _computeExportMetadata(
-        request: request,
-        generatedAt: generatedAt,
-        collections: collections,
-        schemas: schemas,
-      );
+    yield encodeLine({
+      'type': 'header',
+      'formatVersion': _databaseFormatVersion,
+      'generatedAt': generatedAt.toIso8601String(),
+    });
+    for (final schema in schemas) {
+      yield encodeLine({
+        'type': 'schema',
+        'collection': schema.collection,
+        'version': schema.version,
+        'schema': schema.schema,
+        'enabled': schema.enabled,
+        'requireValidation': schema.requireValidation,
+      });
+    }
 
-      final payloadStream = _buildExportStream(
-        generatedAt: generatedAt,
-        collections: collections,
-        recordCount: computation.recordCount,
-        schemas: schemas,
-        preparedStreams: preparedStreams,
-      );
+    for (final collection in collections) {
+      yield encodeLine({'type': 'collection', 'name': collection});
 
-      return ExportDatabaseResponse(
-        payload: computation.payload,
-        payloadStream: payloadStream,
-        generatedAt: generatedAt,
-        formatVersion: _databaseFormatVersion,
-        collectionCount: collections.length,
-        recordCount: computation.recordCount,
-      );
-    } catch (error) {
-      if (preparedStreams != null) {
-        for (final stream in preparedStreams.values) {
-          await stream.iterator.cancel();
+      await for (final chunk in storage.readCollectionChunks(
+        collection,
+        chunkSize: BaseDataRepository.databaseExportChunkSize,
+      )) {
+        if (chunk.isEmpty) {
+          continue;
+        }
+        for (final record in chunk) {
+          recordCount += 1;
+          yield encodeLine({
+            'type': 'record',
+            'data': record.toJson(),
+          });
         }
       }
-      rethrow;
-    }
-  }
 
-  Map<String, _PreparedChunkStream> _prepareChunkStreams(
-    Iterable<String> collections,
-  ) {
-    final result = <String, _PreparedChunkStream>{};
-    for (final collection in collections) {
-      final iterator = StreamIterator<List<DataRecord>>(
-        storage.readCollectionChunks(
-          collection,
-          chunkSize: BaseDataRepository.databaseExportChunkSize,
-        ),
-      );
-      final pending = iterator.moveNext();
-      result[collection] = _PreparedChunkStream(
-        iterator: iterator,
-        pending: pending,
-      );
+      yield encodeLine({'type': 'collectionEnd', 'name': collection});
     }
-    return result;
+
+    yield encodeLine({
+      'type': 'footer',
+      'collectionCount': collections.length,
+      'recordCount': recordCount,
+    });
   }
 
   Future<List<_SnapshotSchemaEntry>> _exportSchemas() async {
@@ -946,161 +807,14 @@ abstract class BaseDataRepository implements IDataRepository {
         .toList(growable: false);
   }
 
-  Future<_ExportComputationResult> _computeExportMetadata({
-    required ExportDatabaseRequest request,
-    required DateTime generatedAt,
-    required List<String> collections,
-    required List<_SnapshotSchemaEntry> schemas,
-  }) async {
-    final encoder = const JsonEncoder();
-    final buffer = request.includePayloadString ? StringBuffer() : null;
-    var recordCount = 0;
-
-    void writeLine(Map<String, dynamic> entry) {
-      if (buffer == null) {
-        return;
-      }
-      buffer.writeln(encoder.convert(entry));
-    }
-
-    void writeRecord(DataRecord record) {
-      if (buffer == null) {
-        return;
-      }
-      buffer.writeln(
-        encoder.convert({'type': 'record', 'data': record.toJson()}),
-      );
-    }
-
-    writeLine({
-      'type': 'header',
-      'formatVersion': _databaseFormatVersion,
-      'generatedAt': generatedAt.toIso8601String(),
-    });
-    for (final schema in schemas) {
-      writeLine({
-        'type': 'schema',
-        'collection': schema.collection,
-        'version': schema.version,
-        'schema': schema.schema,
-        'enabled': schema.enabled,
-        'requireValidation': schema.requireValidation,
-      });
-    }
-
-    for (final collection in collections) {
-      writeLine({'type': 'collection', 'name': collection});
-
-      if (request.includePayloadString) {
-        await for (final chunk in storage.readCollectionChunks(
-          collection,
-          chunkSize: BaseDataRepository.databaseExportChunkSize,
-        )) {
-          if (chunk.isEmpty) {
-            continue;
-          }
-          for (final record in chunk) {
-            writeRecord(record);
-          }
-          recordCount += chunk.length;
-        }
-      } else {
-        final records = await storage.readCollection(collection);
-        recordCount += records.length;
-      }
-
-      writeLine({'type': 'collectionEnd', 'name': collection});
-    }
-
-    writeLine({
-      'type': 'footer',
-      'collectionCount': collections.length,
-      'recordCount': recordCount,
-    });
-
-    return _ExportComputationResult(
-      payload: buffer?.toString() ?? '',
-      recordCount: recordCount,
-    );
-  }
-
-  Stream<List<int>> _buildExportStream({
-    required DateTime generatedAt,
-    required List<String> collections,
-    required int recordCount,
-    required List<_SnapshotSchemaEntry> schemas,
-    Map<String, _PreparedChunkStream>? preparedStreams,
-  }) async* {
-    final encoder = const JsonEncoder();
-
-    List<int> encodeLine(Map<String, dynamic> entry) {
-      final line = encoder.convert(entry);
-      return utf8.encode('$line\n');
-    }
-
-    yield encodeLine({
-      'type': 'header',
-      'formatVersion': _databaseFormatVersion,
-      'generatedAt': generatedAt.toIso8601String(),
-    });
-    for (final schema in schemas) {
-      yield encodeLine({
-        'type': 'schema',
-        'collection': schema.collection,
-        'version': schema.version,
-        'schema': schema.schema,
-        'enabled': schema.enabled,
-        'requireValidation': schema.requireValidation,
-      });
-    }
-
-    for (final collection in collections) {
-      final prepared = preparedStreams?[collection];
-      final chunkIterator =
-          prepared?.iterator ??
-          StreamIterator<List<DataRecord>>(
-            storage.readCollectionChunks(
-              collection,
-              chunkSize: BaseDataRepository.databaseExportChunkSize,
-            ),
-          );
-      var hasChunk = prepared?.pending ?? chunkIterator.moveNext();
-      if (prepared == null) {
-        await Future<void>.delayed(Duration.zero);
-      }
-
-      yield encodeLine({'type': 'collection', 'name': collection});
-
-      while (await hasChunk) {
-        final chunk = chunkIterator.current;
-        final nextPending = chunkIterator.moveNext();
-        if (chunk.isNotEmpty) {
-          for (final record in chunk) {
-            yield encodeLine({'type': 'record', 'data': record.toJson()});
-          }
-        }
-        hasChunk = nextPending;
-        await Future<void>.delayed(Duration.zero);
-      }
-
-      await chunkIterator.cancel();
-
-      yield encodeLine({'type': 'collectionEnd', 'name': collection});
-    }
-
-    yield encodeLine({
-      'type': 'footer',
-      'collectionCount': collections.length,
-      'recordCount': recordCount,
-    });
-  }
 
   @override
-  Future<ImportDatabaseResponse> importDatabase(
-    ImportDatabaseRequest request,
-  ) async {
-    final payload = request.payload.trimLeft();
-    if (payload.isEmpty) {
+  Future<ImportDatabaseResponse> importDatabase({
+    required Stream<Uint8List> payload,
+    bool replaceExisting = true,
+  }) async {
+    final iterator = StreamIterator<Uint8List>(payload);
+    if (!await iterator.moveNext()) {
       return ImportDatabaseResponse(
         collectionCount: 0,
         recordCount: 0,
@@ -1108,27 +822,18 @@ abstract class BaseDataRepository implements IDataRepository {
       );
     }
 
-    if (payload.startsWith('{')) {
-      try {
-        final snapshot = _decodeSnapshotPayload(request);
-        final formatVersion = snapshot['formatVersion'] as String?;
-        if (formatVersion != null &&
-            formatVersion != _databaseFormatVersion &&
-            formatVersion != _legacyDatabaseFormatVersion) {
-          throw RpcDataError.invalidArgument(
-            'Unsupported snapshot format "$formatVersion"',
-          );
-        }
-        final collections = _parseSnapshotCollections(snapshot);
-        final schemas = _parseSnapshotSchemas(snapshot);
-        await _applySchemas(schemas);
-        return _importParsedCollections(collections, request.replaceExisting);
-      } on FormatException {
-        // Not a legacy snapshot, fall through to the streaming parser.
+    Stream<Uint8List> replayed() async* {
+      yield iterator.current;
+      while (await iterator.moveNext()) {
+        yield iterator.current;
       }
     }
 
-    return _importStreamingSnapshot(payload, request.replaceExisting);
+    final lineStream = replayed()
+        .cast<List<int>>()
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
+    return _importStreamingSnapshot(lineStream, replaceExisting);
   }
 
   @override
@@ -1287,83 +992,6 @@ abstract class BaseDataRepository implements IDataRepository {
   }
 }
 
-enum _SnapshotEntryType {
-  header,
-  schema,
-  collection,
-  record,
-  collectionEnd,
-  footer,
-}
-
-class _SnapshotParsedEntry {
-  _SnapshotParsedEntry.header()
-    : type = _SnapshotEntryType.header,
-      collection = null,
-      record = null,
-      schema = null,
-      declaredCollectionCount = null,
-      declaredRecordCount = null;
-
-  _SnapshotParsedEntry.schema(this.schema)
-    : type = _SnapshotEntryType.schema,
-      collection = schema?.collection,
-      record = null,
-      declaredCollectionCount = null,
-      declaredRecordCount = null;
-
-  _SnapshotParsedEntry.collection(this.collection)
-    : type = _SnapshotEntryType.collection,
-      record = null,
-      schema = null,
-      declaredCollectionCount = null,
-      declaredRecordCount = null;
-
-  _SnapshotParsedEntry.record(this.record)
-    : type = _SnapshotEntryType.record,
-      collection = record?.collection,
-      schema = null,
-      declaredCollectionCount = null,
-      declaredRecordCount = null;
-
-  _SnapshotParsedEntry.collectionEnd()
-    : type = _SnapshotEntryType.collectionEnd,
-      collection = null,
-      record = null,
-      schema = null,
-      declaredCollectionCount = null,
-      declaredRecordCount = null;
-
-  _SnapshotParsedEntry.footer({
-    this.declaredCollectionCount,
-    this.declaredRecordCount,
-  }) : type = _SnapshotEntryType.footer,
-       collection = null,
-       record = null,
-       schema = null;
-
-  final _SnapshotEntryType type;
-  final String? collection;
-  final DataRecord? record;
-  final _SnapshotSchemaEntry? schema;
-  final int? declaredCollectionCount;
-  final int? declaredRecordCount;
-}
-
-class _SnapshotValidationResult {
-  _SnapshotValidationResult({
-    required this.seenCollections,
-    required this.declaredCollectionCount,
-    required this.declaredRecordCount,
-    required this.actualRecordCount,
-  });
-
-  final Set<String> seenCollections;
-  final int? declaredCollectionCount;
-  final int? declaredRecordCount;
-  final int actualRecordCount;
-}
-
 class _SnapshotSchemaEntry {
   const _SnapshotSchemaEntry({
     required this.collection,
@@ -1378,21 +1006,4 @@ class _SnapshotSchemaEntry {
   final Map<String, dynamic> schema;
   final bool enabled;
   final bool requireValidation;
-}
-
-class _ExportComputationResult {
-  const _ExportComputationResult({
-    required this.payload,
-    required this.recordCount,
-  });
-
-  final String payload;
-  final int recordCount;
-}
-
-class _PreparedChunkStream {
-  _PreparedChunkStream({required this.iterator, required this.pending});
-
-  final StreamIterator<List<DataRecord>> iterator;
-  Future<bool> pending;
 }

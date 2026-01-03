@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:typed_data';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
@@ -177,14 +179,14 @@ class _ThrowingRepository implements IDataRepository {
   ) => throw UnimplementedError();
 
   @override
-  Future<ExportDatabaseResponse> exportDatabase(
-    ExportDatabaseRequest request,
-  ) => throw UnimplementedError();
+  Stream<Uint8List> exportDatabase(ExportDatabaseRequest request) =>
+      throw UnimplementedError();
 
   @override
-  Future<ImportDatabaseResponse> importDatabase(
-    ImportDatabaseRequest request,
-  ) => throw UnimplementedError();
+  Future<ImportDatabaseResponse> importDatabase({
+    required Stream<Uint8List> payload,
+    bool replaceExisting = true,
+  }) => throw UnimplementedError();
 
   @override
   Future<SearchRecordsResponse> search(SearchRecordsRequest request) =>

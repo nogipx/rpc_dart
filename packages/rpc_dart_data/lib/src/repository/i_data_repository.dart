@@ -28,9 +28,12 @@ abstract interface class IDataRepository {
 
   Future<ExportSnapshotResponse> exportSnapshot(ExportSnapshotRequest request);
 
-  Future<ExportDatabaseResponse> exportDatabase(ExportDatabaseRequest request);
+  Stream<Uint8List> exportDatabase(ExportDatabaseRequest request);
 
-  Future<ImportDatabaseResponse> importDatabase(ImportDatabaseRequest request);
+  Future<ImportDatabaseResponse> importDatabase({
+    required Stream<Uint8List> payload,
+    bool replaceExisting = true,
+  });
 
   Future<SearchRecordsResponse> search(SearchRecordsRequest request);
 

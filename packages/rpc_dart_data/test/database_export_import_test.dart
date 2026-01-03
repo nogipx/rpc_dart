@@ -5,9 +5,23 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
+
+Future<String> _collectExportStream(Stream<Uint8List> stream) async {
+  final buffer = BytesBuilder(copy: false);
+  await for (final chunk in stream) {
+    buffer.add(chunk);
+  }
+  return utf8.decode(buffer.takeBytes());
+}
+
+Stream<Uint8List> _asChunkStream(String payload) async* {
+  yield Uint8List.fromList(utf8.encode(payload));
+}
 
 Future<void> _seedSampleData(IDataRepository repository) async {
   await repository.create(
@@ -130,15 +144,11 @@ void main() {
     test('exports database as NDJSON snapshot', () async {
       await _seedSampleData(sourceRepository);
 
-      final exportResponse = await sourceRepository.exportDatabase(
-        const ExportDatabaseRequest(),
+      final exportPayload = await _collectExportStream(
+        sourceRepository.exportDatabase(const ExportDatabaseRequest()),
       );
 
-      expect(exportResponse.collectionCount, 2);
-      expect(exportResponse.recordCount, 3);
-      expect(exportResponse.payload, isNotEmpty);
-
-      final lines = const LineSplitter().convert(exportResponse.payload);
+      final lines = const LineSplitter().convert(exportPayload);
       expect(lines, isNotEmpty);
 
       final header = jsonDecode(lines.first) as Map<String, dynamic>;
@@ -153,8 +163,8 @@ void main() {
     test('importDatabase replaces existing data when requested', () async {
       await _seedSampleData(sourceRepository);
 
-      final exportResponse = await sourceRepository.exportDatabase(
-        const ExportDatabaseRequest(),
+      final exportPayload = await _collectExportStream(
+        sourceRepository.exportDatabase(const ExportDatabaseRequest()),
       );
 
       final extra = await targetRepository.create(
@@ -166,10 +176,8 @@ void main() {
       expect(extra.id, isNotEmpty);
 
       final importResponse = await targetRepository.importDatabase(
-        ImportDatabaseRequest(
-          payload: exportResponse.payload,
-          replaceExisting: true,
-        ),
+        payload: _asChunkStream(exportPayload),
+        replaceExisting: true,
       );
 
       expect(importResponse.collectionCount, 2);
@@ -212,12 +220,10 @@ void main() {
       await trackingStorage.writeRecords(records);
 
       trackingStorage.failOnFullCollectionRead = true;
-      final export = await repository.exportDatabase(
-        const ExportDatabaseRequest(),
+      final exportPayload = await _collectExportStream(
+        repository.exportDatabase(const ExportDatabaseRequest()),
       );
 
-      expect(export.recordCount, recordCount);
-      expect(export.payloadStream, isNotNull);
       expect(trackingStorage.readChunkSizes, isNotEmpty);
       expect(
         trackingStorage.readChunkSizes.reduce(max),
@@ -228,8 +234,8 @@ void main() {
         recordCount,
       );
 
-      final streamedLines = await export
-          .payloadLines()
+      final streamedLines = await const LineSplitter()
+          .convert(exportPayload)
           .take(3)
           .map((line) => jsonDecode(line) as Map<String, dynamic>)
           .toList();
@@ -261,14 +267,12 @@ void main() {
         }
         await storage.writeRecords(records);
 
-        final export = await repository.exportDatabase(
-          const ExportDatabaseRequest(includePayloadString: false),
-        );
-
-        expect(export.payload, isEmpty);
-        expect(export.payloadStream, isNotNull);
-
-        final iterator = export.payloadLines().iterator;
+      final iterator = repository
+          .exportDatabase(const ExportDatabaseRequest())
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .iterator;
 
         expect(await iterator.moveNext(), isTrue);
         expect(
@@ -281,13 +285,12 @@ void main() {
           'collection',
         );
 
-        await Future<void>.delayed(Duration.zero);
-        expect(storage.pendingChunks, equals(1));
-
         final stalled = iterator.moveNext().timeout(
           const Duration(milliseconds: 100),
           onTimeout: () => false,
         );
+        await Future<void>.delayed(Duration.zero);
+        expect(storage.pendingChunks, equals(1));
         expect(await stalled, isFalse);
 
         storage.allowNextChunk();
@@ -297,12 +300,12 @@ void main() {
           'record',
         );
 
-        await Future<void>.delayed(Duration.zero);
-        expect(storage.pendingChunks, equals(1));
         final stalledAgain = iterator.moveNext().timeout(
           const Duration(milliseconds: 100),
           onTimeout: () => false,
         );
+        await Future<void>.delayed(Duration.zero);
+        expect(storage.pendingChunks, equals(1));
         expect(await stalledAgain, isFalse);
 
         storage.allowNextChunk();
@@ -365,14 +368,15 @@ void main() {
         await sourceStorage.writeRecords(entry.value);
       }
 
-      final export = await sourceRepo.exportDatabase(
-        const ExportDatabaseRequest(),
+      final exportPayload = await _collectExportStream(
+        sourceRepo.exportDatabase(const ExportDatabaseRequest()),
       );
 
       final streamingStorage = _TrackingInMemoryAdapter();
       final streamingRepo = InMemoryDataRepository(storage: streamingStorage);
       await streamingRepo.importDatabase(
-        ImportDatabaseRequest(payload: export.payload, replaceExisting: true),
+        payload: _asChunkStream(exportPayload),
+        replaceExisting: true,
       );
 
       expect(streamingStorage.writeBatchSizes, isNotEmpty);
@@ -382,29 +386,8 @@ void main() {
         lessThanOrEqualTo(BaseDataRepository.databaseImportBatchSize),
       );
 
-      final legacyStorage = _TrackingInMemoryAdapter();
-      final legacyRepo = InMemoryDataRepository(storage: legacyStorage);
-      final legacyPayload = jsonEncode({
-        'formatVersion': '1.0.0',
-        'collections': dataset.map(
-          (key, value) => MapEntry(
-            key,
-            value.map((record) => record.toJson()).toList(growable: false),
-          ),
-        ),
-      });
-
-      await legacyRepo.importDatabase(
-        ImportDatabaseRequest(payload: legacyPayload, replaceExisting: true),
-      );
-
-      expect(legacyStorage.writeBatchSizes, isNotEmpty);
-      final maxLegacyBatch = legacyStorage.writeBatchSizes.reduce(max);
-      expect(maxLegacyBatch, greaterThan(maxStreamingBatch));
-
       await sourceRepo.dispose();
       await streamingRepo.dispose();
-      await legacyRepo.dispose();
     });
 
     test(
@@ -461,10 +444,8 @@ void main() {
         );
 
         final response = await repository.importDatabase(
-          ImportDatabaseRequest(
-            payload: buffer.toString(),
-            replaceExisting: true,
-          ),
+          payload: _asChunkStream(buffer.toString()),
+          replaceExisting: true,
         );
 
         expect(response.collectionCount, collections);
@@ -512,10 +493,10 @@ void main() {
     );
     await _seedSampleData(repo);
 
-    final exportResponse = await repo.exportDatabase(
-      const ExportDatabaseRequest(),
+    final exportPayload = await _collectExportStream(
+      repo.exportDatabase(const ExportDatabaseRequest()),
     );
-    final lines = const LineSplitter().convert(exportResponse.payload);
+    final lines = const LineSplitter().convert(exportPayload);
     expect(lines.length, greaterThan(2));
     final schemaLine = jsonDecode(lines[1]) as Map<String, dynamic>;
     expect(schemaLine['type'], 'schema');

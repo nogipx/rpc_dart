@@ -53,7 +53,22 @@ dart run example/example.dart
 ```
 
 ## Streaming export and import
-`IDataRepository.exportDatabase` / `DataServiceClient.exportDatabase` emits NDJSON (`header`, `schema`, `collection`, `record`, `collectionEnd`, `footer`). Keep the default `includePayloadString: true` for serialized transports; set it to `false` to stream `payloadStream` in zero-copy environments (e.g., `DataServiceFactory.inMemory`) and keep memory flat. Imports validate the stream before writes, run in `databaseImportBatchSize` chunks, and when `replaceExisting` is `true` they drop collections missing from the snapshot.
+`IDataRepository.exportDatabase` / `DataServiceClient.exportDatabase` is a server-stream of NDJSON chunks (`header`, `schema`, `collection`, `record`, `collectionEnd`, `footer`) encoded as UTF-8 (`Uint8List`). `importDatabase` is a client-stream that accepts the same NDJSON byte chunks. Imports validate the stream before writes, run in `databaseImportBatchSize` chunks, and when `replaceExisting` is `true` they drop collections missing from the snapshot.
+
+```dart
+// Export
+await for (final chunk in client.exportDatabase()) {
+  sink.add(chunk); // write bytes to file/socket/etc
+}
+
+// Import (Stream<Uint8List> of NDJSON lines)
+await client.importDatabase(
+  payload: sourceByteStream,
+  replaceExisting: true,
+);
+```
+
+Legacy JSON blobs are no longer accepted; always stream NDJSON.
 
 ## Schema validation and migrations
 - Defaults: schemas enabled + validation required; toggle per collection via `setSchemaPolicy`.

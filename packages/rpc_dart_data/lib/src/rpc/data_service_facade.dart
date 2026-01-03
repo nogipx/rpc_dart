@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
@@ -196,24 +197,20 @@ class DataServiceClient implements IDataService {
   }
 
   @override
-  Future<ExportDatabaseResponse> exportDatabase({
-    bool includePayloadString = false,
-    RpcContext? context,
-  }) {
-    return _caller.exportDatabase(
-      ExportDatabaseRequest(includePayloadString: includePayloadString),
-      context: context,
-    );
+  Stream<Uint8List> exportDatabase({RpcContext? context}) {
+    return _caller
+        .exportDatabase(const ExportDatabaseRequest(), context: context)
+        .map((chunk) => chunk.bytes);
   }
 
   @override
   Future<ImportDatabaseResponse> importDatabase({
-    required String payload,
+    required Stream<Uint8List> payload,
     bool replaceExisting = true,
     RpcContext? context,
   }) {
     return _caller.importDatabase(
-      ImportDatabaseRequest(payload: payload, replaceExisting: replaceExisting),
+      _withReplaceFlag(payload, replaceExisting),
       context: context,
     );
   }
@@ -316,6 +313,24 @@ class DataServiceClient implements IDataService {
       ),
       context: context,
     );
+  }
+
+  Stream<DatabaseChunk> _withReplaceFlag(
+    Stream<Uint8List> payload,
+    bool replaceExisting,
+  ) async* {
+    var first = true;
+    await for (final bytes in payload) {
+      if (first) {
+        yield DatabaseChunk(
+          bytes: bytes,
+          replaceExisting: replaceExisting,
+        );
+        first = false;
+      } else {
+        yield DatabaseChunk(bytes: bytes);
+      }
+    }
   }
 
   @override

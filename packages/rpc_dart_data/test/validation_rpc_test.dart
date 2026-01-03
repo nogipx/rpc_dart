@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
@@ -123,14 +124,27 @@ void main() {
         createdAt: DateTime.now().toUtc(),
         updatedAt: DateTime.now().toUtc(),
       );
-      final snapshot = jsonEncode({
-        'formatVersion': '2.0.0',
-        'collections': {
-          'notes': [invalidRecord.toJson()],
-        },
-      });
+      final buffer = StringBuffer()
+        ..writeln(jsonEncode({
+          'type': 'header',
+          'formatVersion': '2.0.0',
+        }))
+        ..writeln(jsonEncode({
+          'type': 'collection',
+          'name': 'notes',
+        }))
+        ..writeln(jsonEncode({
+          'type': 'record',
+          'data': invalidRecord.toJson(),
+        }))
+        ..writeln(jsonEncode({'type': 'collectionEnd', 'name': 'notes'}))
+        ..writeln(jsonEncode({'type': 'footer', 'collectionCount': 1, 'recordCount': 1}));
+      final snapshot = buffer.toString();
 
-      final attempt = client.importDatabase(payload: snapshot);
+      final attempt = client.importDatabase(
+        payload:
+            Stream<Uint8List>.value(Uint8List.fromList(utf8.encode(snapshot))),
+      );
       await expectLater(
         attempt,
         throwsA(

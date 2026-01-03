@@ -1,3 +1,9 @@
+## 3.5.0
+
+- Breaking: export/import now stream NDJSON `Uint8List` chunks only; legacy `includePayloadString` and `List<int>` paths are removed, RPC uses server-stream/client-stream for dump/restore.
+- Zero-copy remains available for in-memory transport; network transports keep CBOR serialization (no base64 involved).
+- README/example trimmed and updated with the full schema example; Postgres adapter marked stable (not alpha).
+
 ## 3.4.5
 
 - Update readme.

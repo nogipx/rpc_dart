@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:typed_data';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 
@@ -146,20 +148,17 @@ abstract interface class IDataService {
     RpcContext? context,
   });
 
-  /// Exports the entire database.
+  /// Exports the entire database as NDJSON chunks (server stream).
   ///
-  /// Can be heavy and may be disabled by policy.
-  Future<ExportDatabaseResponse> exportDatabase({
-    bool includePayloadString = false,
-    RpcContext? context,
-  });
+  /// Each chunk is a UTF-8 slice of NDJSON lines (`header`/`schema`/`collection`/`record`/`collectionEnd`/`footer`).
+  Stream<Uint8List> exportDatabase({RpcContext? context});
 
-  /// Imports the database from a serialized dump.
+  /// Imports the database from NDJSON chunks (client stream).
   ///
   /// With `replaceExisting=true` existing data may be overwritten/cleared — use cautiously
   /// in production.
   Future<ImportDatabaseResponse> importDatabase({
-    required String payload,
+    required Stream<Uint8List> payload,
     bool replaceExisting = true,
     RpcContext? context,
   });

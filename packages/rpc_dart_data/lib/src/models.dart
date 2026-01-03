@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:async/async.dart';
 import 'package:collection/collection.dart';
@@ -1044,102 +1045,40 @@ class ExportSnapshotResponse extends Equatable implements IRpcSerializable {
 
 @immutable
 class ExportDatabaseRequest extends Equatable implements IRpcSerializable {
-  const ExportDatabaseRequest({this.includePayloadString = true});
+  const ExportDatabaseRequest();
 
   factory ExportDatabaseRequest.fromJson(Map<String, dynamic> json) =>
-      ExportDatabaseRequest(
-        includePayloadString: json['includePayloadString'] as bool? ?? true,
-      );
-
-  final bool includePayloadString;
+      const ExportDatabaseRequest();
 
   @override
-  List<Object?> get props => [includePayloadString];
+  List<Object?> get props => const [];
 
   @override
-  Map<String, dynamic> toJson() => {
-    'includePayloadString': includePayloadString,
-  };
+  Map<String, dynamic> toJson() => const {};
 }
 
+/// Chunked NDJSON payload for export/import streaming.
 @immutable
-class ExportDatabaseResponse extends Equatable implements IRpcSerializable {
-  const ExportDatabaseResponse({
-    required this.payload,
-    required this.generatedAt,
-    required this.formatVersion,
-    required this.collectionCount,
-    required this.recordCount,
-    this.payloadStream,
-  });
+class DatabaseChunk extends Equatable implements IRpcSerializable {
+  const DatabaseChunk({required this.bytes, this.replaceExisting});
 
-  factory ExportDatabaseResponse.fromJson(Map<String, dynamic> json) =>
-      ExportDatabaseResponse(
-        payload: json['payload'] as String,
-        generatedAt: DateTime.parse(json['generatedAt'] as String),
-        formatVersion: json['formatVersion'] as String? ?? '2.0.0',
-        collectionCount: json['collectionCount'] as int? ?? 0,
-        recordCount: json['recordCount'] as int? ?? 0,
-      );
+  factory DatabaseChunk.fromJson(Map<String, dynamic> json) => DatabaseChunk(
+    bytes: Uint8List.fromList(
+      (json['bytes'] as List? ?? const []).cast<int>(),
+    ),
+    replaceExisting: json['replaceExisting'] as bool?,
+  );
 
-  final String payload;
-  final DateTime generatedAt;
-  final String formatVersion;
-  final int collectionCount;
-  final int recordCount;
-  final Stream<List<int>>? payloadStream;
-
-  Stream<String> payloadLines({Encoding encoding = utf8}) {
-    final source = payloadStream;
-    if (source != null) {
-      return source.transform(encoding.decoder).transform(const LineSplitter());
-    }
-
-    return Stream<String>.fromIterable(const LineSplitter().convert(payload));
-  }
+  final Uint8List bytes;
+  final bool? replaceExisting;
 
   @override
-  List<Object?> get props => [
-    payload,
-    generatedAt,
-    formatVersion,
-    collectionCount,
-    recordCount,
-  ];
+  List<Object?> get props => [bytes, replaceExisting];
 
   @override
   Map<String, dynamic> toJson() => {
-    'payload': payload,
-    'generatedAt': generatedAt.toIso8601String(),
-    'formatVersion': formatVersion,
-    'collectionCount': collectionCount,
-    'recordCount': recordCount,
-  };
-}
-
-@immutable
-class ImportDatabaseRequest extends Equatable implements IRpcSerializable {
-  const ImportDatabaseRequest({
-    required this.payload,
-    this.replaceExisting = true,
-  });
-
-  factory ImportDatabaseRequest.fromJson(Map<String, dynamic> json) =>
-      ImportDatabaseRequest(
-        payload: json['payload'] as String,
-        replaceExisting: json['replaceExisting'] as bool? ?? true,
-      );
-
-  final String payload;
-  final bool replaceExisting;
-
-  @override
-  List<Object?> get props => [payload, replaceExisting];
-
-  @override
-  Map<String, dynamic> toJson() => {
-    'payload': payload,
-    'replaceExisting': replaceExisting,
+    'bytes': bytes,
+    if (replaceExisting != null) 'replaceExisting': replaceExisting,
   };
 }
 

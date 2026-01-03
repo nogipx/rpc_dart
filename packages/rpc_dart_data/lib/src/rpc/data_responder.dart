@@ -121,20 +121,20 @@ class DataServiceResponder extends RpcResponderContract
       description: 'Экспорт моментального снимка коллекции',
     );
 
-    addUnaryMethod<ExportDatabaseRequest, ExportDatabaseResponse>(
+    addServerStreamMethod<ExportDatabaseRequest, DatabaseChunk>(
       methodName: IDataServiceContract.exportDatabase,
-      handler: _handleExportDatabase,
+      handler: _handleExportDatabaseStream,
       requestCodec: exportDatabaseRequestCodec,
-      responseCodec: exportDatabaseResponseCodec,
-      description: 'Полный экспорт базы данных (с шифрованием по паролю)',
+      responseCodec: databaseChunkCodec,
+      description: 'Полный экспорт базы данных (стрим NDJSON чанков)',
     );
 
-    addUnaryMethod<ImportDatabaseRequest, ImportDatabaseResponse>(
+    addClientStreamMethod<DatabaseChunk, ImportDatabaseResponse>(
       methodName: IDataServiceContract.importDatabase,
-      handler: _handleImportDatabase,
-      requestCodec: importDatabaseRequestCodec,
+      handler: _handleImportDatabaseStream,
+      requestCodec: databaseChunkCodec,
       responseCodec: importDatabaseResponseCodec,
-      description: 'Импорт полной базы данных из снапшота',
+      description: 'Импорт полной базы данных из NDJSON чанков',
     );
 
     addUnaryMethod<SearchRecordsRequest, SearchRecordsResponse>(
@@ -299,18 +299,48 @@ class DataServiceResponder extends RpcResponderContract
     return _runSafely(context, () => _repository.exportSnapshot(request));
   }
 
-  Future<ExportDatabaseResponse> _handleExportDatabase(
+  Stream<DatabaseChunk> _handleExportDatabaseStream(
     ExportDatabaseRequest request, {
     RpcContext? context,
-  }) async {
-    return _runSafely(context, () => _repository.exportDatabase(request));
+  }) async* {
+    _ensureAuthorized(context);
+    try {
+      await for (final bytes in _repository.exportDatabase(request)) {
+        yield DatabaseChunk(bytes: bytes);
+      }
+    } catch (error, stackTrace) {
+      if (error is RpcDataError) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      Error.throwWithStackTrace(
+        RpcDataError.internal('Failed to export database', error: error),
+        stackTrace,
+      );
+    }
   }
 
-  Future<ImportDatabaseResponse> _handleImportDatabase(
-    ImportDatabaseRequest request, {
+  Future<ImportDatabaseResponse> _handleImportDatabaseStream(
+    Stream<DatabaseChunk> chunks, {
     RpcContext? context,
   }) async {
-    return _runSafely(context, () => _repository.importDatabase(request));
+    _ensureAuthorized(context);
+    var replaceExisting = true;
+    var replaceSeen = false;
+    final payload = chunks.map((chunk) {
+      if (!replaceSeen && chunk.replaceExisting != null) {
+        replaceExisting = chunk.replaceExisting!;
+        replaceSeen = true;
+      }
+      return chunk.bytes;
+    });
+
+    return _runSafely(
+      context,
+      () => _repository.importDatabase(
+        payload: payload,
+        replaceExisting: replaceExisting,
+      ),
+    );
   }
 
   Future<SearchRecordsResponse> _handleSearch(

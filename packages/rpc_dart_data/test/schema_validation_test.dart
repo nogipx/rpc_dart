@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
@@ -75,16 +76,20 @@ void main() {
         createdAt: now,
         updatedAt: now,
       );
-      final snapshot = {
-        'formatVersion': '2.0.0',
-        'collections': {
-          'notes': [invalid.toJson()],
-        },
-      };
-      final payload = jsonEncode(snapshot);
+      final buffer = StringBuffer()
+        ..writeln(jsonEncode({
+          'type': 'header',
+          'formatVersion': '2.0.0',
+        }))
+        ..writeln(jsonEncode({'type': 'collection', 'name': 'notes'}))
+        ..writeln(jsonEncode({'type': 'record', 'data': invalid.toJson()}))
+        ..writeln(jsonEncode({'type': 'collectionEnd', 'name': 'notes'}))
+        ..writeln(jsonEncode({'type': 'footer', 'collectionCount': 1, 'recordCount': 1}));
+      final payload = buffer.toString();
 
       final attempt = repository.importDatabase(
-        ImportDatabaseRequest(payload: payload),
+        payload:
+            Stream<Uint8List>.value(Uint8List.fromList(utf8.encode(payload))),
       );
       await expectLater(
         attempt,
