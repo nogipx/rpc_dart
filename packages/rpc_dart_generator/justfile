@@ -1,5 +1,5 @@
 #!/usr/bin/env just --justfile
-call_recipe := just_executable() + " --justfile=" + justfile()
+recipe := just_executable() + " --justfile=" + justfile()
 ver dir='.':
     cd {{dir}} && echo $(if command -v yq >/dev/null; then yq -r '.version' {{dir}}/pubspec.yaml; else grep -E '^\s*version:' pubspec.yaml | head -n1 | sed -E 's/^\s*version:\s*"?([^"#]+)"?\s*(#.*)?$/\1/'; fi)
 pg dir: # Pubget
@@ -11,20 +11,22 @@ cl_br dir: # Clean build runner
     cd {{dir}} && fvm dart run build_runner clean
 cl dir: # Flutter clean
     cd {{dir}} && fvm flutter clean
+license year +dirs:
+    reuse annotate -c "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>" -l "MIT" -y {{year}} -r {{dirs}}
 
 test:
     fvm dart test --concurrency=1
 
 gen:
-    {{call_recipe}} br .
+    {{recipe}} br .
 
 get:
-    {{call_recipe}} pg .
+    {{recipe}} pg .
 
 prepare:
     fvm dart fix --apply
     fvm dart format -l 80 .
-    reuse annotate -c "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>" -l "MIT" --skip-unrecognised
+    {{recipe}} license 2025 lib example test
     rm -rf coverage
     fvm dart test test/ --coverage=coverage --reporter=compact --concurrency=5
     fvm dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
