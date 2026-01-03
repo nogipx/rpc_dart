@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 
@@ -144,6 +145,7 @@ Future<void> main() async {
   await _validationFailure(client, updated);
   await _versionConflict(client, updated);
   await _exportSnapshot(client);
+  await _demoStreamingImportResume(client);
 
   await env.dispose();
   await connection.close();
@@ -213,6 +215,37 @@ Future<void> _exportSnapshot(DataServiceClient client) async {
   await for (final chunk in export) {
     print(utf8.decode(chunk));
   }
+}
+
+Future<void> _demoStreamingImportResume(DataServiceClient source) async {
+  final backupEnv = await DataServiceFactory.inMemory(
+    serverLabel: 'backup-server',
+    clientLabel: 'backup-client',
+  );
+  final dump = await source.exportDatabase().toList();
+
+  var resumeAfter = -1;
+  try {
+    await backupEnv.client.importDatabase(
+      // Truncate the dump to emulate a transport drop.
+      payload: Stream<Uint8List>.fromIterable(dump.take(3)),
+      replaceExisting: true,
+    );
+  } on ImportResumeException catch (error) {
+    resumeAfter = error.lastChunkIndex ?? -1;
+    print('import interrupted at chunk $resumeAfter, resuming...');
+  }
+
+  final result = await backupEnv.client.importDatabase(
+    payload: Stream<Uint8List>.fromIterable(dump),
+    replaceExisting: true,
+    resumeAfterChunk: resumeAfter,
+  );
+  print(
+    'restored backup collections=${result.collectionCount} records=${result.recordCount} lastChunk=${result.lastChunkIndex}',
+  );
+
+  await backupEnv.dispose();
 }
 
 Map<String, dynamic> _addSlug(Map<String, dynamic> payload) => {

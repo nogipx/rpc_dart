@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
@@ -207,10 +206,15 @@ class DataServiceClient implements IDataService {
   Future<ImportDatabaseResponse> importDatabase({
     required Stream<Uint8List> payload,
     bool replaceExisting = true,
+    int resumeAfterChunk = -1,
     RpcContext? context,
   }) {
     return _caller.importDatabase(
-      _withReplaceFlag(payload, replaceExisting),
+      _withReplaceFlag(
+        payload,
+        replaceExisting: replaceExisting,
+        resumeAfterChunk: resumeAfterChunk,
+      ),
       context: context,
     );
   }
@@ -316,15 +320,17 @@ class DataServiceClient implements IDataService {
   }
 
   Stream<DatabaseChunk> _withReplaceFlag(
-    Stream<Uint8List> payload,
-    bool replaceExisting,
-  ) async* {
+    Stream<Uint8List> payload, {
+    required bool replaceExisting,
+    required int resumeAfterChunk,
+  }) async* {
     var first = true;
     await for (final bytes in payload) {
       if (first) {
         yield DatabaseChunk(
           bytes: bytes,
           replaceExisting: replaceExisting,
+          resumeAfterChunk: resumeAfterChunk >= 0 ? resumeAfterChunk : null,
         );
         first = false;
       } else {

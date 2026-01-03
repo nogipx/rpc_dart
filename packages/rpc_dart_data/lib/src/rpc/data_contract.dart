@@ -199,10 +199,14 @@ const RpcCodec<ExportSnapshotResponse> exportResponseCodec =
     RpcCodec.withDecoder(ExportSnapshotResponse.fromJson);
 const RpcCodec<ExportDatabaseRequest> exportDatabaseRequestCodec =
     RpcCodec.withDecoder(ExportDatabaseRequest.fromJson);
-const RpcCodec<DatabaseChunk> databaseChunkCodec =
-    RpcCodec.withDecoder(DatabaseChunk.fromJson);
+const RpcCodec<DatabaseChunk> databaseChunkCodec = RpcCodec.withDecoder(
+  DatabaseChunk.fromJson,
+);
 const RpcCodec<ImportDatabaseResponse> importDatabaseResponseCodec =
     RpcCodec.withDecoder(ImportDatabaseResponse.fromJson);
+const RpcCodec<ImportProgress> importProgressCodec = RpcCodec.withDecoder(
+  ImportProgress.fromJson,
+);
 const RpcCodec<ListSchemasRequest> listSchemasRequestCodec =
     RpcCodec.withDecoder(ListSchemasRequest.fromJson);
 const RpcCodec<ListSchemasResponse> listSchemasResponseCodec =

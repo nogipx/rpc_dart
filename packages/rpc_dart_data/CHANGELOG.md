@@ -1,7 +1,8 @@
 ## 3.5.0
 
-- Breaking: export/import now stream NDJSON `Uint8List` chunks only; legacy `includePayloadString` and `List<int>` paths are removed, RPC uses server-stream/client-stream for dump/restore.
+- Breaking: export/import now stream NDJSON `Uint8List` chunks only; legacy `includePayloadString` and `List<int>` paths are removed, RPC uses server-stream for export and a bidirectional stream with ACKs (batched every few chunks) for import. Callers still send NDJSON byte chunks and get `ImportResumeException(lastChunkIndex: x)` on drops/timeouts, making resume-after-chunk robust even without server error details.
 - Zero-copy remains available for in-memory transport; network transports keep CBOR serialization (no base64 involved).
+- Resume support for streaming import: every NDJSON chunk has a `chunkIndex`, and `resumeAfterChunk` lets you retry the same stream after a drop without reapplying early chunks.
 - README/example trimmed and updated with the full schema example; Postgres adapter marked stable (not alpha).
 
 ## 3.4.5

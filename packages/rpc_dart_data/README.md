@@ -53,7 +53,9 @@ dart run example/example.dart
 ```
 
 ## Streaming export and import
-`IDataRepository.exportDatabase` / `DataServiceClient.exportDatabase` is a server-stream of NDJSON chunks (`header`, `schema`, `collection`, `record`, `collectionEnd`, `footer`) encoded as UTF-8 (`Uint8List`). `importDatabase` is a client-stream that accepts the same NDJSON byte chunks. Imports validate the stream before writes, run in `databaseImportBatchSize` chunks, and when `replaceExisting` is `true` they drop collections missing from the snapshot.
+`IDataRepository.exportDatabase` / `DataServiceClient.exportDatabase` is a server-stream of NDJSON chunks (`header`, `schema`, `collection`, `record`, `collectionEnd`, `footer`) encoded as UTF-8 (`Uint8List`). Each chunk has a monotonically increasing `chunkIndex`.
+
+`importDatabase` is bidirectional: the client streams NDJSON chunks, the server streams ACKs with the last applied `chunkIndex` (batched every few chunks to reduce chatter). On transport errors/timeouts the client throws `ImportResumeException(lastChunkIndex: x)`, so you can retry from `resumeAfterChunk=x` using the same dump. Imports validate the stream before writes, run in `databaseImportBatchSize` chunks, and when `replaceExisting` is `true` they drop collections missing from the snapshot.
 
 ```dart
 // Export
@@ -61,11 +63,25 @@ await for (final chunk in client.exportDatabase()) {
   sink.add(chunk); // write bytes to file/socket/etc
 }
 
-// Import (Stream<Uint8List> of NDJSON lines)
-await client.importDatabase(
-  payload: sourceByteStream,
-  replaceExisting: true,
-);
+// Import with automatic resume (Stream<Uint8List> of NDJSON lines)
+final dump = await client.exportDatabase().toList();
+var resumeAfter = -1;
+while (true) {
+  try {
+    final result = await client.importDatabase(
+      payload: Stream<Uint8List>.fromIterable(dump),
+      replaceExisting: true,
+      resumeAfterChunk: resumeAfter,
+    );
+    print(
+      'restored ${result.recordCount} records at chunk ${result.lastChunkIndex}',
+    );
+    break;
+  } on ImportResumeException catch (error) {
+    // Transport dropped mid-stream; retry from the last ACKed chunk.
+    resumeAfter = error.lastChunkIndex ?? -1;
+  }
+}
 ```
 
 Legacy JSON blobs are no longer accepted; always stream NDJSON.

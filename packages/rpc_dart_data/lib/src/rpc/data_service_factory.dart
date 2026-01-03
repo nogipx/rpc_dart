@@ -15,6 +15,7 @@ class DataServiceFactory {
     required IDataRepository repository,
     RpcDataTransferMode transferMode = RpcDataTransferMode.codec,
     String debugLabel = 'DataServiceServer',
+    int importAckEveryChunks = 32,
   }) {
     return DataServiceServer(
       endpoint: RpcResponderEndpoint(
@@ -24,6 +25,7 @@ class DataServiceFactory {
       responder: DataServiceResponder(
         repository: repository,
         transferMode: transferMode,
+        importAckEveryChunks: importAckEveryChunks,
       ),
       repository: repository,
     );

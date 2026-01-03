@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
@@ -131,6 +131,72 @@ void main() {
       expect(collections.toSet(), containsAll({'notes', 'tasks'}));
     });
   });
+
+  group('DataService RPC export/import resume', () {
+    Future<DataServiceClient> seededClient(DataServiceClient client) async {
+      await client.create(
+        collection: 'notes',
+        payload: {'title': 'First', 'done': false},
+      );
+      await client.create(
+        collection: 'notes',
+        payload: {'title': 'Second', 'done': true},
+      );
+      await client.create(collection: 'tasks', payload: {'title': 'Task 1'});
+      return client;
+    }
+
+    test('importDatabase can resume over RPC after a drop', () async {
+      final sourceEnv = await DataServiceFactory.inMemory(
+        serverLabel: 'source-server',
+        clientLabel: 'source-client',
+      );
+      final targetEnv = await DataServiceFactory.inMemory(
+        serverLabel: 'target-server',
+        clientLabel: 'target-client',
+      );
+      await seededClient(sourceEnv.client);
+
+      final chunks = await sourceEnv.client.exportDatabase().toList();
+
+      // First attempt: truncated stream → error, partial data written.
+      late int lastChunkIndexFromError;
+      await expectLater(() async {
+        try {
+          await targetEnv.client.importDatabase(
+            // Cut off before finishing the second collection to emulate network drop.
+            payload: Stream<Uint8List>.fromIterable(chunks.take(3)),
+            replaceExisting: true,
+          );
+        } on ImportResumeException catch (error) {
+          lastChunkIndexFromError = error.lastChunkIndex ?? -1;
+          rethrow;
+        } catch (error) {
+          rethrow;
+        }
+      }(), throwsA(isA<Exception>()));
+
+      final partialNotes = await targetEnv.client.list(collection: 'notes');
+      expect(partialNotes.records.length, greaterThan(0));
+
+      final resumeResponse = await targetEnv.client.importDatabase(
+        payload: Stream<Uint8List>.fromIterable(chunks),
+        replaceExisting: true,
+        resumeAfterChunk: lastChunkIndexFromError,
+      );
+
+      expect(resumeResponse.recordCount, 3);
+      expect(resumeResponse.lastChunkIndex, chunks.length - 1);
+
+      final notes = await targetEnv.client.list(collection: 'notes');
+      final tasks = await targetEnv.client.list(collection: 'tasks');
+      expect(notes.records.length, 2);
+      expect(tasks.records.length, 1);
+
+      await sourceEnv.dispose();
+      await targetEnv.dispose();
+    });
+  });
 }
 
 class _ThrowingRepository implements IDataRepository {
@@ -186,6 +252,8 @@ class _ThrowingRepository implements IDataRepository {
   Future<ImportDatabaseResponse> importDatabase({
     required Stream<Uint8List> payload,
     bool replaceExisting = true,
+    int resumeAfterChunk = -1,
+    void Function(int chunkIndex)? onChunkProcessed,
   }) => throw UnimplementedError();
 
   @override

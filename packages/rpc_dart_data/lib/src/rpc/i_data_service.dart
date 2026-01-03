@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:typed_data';
-
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 
@@ -156,10 +154,13 @@ abstract interface class IDataService {
   /// Imports the database from NDJSON chunks (client stream).
   ///
   /// With `replaceExisting=true` existing data may be overwritten/cleared — use cautiously
-  /// in production.
+  /// in production. The call runs as a bidirectional stream and emits ACKs internally;
+  /// if the transport drops, `ImportResumeException` carries `lastChunkIndex` so you can
+  /// restart from the last confirmed chunk using `resumeAfterChunk`.
   Future<ImportDatabaseResponse> importDatabase({
     required Stream<Uint8List> payload,
     bool replaceExisting = true,
+    int resumeAfterChunk = -1,
     RpcContext? context,
   });
 

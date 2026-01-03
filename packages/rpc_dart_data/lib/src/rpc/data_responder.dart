@@ -14,16 +14,20 @@ class DataServiceResponder extends RpcResponderContract
     bool disposeRepositoryOnClose = true,
     Iterable<String> allowedBearerTokens = const [],
     required RpcDataTransferMode transferMode,
+    int importAckEveryChunks = 32,
   }) : _repository = repository,
        _disposeRepositoryOnClose = disposeRepositoryOnClose,
        _allowedBearerTokens = {
          for (final token in allowedBearerTokens)
            if (token.trim().isNotEmpty) token.trim(),
        },
+       _importAckEveryChunks = importAckEveryChunks,
+       assert(importAckEveryChunks > 0, 'importAckEveryChunks must be > 0'),
        super(IDataServiceContract.name, dataTransferMode: transferMode);
 
   final IDataRepository _repository;
   final Set<String> _allowedBearerTokens;
+  final int _importAckEveryChunks;
 
   /// Управляет тем, должен ли [dispose] закрывать репозиторий.
   ///
@@ -129,12 +133,13 @@ class DataServiceResponder extends RpcResponderContract
       description: 'Полный экспорт базы данных (стрим NDJSON чанков)',
     );
 
-    addClientStreamMethod<DatabaseChunk, ImportDatabaseResponse>(
+    addBidirectionalMethod<DatabaseChunk, ImportProgress>(
       methodName: IDataServiceContract.importDatabase,
-      handler: _handleImportDatabaseStream,
+      handler: _handleImportDatabaseBidirectional,
       requestCodec: databaseChunkCodec,
-      responseCodec: importDatabaseResponseCodec,
-      description: 'Импорт полной базы данных из NDJSON чанков',
+      responseCodec: importProgressCodec,
+      description:
+          'Импорт полной базы данных из NDJSON чанков с ACK прогрессом',
     );
 
     addUnaryMethod<SearchRecordsRequest, SearchRecordsResponse>(
@@ -305,8 +310,9 @@ class DataServiceResponder extends RpcResponderContract
   }) async* {
     _ensureAuthorized(context);
     try {
+      var chunkIndex = 0;
       await for (final bytes in _repository.exportDatabase(request)) {
-        yield DatabaseChunk(bytes: bytes);
+        yield DatabaseChunk(bytes: bytes, chunkIndex: chunkIndex++);
       }
     } catch (error, stackTrace) {
       if (error is RpcDataError) {
@@ -319,28 +325,117 @@ class DataServiceResponder extends RpcResponderContract
     }
   }
 
-  Future<ImportDatabaseResponse> _handleImportDatabaseStream(
+  Stream<ImportProgress> _handleImportDatabaseBidirectional(
     Stream<DatabaseChunk> chunks, {
     RpcContext? context,
-  }) async {
+  }) {
     _ensureAuthorized(context);
-    var replaceExisting = true;
-    var replaceSeen = false;
-    final payload = chunks.map((chunk) {
-      if (!replaceSeen && chunk.replaceExisting != null) {
-        replaceExisting = chunk.replaceExisting!;
-        replaceSeen = true;
+    return Stream<ImportProgress>.multi((emitter) async {
+      final iterator = StreamIterator<DatabaseChunk>(chunks);
+      if (!await iterator.moveNext()) {
+        try {
+          final response = await _runSafely(
+            context,
+            () => _repository.importDatabase(
+              payload: const Stream<Uint8List>.empty(),
+              replaceExisting: true,
+              resumeAfterChunk: -1,
+              onChunkProcessed: (index) => _maybeAck(
+                index,
+                emitter,
+                _importAckEveryChunks,
+                allowFirst: false,
+              ),
+            ),
+          );
+          emitter.add(
+            ImportProgress(
+              lastChunkIndex: response.lastChunkIndex,
+              result: response,
+            ),
+          );
+          emitter.close();
+        } catch (error, stackTrace) {
+          emitter.addError(error, stackTrace);
+        }
+        return;
       }
-      return chunk.bytes;
-    });
 
-    return _runSafely(
-      context,
-      () => _repository.importDatabase(
-        payload: payload,
-        replaceExisting: replaceExisting,
-      ),
-    );
+      var replaceExisting = iterator.current.replaceExisting ?? true;
+      var replaceSeen = iterator.current.replaceExisting != null;
+      var resumeAfterChunk = iterator.current.resumeAfterChunk ?? -1;
+      var resumeSeen = iterator.current.resumeAfterChunk != null;
+      var lastAck = -1;
+
+      Stream<Uint8List> replay() async* {
+        yield iterator.current.bytes;
+        while (await iterator.moveNext()) {
+          final chunk = iterator.current;
+          if (!replaceSeen && chunk.replaceExisting != null) {
+            replaceExisting = chunk.replaceExisting!;
+            replaceSeen = true;
+          }
+          if (!resumeSeen && chunk.resumeAfterChunk != null) {
+            resumeAfterChunk = chunk.resumeAfterChunk!;
+            resumeSeen = true;
+          }
+          yield chunk.bytes;
+        }
+      }
+
+      try {
+        final response = await _runSafely(
+          context,
+          () => _repository.importDatabase(
+            payload: replay(),
+            replaceExisting: replaceExisting,
+            resumeAfterChunk: resumeAfterChunk,
+            onChunkProcessed: (index) {
+              lastAck = _maybeAck(
+                index,
+                emitter,
+                _importAckEveryChunks,
+                lastAck: lastAck,
+                allowFirst: false,
+              );
+            },
+          ),
+        );
+        lastAck = _maybeAck(
+          response.lastChunkIndex,
+          emitter,
+          _importAckEveryChunks,
+          lastAck: lastAck,
+        );
+        emitter.add(
+          ImportProgress(
+            lastChunkIndex: response.lastChunkIndex,
+            result: response,
+          ),
+        );
+        emitter.close();
+      } catch (error, stackTrace) {
+        emitter.addError(error, stackTrace);
+      }
+    });
+  }
+
+  int _maybeAck(
+    int index,
+    StreamSink<ImportProgress> emitter,
+    int ackEveryChunks, {
+    int lastAck = -1,
+    bool allowFirst = true,
+  }) {
+    final isFirst = lastAck == -1;
+    final shouldAck =
+        (!isFirst || allowFirst) &&
+        (isFirst || (index - lastAck) >= ackEveryChunks);
+    if (shouldAck) {
+      emitter.add(ImportProgress(lastChunkIndex: index));
+      return index;
+    }
+    return lastAck;
   }
 
   Future<SearchRecordsResponse> _handleSearch(

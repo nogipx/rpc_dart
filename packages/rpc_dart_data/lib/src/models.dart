@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:async/async.dart';
 import 'package:collection/collection.dart';
@@ -1060,25 +1058,39 @@ class ExportDatabaseRequest extends Equatable implements IRpcSerializable {
 /// Chunked NDJSON payload for export/import streaming.
 @immutable
 class DatabaseChunk extends Equatable implements IRpcSerializable {
-  const DatabaseChunk({required this.bytes, this.replaceExisting});
+  const DatabaseChunk({
+    required this.bytes,
+    this.replaceExisting,
+    this.chunkIndex,
+    this.resumeAfterChunk,
+  });
 
   factory DatabaseChunk.fromJson(Map<String, dynamic> json) => DatabaseChunk(
-    bytes: Uint8List.fromList(
-      (json['bytes'] as List? ?? const []).cast<int>(),
-    ),
+    bytes: Uint8List.fromList((json['bytes'] as List? ?? const []).cast<int>()),
     replaceExisting: json['replaceExisting'] as bool?,
+    chunkIndex: json['chunkIndex'] as int?,
+    resumeAfterChunk: json['resumeAfterChunk'] as int?,
   );
 
   final Uint8List bytes;
   final bool? replaceExisting;
+  final int? chunkIndex;
+  final int? resumeAfterChunk;
 
   @override
-  List<Object?> get props => [bytes, replaceExisting];
+  List<Object?> get props => [
+    bytes,
+    replaceExisting,
+    chunkIndex,
+    resumeAfterChunk,
+  ];
 
   @override
   Map<String, dynamic> toJson() => {
     'bytes': bytes,
     if (replaceExisting != null) 'replaceExisting': replaceExisting,
+    if (chunkIndex != null) 'chunkIndex': chunkIndex,
+    if (resumeAfterChunk != null) 'resumeAfterChunk': resumeAfterChunk,
   };
 }
 
@@ -1088,6 +1100,7 @@ class ImportDatabaseResponse extends Equatable implements IRpcSerializable {
     required this.collectionCount,
     required this.recordCount,
     required this.appliedAt,
+    required this.lastChunkIndex,
   });
 
   factory ImportDatabaseResponse.fromJson(Map<String, dynamic> json) =>
@@ -1095,20 +1108,70 @@ class ImportDatabaseResponse extends Equatable implements IRpcSerializable {
         collectionCount: json['collectionCount'] as int? ?? 0,
         recordCount: json['recordCount'] as int? ?? 0,
         appliedAt: DateTime.parse(json['appliedAt'] as String),
+        lastChunkIndex: json['lastChunkIndex'] as int? ?? -1,
       );
 
   final int collectionCount;
   final int recordCount;
   final DateTime appliedAt;
+  final int lastChunkIndex;
 
   @override
-  List<Object?> get props => [collectionCount, recordCount, appliedAt];
+  List<Object?> get props => [
+    collectionCount,
+    recordCount,
+    appliedAt,
+    lastChunkIndex,
+  ];
 
   @override
   Map<String, dynamic> toJson() => {
     'collectionCount': collectionCount,
     'recordCount': recordCount,
     'appliedAt': appliedAt.toIso8601String(),
+    'lastChunkIndex': lastChunkIndex,
+  };
+}
+
+/// Thrown on import failures to expose the last applied chunk index for resume.
+class ImportResumeException implements Exception {
+  ImportResumeException(this.message, {this.lastChunkIndex, this.cause});
+
+  final String message;
+  final int? lastChunkIndex;
+  final Object? cause;
+
+  @override
+  String toString() =>
+      'ImportResumeException(message: $message, lastChunkIndex: $lastChunkIndex)';
+}
+
+/// Progress/summary emitted by bidirectional import.
+@immutable
+class ImportProgress extends Equatable implements IRpcSerializable {
+  const ImportProgress({required this.lastChunkIndex, this.result});
+
+  factory ImportProgress.fromJson(Map<String, dynamic> json) => ImportProgress(
+    lastChunkIndex: json['lastChunkIndex'] as int? ?? -1,
+    result: json['result'] == null
+        ? null
+        : ImportDatabaseResponse.fromJson(
+            Map<String, dynamic>.from(json['result'] as Map),
+          ),
+  );
+
+  final int lastChunkIndex;
+  final ImportDatabaseResponse? result;
+
+  bool get isComplete => result != null;
+
+  @override
+  List<Object?> get props => [lastChunkIndex, result];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'lastChunkIndex': lastChunkIndex,
+    if (result != null) 'result': result!.toJson(),
   };
 }
 

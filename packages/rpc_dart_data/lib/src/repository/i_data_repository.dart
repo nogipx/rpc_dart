@@ -33,6 +33,8 @@ abstract interface class IDataRepository {
   Future<ImportDatabaseResponse> importDatabase({
     required Stream<Uint8List> payload,
     bool replaceExisting = true,
+    int resumeAfterChunk = -1,
+    void Function(int chunkIndex)? onChunkProcessed,
   });
 
   Future<SearchRecordsResponse> search(SearchRecordsRequest request);

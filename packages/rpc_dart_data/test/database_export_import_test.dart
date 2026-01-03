@@ -234,7 +234,7 @@ void main() {
         recordCount,
       );
 
-      final streamedLines = await const LineSplitter()
+      final streamedLines = const LineSplitter()
           .convert(exportPayload)
           .take(3)
           .map((line) => jsonDecode(line) as Map<String, dynamic>)
@@ -267,12 +267,12 @@ void main() {
         }
         await storage.writeRecords(records);
 
-      final iterator = repository
-          .exportDatabase(const ExportDatabaseRequest())
-          .cast<List<int>>()
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .iterator;
+        final iterator = repository
+            .exportDatabase(const ExportDatabaseRequest())
+            .cast<List<int>>()
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .iterator;
 
         expect(await iterator.moveNext(), isTrue);
         expect(
@@ -469,6 +469,49 @@ void main() {
         await repository.dispose();
       },
     );
+
+    test('streaming import can resume after a mid-stream failure', () async {
+      await _seedSampleData(sourceRepository);
+
+      final chunks = await sourceRepository
+          .exportDatabase(const ExportDatabaseRequest())
+          .toList();
+
+      // First attempt: truncate mid-collection to emulate network drop.
+      await expectLater(
+        targetRepository.importDatabase(
+          payload: Stream<Uint8List>.fromIterable(chunks.take(4)),
+          replaceExisting: true,
+        ),
+        throwsA(isA<RpcDataError>()),
+      );
+
+      // Partial data should have landed.
+      final partialNotes = await targetRepository.list(
+        const ListRecordsRequest(collection: 'notes'),
+      );
+      expect(partialNotes.records, hasLength(2));
+
+      // Resume from the last applied chunk (index 3).
+      final resumeResponse = await targetRepository.importDatabase(
+        payload: Stream<Uint8List>.fromIterable(chunks),
+        replaceExisting: true,
+        resumeAfterChunk: 3,
+      );
+
+      expect(resumeResponse.recordCount, 3);
+      expect(resumeResponse.lastChunkIndex, chunks.length - 1);
+
+      final notes = await targetRepository.list(
+        const ListRecordsRequest(collection: 'notes'),
+      );
+      final tasks = await targetRepository.list(
+        const ListRecordsRequest(collection: 'tasks'),
+      );
+
+      expect(notes.records, hasLength(2));
+      expect(tasks.records, hasLength(1));
+    });
   });
 
   test('export includes schemas when present', () async {

@@ -145,76 +145,12 @@ abstract class BaseDataRepository implements IDataRepository {
     );
   }
 
-  Map<String, List<DataRecord>> _parseSnapshotCollections(
-    Map<String, dynamic> snapshot,
-  ) {
-    final rawCollections = snapshot['collections'];
-    if (rawCollections is! Map) {
-      throw RpcDataError.invalidArgument('Snapshot is missing collections map');
-    }
-    final collectionsMap = Map<String, dynamic>.from(rawCollections);
-    final parsed = <String, List<DataRecord>>{};
-    collectionsMap.forEach((key, value) {
-      if (value is! List) {
-        throw RpcDataError.invalidArgument(
-          'Snapshot collection "$key" must be a list',
-        );
-      }
-      final records = value
-          .map(
-            (entry) =>
-                DataRecord.fromJson(Map<String, dynamic>.from(entry as Map)),
-          )
-          .toList(growable: false);
-      parsed[key] = records;
-    });
-    return parsed;
-  }
-
-  List<_SnapshotSchemaEntry> _parseSnapshotSchemas(
-    Map<String, dynamic> snapshot,
-  ) {
-    final rawSchemas = snapshot['schemas'];
-    if (rawSchemas == null) {
-      return const [];
-    }
-    if (rawSchemas is! Map) {
-      throw RpcDataError.invalidArgument('Snapshot field "schemas" is invalid');
-    }
-    final result = <_SnapshotSchemaEntry>[];
-    final asMap = Map<String, dynamic>.from(rawSchemas);
-    for (final entry in asMap.entries) {
-      final schemaMap = entry.value;
-      if (schemaMap is! Map) {
-        throw RpcDataError.invalidArgument(
-          'Schema entry for ${entry.key} must be an object',
-        );
-      }
-      final parsed = Map<String, dynamic>.from(schemaMap);
-      final version = parsed['version'] as int? ?? 1;
-      final schema = parsed['schema'];
-      if (schema is! Map) {
-        throw RpcDataError.invalidArgument(
-          'Schema definition for ${entry.key} must be an object',
-        );
-      }
-      result.add(
-        _SnapshotSchemaEntry(
-          collection: entry.key,
-          version: version,
-          schema: Map<String, dynamic>.from(schema),
-          enabled: parsed['enabled'] as bool? ?? true,
-          requireValidation: parsed['requireValidation'] as bool? ?? true,
-        ),
-      );
-    }
-    return result;
-  }
-
   Future<ImportDatabaseResponse> _importStreamingSnapshot(
     Stream<String> lines,
-    bool replaceExisting,
-  ) async {
+    bool replaceExisting, {
+    int resumeAfterChunk = -1,
+    void Function(int chunkIndex)? onChunkProcessed,
+  }) async {
     Map<String, dynamic> parseEntry(String line) {
       try {
         final decoded = jsonDecode(line);
@@ -240,6 +176,8 @@ abstract class BaseDataRepository implements IDataRepository {
     int? declaredRecordCount;
     var actualRecordCount = 0;
     var importedRecords = 0;
+    var lastChunkIndex = -1;
+    var inferredChunkIndex = -1;
 
     Future<void> flushPending() async {
       if (pending.isEmpty) {
@@ -290,6 +228,21 @@ abstract class BaseDataRepository implements IDataRepository {
           'Snapshot entry is missing a "type" attribute',
         );
       }
+      final chunkIndexField = entry['chunkIndex'];
+      final chunkIndex = chunkIndexField is int
+          ? chunkIndexField
+          : inferredChunkIndex + 1;
+      if (chunkIndex < 0) {
+        throw RpcDataError.invalidArgument('Snapshot chunkIndex must be >= 0');
+      }
+      if (chunkIndex != inferredChunkIndex + 1) {
+        throw RpcDataError.invalidArgument(
+          'Snapshot chunkIndex must be contiguous. '
+          'Expected ${inferredChunkIndex + 1}, got $chunkIndex',
+        );
+      }
+      inferredChunkIndex = chunkIndex;
+      final shouldApply = chunkIndex > resumeAfterChunk;
 
       switch (type) {
         case 'header':
@@ -327,8 +280,7 @@ abstract class BaseDataRepository implements IDataRepository {
           }
           final version = entry['version'] as int? ?? 1;
           final enabled = entry['enabled'] as bool? ?? true;
-          final requireValidation =
-              entry['requireValidation'] as bool? ?? true;
+          final requireValidation = entry['requireValidation'] as bool? ?? true;
           await _applySchemas([
             _SnapshotSchemaEntry(
               collection: name,
@@ -362,7 +314,11 @@ abstract class BaseDataRepository implements IDataRepository {
             );
           }
           await flushPending();
-          await purgeCollection(name);
+          if (shouldApply) {
+            await purgeCollection(name);
+          } else {
+            remainingCollections.remove(name);
+          }
           currentCollection = name;
           break;
         case 'record':
@@ -389,9 +345,13 @@ abstract class BaseDataRepository implements IDataRepository {
             );
           }
           actualRecordCount += 1;
-          pending.add(record);
-          if (pending.length >= BaseDataRepository.databaseImportBatchSize) {
-            await flushPending();
+          if (shouldApply) {
+            pending.add(record);
+            if (pending.length >= BaseDataRepository.databaseImportBatchSize) {
+              await flushPending();
+            }
+          } else {
+            importedRecords += 1;
           }
           break;
         case 'collectionEnd':
@@ -400,7 +360,11 @@ abstract class BaseDataRepository implements IDataRepository {
               'Snapshot contains collectionEnd without collection start',
             );
           }
-          await flushPending();
+          if (shouldApply) {
+            await flushPending();
+          } else {
+            pending.clear();
+          }
           currentCollection = '';
           break;
         case 'footer':
@@ -418,6 +382,9 @@ abstract class BaseDataRepository implements IDataRepository {
             'Unknown snapshot entry type "$type"',
           );
       }
+
+      lastChunkIndex = chunkIndex;
+      onChunkProcessed?.call(chunkIndex);
     }
 
     await flushPending();
@@ -467,6 +434,7 @@ abstract class BaseDataRepository implements IDataRepository {
       collectionCount: seenCollections.length,
       recordCount: importedRecords,
       appliedAt: _clock(),
+      lastChunkIndex: lastChunkIndex,
     );
   }
 
@@ -729,17 +697,16 @@ abstract class BaseDataRepository implements IDataRepository {
   }
 
   @override
-  Stream<Uint8List> exportDatabase(
-    ExportDatabaseRequest request,
-  ) async* {
+  Stream<Uint8List> exportDatabase(ExportDatabaseRequest request) async* {
     final generatedAt = _clock();
     final collections = await storage.listCollections();
     final schemas = await _exportSchemas();
     final encoder = const JsonEncoder();
     var recordCount = 0;
+    var chunkIndex = 0;
 
     Uint8List encodeLine(Map<String, dynamic> entry) {
-      final line = encoder.convert(entry);
+      final line = encoder.convert({'chunkIndex': chunkIndex++, ...entry});
       return Uint8List.fromList(utf8.encode('$line\n'));
     }
 
@@ -771,10 +738,7 @@ abstract class BaseDataRepository implements IDataRepository {
         }
         for (final record in chunk) {
           recordCount += 1;
-          yield encodeLine({
-            'type': 'record',
-            'data': record.toJson(),
-          });
+          yield encodeLine({'type': 'record', 'data': record.toJson()});
         }
       }
 
@@ -807,18 +771,21 @@ abstract class BaseDataRepository implements IDataRepository {
         .toList(growable: false);
   }
 
-
   @override
   Future<ImportDatabaseResponse> importDatabase({
     required Stream<Uint8List> payload,
     bool replaceExisting = true,
+    int resumeAfterChunk = -1,
+    void Function(int chunkIndex)? onChunkProcessed,
   }) async {
+    var lastChunkIndex = -1;
     final iterator = StreamIterator<Uint8List>(payload);
     if (!await iterator.moveNext()) {
       return ImportDatabaseResponse(
         collectionCount: 0,
         recordCount: 0,
         appliedAt: _clock(),
+        lastChunkIndex: -1,
       );
     }
 
@@ -833,7 +800,39 @@ abstract class BaseDataRepository implements IDataRepository {
         .cast<List<int>>()
         .transform(utf8.decoder)
         .transform(const LineSplitter());
-    return _importStreamingSnapshot(lineStream, replaceExisting);
+    try {
+      return await _importStreamingSnapshot(
+        lineStream,
+        replaceExisting,
+        resumeAfterChunk: resumeAfterChunk,
+        onChunkProcessed: (index) {
+          lastChunkIndex = index;
+          onChunkProcessed?.call(index);
+        },
+      );
+    } on RpcDataError catch (error, stackTrace) {
+      final details = {
+        if (error.details != null) ...error.details!,
+        'lastChunkIndex': lastChunkIndex,
+      };
+      Error.throwWithStackTrace(
+        RpcDataError(
+          '${error.message} (lastChunkIndex=$lastChunkIndex)',
+          status: error.status,
+          code: error.code,
+          details: details,
+        ),
+        stackTrace,
+      );
+    } catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        RpcDataError.internal(
+          'Failed to import database (lastChunkIndex=$lastChunkIndex)',
+          error: error,
+        ),
+        stackTrace,
+      );
+    }
   }
 
   @override

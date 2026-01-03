@@ -77,19 +77,23 @@ void main() {
         updatedAt: now,
       );
       final buffer = StringBuffer()
-        ..writeln(jsonEncode({
-          'type': 'header',
-          'formatVersion': '2.0.0',
-        }))
+        ..writeln(jsonEncode({'type': 'header', 'formatVersion': '2.0.0'}))
         ..writeln(jsonEncode({'type': 'collection', 'name': 'notes'}))
         ..writeln(jsonEncode({'type': 'record', 'data': invalid.toJson()}))
         ..writeln(jsonEncode({'type': 'collectionEnd', 'name': 'notes'}))
-        ..writeln(jsonEncode({'type': 'footer', 'collectionCount': 1, 'recordCount': 1}));
+        ..writeln(
+          jsonEncode({
+            'type': 'footer',
+            'collectionCount': 1,
+            'recordCount': 1,
+          }),
+        );
       final payload = buffer.toString();
 
       final attempt = repository.importDatabase(
-        payload:
-            Stream<Uint8List>.value(Uint8List.fromList(utf8.encode(payload))),
+        payload: Stream<Uint8List>.value(
+          Uint8List.fromList(utf8.encode(payload)),
+        ),
       );
       await expectLater(
         attempt,
