@@ -35,12 +35,11 @@ Future<void> main() async {
     ),
   );
 
-  final env = await DataServiceFactory.inMemory(
-    repository: SqliteDataRepository(
-      storage: storage,
-      schemaValidation: schemaEngine,
-    ),
+  final repository = SqliteDataRepository(
+    storage: storage,
+    schemaValidation: schemaEngine,
   );
+  final env = await DataServiceFactory.inMemory(repository: repository);
   final client = env.client;
   final serverRepo = env.server.repository as SqliteDataRepository;
 
@@ -50,6 +49,14 @@ Future<void> main() async {
         migrationId: 'notes_init_v1',
         toVersion: 1,
         schema: {
+          // Supported schema keywords (subset of JSON Schema):
+          // - type: object/array/string/integer/number/boolean/null
+          // - enum, required, properties
+          // - strings: minLength, maxLength, pattern
+          // - numbers: minimum, maximum
+          // - arrays: items, minItems, maxItems
+          // Advanced keywords (oneOf/anyOf/allOf/$ref/additionalProperties/uniqueItems/etc.)
+          // are not implemented and will be ignored.
           'type': 'object',
           'required': ['title'],
           'properties': {
@@ -96,11 +103,12 @@ Future<void> main() async {
           },
         },
         transformer: _addSlug,
-      );
+      )
+      .build();
 
   final helper = MigrationRunnerHelper(
     repository: serverRepo,
-    migrations: [...notesMigrations.build()],
+    migrations: notesMigrations,
   );
   await helper.applyPendingMigrations();
   final schema = await serverRepo.schemaValidationEngine.getSchema('notes');
@@ -126,22 +134,30 @@ Future<void> main() async {
   );
   print('patched id=${updated.id} v=${updated.version}');
 
+  await _printNotes(client);
+
+  await _inspectSchemas(client);
+  await _validationFailure(client, updated);
+  await _versionConflict(client, updated);
+  await _exportSnapshot(client);
+
+  await env.dispose();
+  await connection.close();
+}
+
+Future<void> _printNotes(DataServiceClient client) async {
   final listed = await client.list(
     collection: 'notes',
     options: const QueryOptions(limit: 10),
   );
   for (final note in listed.records) {
     print(
-      'note ${note.id} title=${note.payload['title']} done=${note.payload['done']}',
+      'note ${note.id} title=${note.payload['title']} slug=${note.payload['slug']} done=${note.payload['done']}',
     );
   }
+}
 
-  final export = await client.exportDatabase(includePayloadString: false);
-  await for (final chunk in export.payloadStream!) {
-    print(utf8.decode(chunk));
-  }
-
-  // Demonstrate schema RPCs via client: list schemas and fetch one.
+Future<void> _inspectSchemas(DataServiceClient client) async {
   final schemas = await client.listSchemas();
   print(
     'schemas: ${schemas.schemas.map((s) => '${s.collection}@${s.version}')}',
@@ -149,27 +165,50 @@ Future<void> main() async {
   final fetchedSchema = await client.getSchema(collection: 'notes');
   final activeSchema = fetchedSchema.schema;
   print('active schema for notes v=${activeSchema?.version}');
-  // Toggle policy via RPC (e.g., ensure validation is on).
   await client.setSchemaPolicy(
     collection: 'notes',
     enabled: true,
     requireValidation: true,
   );
+}
 
-  final first = (await client.list(
-    collection: 'notes',
-    options: const QueryOptions(limit: 1),
-  )).records.first;
-  //
-  await client.update(
-    collection: 'notes',
-    id: first.id,
-    expectedVersion: first.version,
-    payload: {'author': 'not exists'},
-  );
+Future<void> _validationFailure(
+  DataServiceClient client,
+  DataRecord current,
+) async {
+  try {
+    await client.update(
+      collection: 'notes',
+      id: current.id,
+      expectedVersion: current.version,
+      payload: {'title': 'Missing slug', 'done': true},
+    );
+  } on RpcDataError catch (err) {
+    print('validation blocked update: code=${err.code} details=${err.details}');
+  }
+}
 
-  await env.dispose();
-  await connection.close();
+Future<void> _versionConflict(
+  DataServiceClient client,
+  DataRecord current,
+) async {
+  try {
+    await client.update(
+      collection: 'notes',
+      id: current.id,
+      expectedVersion: current.version - 1,
+      payload: {'title': 'Stale write', 'slug': 'stale-write', 'done': true},
+    );
+  } on RpcDataError catch (err) {
+    print('version conflict: code=${err.code} details=${err.details}');
+  }
+}
+
+Future<void> _exportSnapshot(DataServiceClient client) async {
+  final export = await client.exportDatabase(includePayloadString: false);
+  await for (final chunk in export.payloadStream!) {
+    print(utf8.decode(chunk));
+  }
 }
 
 Map<String, dynamic> _addSlug(Map<String, dynamic> payload) => {

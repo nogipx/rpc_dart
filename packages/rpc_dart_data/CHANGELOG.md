@@ -1,3 +1,7 @@
+## 3.4.5
+
+- Update readme.
+
 ## 3.4.4
 
 - SQLite: chunked reads switch to keyset pagination to avoid large OFFSET scans; `queryCollection` now uses keyset pagination for cursors (OFFSET kept only when explicitly requested); bulk FTS updates insert per chunk in a single statement after one delete.
