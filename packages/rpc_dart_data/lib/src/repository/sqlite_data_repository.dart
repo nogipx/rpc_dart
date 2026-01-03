@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 part of '_index.dart';
 
 /// Convenience repository that uses [SqliteDataStorageAdapter].

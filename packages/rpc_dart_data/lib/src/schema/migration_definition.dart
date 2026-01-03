@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 import 'schema_validation.dart';
 
 /// Declarative migration definition stored in code/config.

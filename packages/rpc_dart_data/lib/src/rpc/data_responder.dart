@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 import 'dart:typed_data';
 
 import 'package:rpc_dart_data/src/sqlite_storage/sql_cipher.dart';

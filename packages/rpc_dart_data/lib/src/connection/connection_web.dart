@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 import 'package:path/path.dart' as p;
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:sqlite3/common.dart' as sqlite;
