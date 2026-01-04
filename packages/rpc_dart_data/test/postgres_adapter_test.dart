@@ -2,9 +2,16 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'package:licensify/licensify.dart';
 import 'package:postgres/postgres.dart';
 import 'package:rpc_dart_data/rpc_dart_data.dart';
 import 'package:test/test.dart';
+
+class _Item {
+  const _Item({required this.id, required this.value});
+  final String id;
+  final int value;
+}
 
 const _url =
     'postgresql://postgres:00000000@localhost:5433/postgres?sslmode=disable';
@@ -57,6 +64,34 @@ void main() {
       await connection.close();
     });
 
+    test('list allows explicit sort for deterministic order', () async {
+      final env = await DataServiceFactory.inMemory(repository: repo);
+      final collection = DataServiceCollection<_Item>(
+        collection: 'items',
+        dataService: env.client,
+        fromJson: (json) =>
+            _Item(id: json['id'] as String, value: json['value'] as int),
+        toJson: (item) => {'value': item.value},
+        idSelector: (item) => item.id,
+      );
+      for (var i = 0; i < 150; i++) {
+        await collection.upsert(_Item(value: i, id: Licensify.nanoId()));
+      }
+
+      final items = await collection.list(
+        options: const QueryOptions(),
+        filter: null,
+        context: null,
+      );
+      items.forEach((e) => print(e.data.value));
+      expect(items.length, 20);
+      expect(items.first.data.value, 0);
+      expect(
+        items.map((item) => item.data.value).toSet(),
+        containsAll(Iterable<int>.generate(20)),
+      );
+    });
+
     test('CRUD + query pagination work per collection', () async {
       final created1 = await repo.create(
         const CreateRecordRequest(
@@ -90,7 +125,7 @@ void main() {
       final page1 = await repo.list(
         const ListRecordsRequest(
           collection: 'notes',
-          sort: SortOrder(field: 'id'),
+          sort: SortOrder(field: 'createdAt'),
           options: QueryOptions(limit: 1),
         ),
       );
@@ -100,7 +135,7 @@ void main() {
       final page2 = await repo.list(
         ListRecordsRequest(
           collection: 'notes',
-          sort: const SortOrder(field: 'id'),
+          sort: const SortOrder(field: 'createdAt'),
           options: QueryOptions(limit: 1, cursor: page1.nextCursor),
         ),
       );

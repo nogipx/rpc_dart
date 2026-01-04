@@ -199,7 +199,9 @@ List<DataRecord> _filterAndSortRecords(
   final filtered = records
       .where((record) => _recordMatchesFilter(record, filter))
       .toList();
-  filtered.sort((a, b) => _compareRecords(a, b, sort));
+  if (sort != null) {
+    filtered.sort((a, b) => _compareRecords(a, b, sort));
+  }
   return filtered;
 }
 

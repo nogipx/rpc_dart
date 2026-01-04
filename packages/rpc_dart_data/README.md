@@ -4,9 +4,9 @@ Transport-agnostic data layer (CRUD, queries, change streams) on top of [`rpc_da
 
 ## What you get
 - Unified `DataService` contract: create/get/list/update/patch/delete/deleteCollection, `bulkUpsert`/`bulkUpsertStream`/`bulkDelete`, search, `listAllRecords`, change streams, NDJSON export/import.
-- Typed collection helper: `DataServieCollection`/`IDataServiceCollection` wraps a single collection with parsed models and change streams.
+- Typed collection helper: `DataServiceCollection` (`DataCollection` alias)/`IDataServiceCollection` wraps a single collection with parsed models and change streams.
 - Schema registry + migrations per collection, validation on all writes/imports, optimistic concurrency on update/patch/delete.
-- Cursor-friendly pagination (keyset by default, offset when requested) with server-side filters/sort/search.
+- Cursor-friendly pagination (keyset by default, offset when requested) with server-side filters/sort/search; SQL adapters default to `createdAt, updatedAt` with an internal row-order tiebreak (explicit sorts, including `id`, stay supported), in-memory preserves insertion order.
 - Ready environments: `DataServiceFactory.inMemory` plus SQLite/PostgreSQL repositories; SQLite supports SQLCipher out of the box.
 - Collection discovery via `listCollections`; schema RPCs to inspect and toggle policy.
 

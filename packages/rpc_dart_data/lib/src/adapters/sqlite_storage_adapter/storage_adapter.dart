@@ -545,7 +545,8 @@ class SqliteDataStorageAdapter
     }
     final rows = await _database
         .customSelect(
-          'SELECT id, payload, version, created_at, updated_at FROM "$tableName"',
+          'SELECT id, payload, version, created_at, updated_at '
+          'FROM "$tableName" ORDER BY created_at, updated_at, rowid',
         )
         .get();
     return rows.map((row) => _mapRow(collection, row)).toList(growable: false);
@@ -563,18 +564,30 @@ class SqliteDataStorageAdapter
     final effectiveChunkSize = chunkSize <= 0
         ? BaseDataRepository.databaseExportChunkSize
         : chunkSize;
-    String? lastId;
+    int? lastCreatedAt;
+    int? lastUpdatedAt;
+    int? lastRowId;
     while (true) {
       final query = StringBuffer(
-        'SELECT id, payload, version, created_at, updated_at '
+        'SELECT id, payload, version, created_at, updated_at, rowid '
         'FROM "$tableName"',
       );
       final variables = <Object>[];
-      if (lastId != null) {
-        query.write(' WHERE id > ?');
-        variables.add(lastId);
+      if (lastCreatedAt != null) {
+        query.write(
+          ' WHERE (created_at > ? '
+          'OR (created_at = ? AND (updated_at > ? '
+          'OR (updated_at = ? AND rowid > ?))))',
+        );
+        variables.addAll([
+          lastCreatedAt,
+          lastCreatedAt,
+          lastUpdatedAt!,
+          lastUpdatedAt!,
+          lastRowId!,
+        ]);
       }
-      query.write(' ORDER BY id LIMIT ?');
+      query.write(' ORDER BY created_at, updated_at, rowid LIMIT ?');
       variables.add(effectiveChunkSize);
       final rows = await _database
           .customSelect(query.toString(), variables: variables)
@@ -583,7 +596,10 @@ class SqliteDataStorageAdapter
         break;
       }
       yield rows.map((row) => _mapRow(collection, row)).toList(growable: false);
-      lastId = rows.last.read<String>('id');
+      final lastRow = rows.last;
+      lastCreatedAt = lastRow['created_at'] as int;
+      lastUpdatedAt = lastRow['updated_at'] as int;
+      lastRowId = lastRow['rowid'] as int;
       if (rows.length < effectiveChunkSize) {
         break;
       }
@@ -606,7 +622,7 @@ class SqliteDataStorageAdapter
   ) async {
     if (!_supportsSort(request.sort)) {
       throw RpcDataError.invalidArgument(
-        'Sorting by "${request.sort?.field ?? 'id'}" is not supported by SQLite adapter.',
+        'Sorting by "${request.sort?.field ?? 'createdAt'}" is not supported by SQLite adapter.',
       );
     }
 
@@ -628,7 +644,7 @@ class SqliteDataStorageAdapter
     }
 
     final sort = request.sort;
-    final sortField = sort?.field ?? 'id';
+    final sortField = sort?.field ?? 'createdAt';
     final sortExpression = _fieldExpression(sortField);
     if (sortExpression == null) {
       throw RpcDataError.invalidArgument(
@@ -650,31 +666,39 @@ class SqliteDataStorageAdapter
         );
       }
       final comparator = descending ? '<' : '>';
-      final sortColumn = _columnForField(sortField);
-      Object boundaryValue;
-      if (sortColumn == 'id') {
-        boundaryValue = cursor;
-      } else {
-        final boundary = await _database
-            .customSelect(
-              'SELECT $sortExpression AS boundary FROM "$tableName" '
-              'WHERE id = ? LIMIT 1',
-              variables: [cursor],
-            )
-            .getSingleOrNull();
-        if (boundary == null) {
-          throw RpcDataError.invalidArgument(
-            'Cursor $cursor is not valid for ${request.collection}',
-          );
-        }
-        boundaryValue = boundary.read<Object>('boundary');
+      final boundary = await _database
+          .customSelect(
+            'SELECT $sortExpression AS boundary, '
+            '${_qualifiedColumn('updated_at')} AS boundary_updated_at, '
+            'rowid AS boundary_rowid '
+            'FROM "$tableName" '
+            'WHERE id = ? LIMIT 1',
+            variables: [cursor],
+          )
+          .getSingleOrNull();
+      if (boundary == null) {
+        throw RpcDataError.invalidArgument(
+          'Cursor $cursor is not valid for ${request.collection}',
+        );
       }
+      final boundaryValue = boundary.read<Object>('boundary');
+      final boundaryUpdatedAt = boundary.read<int>('boundary_updated_at');
+      final boundaryRowId = boundary.read<int>('boundary_rowid');
       whereClauses.add(
         '($sortExpression $comparator ? OR '
-        '($sortExpression = ? AND ${_qualifiedColumn('id')} '
-        '$comparator ?))',
+        '($sortExpression = ? AND ('
+        '${_qualifiedColumn('updated_at')} $comparator ? OR '
+        '(${_qualifiedColumn('updated_at')} = ? AND rowid $comparator ?))))',
       );
-      values.addAll([boundaryValue, boundaryValue, cursor]);
+      values.addAll(
+        [
+          boundaryValue,
+          boundaryValue,
+          boundaryUpdatedAt,
+          boundaryUpdatedAt,
+          boundaryRowId,
+        ],
+      );
     }
 
     final querySql = StringBuffer(
@@ -691,8 +715,10 @@ class SqliteDataStorageAdapter
       ..write(sortExpression)
       ..write(descending ? ' DESC' : ' ASC')
       ..write(', ')
-      ..write(_qualifiedColumn('id'))
+      ..write(_qualifiedColumn('updated_at'))
       ..write(' ')
+      ..write(descending ? 'DESC' : 'ASC')
+      ..write(', rowid ')
       ..write(descending ? 'DESC' : 'ASC');
 
     final useOffset = !useKeyset && request.options.offset > 0;
@@ -794,16 +820,37 @@ class SqliteDataStorageAdapter
     final queryFilterValues = List<Object>.from(baseFilterValues);
     final cursor = request.options.cursor;
     if (cursor != null) {
-      final exists = await _cursorExists(tableName, cursor);
-      if (!exists) {
+      final boundary = await _database
+          .customSelect(
+            'SELECT created_at AS boundary_created_at, '
+            'updated_at AS boundary_updated_at, '
+            'rowid AS boundary_rowid '
+            'FROM "$tableName" WHERE id = ? LIMIT 1',
+            variables: [cursor],
+          )
+          .getSingleOrNull();
+      if (boundary == null) {
         throw RpcDataError.invalidArgument(
           'Cursor $cursor is not valid for ${request.collection}',
         );
       }
+      final boundaryCreatedAt = boundary.read<int>('boundary_created_at');
+      final boundaryUpdatedAt = boundary.read<int>('boundary_updated_at');
+      final boundaryRowId = boundary.read<int>('boundary_rowid');
       queryFilterConditions.add(
-        '${_qualifiedColumn('id', tableAlias: baseAlias)} > ?',
+        '(${_qualifiedColumn('created_at', tableAlias: baseAlias)} > ? OR '
+        '(${_qualifiedColumn('created_at', tableAlias: baseAlias)} = ? AND '
+        '(${_qualifiedColumn('updated_at', tableAlias: baseAlias)} > ? OR '
+        '(${_qualifiedColumn('updated_at', tableAlias: baseAlias)} = ? AND '
+        '${baseAlias}.rowid > ?))))',
       );
-      queryFilterValues.add(cursor);
+      queryFilterValues.addAll([
+        boundaryCreatedAt,
+        boundaryCreatedAt,
+        boundaryUpdatedAt,
+        boundaryUpdatedAt,
+        boundaryRowId,
+      ]);
     }
 
     final queryWhereClause = queryFilterConditions.isEmpty
@@ -825,7 +872,8 @@ class SqliteDataStorageAdapter
       'FROM "$tableName" $baseAlias '
       'JOIN fts_hits fts ON fts.id = $baseAlias.id '
       '$queryWhereClause '
-      'ORDER BY fts.rank ASC, $baseAlias.id ASC '
+      'ORDER BY fts.rank ASC, $baseAlias.created_at ASC, '
+      '$baseAlias.updated_at ASC, $baseAlias.rowid ASC '
       'LIMIT ? OFFSET ?',
     );
 

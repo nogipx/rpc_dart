@@ -184,7 +184,7 @@ void main() {
 
       expect(response.totalHits, 3);
       expect(response.records, hasLength(1));
-      expect(response.records.single.id, 'delta');
+      expect(response.records.single.id, 'gamma');
     });
   });
 

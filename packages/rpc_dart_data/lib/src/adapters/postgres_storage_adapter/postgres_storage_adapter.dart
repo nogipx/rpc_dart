@@ -57,6 +57,18 @@ class PgTableNames {
   }
 }
 
+class _PgCursorBoundary {
+  _PgCursorBoundary({
+    required this.boundary,
+    required this.updatedAt,
+    required this.ctid,
+  });
+
+  final Object? boundary;
+  final DateTime updatedAt;
+  final String ctid;
+}
+
 /// PostgreSQL-backed implementation of [IDataStorageAdapter].
 ///
 /// Query and search methods reuse the in-memory filtering helpers for now, so
@@ -384,7 +396,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       Sql.named(
         'SELECT id, payload, version, created_at, updated_at '
         'FROM $table '
-        'ORDER BY id',
+        'ORDER BY created_at, updated_at, ctid',
       ),
       parameters: const {},
     );
@@ -408,18 +420,27 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     final effectiveChunkSize = chunkSize <= 0
         ? BaseDataRepository.databaseExportChunkSize
         : chunkSize;
-    String? lastId;
+    DateTime? lastCreatedAt;
+    DateTime? lastUpdatedAt;
+    String? lastCtid;
     while (true) {
       final parameters = <String, Object?>{'limit': effectiveChunkSize};
       final query = StringBuffer(
-        'SELECT id, payload, version, created_at, updated_at '
+        'SELECT id, payload, version, created_at, updated_at, ctid, '
+        'ctid::text AS ctid_text '
         'FROM $table ',
       );
-      if (lastId != null) {
-        query.write('WHERE id > @cursor ');
-        parameters['cursor'] = lastId;
+      if (lastCreatedAt != null) {
+        query.write(
+          'WHERE (created_at > @createdAt '
+          'OR (created_at = @createdAt AND (updated_at > @updatedAt '
+          'OR (updated_at = @updatedAt AND ctid > CAST(@cursorCtid AS tid))))) ',
+        );
+        parameters['createdAt'] = lastCreatedAt;
+        parameters['updatedAt'] = lastUpdatedAt;
+        parameters['cursorCtid'] = lastCtid;
       }
-      query.write('ORDER BY id LIMIT @limit');
+      query.write('ORDER BY created_at, updated_at, ctid LIMIT @limit');
       final result = await _connection.execute(
         Sql.named(query.toString()),
         parameters: parameters,
@@ -430,7 +451,10 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       yield result
           .map((row) => _mapRow(row, collectionOverride: collection))
           .toList(growable: false);
-      lastId = result.last.toColumnMap()['id'] as String;
+      final lastRow = result.last.toColumnMap();
+      lastCreatedAt = lastRow['created_at'] as DateTime;
+      lastUpdatedAt = lastRow['updated_at'] as DateTime;
+      lastCtid = lastRow['ctid_text'] as String;
       if (result.length < effectiveChunkSize) {
         break;
       }
@@ -451,7 +475,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     }
     if (!_supportsSort(request.sort)) {
       throw RpcDataError.invalidArgument(
-        'Sorting by "${request.sort?.field ?? 'id'}" is not supported by Postgres adapter.',
+        'Sorting by "${request.sort?.field ?? 'createdAt'}" is not supported by Postgres adapter.',
       );
     }
 
@@ -467,7 +491,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     final where = List<String>.from(baseWhere);
 
     final sort = request.sort;
-    final sortField = sort?.field ?? 'id';
+    final sortField = sort?.field ?? 'createdAt';
     final sortExpression = _fieldExpression(sortField);
     final descending = sort?.descending ?? false;
     if (sortExpression == null) {
@@ -486,14 +510,22 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         );
       }
       final boundary = await _readCursorBoundary(table, cursor, sortExpression);
-      final boundaryParam = _addParam(params, boundary);
-      final cursorIdParam = _addParam(params, cursor);
+      if (boundary == null) {
+        throw RpcDataError.invalidArgument(
+          'Cursor $cursor is not valid for ${request.collection}',
+        );
+      }
+      final boundaryParam = _addParam(params, boundary.boundary);
+      final boundaryUpdatedParam = _addParam(params, boundary.updatedAt);
+      final boundaryCtidParam = _addParam(params, boundary.ctid);
       final primaryComparator = descending ? '<' : '>';
       final secondaryComparator = descending ? '<' : '>';
       where.add(
         '($sortExpression $primaryComparator $boundaryParam '
-        'OR ($sortExpression = $boundaryParam AND id '
-        '$secondaryComparator $cursorIdParam))',
+        'OR ($sortExpression = $boundaryParam AND '
+        '(updated_at $secondaryComparator $boundaryUpdatedParam OR '
+        '(updated_at = $boundaryUpdatedParam AND '
+        'ctid $secondaryComparator CAST($boundaryCtidParam AS tid)))))',
       );
     }
 
@@ -510,7 +542,9 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       ..write(' ORDER BY ')
       ..write(sortExpression)
       ..write(descending ? ' DESC' : ' ASC')
-      ..write(', id ')
+      ..write(', updated_at ')
+      ..write(descending ? 'DESC' : 'ASC')
+      ..write(', ctid ')
       ..write(descending ? 'DESC' : 'ASC');
 
     final useOffset = !useKeyset && request.options.offset > 0;
@@ -624,11 +658,33 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
           'Cursor $cursor is not valid for ${request.collection}',
         );
       }
+      final boundaryRow = await _connection.execute(
+        Sql.named(
+          'SELECT created_at, updated_at, ctid::text AS boundary_ctid FROM $table '
+          'WHERE id = @id LIMIT 1',
+        ),
+        parameters: {'id': cursor},
+      );
+      if (boundaryRow.isEmpty) {
+        throw RpcDataError.invalidArgument(
+          'Cursor $cursor is not valid for ${request.collection}',
+        );
+      }
+      final boundary = boundaryRow.first.toColumnMap();
       final rankParam = _addParam(params, cursorRank);
-      final cursorIdParam = _addParam(params, cursor);
+      final createdParam =
+          _addParam(params, boundary['created_at'] as DateTime);
+      final updatedParam =
+          _addParam(params, boundary['updated_at'] as DateTime);
+      final ctidParam = _addParam(params, boundary['boundary_ctid'] as String);
       where.add(
         '($rankExpression < $rankParam OR '
-        '($rankExpression = $rankParam AND id > $cursorIdParam))',
+        '($rankExpression = $rankParam AND '
+        '(created_at > $createdParam OR '
+        '(created_at = $createdParam AND '
+        '(updated_at > $updatedParam OR '
+        '(updated_at = $updatedParam AND '
+        'ctid > CAST($ctidParam AS tid)))))))',
       );
     }
 
@@ -646,7 +702,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         ..write(where.join(' AND '));
     }
     querySql
-      ..write(' ORDER BY rank DESC, id ASC ')
+      ..write(' ORDER BY rank DESC, created_at ASC, updated_at ASC, ctid ASC ')
       ..write('LIMIT ')
       ..write(limitParam)
       ..write(' OFFSET ')
@@ -1279,14 +1335,14 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     return result.isNotEmpty;
   }
 
-  Future<Object?> _readCursorBoundary(
+  Future<_PgCursorBoundary?> _readCursorBoundary(
     String table,
     String cursor,
     String sortExpression,
   ) async {
     final result = await _connection.execute(
       Sql.named(
-        'SELECT $sortExpression AS boundary '
+        'SELECT $sortExpression AS boundary, updated_at, ctid::text AS boundary_ctid '
         'FROM $table '
         'WHERE id = @id LIMIT 1',
       ),
@@ -1295,7 +1351,12 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     if (result.isEmpty) {
       return null;
     }
-    return result.first.toColumnMap()['boundary'];
+    final map = result.first.toColumnMap();
+    return _PgCursorBoundary(
+      boundary: map['boundary'],
+      updatedAt: map['updated_at'] as DateTime,
+      ctid: map['boundary_ctid'] as String,
+    );
   }
 
   Future<double?> _readSearchCursorRank(

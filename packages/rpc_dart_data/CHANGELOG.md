@@ -1,6 +1,7 @@
 ## 3.6.0
 
-- Added `IDataServiceCollection` and made `DataServiceCollection` implement it for a typed collection facade (create/get/list/update/patch/upsert/delete/bulkDelete/watchChanges with parsed models). Tests now run against the in-memory RPC/service instead of a fake.
+- Added `IDataServiceCollection` and made `DataServiceCollection` (alias `DataCollection`) implement it for a typed collection facade (create/get/list/update/patch/upsert/delete/bulkDelete/watchChanges with parsed models). Tests now run against the in-memory RPC/service instead of a fake.
+- In-memory adapter no longer applies implicit lexicographic sort when `sort` is omitted; order now follows storage insertion unless you specify `SortOrder`. SQLite/PostgreSQL keep deterministic pagination by ordering by `createdAt, updatedAt` with an internal row-order tiebreaker when no sort is provided (explicit sorts, including `id`, remain available).
 
 ## 3.5.0
 
