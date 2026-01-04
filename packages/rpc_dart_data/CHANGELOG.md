@@ -1,3 +1,7 @@
+## 3.6.0
+
+- Added `IDataServiceCollection` and made `DataServiceCollection` implement it for a typed collection facade (create/get/list/update/patch/upsert/delete/bulkDelete/watchChanges with parsed models). Tests now run against the in-memory RPC/service instead of a fake.
+
 ## 3.5.0
 
 - Breaking: export/import now stream NDJSON `Uint8List` chunks only; legacy `includePayloadString` and `List<int>` paths are removed, RPC uses server-stream for export and a bidirectional stream with ACKs (batched every few chunks) for import. Callers still send NDJSON byte chunks and get `ImportResumeException(lastChunkIndex: x)` on drops/timeouts, making resume-after-chunk robust even without server error details.
