@@ -672,10 +672,14 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       }
       final boundary = boundaryRow.first.toColumnMap();
       final rankParam = _addParam(params, cursorRank);
-      final createdParam =
-          _addParam(params, boundary['created_at'] as DateTime);
-      final updatedParam =
-          _addParam(params, boundary['updated_at'] as DateTime);
+      final createdParam = _addParam(
+        params,
+        boundary['created_at'] as DateTime,
+      );
+      final updatedParam = _addParam(
+        params,
+        boundary['updated_at'] as DateTime,
+      );
       final ctidParam = _addParam(params, boundary['boundary_ctid'] as String);
       where.add(
         '($rankExpression < $rankParam OR '

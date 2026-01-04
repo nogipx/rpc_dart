@@ -583,7 +583,7 @@ class SqliteDataStorageAdapter
           lastCreatedAt,
           lastCreatedAt,
           lastUpdatedAt!,
-          lastUpdatedAt!,
+          lastUpdatedAt,
           lastRowId!,
         ]);
       }
@@ -690,15 +690,13 @@ class SqliteDataStorageAdapter
         '${_qualifiedColumn('updated_at')} $comparator ? OR '
         '(${_qualifiedColumn('updated_at')} = ? AND rowid $comparator ?))))',
       );
-      values.addAll(
-        [
-          boundaryValue,
-          boundaryValue,
-          boundaryUpdatedAt,
-          boundaryUpdatedAt,
-          boundaryRowId,
-        ],
-      );
+      values.addAll([
+        boundaryValue,
+        boundaryValue,
+        boundaryUpdatedAt,
+        boundaryUpdatedAt,
+        boundaryRowId,
+      ]);
     }
 
     final querySql = StringBuffer(
@@ -842,7 +840,7 @@ class SqliteDataStorageAdapter
         '(${_qualifiedColumn('created_at', tableAlias: baseAlias)} = ? AND '
         '(${_qualifiedColumn('updated_at', tableAlias: baseAlias)} > ? OR '
         '(${_qualifiedColumn('updated_at', tableAlias: baseAlias)} = ? AND '
-        '${baseAlias}.rowid > ?))))',
+        '$baseAlias.rowid > ?))))',
       );
       queryFilterValues.addAll([
         boundaryCreatedAt,

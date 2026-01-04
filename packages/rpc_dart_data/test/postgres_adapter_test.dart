@@ -83,7 +83,9 @@ void main() {
         filter: null,
         context: null,
       );
-      items.forEach((e) => print(e.data.value));
+      for (var e in items) {
+        print(e.data.value);
+      }
       expect(items.length, 20);
       expect(items.first.data.value, 0);
       expect(
