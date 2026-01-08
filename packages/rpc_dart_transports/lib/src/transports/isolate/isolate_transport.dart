@@ -42,6 +42,7 @@ abstract interface class RpcIsolateTransport {
     String isolateId = 'default',
     String? debugName,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    Uri? workerUri, // Ignored on IO; kept for API parity with web.
   }) async {
     final name = debugName ?? 'rpc-isolate-$isolateId';
 
@@ -928,3 +929,8 @@ class _IsolateWorkerTransport implements IRpcTransport {
   @override
   bool get supportsZeroCopy => true;
 }
+
+void runRpcIsolateManagerWorker(
+  RpcIsolateEntrypoint entrypoint, {
+  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+}) {}

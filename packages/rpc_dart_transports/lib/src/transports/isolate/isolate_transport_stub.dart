@@ -15,6 +15,8 @@ abstract interface class RpcIsolateTransport {
     Map<String, dynamic>? customParams,
     String isolateId = 'default',
     String? debugName,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    Uri? workerUri,
   }) {
     throw UnsupportedError(
       'RpcIsolateTransport is not available on this platform. '
@@ -22,3 +24,8 @@ abstract interface class RpcIsolateTransport {
     );
   }
 }
+
+void runRpcIsolateManagerWorker(
+  RpcIsolateEntrypoint entrypoint, {
+  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+}) {}

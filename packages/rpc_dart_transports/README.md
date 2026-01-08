@@ -20,37 +20,53 @@ Transport implementations for [RPC Dart](https://pub.dev/packages/rpc_dart). Pro
 - WebSocketTransport — bidirectional real-time transport with reconnection and optional multiplexing.
 - IsolateTransport — efficient communication between Dart isolates, supports zero-copy for in-process objects.
 - Http2Transport — HTTP/2 based transport with gRPC-compatible framing, TLS support and stream multiplexing.
-- Http1Transport — unary-only HTTP/1.1 fallback that wraps every request in a POST and adds `x-rpc-integrity` checksums to guarantee payload integrity when a full gRPC stack is unavailable.
 
-### HTTP/1.1 transport (unary only)
+#### Isolate transport on web (workers)
 
-When you cannot rely on HTTP/2 but still need RPC calls, `RpcHttp1CallerTransport`/`RpcHttp1Server` send a single unary request per RPC and rely on `x-rpc-integrity` (SHA256 over the framed payload) so both sides can detect tampering. There is no multiplexing or streaming—each call closes the request/response pair as soon as the body is exchanged. Example:
+- On the web, use `isolate_manager` with a Web Worker. Annotate your worker with `@isolateManagerCustomWorker`, call `runRpcIsolateManagerWorker(yourServerEntrypoint);`, and build it with `dart compile js web/rpc_isolate_worker.dart -o web/rpcIsolateWorker.js` (default name resolved relative to `Uri.base`). No manual `postMessage` plumbing is needed.
+- For dart2wasm builds the worker is started as `type: 'module'`; ensure your bundler/server serves a module worker. You can override the filename via `workerUri`, and `debugName` is forwarded into `WorkerOptions.name`.
+- `RpcIsolateTransport.spawn` keeps the same API and defaults to `rpcIsolateWorker.js` when `workerUri` is not provided. The `entrypoint` parameter exists for parity—real logic lives in the worker.
+- Zero-copy is not available inside the worker; use normal serialization (codecs or framed bytes).
+- Worker channels must carry JSON-friendly values only (`num`/`String`/`bool`/`null`/`Map`/`List`). Binary payloads are automatically serialized to `List<int>` inside the transport.
+- On Dart VM isolates, zero-copy is supported via `TransferableTypedData` when both sides send/receive binary payloads (fallbacks to copies when not available). On the web, `TransferableTypedData` is not exposed and worker channels go through structured-clone JSON, so payloads are serialized instead.
+
+Example worker (`web/rpc_isolate_worker.dart`):
 
 ```dart
-final server = RpcHttp1Server.createWithContracts(
-  host: 'localhost',
-  port: 8081,
-  contracts: [MyServiceContract()],
-);
-await server.start();
+// Run in the worker context. Bundlers should keep this as a dedicated entry.
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
-final transport = RpcHttp1CallerTransport.connect(
-  Uri.parse('http://localhost:8081'),
-);
-final caller = RpcCallerEndpoint(transport: transport);
+/// This will be used to generate JS for the worker for the WEB platform.
+@isolateManagerCustomWorker
+FutureOr<void> rpcIsolateWorker(dynamic _) async {
+  runRpcIsolateManagerWorker(isolateEntrypoint);
+}
 
-final response = await caller.unaryRequest<RpcString, RpcString>(
-  serviceName: 'MyService',
-  methodName: 'Echo',
-  requestCodec: RpcString.codec,
-  responseCodec: RpcString.codec,
-  request: RpcString('hello over HTTP/1.1'),
-);
-print('Server replied: ${response.value}');
+/// This should be used directly in RpcIsolateTransport.spawn() on IO platform.
+void isolateEntrypoint(IRpcTransport transport, Map<String, dynamic> customParams) {
+  final responder = RpcResponderEndpoint(
+    transport: transport,
+    policy: const RpcSecurityPolicy(), // Optional; match your host.
+  );
+
+  // Register your contracts/handlers here.
+  // responder.registerContract(MyServiceContract());
+  responder.start();
+}
+
+```
+
+Generate the JS worker after edits:
+
+```bash
+dart run isolate_manager:generate
+# or
+dart compile js web/rpc_isolate_worker.dart -o web/rpcIsolateWorker.js
 ```
 
 #### WebSocket transport notes
 
-- Формат кадра: `[streamId:4][flags:1][gRPC_frame...]`, где gRPC_frame — 5-байтовый префикс gRPC + payload.
-- Для больших сообщений можно включить чанкование по WebSocket (`enableChunking: true` в `RpcWebSocketTransportBase` конструкторах в `rpc_dart_transports`). Это режет gRPC frame на куски с дополнительным chunk-header и собирает обратно на приёме.
-- По умолчанию чанкование выключено ради обратной совместимости: включайте только если обе стороны используют версию с поддержкой chunked флагов.
+- Frame layout: `[streamId:4][flags:1][gRPC_frame...]`, where `gRPC_frame` is the 5-byte gRPC prefix plus payload.
+- For large messages you can enable WebSocket chunking (`enableChunking: true` in `RpcWebSocketTransportBase` constructors). It slices gRPC frames with an extra chunk header and reassembles them on receive.
+- Chunking is off by default for backward compatibility—enable only when both peers support chunked flags.

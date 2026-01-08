@@ -5,5 +5,6 @@
 export 'http/_index.dart';
 export 'http2/_index.dart';
 export 'isolate/isolate_transport_stub.dart'
-    if (dart.library.io) 'isolate/isolate_transport.dart';
+    if (dart.library.io) 'isolate/isolate_transport.dart'
+    if (dart.library.js_interop) 'isolate/isolate_transport_web.dart';
 export 'websocket/_index.dart';

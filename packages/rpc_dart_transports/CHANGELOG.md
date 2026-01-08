@@ -1,3 +1,8 @@
+## 1.8.0
+
+- Web isolate transport now works on dart2wasm builds by emitting module workers (`WorkerOptions(type: 'module')`) and honoring optional debug names in worker options.
+- Default web worker artifact renamed to `rpcIsolateWorker.js`; metadata/byte parsing became more permissive (accepts `ByteBuffer` and numeric lists).
+
 ## 1.7.1
 
 - Isolate transport: propagate worker crashes/exits to host health, close channels cleanly, and tolerate shutdown signals even when streams remain open.
