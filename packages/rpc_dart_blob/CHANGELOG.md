@@ -1,3 +1,7 @@
+## 1.0.5
+
+- Allow to pass raw sqlite db connection to adapter
+
 ## 1.0.4
 
 - S3 adapter now auto-detects public buckets and returns plain download URLs when anonymous `s3:GetObject` is allowed; presigning is used only for private buckets, still honoring `presign*` host overrides.

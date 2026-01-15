@@ -75,6 +75,29 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
     }
   }
 
+  /// Create or open a file-backed adapter.
+  factory SqliteBlobStorageAdapter.db(
+    sqlite.CommonDatabase db, {
+    int? maxBlobBytes,
+    int readChunkBytes = _defaultReadChunkBytes,
+    Clock? clock,
+    bool enableWal = true,
+    SqlCipherKey? sqlCipherKey,
+  }) {
+    try {
+      _prepareDatabase(db, enableWal: enableWal, sqlCipherKey: sqlCipherKey);
+      return SqliteBlobStorageAdapter._(
+        db,
+        maxBlobBytes: maxBlobBytes,
+        readChunkBytes: readChunkBytes,
+        clock: clock,
+      );
+    } catch (_) {
+      db.close();
+      rethrow;
+    }
+  }
+
   static void _prepareDatabase(
     sqlite.CommonDatabase database, {
     bool enableWal = true,

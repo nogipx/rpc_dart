@@ -532,8 +532,8 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
       final document = xml.XmlDocument.parse(response.body);
       final tags = <String, String>{};
       for (final tag in document.findAllElements('Tag')) {
-        final tagKey = tag.getElement('Key')?.text;
-        final tagValue = tag.getElement('Value')?.text;
+        final tagKey = tag.getElement('Key')?.value;
+        final tagValue = tag.getElement('Value')?.value;
         if (tagKey != null && tagValue != null) {
           tags[tagKey] = tagValue;
         }
