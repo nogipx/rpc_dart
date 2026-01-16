@@ -1,3 +1,7 @@
+## 1.8.1
+
+- WebSocket caller transport: keep client streams alive after `finishSending()` by no longer force-closing `_activeStreams`; fixes lost responses/ACKs and protocol violation `Data received for unknown streamId` when using client-stream RPCs.
+
 ## 1.8.0
 
 - Web isolate transport now works on dart2wasm builds by emitting module workers (`WorkerOptions(type: 'module')`) and honoring optional debug names in worker options.

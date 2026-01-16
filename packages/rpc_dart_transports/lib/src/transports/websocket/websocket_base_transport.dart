@@ -726,8 +726,6 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
 
       // Отправляем пустое сообщние с флагом завершения
       await _sendWithHeader(streamId, Uint8List(0), endStream: true);
-
-      _onStreamEnd(streamId);
     } catch (e, stackTrace) {
       _logger?.error(
         'Ошибка при завершении отправки: $e',
