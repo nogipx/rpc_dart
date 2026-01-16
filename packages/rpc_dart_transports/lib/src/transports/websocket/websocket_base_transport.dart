@@ -806,6 +806,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     Uint8List payload, {
     required bool endStream,
   }) async {
+    if (_closed) return;
     final totalLength = payload.length;
     final chunkCount = (totalLength / _chunkSizeBytes).ceil();
     if (chunkCount > 0xFFFF) {
