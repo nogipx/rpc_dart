@@ -1,0 +1,13 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
+import 'dart:math';
+
+import '../models.dart';
+import '../rpc/data_contract.dart';
+
+part 'i_data_storage_adapter.dart';
+part 'in_memory_storage_adapter.dart';
+
+const int defaultStorageChunkSize = 512;
