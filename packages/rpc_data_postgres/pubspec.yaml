@@ -1,6 +1,6 @@
 name: rpc_data_postgres
 description: PostgreSQL adapter and repository for rpc_data.
-version: 4.0.0
+version: 1.0.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

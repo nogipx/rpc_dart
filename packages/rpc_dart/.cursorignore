@@ -1,7 +1,0 @@
-**/.dart_tool/
-**/coverage/html/
-**/coverage/test/
-.vscode/
-LICENSES/
-LICENSE
-REUSE.toml
