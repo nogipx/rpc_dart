@@ -1,6 +1,6 @@
 # rpc_dart_blob
 
-Contract and adapters for streamed blob storage over `rpc_dart`. Think of it as the binary twin of `rpc_dart_data`: optimized for chunked uploads/downloads, checksums, and content types, without forcing base64 inside JSON payloads.
+Contract and adapters for streamed blob storage over `rpc_dart`. Think of it as the binary twin of `rpc_data`: optimized for chunked uploads/downloads, checksums, and content types, without forcing base64 inside JSON payloads.
 
 ## Quick start
 
@@ -87,7 +87,7 @@ final server = BlobServiceFactory.createServer(
 Descriptors returned from S3 include a download URL (`downloadUrl`). The adapter now auto-detects public access: if bucket policy allows anonymous `s3:GetObject`, it returns a plain URL; otherwise it presigns. Prefer `presignEndpoint`/`presignPort`/`presignUseSSL`/`presignPathStyle` when the public host differs from the internal one — the URL (presigned or plain) will use those host overrides. Set `presignRegion` explicitly to avoid any region lookup when generating presigns. `S3BlobStorageOptions` also configures prefix/clock and `presignTtlSeconds` (link lifetime).
 
 ## Goals
-- Separate contract for blobs (`BlobService`) so `rpc_dart_data` stays focused on JSON records.
+- Separate contract for blobs (`BlobService`) so `rpc_data` stays focused on JSON records.
 - Stream-first API (client-stream upload, server-stream download) with optimistic versioning.
 - Pluggable storage adapters (SQLite for dev/tests, S3/MinIO for object storage; bucket must exist).
 - Export/import-friendly framing (header + binary chunks) without loading whole files in memory.

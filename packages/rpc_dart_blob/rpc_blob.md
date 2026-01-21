@@ -1,6 +1,6 @@
 # rpc_dart_blob: функциональный набросок
 
-Цель: отдельный сервис для блобов (картинки/файлы), совместимый по стилю с `rpc_dart_data`, но оптимизированный под бинарные стримы и хранения вне JSON.
+Цель: отдельный сервис для блобов (картинки/файлы), совместимый по стилю с `rpc_data`, но оптимизированный под бинарные стримы и хранения вне JSON.
 
 ## Контракт (RPC)
 - Service: `BlobService`.
@@ -25,7 +25,7 @@
 ## Хранилища (IBlobStorageAdapter)
 - Интерфейс: `headBlob`, `readBlob(range)`, `writeBlob`, `deleteBlob`, `listBlobs`, `dispose`.
 - Реализации (MVP):
-  1) `SqliteBlobStorageAdapter` — dev/тест, хранит `payload BLOB`, `content_type`, `length`, `checksum`, индексы по `updated_at`. Файл БД отдельный от rpc_dart_data.
+  1) `SqliteBlobStorageAdapter` — dev/тест, хранит `payload BLOB`, `content_type`, `length`, `checksum`, индексы по `updated_at`. Файл БД отдельный от rpc_data.
   2) `FsBlobStorageAdapter` — хранит байты на диске (layout `/collection/id`), метаданные в маленьком index-файле/SQLite.
   3) (позже) `S3BlobStorageAdapter`/minio — ставит presigned PUT/GET, но оставляет контракт прежним.
 
@@ -43,11 +43,11 @@
 - Auth: опция allowed tokens как в `DataServiceResponder`, либо передача `RpcContext` в сервисную реализацию (пользователь сам проверяет).
 
 ## Экспорт/импорт и бэкапы
-- Отдельный поток от `rpc_dart_data`: формат “header frame (descriptor) + бинарные чанки” в одном стриме; можно сжать/тарить. Не base64.
+- Отдельный поток от `rpc_data`: формат “header frame (descriptor) + бинарные чанки” в одном стриме; можно сжать/тарить. Не base64.
 - CLI-хелпер может собирать tar-подобный архив (metadata.json + files).
 
 ## Интеграция
-- Пакет самодостаточен и не зависит от `rpc_dart_data`. При желании приложения могут хранить ссылки на blob-id в своих данных, но blob-сервис живёт отдельно (свои контракты, БД, адаптеры).
+- Пакет самодостаточен и не зависит от `rpc_data`. При желании приложения могут хранить ссылки на blob-id в своих данных, но blob-сервис живёт отдельно (свои контракты, БД, адаптеры).
 
 ## Тестирование
 - In-memory/fs/sqlite адаптеры с предсказуемыми ID для тестов.
