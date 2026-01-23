@@ -1,111 +1,203 @@
 import 'dart:async';
 
+import 'package:async/async.dart';
+import 'package:crypto/crypto.dart';
+import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
-import '../models.dart';
 import 'blob_contract.dart';
-import 'i_blob_service.dart';
 
-class BlobServiceResponder extends RpcResponderContract
-    implements IBlobServiceContract {
+class BlobServiceResponder extends BlobServiceContractResponder {
   BlobServiceResponder({
-    required IBlobService service,
-    required RpcDataTransferMode transferMode,
-  }) : _service = service,
-       super(IBlobServiceContract.name, dataTransferMode: transferMode);
+    super.serviceNameOverride,
+    required IBlobStorageAdapter storage,
+    RpcDataTransferMode transferMode = RpcDataTransferMode.auto,
+    int? maxChunkBytes,
+  }) : _storage = storage,
+       _maxChunkBytes = maxChunkBytes,
+       super(dataTransferMode: transferMode);
 
-  final IBlobService _service;
+  final IBlobStorageAdapter _storage;
+  final int? _maxChunkBytes;
 
   @override
-  void setup() {
-    addClientStreamMethod<BlobUploadChunk, PutBlobResponse>(
-      methodName: IBlobServiceContract.putBlob,
-      handler: _handlePut,
-      requestCodec: uploadChunkCodec,
-      responseCodec: putResponseCodec,
-      description: 'Chunked upload of a blob with optimistic versioning',
-    );
-
-    addServerStreamMethod<GetBlobRequest, BlobDownloadFrame>(
-      methodName: IBlobServiceContract.getBlob,
-      handler: _handleGet,
-      requestCodec: getRequestCodec,
-      responseCodec: downloadFrameCodec,
-      description: 'Chunked download of a blob (supports optional ranges)',
-    );
-
-    addUnaryMethod<HeadBlobRequest, HeadBlobResponse>(
-      methodName: IBlobServiceContract.headBlob,
-      handler: _handleHead,
-      requestCodec: headRequestCodec,
-      responseCodec: headResponseCodec,
-      description: 'Return blob metadata without payload',
-    );
-
-    addUnaryMethod<DeleteBlobRequest, DeleteBlobResponse>(
-      methodName: IBlobServiceContract.deleteBlob,
-      handler: _handleDelete,
-      requestCodec: deleteRequestCodec,
-      responseCodec: deleteResponseCodec,
-      description: 'Delete blob by id with optional version check',
-    );
-
-    addUnaryMethod<ListBlobsRequest, ListBlobsResponse>(
-      methodName: IBlobServiceContract.listBlobs,
-      handler: _handleList,
-      requestCodec: listRequestCodec,
-      responseCodec: listResponseCodec,
-      description: 'Paginated list of blob descriptors in a collection',
-    );
-
-    addUnaryMethod<ListCollectionsRequest, ListCollectionsResponse>(
-      methodName: IBlobServiceContract.listCollections,
-      handler: _handleListCollections,
-      requestCodec: listCollectionsRequestCodec,
-      responseCodec: listCollectionsResponseCodec,
-      description: 'List known blob collections',
-    );
-  }
-
-  Future<PutBlobResponse> _handlePut(
+  Future<PutBlobResponse> putBlob(
     Stream<BlobUploadChunk> chunks, {
     RpcContext? context,
-  }) {
-    return _service.putBlob(chunks, context: context);
+  }) async {
+    final queue = StreamQueue<BlobUploadChunk>(chunks);
+    if (!await queue.hasNext) {
+      throw StateError('Upload stream is empty');
+    }
+    final first = await queue.next;
+    if (first.offset != 0) {
+      throw StateError('First chunk must start at offset 0.');
+    }
+    _assertChunkSize(first);
+
+    int seen = 0;
+    int expectedOffset = 0;
+    int? declaredLength = first.totalLength;
+    final metadata = first.metadata;
+    BlobUploadChunk lastChunk = first;
+    final checksumAlgorithm =
+        first.checksumAlgorithm ?? ChecksumAlgorithm.sha256;
+
+    Stream<Uint8List> byteStream() async* {
+      BlobUploadChunk current = first;
+      while (true) {
+        if (current.offset != expectedOffset) {
+          throw StateError(
+            'Non-contiguous upload: got offset ${current.offset}, '
+            'expected $expectedOffset.',
+          );
+        }
+        _assertChunkSize(current);
+        _verifyChunkChecksum(current, checksumAlgorithm);
+        seen += current.bytes.length;
+        expectedOffset += current.bytes.length;
+        declaredLength ??= current.totalLength;
+        lastChunk = current;
+        yield current.bytes;
+        final hasNext = await queue.hasNext;
+        if (!hasNext) {
+          break;
+        }
+        if (current.last) {
+          throw StateError('Chunk marked last but stream continues.');
+        }
+        current = await queue.next;
+      }
+      if (!lastChunk.last) {
+        throw StateError(
+          'Upload stream ended without last=true on the final chunk.',
+        );
+      }
+      if (declaredLength != null && declaredLength != seen) {
+        throw StateError(
+          'Declared length $declaredLength does not match received $seen bytes.',
+        );
+      }
+    }
+
+    final writeResult = await _storage.writeBlob(
+      BlobWriteRequest(
+        collection: first.collection,
+        id: first.blobId.isEmpty ? null : first.blobId,
+        bytes: byteStream(),
+        contentType: first.contentType,
+        length: declaredLength,
+        checksum: first.checksum,
+        checksumAlgorithm: checksumAlgorithm,
+        metadata: metadata,
+        expectedVersion: first.expectedVersion,
+      ),
+    );
+
+    return PutBlobResponse(descriptor: writeResult.descriptor);
   }
 
-  Stream<BlobDownloadFrame> _handleGet(
+  @override
+  Stream<BlobDownloadFrame> getBlob(
     GetBlobRequest request, {
     RpcContext? context,
-  }) {
-    return _service.getBlob(request, context: context);
+  }) async* {
+    final result = await _storage.readBlob(
+      BlobReadRequest(
+        collection: request.collection,
+        id: request.id,
+        rangeStart: request.rangeStart,
+        rangeEnd: request.rangeEnd,
+      ),
+    );
+    if (result == null) {
+      return;
+    }
+
+    final offsetStart = result.rangeStart ?? 0;
+    final rangeStart = result.rangeStart;
+    final rangeEnd = result.rangeEnd;
+    var offset = offsetStart;
+    final queue = StreamQueue(result.bytes);
+    var firstFrame = true;
+
+    while (await queue.hasNext) {
+      final chunk = await queue.next;
+      final hasMore = await queue.hasNext;
+      yield BlobDownloadFrame(
+        offset: offset,
+        bytes: chunk,
+        descriptor: firstFrame ? result.descriptor : null,
+        rangeStart: firstFrame ? rangeStart : null,
+        rangeEnd: firstFrame ? rangeEnd : null,
+        last: !hasMore,
+      );
+      firstFrame = false;
+      offset += chunk.length;
+    }
   }
 
-  Future<HeadBlobResponse> _handleHead(
+  @override
+  Future<HeadBlobResponse> headBlob(
     HeadBlobRequest request, {
     RpcContext? context,
-  }) {
-    return _service.headBlob(request, context: context);
+  }) async {
+    final descriptor = await _storage.headBlob(request.collection, request.id);
+    return HeadBlobResponse(descriptor: descriptor);
   }
 
-  Future<DeleteBlobResponse> _handleDelete(
+  @override
+  Future<DeleteBlobResponse> deleteBlob(
     DeleteBlobRequest request, {
     RpcContext? context,
-  }) {
-    return _service.deleteBlob(request, context: context);
+  }) async {
+    final deleted = await _storage.deleteBlob(
+      request.collection,
+      request.id,
+      expectedVersion: request.expectedVersion,
+    );
+    return DeleteBlobResponse(deleted: deleted);
   }
 
-  Future<ListBlobsResponse> _handleList(
+  @override
+  Future<ListBlobsResponse> listBlobs(
     ListBlobsRequest request, {
     RpcContext? context,
   }) {
-    return _service.listBlobs(request, context: context);
+    return _storage.listBlobs(request);
   }
 
-  Future<ListCollectionsResponse> _handleListCollections(
+  @override
+  Future<ListCollectionsResponse> listCollections(
     ListCollectionsRequest request, {
     RpcContext? context,
-  }) {
-    return _service.listCollections(request, context: context);
+  }) async {
+    final collections = await _storage.listCollections();
+    return ListCollectionsResponse(collections: collections);
+  }
+
+  void _assertChunkSize(BlobUploadChunk chunk) {
+    if (_maxChunkBytes != null && chunk.bytes.length > _maxChunkBytes) {
+      throw StateError(
+        'Chunk size ${chunk.bytes.length} exceeds maxChunkBytes $_maxChunkBytes',
+      );
+    }
+  }
+
+  void _verifyChunkChecksum(
+    BlobUploadChunk chunk,
+    ChecksumAlgorithm algorithm,
+  ) {
+    if (chunk.chunkChecksum == null) {
+      return;
+    }
+    switch (algorithm) {
+      case ChecksumAlgorithm.sha256:
+        final digest = sha256.convert(chunk.bytes).toString();
+        if (digest.toLowerCase() != chunk.chunkChecksum!.toLowerCase()) {
+          throw StateError('Chunk checksum mismatch at offset ${chunk.offset}');
+        }
+        return;
+    }
   }
 }

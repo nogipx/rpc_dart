@@ -3,7 +3,6 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 import '../adapters/i_blob_storage_adapter.dart';
 import '../models.dart';
-import '../service/blob_service.dart';
 import 'blob_caller.dart';
 import 'blob_responder.dart';
 
@@ -21,7 +20,8 @@ class BlobServiceFactory {
     String debugLabel = 'BlobServiceServer',
   }) {
     final responder = BlobServiceResponder(
-      service: BlobService(storage: storage, maxChunkBytes: maxChunkBytes),
+      storage: storage,
+      maxChunkBytes: maxChunkBytes,
       transferMode: transferMode,
     );
     final endpoint = RpcResponderEndpoint(
@@ -238,7 +238,7 @@ class BlobServiceClient implements IBlobClient {
 
   @override
   Future<ListCollectionsResponse> listCollections({RpcContext? context}) =>
-      _caller.listCollections(context: context);
+      _caller.listCollections(const ListCollectionsRequest(), context: context);
 
   Future<void> close() => _endpoint.close();
 

@@ -1,17 +1,16 @@
 import 'dart:typed_data';
 
-import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_blob_sqlite/rpc_blob_sqlite.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('BlobService checksums', () {
     late SqliteBlobStorageAdapter storage;
-    late BlobService service;
+    late BlobServiceResponder service;
 
     setUp(() {
       storage = SqliteBlobStorageAdapter.memory();
-      service = BlobService(storage: storage);
+      service = BlobServiceResponder(storage: storage);
     });
 
     tearDown(() async {
