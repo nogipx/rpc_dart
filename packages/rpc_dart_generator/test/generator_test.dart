@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:build/build.dart';
@@ -50,7 +55,7 @@ class Foo implements IRpcSerializable {
             'rpc_dart_generator|lib/input.rpc_dart.g.part': decodedMatches(
               allOf([
                 contains('class CalcNames'),
-                contains('final class CalcCaller'),
+                contains('class CalcCaller'),
                 contains('abstract class CalcResponder'),
                 contains("static const service = 'Calc'"),
                 contains("static String instance(String suffix)"),

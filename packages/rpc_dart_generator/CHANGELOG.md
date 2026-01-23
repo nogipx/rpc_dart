@@ -1,3 +1,6 @@
+## 0.1.4
+- fix adding bidirectional method
+
 ## 0.1.3
 - Switch to `SharedPartBuilder` + `combining_builder` to avoid `.g.dart` output collisions with other source_gen builders.
 - Intermediate output renamed to `.rpc_dart.g.part` and written to cache; final `.g.dart` remains produced by the combiner.
