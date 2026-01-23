@@ -1,12 +1,33 @@
 #!/usr/bin/env just --justfile
-test_all:
-  cd packages/rpc_dart && just test
-  cd packages/rpc_dart_transports && just test
-
 pubget_all:
-  cd packages/rpc_dart && just get
-  cd packages/rpc_dart_transports && just get
+  for dir in packages/*; do \
+    [ -f "$dir/pubspec.yaml" ] || continue; \
+    echo "pub get -> $dir"; \
+    if grep -q '^flutter:' "$dir/pubspec.yaml"; then \
+      (cd "$dir" && fvm flutter pub get); \
+    else \
+      (cd "$dir" && fvm dart pub get); \
+    fi; \
+  done
 
-prepare_all:
-  cd packages/rpc_dart && just prepare
-  cd packages/rpc_dart_transports && just prepare
+upgrade_rpc_dart_all:
+  version=$(awk '/^version:/{print $2}' packages/rpc_dart/pubspec.yaml); \
+  echo "Updating rpc_dart dependency to ^${version}"; \
+  for file in packages/*/pubspec.yaml; do \
+    [ "$file" = "packages/rpc_dart/pubspec.yaml" ] && continue; \
+    if grep -q '^  rpc_dart:' "$file"; then \
+      echo "  -> $file"; \
+      perl -0pi -e "s/^(\\s*rpc_dart:\\s*)\\^?[^\\s#\\n]+/\\1^${version}/m" "$file"; \
+    fi; \
+  done
+
+upgrade_rpc_dart_generator_all:
+  version=$(awk '/^version:/{print $2}' packages/rpc_dart_generator/pubspec.yaml); \
+  echo "Updating rpc_dart_generator dependency to ^${version}"; \
+  for file in packages/*/pubspec.yaml; do \
+    [ "$file" = "packages/rpc_dart_generator/pubspec.yaml" ] && continue; \
+    if grep -q '^  rpc_dart_generator:' "$file"; then \
+      echo "  -> $file"; \
+      perl -0pi -e "s/^(\\s*rpc_dart_generator:\\s*)\\^?[^\\s#\\n]+/\\1^${version}/m" "$file"; \
+    fi; \
+  done

@@ -3,12 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'package:universal_io/io.dart';
 
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:universal_io/io.dart';
 
-import '../../server/rpc_server_interface.dart';
 import 'rpc_http2_responder_transport.dart';
 
 /// Высокоуровневый HTTP/2 RPC сервер
@@ -24,7 +23,7 @@ class RpcHttp2Server implements IRpcServer {
   final void Function(Socket socket)? _onConnectionOpened;
   final void Function(Socket socket)? _onConnectionClosed;
   final IRpcTransport Function(IRpcTransport inner, Socket socket)?
-      _transportWrapper;
+  _transportWrapper;
 
   ServerSocket? _serverSocket;
   bool _isRunning = false;
@@ -49,15 +48,15 @@ class RpcHttp2Server implements IRpcServer {
     void Function(Socket socket)? onConnectionOpened,
     void Function(Socket socket)? onConnectionClosed,
     IRpcTransport Function(IRpcTransport inner, Socket socket)?
-        transportWrapper,
-  })  : _host = host,
-        _port = port,
-        _logger = logger?.child('Http2Server'),
-        _onEndpointCreated = onEndpointCreated,
-        _onConnectionError = onConnectionError,
-        _onConnectionOpened = onConnectionOpened,
-        _onConnectionClosed = onConnectionClosed,
-        _transportWrapper = transportWrapper;
+    transportWrapper,
+  }) : _host = host,
+       _port = port,
+       _logger = logger?.child('Http2Server'),
+       _onEndpointCreated = onEndpointCreated,
+       _onConnectionError = onConnectionError,
+       _onConnectionOpened = onConnectionOpened,
+       _onConnectionClosed = onConnectionClosed,
+       _transportWrapper = transportWrapper;
 
   /// Создает простой HTTP/2 сервер с автоматической регистрацией контрактов
   ///
@@ -232,17 +231,19 @@ class RpcHttp2Server implements IRpcServer {
       _logger?.debug('RPC endpoint создан для $clientAddress');
 
       // Обрабатываем закрытие соединения
-      socket.done.then((_) {
-        _logger?.debug('HTTP/2 соединение $clientAddress закрыто');
-        _endpoints.remove(endpoint);
-        _onConnectionClosed?.call(socket);
-      }).catchError((error) {
-        _logger?.warning(
-          'Ошибка при закрытии соединения $clientAddress: $error',
-        );
-        _endpoints.remove(endpoint);
-        _onConnectionClosed?.call(socket);
-      });
+      socket.done
+          .then((_) {
+            _logger?.debug('HTTP/2 соединение $clientAddress закрыто');
+            _endpoints.remove(endpoint);
+            _onConnectionClosed?.call(socket);
+          })
+          .catchError((error) {
+            _logger?.warning(
+              'Ошибка при закрытии соединения $clientAddress: $error',
+            );
+            _endpoints.remove(endpoint);
+            _onConnectionClosed?.call(socket);
+          });
     } catch (e, stackTrace) {
       _logger?.error(
         'Ошибка при создании HTTP/2 RPC соединения',
