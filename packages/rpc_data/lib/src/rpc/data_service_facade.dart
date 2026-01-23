@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
@@ -62,7 +63,10 @@ class DataServiceClient implements IDataService {
 
   @override
   Future<List<String>> listCollections({RpcContext? context}) async {
-    final response = await _caller.listCollections(context: context);
+    final response = await _caller.listCollections(
+      const ListCollectionsRequest(),
+      context: context,
+    );
     return response.collections;
   }
 
@@ -209,7 +213,7 @@ class DataServiceClient implements IDataService {
     int resumeAfterChunk = -1,
     RpcContext? context,
   }) {
-    return _caller.importDatabase(
+    return _caller.importDatabaseSync(
       _withReplaceFlag(
         payload,
         replaceExisting: replaceExisting,
@@ -288,7 +292,7 @@ class DataServiceClient implements IDataService {
 
   @override
   Future<ListSchemasResponse> listSchemas({RpcContext? context}) {
-    return _caller.listSchemas(context: context);
+    return _caller.listSchemas(const ListSchemasRequest(), context: context);
   }
 
   @override
@@ -341,33 +345,4 @@ class DataServiceClient implements IDataService {
 
   @override
   Future<void> close() => _endpoint.close();
-}
-
-/// Серверная обёртка: содержит endpoint, responder и репозиторий.
-class DataServiceServer {
-  DataServiceServer({
-    required RpcResponderEndpoint endpoint,
-    required DataServiceResponder responder,
-    required IDataRepository repository,
-  }) : _endpoint = endpoint,
-       _responder = responder,
-       _repository = repository;
-
-  final RpcResponderEndpoint _endpoint;
-  final DataServiceResponder _responder;
-  final IDataRepository _repository;
-
-  RpcResponderEndpoint get endpoint => _endpoint;
-  DataServiceResponder get rawResponder => _responder;
-  IDataRepository get repository => _repository;
-
-  Future<void> start() async {
-    _endpoint.registerServiceContract(_responder);
-    _endpoint.start();
-  }
-
-  Future<void> close() async {
-    await _endpoint.close();
-    await _responder.dispose();
-  }
 }

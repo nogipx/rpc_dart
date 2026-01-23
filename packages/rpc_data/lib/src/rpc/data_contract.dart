@@ -1,85 +1,214 @@
 // SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
+
+import 'dart:async';
 
 import 'package:meta/meta.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
 import '../models.dart';
 
+part 'data_contract.g.dart';
+
 /// Контракт сервиса данных с именем DataService.
+@RpcService(
+  name: 'DataService',
+  transferMode: RpcDataTransferMode.codec,
+  description: 'CRUD/поиск/схемы/экспорт для драйвер-агностичного хранилища',
+)
 abstract interface class IDataServiceContract implements IRpcContract {
-  /// Имя сервиса в реестре RPC.
-  static const String name = 'DataService';
+  @RpcMethod.unary(
+    name: 'createRecord',
+    description: 'Создание новой записи с проверкой прав и дедлайна',
+  )
+  Future<CreateRecordResponse> createRecord(
+    CreateRecordRequest request, {
+    RpcContext? context,
+  });
 
-  /// Метод создания записи.
-  static const String createRecord = 'createRecord';
+  @RpcMethod.unary(
+    name: 'getRecord',
+    description: 'Получение записи по идентификатору',
+  )
+  Future<GetRecordResponse> getRecord(
+    GetRecordRequest request, {
+    RpcContext? context,
+  });
 
-  /// Метод получения записи.
-  static const String getRecord = 'getRecord';
+  @RpcMethod.unary(
+    name: 'listRecords',
+    description: 'Постраничный список с фильтрацией и сортировкой',
+  )
+  Future<ListRecordsResponse> listRecords(
+    ListRecordsRequest request, {
+    RpcContext? context,
+  });
 
-  /// Метод листинга записей.
-  static const String listRecords = 'listRecords';
+  @RpcMethod.unary(
+    name: 'listCollections',
+    description: 'Список существующих коллекций',
+  )
+  Future<ListCollectionsResponse> listCollections(
+    ListCollectionsRequest request, {
+    RpcContext? context,
+  });
 
-  /// Запрос списка коллекций.
-  static const String listCollections = 'listCollections';
+  @RpcMethod.unary(
+    name: 'updateRecord',
+    description: 'Полное обновление записи c оптимистической конкуренцией',
+  )
+  Future<UpdateRecordResponse> updateRecord(
+    UpdateRecordRequest request, {
+    RpcContext? context,
+  });
 
-  /// Полное обновление записи.
-  static const String updateRecord = 'updateRecord';
+  @RpcMethod.unary(
+    name: 'patchRecord',
+    description: 'Частичное обновление через RecordPatch',
+  )
+  Future<PatchRecordResponse> patchRecord(
+    PatchRecordRequest request, {
+    RpcContext? context,
+  });
 
-  /// Частичное обновление записи.
-  static const String patchRecord = 'patchRecord';
+  @RpcMethod.unary(
+    name: 'deleteRecord',
+    description: 'Удаление с проверкой версии',
+  )
+  Future<DeleteRecordResponse> deleteRecord(
+    DeleteRecordRequest request, {
+    RpcContext? context,
+  });
 
-  /// Удаление записи.
-  static const String deleteRecord = 'deleteRecord';
+  @RpcMethod.unary(
+    name: 'deleteCollection',
+    description: 'Удаление коллекции и всех записей',
+  )
+  Future<DeleteCollectionResponse> deleteCollection(
+    DeleteCollectionRequest request, {
+    RpcContext? context,
+  });
 
-  /// Удаление коллекции целиком.
-  static const String deleteCollection = 'deleteCollection';
+  @RpcMethod.clientStream(
+    name: 'bulkUpsert',
+    description: 'Пакетный upsert через клиентский стрим',
+  )
+  Future<BulkUpsertResponse> bulkUpsert(
+    Stream<DataRecord> request, {
+    RpcContext? context,
+  });
 
-  /// Массовый upsert записей.
-  static const String bulkUpsert = 'bulkUpsert';
+  @RpcMethod.unary(
+    name: 'bulkDelete',
+    description: 'Массовое удаление записей',
+  )
+  Future<BulkDeleteResponse> bulkDelete(
+    BulkDeleteRequest request, {
+    RpcContext? context,
+  });
 
-  /// Массовое удаление записей.
-  static const String bulkDelete = 'bulkDelete';
+  @RpcMethod.unary(
+    name: 'exportSnapshot',
+    description: 'Экспорт моментального снимка коллекции',
+  )
+  Future<ExportSnapshotResponse> exportSnapshot(
+    ExportSnapshotRequest request, {
+    RpcContext? context,
+  });
 
-  /// Экспорт моментального снимка коллекции.
-  static const String exportSnapshot = 'exportSnapshot';
+  @RpcMethod.serverStream(
+    name: 'exportDatabase',
+    description: 'Полный экспорт базы данных (стрим NDJSON чанков)',
+  )
+  Stream<DatabaseChunk> exportDatabase(
+    ExportDatabaseRequest request, {
+    RpcContext? context,
+  });
 
-  /// Экспорт полной базы данных.
-  static const String exportDatabase = 'exportDatabase';
+  @RpcMethod.bidirectionalStream(
+    name: 'importDatabase',
+    description: 'Импорт полной базы данных из NDJSON чанков с ACK прогрессом',
+  )
+  Stream<ImportProgress> importDatabase(
+    Stream<DatabaseChunk> request, {
+    RpcContext? context,
+  });
 
-  /// Импорт полной базы данных.
-  static const String importDatabase = 'importDatabase';
+  @RpcMethod.unary(
+    name: 'searchRecords',
+    description: 'Полнотекстовый поиск по коллекции',
+  )
+  Future<SearchRecordsResponse> searchRecords(
+    SearchRecordsRequest request, {
+    RpcContext? context,
+  });
 
-  /// Поиск записей.
-  static const String searchRecords = 'searchRecords';
+  @RpcMethod.unary(
+    name: 'createCollectionIndex',
+    description: 'Создание индексированного выражения для JSON-поля',
+  )
+  Future<CreateCollectionIndexResponse> createCollectionIndex(
+    CreateCollectionIndexRequest request, {
+    RpcContext? context,
+  });
 
-  /// Создание выраженного индекса по JSON-полю.
-  static const String createCollectionIndex = 'createCollectionIndex';
+  @RpcMethod.unary(
+    name: 'deleteCollectionIndex',
+    description: 'Удаление индексированного выражения коллекции',
+  )
+  Future<DeleteCollectionIndexResponse> deleteCollectionIndex(
+    DeleteCollectionIndexRequest request, {
+    RpcContext? context,
+  });
 
-  /// Удаление выраженного индекса.
-  static const String deleteCollectionIndex = 'deleteCollectionIndex';
+  @RpcMethod.serverStream(
+    name: 'watchChanges',
+    description: 'Стрим изменений коллекции с курсором',
+  )
+  Stream<DataChangeEvent> watchChanges(
+    WatchChangesRequest request, {
+    RpcContext? context,
+  });
 
-  /// Подписка на поток изменений.
-  static const String watchChanges = 'watchChanges';
+  @RpcMethod.unary(
+    name: 'listSchemas',
+    description: 'Список активных схем коллекций',
+  )
+  Future<ListSchemasResponse> listSchemas(
+    ListSchemasRequest request, {
+    RpcContext? context,
+  });
 
-  /// Получение списка активных схем.
-  static const String listSchemas = 'listSchemas';
+  @RpcMethod.unary(
+    name: 'getSchema',
+    description: 'Получение схемы коллекции',
+  )
+  Future<GetSchemaResponse> getSchema(
+    GetSchemaRequest request, {
+    RpcContext? context,
+  });
 
-  /// Получение схемы коллекции.
-  static const String getSchema = 'getSchema';
-
-  /// Изменение политики схемы коллекции.
-  static const String setSchemaPolicy = 'setSchemaPolicy';
-
-  @override
-  String get serviceName => IDataServiceContract.name;
+  @RpcMethod.unary(
+    name: 'setSchemaPolicy',
+    description: 'Установка политики схемы коллекции',
+  )
+  Future<SetSchemaPolicyResponse> setSchemaPolicy(
+    SetSchemaPolicyRequest request, {
+    RpcContext? context,
+  });
 }
 
 /// Базовый класс для ошибок сервиса данных.
 @immutable
 class RpcDataError extends RpcException {
-  RpcDataError(super.message, {required this.status, this.code, this.details});
+  RpcDataError(
+    super.message, {
+    required this.status,
+    this.code,
+    this.details,
+  });
 
   final int status;
   final String? code;
@@ -137,106 +266,3 @@ class RpcDataError extends RpcException {
     code: 'DEADLINE_EXCEEDED',
   );
 }
-
-const RpcCodec<CreateRecordRequest> createRequestCodec = RpcCodec.withDecoder(
-  CreateRecordRequest.fromJson,
-);
-const RpcCodec<CreateRecordResponse> createResponseCodec = RpcCodec.withDecoder(
-  CreateRecordResponse.fromJson,
-);
-const RpcCodec<GetRecordRequest> getRequestCodec = RpcCodec.withDecoder(
-  GetRecordRequest.fromJson,
-);
-const RpcCodec<GetRecordResponse> getResponseCodec = RpcCodec.withDecoder(
-  GetRecordResponse.fromJson,
-);
-const RpcCodec<ListRecordsRequest> listRequestCodec = RpcCodec.withDecoder(
-  ListRecordsRequest.fromJson,
-);
-const RpcCodec<ListRecordsResponse> listResponseCodec = RpcCodec.withDecoder(
-  ListRecordsResponse.fromJson,
-);
-const RpcCodec<ListCollectionsRequest> listCollectionsRequestCodec =
-    RpcCodec.withDecoder(ListCollectionsRequest.fromJson);
-const RpcCodec<ListCollectionsResponse> listCollectionsResponseCodec =
-    RpcCodec.withDecoder(ListCollectionsResponse.fromJson);
-const RpcCodec<UpdateRecordRequest> updateRequestCodec = RpcCodec.withDecoder(
-  UpdateRecordRequest.fromJson,
-);
-const RpcCodec<UpdateRecordResponse> updateResponseCodec = RpcCodec.withDecoder(
-  UpdateRecordResponse.fromJson,
-);
-final RpcCodec<PatchRecordRequest> patchRequestCodec = RpcCodec.withDecoder(
-  PatchRecordRequest.fromJson,
-);
-const RpcCodec<PatchRecordResponse> patchResponseCodec = RpcCodec.withDecoder(
-  PatchRecordResponse.fromJson,
-);
-const RpcCodec<DeleteRecordRequest> deleteRequestCodec = RpcCodec.withDecoder(
-  DeleteRecordRequest.fromJson,
-);
-const RpcCodec<DeleteRecordResponse> deleteResponseCodec = RpcCodec.withDecoder(
-  DeleteRecordResponse.fromJson,
-);
-const RpcCodec<DeleteCollectionRequest> deleteCollectionRequestCodec =
-    RpcCodec.withDecoder(DeleteCollectionRequest.fromJson);
-const RpcCodec<DeleteCollectionResponse> deleteCollectionResponseCodec =
-    RpcCodec.withDecoder(DeleteCollectionResponse.fromJson);
-const RpcCodec<DataRecord> recordCodec = RpcCodec.withDecoder(
-  DataRecord.fromJson,
-);
-const RpcCodec<BulkUpsertResponse> bulkUpsertResponseCodec =
-    RpcCodec.withDecoder(BulkUpsertResponse.fromJson);
-const RpcCodec<BulkDeleteRequest> bulkDeleteRequestCodec = RpcCodec.withDecoder(
-  BulkDeleteRequest.fromJson,
-);
-const RpcCodec<BulkDeleteResponse> bulkDeleteResponseCodec =
-    RpcCodec.withDecoder(BulkDeleteResponse.fromJson);
-const RpcCodec<ExportSnapshotRequest> exportRequestCodec = RpcCodec.withDecoder(
-  ExportSnapshotRequest.fromJson,
-);
-const RpcCodec<ExportSnapshotResponse> exportResponseCodec =
-    RpcCodec.withDecoder(ExportSnapshotResponse.fromJson);
-const RpcCodec<ExportDatabaseRequest> exportDatabaseRequestCodec =
-    RpcCodec.withDecoder(ExportDatabaseRequest.fromJson);
-const RpcCodec<DatabaseChunk> databaseChunkCodec = RpcCodec.withDecoder(
-  DatabaseChunk.fromJson,
-);
-const RpcCodec<ImportDatabaseResponse> importDatabaseResponseCodec =
-    RpcCodec.withDecoder(ImportDatabaseResponse.fromJson);
-const RpcCodec<ImportProgress> importProgressCodec = RpcCodec.withDecoder(
-  ImportProgress.fromJson,
-);
-const RpcCodec<ListSchemasRequest> listSchemasRequestCodec =
-    RpcCodec.withDecoder(ListSchemasRequest.fromJson);
-const RpcCodec<ListSchemasResponse> listSchemasResponseCodec =
-    RpcCodec.withDecoder(ListSchemasResponse.fromJson);
-const RpcCodec<GetSchemaRequest> getSchemaRequestCodec = RpcCodec.withDecoder(
-  GetSchemaRequest.fromJson,
-);
-const RpcCodec<GetSchemaResponse> getSchemaResponseCodec = RpcCodec.withDecoder(
-  GetSchemaResponse.fromJson,
-);
-const RpcCodec<SetSchemaPolicyRequest> setSchemaPolicyRequestCodec =
-    RpcCodec.withDecoder(SetSchemaPolicyRequest.fromJson);
-const RpcCodec<SetSchemaPolicyResponse> setSchemaPolicyResponseCodec =
-    RpcCodec.withDecoder(SetSchemaPolicyResponse.fromJson);
-const RpcCodec<SearchRecordsRequest> searchRequestCodec = RpcCodec.withDecoder(
-  SearchRecordsRequest.fromJson,
-);
-const RpcCodec<SearchRecordsResponse> searchResponseCodec =
-    RpcCodec.withDecoder(SearchRecordsResponse.fromJson);
-const RpcCodec<CreateCollectionIndexRequest> createIndexRequestCodec =
-    RpcCodec.withDecoder(CreateCollectionIndexRequest.fromJson);
-const RpcCodec<CreateCollectionIndexResponse> createIndexResponseCodec =
-    RpcCodec.withDecoder(CreateCollectionIndexResponse.fromJson);
-const RpcCodec<DeleteCollectionIndexRequest> deleteIndexRequestCodec =
-    RpcCodec.withDecoder(DeleteCollectionIndexRequest.fromJson);
-const RpcCodec<DeleteCollectionIndexResponse> deleteIndexResponseCodec =
-    RpcCodec.withDecoder(DeleteCollectionIndexResponse.fromJson);
-const RpcCodec<WatchChangesRequest> watchRequestCodec = RpcCodec.withDecoder(
-  WatchChangesRequest.fromJson,
-);
-const RpcCodec<DataChangeEvent> changeEventCodec = RpcCodec.withDecoder(
-  DataChangeEvent.fromJson,
-);

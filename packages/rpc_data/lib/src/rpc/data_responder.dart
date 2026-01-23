@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
@@ -7,8 +8,9 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_data/rpc_data.dart';
 
-class DataServiceResponder extends RpcResponderContract
-    implements IDataServiceContract {
+import 'data_contract.dart';
+
+class DataServiceResponder extends DataServiceContractResponder {
   DataServiceResponder({
     required IDataRepository repository,
     bool disposeRepositoryOnClose = true,
@@ -23,7 +25,7 @@ class DataServiceResponder extends RpcResponderContract
        },
        _importAckEveryChunks = importAckEveryChunks,
        assert(importAckEveryChunks > 0, 'importAckEveryChunks must be > 0'),
-       super(IDataServiceContract.name, dataTransferMode: transferMode);
+       super(dataTransferMode: transferMode);
 
   final IDataRepository _repository;
   final Set<String> _allowedBearerTokens;
@@ -36,170 +38,7 @@ class DataServiceResponder extends RpcResponderContract
   final bool _disposeRepositoryOnClose;
 
   @override
-  void setup() {
-    addUnaryMethod<CreateRecordRequest, CreateRecordResponse>(
-      methodName: IDataServiceContract.createRecord,
-      handler: _handleCreate,
-      requestCodec: createRequestCodec,
-      responseCodec: createResponseCodec,
-      description: 'Создание новой записи с проверкой прав и дедлайна',
-    );
-
-    addUnaryMethod<GetRecordRequest, GetRecordResponse>(
-      methodName: IDataServiceContract.getRecord,
-      handler: _handleGet,
-      requestCodec: getRequestCodec,
-      responseCodec: getResponseCodec,
-      description: 'Получение записи по идентификатору',
-    );
-
-    addUnaryMethod<ListRecordsRequest, ListRecordsResponse>(
-      methodName: IDataServiceContract.listRecords,
-      handler: _handleList,
-      requestCodec: listRequestCodec,
-      responseCodec: listResponseCodec,
-      description: 'Постраничный список с фильтрацией и сортировкой',
-    );
-
-    addUnaryMethod<ListCollectionsRequest, ListCollectionsResponse>(
-      methodName: IDataServiceContract.listCollections,
-      handler: _handleListCollections,
-      requestCodec: listCollectionsRequestCodec,
-      responseCodec: listCollectionsResponseCodec,
-      description: 'Список существующих коллекций',
-    );
-
-    addUnaryMethod<UpdateRecordRequest, UpdateRecordResponse>(
-      methodName: IDataServiceContract.updateRecord,
-      handler: _handleUpdate,
-      requestCodec: updateRequestCodec,
-      responseCodec: updateResponseCodec,
-      description: 'Полное обновление записи c оптимистической конкуренцией',
-    );
-
-    addUnaryMethod<PatchRecordRequest, PatchRecordResponse>(
-      methodName: IDataServiceContract.patchRecord,
-      handler: _handlePatch,
-      requestCodec: patchRequestCodec,
-      responseCodec: patchResponseCodec,
-      description: 'Частичное обновление через RecordPatch',
-    );
-
-    addUnaryMethod<DeleteRecordRequest, DeleteRecordResponse>(
-      methodName: IDataServiceContract.deleteRecord,
-      handler: _handleDelete,
-      requestCodec: deleteRequestCodec,
-      responseCodec: deleteResponseCodec,
-      description: 'Удаление с проверкой версии',
-    );
-
-    addUnaryMethod<DeleteCollectionRequest, DeleteCollectionResponse>(
-      methodName: IDataServiceContract.deleteCollection,
-      handler: _handleDeleteCollection,
-      requestCodec: deleteCollectionRequestCodec,
-      responseCodec: deleteCollectionResponseCodec,
-      description: 'Удаление коллекции и всех записей',
-    );
-
-    addClientStreamMethod<DataRecord, BulkUpsertResponse>(
-      methodName: IDataServiceContract.bulkUpsert,
-      handler: _handleBulkUpsertStream,
-      requestCodec: recordCodec,
-      responseCodec: bulkUpsertResponseCodec,
-      description: 'Пакетный upsert через клиентский стрим',
-    );
-
-    addUnaryMethod<BulkDeleteRequest, BulkDeleteResponse>(
-      methodName: IDataServiceContract.bulkDelete,
-      handler: _handleBulkDelete,
-      requestCodec: bulkDeleteRequestCodec,
-      responseCodec: bulkDeleteResponseCodec,
-      description: 'Массовое удаление записей',
-    );
-
-    addUnaryMethod<ExportSnapshotRequest, ExportSnapshotResponse>(
-      methodName: IDataServiceContract.exportSnapshot,
-      handler: _handleExport,
-      requestCodec: exportRequestCodec,
-      responseCodec: exportResponseCodec,
-      description: 'Экспорт моментального снимка коллекции',
-    );
-
-    addServerStreamMethod<ExportDatabaseRequest, DatabaseChunk>(
-      methodName: IDataServiceContract.exportDatabase,
-      handler: _handleExportDatabaseStream,
-      requestCodec: exportDatabaseRequestCodec,
-      responseCodec: databaseChunkCodec,
-      description: 'Полный экспорт базы данных (стрим NDJSON чанков)',
-    );
-
-    addBidirectionalMethod<DatabaseChunk, ImportProgress>(
-      methodName: IDataServiceContract.importDatabase,
-      handler: _handleImportDatabaseBidirectional,
-      requestCodec: databaseChunkCodec,
-      responseCodec: importProgressCodec,
-      description:
-          'Импорт полной базы данных из NDJSON чанков с ACK прогрессом',
-    );
-
-    addUnaryMethod<SearchRecordsRequest, SearchRecordsResponse>(
-      methodName: IDataServiceContract.searchRecords,
-      handler: _handleSearch,
-      requestCodec: searchRequestCodec,
-      responseCodec: searchResponseCodec,
-      description: 'Полнотекстовый поиск по коллекции',
-    );
-
-    addUnaryMethod<CreateCollectionIndexRequest, CreateCollectionIndexResponse>(
-      methodName: IDataServiceContract.createCollectionIndex,
-      handler: _handleCreateIndex,
-      requestCodec: createIndexRequestCodec,
-      responseCodec: createIndexResponseCodec,
-      description: 'Создание индексированного выражения для JSON-поля',
-    );
-
-    addUnaryMethod<DeleteCollectionIndexRequest, DeleteCollectionIndexResponse>(
-      methodName: IDataServiceContract.deleteCollectionIndex,
-      handler: _handleDeleteIndex,
-      requestCodec: deleteIndexRequestCodec,
-      responseCodec: deleteIndexResponseCodec,
-      description: 'Удаление индексированного выражения коллекции',
-    );
-
-    addServerStreamMethod<WatchChangesRequest, DataChangeEvent>(
-      methodName: IDataServiceContract.watchChanges,
-      handler: _handleWatch,
-      requestCodec: watchRequestCodec,
-      responseCodec: changeEventCodec,
-      description: 'Стрим изменений коллекции с курсором',
-    );
-
-    addUnaryMethod<ListSchemasRequest, ListSchemasResponse>(
-      methodName: IDataServiceContract.listSchemas,
-      handler: _handleListSchemas,
-      requestCodec: listSchemasRequestCodec,
-      responseCodec: listSchemasResponseCodec,
-      description: 'Список активных схем коллекций',
-    );
-
-    addUnaryMethod<GetSchemaRequest, GetSchemaResponse>(
-      methodName: IDataServiceContract.getSchema,
-      handler: _handleGetSchema,
-      requestCodec: getSchemaRequestCodec,
-      responseCodec: getSchemaResponseCodec,
-      description: 'Получение схемы коллекции',
-    );
-
-    addUnaryMethod<SetSchemaPolicyRequest, SetSchemaPolicyResponse>(
-      methodName: IDataServiceContract.setSchemaPolicy,
-      handler: _handleSetSchemaPolicy,
-      requestCodec: setSchemaPolicyRequestCodec,
-      responseCodec: setSchemaPolicyResponseCodec,
-      description: 'Установка политики схемы коллекции',
-    );
-  }
-
-  Future<CreateRecordResponse> _handleCreate(
+  Future<CreateRecordResponse> createRecord(
     CreateRecordRequest request, {
     RpcContext? context,
   }) async {
@@ -207,7 +46,8 @@ class DataServiceResponder extends RpcResponderContract
     return CreateRecordResponse(record: record);
   }
 
-  Future<GetRecordResponse> _handleGet(
+  @override
+  Future<GetRecordResponse> getRecord(
     GetRecordRequest request, {
     RpcContext? context,
   }) async {
@@ -215,14 +55,16 @@ class DataServiceResponder extends RpcResponderContract
     return GetRecordResponse(record: record);
   }
 
-  Future<ListRecordsResponse> _handleList(
+  @override
+  Future<ListRecordsResponse> listRecords(
     ListRecordsRequest request, {
     RpcContext? context,
   }) async {
     return _runSafely(context, () => _repository.list(request));
   }
 
-  Future<ListCollectionsResponse> _handleListCollections(
+  @override
+  Future<ListCollectionsResponse> listCollections(
     ListCollectionsRequest request, {
     RpcContext? context,
   }) async {
@@ -233,7 +75,8 @@ class DataServiceResponder extends RpcResponderContract
     return ListCollectionsResponse(collections: collections);
   }
 
-  Future<UpdateRecordResponse> _handleUpdate(
+  @override
+  Future<UpdateRecordResponse> updateRecord(
     UpdateRecordRequest request, {
     RpcContext? context,
   }) async {
@@ -241,7 +84,8 @@ class DataServiceResponder extends RpcResponderContract
     return UpdateRecordResponse(record: record);
   }
 
-  Future<PatchRecordResponse> _handlePatch(
+  @override
+  Future<PatchRecordResponse> patchRecord(
     PatchRecordRequest request, {
     RpcContext? context,
   }) async {
@@ -249,7 +93,8 @@ class DataServiceResponder extends RpcResponderContract
     return PatchRecordResponse(record: record);
   }
 
-  Future<DeleteRecordResponse> _handleDelete(
+  @override
+  Future<DeleteRecordResponse> deleteRecord(
     DeleteRecordRequest request, {
     RpcContext? context,
   }) async {
@@ -260,7 +105,8 @@ class DataServiceResponder extends RpcResponderContract
     return DeleteRecordResponse(deleted: deleted);
   }
 
-  Future<DeleteCollectionResponse> _handleDeleteCollection(
+  @override
+  Future<DeleteCollectionResponse> deleteCollection(
     DeleteCollectionRequest request, {
     RpcContext? context,
   }) async {
@@ -271,7 +117,8 @@ class DataServiceResponder extends RpcResponderContract
     return DeleteCollectionResponse(deleted: deleted);
   }
 
-  Future<BulkUpsertResponse> _handleBulkUpsertStream(
+  @override
+  Future<BulkUpsertResponse> bulkUpsert(
     Stream<DataRecord> records, {
     RpcContext? context,
   }) async {
@@ -286,7 +133,8 @@ class DataServiceResponder extends RpcResponderContract
     return BulkUpsertResponse(records: saved);
   }
 
-  Future<BulkDeleteResponse> _handleBulkDelete(
+  @override
+  Future<BulkDeleteResponse> bulkDelete(
     BulkDeleteRequest request, {
     RpcContext? context,
   }) async {
@@ -297,14 +145,16 @@ class DataServiceResponder extends RpcResponderContract
     return BulkDeleteResponse(deletedCount: deleted);
   }
 
-  Future<ExportSnapshotResponse> _handleExport(
+  @override
+  Future<ExportSnapshotResponse> exportSnapshot(
     ExportSnapshotRequest request, {
     RpcContext? context,
   }) async {
     return _runSafely(context, () => _repository.exportSnapshot(request));
   }
 
-  Stream<DatabaseChunk> _handleExportDatabaseStream(
+  @override
+  Stream<DatabaseChunk> exportDatabase(
     ExportDatabaseRequest request, {
     RpcContext? context,
   }) async* {
@@ -325,7 +175,8 @@ class DataServiceResponder extends RpcResponderContract
     }
   }
 
-  Stream<ImportProgress> _handleImportDatabaseBidirectional(
+  @override
+  Stream<ImportProgress> importDatabase(
     Stream<DatabaseChunk> chunks, {
     RpcContext? context,
   }) {
@@ -438,35 +289,40 @@ class DataServiceResponder extends RpcResponderContract
     return lastAck;
   }
 
-  Future<SearchRecordsResponse> _handleSearch(
+  @override
+  Future<SearchRecordsResponse> searchRecords(
     SearchRecordsRequest request, {
     RpcContext? context,
   }) async {
     return _runSafely(context, () => _repository.search(request));
   }
 
-  Future<ListSchemasResponse> _handleListSchemas(
+  @override
+  Future<ListSchemasResponse> listSchemas(
     ListSchemasRequest request, {
     RpcContext? context,
   }) async {
     return _runSafely(context, () => _repository.listSchemas());
   }
 
-  Future<GetSchemaResponse> _handleGetSchema(
+  @override
+  Future<GetSchemaResponse> getSchema(
     GetSchemaRequest request, {
     RpcContext? context,
   }) async {
     return _runSafely(context, () => _repository.getSchema(request));
   }
 
-  Future<SetSchemaPolicyResponse> _handleSetSchemaPolicy(
+  @override
+  Future<SetSchemaPolicyResponse> setSchemaPolicy(
     SetSchemaPolicyRequest request, {
     RpcContext? context,
   }) async {
     return _runSafely(context, () => _repository.setSchemaPolicy(request));
   }
 
-  Future<CreateCollectionIndexResponse> _handleCreateIndex(
+  @override
+  Future<CreateCollectionIndexResponse> createCollectionIndex(
     CreateCollectionIndexRequest request, {
     RpcContext? context,
   }) async {
@@ -477,7 +333,8 @@ class DataServiceResponder extends RpcResponderContract
     return CreateCollectionIndexResponse(index: index);
   }
 
-  Future<DeleteCollectionIndexResponse> _handleDeleteIndex(
+  @override
+  Future<DeleteCollectionIndexResponse> deleteCollectionIndex(
     DeleteCollectionIndexRequest request, {
     RpcContext? context,
   }) async {
@@ -488,7 +345,8 @@ class DataServiceResponder extends RpcResponderContract
     return DeleteCollectionIndexResponse(deleted: deleted);
   }
 
-  Stream<DataChangeEvent> _handleWatch(
+  @override
+  Stream<DataChangeEvent> watchChanges(
     WatchChangesRequest request, {
     RpcContext? context,
   }) {
