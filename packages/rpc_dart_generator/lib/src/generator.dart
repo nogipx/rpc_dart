@@ -267,7 +267,7 @@ class _Emitter {
     final defaultTransfer = 'RpcDataTransferMode.${service.transferMode.name}';
 
     b.writeln(
-      'final class $className extends RpcCallerContract '
+      'class $className extends RpcCallerContract '
       'implements ${classElement.name} {',
     );
     b.writeln('  $className(');
@@ -717,7 +717,7 @@ class _Signature {
       case RpcMethodKind.clientStream:
         return "addClientStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
       case RpcMethodKind.bidirectionalStream:
-        return "addBidirectionalStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
+        return "addBidirectionalMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
     }
   }
 
