@@ -1,3 +1,7 @@
+## 2.4.1
+
+- Add interface for transport server
+
 ## 2.4.0
 
 - Breaking: removed transport toolkit (`transport_toolkit.dart`) from the public API surface.

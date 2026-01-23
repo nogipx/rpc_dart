@@ -1,6 +1,6 @@
 name: rpc_dart
 description: Transport-agnostic RPC framework with contracts, streaming and included transports.
-version: 2.4.0
+version: 2.4.1
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

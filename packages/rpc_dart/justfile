@@ -26,7 +26,7 @@ get:
 prepare:
     fvm dart fix --apply
     fvm dart format -l 80 .
-    {{recipe}} license 2025 lib example test
+    {{recipe}} license 2026 lib example test
     rm -rf coverage
     fvm dart test test/ --coverage=coverage --reporter=compact --concurrency=5
     fvm dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
