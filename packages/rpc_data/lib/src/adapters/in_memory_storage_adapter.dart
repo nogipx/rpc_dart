@@ -302,6 +302,22 @@ dynamic _recordFieldValue(DataRecord record, String field) {
     case 'updatedAt':
       return record.updatedAt;
     default:
-      return record.payload[field];
+      // Support nested lookups using dot-separated paths (e.g. vaultId.value).
+      final path = field.split('.');
+      return _valueAtPath(record.payload, path);
   }
+}
+
+dynamic _valueAtPath(dynamic current, List<String> path) {
+  if (path.isEmpty) return current;
+  if (current is Map<String, dynamic>) {
+    return _valueAtPath(current[path.first], path.sublist(1));
+  }
+  if (current is List) {
+    final idx = int.tryParse(path.first);
+    if (idx != null && idx >= 0 && idx < current.length) {
+      return _valueAtPath(current[idx], path.sublist(1));
+    }
+  }
+  return null;
 }
