@@ -12,13 +12,13 @@ import 'sqlite_loader.dart' as sqlite_loader;
 
 typedef Clock = DateTime Function();
 
-/// SQLite-backed implementation of [IBlobStorageAdapter].
+/// SQLite-backed implementation of [IBlobRepository].
 ///
 /// Stores payloads directly in a `BLOB` column alongside metadata and keeps
 /// optimistic versioning per `(collection, id)` pair. Intended for local/dev
 /// deployments where an embedded store is preferable to S3/minio.
-class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
-  SqliteBlobStorageAdapter._(
+class SqliteBlobRepository implements IBlobRepository {
+  SqliteBlobRepository._(
     this._database, {
     int? maxBlobBytes,
     int readChunkBytes = _defaultReadChunkBytes,
@@ -29,7 +29,7 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
        _clock = clock ?? DateTime.now;
 
   /// Create an in-memory adapter (useful for tests).
-  factory SqliteBlobStorageAdapter.memory({
+  factory SqliteBlobRepository.memory({
     int? maxBlobBytes,
     int readChunkBytes = _defaultReadChunkBytes,
     Clock? clock,
@@ -38,7 +38,7 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
     final db = sqlite_loader.openInMemory();
     try {
       _prepareDatabase(db, sqlCipherKey: sqlCipherKey);
-      return SqliteBlobStorageAdapter._(
+      return SqliteBlobRepository._(
         db,
         maxBlobBytes: maxBlobBytes,
         readChunkBytes: readChunkBytes,
@@ -51,7 +51,7 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
   }
 
   /// Create or open a file-backed adapter.
-  factory SqliteBlobStorageAdapter.file(
+  factory SqliteBlobRepository.file(
     String path, {
     int? maxBlobBytes,
     int readChunkBytes = _defaultReadChunkBytes,
@@ -62,7 +62,7 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
     final db = sqlite_loader.openFile(path);
     try {
       _prepareDatabase(db, enableWal: enableWal, sqlCipherKey: sqlCipherKey);
-      return SqliteBlobStorageAdapter._(
+      return SqliteBlobRepository._(
         db,
         maxBlobBytes: maxBlobBytes,
         readChunkBytes: readChunkBytes,
@@ -75,7 +75,7 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
   }
 
   /// Create or open a file-backed adapter.
-  factory SqliteBlobStorageAdapter.db(
+  factory SqliteBlobRepository.db(
     sqlite.CommonDatabase db, {
     int? maxBlobBytes,
     int readChunkBytes = _defaultReadChunkBytes,
@@ -85,7 +85,7 @@ class SqliteBlobStorageAdapter implements IBlobStorageAdapter {
   }) {
     try {
       _prepareDatabase(db, enableWal: enableWal, sqlCipherKey: sqlCipherKey);
-      return SqliteBlobStorageAdapter._(
+      return SqliteBlobRepository._(
         db,
         maxBlobBytes: maxBlobBytes,
         readChunkBytes: readChunkBytes,

@@ -1,7 +1,6 @@
 import 'package:minio/minio.dart';
-import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_blob_minio/rpc_blob_minio.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 /// RPC-level integration over S3/MinIO backend.
@@ -38,7 +37,7 @@ void main() {
   });
 
   group('Blob RPC over S3', () {
-    late S3BlobStorageAdapter storage;
+    late S3BlobRepository storage;
     late BlobServiceServer server;
     late BlobServiceClient client;
     late IRpcTransport caller;
@@ -48,7 +47,7 @@ void main() {
       if (skipReason != null) {
         return;
       }
-      storage = S3BlobStorageAdapter.connect(
+      storage = S3BlobRepository.connect(
         bucket: bucket,
         endPoint: endPoint,
         port: port,

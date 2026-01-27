@@ -5,11 +5,11 @@ import 'package:test/test.dart';
 
 void main() {
   group('BlobService checksums', () {
-    late SqliteBlobStorageAdapter storage;
+    late SqliteBlobRepository storage;
     late BlobServiceResponder service;
 
     setUp(() {
-      storage = SqliteBlobStorageAdapter.memory();
+      storage = SqliteBlobRepository.memory();
       service = BlobServiceResponder(storage: storage);
     });
 

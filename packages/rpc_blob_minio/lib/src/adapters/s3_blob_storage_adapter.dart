@@ -57,8 +57,8 @@ class S3BlobStorageOptions {
 /// Stores blobs as individual objects under `<prefix><collection>/<id>`.
 /// Uses custom metadata to persist version/createdAt/updatedAt. Optimistic
 /// concurrency is best-effort (checks current version before upload).
-class S3BlobStorageAdapter implements IBlobStorageAdapter {
-  S3BlobStorageAdapter({
+class S3BlobRepository implements IBlobRepository {
+  S3BlobRepository({
     required Minio client,
     required this.bucket,
     S3BlobStorageOptions options = const S3BlobStorageOptions(),
@@ -72,7 +72,7 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
   }
 
   /// Convenience factory to create a MinIO/S3 client.
-  factory S3BlobStorageAdapter.connect({
+  factory S3BlobRepository.connect({
     required String bucket,
     String endPoint = 'localhost',
     int? port,
@@ -92,11 +92,7 @@ class S3BlobStorageAdapter implements IBlobStorageAdapter {
       useSSL: useSSL,
       pathStyle: pathStyle,
     );
-    return S3BlobStorageAdapter(
-      client: client,
-      bucket: bucket,
-      options: options,
-    );
+    return S3BlobRepository(client: client, bucket: bucket, options: options);
   }
 
   final Minio _client;

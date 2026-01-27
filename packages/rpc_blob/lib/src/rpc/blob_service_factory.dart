@@ -2,6 +2,7 @@ import 'package:crypto/crypto.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
 import '../adapters/i_blob_storage_adapter.dart';
+import '../client/blob_repository_client.dart';
 import '../models.dart';
 import 'blob_caller.dart';
 import 'blob_responder.dart';
@@ -11,10 +12,10 @@ import 'blob_responder.dart';
 class BlobServiceFactory {
   const BlobServiceFactory._();
 
-  /// Create server-side wiring for an existing [IBlobStorageAdapter].
+  /// Create server-side wiring for an existing [IBlobRepository].
   static BlobServiceServer createServer({
     required IRpcTransport transport,
-    required IBlobStorageAdapter storage,
+    required IBlobRepository storage,
     RpcDataTransferMode transferMode = RpcDataTransferMode.codec,
     int? maxChunkBytes,
     String debugLabel = 'BlobServiceServer',
@@ -59,7 +60,7 @@ class BlobServiceFactory {
 
   /// Full in-memory setup: paired transports + SQLite in-memory storage.
   static Future<InMemoryBlobServiceEnvironment> inMemory({
-    required IBlobStorageAdapter storage,
+    required IBlobRepository storage,
     String serverLabel = 'BlobResponder',
     String clientLabel = 'BlobCaller',
     RpcDataTransferMode transferMode = RpcDataTransferMode.codec,
@@ -95,18 +96,18 @@ class BlobServiceServer {
   BlobServiceServer({
     required RpcResponderEndpoint endpoint,
     required BlobServiceResponder responder,
-    required IBlobStorageAdapter storage,
+    required IBlobRepository storage,
   }) : _endpoint = endpoint,
        _responder = responder,
        _storage = storage;
 
   final RpcResponderEndpoint _endpoint;
   final BlobServiceResponder _responder;
-  final IBlobStorageAdapter _storage;
+  final IBlobRepository _storage;
 
   RpcResponderEndpoint get endpoint => _endpoint;
   BlobServiceResponder get rawResponder => _responder;
-  IBlobStorageAdapter get storage => _storage;
+  IBlobRepository get storage => _storage;
 
   Future<void> start() async {
     _endpoint.registerServiceContract(_responder);
@@ -318,6 +319,40 @@ class BlobServiceClient implements IBlobClient {
 
 /// Client-facing contract mirroring IDataService style.
 abstract interface class IBlobClient {
+  // Backwards-compatible alias.
+  static IBlobClient factory({
+    required RpcCallerEndpoint endpoint,
+    required RpcDataTransferMode transferMode,
+  }) =>
+      IBlobClient.endpoint(
+        endpoint: endpoint,
+        transferMode: transferMode,
+      );
+
+  static IBlobClient endpoint({
+    required RpcCallerEndpoint endpoint,
+    required RpcDataTransferMode transferMode,
+  }) {
+    return BlobServiceClient(
+      endpoint,
+      BlobServiceCaller(endpoint: endpoint, transferMode: transferMode),
+    );
+  }
+
+  static IBlobClient repository({
+    required IBlobRepository repository,
+    bool disposeRepositoryOnClose = false,
+    int uploadChunkBytes = BlobRepositoryClient.defaultChunkBytes,
+    int? maxChunkBytes,
+  }) {
+    return BlobRepositoryClient(
+      repository: repository,
+      disposeRepositoryOnClose: disposeRepositoryOnClose,
+      uploadChunkBytes: uploadChunkBytes,
+      maxChunkBytes: maxChunkBytes,
+    );
+  }
+
   Future<PutBlobResponse> putBytes({
     required String collection,
     String? id,
@@ -368,6 +403,8 @@ abstract interface class IBlobClient {
   });
 
   Future<ListCollectionsResponse> listCollections({RpcContext? context});
+
+  Future<void> close();
 }
 
 /// Result of in-memory helper for quick setups.
@@ -383,4 +420,9 @@ class InMemoryBlobServiceEnvironment {
   final BlobServiceServer server;
   final IRpcTransport clientTransport;
   final IRpcTransport serverTransport;
+
+  Future<void> dispose() async {
+    await client.close();
+    await server.close();
+  }
 }

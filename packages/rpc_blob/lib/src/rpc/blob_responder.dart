@@ -10,14 +10,14 @@ import 'blob_contract.dart';
 class BlobServiceResponder extends BlobServiceContractResponder {
   BlobServiceResponder({
     super.serviceNameOverride,
-    required IBlobStorageAdapter storage,
+    required IBlobRepository storage,
     RpcDataTransferMode transferMode = RpcDataTransferMode.auto,
     int? maxChunkBytes,
   }) : _storage = storage,
        _maxChunkBytes = maxChunkBytes,
        super(dataTransferMode: transferMode);
 
-  final IBlobStorageAdapter _storage;
+  final IBlobRepository _storage;
   final int? _maxChunkBytes;
 
   @override

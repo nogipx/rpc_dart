@@ -3,12 +3,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_blob_sqlite/rpc_blob_sqlite.dart';
 import 'package:test/test.dart';
 
 void main() {
-  late SqliteBlobStorageAdapter adapter;
+  late SqliteBlobRepository adapter;
   late DateTime now;
   late File dbFile;
   late Directory tmpDir;
@@ -22,7 +21,7 @@ void main() {
     now = DateTime.utc(2024, 1, 1);
     tmpDir = Directory.systemTemp.createTempSync('rpc_blob_sqlite_test_');
     dbFile = File('${tmpDir.path}/blob.sqlite');
-    adapter = SqliteBlobStorageAdapter.file(
+    adapter = SqliteBlobRepository.file(
       dbFile.path,
       clock: tick,
       enableWal: false,

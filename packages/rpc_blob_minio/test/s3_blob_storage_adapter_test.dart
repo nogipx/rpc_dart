@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_blob_minio/rpc_blob_minio.dart';
 import 'package:test/test.dart';
 
@@ -16,10 +15,10 @@ void main() {
   const pathStyle = true;
 
   group('S3BlobStorageAdapter (integration)', () {
-    late S3BlobStorageAdapter storage;
+    late S3BlobRepository storage;
 
     setUp(() {
-      storage = S3BlobStorageAdapter.connect(
+      storage = S3BlobRepository.connect(
         bucket: bucket,
         endPoint: endPoint,
         port: port,

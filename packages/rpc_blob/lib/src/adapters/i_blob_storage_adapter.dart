@@ -4,7 +4,7 @@ import '../models.dart';
 
 /// Storage adapter for blobs (files, images, binaries).
 /// Implementations should stream data and avoid buffering whole payloads.
-abstract interface class IBlobStorageAdapter {
+abstract interface class IBlobRepository {
   /// Fetch blob metadata; return null when missing.
   Future<BlobDescriptor?> headBlob(String collection, String id);
 
