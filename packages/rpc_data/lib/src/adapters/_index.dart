@@ -5,8 +5,7 @@
 
 import 'dart:math';
 
-import '../models.dart';
-import '../rpc/data_contract.dart';
+import 'package:rpc_data/rpc_data.dart';
 
 part 'i_data_storage_adapter.dart';
 part 'in_memory_storage_adapter.dart';

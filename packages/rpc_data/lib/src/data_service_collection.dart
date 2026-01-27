@@ -80,7 +80,7 @@ class DataServiceCollection<T> implements IDataServiceCollection<T> {
 
   @override
   final String collection;
-  final IDataService dataService;
+  final IDataClient dataService;
   final RpcLogger log;
   final FromJson<T> fromJson;
   final ToJson<T> toJson;

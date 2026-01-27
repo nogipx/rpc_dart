@@ -9,11 +9,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
-import '../adapters/_index.dart';
-import '../change_journal.dart';
-import '../models.dart';
-import '../rpc/data_contract.dart';
-import '../schema/schema_validation.dart';
+import 'package:rpc_data/rpc_data.dart';
 
 part 'base_data_repository.dart';
 part 'i_data_repository.dart';

@@ -9,7 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_data/rpc_data.dart';
 
 /// Клиентская инкапсуляция. Хранит endpoint и caller и реализует интерфейс DataService.
-class DataServiceClient implements IDataService {
+class DataServiceClient implements IDataClient {
   DataServiceClient(this._endpoint, this._caller);
 
   final RpcCallerEndpoint _endpoint;

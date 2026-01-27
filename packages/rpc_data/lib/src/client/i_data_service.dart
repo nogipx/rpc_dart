@@ -19,7 +19,27 @@ import 'package:rpc_data/rpc_data.dart';
 
 /// Unified interface for CRUD/Query operations.
 /// Returns already “unpacked” data instead of *Response objects where it makes sense.
-abstract interface class IDataService {
+abstract interface class IDataClient {
+  static IDataClient endpoint({
+    required RpcCallerEndpoint endpoint,
+    required RpcDataTransferMode transferMode,
+  }) {
+    return DataServiceClient(
+      endpoint,
+      DataServiceCaller(endpoint: endpoint, transferMode: transferMode),
+    );
+  }
+
+  static IDataClient repository({
+    required IDataRepository repository,
+    bool disposeRepositoryOnClose = false,
+  }) {
+    return DataRepositoryClient(
+      repository: repository,
+      disposeRepositoryOnClose: disposeRepositoryOnClose,
+    );
+  }
+
   /// Creates a record in the collection and returns the stored document with id/version set.
   ///
   /// If `id` is not provided, the provider generates it (typically ULID/UUID). Authorization

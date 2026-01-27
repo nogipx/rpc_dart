@@ -3,11 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-export 'data_caller.dart';
-export 'data_contract.dart'
-    hide DataServiceContractResponder, DataServiceContractCaller;
-export 'data_responder.dart';
-export 'data_service_client.dart';
-export 'data_service_factory.dart';
-export 'data_service_server.dart';
-export 'i_data_service.dart';
+export 'data_caller.dart' show DataServiceCaller;
+export 'data_contract.dart' show IDataServiceContract, DataServiceContractNames;
+export 'data_error.dart' show RpcDataError;
+export 'data_responder.dart' show DataServiceResponder;

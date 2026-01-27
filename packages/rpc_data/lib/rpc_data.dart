@@ -5,6 +5,7 @@
 
 export 'src/adapters/_index.dart';
 export 'src/change_journal.dart';
+export 'src/client/_index.dart';
 export 'src/data_service_collection.dart';
 export 'src/models.dart';
 export 'src/repository/_index.dart';

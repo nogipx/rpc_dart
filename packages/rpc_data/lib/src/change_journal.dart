@@ -5,8 +5,7 @@
 
 import 'dart:convert';
 
-import 'models.dart';
-import 'rpc/data_contract.dart';
+import 'package:rpc_data/rpc_data.dart';
 
 /// Persists and replays change events for [DataRepository.watch] cursors.
 abstract interface class DataChangeJournal {
