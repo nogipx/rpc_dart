@@ -283,6 +283,13 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
         final existingLength = current['length'] as int? ?? -1;
         final existingChecksum = current['checksum'] as String?;
         final existingContentType = current['content_type'] as String?;
+        if (existingChecksum != null &&
+            request.checksum != null &&
+            existingChecksum != request.checksum) {
+          throw StateError(
+            'Checksum mismatch for existing blob $id: stored=$existingChecksum new=${request.checksum}',
+          );
+        }
         if (request.checksum != null &&
             request.checksum == existingChecksum &&
             existingLength == payload.length &&

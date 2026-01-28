@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:async/async.dart';
 import 'package:crypto/crypto.dart';
@@ -43,6 +44,9 @@ class BlobServiceResponder extends BlobServiceContractResponder {
     final checksumAlgorithm =
         first.checksumAlgorithm ?? ChecksumAlgorithm.sha256;
 
+    // Accumulate checksum over the bytes actually stored (buffered; chunks are small).
+    final payloadBuilder = BytesBuilder(copy: false);
+
     Stream<Uint8List> byteStream() async* {
       BlobUploadChunk current = first;
       while (true) {
@@ -58,6 +62,7 @@ class BlobServiceResponder extends BlobServiceContractResponder {
         expectedOffset += current.bytes.length;
         declaredLength ??= current.totalLength;
         lastChunk = current;
+        payloadBuilder.add(current.bytes);
         yield current.bytes;
         final hasNext = await queue.hasNext;
         if (!hasNext) {
@@ -93,6 +98,18 @@ class BlobServiceResponder extends BlobServiceContractResponder {
         expectedVersion: first.expectedVersion,
       ),
     );
+
+    final computedHex = sha256.convert(payloadBuilder.toBytes()).toString();
+    final shouldVerify = first.checksum != null || _looksLikeHash(first.blobId);
+    if (shouldVerify) {
+      final expectedHex =
+          (first.checksum ?? first.blobId).toLowerCase();
+      if (computedHex.toLowerCase() != expectedHex) {
+        throw StateError(
+          'Checksum mismatch for blob ${first.blobId}: expected $expectedHex got $computedHex',
+        );
+      }
+    }
 
     return PutBlobResponse(descriptor: writeResult.descriptor);
   }
@@ -200,4 +217,7 @@ class BlobServiceResponder extends BlobServiceContractResponder {
         return;
     }
   }
+
+  bool _looksLikeHash(String value) =>
+      RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(value);
 }
