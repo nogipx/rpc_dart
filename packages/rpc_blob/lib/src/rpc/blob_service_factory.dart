@@ -69,6 +69,7 @@ class BlobServiceFactory {
     RpcDataTransferMode transferMode = RpcDataTransferMode.codec,
     int uploadChunkBytes = BlobServiceClient.defaultChunkBytes,
     String debugLabel = 'BlobServiceClient',
+    bool attachChunkChecksums = false,
   }) {
     final endpoint = RpcCallerEndpoint(
       transport: transport,
@@ -82,6 +83,7 @@ class BlobServiceFactory {
       endpoint,
       caller,
       uploadChunkBytes: uploadChunkBytes,
+      attachChunkChecksums: attachChunkChecksums,
     );
   }
 
@@ -154,12 +156,15 @@ class BlobServiceClient implements IBlobClient {
     this._endpoint,
     this._caller, {
     int uploadChunkBytes = defaultChunkBytes,
+    bool attachChunkChecksums = false,
   }) : assert(uploadChunkBytes > 0, 'uploadChunkBytes must be positive'),
-       _uploadChunkBytes = uploadChunkBytes;
+       _uploadChunkBytes = uploadChunkBytes,
+       _attachChunkChecksums = attachChunkChecksums;
 
   final RpcCallerEndpoint _endpoint;
   final BlobServiceCaller _caller;
   final int _uploadChunkBytes;
+  final bool _attachChunkChecksums;
 
   static const int defaultChunkBytes = 256 * 1024;
 
@@ -189,7 +194,7 @@ class BlobServiceClient implements IBlobClient {
         contentType: contentType,
         checksum: checksum,
         checksumAlgorithm: checksumAlgorithm,
-        attachChunkChecksums: attachChunkChecksums,
+        attachChunkChecksums: attachChunkChecksums || _attachChunkChecksums,
         metadata: metadata,
         expectedVersion: expectedVersion,
       ),
@@ -418,12 +423,14 @@ abstract interface class IBlobClient {
     bool disposeRepositoryOnClose = false,
     int uploadChunkBytes = BlobRepositoryClient.defaultChunkBytes,
     int? maxChunkBytes,
+    bool attachChunkChecksums = false,
   }) {
     return BlobRepositoryClient(
       repository: repository,
       disposeRepositoryOnClose: disposeRepositoryOnClose,
       uploadChunkBytes: uploadChunkBytes,
       maxChunkBytes: maxChunkBytes,
+      attachChunkChecksums: attachChunkChecksums,
     );
   }
 
