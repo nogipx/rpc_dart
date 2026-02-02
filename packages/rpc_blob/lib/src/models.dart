@@ -163,6 +163,173 @@ class DeleteBlobResponse extends Equatable implements IRpcSerializable {
 }
 
 @immutable
+class BulkHeadBlobRequest extends Equatable implements IRpcSerializable {
+  const BulkHeadBlobRequest({required this.items});
+
+  factory BulkHeadBlobRequest.fromJson(Map<String, dynamic> json) =>
+      BulkHeadBlobRequest(
+        items: (json['items'] as List? ?? const [])
+            .map(
+              (e) =>
+                  HeadBlobRequest.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
+            .toList(growable: false),
+      );
+
+  final List<HeadBlobRequest> items;
+
+  @override
+  List<Object?> get props => [items];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'items': items.map((e) => e.toJson()).toList(growable: false),
+  };
+}
+
+@immutable
+class BulkHeadBlobResult extends Equatable implements IRpcSerializable {
+  const BulkHeadBlobResult({
+    required this.collection,
+    required this.id,
+    this.descriptor,
+  });
+
+  factory BulkHeadBlobResult.fromJson(Map<String, dynamic> json) =>
+      BulkHeadBlobResult(
+        collection: json['collection'] as String,
+        id: json['id'] as String,
+        descriptor: json['descriptor'] == null
+            ? null
+            : BlobDescriptor.fromJson(
+                Map<String, dynamic>.from(json['descriptor'] as Map),
+              ),
+      );
+
+  final String collection;
+  final String id;
+  final BlobDescriptor? descriptor;
+
+  @override
+  List<Object?> get props => [collection, id, descriptor];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'collection': collection,
+    'id': id,
+    if (descriptor != null) 'descriptor': descriptor!.toJson(),
+  };
+}
+
+@immutable
+class BulkHeadBlobResponse extends Equatable implements IRpcSerializable {
+  const BulkHeadBlobResponse({required this.items});
+
+  factory BulkHeadBlobResponse.fromJson(Map<String, dynamic> json) =>
+      BulkHeadBlobResponse(
+        items: (json['items'] as List? ?? const [])
+            .map(
+              (e) => BulkHeadBlobResult.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            )
+            .toList(growable: false),
+      );
+
+  final List<BulkHeadBlobResult> items;
+
+  @override
+  List<Object?> get props => [items];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'items': items.map((e) => e.toJson()).toList(growable: false),
+  };
+}
+
+@immutable
+class BulkDeleteBlobRequest extends Equatable implements IRpcSerializable {
+  const BulkDeleteBlobRequest({required this.items});
+
+  factory BulkDeleteBlobRequest.fromJson(Map<String, dynamic> json) =>
+      BulkDeleteBlobRequest(
+        items: (json['items'] as List? ?? const [])
+            .map(
+              (e) => DeleteBlobRequest.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            )
+            .toList(growable: false),
+      );
+
+  final List<DeleteBlobRequest> items;
+
+  @override
+  List<Object?> get props => [items];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'items': items.map((e) => e.toJson()).toList(growable: false),
+  };
+}
+
+@immutable
+class BulkDeleteBlobResult extends Equatable implements IRpcSerializable {
+  const BulkDeleteBlobResult({
+    required this.collection,
+    required this.id,
+    required this.deleted,
+  });
+
+  factory BulkDeleteBlobResult.fromJson(Map<String, dynamic> json) =>
+      BulkDeleteBlobResult(
+        collection: json['collection'] as String,
+        id: json['id'] as String,
+        deleted: json['deleted'] as bool? ?? false,
+      );
+
+  final String collection;
+  final String id;
+  final bool deleted;
+
+  @override
+  List<Object?> get props => [collection, id, deleted];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'collection': collection,
+    'id': id,
+    'deleted': deleted,
+  };
+}
+
+@immutable
+class BulkDeleteBlobResponse extends Equatable implements IRpcSerializable {
+  const BulkDeleteBlobResponse({required this.items});
+
+  factory BulkDeleteBlobResponse.fromJson(Map<String, dynamic> json) =>
+      BulkDeleteBlobResponse(
+        items: (json['items'] as List? ?? const [])
+            .map(
+              (e) => BulkDeleteBlobResult.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            )
+            .toList(growable: false),
+      );
+
+  final List<BulkDeleteBlobResult> items;
+
+  @override
+  List<Object?> get props => [items];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'items': items.map((e) => e.toJson()).toList(growable: false),
+  };
+}
+
+@immutable
 class ListBlobsRequest extends Equatable implements IRpcSerializable {
   const ListBlobsRequest({
     required this.collection,
@@ -460,6 +627,92 @@ class ListCollectionsRequest extends Equatable implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => const {};
+}
+
+/// === Bulk operations ===
+
+@immutable
+class BulkPutBlobResponse extends Equatable implements IRpcSerializable {
+  const BulkPutBlobResponse({required this.items});
+
+  factory BulkPutBlobResponse.fromJson(Map<String, dynamic> json) =>
+      BulkPutBlobResponse(
+        items: (json['items'] as List? ?? const [])
+            .map(
+              (e) =>
+                  BlobDescriptor.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
+            .toList(growable: false),
+      );
+
+  final List<BlobDescriptor> items;
+
+  @override
+  List<Object?> get props => [items];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'items': items.map((e) => e.toJson()).toList(growable: false),
+  };
+}
+
+@immutable
+class BulkGetBlobRequest extends Equatable implements IRpcSerializable {
+  const BulkGetBlobRequest({required this.items});
+
+  factory BulkGetBlobRequest.fromJson(Map<String, dynamic> json) =>
+      BulkGetBlobRequest(
+        items: (json['items'] as List? ?? const [])
+            .map(
+              (e) =>
+                  GetBlobRequest.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
+            .toList(growable: false),
+      );
+
+  final List<GetBlobRequest> items;
+
+  @override
+  List<Object?> get props => [items];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'items': items.map((e) => e.toJson()).toList(growable: false),
+  };
+}
+
+/// Frame for bulk download: identifies blob and carries a regular download
+/// frame as payload.
+@immutable
+class BulkBlobDownloadFrame extends Equatable implements IRpcSerializable {
+  const BulkBlobDownloadFrame({
+    required this.collection,
+    required this.id,
+    required this.frame,
+  });
+
+  factory BulkBlobDownloadFrame.fromJson(Map<String, dynamic> json) =>
+      BulkBlobDownloadFrame(
+        collection: json['collection'] as String,
+        id: json['id'] as String,
+        frame: BlobDownloadFrame.fromJson(
+          Map<String, dynamic>.from(json['frame'] as Map),
+        ),
+      );
+
+  final String collection;
+  final String id;
+  final BlobDownloadFrame frame;
+
+  @override
+  List<Object?> get props => [collection, id, frame];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'collection': collection,
+    'id': id,
+    'frame': frame.toJson(),
+  };
 }
 
 Uint8List _bytesFromJsonValue(Object? raw) {

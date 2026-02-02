@@ -66,4 +66,40 @@ abstract interface class IBlobServiceContract implements IRpcContract {
     ListCollectionsRequest request, {
     RpcContext? context,
   });
+
+  @RpcMethod.unary(
+    name: 'bulkHeadBlob',
+    description: 'Fetch metadata for multiple blobs',
+  )
+  Future<BulkHeadBlobResponse> bulkHeadBlob(
+    BulkHeadBlobRequest request, {
+    RpcContext? context,
+  });
+
+  @RpcMethod.unary(
+    name: 'bulkDeleteBlob',
+    description: 'Delete multiple blobs (per item best-effort)',
+  )
+  Future<BulkDeleteBlobResponse> bulkDeleteBlob(
+    BulkDeleteBlobRequest request, {
+    RpcContext? context,
+  });
+
+  @RpcMethod.serverStream(
+    name: 'bulkGetBlob',
+    description: 'Download multiple blobs sequentially with identification',
+  )
+  Stream<BulkBlobDownloadFrame> bulkGetBlob(
+    BulkGetBlobRequest request, {
+    RpcContext? context,
+  });
+
+  @RpcMethod.clientStream(
+    name: 'bulkPutBlob',
+    description: 'Upload multiple blobs sequentially in one stream',
+  )
+  Future<BulkPutBlobResponse> bulkPutBlob(
+    Stream<BlobUploadChunk> request, {
+    RpcContext? context,
+  });
 }

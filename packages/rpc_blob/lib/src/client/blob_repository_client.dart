@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:async/async.dart';
 import 'package:crypto/crypto.dart';
@@ -247,8 +246,140 @@ class BlobRepositoryClient implements IBlobClient {
     );
   }
 
+  @override
+  Future<BulkHeadBlobResponse> bulkHeadBlob(
+    BulkHeadBlobRequest request, {
+    RpcContext? context,
+  }) async {
+    _ensureContext(context);
+    final results = <BulkHeadBlobResult>[];
+    for (final item in request.items) {
+      final descriptor = await _repository.headBlob(item.collection, item.id);
+      results.add(
+        BulkHeadBlobResult(
+          collection: item.collection,
+          id: item.id,
+          descriptor: descriptor,
+        ),
+      );
+    }
+    return BulkHeadBlobResponse(items: results);
+  }
+
+  @override
+  Future<BulkDeleteBlobResponse> bulkDeleteBlob(
+    BulkDeleteBlobRequest request, {
+    RpcContext? context,
+  }) async {
+    _ensureContext(context);
+    final results = <BulkDeleteBlobResult>[];
+    for (final item in request.items) {
+      final deleted = await _repository.deleteBlob(
+        item.collection,
+        item.id,
+        expectedVersion: item.expectedVersion,
+      );
+      results.add(
+        BulkDeleteBlobResult(
+          collection: item.collection,
+          id: item.id,
+          deleted: deleted,
+        ),
+      );
+    }
+    return BulkDeleteBlobResponse(items: results);
+  }
+
+  @override
+  Stream<BulkBlobDownloadFrame> bulkGetBlob(
+    BulkGetBlobRequest request, {
+    RpcContext? context,
+  }) async* {
+    _ensureContext(context);
+    for (final item in request.items) {
+      final result = await _repository.readBlob(
+        BlobReadRequest(
+          collection: item.collection,
+          id: item.id,
+          rangeStart: item.rangeStart,
+          rangeEnd: item.rangeEnd,
+        ),
+      );
+      if (result == null) continue;
+      final offsetStart = result.rangeStart ?? 0;
+      final start = result.rangeStart;
+      final end = result.rangeEnd;
+      var offset = offsetStart;
+      final queue = StreamQueue<Uint8List>(result.bytes);
+      var firstFrame = true;
+
+      while (await queue.hasNext) {
+        final chunk = await queue.next;
+        final hasMore = await queue.hasNext;
+        yield BulkBlobDownloadFrame(
+          collection: item.collection,
+          id: item.id,
+          frame: BlobDownloadFrame(
+            offset: offset,
+            bytes: chunk,
+            descriptor: firstFrame ? result.descriptor : null,
+            rangeStart: firstFrame ? start : null,
+            rangeEnd: firstFrame ? end : null,
+            last: !hasMore,
+          ),
+        );
+        firstFrame = false;
+        offset += chunk.length;
+      }
+    }
+  }
+
+  @override
+  Future<BulkPutBlobResponse> bulkPutBlob(
+    Stream<BlobUploadChunk> chunks, {
+    RpcContext? context,
+  }) async {
+    _ensureContext(context);
+    final queue = StreamQueue<BlobUploadChunk>(chunks);
+    final descriptors = <BlobDescriptor>[];
+    while (await queue.hasNext) {
+      final first = await queue.next;
+      if (first.offset != 0) {
+        throw StateError('First chunk of a blob must start at offset 0.');
+      }
+      descriptors.add(await _consumeAndStoreBlob(first, queue));
+    }
+    return BulkPutBlobResponse(items: descriptors);
+  }
+
+  @override
+  Future<BulkPutBlobResponse> bulkPutBytes(
+    List<BulkPutBlobItem> items, {
+    RpcContext? context,
+  }) {
+    final stream = _concatUploads(items);
+    return bulkPutBlob(stream, context: context);
+  }
+
+  Stream<BlobUploadChunk> _concatUploads(List<BulkPutBlobItem> items) async* {
+    for (final item in items) {
+      yield* _chunkUpload(
+        collection: item.collection,
+        id: item.id,
+        bytes: item.bytes,
+        length: item.length,
+        contentType: item.contentType,
+        checksum: item.checksum,
+        checksumAlgorithm: item.checksumAlgorithm,
+        attachChunkChecksums: item.attachChunkChecksums,
+        metadata: item.metadata,
+        expectedVersion: item.expectedVersion,
+      );
+    }
+  }
+
   void _assertChunkSize(BlobUploadChunk chunk) {
-    if (_maxChunkBytes != null && chunk.bytes.length > _maxChunkBytes!) {
+    if (_maxChunkBytes != null && chunk.bytes.length > _maxChunkBytes) {
       throw StateError(
         'Chunk size ${chunk.bytes.length} exceeds maxChunkBytes $_maxChunkBytes',
       );
@@ -339,6 +470,83 @@ class BlobRepositoryClient implements IBlobClient {
     }
   }
 
+  Future<BlobDescriptor> _consumeAndStoreBlob(
+    BlobUploadChunk first,
+    StreamQueue<BlobUploadChunk> queue,
+  ) async {
+    _assertChunkSize(first);
+    int seen = 0;
+    int expectedOffset = 0;
+    int? declaredLength = first.totalLength;
+    BlobUploadChunk current = first;
+    final metadata = first.metadata;
+    final checksumAlgorithm =
+        first.checksumAlgorithm ?? ChecksumAlgorithm.sha256;
+    final payloadBuilder = BytesBuilder(copy: false);
+    final chunks = <Uint8List>[];
+    BlobUploadChunk lastChunk = first;
+
+    while (true) {
+      if (current.offset != expectedOffset) {
+        throw StateError(
+          'Non-contiguous upload: got offset ${current.offset}, '
+          'expected $expectedOffset.',
+        );
+      }
+      _assertChunkSize(current);
+      _verifyChunkChecksum(current, checksumAlgorithm);
+      seen += current.bytes.length;
+      expectedOffset += current.bytes.length;
+      declaredLength ??= current.totalLength;
+      lastChunk = current;
+      payloadBuilder.add(current.bytes);
+      chunks.add(current.bytes);
+
+      if (current.last) {
+        break;
+      }
+      if (!await queue.hasNext) {
+        throw StateError(
+          'Upload stream ended without last=true on the final chunk.',
+        );
+      }
+      current = await queue.next;
+    }
+
+    if (declaredLength != null && declaredLength != seen) {
+      throw StateError(
+        'Declared length $declaredLength does not match received $seen bytes.',
+      );
+    }
+
+    final writeResult = await _repository.writeBlob(
+      BlobWriteRequest(
+        collection: first.collection,
+        id: first.blobId.isEmpty ? null : first.blobId,
+        bytes: Stream.fromIterable(chunks),
+        contentType: first.contentType,
+        length: declaredLength,
+        checksum: first.checksum,
+        checksumAlgorithm: checksumAlgorithm,
+        metadata: metadata,
+        expectedVersion: first.expectedVersion,
+      ),
+    );
+
+    final computedHex = sha256.convert(payloadBuilder.toBytes()).toString();
+    final shouldVerify = first.checksum != null || _looksLikeHash(first.blobId);
+    if (shouldVerify) {
+      final expectedHex = (first.checksum ?? first.blobId).toLowerCase();
+      if (computedHex.toLowerCase() != expectedHex) {
+        throw StateError(
+          'Checksum mismatch for blob ${first.blobId}: expected $expectedHex got $computedHex',
+        );
+      }
+    }
+
+    return writeResult.descriptor;
+  }
+
   void _ensureContext(RpcContext? context) {
     if (context?.isExpired ?? false) {
       final deadline = context!.deadline!;
@@ -353,4 +561,7 @@ class BlobRepositoryClient implements IBlobClient {
       await _repository.dispose();
     }
   }
+
+  bool _looksLikeHash(String value) =>
+      RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(value);
 }

@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_blob_sqlite/rpc_blob_sqlite.dart';
 import 'package:test/test.dart';
 
@@ -116,6 +115,99 @@ void main() {
         );
         expect(frames.last.last, isTrue);
       });
+
+      test('bulk put uploads multiple blobs', () async {
+        final first = Uint8List.fromList([1, 2, 3]);
+        final second = Uint8List.fromList([4, 5, 6, 7]);
+
+        final resp = await client.bulkPutBytes(
+          [
+            BulkPutBlobItem(
+              collection: 'rpc',
+              id: 'put-a',
+              bytes: Stream.value(first),
+              length: first.length,
+            ),
+            BulkPutBlobItem(
+              collection: 'rpc',
+              id: 'put-b',
+              bytes: Stream.value(second),
+              length: second.length,
+            ),
+          ],
+        );
+        expect(resp.items.map((e) => e.id), containsAll(['put-a', 'put-b']));
+
+        final aFrames = await client.get('rpc', 'put-a').toList();
+        final bFrames = await client.get('rpc', 'put-b').toList();
+        expect(_collectFrames(aFrames), first);
+        expect(_collectFrames(bFrames), second);
+      });
+
+      test('bulk head/get/delete flow', () async {
+        final first = Uint8List.fromList([1, 2, 3, 4]);
+        final second = Uint8List.fromList([5, 6, 7]);
+
+        await client.putBytes(
+          collection: 'rpc',
+          id: 'bulk-a',
+          bytes: Stream.value(first),
+          length: first.length,
+        );
+        await client.putBytes(
+          collection: 'rpc',
+          id: 'bulk-b',
+          bytes: Stream.value(second),
+          length: second.length,
+        );
+
+        final headResp = await client.bulkHeadBlob(
+          BulkHeadBlobRequest(
+            items: const [
+              HeadBlobRequest(collection: 'rpc', id: 'bulk-a'),
+              HeadBlobRequest(collection: 'rpc', id: 'bulk-b'),
+            ],
+          ),
+        );
+        expect(headResp.items, hasLength(2));
+        expect(headResp.items.first.descriptor?.id, 'bulk-a');
+        expect(headResp.items.last.descriptor?.id, 'bulk-b');
+
+        final frames = await client
+            .bulkGetBlob(
+              const BulkGetBlobRequest(
+                items: [
+                  GetBlobRequest(collection: 'rpc', id: 'bulk-a'),
+                  GetBlobRequest(collection: 'rpc', id: 'bulk-b'),
+                ],
+              ),
+            )
+            .toList();
+
+        final grouped = _groupBulkFrames(frames);
+        expect(grouped['bulk-a'], first);
+        expect(grouped['bulk-b'], second);
+
+        final deleteResp = await client.bulkDeleteBlob(
+          const BulkDeleteBlobRequest(
+            items: [
+              DeleteBlobRequest(collection: 'rpc', id: 'bulk-a'),
+              DeleteBlobRequest(collection: 'rpc', id: 'bulk-b'),
+            ],
+          ),
+        );
+        expect(deleteResp.items.map((e) => e.deleted), everyElement(isTrue));
+
+        final headAfter = await client.bulkHeadBlob(
+          const BulkHeadBlobRequest(
+            items: [
+              HeadBlobRequest(collection: 'rpc', id: 'bulk-a'),
+              HeadBlobRequest(collection: 'rpc', id: 'bulk-b'),
+            ],
+          ),
+        );
+        expect(headAfter.items.map((e) => e.descriptor), everyElement(isNull));
+      });
     });
   }
 }
@@ -140,4 +232,13 @@ class _ClientInstance {
 
   final IBlobClient client;
   final Future<void> Function() dispose;
+}
+
+Map<String, Uint8List> _groupBulkFrames(List<BulkBlobDownloadFrame> frames) {
+  final byId = <String, BytesBuilder>{};
+  for (final frame in frames) {
+    final builder = byId.putIfAbsent(frame.id, () => BytesBuilder());
+    builder.add(frame.frame.bytes);
+  }
+  return byId.map((key, value) => MapEntry(key, value.takeBytes()));
 }

@@ -18,6 +18,10 @@ class BlobServiceContractNames {
   static const deleteBlob = 'deleteBlob';
   static const listBlobs = 'listBlobs';
   static const listCollections = 'listCollections';
+  static const bulkHeadBlob = 'bulkHeadBlob';
+  static const bulkDeleteBlob = 'bulkDeleteBlob';
+  static const bulkGetBlob = 'bulkGetBlob';
+  static const bulkPutBlob = 'bulkPutBlob';
 }
 
 class BlobServiceContractCaller extends RpcCallerContract
@@ -139,6 +143,78 @@ class BlobServiceContractCaller extends RpcCallerContract
       context: context,
     );
   }
+
+  @override
+  Future<BulkHeadBlobResponse> bulkHeadBlob(
+    BulkHeadBlobRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary<BulkHeadBlobRequest, BulkHeadBlobResponse>(
+      methodName: BlobServiceContractNames.bulkHeadBlob,
+      requestCodec: const RpcCodec<BulkHeadBlobRequest>.withDecoder(
+        BulkHeadBlobRequest.fromJson,
+      ),
+      responseCodec: const RpcCodec<BulkHeadBlobResponse>.withDecoder(
+        BulkHeadBlobResponse.fromJson,
+      ),
+      request: request,
+      context: context,
+    );
+  }
+
+  @override
+  Future<BulkDeleteBlobResponse> bulkDeleteBlob(
+    BulkDeleteBlobRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary<BulkDeleteBlobRequest, BulkDeleteBlobResponse>(
+      methodName: BlobServiceContractNames.bulkDeleteBlob,
+      requestCodec: const RpcCodec<BulkDeleteBlobRequest>.withDecoder(
+        BulkDeleteBlobRequest.fromJson,
+      ),
+      responseCodec: const RpcCodec<BulkDeleteBlobResponse>.withDecoder(
+        BulkDeleteBlobResponse.fromJson,
+      ),
+      request: request,
+      context: context,
+    );
+  }
+
+  @override
+  Stream<BulkBlobDownloadFrame> bulkGetBlob(
+    BulkGetBlobRequest request, {
+    RpcContext? context,
+  }) {
+    return callServerStream<BulkGetBlobRequest, BulkBlobDownloadFrame>(
+      methodName: BlobServiceContractNames.bulkGetBlob,
+      requestCodec: const RpcCodec<BulkGetBlobRequest>.withDecoder(
+        BulkGetBlobRequest.fromJson,
+      ),
+      responseCodec: const RpcCodec<BulkBlobDownloadFrame>.withDecoder(
+        BulkBlobDownloadFrame.fromJson,
+      ),
+      request: request,
+      context: context,
+    );
+  }
+
+  @override
+  Future<BulkPutBlobResponse> bulkPutBlob(
+    Stream<BlobUploadChunk> requests, {
+    RpcContext? context,
+  }) {
+    return callClientStream<BlobUploadChunk, BulkPutBlobResponse>(
+      methodName: BlobServiceContractNames.bulkPutBlob,
+      requestCodec: const RpcCodec<BlobUploadChunk>.withDecoder(
+        BlobUploadChunk.fromJson,
+      ),
+      responseCodec: const RpcCodec<BulkPutBlobResponse>.withDecoder(
+        BulkPutBlobResponse.fromJson,
+      ),
+      requests: requests,
+      context: context,
+    );
+  }
 }
 
 abstract class BlobServiceContractResponder extends RpcResponderContract
@@ -217,6 +293,50 @@ abstract class BlobServiceContractResponder extends RpcResponderContract
       ),
       responseCodec: const RpcCodec<ListCollectionsResponse>.withDecoder(
         ListCollectionsResponse.fromJson,
+      ),
+    );
+    addUnaryMethod<BulkHeadBlobRequest, BulkHeadBlobResponse>(
+      methodName: BlobServiceContractNames.bulkHeadBlob,
+      handler: bulkHeadBlob,
+      description: 'Fetch metadata for multiple blobs',
+      requestCodec: const RpcCodec<BulkHeadBlobRequest>.withDecoder(
+        BulkHeadBlobRequest.fromJson,
+      ),
+      responseCodec: const RpcCodec<BulkHeadBlobResponse>.withDecoder(
+        BulkHeadBlobResponse.fromJson,
+      ),
+    );
+    addUnaryMethod<BulkDeleteBlobRequest, BulkDeleteBlobResponse>(
+      methodName: BlobServiceContractNames.bulkDeleteBlob,
+      handler: bulkDeleteBlob,
+      description: 'Delete multiple blobs (per item best-effort)',
+      requestCodec: const RpcCodec<BulkDeleteBlobRequest>.withDecoder(
+        BulkDeleteBlobRequest.fromJson,
+      ),
+      responseCodec: const RpcCodec<BulkDeleteBlobResponse>.withDecoder(
+        BulkDeleteBlobResponse.fromJson,
+      ),
+    );
+    addServerStreamMethod<BulkGetBlobRequest, BulkBlobDownloadFrame>(
+      methodName: BlobServiceContractNames.bulkGetBlob,
+      handler: bulkGetBlob,
+      description: 'Download multiple blobs sequentially with identification',
+      requestCodec: const RpcCodec<BulkGetBlobRequest>.withDecoder(
+        BulkGetBlobRequest.fromJson,
+      ),
+      responseCodec: const RpcCodec<BulkBlobDownloadFrame>.withDecoder(
+        BulkBlobDownloadFrame.fromJson,
+      ),
+    );
+    addClientStreamMethod<BlobUploadChunk, BulkPutBlobResponse>(
+      methodName: BlobServiceContractNames.bulkPutBlob,
+      handler: bulkPutBlob,
+      description: 'Upload multiple blobs sequentially in one stream',
+      requestCodec: const RpcCodec<BlobUploadChunk>.withDecoder(
+        BlobUploadChunk.fromJson,
+      ),
+      responseCodec: const RpcCodec<BulkPutBlobResponse>.withDecoder(
+        BulkPutBlobResponse.fromJson,
       ),
     );
   }

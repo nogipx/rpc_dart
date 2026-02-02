@@ -7,6 +7,33 @@ import '../models.dart';
 import 'blob_caller.dart';
 import 'blob_responder.dart';
 
+/// Helper item for bulk uploads via convenience API.
+class BulkPutBlobItem {
+  BulkPutBlobItem({
+    required this.collection,
+    required this.bytes,
+    this.id,
+    this.length,
+    this.contentType,
+    this.checksum,
+    this.checksumAlgorithm = ChecksumAlgorithm.sha256,
+    this.attachChunkChecksums = false,
+    this.metadata = const {},
+    this.expectedVersion,
+  });
+
+  final String collection;
+  final String? id;
+  final Stream<Uint8List> bytes;
+  final int? length;
+  final String? contentType;
+  final String? checksum;
+  final ChecksumAlgorithm checksumAlgorithm;
+  final bool attachChunkChecksums;
+  final Map<String, String> metadata;
+  final int? expectedVersion;
+}
+
 /// Helpers to bootstrap blob service client/server pairs over arbitrary
 /// transports, similar to `DataServiceFactory`.
 class BlobServiceFactory {
@@ -241,7 +268,58 @@ class BlobServiceClient implements IBlobClient {
   Future<ListCollectionsResponse> listCollections({RpcContext? context}) =>
       _caller.listCollections(const ListCollectionsRequest(), context: context);
 
+  @override
   Future<void> close() => _endpoint.close();
+
+  @override
+  Future<BulkHeadBlobResponse> bulkHeadBlob(
+    BulkHeadBlobRequest request, {
+    RpcContext? context,
+  }) => _caller.bulkHeadBlob(request, context: context);
+
+  @override
+  Future<BulkDeleteBlobResponse> bulkDeleteBlob(
+    BulkDeleteBlobRequest request, {
+    RpcContext? context,
+  }) => _caller.bulkDeleteBlob(request, context: context);
+
+  @override
+  Stream<BulkBlobDownloadFrame> bulkGetBlob(
+    BulkGetBlobRequest request, {
+    RpcContext? context,
+  }) => _caller.bulkGetBlob(request, context: context);
+
+  @override
+  Future<BulkPutBlobResponse> bulkPutBlob(
+    Stream<BlobUploadChunk> request, {
+    RpcContext? context,
+  }) => _caller.bulkPutBlob(request, context: context);
+
+  @override
+  Future<BulkPutBlobResponse> bulkPutBytes(
+    List<BulkPutBlobItem> items, {
+    RpcContext? context,
+  }) {
+    final stream = _concatUploads(items);
+    return bulkPutBlob(stream, context: context);
+  }
+
+  Stream<BlobUploadChunk> _concatUploads(List<BulkPutBlobItem> items) async* {
+    for (final item in items) {
+      yield* _chunkUpload(
+        collection: item.collection,
+        id: item.id,
+        bytes: item.bytes,
+        length: item.length,
+        contentType: item.contentType,
+        checksum: item.checksum,
+        checksumAlgorithm: item.checksumAlgorithm,
+        attachChunkChecksums: item.attachChunkChecksums,
+        metadata: item.metadata,
+        expectedVersion: item.expectedVersion,
+      );
+    }
+  }
 
   Stream<BlobUploadChunk> _chunkUpload({
     required String collection,
@@ -323,11 +401,7 @@ abstract interface class IBlobClient {
   static IBlobClient factory({
     required RpcCallerEndpoint endpoint,
     required RpcDataTransferMode transferMode,
-  }) =>
-      IBlobClient.endpoint(
-        endpoint: endpoint,
-        transferMode: transferMode,
-      );
+  }) => IBlobClient.endpoint(endpoint: endpoint, transferMode: transferMode);
 
   static IBlobClient endpoint({
     required RpcCallerEndpoint endpoint,
@@ -403,6 +477,31 @@ abstract interface class IBlobClient {
   });
 
   Future<ListCollectionsResponse> listCollections({RpcContext? context});
+
+  Future<BulkHeadBlobResponse> bulkHeadBlob(
+    BulkHeadBlobRequest request, {
+    RpcContext? context,
+  });
+
+  Future<BulkDeleteBlobResponse> bulkDeleteBlob(
+    BulkDeleteBlobRequest request, {
+    RpcContext? context,
+  });
+
+  Stream<BulkBlobDownloadFrame> bulkGetBlob(
+    BulkGetBlobRequest request, {
+    RpcContext? context,
+  });
+
+  Future<BulkPutBlobResponse> bulkPutBlob(
+    Stream<BlobUploadChunk> request, {
+    RpcContext? context,
+  });
+
+  Future<BulkPutBlobResponse> bulkPutBytes(
+    List<BulkPutBlobItem> items, {
+    RpcContext? context,
+  });
 
   Future<void> close();
 }

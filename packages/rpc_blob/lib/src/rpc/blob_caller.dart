@@ -8,8 +8,8 @@ class BlobServiceCaller extends BlobServiceContractCaller {
     required RpcDataTransferMode transferMode,
     String? serviceNameOverride,
   }) : super(
-          endpoint,
-          serviceNameOverride: serviceNameOverride,
-          dataTransferMode: transferMode,
-        );
+         endpoint,
+         serviceNameOverride: serviceNameOverride,
+         dataTransferMode: transferMode,
+       );
 }
