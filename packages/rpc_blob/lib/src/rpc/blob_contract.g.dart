@@ -18,6 +18,7 @@ class BlobServiceContractNames {
   static const deleteBlob = 'deleteBlob';
   static const listBlobs = 'listBlobs';
   static const listCollections = 'listCollections';
+  static const deleteCollection = 'deleteCollection';
   static const bulkHeadBlob = 'bulkHeadBlob';
   static const bulkDeleteBlob = 'bulkDeleteBlob';
   static const bulkGetBlob = 'bulkGetBlob';
@@ -138,6 +139,24 @@ class BlobServiceContractCaller extends RpcCallerContract
       ),
       responseCodec: const RpcCodec<ListCollectionsResponse>.withDecoder(
         ListCollectionsResponse.fromJson,
+      ),
+      request: request,
+      context: context,
+    );
+  }
+
+  @override
+  Future<DeleteCollectionResponse> deleteCollection(
+    DeleteCollectionRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary<DeleteCollectionRequest, DeleteCollectionResponse>(
+      methodName: BlobServiceContractNames.deleteCollection,
+      requestCodec: const RpcCodec<DeleteCollectionRequest>.withDecoder(
+        DeleteCollectionRequest.fromJson,
+      ),
+      responseCodec: const RpcCodec<DeleteCollectionResponse>.withDecoder(
+        DeleteCollectionResponse.fromJson,
       ),
       request: request,
       context: context,
@@ -293,6 +312,17 @@ abstract class BlobServiceContractResponder extends RpcResponderContract
       ),
       responseCodec: const RpcCodec<ListCollectionsResponse>.withDecoder(
         ListCollectionsResponse.fromJson,
+      ),
+    );
+    addUnaryMethod<DeleteCollectionRequest, DeleteCollectionResponse>(
+      methodName: BlobServiceContractNames.deleteCollection,
+      handler: deleteCollection,
+      description: 'Drop a blob collection and all contained blobs',
+      requestCodec: const RpcCodec<DeleteCollectionRequest>.withDecoder(
+        DeleteCollectionRequest.fromJson,
+      ),
+      responseCodec: const RpcCodec<DeleteCollectionResponse>.withDecoder(
+        DeleteCollectionResponse.fromJson,
       ),
     );
     addUnaryMethod<BulkHeadBlobRequest, BulkHeadBlobResponse>(

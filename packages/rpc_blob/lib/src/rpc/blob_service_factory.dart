@@ -274,6 +274,15 @@ class BlobServiceClient implements IBlobClient {
       _caller.listCollections(const ListCollectionsRequest(), context: context);
 
   @override
+  Future<DeleteCollectionResponse> deleteCollection(
+    String collection, {
+    RpcContext? context,
+  }) => _caller.deleteCollection(
+    DeleteCollectionRequest(collection: collection),
+    context: context,
+  );
+
+  @override
   Future<void> close() => _endpoint.close();
 
   @override
@@ -484,6 +493,11 @@ abstract interface class IBlobClient {
   });
 
   Future<ListCollectionsResponse> listCollections({RpcContext? context});
+
+  Future<DeleteCollectionResponse> deleteCollection(
+    String collection, {
+    RpcContext? context,
+  });
 
   Future<BulkHeadBlobResponse> bulkHeadBlob(
     BulkHeadBlobRequest request, {

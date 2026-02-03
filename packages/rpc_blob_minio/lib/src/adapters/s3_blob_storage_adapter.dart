@@ -296,6 +296,25 @@ class S3BlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<bool> deleteCollection(String collection) async {
+    var deleted = false;
+    final prefix = _normalizePrefix('$_prefix$collection');
+    await for (final chunk in _client.listObjects(
+      bucket,
+      prefix: prefix,
+      recursive: true,
+    )) {
+      for (final object in chunk.objects) {
+        final key = object.key;
+        if (key == null) continue;
+        await _client.removeObject(bucket, key);
+        deleted = true;
+      }
+    }
+    return deleted;
+  }
+
+  @override
   Future<void> dispose() async {
     // Minio client has no explicit close.
   }

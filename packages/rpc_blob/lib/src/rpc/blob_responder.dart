@@ -192,6 +192,15 @@ class BlobServiceResponder extends BlobServiceContractResponder {
   }
 
   @override
+  Future<DeleteCollectionResponse> deleteCollection(
+    DeleteCollectionRequest request, {
+    RpcContext? context,
+  }) async {
+    final deleted = await _storage.deleteCollection(request.collection);
+    return DeleteCollectionResponse(deleted: deleted);
+  }
+
+  @override
   Future<BulkHeadBlobResponse> bulkHeadBlob(
     BulkHeadBlobRequest request, {
     RpcContext? context,

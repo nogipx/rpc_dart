@@ -68,6 +68,15 @@ abstract interface class IBlobServiceContract implements IRpcContract {
   });
 
   @RpcMethod.unary(
+    name: 'deleteCollection',
+    description: 'Drop a blob collection and all contained blobs',
+  )
+  Future<DeleteCollectionResponse> deleteCollection(
+    DeleteCollectionRequest request, {
+    RpcContext? context,
+  });
+
+  @RpcMethod.unary(
     name: 'bulkHeadBlob',
     description: 'Fetch metadata for multiple blobs',
   )

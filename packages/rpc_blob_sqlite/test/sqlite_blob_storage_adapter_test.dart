@@ -200,6 +200,39 @@ void main() {
     expect(withMeta.items.single.metadata['x'], 'y');
   });
 
+  test('deleteCollection drops table and registry entry', () async {
+    // Seed two collections.
+    await adapter.writeBlob(
+      BlobWriteRequest(
+        collection: 'alpha',
+        id: 'a1',
+        bytes: Stream.value(Uint8List.fromList([1])),
+      ),
+    );
+    await adapter.writeBlob(
+      BlobWriteRequest(
+        collection: 'beta',
+        id: 'b1',
+        bytes: Stream.value(Uint8List.fromList([2])),
+      ),
+    );
+
+    expect(await adapter.listCollections(), containsAll(['alpha', 'beta']));
+
+    final deleted = await adapter.deleteCollection('alpha');
+    expect(deleted, isTrue);
+    expect(await adapter.headBlob('alpha', 'a1'), isNull);
+    expect(await adapter.listCollections(), isNot(contains('alpha')));
+
+    // Second attempt is a no-op (returns false).
+    final second = await adapter.deleteCollection('alpha');
+    expect(second, isFalse);
+
+    // Remaining collection still works.
+    final headBeta = await adapter.headBlob('beta', 'b1');
+    expect(headBeta, isNotNull);
+  });
+
   test('listCollections returns created collections', () async {
     Future<void> write(String collection, String id) async {
       await adapter.writeBlob(

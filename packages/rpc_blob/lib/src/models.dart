@@ -629,6 +629,38 @@ class ListCollectionsRequest extends Equatable implements IRpcSerializable {
   Map<String, dynamic> toJson() => const {};
 }
 
+@immutable
+class DeleteCollectionRequest extends Equatable implements IRpcSerializable {
+  const DeleteCollectionRequest({required this.collection});
+
+  factory DeleteCollectionRequest.fromJson(Map<String, dynamic> json) =>
+      DeleteCollectionRequest(collection: json['collection'] as String);
+
+  final String collection;
+
+  @override
+  List<Object?> get props => [collection];
+
+  @override
+  Map<String, dynamic> toJson() => {'collection': collection};
+}
+
+@immutable
+class DeleteCollectionResponse extends Equatable implements IRpcSerializable {
+  const DeleteCollectionResponse({required this.deleted});
+
+  factory DeleteCollectionResponse.fromJson(Map<String, dynamic> json) =>
+      DeleteCollectionResponse(deleted: json['deleted'] as bool? ?? false);
+
+  final bool deleted;
+
+  @override
+  List<Object?> get props => [deleted];
+
+  @override
+  Map<String, dynamic> toJson() => {'deleted': deleted};
+}
+
 /// === Bulk operations ===
 
 @immutable

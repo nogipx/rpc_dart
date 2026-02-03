@@ -24,6 +24,11 @@ abstract interface class IBlobRepository {
   /// List known collections in the backing store.
   Future<List<String>> listCollections();
 
+  /// Drop an entire collection (namespace) and all blobs within it.
+  ///
+  /// Returns true if the collection existed and was removed.
+  Future<bool> deleteCollection(String collection);
+
   Future<void> dispose();
 }
 

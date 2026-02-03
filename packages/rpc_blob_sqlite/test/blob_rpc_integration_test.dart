@@ -254,6 +254,27 @@ void main() {
         await clientWithChecksums.close();
       });
 
+      test('deleteCollection removes namespace for both clients', () async {
+        final bytes = Uint8List.fromList([3, 3, 3]);
+        await client.putBytes(
+          collection: 'rpc',
+          id: 'drop-me',
+          bytes: Stream.value(bytes),
+          length: bytes.length,
+        );
+        expect((await client.head('rpc', 'drop-me')).descriptor, isNotNull);
+
+        final resp = await client.deleteCollection('rpc');
+        expect(resp.deleted, isTrue);
+        expect((await client.head('rpc', 'drop-me')).descriptor, isNull);
+        final collections = await client.listCollections();
+        expect(collections.collections, isNot(contains('rpc')));
+
+        // Second call should be harmless.
+        final again = await client.deleteCollection('rpc');
+        expect(again.deleted, isFalse);
+      });
+
       test('bulk head/get/delete flow', () async {
         final first = Uint8List.fromList([1, 2, 3, 4]);
         final second = Uint8List.fromList([5, 6, 7]);

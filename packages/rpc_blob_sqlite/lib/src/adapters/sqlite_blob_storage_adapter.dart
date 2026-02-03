@@ -132,7 +132,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   @override
   Future<BlobDescriptor?> headBlob(String collection, String id) async {
     _ensureOpen();
-    final table = _ensureTableForCollection(collection);
+    final table = _tableForCollection(collection, createIfMissing: false);
+    if (table == null) {
+      return null;
+    }
     final rows = _database.select(
       'SELECT id, collection, version, length, content_type, checksum, '
       'metadata, created_at, updated_at '
@@ -181,7 +184,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       variables = [request.collection, request.id];
     }
 
-    final table = _ensureTableForCollection(request.collection);
+    final table = _tableForCollection(request.collection, createIfMissing: false);
+    if (table == null) {
+      return null;
+    }
     columns.write(
       'FROM ${_quoteIdentifier(table)} '
       'WHERE collection = ? AND id = ? AND deleted_at IS NULL '
@@ -230,7 +236,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
         ? null
         : jsonEncode(request.metadata);
 
-    final table = _ensureTableForCollection(request.collection);
+    final table = _tableForCollection(request.collection, createIfMissing: true);
+    if (table == null) {
+      throw StateError('Failed to ensure collection table for ${request.collection}');
+    }
 
     return _transaction<BlobWriteResult>(() {
       final existing = _database.select(
@@ -350,7 +359,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     int? expectedVersion,
   }) async {
     _ensureOpen();
-    final table = _ensureTableForCollection(collection);
+    final table = _tableForCollection(collection, createIfMissing: false);
+    if (table == null) {
+      return false;
+    }
     return _transaction<bool>(() {
       final args = <Object?>[collection, id];
       final where = StringBuffer(
@@ -378,7 +390,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   @override
   Future<ListBlobsResponse> listBlobs(ListBlobsRequest request) async {
     _ensureOpen();
-    final table = _ensureTableForCollection(request.collection);
+    final table = _tableForCollection(request.collection, createIfMissing: false);
+    if (table == null) {
+      return const ListBlobsResponse(items: []);
+    }
     DateTime? cursorUpdated;
     String? cursorId;
     if (request.cursor != null) {
@@ -449,11 +464,38 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   Future<List<String>> listCollections() async {
     _ensureOpen();
     final rows = _database.select(
-      'SELECT collection FROM "$_registryTable" ORDER BY collection ASC',
+      'SELECT collection FROM "$_registryTable" '
+      'WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type = ? AND name = table_name) '
+      'ORDER BY collection ASC',
+      ['table'],
     );
     return rows
         .map((row) => row['collection'] as String)
         .toList(growable: false);
+  }
+
+  @override
+  Future<bool> deleteCollection(String collection) async {
+    _ensureOpen();
+    final existing = _database.select(
+      'SELECT table_name FROM "$_registryTable" WHERE collection = ? LIMIT 1',
+      [collection],
+    );
+    if (existing.isEmpty) {
+      return false;
+    }
+    final table = existing.first['table_name'] as String;
+    _ensureOpen();
+    _database.execute('DROP TABLE IF EXISTS ${_quoteIdentifier(table)}');
+    if (_tableExists(table)) {
+      _database.execute('DROP TABLE IF EXISTS $table');
+    }
+    _database.execute(
+      'DELETE FROM "$_registryTable" WHERE collection = ?',
+      [collection],
+    );
+    _tableCache.remove(collection);
+    return !_tableExists(table);
   }
 
   @override
@@ -563,7 +605,7 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     }
   }
 
-  String _ensureTableForCollection(String collection) {
+  String? _tableForCollection(String collection, {bool createIfMissing = true}) {
     final cached = _tableCache[collection];
     if (cached != null) {
       return cached;
@@ -575,13 +617,21 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     );
     if (existing.isNotEmpty) {
       final tableName = existing.first['table_name'] as String;
-      if (!_tableExists(tableName)) {
-        _createCollectionTable(tableName);
+      if (_tableExists(tableName)) {
+        _tableCache[collection] = tableName;
+        return tableName;
       }
+      if (!createIfMissing) {
+        return null;
+      }
+      _createCollectionTable(tableName);
       _tableCache[collection] = tableName;
       return tableName;
     }
 
+    if (!createIfMissing) {
+      return null;
+    }
     final tableName = _tableNameFor(collection);
     _transaction<void>(() {
       _createCollectionTable(tableName);

@@ -250,6 +250,16 @@ class BlobRepositoryClient implements IBlobClient {
   }
 
   @override
+  Future<DeleteCollectionResponse> deleteCollection(
+    String collection, {
+    RpcContext? context,
+  }) async {
+    _ensureContext(context);
+    final deleted = await _repository.deleteCollection(collection);
+    return DeleteCollectionResponse(deleted: deleted);
+  }
+
+  @override
   Future<BulkHeadBlobResponse> bulkHeadBlob(
     BulkHeadBlobRequest request, {
     RpcContext? context,
