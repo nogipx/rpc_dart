@@ -71,24 +71,31 @@ class SqlCipherKey {
     }
 
     try {
-      // SQLite3MultipleCiphers: tell the engine to use the SQLCipher codec and
-      // legacy page format before applying the key so existing SQLCipher
-      // databases remain compatible.
-      // Choose SQLCipher-compatible codec and legacy page format first.
-      database.execute("PRAGMA cipher = 'sqlcipher';");
-      database.execute('PRAGMA legacy = 4;');
+      // SQLite3MultipleCiphers: try to select SQLCipher-compatible provider
+      // first. Some builds may ship without the `sqlcipher` provider (for
+      // example when the WASM bundle was built without that flag). In that
+      // case fall back to the first available cipher instead of failing hard
+      // so encrypted databases still work.
+      final selectedCipher = _selectCipherProvider(database);
+      if (selectedCipher == _sqlcipherProvider) {
+        database.execute('PRAGMA legacy = 4;');
+      }
 
       // Fail fast: if the binary does not expose cipher pragmas, do not
       // continue with an unencrypted database.
-      _assertCipherAvailable(database);
+      _assertCipherAvailable(database, expectedProvider: selectedCipher);
 
       final hexKey = _encodeHex(_keyBytes);
       database.execute("PRAGMA key = \"x'$hexKey'\";");
 
-      _assertCipherAvailable(database);
+      _assertCipherAvailable(database, expectedProvider: selectedCipher);
 
       if (enforceMemorySecurity) {
-        database.execute('PRAGMA cipher_memory_security = ON;');
+        try {
+          database.execute('PRAGMA cipher_memory_security = ON;');
+        } catch (_) {
+          // Older or trimmed-down builds may not support this pragma; ignore.
+        }
       }
     } on sqlite.SqliteException catch (error) {
       throw SqlCipherException(
@@ -101,7 +108,69 @@ class SqlCipherKey {
     }
   }
 
-  static void _assertCipherAvailable(sqlite.CommonDatabase database) {
+  static const _sqlcipherProvider = 'sqlcipher';
+
+  static String _selectCipherProvider(sqlite.CommonDatabase database) {
+    // First, try to select the preferred SQLCipher provider.
+    try {
+      database.execute("PRAGMA cipher = '$_sqlcipherProvider';");
+      return _sqlcipherProvider;
+    } on sqlite.SqliteException catch (error) {
+      // If that fails, try to discover any available provider.
+      final providers = _availableProviders(database);
+      if (providers.isNotEmpty) {
+        final fallback = providers.first;
+        database.execute("PRAGMA cipher = '$fallback';");
+        return fallback;
+      }
+
+      // As a last resort, inspect current cipher pragma (some builds expose
+      // it even when cipher_list is missing) and keep using whatever is
+      // reported there.
+      try {
+        final rows = database.select('PRAGMA cipher;');
+        final reported = rows
+            .map((row) => row.values)
+            .expand((v) => v)
+            .map((v) => '$v'.trim())
+            .firstWhere(
+              (v) => v.isNotEmpty,
+              orElse: () => '',
+            );
+        if (reported.isNotEmpty) {
+          database.execute("PRAGMA cipher = '$reported';");
+          return reported;
+        }
+      } catch (_) {
+        // ignore, will throw below
+      }
+
+      throw SqlCipherException(
+        'Сборка SQLite не поддерживает шифрование (cipher_list пустой, cipher=\'sqlcipher\' недоступен).',
+        cause: error,
+      );
+    }
+  }
+
+  static List<String> _availableProviders(sqlite.CommonDatabase database) {
+    try {
+      final rows = database.select('PRAGMA cipher_list;');
+      return rows
+          .map((row) => row.values)
+          .expand((v) => v)
+          .map((v) => '$v'.trim())
+          .where((v) => v.isNotEmpty)
+          .toList();
+    } catch (_) {
+      // Some builds omit cipher_list; return empty so callers can fallback.
+      return const [];
+    }
+  }
+
+  static void _assertCipherAvailable(
+    sqlite.CommonDatabase database, {
+    String? expectedProvider,
+  }) {
     try {
       final result = database.select('PRAGMA cipher_version;');
       final version = result.isNotEmpty ? result.single.values.first : null;
@@ -109,10 +178,17 @@ class SqlCipherKey {
           version != null && version.toString().trim().isNotEmpty;
       if (!hasVersion) {
         final cipherRows = database.select('PRAGMA cipher;');
-        final hasSqlcipherCipher = cipherRows.any(
-          (row) => row.values.any((value) => '$value' == 'sqlcipher'),
-        );
-        if (!hasSqlcipherCipher) {
+        final providers = cipherRows
+            .map((row) => row.values)
+            .expand((v) => v)
+            .map((v) => '$v')
+            .toList();
+        final hasExpected = expectedProvider == null
+            ? providers.isNotEmpty
+            : providers.any(
+                (provider) => provider.toString().trim() == expectedProvider,
+              );
+        if (!hasExpected) {
           throw SqlCipherException(
             'SQLCipher не активирован: cipher_version пустой и провайдер не выставлен.',
           );

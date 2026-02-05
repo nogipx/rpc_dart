@@ -63,8 +63,14 @@ Future<sqlite.VirtualFileSystem> _tryOpfsThenIndexedDb(
 }
 
 Future<sqlite.VirtualFileSystem> _resolveWebVfs(
-  SqliteConnectionOptions options,
-) async {
+  SqliteConnectionOptions options, {
+  required bool cipherCompatibleOnly,
+}) async {
+  if (cipherCompatibleOnly) {
+    // Prefer durable VFS; MultipleCiphers exposes wrapper vfs names
+    // "multipleciphers-<name>" for each registered VFS.
+    return _tryOpfsThenIndexedDb(options);
+  }
   switch (options.webVfsMode) {
     case WebVfsMode.opfs:
       return _tryOpfsThenIndexedDb(options);
@@ -76,17 +82,22 @@ Future<sqlite.VirtualFileSystem> _resolveWebVfs(
 }
 
 Future<sqlite.CommonDatabase> _openWebDatabase(
-  SqliteConnectionOptions options,
-) async {
+  SqliteConnectionOptions options, {
+  required bool cipherCompatibleOnly,
+}) async {
   final engine = await _loadSqliteEngine(options);
-  final vfs = await _resolveWebVfs(options);
+  final vfs = await _resolveWebVfs(
+    options,
+    cipherCompatibleOnly: cipherCompatibleOnly,
+  );
   engine.registerVirtualFileSystem(vfs, makeDefault: true);
 
   final fileName = _normalizeWebFileName(options.webFileName);
   final openPath = vfs is sqlite_wasm.SimpleOpfsFileSystem
       ? '/database'
       : fileName;
-  return engine.open(openPath);
+  final vfsName = cipherCompatibleOnly ? 'multipleciphers-${vfs.name}' : null;
+  return engine.open(openPath, vfs: vfsName);
 }
 
 Future<DatabaseConnection> _openDatabase(
@@ -113,7 +124,10 @@ Future<DatabaseConnection> openFileDb({
   SqliteSetupHook? sqliteSetup,
 }) async {
   logStatements;
-  final database = await _openWebDatabase(options);
+  final database = await _openWebDatabase(
+    options,
+    cipherCompatibleOnly: sqlCipherKey != null,
+  );
   return _openDatabase(
     database,
     sqlCipherKey: sqlCipherKey,
@@ -129,7 +143,10 @@ Future<DatabaseConnection> openInMemoryDb({
   SqliteSetupHook? sqliteSetup,
 }) async {
   logStatements;
-  final database = await _openWebDatabase(options);
+  final database = await _openWebDatabase(
+    options,
+    cipherCompatibleOnly: sqlCipherKey != null,
+  );
   return _openDatabase(
     database,
     sqlCipherKey: sqlCipherKey,
