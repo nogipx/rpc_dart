@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:licensify/licensify.dart';
+import 'package:paseto_dart/paseto_dart.dart';
 import 'package:path/path.dart' as p;
 import 'package:rpc_data_sqlite/rpc_data_sqlite.dart';
 import 'package:rpc_data_sqlite/src/sqlite_storage/sqlite_cipher_loader.dart';
@@ -32,13 +33,11 @@ void main() {
             'SQLCipher/MultipleCiphers assets must be available for this test',
       );
 
-      final paserk = LicensifySymmetricKey.xchacha20(
-        keyBytes: keyBytes,
-      ).toPaserk();
+      final paserk = Paseto.symmetricKeyFromBytes(keyBytes).toPaserk();
 
       final connection = await openFileDb(
         options: SqliteConnectionOptions(nativePath: dbPath),
-        sqlCipherKey: SqlCipherKey.fromPaserk(paserk: paserk),
+        sqlCipherKey: await SqlCipherKey.fromPaserk(paserk: paserk),
       );
 
       connection.database.execute(
@@ -51,7 +50,7 @@ void main() {
 
       final unlocked = await openFileDb(
         options: SqliteConnectionOptions(nativePath: dbPath),
-        sqlCipherKey: SqlCipherKey.fromPaserk(paserk: paserk),
+        sqlCipherKey: await SqlCipherKey.fromPaserk(paserk: paserk),
       );
       final rows = unlocked.database.select(
         'SELECT body FROM secrets WHERE id = ?',

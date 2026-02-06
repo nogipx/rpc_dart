@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
@@ -54,8 +55,8 @@ class SqliteDataStorageAdapter
     this._inMemory, {
     SqlStatementObserver? statementObserver,
     bool enableFts = false,
-  })  : _statementObserver = statementObserver,
-        _ftsEnabled = enableFts;
+  }) : _statementObserver = statementObserver,
+       _ftsEnabled = enableFts;
 
   /// Create an adapter backed by an existing [DatabaseConnection].
   factory SqliteDataStorageAdapter.connection(
@@ -148,6 +149,7 @@ class SqliteDataStorageAdapter
     _ftsReady = false;
     _ftsSeededCollections.clear();
   }
+
   static const int _ftsBatchSize = 200;
   static const int _sqliteVariableLimit = 999;
   static const int _recordUpsertArgumentCount = 5;

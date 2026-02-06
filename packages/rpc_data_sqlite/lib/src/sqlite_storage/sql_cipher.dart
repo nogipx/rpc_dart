@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
 import 'dart:typed_data';
 
-import 'package:licensify/licensify.dart';
+import 'package:paseto_dart/paseto_dart.dart';
 import 'package:sqlite3/common.dart' as sqlite;
 
 /// SQLCipher-specific exception wrapper with optional underlying cause.
@@ -37,16 +38,18 @@ class SqlCipherKey {
     return SqlCipherKey._(Uint8List.fromList(keyBytes));
   }
 
-  factory SqlCipherKey.fromPaserk({required String paserk}) {
+  static Future<SqlCipherKey> fromPaserk({required String paserk}) async {
     final trimmed = paserk.trim();
     if (trimmed.isEmpty) {
       throw const FormatException('Пустой PASERK ключ SQLCipher.');
     }
 
     try {
-      final symmetricKey = LicensifySymmetricKey.fromPaserk(paserk: trimmed);
-      return symmetricKey.executeWithKeyBytes((keyBytes) {
-        return SqlCipherKey.fromBytes(keyBytes: Uint8List.fromList(keyBytes));
+      final symmetricKey = Paseto.symmetricKeyFromPaserk(trimmed);
+      return symmetricKey.withSecretKey((keyBytes) async {
+        return SqlCipherKey.fromBytes(
+          keyBytes: Uint8List.fromList(await keyBytes.extractBytes()),
+        );
       });
     } on FormatException catch (error) {
       throw FormatException(
@@ -133,10 +136,7 @@ class SqlCipherKey {
             .map((row) => row.values)
             .expand((v) => v)
             .map((v) => '$v'.trim())
-            .firstWhere(
-              (v) => v.isNotEmpty,
-              orElse: () => '',
-            );
+            .firstWhere((v) => v.isNotEmpty, orElse: () => '');
         if (reported.isNotEmpty) {
           database.execute("PRAGMA cipher = '$reported';");
           return reported;
