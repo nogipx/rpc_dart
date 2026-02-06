@@ -53,18 +53,22 @@ class SqliteDataStorageAdapter
     this._database,
     this._inMemory, {
     SqlStatementObserver? statementObserver,
-  }) : _statementObserver = statementObserver;
+    bool enableFts = false,
+  })  : _statementObserver = statementObserver,
+        _ftsEnabled = enableFts;
 
   /// Create an adapter backed by an existing [DatabaseConnection].
   factory SqliteDataStorageAdapter.connection(
     DatabaseConnection connection, {
     bool isInMemory = false,
     SqlStatementObserver? statementObserver,
+    bool enableFts = false,
   }) {
     return SqliteDataStorageAdapter._(
       SqliteDataDatabase(connection.database),
       isInMemory,
       statementObserver: statementObserver,
+      enableFts: enableFts,
     );
   }
 
@@ -77,6 +81,7 @@ class SqliteDataStorageAdapter
     bool logStatements = false,
     SqliteSetupHook? sqliteSetup,
     SqlStatementObserver? statementObserver,
+    bool enableFts = false,
   }) async {
     if (logStatements) {
       // Logging is not available with the sqlite3 executor yet.
@@ -92,6 +97,7 @@ class SqliteDataStorageAdapter
         SqliteDataDatabase(database),
         true,
         statementObserver: statementObserver,
+        enableFts: enableFts,
       );
     } catch (_) {
       database.close();
@@ -117,12 +123,31 @@ class SqliteDataStorageAdapter
   final SqliteDataDatabase _database;
   final bool _inMemory;
   final SqlStatementObserver? _statementObserver;
+  final bool _ftsEnabled;
 
   bool get isInMemory => _inMemory;
   bool _registryReady = false;
   final Set<String> _knownTables = <String>{};
   final Set<String> _ftsSeededCollections = <String>{};
   bool _ftsReady = false;
+  Future<void> _dropFtsArtifacts() async {
+    // Drop the FTS virtual table and all its shadow tables (they share name
+    // prefix). Some SQLite builds may leave shadow tables behind if the main
+    // table was created in a previous session, so we remove them explicitly.
+    final rows = await _database
+        .customSelect(
+          'SELECT name FROM sqlite_master '
+          'WHERE type = ? AND name LIKE ?',
+          variables: ['table', '$_ftsTableName%'],
+        )
+        .get();
+    for (final row in rows) {
+      final name = row.read<String>('name');
+      await _database.customStatement('DROP TABLE IF EXISTS "$name"');
+    }
+    _ftsReady = false;
+    _ftsSeededCollections.clear();
+  }
   static const int _ftsBatchSize = 200;
   static const int _sqliteVariableLimit = 999;
   static const int _recordUpsertArgumentCount = 5;
@@ -141,6 +166,8 @@ class SqliteDataStorageAdapter
         defaultPolicy: const CollectionSchemaPolicy(),
       );
 
+  bool get ftsEnabled => _ftsEnabled;
+
   /// Rebuilds collection indexes and FTS data. Intended for migrations.
   Future<void> rebuildCollectionStructures(String collection) async {
     final table = await _lookupTable(collection);
@@ -148,7 +175,9 @@ class SqliteDataStorageAdapter
       return;
     }
     await _ensureCollectionIndexes(collection, table);
-    await _ensureFtsSeeded(collection, table);
+    if (_ftsEnabled) {
+      await _ensureFtsSeeded(collection, table);
+    }
   }
 
   void _recordStatement(String sql, Iterable<Object?> arguments) {
@@ -169,7 +198,11 @@ class SqliteDataStorageAdapter
     await _ensureRegistry();
     await schemaRegistry.ensureReady();
     await _ensureIndexRegistry();
-    await _ensureFts();
+    if (_ftsEnabled) {
+      await _ensureFts();
+    } else {
+      await _dropFtsArtifacts();
+    }
     final journal = SqliteDataChangeJournal(_database);
     await journal.ensureReady();
 
@@ -781,6 +814,11 @@ class SqliteDataStorageAdapter
   Future<SearchRecordsResponse> searchCollection(
     SearchRecordsRequest request,
   ) async {
+    if (!_ftsEnabled) {
+      throw RpcDataError.invalidArgument(
+        'Full-text search is disabled for this adapter.',
+      );
+    }
     final pattern = _buildFtsMatchPattern(request.query);
     if (pattern == null) {
       throw RpcDataError.invalidArgument(

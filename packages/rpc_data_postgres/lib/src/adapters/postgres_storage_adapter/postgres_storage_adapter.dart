@@ -82,10 +82,12 @@ class PostgresDataStorageAdapter
     required this.schema,
     required this.tablePrefix,
     required bool ownsConnection,
+    bool enableFts = false,
   }) : _ownsConnection = ownsConnection,
        _names = PgTableNames(schema: schema, prefix: tablePrefix),
-       schemaRegistry = PostgresSchemaRegistry(
-         _connection,
+       _ftsEnabled = enableFts,
+        schemaRegistry = PostgresSchemaRegistry(
+          _connection,
          names: PgTableNames(schema: schema, prefix: tablePrefix),
        );
 
@@ -94,6 +96,7 @@ class PostgresDataStorageAdapter
     ConnectionSettings? settings,
     String schema = 'public',
     String tablePrefix = '',
+    bool enableFts = false,
   }) async {
     final connection = await Connection.open(endpoint, settings: settings);
     final adapter = PostgresDataStorageAdapter._(
@@ -101,6 +104,7 @@ class PostgresDataStorageAdapter
       schema: schema,
       tablePrefix: tablePrefix,
       ownsConnection: true,
+      enableFts: enableFts,
     );
     await adapter.ensureReady();
     return adapter;
@@ -115,6 +119,7 @@ class PostgresDataStorageAdapter
   final Map<String, List<_PgIndexMetadata>> _indexCache =
       <String, List<_PgIndexMetadata>>{};
   bool _ready = false;
+  final bool _ftsEnabled;
 
   final String schema;
   final String tablePrefix;
@@ -238,10 +243,12 @@ CREATE TABLE IF NOT EXISTS $table (
       'CREATE INDEX IF NOT EXISTS ${_names.indexName('${_rawTableName(table)}_updated_idx')} '
       'ON $table (updated_at)',
     );
-    await _connection.execute(
-      'CREATE INDEX IF NOT EXISTS ${_names.indexName('${_rawTableName(table)}_fts_idx')} '
-      'ON $table USING GIN (to_tsvector(\'simple\', payload::text))',
-    );
+    if (_ftsEnabled) {
+      await _connection.execute(
+        'CREATE INDEX IF NOT EXISTS ${_names.indexName('${_rawTableName(table)}_fts_idx')} '
+        'ON $table USING GIN (to_tsvector(\'simple\', payload::text))',
+      );
+    }
     await _registerTable(collection, table);
   }
 
@@ -280,6 +287,16 @@ CREATE TABLE IF NOT EXISTS $table (
   String _rawTableName(String qualified) {
     final parts = qualified.split('.');
     return parts.isNotEmpty ? parts.last.replaceAll('"', '') : qualified;
+  }
+
+  Future<void> _dropFtsIndexIfDisabled(String table) async {
+    if (_ftsEnabled) {
+      return;
+    }
+    final base = _rawTableName(table);
+    final indexName = _names.indexName('${base}_fts_idx');
+    await _connection.execute('DROP INDEX IF EXISTS $indexName');
+    _knownIndexes.remove(indexName);
   }
 
   @override
@@ -329,6 +346,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         );
       }
       _knownTables.add(table);
+      await _dropFtsIndexIfDisabled(table);
       await _ensureCollectionIndexes(collection, table);
     }
     _ready = true;
@@ -610,6 +628,11 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
   Future<SearchRecordsResponse> searchCollection(
     SearchRecordsRequest request,
   ) async {
+    if (!_ftsEnabled) {
+      throw RpcDataError.invalidArgument(
+        'Full-text search is disabled for this adapter.',
+      );
+    }
     final table = await _ensureTableForRead(request.collection);
     if (table == null) {
       return SearchRecordsResponse(

@@ -378,7 +378,9 @@ extension _CollectionRegistrySupport on SqliteDataStorageAdapter {
       return null;
     }
     await _ensureCollectionIndexes(collection, table);
-    await _ensureFtsSeeded(collection, table);
+    if (_ftsEnabled) {
+      await _ensureFtsSeeded(collection, table);
+    }
     return table;
   }
 

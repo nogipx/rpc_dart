@@ -14,11 +14,14 @@ void main() {
   final dbFile = File(p.join(Directory.current.path, 'rpc_data_test.sqlite'));
   final skip = false;
 
-  Future<SqliteDataStorageAdapter> openAdapter() async {
+  Future<SqliteDataStorageAdapter> openAdapter({bool enableFts = true}) async {
     final connection = await openFileDb(
       options: SqliteConnectionOptions(nativePath: dbFile.path),
     );
-    return SqliteDataStorageAdapter.connection(connection);
+    return SqliteDataStorageAdapter.connection(
+      connection,
+      enableFts: enableFts,
+    );
   }
 
   Future<void> resetDatabase() async {
@@ -714,5 +717,49 @@ void main() {
       ...firstPage.records.map((record) => record.id),
       ...secondPage.records.map((record) => record.id),
     }, equals(ids));
+  });
+
+  test('FTS can be disabled and drops virtual table', () async {
+    // First, ensure the virtual table exists.
+    final connection1 = await openFileDb(
+      options: SqliteConnectionOptions(nativePath: dbFile.path),
+    );
+    final adapterWithFts = SqliteDataStorageAdapter.connection(
+      connection1,
+      enableFts: true,
+    );
+    await adapterWithFts.ensureReady();
+    await adapterWithFts.dispose();
+
+    // Reopen with FTS disabled; startup should remove the virtual table.
+    final connection2 = await openFileDb(
+      options: SqliteConnectionOptions(nativePath: dbFile.path),
+    );
+    final adapterWithoutFts = SqliteDataStorageAdapter.connection(
+      connection2,
+      enableFts: false,
+    );
+    await adapterWithoutFts.ensureReady();
+
+    final tables = await adapterWithoutFts.database
+        .customSelect(
+          'SELECT name FROM sqlite_master WHERE type = ? AND name = ?',
+          variables: ['table', 's_global_fts'],
+        )
+        .get();
+    expect(tables, isEmpty);
+
+    expect(
+      () => adapterWithoutFts.searchCollection(
+        SearchRecordsRequest(
+          collection: 'notes',
+          query: 'note',
+          options: const QueryOptions(limit: 1),
+        ),
+      ),
+      throwsA(isA<RpcDataError>()),
+    );
+
+    await adapterWithoutFts.dispose();
   });
 }

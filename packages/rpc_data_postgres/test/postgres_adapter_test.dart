@@ -46,6 +46,7 @@ void main() {
         schema: _schema,
         tablePrefix: _tablePrefix,
         settings: const ConnectionSettings(sslMode: SslMode.disable),
+        enableFts: true,
       );
       repo = PostgresDataRepository(storage: storage);
       // // Очистка коллекций перед каждым тестом, чтобы не брать старые данные.

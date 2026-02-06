@@ -6,6 +6,9 @@ part of 'storage_adapter.dart';
 
 extension _FtsSupport on SqliteDataStorageAdapter {
   Future<void> _ensureFts() async {
+    if (!_ftsEnabled) {
+      return;
+    }
     if (_ftsReady) {
       return;
     }
@@ -18,6 +21,9 @@ extension _FtsSupport on SqliteDataStorageAdapter {
   }
 
   Future<void> _ensureFtsSeeded(String collection, String tableName) async {
+    if (!_ftsEnabled) {
+      return;
+    }
     await _ensureFts();
     if (_ftsSeededCollections.contains(collection)) {
       return;
@@ -53,6 +59,9 @@ extension _FtsSupport on SqliteDataStorageAdapter {
     String baseTable,
     Iterable<DataRecord> records,
   ) async {
+    if (!_ftsEnabled) {
+      return;
+    }
     await _ensureFts();
     final pending = records.toList(growable: false);
     if (pending.isEmpty) {

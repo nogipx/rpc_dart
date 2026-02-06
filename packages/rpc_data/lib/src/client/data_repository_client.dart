@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_data/rpc_data.dart';
@@ -15,9 +14,9 @@ class DataRepositoryClient implements IDataClient {
     required IDataRepository repository,
     bool disposeRepositoryOnClose = false,
     RpcLogger? logger,
-  })  : _repository = repository,
-        _disposeRepositoryOnClose = disposeRepositoryOnClose,
-        _log = logger ?? RpcLogger('DataRepositoryClient');
+  }) : _repository = repository,
+       _disposeRepositoryOnClose = disposeRepositoryOnClose,
+       _log = logger ?? RpcLogger('DataRepositoryClient');
 
   final IDataRepository _repository;
   final bool _disposeRepositoryOnClose;
@@ -267,8 +266,9 @@ class DataRepositoryClient implements IDataClient {
         'Deadline exceeded for request ${context?.requestId}',
       );
     } catch (error, stackTrace) {
-      final resumeIndex =
-          lastAck >= 0 ? lastAck : _extractLastChunkIndex(error.toString());
+      final resumeIndex = lastAck >= 0
+          ? lastAck
+          : _extractLastChunkIndex(error.toString());
       if (resumeIndex != null) {
         Error.throwWithStackTrace(
           ImportResumeException(
@@ -363,9 +363,9 @@ class DataRepositoryClient implements IDataClient {
     return _repository
         .watch(WatchChangesRequest(collection: collection, cursor: cursor))
         .handleError((error, stackTrace) {
-      if (error is RpcDataError) throw error;
-      throw RpcDataError.internal('Failed to stream changes', error: error);
-    });
+          if (error is RpcDataError) throw error;
+          throw RpcDataError.internal('Failed to stream changes', error: error);
+        });
   }
 
   @override
