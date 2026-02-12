@@ -1,8 +1,3 @@
-// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
-// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
-//
-// SPDX-License-Identifier: MIT
-
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'calculator_with_codec.dart';
@@ -20,12 +15,12 @@ class CalculatorCodecContractNames {
   static const sum = 'sum';
 }
 
-final class CalculatorCodecContractCaller extends RpcCallerContract
+class CalculatorCodecContractCaller extends RpcCallerContract
     implements ICalculatorCodecContract {
   CalculatorCodecContractCaller(
     RpcCallerEndpoint endpoint, {
     String? serviceNameOverride,
-    RpcDataTransferMode dataTransferMode = RpcDataTransferMode.zeroCopy,
+    RpcDataTransferMode dataTransferMode = RpcDataTransferMode.codec,
   }) : super(
          serviceNameOverride ?? CalculatorCodecContractNames.service,
          endpoint,
@@ -36,6 +31,10 @@ final class CalculatorCodecContractCaller extends RpcCallerContract
   Future<SumResponse> sum(SumRequest request, {RpcContext? context}) {
     return callUnary<SumRequest, SumResponse>(
       methodName: CalculatorCodecContractNames.sum,
+      requestCodec: const RpcCodec<SumRequest>.withDecoder(SumRequest.fromJson),
+      responseCodec: const RpcCodec<SumResponse>.withDecoder(
+        SumResponse.fromJson,
+      ),
       request: request,
       context: context,
     );
@@ -46,7 +45,7 @@ abstract class CalculatorCodecContractResponder extends RpcResponderContract
     implements ICalculatorCodecContract {
   CalculatorCodecContractResponder({
     String? serviceNameOverride,
-    RpcDataTransferMode dataTransferMode = RpcDataTransferMode.zeroCopy,
+    RpcDataTransferMode dataTransferMode = RpcDataTransferMode.codec,
   }) : super(
          serviceNameOverride ?? CalculatorCodecContractNames.service,
          dataTransferMode: dataTransferMode,
@@ -58,6 +57,10 @@ abstract class CalculatorCodecContractResponder extends RpcResponderContract
       methodName: CalculatorCodecContractNames.sum,
       handler: sum,
       description: 'Sum with default RpcCodec',
+      requestCodec: const RpcCodec<SumRequest>.withDecoder(SumRequest.fromJson),
+      responseCodec: const RpcCodec<SumResponse>.withDecoder(
+        SumResponse.fromJson,
+      ),
     );
   }
 }

@@ -1,8 +1,3 @@
-// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
-// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
-//
-// SPDX-License-Identifier: MIT
-
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'calculator_contract.dart';
@@ -40,7 +35,7 @@ class CalculatorContractNames {
   static const numbers = 'numbers';
 }
 
-final class CalculatorContractCaller extends RpcCallerContract
+class CalculatorContractCaller extends RpcCallerContract
     implements ICalculatorContract {
   CalculatorContractCaller(
     RpcCallerEndpoint endpoint, {
