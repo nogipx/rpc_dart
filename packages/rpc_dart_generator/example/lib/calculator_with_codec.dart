@@ -13,9 +13,12 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 part 'calculator_with_codec.g.dart';
 
-@RpcService(name: 'CalculatorCodec', transferMode: RpcDataTransferMode.codec)
-abstract class ICalculatorCodecContract {
-  @RpcMethod(name: 'sum', description: 'Sum with default RpcCodec')
+@RpcService(
+  name: 'CalculatorSerialize',
+  transferMode: RpcDataTransferMode.codec,
+)
+abstract class ICalculatorSerializeContract {
+  @RpcMethod.unary(name: 'sum', description: 'Sum with default RpcCodec')
   Future<SumResponse> sum(SumRequest request, {RpcContext? context});
 }
 

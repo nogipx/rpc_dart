@@ -8,21 +8,31 @@ part of 'calculator_with_codec.dart';
 
 // ignore_for_file: type=lint, unused_element
 
-class CalculatorCodecContractNames {
-  const CalculatorCodecContractNames._();
-  static const service = 'CalculatorCodec';
+class CalculatorSerializeContractNames {
+  const CalculatorSerializeContractNames._();
+  static const service = 'CalculatorSerialize';
   static String instance(String suffix) => '\$service\_$suffix';
   static const sum = 'sum';
 }
 
-class CalculatorCodecContractCaller extends RpcCallerContract
-    implements ICalculatorCodecContract {
-  CalculatorCodecContractCaller(
+class CalculatorSerializeContractCodecs {
+  const CalculatorSerializeContractCodecs._();
+  static const codecSumRequest = RpcCodec<SumRequest>.withDecoder(
+    SumRequest.fromJson,
+  );
+  static const codecSumResponse = RpcCodec<SumResponse>.withDecoder(
+    SumResponse.fromJson,
+  );
+}
+
+class CalculatorSerializeContractCaller extends RpcCallerContract
+    implements ICalculatorSerializeContract {
+  CalculatorSerializeContractCaller(
     RpcCallerEndpoint endpoint, {
     String? serviceNameOverride,
     RpcDataTransferMode dataTransferMode = RpcDataTransferMode.codec,
   }) : super(
-         serviceNameOverride ?? CalculatorCodecContractNames.service,
+         serviceNameOverride ?? CalculatorSerializeContractNames.service,
          endpoint,
          dataTransferMode: dataTransferMode,
        );
@@ -30,37 +40,33 @@ class CalculatorCodecContractCaller extends RpcCallerContract
   @override
   Future<SumResponse> sum(SumRequest request, {RpcContext? context}) {
     return callUnary<SumRequest, SumResponse>(
-      methodName: CalculatorCodecContractNames.sum,
-      requestCodec: const RpcCodec<SumRequest>.withDecoder(SumRequest.fromJson),
-      responseCodec: const RpcCodec<SumResponse>.withDecoder(
-        SumResponse.fromJson,
-      ),
+      methodName: CalculatorSerializeContractNames.sum,
+      requestCodec: CalculatorSerializeContractCodecs.codecSumRequest,
+      responseCodec: CalculatorSerializeContractCodecs.codecSumResponse,
       request: request,
       context: context,
     );
   }
 }
 
-abstract class CalculatorCodecContractResponder extends RpcResponderContract
-    implements ICalculatorCodecContract {
-  CalculatorCodecContractResponder({
+abstract class CalculatorSerializeContractResponder extends RpcResponderContract
+    implements ICalculatorSerializeContract {
+  CalculatorSerializeContractResponder({
     String? serviceNameOverride,
     RpcDataTransferMode dataTransferMode = RpcDataTransferMode.codec,
   }) : super(
-         serviceNameOverride ?? CalculatorCodecContractNames.service,
+         serviceNameOverride ?? CalculatorSerializeContractNames.service,
          dataTransferMode: dataTransferMode,
        );
 
   @override
   void setup() {
     addUnaryMethod<SumRequest, SumResponse>(
-      methodName: CalculatorCodecContractNames.sum,
+      methodName: CalculatorSerializeContractNames.sum,
       handler: sum,
       description: 'Sum with default RpcCodec',
-      requestCodec: const RpcCodec<SumRequest>.withDecoder(SumRequest.fromJson),
-      responseCodec: const RpcCodec<SumResponse>.withDecoder(
-        SumResponse.fromJson,
-      ),
+      requestCodec: CalculatorSerializeContractCodecs.codecSumRequest,
+      responseCodec: CalculatorSerializeContractCodecs.codecSumResponse,
     );
   }
 }

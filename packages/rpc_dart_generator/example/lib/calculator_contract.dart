@@ -9,13 +9,12 @@ import 'dart:async';
 
 import 'package:json_annotation/json_annotation.dart';
 import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_dart_generator/rpc_dart_generator.dart';
 
 part 'calculator_contract.g.dart';
 
 @RpcService(name: 'Calculator', transferMode: RpcDataTransferMode.zeroCopy)
 abstract class ICalculatorContract {
-  @RpcMethod(name: 'sum')
+  @RpcMethod.unary(name: 'sum')
   Future<SumResponse> sum(SumRequest request, {RpcContext? context});
 
   @RpcMethod(

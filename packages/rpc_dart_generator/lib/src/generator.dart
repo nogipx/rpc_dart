@@ -234,6 +234,19 @@ class _Emitter {
     return name;
   }
 
+  bool _shouldUseCodec(
+    _MethodMeta meta,
+    MethodElement element,
+    RpcDataTransferMode effectiveMode,
+  ) {
+    final methodMode = meta.transferMode ?? effectiveMode;
+    if (methodMode == RpcDataTransferMode.zeroCopy) return false;
+    if (meta.requestCodecType != null || meta.responseCodecType != null) {
+      return true;
+    }
+    return true;
+  }
+
   String build() {
     final buffer = StringBuffer();
     buffer.writeln("// ignore_for_file: type=lint, unused_element");
@@ -241,6 +254,15 @@ class _Emitter {
 
     buffer.writeln(_buildNames());
     buffer.writeln();
+
+    final needsCodecs = methods.any((m) =>
+      _shouldUseCodec(m, m.signature.element, service.transferMode)
+    );
+    if (needsCodecs) {
+      buffer.writeln(_buildCodecs());
+      buffer.writeln();
+    }
+
     buffer.writeln(_buildCaller());
     buffer.writeln();
     buffer.writeln(_buildResponder());
@@ -262,6 +284,42 @@ class _Emitter {
         "  static const ${method.declarationName} = '${method.methodName}';",
       );
     }
+    b.writeln('}');
+    return b.toString();
+  }
+
+  String _buildCodecs() {
+    final b = StringBuffer();
+    final className = '${_baseName}Codecs';
+    b.writeln('class $className {');
+    b.writeln('  const $className._();');
+
+    for (final method in methods) {
+      final effectiveMode = method.transferMode ?? service.transferMode;
+      if (!_shouldUseCodec(method, method.signature.element, effectiveMode)) {
+        continue;
+      }
+
+      final requestTypeStr = method.signature.requestType.getDisplayString();
+      final responseTypeStr = method.signature.responseType.getDisplayString();
+
+      // Request codec
+      final requestCodecName = 'codec$requestTypeStr';
+      if (method.requestCodecType != null) {
+        b.writeln('  static const $requestCodecName = ${method.requestCodecType!.getDisplayString()}();');
+      } else {
+        b.writeln('  static const $requestCodecName = RpcCodec<$requestTypeStr>.withDecoder($requestTypeStr.fromJson);');
+      }
+
+      // Response codec
+      final responseCodecName = 'codec$responseTypeStr';
+      if (method.responseCodecType != null) {
+        b.writeln('  static const $responseCodecName = ${method.responseCodecType!.getDisplayString()}();');
+      } else {
+        b.writeln('  static const $responseCodecName = RpcCodec<$responseTypeStr>.withDecoder($responseTypeStr.fromJson);');
+      }
+    }
+
     b.writeln('}');
     return b.toString();
   }
@@ -706,12 +764,14 @@ class _Signature {
       useDefault: useCodec,
       providedCodecType: meta.requestCodecType,
       targetType: requestTypeStr,
+      methodDeclarationName: meta.declarationName,
     );
     final responseCodec = _codecString(
       isResponse: true,
       useDefault: useCodec,
       providedCodecType: meta.responseCodecType,
       targetType: responseTypeStr,
+      methodDeclarationName: meta.declarationName,
     );
 
     switch (kind) {
@@ -740,13 +800,11 @@ class _Signature {
     required bool useDefault,
     required DartType? providedCodecType,
     required String targetType,
+    required String methodDeclarationName,
   }) {
     final label = isResponse ? 'responseCodec' : 'requestCodec';
     if (!useDefault) return '';
-    if (providedCodecType != null) {
-      return '$label: const ${providedCodecType.getDisplayString()}(), ';
-    }
-    return '$label: const RpcCodec<$targetType>.withDecoder($targetType.fromJson), ';
+    return '$label: ${baseName}Codecs.codec$targetType, ';
   }
 
   String _codecArg({
@@ -757,12 +815,7 @@ class _Signature {
     required bool useCodec,
   }) {
     if (!useCodec) return '';
-    final codecType =
-        isResponse ? meta.responseCodecType : meta.requestCodecType;
-    if (codecType != null) {
-      return '$label: const ${codecType.getDisplayString()}(), ';
-    }
-    return '$label: const RpcCodec<$targetType>.withDecoder($targetType.fromJson), ';
+    return '$label: ${baseName}Codecs.codec$targetType, ';
   }
 
   String _escape(String value) => value.replaceAll("'", "\\'");

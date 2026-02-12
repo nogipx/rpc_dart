@@ -6,8 +6,10 @@
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_generator_consumer/calculator_with_codec.dart';
 
-class CalculatorCodecResponder extends CalculatorCodecContractResponder {
-  CalculatorCodecResponder() : super();
+class CalculatorSerializeResponder
+    extends CalculatorSerializeContractResponder {
+  CalculatorSerializeResponder()
+    : super(dataTransferMode: RpcDataTransferMode.codec);
 
   @override
   Future<SumResponse> sum(SumRequest request, {RpcContext? context}) async {
@@ -17,14 +19,16 @@ class CalculatorCodecResponder extends CalculatorCodecContractResponder {
 }
 
 Future<void> main() async {
+  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.internal);
   final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
 
   final responderEndpoint = RpcResponderEndpoint(transport: responderTransport);
-  responderEndpoint.registerServiceContract(CalculatorCodecResponder());
+  responderEndpoint.registerServiceContract(CalculatorSerializeResponder());
   responderEndpoint.start();
 
-  final caller = CalculatorCodecContractCaller(
+  final caller = CalculatorSerializeContractCaller(
     RpcCallerEndpoint(transport: callerTransport),
+    dataTransferMode: RpcDataTransferMode.codec,
   );
 
   final res = await caller.sum(SumRequest(values: [4, 5, 6]));
