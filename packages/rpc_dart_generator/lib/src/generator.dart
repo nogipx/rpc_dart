@@ -294,6 +294,9 @@ class _Emitter {
     b.writeln('class $className {');
     b.writeln('  const $className._();');
 
+    // Собираем уникальные типы с их кодеками
+    final codecMap = <String, _CodecInfo>{};
+
     for (final method in methods) {
       final effectiveMode = method.transferMode ?? service.transferMode;
       if (!_shouldUseCodec(method, method.signature.element, effectiveMode)) {
@@ -303,20 +306,33 @@ class _Emitter {
       final requestTypeStr = method.signature.requestType.getDisplayString();
       final responseTypeStr = method.signature.responseType.getDisplayString();
 
-      // Request codec
-      final requestCodecName = 'codec$requestTypeStr';
-      if (method.requestCodecType != null) {
-        b.writeln('  static const $requestCodecName = ${method.requestCodecType!.getDisplayString()}();');
-      } else {
-        b.writeln('  static const $requestCodecName = RpcCodec<$requestTypeStr>.withDecoder($requestTypeStr.fromJson);');
+      // Добавляем request codec если ещё нет
+      if (!codecMap.containsKey(requestTypeStr)) {
+        codecMap[requestTypeStr] = _CodecInfo(
+          typeName: requestTypeStr,
+          customCodecType: method.requestCodecType,
+        );
       }
 
-      // Response codec
-      final responseCodecName = 'codec$responseTypeStr';
-      if (method.responseCodecType != null) {
-        b.writeln('  static const $responseCodecName = ${method.responseCodecType!.getDisplayString()}();');
+      // Добавляем response codec если ещё нет
+      if (!codecMap.containsKey(responseTypeStr)) {
+        codecMap[responseTypeStr] = _CodecInfo(
+          typeName: responseTypeStr,
+          customCodecType: method.responseCodecType,
+        );
+      }
+    }
+
+    // Генерируем константы в алфавитном порядке для стабильности
+    final sortedTypes = codecMap.keys.toList()..sort();
+    for (final typeName in sortedTypes) {
+      final info = codecMap[typeName]!;
+      final codecName = 'codec$typeName';
+
+      if (info.customCodecType != null) {
+        b.writeln('  static const $codecName = ${info.customCodecType!.getDisplayString()}();');
       } else {
-        b.writeln('  static const $responseCodecName = RpcCodec<$responseTypeStr>.withDecoder($responseTypeStr.fromJson);');
+        b.writeln('  static const $codecName = RpcCodec<$typeName>.withDecoder($typeName.fromJson);');
       }
     }
 
@@ -853,6 +869,16 @@ class _MethodMeta {
   final DartType? requestCodecType;
   final DartType? responseCodecType;
   final RpcDataTransferMode? transferMode;
+}
+
+class _CodecInfo {
+  _CodecInfo({
+    required this.typeName,
+    this.customCodecType,
+  });
+
+  final String typeName;
+  final DartType? customCodecType;
 }
 
 extension<E> on Iterable<E> {
