@@ -49,11 +49,22 @@ await client.delete('photos', 'p1', expectedVersion: head.descriptor?.version);
 
 ### In-memory setup (tests/dev)
 ```dart
+// Using BlobServiceFactory helper
 final env = await BlobServiceFactory.inMemory(
   uploadChunkBytes: 128 * 1024,
   maxChunkBytes: 256 * 1024,
 );
 final client = env.client;
+
+// Or using InMemoryBlobRepository directly
+final storage = InMemoryBlobRepository(
+  maxBlobBytes: 10 * 1024 * 1024, // 10MB limit
+  readChunkBytes: 256 * 1024,
+);
+final server = BlobServiceFactory.createServer(
+  transport: transport,
+  storage: storage,
+);
 ```
 
 ### S3/MinIO adapter
@@ -95,4 +106,9 @@ Descriptors returned from S3 include a download URL (`downloadUrl`). The adapter
 - `lib/src/rpc` — contract, caller/responder wiring, service interface (client-stream upload, server-stream download; chunks are base64-framed for now).
 
 ## Status
-Includes `SqliteBlobStorageAdapter` for local/dev storage (payloads kept in `BLOB` columns with optimistic versioning) and `S3BlobStorageAdapter` for S3-compatible backends (AWS, MinIO, Ceph) storing blobs as `<prefix><collection>/<id>` with metadata-based versioning. `BlobService` provides a default server implementation on top of any `IBlobStorageAdapter`. The API is intentionally small to evolve toward zero-copy binary framing (replace base64 chunks with transport-native binary when ready).
+Includes three storage adapter implementations:
+- `InMemoryBlobRepository` — pure in-memory storage for testing and development (no persistence)
+- `SqliteBlobStorageAdapter` — local/dev storage (payloads kept in `BLOB` columns with optimistic versioning)
+- `S3BlobStorageAdapter` — S3-compatible backends (AWS, MinIO, Ceph) storing blobs as `<prefix><collection>/<id>` with metadata-based versioning
+
+`BlobService` provides a default server implementation on top of any `IBlobStorageAdapter`. The API is intentionally small to evolve toward zero-copy binary framing (replace base64 chunks with transport-native binary when ready).

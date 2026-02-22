@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 import 'package:crypto/crypto.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
@@ -87,7 +92,7 @@ class BlobServiceFactory {
     );
   }
 
-  /// Full in-memory setup: paired transports + SQLite in-memory storage.
+  /// Full in-memory setup: paired transports + provided storage adapter.
   static Future<InMemoryBlobServiceEnvironment> inMemory({
     required IBlobRepository storage,
     String serverLabel = 'BlobResponder',

@@ -10,8 +10,6 @@ import 'package:sqlite3/common.dart' as sqlite;
 import 'sql_cipher.dart';
 import 'sqlite_loader.dart' as sqlite_loader;
 
-typedef Clock = DateTime Function();
-
 /// SQLite-backed implementation of [IBlobRepository].
 ///
 /// Stores payloads directly in a `BLOB` column alongside metadata and keeps
@@ -184,7 +182,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       variables = [request.collection, request.id];
     }
 
-    final table = _tableForCollection(request.collection, createIfMissing: false);
+    final table = _tableForCollection(
+      request.collection,
+      createIfMissing: false,
+    );
     if (table == null) {
       return null;
     }
@@ -236,9 +237,14 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
         ? null
         : jsonEncode(request.metadata);
 
-    final table = _tableForCollection(request.collection, createIfMissing: true);
+    final table = _tableForCollection(
+      request.collection,
+      createIfMissing: true,
+    );
     if (table == null) {
-      throw StateError('Failed to ensure collection table for ${request.collection}');
+      throw StateError(
+        'Failed to ensure collection table for ${request.collection}',
+      );
     }
 
     return _transaction<BlobWriteResult>(() {
@@ -390,7 +396,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   @override
   Future<ListBlobsResponse> listBlobs(ListBlobsRequest request) async {
     _ensureOpen();
-    final table = _tableForCollection(request.collection, createIfMissing: false);
+    final table = _tableForCollection(
+      request.collection,
+      createIfMissing: false,
+    );
     if (table == null) {
       return const ListBlobsResponse(items: []);
     }
@@ -490,10 +499,9 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     if (_tableExists(table)) {
       _database.execute('DROP TABLE IF EXISTS $table');
     }
-    _database.execute(
-      'DELETE FROM "$_registryTable" WHERE collection = ?',
-      [collection],
-    );
+    _database.execute('DELETE FROM "$_registryTable" WHERE collection = ?', [
+      collection,
+    ]);
     _tableCache.remove(collection);
     return !_tableExists(table);
   }
@@ -605,7 +613,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     }
   }
 
-  String? _tableForCollection(String collection, {bool createIfMissing = true}) {
+  String? _tableForCollection(
+    String collection, {
+    bool createIfMissing = true,
+  }) {
     final cached = _tableCache[collection];
     if (cached != null) {
       return cached;
