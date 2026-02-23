@@ -255,9 +255,8 @@ class _Emitter {
     buffer.writeln(_buildNames());
     buffer.writeln();
 
-    final needsCodecs = methods.any((m) =>
-      _shouldUseCodec(m, m.signature.element, service.transferMode)
-    );
+    final needsCodecs = methods.any(
+        (m) => _shouldUseCodec(m, m.signature.element, service.transferMode));
     if (needsCodecs) {
       buffer.writeln(_buildCodecs());
       buffer.writeln();
@@ -330,9 +329,11 @@ class _Emitter {
       final codecName = 'codec$typeName';
 
       if (info.customCodecType != null) {
-        b.writeln('  static const $codecName = ${info.customCodecType!.getDisplayString()}();');
+        b.writeln(
+            '  static const $codecName = ${info.customCodecType!.getDisplayString()}();');
       } else {
-        b.writeln('  static const $codecName = RpcCodec<$typeName>.withDecoder($typeName.fromJson);');
+        b.writeln(
+            '  static const $codecName = RpcCodec<$typeName>.withDecoder($typeName.fromJson);');
       }
     }
 

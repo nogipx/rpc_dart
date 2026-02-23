@@ -1,6 +1,6 @@
 name: rpc_dart_generator
 description: Code generator for rpc_dart callers and responders.
-version: 0.1.4
+version: 0.1.5
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

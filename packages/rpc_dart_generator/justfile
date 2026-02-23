@@ -12,7 +12,7 @@ cl_br dir: # Clean build runner
 cl dir: # Flutter clean
     cd {{dir}} && fvm flutter clean
 license year +dirs:
-    reuse annotate -c "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>" -l "MIT" -y {{year}} -r {{dirs}}
+    reuse annotate -c "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>" -l "MIT" -y {{year}} -r {{dirs}} --skip-unrecognised
 
 test:
     fvm dart test --concurrency=1
