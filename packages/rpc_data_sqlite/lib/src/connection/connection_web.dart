@@ -16,6 +16,8 @@ import 'options.dart';
 final Uri _defaultWasmUri = Uri.parse('sqlite3mc.wasm');
 
 sqlite_wasm.WasmSqlite3? _cachedWasm;
+sqlite.VirtualFileSystem? _cachedVfs;
+bool _vfsRegistered = false;
 
 Future<sqlite_wasm.WasmSqlite3> _loadSqliteEngine(
   SqliteConnectionOptions options,
@@ -87,11 +89,21 @@ Future<sqlite.CommonDatabase> _openWebDatabase(
   required bool cipherCompatibleOnly,
 }) async {
   final engine = await _loadSqliteEngine(options);
-  final vfs = await _resolveWebVfs(
-    options,
-    cipherCompatibleOnly: cipherCompatibleOnly,
-  );
-  engine.registerVirtualFileSystem(vfs, makeDefault: true);
+
+  // Reuse cached VFS to avoid re-registering the same VFS name, which would
+  // cause an IndexedDB ConstraintError on the internal 'fileName' index.
+  var vfs = _cachedVfs;
+  if (vfs == null) {
+    vfs = await _resolveWebVfs(
+      options,
+      cipherCompatibleOnly: cipherCompatibleOnly,
+    );
+    _cachedVfs = vfs;
+  }
+  if (!_vfsRegistered) {
+    engine.registerVirtualFileSystem(vfs, makeDefault: true);
+    _vfsRegistered = true;
+  }
 
   final fileName = _normalizeWebFileName(options.webFileName);
   final openPath = vfs is sqlite_wasm.SimpleOpfsFileSystem
@@ -114,7 +126,23 @@ Future<DatabaseConnection> _openDatabase(
   if (hook != null) {
     await hook(database);
   }
-  return DatabaseConnection(database);
+
+  // Attach a close hook that flushes pending IndexedDB work items before
+  // the module is reloaded. Without this, orphaned async creates can race
+  // with the next session's _readFiles() and cause a ConstraintError on
+  // the 'fileName' unique index.
+  Future<void> closeHook() async {
+    final vfs = _cachedVfs;
+    _cachedVfs = null;
+    _vfsRegistered = false;
+    if (vfs is sqlite_wasm.IndexedDbFileSystem && !vfs.isClosed) {
+      await vfs.close();
+    } else if (vfs is sqlite_wasm.SimpleOpfsFileSystem) {
+      vfs.close();
+    }
+  }
+
+  return DatabaseConnection(database, closeHook: closeHook);
 }
 
 /// Открывает файл на веб-платформе (по умолчанию OPFS с fallback на IndexedDB/in-memory).

@@ -9,9 +9,14 @@ import 'package:sqlite3/common.dart' as sqlite;
 
 /// Lightweight wrapper around sqlite3 databases to match the previous API.
 class DatabaseConnection {
-  DatabaseConnection(this.database);
+  DatabaseConnection(this.database, {Future<void> Function()? closeHook})
+      : _closeHook = closeHook;
 
   final sqlite.CommonDatabase database;
+  final Future<void> Function()? _closeHook;
 
-  Future<void> close() => Future.sync(() => database.close());
+  Future<void> close() async {
+    database.close();
+    if (_closeHook != null) await _closeHook();
+  }
 }
