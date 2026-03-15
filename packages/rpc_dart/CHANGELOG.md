@@ -1,3 +1,17 @@
+## 2.5.0
+
+- Added gzip compression support: `RpcCallerEndpoint` now has a `compressionEnabled` flag (default `true`) that automatically injects `grpc-encoding: gzip` for non-zero-copy transports (e.g. network transports).
+- `StreamProcessor` auto-detects request/response encoding from incoming metadata (`grpc-encoding` / `grpc-accept-encoding`), enabling transparent decompression on the server side.
+- `UnaryResponder` captures `grpc-accept-encoding` per stream to compress unary responses when the client advertises support.
+- `RpcMetadata.forServerInitialResponse` now accepts an optional `encoding` parameter to include `grpc-encoding` in the initial server response headers for streaming compression.
+- Added compression tests for all stream types (unary, server streaming, client streaming, bidirectional).
+- Fix: `UnaryResponder` now captures `grpc-encoding` from incoming client metadata per stream and uses it for decompression, matching the behaviour of `StreamProcessor`.
+- Fix: caller and streaming processors now validate `grpc-encoding` against supported encodings before compressing and throw `RpcException` with a clear message instead of `UnsupportedError`.
+- Fix: `UnaryResponder` now throws `RpcException` (was bare `Exception`) when the request frame is empty.
+- Refactor: per-stream state in `UnaryResponder` consolidated from five parallel maps into a single `_UnaryStreamState` object — cleanup is now atomic.
+- Refactor: response-encoding negotiation logic extracted to `RpcGrpcCompression.selectResponseEncoding()` and reused by both `UnaryResponder` and `StreamProcessor`.
+- Refactor: `RpcCallerEndpoint._effectiveContext` renamed to `_prepareContext` for clarity.
+
 ## 2.4.1
 
 - Add interface for transport server

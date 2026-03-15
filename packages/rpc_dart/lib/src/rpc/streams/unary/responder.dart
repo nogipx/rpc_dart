@@ -5,6 +5,17 @@
 
 part of '../_index.dart';
 
+/// Per-stream state for [UnaryResponder].
+/// Consolidates all per-stream flags and encoding values into one object
+/// so that cleanup is a single [Map.remove] call.
+final class _UnaryStreamState {
+  bool requestHandled = false;
+  bool initialHeadersSent = false;
+  bool belongsToThisMethod = false;
+  String? clientAcceptEncoding;
+  String? clientRequestEncoding;
+}
+
 /// Unary responder with Stream ID support: handles one request, sends one response.
 final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Transport.
@@ -46,13 +57,16 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Request handler.
   late final FutureOr<TResponse> Function(TRequest request) _handler;
 
-  /// Stream state tracking.
-  final Map<int, bool> _streamRequestHandled = <int, bool>{};
-  final Map<int, bool> _streamInitialHeadersSent = <int, bool>{};
-  final Map<int, bool> _streamBelongsToThisMethod = <int, bool>{};
+  /// Per-stream state. Single map — one [remove] call cleans up everything.
+  final Map<int, _UnaryStreamState> _streamStates = <int, _UnaryStreamState>{};
 
-  /// grpc-accept-encoding from client's initial metadata, per stream.
-  final Map<int, String> _streamClientAcceptEncoding = <int, String>{};
+  _UnaryStreamState _stateFor(int streamId) =>
+      _streamStates.putIfAbsent(streamId, _UnaryStreamState.new);
+
+  /// Encoding of the stream currently being parsed (set before calling _parser).
+  /// Safe to use as a field because Dart is single-threaded and the decompressor
+  /// is called synchronously within the parser.
+  String? _activeRequestEncoding;
 
   /// Creates a unary responder.
   UnaryResponder({
@@ -76,7 +90,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     _parser = RpcMessageParser(
       logger: _logger,
       decompressor: (payload) {
-        final encoding = _context?.getHeader(RpcConstants.grpcEncodingHeader);
+        final encoding = _activeRequestEncoding ??
+            _context?.getHeader(RpcConstants.grpcEncodingHeader);
         if (encoding == null || encoding == RpcGrpcCompression.identity) {
           throw RpcException(
             'Compressed gRPC payload received without grpc-encoding',
@@ -91,7 +106,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     );
 
     // Register initial stream as belonging to this method.
-    _streamBelongsToThisMethod[id] = true;
+    _stateFor(id).belongsToThisMethod = true;
 
     _setupCancellationMonitoring();
     _setupRequestHandler();
@@ -140,8 +155,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
         // For metadata, ensure it targets this method.
         if (message.isMetadataOnly && message.metadata != null) {
+          final state = _stateFor(streamId);
           if (message.methodPath == _methodPath) {
-            _streamBelongsToThisMethod[streamId] = true;
+            state.belongsToThisMethod = true;
             _logger?.internal(
               'Unary server: stream $streamId bound to method $_methodPath',
             );
@@ -151,17 +167,24 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
             RpcConstants.grpcAcceptEncodingHeader,
           );
           if (accept != null) {
-            _streamClientAcceptEncoding[streamId] = accept;
+            state.clientAcceptEncoding = accept;
+          }
+          // Capture client's grpc-encoding to decompress incoming requests.
+          final requestEnc = message.metadata!.getHeaderValue(
+            RpcConstants.grpcEncodingHeader,
+          );
+          if (requestEnc != null && requestEnc != RpcGrpcCompression.identity) {
+            state.clientRequestEncoding = requestEnc;
           }
           return; // Register metadata only.
         }
 
         // For data messages, ensure they belong to this method.
-        if (!_streamBelongsToThisMethod.containsKey(streamId)) {
+        if (_streamStates[streamId]?.belongsToThisMethod != true) {
           return; // Not for this responder.
         }
 
-        if (_streamRequestHandled[streamId] == true) {
+        if (_streamStates[streamId]?.requestHandled == true) {
           // Ignore additional messages after first request handled.
           _logger?.internal(
             'Ignoring extra message for stream $streamId (request already handled)',
@@ -187,10 +210,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         }
 
         // If the client closed the stream without sending data.
+        final eosState = _streamStates[streamId];
         if (message.isEndOfStream &&
-            _streamBelongsToThisMethod[streamId] == true &&
-            _streamRequestHandled[streamId] != true) {
-          _streamRequestHandled[streamId] = true;
+            eosState?.belongsToThisMethod == true &&
+            eosState?.requestHandled != true) {
+          eosState!.requestHandled = true;
           _logger?.warning(
             'Client closed stream without sending data [streamId: $streamId]',
           );
@@ -206,9 +230,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           );
 
           // Clear state for this stream.
-          _streamRequestHandled.remove(streamId);
-          _streamInitialHeadersSent.remove(streamId);
-          _streamBelongsToThisMethod.remove(streamId);
+          _streamStates.remove(streamId);
         }
       },
       onError: (error, stackTrace) async {
@@ -241,7 +263,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       return;
     }
 
-    if (_streamRequestHandled[streamId] == true) {
+    final state = _stateFor(streamId);
+
+    if (state.requestHandled) {
       _logger?.internal(
         'Message for stream $streamId already handled, skipping',
       );
@@ -254,7 +278,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     }
 
     // Mark as handling immediately to prevent duplicates.
-    _streamRequestHandled[streamId] = true;
+    state.requestHandled = true;
     _logger?.internal(
       'Handling request for $_methodPath [streamId: $streamId]',
     );
@@ -264,7 +288,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       final responseEncoding = _selectResponseEncoding(streamId);
 
       // Send initial headers if not already sent.
-      if (_streamInitialHeadersSent[streamId] != true) {
+      if (!state.initialHeadersSent) {
         _logger?.internal(
           'Sending initial headers [streamId: $streamId]',
         );
@@ -272,19 +296,21 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           streamId,
           RpcMetadata.forServerInitialResponse(encoding: responseEncoding),
         );
-        _streamInitialHeadersSent[streamId] = true;
+        state.initialHeadersSent = true;
       }
 
       // Deserialize request using parser to extract framed messages.
       _logger?.internal(
         'Parsing request frame of ${message.payload!.length} bytes [streamId: $streamId]',
       );
+      _activeRequestEncoding = state.clientRequestEncoding;
       final messages = _parser(message.payload!);
+      _activeRequestEncoding = null;
       if (messages.isEmpty) {
         _logger?.error(
           'Failed to extract message from payload [streamId: $streamId]',
         );
-        throw Exception('Failed to extract message from payload');
+        throw RpcException('Failed to extract message from payload');
       }
 
       _logger?.internal('Deserializing request [streamId: $streamId]');
@@ -341,12 +367,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
 
       // Send initial headers if not already sent.
-      if (_streamInitialHeadersSent[streamId] != true) {
+      if (!state.initialHeadersSent) {
         await _transport.sendMetadata(
           streamId,
           RpcMetadata.forServerInitialResponse(),
         );
-        _streamInitialHeadersSent[streamId] = true;
+        state.initialHeadersSent = true;
       }
 
       // On error, send trailer with status.
@@ -360,12 +386,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         endStream: true,
       );
     } finally {
-      // Clear state for this stream.
+      // Clear state for this stream (single call removes all per-stream data).
       _logger?.internal('Clearing state for stream $streamId');
-      _streamRequestHandled.remove(streamId);
-      _streamInitialHeadersSent.remove(streamId);
-      _streamBelongsToThisMethod.remove(streamId);
-      _streamClientAcceptEncoding.remove(streamId);
+      _streamStates.remove(streamId);
     }
   }
 
@@ -391,7 +414,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       return;
     }
 
-    if (_streamRequestHandled[streamId] == true) {
+    final state = _stateFor(streamId);
+
+    if (state.requestHandled) {
       _logger?.internal(
         'Zero-copy message for stream $streamId already handled, skipping',
       );
@@ -399,14 +424,14 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     }
 
     // Mark as handling immediately.
-    _streamRequestHandled[streamId] = true;
+    state.requestHandled = true;
     _logger?.internal(
       'Zero-copy request processing for $_methodPath [streamId: $streamId]',
     );
 
     try {
       // Send initial headers if not already sent.
-      if (_streamInitialHeadersSent[streamId] != true) {
+      if (!state.initialHeadersSent) {
         _logger?.internal(
           'Sending initial headers [streamId: $streamId]',
         );
@@ -415,7 +440,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           streamId,
           RpcMetadata.forServerInitialResponse(),
         );
-        _streamInitialHeadersSent[streamId] = true;
+        state.initialHeadersSent = true;
       }
 
       // Zero-copy: get object directly without deserialization.
@@ -466,12 +491,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
 
       // Send initial headers if not already sent.
-      if (_streamInitialHeadersSent[streamId] != true) {
+      if (!state.initialHeadersSent) {
         await _transport.sendMetadata(
           streamId,
           RpcMetadata.forServerInitialResponse(),
         );
-        _streamInitialHeadersSent[streamId] = true;
+        state.initialHeadersSent = true;
       }
 
       // On error, send error trailer.
@@ -481,12 +506,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         endStream: true,
       );
     } finally {
-      // Clear state for this stream.
+      // Clear state for this stream (single call removes all per-stream data).
       _logger?.internal('Zero-copy cleanup for stream $streamId');
-      _streamRequestHandled.remove(streamId);
-      _streamInitialHeadersSent.remove(streamId);
-      _streamBelongsToThisMethod.remove(streamId);
-      _streamClientAcceptEncoding.remove(streamId);
+      _streamStates.remove(streamId);
     }
   }
 
@@ -495,16 +517,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Checks incoming request metadata first, then falls back to server context.
   /// Returns `null` if no compression should be applied (identity or unknown).
   String? _selectResponseEncoding(int streamId) {
-    final accept = _streamClientAcceptEncoding[streamId] ??
+    final accept = _streamStates[streamId]?.clientAcceptEncoding ??
         _context?.getHeader(RpcConstants.grpcAcceptEncodingHeader);
-    if (accept == null) return null;
-    for (final enc in accept.split(',').map((e) => e.trim())) {
-      if (enc != RpcGrpcCompression.identity &&
-          RpcGrpcCompression.isSupported(enc)) {
-        return enc;
-      }
-    }
-    return null;
+    return RpcGrpcCompression.selectResponseEncoding(accept);
   }
 
   /// Closes the responder; transport remains open.

@@ -459,9 +459,8 @@ void main() {
         await client.send('test request'.rpc);
 
         // Получаем все ответы до закрытия стрима (initial metadata + data + error trailer)
-        final responses = await client.responses
-            .toList()
-            .timeout(Duration(seconds: 5));
+        final responses =
+            await client.responses.toList().timeout(Duration(seconds: 5));
 
         // Должен быть хотя бы один ответ с данными и один с метаданными ошибки
         expect(responses.length, greaterThanOrEqualTo(1));

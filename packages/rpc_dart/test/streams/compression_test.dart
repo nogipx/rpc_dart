@@ -256,7 +256,10 @@ void main() {
       expect(receivedResponses.length, equals(2));
       expect(
         receivedResponses,
-        equals(['echo:${largePayload.value}'.rpc, 'echo:${largePayload.value}'.rpc]),
+        equals([
+          'echo:${largePayload.value}'.rpc,
+          'echo:${largePayload.value}'.rpc
+        ]),
       );
 
       await client.close();

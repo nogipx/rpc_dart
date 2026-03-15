@@ -347,7 +347,10 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         .withAdditionalHeaders(routingHeaders);
   }
 
-  RpcContext _effectiveContext(
+  /// Prepares a fully enriched context for an outgoing RPC call:
+  /// ensures trace ID and compression header, then adds routing headers
+  /// and a cancellation token.
+  RpcContext _prepareContext(
     RpcContext? userContext,
     String serviceName,
     String methodName,
@@ -390,7 +393,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     }
 
     // Auto-create/enrich context with trace ID and routing headers.
-    final enhancedContext = _effectiveContext(context, serviceName, methodName);
+    final enhancedContext = _prepareContext(context, serviceName, methodName);
 
     return () async {
       try {
@@ -514,7 +517,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     );
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
-    final enhancedContext = _effectiveContext(context, serviceName, methodName);
+    final enhancedContext = _prepareContext(context, serviceName, methodName);
 
     final stream = handleServerStream<TRequest, TResponse>(
       serviceName: serviceName,
@@ -560,8 +563,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
     return (Stream<C> requests) async {
       logger.internal('Выполнение client stream для $serviceName/$methodName');
-      final enhancedContext =
-          _effectiveContext(context, serviceName, methodName);
+      final enhancedContext = _prepareContext(context, serviceName, methodName);
 
       try {
         return await handleClientStream<C, R>(
@@ -603,7 +605,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     );
 
     // Автоматически создаем или дополняем контекст с trace ID и роутинговыми заголовками
-    final enhancedContext = _effectiveContext(context, serviceName, methodName);
+    final enhancedContext = _prepareContext(context, serviceName, methodName);
 
     return handleBidirectionalStream<C, R>(
       serviceName: serviceName,

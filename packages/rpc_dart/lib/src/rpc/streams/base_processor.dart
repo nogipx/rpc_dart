@@ -93,8 +93,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       _parser = RpcMessageParser(
         logger: _logger,
         decompressor: (payload) {
-          final encoding =
-              _requestEncoding ??
+          final encoding = _requestEncoding ??
               _context?.getHeader(RpcConstants.grpcEncodingHeader);
           if (encoding == null || encoding == RpcGrpcCompression.identity) {
             throw RpcException(
@@ -128,14 +127,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Picks the best response encoding from the client's grpc-accept-encoding.
   static String? _pickResponseEncoding(RpcContext? context) {
     final accept = context?.getHeader(RpcConstants.grpcAcceptEncodingHeader);
-    if (accept == null) return null;
-    for (final enc in accept.split(',').map((e) => e.trim())) {
-      if (enc != RpcGrpcCompression.identity &&
-          RpcGrpcCompression.isSupported(enc)) {
-        return enc;
-      }
-    }
-    return null;
+    return RpcGrpcCompression.selectResponseEncoding(accept);
   }
 
   /// Incoming request stream.
@@ -827,6 +819,14 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
             final requestEncoding =
                 _context?.getHeader(RpcConstants.grpcEncodingHeader);
+            if (requestEncoding != null &&
+                requestEncoding != RpcGrpcCompression.identity &&
+                !RpcGrpcCompression.isSupported(requestEncoding)) {
+              throw RpcException(
+                'Unsupported grpc-encoding: $requestEncoding. '
+                'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}',
+              );
+            }
             final useCompression = requestEncoding != null &&
                 requestEncoding != RpcGrpcCompression.identity;
             final payload = useCompression

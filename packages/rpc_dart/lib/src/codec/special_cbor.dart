@@ -35,7 +35,7 @@ abstract interface class CborCodec {
   static const int _simpleValueUndefined = 23;
   static const int _simpleValueBreak = 31;
 
-  /// Encodes Map<String, dynamic> into CBOR bytes.
+  /// Encodes Map(String, dynamic) into CBOR bytes.
   static Uint8List encode(Map<String, dynamic> value) {
     final writer = _FastCborWriter();
     writer.writeMap(value);
@@ -56,7 +56,7 @@ abstract interface class CborCodec {
   }
 
   /// Unsafe decoding of CBOR bytes.
-  /// Returns dynamic instead of Map<String, dynamic>.
+  /// Returns dynamic instead of Map(String, dynamic).
   /// Intended for tests and special cases.
   static dynamic decodeUnsafe(Uint8List bytes) {
     final reader = _CborReader(bytes);
@@ -64,7 +64,7 @@ abstract interface class CborCodec {
   }
 
   /// Encodes any value into CBOR bytes.
-  /// When [strictMapTypes] is true, Map inputs must be Map<String, dynamic>.
+  /// When [strictMapTypes] is true, Map inputs must be Map(String, dynamic).
   static Uint8List _encode(dynamic value, {bool strictMapTypes = true}) {
     // Ensure map inputs use string keys when strict typing is requested.
     if (strictMapTypes && value is Map && value is! Map<String, dynamic>) {
@@ -338,7 +338,7 @@ abstract interface class CborCodec {
     return (majorType << 5) | (additionalInfo & 0x1F);
   }
 
-  /// Converts Map<dynamic, dynamic> to Map<String, dynamic>.
+  /// Converts Map(dynamic, dynamic) to Map(String, dynamic).
   static Map<String, dynamic> _ensureStringKeys(Map<dynamic, dynamic> map) {
     return map.map((key, value) {
       // Recursively process nested maps.
@@ -617,7 +617,7 @@ class _CborReader {
   }
 }
 
-/// OPTIMIZED: Fast CBOR reader for Map<String, dynamic>.
+/// OPTIMIZED: Fast CBOR reader for Map(String, dynamic).
 /// Avoids redundant checks and type conversions.
 class _FastCborReader {
   final Uint8List _bytes;
@@ -625,7 +625,7 @@ class _FastCborReader {
 
   _FastCborReader(this._bytes);
 
-  /// Reads Map<String, dynamic> directly without extra conversions.
+  /// Reads Map(String, dynamic) directly without extra conversions.
   Map<String, dynamic> readMap() {
     if (_offset >= _bytes.length) {
       throw FormatException('Unexpected end of CBOR data');
@@ -810,7 +810,7 @@ class _FastCborReader {
   }
 }
 
-/// OPTIMIZED: Fast CBOR writer for Map<String, dynamic>.
+/// OPTIMIZED: Fast CBOR writer for Map(String, dynamic).
 /// Avoids redundant checks and type conversions.
 class _FastCborWriter {
   final BytesBuilder _builder = BytesBuilder();
@@ -818,7 +818,7 @@ class _FastCborWriter {
   /// Returns encoded bytes.
   Uint8List toBytes() => _builder.toBytes();
 
-  /// Encodes Map<String, dynamic> into CBOR bytes.
+  /// Encodes Map(String, dynamic) into CBOR bytes.
   void writeMap(Map<String, dynamic> value) {
     _writeLength(CborCodec._majorTypeMap, value.length);
 
@@ -865,7 +865,7 @@ class _FastCborWriter {
     } else if (value is Map) {
       _writeMap(value);
     } else if (value is IRpcSerializable) {
-      // For IRpcSerializable use toJson(), which returns Map<String, dynamic>.
+      // For IRpcSerializable use toJson(), which returns Map(String, dynamic).
       _writeMap(value.toJson());
     } else {
       try {

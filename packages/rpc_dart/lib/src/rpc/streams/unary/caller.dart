@@ -290,6 +290,14 @@ final class UnaryCaller<TRequest, TResponse> {
         final requestEncoding = _context?.getHeader(
           RpcConstants.grpcEncodingHeader,
         );
+        if (requestEncoding != null &&
+            requestEncoding != RpcGrpcCompression.identity &&
+            !RpcGrpcCompression.isSupported(requestEncoding)) {
+          throw RpcException(
+            'Unsupported grpc-encoding: $requestEncoding. '
+            'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}',
+          );
+        }
         final useCompression = requestEncoding != null &&
             requestEncoding != RpcGrpcCompression.identity;
         final payload = useCompression

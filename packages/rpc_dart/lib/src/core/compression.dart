@@ -48,6 +48,21 @@ abstract final class RpcGrpcCompression {
     }
   }
 
+  /// Picks the best encoding the peer advertised it can decompress.
+  ///
+  /// [acceptEncoding] is the raw `grpc-accept-encoding` header value
+  /// (comma-separated list, e.g. `"gzip, identity"`).
+  /// Returns the first supported non-identity encoding, or `null` for identity.
+  static String? selectResponseEncoding(String? acceptEncoding) {
+    if (acceptEncoding == null) return null;
+    for (final enc in acceptEncoding.split(',').map((e) => e.trim())) {
+      if (enc != identity && isSupported(enc)) {
+        return enc;
+      }
+    }
+    return null;
+  }
+
   static List<String> supportedEncodings() {
     final encodings = <String>[identity];
     if (gzip_impl.rpcGzipSupported) {
