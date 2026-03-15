@@ -1,8 +1,11 @@
+## 0.1.6
+- fix: correct custom instance name
+
 ## 0.1.5
 - bump dependencies
 
 ## 0.1.4
-- fix adding bidirectional method
+- fix: adding bidirectional method
 
 ## 0.1.3
 - Switch to `SharedPartBuilder` + `combining_builder` to avoid `.g.dart` output collisions with other source_gen builders.

@@ -276,7 +276,7 @@ class _Emitter {
     b.writeln('  const $className._();');
     b.writeln("  static const service = '${service.name}';");
     b.writeln(
-      r"  static String instance(String suffix) => '\$service\_$suffix';",
+      r"  static String instance(String suffix) => '$service\_$suffix';",
     );
     for (final method in methods) {
       b.writeln(
