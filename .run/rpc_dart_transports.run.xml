@@ -1,7 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="rpc_dart_transports" type="DartTestRunConfigurationType" factoryName="Dart Test">
-    <option name="filePath" value="$PROJECT_DIR$/packages/rpc_dart_transports/test" />
-    <option name="scope" value="FOLDER" />
-    <method v="2" />
-  </configuration>
-</component>

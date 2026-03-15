@@ -1,0 +1,19 @@
+name: rpc_dart_http
+description: HTTP/1.1 caller/responder transports for rpc_dart (unary only).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.1
+
+topics:
+  - rpc
+  - http
+
+dependencies:
+  rpc_dart:
+    path: ../rpc_dart
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6
