@@ -908,6 +908,97 @@ void main() {
       await transport.close();
     });
   });
+
+  group('gzip compression', () {
+    // End-to-end: client sends compressed request + server responds compressed.
+    test('compressed_request_and_response_round_trip', () async {
+      final httpServer = await HttpServer.bind('127.0.0.1', 0);
+      final serverTransport = RpcHttpResponderTransport(httpServer);
+      final serverEndpoint = RpcResponderEndpoint(
+        transport: serverTransport,
+        debugLabel: 'CompressServer',
+      );
+      serverEndpoint.registerServiceContract(_EchoService());
+      serverEndpoint.start();
+
+      final clientTransport = RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${httpServer.port}',
+      );
+      final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
+
+      // Send a large payload — compression is most visible on larger data.
+      final payload = 'hello-gzip ' * 500; // ~5.5 KB
+
+      // Request with grpc-encoding: gzip in context → client compresses request,
+      // server sees grpc-accept-encoding → responds with gzip too.
+      final context = RpcContext.withHeaders(
+        {RpcConstants.grpcEncodingHeader: 'gzip'},
+      );
+
+      final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        serviceName: 'Echo',
+        methodName: 'Echo',
+        requestCodec: RpcString.codec,
+        responseCodec: RpcString.codec,
+        request: RpcString(payload),
+        context: context,
+      );
+
+      expect(response.value, 'Echo: $payload');
+
+      await clientEndpoint.close();
+      await serverEndpoint.close();
+      await httpServer.close(force: true);
+    });
+
+    test('server_compresses_response_when_client_advertises_gzip', () async {
+      final httpServer = await HttpServer.bind('127.0.0.1', 0);
+      final serverTransport = RpcHttpResponderTransport(httpServer);
+      final serverEndpoint = RpcResponderEndpoint(
+        transport: serverTransport,
+        debugLabel: 'CompressServer',
+      );
+      serverEndpoint.registerServiceContract(_EchoService());
+      serverEndpoint.start();
+
+      final clientTransport = RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${httpServer.port}',
+      );
+
+      // Intercept raw transport messages to verify grpc-encoding header.
+      final receivedMeta = <RpcTransportMessage>[];
+      final streamId = clientTransport.createStream();
+      clientTransport.getMessagesForStream(streamId).listen((m) {
+        if (m.metadata != null) receivedMeta.add(m);
+      });
+
+      // Standard metadata already includes grpc-accept-encoding: identity,gzip.
+      await clientTransport.sendMetadata(
+        streamId,
+        RpcMetadata.forClientRequest('Echo', 'Echo'),
+      );
+      final body = RpcMessageFrame.encode(
+        RpcString.codec.serialize(RpcString('check-encoding')),
+      );
+      await clientTransport.sendMessage(streamId, body, endStream: true);
+
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      // The server's initial response metadata must contain grpc-encoding: gzip.
+      final initialMeta = receivedMeta.firstWhere(
+        (m) => !m.isEndOfStream,
+        orElse: () => throw StateError('No initial metadata received'),
+      );
+      expect(
+        initialMeta.metadata?.getHeaderValue(RpcConstants.grpcEncodingHeader),
+        'gzip',
+      );
+
+      await clientTransport.close();
+      await serverEndpoint.close();
+      await httpServer.close(force: true);
+    });
+  });
 }
 
 abstract interface class _IEchoContract implements IRpcContract {

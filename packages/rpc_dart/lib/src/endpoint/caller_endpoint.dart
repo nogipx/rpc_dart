@@ -53,10 +53,18 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
   RpcLogger get logger =>
       RpcLogger('RpcCallerEndpoint', colors: loggerColors, label: debugLabel);
 
+  /// Whether to compress outgoing requests with gzip by default.
+  ///
+  /// Automatically disabled for zero-copy-capable transports (e.g.
+  /// [RpcInMemoryTransport]) because compression yields no benefit
+  /// in-process and only wastes CPU.
+  final bool compressionEnabled;
+
   RpcCallerEndpoint({
     required super.transport,
     super.debugLabel,
     super.loggerColors,
+    this.compressionEnabled = true,
   }) {
     _validateClientTransport();
   }
@@ -285,27 +293,36 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
 
   /// Creates or enriches RpcContext for a client request.
   /// Auto-generates trace ID when absent.
+  /// Injects gzip compression header when [compressionEnabled] is true and
+  /// the transport does not support zero-copy (i.e. it is a network transport).
   RpcContext _ensureContext(RpcContext? context) {
+    RpcContext result;
+
     if (context?.traceId != null) {
-      // Context already has trace ID.
       logger.internal('Using existing trace ID: ${context!.traceId}');
-      return context;
-    }
-
-    if (context != null) {
-      // Add trace ID to existing context.
+      result = context;
+    } else if (context != null) {
       final tracingContext = RpcContextUtils.withTracing();
-      final enhancedContext = context.withTraceId(tracingContext.traceId!);
+      result = context.withTraceId(tracingContext.traceId!);
       logger.internal(
-        'Attached trace ID to existing context: ${enhancedContext.traceId}',
+        'Attached trace ID to existing context: ${result.traceId}',
       );
-      return enhancedContext;
+    } else {
+      result = RpcContextUtils.withTracing();
+      logger.internal('Created new context with trace ID: ${result.traceId}');
     }
 
-    // No context provided—create a new one with trace ID.
-    final newContext = RpcContextUtils.withTracing();
-    logger.internal('Created new context with trace ID: ${newContext.traceId}');
-    return newContext;
+    // Inject gzip for network transports unless the caller already set it.
+    if (compressionEnabled &&
+        !transport.supportsZeroCopy &&
+        !result.headers.containsKey(RpcConstants.grpcEncodingHeader)) {
+      result = result.withAdditionalHeaders({
+        RpcConstants.grpcEncodingHeader: RpcGrpcCompression.gzip,
+      });
+      logger.internal('Injected default gzip compression');
+    }
+
+    return result;
   }
 
   /// Enriches context with a cancellation token for the Transport Router.

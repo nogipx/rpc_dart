@@ -110,13 +110,15 @@ final class RpcMetadata {
   /// Forms the HTTP/2 headers the server sends upon receiving a request before
   /// streaming any data.
   /// Returns metadata ready to send at the start of a response.
-  static RpcMetadata forServerInitialResponse() {
-    return const RpcMetadata([
-      RpcHeader(':status', '200'),
-      RpcHeader(
+  static RpcMetadata forServerInitialResponse({String? encoding}) {
+    return RpcMetadata([
+      const RpcHeader(':status', '200'),
+      const RpcHeader(
         RpcConstants.contentTypeHeader,
         RpcConstants.grpcContentType,
       ),
+      if (encoding != null && encoding != RpcGrpcCompression.identity)
+        RpcHeader(RpcConstants.grpcEncodingHeader, encoding),
     ]);
   }
 

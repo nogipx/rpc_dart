@@ -52,6 +52,15 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Indicates initial metadata sent.
   bool _initialMetadataSent = false;
 
+  /// Response encoding selected from client's grpc-accept-encoding.
+  /// Null means identity (no compression).
+  /// Initially set from server context; overridden by incoming client metadata.
+  String? _responseEncoding;
+
+  /// Request encoding advertised by the peer in grpc-encoding.
+  /// Set when the initial request metadata arrives; used by the decompressor.
+  String? _requestEncoding;
+
   /// Method path `/Service/Method`.
   late final String _methodPath;
 
@@ -84,7 +93,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       _parser = RpcMessageParser(
         logger: _logger,
         decompressor: (payload) {
-          final encoding = _context?.getHeader(RpcConstants.grpcEncodingHeader);
+          final encoding =
+              _requestEncoding ??
+              _context?.getHeader(RpcConstants.grpcEncodingHeader);
           if (encoding == null || encoding == RpcGrpcCompression.identity) {
             throw RpcException(
               'Compressed gRPC payload received without grpc-encoding',
@@ -104,6 +115,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     _methodPath = '/$_serviceName/$_methodName';
+    _responseEncoding = _pickResponseEncoding(context);
 
     _logger?.internal(
       'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
@@ -111,6 +123,19 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
     _setupCancellationMonitoring();
     _setupResponseHandler();
+  }
+
+  /// Picks the best response encoding from the client's grpc-accept-encoding.
+  static String? _pickResponseEncoding(RpcContext? context) {
+    final accept = context?.getHeader(RpcConstants.grpcAcceptEncodingHeader);
+    if (accept == null) return null;
+    for (final enc in accept.split(',').map((e) => e.trim())) {
+      if (enc != RpcGrpcCompression.identity &&
+          RpcGrpcCompression.isSupported(enc)) {
+        return enc;
+      }
+    }
+    return null;
   }
 
   /// Incoming request stream.
@@ -143,13 +168,37 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
                 'Zero-copy response sent for $_methodPath [streamId: $_streamId]',
               );
             } else {
+              // Send initial metadata before the first response frame only when
+              // we need to advertise compression. Without compression the
+              // existing behaviour (no initial metadata for streaming) is kept
+              // so existing tests and in-memory transports are not affected.
+              if (_responseEncoding != null && !_initialMetadataSent) {
+                await _transport.sendMetadata(
+                  _streamId,
+                  RpcMetadata.forServerInitialResponse(
+                    encoding: _responseEncoding,
+                  ),
+                );
+                _initialMetadataSent = true;
+              }
+
               // Serialization for network transports
               final serialized = _responseCodec!.serialize(response);
               _logger?.internal(
                 'Response serialized (${serialized.length} bytes) [streamId: $_streamId]',
               );
 
-              final framedMessage = RpcMessageFrame.encode(serialized);
+              final useCompression = _responseEncoding != null;
+              final payload = useCompression
+                  ? RpcGrpcCompression.compress(
+                      serialized,
+                      encoding: _responseEncoding!,
+                    )
+                  : serialized;
+              final framedMessage = RpcMessageFrame.encode(
+                payload,
+                compressed: useCompression,
+              );
               await _transport.sendMessage(_streamId, framedMessage);
 
               _logger?.internal(
@@ -281,6 +330,33 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       payloadSize: message.payload?.length,
       isDirectPayload: message.isDirect,
     );
+
+    // Extract encoding hints from initial request metadata.
+    if (message.isMetadataOnly && message.metadata != null) {
+      final meta = message.metadata!;
+
+      // grpc-encoding: what the peer used to compress its requests.
+      final reqEnc = meta.getHeaderValue(RpcConstants.grpcEncodingHeader);
+      if (reqEnc != null && reqEnc != RpcGrpcCompression.identity) {
+        _requestEncoding = reqEnc;
+      }
+
+      // grpc-accept-encoding: what the peer can decompress → use for responses.
+      if (_responseEncoding == null) {
+        final accept = meta.getHeaderValue(
+          RpcConstants.grpcAcceptEncodingHeader,
+        );
+        if (accept != null) {
+          for (final enc in accept.split(',').map((e) => e.trim())) {
+            if (enc != RpcGrpcCompression.identity &&
+                RpcGrpcCompression.isSupported(enc)) {
+              _responseEncoding = enc;
+              break;
+            }
+          }
+        }
+      }
+    }
 
     // Zero-copy: direct object.
     if (message.isDirect && message.directPayload != null) {

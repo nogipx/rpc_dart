@@ -51,6 +51,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   final Map<int, bool> _streamInitialHeadersSent = <int, bool>{};
   final Map<int, bool> _streamBelongsToThisMethod = <int, bool>{};
 
+  /// grpc-accept-encoding from client's initial metadata, per stream.
+  final Map<int, String> _streamClientAcceptEncoding = <int, String>{};
+
   /// Creates a unary responder.
   UnaryResponder({
     this.id = 0,
@@ -142,6 +145,13 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
             _logger?.internal(
               'Unary server: stream $streamId bound to method $_methodPath',
             );
+          }
+          // Capture client's grpc-accept-encoding for response compression.
+          final accept = message.metadata!.getHeaderValue(
+            RpcConstants.grpcAcceptEncodingHeader,
+          );
+          if (accept != null) {
+            _streamClientAcceptEncoding[streamId] = accept;
           }
           return; // Register metadata only.
         }
@@ -250,6 +260,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     );
 
     try {
+      // Determine response encoding from client's grpc-accept-encoding.
+      final responseEncoding = _selectResponseEncoding(streamId);
+
       // Send initial headers if not already sent.
       if (_streamInitialHeadersSent[streamId] != true) {
         _logger?.internal(
@@ -257,7 +270,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         );
         await _transport.sendMetadata(
           streamId,
-          RpcMetadata.forServerInitialResponse(),
+          RpcMetadata.forServerInitialResponse(encoding: responseEncoding),
         );
         _streamInitialHeadersSent[streamId] = true;
       }
@@ -287,13 +300,23 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         'Request handled, preparing response [streamId: $streamId]',
       );
 
-      // Serialize and send response.
+      // Serialize and optionally compress response.
       _logger?.internal('Serializing response [streamId: $streamId]');
       final serializedResponse = _responseSerializer.serialize(response);
       _logger?.internal(
         'Response serialized, size: ${serializedResponse.length} bytes [streamId: $streamId]',
       );
-      final framedResponse = RpcMessageFrame.encode(serializedResponse);
+      final useCompression = responseEncoding != null;
+      final payload = useCompression
+          ? RpcGrpcCompression.compress(
+              serializedResponse,
+              encoding: responseEncoding,
+            )
+          : serializedResponse;
+      final framedResponse = RpcMessageFrame.encode(
+        payload,
+        compressed: useCompression,
+      );
       _logger?.internal('Sending response [streamId: $streamId]');
       await _transport.sendMessage(streamId, framedResponse);
 
@@ -342,6 +365,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       _streamRequestHandled.remove(streamId);
       _streamInitialHeadersSent.remove(streamId);
       _streamBelongsToThisMethod.remove(streamId);
+      _streamClientAcceptEncoding.remove(streamId);
     }
   }
 
@@ -386,6 +410,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         _logger?.internal(
           'Sending initial headers [streamId: $streamId]',
         );
+        // Zero-copy bypasses serialization/compression; no encoding header needed.
         await _transport.sendMetadata(
           streamId,
           RpcMetadata.forServerInitialResponse(),
@@ -461,7 +486,25 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       _streamRequestHandled.remove(streamId);
       _streamInitialHeadersSent.remove(streamId);
       _streamBelongsToThisMethod.remove(streamId);
+      _streamClientAcceptEncoding.remove(streamId);
     }
+  }
+
+  /// Picks the best response encoding the client advertised it can decompress.
+  ///
+  /// Checks incoming request metadata first, then falls back to server context.
+  /// Returns `null` if no compression should be applied (identity or unknown).
+  String? _selectResponseEncoding(int streamId) {
+    final accept = _streamClientAcceptEncoding[streamId] ??
+        _context?.getHeader(RpcConstants.grpcAcceptEncodingHeader);
+    if (accept == null) return null;
+    for (final enc in accept.split(',').map((e) => e.trim())) {
+      if (enc != RpcGrpcCompression.identity &&
+          RpcGrpcCompression.isSupported(enc)) {
+        return enc;
+      }
+    }
+    return null;
   }
 
   /// Closes the responder; transport remains open.

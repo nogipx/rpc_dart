@@ -458,9 +458,8 @@ void main() {
         // Act & Assert
         await client.send('test request'.rpc);
 
-        // Получаем все ответы (ожидаем первый ответ с данными, затем метаданные с ошибкой)
+        // Получаем все ответы до закрытия стрима (initial metadata + data + error trailer)
         final responses = await client.responses
-            .take(2)
             .toList()
             .timeout(Duration(seconds: 5));
 
