@@ -1,0 +1,20 @@
+name: rpc_dart_compression
+description: Cross-platform compression codecs for rpc_dart (web/JS/Wasm compatible).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.1
+
+topics:
+  - rpc
+  - compression
+
+dependencies:
+  rpc_dart:
+    path: ../rpc_dart
+  archive: ^3.6.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

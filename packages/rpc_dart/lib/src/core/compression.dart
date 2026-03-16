@@ -8,44 +8,97 @@ import 'dart:typed_data';
 import 'compression_gzip_stub.dart'
     if (dart.library.io) 'compression_gzip_io.dart' as gzip_impl;
 
+/// Interface for a pluggable compression codec.
+///
+/// Implement this class and register it with [RpcGrpcCompression.register]
+/// to add compression support for a given encoding on any platform:
+///
+/// ```dart
+/// RpcGrpcCompression.register('gzip', MyGzipCodec());
+/// ```
+abstract class RpcCompressionCodec {
+  const RpcCompressionCodec();
+
+  Uint8List compress(Uint8List data);
+  Uint8List decompress(Uint8List data);
+}
+
+/// Built-in codec backed by the dart:io gzip stub/io conditional import.
+final class _BuiltinGzipCodec implements RpcCompressionCodec {
+  const _BuiltinGzipCodec();
+
+  @override
+  Uint8List compress(Uint8List data) => gzip_impl.rpcGzipCompress(data);
+
+  @override
+  Uint8List decompress(Uint8List data) => gzip_impl.rpcGzipDecompress(data);
+}
+
 /// Minimal gRPC message compression helpers.
 ///
-/// Supports `identity` everywhere and `gzip` on platforms with `dart:io`.
+/// Supports `identity` everywhere. Additional encodings (e.g. `gzip`) are
+/// provided either automatically on native platforms (via `dart:io`) or by
+/// registering an external [RpcCompressionCodec]:
+///
+/// ```dart
+/// // e.g. in a web app using package:archive
+/// RpcGrpcCompression.register('gzip', ArchiveGzipCodec());
+/// ```
 abstract final class RpcGrpcCompression {
   static const String identity = 'identity';
   static const String gzip = 'gzip';
 
-  static bool isSupported(String encoding) {
-    switch (encoding) {
-      case identity:
-        return true;
-      case gzip:
-        return gzip_impl.rpcGzipSupported;
-      default:
-        return false;
+  /// Codec registry. Populated at startup with the dart:io gzip codec on
+  /// native platforms; external codecs can be added via [register].
+  static final Map<String, RpcCompressionCodec> _codecs = _initDefaults();
+
+  static Map<String, RpcCompressionCodec> _initDefaults() {
+    final map = <String, RpcCompressionCodec>{};
+    if (gzip_impl.rpcGzipSupported) {
+      map[gzip] = const _BuiltinGzipCodec();
     }
+    return map;
+  }
+
+  /// Registers [codec] for [encoding], replacing any existing one.
+  ///
+  /// Call this once at application startup before any RPC calls are made.
+  /// On web, register a gzip codec backed by `package:archive` (or similar)
+  /// to enable gzip compression:
+  ///
+  /// ```dart
+  /// RpcGrpcCompression.register('gzip', ArchiveGzipCodec());
+  /// ```
+  static void register(String encoding, RpcCompressionCodec codec) {
+    _codecs[encoding] = codec;
+  }
+
+  /// Removes the codec registered for [encoding].
+  static void unregister(String encoding) {
+    _codecs.remove(encoding);
+  }
+
+  static bool isSupported(String encoding) {
+    if (encoding == identity) return true;
+    return _codecs.containsKey(encoding);
   }
 
   static Uint8List compress(Uint8List data, {required String encoding}) {
-    switch (encoding) {
-      case identity:
-        return data;
-      case gzip:
-        return gzip_impl.rpcGzipCompress(data);
-      default:
-        throw UnsupportedError('Unsupported grpc-encoding: $encoding');
+    if (encoding == identity) return data;
+    final codec = _codecs[encoding];
+    if (codec == null) {
+      throw UnsupportedError('Unsupported grpc-encoding: $encoding');
     }
+    return codec.compress(data);
   }
 
   static Uint8List decompress(Uint8List data, {required String encoding}) {
-    switch (encoding) {
-      case identity:
-        return data;
-      case gzip:
-        return gzip_impl.rpcGzipDecompress(data);
-      default:
-        throw UnsupportedError('Unsupported grpc-encoding: $encoding');
+    if (encoding == identity) return data;
+    final codec = _codecs[encoding];
+    if (codec == null) {
+      throw UnsupportedError('Unsupported grpc-encoding: $encoding');
     }
+    return codec.decompress(data);
   }
 
   /// Picks the best encoding the peer advertised it can decompress.
@@ -64,10 +117,6 @@ abstract final class RpcGrpcCompression {
   }
 
   static List<String> supportedEncodings() {
-    final encodings = <String>[identity];
-    if (gzip_impl.rpcGzipSupported) {
-      encodings.add(gzip);
-    }
-    return encodings;
+    return [identity, ..._codecs.keys];
   }
 }
