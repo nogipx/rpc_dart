@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:io';
 
+import 'package:http/http.dart' as http;
 import 'package:rpc_dart/rpc_dart.dart';
 
 /// Pending outgoing HTTP call state.
 final class _PendingCall {
   final String methodPath;
   final List<RpcHeader> requestHeaders;
-  final BytesBuilder bodyBuffer = BytesBuilder();
+  final List<int> bodyBuffer = [];
 
   _PendingCall({required this.methodPath, required this.requestHeaders});
 }
@@ -19,37 +19,37 @@ final class _PendingCall {
 /// Maps an HTTP status code to a gRPC status int ([RpcStatus] constants).
 int _httpStatusToGrpcCode(int statusCode) {
   switch (statusCode) {
-    case HttpStatus.badRequest:
+    case 400:
       return RpcStatus.invalidArgument;
-    case HttpStatus.unauthorized:
+    case 401:
       return RpcStatus.unauthenticated;
-    case HttpStatus.forbidden:
+    case 403:
       return RpcStatus.permissionDenied;
-    case HttpStatus.notFound:
+    case 404:
       return RpcStatus.unimplemented;
-    case HttpStatus.conflict:
+    case 409:
       return RpcStatus.aborted;
-    case HttpStatus.gone:
+    case 410:
       return RpcStatus.notFound;
-    case HttpStatus.preconditionFailed:
+    case 412:
       return RpcStatus.failedPrecondition;
-    case HttpStatus.requestEntityTooLarge:
+    case 413:
       return RpcStatus.resourceExhausted;
-    case HttpStatus.tooManyRequests:
+    case 429:
       return RpcStatus.resourceExhausted;
     case 499: // Client Closed Request (nginx convention)
       return RpcStatus.cancelled;
-    case HttpStatus.internalServerError:
+    case 500:
       return RpcStatus.internal;
-    case HttpStatus.notImplemented:
+    case 501:
       return RpcStatus.unimplemented;
-    case HttpStatus.badGateway:
+    case 502:
       return RpcStatus.unavailable;
-    case HttpStatus.serviceUnavailable:
+    case 503:
       return RpcStatus.unavailable;
-    case HttpStatus.gatewayTimeout:
+    case 504:
       return RpcStatus.deadlineExceeded;
-    case HttpStatus.unsupportedMediaType:
+    case 415:
       return RpcStatus.invalidArgument;
     default:
       if (statusCode >= 500) return RpcStatus.internal;
@@ -65,53 +65,48 @@ int _httpStatusToGrpcCode(int statusCode) {
 /// HTTP/1.1 cannot multiplex messages in both directions within a single
 /// request/response cycle.
 ///
+/// Uses [package:http](https://pub.dev/packages/http) and compiles to all
+/// platforms including JS/Wasm.
+///
 /// Wire format:
 ///   Request:  POST {baseUrl}{methodPath}  body = gRPC-framed bytes
 ///   Response: 200 OK                      body = gRPC-framed bytes
 ///             All response headers (including grpc-status) are in HTTP headers.
 class RpcHttpCallerTransport implements IRpcTransport {
   final String _baseUrl;
-  final HttpClient _httpClient;
+  final http.Client _httpClient;
   final RpcStreamIdManager _idManager = RpcStreamIdManager(isClient: true);
   final Map<int, _PendingCall> _pending = {};
-  // Stream IDs that are currently awaiting an HTTP response.
   final Set<int> _inFlight = {};
   final StreamController<RpcTransportMessage> _incoming =
       StreamController<RpcTransportMessage>.broadcast();
   bool _isClosed = false;
   final RpcLogger? _logger;
 
+  /// Creates an HTTP caller transport.
+  ///
+  /// Pass a custom [httpClient] to configure TLS, proxies, or other
+  /// platform-specific settings. For example, on native platforms you can
+  /// wrap a `dart:io` `HttpClient` via `package:http`'s `IOClient`:
+  ///
+  /// ```dart
+  /// import 'dart:io';
+  /// import 'package:http/io_client.dart';
+  ///
+  /// final ioClient = HttpClient()
+  ///   ..badCertificateCallback = (cert, host, port) => true; // dev only
+  /// final transport = RpcHttpCallerTransport(
+  ///   baseUrl: 'https://...',
+  ///   httpClient: IOClient(ioClient),
+  /// );
+  /// ```
   RpcHttpCallerTransport({
     required String baseUrl,
-    HttpClient? httpClient,
+    http.Client? httpClient,
     RpcLogger? logger,
-    /// TLS security context for HTTPS connections.
-    SecurityContext? securityContext,
-    /// Called when the server certificate cannot be verified.
-    /// Return `true` to accept the certificate anyway (e.g. for self-signed
-    /// certs in development). Defaults to strict verification.
-    bool Function(X509Certificate, String, int)? badCertificateCallback,
-    /// Timeout for establishing a TCP connection. If null, the platform
-    /// default is used.
-    Duration? connectionTimeout,
-    /// How long an idle keep-alive connection may remain in the pool before
-    /// it is closed. If null, the platform default is used.
-    Duration? idleTimeout,
   })  : _baseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl,
-        _httpClient = httpClient ?? HttpClient(context: securityContext),
-        _logger = logger?.child('HttpCallerTransport') {
-    if (httpClient == null) {
-      if (badCertificateCallback != null) {
-        _httpClient.badCertificateCallback = badCertificateCallback;
-      }
-      if (connectionTimeout != null) {
-        _httpClient.connectionTimeout = connectionTimeout;
-      }
-      if (idleTimeout != null) {
-        _httpClient.idleTimeout = idleTimeout;
-      }
-    }
-  }
+        _httpClient = httpClient ?? http.Client(),
+        _logger = logger?.child('HttpCallerTransport');
 
   @override
   bool get isClient => true;
@@ -159,7 +154,7 @@ class RpcHttpCallerTransport implements IRpcTransport {
     if (call == null) {
       throw StateError('No pending call for stream $streamId. Call sendMetadata first.');
     }
-    call.bodyBuffer.add(data);
+    call.bodyBuffer.addAll(data);
     if (endStream) {
       await _fireRequest(streamId);
     }
@@ -179,32 +174,27 @@ class RpcHttpCallerTransport implements IRpcTransport {
 
     final uri = Uri.parse('$_baseUrl${call.methodPath}');
     try {
-      final request = await _httpClient.postUrl(uri);
-      request.headers.contentType = ContentType('application', 'grpc+proto');
+      final request = http.Request('POST', uri);
+      request.headers['content-type'] = 'application/grpc+proto';
+
       for (final header in call.requestHeaders) {
-        // Skip HTTP/2 pseudo-headers and content-type (set explicitly above).
         if (header.name.startsWith(':') ||
             header.name == RpcConstants.contentTypeHeader) {
           continue;
         }
-        request.headers.add(header.name, header.value);
+        request.headers[header.name] = header.value;
       }
 
-      final body = call.bodyBuffer.takeBytes();
-      request.contentLength = body.length;
-      request.add(body);
+      request.bodyBytes = Uint8List.fromList(call.bodyBuffer);
 
-      final response = await request.close();
+      final streamedResponse = await _httpClient.send(request);
+      final response = await http.Response.fromStream(streamedResponse);
 
       _logger?.internal(
         'HTTP response ${response.statusCode} for [streamId: $streamId]',
       );
 
-      // Non-200 responses without gRPC trailers are mapped to RpcErrors.
-      if (response.statusCode != HttpStatus.ok) {
-        // Drain the response body to free the connection.
-        await response.drain<void>();
-        // Synthesise a gRPC trailer so UnaryCaller resolves with a proper error.
+      if (response.statusCode != 200) {
         final grpcCode = _httpStatusToGrpcCode(response.statusCode);
         if (!_incoming.isClosed) {
           _incoming.add(RpcTransportMessage(
@@ -223,14 +213,12 @@ class RpcHttpCallerTransport implements IRpcTransport {
       }
 
       // Split response headers into initial headers and gRPC trailer headers.
-      // The server puts both in HTTP response headers (HTTP/1.1 has no trailers).
-      // UnaryCaller expects a separate trailer message with isEndOfStream: true
-      // that carries grpc-status / grpc-message.
       final initialHeaders = <RpcHeader>[];
       final trailerHeaders = <RpcHeader>[];
-      response.headers.forEach((name, values) {
-        for (final value in values) {
-          final header = RpcHeader(name, value);
+      response.headers.forEach((name, value) {
+        // package:http joins multi-values with ', ' — split them back.
+        for (final v in value.split(', ')) {
+          final header = RpcHeader(name, v);
           if (name == RpcConstants.grpcStatusHeader ||
               name == RpcConstants.grpcMessageHeader) {
             trailerHeaders.add(header);
@@ -240,7 +228,6 @@ class RpcHttpCallerTransport implements IRpcTransport {
         }
       });
 
-      // Emit initial response metadata.
       if (!_incoming.isClosed) {
         _incoming.add(RpcTransportMessage(
           streamId: streamId,
@@ -250,25 +237,16 @@ class RpcHttpCallerTransport implements IRpcTransport {
         ));
       }
 
-      // Read response body.
-      final builder = BytesBuilder();
-      await for (final chunk in response) {
-        builder.add(chunk);
-      }
-      final responseBytes = builder.takeBytes();
-
+      final responseBytes = response.bodyBytes;
       if (responseBytes.isNotEmpty && !_incoming.isClosed) {
         _incoming.add(RpcTransportMessage(
           streamId: streamId,
-          payload: Uint8List.fromList(responseBytes),
+          payload: responseBytes,
           isEndOfStream: false,
           methodPath: call.methodPath,
         ));
       }
 
-      // Emit gRPC trailer as a separate metadata-only message with endOfStream.
-      // This mirrors how HTTP/2 sends trailing headers, letting UnaryCaller
-      // detect grpc-status and complete (or error) the call.
       if (!_incoming.isClosed) {
         _incoming.add(RpcTransportMessage(
           streamId: streamId,
@@ -315,7 +293,6 @@ class RpcHttpCallerTransport implements IRpcTransport {
 
   @override
   Future<RpcHealthStatus> reconnect() async {
-    // HTTP/1.1 is stateless — no reconnect needed.
     return RpcHealthStatus.healthy(
       component: runtimeType.toString(),
       message: 'HTTP is stateless, no reconnect required',
@@ -328,11 +305,8 @@ class RpcHttpCallerTransport implements IRpcTransport {
     if (_isClosed) return;
     _isClosed = true;
     _pending.clear();
-    _httpClient.close(force: true);
+    _httpClient.close();
     if (!_incoming.isClosed) {
-      // Notify active subscribers (e.g. UnaryCaller) that the transport is
-      // gone — but only if there are in-flight requests. Without this, those
-      // callers' completers would never resolve, hanging their Futures.
       if (_inFlight.isNotEmpty) {
         _incoming.addError(StateError('Transport was closed'));
       }

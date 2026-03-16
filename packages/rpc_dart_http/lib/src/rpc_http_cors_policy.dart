@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:io';
+import 'package:shelf/shelf.dart';
 
 /// CORS policy for [RpcHttpResponderTransport].
 ///
@@ -44,46 +44,37 @@ final class RpcHttpCorsPolicy {
           'allowCredentials=true requires specific origins, not ["*"]',
         );
 
-  /// Applies CORS response headers for a regular (non-preflight) request.
-  void applyTo(HttpResponse response, String? requestOrigin) {
+  /// Applies CORS response headers into [headers] map for a regular request.
+  void applyTo(Map<String, String> headers, String? requestOrigin) {
     final origin = _resolveOrigin(requestOrigin);
     if (origin == null) return;
-    response.headers.set('access-control-allow-origin', origin);
+    headers['access-control-allow-origin'] = origin;
     if (allowCredentials) {
-      response.headers.set('access-control-allow-credentials', 'true');
+      headers['access-control-allow-credentials'] = 'true';
     }
   }
 
-  /// Applies CORS response headers for an `OPTIONS` preflight request and
-  /// writes a 204 No Content response.
-  Future<void> handlePreflight(HttpRequest request) async {
-    final response = request.response;
-    final requestOrigin = request.headers.value('origin');
+  /// Handles an `OPTIONS` preflight [request] and returns the shelf [Response].
+  Response handlePreflight(Request request) {
+    final requestOrigin = request.headers['origin'];
     final origin = _resolveOrigin(requestOrigin);
 
     if (origin == null) {
-      response.statusCode = HttpStatus.forbidden;
-      await response.close();
-      return;
+      return Response.forbidden('');
     }
 
-    response.statusCode = HttpStatus.noContent;
-    response.headers.set('access-control-allow-origin', origin);
-    response.headers.set('access-control-allow-methods', 'POST, OPTIONS');
-    response.headers.set(
-      'access-control-allow-headers',
-      allowedHeaders.join(', '),
-    );
+    final headers = <String, String>{
+      'access-control-allow-origin': origin,
+      'access-control-allow-methods': 'POST, OPTIONS',
+      'access-control-allow-headers': allowedHeaders.join(', '),
+    };
     if (allowCredentials) {
-      response.headers.set('access-control-allow-credentials', 'true');
+      headers['access-control-allow-credentials'] = 'true';
     }
     if (preflightMaxAge != null) {
-      response.headers.set(
-        'access-control-max-age',
-        preflightMaxAge!.inSeconds.toString(),
-      );
+      headers['access-control-max-age'] = preflightMaxAge!.inSeconds.toString();
     }
-    await response.close();
+    return Response(204, headers: headers);
   }
 
   String? _resolveOrigin(String? requestOrigin) {

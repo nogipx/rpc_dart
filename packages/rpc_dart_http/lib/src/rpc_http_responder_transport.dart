@@ -3,43 +3,49 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:shelf/shelf.dart';
 
 import 'rpc_http_cors_policy.dart';
 
 /// Pending outgoing HTTP response state.
 final class _PendingResponse {
-  final HttpRequest httpRequest;
+  final Request shelfRequest;
+  final Completer<Response> completer = Completer<Response>();
   final List<RpcHeader> responseHeaders = [];
-  final BytesBuilder bodyBuffer = BytesBuilder();
+  final List<int> bodyBuffer = [];
 
-  _PendingResponse(this.httpRequest);
+  _PendingResponse(this.shelfRequest);
 }
 
-/// HTTP/1.1 responder transport for rpc_dart.
+/// HTTP/1.1 responder transport for rpc_dart built on [package:shelf](https://pub.dev/packages/shelf).
 ///
-/// Accepts a [Stream<HttpRequest>] — typically a filtered view of an
-/// [HttpServer] — so multiple transports can share the same port.
-///
-/// Each incoming HTTP request becomes one RPC stream. The transport reads
-/// the request body, emits metadata + data into [incomingMessages], then
-/// waits for the responder endpoint to call [sendMetadata] / [sendMessage] /
-/// [sendMetadata(endStream:true)] before flushing the HTTP response.
+/// Exposes a shelf [handler] that you mount on any shelf server or router.
+/// Each incoming HTTP request becomes one RPC stream. The transport reads the
+/// request body, emits metadata + data into [incomingMessages], then waits for
+/// the responder endpoint to call [sendMetadata] / [sendMessage] /
+/// [finishSending] before completing the shelf [Response].
 ///
 /// Only unary RPC methods are supported.
+///
+/// Example with `shelf_io` (native platforms):
+/// ```dart
+/// import 'package:shelf/shelf_io.dart' as shelf_io;
+///
+/// final transport = RpcHttpResponderTransport();
+/// final server = await shelf_io.serve(transport.handler, '127.0.0.1', 8080);
+/// ```
 class RpcHttpResponderTransport implements IRpcTransport {
   final StreamController<RpcTransportMessage> _incoming =
       StreamController<RpcTransportMessage>.broadcast();
   final Map<int, _PendingResponse> _pending = {};
   final RpcStreamIdManager _idManager = RpcStreamIdManager(isClient: false);
-  StreamSubscription<HttpRequest>? _requestSubscription;
   bool _isClosed = false;
   final RpcLogger? _logger;
 
-  /// Optional security policy: limits concurrent requests, body size, header
-  /// sizes, and method-path length.
+  /// Optional security policy: limits concurrent requests, body size, and
+  /// header sizes.
   final RpcSecurityPolicy? securityPolicy;
 
   /// Optional CORS policy. When set, handles `OPTIONS` preflight requests
@@ -50,37 +56,24 @@ class RpcHttpResponderTransport implements IRpcTransport {
   /// If null, no timeout is applied.
   final Duration? bodyReadTimeout;
 
-  RpcHttpResponderTransport(
-    Stream<HttpRequest> requests, {
+  RpcHttpResponderTransport({
     RpcLogger? logger,
     this.securityPolicy,
     this.corsPolicy,
     this.bodyReadTimeout,
-  }) : _logger = logger?.child('HttpResponderTransport') {
-    _requestSubscription = requests.listen(
-      _handleRequest,
-      onError: (Object e, StackTrace st) {
-        _logger?.error('HttpRequest stream error', error: e, stackTrace: st);
-        if (!_incoming.isClosed) _incoming.addError(e, st);
-      },
-      onDone: () {
-        _logger?.internal('HttpRequest stream done');
-        close();
-      },
-    );
-  }
+  }) : _logger = logger?.child('HttpResponderTransport');
 
-  @override
-  bool get isClient => false;
+  /// shelf [Handler] to mount on a shelf server or router.
+  Handler get handler => _handleRequest;
 
-  @override
-  bool get isClosed => _isClosed;
+  Future<Response> _handleRequest(Request request) async {
+    if (_isClosed) {
+      return Response(503, body: 'Transport closed');
+    }
 
-  Future<void> _handleRequest(HttpRequest request) async {
     // Handle CORS preflight before any other processing.
     if (request.method == 'OPTIONS' && corsPolicy != null) {
-      await corsPolicy!.handlePreflight(request);
-      return;
+      return corsPolicy!.handlePreflight(request);
     }
 
     // Enforce concurrent stream limit.
@@ -89,46 +82,39 @@ class RpcHttpResponderTransport implements IRpcTransport {
       _logger?.warning(
         'Rejected request: too many active streams (${_pending.length})',
       );
-      request.response.statusCode = HttpStatus.serviceUnavailable;
-      await request.response.close();
-      return;
+      return Response(503);
     }
 
     // Validate Content-Type: must be a gRPC content type (application/grpc*).
-    final contentTypeValue = request.headers.value(RpcConstants.contentTypeHeader) ?? '';
+    final contentTypeValue = request.headers[RpcConstants.contentTypeHeader] ?? '';
     if (!contentTypeValue.startsWith('application/grpc')) {
       _logger?.warning(
         'Rejected request: unsupported Content-Type '
         '"$contentTypeValue" — expected application/grpc[+subtype]',
       );
-      request.response.statusCode = HttpStatus.unsupportedMediaType;
-      await request.response.close();
-      return;
+      return Response(415);
     }
 
     // Validate method path length.
-    final methodPath = request.uri.path;
+    final methodPath = request.requestedUri.path;
     if (policy != null && !policy.isValidMethodPath(methodPath)) {
       _logger?.warning('Rejected request: invalid method path "$methodPath"');
-      request.response.statusCode = HttpStatus.badRequest;
-      await request.response.close();
-      return;
+      return Response(400);
     }
 
     final streamId = _idManager.generateId();
-    _pending[streamId] = _PendingResponse(request);
+    final pending = _PendingResponse(request);
+    _pending[streamId] = pending;
 
     _logger?.internal(
       'Incoming HTTP request $methodPath [streamId: $streamId]',
     );
 
     try {
-      // Validate and collect request headers.
+      // Collect and validate request headers.
       final requestHeaders = <RpcHeader>[];
-      request.headers.forEach((name, values) {
-        for (final value in values) {
-          requestHeaders.add(RpcHeader(name, value));
-        }
+      request.headers.forEach((name, value) {
+        requestHeaders.add(RpcHeader(name, value));
       });
 
       if (policy != null) {
@@ -140,9 +126,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
           );
           _pending.remove(streamId);
           _idManager.releaseId(streamId);
-          request.response.statusCode = HttpStatus.badRequest;
-          await request.response.close();
-          return;
+          return Response(400);
         }
       }
 
@@ -155,23 +139,23 @@ class RpcHttpResponderTransport implements IRpcTransport {
         ));
       }
 
-      // Read request body, optionally with a timeout.
-      final builder = BytesBuilder();
-
-      Future<void> readBody() async {
-        await for (final chunk in request) {
-          builder.add(chunk);
-          if (policy != null &&
-              builder.length > policy.maxMessageLengthBytes) {
+      // Read request body.
+      Future<Uint8List> readBody() async {
+        final bytes = <int>[];
+        await for (final chunk in request.read()) {
+          bytes.addAll(chunk);
+          if (policy != null && bytes.length > policy.maxMessageLengthBytes) {
             throw StateError(
               'Request body exceeds limit of ${policy.maxMessageLengthBytes} bytes',
             );
           }
         }
+        return Uint8List.fromList(bytes);
       }
 
+      final Uint8List body;
       if (bodyReadTimeout != null) {
-        await readBody().timeout(
+        body = await readBody().timeout(
           bodyReadTimeout!,
           onTimeout: () => throw TimeoutException(
             'Body read timed out after $bodyReadTimeout',
@@ -179,21 +163,18 @@ class RpcHttpResponderTransport implements IRpcTransport {
           ),
         );
       } else {
-        await readBody();
+        body = await readBody();
       }
-
-      final body = builder.takeBytes();
 
       if (!_incoming.isClosed) {
         _incoming.add(RpcTransportMessage(
           streamId: streamId,
-          payload: body.isNotEmpty ? Uint8List.fromList(body) : null,
+          payload: body.isNotEmpty ? body : null,
           isEndOfStream: true,
           methodPath: methodPath,
         ));
       }
     } catch (e, st) {
-      // Client disconnected, request timed out, body too large, etc.
       _pending.remove(streamId);
       _idManager.releaseId(streamId);
       _logger?.error(
@@ -201,15 +182,20 @@ class RpcHttpResponderTransport implements IRpcTransport {
         error: e,
         stackTrace: st,
       );
-      try {
-        final statusCode = e is TimeoutException
-            ? HttpStatus.requestTimeout
-            : HttpStatus.badRequest;
-        request.response.statusCode = statusCode;
-        await request.response.close();
-      } catch (_) {}
+      final statusCode = e is TimeoutException ? 408 : 400;
+      if (!pending.completer.isCompleted) {
+        pending.completer.complete(Response(statusCode));
+      }
     }
+
+    return pending.completer.future;
   }
+
+  @override
+  bool get isClient => false;
+
+  @override
+  bool get isClosed => _isClosed;
 
   @override
   int createStream() {
@@ -255,7 +241,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
       _logger?.warning('sendMessage: no pending response for [streamId: $streamId]');
       return;
     }
-    pending.bodyBuffer.add(data);
+    pending.bodyBuffer.addAll(data);
     if (endStream) {
       await _flushResponse(streamId);
     }
@@ -272,33 +258,32 @@ class RpcHttpResponderTransport implements IRpcTransport {
 
     _logger?.internal('Flushing HTTP response [streamId: $streamId]');
 
-    final response = pending.httpRequest.response;
-    response.statusCode = HttpStatus.ok;
-    response.headers.contentType = ContentType('application', 'grpc+proto');
+    // Use Map<String, Object> to support multi-value headers (List<String>).
+    final headers = <String, Object>{
+      'content-type': 'application/grpc+proto',
+    };
 
-    // Apply CORS headers to the response.
     if (corsPolicy != null) {
-      final requestOrigin = pending.httpRequest.headers.value('origin');
-      corsPolicy!.applyTo(response, requestOrigin);
+      final requestOrigin = pending.shelfRequest.headers['origin'];
+      final corsHeaders = <String, String>{};
+      corsPolicy!.applyTo(corsHeaders, requestOrigin);
+      headers.addAll(corsHeaders);
     }
 
     for (final header in pending.responseHeaders) {
-      if (!header.name.startsWith(':')) {
-        response.headers.add(header.name, header.value);
+      if (header.name.startsWith(':')) continue;
+      final existing = headers[header.name];
+      if (existing == null) {
+        headers[header.name] = header.value;
+      } else if (existing is String) {
+        headers[header.name] = [existing, header.value];
+      } else {
+        (existing as List<String>).add(header.value);
       }
     }
 
-    final body = pending.bodyBuffer.takeBytes();
-    if (body.isNotEmpty) {
-      response.add(body);
-    }
-
-    try {
-      await response.close();
-    } catch (e) {
-      _logger?.warning('Error closing HTTP response [streamId: $streamId]: $e');
-    }
-
+    final body = Uint8List.fromList(pending.bodyBuffer);
+    pending.completer.complete(Response.ok(body, headers: headers));
     _idManager.releaseId(streamId);
   }
 
@@ -338,15 +323,11 @@ class RpcHttpResponderTransport implements IRpcTransport {
     if (_isClosed) return;
     _isClosed = true;
 
-    await _requestSubscription?.cancel();
-    _requestSubscription = null;
-
-    // Close any pending responses with 503.
+    // Complete any pending responses with 503.
     for (final pending in _pending.values) {
-      try {
-        pending.httpRequest.response.statusCode = HttpStatus.serviceUnavailable;
-        await pending.httpRequest.response.close();
-      } catch (_) {}
+      if (!pending.completer.isCompleted) {
+        pending.completer.complete(Response(503));
+      }
     }
     _pending.clear();
 

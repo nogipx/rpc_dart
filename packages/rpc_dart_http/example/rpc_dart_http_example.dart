@@ -2,12 +2,17 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http/rpc_dart_http.dart';
+import 'package:shelf/shelf.dart' show Response;
+import 'package:shelf/shelf_io.dart' as shelf_io;
 
 // ---------------------------------------------------------------------------
-// Example: rpc_dart_http — production-ready HTTP/1.1 unary transport
+// Example: rpc_dart_http — HTTP/1.1 unary transport
+//
+// Uses package:http (client) and package:shelf (server) — compiles to all
+// platforms including JS/Wasm.
 //
 // Shows:
 //   1. Basic server + client setup
@@ -15,18 +20,16 @@ import 'package:rpc_dart_http/rpc_dart_http.dart';
 //   3. Content-Type validation (415 for non-gRPC requests)
 //   4. Body-read timeout (408 when the client is too slow)
 //   5. CORS policy (preflight + response headers)
-//   6. Connection pool tuning (idle timeout, connection timeout)
-//   7. HTTPS / TLS (SecurityContext + bad-cert callback)
-//   8. HTTP → gRPC error mapping (non-200 responses become gRPC errors)
+//   6. Custom HTTP client (e.g. for TLS / self-signed certs on native)
+//   7. HTTP → gRPC error mapping (non-200 responses become gRPC errors)
 // ---------------------------------------------------------------------------
 
 void main() async {
   await example1BasicSetup();
   await example2SecurityPolicy();
   await example3Cors();
-  await example4ConnectionPoolConfig();
-  await example5Https();
-  await example6HttpErrorMapping();
+  await example4CustomHttpClient();
+  await example5HttpErrorMapping();
 }
 
 // ---------------------------------------------------------------------------
@@ -35,13 +38,8 @@ void main() async {
 Future<void> example1BasicSetup() async {
   print('\n=== 1. Basic setup ===');
 
-  final httpServer = await HttpServer.bind('127.0.0.1', 0);
-
-  final serverTransport = RpcHttpResponderTransport(
-    // You can filter which paths this transport handles:
-    //   httpServer.where((r) => r.uri.path.startsWith('/Echo/'))
-    httpServer,
-  );
+  final serverTransport = RpcHttpResponderTransport();
+  final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
 
   final serverEndpoint = RpcResponderEndpoint(
     transport: serverTransport,
@@ -51,7 +49,7 @@ Future<void> example1BasicSetup() async {
   serverEndpoint.start();
 
   final clientTransport = RpcHttpCallerTransport(
-    baseUrl: 'http://127.0.0.1:${httpServer.port}',
+    baseUrl: 'http://127.0.0.1:${server.port}',
   );
   final clientEndpoint = RpcCallerEndpoint(
     transport: clientTransport,
@@ -64,7 +62,7 @@ Future<void> example1BasicSetup() async {
 
   await clientEndpoint.close();
   await serverEndpoint.close();
-  await httpServer.close(force: true);
+  await server.close(force: true);
 }
 
 // ---------------------------------------------------------------------------
@@ -73,27 +71,21 @@ Future<void> example1BasicSetup() async {
 Future<void> example2SecurityPolicy() async {
   print('\n=== 2. Security policy ===');
 
-  final httpServer = await HttpServer.bind('127.0.0.1', 0);
-
   final serverTransport = RpcHttpResponderTransport(
-    httpServer,
-    // Limit concurrent in-flight streams to 100.
-    // Limit individual message bodies to 4 MB.
-    // All other header/path constraints come from RpcSecurityPolicy defaults.
     securityPolicy: RpcSecurityPolicy(
       maxActiveStreams: 100,
       maxMessageLengthBytes: 4 * 1024 * 1024,
     ),
-    // Reject requests whose body doesn't arrive within 10 seconds.
     bodyReadTimeout: const Duration(seconds: 10),
   );
+  final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
 
   final serverEndpoint = RpcResponderEndpoint(transport: serverTransport);
   serverEndpoint.registerServiceContract(EchoResponder());
   serverEndpoint.start();
 
   final clientTransport = RpcHttpCallerTransport(
-    baseUrl: 'http://127.0.0.1:${httpServer.port}',
+    baseUrl: 'http://127.0.0.1:${server.port}',
   );
   final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
 
@@ -101,24 +93,16 @@ Future<void> example2SecurityPolicy() async {
   final result = await echo.echo('secure call'.rpc);
   print('Response: ${result.value}');
 
-  // A non-gRPC content-type is rejected with HTTP 415 before reaching the
-  // RPC layer — no stream is created, no resources are wasted.
-  final rawClient = HttpClient();
-  final rawRequest = await rawClient.post(
-    '127.0.0.1',
-    httpServer.port,
-    '/Echo/Echo',
+  // A non-gRPC content-type is rejected with HTTP 415.
+  final rawResponse = await http.post(
+    Uri.parse('http://127.0.0.1:${server.port}/Echo/Echo'),
+    headers: {'content-type': 'application/json'},
   );
-  rawRequest.headers.contentType = ContentType.json; // wrong content type
-  rawRequest.contentLength = 0;
-  final rawResponse = await rawRequest.close();
   print('Wrong content-type → HTTP ${rawResponse.statusCode}'); // 415
-  await rawResponse.drain<void>();
-  rawClient.close();
 
   await clientEndpoint.close();
   await serverEndpoint.close();
-  await httpServer.close(force: true);
+  await server.close(force: true);
 }
 
 // ---------------------------------------------------------------------------
@@ -127,66 +111,65 @@ Future<void> example2SecurityPolicy() async {
 Future<void> example3Cors() async {
   print('\n=== 3. CORS ===');
 
-  final httpServer = await HttpServer.bind('127.0.0.1', 0);
-
   final serverTransport = RpcHttpResponderTransport(
-    httpServer,
     corsPolicy: RpcHttpCorsPolicy(
-      // Allow only this specific origin (use ['*'] to allow all).
       allowedOrigins: ['https://my-app.example.com'],
-      // Additional headers the browser may include in preflight.
       allowedHeaders: [
         'content-type',
         'authorization',
         'x-requested-with',
         'x-tenant-id',
       ],
-      // Set to true only when allowedOrigins does NOT contain '*'.
       allowCredentials: true,
-      // Browsers may cache the preflight response for 10 minutes.
       preflightMaxAge: const Duration(minutes: 10),
     ),
   );
+  final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
 
   final serverEndpoint = RpcResponderEndpoint(transport: serverTransport);
   serverEndpoint.registerServiceContract(EchoResponder());
   serverEndpoint.start();
 
   // Simulate a browser sending an OPTIONS preflight.
-  final rawClient = HttpClient();
-  final preflightReq = await rawClient.openUrl(
+  final preflightReq = http.Request(
     'OPTIONS',
-    Uri.parse('http://127.0.0.1:${httpServer.port}/Echo/Echo'),
+    Uri.parse('http://127.0.0.1:${server.port}/Echo/Echo'),
   );
-  preflightReq.headers.add('origin', 'https://my-app.example.com');
-  preflightReq.headers.add('access-control-request-method', 'POST');
-  final preflightRes = await preflightReq.close();
+  preflightReq.headers['origin'] = 'https://my-app.example.com';
+  preflightReq.headers['access-control-request-method'] = 'POST';
+  final preflightRes = await http.Client().send(preflightReq);
   print('Preflight → ${preflightRes.statusCode}'); // 204
-  print(
-    'Allow-Origin: '
-    '${preflightRes.headers.value('access-control-allow-origin')}',
-  );
-  await preflightRes.drain<void>();
-  rawClient.close();
+  print('Allow-Origin: ${preflightRes.headers['access-control-allow-origin']}');
 
   await serverEndpoint.close();
-  await httpServer.close(force: true);
+  await server.close(force: true);
 }
 
 // ---------------------------------------------------------------------------
-// 4. Connection pool configuration
+// 4. Custom HTTP client (e.g. for TLS / self-signed certs on native)
 // ---------------------------------------------------------------------------
-Future<void> example4ConnectionPoolConfig() async {
-  print('\n=== 4. Connection pool config ===');
+Future<void> example4CustomHttpClient() async {
+  print('\n=== 4. Custom HTTP client ===');
 
-  // These options are passed directly to the underlying dart:io HttpClient.
-  // They are only applied when you do NOT pass a custom `httpClient`.
+  // On native platforms, wrap dart:io HttpClient with IOClient for full
+  // TLS control (custom CA, self-signed cert acceptance, etc.):
+  //
+  // import 'dart:io';
+  // import 'package:http/io_client.dart';
+  //
+  // final ioClient = HttpClient()
+  //   ..badCertificateCallback = (cert, host, port) => true; // dev only
+  // final client = IOClient(ioClient);
+  //
+  // final transport = RpcHttpCallerTransport(
+  //   baseUrl: 'https://...',
+  //   httpClient: client,
+  // );
+
+  // For this example, just check health with a plain client.
   final clientTransport = RpcHttpCallerTransport(
     baseUrl: 'http://127.0.0.1:8765',
-    // Fail fast if the server is unreachable.
-    connectionTimeout: const Duration(seconds: 5),
-    // Close keep-alive connections after 60 s of inactivity.
-    idleTimeout: const Duration(seconds: 60),
+    httpClient: http.Client(),
   );
 
   final health = await clientTransport.health();
@@ -196,52 +179,20 @@ Future<void> example4ConnectionPoolConfig() async {
 }
 
 // ---------------------------------------------------------------------------
-// 5. HTTPS / TLS
+// 5. HTTP → gRPC error mapping
 // ---------------------------------------------------------------------------
-Future<void> example5Https() async {
-  print('\n=== 5. HTTPS / TLS ===');
+Future<void> example5HttpErrorMapping() async {
+  print('\n=== 5. HTTP → gRPC error mapping ===');
 
-  // Production: point to a valid certificate bundle.
-  //
-  // final secCtx = SecurityContext()
-  //   ..setTrustedCertificates('/path/to/ca-bundle.pem');
-  //
-  // final transport = RpcHttpCallerTransport(
-  //   baseUrl: 'https://api.example.com',
-  //   securityContext: secCtx,
-  // );
-
-  // Development / self-signed cert: accept any certificate.
-  final devTransport = RpcHttpCallerTransport(
-    baseUrl: 'https://127.0.0.1:8766',
-    badCertificateCallback: (cert, host, port) {
-      // WARNING: only use this in development!
-      print('Accepting self-signed cert for $host:$port');
-      return true;
-    },
-    connectionTimeout: const Duration(seconds: 3),
+  // A shelf handler that always returns 404.
+  final server = await shelf_io.serve(
+    (_) async => Response.notFound(''),
+    '127.0.0.1',
+    0,
   );
 
-  final health = await devTransport.health();
-  print('Health: ${health.level}');
-  await devTransport.close();
-}
-
-// ---------------------------------------------------------------------------
-// 6. HTTP → gRPC error mapping
-// ---------------------------------------------------------------------------
-Future<void> example6HttpErrorMapping() async {
-  print('\n=== 6. HTTP → gRPC error mapping ===');
-
-  // A raw HTTP server that always returns 404.
-  final httpServer = await HttpServer.bind('127.0.0.1', 0);
-  httpServer.listen((req) async {
-    req.response.statusCode = HttpStatus.notFound;
-    await req.response.close();
-  });
-
   final clientTransport = RpcHttpCallerTransport(
-    baseUrl: 'http://127.0.0.1:${httpServer.port}',
+    baseUrl: 'http://127.0.0.1:${server.port}',
   );
   final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
   final echo = EchoCaller(clientEndpoint);
@@ -258,7 +209,6 @@ Future<void> example6HttpErrorMapping() async {
   //   401 → UNAUTHENTICATED (16)
   //   403 → PERMISSION_DENIED (7)
   //   404 → UNIMPLEMENTED (12)
-  //   408 → DEADLINE_EXCEEDED (4)   [gateway timeout variant]
   //   429 → RESOURCE_EXHAUSTED (8)
   //   499 → CANCELLED (1)
   //   500 → INTERNAL (13)
@@ -267,7 +217,7 @@ Future<void> example6HttpErrorMapping() async {
   //   504 → DEADLINE_EXCEEDED (4)
 
   await clientEndpoint.close();
-  await httpServer.close(force: true);
+  await server.close(force: true);
 }
 
 // ---------------------------------------------------------------------------

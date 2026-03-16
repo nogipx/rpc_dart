@@ -3,35 +3,36 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' show HttpServer, Socket; // HttpServer for raw handler tests; Socket for raw TCP tests
 
+import 'package:http/http.dart' as http;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http/rpc_dart_http.dart';
+import 'package:shelf/shelf.dart' show Response;
+import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:test/test.dart';
 
 void main() {
   group('Transport-level', () {
-    late HttpServer httpServer;
+    late HttpServer server;
     late RpcHttpResponderTransport serverTransport;
     late RpcHttpCallerTransport clientTransport;
 
     setUp(() async {
-      httpServer = await HttpServer.bind('127.0.0.1', 0);
-      serverTransport = RpcHttpResponderTransport(httpServer);
+      serverTransport = RpcHttpResponderTransport();
+      server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
       clientTransport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${httpServer.port}',
+        baseUrl: 'http://127.0.0.1:${server.port}',
       );
     });
 
     tearDown(() async {
       await clientTransport.close();
       await serverTransport.close();
-      await httpServer.close(force: true);
+      await server.close(force: true);
     });
 
     test('server_receives_metadata_with_correct_method_path', () async {
-      // HTTP/1.1: client blocks until server responds.
-      // Server must reply so _fireRequest can complete.
       final receivedMessages = <RpcTransportMessage>[];
       final serverReplied = Completer<void>();
 
@@ -62,7 +63,6 @@ void main() {
       await serverReplied.future.timeout(const Duration(seconds: 5));
       await sub.cancel();
 
-      // Server should have received: metadata message + data message.
       expect(receivedMessages.length, 2);
       expect(receivedMessages[0].isMetadataOnly, isTrue);
       expect(receivedMessages[0].methodPath, '/MyService/MyMethod');
@@ -148,10 +148,8 @@ void main() {
       await clientSub.cancel();
       await serverSub.cancel();
 
-      // Client should receive: response metadata, response data, endOfStream.
       expect(clientMessages.length, greaterThanOrEqualTo(2));
-      final dataMsg =
-          clientMessages.firstWhere((m) => m.payload != null);
+      final dataMsg = clientMessages.firstWhere((m) => m.payload != null);
       expect(dataMsg.payload, isNotNull);
     });
 
@@ -159,7 +157,6 @@ void main() {
       final id1 = clientTransport.createStream();
       final id2 = clientTransport.createStream();
 
-      // Caller uses odd IDs per gRPC convention.
       expect(id1.isOdd, isTrue);
       expect(id2.isOdd, isTrue);
       expect(id2, greaterThan(id1));
@@ -186,15 +183,15 @@ void main() {
   });
 
   group('Integration - unary RPC', () {
-    late HttpServer httpServer;
+    late HttpServer server;
     late RpcHttpResponderTransport serverTransport;
     late RpcResponderEndpoint serverEndpoint;
     late RpcHttpCallerTransport clientTransport;
     late RpcCallerEndpoint clientEndpoint;
 
     setUpAll(() async {
-      httpServer = await HttpServer.bind('127.0.0.1', 0);
-      serverTransport = RpcHttpResponderTransport(httpServer);
+      serverTransport = RpcHttpResponderTransport();
+      server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
       serverEndpoint = RpcResponderEndpoint(
         transport: serverTransport,
         debugLabel: 'TestServer',
@@ -203,7 +200,7 @@ void main() {
       serverEndpoint.start();
 
       clientTransport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${httpServer.port}',
+        baseUrl: 'http://127.0.0.1:${server.port}',
       );
       clientEndpoint = RpcCallerEndpoint(
         transport: clientTransport,
@@ -214,7 +211,7 @@ void main() {
     tearDownAll(() async {
       await clientEndpoint.close();
       await serverEndpoint.close();
-      await httpServer.close(force: true);
+      await server.close(force: true);
     });
 
     test('basic_unary_call_succeeds', () async {
@@ -278,7 +275,6 @@ void main() {
     });
 
     test('large_payload_round_trip', () async {
-      // ~64KB payload.
       final large = 'x' * 65536;
 
       final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
@@ -301,16 +297,14 @@ void main() {
 
   group('Health and lifecycle', () {
     test('health_returns_healthy_for_open_transport', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
       final transport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${server.port}',
+        baseUrl: 'http://127.0.0.1:9999',
       );
 
       final status = await transport.health();
       expect(status.level, RpcHealthLevel.healthy);
 
       await transport.close();
-      await server.close(force: true);
     });
 
     test('health_returns_closed_after_close', () async {
@@ -335,59 +329,45 @@ void main() {
     });
 
     test('responder_transport_closes_pending_with_503', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
-      final transport = RpcHttpResponderTransport(server);
+      final serverTransport = RpcHttpResponderTransport();
+      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
 
-      // Start a request that will be pending when we close.
-      final client = HttpClient();
-      final frame = RpcMessageFrame.encode(Uint8List.fromList([1]));
-      final reqFuture = client
-          .post('127.0.0.1', server.port, '/Echo/Echo')
-          .then((req) {
-        req.headers.contentType = ContentType('application', 'grpc+proto');
-        req.contentLength = frame.length;
-        req.add(frame);
-        return req.close();
-      });
+      // Nobody listens on incomingMessages → completer never resolves.
+      serverTransport.incomingMessages.listen((_) {});
 
-      // Wait a little for the server to accept the connection but not respond.
+      // Start a request; server accepts but never responds (no handler).
+      final responseFuture = http.post(
+        Uri.parse('http://127.0.0.1:${server.port}/Echo/Echo'),
+        headers: {'content-type': 'application/grpc+proto'},
+        body: RpcMessageFrame.encode(Uint8List.fromList([1])),
+      );
+
       await Future.delayed(const Duration(milliseconds: 50));
-      await transport.close();
-      await server.close(force: true);
+      await serverTransport.close();
 
-      // The pending request should eventually complete (503 or connection error).
       try {
-        final response = await reqFuture;
-        expect(response.statusCode, HttpStatus.serviceUnavailable);
+        final response = await responseFuture;
+        expect(response.statusCode, 503);
       } catch (_) {
         // Connection error is also acceptable when server is force-closed.
       }
 
-      client.close(force: true);
+      await server.close(force: true);
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // Bug regression tests — each test documents a known bug.
-  // These tests are expected to FAIL before the fix and PASS after.
-  // ---------------------------------------------------------------------------
-
   group('Bug: caller close() during in-flight request', () {
-    // Bug #1: When close() is called while _fireRequest is awaiting the HTTP
-    // response, _incoming.close() races with the catch block in _fireRequest.
-    // If _incoming is closed before addError runs, the UnaryCaller's completer
-    // is never resolved → the call Future hangs indefinitely.
     test('close_during_in_flight_call_completes_future_with_error', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
+      final serverTransport = RpcHttpResponderTransport();
+      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
+      // Nobody responds → shelf handler blocks.
+      serverTransport.incomingMessages.listen((_) {});
 
-      // Server accepts but deliberately never responds.
-      final serverTransport = RpcHttpResponderTransport(server);
       final clientTransport = RpcHttpCallerTransport(
         baseUrl: 'http://127.0.0.1:${server.port}',
       );
       final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
 
-      // Start a call — will block waiting for server response.
       final callFuture = clientEndpoint.unaryRequest<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Echo',
@@ -396,14 +376,9 @@ void main() {
         request: RpcString('hello'),
       );
 
-      // Give the request time to reach the server.
       await Future.delayed(const Duration(milliseconds: 50));
-
-      // Close the transport while call is in flight.
       await clientTransport.close();
 
-      // The call Future must complete with a non-timeout error quickly.
-      // If it throws TimeoutException → bug is present (Future hung).
       try {
         await callFuture.timeout(const Duration(milliseconds: 500));
         fail('Expected an error, got a result');
@@ -413,7 +388,7 @@ void main() {
           '— completer was never resolved',
         );
       } catch (_) {
-        // Any other error = correct behavior, bug is fixed.
+        // Any other error = correct behavior.
       }
 
       await serverTransport.close();
@@ -422,16 +397,13 @@ void main() {
   });
 
   group('Bug: responder _handleRequest errors are silently swallowed', () {
-    // Bug #2: _handleRequest is an async function whose Future is discarded by
-    // listen(). If the client disconnects mid-body-read, the exception is never
-    // caught and _pending[streamId] leaks forever.
     test('client_disconnect_mid_body_removes_pending_entry', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
-      final serverTransport = RpcHttpResponderTransport(server);
+      final serverTransport = RpcHttpResponderTransport();
+      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
+      serverTransport.incomingMessages.listen((_) {});
 
-      // Connect and send only partial data, then abort.
+      // Connect via raw TCP and send partial body, then close abruptly.
       final socket = await Socket.connect('127.0.0.1', server.port);
-      // Valid HTTP headers with content-length=100 but we only send 1 byte.
       socket.write(
         'POST /Echo/Echo HTTP/1.1\r\n'
         'Host: 127.0.0.1\r\n'
@@ -441,13 +413,9 @@ void main() {
         'x', // only 1 byte of promised 100
       );
       await Future.delayed(const Duration(milliseconds: 50));
-
-      // Abruptly close the socket without completing the body.
       await socket.close();
       await Future.delayed(const Duration(milliseconds: 100));
 
-      // After the error, pending map must be empty — no leak.
-      // We access it via health details as a proxy.
       final health = await serverTransport.health();
       expect((health.details as Map)['pendingRequests'], 0);
 
@@ -457,14 +425,10 @@ void main() {
   });
 
   group('Bug: double releaseId', () {
-    // Bug #3: _fireRequest's finally block calls _idManager.releaseId(streamId),
-    // and then the endpoint calls releaseStreamId which calls it again.
-    // With a small custom ID pool this can cause ID reuse before the first
-    // call is fully done.
     test('releaseStreamId_after_completed_call_returns_false_not_throws',
         () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
-      final serverTransport = RpcHttpResponderTransport(server);
+      final serverTransport = RpcHttpResponderTransport();
+      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
       serverTransport.incomingMessages.listen((msg) async {
         if (msg.isEndOfStream) {
           await serverTransport.sendMetadata(
@@ -491,8 +455,6 @@ void main() {
       final body = RpcMessageFrame.encode(Uint8List.fromList([1]));
       await clientTransport.sendMessage(streamId, body, endStream: true);
 
-      // _fireRequest already released the ID internally.
-      // releaseStreamId must not throw — double-release should be safe.
       expect(() => clientTransport.releaseStreamId(streamId), returnsNormally);
 
       await clientTransport.close();
@@ -502,14 +464,9 @@ void main() {
   });
 
   group('Bug: headers.set overwrites duplicate header names', () {
-    // Bug #4: _flushResponse uses response.headers.set() which replaces all
-    // previous values for a header name. Multiple values for the same header
-    // (e.g. two x-custom entries) collapse to just the last one.
     test('multiple_values_for_same_header_name_all_reach_client', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
-
-      // Server that sends two values for the same custom header.
-      final serverTransport = RpcHttpResponderTransport(server);
+      final serverTransport = RpcHttpResponderTransport();
+      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
       serverTransport.incomingMessages.listen((msg) async {
         if (msg.isEndOfStream) {
           await serverTransport.sendMetadata(
@@ -549,12 +506,8 @@ void main() {
       final body = RpcMessageFrame.encode(Uint8List.fromList([1]));
       await clientTransport.sendMessage(streamId, body, endStream: true);
 
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 200));
 
-      // Both x-multi values must be present in the received metadata.
-      // Dart's HttpResponse.headers.add() combines multiple values for the same
-      // header name with a comma: 'value-1, value-2'. With headers.set() only
-      // the last value survives. We verify both values are present in any form.
       final combinedValues = receivedMeta
           .expand((m) => m.metadata?.headers ?? <RpcHeader>[])
           .where((h) => h.name == 'x-multi')
@@ -570,64 +523,42 @@ void main() {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // Production-readiness: security policy, content-type validation,
-  // body timeout, HTTP→gRPC error mapping, CORS, TLS config.
-  // ---------------------------------------------------------------------------
-
   group('Security policy', () {
     test('rejects_request_when_concurrent_limit_reached', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
-      // maxActiveStreams=0 means every request is immediately over the limit.
       final transport = RpcHttpResponderTransport(
-        server,
         securityPolicy: RpcSecurityPolicy(maxActiveStreams: 0),
       );
-      // Suppress unhandled messages.
+      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((_) {});
 
-      final client = HttpClient();
-      final frame = RpcMessageFrame.encode(Uint8List.fromList([1]));
-      final response = await client
-          .post('127.0.0.1', server.port, '/Svc/Method')
-          .then((req) {
-        req.headers.contentType = ContentType('application', 'grpc');
-        req.contentLength = frame.length;
-        req.add(frame);
-        return req.close();
-      });
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:${server.port}/Svc/Method'),
+        headers: {'content-type': 'application/grpc'},
+        body: RpcMessageFrame.encode(Uint8List.fromList([1])),
+      );
 
-      expect(response.statusCode, HttpStatus.serviceUnavailable);
+      expect(response.statusCode, 503);
 
-      client.close(force: true);
       await transport.close();
       await server.close(force: true);
     });
 
     test('rejects_request_with_oversized_body', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
-      // Allow max 10 bytes.
       final transport = RpcHttpResponderTransport(
-        server,
         securityPolicy: RpcSecurityPolicy(maxMessageLengthBytes: 10),
       );
+      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((_) {});
 
-      final client = HttpClient();
-      // Send 100 bytes — exceeds the 10-byte limit.
       final bigBody = Uint8List(100);
-      final response = await client
-          .post('127.0.0.1', server.port, '/Svc/Method')
-          .then((req) {
-        req.headers.contentType = ContentType('application', 'grpc');
-        req.contentLength = bigBody.length;
-        req.add(bigBody);
-        return req.close();
-      });
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:${server.port}/Svc/Method'),
+        headers: {'content-type': 'application/grpc'},
+        body: bigBody,
+      );
 
-      expect(response.statusCode, HttpStatus.badRequest);
+      expect(response.statusCode, 400);
 
-      client.close(force: true);
       await transport.close();
       await server.close(force: true);
     });
@@ -635,30 +566,25 @@ void main() {
 
   group('Content-Type validation', () {
     test('rejects_wrong_content_type_with_415', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
-      final transport = RpcHttpResponderTransport(server);
+      final transport = RpcHttpResponderTransport();
+      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((_) {});
 
-      final client = HttpClient();
-      final response = await client
-          .post('127.0.0.1', server.port, '/Svc/Method')
-          .then((req) {
-        req.headers.contentType = ContentType.json; // wrong
-        req.contentLength = 0;
-        return req.close();
-      });
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:${server.port}/Svc/Method'),
+        headers: {'content-type': 'application/json'},
+      );
 
-      expect(response.statusCode, HttpStatus.unsupportedMediaType);
+      expect(response.statusCode, 415);
 
-      client.close(force: true);
       await transport.close();
       await server.close(force: true);
     });
 
     test('accepts_application_grpc_content_type', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
       final serverDone = Completer<void>();
-      final transport = RpcHttpResponderTransport(server);
+      final transport = RpcHttpResponderTransport();
+      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((msg) async {
         if (msg.isEndOfStream) {
           await transport.sendMetadata(
@@ -674,22 +600,16 @@ void main() {
         }
       });
 
-      final client = HttpClient();
       final frame = RpcMessageFrame.encode(Uint8List.fromList([1]));
-      final responseFuture = client
-          .post('127.0.0.1', server.port, '/Svc/Method')
-          .then((req) {
-        req.headers.contentType = ContentType('application', 'grpc');
-        req.contentLength = frame.length;
-        req.add(frame);
-        return req.close();
-      });
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:${server.port}/Svc/Method'),
+        headers: {'content-type': 'application/grpc'},
+        body: frame,
+      );
 
       await serverDone.future.timeout(const Duration(seconds: 5));
-      final response = await responseFuture;
-      expect(response.statusCode, HttpStatus.ok);
+      expect(response.statusCode, 200);
 
-      client.close(force: true);
       await transport.close();
       await server.close(force: true);
     });
@@ -697,14 +617,13 @@ void main() {
 
   group('Body read timeout', () {
     test('returns_408_when_body_not_received_in_time', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
       final transport = RpcHttpResponderTransport(
-        server,
         bodyReadTimeout: const Duration(milliseconds: 100),
       );
+      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((_) {});
 
-      // Open a raw socket and send headers but withhold the body.
+      // Open a raw TCP socket — send headers but withhold body.
       final socket = await Socket.connect('127.0.0.1', server.port);
       socket.write(
         'POST /Svc/Method HTTP/1.1\r\n'
@@ -712,25 +631,25 @@ void main() {
         'Content-Type: application/grpc\r\n'
         'Content-Length: 100\r\n'
         '\r\n',
-        // No body — server should time out.
       );
 
-      // Wait for the 408 response.
-      final responseBytes = BytesBuilder();
+      final responseBytes = <int>[];
       final done = Completer<void>();
       socket.listen(
         (data) {
-          responseBytes.add(data);
-          final text = String.fromCharCodes(responseBytes.toBytes());
+          responseBytes.addAll(data);
+          final text = String.fromCharCodes(responseBytes);
           if (text.contains('\r\n\r\n') && !done.isCompleted) {
             done.complete();
           }
         },
-        onDone: () { if (!done.isCompleted) done.complete(); },
+        onDone: () {
+          if (!done.isCompleted) done.complete();
+        },
       );
 
       await done.future.timeout(const Duration(seconds: 3));
-      final responseText = String.fromCharCodes(responseBytes.toBytes());
+      final responseText = String.fromCharCodes(responseBytes);
       expect(responseText, contains('408'));
 
       await socket.close();
@@ -741,13 +660,11 @@ void main() {
 
   group('HTTP status → gRPC error mapping', () {
     test('non_200_response_maps_to_grpc_error', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
-
-      // Raw HTTP server that always returns 503.
-      server.listen((request) async {
-        request.response.statusCode = HttpStatus.serviceUnavailable;
-        await request.response.close();
-      });
+      final server = await shelf_io.serve(
+        (_) async => Response(503),
+        '127.0.0.1',
+        0,
+      );
 
       final clientTransport = RpcHttpCallerTransport(
         baseUrl: 'http://127.0.0.1:${server.port}',
@@ -770,11 +687,11 @@ void main() {
     });
 
     test('404_maps_to_unimplemented_grpc_code', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
-      server.listen((request) async {
-        request.response.statusCode = HttpStatus.notFound;
-        await request.response.close();
-      });
+      final server = await shelf_io.serve(
+        (_) async => Response.notFound(''),
+        '127.0.0.1',
+        0,
+      );
 
       final clientTransport = RpcHttpCallerTransport(
         baseUrl: 'http://127.0.0.1:${server.port}',
@@ -796,13 +713,12 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
       await sub.cancel();
 
-      // Should receive a synthetic trailer with grpc-status = 12 (UNIMPLEMENTED).
       final trailer = messages.lastWhere(
         (m) => m.isEndOfStream,
         orElse: () => throw StateError('No end-of-stream message received'),
       );
-      final grpcStatus = trailer.metadata
-          ?.getHeaderValue(RpcConstants.grpcStatusHeader);
+      final grpcStatus =
+          trailer.metadata?.getHeaderValue(RpcConstants.grpcStatusHeader);
       expect(grpcStatus, '${RpcStatus.unimplemented}');
 
       await clientTransport.close();
@@ -812,46 +728,39 @@ void main() {
 
   group('CORS policy', () {
     test('preflight_OPTIONS_returns_204_with_cors_headers', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
       final transport = RpcHttpResponderTransport(
-        server,
         corsPolicy: RpcHttpCorsPolicy(
           allowedOrigins: ['https://example.com'],
         ),
       );
+      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((_) {});
 
-      final client = HttpClient();
-      final request = await client.openUrl(
+      final request = http.Request(
         'OPTIONS',
         Uri.parse('http://127.0.0.1:${server.port}/Svc/Method'),
       );
-      request.headers.add('origin', 'https://example.com');
-      request.headers.add('access-control-request-method', 'POST');
-      final response = await request.close();
+      request.headers['origin'] = 'https://example.com';
+      request.headers['access-control-request-method'] = 'POST';
+      final streamed = await http.Client().send(request);
 
-      expect(response.statusCode, HttpStatus.noContent);
+      expect(streamed.statusCode, 204);
       expect(
-        response.headers.value('access-control-allow-origin'),
+        streamed.headers['access-control-allow-origin'],
         'https://example.com',
       );
-      expect(
-        response.headers.value('access-control-allow-methods'),
-        isNotNull,
-      );
+      expect(streamed.headers['access-control-allow-methods'], isNotNull);
 
-      client.close(force: true);
       await transport.close();
       await server.close(force: true);
     });
 
     test('cors_headers_attached_to_regular_responses', () async {
-      final server = await HttpServer.bind('127.0.0.1', 0);
       final serverDone = Completer<void>();
       final transport = RpcHttpResponderTransport(
-        server,
         corsPolicy: RpcHttpCorsPolicy(),
       );
+      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((msg) async {
         if (msg.isEndOfStream) {
           await transport.sendMetadata(
@@ -867,41 +776,32 @@ void main() {
         }
       });
 
-      final client = HttpClient();
       final frame = RpcMessageFrame.encode(Uint8List.fromList([1]));
-      final responseFuture = client
-          .post('127.0.0.1', server.port, '/Svc/Method')
-          .then((req) {
-        req.headers.contentType = ContentType('application', 'grpc');
-        req.headers.add('origin', 'http://localhost:3000');
-        req.contentLength = frame.length;
-        req.add(frame);
-        return req.close();
-      });
+      final request = http.Request(
+        'POST',
+        Uri.parse('http://127.0.0.1:${server.port}/Svc/Method'),
+      );
+      request.headers['content-type'] = 'application/grpc';
+      request.headers['origin'] = 'http://localhost:3000';
+      request.bodyBytes = frame;
+      final streamed = await http.Client().send(request);
+      final response = await http.Response.fromStream(streamed);
 
       await serverDone.future.timeout(const Duration(seconds: 5));
-      final response = await responseFuture;
+      expect(response.statusCode, 200);
+      expect(response.headers['access-control-allow-origin'], '*');
 
-      expect(response.statusCode, HttpStatus.ok);
-      // With allowedOrigins: ['*'], the header value is '*'.
-      expect(
-        response.headers.value('access-control-allow-origin'),
-        '*',
-      );
-
-      client.close(force: true);
       await transport.close();
       await server.close(force: true);
     });
   });
 
-  group('Caller TLS / connection pool config', () {
-    test('custom_idle_timeout_and_connection_timeout_are_applied', () async {
-      // Smoke test: constructing with these options must not throw.
+  group('Caller custom HTTP client', () {
+    test('custom_http_client_is_accepted', () async {
+      // Smoke test: constructing with a custom client must not throw.
       final transport = RpcHttpCallerTransport(
         baseUrl: 'https://127.0.0.1:9999',
-        connectionTimeout: const Duration(seconds: 5),
-        idleTimeout: const Duration(seconds: 30),
+        httpClient: http.Client(),
       );
       final health = await transport.health();
       expect(health.level, RpcHealthLevel.healthy);
@@ -910,10 +810,9 @@ void main() {
   });
 
   group('gzip compression', () {
-    // End-to-end: client sends compressed request + server responds compressed.
     test('compressed_request_and_response_round_trip', () async {
-      final httpServer = await HttpServer.bind('127.0.0.1', 0);
-      final serverTransport = RpcHttpResponderTransport(httpServer);
+      final serverTransport = RpcHttpResponderTransport();
+      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
       final serverEndpoint = RpcResponderEndpoint(
         transport: serverTransport,
         debugLabel: 'CompressServer',
@@ -922,15 +821,12 @@ void main() {
       serverEndpoint.start();
 
       final clientTransport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${httpServer.port}',
+        baseUrl: 'http://127.0.0.1:${server.port}',
       );
       final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
 
-      // Send a large payload — compression is most visible on larger data.
-      final payload = 'hello-gzip ' * 500; // ~5.5 KB
+      final payload = 'hello-gzip ' * 500;
 
-      // Request with grpc-encoding: gzip in context → client compresses request,
-      // server sees grpc-accept-encoding → responds with gzip too.
       final context = RpcContext.withHeaders(
         {RpcConstants.grpcEncodingHeader: 'gzip'},
       );
@@ -948,12 +844,12 @@ void main() {
 
       await clientEndpoint.close();
       await serverEndpoint.close();
-      await httpServer.close(force: true);
+      await server.close(force: true);
     });
 
     test('server_compresses_response_when_client_advertises_gzip', () async {
-      final httpServer = await HttpServer.bind('127.0.0.1', 0);
-      final serverTransport = RpcHttpResponderTransport(httpServer);
+      final serverTransport = RpcHttpResponderTransport();
+      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
       final serverEndpoint = RpcResponderEndpoint(
         transport: serverTransport,
         debugLabel: 'CompressServer',
@@ -962,17 +858,15 @@ void main() {
       serverEndpoint.start();
 
       final clientTransport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${httpServer.port}',
+        baseUrl: 'http://127.0.0.1:${server.port}',
       );
 
-      // Intercept raw transport messages to verify grpc-encoding header.
       final receivedMeta = <RpcTransportMessage>[];
       final streamId = clientTransport.createStream();
       clientTransport.getMessagesForStream(streamId).listen((m) {
         if (m.metadata != null) receivedMeta.add(m);
       });
 
-      // Standard metadata already includes grpc-accept-encoding: identity,gzip.
       await clientTransport.sendMetadata(
         streamId,
         RpcMetadata.forClientRequest('Echo', 'Echo'),
@@ -984,7 +878,6 @@ void main() {
 
       await Future.delayed(const Duration(milliseconds: 200));
 
-      // The server's initial response metadata must contain grpc-encoding: gzip.
       final initialMeta = receivedMeta.firstWhere(
         (m) => !m.isEndOfStream,
         orElse: () => throw StateError('No initial metadata received'),
@@ -996,7 +889,7 @@ void main() {
 
       await clientTransport.close();
       await serverEndpoint.close();
-      await httpServer.close(force: true);
+      await server.close(force: true);
     });
   });
 }

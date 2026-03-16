@@ -13,6 +13,8 @@ topics:
 dependencies:
   rpc_dart:
     path: ../rpc_dart
+  http: ^1.6.0
+  shelf: ^1.4.2
 
 dev_dependencies:
   lints: ^6.0.0
