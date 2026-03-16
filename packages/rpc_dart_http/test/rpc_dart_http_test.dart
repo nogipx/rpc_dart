@@ -891,6 +891,43 @@ void main() {
       await serverEndpoint.close();
       await server.close(force: true);
     });
+
+    test('compression_disabled_endpoint_does_not_trigger_server_compression',
+        () async {
+      final serverTransport = RpcHttpResponderTransport();
+      final server =
+          await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
+      final serverEndpoint = RpcResponderEndpoint(
+        transport: serverTransport,
+        debugLabel: 'CompressServer',
+      );
+      serverEndpoint.registerServiceContract(_EchoService());
+      serverEndpoint.start();
+
+      final clientTransport = RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${server.port}',
+      );
+      // compressionEnabled = false: server must NOT compress the response even
+      // if gzip is globally registered.
+      final clientEndpoint = RpcCallerEndpoint(
+        transport: clientTransport,
+        compressionEnabled: false,
+      );
+
+      final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        serviceName: 'Echo',
+        methodName: 'Echo',
+        requestCodec: RpcString.codec,
+        responseCodec: RpcString.codec,
+        request: RpcString('hello'),
+      );
+
+      expect(response.value, 'Echo: hello');
+
+      await clientEndpoint.close();
+      await serverEndpoint.close();
+      await server.close(force: true);
+    });
   });
 }
 

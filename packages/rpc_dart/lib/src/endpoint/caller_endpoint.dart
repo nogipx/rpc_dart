@@ -322,6 +322,20 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       logger.internal('Injected default gzip compression');
     }
 
+    // Control grpc-accept-encoding based on compressionEnabled.
+    // This overrides the base metadata value set in forClientRequest, which
+    // always advertises all globally-registered codecs regardless of this
+    // endpoint's compressionEnabled flag.
+    if (!transport.supportsZeroCopy &&
+        !result.headers.containsKey(RpcConstants.grpcAcceptEncodingHeader)) {
+      final accept = compressionEnabled
+          ? RpcGrpcCompression.supportedEncodings().join(',')
+          : RpcGrpcCompression.identity;
+      result = result.withAdditionalHeaders({
+        RpcConstants.grpcAcceptEncodingHeader: accept,
+      });
+    }
+
     return result;
   }
 
