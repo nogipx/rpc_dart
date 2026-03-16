@@ -72,7 +72,7 @@ void main() {
       test('создает_сообщение_только_с_метаданными', () {
         // Arrange
         final metadata = RpcMetadata([
-          RpcHeader('content-type', 'application/grpc'),
+          RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
         ]);
 
         // Act
@@ -88,7 +88,7 @@ void main() {
       test('создает_сообщение_с_метаданными_и_флагом_конца_потока', () {
         // Arrange
         final metadata = RpcMetadata([
-          RpcHeader(RpcConstants.grpcStatusHeader, '0'),
+          RpcHeader(RpcHeaders.grpcStatus, '0'),
         ]);
 
         // Act

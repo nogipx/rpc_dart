@@ -10,255 +10,198 @@ void main() {
   group('RpcMetadata', () {
     group('forClientRequest', () {
       test('создает_корректные_клиентские_метаданные', () {
-        // Arrange
         const serviceName = 'TestService';
         const methodName = 'TestMethod';
-        const host = 'example.com';
 
-        // Act
-        final metadata = RpcMetadata.forClientRequest(
-          serviceName,
-          methodName,
-          host: host,
-        );
+        final metadata = RpcMetadata.forClientRequest(serviceName, methodName);
 
-        // Assert
-        expect(metadata.headers.length, equals(7));
-        expect(_getHeaderValue(metadata, ':method'), equals('POST'));
+        // Only gRPC-semantic headers — no HTTP/2 pseudo-headers.
+        expect(metadata.headers.length, equals(2));
+        expect(metadata.methodPath, equals('/TestService/TestMethod'));
         expect(
-          _getHeaderValue(metadata, ':path'),
-          equals('/TestService/TestMethod'),
+          _getHeaderValue(metadata, RpcHeaders.contentType),
+          equals(RpcHeaders.contentTypeGrpc),
         );
-        expect(_getHeaderValue(metadata, ':scheme'), equals('http'));
-        expect(_getHeaderValue(metadata, ':authority'), equals(host));
         expect(
-          _getHeaderValue(metadata, RpcConstants.contentTypeHeader),
-          equals(RpcConstants.grpcContentType),
-        );
-        expect(_getHeaderValue(metadata, 'te'), equals('trailers'));
-        expect(
-          _getHeaderValue(metadata, RpcConstants.grpcAcceptEncodingHeader),
+          _getHeaderValue(metadata, RpcHeaders.grpcAcceptEncoding),
           contains('identity'),
         );
       });
 
-      test('использует_пустой_хост_по_умолчанию', () {
-        // Arrange
-        const serviceName = 'TestService';
-        const methodName = 'TestMethod';
+      test('не_содержит_http2_псевдо_хедеры', () {
+        final metadata = RpcMetadata.forClientRequest('Svc', 'Method');
 
-        // Act
-        final metadata = RpcMetadata.forClientRequest(serviceName, methodName);
-
-        // Assert
-        expect(_getHeaderValue(metadata, ':authority'), equals(''));
+        expect(_getHeaderValue(metadata, ':method'), isNull);
+        expect(_getHeaderValue(metadata, ':path'), isNull);
+        expect(_getHeaderValue(metadata, ':scheme'), isNull);
+        expect(_getHeaderValue(metadata, ':authority'), isNull);
+        expect(_getHeaderValue(metadata, 'te'), isNull);
       });
     });
 
     group('forClientRequestWithPath', () {
       test('создает_метаданные_с_готовым_путем', () {
-        // Arrange
         const methodPath = '/CustomService/CustomMethod';
-        const host = 'test.com';
 
-        // Act
-        final metadata = RpcMetadata.forClientRequestWithPath(
-          methodPath,
-          host: host,
+        final metadata = RpcMetadata.forClientRequestWithPath(methodPath);
+
+        expect(metadata.methodPath, equals(methodPath));
+        expect(
+          _getHeaderValue(metadata, RpcHeaders.contentType),
+          equals(RpcHeaders.contentTypeGrpc),
         );
-
-        // Assert
-        expect(_getHeaderValue(metadata, ':path'), equals(methodPath));
-        expect(_getHeaderValue(metadata, ':authority'), equals(host));
       });
     });
 
     group('forServerInitialResponse', () {
       test('создает_корректные_серверные_метаданные', () {
-        // Arrange & Act
         final metadata = RpcMetadata.forServerInitialResponse();
 
-        // Assert
-        expect(metadata.headers.length, equals(2));
-        expect(_getHeaderValue(metadata, ':status'), equals('200'));
+        // Only content-type — no :status pseudo-header.
+        expect(metadata.headers.length, equals(1));
         expect(
-          _getHeaderValue(metadata, RpcConstants.contentTypeHeader),
-          equals(RpcConstants.grpcContentType),
+          _getHeaderValue(metadata, RpcHeaders.contentType),
+          equals(RpcHeaders.contentTypeGrpc),
         );
+        expect(_getHeaderValue(metadata, ':status'), isNull);
+      });
+
+      test('добавляет_grpc_encoding_если_указано', () {
+        final metadata =
+            RpcMetadata.forServerInitialResponse(encoding: 'gzip');
+
+        expect(metadata.headers.length, equals(2));
+        expect(_getHeaderValue(metadata, RpcHeaders.grpcEncoding), equals('gzip'));
       });
     });
 
     group('forTrailer', () {
       test('создает_трейлер_с_успешным_статусом', () {
-        // Arrange
         const statusCode = RpcStatus.ok;
 
-        // Act
         final metadata = RpcMetadata.forTrailer(statusCode);
 
-        // Assert
         expect(metadata.headers.length, equals(1));
         expect(
-          _getHeaderValue(metadata, RpcConstants.grpcStatusHeader),
+          _getHeaderValue(metadata, RpcHeaders.grpcStatus),
           equals('0'),
         );
       });
 
       test('создает_трейлер_с_ошибкой_и_сообщением', () {
-        // Arrange
         const statusCode = RpcStatus.internal;
         const message = 'Внутренняя ошибка сервера';
 
-        // Act
         final metadata = RpcMetadata.forTrailer(statusCode, message: message);
 
-        // Assert
         expect(metadata.headers.length, equals(2));
         expect(
-          _getHeaderValue(metadata, RpcConstants.grpcStatusHeader),
+          _getHeaderValue(metadata, RpcHeaders.grpcStatus),
           equals('13'),
         );
         expect(
-          _getHeaderValue(metadata, RpcConstants.grpcMessageHeader),
+          _getHeaderValue(metadata, RpcHeaders.grpcMessage),
           equals(RpcMetadata.encodeGrpcMessage(message)),
         );
       });
 
       test('не_добавляет_пустое_сообщение', () {
-        // Arrange
         const statusCode = RpcStatus.cancelled;
 
-        // Act
         final metadata = RpcMetadata.forTrailer(statusCode, message: '');
 
-        // Assert
         expect(metadata.headers.length, equals(1));
-        expect(
-          _getHeaderValue(metadata, RpcConstants.grpcMessageHeader),
-          isNull,
-        );
+        expect(_getHeaderValue(metadata, RpcHeaders.grpcMessage), isNull);
       });
     });
 
     group('getHeaderValue', () {
       test('возвращает_значение_существующего_заголовка', () {
-        // Arrange
         final metadata = RpcMetadata([
           RpcHeader('custom-header', 'custom-value'),
           RpcHeader('another-header', 'another-value'),
         ]);
 
-        // Act
-        final value = metadata.getHeaderValue('custom-header');
-
-        // Assert
-        expect(value, equals('custom-value'));
+        expect(metadata.getHeaderValue('custom-header'), equals('custom-value'));
       });
 
       test('возвращает_null_для_несуществующего_заголовка', () {
-        // Arrange
         final metadata = RpcMetadata([RpcHeader('exists', 'value')]);
 
-        // Act
-        final value = metadata.getHeaderValue('not-exists');
-
-        // Assert
-        expect(value, isNull);
+        expect(metadata.getHeaderValue('not-exists'), isNull);
       });
     });
 
     group('methodPath', () {
-      test('извлекает_путь_метода_из_заголовков', () {
-        // Arrange
+      test('возвращает_explicit_field_из_factory', () {
+        final metadata =
+            RpcMetadata.forClientRequest('TestService', 'TestMethod');
+
+        expect(metadata.methodPath, equals('/TestService/TestMethod'));
+      });
+
+      test('fallback_на_legacy_path_заголовок', () {
+        // HTTP/2 transport creates metadata with :path header.
         final metadata = RpcMetadata([
           RpcHeader(':path', '/TestService/TestMethod'),
         ]);
 
-        // Act
-        final path = metadata.methodPath;
-
-        // Assert
-        expect(path, equals('/TestService/TestMethod'));
+        expect(metadata.methodPath, equals('/TestService/TestMethod'));
       });
 
       test('возвращает_null_если_путь_отсутствует', () {
-        // Arrange
         final metadata = RpcMetadata([]);
 
-        // Act
-        final path = metadata.methodPath;
-
-        // Assert
-        expect(path, isNull);
+        expect(metadata.methodPath, isNull);
       });
     });
 
     group('serviceName', () {
       test('извлекает_имя_сервиса_из_пути', () {
-        // Arrange
+        final metadata =
+            RpcMetadata.forClientRequest('TestService', 'TestMethod');
+
+        expect(metadata.serviceName, equals('TestService'));
+      });
+
+      test('извлекает_из_legacy_path_заголовка', () {
         final metadata = RpcMetadata([
           RpcHeader(':path', '/TestService/TestMethod'),
         ]);
 
-        // Act
-        final serviceName = metadata.serviceName;
-
-        // Assert
-        expect(serviceName, equals('TestService'));
+        expect(metadata.serviceName, equals('TestService'));
       });
 
       test('возвращает_null_для_некорректного_пути', () {
-        // Arrange
         final metadata = RpcMetadata([RpcHeader(':path', 'invalid-path')]);
 
-        // Act
-        final serviceName = metadata.serviceName;
-
-        // Assert
-        expect(serviceName, isNull);
+        expect(metadata.serviceName, isNull);
       });
 
       test('возвращает_null_для_пустого_пути', () {
-        // Arrange
         final metadata = RpcMetadata([RpcHeader(':path', '/')]);
 
-        // Act
-        final serviceName = metadata.serviceName;
-
-        // Assert
-        expect(serviceName, isNull);
+        expect(metadata.serviceName, isNull);
       });
     });
 
     group('methodName', () {
       test('извлекает_имя_метода_из_пути', () {
-        // Arrange
-        final metadata = RpcMetadata([
-          RpcHeader(':path', '/TestService/TestMethod'),
-        ]);
+        final metadata =
+            RpcMetadata.forClientRequest('TestService', 'TestMethod');
 
-        // Act
-        final methodName = metadata.methodName;
-
-        // Assert
-        expect(methodName, equals('TestMethod'));
+        expect(metadata.methodName, equals('TestMethod'));
       });
 
       test('возвращает_null_для_пути_без_метода', () {
-        // Arrange
         final metadata = RpcMetadata([RpcHeader(':path', '/TestService')]);
 
-        // Act
-        final methodName = metadata.methodName;
-
-        // Assert
-        expect(methodName, isNull);
+        expect(metadata.methodName, isNull);
       });
     });
   });
 }
 
-/// Вспомогательная функция для получения значения заголовка
 String? _getHeaderValue(RpcMetadata metadata, String name) {
   return metadata.getHeaderValue(name);
 }

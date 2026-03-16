@@ -18,7 +18,7 @@ void main() {
 
       // Server context: advertise that it accepts gzip → enables response compression.
       final serverContext = RpcContext.withHeaders({
-        RpcConstants.grpcAcceptEncodingHeader: 'identity,gzip',
+        RpcHeaders.grpcAcceptEncoding: 'identity,gzip',
       });
 
       final server = ServerStreamResponder<RpcString, RpcString>(
@@ -80,7 +80,7 @@ void main() {
 
       // Client context: compress outgoing requests with gzip.
       final clientContext = RpcContext.withHeaders({
-        RpcConstants.grpcEncodingHeader: 'gzip',
+        RpcHeaders.grpcEncoding: 'gzip',
       });
 
       final client = ServerStreamCaller<RpcString, RpcString>(
@@ -126,7 +126,7 @@ void main() {
 
       // Client context: compress outgoing requests with gzip.
       final clientContext = RpcContext.withHeaders({
-        RpcConstants.grpcEncodingHeader: 'gzip',
+        RpcHeaders.grpcEncoding: 'gzip',
       });
 
       final client = ClientStreamCaller<RpcString, RpcString>(
@@ -154,7 +154,7 @@ void main() {
 
       // Server context: advertise gzip acceptance → compress the single response.
       final serverContext = RpcContext.withHeaders({
-        RpcConstants.grpcAcceptEncodingHeader: 'identity,gzip',
+        RpcHeaders.grpcAcceptEncoding: 'identity,gzip',
       });
 
       final server = ClientStreamResponder<RpcString, RpcString>(
@@ -199,7 +199,7 @@ void main() {
 
       // Server context: compress responses.
       final serverContext = RpcContext.withHeaders({
-        RpcConstants.grpcAcceptEncodingHeader: 'identity,gzip',
+        RpcHeaders.grpcAcceptEncoding: 'identity,gzip',
       });
 
       final server = BidirectionalStreamResponder<RpcString, RpcString>(
@@ -218,7 +218,7 @@ void main() {
 
       // Client context: compress requests.
       final clientContext = RpcContext.withHeaders({
-        RpcConstants.grpcEncodingHeader: 'gzip',
+        RpcHeaders.grpcEncoding: 'gzip',
       });
 
       final client = BidirectionalStreamCaller<RpcString, RpcString>(

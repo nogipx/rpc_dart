@@ -205,21 +205,9 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       return;
     }
 
-    final httpMethod = metadata.getHeaderValue(':method');
-    if (httpMethod != null && httpMethod.toUpperCase() != 'POST') {
-      unawaited(
-        _sendGrpcErrorAndCleanup(
-          streamId: state.id,
-          status: RpcStatus.invalidArgument,
-          message: 'Invalid :method for gRPC',
-        ),
-      );
-      return;
-    }
-
-    final contentType = metadata.getHeaderValue(RpcConstants.contentTypeHeader);
+    final contentType = metadata.getHeaderValue(RpcHeaders.contentType);
     if (contentType != null &&
-        !contentType.toLowerCase().startsWith(RpcConstants.grpcContentType)) {
+        !contentType.toLowerCase().startsWith(RpcHeaders.contentTypeGrpc)) {
       unawaited(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
@@ -230,20 +218,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
       return;
     }
 
-    final te = metadata.getHeaderValue('te');
-    if (te != null && !te.toLowerCase().contains('trailers')) {
-      unawaited(
-        _sendGrpcErrorAndCleanup(
-          streamId: state.id,
-          status: RpcStatus.invalidArgument,
-          message: 'Invalid te header for gRPC',
-        ),
-      );
-      return;
-    }
-
-    final grpcEncoding =
-        metadata.getHeaderValue(RpcConstants.grpcEncodingHeader);
+    final grpcEncoding = metadata.getHeaderValue(RpcHeaders.grpcEncoding);
     if (grpcEncoding != null && !RpcGrpcCompression.isSupported(grpcEncoding)) {
       unawaited(
         _sendGrpcErrorAndCleanup(
@@ -947,11 +922,11 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         state.id,
         RpcMetadata([
           RpcHeader(
-            RpcConstants.grpcStatusHeader,
+            RpcHeaders.grpcStatus,
             RpcStatus.unimplemented.toString(),
           ),
           RpcHeader(
-            RpcConstants.grpcMessageHeader,
+            RpcHeaders.grpcMessage,
             RpcMetadata.encodeGrpcMessage(
               'Zero-copy method $methodKey требует транспорт с поддержкой zero-copy',
             ),
@@ -1107,7 +1082,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
 
     var context = RpcContext.withHeaders(headers);
 
-    final timeoutHeader = context.getHeader(RpcConstants.grpcTimeoutHeader);
+    final timeoutHeader = context.getHeader(RpcHeaders.grpcTimeout);
     if (timeoutHeader != null) {
       final timeout = RpcMetadata.parseGrpcTimeout(timeoutHeader);
       if (timeout != null) {
@@ -1115,18 +1090,6 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         logger.internal('Установлен grpc-timeout: $timeout');
       } else {
         logger.warning('Некорректный grpc-timeout: $timeoutHeader');
-      }
-    } else {
-      final deadlineHeader = context.getHeader('x-deadline');
-      if (deadlineHeader != null) {
-        try {
-          final deadlineMs = int.parse(deadlineHeader);
-          final deadline = DateTime.fromMillisecondsSinceEpoch(deadlineMs);
-          context = context.withDeadline(deadline);
-          logger.internal('Установлен deadline из заголовков: $deadline');
-        } catch (_) {
-          logger.warning('Некорректный deadline в заголовках: $deadlineHeader');
-        }
       }
     }
 

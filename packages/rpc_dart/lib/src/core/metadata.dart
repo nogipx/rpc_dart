@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'compression.dart';
-import 'protocol.dart';
+import 'rpc_headers.dart';
 
 /// Represents a single HTTP/2 header.
 ///
@@ -24,10 +24,11 @@ final class RpcHeader {
   const RpcHeader(this.name, this.value);
 }
 
-/// Request/response metadata (a set of HTTP/2 headers).
+/// Request/response metadata (a set of gRPC headers).
 ///
-/// gRPC ships metadata through HTTP/2 headers and trailers. This class offers
-/// convenient access plus factories for common header sets.
+/// gRPC ships metadata as header/trailer key-value pairs. This class holds
+/// the transport-agnostic semantic headers. The [methodPath] is a first-class
+/// field — it is never stored as a `:path` header inside [headers].
 final class RpcMetadata {
   static const int _maxGrpcMessageLength = 1024;
   static const int _maxMethodTokenLength = 128;
@@ -37,50 +38,46 @@ final class RpcMetadata {
   /// Headers that comprise the metadata.
   final List<RpcHeader> headers;
 
-  /// Builds metadata from a list of headers.
-  const RpcMetadata(this.headers);
+  /// RPC method path in `/ServiceName/MethodName` format.
+  ///
+  /// Stored as a dedicated field rather than a `:path` header so that core
+  /// metadata stays transport-agnostic. Falls back to reading the legacy
+  /// `:path` header for metadata produced by HTTP/2 transport internals.
+  final String? _explicitMethodPath;
+
+  /// Builds metadata from a list of headers with an optional method path.
+  const RpcMetadata(this.headers, {String? methodPath})
+      : _explicitMethodPath = methodPath;
 
   /// Creates metadata for a client request.
   ///
-  /// Builds the HTTP/2 headers needed to start a gRPC call.
-  /// [serviceName] Service name (e.g., "ChatService")
-  /// [methodName] Method name (e.g., "Send")
-  /// [host] Optional host header.
-  /// Returns metadata ready to send with the initial request.
+  /// Produces only gRPC-semantic headers. Transport-specific headers
+  /// (HTTP/2 pseudo-headers, `te`, etc.) are added by each transport layer.
+  ///
+  /// [serviceName] Service name (e.g., "ChatService").
+  /// [methodName] Method name (e.g., "Send").
   static RpcMetadata forClientRequest(
     String serviceName,
-    String methodName, {
-    String host = '',
-  }) {
+    String methodName,
+  ) {
     _validateMethodToken(serviceName, 'serviceName');
     _validateMethodToken(methodName, 'methodName');
-    final methodPath = '/$serviceName/$methodName';
-    return RpcMetadata([
-      const RpcHeader(':method', 'POST'),
-      RpcHeader(':path', methodPath),
-      const RpcHeader(':scheme', 'http'),
-      RpcHeader(':authority', host),
-      const RpcHeader(
-        RpcConstants.contentTypeHeader,
-        RpcConstants.grpcContentType,
-      ),
-      const RpcHeader('te', 'trailers'),
-      RpcHeader(
-        RpcConstants.grpcAcceptEncodingHeader,
-        RpcGrpcCompression.supportedEncodings().join(','),
-      ),
-    ]);
+    return RpcMetadata(
+      [
+        const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
+        RpcHeader(
+          RpcHeaders.grpcAcceptEncoding,
+          RpcGrpcCompression.supportedEncodings().join(','),
+        ),
+      ],
+      methodPath: '/$serviceName/$methodName',
+    );
   }
 
   /// Creates client metadata when the method path is already computed.
   ///
-  /// Simplified variant for situations when the path already exists.
   /// [methodPath] Method path in `/ServiceName/MethodName` format.
-  /// [host] Optional host header.
-  static RpcMetadata forClientRequestWithPath(
-    String methodPath, {
-    String host = '',
-  }) {
+  static RpcMetadata forClientRequestWithPath(String methodPath) {
     if (!_isValidMethodPath(methodPath)) {
       throw ArgumentError.value(
         methodPath,
@@ -88,37 +85,27 @@ final class RpcMetadata {
         'Invalid method path (expected /Service/Method)',
       );
     }
-    return RpcMetadata([
-      const RpcHeader(':method', 'POST'),
-      RpcHeader(':path', methodPath),
-      const RpcHeader(':scheme', 'http'),
-      RpcHeader(':authority', host),
-      const RpcHeader(
-        RpcConstants.contentTypeHeader,
-        RpcConstants.grpcContentType,
-      ),
-      const RpcHeader('te', 'trailers'),
-      RpcHeader(
-        RpcConstants.grpcAcceptEncodingHeader,
-        RpcGrpcCompression.supportedEncodings().join(','),
-      ),
-    ]);
+    return RpcMetadata(
+      [
+        const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
+        RpcHeader(
+          RpcHeaders.grpcAcceptEncoding,
+          RpcGrpcCompression.supportedEncodings().join(','),
+        ),
+      ],
+      methodPath: methodPath,
+    );
   }
 
   /// Creates initial metadata for a server response.
   ///
-  /// Forms the HTTP/2 headers the server sends upon receiving a request before
-  /// streaming any data.
-  /// Returns metadata ready to send at the start of a response.
+  /// Produces only gRPC-semantic headers. Transport-specific status headers
+  /// (e.g. HTTP/2 `:status`) are added by the transport layer.
   static RpcMetadata forServerInitialResponse({String? encoding}) {
     return RpcMetadata([
-      const RpcHeader(':status', '200'),
-      const RpcHeader(
-        RpcConstants.contentTypeHeader,
-        RpcConstants.grpcContentType,
-      ),
+      const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
       if (encoding != null && encoding != RpcGrpcCompression.identity)
-        RpcHeader(RpcConstants.grpcEncodingHeader, encoding),
+        RpcHeader(RpcHeaders.grpcEncoding, encoding),
     ]);
   }
 
@@ -134,24 +121,18 @@ final class RpcMetadata {
     Uint8List? statusDetailsBin,
   }) {
     final headers = [
-      RpcHeader(RpcConstants.grpcStatusHeader, statusCode.toString()),
+      RpcHeader(RpcHeaders.grpcStatus, statusCode.toString()),
     ];
 
     if (message.isNotEmpty) {
       headers.add(
-        RpcHeader(
-          RpcConstants.grpcMessageHeader,
-          encodeGrpcMessage(message),
-        ),
+        RpcHeader(RpcHeaders.grpcMessage, encodeGrpcMessage(message)),
       );
     }
 
     if (statusDetailsBin != null && statusDetailsBin.isNotEmpty) {
       headers.add(
-        RpcHeader(
-          RpcConstants.grpcStatusDetailsBinHeader,
-          base64Encode(statusDetailsBin),
-        ),
+        RpcHeader(RpcHeaders.grpcStatusDetails, base64Encode(statusDetailsBin)),
       );
     }
 
@@ -231,7 +212,7 @@ final class RpcMetadata {
   }
 
   Uint8List? get statusDetailsBin {
-    final raw = getHeaderValue(RpcConstants.grpcStatusDetailsBinHeader);
+    final raw = getHeaderValue(RpcHeaders.grpcStatusDetails);
     if (raw == null || raw.isEmpty) return null;
     try {
       return base64Decode(raw);
@@ -252,10 +233,12 @@ final class RpcMetadata {
     return null;
   }
 
-  /// Extracts the method path from metadata.
+  /// RPC method path in `/ServiceName/MethodName` format.
   ///
-  /// Returns the :path header value or null if it is absent.
-  String? get methodPath => getHeaderValue(':path');
+  /// Returns the explicit field when set by factory methods. Falls back to the
+  /// legacy `:path` header so metadata produced by HTTP/2 transport internals
+  /// continues to work without changes.
+  String? get methodPath => _explicitMethodPath ?? getHeaderValue(':path');
 
   /// Extracts the service name from the method path.
   ///

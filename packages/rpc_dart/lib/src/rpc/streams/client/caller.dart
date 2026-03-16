@@ -79,13 +79,13 @@ final class ClientStreamCaller<TRequest extends Object,
         // Check for errors in metadata/trailers.
         if (rpcMessage.isMetadataOnly && rpcMessage.metadata != null) {
           final statusCode = rpcMessage.metadata!.getHeaderValue(
-            RpcConstants.grpcStatusHeader,
+            RpcHeaders.grpcStatus,
           );
           _logger?.internal('Status code from metadata: $statusCode');
 
           if (statusCode != null && statusCode != '0') {
             final errorMessage = rpcMessage.metadata!.getHeaderValue(
-                  RpcConstants.grpcMessageHeader,
+                  RpcHeaders.grpcMessage,
                 ) ??
                 '';
             final decodedMessage = RpcMetadata.decodeGrpcMessage(errorMessage);

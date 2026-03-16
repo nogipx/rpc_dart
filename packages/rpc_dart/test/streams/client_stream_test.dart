@@ -339,8 +339,8 @@ void main() {
 
         await incorrectClient.send('incorrect'.rpc);
         await expectLater(
-          () => incorrectClient.finishSending().timeout(Duration(seconds: 5)),
-          throwsA(isA<Exception>()),
+          incorrectClient.finishSending().timeout(Duration(milliseconds: 100)),
+          throwsA(isA<TimeoutException>()),
         );
 
         // Assert

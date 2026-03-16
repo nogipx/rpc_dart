@@ -10,5 +10,6 @@ export 'metadata.dart';
 export 'message.dart';
 export 'parser.dart';
 export 'protocol.dart';
+export 'rpc_headers.dart';
 export 'security_policy.dart';
 export 'transport.dart';

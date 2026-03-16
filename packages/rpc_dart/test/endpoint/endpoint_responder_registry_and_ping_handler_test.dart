@@ -112,7 +112,7 @@ void main() {
       );
 
       final trailer = metadata
-          .map((m) => m.getHeaderValue(RpcConstants.grpcStatusHeader))
+          .map((m) => m.getHeaderValue(RpcHeaders.grpcStatus))
           .whereType<String>()
           .toList();
       expect(trailer, equals([RpcStatus.ok.toString()]));
@@ -148,7 +148,7 @@ void main() {
       final sub = client.getMessagesForStream(streamId).listen((message) {
         final metadata = message.metadata;
         if (metadata == null) return;
-        final status = metadata.getHeaderValue(RpcConstants.grpcStatusHeader);
+        final status = metadata.getHeaderValue(RpcHeaders.grpcStatus);
         if (status != null && !trailers.isCompleted) {
           trailers.complete(metadata);
         }
@@ -163,12 +163,12 @@ void main() {
 
       final trailer = await trailers.future.timeout(const Duration(seconds: 2));
       expect(
-        trailer.getHeaderValue(RpcConstants.grpcStatusHeader),
+        trailer.getHeaderValue(RpcHeaders.grpcStatus),
         equals(RpcStatus.internal.toString()),
       );
       expect(
         RpcMetadata.decodeGrpcMessage(
-          trailer.getHeaderValue(RpcConstants.grpcMessageHeader) ?? '',
+          trailer.getHeaderValue(RpcHeaders.grpcMessage) ?? '',
         ),
         contains('Ping handling error'),
       );

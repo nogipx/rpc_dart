@@ -165,7 +165,7 @@ void main() {
         (message) =>
             message.streamId == streamId &&
             message.isMetadataOnly &&
-            message.metadata?.getHeaderValue(RpcConstants.grpcStatusHeader) !=
+            message.metadata?.getHeaderValue(RpcHeaders.grpcStatus) !=
                 null,
       );
 
@@ -177,7 +177,7 @@ void main() {
 
       final trailer = await response;
       expect(
-        trailer.metadata!.getHeaderValue(RpcConstants.grpcStatusHeader),
+        trailer.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
         equals(RpcStatus.invalidArgument.toString()),
       );
 
@@ -192,7 +192,7 @@ void main() {
         (message) =>
             message.streamId == streamId &&
             message.isMetadataOnly &&
-            message.metadata?.getHeaderValue(RpcConstants.grpcStatusHeader) !=
+            message.metadata?.getHeaderValue(RpcHeaders.grpcStatus) !=
                 null,
       );
 
@@ -204,7 +204,7 @@ void main() {
 
       final trailer = await response;
       expect(
-        trailer.metadata!.getHeaderValue(RpcConstants.grpcStatusHeader),
+        trailer.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
         equals(RpcStatus.unimplemented.toString()),
       );
 

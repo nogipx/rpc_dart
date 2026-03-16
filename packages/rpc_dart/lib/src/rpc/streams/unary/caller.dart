@@ -183,13 +183,13 @@ final class UnaryCaller<TRequest, TResponse> {
             // Received metadata (possibly trailers).
             _logger?.internal('Metadata received [streamId: $streamId]');
             final encoding = message.metadata!.getHeaderValue(
-              RpcConstants.grpcEncodingHeader,
+              RpcHeaders.grpcEncoding,
             );
             if (encoding != null) {
               _peerGrpcEncoding = encoding;
             }
             final statusCode = message.metadata!.getHeaderValue(
-              RpcConstants.grpcStatusHeader,
+              RpcHeaders.grpcStatus,
             );
 
             if (statusCode != null && message.isEndOfStream) {
@@ -199,7 +199,7 @@ final class UnaryCaller<TRequest, TResponse> {
               );
               if (code != RpcStatus.ok && !completer.isCompleted) {
                 final errorMessage = message.metadata!.getHeaderValue(
-                      RpcConstants.grpcMessageHeader,
+                      RpcHeaders.grpcMessage,
                     ) ??
                     '';
                 final decodedMessage =
@@ -228,43 +228,28 @@ final class UnaryCaller<TRequest, TResponse> {
 
       // Send initial metadata with context headers.
       _logger?.internal('Sending initial metadata [streamId: $streamId]');
-      final baseMetadata = RpcMetadata.forClientRequest(
-        _serviceName,
-        _methodName,
-      );
+      final baseMetadata = RpcMetadata.forClientRequest(_serviceName, _methodName);
 
-      // Build metadata with context headers.
-      final headers = List<RpcHeader>.from(baseMetadata.headers);
+      // Use a map so context headers naturally override base headers,
+      // preventing duplicates (e.g. grpc-accept-encoding).
+      final headerMap = <String, String>{
+        for (final h in baseMetadata.headers) h.name: h.value,
+      };
 
       if (_context != null) {
-        // Add custom context headers.
-        for (final entry in _context!.headers.entries) {
-          headers.add(RpcHeader(entry.key, entry.value));
-        }
+        headerMap.addAll(_context!.headers);
 
-        // Add RPC-specific headers.
         if (_context!.traceId != null) {
-          headers.add(RpcHeader('x-trace-id', _context!.traceId!));
+          headerMap[RpcHeaders.xTraceId] = _context!.traceId!;
         }
-        headers.add(RpcHeader('x-request-id', _context!.requestId));
+        headerMap[RpcHeaders.xRequestId] = _context!.requestId;
 
-        // Send deadline to server.
         if (_context!.deadline != null) {
           final timeout = _context!.remainingTime;
           if (timeout != null) {
-            headers.add(
-              RpcHeader(
-                RpcConstants.grpcTimeoutHeader,
-                RpcMetadata.encodeGrpcTimeout(timeout),
-              ),
-            );
+            headerMap[RpcHeaders.grpcTimeout] =
+                RpcMetadata.encodeGrpcTimeout(timeout);
           }
-          headers.add(
-            RpcHeader(
-              'x-deadline',
-              _context!.deadline!.millisecondsSinceEpoch.toString(),
-            ),
-          );
         }
 
         _logger?.internal(
@@ -272,7 +257,10 @@ final class UnaryCaller<TRequest, TResponse> {
         );
       }
 
-      final metadata = RpcMetadata(headers);
+      final metadata = RpcMetadata(
+        [for (final e in headerMap.entries) RpcHeader(e.key, e.value)],
+        methodPath: baseMetadata.methodPath,
+      );
       await _transport.sendMetadata(streamId, metadata);
 
       // Zero-copy optimization for supporting transports.
@@ -288,7 +276,7 @@ final class UnaryCaller<TRequest, TResponse> {
         _logger?.internal('Serializing request [streamId: $streamId]');
         final serializedRequest = _requestSerializer.serialize(request);
         final requestEncoding = _context?.getHeader(
-          RpcConstants.grpcEncodingHeader,
+          RpcHeaders.grpcEncoding,
         );
         if (requestEncoding != null &&
             requestEncoding != RpcGrpcCompression.identity &&

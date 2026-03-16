@@ -144,7 +144,7 @@ void main() {
         // Act - отправляем premium пользователя
         final streamId = router.createStream();
         final metadata = RpcMetadata([
-          RpcHeader('x-route-service', 'UserService'),
+          RpcHeader(RpcHeaders.xRouteService, 'UserService'),
           RpcHeader('x-tier', 'premium'),
         ]);
         await router.sendMetadata(streamId, metadata);
@@ -184,7 +184,7 @@ void main() {
         // Act - отправляем обычного пользователя
         final streamId = router.createStream();
         final metadata = RpcMetadata([
-          RpcHeader('x-route-service', 'UserService'),
+          RpcHeader(RpcHeaders.xRouteService, 'UserService'),
           RpcHeader('x-tier', 'regular'),
         ]);
         await router.sendMetadata(streamId, metadata);
@@ -224,13 +224,13 @@ void main() {
         // Act - отправляем в разные сервисы
         final userStreamId = router.createStream();
         final userMetadata = RpcMetadata([
-          RpcHeader('x-route-service', 'UserService'),
+          RpcHeader(RpcHeaders.xRouteService, 'UserService'),
         ]);
         await router.sendMetadata(userStreamId, userMetadata);
 
         final paymentStreamId = router.createStream();
         final paymentMetadata = RpcMetadata([
-          RpcHeader('x-route-service', 'PaymentService'),
+          RpcHeader(RpcHeaders.xRouteService, 'PaymentService'),
         ]);
         await router.sendMetadata(paymentStreamId, paymentMetadata);
 
@@ -241,11 +241,11 @@ void main() {
         expect(paymentMessages.length, equals(1));
 
         expect(
-          userMessages.first.metadata?.getHeaderValue('x-route-service'),
+          userMessages.first.metadata?.getHeaderValue(RpcHeaders.xRouteService),
           equals('UserService'),
         );
         expect(
-          paymentMessages.first.metadata?.getHeaderValue('x-route-service'),
+          paymentMessages.first.metadata?.getHeaderValue(RpcHeaders.xRouteService),
           equals('PaymentService'),
         );
 
@@ -280,7 +280,7 @@ void main() {
         // Act - отправляем admin метод
         final adminStreamId = router.createStream();
         final adminMetadata = RpcMetadata([
-          RpcHeader('x-route-service', 'UserService'),
+          RpcHeader(RpcHeaders.xRouteService, 'UserService'),
           RpcHeader(
             ':path',
             '/admin/deleteUser',
@@ -291,7 +291,7 @@ void main() {
         // Act - отправляем обычный метод
         final userStreamId = router.createStream();
         final userMetadata = RpcMetadata([
-          RpcHeader('x-route-service', 'UserService'),
+          RpcHeader(RpcHeaders.xRouteService, 'UserService'),
           RpcHeader(':path', '/UserService/getUser'), // Обычный method path
         ]);
         await router.sendMetadata(userStreamId, userMetadata);
@@ -338,7 +338,7 @@ void main() {
         // Act - тестируем с пользователем с четным хэшем
         final evenStreamId = router.createStream();
         final evenMetadata = RpcMetadata([
-          RpcHeader('x-route-service', 'UserService'),
+          RpcHeader(RpcHeaders.xRouteService, 'UserService'),
           RpcHeader('x-user-id', 'user_1'), // hashCode: 742579346 (четный)
         ]);
         await router.sendMetadata(evenStreamId, evenMetadata);
@@ -346,7 +346,7 @@ void main() {
         // Тестируем с пользователем с нечетным хэшем
         final oddStreamId = router.createStream();
         final oddMetadata = RpcMetadata([
-          RpcHeader('x-route-service', 'UserService'),
+          RpcHeader(RpcHeaders.xRouteService, 'UserService'),
           RpcHeader('x-user-id', 'user_2'), // hashCode: 437041191 (нечетный)
         ]);
         await router.sendMetadata(oddStreamId, oddMetadata);
@@ -402,7 +402,7 @@ void main() {
         await router.sendMetadata(
           adminStreamId,
           RpcMetadata([
-            RpcHeader('x-route-service', 'UserService'),
+            RpcHeader(RpcHeaders.xRouteService, 'UserService'),
             RpcHeader('x-tier', 'premium'),
             RpcHeader('x-role', 'admin'),
           ]),
@@ -413,7 +413,7 @@ void main() {
         await router.sendMetadata(
           premiumStreamId,
           RpcMetadata([
-            RpcHeader('x-route-service', 'UserService'),
+            RpcHeader(RpcHeaders.xRouteService, 'UserService'),
             RpcHeader('x-tier', 'premium'),
             RpcHeader('x-role', 'user'),
           ]),
@@ -424,7 +424,7 @@ void main() {
         await router.sendMetadata(
           regularStreamId,
           RpcMetadata([
-            RpcHeader('x-route-service', 'UserService'),
+            RpcHeader(RpcHeaders.xRouteService, 'UserService'),
             RpcHeader('x-tier', 'regular'),
           ]),
         );
@@ -453,7 +453,7 @@ void main() {
         // Act & Assert
         final streamId = router.createStream();
         final metadata = RpcMetadata([
-          RpcHeader('x-route-service', 'UnknownService'),
+          RpcHeader(RpcHeaders.xRouteService, 'UnknownService'),
         ]);
 
         expect(
@@ -595,7 +595,7 @@ void main() {
         // 1. Отправляем метаданные
         await router.sendMetadata(
           streamId,
-          RpcMetadata([RpcHeader('x-route-service', 'UserService')]),
+          RpcMetadata([RpcHeader(RpcHeaders.xRouteService, 'UserService')]),
         );
 
         // 2. Отправляем данные
@@ -651,7 +651,7 @@ void main() {
         // Отправляем в UserService
         await router.sendMetadata(
           userStreamId,
-          RpcMetadata([RpcHeader('x-route-service', 'UserService')]),
+          RpcMetadata([RpcHeader(RpcHeaders.xRouteService, 'UserService')]),
         );
         await router.sendMessage(
           userStreamId,
@@ -661,7 +661,7 @@ void main() {
         // Отправляем в PaymentService
         await router.sendMetadata(
           paymentStreamId,
-          RpcMetadata([RpcHeader('x-route-service', 'PaymentService')]),
+          RpcMetadata([RpcHeader(RpcHeaders.xRouteService, 'PaymentService')]),
         );
         await router.sendMessage(
           paymentStreamId,
@@ -675,11 +675,11 @@ void main() {
         expect(paymentMessages.length, equals(2)); // metadata + data
 
         expect(
-          userMessages[0].metadata?.getHeaderValue('x-route-service'),
+          userMessages[0].metadata?.getHeaderValue(RpcHeaders.xRouteService),
           equals('UserService'),
         );
         expect(
-          paymentMessages[0].metadata?.getHeaderValue('x-route-service'),
+          paymentMessages[0].metadata?.getHeaderValue(RpcHeaders.xRouteService),
           equals('PaymentService'),
         );
 
@@ -729,7 +729,7 @@ void main() {
 
             await router.sendMetadata(
               clientStreamId,
-              RpcMetadata([RpcHeader('x-route-service', 'UserService')]),
+              RpcMetadata([RpcHeader(RpcHeaders.xRouteService, 'UserService')]),
             );
 
             // После очистки роутер должен снова выделять базовый ID на целевом транспорте
@@ -777,7 +777,7 @@ void main() {
         // Чтобы поток стал активным, нужно отправить метаданные
         await router.sendMetadata(
           streamId,
-          RpcMetadata([RpcHeader('x-route-service', 'UserService')]),
+          RpcMetadata([RpcHeader(RpcHeaders.xRouteService, 'UserService')]),
         );
 
         // Assert - проверяем статистику
@@ -991,7 +991,7 @@ class _ReusableIdTestTransport implements IRpcTransport {
 
 extension RpcMetadataTestHelpers on RpcMetadata {
   static RpcMetadata forService(String serviceName) {
-    return RpcMetadata([RpcHeader('x-route-service', serviceName)]);
+    return RpcMetadata([RpcHeader(RpcHeaders.xRouteService, serviceName)]);
   }
 
   static RpcMetadata withHeaders(Map<String, String> headers) {

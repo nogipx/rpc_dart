@@ -91,7 +91,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       logger: _logger,
       decompressor: (payload) {
         final encoding = _activeRequestEncoding ??
-            _context?.getHeader(RpcConstants.grpcEncodingHeader);
+            _context?.getHeader(RpcHeaders.grpcEncoding);
         if (encoding == null || encoding == RpcGrpcCompression.identity) {
           throw RpcException(
             'Compressed gRPC payload received without grpc-encoding',
@@ -164,14 +164,14 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           }
           // Capture client's grpc-accept-encoding for response compression.
           final accept = message.metadata!.getHeaderValue(
-            RpcConstants.grpcAcceptEncodingHeader,
+            RpcHeaders.grpcAcceptEncoding,
           );
           if (accept != null) {
             state.clientAcceptEncoding = accept;
           }
           // Capture client's grpc-encoding to decompress incoming requests.
           final requestEnc = message.metadata!.getHeaderValue(
-            RpcConstants.grpcEncodingHeader,
+            RpcHeaders.grpcEncoding,
           );
           if (requestEnc != null && requestEnc != RpcGrpcCompression.identity) {
             state.clientRequestEncoding = requestEnc;
@@ -518,7 +518,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Returns `null` if no compression should be applied (identity or unknown).
   String? _selectResponseEncoding(int streamId) {
     final accept = _streamStates[streamId]?.clientAcceptEncoding ??
-        _context?.getHeader(RpcConstants.grpcAcceptEncodingHeader);
+        _context?.getHeader(RpcHeaders.grpcAcceptEncoding);
     return RpcGrpcCompression.selectResponseEncoding(accept);
   }
 

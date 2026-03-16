@@ -93,8 +93,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       _parser = RpcMessageParser(
         logger: _logger,
         decompressor: (payload) {
-          final encoding = _requestEncoding ??
-              _context?.getHeader(RpcConstants.grpcEncodingHeader);
+          final encoding =
+              _requestEncoding ?? _context?.getHeader(RpcHeaders.grpcEncoding);
           if (encoding == null || encoding == RpcGrpcCompression.identity) {
             throw RpcException(
               'Compressed gRPC payload received without grpc-encoding',
@@ -126,7 +126,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Picks the best response encoding from the client's grpc-accept-encoding.
   static String? _pickResponseEncoding(RpcContext? context) {
-    final accept = context?.getHeader(RpcConstants.grpcAcceptEncodingHeader);
+    final accept = context?.getHeader(RpcHeaders.grpcAcceptEncoding);
     return RpcGrpcCompression.selectResponseEncoding(accept);
   }
 
@@ -328,7 +328,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       final meta = message.metadata!;
 
       // grpc-encoding: what the peer used to compress its requests.
-      final reqEnc = meta.getHeaderValue(RpcConstants.grpcEncodingHeader);
+      final reqEnc = meta.getHeaderValue(RpcHeaders.grpcEncoding);
       if (reqEnc != null && reqEnc != RpcGrpcCompression.identity) {
         _requestEncoding = reqEnc;
       }
@@ -336,7 +336,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // grpc-accept-encoding: what the peer can decompress → use for responses.
       if (_responseEncoding == null) {
         final accept = meta.getHeaderValue(
-          RpcConstants.grpcAcceptEncodingHeader,
+          RpcHeaders.grpcAcceptEncoding,
         );
         if (accept != null) {
           for (final enc in accept.split(',').map((e) => e.trim())) {
@@ -522,16 +522,16 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         final errorHeaders = [
           RpcHeader(':status', '200'), // HTTP 200 for gRPC
           RpcHeader(
-            RpcConstants.contentTypeHeader,
-            RpcConstants.grpcContentType,
+            RpcHeaders.contentType,
+            RpcHeaders.contentTypeGrpc,
           ),
-          RpcHeader(RpcConstants.grpcStatusHeader, statusCode.toString()),
+          RpcHeader(RpcHeaders.grpcStatus, statusCode.toString()),
         ];
 
         if (message.isNotEmpty) {
           errorHeaders.add(
             RpcHeader(
-              RpcConstants.grpcMessageHeader,
+              RpcHeaders.grpcMessage,
               RpcMetadata.encodeGrpcMessage(message),
             ),
           );
@@ -818,7 +818,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             );
 
             final requestEncoding =
-                _context?.getHeader(RpcConstants.grpcEncodingHeader);
+                _context?.getHeader(RpcHeaders.grpcEncoding);
             if (requestEncoding != null &&
                 requestEncoding != RpcGrpcCompression.identity &&
                 !RpcGrpcCompression.isSupported(requestEncoding)) {
@@ -922,63 +922,47 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       'Sending initial metadata for $_methodPath [streamId: $_streamId]',
     );
 
-    final baseMetadata = RpcMetadata.forClientRequest(
-      _serviceName,
-      _methodName,
-    );
+    final baseMetadata =
+        RpcMetadata.forClientRequest(_serviceName, _methodName);
 
-    // Build metadata with context headers.
-    final headers = List<RpcHeader>.from(baseMetadata.headers);
+    // Use a map so context headers naturally override base headers,
+    // preventing duplicates (e.g. grpc-accept-encoding).
+    final headerMap = <String, String>{
+      for (final h in baseMetadata.headers) h.name: h.value,
+    };
 
     if (_context != null) {
-      // Add custom headers from context.
-      for (final entry in _context!.headers.entries) {
-        headers.add(RpcHeader(entry.key, entry.value));
-      }
+      // Context headers override base — handles grpc-accept-encoding dedup.
+      headerMap.addAll(_context!.headers);
 
-      // Add RPC-specific headers.
       if (_context!.traceId != null) {
-        headers.add(RpcHeader('x-trace-id', _context!.traceId!));
+        headerMap[RpcHeaders.xTraceId] = _context!.traceId!;
       }
-      headers.add(RpcHeader('x-request-id', _context!.requestId));
+      headerMap[RpcHeaders.xRequestId] = _context!.requestId;
 
-      // Propagate deadline to server.
       if (_context!.deadline != null) {
         final timeout = _context!.remainingTime;
         if (timeout != null) {
-          headers.add(
-            RpcHeader(
-              RpcConstants.grpcTimeoutHeader,
-              RpcMetadata.encodeGrpcTimeout(timeout),
-            ),
-          );
+          headerMap[RpcHeaders.grpcTimeout] =
+              RpcMetadata.encodeGrpcTimeout(timeout);
         }
-
-        headers.add(
-          RpcHeader(
-            'x-deadline',
-            _context!.deadline!.millisecondsSinceEpoch.toString(),
-          ),
-        );
       }
-
-      // Context values stay local (per gRPC); only headers cross the wire.
 
       _logger?.internal(
         'Context headers added: ${_context!.headers.length} custom + system [streamId: $_streamId]',
       );
     } else {
-      // Add a base request-id even when context is null.
-      final requestId =
-          RpcContext.empty().requestId; // Generate base request-id
-      headers.add(RpcHeader('x-request-id', requestId));
+      headerMap[RpcHeaders.xRequestId] = RpcContext.empty().requestId;
 
       _logger?.internal(
         'Added base request-id for null context [streamId: $_streamId]',
       );
     }
 
-    final metadata = RpcMetadata(headers);
+    final metadata = RpcMetadata(
+      [for (final e in headerMap.entries) RpcHeader(e.key, e.value)],
+      methodPath: baseMetadata.methodPath,
+    );
     await _transport.sendMetadata(_streamId, metadata);
 
     _logger?.internal(
@@ -1045,7 +1029,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         RpcHeader('x-client-cancelled', 'true'),
         RpcHeader('x-cancellation-reason', reason),
         RpcHeader(
-          RpcConstants.grpcStatusHeader,
+          RpcHeaders.grpcStatus,
           RpcStatus.cancelled.toString(),
         ),
       ];
@@ -1103,7 +1087,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       // Handle metadata.
       if (message.isMetadataOnly) {
         final encoding = message.metadata?.getHeaderValue(
-          RpcConstants.grpcEncodingHeader,
+          RpcHeaders.grpcEncoding,
         );
         if (encoding != null) {
           _peerGrpcEncoding = encoding;

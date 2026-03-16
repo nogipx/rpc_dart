@@ -7,9 +7,10 @@ import 'dart:typed_data';
 
 import 'errors.dart';
 
-/// gRPC protocol constants.
+/// gRPC message framing constants.
 ///
-/// Centralizes fixed values to avoid magic numbers and maintain consistency.
+/// Centralizes fixed values for the 5-byte gRPC message prefix.
+/// Header name constants have moved to [RpcHeaders].
 abstract interface class RpcConstants {
   /// Message prefix size in bytes (1 byte flag + 4 bytes length).
   static const int messagePrefixSize = 5;
@@ -25,30 +26,6 @@ abstract interface class RpcConstants {
 
   /// Flag value for compressed message.
   static const int compressed = 1;
-
-  /// HTTP header carrying gRPC status.
-  static const String grpcStatusHeader = 'grpc-status';
-
-  /// HTTP header carrying gRPC error message.
-  static const String grpcMessageHeader = 'grpc-message';
-
-  /// gRPC header carrying timeout for the call (e.g. "10S", "100m")
-  static const String grpcTimeoutHeader = 'grpc-timeout';
-
-  /// gRPC header specifying message compression algorithm (e.g. "gzip", "identity")
-  static const String grpcEncodingHeader = 'grpc-encoding';
-
-  /// gRPC header specifying what encodings the peer accepts (e.g. "gzip,identity")
-  static const String grpcAcceptEncodingHeader = 'grpc-accept-encoding';
-
-  /// gRPC binary status details (base64-encoded in HTTP/2 headers)
-  static const String grpcStatusDetailsBinHeader = 'grpc-status-details-bin';
-
-  /// HTTP header for content type.
-  static const String contentTypeHeader = 'content-type';
-
-  /// Content type for gRPC.
-  static const String grpcContentType = 'application/grpc';
 }
 
 /// Standard gRPC status codes.

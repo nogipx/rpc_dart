@@ -350,8 +350,7 @@ void main() {
 
         final trailers = Completer<RpcTransportMessage>();
         client.incomingMessages.listen((m) {
-          final status =
-              m.metadata?.getHeaderValue(RpcConstants.grpcStatusHeader);
+          final status = m.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
           if (status != null && !trailers.isCompleted) {
             trailers.complete(m);
           }
@@ -372,11 +371,11 @@ void main() {
             await trailers.future.timeout(const Duration(seconds: 2));
         expect(message.isEndOfStream, isTrue);
         expect(
-          message.metadata?.getHeaderValue(RpcConstants.grpcStatusHeader),
+          message.metadata?.getHeaderValue(RpcHeaders.grpcStatus),
           RpcStatus.internal.toString(),
         );
         expect(
-          message.metadata?.getHeaderValue(RpcConstants.grpcMessageHeader),
+          message.metadata?.getHeaderValue(RpcHeaders.grpcMessage),
           'boom',
         );
 
@@ -456,7 +455,7 @@ void main() {
 
         final md =
             await metadataSeen.future.timeout(const Duration(seconds: 2));
-        expect(md.getHeaderValue('x-request-id'), isNotNull);
+        expect(md.getHeaderValue(RpcHeaders.xRequestId), isNotNull);
 
         await processor.close();
         await client.close();
@@ -492,9 +491,8 @@ void main() {
 
         final md =
             await metadataSeen.future.timeout(const Duration(seconds: 2));
-        expect(md.getHeaderValue('x-deadline'),
-            deadline.millisecondsSinceEpoch.toString());
-        expect(md.getHeaderValue('x-trace-id'), 't');
+        expect(md.getHeaderValue(RpcHeaders.grpcTimeout), isNotNull);
+        expect(md.getHeaderValue(RpcHeaders.xTraceId), 't');
 
         await processor.close();
         await client.close();
@@ -509,7 +507,7 @@ void main() {
         final cancellationSeen = Completer<RpcTransportMessage>();
         server.incomingMessages.listen((m) {
           if (m.isMetadataOnly &&
-              (m.metadata?.getHeaderValue('x-client-cancelled') == 'true') &&
+              (m.metadata?.getHeaderValue(RpcHeaders.xClientCancelled) == 'true') &&
               !cancellationSeen.isCompleted) {
             cancellationSeen.complete(m);
           }
@@ -531,7 +529,7 @@ void main() {
           const Duration(seconds: 2),
         );
         expect(msg.isEndOfStream, isTrue);
-        expect(msg.metadata?.getHeaderValue('x-cancellation-reason'), 'stop');
+        expect(msg.metadata?.getHeaderValue(RpcHeaders.xCancellationReason), 'stop');
 
         await processor.close();
         await client.close();

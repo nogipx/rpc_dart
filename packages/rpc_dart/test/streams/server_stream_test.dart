@@ -168,7 +168,7 @@ void main() {
         expect(response.isMetadataOnly, isTrue);
         expect(response.metadata, isNotNull);
 
-        final grpcStatus = response.metadata!.getHeaderValue('grpc-status');
+        final grpcStatus = response.metadata!.getHeaderValue(RpcHeaders.grpcStatus);
         expect(grpcStatus, isNotNull);
         expect(
           grpcStatus,
@@ -349,7 +349,7 @@ void main() {
         expect(response.isMetadataOnly, isTrue);
         expect(response.metadata, isNotNull);
 
-        final grpcStatus = response.metadata!.getHeaderValue('grpc-status');
+        final grpcStatus = response.metadata!.getHeaderValue(RpcHeaders.grpcStatus);
         expect(grpcStatus, isNotNull);
         expect(
           grpcStatus,
@@ -469,13 +469,13 @@ void main() {
         final errorResponse = responses.firstWhere(
           (r) =>
               r.isMetadataOnly &&
-              r.metadata?.getHeaderValue('grpc-status') != null &&
-              r.metadata!.getHeaderValue('grpc-status') != '0',
+              r.metadata?.getHeaderValue(RpcHeaders.grpcStatus) != null &&
+              r.metadata!.getHeaderValue(RpcHeaders.grpcStatus) != '0',
           orElse: () => throw AssertionError('Не найден ответ с gRPC ошибкой'),
         );
 
         expect(
-          errorResponse.metadata!.getHeaderValue('grpc-status'),
+          errorResponse.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
           isNot(equals('0')),
           reason: 'gRPC статус должен указывать на ошибку',
         );

@@ -211,7 +211,7 @@ final class RpcTransportRouter implements IRpcTransport {
     final headers = <String, String>{};
     for (final header in message.metadata!.headers) {
       if (!header.name.startsWith(':') &&
-          header.name != RpcConstants.contentTypeHeader &&
+          header.name != RpcHeaders.contentType &&
           header.name != 'te') {
         headers[header.name] = header.value;
       }

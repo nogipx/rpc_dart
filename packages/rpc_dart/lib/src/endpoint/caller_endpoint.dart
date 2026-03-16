@@ -110,44 +110,32 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
       RpcEndpointPingProtocol.methodName,
     );
 
-    final headers = List<RpcHeader>.from(baseMetadata.headers);
+    final headerMap = <String, String>{
+      for (final h in baseMetadata.headers) h.name: h.value,
+    };
 
-    for (final entry in routingContext.headers.entries) {
-      headers.add(RpcHeader(entry.key, entry.value));
-    }
+    headerMap.addAll(routingContext.headers);
 
     if (routingContext.traceId != null) {
-      headers.add(RpcHeader('x-trace-id', routingContext.traceId!));
+      headerMap[RpcHeaders.xTraceId] = routingContext.traceId!;
     }
-
-    headers.add(RpcHeader('x-request-id', routingContext.requestId));
+    headerMap[RpcHeaders.xRequestId] = routingContext.requestId;
 
     if (routingContext.deadline != null) {
       final timeout = routingContext.remainingTime;
       if (timeout != null) {
-        headers.add(
-          RpcHeader(
-            RpcConstants.grpcTimeoutHeader,
-            RpcMetadata.encodeGrpcTimeout(timeout),
-          ),
-        );
+        headerMap[RpcHeaders.grpcTimeout] =
+            RpcMetadata.encodeGrpcTimeout(timeout);
       }
-      headers.add(
-        RpcHeader(
-          'x-deadline',
-          routingContext.deadline!.millisecondsSinceEpoch.toString(),
-        ),
-      );
     }
 
-    headers.add(
-      RpcHeader(
-        RpcEndpointPingProtocol.requestTimestampHeader,
-        sentAt.toIso8601String(),
-      ),
-    );
+    headerMap[RpcEndpointPingProtocol.requestTimestampHeader] =
+        sentAt.toIso8601String();
 
-    final metadata = RpcMetadata(headers);
+    final metadata = RpcMetadata(
+      [for (final e in headerMap.entries) RpcHeader(e.key, e.value)],
+      methodPath: baseMetadata.methodPath,
+    );
 
     final exchange = RpcEndpointPingExchange(
       transport: transport,
@@ -315,9 +303,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // Inject gzip for network transports unless the caller already set it.
     if (compressionEnabled &&
         !transport.supportsZeroCopy &&
-        !result.headers.containsKey(RpcConstants.grpcEncodingHeader)) {
+        !result.headers.containsKey(RpcHeaders.grpcEncoding)) {
       result = result.withAdditionalHeaders({
-        RpcConstants.grpcEncodingHeader: RpcGrpcCompression.gzip,
+        RpcHeaders.grpcEncoding: RpcGrpcCompression.gzip,
       });
       logger.internal('Injected default gzip compression');
     }
@@ -327,12 +315,12 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     // always advertises all globally-registered codecs regardless of this
     // endpoint's compressionEnabled flag.
     if (!transport.supportsZeroCopy &&
-        !result.headers.containsKey(RpcConstants.grpcAcceptEncodingHeader)) {
+        !result.headers.containsKey(RpcHeaders.grpcAcceptEncoding)) {
       final accept = compressionEnabled
           ? RpcGrpcCompression.supportedEncodings().join(',')
           : RpcGrpcCompression.identity;
       result = result.withAdditionalHeaders({
-        RpcConstants.grpcAcceptEncodingHeader: accept,
+        RpcHeaders.grpcAcceptEncoding: accept,
       });
     }
 
@@ -467,13 +455,13 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
         // Проверяем статус в метаданных
         if (response.metadata != null) {
           final statusStr = response.metadata!.getHeaderValue(
-            RpcConstants.grpcStatusHeader,
+            RpcHeaders.grpcStatus,
           );
           if (statusStr != null) {
             final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
             if (status != RpcStatus.ok) {
               final message = response.metadata!.getHeaderValue(
-                    RpcConstants.grpcMessageHeader,
+                    RpcHeaders.grpcMessage,
                   ) ??
                   'Unknown error';
               final decodedMessage = RpcMetadata.decodeGrpcMessage(message);

@@ -39,7 +39,7 @@ final class RpcResponderPingHandler {
           transport.runtimeType.toString(),
         ),
         RpcHeader(
-          RpcConstants.grpcStatusHeader,
+          RpcHeaders.grpcStatus,
           RpcStatus.ok.toString(),
         ),
       ];
@@ -76,11 +76,11 @@ final class RpcResponderPingHandler {
           streamId,
           RpcMetadata([
             RpcHeader(
-              RpcConstants.grpcStatusHeader,
+              RpcHeaders.grpcStatus,
               RpcStatus.internal.toString(),
             ),
             RpcHeader(
-              RpcConstants.grpcMessageHeader,
+              RpcHeaders.grpcMessage,
               RpcMetadata.encodeGrpcMessage('Ping handling error: $error'),
             ),
           ]),

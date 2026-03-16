@@ -115,7 +115,7 @@ final class RpcEndpointPingExchange {
 
         final headersMap = metadataToMap(message.metadata!);
 
-        if (!headersMap.containsKey(RpcConstants.grpcStatusHeader)) {
+        if (!headersMap.containsKey(RpcHeaders.grpcStatus)) {
           if (message.isEndOfStream) {
             completeError(
               StateError(
@@ -132,7 +132,7 @@ final class RpcEndpointPingExchange {
         }
 
         final statusCode = int.tryParse(
-              headersMap[RpcConstants.grpcStatusHeader] ?? '',
+              headersMap[RpcHeaders.grpcStatus] ?? '',
             ) ??
             RpcStatus.unknown;
 
@@ -140,7 +140,7 @@ final class RpcEndpointPingExchange {
 
         if (statusCode != RpcStatus.ok) {
           final statusMessage =
-              headersMap[RpcConstants.grpcMessageHeader] ?? 'Unknown error';
+              headersMap[RpcHeaders.grpcMessage] ?? 'Unknown error';
           final decodedMessage = RpcMetadata.decodeGrpcMessage(statusMessage);
           logger.warning(
             'Ping завершился с ошибкой: status=$statusCode, message=$decodedMessage [streamId: $streamId]',

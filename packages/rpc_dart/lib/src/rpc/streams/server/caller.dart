@@ -114,13 +114,13 @@ final class ServerStreamCaller<TRequest extends Object,
         // Inspect status in metadata.
         if (response.metadata != null) {
           final statusStr = response.metadata!.getHeaderValue(
-            RpcConstants.grpcStatusHeader,
+            RpcHeaders.grpcStatus,
           );
           if (statusStr != null) {
             final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
             if (status != RpcStatus.ok) {
               final message = response.metadata!.getHeaderValue(
-                    RpcConstants.grpcMessageHeader,
+                    RpcHeaders.grpcMessage,
                   ) ??
                   'Unknown error';
               final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
