@@ -228,7 +228,8 @@ final class UnaryCaller<TRequest, TResponse> {
 
       // Send initial metadata with context headers.
       _logger?.internal('Sending initial metadata [streamId: $streamId]');
-      final baseMetadata = RpcMetadata.forClientRequest(_serviceName, _methodName);
+      final baseMetadata =
+          RpcMetadata.forClientRequest(_serviceName, _methodName);
 
       // Use a map so context headers naturally override base headers,
       // preventing duplicates (e.g. grpc-accept-encoding).

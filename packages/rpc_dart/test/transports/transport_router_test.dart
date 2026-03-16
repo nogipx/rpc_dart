@@ -245,7 +245,8 @@ void main() {
           equals('UserService'),
         );
         expect(
-          paymentMessages.first.metadata?.getHeaderValue(RpcHeaders.xRouteService),
+          paymentMessages.first.metadata
+              ?.getHeaderValue(RpcHeaders.xRouteService),
           equals('PaymentService'),
         );
 

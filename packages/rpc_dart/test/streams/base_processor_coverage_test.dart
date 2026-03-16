@@ -507,7 +507,8 @@ void main() {
         final cancellationSeen = Completer<RpcTransportMessage>();
         server.incomingMessages.listen((m) {
           if (m.isMetadataOnly &&
-              (m.metadata?.getHeaderValue(RpcHeaders.xClientCancelled) == 'true') &&
+              (m.metadata?.getHeaderValue(RpcHeaders.xClientCancelled) ==
+                  'true') &&
               !cancellationSeen.isCompleted) {
             cancellationSeen.complete(m);
           }
@@ -529,7 +530,8 @@ void main() {
           const Duration(seconds: 2),
         );
         expect(msg.isEndOfStream, isTrue);
-        expect(msg.metadata?.getHeaderValue(RpcHeaders.xCancellationReason), 'stop');
+        expect(msg.metadata?.getHeaderValue(RpcHeaders.xCancellationReason),
+            'stop');
 
         await processor.close();
         await client.close();

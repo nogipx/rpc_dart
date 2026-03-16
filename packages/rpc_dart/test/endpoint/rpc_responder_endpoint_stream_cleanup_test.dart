@@ -165,8 +165,7 @@ void main() {
         (message) =>
             message.streamId == streamId &&
             message.isMetadataOnly &&
-            message.metadata?.getHeaderValue(RpcHeaders.grpcStatus) !=
-                null,
+            message.metadata?.getHeaderValue(RpcHeaders.grpcStatus) != null,
       );
 
       await clientTransport.sendMetadata(
@@ -192,8 +191,7 @@ void main() {
         (message) =>
             message.streamId == streamId &&
             message.isMetadataOnly &&
-            message.metadata?.getHeaderValue(RpcHeaders.grpcStatus) !=
-                null,
+            message.metadata?.getHeaderValue(RpcHeaders.grpcStatus) != null,
       );
 
       await clientTransport.sendMetadata(

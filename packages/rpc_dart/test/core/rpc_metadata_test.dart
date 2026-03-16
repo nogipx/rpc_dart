@@ -67,11 +67,11 @@ void main() {
       });
 
       test('добавляет_grpc_encoding_если_указано', () {
-        final metadata =
-            RpcMetadata.forServerInitialResponse(encoding: 'gzip');
+        final metadata = RpcMetadata.forServerInitialResponse(encoding: 'gzip');
 
         expect(metadata.headers.length, equals(2));
-        expect(_getHeaderValue(metadata, RpcHeaders.grpcEncoding), equals('gzip'));
+        expect(
+            _getHeaderValue(metadata, RpcHeaders.grpcEncoding), equals('gzip'));
       });
     });
 
@@ -122,7 +122,8 @@ void main() {
           RpcHeader('another-header', 'another-value'),
         ]);
 
-        expect(metadata.getHeaderValue('custom-header'), equals('custom-value'));
+        expect(
+            metadata.getHeaderValue('custom-header'), equals('custom-value'));
       });
 
       test('возвращает_null_для_несуществующего_заголовка', () {

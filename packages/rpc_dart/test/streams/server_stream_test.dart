@@ -168,7 +168,8 @@ void main() {
         expect(response.isMetadataOnly, isTrue);
         expect(response.metadata, isNotNull);
 
-        final grpcStatus = response.metadata!.getHeaderValue(RpcHeaders.grpcStatus);
+        final grpcStatus =
+            response.metadata!.getHeaderValue(RpcHeaders.grpcStatus);
         expect(grpcStatus, isNotNull);
         expect(
           grpcStatus,
@@ -349,7 +350,8 @@ void main() {
         expect(response.isMetadataOnly, isTrue);
         expect(response.metadata, isNotNull);
 
-        final grpcStatus = response.metadata!.getHeaderValue(RpcHeaders.grpcStatus);
+        final grpcStatus =
+            response.metadata!.getHeaderValue(RpcHeaders.grpcStatus);
         expect(grpcStatus, isNotNull);
         expect(
           grpcStatus,
