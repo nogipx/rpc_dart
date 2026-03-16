@@ -194,7 +194,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     );
 
     // Конвертируем RPC метаданные в HTTP/2 headers
-    final headers = rpcMetadataToHttp2Headers(
+    final headers = rpcMetadataToHttp2RequestHeaders(
       metadata,
       method: 'POST',
       path: methodPath,
@@ -348,7 +348,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     http2.HeadersStreamMessage message,
     String methodPath,
   ) {
-    // Конвертируем HTTP/2 headers в RPC метаданные
+    // Конвертируем HTTP/2 headers в RPC метаданные (pseudo-headers отфильтрованы)
     final metadata = http2HeadersToRpcMetadata(message.headers);
     _policy.validateMetadata(metadata);
 

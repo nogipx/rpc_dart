@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
@@ -7,53 +8,46 @@ import 'dart:convert';
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
 
-/// gRPC Content-Type для HTTP/2
-const String kGrpcContentType = 'application/grpc+proto';
-
-/// gRPC User-Agent header
+/// gRPC User-Agent header value.
 const String kGrpcUserAgent = 'rpc-dart/1.0.0';
 
-// Используем RpcStatus из rpc_dart вместо дублирования
-
-/// Конвертирует RPC метаданные в HTTP/2 headers
+/// Converts [RpcMetadata] to HTTP/2 request headers (caller → responder).
 ///
-/// Использует стандартные метаданные из rpc_dart и дополняет их custom headers
-List<http2.Header> rpcMetadataToHttp2Headers(
+/// Prepends the required HTTP/2 pseudo-headers (`:method`, `:path`,
+/// `:scheme`, `:authority`) and the `te: trailers` header required by the
+/// gRPC-over-HTTP/2 spec.  Transport-agnostic semantic headers from
+/// [metadata] are appended after the pseudo-headers.
+///
+/// Any `:*` headers that accidentally appear in [metadata] are skipped
+/// because pseudo-headers are transport-specific and must be generated here.
+List<http2.Header> rpcMetadataToHttp2RequestHeaders(
   RpcMetadata metadata, {
-  String? method,
-  String? path,
-  String? scheme,
-  String? authority,
+  required String method,
+  required String path,
+  required String scheme,
+  required String authority,
 }) {
-  final headers = <http2.Header>[];
+  final headers = <http2.Header>[
+    http2.Header.ascii(':method', method),
+    http2.Header.ascii(':path', path),
+    http2.Header.ascii(':scheme', scheme),
+    http2.Header.ascii(':authority', authority),
+    // Required by gRPC-over-HTTP/2 spec.
+    http2.Header.ascii('te', 'trailers'),
+  ];
 
-  // Конвертируем все RPC headers в HTTP/2 headers
+  bool hasUserAgent = false;
+
   for (final rpcHeader in metadata.headers) {
-    final headerName = rpcHeader.name.toLowerCase();
+    final name = rpcHeader.name.toLowerCase();
+    // Skip pseudo-headers — they are already added above.
+    if (name.startsWith(':')) continue;
 
-    // Перезаписываем scheme и authority если переданы явно
-    if (headerName == ':scheme' && scheme != null) {
-      headers.add(http2.Header.ascii(':scheme', scheme));
-    } else if (headerName == ':authority' && authority != null) {
-      headers.add(http2.Header.ascii(':authority', authority));
-    } else {
-      String headerValue;
-      try {
-        ascii.encode(rpcHeader.value);
-        headerValue = rpcHeader.value;
-      } on Object catch (_) {
-        final encodedValue = base64UrlEncode(utf8.encode(rpcHeader.value));
-        headerValue = encodedValue;
-      }
-      // Добавляем header как есть
-      headers.add(http2.Header.ascii(headerName, headerValue));
-    }
+    if (name == 'user-agent') hasUserAgent = true;
+
+    headers.add(http2.Header.ascii(name, _asciiSafeValue(rpcHeader.value)));
   }
 
-  // Добавляем стандартные gRPC headers если их нет
-  final hasUserAgent = metadata.headers.any(
-    (h) => h.name.toLowerCase() == 'user-agent',
-  );
   if (!hasUserAgent) {
     headers.add(http2.Header.ascii('user-agent', kGrpcUserAgent));
   }
@@ -61,33 +55,75 @@ List<http2.Header> rpcMetadataToHttp2Headers(
   return headers;
 }
 
-/// Конвертирует HTTP/2 headers в RPC метаданные
+/// Converts [RpcMetadata] to HTTP/2 response headers (responder → caller).
 ///
-/// Сохраняет все headers, включая системные HTTP/2 и gRPC headers
-RpcMetadata http2HeadersToRpcMetadata(List<http2.Header> headers) {
+/// Prepends `:status: 200` which is required by HTTP/2 for all responses.
+/// Transport-agnostic semantic headers from [metadata] are appended after
+/// the pseudo-header.
+///
+/// Any `:*` headers in [metadata] are skipped — `:status` is always
+/// written unconditionally as `200`.
+List<http2.Header> rpcMetadataToHttp2ResponseHeaders(RpcMetadata metadata) {
+  final headers = <http2.Header>[
+    http2.Header.ascii(':status', '200'),
+  ];
+
+  for (final rpcHeader in metadata.headers) {
+    final name = rpcHeader.name.toLowerCase();
+    if (name.startsWith(':')) continue;
+    headers.add(http2.Header.ascii(name, _asciiSafeValue(rpcHeader.value)));
+  }
+
+  return headers;
+}
+
+/// Converts incoming HTTP/2 headers to [RpcMetadata].
+///
+/// HTTP/2 pseudo-headers (`:method`, `:path`, `:scheme`, `:authority`,
+/// `:status`) are transport-specific and are filtered out.  The `:path`
+/// value is extracted separately and passed as [methodPath] so that
+/// [RpcMetadata.methodPath] works correctly without storing a pseudo-header.
+///
+/// Pass the `:path` value extracted from the raw headers as [methodPath].
+RpcMetadata http2HeadersToRpcMetadata(
+  List<http2.Header> headers, {
+  String? methodPath,
+}) {
   final rpcHeaders = <RpcHeader>[];
 
   for (final header in headers) {
     final name = String.fromCharCodes(header.name);
+    // Skip pseudo-headers — they belong to the HTTP/2 transport layer.
+    if (name.startsWith(':')) continue;
+
     var value = String.fromCharCodes(header.value);
+    // Attempt to decode base64url-encoded binary header values.
     try {
       value = utf8.decode(base64Url.decode(value));
     } on Object {
-      null;
+      // Not base64url — use as-is.
     }
 
-    // Сохраняем все headers как есть
     rpcHeaders.add(RpcHeader(name, value));
   }
 
-  return RpcMetadata(rpcHeaders);
+  return RpcMetadata(rpcHeaders, methodPath: methodPath);
 }
 
-/// Гарантирует, что данные представляют собой корректно сформированный gRPC frame.
+/// Extracts the `:path` pseudo-header value from raw HTTP/2 headers.
+String? extractMethodPath(List<http2.Header> headers) {
+  for (final header in headers) {
+    if (String.fromCharCodes(header.name) == ':path') {
+      return String.fromCharCodes(header.value);
+    }
+  }
+  return null;
+}
+
+/// Gárrantees that [data] is a valid gRPC frame (5-byte prefix + payload).
 ///
-/// Если входные [data] уже содержат валидный 5-байтный префикс и длину,
-/// возвращает исходный буфер без копирования. В противном случае добавляет
-/// gRPC префикс, предполагая отсутствие сжатия.
+/// If [data] already has a valid 5-byte gRPC prefix the input is returned
+/// unchanged.  Otherwise an uncompressed frame is built around [data].
 Uint8List ensureGrpcFrame(Uint8List data) {
   if (data.length >= RpcConstants.messagePrefixSize) {
     try {
@@ -99,14 +135,15 @@ Uint8List ensureGrpcFrame(Uint8List data) {
         return data;
       }
     } catch (_) {
-      // Игнорируем ошибку и упаковываем данные заново.
+      // Fall through and re-frame.
     }
   }
 
   return RpcMessageFrame.encode(data, compressed: false);
 }
 
-/// Проверяет, что данные имеют валидный gRPC префикс и соответствующую длину.
+/// Returns `true` when [data] has a valid gRPC 5-byte prefix and matching
+/// payload length.
 bool isGrpcFrame(Uint8List data) {
   if (data.length < RpcConstants.messagePrefixSize) {
     return false;
@@ -119,5 +156,16 @@ bool isGrpcFrame(Uint8List data) {
     return expectedLength == data.length;
   } catch (_) {
     return false;
+  }
+}
+
+/// Returns [value] unchanged if it is valid ASCII; otherwise base64url-encodes
+/// the UTF-8 bytes.
+String _asciiSafeValue(String value) {
+  try {
+    ascii.encode(value);
+    return value;
+  } on Object catch (_) {
+    return base64UrlEncode(utf8.encode(value));
   }
 }

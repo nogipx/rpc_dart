@@ -141,20 +141,20 @@ final class RpcMessageParser {
         if (_state.isCompressed) {
           final decompressor = _decompressor;
           if (decompressor == null) {
-            _state.buffer.clear();
-            _state.reset();
-            throw RpcException(
-              'Compressed gRPC frame received but no decompressor configured',
-            );
-          }
-          payload = decompressor(payload);
-          if (payload.length > _maxMessageLength) {
-            final length = payload.length;
-            _state.buffer.clear();
-            _state.reset();
-            throw RpcException(
-              'Decompressed gRPC payload is too large: $length bytes (max: $_maxMessageLength)',
-            );
+            // No decompressor at this layer: reconstruct the complete gRPC
+            // frame (with compression bit set) and pass it through so the
+            // application layer can decompress it.
+            payload = RpcMessageFrame.encode(payload, compressed: true);
+          } else {
+            payload = decompressor(payload);
+            if (payload.length > _maxMessageLength) {
+              final length = payload.length;
+              _state.buffer.clear();
+              _state.reset();
+              throw RpcException(
+                'Decompressed gRPC payload is too large: $length bytes (max: $_maxMessageLength)',
+              );
+            }
           }
         }
         result.add(payload);

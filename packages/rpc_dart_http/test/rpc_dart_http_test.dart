@@ -718,7 +718,7 @@ void main() {
         orElse: () => throw StateError('No end-of-stream message received'),
       );
       final grpcStatus =
-          trailer.metadata?.getHeaderValue(RpcConstants.grpcStatusHeader);
+          trailer.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
       expect(grpcStatus, '${RpcStatus.unimplemented}');
 
       await clientTransport.close();
@@ -828,7 +828,7 @@ void main() {
       final payload = 'hello-gzip ' * 500;
 
       final context = RpcContext.withHeaders(
-        {RpcConstants.grpcEncodingHeader: 'gzip'},
+        {RpcHeaders.grpcEncoding: 'gzip'},
       );
 
       final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
@@ -883,7 +883,7 @@ void main() {
         orElse: () => throw StateError('No initial metadata received'),
       );
       expect(
-        initialMeta.metadata?.getHeaderValue(RpcConstants.grpcEncodingHeader),
+        initialMeta.metadata?.getHeaderValue(RpcHeaders.grpcEncoding),
         'gzip',
       );
 

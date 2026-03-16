@@ -86,7 +86,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
     }
 
     // Validate Content-Type: must be a gRPC content type (application/grpc*).
-    final contentTypeValue = request.headers[RpcConstants.contentTypeHeader] ?? '';
+    final contentTypeValue = request.headers[RpcHeaders.contentType] ?? '';
     if (!contentTypeValue.startsWith('application/grpc')) {
       _logger?.warning(
         'Rejected request: unsupported Content-Type '

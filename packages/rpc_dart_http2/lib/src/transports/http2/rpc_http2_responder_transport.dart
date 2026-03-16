@@ -161,18 +161,14 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
     int streamId,
     http2.HeadersStreamMessage message,
   ) {
-    // Извлекаем путь метода из headers
-    String? methodPath;
-    for (final header in message.headers) {
-      final name = String.fromCharCodes(header.name);
-      if (name == ':path') {
-        methodPath = String.fromCharCodes(header.value);
-        break;
-      }
-    }
+    // Извлекаем путь метода из pseudo-headers
+    final methodPath = extractMethodPath(message.headers);
 
-    // Конвертируем HTTP/2 headers в RPC метаданные
-    final metadata = http2HeadersToRpcMetadata(message.headers);
+    // Конвертируем HTTP/2 headers в RPC метаданные (pseudo-headers отфильтрованы)
+    final metadata = http2HeadersToRpcMetadata(
+      message.headers,
+      methodPath: methodPath,
+    );
     _policy.validateMetadata(metadata);
 
     // Создаем транспортное сообщение
@@ -325,16 +321,9 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
     }
 
     try {
-      // Если у метаданных нет статуса, используем стандартный серверный ответ
-      final serverMetadata = metadata.getHeaderValue(':status') == null
-          ? RpcMetadata([
-              ...RpcMetadata.forServerInitialResponse().headers,
-              ...metadata.headers,
-            ])
-          : metadata;
-
-      // Конвертируем RPC метаданные в HTTP/2 headers (ответ сервера)
-      final headers = rpcMetadataToHttp2Headers(serverMetadata);
+      // Транспорт добавляет :status: 200 и преобразует семантические headers.
+      // Pseudo-headers не хранятся в RpcMetadata — они добавляются здесь.
+      final headers = rpcMetadataToHttp2ResponseHeaders(metadata);
 
       // Отправляем headers в ответ
       incomingStream.sendHeaders(headers, endStream: endStream);

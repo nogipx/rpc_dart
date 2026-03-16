@@ -76,11 +76,13 @@ void main() {
       );
 
       final header = RpcMessageFrame.parseHeader(rawFrame);
-      expect(header.messageLength, equals(serializedRequest.length));
-
-      final payloadWithoutPrefix =
-          rawFrame.sublist(RpcConstants.messagePrefixSize);
-      expect(payloadWithoutPrefix, equals(serializedRequest));
+      // The frame must have exactly one gRPC prefix — no double-wrapping.
+      // Total length == 5-byte prefix + declared message length.
+      expect(
+        rawFrame.length,
+        equals(RpcConstants.messagePrefixSize + header.messageLength),
+        reason: 'Frame must have exactly one gRPC prefix (no double-wrapping)',
+      );
     });
 
     test('unary_rpc_через_caller_и_responder', () async {

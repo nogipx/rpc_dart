@@ -23,3 +23,7 @@ dev_dependencies:
   test: ^1.29.0
   shelf: any
   stream_channel: any
+
+dependency_overrides:
+  rpc_dart:
+    path: ../rpc_dart

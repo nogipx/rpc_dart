@@ -175,11 +175,13 @@ class RpcHttpCallerTransport implements IRpcTransport {
     final uri = Uri.parse('$_baseUrl${call.methodPath}');
     try {
       final request = http.Request('POST', uri);
-      request.headers['content-type'] = 'application/grpc+proto';
+      request.headers[RpcHeaders.contentType] = 'application/grpc+proto';
+      // Required by gRPC-over-HTTP/1.1 to signal trailer support.
+      request.headers['te'] = 'trailers';
 
       for (final header in call.requestHeaders) {
         if (header.name.startsWith(':') ||
-            header.name == RpcConstants.contentTypeHeader) {
+            header.name == RpcHeaders.contentType) {
           continue;
         }
         request.headers[header.name] = header.value;
@@ -200,9 +202,9 @@ class RpcHttpCallerTransport implements IRpcTransport {
           _incoming.add(RpcTransportMessage(
             streamId: streamId,
             metadata: RpcMetadata([
-              RpcHeader(RpcConstants.grpcStatusHeader, '$grpcCode'),
+              RpcHeader(RpcHeaders.grpcStatus, '$grpcCode'),
               RpcHeader(
-                RpcConstants.grpcMessageHeader,
+                RpcHeaders.grpcMessage,
                 Uri.encodeComponent('HTTP ${response.statusCode} from ${call.methodPath}'),
               ),
             ]),
@@ -219,8 +221,7 @@ class RpcHttpCallerTransport implements IRpcTransport {
         // package:http joins multi-values with ', ' — split them back.
         for (final v in value.split(', ')) {
           final header = RpcHeader(name, v);
-          if (name == RpcConstants.grpcStatusHeader ||
-              name == RpcConstants.grpcMessageHeader) {
+          if (name == RpcHeaders.grpcStatus || name == RpcHeaders.grpcMessage) {
             trailerHeaders.add(header);
           } else {
             initialHeaders.add(header);
