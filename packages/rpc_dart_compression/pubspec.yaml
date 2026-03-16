@@ -11,9 +11,8 @@ topics:
   - compression
 
 dependencies:
-  rpc_dart:
-    path: ../rpc_dart
-  archive: ^3.6.0
+  rpc_dart: ^2.5.1
+  archive: ^4.0.9
 
 dev_dependencies:
   lints: ^6.0.0
