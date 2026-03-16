@@ -1,3 +1,9 @@
+## 2.5.1
+
+- Compression is now pluggable via `RpcCompressionCodec` interface and `RpcGrpcCompression.register()`.
+- Native dart:io gzip continues to auto-register on startup as before.
+- External packages (e.g. `rpc_dart_compression`) can now register codecs on web/JS/Wasm.
+
 ## 2.5.0
 
 - Added gzip compression support: `RpcCallerEndpoint` now has a `compressionEnabled` flag (default `true`) that automatically injects `grpc-encoding: gzip` for non-zero-copy transports (e.g. network transports).
