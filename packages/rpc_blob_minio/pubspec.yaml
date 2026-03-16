@@ -11,7 +11,7 @@ environment:
 dependencies:
   rpc_blob:
     path: ../rpc_blob
-  rpc_dart: ^2.4.1
+  rpc_dart: ^2.5.0
   crypto: ^3.0.7
   minio: ^3.5.8
   xml: ^6.4.2

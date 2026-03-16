@@ -11,8 +11,7 @@ topics:
   - http
 
 dependencies:
-  rpc_dart:
-    path: ../rpc_dart
+  rpc_dart: ^2.5.0
   http: ^1.6.0
   shelf: ^1.4.2
 
