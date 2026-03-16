@@ -12,6 +12,74 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
+  // ---------------------------------------------------------------------------
+  // WsMetadataCodec unit tests
+  // ---------------------------------------------------------------------------
+
+  group('WsMetadataCodec', () {
+    test('round-trips typical gRPC metadata with methodPath', () {
+      final metadata = RpcMetadata(
+        [
+          const RpcHeader('content-type', 'application/grpc'),
+          const RpcHeader('grpc-accept-encoding', 'identity,gzip'),
+          const RpcHeader('x-trace-id', 'abc-123'),
+        ],
+        methodPath: '/TestService/Echo',
+      );
+      final encoded = WsMetadataCodec.encode(metadata);
+      final decoded = WsMetadataCodec.decode(encoded);
+
+      expect(decoded, isNotNull);
+      expect(decoded!.methodPath, '/TestService/Echo');
+      expect(decoded.metadata.headers.length, 3);
+      expect(decoded.metadata.headers[0].name, 'content-type');
+      expect(decoded.metadata.headers[0].value, 'application/grpc');
+      expect(decoded.metadata.headers[1].name, 'grpc-accept-encoding');
+      expect(decoded.metadata.headers[2].value, 'abc-123');
+    });
+
+    test('round-trips empty metadata without methodPath', () {
+      final metadata = RpcMetadata(const []);
+      final encoded = WsMetadataCodec.encode(metadata);
+      final decoded = WsMetadataCodec.decode(encoded);
+
+      expect(decoded, isNotNull);
+      expect(decoded!.methodPath, isNull);
+      expect(decoded.metadata.headers, isEmpty);
+    });
+
+    test('returns null for empty bytes', () {
+      expect(WsMetadataCodec.decode(Uint8List(0)), isNull);
+    });
+
+    test('returns null for malformed CBOR bytes', () {
+      // 0xFF is not a valid CBOR initial byte for a map.
+      final buf = Uint8List.fromList([0xFF, 0x00, 0x00]);
+      expect(WsMetadataCodec.decode(buf), isNull);
+    });
+
+    test('is more compact than JSON equivalent', () {
+      final metadata = RpcMetadata(
+        [
+          const RpcHeader('content-type', 'application/grpc'),
+          const RpcHeader('grpc-accept-encoding', 'identity,gzip'),
+        ],
+        methodPath: '/Service/Method',
+      );
+      final cborBytes = WsMetadataCodec.encode(metadata);
+      // CBOR should be notably smaller than JSON for the same data.
+      // JSON equivalent: ~155 bytes; CBOR: ~80 bytes.
+      expect(cborBytes.length, lessThan(120),
+          reason: 'CBOR metadata should be more compact than JSON');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Transport integration tests
+  //
+  // sendMessage / received payload are gRPC frames (5-byte prefix + data).
+  // ---------------------------------------------------------------------------
+
   test('caller -> responder over real WebSocket server', () async {
     final server = await _startIoWsServer();
 
@@ -30,8 +98,10 @@ void main() {
       streamId,
       RpcMetadata([const RpcHeader('x-test', 'io')]),
     );
-    final payload = Uint8List.fromList([42, 43, 44]);
-    await caller.sendMessage(streamId, payload, endStream: true);
+    // sendMessage expects a gRPC frame (5-byte prefix + payload).
+    final rawPayload = Uint8List.fromList([42, 43, 44]);
+    final grpcFrame = RpcMessageFrame.encode(rawPayload);
+    await caller.sendMessage(streamId, grpcFrame, endStream: true);
 
     await Future.delayed(const Duration(milliseconds: 50));
 
@@ -42,7 +112,8 @@ void main() {
 
     expect(received.length, 2);
     expect(received.first.metadata?.headers.first.value, 'io');
-    expect(received[1].payload, payload);
+    // Received payload is the complete gRPC frame.
+    expect(received[1].payload, grpcFrame);
   });
 
   test('responder -> caller over real WebSocket server', () async {
@@ -59,8 +130,9 @@ void main() {
     final sub = caller.incomingMessages.listen(incoming.add);
 
     final streamId = serverTransport.createStream();
-    final payload = Uint8List.fromList([1, 2, 3, 4, 5]);
-    await serverTransport.sendMessage(streamId, payload, endStream: true);
+    final rawPayload = Uint8List.fromList([1, 2, 3, 4, 5]);
+    final grpcFrame = RpcMessageFrame.encode(rawPayload);
+    await serverTransport.sendMessage(streamId, grpcFrame, endStream: true);
 
     await Future.delayed(const Duration(milliseconds: 50));
 
@@ -69,7 +141,7 @@ void main() {
     await sub.cancel();
     await server.stop();
 
-    expect(incoming.single.payload, payload);
+    expect(incoming.single.payload, grpcFrame);
     expect(incoming.single.streamId, streamId);
   });
 
@@ -91,8 +163,9 @@ void main() {
       streamId,
       RpcMetadata([const RpcHeader('x-test', '1')]),
     );
-    final payload = Uint8List.fromList([1, 2, 3, 4]);
-    await caller.sendMessage(streamId, payload, endStream: true);
+    final rawPayload = Uint8List.fromList([1, 2, 3, 4]);
+    final grpcFrame = RpcMessageFrame.encode(rawPayload);
+    await caller.sendMessage(streamId, grpcFrame, endStream: true);
 
     await Future.delayed(const Duration(milliseconds: 50));
     await caller.close();
@@ -102,7 +175,7 @@ void main() {
 
     expect(received.length, 2);
     expect(received.first.metadata?.headers.first.name, 'x-test');
-    expect(received[1].payload, payload);
+    expect(received[1].payload, grpcFrame);
     expect(received[1].isEndOfStream, isTrue);
   });
 }

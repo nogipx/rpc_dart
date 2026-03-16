@@ -4,16 +4,110 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// Simple WebSocket transport compatible with dart2js/wasm. Server-side pieces
-/// and dart:io dependencies have been stripped out.
+// ---------------------------------------------------------------------------
+// Wire format
+// ---------------------------------------------------------------------------
+//
+// Every WebSocket binary message starts with a 5-byte frame header:
+//
+//   [streamId : 4 bytes, big-endian uint32]
+//   [flags    : 1 byte]
+//     bit 0 – endStream
+//     bit 1 – metadata frame (payload is WsMetadataCodec CBOR)
+//     bit 2 – chunked data (payload has an 8-byte chunk header)
+//
+// DATA frame payload  – gRPC-framed bytes (5-byte prefix + message payload).
+//                       Frames may be split across WebSocket messages and are
+//                       reassembled by RpcMessageParser.
+//
+// METADATA frame payload – CBOR-encoded map (RFC 7049, via CborCodec):
+//
+//   {
+//     "p": "/Service/Method",          // methodPath, absent if null
+//     "h": [["name","value"], ...]      // headers as array of 2-element arrays
+//   }
+//
+// CHUNKED DATA frame payload:
+//
+//   [chunk_index : 2 bytes, big-endian uint16]
+//   [chunk_count : 2 bytes, big-endian uint16]
+//   [chunk_len   : 4 bytes, big-endian uint32]
+//   [chunk_data  : chunk_len bytes]
+
+// ---------------------------------------------------------------------------
+// Metadata CBOR codec
+// ---------------------------------------------------------------------------
+
+/// Encodes/decodes WebSocket metadata frames using CBOR (RFC 7049).
 ///
-/// Wire format: [streamId:4 bytes][flags:1 byte][payload...]
-/// flags: bit0=endStream, bit1=metadata, bit2=chunked.
+/// Uses [CborCodec] from `rpc_dart` — no external dependencies.
+/// More compact and self-describing compared to JSON.
+abstract final class WsMetadataCodec {
+  static const _keyPath = 'p';
+  static const _keyHeaders = 'h';
+
+  /// Encodes [metadata] into CBOR bytes.
+  static Uint8List encode(RpcMetadata metadata) {
+    final map = <String, dynamic>{};
+
+    final path = metadata.methodPath;
+    if (path != null && path.isNotEmpty) {
+      map[_keyPath] = path;
+    }
+
+    map[_keyHeaders] = [
+      for (final h in metadata.headers) [h.name, h.value],
+    ];
+
+    return CborCodec.encode(map);
+  }
+
+  /// Decodes CBOR [bytes] into metadata and an optional method path.
+  ///
+  /// Returns `null` if the bytes are malformed.
+  static ({RpcMetadata metadata, String? methodPath})? decode(Uint8List bytes) {
+    if (bytes.isEmpty) return null;
+    try {
+      final map = CborCodec.decode(bytes);
+
+      final pathRaw = map[_keyPath];
+      final methodPath = pathRaw is String && pathRaw.isNotEmpty
+          ? pathRaw
+          : null;
+
+      final headersRaw = map[_keyHeaders];
+      final headers = <RpcHeader>[];
+      if (headersRaw is List) {
+        for (final item in headersRaw) {
+          if (item is List && item.length >= 2) {
+            final name = item[0];
+            final value = item[1];
+            if (name is String && value is String) {
+              headers.add(RpcHeader(name, value));
+            }
+          }
+        }
+      }
+
+      final metadata = RpcMetadata(headers, methodPath: methodPath);
+      return (metadata: metadata, methodPath: methodPath);
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transport base
+// ---------------------------------------------------------------------------
+
+/// WebSocket transport base. Compatible with dart2js/Wasm.
+///
+/// Wire format: see the file-level comment above.
 abstract class RpcWebSocketTransportBase implements IRpcTransport {
   WebSocketChannel _channel;
   final Future<WebSocketChannel> Function()? _reconnectFactory;
@@ -71,6 +165,8 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
   }
 
   RpcStreamIdManager get idManager;
+
+  @override
   bool get isClient;
 
   @override
@@ -146,28 +242,13 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       return;
     }
 
-    final jsonStr = utf8.decode(payload);
-    final jsonData = json.decode(jsonStr) as Map<String, dynamic>;
-
-    final headers = <RpcHeader>[];
-    if (jsonData['headers'] is List) {
-      var added = 0;
-      for (final headerData in jsonData['headers'] as List) {
-        if (added >= _maxHeaders) break;
-        if (headerData is! Map<String, dynamic>) continue;
-        final name = headerData['name'];
-        final value = headerData['value'];
-        if (name is! String || value is! String) continue;
-        if (!_isValidHeaderName(name) || !_isValidHeaderValue(value)) {
-          _protocolViolation('Invalid header in metadata (stream $streamId)');
-          return;
-        }
-        headers.add(RpcHeader(name, value));
-        added += 1;
-      }
+    final decoded = WsMetadataCodec.decode(payload);
+    if (decoded == null) {
+      _protocolViolation('Malformed metadata frame (stream $streamId)');
+      return;
     }
 
-    final methodPath = jsonData['methodPath'] as String?;
+    final methodPath = decoded.methodPath;
     if (methodPath != null &&
         (methodPath.isEmpty ||
             methodPath.length > _maxMethodPathLength ||
@@ -176,11 +257,25 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
       return;
     }
 
-    final metadata = RpcMetadata(headers);
+    // Validate headers.
+    for (final h in decoded.metadata.headers) {
+      if (!_isValidHeaderName(h.name) || !_isValidHeaderValue(h.value)) {
+        _protocolViolation('Invalid header in metadata (stream $streamId)');
+        return;
+      }
+    }
+    if (decoded.metadata.headers.length > _maxHeaders) {
+      _protocolViolation(
+        'Too many headers in metadata (stream $streamId): '
+        '${decoded.metadata.headers.length} > $_maxHeaders',
+      );
+      return;
+    }
+
     _incomingController.add(
       RpcTransportMessage(
         streamId: streamId,
-        metadata: metadata,
+        metadata: decoded.metadata,
         isEndOfStream: isEndOfStream,
         methodPath: methodPath,
       ),
@@ -224,10 +319,13 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     );
     final messages = parser(payload);
     for (final msgData in messages) {
+      // Re-wrap as a complete gRPC frame so the app layer (base_processor)
+      // receives the same format as the HTTP/2 transport.
+      final framedMessage = _ensureGrpcFrame(msgData);
       _incomingController.add(
         RpcTransportMessage(
           streamId: streamId,
-          payload: msgData,
+          payload: framedMessage,
           isEndOfStream: isEndOfStream && msgData == messages.last,
         ),
       );
@@ -431,14 +529,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     bool endStream = false,
   }) async {
     if (_closed) return;
-    final metadataJson = {
-      'headers': metadata.headers
-          .map((h) => {'name': h.name, 'value': h.value})
-          .toList(),
-      if (metadata.methodPath != null) 'methodPath': metadata.methodPath,
-    };
-    final jsonStr = json.encode(metadataJson);
-    final payload = utf8.encode(jsonStr);
+    final payload = WsMetadataCodec.encode(metadata);
     if (payload.length > _maxMetadataBytes) {
       throw StateError(
         'Metadata payload too large: ${payload.length} > $_maxMetadataBytes',
@@ -446,7 +537,7 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     }
     await _sendWithHeader(
       streamId,
-      Uint8List.fromList(payload),
+      payload,
       isMetadata: true,
       endStream: endStream,
     );
@@ -459,16 +550,16 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     bool endStream = false,
   }) async {
     if (_closed) return;
-    final encoded = RpcMessageFrame.encode(data);
-    if (_enableChunking && encoded.length > _chunkSizeBytes) {
-      await _sendChunked(streamId, encoded, endStream: endStream);
+    // [data] is already a gRPC frame (5-byte prefix + payload) — send as-is.
+    if (_enableChunking && data.length > _chunkSizeBytes) {
+      await _sendChunked(streamId, data, endStream: endStream);
     } else {
-      if (encoded.length + 5 > _maxWebSocketMessageBytes) {
+      if (data.length + 5 > _maxWebSocketMessageBytes) {
         throw StateError(
-          'Encoded message exceeds maxWebSocketMessageBytes: ${encoded.length + 5} > $_maxWebSocketMessageBytes',
+          'Message exceeds maxWebSocketMessageBytes: ${data.length + 5} > $_maxWebSocketMessageBytes',
         );
       }
-      await _sendWithHeader(streamId, encoded, endStream: endStream);
+      await _sendWithHeader(streamId, data, endStream: endStream);
     }
     if (endStream) _onStreamEnd(streamId);
   }
@@ -631,6 +722,21 @@ abstract class RpcWebSocketTransportBase implements IRpcTransport {
     }
     return true;
   }
+}
+
+/// Returns [data] unchanged if it is already a valid gRPC frame; otherwise
+/// wraps it in an uncompressed gRPC frame.
+Uint8List _ensureGrpcFrame(Uint8List data) {
+  if (data.length >= RpcConstants.messagePrefixSize) {
+    try {
+      final header = RpcMessageFrame.parseHeader(data);
+      if (RpcConstants.messagePrefixSize + header.messageLength ==
+          data.length) {
+        return data;
+      }
+    } catch (_) {}
+  }
+  return RpcMessageFrame.encode(data, compressed: false);
 }
 
 class _ChunkAssembly {
