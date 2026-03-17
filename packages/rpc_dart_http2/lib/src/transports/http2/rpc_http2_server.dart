@@ -94,11 +94,9 @@ class RpcHttp2Server implements IRpcServer {
   }
 
   /// Хост сервера
-  @override
   String get host => _host;
 
   /// Порт сервера
-  @override
   int get port => _port;
 
   /// Активные endpoints
@@ -200,7 +198,7 @@ class RpcHttp2Server implements IRpcServer {
 
       if (_transportWrapper != null) {
         try {
-          transport = _transportWrapper!(transport, socket);
+          transport = _transportWrapper(transport, socket);
         } catch (error, stackTrace) {
           _logger?.error(
             'Ошибка при обёртке транспорта',
@@ -254,27 +252,4 @@ class RpcHttp2Server implements IRpcServer {
       socket.destroy();
     }
   }
-}
-
-/// Фабрика для создания HTTP/2 RPC серверов
-class RpcHttp2ServerFactory implements IRpcServerFactory {
-  const RpcHttp2ServerFactory();
-
-  @override
-  IRpcServer create({
-    required int port,
-    required List<RpcResponderContract> contracts,
-    String host = 'localhost',
-    RpcLogger? logger,
-  }) {
-    return RpcHttp2Server.createWithContracts(
-      port: port,
-      contracts: contracts,
-      host: host,
-      logger: logger,
-    );
-  }
-
-  @override
-  String get transportType => 'HTTP/2';
 }

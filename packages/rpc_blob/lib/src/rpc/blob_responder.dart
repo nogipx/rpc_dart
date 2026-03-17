@@ -351,8 +351,6 @@ class BlobServiceResponder extends BlobServiceContractResponder {
         first.checksumAlgorithm ?? ChecksumAlgorithm.sha256;
     final payloadBuilder = BytesBuilder(copy: false);
     final chunks = <Uint8List>[];
-    BlobUploadChunk lastChunk = first;
-
     while (true) {
       if (current.offset != expectedOffset) {
         throw StateError(
@@ -365,7 +363,6 @@ class BlobServiceResponder extends BlobServiceContractResponder {
       seen += current.bytes.length;
       expectedOffset += current.bytes.length;
       declaredLength ??= current.totalLength;
-      lastChunk = current;
       payloadBuilder.add(current.bytes);
       chunks.add(current.bytes);
 

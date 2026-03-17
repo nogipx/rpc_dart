@@ -27,7 +27,6 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   @override
   Uint8List compress(Uint8List data) {
     final result = GZipEncoder().encode(data);
-    if (result == null) throw StateError('GZipEncoder returned null');
     return Uint8List.fromList(result);
   }
 

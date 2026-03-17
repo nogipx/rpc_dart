@@ -12,12 +12,6 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// Определяет общий контракт для всех типов RPC серверов (HTTP/2, WebSocket, gRPC, etc.)
 /// Используется в [RpcServerBootstrap] для абстракции от конкретной реализации транспорта.
 abstract interface class IRpcServer {
-  /// Хост сервера
-  String get host;
-
-  /// Порт сервера
-  int get port;
-
   /// Запущен ли сервер
   bool get isRunning;
 
@@ -31,16 +25,3 @@ abstract interface class IRpcServer {
   Future<void> stop();
 }
 
-/// Фабрика для создания RPC серверов с предустановленными контрактами
-abstract interface class IRpcServerFactory {
-  /// Создает сервер с автоматической регистрацией контрактов
-  IRpcServer create({
-    required int port,
-    required List<RpcResponderContract> contracts,
-    String host = 'localhost',
-    RpcLogger? logger,
-  });
-
-  /// Тип транспорта (для логирования и отладки)
-  String get transportType;
-}

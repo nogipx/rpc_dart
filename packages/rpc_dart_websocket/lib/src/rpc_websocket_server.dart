@@ -13,8 +13,6 @@ import 'websocket_responder_transport.dart';
 /// WebSocket RPC server that consumes an external stream of already-upgraded
 /// WebSocket connections (no HTTP upgrade / dart:io inside).
 class RpcWebSocketServer implements IRpcServer {
-  final String _host;
-  final int _port;
   final RpcLogger? _logger;
   final Stream<WebSocketChannel> _connections;
 
@@ -30,16 +28,12 @@ class RpcWebSocketServer implements IRpcServer {
 
   RpcWebSocketServer({
     required Stream<WebSocketChannel> connections,
-    String host = 'localhost',
-    required int port,
     RpcLogger? logger,
     void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(WebSocketChannel channel)? onConnectionOpened,
     void Function(WebSocketChannel channel)? onConnectionClosed,
   }) : _connections = connections,
-       _host = host,
-       _port = port,
        _logger = logger?.child('WebSocketServer'),
        _onEndpointCreated = onEndpointCreated,
        _onConnectionError = onConnectionError,
@@ -48,15 +42,11 @@ class RpcWebSocketServer implements IRpcServer {
 
   factory RpcWebSocketServer.createWithContracts({
     required Stream<WebSocketChannel> connections,
-    required int port,
     required List<RpcResponderContract> contracts,
-    String host = 'localhost',
     RpcLogger? logger,
   }) {
     return RpcWebSocketServer(
       connections: connections,
-      host: host,
-      port: port,
       logger: logger,
       onEndpointCreated: (endpoint) {
         logger?.debug(
@@ -78,12 +68,6 @@ class RpcWebSocketServer implements IRpcServer {
   }
 
   @override
-  String get host => _host;
-
-  @override
-  int get port => _port;
-
-  @override
   List<RpcResponderEndpoint> get endpoints => List.unmodifiable(_endpoints);
 
   @override
@@ -95,7 +79,7 @@ class RpcWebSocketServer implements IRpcServer {
       _logger?.warning('WebSocket server already running');
       return;
     }
-    _logger?.info('Starting WebSocket server (no io) on $_host:$_port');
+    _logger?.info('Starting WebSocket server (no io)');
     _isRunning = true;
 
     _connectionsSub = _connections.listen(
@@ -183,30 +167,4 @@ class RpcWebSocketServer implements IRpcServer {
   }
 
   String _nextPeerLabel() => 'peer-${++_connCounter}';
-}
-
-/// Factory producing WebSocket servers from an external connection stream.
-class RpcWebSocketServerFactory implements IRpcServerFactory {
-  final Stream<WebSocketChannel> connections;
-
-  const RpcWebSocketServerFactory(this.connections);
-
-  @override
-  IRpcServer create({
-    required int port,
-    required List<RpcResponderContract> contracts,
-    String host = 'localhost',
-    RpcLogger? logger,
-  }) {
-    return RpcWebSocketServer.createWithContracts(
-      connections: connections,
-      port: port,
-      contracts: contracts,
-      host: host,
-      logger: logger,
-    );
-  }
-
-  @override
-  String get transportType => 'WebSocket';
 }

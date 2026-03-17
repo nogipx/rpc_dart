@@ -502,8 +502,6 @@ class BlobRepositoryClient implements IBlobClient {
         first.checksumAlgorithm ?? ChecksumAlgorithm.sha256;
     final payloadBuilder = BytesBuilder(copy: false);
     final chunks = <Uint8List>[];
-    BlobUploadChunk lastChunk = first;
-
     while (true) {
       if (current.offset != expectedOffset) {
         throw StateError(
@@ -516,7 +514,6 @@ class BlobRepositoryClient implements IBlobClient {
       seen += current.bytes.length;
       expectedOffset += current.bytes.length;
       declaredLength ??= current.totalLength;
-      lastChunk = current;
       payloadBuilder.add(current.bytes);
       chunks.add(current.bytes);
 

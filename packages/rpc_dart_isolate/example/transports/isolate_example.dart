@@ -86,7 +86,10 @@ Future<void> runIsolateExample() async {
 
 /// Пользовательская функция сервера, получающая готовый транспорт
 @pragma('vm:entry-point')
-void customEchoServer(transport, customParams) {
+void customEchoServer(
+  IRpcTransport transport,
+  Map<String, dynamic> customParams,
+) {
   print('customParams: $customParams');
   print('СЕРВЕР: Запущен эхо-сервер с новым API');
   final logger = RpcLogger(

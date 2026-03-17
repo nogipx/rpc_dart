@@ -10,7 +10,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('HTTP/2 RPC Integration Tests (High-Level API)', () {
-    late IRpcServer testServer;
+    late RpcHttp2Server testServer;
     late RpcHttp2CallerTransport clientTransport;
     late RpcCallerEndpoint callerEndpoint;
     late StreamController<Uint8List> serverRequestPayloads;
