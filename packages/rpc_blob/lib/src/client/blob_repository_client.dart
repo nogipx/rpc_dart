@@ -459,25 +459,23 @@ class BlobRepositoryClient implements IBlobClient {
         firstChunk = false;
       }
     }
-    if (buffer.isNotEmpty || firstChunk) {
-      final chunkChecksum = attachChunkChecksums
-          ? _hashChunk(Uint8List.fromList(buffer), checksumAlgorithm)
-          : null;
-      yield BlobUploadChunk(
-        collection: collection,
-        blobId: id ?? '',
-        offset: offset,
-        bytes: Uint8List.fromList(buffer),
-        totalLength: length,
-        contentType: firstChunk ? contentType : null,
-        checksum: firstChunk ? checksum : null,
-        checksumAlgorithm: firstChunk ? checksumAlgorithm : null,
-        chunkChecksum: chunkChecksum,
-        metadata: firstChunk ? metadata : const {},
-        expectedVersion: firstChunk ? expectedVersion : null,
-        last: true,
-      );
-    }
+    final chunkChecksum = attachChunkChecksums
+        ? _hashChunk(Uint8List.fromList(buffer), checksumAlgorithm)
+        : null;
+    yield BlobUploadChunk(
+      collection: collection,
+      blobId: id ?? '',
+      offset: offset,
+      bytes: Uint8List.fromList(buffer),
+      totalLength: length,
+      contentType: firstChunk ? contentType : null,
+      checksum: firstChunk ? checksum : null,
+      checksumAlgorithm: firstChunk ? checksumAlgorithm : null,
+      chunkChecksum: chunkChecksum,
+      metadata: firstChunk ? metadata : const {},
+      expectedVersion: firstChunk ? expectedVersion : null,
+      last: true,
+    );
   }
 
   String? _hashChunk(Uint8List data, ChecksumAlgorithm algorithm) {
