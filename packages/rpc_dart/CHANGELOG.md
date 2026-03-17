@@ -1,3 +1,8 @@
+## 2.6.1
+
+- `IRpcServer`: removed `host` and `port` from the interface — these are transport-level concerns, not RPC server concerns.
+- `IRpcServerFactory` interface removed along with `RpcHttp2ServerFactory` and `RpcWebSocketServerFactory` — the abstraction had no consumers.
+
 ## 2.6.0
 
 - Added `RpcHeaders` class with gRPC semantic header name constants; all internal

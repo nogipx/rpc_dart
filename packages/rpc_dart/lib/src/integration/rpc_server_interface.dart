@@ -24,4 +24,3 @@ abstract interface class IRpcServer {
   /// Останавливает сервер
   Future<void> stop();
 }
-
