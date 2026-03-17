@@ -236,10 +236,11 @@ packages:
   rpc_dart:
     dependency: "direct main"
     description:
-      path: "../rpc_dart"
-      relative: true
-    source: path
-    version: "2.5.0"
+      name: rpc_dart
+      sha256: "780b04fb1623cf5fc9f6ef21ee6079cd7a5ff179ee1ce422d7e521e65cb3afd0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.6.1"
   shelf:
     dependency: transitive
     description:

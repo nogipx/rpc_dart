@@ -11,7 +11,7 @@ topics:
   - websocket
 
 dependencies:
-  rpc_dart: ^2.6.0
+  rpc_dart: ^2.6.1
   web_socket_channel: ^3.0.3
 
 dev_dependencies:

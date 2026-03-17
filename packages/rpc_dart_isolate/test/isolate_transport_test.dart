@@ -88,36 +88,40 @@ void _transferableEchoServer(
 void main() {
   group('RpcIsolateTransport', () {
     group('TransferableTypedData', () {
-      test('directObject передает TransferableTypedData туда-обратно без копий',
-          () async {
-        final result = await RpcIsolateTransport.spawn(
-          entrypoint: _transferableEchoServer,
-          customParams: const {},
-          isolateId: 'transferable-echo',
-        );
+      test(
+        'directObject передает TransferableTypedData туда-обратно без копий',
+        () async {
+          final result = await RpcIsolateTransport.spawn(
+            entrypoint: _transferableEchoServer,
+            customParams: const {},
+            isolateId: 'transferable-echo',
+          );
 
-        final transport = result.transport;
-        final streamId = transport.createStream();
+          final transport = result.transport;
+          final streamId = transport.createStream();
 
-        final original = Uint8List.fromList(List<int>.generate(256, (i) => i));
-        final transfer = TransferableTypedData.fromList([original]);
+          final original = Uint8List.fromList(
+            List<int>.generate(256, (i) => i),
+          );
+          final transfer = TransferableTypedData.fromList([original]);
 
-        final responseFuture = transport
-            .getMessagesForStream(streamId)
-            .where((msg) => msg.isDirect && msg.directPayload != null)
-            .map((msg) => msg.directPayload)
-            .cast<TransferableTypedData>()
-            .first
-            .timeout(const Duration(seconds: 2));
+          final responseFuture = transport
+              .getMessagesForStream(streamId)
+              .where((msg) => msg.isDirect && msg.directPayload != null)
+              .map((msg) => msg.directPayload)
+              .cast<TransferableTypedData>()
+              .first
+              .timeout(const Duration(seconds: 2));
 
-        await transport.sendDirectObject(streamId, transfer);
-        final receivedTransfer = await responseFuture;
+          await transport.sendDirectObject(streamId, transfer);
+          final receivedTransfer = await responseFuture;
 
-        final roundtrip = receivedTransfer.materialize().asUint8List();
-        expect(roundtrip, orderedEquals(original));
+          final roundtrip = receivedTransfer.materialize().asUint8List();
+          expect(roundtrip, orderedEquals(original));
 
-        result.kill();
-      });
+          result.kill();
+        },
+      );
     });
 
     group('spawn factory', () {
@@ -300,7 +304,6 @@ void main() {
         final metadata = RpcMetadata.forClientRequest(
           'TestService',
           'TestMethod',
-          host: 'test.com',
         );
         await transport.sendMetadata(streamId, metadata);
 
@@ -548,8 +551,9 @@ void main() {
         expect(receivedMessages.length, greaterThan(0));
 
         // Проверяем, что получили и метаданные, и данные
-        final metadataMessages =
-            receivedMessages.where((msg) => msg.isMetadataOnly).toList();
+        final metadataMessages = receivedMessages
+            .where((msg) => msg.isMetadataOnly)
+            .toList();
         final dataMessages = receivedMessages
             .where((msg) => !msg.isMetadataOnly && msg.payload != null)
             .toList();
