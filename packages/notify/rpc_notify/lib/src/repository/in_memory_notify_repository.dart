@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:async';
-
 import 'package:rpc_dart/rpc_dart.dart';
 
 import '../models/notify_event.dart';
@@ -15,6 +13,10 @@ import 'i_notify_repository.dart';
 /// instantiated on first publish/subscribe and disposed when the last
 /// subscriber leaves.
 class InMemoryNotifyRepository implements INotifyRepository {
+  InMemoryNotifyRepository({RpcLogger? logger})
+      : _log = logger ?? RpcLogger('InMemoryNotifyRepository');
+
+  final RpcLogger _log;
   final _distributors = <String, StreamDistributor<NotifyEvent>>{};
 
   StreamDistributor<NotifyEvent> _distributorFor(String topic) =>
@@ -22,23 +24,27 @@ class InMemoryNotifyRepository implements INotifyRepository {
 
   @override
   void publish(String topic, Map<String, dynamic> payload) {
+    _log.debug('publish topic=$topic');
     final event = NotifyEvent(topic: topic, payload: payload);
     _distributorFor(topic).publish(event);
   }
 
   @override
   void publishTo(String clientId, String topic, Map<String, dynamic> payload) {
+    _log.debug('publishTo clientId=$clientId topic=$topic');
     final event = NotifyEvent(topic: topic, payload: payload);
     _distributorFor(topic).publishToClient(clientId, event);
   }
 
   @override
   Stream<NotifyEvent> subscribe(String clientId, String topic) {
+    _log.debug('subscribe clientId=$clientId topic=$topic');
     return _distributorFor(topic).createClientStreamWithId(clientId);
   }
 
   @override
   void unsubscribe(String clientId, String topic) {
+    _log.debug('unsubscribe clientId=$clientId topic=$topic');
     _distributors[topic]?.closeClientStream(clientId);
   }
 
@@ -57,6 +63,7 @@ class InMemoryNotifyRepository implements INotifyRepository {
 
   @override
   Future<void> dispose() async {
+    _log.debug('dispose — closing ${_distributors.length} distributor(s)');
     final entries = List.of(_distributors.values);
     _distributors.clear();
     for (final d in entries) {

@@ -16,20 +16,26 @@ import 'i_notify_subscriber.dart';
 /// Each call to [subscribe] opens a server-stream RPC call for the requested
 /// topic.  Multiple topics are supported: each topic gets its own stream.
 class NotifySubscriber implements INotifySubscriber {
-  NotifySubscriber(this._endpoint, this._caller);
+  NotifySubscriber(this._endpoint, this._caller)
+      : _log = RpcLogger('NotifySubscriber');
 
   factory NotifySubscriber.endpoint(RpcCallerEndpoint endpoint) =>
       NotifySubscriber(endpoint, NotifySubscribeContractCaller(endpoint));
 
   final RpcCallerEndpoint _endpoint;
   final NotifySubscribeContractCaller _caller;
+  final RpcLogger _log;
 
   final _subscriptions = <String, _TopicSubscription>{};
 
   @override
   Stream<NotifyEvent> subscribe(String topic, {RpcContext? context}) {
     final existing = _subscriptions[topic];
-    if (existing != null) return existing.stream;
+    if (existing != null) {
+      _log.debug('subscribe topic=$topic (reusing existing stream)');
+      return existing.stream;
+    }
+    _log.debug('subscribe topic=$topic');
 
     final controller = StreamController<NotifyEvent>.broadcast(
       onCancel: () => _subscriptions.remove(topic),
@@ -57,6 +63,7 @@ class NotifySubscriber implements INotifySubscriber {
 
   @override
   Future<void> unsubscribe(String topic) async {
+    _log.debug('unsubscribe topic=$topic');
     final sub = _subscriptions.remove(topic);
     if (sub != null) {
       // Cancel the underlying RPC stream without awaiting — the server-stream
@@ -72,6 +79,7 @@ class NotifySubscriber implements INotifySubscriber {
 
   @override
   Future<void> dispose() async {
+    _log.debug('dispose — active topics: ${_subscriptions.keys.toList()}');
     final topics = List<String>.from(_subscriptions.keys);
     for (final topic in topics) {
       await unsubscribe(topic);

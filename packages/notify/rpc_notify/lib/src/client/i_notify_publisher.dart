@@ -58,27 +58,48 @@ class _RepositoryPublisher implements INotifyPublisher {
 
 class _RpcPublisher implements INotifyPublisher {
   _RpcPublisher(this._endpoint)
-      : _caller = NotifyPublishContractCaller(_endpoint);
+      : _caller = NotifyPublishContractCaller(_endpoint),
+        _log = RpcLogger('NotifyPublisher.endpoint');
 
   final RpcCallerEndpoint _endpoint;
   final NotifyPublishContractCaller _caller;
+  final RpcLogger _log;
 
   @override
   void publish(String topic, Map<String, dynamic> payload) {
-    _caller.publish(NotifyPublishRequest(topic: topic, payload: payload));
+    _log.debug('publish topic=$topic');
+    _caller
+        .publish(NotifyPublishRequest(topic: topic, payload: payload))
+        .catchError((e, st) {
+          _log.error('publish failed topic=$topic', error: e, stackTrace: st);
+          return const NotifyPublishResponse();
+        });
   }
 
   @override
   void publishTo(String clientId, String topic, Map<String, dynamic> payload) {
-    _caller.publishTo(
-      NotifyPublishToRequest(
-        clientId: clientId,
-        topic: topic,
-        payload: payload,
-      ),
-    );
+    _log.debug('publishTo clientId=$clientId topic=$topic');
+    _caller
+        .publishTo(
+          NotifyPublishToRequest(
+            clientId: clientId,
+            topic: topic,
+            payload: payload,
+          ),
+        )
+        .catchError((e, st) {
+          _log.error(
+            'publishTo failed clientId=$clientId topic=$topic',
+            error: e,
+            stackTrace: st,
+          );
+          return const NotifyPublishResponse();
+        });
   }
 
   @override
-  Future<void> close() => _endpoint.close();
+  Future<void> close() {
+    _log.debug('close');
+    return _endpoint.close();
+  }
 }

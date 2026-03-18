@@ -18,10 +18,12 @@ import '../models/notify_subscribe_request.dart';
 
 /// Handles subscribe RPC calls — opens a server-stream per topic.
 class NotifySubscribeResponder extends NotifySubscribeContractResponder {
-  NotifySubscribeResponder({required INotifySubscriber subscriber})
-      : _subscriber = subscriber;
+  NotifySubscribeResponder({required INotifySubscriber subscriber, RpcLogger? logger})
+      : _subscriber = subscriber,
+        _log = logger ?? RpcLogger('NotifySubscribeResponder');
 
   final INotifySubscriber _subscriber;
+  final RpcLogger _log;
 
   INotifySubscriber get subscriber => _subscriber;
 
@@ -30,11 +32,13 @@ class NotifySubscribeResponder extends NotifySubscribeContractResponder {
     NotifySubscribeRequest request, {
     RpcContext? context,
   }) {
+    _log.debug('subscribe topic=${request.topic}');
     return _subscriber.subscribe(request.topic, context: context);
   }
 
   @override
   Future<void> dispose() async {
+    _log.debug('dispose');
     await _subscriber.dispose();
   }
 }
@@ -49,10 +53,12 @@ class NotifySubscribeResponder extends NotifySubscribeContractResponder {
 /// lets the server apply independent authorisation (e.g. only back-end
 /// services may call publish, while any client may subscribe).
 class NotifyPublishResponder extends NotifyPublishContractResponder {
-  NotifyPublishResponder({required INotifyPublisher publisher})
-      : _publisher = publisher;
+  NotifyPublishResponder({required INotifyPublisher publisher, RpcLogger? logger})
+      : _publisher = publisher,
+        _log = logger ?? RpcLogger('NotifyPublishResponder');
 
   final INotifyPublisher _publisher;
+  final RpcLogger _log;
 
   INotifyPublisher get publisher => _publisher;
 
@@ -61,6 +67,7 @@ class NotifyPublishResponder extends NotifyPublishContractResponder {
     NotifyPublishRequest request, {
     RpcContext? context,
   }) async {
+    _log.debug('publish topic=${request.topic}');
     _publisher.publish(request.topic, request.payload);
     return const NotifyPublishResponse();
   }
@@ -70,6 +77,7 @@ class NotifyPublishResponder extends NotifyPublishContractResponder {
     NotifyPublishToRequest request, {
     RpcContext? context,
   }) async {
+    _log.debug('publishTo clientId=${request.clientId} topic=${request.topic}');
     _publisher.publishTo(request.clientId, request.topic, request.payload);
     return const NotifyPublishResponse();
   }

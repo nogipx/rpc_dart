@@ -46,16 +46,22 @@ abstract interface class INotifySubscriber {
 const _uuid = Uuid();
 
 class _RepositorySubscriber implements INotifySubscriber {
-  _RepositorySubscriber(this._repository);
+  _RepositorySubscriber(this._repository)
+      : _log = RpcLogger('NotifySubscriber.repository');
 
   final INotifyRepository _repository;
+  final RpcLogger _log;
   final Map<String, String> _topicToClientId = {};
   final Map<String, Stream<NotifyEvent>> _streams = {};
 
   @override
   Stream<NotifyEvent> subscribe(String topic, {RpcContext? context}) {
-    if (_streams.containsKey(topic)) return _streams[topic]!;
+    if (_streams.containsKey(topic)) {
+      _log.debug('subscribe topic=$topic (reusing existing stream)');
+      return _streams[topic]!;
+    }
     final clientId = _uuid.v4();
+    _log.debug('subscribe topic=$topic clientId=$clientId');
     _topicToClientId[topic] = clientId;
     _streams[topic] = _repository.subscribe(clientId, topic);
     return _streams[topic]!;
@@ -66,6 +72,7 @@ class _RepositorySubscriber implements INotifySubscriber {
     final clientId = _topicToClientId.remove(topic);
     _streams.remove(topic);
     if (clientId != null) {
+      _log.debug('unsubscribe topic=$topic clientId=$clientId');
       _repository.unsubscribe(clientId, topic);
     }
   }
@@ -75,6 +82,7 @@ class _RepositorySubscriber implements INotifySubscriber {
 
   @override
   Future<void> dispose() async {
+    _log.debug('dispose — active topics: ${_streams.keys.toList()}');
     final topics = List<String>.from(_topicToClientId.keys);
     for (final topic in topics) {
       await unsubscribe(topic);
