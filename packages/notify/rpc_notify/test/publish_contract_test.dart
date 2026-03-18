@@ -36,27 +36,26 @@ void main() {
     });
 
     test('publishClient.publishTo delivers only to targeted client', () async {
-      // Two subscribers on the same topic.
-      // Client IDs are assigned server-side as 'client_0' and 'client_1'.
-      final events0 = <NotifyEvent>[];
-      final events1 = <NotifyEvent>[];
+      // Use the repository directly to subscribe two clients with known IDs.
+      const clientA = 'test-client-a';
+      const clientB = 'test-client-b';
 
-      env.subscriber.subscribe('chat').listen(events0.add);
+      final eventsA = <NotifyEvent>[];
+      final eventsB = <NotifyEvent>[];
 
-      // Second subscription (different topic name trick — use same topic but
-      // we can only verify via direct repository for targeted delivery).
-      // Instead, test publishTo via repository-level IDs by publishing to
-      // the known first subscriber ID.
+      env.repository.subscribe(clientA, 'chat').listen(eventsA.add);
+      env.repository.subscribe(clientB, 'chat').listen(eventsB.add);
+
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      // Publish to 'client_0' — the first subscriber on 'chat'.
+      // Targeted — only clientA should receive this.
       await env.publisher.publishTo(
-        clientId: 'client_0',
+        clientId: clientA,
         topic: 'chat',
         payload: {'msg': 'direct'},
       );
 
-      // Broadcast to verify normal publish still works.
+      // Broadcast — both clients should receive this.
       await env.publisher.publish(
         topic: 'chat',
         payload: {'msg': 'broadcast'},
@@ -64,10 +63,13 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
-      // client_0 gets both the targeted and the broadcast event.
-      expect(events0.length, 2);
-      expect(events0[0].payload['msg'], 'direct');
-      expect(events0[1].payload['msg'], 'broadcast');
+      expect(eventsA.length, 2);
+      expect(eventsA[0].payload['msg'], 'direct');
+      expect(eventsA[1].payload['msg'], 'broadcast');
+
+      // clientB only gets the broadcast, not the targeted event.
+      expect(eventsB.length, 1);
+      expect(eventsB[0].payload['msg'], 'broadcast');
     });
 
     test('direct server.publish and publishClient.publish both work', () async {

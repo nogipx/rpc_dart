@@ -18,6 +18,9 @@ import 'i_notify_subscriber.dart';
 class NotifySubscriber implements INotifySubscriber {
   NotifySubscriber(this._endpoint, this._caller);
 
+  factory NotifySubscriber.endpoint(RpcCallerEndpoint endpoint) =>
+      NotifySubscriber(endpoint, NotifySubscribeContractCaller(endpoint));
+
   final RpcCallerEndpoint _endpoint;
   final NotifySubscribeContractCaller _caller;
 

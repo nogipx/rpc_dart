@@ -15,4 +15,5 @@ export 'src/server/notify_service_server.dart';
 export 'src/client/i_notify_subscriber.dart';
 export 'src/client/notify_subscriber.dart';
 export 'src/client/notify_publisher.dart';
+export 'src/client/i_notify_publisher.dart';
 export 'src/factory/notify_service_factory.dart';

@@ -4,6 +4,8 @@
 
 import 'package:rpc_dart/rpc_dart.dart';
 
+import '../client/i_notify_publisher.dart';
+import '../client/i_notify_subscriber.dart';
 import '../client/notify_publisher.dart';
 import '../client/notify_subscriber.dart';
 import '../contract/notify_contract.dart';
@@ -33,8 +35,12 @@ class NotifyServiceFactory {
         transport: transport,
         debugLabel: debugLabel,
       ),
-      subscribeResponder: NotifySubscribeResponder(repository: repo),
-      publishResponder: NotifyPublishResponder(repository: repo),
+      subscribeResponder: NotifySubscribeResponder(
+        subscriber: INotifySubscriber.repository(repo),
+      ),
+      publishResponder: NotifyPublishResponder(
+        publisher: INotifyPublisher.repository(repo),
+      ),
     );
   }
 
@@ -77,9 +83,10 @@ class NotifyServiceFactory {
   }) async {
     final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
 
+    final repo = repository ?? InMemoryNotifyRepository();
     final server = createServer(
       transport: responderTransport,
-      repository: repository,
+      repository: repo,
       debugLabel: serverLabel,
     );
     await server.start();
@@ -102,6 +109,7 @@ class NotifyServiceFactory {
       server: server,
       subscriber: subscriber,
       publisher: publisher,
+      repository: repo,
       callerTransport: callerTransport,
       responderTransport: responderTransport,
     );
@@ -114,6 +122,7 @@ class InMemoryNotifyServiceEnvironment {
     required this.server,
     required this.subscriber,
     required this.publisher,
+    required this.repository,
     required this.callerTransport,
     required this.responderTransport,
   });
@@ -121,6 +130,11 @@ class InMemoryNotifyServiceEnvironment {
   final NotifyServiceServer server;
   final NotifySubscriber subscriber;
   final NotifyPublisher publisher;
+
+  /// The underlying repository — useful for injecting [INotifyPublisher]
+  /// or [INotifySubscribeClient] into other components under test.
+  final INotifyRepository repository;
+
   final IRpcTransport callerTransport;
   final IRpcTransport responderTransport;
 

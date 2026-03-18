@@ -4,12 +4,13 @@
 
 import 'package:rpc_dart/rpc_dart.dart';
 
+import '../client/i_notify_publisher.dart';
+import '../client/i_notify_subscriber.dart';
 import '../contract/notify_contract.dart';
 import '../contract/notify_publish_contract.dart';
 import '../models/notify_event.dart';
 import '../models/notify_publish_request.dart';
 import '../models/notify_subscribe_request.dart';
-import '../repository/i_notify_repository.dart';
 
 // ---------------------------------------------------------------------------
 // Subscribe-side responder
@@ -17,25 +18,24 @@ import '../repository/i_notify_repository.dart';
 
 /// Handles subscribe RPC calls — opens a server-stream per topic.
 class NotifySubscribeResponder extends NotifySubscribeContractResponder {
-  NotifySubscribeResponder({required INotifyRepository repository})
-      : _repository = repository;
+  NotifySubscribeResponder({required INotifySubscriber subscriber})
+      : _subscriber = subscriber;
 
-  final INotifyRepository _repository;
-  int _clientCounter = 0;
+  final INotifySubscriber _subscriber;
 
-  INotifyRepository get repository => _repository;
+  INotifySubscriber get subscriber => _subscriber;
 
   @override
   Stream<NotifyEvent> subscribe(
     NotifySubscribeRequest request, {
     RpcContext? context,
   }) {
-    final clientId = 'client_${_clientCounter++}';
-    return _repository.subscribe(clientId, request.topic);
+    return _subscriber.subscribe(request.topic, context: context);
   }
 
+  @override
   Future<void> dispose() async {
-    await _repository.dispose();
+    await _subscriber.dispose();
   }
 }
 
@@ -43,23 +43,25 @@ class NotifySubscribeResponder extends NotifySubscribeContractResponder {
 // Publish-side responder
 // ---------------------------------------------------------------------------
 
-/// Handles publish RPC calls — delegates to [INotifyRepository].
+/// Handles publish RPC calls — delegates to [INotifyPublisher].
 ///
-/// Registering this as a separate contract from [NotifyServiceResponder]
+/// Registering this as a separate contract from [NotifySubscribeResponder]
 /// lets the server apply independent authorisation (e.g. only back-end
 /// services may call publish, while any client may subscribe).
 class NotifyPublishResponder extends NotifyPublishContractResponder {
-  NotifyPublishResponder({required INotifyRepository repository})
-      : _repository = repository;
+  NotifyPublishResponder({required INotifyPublisher publisher})
+      : _publisher = publisher;
 
-  final INotifyRepository _repository;
+  final INotifyPublisher _publisher;
+
+  INotifyPublisher get publisher => _publisher;
 
   @override
   Future<NotifyPublishResponse> publish(
     NotifyPublishRequest request, {
     RpcContext? context,
   }) async {
-    _repository.publish(request.topic, request.payload);
+    _publisher.publish(request.topic, request.payload);
     return const NotifyPublishResponse();
   }
 
@@ -68,7 +70,7 @@ class NotifyPublishResponder extends NotifyPublishContractResponder {
     NotifyPublishToRequest request, {
     RpcContext? context,
   }) async {
-    _repository.publishTo(request.clientId, request.topic, request.payload);
+    _publisher.publishTo(request.clientId, request.topic, request.payload);
     return const NotifyPublishResponse();
   }
 }
@@ -91,14 +93,12 @@ class NotifyServiceServer {
   final NotifySubscribeResponder _subscribeResponder;
   final NotifyPublishResponder _publishResponder;
 
-  INotifyRepository get repository => _subscribeResponder.repository;
-
   /// Publish directly (server-side, no RPC round-trip).
   void publish({
     required String topic,
     required Map<String, dynamic> payload,
   }) {
-    _subscribeResponder.repository.publish(topic, payload);
+    _publishResponder.publisher.publish(topic, payload);
   }
 
   /// Publish to a specific client directly (server-side, no RPC round-trip).
@@ -107,7 +107,7 @@ class NotifyServiceServer {
     required String topic,
     required Map<String, dynamic> payload,
   }) {
-    _subscribeResponder.repository.publishTo(clientId, topic, payload);
+    _publishResponder.publisher.publishTo(clientId, topic, payload);
   }
 
   Future<void> start() async {
