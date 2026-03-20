@@ -15,7 +15,7 @@ concurrency:
 env:
   # Глобальная переменная для рабочей директории
   # Измените это значение, если переместите библиотеку в подпапку
-  WORKING_DIRECTORY: "packages/rpc_dart"
+  WORKING_DIRECTORY: "packages/core/rpc_dart"
 
 jobs:
   # Быстрая проверка форматирования и анализа кода
