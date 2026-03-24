@@ -6,36 +6,22 @@ repo_name: nogipx/rpc_dart
 edit_uri: ''
 
 nav:
-  - Overview: index.md
-  - Getting started: getting-started.md
-  - Core concepts: core-concepts.md
-  - Architecture: architecture.md
-  - Guides:
-      - Context, metadata & deadlines: guides/context-and-metadata.md
-      - Diagnostics & health checks: guides/diagnostics.md
-      - Error handling & status codes: guides/error-handling.md
-      - Routing & composition: guides/routing-and-composition.md
-      - RPC call lifecycle: guides/rpc-lifecycle.md
-      - Streaming patterns: guides/streaming-patterns.md
-      - Testing & tooling: guides/testing-and-debugging.md
+  - Home: index.md
+  - Getting Started: getting-started.md
+
+  - Core:
+      - Framework: core/rpc_dart.md
+      - Code Generation: core/generator.md
+      - Compression: core/compression.md
+      - OpenTelemetry: core/opentelemetry.md
+
   - Transports:
+      - Choosing a Transport: transports/index.md
       - InMemory: transports/inmemory.md
       - HTTP/2: transports/http2.md
+      - HTTP/1.1: transports/http.md
       - WebSocket: transports/websocket.md
       - Isolate: transports/isolate.md
-      - TURN relay: transports/turn-relay.md
-  - Русский:
-      - Обзор: ru/index.md
-      - Быстрый старт: ru/getting-started.md
-      - Основные концепции: ru/core-concepts.md
-      - Архитектура: ru/architecture.md
-      - Транспорты:
-          - InMemory: ru/transports/inmemory.md
-          - HTTP/2: ru/transports/http2.md
-          - WebSocket: ru/transports/websocket.md
-          - Isolate: ru/transports/isolate.md
-          - TURN релейный: ru/transports/turn-relay.md
-          - Кастомные транспорты: ru/transports/custom.md
 
 theme:
   name: material

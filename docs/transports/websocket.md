@@ -1,83 +1,119 @@
 # WebSocket Transport
 
-WebSocket transports keep a single TCP connection open while multiplexing many
-RPC calls. They are ideal for real-time dashboards, collaborative apps, and
-scenarios where the client needs to push updates back to the server without
-re-establishing a connection for every request.
+`rpc_dart_websocket` provides a WebSocket transport built on [`package:web_socket_channel`](https://pub.dev/packages/web_socket_channel). It supports all four RPC patterns, compiles to all platforms including JS and Wasm, and is the recommended choice for browser clients that need streaming.
 
-## When to use WebSocket
+---
 
-- **Bidirectional updates** – UI clients can send commands while receiving
-  streaming responses in the same session.
-- **Low-latency push** – avoid the overhead of repeatedly negotiating HTTP
-  connections when servers need to push data immediately.
-- **Firewall friendly** – works when only a single outbound port (such as 443) is
-  allowed.
+## Installation
 
-## Client setup
+```yaml
+dependencies:
+  rpc_dart_websocket: <latest>
+```
 
-Create a caller-side transport with
-`RpcWebSocketCallerTransport.connect` and pass it to a `RpcCallerEndpoint`:
+---
+
+## Client
 
 ```dart
+import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 
-Future<void> main() async {
-  final transport = RpcWebSocketCallerTransport.connect(
-Uri.parse('wss://api.example.com/rpc'),
-protocols: const ['rpc-dart'],
-logger: RpcLogger('WebSocketClient'),
-  );
+final transport = RpcWebSocketCallerTransport.connect(
+  Uri.parse('wss://api.example.com/rpc'),
+);
 
-  final caller = RpcCallerEndpoint(transport: transport);
-  final chat = ChatCaller(caller);
+final caller = CalculatorContractCaller(
+  RpcCallerEndpoint(transport: transport),
+);
 
-  final stream = chat.joinRoom('general', 'u-42');
-  stream.listen((message) => print('[$message]'));
+final result = await caller.sum(SumRequest(values: [1, 2, 3]));
+
+await caller.endpoint.close();
+```
+
+### Options
+
+```dart
+RpcWebSocketCallerTransport.connect(
+  Uri.parse('wss://api.example.com/rpc'),
+  protocols: ['rpc-v1'],          // WebSocket sub-protocols
+  chunkSizeBytes: 64 * 1024,      // max chunk size for large messages (default 64 KB)
+  enableChunking: false,          // enable chunked transfer for large payloads
+  policy: RpcSecurityPolicy(...),
+);
+```
+
+### Reconnection
+
+The caller transport stores a factory that recreates the channel on demand. Call `reconnect()` after a connection drop:
+
+```dart
+final status = await transport.reconnect();
+if (status.isHealthy) {
+  print('Reconnected');
 }
 ```
 
-`RpcWebSocketCallerTransport.connect` automatically configures a reconnection
-factory so you can call `transport.reconnect()` if the socket is dropped.
+---
 
-## Server setup
+## Server
 
-Use `RpcWebSocketServer` when you already have a source of upgraded
-`WebSocketChannel`s (for example via `shelf_web_socket` or a custom `HttpServer`):
+`RpcWebSocketServer` consumes an external stream of already-upgraded `WebSocketChannel` connections — it has no HTTP server inside. Wire it to whatever HTTP server or framework you use for the upgrade handshake.
+
+### With `shelf_web_socket` (native)
 
 ```dart
-final connections = controller.stream; // Stream<WebSocketChannel>
+import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
+import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:shelf_web_socket/shelf_web_socket.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
-final server = RpcWebSocketServer.createWithContracts(
-  connections: connections,
-  port: 8080,
-  contracts: [ChatResponder()],
-  logger: RpcLogger('WebSocketServer'),
+final connectionController = StreamController<WebSocketChannel>();
+
+final rpcServer = RpcWebSocketServer.createWithContracts(
+  connections: connectionController.stream,
+  contracts: [CalculatorResponder()],
 );
+await rpcServer.start();
 
-await server.start();
+final httpServer = await shelf_io.serve(
+  webSocketHandler((channel) => connectionController.add(channel)),
+  '0.0.0.0',
+  8080,
+);
 ```
 
-For lower-level control you can create `RpcWebSocketResponderTransport` directly
-from a `WebSocketChannel` and pass it to `RpcResponderEndpoint`.
+### Manual setup (per-connection logic)
 
-## Extending the transport
+```dart
+final rpcServer = RpcWebSocketServer(
+  connections: connectionStream,
+  onEndpointCreated: (endpoint) {
+    endpoint.registerServiceContract(CalculatorResponder());
+    endpoint.addInterceptor(OtelRpcInterceptor(tracer: tracer));
+  },
+  onConnectionError: (error, _) => print('Error: $error'),
+  onConnectionOpened: (channel) => print('Connected'),
+  onConnectionClosed: (channel) => print('Disconnected'),
+);
+```
 
-For lower-level control you can extend `RpcWebSocketTransportBase` from
-`rpc_dart_transports` (or wrap the provided caller/responder transports) and
-add your own reconnection/backpressure/buffering policy. The core requirement
-is to keep `incomingMessages` consistent and to validate any bytes you accept
-from the wire.
+---
 
-Keep `supportsZeroCopy` disabled for any transport that crosses a process or
-network boundary.
+## Wire Format
 
-## Diagnostics
+Each WebSocket binary message starts with a **5-byte frame header**:
 
-All WebSocket transports implement `IRpcTransport`, so you can:
+```
+[streamId : 4 bytes, big-endian uint32]
+[flags    : 1 byte]
+  bit 0 – endStream
+  bit 1 – metadata frame  (payload is CBOR-encoded metadata)
+  bit 2 – chunked data    (payload has an 8-byte chunk header)
+```
 
-- Call `transport.health()` to obtain `RpcHealthStatus` snapshots.
-- Trigger a reconnection with `transport.reconnect()` (client side).
-- Close the socket via `transport.close()` when the endpoint shuts down.
+- **Metadata frames** carry method path and headers encoded as CBOR (compact, self-describing).
+- **Data frames** carry gRPC-framed bytes (5-byte prefix + payload), reassembled by `RpcMessageParser` if fragmented.
+- **Chunked frames** allow sending large messages in pieces when `enableChunking: true`.
 
-Pair these diagnostics with `RpcEndpoint.health()` and `RpcEndpointPingProtocol`
-from the core library to build dashboards and alerting around connection health.
+Multiple RPC streams are multiplexed over a single WebSocket connection using stream IDs (clients use odd IDs, servers use even IDs).

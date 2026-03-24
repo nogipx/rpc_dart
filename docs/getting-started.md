@@ -1,161 +1,234 @@
-# Getting started
+# Getting Started
 
-Welcome to **RPC Dart**! This guide walks you through installing the package and
-building your first service.
+This guide builds a small calculator service end-to-end: define the interface, generate code, implement the server, wire both sides, make a call, and write a test.
 
-## Installation
+---
 
-### Dart
+## 1. Add Dependencies
 
-```bash
-dart pub add rpc_dart
+```yaml
+# pubspec.yaml
+dependencies:
+  rpc_dart: ^2.6.1
+
+dev_dependencies:
+  rpc_dart_generator: ^0.1.6
+  build_runner: any
 ```
 
-### Flutter
-
-```bash
-flutter pub add rpc_dart
+```sh
+fvm dart pub get
 ```
 
-For additional transport types (HTTP, WebSocket, isolate) also add:
+---
 
-```bash
-dart pub add rpc_dart_transports
-```
+## 2. Define the Service Interface
 
-## Your first RPC service
-
-Let's create a simple calculator service to demonstrate the core concepts of RPC
-Dart.
-
-### 1. Define the contract
-
-First, define the service contract with constants for service and method names:
+Annotate an abstract class with `@RpcService` and each method with `@RpcMethod`. The method signature determines the RPC pattern.
 
 ```dart
-// calculator_contract.dart
-abstract interface class ICalculatorContract {
-  static const name = 'Calculator';
-  static const methodAdd = 'add';
-}
-```
-
-### 2. Create request/response models
-
-Define the data models for your RPC calls:
-
-```dart
-// models.dart
-class AddRequest {
-  final double a;
-  final double b;
-
-  AddRequest(this.a, this.b);
-}
-
-class AddResponse {
-  final double result;
-
-  AddResponse(this.result);
-}
-```
-
-### 3. Implement the server (responder)
-
-Create a responder that handles incoming RPC calls:
-
-```dart
-// calculator_responder.dart
+// lib/src/calculator_contract.dart
 import 'package:rpc_dart/rpc_dart.dart';
 
-final class CalculatorResponder extends RpcResponderContract {
-  CalculatorResponder() : super(ICalculatorContract.name);
+part 'calculator_contract.g.dart';
+
+@RpcService(name: 'Calculator', transferMode: RpcDataTransferMode.codec)
+abstract class ICalculatorContract {
+  @RpcMethod.unary(name: 'add')
+  Future<AddResponse> add(AddRequest request, {RpcContext? context});
+
+  @RpcMethod.serverStream(name: 'countUp')
+  Stream<CountResponse> countUp(CountRequest request, {RpcContext? context});
+}
+```
+
+Models must implement `IRpcSerializable` (provides `toJson()`) and have a `fromJson` factory:
+
+```dart
+class AddRequest implements IRpcSerializable {
+  AddRequest({required this.a, required this.b});
+  final int a;
+  final int b;
+
+  factory AddRequest.fromJson(Map<String, dynamic> json) =>
+      AddRequest(a: json['a'] as int, b: json['b'] as int);
 
   @override
-  void setup() {
-    // Register unary method handler
-    addUnaryMethod<AddRequest, AddResponse>(
-      methodName: ICalculatorContract.methodAdd,
-      handler: _add,
-    );
-  }
+  Map<String, dynamic> toJson() => {'a': a, 'b': b};
+}
 
-  Future<AddResponse> _add(AddRequest request, {RpcContext? context}) async {
-    final result = request.a + request.b;
-    return AddResponse(result);
-  }
+class AddResponse implements IRpcSerializable {
+  AddResponse({required this.result});
+  final int result;
+
+  factory AddResponse.fromJson(Map<String, dynamic> json) =>
+      AddResponse(result: json['result'] as int);
+
+  @override
+  Map<String, dynamic> toJson() => {'result': result};
+}
+
+class CountRequest implements IRpcSerializable {
+  CountRequest({required this.upTo});
+  final int upTo;
+
+  factory CountRequest.fromJson(Map<String, dynamic> json) =>
+      CountRequest(upTo: json['upTo'] as int);
+
+  @override
+  Map<String, dynamic> toJson() => {'upTo': upTo};
+}
+
+class CountResponse implements IRpcSerializable {
+  CountResponse({required this.value});
+  final int value;
+
+  factory CountResponse.fromJson(Map<String, dynamic> json) =>
+      CountResponse(value: json['value'] as int);
+
+  @override
+  Map<String, dynamic> toJson() => {'value': value};
 }
 ```
 
-### 4. Create the client (caller)
+---
 
-Implement a client that calls the RPC methods:
+## 3. Run the Generator
+
+```sh
+fvm dart run build_runner build
+```
+
+The generator reads `ICalculatorContract`, strips the leading `I`, and produces classes in `calculator_contract.g.dart`:
+
+- `CalculatorContractResponder` — server side, extends `RpcResponderContract`
+- `CalculatorContractCaller` — client side, wraps `RpcCallerEndpoint`
+
+---
+
+## 4. Implement the Responder
+
+Extend the generated responder and implement the methods:
 
 ```dart
-// calculator_caller.dart
+// lib/src/calculator_responder.dart
 import 'package:rpc_dart/rpc_dart.dart';
+import 'calculator_contract.dart';
 
-final class CalculatorCaller extends RpcCallerContract {
-  CalculatorCaller(RpcCallerEndpoint endpoint)
-    : super(ICalculatorContract.name, endpoint);
+class CalculatorResponder extends CalculatorContractResponder {
+  @override
+  Future<AddResponse> add(AddRequest request, {RpcContext? context}) async {
+    return AddResponse(result: request.a + request.b);
+  }
 
-  Future<AddResponse> add(AddRequest request) {
-    return callUnary<AddRequest, AddResponse>(
-      methodName: ICalculatorContract.methodAdd,
-      request: request,
-    );
+  @override
+  Stream<CountResponse> countUp(CountRequest request, {RpcContext? context}) async* {
+    for (var i = 1; i <= request.upTo; i++) {
+      yield CountResponse(value: i);
+    }
   }
 }
 ```
 
-### 5. Put it all together
+---
 
-Now let's create a complete example that sets up the transport, endpoints, and
-makes an RPC call:
+## 5. Wire Up Server and Client
 
 ```dart
-// main.dart
+// bin/main.dart
 import 'package:rpc_dart/rpc_dart.dart';
+import '../lib/src/calculator_contract.dart';
+import '../lib/src/calculator_responder.dart';
 
-void main() async {
-  // Create InMemory transport pair
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+Future<void> main() async {
+  // Transport pair: caller side and responder side
+  final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
 
-  // Setup responder endpoint
-  final responder = RpcResponderEndpoint(transport: serverTransport);
-  responder.registerServiceContract(CalculatorResponder());
-  responder.start();
+  // Server
+  final server = RpcResponderEndpoint(transport: responderTransport);
+  server.registerServiceContract(CalculatorResponder());
+  server.start();
 
-  // Setup caller endpoint
-  final caller = RpcCallerEndpoint(transport: clientTransport);
+  // Client
+  final caller = CalculatorContractCaller(
+    RpcCallerEndpoint(transport: callerTransport),
+  );
 
-  // Create calculator client
-  final calculator = CalculatorCaller(caller);
+  // Unary call
+  final response = await caller.add(AddRequest(a: 4, b: 7));
+  print('4 + 7 = ${response.result}'); // 4 + 7 = 11
 
-  // Make RPC call
-  final result = await calculator.add(AddRequest(10, 5));
-  print('10 + 5 = ${result.result}'); // Output: 10 + 5 = 15.0
+  // Server-streaming call
+  await for (final event in caller.countUp(CountRequest(upTo: 5))) {
+    print('count: ${event.value}');
+  }
 
-  // Cleanup
-  await caller.close();
-  await responder.close();
+  await caller.endpoint.close();
+  await server.close();
 }
 ```
 
-## Key benefits
+!!! note "Swapping transports"
+    The only thing that changes when moving to production is the transport construction line.
+    Replace `RpcInMemoryTransport.pair()` with a WebSocket, HTTP/2, or Isolate transport —
+    the service code stays identical.
 
-- 🚀 **Zero-copy performance**: InMemory transport passes objects directly without
-  serialization overhead.
-- 🔒 **Type safety**: All RPC calls are strongly typed, catching errors at compile
-  time.
-- 🧪 **Easy testing**: InMemory transport makes unit and integration testing
-  straightforward.
-- 🔌 **Transport agnostic**: Switch transports without changing business logic.
+---
 
-## Next steps
+## 6. Write a Test
 
-- Learn the [core concepts](core-concepts.md)
-- Explore the [architecture](architecture.md)
-- Browse [examples on GitHub](https://github.com/nogipx/rpc_dart/tree/main/example)
-- Open an [issue on GitHub](https://github.com/nogipx/rpc_dart/issues) if you
-  have questions
+`RpcInMemoryTransport.pair()` creates a fully in-process bidirectional transport — no network, no ports, fast:
+
+```dart
+// test/calculator_test.dart
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:test/test.dart';
+import '../lib/src/calculator_contract.dart';
+import '../lib/src/calculator_responder.dart';
+
+void main() {
+  late CalculatorContractCaller caller;
+  late RpcResponderEndpoint server;
+
+  setUp(() {
+    final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+
+    server = RpcResponderEndpoint(transport: responderTransport);
+    server.registerServiceContract(CalculatorResponder());
+    server.start();
+
+    caller = CalculatorContractCaller(
+      RpcCallerEndpoint(transport: callerTransport),
+    );
+  });
+
+  tearDown(() async {
+    await caller.endpoint.close();
+    await server.close();
+  });
+
+  test('add returns correct sum', () async {
+    final response = await caller.add(AddRequest(a: 10, b: 32));
+    expect(response.result, equals(42));
+  });
+
+  test('countUp emits values 1..n', () async {
+    final values = await caller.countUp(CountRequest(upTo: 3)).toList();
+    expect(values.map((e) => e.value).toList(), equals([1, 2, 3]));
+  });
+}
+```
+
+```sh
+fvm dart test
+```
+
+---
+
+## Next Steps
+
+- [Core Framework](core/rpc_dart.md) — contracts, endpoints, context, middleware, zero-copy
+- [Code Generation](core/generator.md) — annotations reference, transfer modes, build config
+- [Transports](transports/index.md) — choose the right transport for your use case
+- [Compression](core/compression.md) — add gzip with one line
+- [OpenTelemetry](core/opentelemetry.md) — distributed tracing

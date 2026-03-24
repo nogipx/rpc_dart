@@ -1,253 +1,143 @@
-# HTTP/2 transport
+# HTTP/2 Transport
 
-HTTP/2 transports speak the same gRPC wire format that traditional gRPC clients
-expect. They keep a single TCP connection open while multiplexing every RPC
-stream, so once the caller and responder endpoints are wired up you can reuse
-all of the core primitives—unary calls, server streams, client streams, and
-bidirectional flows—without any extra adapters.
+`rpc_dart_http2` provides an HTTP/2 transport for native platforms. It supports all four RPC patterns, multiplexes streams over a single TCP connection, and uses gRPC-compatible pseudo-headers — making it interoperable with any gRPC server or client that speaks the wire protocol.
 
-## When to choose HTTP/2
+!!! note "Native only"
+    `rpc_dart_http2` depends on `dart:io` and does not compile to JS or Wasm. For web clients use [WebSocket](websocket.md) or [HTTP/1.1](http.md).
 
-- **Interop with gRPC** – connect RPC Dart services to existing gRPC
-  infrastructure, tooling, and contracts without a protocol translation layer.
-- **High fan-out service calls** – multiplex many concurrent requests over one
-  socket instead of managing a pool of HTTP/1.1 clients.
-- **Service mesh friendly** – HTTP/2 is supported by Envoy, Istio, and most
-  service meshes, so transports can inherit routing, tracing, and TLS policies
-  from the mesh.
+---
 
-## Client setup
+## Installation
 
-Create a caller-side transport with `RpcHttp2CallerTransport.connect` and pass it
-into a `RpcCallerEndpoint`:
-
-```dart
-import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_dart_transports/rpc_dart_transports.dart';
-
-Future<void> main() async {
-  final transport = await RpcHttp2CallerTransport.connect(
-    host: 'localhost',
-    port: 8765,
-    logger: RpcLogger('Http2Client'),
-  );
-
-  final endpoint = RpcCallerEndpoint(
-    transport: transport,
-    debugLabel: 'demo-http2-client',
-  );
-
-  final response = await endpoint.unaryRequest<RpcString, RpcString>(
-    serviceName: 'DemoService',
-    methodName: 'Echo',
-    requestCodec: RpcString.codec,
-    responseCodec: RpcString.codec,
-    request: RpcString('Hello over HTTP/2!'),
-  );
-
-  print('Server replied: ${response.value}');
-
-  await transport.close();
-}
+```yaml
+dependencies:
+  rpc_dart_http2: <latest>
 ```
 
-Use `RpcHttp2CallerTransport.secureConnect` to negotiate TLS and HTTP/2 ALPN in
-one call:
+---
+
+## Server
+
+`RpcHttp2Server` accepts incoming TCP connections, wraps each in `RpcHttp2ResponderTransport`, creates a `RpcResponderEndpoint`, and fires `onEndpointCreated` so you can register contracts.
+
+### Quick setup
 
 ```dart
-final transport = await RpcHttp2CallerTransport.secureConnect(
-  host: 'api.example.com',
-  port: 443,
-  logger: RpcLogger('Http2Client'),
-);
-```
+import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 
-Caller transports expose the standard diagnostics from `IRpcTransport`.
-`transport.health()` returns a `RpcHealthStatus` snapshot and
-`transport.reconnect()` re-establishes the underlying HTTP/2 connection using the
-stored connection factory.
-
-## Running a server
-
-For most services `RpcHttp2Server.createWithContracts` provides the quickest
-setup. It binds a TCP socket, upgrades incoming connections to HTTP/2, and
-creates one `RpcResponderEndpoint` per client connection:
-
-```dart
 final server = RpcHttp2Server.createWithContracts(
-  port: 8765,
   host: '0.0.0.0',
-  logger: RpcLogger('Http2Server'),
-  contracts: [
-    DemoServiceContract(),
-  ],
+  port: 8080,
+  contracts: [CalculatorResponder()],
 );
 
 await server.start();
 
-// ... later during shutdown
+// later
 await server.stop();
 ```
 
-Use the `RpcHttp2Server` constructor directly when you need hooks for lifecycle
-observability. The `onEndpointCreated`, `onConnectionOpened`, and
-`onConnectionClosed` callbacks let you attach metrics, register additional
-contracts, or apply middleware at runtime.
+### Manual setup
 
-### Example responder contract
+Use the default constructor when you need per-connection logic — registering contracts based on auth headers, wrapping transports, etc.:
 
 ```dart
-class DemoServiceContract extends RpcResponderContract {
-  DemoServiceContract() : super('DemoService');
-
-  @override
-  void setup() {
-    addUnaryMethod<RpcString, RpcString>(
-      methodName: 'Echo',
-      handler: _echo,
-      requestCodec: RpcString.codec,
-      responseCodec: RpcString.codec,
-    );
-
-    addServerStreamMethod<RpcString, RpcString>(
-      methodName: 'GetStream',
-      handler: _getStream,
-      requestCodec: RpcString.codec,
-      responseCodec: RpcString.codec,
-    );
-
-    addBidirectionalMethod<RpcString, RpcString>(
-      methodName: 'Chat',
-      handler: _chat,
-      requestCodec: RpcString.codec,
-      responseCodec: RpcString.codec,
-    );
-  }
-
-  Future<RpcString> _echo(RpcString request, {RpcContext? context}) async {
-    return RpcString('echo: ${request.value}');
-  }
-
-  Stream<RpcString> _getStream(
-    RpcString request, {
-    RpcContext? context,
-  }) async* {
-    for (var i = 0; i < 3; i++) {
-      await Future.delayed(const Duration(milliseconds: 200));
-      yield RpcString('${request.value} #$i');
-    }
-  }
-
-  Stream<RpcString> _chat(
-    Stream<RpcString> requests, {
-    RpcContext? context,
-  }) async* {
-    await for (final message in requests) {
-      yield RpcString('received: ${message.value}');
-    }
-  }
-}
-```
-
-## Handling custom listeners and TLS
-
-If you already have a listener (for example behind a reverse proxy, inside a
-service mesh sidecar, or using `SecureServerSocket.bind`) you can instantiate
-`RpcHttp2ResponderTransport` manually:
-
-```dart
-import 'dart:io';
-import 'package:http2/http2.dart' as http2;
-import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_dart_transports/rpc_dart_transports.dart';
-
-Future<void> serveOverTls(SecurityContext context) async {
-  final secureSocket = await SecureServerSocket.bind(
-    '0.0.0.0',
-    8443,
-    context,
-    supportedProtocols: const ['h2'],
-  );
-
-  secureSocket.listen((SecureSocket socket) {
-    final connection = http2.ServerTransportConnection.viaSocket(socket);
-    final transport = RpcHttp2ResponderTransport(
-      connection: connection,
-      logger: RpcLogger('Http2Responder'),
-    );
-
-    final endpoint = RpcResponderEndpoint(transport: transport);
-    endpoint.registerServiceContract(DemoServiceContract());
-    endpoint.start();
-  });
-}
-```
-
-Every responder endpoint created this way still participates in the same
-`IRpcTransport` contract, so middleware, interceptors, and health checks behave
-identically across transports.
-
-## Streaming flows
-
-HTTP/2 transports deliver all four RPC styles. The caller API is the same as
-with in-memory or WebSocket transports:
-
-```dart
-final endpoint = RpcCallerEndpoint(transport: transport);
-
-// Server streaming
-final updates = endpoint.serverStream<RpcString, RpcString>(
-  serviceName: 'DemoService',
-  methodName: 'GetStream',
-  requestCodec: RpcString.codec,
-  responseCodec: RpcString.codec,
-  request: RpcString('stream please'),
+final server = RpcHttp2Server(
+  host: '0.0.0.0',
+  port: 8080,
+  onEndpointCreated: (endpoint) {
+    endpoint.registerServiceContract(CalculatorResponder());
+    endpoint.addInterceptor(OtelRpcInterceptor(tracer: tracer));
+  },
+  onConnectionError: (error, stackTrace) => print('Error: $error'),
+  onConnectionOpened: (socket) => print('Connected: ${socket.remoteAddress}'),
+  onConnectionClosed: (socket) => print('Closed: ${socket.remoteAddress}'),
 );
-await for (final update in updates) {
-  print('update: ${update.value}');
-}
 
-// Bidirectional streaming
-final responses = endpoint.bidirectionalStream<RpcString, RpcString>(
-  serviceName: 'DemoService',
-  methodName: 'Chat',
-  requestCodec: RpcString.codec,
-  responseCodec: RpcString.codec,
-  requests: Stream.periodic(
-    const Duration(milliseconds: 250),
-    (i) => RpcString('message #$i'),
-  ).take(3),
+await server.start();
+```
+
+`transportWrapper` lets you wrap every new transport before the endpoint sees it — useful for encryption overlays:
+
+```dart
+RpcHttp2Server(
+  port: 8080,
+  transportWrapper: (inner, socket) => EncryptedTransport(inner),
+  onEndpointCreated: (endpoint) {
+    endpoint.registerServiceContract(MyResponder());
+  },
 );
-await for (final reply in responses) {
-  print('reply: ${reply.value}');
+```
+
+---
+
+## Client
+
+```dart
+// TLS (production)
+final transport = await RpcHttp2CallerTransport.secureConnect(
+  host: 'api.example.com',
+  port: 443,
+);
+
+// Plain TCP (local dev, internal network)
+final transport = await RpcHttp2CallerTransport.connect(
+  host: 'localhost',
+  port: 8080,
+);
+
+final caller = CalculatorContractCaller(
+  RpcCallerEndpoint(transport: transport),
+);
+
+final result = await caller.sum(SumRequest(values: [1, 2, 3]));
+
+await caller.endpoint.close();
+```
+
+---
+
+## Reconnection
+
+The caller transport stores a connection factory internally and can reconnect after a drop:
+
+```dart
+final status = await transport.reconnect();
+if (status.isHealthy) {
+  print('Reconnected');
 }
 ```
 
-## Diagnostics and resiliency
+Stream ID counters reset on reconnect.
 
-Both caller and responder transports implement `IRpcTransport` so you can:
+---
 
-- Inspect live state with `transport.health()` and feed it into your monitoring
-  pipeline.
-- Call `transport.reconnect()` on the client when the socket is lost. Server
-  transports report that manual reconnect is not supported, which signals the
-  endpoint to close gracefully.
-- Close transports explicitly with `transport.close()` when the endpoint shuts
-  down to release HTTP/2 streams cleanly.
+## Security Policy
 
-Pair these hooks with `RpcEndpoint.health()` and `RpcEndpointPingProtocol` from
-`rpc_dart` to build readiness and liveness checks for your services.
+Both client and server accept `RpcSecurityPolicy` to limit resource usage:
 
-## gRPC interoperability
-
-RPC Dart already encodes requests with gRPC headers and framing, so any gRPC
-client can talk to a responder exposed through `RpcHttp2Server`:
-
-```bash
-grpcurl -plaintext -d '{"a": 10, "b": 5}' \
-  localhost:8765 DemoService/Add
+```dart
+RpcHttp2CallerTransport.secureConnect(
+  host: 'api.example.com',
+  port: 443,
+  policy: RpcSecurityPolicy(
+    maxActiveStreams: 100,
+    maxMessageLengthBytes: 4 * 1024 * 1024,
+  ),
+);
 ```
 
-Likewise, caller transports can target existing gRPC servers as long as the
-service names and method names match the contracts you generate from their
-protobuf definitions.
+---
+
+## gRPC Compatibility
+
+The transport maps RPC method paths to HTTP/2 pseudo-headers in the gRPC format:
+
+```
+:method    = POST
+:path      = /ServiceName/MethodName
+:scheme    = https
+:authority = host
+```
+
+A `rpc_dart` server with HTTP/2 transport can be called from any standard gRPC client (Go, Java, Python, etc.) — and vice versa.
