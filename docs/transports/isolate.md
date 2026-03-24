@@ -108,6 +108,6 @@ final (:transport, :kill) = await RpcIsolateTransport.spawn(
 
 ## Notes
 
-- The isolate transport does **not** support zero-copy — objects are serialized when crossing isolate boundaries (Dart's isolate memory model).
+- The isolate transport supports zero-copy (`supportsZeroCopy == true`) — objects are passed directly via `SendPort` as `directObject` messages without serialization.
 - All four RPC patterns (unary, server-stream, client-stream, bidirectional) are supported.
 - `kill()` is immediate; for a graceful shutdown close the endpoint first, then call `kill()`.

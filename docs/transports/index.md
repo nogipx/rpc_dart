@@ -12,7 +12,7 @@ Every transport implements `IRpcTransport`. Swapping transports requires changin
 | [HTTP/2](http2.md) | `rpc_dart_http2` | native | all patterns | no | gRPC-compatible, production server-to-server |
 | [HTTP/1.1](http.md) | `rpc_dart_http` | all (web/wasm) | **unary only** | no | Web clients, simple REST-like APIs |
 | [WebSocket](websocket.md) | `rpc_dart_websocket` | all (web/wasm) | all patterns | no | Real-time, browser clients |
-| [Isolate](isolate.md) | `rpc_dart_isolate` | IO + web workers | all patterns | no | CPU-bound work in parallel isolates |
+| [Isolate](isolate.md) | `rpc_dart_isolate` | IO + web workers | all patterns | yes | CPU-bound work in parallel isolates |
 
 ---
 
