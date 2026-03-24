@@ -21,6 +21,9 @@ upgrade_rpc_dart_all:
     fi; \
   done
 
+docs:
+  mkdocs serve --strict
+
 upgrade_rpc_dart_generator_all:
   version=$(awk '/^version:/{print $2}' packages/rpc_dart_generator/pubspec.yaml); \
   echo "Updating rpc_dart_generator dependency to ^${version}"; \
