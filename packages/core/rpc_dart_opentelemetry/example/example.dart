@@ -29,10 +29,7 @@ void main() async {
   // -------------------------------------------------------------------------
   // 2. Build the interceptor
   // -------------------------------------------------------------------------
-  final tracer = globalTracerProvider.getTracer(
-    'my-service',
-    version: '1.0.0',
-  );
+  final tracer = globalTracerProvider.getTracer('my-service', version: '1.0.0');
 
   final otelInterceptor = OtelRpcInterceptor(tracer: tracer);
 
@@ -63,4 +60,10 @@ void main() async {
   //   span?.setAttribute(Attribute.fromString('user.id', req.userId));
   //   ...
   // }
+
+  // -------------------------------------------------------------------------
+  // 6. Graceful shutdown — flush and release OTel SDK resources.
+  //    Always call this before process exit so buffered spans are exported.
+  // -------------------------------------------------------------------------
+  tracerProvider.shutdown();
 }

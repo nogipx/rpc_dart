@@ -88,7 +88,7 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     final stopwatch = Stopwatch()..start();
     try {
       final stream = await next(context, request);
-      return stream.transform(_spanStreamTransformer(span, call, stopwatch));
+      return _wrapWithSpan(stream, span, call, stopwatch);
     } catch (e, st) {
       _finishWithError(span, call, stopwatch, e, st);
       rethrow;
@@ -131,7 +131,7 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     final stopwatch = Stopwatch()..start();
     try {
       final stream = await next(context, requests);
-      return stream.transform(_spanStreamTransformer(span, call, stopwatch));
+      return _wrapWithSpan(stream, span, call, stopwatch);
     } catch (e, st) {
       _finishWithError(span, call, stopwatch, e, st);
       rethrow;
@@ -198,29 +198,60 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     span.end();
   }
 
-  /// Wraps a response stream: ends the span after the stream completes or errors.
-  /// Counts messages and records the total as a span attribute on completion.
-  StreamTransformer<T, T> _spanStreamTransformer<T>(
+  /// Wraps a response stream in a span: ends the span when the stream completes,
+  /// errors, or the subscription is cancelled. Counts messages and records the
+  /// total as a span attribute on completion.
+  ///
+  /// Uses [StreamController] with an [onCancel] hook instead of
+  /// [StreamTransformer.fromHandlers] because the latter has no cancel callback,
+  /// which would leave spans open forever when consumers unsubscribe early.
+  Stream<T> _wrapWithSpan<T>(
+    Stream<T> source,
     Span span,
     RpcMiddlewareContext call,
     Stopwatch stopwatch,
   ) {
     var messageCount = 0;
-    return StreamTransformer.fromHandlers(
-      handleData: (data, sink) {
-        messageCount++;
-        sink.add(data);
-      },
-      handleError: (error, stackTrace, sink) {
-        span.setAttribute(Attribute.fromInt('rpc.stream.messages', messageCount));
-        _finishWithError(span, call, stopwatch, error, stackTrace);
-        sink.addError(error, stackTrace);
-      },
-      handleDone: (sink) {
-        span.setAttribute(Attribute.fromInt('rpc.stream.messages', messageCount));
+    var finished = false;
+
+    void finishOnce({required bool isError, Object? error, StackTrace? stackTrace}) {
+      if (finished) return;
+      finished = true;
+      span.setAttribute(Attribute.fromInt('rpc.stream.messages', messageCount));
+      if (isError && error != null) {
+        _finishWithError(span, call, stopwatch, error, stackTrace!);
+      } else {
         _finish(span, call, stopwatch, error: false);
-        sink.close();
+      }
+    }
+
+    late StreamController<T> controller;
+    late StreamSubscription<T> subscription;
+
+    controller = StreamController<T>(
+      onListen: () {
+        subscription = source.listen(
+          (data) {
+            messageCount++;
+            controller.add(data);
+          },
+          onError: (Object error, StackTrace st) {
+            finishOnce(isError: true, error: error, stackTrace: st);
+            controller.addError(error, st);
+          },
+          onDone: () {
+            finishOnce(isError: false);
+            controller.close();
+          },
+          cancelOnError: false,
+        );
+      },
+      onCancel: () {
+        finishOnce(isError: false);
+        return subscription.cancel();
       },
     );
+
+    return controller.stream;
   }
 }
