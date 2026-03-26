@@ -13,9 +13,38 @@ import 'protocol.dart';
 ///
 /// Manages buffering and parse state for fragmented gRPC messages, which may
 /// arrive split across fragments or multiple messages per fragment.
+///
+/// Uses a read-offset to avoid O(N²) buffer copies when multiple gRPC messages
+/// arrive in a single chunk. The buffer grows by appending; the read pointer
+/// advances without copying. One compact() call at the end of each parse pass
+/// drops already-consumed bytes.
 final class _MessageParserState {
-  /// Current accumulated buffer.
+  /// Accumulated byte buffer. May contain already-consumed bytes before [readOffset].
   List<int> buffer = [];
+
+  /// Index of the first unprocessed byte in [buffer].
+  int readOffset = 0;
+
+  /// Number of bytes not yet consumed.
+  int get available => buffer.length - readOffset;
+
+  /// Advances the read pointer by [n] bytes without copying.
+  void advance(int n) => readOffset += n;
+
+  /// Drops consumed bytes from the front. Called once per parser invocation
+  /// instead of slicing on every message — O(remaining) total instead of O(N²).
+  void compact() {
+    if (readOffset > 0) {
+      buffer = buffer.sublist(readOffset);
+      readOffset = 0;
+    }
+  }
+
+  /// Clears all buffered data and resets the read pointer.
+  void clear() {
+    buffer.clear();
+    readOffset = 0;
+  }
 
   /// Expected length of the current message (null until the header is read).
   int? expectedMessageLength;
@@ -23,7 +52,7 @@ final class _MessageParserState {
   /// Compression flag for the message being processed.
   bool isCompressed = false;
 
-  /// Resets state so the next message can be processed.
+  /// Resets per-message state so the next message can be processed.
   void reset() {
     expectedMessageLength = null;
     isCompressed = false;
@@ -81,11 +110,11 @@ final class RpcMessageParser {
   List<Uint8List> _call(Uint8List data) {
     final result = <Uint8List>[];
 
-    // Append data to the buffer.
+    // Append incoming data to the buffer.
     _state.buffer.addAll(data);
-    if (_state.buffer.length > _maxBufferedBytes) {
-      final buffered = _state.buffer.length;
-      _state.buffer.clear();
+    if (_state.available > _maxBufferedBytes) {
+      final buffered = _state.available;
+      _state.clear();
       _state.reset();
       throw RpcException(
         'gRPC frame buffer overflow: $buffered bytes (max: $_maxBufferedBytes)',
@@ -93,13 +122,21 @@ final class RpcMessageParser {
     }
 
     // Process buffer while messages can be extracted.
-    while (_state.buffer.length >= RpcConstants.messagePrefixSize) {
-      // If length is unknown yet, extract it from the header.
+    // Uses readOffset instead of slicing — O(1) per iteration, O(remaining)
+    // compact at the end instead of O(N²) copies in the loop.
+    while (true) {
+      // If length is unknown yet, try to extract it from the header.
       if (_state.expectedMessageLength == null) {
+        // Need at least 5 bytes to read the header.
+        if (_state.available < RpcConstants.messagePrefixSize) break;
+
         try {
           final header = RpcMessageFrame.parseHeader(
             Uint8List.fromList(
-              _state.buffer.sublist(0, RpcConstants.messagePrefixSize),
+              _state.buffer.sublist(
+                _state.readOffset,
+                _state.readOffset + RpcConstants.messagePrefixSize,
+              ),
             ),
           );
           _state.isCompressed = header.isCompressed;
@@ -107,75 +144,75 @@ final class RpcMessageParser {
 
           if (_state.expectedMessageLength! > _maxMessageLength) {
             final length = _state.expectedMessageLength!;
-            _state.buffer.clear();
+            _state.clear();
             _state.reset();
             throw RpcException(
               'gRPC frame payload is too large: $length bytes (max: $_maxMessageLength)',
             );
           }
 
-          // Remove the header from the buffer.
-          _state.buffer = _state.buffer.sublist(
-            RpcConstants.messagePrefixSize,
-          );
+          // Advance past the header — no copy.
+          _state.advance(RpcConstants.messagePrefixSize);
         } catch (e, trace) {
           _logger?.error(
             'Failed to parse frame header: $e',
             error: e,
             stackTrace: trace,
           );
-          _state.buffer.clear();
+          _state.clear();
           _state.reset();
           rethrow;
         }
       }
 
-      // If we have enough data for a complete message.
-      if (_state.buffer.length >= _state.expectedMessageLength!) {
-        // Extract the message.
-        final messageBytes = _state.buffer.sublist(
-          0,
-          _state.expectedMessageLength!,
-        );
-        var payload = Uint8List.fromList(messageBytes);
-        if (_state.isCompressed) {
-          final decompressor = _decompressor;
-          if (decompressor == null) {
-            // No decompressor at this layer: reconstruct the complete gRPC
-            // frame (with compression bit set) and pass it through so the
-            // application layer can decompress it.
-            payload = RpcMessageFrame.encode(payload, compressed: true);
-          } else {
-            payload = decompressor(payload);
-            if (payload.length > _maxMessageLength) {
-              final length = payload.length;
-              _state.buffer.clear();
-              _state.reset();
-              throw RpcException(
-                'Decompressed gRPC payload is too large: $length bytes (max: $_maxMessageLength)',
-              );
-            }
+      // Need the full body before we can emit the message.
+      if (_state.available < _state.expectedMessageLength!) break;
+
+      // Extract the message body — one copy of exactly the payload bytes.
+      var payload = Uint8List.fromList(
+        _state.buffer.sublist(
+          _state.readOffset,
+          _state.readOffset + _state.expectedMessageLength!,
+        ),
+      );
+      if (_state.isCompressed) {
+        final decompressor = _decompressor;
+        if (decompressor == null) {
+          // No decompressor at this layer: reconstruct the complete gRPC
+          // frame (with compression bit set) and pass it through so the
+          // application layer can decompress it.
+          payload = RpcMessageFrame.encode(payload, compressed: true);
+        } else {
+          payload = decompressor(payload);
+          if (payload.length > _maxMessageLength) {
+            final length = payload.length;
+            _state.clear();
+            _state.reset();
+            throw RpcException(
+              'Decompressed gRPC payload is too large: $length bytes (max: $_maxMessageLength)',
+            );
           }
         }
-        result.add(payload);
-        if (result.length > _maxMessagesPerChunk) {
-          _state.buffer.clear();
-          _state.reset();
-          throw RpcException(
-            'Too many gRPC messages in a single chunk: ${result.length} (max: $_maxMessagesPerChunk)',
-          );
-        }
-
-        // Drop processed bytes from the buffer.
-        _state.buffer = _state.buffer.sublist(_state.expectedMessageLength!);
-
-        // Reset for the next message.
-        _state.reset();
-      } else {
-        // Not enough data yet; wait for the next chunk.
-        break;
       }
+      result.add(payload);
+      if (result.length > _maxMessagesPerChunk) {
+        _state.clear();
+        _state.reset();
+        throw RpcException(
+          'Too many gRPC messages in a single chunk: ${result.length} (max: $_maxMessagesPerChunk)',
+        );
+      }
+
+      // Advance past the body — no copy.
+      _state.advance(_state.expectedMessageLength!);
+
+      // Reset for the next message.
+      _state.reset();
     }
+
+    // Single compact at the end: drop all consumed bytes in one O(remaining) copy
+    // instead of O(N) copies of shrinking buffer inside the loop above.
+    _state.compact();
 
     _logger?.internal(
       'Chunk processed, messages extracted: ${result.length}',
