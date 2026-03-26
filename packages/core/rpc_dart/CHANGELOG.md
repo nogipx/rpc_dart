@@ -1,3 +1,8 @@
+## 2.6.2
+
+- `RpcMessageParser`: replaced per-message buffer slicing with a read-offset approach — `advance()` moves a pointer in O(1) and a single `compact()` at the end of each parse pass drops consumed bytes in O(remaining), eliminating the previous O(N²) copy behaviour when multiple gRPC frames arrive in a single chunk (relevant for HTTP/2 and WebSocket transports).
+- `RpcMessageParser`: fixed a latent bug where the loop condition `buffer.length >= 5` prevented re-entry after a 5-byte header arrived without a body shorter than 5 bytes, causing such messages to stall in the buffer indefinitely.
+
 ## 2.6.1
 
 - `IRpcServer`: removed `host` and `port` from the interface — these are transport-level concerns, not RPC server concerns.
