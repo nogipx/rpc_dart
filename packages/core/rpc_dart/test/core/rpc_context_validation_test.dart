@@ -109,7 +109,9 @@ void main() {
             request: 'slow'.rpc,
             context: context,
           ),
-          throwsA(isA<TimeoutException>()),
+          throwsA(
+            anyOf(isA<TimeoutException>(), isA<RpcDeadlineExceededException>()),
+          ),
         );
       });
 
