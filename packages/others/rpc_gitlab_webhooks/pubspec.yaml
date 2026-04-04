@@ -1,0 +1,23 @@
+name: rpc_gitlab_webhooks
+description: GitLab webhook bridge — receives HTTP webhooks from GitLab and exposes them as RPC streams over WebSocket.
+version: 0.1.0
+publish_to: none
+
+executables:
+  gitlab-webhook-server: server
+
+environment:
+  sdk: ^3.10.1
+
+dependencies:
+  rpc_dart: ^2.6.2
+  rpc_dart_websocket:
+    git:
+      url: https://github.com/nogipx/rpc_dart
+      path: packages/transport/rpc_dart_websocket
+      ref: 4c83d405819c692dbdc181acc0cbafc6f046b99d
+  web_socket_channel: ^3.0.3
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6
