@@ -106,7 +106,7 @@ class RpcWebSocketServer implements IRpcServer {
     _logger?.info('Stopping WebSocket server');
     _isRunning = false;
 
-    for (final endpoint in _endpoints) {
+    for (final endpoint in List.of(_endpoints)) {
       try {
         await endpoint.close();
       } catch (e) {
