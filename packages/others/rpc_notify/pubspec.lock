@@ -317,10 +317,10 @@ packages:
     dependency: "direct main"
     description:
       name: rpc_dart
-      sha256: "780b04fb1623cf5fc9f6ef21ee6079cd7a5ff179ee1ce422d7e521e65cb3afd0"
+      sha256: b00c22bc95dcedd0bb1637ad1a741bd7cd9d2507fd43cd0b6aa15140fa726bfc
       url: "https://pub.dev"
     source: hosted
-    version: "2.6.1"
+    version: "2.6.2"
   rpc_dart_generator:
     dependency: "direct dev"
     description:

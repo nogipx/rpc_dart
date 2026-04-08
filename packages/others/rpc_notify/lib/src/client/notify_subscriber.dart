@@ -17,10 +17,18 @@ import 'i_notify_subscriber.dart';
 /// topic.  Multiple topics are supported: each topic gets its own stream.
 class NotifySubscriber implements INotifySubscriber {
   NotifySubscriber(this._endpoint, this._caller)
-      : _log = RpcLogger('NotifySubscriber');
+    : _log = RpcLogger('NotifySubscriber');
 
   factory NotifySubscriber.endpoint(RpcCallerEndpoint endpoint) =>
-      NotifySubscriber(endpoint, NotifySubscribeContractCaller(endpoint));
+      NotifySubscriber(
+        endpoint,
+        NotifySubscribeContractCaller(
+          endpoint,
+          dataTransferMode: endpoint.transport is RpcInMemoryTransport
+              ? RpcDataTransferMode.zeroCopy
+              : RpcDataTransferMode.auto,
+        ),
+      );
 
   final RpcCallerEndpoint _endpoint;
   final NotifySubscribeContractCaller _caller;

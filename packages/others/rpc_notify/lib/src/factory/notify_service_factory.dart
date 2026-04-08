@@ -8,8 +8,6 @@ import '../client/i_notify_publisher.dart';
 import '../client/i_notify_subscriber.dart';
 import '../client/notify_publisher.dart';
 import '../client/notify_subscriber.dart';
-import '../contract/notify_contract.dart';
-import '../contract/notify_publish_contract.dart';
 import '../repository/i_notify_repository.dart';
 import '../repository/in_memory_notify_repository.dart';
 import '../server/notify_service_server.dart';
@@ -37,9 +35,15 @@ class NotifyServiceFactory {
       ),
       subscribeResponder: NotifySubscribeResponder(
         subscriber: INotifySubscriber.repository(repo),
+        dataTransferMode: transport is RpcInMemoryTransport
+            ? RpcDataTransferMode.zeroCopy
+            : RpcDataTransferMode.auto,
       ),
       publishResponder: NotifyPublishResponder(
         publisher: INotifyPublisher.repository(repo),
+        dataTransferMode: transport is RpcInMemoryTransport
+            ? RpcDataTransferMode.zeroCopy
+            : RpcDataTransferMode.auto,
       ),
     );
   }
@@ -53,7 +57,7 @@ class NotifyServiceFactory {
       transport: transport,
       debugLabel: debugLabel,
     );
-    return NotifySubscriber(endpoint, NotifySubscribeContractCaller(endpoint));
+    return NotifySubscriber.endpoint(endpoint);
   }
 
   /// Create a [NotifyPublisher] backed by [transport].
@@ -68,7 +72,7 @@ class NotifyServiceFactory {
       transport: transport,
       debugLabel: debugLabel,
     );
-    return NotifyPublisher(endpoint, NotifyPublishContractCaller(endpoint));
+    return NotifyPublisher.endpoint(endpoint);
   }
 
   /// Full in-memory environment: one transport pair + server + both clients.
@@ -96,14 +100,8 @@ class NotifyServiceFactory {
       debugLabel: subscriberLabel,
     );
 
-    final subscriber = NotifySubscriber(
-      callerEndpoint,
-      NotifySubscribeContractCaller(callerEndpoint),
-    );
-    final publisher = NotifyPublisher(
-      callerEndpoint,
-      NotifyPublishContractCaller(callerEndpoint),
-    );
+    final subscriber = NotifySubscriber.endpoint(callerEndpoint);
+    final publisher = NotifyPublisher.endpoint(callerEndpoint);
 
     return InMemoryNotifyServiceEnvironment(
       server: server,
@@ -114,6 +112,25 @@ class NotifyServiceFactory {
       responderTransport: responderTransport,
     );
   }
+}
+
+/// Truly zero-copy in-process environment.
+///
+/// Publisher and subscriber talk directly to [InMemoryNotifyRepository]
+/// — no RPC transport, no serialization, no dart2js type-erasure issues.
+/// Use this when publish/subscribe both live in the same Dart isolate and
+/// payloads may contain non-serializable objects.
+class DirectNotifyServiceEnvironment {
+  DirectNotifyServiceEnvironment() : _repo = InMemoryNotifyRepository() {
+    publisher = INotifyPublisher.repository(_repo);
+    subscriber = INotifySubscriber.repository(_repo);
+  }
+
+  final InMemoryNotifyRepository _repo;
+  late final INotifyPublisher publisher;
+  late final INotifySubscriber subscriber;
+
+  Future<void> dispose() => _repo.dispose();
 }
 
 /// Result of [NotifyServiceFactory.inMemory].

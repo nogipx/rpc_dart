@@ -17,6 +17,17 @@ class NotifyPublisher {
   final RpcCallerEndpoint _endpoint;
   final NotifyPublishContractCaller _caller;
 
+  factory NotifyPublisher.endpoint(RpcCallerEndpoint endpoint) =>
+      NotifyPublisher(
+        endpoint,
+        NotifyPublishContractCaller(
+          endpoint,
+          dataTransferMode: endpoint.transport is RpcInMemoryTransport
+              ? RpcDataTransferMode.zeroCopy
+              : RpcDataTransferMode.auto,
+        ),
+      );
+
   /// Broadcast [payload] to all subscribers of [topic].
   Future<void> publish({
     required String topic,
@@ -37,7 +48,11 @@ class NotifyPublisher {
     RpcContext? context,
   }) async {
     await _caller.publishTo(
-      NotifyPublishToRequest(clientId: clientId, topic: topic, payload: payload),
+      NotifyPublishToRequest(
+        clientId: clientId,
+        topic: topic,
+        payload: payload,
+      ),
       context: context,
     );
   }

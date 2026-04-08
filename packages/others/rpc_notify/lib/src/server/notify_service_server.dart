@@ -18,9 +18,12 @@ import '../models/notify_subscribe_request.dart';
 
 /// Handles subscribe RPC calls — opens a server-stream per topic.
 class NotifySubscribeResponder extends NotifySubscribeContractResponder {
-  NotifySubscribeResponder({required INotifySubscriber subscriber, RpcLogger? logger})
-      : _subscriber = subscriber,
-        _log = logger ?? RpcLogger('NotifySubscribeResponder');
+  NotifySubscribeResponder({
+    required INotifySubscriber subscriber,
+    RpcLogger? logger,
+    super.dataTransferMode,
+  }) : _subscriber = subscriber,
+       _log = logger ?? RpcLogger('NotifySubscribeResponder');
 
   final INotifySubscriber _subscriber;
   final RpcLogger _log;
@@ -53,9 +56,12 @@ class NotifySubscribeResponder extends NotifySubscribeContractResponder {
 /// lets the server apply independent authorisation (e.g. only back-end
 /// services may call publish, while any client may subscribe).
 class NotifyPublishResponder extends NotifyPublishContractResponder {
-  NotifyPublishResponder({required INotifyPublisher publisher, RpcLogger? logger})
-      : _publisher = publisher,
-        _log = logger ?? RpcLogger('NotifyPublishResponder');
+  NotifyPublishResponder({
+    required INotifyPublisher publisher,
+    RpcLogger? logger,
+    super.dataTransferMode,
+  }) : _publisher = publisher,
+       _log = logger ?? RpcLogger('NotifyPublishResponder');
 
   final INotifyPublisher _publisher;
   final RpcLogger _log;
@@ -93,19 +99,16 @@ class NotifyServiceServer {
     required RpcResponderEndpoint endpoint,
     required NotifySubscribeResponder subscribeResponder,
     required NotifyPublishResponder publishResponder,
-  })  : _endpoint = endpoint,
-        _subscribeResponder = subscribeResponder,
-        _publishResponder = publishResponder;
+  }) : _endpoint = endpoint,
+       _subscribeResponder = subscribeResponder,
+       _publishResponder = publishResponder;
 
   final RpcResponderEndpoint _endpoint;
   final NotifySubscribeResponder _subscribeResponder;
   final NotifyPublishResponder _publishResponder;
 
   /// Publish directly (server-side, no RPC round-trip).
-  void publish({
-    required String topic,
-    required Map<String, dynamic> payload,
-  }) {
+  void publish({required String topic, required Map<String, dynamic> payload}) {
     _publishResponder.publisher.publish(topic, payload);
   }
 
