@@ -116,4 +116,13 @@ abstract interface class IBlobServiceContract implements IRpcContract {
     Stream<BlobUploadChunk> request, {
     RpcContext? context,
   });
+
+  @RpcMethod.unary(
+    name: 'collectionSize',
+    description: 'Return total size in bytes of all blobs in a collection',
+  )
+  Future<CollectionSizeResponse> collectionSize(
+    CollectionSizeRequest request, {
+    RpcContext? context,
+  });
 }

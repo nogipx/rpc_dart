@@ -288,6 +288,15 @@ class BlobServiceClient implements IBlobClient {
   );
 
   @override
+  Future<int> collectionSize(String collection, {RpcContext? context}) =>
+      _caller
+          .collectionSize(
+            CollectionSizeRequest(collection: collection),
+            context: context,
+          )
+          .then((r) => r.sizeBytes);
+
+  @override
   Future<void> close() => _endpoint.close();
 
   @override
@@ -528,6 +537,10 @@ abstract interface class IBlobClient {
     List<BulkPutBlobItem> items, {
     RpcContext? context,
   });
+
+  /// Returns the total size in bytes of all blobs in the collection.
+  /// Returns 0 if the collection does not exist.
+  Future<int> collectionSize(String collection, {RpcContext? context});
 
   Future<void> close();
 }

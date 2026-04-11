@@ -34,6 +34,10 @@ abstract interface class IBlobRepository {
   /// Returns true if the collection existed and was removed.
   Future<bool> deleteCollection(String collection);
 
+  /// Returns the total size in bytes of all blobs in the collection.
+  /// Returns 0 if the collection does not exist.
+  Future<int> collectionSize(String collection);
+
   Future<void> dispose();
 }
 

@@ -330,6 +330,14 @@ class InMemoryBlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<int> collectionSize(String collection) async {
+    _ensureOpen();
+    final entries = _storage[collection];
+    if (entries == null) return 0;
+    return entries.values.fold<int>(0, (sum, e) => sum + e.descriptor.length);
+  }
+
+  @override
   Future<void> dispose() async {
     if (_closed) return;
     _closed = true;

@@ -507,6 +507,19 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   }
 
   @override
+  Future<int> collectionSize(String collection) async {
+    _ensureOpen();
+    final table = _tableForCollection(collection, createIfMissing: false);
+    if (table == null) return 0;
+    final rows = _database.select(
+      'SELECT COALESCE(SUM(length), 0) AS total '
+      'FROM ${_quoteIdentifier(table)} '
+      'WHERE deleted_at IS NULL',
+    );
+    return rows.first['total'] as int? ?? 0;
+  }
+
+  @override
   Future<void> dispose() async {
     if (_closed) return;
     _closed = true;

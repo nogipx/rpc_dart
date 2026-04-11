@@ -265,6 +265,12 @@ class BlobRepositoryClient implements IBlobClient {
   }
 
   @override
+  Future<int> collectionSize(String collection, {RpcContext? context}) {
+    _ensureContext(context);
+    return _repository.collectionSize(collection);
+  }
+
+  @override
   Future<BulkHeadBlobResponse> bulkHeadBlob(
     BulkHeadBlobRequest request, {
     RpcContext? context,

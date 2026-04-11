@@ -206,6 +206,15 @@ class BlobServiceResponder extends BlobServiceContractResponder {
   }
 
   @override
+  Future<CollectionSizeResponse> collectionSize(
+    CollectionSizeRequest request, {
+    RpcContext? context,
+  }) async {
+    final size = await _storage.collectionSize(request.collection);
+    return CollectionSizeResponse(sizeBytes: size);
+  }
+
+  @override
   Future<BulkHeadBlobResponse> bulkHeadBlob(
     BulkHeadBlobRequest request, {
     RpcContext? context,

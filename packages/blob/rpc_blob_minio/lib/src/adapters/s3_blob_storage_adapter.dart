@@ -315,6 +315,22 @@ class S3BlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<int> collectionSize(String collection) async {
+    var total = 0;
+    final prefix = _normalizePrefix('$_prefix$collection');
+    await for (final chunk in _client.listObjects(
+      bucket,
+      prefix: prefix,
+      recursive: true,
+    )) {
+      for (final object in chunk.objects) {
+        total += object.size ?? 0;
+      }
+    }
+    return total;
+  }
+
+  @override
   Future<void> dispose() async {
     // Minio client has no explicit close.
   }

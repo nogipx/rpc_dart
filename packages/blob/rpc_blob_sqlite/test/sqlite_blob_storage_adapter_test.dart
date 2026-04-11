@@ -250,6 +250,73 @@ void main() {
     final collections = await adapter.listCollections();
     expect(collections, containsAll(<String>['a', 'b']));
   });
+
+  group('collectionSize', () {
+    test('returns 0 for non-existent collection', () async {
+      final size = await adapter.collectionSize('no_such_collection');
+      expect(size, 0);
+    });
+
+    test('sums sizes of all blobs in collection', () async {
+      final data1 = Uint8List.fromList([1, 2, 3]);      // 3 bytes
+      final data2 = Uint8List.fromList([4, 5, 6, 7]);   // 4 bytes
+      await adapter.writeBlob(
+        BlobWriteRequest(collection: 'docs', id: 'a', bytes: Stream.value(data1)),
+      );
+      await adapter.writeBlob(
+        BlobWriteRequest(collection: 'docs', id: 'b', bytes: Stream.value(data2)),
+      );
+
+      final size = await adapter.collectionSize('docs');
+      expect(size, 7);
+    });
+
+    test('does not include blobs from other collections', () async {
+      final data = Uint8List.fromList([1, 2, 3]);
+      await adapter.writeBlob(
+        BlobWriteRequest(collection: 'a', id: '1', bytes: Stream.value(data)),
+      );
+      await adapter.writeBlob(
+        BlobWriteRequest(
+          collection: 'b',
+          id: '1',
+          bytes: Stream.value(Uint8List(100)),
+        ),
+      );
+
+      final size = await adapter.collectionSize('a');
+      expect(size, data.length);
+    });
+
+    test('returns 0 after deleteCollection', () async {
+      final data = Uint8List.fromList([1, 2, 3]);
+      await adapter.writeBlob(
+        BlobWriteRequest(collection: 'tmp', id: '1', bytes: Stream.value(data)),
+      );
+      await adapter.deleteCollection('tmp');
+
+      final size = await adapter.collectionSize('tmp');
+      expect(size, 0);
+    });
+
+    test('soft-deleted blobs are excluded', () async {
+      final data = Uint8List.fromList([1, 2, 3, 4, 5]);
+      await adapter.writeBlob(
+        BlobWriteRequest(collection: 'col', id: '1', bytes: Stream.value(data)),
+      );
+      await adapter.writeBlob(
+        BlobWriteRequest(
+          collection: 'col',
+          id: '2',
+          bytes: Stream.value(Uint8List(10)),
+        ),
+      );
+      await adapter.deleteBlob('col', '2');
+
+      final size = await adapter.collectionSize('col');
+      expect(size, data.length);
+    });
+  });
 }
 
 Future<Uint8List> _collect(Stream<Uint8List> bytes) async {

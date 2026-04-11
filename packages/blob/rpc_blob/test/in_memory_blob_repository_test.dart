@@ -285,6 +285,51 @@ void main() {
       expect(collections, isNot(contains('temp')));
     });
 
+    group('collectionSize', () {
+      test('returns 0 for non-existent collection', () async {
+        final size = await repository.collectionSize('no_such_collection');
+        expect(size, 0);
+      });
+
+      test('sums sizes of all blobs in collection', () async {
+        final data1 = Uint8List.fromList(utf8.encode('Hello'));   // 5 bytes
+        final data2 = Uint8List.fromList(utf8.encode('World!!'));  // 7 bytes
+        await repository.writeBlob(
+          BlobWriteRequest(collection: 'docs', id: 'a', bytes: Stream.value(data1)),
+        );
+        await repository.writeBlob(
+          BlobWriteRequest(collection: 'docs', id: 'b', bytes: Stream.value(data2)),
+        );
+
+        final size = await repository.collectionSize('docs');
+        expect(size, data1.length + data2.length);
+      });
+
+      test('does not include blobs from other collections', () async {
+        final data = Uint8List.fromList(utf8.encode('test'));
+        await repository.writeBlob(
+          BlobWriteRequest(collection: 'a', id: '1', bytes: Stream.value(data)),
+        );
+        await repository.writeBlob(
+          BlobWriteRequest(collection: 'b', id: '1', bytes: Stream.value(Uint8List(100))),
+        );
+
+        final size = await repository.collectionSize('a');
+        expect(size, data.length);
+      });
+
+      test('returns 0 after deleteCollection', () async {
+        final data = Uint8List.fromList(utf8.encode('gone'));
+        await repository.writeBlob(
+          BlobWriteRequest(collection: 'tmp', id: '1', bytes: Stream.value(data)),
+        );
+        await repository.deleteCollection('tmp');
+
+        final size = await repository.collectionSize('tmp');
+        expect(size, 0);
+      });
+    });
+
     test('maxBlobBytes limit', () async {
       final smallRepo = InMemoryBlobRepository(maxBlobBytes: 10);
       final data = Uint8List(100);
