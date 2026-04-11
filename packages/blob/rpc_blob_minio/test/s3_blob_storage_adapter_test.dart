@@ -7,10 +7,9 @@ import 'package:test/test.dart';
 /// Requires existing bucket `blobs` with accessKey=minio / secretKey=minio123.
 void main() {
   const endPoint = 'localhost';
-  const bucket = 'test';
   const accessKey = 'minioadmin';
   const secretKey = 'minioadmin';
-  const port = 9001;
+  const port = 9000;
   const useSSL = false;
   const pathStyle = true;
 
@@ -19,7 +18,6 @@ void main() {
 
     setUp(() {
       storage = S3BlobRepository.connect(
-        bucket: bucket,
         endPoint: endPoint,
         port: port,
         accessKey: accessKey,

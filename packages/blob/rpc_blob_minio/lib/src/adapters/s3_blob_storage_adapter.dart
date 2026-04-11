@@ -16,7 +16,7 @@ const int kDefaultPresignTtlSeconds = 3600;
 
 class S3BlobStorageOptions {
   const S3BlobStorageOptions({
-    this.prefix,
+    this.bucketPrefix,
     this.clock,
     this.presignTtlSeconds,
     this.presignEndpoint,
@@ -26,8 +26,9 @@ class S3BlobStorageOptions {
     this.presignRegion = 'us-east-1',
   });
 
-  /// Optional key prefix for all objects (e.g., "env/app/").
-  final String? prefix;
+  /// Optional prefix applied to all bucket names (e.g., "myapp-" makes
+  /// collection "photos" map to bucket "myapp-photos").
+  final String? bucketPrefix;
 
   /// Override the clock used for timestamps (primarily for tests).
   final S3Clock? clock;
@@ -54,17 +55,19 @@ class S3BlobStorageOptions {
 
 /// S3-compatible adapter (works with AWS S3, MinIO, Ceph, etc).
 ///
-/// Stores blobs as individual objects under `<prefix><collection>/<id>`.
-/// Uses custom metadata to persist version/createdAt/updatedAt. Optimistic
-/// concurrency is best-effort (checks current version before upload).
+/// Each collection maps to its own S3 bucket. The bucket is created
+/// automatically on first write, mirroring the SQLite adapter's behaviour
+/// of creating a table on demand.
+///
+/// Bucket name = [S3BlobStorageOptions.bucketPrefix] + normalised collection
+/// name (lowercase alphanumeric + hyphens, 3–63 chars).
 class S3BlobRepository implements IBlobRepository {
   S3BlobRepository({
     required Minio client,
-    required this.bucket,
     S3BlobStorageOptions options = const S3BlobStorageOptions(),
   }) : _client = client,
        _presignClient = _buildPresignClient(client, options),
-       _prefix = _normalizePrefix(options.prefix),
+       _bucketPrefix = _normalizeBucketPrefix(options.bucketPrefix),
        _clock = options.clock ?? DateTime.now,
        _presignTtlSeconds =
            options.presignTtlSeconds ?? kDefaultPresignTtlSeconds {
@@ -73,7 +76,6 @@ class S3BlobRepository implements IBlobRepository {
 
   /// Convenience factory to create a MinIO/S3 client.
   factory S3BlobRepository.connect({
-    required String bucket,
     String endPoint = 'localhost',
     int? port,
     required String accessKey,
@@ -92,37 +94,34 @@ class S3BlobRepository implements IBlobRepository {
       useSSL: useSSL,
       pathStyle: pathStyle,
     );
-    return S3BlobRepository(client: client, bucket: bucket, options: options);
+    return S3BlobRepository(client: client, options: options);
   }
 
   final Minio _client;
   final Minio _presignClient;
-  final String bucket;
-  final String _prefix;
+  final String _bucketPrefix;
   final S3Clock _clock;
   final int _presignTtlSeconds;
+
   minio_internal.MinioClient? _rawClient;
   minio_internal.MinioClient? _presignRawClient;
-  bool? _bucketPublic;
 
   static const _metaVersion = 'rpc-version';
   static const _metaCreatedAt = 'rpc-created-at';
   static const _metaUpdatedAt = 'rpc-updated-at';
 
+  // ---------------------------------------------------------------------------
+  // IBlobRepository
+  // ---------------------------------------------------------------------------
+
   @override
   Future<BlobDescriptor?> headBlob(String collection, String id) async {
-    final key = _objectKey(collection, id);
+    final bucketName = _bucketForCollection(collection);
     try {
-      final stat = await _client.statObject(bucket, key);
-      final tags = await _getObjectTags(key);
-      final url = await _downloadUrl(key);
-      return _descriptorFromStat(
-        collection,
-        id,
-        stat,
-        downloadUrl: url,
-        tags: tags,
-      );
+      final stat = await _client.statObject(bucketName, id);
+      final tags = await _getObjectTags(bucketName, id);
+      final url = await _downloadUrl(bucketName, id);
+      return _descriptorFromStat(collection, id, stat, downloadUrl: url, tags: tags);
     } on MinioError catch (e) {
       if (_isNotFound(e)) return null;
       rethrow;
@@ -131,7 +130,7 @@ class S3BlobRepository implements IBlobRepository {
 
   @override
   Future<BlobReadResult?> readBlob(BlobReadRequest request) async {
-    final key = _objectKey(request.collection, request.id);
+    final bucketName = _bucketForCollection(request.collection);
     final stat = await headBlob(request.collection, request.id);
     if (stat == null) return null;
 
@@ -142,7 +141,7 @@ class S3BlobRepository implements IBlobRepository {
       length = request.rangeEnd! - offset;
     }
 
-    final stream = await _client.getPartialObject(bucket, key, offset, length);
+    final stream = await _client.getPartialObject(bucketName, request.id, offset, length);
 
     return BlobReadResult(
       descriptor: stat,
@@ -155,6 +154,9 @@ class S3BlobRepository implements IBlobRepository {
   @override
   Future<BlobWriteResult> writeBlob(BlobWriteRequest request) async {
     final id = request.id ?? _generateId();
+    final bucketName = _bucketForCollection(request.collection);
+    await _ensureBucket(bucketName);
+
     final existing = await headBlob(request.collection, id);
     if (existing == null && request.expectedVersion != null) {
       throw StateError(
@@ -170,16 +172,9 @@ class S3BlobRepository implements IBlobRepository {
       );
     }
 
-    final collected = await _collectBytes(
-      request.bytes,
-      declaredLength: request.length,
-    );
+    final collected = await _collectBytes(request.bytes, declaredLength: request.length);
     if (request.checksum != null) {
-      _verifyChecksum(
-        collected,
-        request.checksum!,
-        algorithm: request.checksumAlgorithm,
-      );
+      _verifyChecksum(collected, request.checksum!, algorithm: request.checksumAlgorithm);
     }
 
     final now = _clock().toUtc();
@@ -193,10 +188,9 @@ class S3BlobRepository implements IBlobRepository {
       if (request.metadata.isNotEmpty) ...request.metadata,
     };
 
-    final key = _objectKey(request.collection, id);
     await _client.putObject(
-      bucket,
-      key,
+      bucketName,
+      id,
       Stream.value(collected),
       size: collected.length,
       metadata: metadata,
@@ -213,17 +207,13 @@ class S3BlobRepository implements IBlobRepository {
         contentType: request.contentType,
         checksum: _etagLikeChecksum(collected),
         metadata: request.metadata,
-        downloadUrl: await _downloadUrl(key),
+        downloadUrl: await _downloadUrl(bucketName, id),
       ),
     );
   }
 
   @override
-  Future<bool> deleteBlob(
-    String collection,
-    String id, {
-    int? expectedVersion,
-  }) async {
+  Future<bool> deleteBlob(String collection, String id, {int? expectedVersion}) async {
     final existing = await headBlob(collection, id);
     if (existing == null) return false;
     if (expectedVersion != null && existing.version != expectedVersion) {
@@ -231,32 +221,28 @@ class S3BlobRepository implements IBlobRepository {
         'Version mismatch for $id: expected $expectedVersion, actual ${existing.version}.',
       );
     }
-    final key = _objectKey(collection, id);
-    await _client.removeObject(bucket, key);
+    final bucketName = _bucketForCollection(collection);
+    await _client.removeObject(bucketName, id);
     return true;
   }
 
   @override
   Future<ListBlobsResponse> listBlobs(ListBlobsRequest request) async {
-    final prefix = '$_prefix${request.collection}/';
+    final bucketName = _bucketForCollection(request.collection);
+    final exists = await _bucketExists(bucketName);
+    if (!exists) return const ListBlobsResponse(items: []);
+
     final cursor = request.cursor == null || request.cursor!.isEmpty
         ? null
         : utf8.decode(base64Url.decode(request.cursor!));
     final items = <BlobDescriptor>[];
     String? nextCursor;
-    await for (final chunk in _client.listObjects(
-      bucket,
-      prefix: prefix,
-      recursive: true,
-    )) {
+
+    await for (final chunk in _client.listObjects(bucketName, recursive: true)) {
       for (final object in chunk.objects) {
-        final objKey = object.key ?? '';
-        if (objKey.isEmpty) continue;
-        if (cursor != null && objKey.compareTo(cursor) <= 0) {
-          continue;
-        }
-        if (!objKey.startsWith(prefix)) continue;
-        final id = objKey.substring(prefix.length);
+        final id = object.key ?? '';
+        if (id.isEmpty) continue;
+        if (cursor != null && id.compareTo(cursor) <= 0) continue;
         if (request.prefix != null &&
             request.prefix!.isNotEmpty &&
             !id.startsWith(request.prefix!)) {
@@ -266,7 +252,7 @@ class S3BlobRepository implements IBlobRepository {
         if (head == null) continue;
         items.add(head);
         if (items.length == request.limit) {
-          nextCursor = base64Url.encode(utf8.encode(objKey));
+          nextCursor = base64Url.encode(utf8.encode(id));
           break;
         }
       }
@@ -277,52 +263,43 @@ class S3BlobRepository implements IBlobRepository {
 
   @override
   Future<List<String>> listCollections() async {
-    final collections = <String>{};
-    await for (final chunk in _client.listObjects(
-      bucket,
-      prefix: _prefix,
-      recursive: true,
-    )) {
-      for (final object in chunk.objects) {
-        final key = object.key ?? '';
-        if (!key.startsWith(_prefix)) continue;
-        final remainder = key.substring(_prefix.length);
-        final slashIndex = remainder.indexOf('/');
-        if (slashIndex <= 0) continue;
-        collections.add(remainder.substring(0, slashIndex));
-      }
+    final buckets = await _client.listBuckets();
+    final collections = <String>[];
+    for (final bucket in buckets) {
+      final name = bucket.name;
+      if (name.isEmpty) continue;
+      if (_bucketPrefix.isNotEmpty && !name.startsWith(_bucketPrefix)) continue;
+      collections.add(name.substring(_bucketPrefix.length));
     }
-    return collections.toList()..sort();
+    return collections..sort();
   }
 
   @override
   Future<bool> deleteCollection(String collection) async {
-    var deleted = false;
-    final prefix = _normalizePrefix('$_prefix$collection');
-    await for (final chunk in _client.listObjects(
-      bucket,
-      prefix: prefix,
-      recursive: true,
-    )) {
+    final bucketName = _bucketForCollection(collection);
+    final exists = await _bucketExists(bucketName);
+    if (!exists) return false;
+
+    // Remove all objects first (S3 requires empty bucket before deletion).
+    await for (final chunk in _client.listObjects(bucketName, recursive: true)) {
       for (final object in chunk.objects) {
         final key = object.key;
         if (key == null) continue;
-        await _client.removeObject(bucket, key);
-        deleted = true;
+        await _client.removeObject(bucketName, key);
       }
     }
-    return deleted;
+    await _client.removeBucket(bucketName);
+    return true;
   }
 
   @override
   Future<int> collectionSize(String collection) async {
+    final bucketName = _bucketForCollection(collection);
+    final exists = await _bucketExists(bucketName);
+    if (!exists) return 0;
+
     var total = 0;
-    final prefix = _normalizePrefix('$_prefix$collection');
-    await for (final chunk in _client.listObjects(
-      bucket,
-      prefix: prefix,
-      recursive: true,
-    )) {
+    await for (final chunk in _client.listObjects(bucketName, recursive: true)) {
       for (final object in chunk.objects) {
         total += object.size ?? 0;
       }
@@ -335,6 +312,29 @@ class S3BlobRepository implements IBlobRepository {
     // Minio client has no explicit close.
   }
 
+  // ---------------------------------------------------------------------------
+  // Bucket helpers
+  // ---------------------------------------------------------------------------
+
+  /// Returns the bucket name for a given collection.
+  String _bucketForCollection(String collection) {
+    return '$_bucketPrefix${_normalizeBucketName(collection)}';
+  }
+
+  /// Ensures the bucket exists, creating it if necessary.
+  Future<void> _ensureBucket(String bucketName) async {
+    final exists = await _client.bucketExists(bucketName);
+    if (!exists) await _client.makeBucket(bucketName);
+  }
+
+  /// Checks whether a bucket exists.
+  Future<bool> _bucketExists(String bucketName) =>
+      _client.bucketExists(bucketName);
+
+  // ---------------------------------------------------------------------------
+  // Descriptor / metadata helpers
+  // ---------------------------------------------------------------------------
+
   BlobDescriptor _descriptorFromStat(
     String collection,
     String id,
@@ -344,11 +344,8 @@ class S3BlobRepository implements IBlobRepository {
   }) {
     final meta = <String, String>{};
     final rawMeta = stat.metaData ?? const <String, String?>{};
-    // MinIO returns metadata with lowercase keys; normalize.
     rawMeta.forEach((key, value) {
-      if (value != null) {
-        meta[key.toLowerCase()] = value;
-      }
+      if (value != null) meta[key.toLowerCase()] = value;
     });
     final createdAtRaw = meta[_metaCreatedAt] ?? meta['created-at'];
     final updatedAtRaw = meta[_metaUpdatedAt] ?? meta['updated-at'];
@@ -372,12 +369,7 @@ class S3BlobRepository implements IBlobRepository {
             key == 'content-type' ||
             key == 'etag',
       );
-
-    if (tags.isNotEmpty) {
-      tags.forEach((tagKey, tagValue) {
-        userMetadata.putIfAbsent(tagKey, () => tagValue);
-      });
-    }
+    tags.forEach((k, v) => userMetadata.putIfAbsent(k, () => v));
 
     return BlobDescriptor(
       id: id,
@@ -393,124 +385,45 @@ class S3BlobRepository implements IBlobRepository {
     );
   }
 
-  String _objectKey(String collection, String id) =>
-      '$_prefix$collection/$id'.replaceAll('//', '/');
+  // ---------------------------------------------------------------------------
+  // URL helpers
+  // ---------------------------------------------------------------------------
 
-  static String _normalizePrefix(String? prefix) {
-    if (prefix == null || prefix.isEmpty) return '';
-    var value = prefix;
-    if (!value.endsWith('/')) value = '$value/';
-    if (value.startsWith('/')) value = value.substring(1);
-    return value;
+  Future<String?> _downloadUrl(String bucketName, String key) async {
+    final isPublic = await _isBucketPublic(bucketName);
+    return isPublic ? _publicUrl(bucketName, key) : _presignedUrl(bucketName, key);
   }
 
-  static Future<Uint8List> _collectBytes(
-    Stream<Uint8List> stream, {
-    int? declaredLength,
-  }) async {
-    final chunks = <int>[];
-    var total = 0;
-    await for (final chunk in stream) {
-      total += chunk.length;
-      chunks.addAll(chunk);
-    }
-    if (declaredLength != null && total != declaredLength) {
-      throw StateError(
-        'Length mismatch: declared=$declaredLength actual=$total bytes',
-      );
-    }
-    return Uint8List.fromList(chunks);
-  }
-
-  static void _verifyChecksum(
-    Uint8List bytes,
-    String expected, {
-    ChecksumAlgorithm? algorithm,
-  }) {
-    final algo = algorithm ?? ChecksumAlgorithm.sha256;
-    switch (algo) {
-      case ChecksumAlgorithm.sha256:
-        final digest = sha256.convert(bytes).toString();
-        if (digest != expected.toLowerCase()) {
-          throw StateError(
-            'Checksum mismatch: expected $expected actual $digest',
-          );
-        }
-    }
-  }
-
-  static bool _isNotFound(MinioError error) {
-    if (error is MinioS3Error) {
-      final code = error.error?.code;
-      if (code != null && code.toLowerCase() == 'nosuchkey') return true;
-      if (error.response?.statusCode == 404) return true;
-    }
-    final message = error.message ?? error.toString();
-    return message.contains('NoSuchKey') || message.contains('404');
-  }
-
-  static String _generateId() => _randomBase62(16);
-
-  static const _alphabet =
-      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-
-  static String _randomBase62(int length) {
-    final random = Random.secure();
-    final codeUnits = List<int>.generate(
-      length,
-      (_) => _alphabet.codeUnitAt(random.nextInt(_alphabet.length)),
-    );
-    return String.fromCharCodes(codeUnits);
-  }
-
-  static String _etagLikeChecksum(Uint8List bytes) {
-    final digest = md5.convert(bytes).toString();
-    return digest;
-  }
-
-  Future<String?> _downloadUrl(String key) async {
-    final isPublic = await _isBucketPublic();
-    return isPublic ? _publicUrl(key) : _presignedUrl(key);
-  }
-
-  Future<String?> _presignedUrl(String key) async {
+  Future<String?> _presignedUrl(String bucketName, String key) async {
     try {
-      final url = await _presignClient.presignedGetObject(
-        bucket,
+      return await _presignClient.presignedGetObject(
+        bucketName,
         key,
         expires: _presignTtlSeconds,
       );
-      return url;
     } catch (_) {
       return null;
     }
   }
 
-  Future<String?> _publicUrl(String key) async {
+  Future<String?> _publicUrl(String bucketName, String key) async {
     try {
-      final client = _presignRawClient ??= minio_internal.MinioClient(
-        _presignClient,
-      );
-      final uri = client.getRequestUrl(bucket, key, null, null);
+      final client = _presignRawClient ??= minio_internal.MinioClient(_presignClient);
+      final uri = client.getRequestUrl(bucketName, key, null, null);
       return uri.toString();
     } catch (_) {
       return null;
     }
   }
 
-  Future<bool> _isBucketPublic() async {
-    if (_bucketPublic != null) return _bucketPublic!;
-
+  Future<bool> _isBucketPublic(String bucketName) async {
     try {
-      final policy = await _client.getBucketPolicy(bucket);
+      final policy = await _client.getBucketPolicy(bucketName);
       final statements = policy?['Statement'];
-      final allowsPublicGet =
-          statements is Iterable && statements.any(_allowsPublicGetObject);
-      _bucketPublic = allowsPublicGet;
+      return statements is Iterable && statements.any(_allowsPublicGetObject);
     } catch (_) {
-      _bucketPublic = false;
+      return false;
     }
-    return _bucketPublic!;
   }
 
   bool _allowsPublicGetObject(dynamic statement) {
@@ -541,18 +454,16 @@ class S3BlobRepository implements IBlobRepository {
       final action = actions.toLowerCase();
       return action == 's3:getobject' || action == 's3:*' || action == '*';
     }
-    if (actions is Iterable) {
-      return actions.any(_allowsGetObjectAction);
-    }
+    if (actions is Iterable) return actions.any(_allowsGetObjectAction);
     return false;
   }
 
-  Future<Map<String, String>> _getObjectTags(String key) async {
+  Future<Map<String, String>> _getObjectTags(String bucketName, String key) async {
     try {
       final client = _rawClient ??= minio_internal.MinioClient(_client);
       final response = await client.request(
         method: 'GET',
-        bucket: bucket,
+        bucket: bucketName,
         object: key,
         resource: 'tagging',
       );
@@ -563,9 +474,7 @@ class S3BlobRepository implements IBlobRepository {
       for (final tag in document.findAllElements('Tag')) {
         final tagKey = tag.getElement('Key')?.value;
         final tagValue = tag.getElement('Value')?.value;
-        if (tagKey != null && tagValue != null) {
-          tags[tagKey] = tagValue;
-        }
+        if (tagKey != null && tagValue != null) tags[tagKey] = tagValue;
       }
       return tags;
     } on MinioError catch (e) {
@@ -575,6 +484,87 @@ class S3BlobRepository implements IBlobRepository {
       return const <String, String>{};
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Static helpers
+  // ---------------------------------------------------------------------------
+
+  /// Normalises a collection name to a valid S3 bucket name segment:
+  /// lowercase, only alphanumeric and hyphens, 3–63 chars.
+  static String _normalizeBucketName(String collection) {
+    var name = collection
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9-]'), '-')
+        .replaceAll(RegExp(r'-{2,}'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    if (name.length < 3) name = name.padRight(3, '0');
+    if (name.length > 63) name = name.substring(0, 63);
+    return name;
+  }
+
+  static String _normalizeBucketPrefix(String? prefix) {
+    if (prefix == null || prefix.isEmpty) return '';
+    var value = prefix.toLowerCase().replaceAll(RegExp(r'[^a-z0-9-]'), '-');
+    if (!value.endsWith('-')) value = '$value-';
+    return value;
+  }
+
+  static Future<Uint8List> _collectBytes(
+    Stream<Uint8List> stream, {
+    int? declaredLength,
+  }) async {
+    final chunks = <int>[];
+    var total = 0;
+    await for (final chunk in stream) {
+      total += chunk.length;
+      chunks.addAll(chunk);
+    }
+    if (declaredLength != null && total != declaredLength) {
+      throw StateError('Length mismatch: declared=$declaredLength actual=$total bytes');
+    }
+    return Uint8List.fromList(chunks);
+  }
+
+  static void _verifyChecksum(
+    Uint8List bytes,
+    String expected, {
+    ChecksumAlgorithm? algorithm,
+  }) {
+    final algo = algorithm ?? ChecksumAlgorithm.sha256;
+    switch (algo) {
+      case ChecksumAlgorithm.sha256:
+        final digest = sha256.convert(bytes).toString();
+        if (digest != expected.toLowerCase()) {
+          throw StateError('Checksum mismatch: expected $expected actual $digest');
+        }
+    }
+  }
+
+  static bool _isNotFound(MinioError error) {
+    if (error is MinioS3Error) {
+      final code = error.error?.code;
+      if (code != null && code.toLowerCase() == 'nosuchkey') return true;
+      if (error.response?.statusCode == 404) return true;
+    }
+    final message = error.message ?? error.toString();
+    return message.contains('NoSuchKey') || message.contains('404');
+  }
+
+  static String _generateId() => _randomBase62(16);
+
+  static const _alphabet =
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+  static String _randomBase62(int length) {
+    final random = Random.secure();
+    final codeUnits = List<int>.generate(
+      length,
+      (_) => _alphabet.codeUnitAt(random.nextInt(_alphabet.length)),
+    );
+    return String.fromCharCodes(codeUnits);
+  }
+
+  static String _etagLikeChecksum(Uint8List bytes) => md5.convert(bytes).toString();
 
   static Minio _buildPresignClient(Minio client, S3BlobStorageOptions options) {
     final region = options.presignRegion ?? client.region;
@@ -590,8 +580,8 @@ class S3BlobRepository implements IBlobRepository {
         options.presignPort != null ||
         options.presignUseSSL != null ||
         options.presignPathStyle != null;
+
     if (!hasOverrides) {
-      // Reuse client but ensure region is set to skip network lookup.
       if (client.region != null) return client;
       return Minio(
         endPoint: client.endPoint,

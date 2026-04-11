@@ -11,7 +11,7 @@ void main() {
   const bucket = 'blobs';
   const accessKey = 'minioadmin';
   const secretKey = 'minioadmin';
-  const port = 9004;
+  const port = 9000;
   const useSSL = false;
   const pathStyle = true;
 
@@ -48,7 +48,6 @@ void main() {
         return;
       }
       storage = S3BlobRepository.connect(
-        bucket: bucket,
         endPoint: endPoint,
         port: port,
         accessKey: accessKey,
