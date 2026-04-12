@@ -13,6 +13,7 @@ dependencies:
     path: ../rpc_blob
   rpc_dart: ^2.6.1
   crypto: ^3.0.7
+  http: ^1.0.0
   minio: ^3.5.8
   xml: ^6.4.2
 

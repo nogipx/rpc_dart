@@ -4,9 +4,13 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
 import 'package:minio/minio.dart';
 import 'package:minio/models.dart';
 import 'package:minio/src/minio_client.dart' as minio_internal;
+import 'package:minio/src/minio_helpers.dart' as minio_helpers;
+import 'package:minio/src/minio_sign.dart' as minio_sign;
+import 'package:minio/src/utils.dart' as minio_utils;
 import 'package:rpc_blob/rpc_blob.dart';
 import 'package:xml/xml.dart' as xml;
 
@@ -17,6 +21,7 @@ const int kDefaultPresignTtlSeconds = 3600;
 class S3BlobStorageOptions {
   const S3BlobStorageOptions({
     this.bucketPrefix,
+    this.useAdminApi = true,
     this.clock,
     this.presignTtlSeconds,
     this.presignEndpoint,
@@ -29,6 +34,10 @@ class S3BlobStorageOptions {
   /// Optional prefix applied to all bucket names (e.g., "myapp-" makes
   /// collection "photos" map to bucket "myapp-photos").
   final String? bucketPrefix;
+
+  /// Whether to use MinIO Admin API for [collectionSize] instead of listing
+  /// all objects. Requires admin credentials. Defaults to true.
+  final bool useAdminApi;
 
   /// Override the clock used for timestamps (primarily for tests).
   final S3Clock? clock;
@@ -68,6 +77,7 @@ class S3BlobRepository implements IBlobRepository {
   }) : _client = client,
        _presignClient = _buildPresignClient(client, options),
        _bucketPrefix = _normalizeBucketPrefix(options.bucketPrefix),
+       _useAdminApi = options.useAdminApi,
        _clock = options.clock ?? DateTime.now,
        _presignTtlSeconds =
            options.presignTtlSeconds ?? kDefaultPresignTtlSeconds {
@@ -100,6 +110,7 @@ class S3BlobRepository implements IBlobRepository {
   final Minio _client;
   final Minio _presignClient;
   final String _bucketPrefix;
+  final bool _useAdminApi;
   final S3Clock _clock;
   final int _presignTtlSeconds;
 
@@ -298,6 +309,12 @@ class S3BlobRepository implements IBlobRepository {
     final exists = await _bucketExists(bucketName);
     if (!exists) return 0;
 
+    if (_useAdminApi) {
+      final size = await _collectionSizeViaAdminApi(bucketName);
+      if (size != null) return size;
+    }
+
+    // Fallback: list objects and sum sizes.
     var total = 0;
     await for (final chunk in _client.listObjects(bucketName, recursive: true)) {
       for (final object in chunk.objects) {
@@ -305,6 +322,57 @@ class S3BlobRepository implements IBlobRepository {
       }
     }
     return total;
+  }
+
+  /// Calls [GET /minio/admin/v3/storageinfo] and extracts the size of
+  /// [bucketName]. Returns null if the call fails or the bucket is not found.
+  Future<int?> _collectionSizeViaAdminApi(String bucketName) async {
+    try {
+      final minio = _client;
+      final scheme = minio.useSSL ? 'https' : 'http';
+      final uri = Uri(
+        scheme: scheme,
+        host: minio.endPoint,
+        port: minio.port,
+        path: '/minio/admin/v3/storageinfo',
+      );
+
+      final request = minio_internal.MinioRequest('GET', uri);
+      final date = DateTime.now().toUtc();
+      final region = minio.region ?? 'us-east-1';
+      final payloadHash = minio_utils.sha256Hex('');
+
+      request.headers.addAll({
+        'host': uri.authority,
+        'x-amz-date': minio_helpers.makeDateLong(date),
+        'x-amz-content-sha256': payloadHash,
+      });
+
+      final authorization = minio_sign.signV4(minio, request, date, region);
+      request.headers['authorization'] = authorization;
+
+      final streamedResponse = await http.Client().send(request);
+      if (streamedResponse.statusCode != 200) return null;
+
+      final body = await streamedResponse.stream.bytesToString();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+
+      // Try bucketsUsage first, then bucketsSizes.
+      final bucketsUsage = json['bucketsUsage'] as Map<String, dynamic>?;
+      if (bucketsUsage != null) {
+        final usage = bucketsUsage[bucketName] as Map<String, dynamic>?;
+        if (usage != null) return usage['size'] as int? ?? 0;
+      }
+
+      final bucketsSizes = json['bucketsSizes'] as Map<String, dynamic>?;
+      if (bucketsSizes != null) {
+        return bucketsSizes[bucketName] as int? ?? 0;
+      }
+
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
