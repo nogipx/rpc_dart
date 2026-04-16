@@ -9,7 +9,8 @@ environment:
   sdk: '>=3.10.0 <4.0.0'
 
 dependencies:
-  rpc_data: ^2.5.0
+  rpc_data:
+    path: ../rpc_data
   postgres: ^3.5.9
 
 dev_dependencies:
