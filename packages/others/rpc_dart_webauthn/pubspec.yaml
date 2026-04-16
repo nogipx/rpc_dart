@@ -10,7 +10,7 @@ environment:
 
 dependencies:
   paseto_dart: ^2.0.0
-  rpc_dart: ^2.3.1
+  rpc_dart: ^2.6.2
   rpc_dart_transports: ^1.4.2
 
   equatable: ^2.0.7
