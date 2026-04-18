@@ -9,7 +9,7 @@ import 'package:test/test.dart';
 import 'nanoid.dart';
 
 const _url =
-    'postgresql://postgres:00000000@localhost:5433/postgres?sslmode=disable';
+    'postgresql://postgres:00000000@localhost:5434/postgres?sslmode=disable';
 const _schema = 'public';
 // Изолированный префикс, чтобы не пересекаться с другими тестами
 const _prefix = 'ptpool_';
@@ -90,9 +90,9 @@ void main() {
       final col2 = 'pool_dispose2_${NanoId.generate()}';
 
       final adapter1 = await makeAdapter();
-      await PostgresDataRepository(storage: adapter1).create(
-        CreateRecordRequest(collection: col1, payload: {'n': 1}),
-      );
+      await PostgresDataRepository(
+        storage: adapter1,
+      ).create(CreateRecordRequest(collection: col1, payload: {'n': 1}));
       await adapter1.deleteCollection(col1);
       await adapter1.dispose(); // освобождаем первый адаптер
 
@@ -157,12 +157,7 @@ void main() {
       // Параллельно создаём ещё 10 записей
       await Future.wait([
         for (var i = 0; i < 10; i++)
-          repo.create(
-            CreateRecordRequest(
-              collection: col,
-              payload: {'i': i},
-            ),
-          ),
+          repo.create(CreateRecordRequest(collection: col, payload: {'i': i})),
       ]);
 
       final records = await adapter.readCollection(col);

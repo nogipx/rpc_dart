@@ -15,7 +15,7 @@ class _Item {
 }
 
 const _url =
-    'postgresql://postgres:00000000@localhost:5433/postgres?sslmode=disable';
+    'postgresql://postgres:00000000@localhost:5434/postgres?sslmode=disable';
 const _schema = 'public';
 const _tablePrefix = '';
 

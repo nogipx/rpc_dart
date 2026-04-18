@@ -36,14 +36,14 @@ class PgTableNames {
 
   String indexName(String base) => _q('$prefix$base');
 
-  String get collectionRegistry => _qualified('${prefix}collection_registry');
-  String get indexRegistry => _qualified('${prefix}collection_index_registry');
-  String get changeJournal => _qualified('${prefix}change_journal');
-  String get schemaTable => _qualified('${prefix}collection_schemas');
-  String get schemaHistory => _qualified('${prefix}collection_schema_history');
+  String get collectionRegistry => _qualified('${prefix}s_collection_registry');
+  String get indexRegistry => _qualified('${prefix}s_collection_index_registry');
+  String get changeJournal => _qualified('${prefix}s_change_journal');
+  String get schemaTable => _qualified('${prefix}s_collection_schemas');
+  String get schemaHistory => _qualified('${prefix}s_collection_schema_history');
   String get schemaCheckpoint =>
-      _qualified('${prefix}collection_migration_checkpoint');
-  String get schemaLog => _qualified('${prefix}collection_migration_log');
+      _qualified('${prefix}s_collection_migration_checkpoint');
+  String get schemaLog => _qualified('${prefix}s_collection_migration_log');
 
   String _normalizeCollection(String value) {
     final sanitized = value
@@ -83,10 +83,12 @@ class PostgresDataStorageAdapter
     required this.tablePrefix,
     Connection? ownedConnection,
     bool enableFts = false,
+    bool enableChangeJournal = true,
   }) : _executor = executor,
        _ownedConnection = ownedConnection,
        _names = PgTableNames(schema: schema, prefix: tablePrefix),
        _ftsEnabled = enableFts,
+       enableChangeJournal = enableChangeJournal,
        schemaRegistry = PostgresSchemaRegistry(
          executor,
          names: PgTableNames(schema: schema, prefix: tablePrefix),
@@ -98,6 +100,7 @@ class PostgresDataStorageAdapter
     String schema = 'public',
     String tablePrefix = '',
     bool enableFts = false,
+    bool enableChangeJournal = true,
   }) async {
     final connection = await Connection.open(endpoint, settings: settings);
     final adapter = PostgresDataStorageAdapter._(
@@ -106,6 +109,7 @@ class PostgresDataStorageAdapter
       tablePrefix: tablePrefix,
       ownedConnection: connection,
       enableFts: enableFts,
+      enableChangeJournal: enableChangeJournal,
     );
     await adapter.ensureReady();
     return adapter;
@@ -116,12 +120,14 @@ class PostgresDataStorageAdapter
     String schema = 'public',
     String tablePrefix = '',
     bool enableFts = false,
+    bool enableChangeJournal = true,
   }) async {
     final adapter = PostgresDataStorageAdapter._(
       pool,
       schema: schema,
       tablePrefix: tablePrefix,
       enableFts: enableFts,
+      enableChangeJournal: enableChangeJournal,
     );
     await adapter.ensureReady();
     return adapter;
@@ -140,6 +146,7 @@ class PostgresDataStorageAdapter
 
   final String schema;
   final String tablePrefix;
+  final bool enableChangeJournal;
   final PostgresSchemaRegistry schemaRegistry;
 
   Session get executor => _executor;
@@ -342,12 +349,14 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       'ON ${_names.indexRegistry} (collection, path)',
     );
     await schemaRegistry.ensureReady();
-    final journal = PostgresDataChangeJournal(
-      _executor,
-      schema: schema,
-      tablePrefix: tablePrefix,
-    );
-    await journal.ensureReady();
+    if (enableChangeJournal) {
+      final journal = PostgresDataChangeJournal(
+        _executor,
+        schema: schema,
+        tablePrefix: tablePrefix,
+      );
+      await journal.ensureReady();
+    }
 
     final registryRows = await _executor.execute(
       'SELECT collection, table_name FROM ${_names.collectionRegistry}',

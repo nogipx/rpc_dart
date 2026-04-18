@@ -24,11 +24,13 @@ class PostgresDataRepository extends BaseDataRepository
          idGenerator: idGenerator,
          changeJournal:
              changeJournal ??
-             PostgresDataChangeJournal(
-               storage.executor,
-               schema: storage.schema,
-               tablePrefix: storage.tablePrefix,
-             ),
+             (storage.enableChangeJournal
+                 ? PostgresDataChangeJournal(
+                     storage.executor,
+                     schema: storage.schema,
+                     tablePrefix: storage.tablePrefix,
+                   )
+                 : null),
          journalMaxEvents: journalMaxEvents,
          journalRetention: journalRetention,
          schemaValidation:
