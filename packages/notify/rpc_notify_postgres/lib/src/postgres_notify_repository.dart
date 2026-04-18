@@ -22,26 +22,34 @@ import 'package:rpc_notify/rpc_notify.dart';
 /// [publishTo] embeds a [_kTargetKey] field in the envelope so that only
 /// the replica holding that specific clientId forwards the event.
 ///
+/// The repository automatically reconnects on connection loss and re-subscribes
+/// to all active topics.
+///
 /// Usage:
 /// ```dart
 /// final repo = await PostgresNotifyRepository.connect(endpoint: endpoint);
 /// ```
 class PostgresNotifyRepository implements INotifyRepository {
-  PostgresNotifyRepository._(this._connection);
+  PostgresNotifyRepository._({
+    required Endpoint endpoint,
+    ConnectionSettings? settings,
+    Duration healthCheckInterval = const Duration(seconds: 10),
+  }) : _endpoint = endpoint,
+       _settings = settings,
+       _healthCheckInterval = healthCheckInterval;
 
   static Future<PostgresNotifyRepository> connect({
     required Endpoint endpoint,
     ConnectionSettings? settings,
+    Duration healthCheckInterval = const Duration(seconds: 10),
   }) async {
-    final connection = await Connection.open(endpoint, settings: settings);
-    final repo = PostgresNotifyRepository._(connection);
-    await repo._init();
-    return repo;
-  }
-
-  static PostgresNotifyRepository fromConnection(Connection connection) {
-    final repo = PostgresNotifyRepository._(connection);
-    repo._init();
+    final repo = PostgresNotifyRepository._(
+      endpoint: endpoint,
+      settings: settings,
+      healthCheckInterval: healthCheckInterval,
+    );
+    await repo._openConnection();
+    repo._startHealthCheck();
     return repo;
   }
 
@@ -50,7 +58,16 @@ class PostgresNotifyRepository implements INotifyRepository {
   static const _kTimestampKey = 'timestamp';
   static const _kEventIdKey = 'eventId';
 
-  final Connection _connection;
+  static const _reconnectDelays = [1, 2, 5, 10, 30];
+
+  final Endpoint _endpoint;
+  final ConnectionSettings? _settings;
+  final Duration _healthCheckInterval;
+
+  Connection? _connection;
+  Timer? _healthTimer;
+  bool _disposed = false;
+  bool _reconnecting = false;
 
   // topic -> { clientId -> StreamController }
   final _subscribers = <String, Map<String, StreamController<NotifyEvent>>>{};
@@ -58,8 +75,57 @@ class PostgresNotifyRepository implements INotifyRepository {
   // topic -> subscription to connection.channels[topic]
   final _channelSubs = <String, StreamSubscription<String>>{};
 
-  Future<void> _init() async {
-    // Nothing to set up globally — subscriptions are per-topic and lazy.
+  void _startHealthCheck() {
+    _healthTimer?.cancel();
+    _healthTimer = Timer.periodic(_healthCheckInterval, (_) {
+      final conn = _connection;
+      if (conn != null && !conn.isOpen) {
+        _onConnectionLost();
+      }
+    });
+  }
+
+  Future<void> _openConnection() async {
+    _connection = await Connection.open(_endpoint, settings: _settings);
+    for (final topic in _channelSubs.keys.toList()) {
+      _attachChannelListener(topic);
+    }
+    // Flush pending LISTEN commands before returning.
+    if (_channelSubs.isNotEmpty) {
+      await _connection!.execute('SELECT 1');
+    }
+  }
+
+  void _attachChannelListener(String topic) {
+    // Ignore errors when cancelling a subscription on a dead connection.
+    _channelSubs[topic]?.cancel().ignore();
+    final sub = _connection!.channels[topic].listen(
+      (rawPayload) => _onChannelMessage(topic, rawPayload),
+    );
+    _channelSubs[topic] = sub;
+  }
+
+  void _onConnectionLost() {
+    if (_disposed || _reconnecting) return;
+    _reconnecting = true;
+    _reconnectLoop();
+  }
+
+  Future<void> _reconnectLoop() async {
+    var attempt = 0;
+    while (!_disposed) {
+      final delaySecs = _reconnectDelays[attempt.clamp(0, _reconnectDelays.length - 1)];
+      await Future<void>.delayed(Duration(seconds: delaySecs));
+      if (_disposed) return;
+      try {
+        await _openConnection();
+        _reconnecting = false;
+        _startHealthCheck();
+        return;
+      } catch (_) {
+        attempt++;
+      }
+    }
   }
 
   void _onChannelMessage(String topic, String rawPayload) {
@@ -109,9 +175,10 @@ class PostgresNotifyRepository implements INotifyRepository {
 
   @override
   void publish(String topic, Map<String, dynamic> payload) {
+    final connection = _connection;
+    if (connection == null || !connection.isOpen) return;
     final envelope = _encodeEnvelope(payload);
-    // Fire-and-forget — NOTIFY is best-effort.
-    _connection.channels.notify(topic, envelope).ignore();
+    connection.channels.notify(topic, envelope).ignore();
   }
 
   @override
@@ -120,8 +187,10 @@ class PostgresNotifyRepository implements INotifyRepository {
     String topic,
     Map<String, dynamic> payload,
   ) {
+    final connection = _connection;
+    if (connection == null || !connection.isOpen) return;
     final envelope = _encodeEnvelope(payload, targetClientId: clientId);
-    _connection.channels.notify(topic, envelope).ignore();
+    connection.channels.notify(topic, envelope).ignore();
   }
 
   @override
@@ -135,10 +204,10 @@ class PostgresNotifyRepository implements INotifyRepository {
     topicSubs[clientId] = controller;
 
     if (!_channelSubs.containsKey(topic)) {
-      final sub = _connection.channels[topic].listen(
-        (rawPayload) => _onChannelMessage(topic, rawPayload),
-      );
-      _channelSubs[topic] = sub;
+      _channelSubs[topic] = const Stream<String>.empty().listen(null);
+      if (_connection != null && !_reconnecting) {
+        _attachChannelListener(topic);
+      }
     }
 
     return controller.stream;
@@ -172,8 +241,12 @@ class PostgresNotifyRepository implements INotifyRepository {
 
   @override
   Future<void> dispose() async {
+    _disposed = true;
+    _healthTimer?.cancel();
+    _healthTimer = null;
+
     for (final sub in _channelSubs.values) {
-      await sub.cancel();
+      await sub.cancel().catchError((_) {});
     }
     _channelSubs.clear();
 
@@ -184,6 +257,7 @@ class PostgresNotifyRepository implements INotifyRepository {
     }
     _subscribers.clear();
 
-    await _connection.close();
+    await _connection?.close();
+    _connection = null;
   }
 }
