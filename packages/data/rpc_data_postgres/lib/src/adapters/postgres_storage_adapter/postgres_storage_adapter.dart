@@ -78,16 +78,17 @@ class _PgCursorBoundary {
 class PostgresDataStorageAdapter
     implements IDataStorageAdapter, ICollectionIndexStorageAdapter {
   PostgresDataStorageAdapter._(
-    this._connection, {
+    Session executor, {
     required this.schema,
     required this.tablePrefix,
-    required bool ownsConnection,
+    Connection? ownedConnection,
     bool enableFts = false,
-  }) : _ownsConnection = ownsConnection,
+  }) : _executor = executor,
+       _ownedConnection = ownedConnection,
        _names = PgTableNames(schema: schema, prefix: tablePrefix),
        _ftsEnabled = enableFts,
-        schemaRegistry = PostgresSchemaRegistry(
-          _connection,
+       schemaRegistry = PostgresSchemaRegistry(
+         executor,
          names: PgTableNames(schema: schema, prefix: tablePrefix),
        );
 
@@ -103,15 +104,31 @@ class PostgresDataStorageAdapter
       connection,
       schema: schema,
       tablePrefix: tablePrefix,
-      ownsConnection: true,
+      ownedConnection: connection,
       enableFts: enableFts,
     );
     await adapter.ensureReady();
     return adapter;
   }
 
-  final Connection _connection;
-  final bool _ownsConnection;
+  static Future<PostgresDataStorageAdapter> withPool(
+    Pool pool, {
+    String schema = 'public',
+    String tablePrefix = '',
+    bool enableFts = false,
+  }) async {
+    final adapter = PostgresDataStorageAdapter._(
+      pool,
+      schema: schema,
+      tablePrefix: tablePrefix,
+      enableFts: enableFts,
+    );
+    await adapter.ensureReady();
+    return adapter;
+  }
+
+  final Session _executor;
+  final Connection? _ownedConnection;
   final PgTableNames _names;
   final Map<String, String> _tableCache = <String, String>{};
   final Set<String> _knownTables = <String>{};
@@ -125,7 +142,7 @@ class PostgresDataStorageAdapter
   final String tablePrefix;
   final PostgresSchemaRegistry schemaRegistry;
 
-  Connection get connection => _connection;
+  Session get executor => _executor;
 
   String _tableNameForCollection(String collection) {
     final cached = _tableCache[collection];
@@ -171,7 +188,7 @@ class PostgresDataStorageAdapter
   }
 
   Future<bool> _tableExists(String qualifiedName) async {
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'SELECT 1 FROM pg_tables WHERE schemaname = @schema '
         'AND tablename = @table LIMIT 1',
@@ -188,7 +205,7 @@ class PostgresDataStorageAdapter
     if (_knownIndexes.contains(indexName)) {
       return true;
     }
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'SELECT 1 FROM pg_indexes WHERE schemaname = @schema '
         'AND indexname = @name LIMIT 1',
@@ -203,7 +220,7 @@ class PostgresDataStorageAdapter
   }
 
   Future<String?> _lookupTable(String collection) async {
-    final row = await _connection.execute(
+    final row = await _executor.execute(
       Sql.named(
         'SELECT table_name FROM ${_names.collectionRegistry} '
         'WHERE collection = @c LIMIT 1',
@@ -219,7 +236,7 @@ class PostgresDataStorageAdapter
   }
 
   Future<void> _registerTable(String collection, String table) async {
-    await _connection.execute(
+    await _executor.execute(
       Sql.named(
         'INSERT INTO ${_names.collectionRegistry} (collection, table_name) '
         'VALUES (@c, @t) '
@@ -231,7 +248,7 @@ class PostgresDataStorageAdapter
   }
 
   Future<void> _createCollectionTable(String collection, String table) async {
-    await _connection.execute('''
+    await _executor.execute('''
 CREATE TABLE IF NOT EXISTS $table (
   id TEXT PRIMARY KEY,
   payload JSONB NOT NULL,
@@ -239,12 +256,12 @@ CREATE TABLE IF NOT EXISTS $table (
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 )''');
-    await _connection.execute(
+    await _executor.execute(
       'CREATE INDEX IF NOT EXISTS ${_names.indexName('${_rawTableName(table)}_updated_idx')} '
       'ON $table (updated_at)',
     );
     if (_ftsEnabled) {
-      await _connection.execute(
+      await _executor.execute(
         'CREATE INDEX IF NOT EXISTS ${_names.indexName('${_rawTableName(table)}_fts_idx')} '
         'ON $table USING GIN (to_tsvector(\'simple\', payload::text))',
       );
@@ -261,7 +278,7 @@ CREATE TABLE IF NOT EXISTS $table (
     }
     try {
       final selector = _jsonTextSelector(metadata.path);
-      await _connection.execute(
+      await _executor.execute(
         'CREATE INDEX IF NOT EXISTS ${_names._q(metadata.indexName)} '
         'ON $table ( ($selector) )',
       );
@@ -295,7 +312,7 @@ CREATE TABLE IF NOT EXISTS $table (
     }
     final base = _rawTableName(table);
     final indexName = _names.indexName('${base}_fts_idx');
-    await _connection.execute('DROP INDEX IF EXISTS $indexName');
+    await _executor.execute('DROP INDEX IF EXISTS $indexName');
     _knownIndexes.remove(indexName);
   }
 
@@ -305,34 +322,34 @@ CREATE TABLE IF NOT EXISTS $table (
     if (_ready) {
       return;
     }
-    await _connection.execute(
+    await _executor.execute(
       'CREATE SCHEMA IF NOT EXISTS ${_names._q(schema)}',
     );
-    await _connection.execute('''
+    await _executor.execute('''
 CREATE TABLE IF NOT EXISTS ${_names.collectionRegistry} (
   collection TEXT PRIMARY KEY,
   table_name TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )''');
-    await _connection.execute('''
+    await _executor.execute('''
 CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
   collection TEXT NOT NULL,
   path TEXT NOT NULL,
   index_name TEXT PRIMARY KEY
 )''');
-    await _connection.execute(
+    await _executor.execute(
       'CREATE UNIQUE INDEX IF NOT EXISTS ${_names._q('${tablePrefix}index_registry_path')} '
       'ON ${_names.indexRegistry} (collection, path)',
     );
     await schemaRegistry.ensureReady();
     final journal = PostgresDataChangeJournal(
-      _connection,
+      _executor,
       schema: schema,
       tablePrefix: tablePrefix,
     );
     await journal.ensureReady();
 
-    final registryRows = await _connection.execute(
+    final registryRows = await _executor.execute(
       'SELECT collection, table_name FROM ${_names.collectionRegistry}',
     );
     for (final row in registryRows) {
@@ -358,7 +375,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     if (table == null) {
       return null;
     }
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'SELECT id, payload, version, created_at, updated_at '
         'FROM $table '
@@ -387,7 +404,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     }
     final params = <String, Object?>{};
     final placeholders = _buildInClause('id', idList, params);
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'SELECT id, payload, version, created_at, updated_at '
         'FROM $table '
@@ -410,7 +427,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     if (table == null) {
       return const <DataRecord>[];
     }
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'SELECT id, payload, version, created_at, updated_at '
         'FROM $table '
@@ -459,7 +476,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         parameters['cursorCtid'] = lastCtid;
       }
       query.write('ORDER BY created_at, updated_at, ctid LIMIT @limit');
-      final result = await _connection.execute(
+      final result = await _executor.execute(
         Sql.named(query.toString()),
         parameters: parameters,
       );
@@ -578,7 +595,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         ..write(offsetParam);
     }
 
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(querySql.toString()),
       parameters: params,
     );
@@ -599,7 +616,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
           ..write(' WHERE ')
           ..write(baseWhere.join(' AND '));
       }
-      final countResult = await _connection.execute(
+      final countResult = await _executor.execute(
         Sql.named(countSql.toString()),
         parameters: baseParams,
       );
@@ -616,7 +633,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
   @override
   Future<List<String>> listCollections() async {
     await ensureReady();
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       'SELECT collection FROM ${_names.collectionRegistry} ORDER BY collection',
     );
     return result
@@ -681,7 +698,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
           'Cursor $cursor is not valid for ${request.collection}',
         );
       }
-      final boundaryRow = await _connection.execute(
+      final boundaryRow = await _executor.execute(
         Sql.named(
           'SELECT created_at, updated_at, ctid::text AS boundary_ctid FROM $table '
           'WHERE id = @id LIMIT 1',
@@ -735,7 +752,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       ..write(' OFFSET ')
       ..write(offsetParam);
 
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(querySql.toString()),
       parameters: params,
     );
@@ -743,7 +760,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         .map((row) => _mapRow(row, collectionOverride: request.collection))
         .toList(growable: false);
 
-    final totalCountResult = await _connection.execute(
+    final totalCountResult = await _executor.execute(
       Sql.named(
         'SELECT COUNT(*) AS count FROM $table '
         'WHERE ${baseWhere.join(' AND ')}',
@@ -833,7 +850,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       buffer.write(' AND version = @version');
       params['version'] = expectedVersion;
     }
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(buffer.toString()),
       parameters: params,
       ignoreRows: true,
@@ -853,7 +870,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     }
     final params = <String, Object?>{};
     final placeholders = _buildInClause('id', idList, params);
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named('DELETE FROM $table WHERE id IN ($placeholders)'),
       parameters: params,
       ignoreRows: true,
@@ -872,34 +889,34 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     for (final index in indexes) {
       await _dropIndex(index.indexName);
     }
-    await _connection.execute(
+    await _executor.execute(
       Sql.named('DELETE FROM ${_names.indexRegistry} WHERE collection = @c'),
       parameters: {'c': collection},
       ignoreRows: true,
     );
-    await _connection.execute('DROP TABLE IF EXISTS $table');
+    await _executor.execute('DROP TABLE IF EXISTS $table');
     _knownTables.remove(table);
-    await _connection.execute(
+    await _executor.execute(
       Sql.named('DELETE FROM ${_names.schemaTable} WHERE collection = @c'),
       parameters: {'c': collection},
       ignoreRows: true,
     );
-    await _connection.execute(
+    await _executor.execute(
       Sql.named('DELETE FROM ${_names.schemaHistory} WHERE collection = @c'),
       parameters: {'c': collection},
       ignoreRows: true,
     );
-    await _connection.execute(
+    await _executor.execute(
       Sql.named('DELETE FROM ${_names.schemaCheckpoint} WHERE collection = @c'),
       parameters: {'c': collection},
       ignoreRows: true,
     );
-    await _connection.execute(
+    await _executor.execute(
       Sql.named('DELETE FROM ${_names.schemaLog} WHERE collection = @c'),
       parameters: {'c': collection},
       ignoreRows: true,
     );
-    await _connection.execute(
+    await _executor.execute(
       Sql.named(
         'DELETE FROM ${_names.collectionRegistry} WHERE collection = @c',
       ),
@@ -941,11 +958,11 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       );
     }
     final selector = _jsonTextSelector(path);
-    await _connection.execute(
+    await _executor.execute(
       'CREATE INDEX IF NOT EXISTS ${_names._q(indexName)} '
       'ON $table ( ($selector) )',
     );
-    await _connection.execute(
+    await _executor.execute(
       Sql.named(
         'INSERT INTO ${_names.indexRegistry}(collection, path, index_name) '
         'VALUES (@c, @p, @n) '
@@ -985,7 +1002,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       return false;
     }
     await _dropIndex(indexName);
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'DELETE FROM ${_names.indexRegistry} '
         'WHERE collection = @c AND index_name = @n',
@@ -1000,9 +1017,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
 
   @override
   Future<void> dispose() async {
-    if (_ownsConnection) {
-      await _connection.close();
-    }
+    await _ownedConnection?.close();
   }
 
   Future<int> _upsertRecords(String table, Iterable<DataRecord> records) async {
@@ -1037,7 +1052,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       'updated_at = excluded.updated_at '
       'WHERE excluded.version > $table.version',
     );
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(buffer.toString()),
       parameters: params,
       ignoreRows: true,
@@ -1065,7 +1080,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     }
     final params = <String, Object?>{};
     final placeholders = _buildInClause('id', ids, params);
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'SELECT id, version FROM $table '
         'WHERE id IN ($placeholders)',
@@ -1352,7 +1367,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
   }
 
   Future<bool> _cursorExists(String table, String cursor) async {
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'SELECT 1 FROM $table '
         'WHERE id = @id LIMIT 1',
@@ -1367,7 +1382,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     String cursor,
     String sortExpression,
   ) async {
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'SELECT $sortExpression AS boundary, updated_at, ctid::text AS boundary_ctid '
         'FROM $table '
@@ -1404,7 +1419,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       ..write(cursorWhere.join(' AND '))
       ..write(' LIMIT 1');
 
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(sql.toString()),
       parameters: cursorParams,
     );
@@ -1428,7 +1443,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     if (cached != null) {
       return cached;
     }
-    final result = await _connection.execute(
+    final result = await _executor.execute(
       Sql.named(
         'SELECT path, index_name FROM ${_names.indexRegistry} '
         'WHERE collection = @c',
@@ -1455,7 +1470,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     if (indexName.isEmpty) {
       return;
     }
-    await _connection.execute('DROP INDEX IF EXISTS ${_names._q(indexName)}');
+    await _executor.execute('DROP INDEX IF EXISTS ${_names._q(indexName)}');
   }
 }
 
@@ -1478,7 +1493,7 @@ class PostgresDataChangeJournal implements DataChangeJournal {
     String tablePrefix = '',
   }) : _names = PgTableNames(schema: schema, prefix: tablePrefix);
 
-  final Connection _connection;
+  final Session _connection;
   final PgTableNames _names;
   bool _ready = false;
 
@@ -1673,7 +1688,7 @@ class PostgresSchemaRegistry implements CollectionSchemaRegistry {
   }) : _names = names,
        _defaultPolicy = defaultPolicy ?? const CollectionSchemaPolicy();
 
-  final Connection _connection;
+  final Session _connection;
   final PgTableNames _names;
   final CollectionSchemaPolicy _defaultPolicy;
   bool _ready = false;

@@ -25,7 +25,7 @@ class PostgresDataRepository extends BaseDataRepository
          changeJournal:
              changeJournal ??
              PostgresDataChangeJournal(
-               storage.connection,
+               storage.executor,
                schema: storage.schema,
                tablePrefix: storage.tablePrefix,
              ),
