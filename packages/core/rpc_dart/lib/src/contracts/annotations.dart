@@ -26,6 +26,26 @@ class RpcService {
   final String? description;
 }
 
+/// Marks an inherited RPC method as removed in this contract version.
+///
+/// The generator produces a `@Deprecated` + `throw UnsupportedError`
+/// implementation so callers get a compile-time warning and a clear
+/// runtime error if the method is still invoked.
+///
+/// Usage:
+/// ```dart
+/// @RpcService(name: 'MyService.v4')
+/// abstract class IMyServiceV4 implements IMyServiceV3 {
+///   @RpcRemoved('Use newMethod() instead')
+///   @override
+///   Future<OldResponse> oldMethod(OldRequest request, {RpcContext? context});
+/// }
+/// ```
+class RpcRemoved {
+  const RpcRemoved([this.message = 'This method has been removed.']);
+  final String message;
+}
+
 /// Describes how a method should be registered and invoked.
 class RpcMethod {
   const RpcMethod({

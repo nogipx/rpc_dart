@@ -1,3 +1,7 @@
+## 2.6.3
+
+- Added `RpcRemoved` annotation. Marks an inherited RPC method as removed in a versioned contract. The generator produces a `@Deprecated` + `throw UnsupportedError` implementation so callers receive a compile-time warning and a clear runtime error message.
+
 ## 2.6.2
 
 - `RpcMessageParser`: replaced per-message buffer slicing with a read-offset approach — `advance()` moves a pointer in O(1) and a single `compact()` at the end of each parse pass drops consumed bytes in O(remaining), eliminating the previous O(N²) copy behaviour when multiple gRPC frames arrive in a single chunk (relevant for HTTP/2 and WebSocket transports).
