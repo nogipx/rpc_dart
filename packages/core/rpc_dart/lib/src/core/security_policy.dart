@@ -57,6 +57,7 @@ final class RpcSecurityPolicy {
   /// If true, transports should close the connection on protocol violations.
   final bool closeOnProtocolError;
 
+  /// Creates an [RpcSecurityPolicy] with the given limits.
   const RpcSecurityPolicy({
     this.maxMessageLengthBytes = 16 * 1024 * 1024,
     this.maxBufferedBytes,
@@ -73,6 +74,7 @@ final class RpcSecurityPolicy {
     this.closeOnProtocolError = true,
   });
 
+  /// Serializes this policy to a plain map.
   Map<String, Object> toMap() => {
         'maxMessageLengthBytes': maxMessageLengthBytes,
         if (maxBufferedBytes != null) 'maxBufferedBytes': maxBufferedBytes!,
@@ -89,6 +91,7 @@ final class RpcSecurityPolicy {
         'closeOnProtocolError': closeOnProtocolError,
       };
 
+  /// Creates an [RpcSecurityPolicy] from a plain map, using defaults for missing keys.
   factory RpcSecurityPolicy.fromMap(Map<String, Object?> map) {
     int readInt(String key, int fallback) {
       final value = map[key];
@@ -121,6 +124,7 @@ final class RpcSecurityPolicy {
     );
   }
 
+  /// Effective max buffered bytes, falling back to message size + prefix when unset.
   int get effectiveMaxBufferedBytes =>
       maxBufferedBytes ??
       (maxMessageLengthBytes + RpcConstants.messagePrefixSize);
@@ -140,6 +144,7 @@ final class RpcSecurityPolicy {
     return true;
   }
 
+  /// Returns true if [value] contains no CR, LF, or NUL characters.
   bool isValidHeaderValue(String value) {
     if (value.length > maxHeaderValueBytes) return false;
     for (final unit in value.codeUnits) {
@@ -148,6 +153,7 @@ final class RpcSecurityPolicy {
     return true;
   }
 
+  /// Returns true if [methodPath] is within the allowed length and non-empty.
   bool isValidMethodPath(String? methodPath) {
     if (methodPath == null) return true;
     if (methodPath.isEmpty) return false;

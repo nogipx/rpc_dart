@@ -7,8 +7,10 @@ part of '_logs.dart';
 
 /// Default filter based on minimum log level.
 class DefaultRpcLoggerFilter implements IRpcLoggerFilter {
+  /// Minimum level that will be logged; messages below this are suppressed.
   final RpcLoggerLevel minLogLevel;
 
+  /// Creates a filter that passes messages at or above [minLogLevel].
   const DefaultRpcLoggerFilter(this.minLogLevel);
 
   @override
@@ -19,8 +21,10 @@ class DefaultRpcLoggerFilter implements IRpcLoggerFilter {
 
 /// Default log formatter.
 class DefaultRpcLoggerFormatter implements IRpcLoggerFormatter {
+  /// Optional label prepended to log output.
   final String? label;
 
+  /// Creates a formatter with an optional [label].
   const DefaultRpcLoggerFormatter([this.label]);
 
   @override

@@ -15,10 +15,13 @@ abstract interface class IRpcContract {
 abstract class RpcResponderContract implements IRpcContract {
   @override
   final String serviceName;
+
+  /// Data transfer mode used by this contract's methods.
   final RpcDataTransferMode dataTransferMode;
   final Map<String, RpcMethodRegistration> _methods = {};
   final Map<String, RpcZeroCopyMethodRegistration> _zeroCopyMethods = {};
 
+  /// Creates a responder contract with the given [serviceName].
   RpcResponderContract(
     this.serviceName, {
     this.dataTransferMode = RpcDataTransferMode.auto,
@@ -352,9 +355,12 @@ abstract class RpcResponderContract implements IRpcContract {
 abstract class RpcCallerContract implements IRpcContract {
   @override
   final String serviceName;
+
+  /// Data transfer mode used by this contract's methods.
   final RpcDataTransferMode dataTransferMode;
   final RpcCallerEndpoint _endpoint;
 
+  /// Creates a caller contract bound to the given [serviceName] and [_endpoint].
   RpcCallerContract(
     this.serviceName,
     this._endpoint, {

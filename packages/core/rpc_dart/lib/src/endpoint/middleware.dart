@@ -9,11 +9,19 @@ part of '_index.dart';
 /// Provides endpoint reference, service/method names, and the current
 /// [RpcContext].
 class RpcMiddlewareContext {
+  /// The endpoint processing this call.
   final RpcEndpointBase endpoint;
+
+  /// Service name for the current call.
   final String serviceName;
+
+  /// Method name for the current call.
   final String methodName;
+
+  /// The current RPC context, may be updated by middleware.
   RpcContext context;
 
+  /// Creates an [RpcMiddlewareContext] for the given call.
   RpcMiddlewareContext({
     required this.endpoint,
     required this.serviceName,
@@ -47,6 +55,7 @@ class RpcMiddlewareContext {
 /// Allows request/response mutation before passing to the next component.
 /// Implementations may return a new instance or the original object.
 abstract class IRpcMiddleware {
+  /// Creates a constant middleware instance.
   const IRpcMiddleware();
 
   /// Called before the user handler executes.
@@ -75,17 +84,20 @@ abstract class IRpcMiddleware {
 typedef RpcUnaryNext<TRequest, TResponse> = Future<TResponse> Function(
     RpcContext context, TRequest request);
 
+/// Handler type for the next step of a server-stream call.
 typedef RpcServerStreamNext<TRequest, TResponse> = FutureOr<Stream<TResponse>>
     Function(
   RpcContext context,
   TRequest request,
 );
 
+/// Handler type for the next step of a client-stream call.
 typedef RpcClientStreamNext<TRequest, TResponse> = Future<TResponse> Function(
   RpcContext context,
   Stream<TRequest> requests,
 );
 
+/// Handler type for the next step of a bidirectional-stream call.
 typedef RpcBidirectionalStreamNext<TRequest, TResponse>
     = FutureOr<Stream<TResponse>> Function(
   RpcContext context,
@@ -97,6 +109,7 @@ typedef RpcBidirectionalStreamNext<TRequest, TResponse>
 /// Wraps user handlers and may short-circuit the chain by returning a custom
 /// result.
 abstract class IRpcInterceptor {
+  /// Creates a constant interceptor instance.
   const IRpcInterceptor();
 
   /// Unary call interceptor.
@@ -111,6 +124,7 @@ abstract class IRpcInterceptor {
     return next(call.context, request);
   }
 
+  /// Server-stream call interceptor.
   FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
     RpcMiddlewareContext call,
     TRequest request,
@@ -119,6 +133,7 @@ abstract class IRpcInterceptor {
     return next(call.context, request);
   }
 
+  /// Client-stream call interceptor.
   Future<TResponse> interceptClientStream<TRequest, TResponse>(
     RpcMiddlewareContext call,
     Stream<TRequest> requests,
@@ -127,6 +142,7 @@ abstract class IRpcInterceptor {
     return next(call.context, requests);
   }
 
+  /// Bidirectional-stream call interceptor.
   FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
     RpcMiddlewareContext call,
     Stream<TRequest> requests,

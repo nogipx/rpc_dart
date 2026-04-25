@@ -10,12 +10,17 @@ abstract base class RpcEndpointBase {
   final IRpcTransport _transport;
   final List<IRpcMiddleware> _middlewares = [];
   final List<IRpcInterceptor> _interceptors = [];
+  /// Optional label attached to log messages for easier identification.
   final String? debugLabel;
+
+  /// Optional ANSI color palette used by the logger.
   final RpcLoggerColors? loggerColors;
 
+  /// Logger for this endpoint.
   RpcLogger get logger;
   bool _isActive = true;
 
+  /// Creates an [RpcEndpointBase] bound to the given [transport].
   RpcEndpointBase({
     required IRpcTransport transport,
     this.debugLabel,
@@ -161,18 +166,22 @@ abstract base class RpcEndpointBase {
     return health(transportOverride: transportStatus);
   }
 
+  /// Adds [middleware] to the processing chain.
   void addMiddleware(IRpcMiddleware middleware) {
     _middlewares.add(middleware);
     logger.internal('Добавлен middleware: ${middleware.toString()}');
   }
 
+  /// Adds [interceptor] to the processing chain.
   void addInterceptor(IRpcInterceptor interceptor) {
     _interceptors.add(interceptor);
     logger.internal('Добавлен interceptor: ${interceptor.toString()}');
   }
 
+  /// Returns true while the endpoint has not been closed.
   bool get isActive => _isActive;
 
+  /// The underlying transport used by this endpoint.
   IRpcTransport get transport => _transport;
 
   /// Starts the endpoint.
@@ -185,6 +194,7 @@ abstract base class RpcEndpointBase {
     logger.internal('Остановка RPC эндпоинта');
   }
 
+  /// Closes the endpoint and releases all resources.
   Future<void> close() async {
     if (!_isActive) return;
 
@@ -415,6 +425,7 @@ abstract base class RpcEndpointBase {
     return (stream: stream, context: context.context);
   }
 
+  /// Runs [handler] through middleware and interceptors for a unary call.
   Future<TResponse> handleUnary<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
@@ -446,6 +457,7 @@ abstract base class RpcEndpointBase {
     return normalizedResponse;
   }
 
+  /// Runs [handler] through middleware and interceptors for a server-stream call.
   Stream<TResponse> handleServerStream<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
@@ -476,6 +488,7 @@ abstract base class RpcEndpointBase {
     );
   }
 
+  /// Runs [handler] through middleware and interceptors for a client-stream call.
   Future<TResponse> handleClientStream<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
@@ -507,6 +520,7 @@ abstract base class RpcEndpointBase {
     );
   }
 
+  /// Runs [handler] through middleware and interceptors for a bidirectional-stream call.
   Stream<TResponse> handleBidirectionalStream<TRequest, TResponse>({
     required String serviceName,
     required String methodName,

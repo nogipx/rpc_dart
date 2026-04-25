@@ -5,17 +5,25 @@
 
 part of '_index.dart';
 
+/// Handles incoming ping requests on the responder side.
 final class RpcResponderPingHandler {
+  /// Transport used to send the ping response.
   final IRpcTransport transport;
+
+  /// Logger for ping handler events.
   final RpcLogger logger;
+
+  /// Debug label included in ping responses.
   final String? debugLabel;
 
+  /// Creates an [RpcResponderPingHandler] with the given transport and logger.
   RpcResponderPingHandler({
     required this.transport,
     required this.logger,
     required this.debugLabel,
   });
 
+  /// Sends a ping response for the given [streamId].
   Future<void> respond({
     required int streamId,
     required RpcContext context,

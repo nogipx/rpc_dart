@@ -17,9 +17,13 @@ import 'compression_gzip_stub.dart'
 /// RpcGrpcCompression.register('gzip', MyGzipCodec());
 /// ```
 abstract class RpcCompressionCodec {
+  /// Creates a constant compression codec.
   const RpcCompressionCodec();
 
+  /// Compresses [data] and returns the compressed bytes.
   Uint8List compress(Uint8List data);
+
+  /// Decompresses [data] and returns the original bytes.
   Uint8List decompress(Uint8List data);
 }
 
@@ -45,7 +49,10 @@ final class _BuiltinGzipCodec implements RpcCompressionCodec {
 /// RpcGrpcCompression.register('gzip', ArchiveGzipCodec());
 /// ```
 abstract final class RpcGrpcCompression {
+  /// The `identity` encoding (no compression).
   static const String identity = 'identity';
+
+  /// The `gzip` encoding identifier.
   static const String gzip = 'gzip';
 
   /// Codec registry. Populated at startup with the dart:io gzip codec on
@@ -78,11 +85,13 @@ abstract final class RpcGrpcCompression {
     _codecs.remove(encoding);
   }
 
+  /// Returns true if [encoding] is supported.
   static bool isSupported(String encoding) {
     if (encoding == identity) return true;
     return _codecs.containsKey(encoding);
   }
 
+  /// Compresses [data] using the specified [encoding].
   static Uint8List compress(Uint8List data, {required String encoding}) {
     if (encoding == identity) return data;
     final codec = _codecs[encoding];
@@ -92,6 +101,7 @@ abstract final class RpcGrpcCompression {
     return codec.compress(data);
   }
 
+  /// Decompresses [data] using the specified [encoding].
   static Uint8List decompress(Uint8List data, {required String encoding}) {
     if (encoding == identity) return data;
     final codec = _codecs[encoding];
@@ -116,6 +126,7 @@ abstract final class RpcGrpcCompression {
     return null;
   }
 
+  /// Returns all encodings that are currently registered, including `identity`.
   static List<String> supportedEncodings() {
     return [identity, ..._codecs.keys];
   }

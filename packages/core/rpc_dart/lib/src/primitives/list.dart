@@ -39,6 +39,7 @@ class RpcList<T extends IRpcSerializable> implements IRpcSerializable {
     return list;
   }
 
+  /// Returns a decoder function that builds an [RpcList] from JSON.
   static RpcList<T> Function(Map<String, dynamic>)
       fromJson<T extends IRpcSerializable>(
               T Function(Map<String, dynamic>) fromJson) =>

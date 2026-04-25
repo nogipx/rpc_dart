@@ -8,8 +8,10 @@
 /// Signals framework-level issues such as depleted Stream IDs or invalid
 /// configuration.
 class RpcException implements Exception {
+  /// Human-readable description of the error.
   final String message;
 
+  /// Creates an [RpcException] with the given [message].
   RpcException(this.message);
 
   @override

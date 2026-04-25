@@ -268,6 +268,7 @@ mixin RpcContextualLogging {
         data: data,
       );
 
+  /// Logs [message] at debug level, attaching the current context automatically.
   Future<void> debugWithContext(
     String message, {
     String? context,
@@ -280,6 +281,7 @@ mixin RpcContextualLogging {
         data: data,
       );
 
+  /// Logs [message] at warning level, attaching the current context automatically.
   Future<void> warningWithContext(
     String message, {
     String? context,
@@ -292,6 +294,7 @@ mixin RpcContextualLogging {
         data: data,
       );
 
+  /// Logs [message] at error level, attaching the current context automatically.
   Future<void> errorWithContext(
     String message, {
     String? context,

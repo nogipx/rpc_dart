@@ -70,6 +70,7 @@ final class RpcMessageParser {
   final Uint8List Function(Uint8List payload)? _decompressor;
   final int _maxMessagesPerChunk;
 
+  /// Creates an [RpcMessageParser] with the given configuration.
   RpcMessageParser({
     RpcLogger? logger,
     int maxMessageLength = 64 * 1024 * 1024,

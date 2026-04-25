@@ -36,6 +36,7 @@ class RpcBool extends RpcPrimitiveMessage<bool> {
     }
   }
 
+  /// Default codec for [RpcBool].
   static RpcCodec<RpcBool> get codec => RpcCodec<RpcBool>(RpcBool.fromJson);
 
   @override

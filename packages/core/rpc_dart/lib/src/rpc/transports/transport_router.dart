@@ -664,6 +664,7 @@ final class RpcTransportRouterBuilder {
     return this;
   }
 
+  /// Sets the maximum number of concurrently active streams.
   RpcTransportRouterBuilder maxActiveStreams(int value) {
     if (value <= 0) {
       throw ArgumentError.value(value, 'value', 'Must be > 0');

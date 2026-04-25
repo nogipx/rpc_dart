@@ -15,6 +15,7 @@ final class ClientStreamResponder<TRequest extends Object,
 
   final Completer<void> _doneCompleter = Completer<void>();
 
+  /// Completes when the client stream has fully finished.
   Future<void> get done => _doneCompleter.future;
 
   void _completeDone() {

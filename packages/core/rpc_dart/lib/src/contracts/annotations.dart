@@ -6,10 +6,23 @@
 part of '_index.dart';
 
 /// RPC method kinds supported by the generator.
-enum RpcMethodKind { unary, serverStream, clientStream, bidirectionalStream }
+enum RpcMethodKind {
+  /// Single request, single response.
+  unary,
+
+  /// Single request, stream of responses.
+  serverStream,
+
+  /// Stream of requests, single response.
+  clientStream,
+
+  /// Stream of requests and responses.
+  bidirectionalStream,
+}
 
 /// Marks a service interface to generate caller/responder wrappers.
 class RpcService {
+  /// Creates an [RpcService] annotation with the given [name].
   const RpcService({
     required this.name,
     this.transferMode = RpcDataTransferMode.auto,
@@ -42,12 +55,16 @@ class RpcService {
 /// }
 /// ```
 class RpcRemoved {
+  /// Creates an [RpcRemoved] annotation with an optional [message].
   const RpcRemoved([this.message = 'This method has been removed.']);
+
+  /// Explanation shown in the deprecation warning and runtime error.
   final String message;
 }
 
 /// Describes how a method should be registered and invoked.
 class RpcMethod {
+  /// Creates an [RpcMethod] annotation with a specific [kind].
   const RpcMethod({
     required this.name,
     required this.kind,
@@ -57,6 +74,7 @@ class RpcMethod {
     this.transferMode,
   });
 
+  /// Creates a unary [RpcMethod] annotation.
   const RpcMethod.unary({
     required this.name,
     this.description,
@@ -65,6 +83,7 @@ class RpcMethod {
     this.transferMode,
   }) : kind = RpcMethodKind.unary;
 
+  /// Creates a server-stream [RpcMethod] annotation.
   const RpcMethod.serverStream({
     required this.name,
     this.description,
@@ -73,6 +92,7 @@ class RpcMethod {
     this.transferMode,
   }) : kind = RpcMethodKind.serverStream;
 
+  /// Creates a client-stream [RpcMethod] annotation.
   const RpcMethod.clientStream({
     required this.name,
     this.description,
@@ -81,6 +101,7 @@ class RpcMethod {
     this.transferMode,
   }) : kind = RpcMethodKind.clientStream;
 
+  /// Creates a bidirectional-stream [RpcMethod] annotation.
   const RpcMethod.bidirectionalStream({
     required this.name,
     this.description,

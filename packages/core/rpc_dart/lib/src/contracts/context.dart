@@ -377,16 +377,34 @@ final class RpcContext {
 
 /// Метаданные домена, извлеченные из RPC контекста
 class DomainMetadata {
+  /// ID of the user initiating the request.
   final String? userId;
+
+  /// Session identifier.
   final String? sessionId;
+
+  /// Tenant identifier for multi-tenant systems.
   final String? tenantId;
+
+  /// Originating domain name.
   final String? fromDomain;
+
+  /// Target domain name.
   final String? toDomain;
+
+  /// Operation or method name.
   final String? operation;
+
+  /// Operation category or type.
   final String? operationType;
+
+  /// Distributed trace ID.
   final String? traceId;
+
+  /// Correlation ID for linking related requests.
   final String? correlationId;
 
+  /// Creates a [DomainMetadata] snapshot.
   const DomainMetadata({
     this.userId,
     this.sessionId,
@@ -454,8 +472,10 @@ final class RpcCancellationToken {
 
 /// Исключение отмены операции
 final class RpcCancelledException implements Exception {
+  /// Reason the operation was cancelled.
   final String message;
 
+  /// Creates an [RpcCancelledException] with the given [message].
   const RpcCancelledException(this.message);
 
   @override
@@ -464,9 +484,13 @@ final class RpcCancelledException implements Exception {
 
 /// Исключение превышения deadline
 final class RpcDeadlineExceededException implements Exception {
+  /// The deadline that was exceeded.
   final DateTime deadline;
+
+  /// The timeout duration that was configured.
   final Duration timeout;
 
+  /// Creates an [RpcDeadlineExceededException] with [deadline] and [timeout].
   const RpcDeadlineExceededException(this.deadline, this.timeout);
 
   @override

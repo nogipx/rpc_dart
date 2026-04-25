@@ -7,12 +7,25 @@ part of '_logs.dart';
 
 /// Logging levels.
 enum RpcLoggerLevel {
+  /// Framework-internal trace messages.
   internal,
+
+  /// Debug-level messages for development.
   debug,
+
+  /// General informational messages.
   info,
+
+  /// Non-fatal warnings.
   warning,
+
+  /// Recoverable errors.
   error,
+
+  /// Critical failures that may halt the system.
   critical,
+
+  /// All logging suppressed.
   disabled;
 
   /// Creates a level from JSON string.
@@ -21,6 +34,7 @@ enum RpcLoggerLevel {
   }
 }
 
+/// Factory function type for creating [RpcLogger] instances.
 typedef RpcLoggerFactory = RpcLogger Function(
   String loggerName, {
   RpcLoggerColors? colors,
@@ -42,6 +56,7 @@ class LogFormattingResult {
   /// Message body content.
   final String content;
 
+  /// Creates a result with [header] and [content].
   LogFormattingResult(this.header, this.content);
 }
 
@@ -84,6 +99,7 @@ abstract interface class RpcLogger {
     );
   }
 
+  /// Creates a child logger with a name derived from this logger.
   RpcLogger child(String childName, {String? label});
 
   /// Sends a log entry with the specified level.

@@ -60,6 +60,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
   /// in-process and only wastes CPU.
   final bool compressionEnabled;
 
+  /// Creates an [RpcCallerEndpoint] bound to the given transport.
   RpcCallerEndpoint({
     required super.transport,
     super.debugLabel,

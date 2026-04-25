@@ -21,6 +21,8 @@ part 'server/responder.dart';
 part 'unary/caller.dart';
 part 'unary/responder.dart';
 
+/// Contract for server-side responders that handle a single stream.
 abstract interface class IRpcResponder {
+  /// The transport-level stream ID for this responder.
   int get id;
 }

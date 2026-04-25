@@ -20,6 +20,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
         label: debugLabel,
       );
 
+  /// Creates an [RpcResponderEndpoint] bound to the given transport.
   RpcResponderEndpoint({
     required super.transport,
     super.debugLabel,
@@ -33,12 +34,15 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     _validateServerTransport();
   }
 
+  /// All contracts registered with this endpoint, keyed by service name.
   Map<String, RpcResponderContract> get registeredContracts =>
       _registry.contracts;
 
+  /// All method registrations exported from all contracts.
   Map<String, RpcMethodRegistration<IRpcSerializable, IRpcSerializable>>
       get registeredMethods => _registry.exportMethodRegistrations();
 
+  /// All method bindings keyed by `serviceName.methodName`.
   Map<String, RpcResponderMethodBinding> get registeredMethodBindings =>
       _registry.methods;
 
@@ -69,10 +73,12 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
     return metrics;
   }
 
+  /// Registers [contract] so its methods can handle incoming requests.
   void registerServiceContract(RpcResponderContract contract) {
     _registry.registerContract(contract, logger);
   }
 
+  /// Removes the contract for [serviceName] and disposes its resources.
   void unregisterServiceContract(String serviceName) {
     _registry.unregisterContract(serviceName, logger);
   }
@@ -1213,6 +1219,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase {
   bool _isPingMethodKey(String methodKey) =>
       methodKey == RpcEndpointPingProtocol.methodKey;
 
+  /// Throws if [serviceName].[methodName] is not registered with [expectedType].
   void validateMethodExists(
     String serviceName,
     String methodName,

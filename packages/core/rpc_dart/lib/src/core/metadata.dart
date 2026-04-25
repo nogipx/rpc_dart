@@ -211,6 +211,7 @@ final class RpcMetadata {
     return '99999999u';
   }
 
+  /// Returns the binary status details from the `grpc-status-details-bin` header.
   Uint8List? get statusDetailsBin {
     final raw = getHeaderValue(RpcHeaders.grpcStatusDetails);
     if (raw == null || raw.isEmpty) return null;

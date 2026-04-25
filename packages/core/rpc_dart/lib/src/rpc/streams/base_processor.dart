@@ -64,6 +64,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Method path `/Service/Method`.
   late final String _methodPath;
 
+  /// Creates a [StreamProcessor] for the given transport and stream.
   StreamProcessor({
     required IRpcTransport transport,
     required int streamId,
@@ -711,6 +712,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Method path in /Service/Method format.
   late final String _methodPath;
 
+  /// Creates a [CallProcessor] for the given transport and method.
   CallProcessor({
     required IRpcTransport transport,
     required String serviceName,

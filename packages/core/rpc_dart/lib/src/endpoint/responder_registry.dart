@@ -5,14 +5,25 @@
 
 part of '_index.dart';
 
+/// Associates a method key with its codec or zero-copy registration.
 final class RpcResponderMethodBinding {
+  /// Service that owns this method.
   final String serviceName;
+
+  /// Method name within the service.
   final String methodName;
+
+  /// Communication pattern of the method.
   final RpcMethodType type;
+
+  /// Codec-based registration, present when not zero-copy.
   final RpcMethodRegistration<IRpcSerializable, IRpcSerializable>?
       codecRegistration;
+
+  /// Zero-copy registration, present when not using serialization.
   final RpcZeroCopyMethodRegistration<Object, Object>? zeroCopyRegistration;
 
+  /// Creates a method binding with at least one registration variant.
   RpcResponderMethodBinding({
     required this.serviceName,
     required this.methodName,
@@ -24,29 +35,38 @@ final class RpcResponderMethodBinding {
           'Method binding requires either codec or zero-copy registration',
         );
 
+  /// Fully-qualified key `serviceName.methodName`.
   String get methodKey => '$serviceName.$methodName';
 
+  /// True when this binding uses zero-copy (no serialization).
   bool get isZeroCopy => zeroCopyRegistration != null;
 
+  /// True when this binding uses codec serialization.
   bool get usesSerialization => codecRegistration != null;
 
+  /// Returns the codec registration, throwing if absent.
   RpcMethodRegistration<IRpcSerializable, IRpcSerializable> get codecMethod =>
       codecRegistration!;
 
+  /// Returns the zero-copy registration, throwing if absent.
   RpcZeroCopyMethodRegistration<Object, Object> get zeroCopyMethod =>
       zeroCopyRegistration!;
 }
 
+/// Stores and manages registered contracts and their method bindings.
 final class RpcResponderMethodRegistry {
   final Map<String, RpcResponderContract> _contracts = {};
   final Map<String, RpcResponderMethodBinding> _methods = {};
 
+  /// All registered contracts, keyed by service name.
   Map<String, RpcResponderContract> get contracts =>
       Map.unmodifiable(_contracts);
 
+  /// All method bindings keyed by `serviceName.methodName`.
   Map<String, RpcResponderMethodBinding> get methods =>
       Map.unmodifiable(_methods);
 
+  /// Exports all bindings as codec-typed registrations (wrapping zero-copy when needed).
   Map<String, RpcMethodRegistration<IRpcSerializable, IRpcSerializable>>
       exportMethodRegistrations() {
     final exported =
@@ -62,6 +82,7 @@ final class RpcResponderMethodRegistry {
     return Map.unmodifiable(exported);
   }
 
+  /// Registers [contract] and indexes all its methods.
   void registerContract(RpcResponderContract contract, RpcLogger logger) {
     final serviceName = contract.serviceName;
 
@@ -128,6 +149,7 @@ final class RpcResponderMethodRegistry {
     );
   }
 
+  /// Removes the contract for [serviceName] and its method bindings.
   void unregisterContract(String serviceName, RpcLogger logger) {
     final contract = _contracts.remove(serviceName);
 
@@ -163,6 +185,7 @@ final class RpcResponderMethodRegistry {
     }
   }
 
+  /// Disposes all registered contracts and clears the registry.
   void disposeAll(RpcLogger logger) {
     for (final entry in _contracts.entries) {
       final serviceName = entry.key;
@@ -186,8 +209,10 @@ final class RpcResponderMethodRegistry {
     _methods.clear();
   }
 
+  /// Returns the binding for [methodKey], or null if not registered.
   RpcResponderMethodBinding? lookup(String methodKey) => _methods[methodKey];
 
+  /// Returns true if [methodKey] is registered.
   bool containsMethod(String methodKey) => _methods.containsKey(methodKey);
 
   RpcMethodRegistration<IRpcSerializable, IRpcSerializable> _convertZeroCopy(

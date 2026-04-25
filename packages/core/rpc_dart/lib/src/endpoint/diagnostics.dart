@@ -16,6 +16,7 @@ final class RpcEndpointHealth {
   /// Report timestamp.
   final DateTime timestamp;
 
+  /// Creates an [RpcEndpointHealth] snapshot.
   RpcEndpointHealth({
     required this.endpointStatus,
     Map<String, RpcHealthStatus>? dependencies,

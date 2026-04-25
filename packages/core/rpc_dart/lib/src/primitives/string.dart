@@ -7,6 +7,7 @@ part of '_index.dart';
 
 /// Wrapper for a string value.
 class RpcString extends RpcPrimitiveMessage<String> {
+  /// Creates an [RpcString] wrapping [value].
   const RpcString(super.value);
 
   /// Creates RpcString from JSON.
@@ -21,6 +22,7 @@ class RpcString extends RpcPrimitiveMessage<String> {
     }
   }
 
+  /// Default codec for [RpcString].
   static RpcCodec<RpcString> get codec =>
       RpcCodec<RpcString>(RpcString.fromJson);
 

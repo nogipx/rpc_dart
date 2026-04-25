@@ -119,6 +119,7 @@ abstract class IRpcTransport {
   /// transport (even Stream IDs).
   bool get isClient;
 
+  /// Returns true when the transport has been closed.
   bool get isClosed;
 
   /// Whether the transport supports zero-copy operations (sendDirectObject).

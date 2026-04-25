@@ -105,6 +105,7 @@ final class BidirectionalStreamCaller<TRequest extends Object,
   /// Request sink for sending to the server (zero-copy friendly).
   StreamSink<TRequest>? _requestSink;
 
+  /// Sink used to send requests to the server.
   StreamSink<TRequest> get requestSink {
     if (_requestSink == null) {
       final controller = StreamController<TRequest>();

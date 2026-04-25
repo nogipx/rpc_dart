@@ -55,6 +55,7 @@ final class RpcEndpointPingResult {
   /// Response headers in readable form.
   final Map<String, String> responseHeaders;
 
+  /// Creates a ping result from the given timestamps and metadata.
   RpcEndpointPingResult({
     required this.sentAt,
     required this.receivedAt,
@@ -68,11 +69,19 @@ final class RpcEndpointPingResult {
 
 /// Manages sending a ping and handling its response for an endpoint.
 final class RpcEndpointPingExchange {
+  /// Transport used to send and receive ping messages.
   final IRpcTransport transport;
+
+  /// Logger for ping lifecycle events.
   final RpcLogger logger;
+
+  /// Stream ID reserved for this ping exchange.
   final int streamId;
+
+  /// Timestamp when the ping was sent.
   final DateTime sentAt;
 
+  /// Creates an [RpcEndpointPingExchange] for the given transport.
   RpcEndpointPingExchange({
     required this.transport,
     required this.logger,
@@ -80,6 +89,7 @@ final class RpcEndpointPingExchange {
     required this.sentAt,
   });
 
+  /// Sends the ping and waits for the pong response.
   Future<RpcEndpointPingResult> execute({
     required RpcMetadata metadata,
     Duration? timeout,

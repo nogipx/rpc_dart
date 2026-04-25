@@ -7,6 +7,7 @@ part of '_index.dart';
 
 /// Wrapper for a numeric value.
 class RpcNum extends RpcPrimitiveMessage<num> {
+  /// Creates an [RpcNum] wrapping [value].
   const RpcNum(super.value);
 
   /// Creates RpcNum from JSON.
@@ -32,16 +33,26 @@ class RpcNum extends RpcPrimitiveMessage<num> {
     }
   }
 
+  /// Default codec for [RpcNum].
   static RpcCodec<RpcNum> get codec => RpcCodec<RpcNum>(RpcNum.fromJson);
 
   @override
   String toString() => value.toString();
 
   // Arithmetic operators.
+  /// Adds [other] to this value.
   RpcNum operator +(Object other) => RpcNum(value + _extractNum(other));
+
+  /// Subtracts [other] from this value.
   RpcNum operator -(Object other) => RpcNum(value - _extractNum(other));
+
+  /// Multiplies this value by [other].
   RpcNum operator *(Object other) => RpcNum(value * _extractNum(other));
+
+  /// Divides this value by [other].
   RpcNum operator /(Object other) => RpcNum(value / _extractNum(other));
+
+  /// Integer-divides this value by [other].
   RpcNum operator ~/(Object other) {
     final a = value;
     final b = _extractNum(other);
@@ -51,9 +62,13 @@ class RpcNum extends RpcPrimitiveMessage<num> {
     throw _comparisonException(type: 'RpcNum', op: '~/');
   }
 
+  /// Returns the remainder of dividing this value by [other].
   RpcNum operator %(Object other) => RpcNum(value % _extractNum(other));
+
+  /// Returns the negation of this value.
   RpcNum operator -() => RpcNum(-value);
 
+  /// Returns true if this value is less than [other].
   bool operator <(Object other) {
     if (other is RpcNum) return value < other.value;
     if (other is num) {
@@ -62,6 +77,7 @@ class RpcNum extends RpcPrimitiveMessage<num> {
     throw _unsupportedOperand(type: 'RpcNum', op: '<', other: other);
   }
 
+  /// Returns true if this value is greater than [other].
   bool operator >(Object other) {
     if (other is RpcNum) return value > other.value;
     if (other is num) {
@@ -70,6 +86,7 @@ class RpcNum extends RpcPrimitiveMessage<num> {
     throw _unsupportedOperand(type: 'RpcNum', op: '>', other: other);
   }
 
+  /// Returns true if this value is less than or equal to [other].
   bool operator <=(Object other) {
     if (other is RpcNum) return value <= other.value;
     if (other is num) {
@@ -78,6 +95,7 @@ class RpcNum extends RpcPrimitiveMessage<num> {
     throw _unsupportedOperand(type: 'RpcNum', op: '<=', other: other);
   }
 
+  /// Returns true if this value is greater than or equal to [other].
   bool operator >=(Object other) {
     if (other is RpcNum) return value >= other.value;
     if (other is num) {
@@ -109,6 +127,7 @@ class RpcNum extends RpcPrimitiveMessage<num> {
 
 /// Wrapper for an integer value.
 class RpcInt extends RpcPrimitiveMessage<int> {
+  /// Creates an [RpcInt] wrapping [value].
   const RpcInt(super.value);
 
   /// Creates RpcInt from JSON.
@@ -124,20 +143,35 @@ class RpcInt extends RpcPrimitiveMessage<int> {
     }
   }
 
+  /// Default codec for [RpcInt].
   static RpcCodec<RpcInt> get codec => RpcCodec<RpcInt>(RpcInt.fromJson);
 
   @override
   String toString() => value.toString();
 
   // Arithmetic operators.
+  /// Adds [other] to this value.
   RpcInt operator +(Object other) => RpcInt(value + _extractInt(other));
+
+  /// Subtracts [other] from this value.
   RpcInt operator -(Object other) => RpcInt(value - _extractInt(other));
+
+  /// Multiplies this value by [other].
   RpcInt operator *(Object other) => RpcInt(value * _extractInt(other));
+
+  /// Integer-divides this value by [other].
   RpcInt operator ~/(Object other) => RpcInt(value ~/ _extractInt(other));
+
+  /// Returns the remainder of dividing this value by [other].
   RpcInt operator %(Object other) => RpcInt(value % _extractInt(other));
+
+  /// Divides this value by [other], returning an [RpcDouble].
   RpcDouble operator /(Object other) => RpcDouble(value / _extractInt(other));
+
+  /// Returns the negation of this value.
   RpcInt operator -() => RpcInt(-value);
 
+  /// Returns true if this value is less than [other].
   bool operator <(Object other) {
     if (other is RpcInt) return value < other.value;
     if (other is num) {
@@ -146,6 +180,7 @@ class RpcInt extends RpcPrimitiveMessage<int> {
     throw _unsupportedOperand(type: 'RpcInt', op: '<', other: other);
   }
 
+  /// Returns true if this value is greater than [other].
   bool operator >(Object other) {
     if (other is RpcInt) return value > other.value;
     if (other is num) {
@@ -154,6 +189,7 @@ class RpcInt extends RpcPrimitiveMessage<int> {
     throw _unsupportedOperand(type: 'RpcInt', op: '>', other: other);
   }
 
+  /// Returns true if this value is less than or equal to [other].
   bool operator <=(Object other) {
     if (other is RpcInt) return value <= other.value;
     if (other is num) {
@@ -162,6 +198,7 @@ class RpcInt extends RpcPrimitiveMessage<int> {
     throw _unsupportedOperand(type: 'RpcInt', op: '<=', other: other);
   }
 
+  /// Returns true if this value is greater than or equal to [other].
   bool operator >=(Object other) {
     if (other is RpcInt) return value >= other.value;
     if (other is num) {
@@ -194,6 +231,7 @@ class RpcInt extends RpcPrimitiveMessage<int> {
 
 /// Wrapper for a double value.
 class RpcDouble extends RpcPrimitiveMessage<double> {
+  /// Creates an [RpcDouble] wrapping [value].
   const RpcDouble(super.value);
 
   /// Creates RpcDouble from JSON.
@@ -216,6 +254,7 @@ class RpcDouble extends RpcPrimitiveMessage<double> {
     }
   }
 
+  /// Default codec for [RpcDouble].
   static RpcCodec<RpcDouble> get codec =>
       RpcCodec<RpcDouble>(RpcDouble.fromJson);
 
@@ -223,18 +262,30 @@ class RpcDouble extends RpcPrimitiveMessage<double> {
   String toString() => value.toString();
 
   // Arithmetic operators.
+  /// Adds [other] to this value.
   RpcDouble operator +(Object other) =>
       RpcDouble(value + _extractDouble(other));
+
+  /// Subtracts [other] from this value.
   RpcDouble operator -(Object other) =>
       RpcDouble(value - _extractDouble(other));
+
+  /// Multiplies this value by [other].
   RpcDouble operator *(Object other) =>
       RpcDouble(value * _extractDouble(other));
+
+  /// Divides this value by [other].
   RpcDouble operator /(Object other) =>
       RpcDouble(value / _extractDouble(other));
+
+  /// Returns the remainder of dividing this value by [other].
   RpcDouble operator %(Object other) =>
       RpcDouble(value % _extractDouble(other));
+
+  /// Returns the negation of this value.
   RpcDouble operator -() => RpcDouble(-value);
 
+  /// Returns true if this value is less than [other].
   bool operator <(Object other) {
     if (other is RpcDouble) return value < other.value;
     if (other is num) {
@@ -243,6 +294,7 @@ class RpcDouble extends RpcPrimitiveMessage<double> {
     throw _unsupportedOperand(type: 'RpcDouble', op: '<', other: other);
   }
 
+  /// Returns true if this value is greater than [other].
   bool operator >(Object other) {
     if (other is RpcDouble) return value > other.value;
     if (other is num) {
@@ -251,6 +303,7 @@ class RpcDouble extends RpcPrimitiveMessage<double> {
     throw _unsupportedOperand(type: 'RpcDouble', op: '>', other: other);
   }
 
+  /// Returns true if this value is less than or equal to [other].
   bool operator <=(Object other) {
     if (other is RpcDouble) return value <= other.value;
     if (other is num) {
@@ -259,6 +312,7 @@ class RpcDouble extends RpcPrimitiveMessage<double> {
     throw _unsupportedOperand(type: 'RpcDouble', op: '<=', other: other);
   }
 
+  /// Returns true if this value is greater than or equal to [other].
   bool operator >=(Object other) {
     if (other is RpcDouble) return value >= other.value;
     if (other is num) {

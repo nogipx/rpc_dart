@@ -14,6 +14,7 @@ class RpcBinaryCodec<T> implements IRpcCodec<T> {
   final Uint8List Function(T value) _toBytes;
   final T Function(Uint8List bytes) _fromBytes;
 
+  /// Creates an [RpcBinaryCodec] with [toBytes] and [fromBytes] callbacks.
   const RpcBinaryCodec({
     required Uint8List Function(T value) toBytes,
     required T Function(Uint8List bytes) fromBytes,

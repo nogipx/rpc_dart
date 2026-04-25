@@ -22,22 +22,41 @@ enum RpcDataTransferMode {
 
 /// RPC method types.
 enum RpcMethodType {
+  /// Single request, single response.
   unaryRequest,
+
+  /// Single request, stream of responses.
   serverStream,
+
+  /// Stream of requests, single response.
   clientStream,
+
+  /// Stream of requests and responses.
   bidirectionalStream,
 }
 
 /// Method registration within a contract.
 final class RpcMethodRegistration<TRequest extends IRpcSerializable,
     TResponse extends IRpcSerializable> {
+  /// Method identifier used for routing.
   final String name;
+
+  /// Communication pattern for this method.
   final RpcMethodType type;
+
+  /// User-provided handler function.
   final Function handler;
+
+  /// Human-readable description of the method.
   final String description;
+
+  /// Codec used to serialize/deserialize requests.
   final IRpcCodec<TRequest> requestCodec;
+
+  /// Codec used to serialize/deserialize responses.
   final IRpcCodec<TResponse> responseCodec;
 
+  /// Creates a method registration entry.
   const RpcMethodRegistration({
     required this.name,
     required this.type,
@@ -102,14 +121,22 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
   }
 }
 
-/// 🚀 ZERO-COPY: Method registration without IRpcSerializable bounds.
+/// Zero-copy method registration without [IRpcSerializable] bounds.
 final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     TResponse extends Object> {
+  /// Method identifier used for routing.
   final String name;
+
+  /// Communication pattern for this method.
   final RpcMethodType type;
+
+  /// User-provided handler function.
   final Function handler;
+
+  /// Human-readable description of the method.
   final String description;
 
+  /// Creates a zero-copy method registration entry.
   const RpcZeroCopyMethodRegistration({
     required this.name,
     required this.type,

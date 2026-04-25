@@ -44,6 +44,7 @@ class RpcHealthStatus {
   /// Timestamp when the snapshot was taken.
   final DateTime timestamp;
 
+  /// Creates an [RpcHealthStatus] for the given [component] and [level].
   RpcHealthStatus({
     required this.component,
     required this.level,
