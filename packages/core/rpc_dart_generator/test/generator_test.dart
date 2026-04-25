@@ -70,6 +70,133 @@ class Foo implements IRpcSerializable {
       },
     );
 
+    test('generates versioned contract with delegation', () async {
+      final packageConfig = await _loadPackageConfig();
+      final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+      await readerWriter.testing.loadIsolateSources();
+
+      const source = r'''
+import 'dart:async';
+
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_generator/rpc_dart_generator.dart';
+
+part 'versioned.g.dart';
+
+@RpcService(name: 'Calc')
+abstract class ICalc {
+  @RpcMethod(name: 'sum')
+  Future<Foo> sum(Foo request, {RpcContext? context});
+
+  @RpcMethod(name: 'numbers', kind: RpcMethodKind.serverStream)
+  Stream<Foo> numbers(Foo request, {RpcContext? context});
+}
+
+@RpcService(name: 'Calc.v2')
+abstract class ICalcV2 implements ICalc {
+  @override
+  @RpcMethod(name: 'sum')
+  Future<Bar> sum(Bar request, {RpcContext? context});
+}
+
+class Foo implements IRpcSerializable {
+  @override
+  Map<String, dynamic> toJson() => {};
+}
+
+class Bar implements IRpcSerializable {
+  @override
+  Map<String, dynamic> toJson() => {};
+}
+''';
+
+      await testBuilder(
+        rpcDartBuilder(BuilderOptions({})),
+        {'rpc_dart_generator|lib/versioned.dart': source},
+        rootPackage: 'rpc_dart_generator',
+        packageConfig: packageConfig,
+        readerWriter: readerWriter,
+        outputs: {
+          'rpc_dart_generator|lib/versioned.rpc_dart.g.part': decodedMatches(
+            allOf([
+              // Base contract
+              contains('class CalcNames'),
+              contains('class CalcCaller'),
+              contains('abstract class CalcResponder'),
+              // Versioned contract names
+              contains('class CalcV2Names'),
+              contains("static const service = 'Calc.v2'"),
+              // Versioned caller has parent field
+              contains('final CalcCaller _parent'),
+              // Versioned caller delegates numbers to parent
+              contains('_parent.numbers('),
+              // Versioned caller has own sum method
+              contains('callUnary<Bar, Bar>'),
+              // Versioned responder does NOT implement ICalcV2
+              isNot(contains(
+                  'abstract class CalcV2Responder extends RpcResponderContract implements')),
+              // Versioned responder has abstract sum declaration
+              contains('Future<Bar> sum('),
+            ]),
+          ),
+        },
+      );
+    });
+
+    test('generates @RpcRemoved as deprecated throwing method', () async {
+      final packageConfig = await _loadPackageConfig();
+      final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+      await readerWriter.testing.loadIsolateSources();
+
+      const source = r'''
+import 'dart:async';
+
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_generator/rpc_dart_generator.dart';
+
+part 'removed.g.dart';
+
+@RpcService(name: 'Calc')
+abstract class ICalc {
+  @RpcMethod(name: 'sum')
+  Future<Foo> sum(Foo request, {RpcContext? context});
+
+  @RpcMethod(name: 'numbers', kind: RpcMethodKind.serverStream)
+  Stream<Foo> numbers(Foo request, {RpcContext? context});
+}
+
+@RpcService(name: 'Calc.v2')
+abstract class ICalcV2 implements ICalc {
+  @RpcRemoved('Use multiply() instead')
+  @override
+  Future<Foo> sum(Foo request, {RpcContext? context});
+}
+
+class Foo implements IRpcSerializable {
+  @override
+  Map<String, dynamic> toJson() => {};
+}
+''';
+
+      await testBuilder(
+        rpcDartBuilder(BuilderOptions({})),
+        {'rpc_dart_generator|lib/removed.dart': source},
+        rootPackage: 'rpc_dart_generator',
+        packageConfig: packageConfig,
+        readerWriter: readerWriter,
+        outputs: {
+          'rpc_dart_generator|lib/removed.rpc_dart.g.part': decodedMatches(
+            allOf([
+              contains("@Deprecated('Use multiply() instead')"),
+              contains('throw UnsupportedError('),
+              contains('_parent.numbers('),
+              isNot(contains('_parent.sum(')),
+            ]),
+          ),
+        },
+      );
+    });
+
     test('fails on invalid signature', () async {
       final packageConfig = await _loadPackageConfig();
       final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');

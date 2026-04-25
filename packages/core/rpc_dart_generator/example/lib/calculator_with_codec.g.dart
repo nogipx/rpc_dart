@@ -15,7 +15,7 @@ part of 'calculator_with_codec.dart';
 class CalculatorSerializeContractNames {
   const CalculatorSerializeContractNames._();
   static const service = 'CalculatorSerialize';
-  static String instance(String suffix) => '\$service\_$suffix';
+  static String instance(String suffix) => '$service\_$suffix';
   static const sum = 'sum';
 }
 

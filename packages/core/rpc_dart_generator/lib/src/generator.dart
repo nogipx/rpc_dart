@@ -17,11 +17,20 @@ import 'package:rpc_dart/rpc_dart.dart'
         RpcDataTransferMode,
         RpcMethod,
         RpcMethodKind,
+        RpcRemoved,
         RpcService;
 import 'package:source_gen/source_gen.dart';
 
 final _rpcMethodChecker = const TypeChecker.typeNamed(
   RpcMethod,
+  inPackage: 'rpc_dart',
+);
+final _rpcServiceChecker = const TypeChecker.typeNamed(
+  RpcService,
+  inPackage: 'rpc_dart',
+);
+final _rpcRemovedChecker = const TypeChecker.typeNamed(
+  RpcRemoved,
   inPackage: 'rpc_dart',
 );
 final _serializableChecker = const TypeChecker.typeNamed(
@@ -33,7 +42,9 @@ final _contextChecker = const TypeChecker.typeNamed(
   inPackage: 'rpc_dart',
 );
 
+/// Code generator for RPC Dart service contracts annotated with [RpcService].
 class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
+  /// Creates an [RpcDartGenerator] with optional [BuilderOptions].
   RpcDartGenerator([BuilderOptions? options])
       : _options = options ?? BuilderOptions({});
 
@@ -64,10 +75,15 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
 
     _validateUniqueMethodNames(methods);
 
+    final parentInfo = _buildParentInfo(element);
+    final removedMethods = _collectRemovedMethods(element);
+
     final emitter = _Emitter(
       classElement: element,
       service: serviceMeta,
       methods: methods,
+      parentInfo: parentInfo,
+      removedMethods: removedMethods,
     );
 
     final raw = emitter.build();
@@ -197,6 +213,66 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     return null;
   }
 
+  _ParentInfo? _buildParentInfo(ClassElement element) {
+    ClassElement? directParent;
+    for (final iface in element.interfaces) {
+      final ifaceEl = iface.element;
+      if (ifaceEl is ClassElement &&
+          _rpcServiceChecker.firstAnnotationOf(ifaceEl) != null) {
+        directParent = ifaceEl;
+        break;
+      }
+    }
+
+    if (directParent == null) return null;
+
+    final ownMethodNames = element.methods.map((m) => m.name).toSet();
+
+    final delegateMethods = <_MethodMeta>[];
+    final seen = <String>{};
+
+    void walk(ClassElement cls) {
+      final anno = _rpcServiceChecker.firstAnnotationOf(cls);
+      if (anno != null) {
+        final serviceMeta = _parseService(ConstantReader(anno));
+        final baseName = _baseNameFor(cls);
+        final methods =
+            _collectMethods(cls, baseName, serviceMeta.transferMode);
+        for (final m in methods) {
+          if (!ownMethodNames.contains(m.declarationName) &&
+              !seen.contains(m.declarationName)) {
+            seen.add(m.declarationName);
+            delegateMethods.add(m);
+          }
+        }
+      }
+      for (final iface in cls.interfaces) {
+        if (iface.element is ClassElement) {
+          walk(iface.element as ClassElement);
+        }
+      }
+    }
+
+    walk(directParent);
+
+    return _ParentInfo(
+      callerClassName: '${_baseNameFor(directParent)}Caller',
+      delegateMethods: delegateMethods,
+    );
+  }
+
+  List<_RemovedMethodInfo> _collectRemovedMethods(ClassElement element) {
+    final result = <_RemovedMethodInfo>[];
+    for (final method in element.methods) {
+      final anno = _rpcRemovedChecker.firstAnnotationOf(method);
+      if (anno == null) continue;
+      final message = ConstantReader(anno).peek('message')?.stringValue ??
+          '${method.name} has been removed.';
+      result.add(_RemovedMethodInfo(element: method, message: message));
+    }
+    return result;
+  }
+
   void _validateUniqueMethodNames(List<_MethodMeta> methods) {
     final names = <String, MethodElement>{};
     for (final method in methods) {
@@ -218,11 +294,15 @@ class _Emitter {
     required this.classElement,
     required this.service,
     required this.methods,
+    this.parentInfo,
+    this.removedMethods = const [],
   });
 
   final ClassElement classElement;
   final _ServiceMeta service;
   final List<_MethodMeta> methods;
+  final _ParentInfo? parentInfo;
+  final List<_RemovedMethodInfo> removedMethods;
 
   String get _baseName {
     final name = classElement.displayName;
@@ -345,16 +425,33 @@ class _Emitter {
     final b = StringBuffer();
     final className = '${_baseName}Caller';
     final defaultTransfer = 'RpcDataTransferMode.${service.transferMode.name}';
+    final isVersioned = parentInfo != null;
 
     b.writeln(
       'class $className extends RpcCallerContract '
       'implements ${classElement.name} {',
     );
+
+    if (isVersioned) {
+      b.writeln('  final ${parentInfo!.callerClassName} _parent;');
+      b.writeln();
+    }
+
     b.writeln('  $className(');
     b.writeln('    RpcCallerEndpoint endpoint, {');
     b.writeln('    String? serviceNameOverride,');
     b.writeln('    RpcDataTransferMode dataTransferMode = $defaultTransfer,');
-    b.writeln('  }) : super(');
+
+    if (isVersioned) {
+      b.writeln('  }) : _parent = ${parentInfo!.callerClassName}(');
+      b.writeln('          endpoint,');
+      b.writeln('          dataTransferMode: dataTransferMode,');
+      b.writeln('        ),');
+      b.writeln('        super(');
+    } else {
+      b.writeln('  }) : super(');
+    }
+
     b.writeln('          serviceNameOverride ?? ${_baseName}Names.service,');
     b.writeln('          endpoint,');
     b.writeln('          dataTransferMode: dataTransferMode,');
@@ -368,17 +465,85 @@ class _Emitter {
       b.writeln();
     }
 
+    if (isVersioned) {
+      for (final method in parentInfo!.delegateMethods) {
+        b.writeln(_buildDelegateMethod(method));
+        b.writeln();
+      }
+    }
+
+    for (final removed in removedMethods) {
+      b.writeln(_buildRemovedMethod(removed));
+      b.writeln();
+    }
+
     b.writeln('}');
     return b.toString();
+  }
+
+  String _buildRemovedMethod(_RemovedMethodInfo info) {
+    final method = info.element;
+    final returnType = method.returnType.getDisplayString();
+    final escaped = info.message.replaceAll("'", "\\'");
+
+    final positional = method.formalParameters
+        .where((p) => p.isPositional)
+        .map((p) => '${p.type.getDisplayString()} ${p.name}')
+        .join(', ');
+    final named = method.formalParameters
+        .where((p) => p.isNamed)
+        .map((p) => '${p.type.getDisplayString()} ${p.name}')
+        .join(', ');
+    final params = named.isEmpty
+        ? positional
+        : positional.isEmpty
+            ? '{$named}'
+            : '$positional, {$named}';
+
+    return "  @Deprecated('$escaped')\n"
+        '  @override\n'
+        '  $returnType ${method.name}($params) =>\n'
+        "      throw UnsupportedError('$escaped');";
+  }
+
+  String _buildDelegateMethod(_MethodMeta method) {
+    final sig = method.signature;
+    final returnType = sig.element.returnType.getDisplayString();
+    final requestTypeStr = sig.requestType.getDisplayString();
+    final contextParam = sig.hasContext ? ', {RpcContext? context}' : '';
+    final contextArg = sig.hasContext ? ', context: context' : '';
+
+    if (sig.isRequestStream) {
+      return '  @override\n'
+          '  $returnType ${sig.element.name}('
+          'Stream<$requestTypeStr> requests$contextParam) {\n'
+          '    return _parent.${sig.element.name}(requests$contextArg);\n'
+          '  }';
+    } else {
+      return '  @override\n'
+          '  $returnType ${sig.element.name}('
+          '$requestTypeStr request$contextParam) {\n'
+          '    return _parent.${sig.element.name}(request$contextArg);\n'
+          '  }';
+    }
   }
 
   String _buildResponder() {
     final b = StringBuffer();
     final className = '${_baseName}Responder';
     final defaultTransfer = 'RpcDataTransferMode.${service.transferMode.name}';
+    final isVersioned = parentInfo != null;
+
+    // Versioned responders do not implement the full interface — they only
+    // handle their own slice of methods. Implementing the parent interface
+    // would force users to implement inherited methods that belong to the
+    // parent responder.
+    final implementsClause =
+        isVersioned ? '' : 'implements ${classElement.name} ';
+
     b.writeln(
       'abstract class $className extends RpcResponderContract '
-      'implements ${classElement.name} {',
+      '$implementsClause{',
     );
     b.writeln('  $className({');
     b.writeln('    String? serviceNameOverride,');
@@ -396,6 +561,15 @@ class _Emitter {
       );
     }
     b.writeln('  }');
+
+    // Versioned responders need explicit abstract method declarations because
+    // they don't implement the interface (which would otherwise provide them).
+    if (isVersioned) {
+      b.writeln();
+      for (final method in methods) {
+        b.writeln(method.signature.abstractMethodDecl(method));
+      }
+    }
 
     b.writeln('}');
     return b.toString();
@@ -688,6 +862,12 @@ class _Signature {
   final bool isRequestStream;
   final bool isResponseStream;
 
+  String abstractMethodDecl(_MethodMeta meta) {
+    final returnType = element.returnType.getDisplayString();
+    final requestTypeStr = requestType.getDisplayString();
+    return '  $returnType ${element.name}(${_buildParam(requestTypeStr)});';
+  }
+
   String callerMethodImpl(_MethodMeta meta, RpcDataTransferMode serviceMode) {
     final buffer = StringBuffer();
     final returnType = element.returnType.getDisplayString();
@@ -880,6 +1060,26 @@ class _CodecInfo {
 
   final String typeName;
   final DartType? customCodecType;
+}
+
+class _ParentInfo {
+  _ParentInfo({
+    required this.callerClassName,
+    required this.delegateMethods,
+  });
+
+  final String callerClassName;
+  final List<_MethodMeta> delegateMethods;
+}
+
+class _RemovedMethodInfo {
+  _RemovedMethodInfo({
+    required this.element,
+    required this.message,
+  });
+
+  final MethodElement element;
+  final String message;
 }
 
 extension<E> on Iterable<E> {

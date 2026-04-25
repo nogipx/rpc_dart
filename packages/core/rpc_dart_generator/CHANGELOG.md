@@ -1,3 +1,10 @@
+## 0.2.0
+
+- Added contract versioning via Dart interface inheritance. Annotate a child interface with `@RpcService` and `implements ParentContract` — the generator detects the version relationship automatically.
+- Versioned callers get a `_parent` field holding the parent caller. Methods declared in the child route to the child's service; inherited methods delegate to `_parent`, forming a transparent chain across any number of versions.
+- Versioned responders register only the methods declared in their own interface slice, avoiding forced implementation of parent methods that belong to a different responder.
+- Added `@RpcRemoved` support. Methods annotated with `@RpcRemoved` in a versioned interface generate a `@Deprecated` + `throw UnsupportedError` override in the caller and are excluded from delegation.
+
 ## 0.1.6
 - fix: correct custom instance name
 

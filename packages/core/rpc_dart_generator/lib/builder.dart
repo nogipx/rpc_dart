@@ -8,6 +8,7 @@ import 'package:source_gen/source_gen.dart';
 
 import 'src/generator.dart';
 
+/// Creates the RPC Dart code generation builder.
 Builder rpcDartBuilder(BuilderOptions options) {
   return SharedPartBuilder(
     [RpcDartGenerator(options)],
