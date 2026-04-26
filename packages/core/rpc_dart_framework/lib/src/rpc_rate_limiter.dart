@@ -206,6 +206,24 @@ class _TokenBucketCounter extends _RateLimitCounter {
 /// )
 /// ```
 ///
+/// ## Per-key fallback ([perKeyFallback])
+///
+/// A catch-all limit applied per `(key, method)` when no [perMethod] or
+/// [perService] spec matches. Equivalent to listing every method in [perMethod]
+/// with the same spec, but without explicit enumeration.
+///
+/// Replaces patterns like a custom per-user-per-method interceptor:
+///
+/// ```dart
+/// RpcRateLimiter(
+///   global: RateLimit.slidingWindow(max: 5000, window: Duration(seconds: 1)),
+///   perKeyFallback: RateLimit.slidingWindow(max: 50, window: Duration(seconds: 1)),
+///   keyExtractor: (call) =>
+///       call.context.getValue<String>('userId') ??
+///       'anon:${call.endpoint.hashCode}',
+/// )
+/// ```
+///
 /// If [keyExtractor] returns `null` for a call, dynamic limits are skipped and
 /// only [global] applies.
 ///
@@ -213,7 +231,7 @@ class _TokenBucketCounter extends _RateLimitCounter {
 ///
 /// ## Priority
 ///
-/// `perMethod[key]` > `perService[key]` > `global`
+/// `perMethod[key]` > `perService[key]` > `perKeyFallback[key:method]` > `global`
 ///
 /// All limits are enforced within a single Dart isolate (no locks needed).
 class RpcRateLimiter extends IRpcInterceptor {
@@ -228,11 +246,13 @@ class RpcRateLimiter extends IRpcInterceptor {
     RateLimit? global,
     Map<String, RateLimit> perService = const {},
     Map<String, RateLimit> perMethod = const {},
+    RateLimit? perKeyFallback,
     String? Function(RpcMiddlewareContext)? keyExtractor,
     Duration cleanupInterval = const Duration(minutes: 5),
   })  : _globalSpec = global,
         _perServiceSpec = Map.unmodifiable(perService),
         _perMethodSpec = Map.unmodifiable(perMethod),
+        _perKeyFallbackSpec = perKeyFallback,
         _keyExtractor = keyExtractor {
     _globalCounter = global?._createCounter();
 
@@ -254,6 +274,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   final RateLimit? _globalSpec;
   final Map<String, RateLimit> _perServiceSpec;
   final Map<String, RateLimit> _perMethodSpec;
+  final RateLimit? _perKeyFallbackSpec;
   final String? Function(RpcMiddlewareContext)? _keyExtractor;
 
   _RateLimitCounter? _globalCounter;
@@ -263,6 +284,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   // Dynamic counters: userKey → slotKey → counter
   final Map<String, Map<String, _RateLimitCounter>> _dynamicServiceCounters = {};
   final Map<String, Map<String, _RateLimitCounter>> _dynamicMethodCounters = {};
+  final Map<String, Map<String, _RateLimitCounter>> _dynamicFallbackCounters = {};
 
   Timer? _cleanupTimer;
 
@@ -274,10 +296,10 @@ class RpcRateLimiter extends IRpcInterceptor {
     _cleanupTimer?.cancel();
     _dynamicServiceCounters.clear();
     _dynamicMethodCounters.clear();
+    _dynamicFallbackCounters.clear();
   }
 
   void _cleanup() {
-    // Keep counters that were used within the last 2× their window duration.
     final nowUs = DateTime.now().microsecondsSinceEpoch;
     final thresholdUs = _maxWindowUs() * 2;
 
@@ -290,12 +312,14 @@ class RpcRateLimiter extends IRpcInterceptor {
 
     evict(_dynamicServiceCounters);
     evict(_dynamicMethodCounters);
+    evict(_dynamicFallbackCounters);
   }
 
   int _maxWindowUs() {
     var max = 0;
     for (final spec in [
       _globalSpec,
+      _perKeyFallbackSpec,
       ..._perServiceSpec.values,
       ..._perMethodSpec.values,
     ]) {
@@ -325,6 +349,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     if (userKey != null) {
       counter = _getDynamic(_dynamicMethodCounters, userKey, methodKey, _perMethodSpec[methodKey]) ??
           _getDynamic(_dynamicServiceCounters, userKey, call.serviceName, _perServiceSpec[call.serviceName]) ??
+          _getDynamic(_dynamicFallbackCounters, userKey, methodKey, _perKeyFallbackSpec) ??
           _globalCounter;
     } else {
       counter = _staticMethodCounters[methodKey] ??

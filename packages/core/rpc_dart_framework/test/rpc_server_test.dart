@@ -746,6 +746,92 @@ void main() {
         await app.dispose();
         limiter.dispose();
       });
+
+      test('perKeyFallback applies per (key, method) for any method', () async {
+        final limiter = RpcRateLimiter(
+          perKeyFallback: RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+          keyExtractor: (call) => call.context.getHeader('x-user-id'),
+        );
+        final app = await RpcTestApp.start(
+          modules: [EchoModule()],
+          interceptors: [limiter],
+        );
+        final client = EchoCallerContract(app.caller);
+        final ctxA = RpcContext.withHeaders({'x-user-id': 'user_a'});
+        final ctxB = RpcContext.withHeaders({'x-user-id': 'user_b'});
+
+        // user_a: ping and echo each get their own counter (per method)
+        await client.ping(const PingRequest('a1'), context: ctxA);
+        await client.ping(const PingRequest('a2'), context: ctxA);
+        await expectLater(
+          client.ping(const PingRequest('a3'), context: ctxA),
+          throwsA(_isRateLimited),
+        );
+        // echo is a separate (key, method) counter — still works for user_a
+        await client.echo(const PingRequest('ae1'), context: ctxA);
+
+        // user_b has independent counters for all methods
+        await client.ping(const PingRequest('b1'), context: ctxB);
+        await client.ping(const PingRequest('b2'), context: ctxB);
+
+        await app.dispose();
+        limiter.dispose();
+      });
+
+      test('perKeyFallback is overridden by perMethod for matching methods', () async {
+        final limiter = RpcRateLimiter(
+          perKeyFallback: RateLimit.slidingWindow(max: 10, window: Duration(seconds: 10)),
+          perMethod: {
+            // Stricter limit for ping — overrides perKeyFallback
+            'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+          },
+          keyExtractor: (call) => call.context.getHeader('x-user-id'),
+        );
+        final app = await RpcTestApp.start(
+          modules: [EchoModule()],
+          interceptors: [limiter],
+        );
+        final client = EchoCallerContract(app.caller);
+        final ctx = RpcContext.withHeaders({'x-user-id': 'user_a'});
+
+        // ping uses perMethod (max 1) — not perKeyFallback (max 10)
+        await client.ping(const PingRequest('1'), context: ctx);
+        await expectLater(
+          client.ping(const PingRequest('2'), context: ctx),
+          throwsA(_isRateLimited),
+        );
+        // echo falls through to perKeyFallback (max 10) — works fine
+        for (var i = 0; i < 5; i++) {
+          await client.echo(PingRequest('e$i'), context: ctx);
+        }
+
+        await app.dispose();
+        limiter.dispose();
+      });
+
+      test('perKeyFallback null key falls through to global', () async {
+        final limiter = RpcRateLimiter(
+          global: RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+          perKeyFallback: RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+          keyExtractor: (call) => call.context.getHeader('x-user-id'), // no header → null
+        );
+        final app = await RpcTestApp.start(
+          modules: [EchoModule()],
+          interceptors: [limiter],
+        );
+        final client = EchoCallerContract(app.caller);
+
+        // No header → key is null → perKeyFallback skipped → global (max 2) applies
+        await client.ping(const PingRequest('1'));
+        await client.ping(const PingRequest('2'));
+        await expectLater(
+          client.ping(const PingRequest('3')),
+          throwsA(_isRateLimited),
+        );
+
+        await app.dispose();
+        limiter.dispose();
+      });
     });
   });
 
