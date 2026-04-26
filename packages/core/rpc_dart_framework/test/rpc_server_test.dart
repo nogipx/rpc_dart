@@ -588,6 +588,165 @@ void main() {
       }
       await app.dispose();
     });
+
+    // -------------------------------------------------------------------------
+    group('keyExtractor (per-key dynamic limits)', () {
+      final _isRateLimited = isA<Exception>().having(
+        (e) => e.toString(),
+        'message',
+        contains('Rate limit exceeded'),
+      );
+
+      test('different keys have independent counters', () async {
+        final limiter = RpcRateLimiter(
+          perMethod: {
+            'EchoService.ping': RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+          },
+          keyExtractor: (call) => call.context.getHeader('x-user-id'),
+        );
+        final app = await RpcTestApp.start(
+          modules: [EchoModule()],
+          interceptors: [limiter],
+        );
+        final client = EchoCallerContract(app.caller);
+        final ctxA = RpcContext.withHeaders({'x-user-id': 'user_a'});
+        final ctxB = RpcContext.withHeaders({'x-user-id': 'user_b'});
+
+        // user_a exhausts their limit (max: 2)
+        await client.ping(const PingRequest('a1'), context: ctxA);
+        await client.ping(const PingRequest('a2'), context: ctxA);
+        await expectLater(
+          client.ping(const PingRequest('a3'), context: ctxA),
+          throwsA(_isRateLimited),
+        );
+        // user_b has their own independent counter — full budget still available
+        await client.ping(const PingRequest('b1'), context: ctxB);
+        await client.ping(const PingRequest('b2'), context: ctxB);
+
+        await app.dispose();
+        limiter.dispose();
+      });
+
+      test('null key falls through to global', () async {
+        final limiter = RpcRateLimiter(
+          global: RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+          perMethod: {
+            // Would be strict limit per key, but key will be null → skipped
+            'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+          },
+          keyExtractor: (call) => call.context.getHeader('x-user-id'), // no header → null
+        );
+        final app = await RpcTestApp.start(
+          modules: [EchoModule()],
+          interceptors: [limiter],
+        );
+        final client = EchoCallerContract(app.caller);
+
+        // No x-user-id header → key is null → per-method skipped → global (max 2) applies
+        await client.ping(const PingRequest('1'));
+        await client.ping(const PingRequest('2'));
+        await expectLater(
+          client.ping(const PingRequest('3')),
+          throwsA(_isRateLimited),
+        );
+
+        await app.dispose();
+        limiter.dispose();
+      });
+
+      test('perService per-key: shared budget across methods for same key', () async {
+        final limiter = RpcRateLimiter(
+          perService: {
+            'EchoService': RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+          },
+          keyExtractor: (call) => call.context.getHeader('x-user-id'),
+        );
+        final app = await RpcTestApp.start(
+          modules: [EchoModule()],
+          interceptors: [limiter],
+        );
+        final client = EchoCallerContract(app.caller);
+        final ctx = RpcContext.withHeaders({'x-user-id': 'user_a'});
+
+        // Two calls across different methods consume user_a's service budget
+        await client.ping(const PingRequest('1'), context: ctx);
+        await client.echo(const PingRequest('2'), context: ctx);
+        // Third call (any method) must be rejected for user_a
+        await expectLater(
+          client.ping(const PingRequest('3'), context: ctx),
+          throwsA(_isRateLimited),
+        );
+
+        // user_b has their own budget — must work
+        final ctxB = RpcContext.withHeaders({'x-user-id': 'user_b'});
+        await client.ping(const PingRequest('b1'), context: ctxB);
+        await client.echo(const PingRequest('b2'), context: ctxB);
+
+        await app.dispose();
+        limiter.dispose();
+      });
+
+      test('perMethod per-key takes priority over perService per-key', () async {
+        final limiter = RpcRateLimiter(
+          perService: {
+            'EchoService': RateLimit.slidingWindow(max: 10, window: Duration(seconds: 10)),
+          },
+          perMethod: {
+            'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+          },
+          keyExtractor: (call) => call.context.getHeader('x-user-id'),
+        );
+        final app = await RpcTestApp.start(
+          modules: [EchoModule()],
+          interceptors: [limiter],
+        );
+        final client = EchoCallerContract(app.caller);
+        final ctx = RpcContext.withHeaders({'x-user-id': 'user_a'});
+
+        // ping is limited to 1 per user (perMethod wins)
+        await client.ping(const PingRequest('1'), context: ctx);
+        await expectLater(
+          client.ping(const PingRequest('2'), context: ctx),
+          throwsA(_isRateLimited),
+        );
+        // echo uses perService counter (max 10 per user) — must work
+        for (var i = 0; i < 5; i++) {
+          await client.echo(PingRequest('e$i'), context: ctx);
+        }
+
+        await app.dispose();
+        limiter.dispose();
+      });
+
+      test('global is always shared regardless of keyExtractor', () async {
+        // No perMethod/perService — all calls fall through to global.
+        // Global is a single shared counter even when keyExtractor is set.
+        final limiter = RpcRateLimiter(
+          global: RateLimit.slidingWindow(max: 3, window: Duration(seconds: 10)),
+          keyExtractor: (call) => call.context.getHeader('x-user-id'),
+        );
+        final app = await RpcTestApp.start(
+          modules: [EchoModule()],
+          interceptors: [limiter],
+        );
+        final client = EchoCallerContract(app.caller);
+        final ctxA = RpcContext.withHeaders({'x-user-id': 'user_a'});
+        final ctxB = RpcContext.withHeaders({'x-user-id': 'user_b'});
+
+        // user_a and user_b together exhaust the shared global counter (max: 3)
+        await client.ping(const PingRequest('a1'), context: ctxA);
+        await client.ping(const PingRequest('b1'), context: ctxB);
+        await client.ping(const PingRequest('a2'), context: ctxA);
+        // 4th call — global exhausted regardless of which user calls
+        await expectLater(
+          client.ping(const PingRequest('b2'), context: ctxB),
+          throwsA(_isRateLimited),
+        );
+
+        await app.dispose();
+        limiter.dispose();
+      });
+    });
   });
 
   // -------------------------------------------------------------------------

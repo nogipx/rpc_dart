@@ -10,14 +10,13 @@ import 'package:rpc_dart/rpc_dart.dart';
 const int _statusResourceExhausted = 8;
 
 // ---------------------------------------------------------------------------
-// Public rate-limit algorithm descriptors
+// Public rate-limit algorithm spec
 // ---------------------------------------------------------------------------
 
-/// A stateful rate-limit counter.
+/// Describes a rate-limit algorithm and its parameters.
 ///
-/// Create one instance per slot (global / per-service / per-method) and pass
-/// it to [RpcRateLimiter]. Each call to [tryAcquire] either allows the
-/// request (returns `true`) or rejects it (returns `false`).
+/// A [RateLimit] instance is a **specification** — it is passed to
+/// [RpcRateLimiter] which creates internal counters from it as needed.
 ///
 /// Two built-in algorithms:
 ///
@@ -30,39 +29,81 @@ sealed class RateLimit {
 
   /// O(1) sliding-window counter.
   ///
-  /// Approximates a true sliding window using two adjacent fixed-window
-  /// buckets. Weighted estimate:
-  ///   `count ≈ current + previous × (1 − elapsed/window)`
-  ///
   /// [max] requests are allowed per [window]. No burst above [max].
-  factory RateLimit.slidingWindow({
+  const factory RateLimit.slidingWindow({
     required int max,
     required Duration window,
-  }) = _SlidingWindowCounter;
+  }) = _SlidingWindowSpec;
 
   /// Token-bucket counter.
   ///
-  /// Tokens refill at [max] per [window]. The bucket holds at most
-  /// [burst] tokens (defaults to [max], i.e. no extra burst). Short
-  /// spikes up to [burst] requests are served instantly as long as the
-  /// bucket is sufficiently full.
-  factory RateLimit.tokenBucket({
+  /// Tokens refill at [max] per [window]. The bucket holds at most [burst]
+  /// tokens (defaults to [max]). Short spikes up to [burst] are served
+  /// instantly as long as the bucket is sufficiently full.
+  const factory RateLimit.tokenBucket({
     required int max,
     required Duration window,
     int? burst,
-  }) = _TokenBucketCounter;
+  }) = _TokenBucketSpec;
+
+  /// Creates a fresh stateful counter for this spec.
+  _RateLimitCounter _createCounter();
+
+  /// The window duration of this spec (used for stale-entry cleanup).
+  Duration get _window;
+}
+
+// ---------------------------------------------------------------------------
+// Spec implementations
+// ---------------------------------------------------------------------------
+
+class _SlidingWindowSpec extends RateLimit {
+  final int max;
+  @override
+  final Duration _window;
+
+  const _SlidingWindowSpec({required this.max, required Duration window}) : _window = window;
+
+  @override
+  _RateLimitCounter _createCounter() =>
+      _SlidingWindowCounter(max: max, window: _window);
+}
+
+class _TokenBucketSpec extends RateLimit {
+  final int max;
+  final int? burst;
+  @override
+  final Duration _window;
+
+  const _TokenBucketSpec({required this.max, required Duration window, this.burst})
+      : _window = window;
+
+  @override
+  _RateLimitCounter _createCounter() =>
+      _TokenBucketCounter(max: max, window: _window, burst: burst ?? max);
+}
+
+// ---------------------------------------------------------------------------
+// Internal counter base
+// ---------------------------------------------------------------------------
+
+abstract class _RateLimitCounter {
+  int _lastUsedUs = DateTime.now().microsecondsSinceEpoch;
 
   /// Attempts to acquire one request slot.
-  ///
-  /// Returns `true` if the request is within the limit, `false` otherwise.
-  bool tryAcquire();
+  bool tryAcquire() {
+    _lastUsedUs = DateTime.now().microsecondsSinceEpoch;
+    return _doAcquire();
+  }
+
+  bool _doAcquire();
 }
 
 // ---------------------------------------------------------------------------
 // Sliding-window counter (O(1))
 // ---------------------------------------------------------------------------
 
-class _SlidingWindowCounter implements RateLimit {
+class _SlidingWindowCounter extends _RateLimitCounter {
   final int max;
   final int _windowUs;
 
@@ -75,7 +116,7 @@ class _SlidingWindowCounter implements RateLimit {
         _windowStartUs = DateTime.now().microsecondsSinceEpoch;
 
   @override
-  bool tryAcquire() {
+  bool _doAcquire() {
     final nowUs = DateTime.now().microsecondsSinceEpoch;
     final elapsedUs = nowUs - _windowStartUs;
 
@@ -100,7 +141,7 @@ class _SlidingWindowCounter implements RateLimit {
 // Token-bucket counter
 // ---------------------------------------------------------------------------
 
-class _TokenBucketCounter implements RateLimit {
+class _TokenBucketCounter extends _RateLimitCounter {
   final int max;
   final int burst;
   final int _windowUs;
@@ -108,14 +149,14 @@ class _TokenBucketCounter implements RateLimit {
   double _tokens;
   int _lastRefillUs;
 
-  _TokenBucketCounter({required this.max, required Duration window, int? burst})
-      : burst = burst ?? max,
+  _TokenBucketCounter({required this.max, required Duration window, required int burst})
+      : burst = burst,
         _windowUs = window.inMicroseconds,
-        _tokens = (burst ?? max).toDouble(),
+        _tokens = burst.toDouble(),
         _lastRefillUs = DateTime.now().microsecondsSinceEpoch;
 
   @override
-  bool tryAcquire() {
+  bool _doAcquire() {
     final nowUs = DateTime.now().microsecondsSinceEpoch;
     final elapsedUs = nowUs - _lastRefillUs;
 
@@ -135,61 +176,168 @@ class _TokenBucketCounter implements RateLimit {
 
 /// Rate-limiting interceptor for [RpcResponderEndpoint].
 ///
-/// Attach a [RateLimit] counter to the global scope, individual services, or
-/// individual methods. Priority: `perMethod` > `perService` > `global`.
+/// ## Static limits (no [keyExtractor])
+///
+/// One shared counter per slot — same limit for all callers:
 ///
 /// ```dart
-/// // Single global limit using the sliding-window algorithm
-/// RpcRateLimiter(
-///   global: RateLimit.slidingWindow(max: 500, window: Duration(seconds: 1)),
-/// )
-///
-/// // Per-service and per-method with different algorithms
 /// RpcRateLimiter(
 ///   global: RateLimit.slidingWindow(max: 1000, window: Duration(seconds: 1)),
-///   perService: {
-///     'HeavyService': RateLimit.slidingWindow(max: 10, window: Duration(seconds: 1)),
-///   },
-///   perMethod: {
-///     'UserService.getUser': RateLimit.tokenBucket(
-///       max: 200, window: Duration(seconds: 1), burst: 300,
-///     ),
-///   },
+///   perService: {'HeavyService': RateLimit.slidingWindow(max: 10, window: Duration(seconds: 1))},
+///   perMethod: {'UserService.search': RateLimit.tokenBucket(max: 5, window: Duration(seconds: 1))},
 /// )
 /// ```
 ///
+/// ## Per-key limits ([keyExtractor] provided)
+///
+/// Each unique key extracted from the call context gets **independent counters**
+/// for [perService] and [perMethod] slots. Typical use: isolate users so one
+/// caller cannot exhaust the limit for others.
+///
+/// [global] is always a single shared counter regardless of [keyExtractor].
+///
+/// ```dart
+/// RpcRateLimiter(
+///   global: RateLimit.slidingWindow(max: 5000, window: Duration(seconds: 1)),
+///   perMethod: {
+///     'SyncService.push': RateLimit.tokenBucket(max: 10, window: Duration(seconds: 1), burst: 20),
+///   },
+///   keyExtractor: (ctx) => ctx.context.getValue<String>('userId'),
+/// )
+/// ```
+///
+/// If [keyExtractor] returns `null` for a call, dynamic limits are skipped and
+/// only [global] applies.
+///
+/// Call [dispose] when the endpoint shuts down to cancel the cleanup timer.
+///
+/// ## Priority
+///
+/// `perMethod[key]` > `perService[key]` > `global`
+///
 /// All limits are enforced within a single Dart isolate (no locks needed).
 class RpcRateLimiter extends IRpcInterceptor {
-  final RateLimit? _global;
-  final Map<String, RateLimit> _perService;
-  final Map<String, RateLimit> _perMethod;
-
   /// Creates a rate limiter.
   ///
-  /// [global] — fallback limit for any method not matched by [perService] or
-  /// [perMethod].
+  /// When [keyExtractor] is provided, [perService] and [perMethod] counters
+  /// are created dynamically per extracted key. [global] is always shared.
   ///
-  /// [perService] — maps a service name (e.g. `'UserService'`) to a limit
-  /// applied to all its methods.
-  ///
-  /// [perMethod] — maps `'ServiceName.methodName'` to a limit applied to that
-  /// specific method. Takes priority over [perService] and [global].
-  const RpcRateLimiter({
+  /// [cleanupInterval] controls how often stale per-key counters are evicted
+  /// (only relevant when [keyExtractor] is set).
+  RpcRateLimiter({
     RateLimit? global,
     Map<String, RateLimit> perService = const {},
     Map<String, RateLimit> perMethod = const {},
-  })  : _global = global,
-        _perService = perService,
-        _perMethod = perMethod;
+    String? Function(RpcMiddlewareContext)? keyExtractor,
+    Duration cleanupInterval = const Duration(minutes: 5),
+  })  : _globalSpec = global,
+        _perServiceSpec = Map.unmodifiable(perService),
+        _perMethodSpec = Map.unmodifiable(perMethod),
+        _keyExtractor = keyExtractor {
+    _globalCounter = global?._createCounter();
 
-  void _check(String serviceName, String methodName) {
-    final methodKey = '$serviceName.$methodName';
-    final counter = _perMethod[methodKey] ?? _perService[serviceName] ?? _global;
+    if (keyExtractor == null) {
+      // Static mode: create one counter per slot up front.
+      _staticServiceCounters = {
+        for (final e in perService.entries) e.key: e.value._createCounter(),
+      };
+      _staticMethodCounters = {
+        for (final e in perMethod.entries) e.key: e.value._createCounter(),
+      };
+    } else {
+      _staticServiceCounters = const {};
+      _staticMethodCounters = const {};
+      _cleanupTimer = Timer.periodic(cleanupInterval, (_) => _cleanup());
+    }
+  }
+
+  final RateLimit? _globalSpec;
+  final Map<String, RateLimit> _perServiceSpec;
+  final Map<String, RateLimit> _perMethodSpec;
+  final String? Function(RpcMiddlewareContext)? _keyExtractor;
+
+  _RateLimitCounter? _globalCounter;
+  late final Map<String, _RateLimitCounter> _staticServiceCounters;
+  late final Map<String, _RateLimitCounter> _staticMethodCounters;
+
+  // Dynamic counters: userKey → slotKey → counter
+  final Map<String, Map<String, _RateLimitCounter>> _dynamicServiceCounters = {};
+  final Map<String, Map<String, _RateLimitCounter>> _dynamicMethodCounters = {};
+
+  Timer? _cleanupTimer;
+
+  /// Cancels the cleanup timer and releases dynamic counter state.
+  ///
+  /// Call this when the rate limiter is no longer needed (e.g. in a module's
+  /// [RpcModule.onStop]).
+  void dispose() {
+    _cleanupTimer?.cancel();
+    _dynamicServiceCounters.clear();
+    _dynamicMethodCounters.clear();
+  }
+
+  void _cleanup() {
+    // Keep counters that were used within the last 2× their window duration.
+    final nowUs = DateTime.now().microsecondsSinceEpoch;
+    final thresholdUs = _maxWindowUs() * 2;
+
+    void evict(Map<String, Map<String, _RateLimitCounter>> store) {
+      store.removeWhere((_, slots) {
+        slots.removeWhere((_, c) => (nowUs - c._lastUsedUs) > thresholdUs);
+        return slots.isEmpty;
+      });
+    }
+
+    evict(_dynamicServiceCounters);
+    evict(_dynamicMethodCounters);
+  }
+
+  int _maxWindowUs() {
+    var max = 0;
+    for (final spec in [
+      _globalSpec,
+      ..._perServiceSpec.values,
+      ..._perMethodSpec.values,
+    ]) {
+      if (spec == null) continue;
+      final w = spec._window.inMicroseconds;
+      if (w > max) max = w;
+    }
+    return max;
+  }
+
+  _RateLimitCounter? _getDynamic(
+    Map<String, Map<String, _RateLimitCounter>> store,
+    String userKey,
+    String slotKey,
+    RateLimit? spec,
+  ) {
+    if (spec == null) return null;
+    return store.putIfAbsent(userKey, () => {}).putIfAbsent(slotKey, spec._createCounter);
+  }
+
+  void _check(RpcMiddlewareContext call) {
+    final methodKey = '${call.serviceName}.${call.methodName}';
+    final userKey = _keyExtractor?.call(call);
+
+    final _RateLimitCounter? counter;
+
+    if (userKey != null) {
+      counter = _getDynamic(_dynamicMethodCounters, userKey, methodKey, _perMethodSpec[methodKey]) ??
+          _getDynamic(_dynamicServiceCounters, userKey, call.serviceName, _perServiceSpec[call.serviceName]) ??
+          _globalCounter;
+    } else {
+      counter = _staticMethodCounters[methodKey] ??
+          _staticServiceCounters[call.serviceName] ??
+          _globalCounter;
+    }
+
     if (counter == null) return;
     if (!counter.tryAcquire()) {
       throw RpcRateLimitException(
-        'Rate limit exceeded for $methodKey '
-        '(gRPC status $_statusResourceExhausted: RESOURCE_EXHAUSTED)',
+        'Rate limit exceeded for $methodKey'
+        '${userKey != null ? ' (key: $userKey)' : ''}'
+        ' (gRPC status $_statusResourceExhausted: RESOURCE_EXHAUSTED)',
       );
     }
   }
@@ -200,7 +348,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {
-    _check(call.serviceName, call.methodName);
+    _check(call);
     return next(call.context, request);
   }
 
@@ -210,7 +358,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
-    _check(call.serviceName, call.methodName);
+    _check(call);
     return next(call.context, request);
   }
 
@@ -220,7 +368,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) async {
-    _check(call.serviceName, call.methodName);
+    _check(call);
     return next(call.context, requests);
   }
 
@@ -230,7 +378,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {
-    _check(call.serviceName, call.methodName);
+    _check(call);
     return next(call.context, requests);
   }
 }
