@@ -9,6 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import '_app_internals.dart';
 import 'rpc_app_config.dart';
 import 'rpc_app_health.dart';
+import 'rpc_client_connection.dart';
 import 'rpc_client_module.dart';
 import 'rpc_container.dart';
 import 'rpc_env_config.dart';
@@ -53,14 +54,14 @@ class RpcTestApp {
 
   final RpcResponderEndpoint _responder;
   final List<RpcModule> _modules;
-  final Map<RpcClientModule, RpcCallerEndpoint> _clientCallers;
+  final Map<RpcClientModule, (RpcClientConnection, RpcCallerEndpoint)> _clientCallers;
   bool _disposed = false;
 
   RpcTestApp._({
     required this.caller,
     required RpcResponderEndpoint responder,
     required List<RpcModule> modules,
-    required Map<RpcClientModule, RpcCallerEndpoint> clientCallers,
+    required Map<RpcClientModule, (RpcClientConnection, RpcCallerEndpoint)> clientCallers,
   })  : _responder = responder,
         _modules = modules,
         _clientCallers = clientCallers;
@@ -101,14 +102,15 @@ class RpcTestApp {
     }
 
     // Wire client modules.
-    final clientCallers = <RpcClientModule, RpcCallerEndpoint>{};
+    final clientCallers = <RpcClientModule, (RpcClientConnection, RpcCallerEndpoint)>{};
     for (final module in sorted) {
       if (module is RpcClientModule) {
-        final transport = await module.createTransport(container, envConfig);
-        final clientCaller = RpcCallerEndpoint(transport: transport);
+        final connection = module.createConnection(container, envConfig);
+        final clientCaller = RpcCallerEndpoint(transport: connection.transport);
         clientCaller.start();
         module.registerCallerContracts(container, clientCaller);
-        clientCallers[module] = clientCaller;
+        clientCallers[module] = (connection, clientCaller);
+        connection.connect();
       }
     }
 
@@ -214,8 +216,9 @@ class RpcTestApp {
       }
     }
 
-    for (final c in _clientCallers.values) {
-      await c.close();
+    for (final (connection, caller) in _clientCallers.values) {
+      await connection.dispose();
+      await caller.close();
     }
 
     await _responder.close();

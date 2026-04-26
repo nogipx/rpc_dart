@@ -10,6 +10,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import '_app_internals.dart';
 import 'rpc_app_config.dart';
 import 'rpc_app_health.dart';
+import 'rpc_client_connection.dart';
 import 'rpc_client_module.dart';
 import 'rpc_container.dart';
 import 'rpc_env_config.dart';
@@ -58,7 +59,7 @@ class RpcApp {
   late final List<IRpcInterceptor> _autoInterceptors;
   IRpcServer? _server;
 
-  final Map<RpcClientModule, RpcCallerEndpoint> _clientCallers = {};
+  final Map<RpcClientModule, (RpcClientConnection, RpcCallerEndpoint)> _clientCallers = {};
 
   bool _started = false;
   final Completer<void> _stopCompleter = Completer<void>();
@@ -196,7 +197,8 @@ class RpcApp {
     } else {
       for (final entry in _clientCallers.entries) {
         _log?.debug('closing client: ${entry.key.name}');
-        await entry.value.close();
+        await entry.value.$1.dispose();
+        await entry.value.$2.close();
       }
       _clientCallers.clear();
     }
@@ -322,11 +324,12 @@ class RpcApp {
     for (final module in _modules) {
       if (module is RpcClientModule) {
         _log?.debug('connecting client: ${module.name}');
-        final transport = await module.createTransport(_container, _env);
-        final caller = RpcCallerEndpoint(transport: transport);
+        final connection = module.createConnection(_container, _env);
+        final caller = RpcCallerEndpoint(transport: connection.transport);
         caller.start();
         module.registerCallerContracts(_container, caller);
-        _clientCallers[module] = caller;
+        _clientCallers[module] = (connection, caller);
+        connection.connect();
       }
     }
   }

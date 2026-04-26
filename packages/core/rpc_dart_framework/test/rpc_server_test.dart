@@ -1238,8 +1238,8 @@ class _StubClientModule extends RpcClientModule {
   String get name => 'StubClient';
 
   @override
-  Future<IRpcTransport> createTransport(RpcContainer c, RpcEnvConfig env) =>
-      throw UnimplementedError();
+  RpcClientConnection createConnection(RpcContainer c, RpcEnvConfig env) =>
+      RpcClientConnection(transportFactory: () => throw UnimplementedError());
 
   @override
   void registerCallerContracts(RpcContainer c, RpcCallerEndpoint caller) {}
