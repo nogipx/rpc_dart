@@ -30,7 +30,6 @@ export 'src/rpc_app_config.dart';
 export 'src/rpc_app_health.dart';
 export 'src/rpc_call_spy.dart';
 export 'src/rpc_client_connection.dart';
-export 'src/rpc_client_module.dart';
 export 'src/rpc_container.dart';
 export 'src/rpc_env_config.dart';
 export 'src/rpc_fault_injector.dart';

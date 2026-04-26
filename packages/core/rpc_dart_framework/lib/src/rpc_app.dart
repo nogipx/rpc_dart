@@ -10,8 +10,6 @@ import 'package:rpc_dart/rpc_dart.dart';
 import '_app_internals.dart';
 import 'rpc_app_config.dart';
 import 'rpc_app_health.dart';
-import 'rpc_client_connection.dart';
-import 'rpc_client_module.dart';
 import 'rpc_container.dart';
 import 'rpc_env_config.dart';
 import 'rpc_isolate_module.dart';
@@ -59,8 +57,6 @@ class RpcApp {
   late final List<IRpcInterceptor> _autoInterceptors;
   IRpcServer? _server;
 
-  final Map<RpcClientModule, (RpcClientConnection, RpcCallerEndpoint)> _clientCallers = {};
-
   bool _started = false;
   final Completer<void> _stopCompleter = Completer<void>();
 
@@ -79,8 +75,8 @@ class RpcApp {
   /// Creates an [RpcApp] that listens for incoming connections via [server].
   ///
   /// [modules] may contain [RpcServerModule]s and plain [RpcModule]s.
-  /// Passing an [RpcClientModule] throws [StateError] at startup — manage
-  /// outgoing connections inside [RpcModule.onStart]/[RpcModule.onStop].
+  /// For outgoing RPC connections within a module use [RpcClientConnection]
+  /// directly inside [RpcModule.onStart]/[RpcModule.onStop].
   factory RpcApp.server({
     required List<RpcModule> modules,
     required IRpcServer Function(void Function(RpcResponderEndpoint)) server,
@@ -91,25 +87,6 @@ class RpcApp {
     return RpcApp._(
       modules: modules,
       serverBuilder: server,
-      interceptors: interceptors,
-      middlewares: middlewares,
-      config: config,
-    );
-  }
-
-  /// Creates an [RpcApp] that only makes outgoing connections (no listener).
-  ///
-  /// [modules] may contain [RpcClientModule]s and plain [RpcModule]s.
-  /// Passing an [RpcServerModule] throws [StateError] at startup.
-  factory RpcApp.client({
-    required List<RpcModule> modules,
-    List<IRpcInterceptor> interceptors = const [],
-    List<IRpcMiddleware> middlewares = const [],
-    RpcAppConfig config = const RpcAppConfig(),
-  }) {
-    return RpcApp._(
-      modules: modules,
-      serverBuilder: null,
       interceptors: interceptors,
       middlewares: middlewares,
       config: config,
@@ -133,9 +110,6 @@ class RpcApp {
 
     _modules = sortModulesByDependencies(_modulesRaw);
 
-    // Validate module types.
-    _validateModules();
-
     _log?.info(
       'RpcApp starting — ${_modules.length} module(s): '
       '${_modules.map((m) => m.name).join(' → ')}',
@@ -150,11 +124,7 @@ class RpcApp {
       module.configureWithEnv(_container, _env);
     }
 
-    if (_serverBuilder != null) {
-      await _startServer();
-    } else {
-      await _startClient();
-    }
+    await _startServer();
 
     for (final module in _modules) {
       _log?.debug('onStart: ${module.name}');
@@ -184,23 +154,14 @@ class RpcApp {
       }
     }
 
-    if (_server != null) {
-      await _drainEndpoints();
-      _log?.info('Stopping transport server');
-      await _server!.stop();
-      for (final module in _modules.reversed) {
-        if (module is RpcIsolateModule) {
-          _log?.debug('terminating isolate: ${module.name}');
-          await module.terminateIsolate();
-        }
+    await _drainEndpoints();
+    _log?.info('Stopping transport server');
+    await _server?.stop();
+    for (final module in _modules.reversed) {
+      if (module is RpcIsolateModule) {
+        _log?.debug('terminating isolate: ${module.name}');
+        await module.terminateIsolate();
       }
-    } else {
-      for (final entry in _clientCallers.entries) {
-        _log?.debug('closing client: ${entry.key.name}');
-        await entry.value.$1.dispose();
-        await entry.value.$2.close();
-      }
-      _clientCallers.clear();
     }
 
     _log?.info('RpcApp stopped');
@@ -285,26 +246,6 @@ class RpcApp {
   // Private helpers
   // -------------------------------------------------------------------------
 
-  void _validateModules() {
-    if (_serverBuilder != null) {
-      final bad = _modules.whereType<RpcClientModule>().map((m) => m.name).toList();
-      if (bad.isNotEmpty) {
-        throw StateError(
-          'RpcApp.server does not accept RpcClientModule: ${bad.join(', ')}. '
-          'Manage outgoing connections in RpcModule.onStart/onStop instead.',
-        );
-      }
-    } else {
-      final bad = _modules.whereType<RpcServerModule>().map((m) => m.name).toList();
-      if (bad.isNotEmpty) {
-        throw StateError(
-          'RpcApp.client does not accept RpcServerModule: ${bad.join(', ')}. '
-          'Use RpcApp.server to expose RPC services.',
-        );
-      }
-    }
-  }
-
   Future<void> _startServer() async {
     // Spawn isolates.
     for (final module in _modules) {
@@ -318,20 +259,6 @@ class RpcApp {
     _log?.info('Starting transport server');
     await _server!.start();
     _log?.info('Transport server started');
-  }
-
-  Future<void> _startClient() async {
-    for (final module in _modules) {
-      if (module is RpcClientModule) {
-        _log?.debug('connecting client: ${module.name}');
-        final connection = module.createConnection(_container, _env);
-        final caller = RpcCallerEndpoint(transport: connection.transport);
-        caller.start();
-        module.registerCallerContracts(_container, caller);
-        _clientCallers[module] = (connection, caller);
-        connection.connect();
-      }
-    }
   }
 
   void _setupEndpoint(RpcResponderEndpoint endpoint) {

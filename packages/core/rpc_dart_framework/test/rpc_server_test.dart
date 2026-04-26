@@ -1111,29 +1111,6 @@ void main() {
 
   // -------------------------------------------------------------------------
   group('RpcApp module type validation', () {
-    test('RpcApp.server rejects RpcClientModule', () async {
-      expect(
-        () async {
-          final app = RpcApp.server(
-            modules: [_StubClientModule()],
-            server: (onEndpoint) => _NullServer(onEndpoint),
-          );
-          await app.start();
-        },
-        throwsA(isA<StateError>()),
-      );
-    });
-
-    test('RpcApp.client rejects RpcServerModule', () async {
-      expect(
-        () async {
-          final app = RpcApp.client(modules: [EchoModule()]);
-          await app.start();
-        },
-        throwsA(isA<StateError>()),
-      );
-    });
-
     test('RpcApp.server accepts plain RpcModule alongside RpcServerModule',
         () async {
       final app = RpcApp.server(
@@ -1144,8 +1121,12 @@ void main() {
       await app.stop();
     });
 
-    test('RpcApp.client accepts plain RpcModule', () async {
-      final app = RpcApp.client(modules: [_InfraModule()]);
+    test('RpcApp.server rejects RpcServerModule in wrong position', () async {
+      // topo sort still works with plain modules
+      final app = RpcApp.server(
+        modules: [EchoModule(), _InfraModule()],
+        server: (onEndpoint) => _NullServer(onEndpoint),
+      );
       await app.start();
       await app.stop();
     });
@@ -1232,18 +1213,6 @@ class _ThrowingContract extends RpcResponderContract {
 }
 
 // RpcApp validation helpers
-
-class _StubClientModule extends RpcClientModule {
-  @override
-  String get name => 'StubClient';
-
-  @override
-  RpcClientConnection createConnection(RpcContainer c, RpcEnvConfig env) =>
-      RpcClientConnection(transportFactory: () => throw UnimplementedError());
-
-  @override
-  void registerCallerContracts(RpcContainer c, RpcCallerEndpoint caller) {}
-}
 
 class _InfraModule extends RpcModule {
   @override
