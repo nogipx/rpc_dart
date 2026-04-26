@@ -6,7 +6,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
 
 import 'rpc_container.dart';
-import 'rpc_module.dart';
+import 'rpc_server_module.dart';
 
 /// A module whose contract handlers run inside a dedicated Dart isolate.
 ///
@@ -50,7 +50,7 @@ import 'rpc_module.dart';
 ///   ];
 /// }
 /// ```
-abstract class RpcIsolateModule extends RpcModule {
+abstract class RpcIsolateModule extends RpcServerModule {
   RpcCallerEndpoint? _isolateCaller;
   void Function()? _killIsolate;
 

@@ -10,61 +10,62 @@ import 'package:rpc_dart/rpc_dart.dart';
 import '_app_internals.dart';
 import 'rpc_app_config.dart';
 import 'rpc_app_health.dart';
+import 'rpc_client_module.dart';
 import 'rpc_container.dart';
 import 'rpc_env_config.dart';
 import 'rpc_isolate_module.dart';
 import 'rpc_module.dart';
+import 'rpc_server_module.dart';
 
 /// The framework entry point.
 ///
-/// [RpcApp] orchestrates modules, DI, interceptors, and transport server:
+/// Use [RpcApp.server] for applications that expose RPC services, or
+/// [RpcApp.client] for applications that only make outgoing RPC calls.
 ///
-/// 1. Sorts modules by [RpcModule.dependencies] (topological order).
-/// 2. Calls [RpcModule.configure] then [RpcModule.configureWithEnv] on each.
-/// 3. Spawns isolates for [RpcIsolateModule]s.
-/// 4. Creates the server via the [serverBuilder] callback.
-/// 5. Calls [RpcModule.onStart] on each module.
+/// Each variant enforces strict module types at startup:
+/// - [RpcApp.server] rejects [RpcClientModule]s — use a plain [RpcModule]
+///   with [RpcModule.onStart]/[RpcModule.onStop] to manage outgoing connections.
+/// - [RpcApp.client] rejects [RpcServerModule]s.
 ///
-/// On each new connection the server creates a [RpcResponderEndpoint]; the
-/// framework registers global interceptors, middleware, and fresh per-module
-/// contracts on it.
+/// Both variants accept plain [RpcModule] for shared infrastructure
+/// (database pools, caches, background workers, etc.).
 ///
 /// ```dart
-/// void main() async {
-///   await RpcApp.create(
-///     modules: [DbModule(), UserModule(), OrderModule()],
-///     interceptors: [AuthInterceptor()],
-///     server: (onEndpoint) => RpcHttp2Server(
-///       host: '0.0.0.0',
-///       port: 50051,
-///       onEndpointCreated: onEndpoint,
-///     ),
-///     config: RpcAppConfig(
-///       onError: (e, st, svc, method) => Sentry.capture(e, st),
-///       onCall:  (ev) => metrics.record(ev),
-///     ),
-///   ).run();
-/// }
+/// // Server
+/// await RpcApp.server(
+///   modules: [DatabaseModule(), UserModule(), OrderModule()],
+///   server: (onEndpoint) => RpcHttp2Server(
+///     host: '0.0.0.0', port: 50051, onEndpointCreated: onEndpoint,
+///   ),
+///   config: RpcAppConfig(onError: (e, st, svc, method) => logger.error(e)),
+/// ).run();
+///
+/// // Client (worker, CLI, background job)
+/// await RpcApp.client(
+///   modules: [PaymentClientModule(), NotificationClientModule()],
+/// ).run();
 /// ```
 class RpcApp {
   final List<RpcModule> _modulesRaw;
   final List<IRpcInterceptor> _interceptors;
   final List<IRpcMiddleware> _middlewares;
-  final IRpcServer Function(void Function(RpcResponderEndpoint)) _serverBuilder;
+  final IRpcServer Function(void Function(RpcResponderEndpoint))? _serverBuilder;
   final RpcAppConfig _config;
 
-  late final List<RpcModule> _modules; // topologically sorted
+  late final List<RpcModule> _modules;
   late final RpcContainer _container;
   late final RpcEnvConfig _env;
-  late final IRpcServer _server;
   late final List<IRpcInterceptor> _autoInterceptors;
+  IRpcServer? _server;
+
+  final Map<RpcClientModule, RpcCallerEndpoint> _clientCallers = {};
 
   bool _started = false;
   final Completer<void> _stopCompleter = Completer<void>();
 
   RpcApp._({
     required List<RpcModule> modules,
-    required IRpcServer Function(void Function(RpcResponderEndpoint)) serverBuilder,
+    IRpcServer Function(void Function(RpcResponderEndpoint))? serverBuilder,
     required List<IRpcInterceptor> interceptors,
     required List<IRpcMiddleware> middlewares,
     required RpcAppConfig config,
@@ -74,13 +75,12 @@ class RpcApp {
         _middlewares = List.unmodifiable(middlewares),
         _config = config;
 
-  /// Creates an [RpcApp].
+  /// Creates an [RpcApp] that listens for incoming connections via [server].
   ///
-  /// [server] — receives the per-endpoint callback and must return an
-  ///   [IRpcServer]. Pass the callback as `onEndpointCreated` (or equivalent)
-  ///   to your transport server. The callback wires interceptors, middleware,
-  ///   and contracts on every new connection endpoint.
-  factory RpcApp.create({
+  /// [modules] may contain [RpcServerModule]s and plain [RpcModule]s.
+  /// Passing an [RpcClientModule] throws [StateError] at startup — manage
+  /// outgoing connections inside [RpcModule.onStart]/[RpcModule.onStop].
+  factory RpcApp.server({
     required List<RpcModule> modules,
     required IRpcServer Function(void Function(RpcResponderEndpoint)) server,
     List<IRpcInterceptor> interceptors = const [],
@@ -96,39 +96,52 @@ class RpcApp {
     );
   }
 
+  /// Creates an [RpcApp] that only makes outgoing connections (no listener).
+  ///
+  /// [modules] may contain [RpcClientModule]s and plain [RpcModule]s.
+  /// Passing an [RpcServerModule] throws [StateError] at startup.
+  factory RpcApp.client({
+    required List<RpcModule> modules,
+    List<IRpcInterceptor> interceptors = const [],
+    List<IRpcMiddleware> middlewares = const [],
+    RpcAppConfig config = const RpcAppConfig(),
+  }) {
+    return RpcApp._(
+      modules: modules,
+      serverBuilder: null,
+      interceptors: interceptors,
+      middlewares: middlewares,
+      config: config,
+    );
+  }
+
   RpcLogger? get _log => _config.logger;
 
   // -------------------------------------------------------------------------
   // Public API
   // -------------------------------------------------------------------------
 
-  /// Starts the application.
-  ///
-  /// Safe to await in [main] without [run] when you manage the process
-  /// lifecycle yourself.
   Future<void> start() async {
     if (_started) return;
     _started = true;
 
-    // Build auto-interceptors from config callbacks.
     _autoInterceptors = [
       if (_config.onError != null) ErrorReportingInterceptor(_config.onError!),
       if (_config.onCall != null) CallMetricsInterceptor(_config.onCall!),
     ];
 
-    // Sort modules respecting declared dependencies.
     _modules = sortModulesByDependencies(_modulesRaw);
+
+    // Validate module types.
+    _validateModules();
+
     _log?.info(
       'RpcApp starting — ${_modules.length} module(s): '
       '${_modules.map((m) => m.name).join(' → ')}',
     );
 
-    // Build env config.
-    _env = _config.env != null
-        ? RpcEnvConfig.from(_config.env!)
-        : RpcEnvConfig();
+    _env = _config.env != null ? RpcEnvConfig.from(_config.env!) : RpcEnvConfig();
 
-    // Configure DI.
     _container = RpcContainer();
     for (final module in _modules) {
       _log?.debug('configure: ${module.name}');
@@ -136,23 +149,12 @@ class RpcApp {
       module.configureWithEnv(_container, _env);
     }
 
-    // Spawn isolates for isolate modules before any server connections.
-    for (final module in _modules) {
-      if (module is RpcIsolateModule) {
-        _log?.debug('spawning isolate: ${module.name}');
-        await module.initIsolate();
-      }
+    if (_serverBuilder != null) {
+      await _startServer();
+    } else {
+      await _startClient();
     }
 
-    // Create server with per-endpoint callback.
-    _server = _serverBuilder(_setupEndpoint);
-
-    // Start transport.
-    _log?.info('Starting transport server');
-    await _server.start();
-    _log?.info('Transport server started');
-
-    // Notify modules.
     for (final module in _modules) {
       _log?.debug('onStart: ${module.name}');
       await module.onStart(_container);
@@ -161,19 +163,11 @@ class RpcApp {
     _log?.info('RpcApp started');
   }
 
-  /// Stops the application gracefully.
-  ///
-  /// Order:
-  /// 1. Stop modules in reverse dependency order.
-  /// 2. Drain in-flight streams (up to [RpcAppConfig.drainTimeout]).
-  /// 3. Stop the transport server.
-  /// 4. Terminate isolates.
   Future<void> stop() async {
     if (!_started) return;
 
     _log?.info('RpcApp stopping');
 
-    // Stop modules in reverse order.
     for (final module in _modules.reversed) {
       _log?.debug('onStop: ${module.name}');
       try {
@@ -185,40 +179,38 @@ class RpcApp {
           ),
         );
       } catch (e, st) {
-        _log?.error(
-          'Error in ${module.name}.onStop()',
-          error: e,
-          stackTrace: st,
-        );
+        _log?.error('Error in ${module.name}.onStop()', error: e, stackTrace: st);
       }
     }
 
-    // Drain in-flight streams.
-    await _drainEndpoints();
-
-    // Stop transport.
-    _log?.info('Stopping transport server');
-    await _server.stop();
-
-    // Terminate isolates.
-    for (final module in _modules.reversed) {
-      if (module is RpcIsolateModule) {
-        _log?.debug('terminating isolate: ${module.name}');
-        await module.terminateIsolate();
+    if (_server != null) {
+      await _drainEndpoints();
+      _log?.info('Stopping transport server');
+      await _server!.stop();
+      for (final module in _modules.reversed) {
+        if (module is RpcIsolateModule) {
+          _log?.debug('terminating isolate: ${module.name}');
+          await module.terminateIsolate();
+        }
       }
+    } else {
+      for (final entry in _clientCallers.entries) {
+        _log?.debug('closing client: ${entry.key.name}');
+        await entry.value.close();
+      }
+      _clientCallers.clear();
     }
 
     _log?.info('RpcApp stopped');
     if (!_stopCompleter.isCompleted) _stopCompleter.complete();
   }
 
-  /// Starts and then blocks until SIGTERM or SIGINT, then stops cleanly.
+  /// Starts and blocks until SIGTERM or SIGINT, then stops cleanly.
   Future<void> run() async {
     await start();
     _log?.info('RpcApp running — send SIGTERM or SIGINT to stop');
 
     final done = Completer<void>();
-
     StreamSubscription? sigtermSub;
     StreamSubscription? sigintSub;
 
@@ -231,21 +223,14 @@ class RpcApp {
 
     try {
       sigtermSub = ProcessSignal.sigterm.watch().listen(onSignal);
-    } catch (_) {
-      // SIGTERM not available on Windows.
-    }
-
+    } catch (_) {}
     try {
       sigintSub = ProcessSignal.sigint.watch().listen(onSignal);
-    } catch (_) {
-      // Signal handling unavailable; only programmatic stop works.
-    }
+    } catch (_) {}
 
     await Future.any([done.future, _stopCompleter.future]);
-
     sigtermSub?.cancel();
     sigintSub?.cancel();
-
     await stop();
   }
 
@@ -272,11 +257,10 @@ class RpcApp {
     }
 
     final endpointHealth = <Map<String, Object?>>[];
-    for (final endpoint in _server.endpoints) {
+    for (final endpoint in (_server?.endpoints ?? [])) {
       endpointHealth.add(endpoint.collectEndpointMetrics());
     }
 
-    // Derive overall level.
     RpcAppHealthLevel level = RpcAppHealthLevel.healthy;
     for (final entry in moduleHealth.values) {
       final lvl = entry['level'] as String?;
@@ -299,8 +283,55 @@ class RpcApp {
   // Private helpers
   // -------------------------------------------------------------------------
 
+  void _validateModules() {
+    if (_serverBuilder != null) {
+      final bad = _modules.whereType<RpcClientModule>().map((m) => m.name).toList();
+      if (bad.isNotEmpty) {
+        throw StateError(
+          'RpcApp.server does not accept RpcClientModule: ${bad.join(', ')}. '
+          'Manage outgoing connections in RpcModule.onStart/onStop instead.',
+        );
+      }
+    } else {
+      final bad = _modules.whereType<RpcServerModule>().map((m) => m.name).toList();
+      if (bad.isNotEmpty) {
+        throw StateError(
+          'RpcApp.client does not accept RpcServerModule: ${bad.join(', ')}. '
+          'Use RpcApp.server to expose RPC services.',
+        );
+      }
+    }
+  }
+
+  Future<void> _startServer() async {
+    // Spawn isolates.
+    for (final module in _modules) {
+      if (module is RpcIsolateModule) {
+        _log?.debug('spawning isolate: ${module.name}');
+        await module.initIsolate();
+      }
+    }
+
+    _server = _serverBuilder!(_setupEndpoint);
+    _log?.info('Starting transport server');
+    await _server!.start();
+    _log?.info('Transport server started');
+  }
+
+  Future<void> _startClient() async {
+    for (final module in _modules) {
+      if (module is RpcClientModule) {
+        _log?.debug('connecting client: ${module.name}');
+        final transport = await module.createTransport(_container, _env);
+        final caller = RpcCallerEndpoint(transport: transport);
+        caller.start();
+        module.registerCallerContracts(_container, caller);
+        _clientCallers[module] = caller;
+      }
+    }
+  }
+
   void _setupEndpoint(RpcResponderEndpoint endpoint) {
-    // Framework auto-interceptors first, then user-supplied.
     for (final i in _autoInterceptors) {
       endpoint.addInterceptor(i);
     }
@@ -310,12 +341,10 @@ class RpcApp {
     for (final mw in _middlewares) {
       endpoint.addMiddleware(mw);
     }
-
-    // Fresh contracts per connection from every module.
     for (final module in _modules) {
+      if (module is! RpcServerModule) continue;
       try {
-        final contracts = module.buildContracts(_container);
-        for (final contract in contracts) {
+        for (final contract in module.buildContracts(_container)) {
           endpoint.registerServiceContract(contract);
         }
       } catch (e, st) {
@@ -326,30 +355,23 @@ class RpcApp {
         );
       }
     }
-
     endpoint.start();
   }
 
   Future<void> _drainEndpoints() async {
     _log?.debug(
-      'Draining in-flight streams '
-      '(timeout: ${_config.drainTimeout.inSeconds}s)',
+      'Draining in-flight streams (timeout: ${_config.drainTimeout.inSeconds}s)',
     );
-
     final deadline = DateTime.now().add(_config.drainTimeout);
-
     while (DateTime.now().isBefore(deadline)) {
-      final totalOpen = _server.endpoints.fold<int>(
+      final totalOpen = (_server?.endpoints ?? []).fold<int>(
         0,
         (sum, ep) =>
             sum + ((ep.collectEndpointMetrics()['openStreams'] as int?) ?? 0),
       );
-
       if (totalOpen == 0) break;
-
       _log?.debug('Waiting for $totalOpen stream(s) to finish');
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
   }
-
 }

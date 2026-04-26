@@ -3,91 +3,190 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:collection';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
 /// gRPC status code for RESOURCE_EXHAUSTED (rate limit exceeded).
 const int _statusResourceExhausted = 8;
 
-/// Sliding-window rate-limiting interceptor.
+// ---------------------------------------------------------------------------
+// Public rate-limit algorithm descriptors
+// ---------------------------------------------------------------------------
+
+/// A stateful rate-limit counter.
 ///
-/// Counts calls within a rolling time window and rejects excess calls with
-/// a `RESOURCE_EXHAUSTED` [RpcException].
+/// Create one instance per slot (global / per-service / per-method) and pass
+/// it to [RpcRateLimiter]. Each call to [tryAcquire] either allows the
+/// request (returns `true`) or rejects it (returns `false`).
 ///
-/// Usage:
+/// Two built-in algorithms:
+///
+/// - [RateLimit.slidingWindow] — O(1) sliding-window counter using two
+///   fixed-window buckets. Strict: no burst allowance.
+/// - [RateLimit.tokenBucket] — token-bucket with configurable burst capacity.
+///   Allows short bursts above the average rate.
+sealed class RateLimit {
+  const RateLimit();
+
+  /// O(1) sliding-window counter.
+  ///
+  /// Approximates a true sliding window using two adjacent fixed-window
+  /// buckets. Weighted estimate:
+  ///   `count ≈ current + previous × (1 − elapsed/window)`
+  ///
+  /// [max] requests are allowed per [window]. No burst above [max].
+  factory RateLimit.slidingWindow({
+    required int max,
+    required Duration window,
+  }) = _SlidingWindowCounter;
+
+  /// Token-bucket counter.
+  ///
+  /// Tokens refill at [max] per [window]. The bucket holds at most
+  /// [burst] tokens (defaults to [max], i.e. no extra burst). Short
+  /// spikes up to [burst] requests are served instantly as long as the
+  /// bucket is sufficiently full.
+  factory RateLimit.tokenBucket({
+    required int max,
+    required Duration window,
+    int? burst,
+  }) = _TokenBucketCounter;
+
+  /// Attempts to acquire one request slot.
+  ///
+  /// Returns `true` if the request is within the limit, `false` otherwise.
+  bool tryAcquire();
+}
+
+// ---------------------------------------------------------------------------
+// Sliding-window counter (O(1))
+// ---------------------------------------------------------------------------
+
+class _SlidingWindowCounter implements RateLimit {
+  final int max;
+  final int _windowUs;
+
+  int _current = 0;
+  int _previous = 0;
+  int _windowStartUs;
+
+  _SlidingWindowCounter({required this.max, required Duration window})
+      : _windowUs = window.inMicroseconds,
+        _windowStartUs = DateTime.now().microsecondsSinceEpoch;
+
+  @override
+  bool tryAcquire() {
+    final nowUs = DateTime.now().microsecondsSinceEpoch;
+    final elapsedUs = nowUs - _windowStartUs;
+
+    if (elapsedUs >= _windowUs) {
+      final periods = elapsedUs ~/ _windowUs;
+      _previous = periods >= 2 ? 0 : _current;
+      _current = 0;
+      _windowStartUs += periods * _windowUs;
+    }
+
+    final elapsedInCurrentUs = nowUs - _windowStartUs;
+    final weight = 1.0 - (elapsedInCurrentUs / _windowUs);
+    final estimated = _current + (_previous * weight).floor();
+
+    if (estimated >= max) return false;
+    _current++;
+    return true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Token-bucket counter
+// ---------------------------------------------------------------------------
+
+class _TokenBucketCounter implements RateLimit {
+  final int max;
+  final int burst;
+  final int _windowUs;
+
+  double _tokens;
+  int _lastRefillUs;
+
+  _TokenBucketCounter({required this.max, required Duration window, int? burst})
+      : burst = burst ?? max,
+        _windowUs = window.inMicroseconds,
+        _tokens = (burst ?? max).toDouble(),
+        _lastRefillUs = DateTime.now().microsecondsSinceEpoch;
+
+  @override
+  bool tryAcquire() {
+    final nowUs = DateTime.now().microsecondsSinceEpoch;
+    final elapsedUs = nowUs - _lastRefillUs;
+
+    final refill = (elapsedUs / _windowUs) * max;
+    _tokens = (_tokens + refill).clamp(0.0, burst.toDouble());
+    _lastRefillUs = nowUs;
+
+    if (_tokens < 1.0) return false;
+    _tokens -= 1.0;
+    return true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Interceptor
+// ---------------------------------------------------------------------------
+
+/// Rate-limiting interceptor for [RpcResponderEndpoint].
+///
+/// Attach a [RateLimit] counter to the global scope, individual services, or
+/// individual methods. Priority: `perMethod` > `perService` > `global`.
+///
 /// ```dart
-/// // Limit all methods to 100 calls per second
-/// RpcRateLimiter.global(maxRequests: 100, window: Duration(seconds: 1))
-///
-/// // Per-method limits
-/// RpcRateLimiter.perMethod({
-///   'UserService.getUser':   (200, Duration(seconds: 1)),
-///   'UserService.listUsers': (10,  Duration(seconds: 1)),
-/// })
-///
-/// // Combined: global fallback + per-method overrides
+/// // Single global limit using the sliding-window algorithm
 /// RpcRateLimiter(
-///   globalMax: 500,
-///   globalWindow: Duration(seconds: 1),
-///   methodLimits: {
-///     'HeavyService.compute': (5, Duration(seconds: 1)),
+///   global: RateLimit.slidingWindow(max: 500, window: Duration(seconds: 1)),
+/// )
+///
+/// // Per-service and per-method with different algorithms
+/// RpcRateLimiter(
+///   global: RateLimit.slidingWindow(max: 1000, window: Duration(seconds: 1)),
+///   perService: {
+///     'HeavyService': RateLimit.slidingWindow(max: 10, window: Duration(seconds: 1)),
+///   },
+///   perMethod: {
+///     'UserService.getUser': RateLimit.tokenBucket(
+///       max: 200, window: Duration(seconds: 1), burst: 300,
+///     ),
 ///   },
 /// )
 /// ```
 ///
-/// All limits are enforced within a single Dart isolate (single-threaded),
-/// so no locks are needed.
+/// All limits are enforced within a single Dart isolate (no locks needed).
 class RpcRateLimiter extends IRpcInterceptor {
-  final _SlidingWindowCounter? _global;
-  final Map<String, _SlidingWindowCounter> _methodWindows;
+  final RateLimit? _global;
+  final Map<String, RateLimit> _perService;
+  final Map<String, RateLimit> _perMethod;
 
-  /// Creates a rate limiter that applies [maxRequests] per [window] globally.
-  RpcRateLimiter.global({
-    required int maxRequests,
-    required Duration window,
-  })  : _global = _SlidingWindowCounter(maxRequests: maxRequests, window: window),
-        _methodWindows = const {};
-
-  /// Creates a rate limiter with per-method limits.
+  /// Creates a rate limiter.
   ///
-  /// [limits] maps `"ServiceName.methodName"` to `(maxRequests, window)`.
-  RpcRateLimiter.perMethod(
-    Map<String, (int maxRequests, Duration window)> limits,
-  )   : _global = null,
-        _methodWindows = {
-          for (final e in limits.entries)
-            e.key: _SlidingWindowCounter(
-              maxRequests: e.value.$1,
-              window: e.value.$2,
-            ),
-        };
-
-  /// Creates a rate limiter with an optional global fallback and per-method
-  /// overrides.
+  /// [global] — fallback limit for any method not matched by [perService] or
+  /// [perMethod].
   ///
-  /// Per-method limits take priority over the global limit. Methods not
-  /// listed in [methodLimits] fall back to the global limit (if set).
-  RpcRateLimiter({
-    int? globalMax,
-    Duration? globalWindow,
-    Map<String, (int maxRequests, Duration window)> methodLimits = const {},
-  })  : _global = (globalMax != null && globalWindow != null)
-            ? _SlidingWindowCounter(maxRequests: globalMax, window: globalWindow)
-            : null,
-        _methodWindows = {
-          for (final e in methodLimits.entries)
-            e.key: _SlidingWindowCounter(
-              maxRequests: e.value.$1,
-              window: e.value.$2,
-            ),
-        };
+  /// [perService] — maps a service name (e.g. `'UserService'`) to a limit
+  /// applied to all its methods.
+  ///
+  /// [perMethod] — maps `'ServiceName.methodName'` to a limit applied to that
+  /// specific method. Takes priority over [perService] and [global].
+  const RpcRateLimiter({
+    RateLimit? global,
+    Map<String, RateLimit> perService = const {},
+    Map<String, RateLimit> perMethod = const {},
+  })  : _global = global,
+        _perService = perService,
+        _perMethod = perMethod;
 
-  void _checkLimit(String serviceName, String methodName) {
+  void _check(String serviceName, String methodName) {
     final methodKey = '$serviceName.$methodName';
-    final window = _methodWindows[methodKey] ?? _global;
-    if (window == null) return;
-    if (!window.tryAcquire()) {
+    final counter = _perMethod[methodKey] ?? _perService[serviceName] ?? _global;
+    if (counter == null) return;
+    if (!counter.tryAcquire()) {
       throw RpcRateLimitException(
         'Rate limit exceeded for $methodKey '
         '(gRPC status $_statusResourceExhausted: RESOURCE_EXHAUSTED)',
@@ -101,7 +200,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {
-    _checkLimit(call.serviceName, call.methodName);
+    _check(call.serviceName, call.methodName);
     return next(call.context, request);
   }
 
@@ -111,7 +210,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
-    _checkLimit(call.serviceName, call.methodName);
+    _check(call.serviceName, call.methodName);
     return next(call.context, request);
   }
 
@@ -121,7 +220,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) async {
-    _checkLimit(call.serviceName, call.methodName);
+    _check(call.serviceName, call.methodName);
     return next(call.context, requests);
   }
 
@@ -131,7 +230,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {
-    _checkLimit(call.serviceName, call.methodName);
+    _check(call.serviceName, call.methodName);
     return next(call.context, requests);
   }
 }
@@ -141,36 +240,6 @@ class RpcRateLimiter extends IRpcInterceptor {
 // ---------------------------------------------------------------------------
 
 /// Thrown by [RpcRateLimiter] when a call exceeds the configured limit.
-///
-/// Extends [RpcException] so the RPC core recognises it and returns a
-/// meaningful error message to the caller. The gRPC status sent to the client
-/// is `INTERNAL` (the core maps all [RpcException]s to it); extend the core's
-/// error handling to map this to `RESOURCE_EXHAUSTED` if needed.
 class RpcRateLimitException extends RpcException {
   RpcRateLimitException(super.message);
-}
-
-// ---------------------------------------------------------------------------
-// Internal sliding-window counter
-// ---------------------------------------------------------------------------
-
-class _SlidingWindowCounter {
-  final int maxRequests;
-  final Duration window;
-  final Queue<DateTime> _timestamps = Queue<DateTime>();
-
-  _SlidingWindowCounter({required this.maxRequests, required this.window});
-
-  /// Returns true and records a call if within the limit; false otherwise.
-  bool tryAcquire() {
-    final now = DateTime.now();
-    final cutoff = now.subtract(window);
-    // Evict timestamps that have fallen outside the window.
-    while (_timestamps.isNotEmpty && _timestamps.first.isBefore(cutoff)) {
-      _timestamps.removeFirst();
-    }
-    if (_timestamps.length >= maxRequests) return false;
-    _timestamps.add(now);
-    return true;
-  }
 }

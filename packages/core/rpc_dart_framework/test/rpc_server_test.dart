@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_dart_server/rpc_dart_server.dart';
+import 'package:rpc_dart_framework/rpc_dart_framework.dart';
 import 'package:test/test.dart';
 
 // ---------------------------------------------------------------------------
@@ -48,6 +48,12 @@ class EchoResponderContract extends RpcResponderContract {
       requestCodec: _reqCodec,
       responseCodec: _resCodec,
     );
+    addUnaryMethod<PingRequest, PingResponse>(
+      methodName: 'echo',
+      handler: (req, {context}) async => PingResponse(_svc.echo(req.message)),
+      requestCodec: _reqCodec,
+      responseCodec: _resCodec,
+    );
   }
 }
 
@@ -61,9 +67,17 @@ class EchoCallerContract extends RpcCallerContract {
         responseCodec: _resCodec,
         context: context,
       );
+  Future<PingResponse> echo(PingRequest req, {RpcContext? context}) =>
+      callUnary<PingRequest, PingResponse>(
+        methodName: 'echo',
+        request: req,
+        requestCodec: _reqCodec,
+        responseCodec: _resCodec,
+        context: context,
+      );
 }
 
-class EchoModule extends RpcModule {
+class EchoModule extends RpcServerModule {
   @override
   String get name => 'EchoModule';
 
@@ -314,7 +328,9 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter.global(maxRequests: 5, window: Duration(seconds: 1)),
+          RpcRateLimiter(
+            global: RateLimit.slidingWindow(max: 5, window: Duration(seconds: 1)),
+          ),
         ],
       );
       final client = EchoCallerContract(app.caller);
@@ -328,16 +344,23 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter.global(maxRequests: 2, window: Duration(seconds: 10)),
+          RpcRateLimiter(
+            global: RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+          ),
         ],
       );
       final client = EchoCallerContract(app.caller);
       await client.ping(const PingRequest('1'));
       await client.ping(const PingRequest('2'));
-      // 3rd call must fail
       await expectLater(
         client.ping(const PingRequest('3')),
-        throwsException,
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Rate limit exceeded'),
+          ),
+        ),
       );
       await app.dispose();
     });
@@ -346,17 +369,223 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter.perMethod({
-            'EchoService.ping': (1, Duration(seconds: 10)),
-          }),
+          RpcRateLimiter(
+            perMethod: {
+              'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+            },
+          ),
+        ],
+      );
+      final client = EchoCallerContract(app.caller);
+      await client.ping(const PingRequest('first'));
+      // ping is now limited
+      await expectLater(
+        client.ping(const PingRequest('second')),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Rate limit exceeded'),
+          ),
+        ),
+      );
+      // echo is not in perMethod — no limit applies, should still work
+      await client.echo(const PingRequest('not limited'));
+      await client.echo(const PingRequest('still works'));
+      await app.dispose();
+    });
+
+    test('per-service limit applies to all methods in service', () async {
+      final app = await RpcTestApp.start(
+        modules: [EchoModule()],
+        interceptors: [
+          RpcRateLimiter(
+            perService: {
+              'EchoService': RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+            },
+          ),
+        ],
+      );
+      final client = EchoCallerContract(app.caller);
+      // Two calls across different methods consume the shared service budget
+      await client.ping(const PingRequest('1'));
+      await client.echo(const PingRequest('2'));
+      // Third call (any method) must be rejected
+      await expectLater(
+        client.ping(const PingRequest('3')),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Rate limit exceeded'),
+          ),
+        ),
+      );
+      await app.dispose();
+    });
+
+    test('perMethod takes priority over perService', () async {
+      final app = await RpcTestApp.start(
+        modules: [EchoModule()],
+        interceptors: [
+          RpcRateLimiter(
+            perService: {
+              'EchoService': RateLimit.slidingWindow(max: 10, window: Duration(seconds: 10)),
+            },
+            perMethod: {
+              // Stricter limit on ping — should win over service limit
+              'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+            },
+          ),
         ],
       );
       final client = EchoCallerContract(app.caller);
       await client.ping(const PingRequest('first'));
       await expectLater(
         client.ping(const PingRequest('second')),
-        throwsException,
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Rate limit exceeded'),
+          ),
+        ),
       );
+      // echo uses service counter (max 10) — must still work
+      for (var i = 0; i < 5; i++) {
+        await client.echo(PingRequest('echo$i'));
+      }
+      await app.dispose();
+    });
+
+    test('perService takes priority over global', () async {
+      final app = await RpcTestApp.start(
+        modules: [EchoModule()],
+        interceptors: [
+          RpcRateLimiter(
+            global: RateLimit.slidingWindow(max: 10, window: Duration(seconds: 10)),
+            perService: {
+              // Stricter limit on EchoService — should win over global
+              'EchoService': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+            },
+          ),
+        ],
+      );
+      final client = EchoCallerContract(app.caller);
+      await client.ping(const PingRequest('first'));
+      await expectLater(
+        client.ping(const PingRequest('second')),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Rate limit exceeded'),
+          ),
+        ),
+      );
+      await app.dispose();
+    });
+
+    test('token bucket rejects calls over burst capacity', () async {
+      final app = await RpcTestApp.start(
+        modules: [EchoModule()],
+        interceptors: [
+          RpcRateLimiter(
+            global: RateLimit.tokenBucket(
+              max: 2,
+              window: Duration(seconds: 10),
+              burst: 2,
+            ),
+          ),
+        ],
+      );
+      final client = EchoCallerContract(app.caller);
+      await client.ping(const PingRequest('1'));
+      await client.ping(const PingRequest('2'));
+      await expectLater(
+        client.ping(const PingRequest('3')),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Rate limit exceeded'),
+          ),
+        ),
+      );
+      await app.dispose();
+    });
+
+    test('token bucket burst allows spike above average rate', () async {
+      final app = await RpcTestApp.start(
+        modules: [EchoModule()],
+        interceptors: [
+          RpcRateLimiter(
+            global: RateLimit.tokenBucket(
+              max: 1,
+              window: Duration(seconds: 1),
+              burst: 5,
+            ),
+          ),
+        ],
+      );
+      final client = EchoCallerContract(app.caller);
+      // Bucket starts full (5 tokens) — all 5 immediate calls pass
+      for (var i = 0; i < 5; i++) {
+        await client.ping(const PingRequest('x'));
+      }
+      // Bucket empty — next call rejected
+      await expectLater(
+        client.ping(const PingRequest('over')),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Rate limit exceeded'),
+          ),
+        ),
+      );
+      await app.dispose();
+    });
+
+    test('token bucket refills after window elapses', () async {
+      const window = Duration(milliseconds: 80);
+      final app = await RpcTestApp.start(
+        modules: [EchoModule()],
+        interceptors: [
+          RpcRateLimiter(
+            global: RateLimit.tokenBucket(max: 1, window: window, burst: 1),
+          ),
+        ],
+      );
+      final client = EchoCallerContract(app.caller);
+      // Consume the single token
+      await client.ping(const PingRequest('1'));
+      await expectLater(
+        client.ping(const PingRequest('2')),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Rate limit exceeded'),
+          ),
+        ),
+      );
+      // Wait for refill
+      await Future<void>.delayed(window * 1.5);
+      // Token refilled — should pass
+      await client.ping(const PingRequest('3'));
+      await app.dispose();
+    });
+
+    test('no limiter configured passes all calls through', () async {
+      final app = await RpcTestApp.start(
+        modules: [EchoModule()],
+        interceptors: [RpcRateLimiter()],
+      );
+      final client = EchoCallerContract(app.caller);
+      for (var i = 0; i < 20; i++) {
+        await client.ping(const PingRequest('x'));
+      }
       await app.dispose();
     });
   });
@@ -634,13 +863,55 @@ void main() {
       expect(events.first.error, isNotNull);
     });
   });
+
+  // -------------------------------------------------------------------------
+  group('RpcApp module type validation', () {
+    test('RpcApp.server rejects RpcClientModule', () async {
+      expect(
+        () async {
+          final app = RpcApp.server(
+            modules: [_StubClientModule()],
+            server: (onEndpoint) => _NullServer(onEndpoint),
+          );
+          await app.start();
+        },
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('RpcApp.client rejects RpcServerModule', () async {
+      expect(
+        () async {
+          final app = RpcApp.client(modules: [EchoModule()]);
+          await app.start();
+        },
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('RpcApp.server accepts plain RpcModule alongside RpcServerModule',
+        () async {
+      final app = RpcApp.server(
+        modules: [_InfraModule(), EchoModule()],
+        server: (onEndpoint) => _NullServer(onEndpoint),
+      );
+      await app.start();
+      await app.stop();
+    });
+
+    test('RpcApp.client accepts plain RpcModule', () async {
+      final app = RpcApp.client(modules: [_InfraModule()]);
+      await app.start();
+      await app.stop();
+    });
+  });
 }
 
 // ===========================================================================
 // Test helpers
 // ===========================================================================
 
-class _EnvModule extends RpcModule {
+class _EnvModule extends RpcServerModule {
   final void Function(RpcEnvConfig) _onEnv;
   _EnvModule({required void Function(RpcEnvConfig) onEnv}) : _onEnv = onEnv;
 
@@ -654,7 +925,7 @@ class _EnvModule extends RpcModule {
   List<RpcResponderContract> buildContracts(RpcContainer c) => const [];
 }
 
-class _LogModule extends RpcModule {
+class _LogModule extends RpcServerModule {
   @override
   final String name;
   final List<Type> _deps;
@@ -681,7 +952,7 @@ class _LogModule extends RpcModule {
   Future<void> onStop() async => _log?.add('stop:$name');
 }
 
-class _HealthyModule extends RpcModule {
+class _HealthyModule extends RpcServerModule {
   @override
   String get name => 'HealthyModule';
 
@@ -693,7 +964,7 @@ class _HealthyModule extends RpcModule {
       RpcHealthStatus.healthy(component: name, message: 'all good');
 }
 
-class _ThrowingModule extends RpcModule {
+class _ThrowingModule extends RpcServerModule {
   @override
   String get name => 'ThrowingModule';
 
@@ -715,8 +986,45 @@ class _ThrowingContract extends RpcResponderContract {
   }
 }
 
+// RpcApp validation helpers
+
+class _StubClientModule extends RpcClientModule {
+  @override
+  String get name => 'StubClient';
+
+  @override
+  Future<IRpcTransport> createTransport(RpcContainer c, RpcEnvConfig env) =>
+      throw UnimplementedError();
+
+  @override
+  void registerCallerContracts(RpcContainer c, RpcCallerEndpoint caller) {}
+}
+
+class _InfraModule extends RpcModule {
+  @override
+  String get name => 'InfraModule';
+}
+
+/// Minimal IRpcServer that calls onEndpointCreated once then does nothing.
+class _NullServer implements IRpcServer {
+  final void Function(RpcResponderEndpoint) _onEndpoint;
+  _NullServer(this._onEndpoint);
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  bool get isRunning => false;
+
+  @override
+  List<RpcResponderEndpoint> get endpoints => const [];
+}
+
 // Circular dependency helpers
-class _CircularA extends RpcModule {
+class _CircularA extends RpcServerModule {
   @override
   String get name => 'CircularA';
   @override
@@ -725,7 +1033,7 @@ class _CircularA extends RpcModule {
   List<RpcResponderContract> buildContracts(RpcContainer c) => const [];
 }
 
-class _CircularB extends RpcModule {
+class _CircularB extends RpcServerModule {
   @override
   String get name => 'CircularB';
   @override
