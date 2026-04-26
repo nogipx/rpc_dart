@@ -8,3 +8,4 @@ library;
 export 'src/rpc_http_caller_transport.dart';
 export 'src/rpc_http_cors_policy.dart';
 export 'src/rpc_http_responder_transport.dart';
+export 'src/rpc_http_server.dart';

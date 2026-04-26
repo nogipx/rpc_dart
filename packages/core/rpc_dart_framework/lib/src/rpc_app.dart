@@ -49,6 +49,7 @@ class RpcApp {
   final List<IRpcInterceptor> _interceptors;
   final List<IRpcMiddleware> _middlewares;
   final IRpcServer Function(void Function(RpcResponderEndpoint))? _serverBuilder;
+  final Future<void> Function(RpcContainer container)? _afterModulesStartHook;
   final RpcAppConfig _config;
 
   late final List<RpcModule> _modules;
@@ -65,11 +66,13 @@ class RpcApp {
     IRpcServer Function(void Function(RpcResponderEndpoint))? serverBuilder,
     required List<IRpcInterceptor> interceptors,
     required List<IRpcMiddleware> middlewares,
+    Future<void> Function(RpcContainer container)? afterModulesStart,
     required RpcAppConfig config,
   })  : _modulesRaw = modules,
         _serverBuilder = serverBuilder,
         _interceptors = List.unmodifiable(interceptors),
         _middlewares = List.unmodifiable(middlewares),
+        _afterModulesStartHook = afterModulesStart,
         _config = config;
 
   /// Creates an [RpcApp] that listens for incoming connections via [server].
@@ -77,11 +80,18 @@ class RpcApp {
   /// [modules] may contain [RpcServerModule]s and plain [RpcModule]s.
   /// For outgoing RPC connections within a module use [RpcClientConnection]
   /// directly inside [RpcModule.onStart]/[RpcModule.onStop].
+  ///
+  /// [afterModulesStart] is called after all module [onStart] hooks complete,
+  /// with the fully-populated DI [container]. Use this for servers that need
+  /// to defer endpoint creation until the container is ready — for example,
+  /// [RpcHttpServer.afterModulesStart] which calls [buildContracts] and binds
+  /// the HTTP port only after all services are registered.
   factory RpcApp.server({
     required List<RpcModule> modules,
     required IRpcServer Function(void Function(RpcResponderEndpoint)) server,
     List<IRpcInterceptor> interceptors = const [],
     List<IRpcMiddleware> middlewares = const [],
+    Future<void> Function(RpcContainer container)? afterModulesStart,
     RpcAppConfig config = const RpcAppConfig(),
   }) {
     return RpcApp._(
@@ -89,6 +99,7 @@ class RpcApp {
       serverBuilder: server,
       interceptors: interceptors,
       middlewares: middlewares,
+      afterModulesStart: afterModulesStart,
       config: config,
     );
   }
@@ -129,6 +140,11 @@ class RpcApp {
     for (final module in _modules) {
       _log?.debug('onStart: ${module.name}');
       await module.onStart(_container);
+    }
+
+    if (_afterModulesStartHook != null) {
+      _log?.debug('afterModulesStart');
+      await _afterModulesStartHook(_container);
     }
 
     _log?.info('RpcApp started');
