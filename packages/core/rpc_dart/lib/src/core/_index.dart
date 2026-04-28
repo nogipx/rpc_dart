@@ -3,9 +3,12 @@
 //
 // SPDX-License-Identifier: MIT
 
+export 'channel.dart';
+export 'channel_frame.dart';
+export 'compression.dart';
+export 'multiplexed_channel.dart';
 export 'errors.dart';
 export 'health.dart';
-export 'compression.dart';
 export 'metadata.dart';
 export 'message.dart';
 export 'parser.dart';

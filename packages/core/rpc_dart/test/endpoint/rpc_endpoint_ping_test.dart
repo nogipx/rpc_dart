@@ -50,7 +50,7 @@ void main() {
             .containsKey(RpcEndpointPingProtocol.responseTimestampHeader),
         isTrue,
       );
-      expect(result.responderTransportType, contains('RpcInMemoryTransport'));
+      expect(result.responderTransportType, contains('RpcChannelTransport'));
     });
 
     test('ping включает debug label responder эндпоинта', () async {

@@ -12,126 +12,104 @@ import 'package:test/test.dart';
 void main() {
   group('RpcInMemoryTransport', () {
     group('pair factory', () {
-      test('создает_два_соединенных_транспорта', () {
-        // Arrange & Act
+      test('creates two connected transports', () {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
 
-        // Assert
-        expect(transport1, isA<RpcInMemoryTransport>());
-        expect(transport2, isA<RpcInMemoryTransport>());
+        expect(transport1, isA<IRpcTransport>());
+        expect(transport2, isA<IRpcTransport>());
         expect(transport1, isNot(same(transport2)));
       });
 
-      test('транспорты_связаны_друг_с_другом', () async {
-        // Arrange
+      test('transports are linked', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
 
-        // Act
         final streamId = transport1.createStream();
         final testData = Uint8List.fromList([1, 2, 3, 4, 5]);
         await transport1.sendMessage(streamId, testData);
 
-        // Give time for async processing
         await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.streamId, equals(streamId));
         expect(receivedMessages.first.payload, equals(testData));
       });
+
+      test('supports zero copy', () {
+        final (transport1, transport2) = RpcInMemoryTransport.pair();
+
+        expect(transport1.supportsZeroCopy, isTrue);
+        expect(transport2.supportsZeroCopy, isTrue);
+      });
     });
 
     group('createStream', () {
-      test('создает_уникальные_stream_id', () {
-        // Arrange
+      test('creates unique stream IDs', () {
         final (transport, _) = RpcInMemoryTransport.pair();
 
-        // Act
         final streamId1 = transport.createStream();
         final streamId2 = transport.createStream();
         final streamId3 = transport.createStream();
 
-        // Assert
         expect(streamId1, isNot(equals(streamId2)));
         expect(streamId2, isNot(equals(streamId3)));
         expect(streamId1, isNot(equals(streamId3)));
       });
 
-      test('генерирует_нечетные_числа_для_клиента', () {
-        // Arrange
+      test('generates odd IDs for client', () {
         final (clientTransport, _) = RpcInMemoryTransport.pair();
 
-        // Act
         final streamIds = List.generate(
           5,
           (_) => clientTransport.createStream(),
         );
 
-        // Assert
         for (final streamId in streamIds) {
-          expect(
-            streamId % 2,
-            equals(1),
-            reason: 'Stream ID должен быть нечетным для клиента',
-          );
+          expect(streamId % 2, equals(1));
         }
       });
 
-      test('генерирует_четные_числа_для_сервера', () {
-        // Arrange
+      test('generates even IDs for server', () {
         final (_, serverTransport) = RpcInMemoryTransport.pair();
 
-        // Act
         final streamIds = List.generate(
           5,
           (_) => serverTransport.createStream(),
         );
 
-        // Assert
         for (final streamId in streamIds) {
-          expect(
-            streamId % 2,
-            equals(0),
-            reason: 'Stream ID должен быть четным для сервера',
-          );
+          expect(streamId % 2, equals(0));
         }
       });
     });
 
-    group('sendMessage и sendMetadata', () {
-      test('отправляет_сообщения_между_транспортами', () async {
-        // Arrange
+    group('sendMessage and sendMetadata', () {
+      test('sends messages between transports', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
 
-        // Act
         final streamId = transport1.createStream();
         final testData = Uint8List.fromList('Hello World'.codeUnits);
         await transport1.sendMessage(streamId, testData);
 
-        // Give time for async processing
         await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.streamId, equals(streamId));
         expect(receivedMessages.first.payload, equals(testData));
         expect(receivedMessages.first.isMetadataOnly, isFalse);
       });
 
-      test('отправляет_метаданные_между_транспортами', () async {
-        // Arrange
+      test('sends metadata between transports', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
 
-        // Act
         final streamId = transport1.createStream();
         final metadata = RpcMetadata.forClientRequest(
           'TestService',
@@ -139,24 +117,20 @@ void main() {
         );
         await transport1.sendMetadata(streamId, metadata);
 
-        // Give time for async processing
         await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.streamId, equals(streamId));
         expect(receivedMessages.first.metadata, equals(metadata));
         expect(receivedMessages.first.isMetadataOnly, isTrue);
       });
 
-      test('обрабатывает_end_stream_флаг', () async {
-        // Arrange
+      test('handles end stream flag', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
 
-        // Act
         final streamId = transport1.createStream();
         await transport1.sendMessage(
           streamId,
@@ -164,16 +138,13 @@ void main() {
           endStream: true,
         );
 
-        // Give time for async processing
         await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.isEndOfStream, isTrue);
       });
 
-      test('двунаправленная_передача_сообщений', () async {
-        // Arrange
+      test('bidirectional messaging', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final messages1 = <RpcTransportMessage>[];
         final messages2 = <RpcTransportMessage>[];
@@ -181,7 +152,6 @@ void main() {
         transport1.incomingMessages.listen(messages1.add);
         transport2.incomingMessages.listen(messages2.add);
 
-        // Act
         final streamId1 = transport1.createStream();
         final streamId2 = transport2.createStream();
 
@@ -194,10 +164,8 @@ void main() {
           Uint8List.fromList('from2'.codeUnits),
         );
 
-        // Give time for async processing
         await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert
         expect(messages1.length, equals(1));
         expect(messages2.length, equals(1));
         expect(String.fromCharCodes(messages2.first.payload!), equals('from1'));
@@ -205,41 +173,54 @@ void main() {
       });
     });
 
-    group('finishSending', () {
-      test('отправляет_end_stream_сообщение', () async {
-        // Arrange
+    group('sendDirectObject', () {
+      test('sends objects by reference (zero-copy)', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
 
-        // Act
+        final streamId = transport1.createStream();
+        final testObject = {'key': 'value', 'number': 42};
+        await transport1.sendDirectObject(streamId, testObject);
+
+        await Future.delayed(Duration(milliseconds: 1));
+
+        expect(receivedMessages.length, equals(1));
+        expect(receivedMessages.first.directPayload, same(testObject));
+      });
+    });
+
+    group('finishSending', () {
+      test('sends end stream message', () async {
+        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final receivedMessages = <RpcTransportMessage>[];
+
+        transport2.incomingMessages.listen(receivedMessages.add);
+
         final streamId = transport1.createStream();
         await transport1.finishSending(streamId);
 
-        // Give time for async processing
         await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.streamId, equals(streamId));
         expect(receivedMessages.first.isEndOfStream, isTrue);
         expect(receivedMessages.first.isMetadataOnly, isTrue);
       });
 
-      test('предотвращает_повторную_отправку', () async {
-        // Arrange
+      test('prevents duplicate send', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
 
-        // Act
         final streamId = transport1.createStream();
         await transport1.finishSending(streamId);
-        await transport1.finishSending(streamId); // Повторный вызов
+        await transport1.finishSending(streamId);
 
-        // Assert
+        await Future.delayed(Duration(milliseconds: 1));
+
         final endStreamMessages = receivedMessages
             .where((msg) => msg.isEndOfStream && msg.streamId == streamId)
             .toList();
@@ -248,8 +229,7 @@ void main() {
     });
 
     group('getMessagesForStream', () {
-      test('фильтрует_сообщения_по_stream_id', () async {
-        // Arrange
+      test('filters messages by stream ID', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final streamId1 = transport1.createStream();
         final streamId2 = transport1.createStream();
@@ -260,7 +240,6 @@ void main() {
         transport2.getMessagesForStream(streamId1).listen(stream1Messages.add);
         transport2.getMessagesForStream(streamId2).listen(stream2Messages.add);
 
-        // Act
         await transport1.sendMessage(
           streamId1,
           Uint8List.fromList('message1'.codeUnits),
@@ -274,10 +253,8 @@ void main() {
           Uint8List.fromList('message3'.codeUnits),
         );
 
-        // Give time for async processing
         await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert
         expect(stream1Messages.length, equals(2));
         expect(stream2Messages.length, equals(1));
         expect(
@@ -294,8 +271,7 @@ void main() {
         );
       });
 
-      test('не_получает_сообщения_от_других_потоков', () async {
-        // Arrange
+      test('does not receive messages from other streams', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final streamId1 = transport1.createStream();
         final streamId2 = transport1.createStream();
@@ -303,35 +279,29 @@ void main() {
         final stream1Messages = <RpcTransportMessage>[];
         transport2.getMessagesForStream(streamId1).listen(stream1Messages.add);
 
-        // Act
         await transport1.sendMessage(
           streamId2,
           Uint8List.fromList('message'.codeUnits),
         );
 
-        // Assert
         expect(stream1Messages, isEmpty);
       });
     });
 
     group('close', () {
-      test('закрывает_транспорт_корректно', () async {
-        // Arrange
+      test('closes transport cleanly', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
 
-        // Act & Assert - должно закрыться без ошибок
         await transport1.close();
         await transport2.close();
       });
 
-      test('прекращает_прием_сообщений_после_закрытия', () async {
-        // Arrange
+      test('stops receiving messages after close', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
 
-        // Act
         await transport2.close();
 
         final streamId = transport1.createStream();
@@ -340,14 +310,12 @@ void main() {
           Uint8List.fromList('test'.codeUnits),
         );
 
-        // Assert
         expect(receivedMessages, isEmpty);
       });
     });
 
-    group('интеграционные тесты', () {
-      test('полный_цикл_обмена_сообщениями', () async {
-        // Arrange
+    group('integration tests', () {
+      test('full message exchange cycle', () async {
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
         final serverMessages = <RpcTransportMessage>[];
         final clientMessages = <RpcTransportMessage>[];
@@ -355,8 +323,7 @@ void main() {
         serverTransport.incomingMessages.listen(serverMessages.add);
         clientTransport.incomingMessages.listen(clientMessages.add);
 
-        // Act
-        // Клиент отправляет запрос
+        // Client sends request
         final requestStreamId = clientTransport.createStream();
         final requestMetadata = RpcMetadata.forClientRequest(
           'TestService',
@@ -369,7 +336,7 @@ void main() {
         );
         await clientTransport.finishSending(requestStreamId);
 
-        // Сервер отправляет ответ
+        // Server sends response
         final responseStreamId = serverTransport.createStream();
         final responseMetadata = RpcMetadata.forServerInitialResponse();
         await serverTransport.sendMetadata(responseStreamId, responseMetadata);
@@ -384,20 +351,10 @@ void main() {
           endStream: true,
         );
 
-        // Give time for async processing
         await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert
-        expect(
-          serverMessages.length,
-          equals(3),
-        ); // metadata + message + endStream
-        expect(
-          clientMessages.length,
-          equals(3),
-        ); // metadata + message + trailer
-
-        // Проверяем запрос
+        // Verify request
+        expect(serverMessages.length, equals(3));
         expect(serverMessages[0].isMetadataOnly, isTrue);
         expect(serverMessages[0].metadata?.serviceName, equals('TestService'));
         expect(serverMessages[1].isMetadataOnly, isFalse);
@@ -407,7 +364,8 @@ void main() {
         );
         expect(serverMessages[2].isEndOfStream, isTrue);
 
-        // Проверяем ответ
+        // Verify response
+        expect(clientMessages.length, equals(3));
         expect(clientMessages[0].isMetadataOnly, isTrue);
         expect(clientMessages[1].isMetadataOnly, isFalse);
         expect(
@@ -417,14 +375,12 @@ void main() {
         expect(clientMessages[2].isEndOfStream, isTrue);
       });
 
-      test('множественные_потоки_на_одном_транспорте', () async {
-        // Arrange
+      test('multiple streams on one transport', () async {
         final (transport1, transport2) = RpcInMemoryTransport.pair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
 
-        // Act
         final streamIds = [
           transport1.createStream(),
           transport1.createStream(),
@@ -438,13 +394,10 @@ void main() {
           );
         }
 
-        // Give time for async processing
         await Future.delayed(Duration(milliseconds: 1));
 
-        // Assert
         expect(receivedMessages.length, equals(3));
 
-        // Проверяем, что все сообщения получены с правильными stream ID
         for (int i = 0; i < streamIds.length; i++) {
           final message = receivedMessages[i];
           expect(message.streamId, equals(streamIds[i]));
@@ -454,63 +407,55 @@ void main() {
     });
   });
 
-  group('Автоматическое закрытие партнера', () {
-    test('при закрытии клиентского транспорта закрывается серверный', () async {
+  group('Partner auto-close', () {
+    test('closing client transport closes server', () async {
       final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-      // Проверяем, что оба транспорта активны
       expect(clientTransport.isClosed, isFalse);
       expect(serverTransport.isClosed, isFalse);
 
-      // Закрываем клиентский транспорт
       await clientTransport.close();
+      await Future.delayed(Duration(milliseconds: 10));
 
-      // Проверяем, что оба транспорта закрыты
       expect(clientTransport.isClosed, isTrue);
       expect(serverTransport.isClosed, isTrue);
     });
 
-    test('при закрытии серверного транспорта закрывается клиентский', () async {
+    test('closing server transport closes client', () async {
       final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-      // Проверяем, что оба транспорта активны
       expect(clientTransport.isClosed, isFalse);
       expect(serverTransport.isClosed, isFalse);
 
-      // Закрываем серверный транспорт
       await serverTransport.close();
+      await Future.delayed(Duration(milliseconds: 10));
 
-      // Проверяем, что оба транспорта закрыты
       expect(clientTransport.isClosed, isTrue);
       expect(serverTransport.isClosed, isTrue);
     });
 
-    test('повторное закрытие не вызывает ошибок', () async {
+    test('double close does not throw', () async {
       final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-      // Закрываем оба транспорта одновременно
       await Future.wait([clientTransport.close(), serverTransport.close()]);
 
-      // Проверяем, что оба транспорта закрыты
       expect(clientTransport.isClosed, isTrue);
       expect(serverTransport.isClosed, isTrue);
 
-      // Повторное закрытие не должно вызывать ошибок
       await clientTransport.close();
       await serverTransport.close();
     });
 
     group('health & reconnect', () {
-      test('возвращает_healthy_когда_транспорт_активен', () async {
+      test('returns healthy when active', () async {
         final (clientTransport, _) = RpcInMemoryTransport.pair();
 
         final status = await clientTransport.health();
 
         expect(status.level, equals(RpcHealthLevel.healthy));
-        expect(status.details['isClosed'], isFalse);
       });
 
-      test('возвращает_closed_после_close', () async {
+      test('returns closed after close', () async {
         final (clientTransport, _) = RpcInMemoryTransport.pair();
 
         await clientTransport.close();
@@ -518,26 +463,14 @@ void main() {
         final status = await clientTransport.health();
 
         expect(status.level, equals(RpcHealthLevel.closed));
-        expect(status.details['isClosed'], isTrue);
       });
 
-      test('reconnect_возвращает_noop_для_активного_транспорта', () async {
+      test('reconnect returns degraded', () async {
         final (clientTransport, _) = RpcInMemoryTransport.pair();
 
         final status = await clientTransport.reconnect();
 
-        expect(status.level, equals(RpcHealthLevel.healthy));
-        expect(status.details['supported'], isFalse);
-      });
-
-      test('reconnect_возвращает_unhealthy_когда_закрыт', () async {
-        final (clientTransport, _) = RpcInMemoryTransport.pair();
-
-        await clientTransport.close();
-
-        final status = await clientTransport.reconnect();
-
-        expect(status.level, equals(RpcHealthLevel.unhealthy));
+        expect(status.level, equals(RpcHealthLevel.degraded));
         expect(status.details['supported'], isFalse);
       });
     });

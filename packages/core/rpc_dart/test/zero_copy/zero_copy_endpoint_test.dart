@@ -207,8 +207,7 @@ void main() {
 
       // Прямое использование zero-copy на транспортном уровне
       if (clientTransport.supportsZeroCopy) {
-        final transport = clientTransport as RpcInMemoryTransport;
-        final streamId = transport.createStream();
+        final streamId = clientTransport.createStream();
 
         print('\n🚀 Прямой zero-copy вызов:');
 
@@ -219,7 +218,8 @@ void main() {
             .timeout(Duration(seconds: 2)); // Добавляем таймаут для отладки
 
         // Теперь отправляем сообщение
-        await transport.sendDirectObject(streamId, request, endStream: true);
+        await clientTransport.sendDirectObject(streamId, request,
+            endStream: true);
 
         // Ждем сообщение
         final directMessage = await messagesFuture;

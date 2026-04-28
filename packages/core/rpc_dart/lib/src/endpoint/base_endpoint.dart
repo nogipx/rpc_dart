@@ -10,6 +10,7 @@ abstract base class RpcEndpointBase {
   final IRpcTransport _transport;
   final List<IRpcMiddleware> _middlewares = [];
   final List<IRpcInterceptor> _interceptors = [];
+
   /// Optional label attached to log messages for easier identification.
   final String? debugLabel;
 
