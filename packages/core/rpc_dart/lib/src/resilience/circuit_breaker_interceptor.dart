@@ -1,0 +1,207 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
+import 'dart:async';
+
+import 'package:rpc_dart/rpc_dart.dart';
+
+/// Circuit breaker states.
+enum CircuitBreakerState {
+  /// Normal operation. Requests pass through.
+  closed,
+
+  /// Circuit tripped. Requests fail immediately without calling the service.
+  open,
+
+  /// Probing. One request is allowed through to test recovery.
+  halfOpen,
+}
+
+/// Exception thrown when the circuit breaker is open.
+class CircuitBreakerOpenException implements Exception {
+  /// Time until the circuit breaker will transition to half-open.
+  final Duration? retryAfter;
+
+  /// Creates a [CircuitBreakerOpenException].
+  const CircuitBreakerOpenException({this.retryAfter});
+
+  @override
+  String toString() {
+    if (retryAfter != null) {
+      return 'CircuitBreakerOpenException: circuit is open, retry after ${retryAfter!.inMilliseconds}ms';
+    }
+    return 'CircuitBreakerOpenException: circuit is open';
+  }
+}
+
+/// Interceptor that implements the circuit breaker pattern.
+///
+/// Tracks consecutive failures. When failures exceed [failureThreshold],
+/// the circuit opens and subsequent calls fail immediately with
+/// [CircuitBreakerOpenException]. After [resetTimeout], one probe request
+/// is allowed through (half-open). If it succeeds, the circuit closes.
+/// If it fails, the circuit opens again.
+///
+/// Usage:
+/// ```dart
+/// caller.addInterceptor(RpcCircuitBreakerInterceptor(
+///   failureThreshold: 5,
+///   resetTimeout: Duration(seconds: 30),
+/// ));
+/// ```
+class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
+  /// Number of consecutive failures before the circuit opens.
+  final int failureThreshold;
+
+  /// How long the circuit stays open before transitioning to half-open.
+  final Duration resetTimeout;
+
+  /// Optional predicate to decide if an error counts as a failure.
+  /// Defaults to counting all errors except cancellation.
+  final bool Function(Object error)? failureOn;
+
+  CircuitBreakerState _state = CircuitBreakerState.closed;
+  int _failureCount = 0;
+  DateTime? _lastFailureTime;
+
+  /// Creates a circuit breaker interceptor.
+  RpcCircuitBreakerInterceptor({
+    this.failureThreshold = 5,
+    this.resetTimeout = const Duration(seconds: 30),
+    this.failureOn,
+  });
+
+  /// Current state of the circuit breaker.
+  CircuitBreakerState get state => _state;
+
+  /// Current consecutive failure count.
+  int get failureCount => _failureCount;
+
+  @override
+  Future<TResponse> interceptUnary<TRequest, TResponse>(
+    RpcMiddlewareContext call,
+    TRequest request,
+    RpcUnaryNext<TRequest, TResponse> next,
+  ) async {
+    _checkState();
+
+    try {
+      final response = await next(call.context, request);
+      _onSuccess();
+      return response;
+    } catch (e) {
+      _onFailure(e);
+      rethrow;
+    }
+  }
+
+  @override
+  FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
+    RpcMiddlewareContext call,
+    TRequest request,
+    RpcServerStreamNext<TRequest, TResponse> next,
+  ) async {
+    _checkState();
+
+    try {
+      final stream = await next(call.context, request);
+      _onSuccess();
+      return stream;
+    } catch (e) {
+      _onFailure(e);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<TResponse> interceptClientStream<TRequest, TResponse>(
+    RpcMiddlewareContext call,
+    Stream<TRequest> requests,
+    RpcClientStreamNext<TRequest, TResponse> next,
+  ) async {
+    _checkState();
+
+    try {
+      final response = await next(call.context, requests);
+      _onSuccess();
+      return response;
+    } catch (e) {
+      _onFailure(e);
+      rethrow;
+    }
+  }
+
+  @override
+  FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
+    RpcMiddlewareContext call,
+    Stream<TRequest> requests,
+    RpcBidirectionalStreamNext<TRequest, TResponse> next,
+  ) async {
+    _checkState();
+
+    try {
+      final stream = await next(call.context, requests);
+      _onSuccess();
+      return stream;
+    } catch (e) {
+      _onFailure(e);
+      rethrow;
+    }
+  }
+
+  /// Checks whether a request is allowed based on the current state.
+  /// Throws [CircuitBreakerOpenException] if the circuit is open.
+  void _checkState() {
+    switch (_state) {
+      case CircuitBreakerState.closed:
+        return; // Allow through.
+
+      case CircuitBreakerState.open:
+        // Check if reset timeout has elapsed.
+        if (_lastFailureTime != null) {
+          final elapsed = DateTime.now().difference(_lastFailureTime!);
+          if (elapsed >= resetTimeout) {
+            // Transition to half-open, allow one probe.
+            _state = CircuitBreakerState.halfOpen;
+            return;
+          }
+          throw CircuitBreakerOpenException(
+            retryAfter: resetTimeout - elapsed,
+          );
+        }
+        throw const CircuitBreakerOpenException();
+
+      case CircuitBreakerState.halfOpen:
+        return; // Allow probe through.
+    }
+  }
+
+  void _onSuccess() {
+    _failureCount = 0;
+    _state = CircuitBreakerState.closed;
+  }
+
+  void _onFailure(Object error) {
+    // Don't count cancellations as failures.
+    if (error is RpcCancelledException) return;
+    if (failureOn != null && !failureOn!(error)) return;
+
+    _failureCount++;
+    _lastFailureTime = DateTime.now();
+
+    if (_state == CircuitBreakerState.halfOpen) {
+      // Probe failed — reopen.
+      _state = CircuitBreakerState.open;
+    } else if (_failureCount >= failureThreshold) {
+      _state = CircuitBreakerState.open;
+    }
+  }
+
+  /// Manually resets the circuit breaker to closed state.
+  void reset() {
+    _state = CircuitBreakerState.closed;
+    _failureCount = 0;
+    _lastFailureTime = null;
+  }
+}
