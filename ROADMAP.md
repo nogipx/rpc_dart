@@ -1,31 +1,48 @@
 # rpc_dart Roadmap
 
-## Phase 1 — Transport abstraction [IN PROGRESS]
+## Phase 1 — Transport abstraction [DONE]
 
 **Goal:** Decouple HTTP/2 semantics from `IRpcTransport` so new transports are trivial to implement.
 
-**Status:** Core interfaces and adapter implemented. Tests needed. WebSocket migration pending.
+**Status:** Complete. 3-layer architecture implemented, in-memory transport migrated, all 543 tests pass.
+
+### Architecture
+
+```
+IRpcChannel              — raw byte pipe (~50 LOC to implement)
+IRpcMultiplexedChannel   — multiplexed message channel
+  +- RpcFrameMultiplexedChannel  — wraps IRpcChannel with frame codec
+  +- RpcDirectMultiplexedChannel — zero-copy paired messages (in-memory)
+RpcChannelTransport      — wraps IRpcMultiplexedChannel into IRpcTransport
+                           (stream IDs, security policy, health)
+```
 
 ### Done
 
-- [x] `IRpcChannel` interface (`core/rpc_dart/lib/src/core/channel.dart`) — raw bidirectional byte pipe, ~50 LOC to implement a new transport
-- [x] `RpcChannelFrame` codec (`core/rpc_dart/lib/src/core/channel_frame.dart`) — 9-byte multiplexed wire format (4B streamId + 1B flags + 4B length + payload), metadata encoded as JSON
-- [x] `RpcChannelTransport` adapter (`core/rpc_dart/lib/src/rpc/transports/channel_transport.dart`) — wraps any `IRpcChannel` into a full `IRpcTransport` with stream IDs, metadata routing, security policy, health checks
-- [x] `RpcChannelTransport.pair()` — paired in-memory channels for testing (byte-oriented, no zero-copy)
-- [x] All 503 existing core tests pass
+- [x] `IRpcChannel` interface — raw bidirectional byte pipe
+- [x] `IRpcMultiplexedChannel` interface — multiplexed message channel between raw channel and transport
+- [x] `RpcChannelFrame` codec — 9-byte multiplexed wire format (4B streamId + 1B flags + 4B length + payload)
+- [x] `RpcFrameMultiplexedChannel` — wraps `IRpcChannel` with frame encoding + read buffer
+- [x] `RpcDirectMultiplexedChannel` — zero-copy paired channel for in-memory transport
+- [x] `RpcChannelTransport` — wraps any `IRpcMultiplexedChannel` into full `IRpcTransport`
+- [x] `RpcChannelTransport.pair()` — frame-based pair for testing
+- [x] `RpcChannelTransport.memoryPair()` — zero-copy pair (replaces old `RpcInMemoryTransport` internals)
+- [x] `RpcInMemoryTransport.pair()` — backward-compatible delegate to `memoryPair()`
+- [x] Tests for frame codec, multiplexing, buffer reassembly, error propagation, health
+- [x] All 543 core tests pass
 
 ### Remaining
 
-- [ ] Write tests for `RpcChannelTransport` (frame encoding/decoding, multiplexing, end-of-stream, metadata roundtrip, error handling, security policy limits)
 - [ ] Migrate `rpc_dart_websocket` to use `IRpcChannel` (proof of concept)
 - [ ] Consider migrating `rpc_dart_http` to use `IRpcChannel`
 
 ### Design decisions
 
-- HTTP/2 and In-Memory/Isolate transports keep implementing `IRpcTransport` directly (native multiplexing / zero-copy)
+- 3-layer split: multiplexing is separate from transport policy (enables swapping frame formats for Phase 2)
+- HTTP/2 keeps implementing `IRpcTransport` directly (native multiplexing)
 - `IRpcChannel` targets byte-oriented transports (WebSocket, raw TCP, Unix socket, QUIC, etc.)
 - `RpcTransportMessage` stays as the high-level unit endpoints see — no breaking changes
-- Multiplexer is built into `RpcChannelTransport`, not a separate interface (simpler than the original 3-layer plan)
+- Sync broadcast controllers in DirectMultiplexedChannel and ChannelTransport to minimize async hops
 
 ---
 
