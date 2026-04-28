@@ -4,7 +4,7 @@
 
 **Goal:** Decouple HTTP/2 semantics from `IRpcTransport` so new transports are trivial to implement.
 
-**Status:** Complete. 3-layer architecture implemented, in-memory transport migrated, all 543 tests pass.
+**Status:** Complete. 3-layer architecture implemented, all transports migrated, all tests pass.
 
 ### Architecture
 
@@ -30,11 +30,15 @@ RpcChannelTransport      — wraps IRpcMultiplexedChannel into IRpcTransport
 - [x] `RpcInMemoryTransport.pair()` — backward-compatible delegate to `memoryPair()`
 - [x] Tests for frame codec, multiplexing, buffer reassembly, error propagation, health
 - [x] All 543 core tests pass
+- [x] Migrate `rpc_dart_websocket` — `RpcWebSocketChannel implements IRpcChannel`, 750 LOC removed
+- [x] Migrate `rpc_dart_isolate` — `IRpcMultiplexedChannel` on both IO and Web, ~1200 LOC removed
+- [x] `RpcWebSocketCallerTransport` — reconnect support via stable stream forwarding
+- [x] `RpcWebSocketResponderTransport` — thin wrapper around `RpcChannelTransport.fromChannel()`
 
-### Remaining
+### Not migrated (by design)
 
-- [ ] Migrate `rpc_dart_websocket` to use `IRpcChannel` (proof of concept)
-- [ ] Consider migrating `rpc_dart_http` to use `IRpcChannel`
+- `rpc_dart_http` — unary HTTP/1.1, no persistent connection, no multiplexing needed
+- `rpc_dart_http2` — native HTTP/2 multiplexing, will get gRPC wire format in Phase 2
 
 ### Design decisions
 

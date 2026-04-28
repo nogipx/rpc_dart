@@ -12,6 +12,10 @@ topics:
   - rpc
   - isolate
 
+dependency_overrides:
+  rpc_dart:
+    path: ../../core/rpc_dart
+
 dependencies:
   rpc_dart: ^2.6.2
   isolate_manager: ^6.1.2

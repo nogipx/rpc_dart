@@ -425,16 +425,19 @@ void main() {
         await server.close();
       });
 
-      test('does not send for unknown stream', () async {
+      test('prevents duplicate sends for same stream', () async {
         final (client, server) = RpcChannelTransport.pair();
         final received = <RpcTransportMessage>[];
         server.incomingMessages.listen(received.add);
 
-        await client.finishSending(999);
+        final streamId = client.createStream();
+        await client.finishSending(streamId);
+        await client.finishSending(streamId);
 
         await Future.delayed(Duration(milliseconds: 10));
 
-        expect(received, isEmpty);
+        expect(received.length, equals(1));
+        expect(received.first.isEndOfStream, isTrue);
 
         await client.close();
         await server.close();

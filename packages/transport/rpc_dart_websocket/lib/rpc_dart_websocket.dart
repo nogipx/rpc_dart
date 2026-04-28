@@ -2,13 +2,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-/// Web-safe WebSocket transports (caller + server) for rpc_dart.
-/// Extracted and slimmed from `rpc_dart_transports` to be dart2js/wasm friendly.
+/// Web-safe WebSocket transport for rpc_dart.
+///
+/// Provides [RpcWebSocketChannel] (implements [IRpcChannel]) and
+/// [RpcWebSocketCallerTransport] for client connections.
+/// Server-side uses [RpcWebSocketServer] to accept incoming connections.
 library;
 
-export 'src/rpc_websocket_server.dart'
-    if (dart.library.io) 'src/rpc_websocket_server.dart';
-export 'src/websocket_base_transport.dart';
+export 'src/rpc_websocket_channel.dart';
+export 'src/rpc_websocket_server.dart';
 export 'src/websocket_caller_transport.dart';
-export 'src/websocket_responder_transport.dart'
-    if (dart.library.io) 'src/websocket_responder_transport.dart';
+export 'src/websocket_responder_transport.dart';

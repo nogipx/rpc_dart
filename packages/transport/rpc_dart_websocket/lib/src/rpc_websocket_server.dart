@@ -12,9 +12,13 @@ import 'websocket_responder_transport.dart';
 
 /// WebSocket RPC server that consumes an external stream of already-upgraded
 /// WebSocket connections (no HTTP upgrade / dart:io inside).
+///
+/// Each incoming [WebSocketChannel] is wrapped via
+/// [RpcWebSocketResponderTransport] (3-layer architecture under the hood).
 class RpcWebSocketServer implements IRpcServer {
   final RpcLogger? _logger;
   final Stream<WebSocketChannel> _connections;
+  final RpcSecurityPolicy _policy;
 
   final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
@@ -29,32 +33,32 @@ class RpcWebSocketServer implements IRpcServer {
   RpcWebSocketServer({
     required Stream<WebSocketChannel> connections,
     RpcLogger? logger,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(WebSocketChannel channel)? onConnectionOpened,
     void Function(WebSocketChannel channel)? onConnectionClosed,
-  }) : _connections = connections,
-       _logger = logger?.child('WebSocketServer'),
-       _onEndpointCreated = onEndpointCreated,
-       _onConnectionError = onConnectionError,
-       _onConnectionOpened = onConnectionOpened,
-       _onConnectionClosed = onConnectionClosed;
+  })  : _connections = connections,
+        _logger = logger?.child('WebSocketServer'),
+        _policy = policy,
+        _onEndpointCreated = onEndpointCreated,
+        _onConnectionError = onConnectionError,
+        _onConnectionOpened = onConnectionOpened,
+        _onConnectionClosed = onConnectionClosed;
 
   factory RpcWebSocketServer.createWithContracts({
     required Stream<WebSocketChannel> connections,
     required List<RpcResponderContract> contracts,
     RpcLogger? logger,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
     return RpcWebSocketServer(
       connections: connections,
       logger: logger,
+      policy: policy,
       onEndpointCreated: (endpoint) {
-        logger?.debug(
-          'Registering ${contracts.length} contracts on new WebSocket endpoint',
-        );
         for (final contract in contracts) {
           endpoint.registerServiceContract(contract);
-          logger?.debug('Registered contract: ${contract.serviceName}');
         }
       },
       onConnectionError: (error, stackTrace) {
@@ -75,35 +79,25 @@ class RpcWebSocketServer implements IRpcServer {
 
   @override
   Future<void> start() async {
-    if (_isRunning) {
-      _logger?.warning('WebSocket server already running');
-      return;
-    }
-    _logger?.info('Starting WebSocket server (no io)');
+    if (_isRunning) return;
     _isRunning = true;
 
     _connectionsSub = _connections.listen(
       (channel) {
         final label = _nextPeerLabel();
-        _logger?.debug('New WebSocket connection: $label');
-        _handleWebSocketConnection(channel, label);
+        _handleConnection(channel, label);
       },
-      onError: (error, st) {
+      onError: (Object error, StackTrace st) {
         _logger?.error('Connection stream error', error: error, stackTrace: st);
         _onConnectionError?.call(error, st);
       },
-      onDone: () {
-        _logger?.info('Connection stream closed');
-      },
       cancelOnError: false,
     );
-    _logger?.info('WebSocket server started (connection source active)');
   }
 
   @override
   Future<void> stop() async {
     if (!_isRunning) return;
-    _logger?.info('Stopping WebSocket server');
     _isRunning = false;
 
     for (final endpoint in List.of(_endpoints)) {
@@ -121,37 +115,30 @@ class RpcWebSocketServer implements IRpcServer {
     } finally {
       _connectionsSub = null;
     }
-    _logger?.info('WebSocket server stopped');
   }
 
-  void _handleWebSocketConnection(
-    WebSocketChannel channel,
-    String clientLabel,
-  ) {
+  void _handleConnection(WebSocketChannel channel, String clientLabel) {
     _onConnectionOpened?.call(channel);
     try {
-      final serverTransport = RpcWebSocketResponderTransport(
+      final transport = RpcWebSocketResponderTransport(
         channel,
-        logger: _logger,
+        policy: _policy,
       );
       final endpoint = RpcResponderEndpoint(
-        transport: serverTransport,
+        transport: transport,
         debugLabel: 'WebSocketEndpoint-$clientLabel',
         loggerColors: RpcLoggerColors.singleColor(AnsiColor.magenta),
       );
       _endpoints.add(endpoint);
       _onEndpointCreated?.call(endpoint);
       endpoint.start();
-      _logger?.debug('RPC endpoint created for $clientLabel');
 
       channel.sink.done
           .then((_) {
-            _logger?.debug('WebSocket connection $clientLabel closed');
             _endpoints.remove(endpoint);
             _onConnectionClosed?.call(channel);
           })
-          .catchError((error) {
-            _logger?.warning('Error closing connection $clientLabel: $error');
+          .catchError((Object error) {
             _endpoints.remove(endpoint);
             _onConnectionClosed?.call(channel);
           });

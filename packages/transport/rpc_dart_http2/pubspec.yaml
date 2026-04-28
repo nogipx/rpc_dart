@@ -13,6 +13,10 @@ topics:
   - http2
   - grpc
 
+dependency_overrides:
+  rpc_dart:
+    path: ../../core/rpc_dart
+
 dependencies:
   rpc_dart: ^2.6.2
   http2: ^2.3.1

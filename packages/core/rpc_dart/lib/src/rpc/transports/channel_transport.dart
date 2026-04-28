@@ -34,6 +34,7 @@ class RpcChannelTransport implements IRpcTransport {
   final RpcSecurityPolicy _policy;
 
   final Set<int> _activeStreams = {};
+  final Set<int> _finishedStreams = {};
   final StreamController<RpcTransportMessage> _incomingCtl =
       StreamController<RpcTransportMessage>.broadcast(sync: true);
   StreamSubscription<RpcTransportMessage>? _channelSub;
@@ -153,7 +154,7 @@ class RpcChannelTransport implements IRpcTransport {
       methodPath: metadata.methodPath,
       streamId: streamId,
     ));
-    if (endStream) _releaseStream(streamId);
+    if (endStream) _markFinished(streamId);
   }
 
   @override
@@ -168,7 +169,7 @@ class RpcChannelTransport implements IRpcTransport {
       isEndOfStream: endStream,
       streamId: streamId,
     ));
-    if (endStream) _releaseStream(streamId);
+    if (endStream) _markFinished(streamId);
   }
 
   @override
@@ -189,20 +190,20 @@ class RpcChannelTransport implements IRpcTransport {
       isEndOfStream: endStream,
       streamId: streamId,
     ));
-    if (endStream) _releaseStream(streamId);
+    if (endStream) _markFinished(streamId);
   }
 
   @override
   Future<void> finishSending(int streamId) async {
     if (_closed) return;
-    if (_activeStreams.contains(streamId)) {
-      await _channel.send(RpcTransportMessage(
-        metadata: RpcMetadata([]),
-        isEndOfStream: true,
-        streamId: streamId,
-      ));
-      _releaseStream(streamId);
-    }
+    if (_finishedStreams.contains(streamId)) return;
+    _finishedStreams.add(streamId);
+    await _channel.send(RpcTransportMessage(
+      metadata: RpcMetadata([]),
+      isEndOfStream: true,
+      streamId: streamId,
+    ));
+    _releaseStream(streamId);
   }
 
   @override
@@ -213,6 +214,7 @@ class RpcChannelTransport implements IRpcTransport {
     await _channelSub?.cancel();
     _channelSub = null;
     _activeStreams.clear();
+    _finishedStreams.clear();
     _idManager.reset();
 
     try {
@@ -266,6 +268,11 @@ class RpcChannelTransport implements IRpcTransport {
 
   // -- Internal ---------------------------------------------------------------
 
+  void _markFinished(int streamId) {
+    _finishedStreams.add(streamId);
+    _releaseStream(streamId);
+  }
+
   void _releaseStream(int streamId) {
     _activeStreams.remove(streamId);
     _idManager.releaseId(streamId);
@@ -273,6 +280,9 @@ class RpcChannelTransport implements IRpcTransport {
 
   void _onMessage(RpcTransportMessage message) {
     if (!_incomingCtl.isClosed) _incomingCtl.add(message);
-    if (message.isEndOfStream) _releaseStream(message.streamId);
+    if (message.isEndOfStream) {
+      _releaseStream(message.streamId);
+      _finishedStreams.remove(message.streamId);
+    }
   }
 }

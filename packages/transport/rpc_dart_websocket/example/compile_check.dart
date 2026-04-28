@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 // Simple compile-check entrypoint for dart2wasm/dart2js.
-// Instantiates the transport with an in-memory WebSocketChannel.fromStream,
+// Instantiates the transport with an in-memory WebSocketChannel,
 // which avoids dart:io dependencies.
 import 'dart:async';
 
@@ -16,10 +16,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 void main() async {
   final channel = _DummyWebSocketChannel();
 
-  final transport = RpcWebSocketCallerTransport(
-    channel,
-    logger: RpcLogger('compile-check'),
-  );
+  final transport = RpcWebSocketCallerTransport(channel);
 
   // Minimal interaction: create/release a stream ID and close.
   final streamId = transport.createStream();
