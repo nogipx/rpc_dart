@@ -198,7 +198,7 @@ class ProgressIndicator {
 }
 
 /// Тестовые модели для RPC
-class TestRequest {
+class TestRequest implements IRpcSerializable {
   final String id;
   final String message;
   final Map<String, dynamic> data;
@@ -210,9 +210,24 @@ class TestRequest {
     required this.data,
     required this.timestamp,
   });
+
+  factory TestRequest.fromJson(Map<String, dynamic> json) => TestRequest(
+        id: json['id'] as String,
+        message: json['message'] as String,
+        data: Map<String, dynamic>.from(json['data'] as Map),
+        timestamp: DateTime.parse(json['timestamp'] as String),
+      );
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'message': message,
+        'data': data,
+        'timestamp': timestamp.toIso8601String(),
+      };
 }
 
-class TestResponse {
+class TestResponse implements IRpcSerializable {
   final String requestId;
   final String result;
   final int processingTimeMs;
@@ -224,6 +239,21 @@ class TestResponse {
     required this.processingTimeMs,
     required this.metadata,
   });
+
+  factory TestResponse.fromJson(Map<String, dynamic> json) => TestResponse(
+        requestId: json['requestId'] as String,
+        result: json['result'] as String,
+        processingTimeMs: json['processingTimeMs'] as int,
+        metadata: Map<String, dynamic>.from(json['metadata'] as Map),
+      );
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'requestId': requestId,
+        'result': result,
+        'processingTimeMs': processingTimeMs,
+        'metadata': metadata,
+      };
 }
 
 /// Генератор тестовых данных разной сложности
@@ -311,36 +341,43 @@ class TestDataGenerator {
 
 /// Серверный контракт для тестирования
 final class TestRpcContract extends RpcResponderContract {
-  TestRpcContract() : super('TestService');
+  TestRpcContract()
+      : super(
+          'TestService',
+          dataTransferMode: RpcDataTransferMode.codec,
+        );
+
+  static final _requestCodec = RpcCodec.withDecoder(TestRequest.fromJson);
+  static final _responseCodec = RpcCodec.withDecoder(TestResponse.fromJson);
 
   @override
   void setup() {
-    // Unary method
     addUnaryMethod<TestRequest, TestResponse>(
       methodName: 'processRequest',
       handler: _processRequest,
-      description: 'Обрабатывает тестовый запрос',
+      requestCodec: _requestCodec,
+      responseCodec: _responseCodec,
     );
 
-    // Server streaming method
     addServerStreamMethod<TestRequest, TestResponse>(
       methodName: 'streamResponses',
       handler: _streamResponses,
-      description: 'Отправляет поток ответов',
+      requestCodec: _requestCodec,
+      responseCodec: _responseCodec,
     );
 
-    // Client streaming method
     addClientStreamMethod<TestRequest, TestResponse>(
       methodName: 'collectRequests',
       handler: _collectRequests,
-      description: 'Собирает множественные запросы',
+      requestCodec: _requestCodec,
+      responseCodec: _responseCodec,
     );
 
-    // Bidirectional streaming method
     addBidirectionalMethod<TestRequest, TestResponse>(
       methodName: 'processStream',
       handler: _processStream,
-      description: 'Обрабатывает двунаправленный поток',
+      requestCodec: _requestCodec,
+      responseCodec: _responseCodec,
     );
   }
 
@@ -422,8 +459,15 @@ final class TestRpcContract extends RpcResponderContract {
 
 /// Клиентский контракт
 final class TestRpcCallerContract extends RpcCallerContract {
+  static final _requestCodec = RpcCodec.withDecoder(TestRequest.fromJson);
+  static final _responseCodec = RpcCodec.withDecoder(TestResponse.fromJson);
+
   TestRpcCallerContract(RpcCallerEndpoint endpoint)
-      : super('TestService', endpoint);
+      : super(
+          'TestService',
+          endpoint,
+          dataTransferMode: RpcDataTransferMode.codec,
+        );
 
   Future<TestResponse> processRequest(
     TestRequest request, {
@@ -432,6 +476,8 @@ final class TestRpcCallerContract extends RpcCallerContract {
       callUnary<TestRequest, TestResponse>(
         methodName: 'processRequest',
         request: request,
+        requestCodec: _requestCodec,
+        responseCodec: _responseCodec,
         context: context,
       );
 
@@ -442,6 +488,8 @@ final class TestRpcCallerContract extends RpcCallerContract {
       callServerStream<TestRequest, TestResponse>(
         methodName: 'streamResponses',
         request: request,
+        requestCodec: _requestCodec,
+        responseCodec: _responseCodec,
         context: context,
       );
 
@@ -452,6 +500,8 @@ final class TestRpcCallerContract extends RpcCallerContract {
       callClientStream<TestRequest, TestResponse>(
         methodName: 'collectRequests',
         requests: requests,
+        requestCodec: _requestCodec,
+        responseCodec: _responseCodec,
         context: context,
       );
 
@@ -462,6 +512,8 @@ final class TestRpcCallerContract extends RpcCallerContract {
       callBidirectionalStream<TestRequest, TestResponse>(
         methodName: 'processStream',
         requests: requests,
+        requestCodec: _requestCodec,
+        responseCodec: _responseCodec,
         context: context,
       );
 }
@@ -707,8 +759,8 @@ class ProfessionalRpcBenchmark {
       _setupInfrastructure() async {
     print('⚙️  Setting up RPC infrastructure...');
 
-    // Create InMemoryTransport pair
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+    // Create transport pair with frame codec (realistic path)
+    final (clientTransport, serverTransport) = RpcChannelTransport.pair();
 
     // Create endpoints
     final serverEndpoint = RpcResponderEndpoint(transport: serverTransport);
