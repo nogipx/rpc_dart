@@ -32,6 +32,7 @@ enum GrpcServingStatus {
   /// Wire value per the gRPC health proto.
   final int value;
 
+  /// Creates a [GrpcServingStatus] from its wire [v]alue.
   static GrpcServingStatus fromValue(int v) => switch (v) {
         0 => unknown,
         1 => serving,
@@ -48,10 +49,13 @@ enum GrpcServingStatus {
 /// Health check request. [service] is the fully-qualified service name
 /// (e.g. `"grpc.health.v1.Health"`). Empty string means the overall server.
 final class GrpcHealthCheckRequest implements IRpcSerializable {
+  /// The fully-qualified service name to check.
   final String service;
 
+  /// Creates a [GrpcHealthCheckRequest].
   const GrpcHealthCheckRequest({this.service = ''});
 
+  /// Deserializes from JSON.
   factory GrpcHealthCheckRequest.fromJson(Map<String, dynamic> json) {
     final s = json['service'];
     return GrpcHealthCheckRequest(
@@ -62,16 +66,20 @@ final class GrpcHealthCheckRequest implements IRpcSerializable {
   @override
   Map<String, dynamic> toJson() => {'service': service};
 
+  /// Codec for [GrpcHealthCheckRequest].
   static RpcCodec<GrpcHealthCheckRequest> get codec =>
       RpcCodec<GrpcHealthCheckRequest>(GrpcHealthCheckRequest.fromJson);
 }
 
 /// Health check response carrying the [status] of a service.
 final class GrpcHealthCheckResponse implements IRpcSerializable {
+  /// The serving status of the queried service.
   final GrpcServingStatus status;
 
+  /// Creates a [GrpcHealthCheckResponse].
   const GrpcHealthCheckResponse({required this.status});
 
+  /// Deserializes from JSON.
   factory GrpcHealthCheckResponse.fromJson(Map<String, dynamic> json) {
     final s = json['status'];
     final value = s is int ? s : 0;
@@ -81,6 +89,7 @@ final class GrpcHealthCheckResponse implements IRpcSerializable {
   @override
   Map<String, dynamic> toJson() => {'status': status.value};
 
+  /// Codec for [GrpcHealthCheckResponse].
   static RpcCodec<GrpcHealthCheckResponse> get codec =>
       RpcCodec<GrpcHealthCheckResponse>(GrpcHealthCheckResponse.fromJson);
 }
@@ -158,6 +167,7 @@ final class GrpcHealthCheckContract extends RpcResponderContract {
 
   final GrpcHealthServiceStatus _status;
 
+  /// Creates a [GrpcHealthCheckContract] backed by the given [_status] store.
   GrpcHealthCheckContract(this._status) : super(grpcServiceName);
 
   @override

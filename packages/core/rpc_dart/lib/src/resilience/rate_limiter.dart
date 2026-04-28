@@ -62,7 +62,8 @@ class _SlidingWindowSpec extends RateLimit {
   @override
   final Duration _window;
 
-  const _SlidingWindowSpec({required this.max, required Duration window}) : _window = window;
+  const _SlidingWindowSpec({required this.max, required Duration window})
+      : _window = window;
 
   @override
   _RateLimitCounter _createCounter() =>
@@ -75,7 +76,8 @@ class _TokenBucketSpec extends RateLimit {
   @override
   final Duration _window;
 
-  const _TokenBucketSpec({required this.max, required Duration window, this.burst})
+  const _TokenBucketSpec(
+      {required this.max, required Duration window, this.burst})
       : _window = window;
 
   @override
@@ -149,9 +151,9 @@ class _TokenBucketCounter extends _RateLimitCounter {
   double _tokens;
   int _lastRefillUs;
 
-  _TokenBucketCounter({required this.max, required Duration window, required int burst})
-      : burst = burst,
-        _windowUs = window.inMicroseconds,
+  _TokenBucketCounter(
+      {required this.max, required Duration window, required this.burst})
+      : _windowUs = window.inMicroseconds,
         _tokens = burst.toDouble(),
         _lastRefillUs = DateTime.now().microsecondsSinceEpoch;
 
@@ -211,8 +213,6 @@ class _TokenBucketCounter extends _RateLimitCounter {
 /// A catch-all limit applied per `(key, method)` when no [perMethod] or
 /// [perService] spec matches. Equivalent to listing every method in [perMethod]
 /// with the same spec, but without explicit enumeration.
-///
-/// Replaces patterns like a custom per-user-per-method interceptor:
 ///
 /// ```dart
 /// RpcRateLimiter(
@@ -281,17 +281,16 @@ class RpcRateLimiter extends IRpcInterceptor {
   late final Map<String, _RateLimitCounter> _staticServiceCounters;
   late final Map<String, _RateLimitCounter> _staticMethodCounters;
 
-  // Dynamic counters: userKey → slotKey → counter
-  final Map<String, Map<String, _RateLimitCounter>> _dynamicServiceCounters = {};
+  // Dynamic counters: userKey -> slotKey -> counter
+  final Map<String, Map<String, _RateLimitCounter>> _dynamicServiceCounters =
+      {};
   final Map<String, Map<String, _RateLimitCounter>> _dynamicMethodCounters = {};
-  final Map<String, Map<String, _RateLimitCounter>> _dynamicFallbackCounters = {};
+  final Map<String, Map<String, _RateLimitCounter>> _dynamicFallbackCounters =
+      {};
 
   Timer? _cleanupTimer;
 
   /// Cancels the cleanup timer and releases dynamic counter state.
-  ///
-  /// Call this when the rate limiter is no longer needed (e.g. in a module's
-  /// [RpcModule.onStop]).
   void dispose() {
     _cleanupTimer?.cancel();
     _dynamicServiceCounters.clear();
@@ -337,7 +336,9 @@ class RpcRateLimiter extends IRpcInterceptor {
     RateLimit? spec,
   ) {
     if (spec == null) return null;
-    return store.putIfAbsent(userKey, () => {}).putIfAbsent(slotKey, spec._createCounter);
+    return store
+        .putIfAbsent(userKey, () => {})
+        .putIfAbsent(slotKey, spec._createCounter);
   }
 
   void _check(RpcMiddlewareContext call) {
@@ -347,9 +348,12 @@ class RpcRateLimiter extends IRpcInterceptor {
     final _RateLimitCounter? counter;
 
     if (userKey != null) {
-      counter = _getDynamic(_dynamicMethodCounters, userKey, methodKey, _perMethodSpec[methodKey]) ??
-          _getDynamic(_dynamicServiceCounters, userKey, call.serviceName, _perServiceSpec[call.serviceName]) ??
-          _getDynamic(_dynamicFallbackCounters, userKey, methodKey, _perKeyFallbackSpec) ??
+      counter = _getDynamic(_dynamicMethodCounters, userKey, methodKey,
+              _perMethodSpec[methodKey]) ??
+          _getDynamic(_dynamicServiceCounters, userKey, call.serviceName,
+              _perServiceSpec[call.serviceName]) ??
+          _getDynamic(_dynamicFallbackCounters, userKey, methodKey,
+              _perKeyFallbackSpec) ??
           _globalCounter;
     } else {
       counter = _staticMethodCounters[methodKey] ??
@@ -414,5 +418,6 @@ class RpcRateLimiter extends IRpcInterceptor {
 
 /// Thrown by [RpcRateLimiter] when a call exceeds the configured limit.
 class RpcRateLimitException extends RpcException {
+  /// Creates an [RpcRateLimitException].
   RpcRateLimitException(super.message);
 }

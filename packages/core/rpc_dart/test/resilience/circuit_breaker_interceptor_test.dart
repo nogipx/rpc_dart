@@ -189,8 +189,7 @@ void main() {
         await cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async =>
-              throw const RpcCancelledException('cancelled'),
+          (ctx, req) async => throw const RpcCancelledException('cancelled'),
         );
       } on RpcCancelledException {
         // expected

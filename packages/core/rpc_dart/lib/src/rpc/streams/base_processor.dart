@@ -146,7 +146,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Configures outgoing response handling.
   void _setupResponseHandler() {
-    _scope.listen<TResponse>(_responseController.stream,
+    _scope.listen<TResponse>(
+      _responseController.stream,
       (response) {
         _sendSequence = _sendSequence.then((_) async {
           if (!_isActive) return;
@@ -271,7 +272,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
     _logger?.logStreamBound(methodPath: _methodPath, streamId: _streamId);
 
-    _scope.listen<RpcTransportMessage>(messageStream,
+    _scope.listen<RpcTransportMessage>(
+      messageStream,
       _handleMessage,
       onError: (error, stackTrace) {
         _logger?.logRpcError(
@@ -764,7 +766,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Configures outgoing request handling.
   void _setupRequestHandler() {
-    _scope.listen<TRequest>(_requestController.stream,
+    _scope.listen<TRequest>(
+      _requestController.stream,
       (request) async {
         if (!_isActive) return;
 
@@ -871,7 +874,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Configures incoming response handling.
   void _setupResponseHandler() {
-    _scope.listen<RpcTransportMessage>(_transport.getMessagesForStream(_streamId),
+    _scope.listen<RpcTransportMessage>(
+      _transport.getMessagesForStream(_streamId),
       _handleResponse,
       onError: (error, stackTrace) {
         _logger?.error(

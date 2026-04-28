@@ -77,15 +77,12 @@ Wire format on HTTP/2 transport must exactly match the gRPC spec:
 - [x] Binary header convention — `-bin` suffix headers base64-encoded/decoded
 - [x] Non-200 HTTP status handling on client side
 - [x] Wire-level compliance test suite (19 tests)
-
-**Tasks:**
 - [x] grpc-status-details-bin (structured error details via protobuf Any or equivalent)
-- [ ] Validate with `grpcurl` and a reference Go/Python gRPC client
 - [x] gRPC Health Checking Protocol (grpc.health.v1)
-- [ ] gRPC Server Reflection (optional, for tooling)
 
-**Non-HTTP/2 transports:**
-These are not "gRPC" and don't need to follow the spec. They use a simpler internal framing format. The contract layer is the same, only the wire format differs.
+**Remaining:**
+- [ ] Validate with `grpcurl` and a reference Go/Python gRPC client
+- [ ] gRPC Server Reflection (optional, for tooling)
 
 ---
 
@@ -97,60 +94,35 @@ Runtime format negotiation adds complexity without clear benefit.
 
 ---
 
-## Phase 3 — Structured concurrency (CallScope) [NOT STARTED]
+## Phase 3 — Structured concurrency (CallScope) [DONE]
 
 **Goal:** Automatic resource cleanup for every RPC call. Eliminate manual StreamSubscription tracking.
 
-**Design:**
-
-```dart
-abstract class RpcCallScope {
-  /// Cancel signal (from client, deadline, or explicit cancel).
-  CancellationToken get cancellation;
-
-  /// Register cleanup callback — runs when scope closes (any reason).
-  void onDispose(FutureOr<void> Function() callback);
-
-  /// Wrap a stream so it auto-cancels when scope closes.
-  Stream<T> track<T>(Stream<T> stream);
-
-  /// Remaining time until deadline (null = no deadline).
-  Duration? get remaining;
-}
-```
-
-Every interceptor, middleware, and handler receives `RpcCallScope`. When the call ends (success, error, cancel, deadline), all tracked resources clean up automatically in reverse order.
-
-Replaces manual `_cancellationSubscription`, `_responseSubscription`, `_messageSubscription` tracking in stream processors.
+`RpcCallScope` provides LIFO dispose ordering, stream tracking via `track()`/`listen()`,
+deadline timer, and cancellation wiring. Integrated into `StreamProcessor` and `CallProcessor`
+to replace manual subscription management.
 
 ---
 
-## Phase 4 — Client-side resilience [NOT STARTED]
+## Phase 4 — Client-side resilience [DONE]
 
 **Goal:** Production-grade client reliability via composable interceptors.
 
-**Components:**
+**Done:**
+- [x] `RpcRetryInterceptor` — exponential backoff with jitter, configurable `maxAttempts`, `retryOn` predicate, respects deadlines and cancellation. Unary only (streaming passes through).
+- [x] `RpcCircuitBreakerInterceptor` — closed/open/halfOpen state machine, configurable `failureThreshold` and `resetTimeout`, `failureOn` predicate, manual `reset()`. All call types.
 
-| Component        | Description                                                     |
-|------------------|-----------------------------------------------------------------|
-| Circuit breaker  | Fail fast when a service is down. States: closed / half-open / open. |
-| Retry            | Per-method retry with backoff. Budget-based (max 10% retries).  |
-| Hedging          | Send N parallel requests, take first. Idempotent methods only.  |
-| Load balancer    | Round-robin / weighted / least-connections over a connection pool. |
-| Deadline propagation | End-to-end enforcement of remaining time budget.            |
-
-All implemented as `IRpcInterceptor` on `RpcCallerEndpoint`. Composable and optional.
+**Not planned (can be added later if needed):**
+- Hedging (parallel speculative requests)
+- Client-side load balancing
+- Deadline propagation (end-to-end time budget enforcement)
 
 ---
 
-## Execution order
-
-Phases 1-2 form the transport + gRPC foundation.
-Phase 3 (call scope) is independent, can be done in parallel with Phase 2 remaining tasks.
-Phase 4 builds on top, incremental.
+## Summary
 
 ```
-Phase 1 (transport) ──> Phase 2 (gRPC)
-                              \
-Phase 3 (call scope) ──────────> Phase 4 (resilience)
+Phase 1 (transport)  [DONE] ──> Phase 2 (gRPC) [IN PROGRESS]
+Phase 3 (call scope) [DONE]
+Phase 4 (resilience)  [DONE]
 ```

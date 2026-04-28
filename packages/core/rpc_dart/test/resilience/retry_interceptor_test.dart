@@ -40,8 +40,7 @@ void main() {
     test('retries on failure up to maxAttempts', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        baseDelay: Duration(milliseconds: 10),
-        jitter: false,
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -65,8 +64,7 @@ void main() {
     test('succeeds on retry after transient failure', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        baseDelay: Duration(milliseconds: 10),
-        jitter: false,
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -87,7 +85,7 @@ void main() {
     test('does not retry RpcCancelledException', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        baseDelay: Duration(milliseconds: 10),
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -111,7 +109,7 @@ void main() {
     test('does not retry RpcDeadlineExceededException', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        baseDelay: Duration(milliseconds: 10),
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -135,7 +133,7 @@ void main() {
     test('respects custom retryOn predicate', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        baseDelay: Duration(milliseconds: 10),
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
         retryOn: (e) => e is RpcException && e.message == 'retry-me',
       );
       var callCount = 0;
@@ -182,7 +180,7 @@ void main() {
 
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        baseDelay: Duration(milliseconds: 10),
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -243,12 +241,10 @@ void main() {
 
       caller.addInterceptor(RpcRetryInterceptor(
         maxAttempts: 4,
-        baseDelay: Duration(milliseconds: 10),
-        jitter: false,
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
       ));
 
-      final response = await caller
-          .unaryRequest<_TestRequest, _TestResponse>(
+      final response = await caller.unaryRequest<_TestRequest, _TestResponse>(
         serviceName: 'TestService',
         methodName: 'Echo',
         requestCodec: _TestRequest.codec,

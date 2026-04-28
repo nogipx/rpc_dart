@@ -7,47 +7,6 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 
 // ---------------------------------------------------------------------------
-// Reconnect policy
-// ---------------------------------------------------------------------------
-
-/// Determines the delay before each reconnect attempt.
-abstract class ReconnectPolicy {
-  const ReconnectPolicy();
-
-  /// Returns the delay before [attempt] (1-based).
-  Duration delayFor(int attempt);
-}
-
-/// Exponential backoff: cycles through [delays], clamping at the last entry.
-final class ExponentialBackoffPolicy extends ReconnectPolicy {
-  const ExponentialBackoffPolicy({
-    this.delays = const [
-      Duration(seconds: 2),
-      Duration(seconds: 5),
-      Duration(seconds: 10),
-      Duration(seconds: 30),
-      Duration(seconds: 60),
-    ],
-  });
-
-  final List<Duration> delays;
-
-  @override
-  Duration delayFor(int attempt) =>
-      delays[(attempt - 1).clamp(0, delays.length - 1)];
-}
-
-/// Fixed delay between every reconnect attempt.
-final class FixedDelayPolicy extends ReconnectPolicy {
-  const FixedDelayPolicy(this.delay);
-
-  final Duration delay;
-
-  @override
-  Duration delayFor(int attempt) => delay;
-}
-
-// ---------------------------------------------------------------------------
 // Connection states
 // ---------------------------------------------------------------------------
 
@@ -58,34 +17,49 @@ sealed class RpcClientConnectionState {
 
 /// No connection has been started yet (or [RpcClientConnection.disconnect] was called).
 final class RpcClientIdle extends RpcClientConnectionState {
+  /// Creates an [RpcClientIdle] state.
   const RpcClientIdle();
 }
 
 /// Waiting before the next connection attempt.
 final class RpcClientConnecting extends RpcClientConnectionState {
+  /// Creates an [RpcClientConnecting] state.
   const RpcClientConnecting({required this.attempt});
 
-  /// 1-based attempt counter. Attempt 1 has no preceding delay.
+  /// 1-based attempt counter.
   final int attempt;
 }
 
 /// Transport connected and ready for calls.
 final class RpcClientOnline extends RpcClientConnectionState {
+  /// Creates an [RpcClientOnline] state.
   const RpcClientOnline();
 }
 
 /// Transport dropped — reconnect loop running.
 final class RpcClientOffline extends RpcClientConnectionState {
+  /// Creates an [RpcClientOffline] state.
   const RpcClientOffline();
 }
 
-/// Reconnect permanently stopped because [RpcClientConnection.shouldReconnect]
-/// returned `false` (e.g. session or subscription expired).
+/// Reconnect permanently stopped because max attempts exceeded or
+/// [RpcClientConnection.shouldReconnect] returned `false`.
 final class RpcClientDisconnected extends RpcClientConnectionState {
+  /// Creates an [RpcClientDisconnected] state.
   const RpcClientDisconnected({this.reason});
 
+  /// The error or reason that caused the disconnect.
   final Object? reason;
 }
+
+// ---------------------------------------------------------------------------
+// Logging callback
+// ---------------------------------------------------------------------------
+
+/// Callback for connection lifecycle events.
+///
+/// [level] is one of: `info`, `warning`, `error`.
+typedef RpcConnectionLogger = void Function(String level, String message);
 
 // ---------------------------------------------------------------------------
 // Proxy transport (internal)
@@ -94,8 +68,7 @@ final class RpcClientDisconnected extends RpcClientConnectionState {
 /// Wraps an inner [IRpcTransport] and swaps it on reconnect.
 ///
 /// The [RpcCallerEndpoint] is created once with this proxy and survives
-/// across reconnects transparently. In-flight calls on the old transport
-/// receive errors; new calls go to the new inner transport automatically.
+/// across reconnects transparently.
 final class _ReconnectingTransportProxy implements IRpcTransport {
   _ReconnectingTransportProxy();
 
@@ -107,7 +80,6 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
   /// Called by [RpcClientConnection] when the inner transport closes.
   void Function(Object? error)? onDropped;
 
-  // Attach a new inner transport (called after each successful connect).
   void attach(IRpcTransport inner) {
     _innerSub?.cancel();
     _inner = inner;
@@ -127,7 +99,6 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
     );
   }
 
-  // Detach and close the current inner transport without closing the proxy.
   Future<void> detach() async {
     await _innerSub?.cancel();
     _innerSub = null;
@@ -175,7 +146,8 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
   int createStream() => _require().createStream();
 
   @override
-  bool releaseStreamId(int streamId) => _inner?.releaseStreamId(streamId) ?? false;
+  bool releaseStreamId(int streamId) =>
+      _inner?.releaseStreamId(streamId) ?? false;
 
   @override
   Future<void> sendMetadata(
@@ -208,7 +180,8 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
   Future<RpcHealthStatus> health() =>
       _inner?.health() ??
       Future.value(
-        RpcHealthStatus.unhealthy(component: 'transport', message: 'not connected'),
+        RpcHealthStatus.unhealthy(
+            component: 'transport', message: 'not connected'),
       );
 
   @override
@@ -247,26 +220,39 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
 /// connection.connect();
 /// ```
 class RpcClientConnection {
+  /// Creates a new [RpcClientConnection].
   RpcClientConnection({
     required Future<IRpcTransport> Function() transportFactory,
-    ReconnectPolicy policy = const ExponentialBackoffPolicy(),
+    BackoffPolicy backoff = const ExponentialBackoff(),
     bool Function(Object? error)? shouldReconnect,
+    int? maxAttempts,
+    Duration? connectTimeout,
+    RpcConnectionLogger? logger,
+    void Function(RpcClientConnectionState state)? onStateChanged,
   })  : _factory = transportFactory,
-        _policy = policy,
-        _shouldReconnect = shouldReconnect {
+        _backoff = backoff,
+        _shouldReconnect = shouldReconnect,
+        _maxAttempts = maxAttempts,
+        _connectTimeout = connectTimeout,
+        _logger = logger,
+        _onStateChanged = onStateChanged {
     _proxy.onDropped = _onTransportDropped;
   }
 
   final Future<IRpcTransport> Function() _factory;
-  final ReconnectPolicy _policy;
+  final BackoffPolicy _backoff;
   final bool Function(Object? error)? _shouldReconnect;
+  final int? _maxAttempts;
+  final Duration? _connectTimeout;
+  final RpcConnectionLogger? _logger;
+  final void Function(RpcClientConnectionState state)? _onStateChanged;
 
   final _proxy = _ReconnectingTransportProxy();
   final _stateCtl = StreamController<RpcClientConnectionState>.broadcast();
 
   RpcClientConnectionState _state = const RpcClientIdle();
   bool _isStopped = false;
-  bool _isConnecting = false;
+  Completer<void>? _connectingGuard;
 
   /// Observable connection state stream.
   Stream<RpcClientConnectionState> get state => _stateCtl.stream;
@@ -279,7 +265,7 @@ class RpcClientConnection {
   /// This object is stable — do not recreate the endpoint on reconnect.
   IRpcTransport get transport => _proxy;
 
-  // ── Control ───────────────────────────────────────────────────────────────
+  // -- Control ---------------------------------------------------------------
 
   /// Starts the connection (or resumes after [disconnect]).
   void connect() {
@@ -289,7 +275,7 @@ class RpcClientConnection {
 
   /// Drops the current transport and immediately starts reconnecting.
   void forceReconnect() {
-    if (_isConnecting) return;
+    if (_connectingGuard != null && !_connectingGuard!.isCompleted) return;
     _proxy.detach().then((_) {
       _emit(const RpcClientOffline());
       _connectWithBackoff();
@@ -311,48 +297,89 @@ class RpcClientConnection {
     if (!_stateCtl.isClosed) await _stateCtl.close();
   }
 
-  // ── Internal ──────────────────────────────────────────────────────────────
+  // -- Internal --------------------------------------------------------------
 
   void _onTransportDropped(Object? error) {
     if (_isStopped) return;
+    _logger?.call('warning', 'Transport dropped: $error');
     if (!_canReconnect(error)) {
+      _logger?.call(
+          'info', 'Will not reconnect (shouldReconnect returned false)');
       _emit(RpcClientDisconnected(reason: error));
       return;
     }
     _emit(const RpcClientOffline());
-    _isConnecting = false;
+    _connectingGuard = null;
     _connectWithBackoff();
   }
 
   Future<void> _connectWithBackoff() async {
-    if (_isConnecting) return;
-    _isConnecting = true;
+    // Guard against concurrent connect loops.
+    if (_connectingGuard != null && !_connectingGuard!.isCompleted) return;
+    final guard = Completer<void>();
+    _connectingGuard = guard;
+
     var attempt = 0;
 
     while (!_isStopped) {
+      // Check max attempts.
+      if (_maxAttempts != null && attempt >= _maxAttempts!) {
+        _logger?.call(
+          'error',
+          'Max reconnect attempts ($_maxAttempts) exceeded',
+        );
+        _emit(const RpcClientDisconnected(
+          reason: 'max reconnect attempts exceeded',
+        ));
+        guard.complete();
+        return;
+      }
+
+      // Emit Connecting and wait for backoff delay (except first attempt).
+      _emit(RpcClientConnecting(attempt: attempt + 1));
       if (attempt > 0) {
-        _emit(RpcClientConnecting(attempt: attempt));
-        await Future<void>.delayed(_policy.delayFor(attempt));
+        final delay = _backoff.delayFor(attempt - 1);
+        _logger?.call(
+          'info',
+          'Reconnect attempt ${attempt + 1}, waiting ${delay.inMilliseconds}ms',
+        );
+        await Future<void>.delayed(delay);
         if (_isStopped) break;
       }
 
       try {
-        final inner = await _factory();
+        final Future<IRpcTransport> factoryFuture = _factory();
+        final IRpcTransport inner;
+        if (_connectTimeout != null) {
+          inner = await factoryFuture.timeout(
+            _connectTimeout!,
+            onTimeout: () =>
+                throw TimeoutException('Connect timed out', _connectTimeout),
+          );
+        } else {
+          inner = await factoryFuture;
+        }
         _proxy.attach(inner);
+        _logger?.call('info', 'Connected (attempt ${attempt + 1})');
         _emit(const RpcClientOnline());
-        _isConnecting = false;
+        guard.complete();
         return;
       } catch (e) {
+        _logger?.call('warning', 'Attempt ${attempt + 1} failed: $e');
         if (!_canReconnect(e)) {
+          _logger?.call(
+            'info',
+            'Will not reconnect (shouldReconnect returned false)',
+          );
           _emit(RpcClientDisconnected(reason: e));
-          _isConnecting = false;
+          guard.complete();
           return;
         }
         attempt++;
       }
     }
 
-    _isConnecting = false;
+    guard.complete();
   }
 
   bool _canReconnect(Object? error) => _shouldReconnect?.call(error) ?? true;
@@ -360,5 +387,6 @@ class RpcClientConnection {
   void _emit(RpcClientConnectionState s) {
     _state = s;
     if (!_stateCtl.isClosed) _stateCtl.add(s);
+    _onStateChanged?.call(s);
   }
 }

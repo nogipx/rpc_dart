@@ -5,20 +5,15 @@
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_dart_framework/rpc_dart_framework.dart';
 import 'package:test/test.dart';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Creates an in-memory transport pair and returns the client-side transport.
-/// Closing [serverTransport] simulates a remote connection drop.
 (IRpcTransport client, IRpcTransport server) _pair() =>
     RpcInMemoryTransport.pair();
 
-/// A factory that creates one transport from the pre-built list in order.
-/// Used to simulate multiple connect attempts (each returning a new transport).
 class _TransportQueue {
   _TransportQueue(this._transports);
 
@@ -32,28 +27,60 @@ class _TransportQueue {
   }
 }
 
-/// Collects all states emitted by [connection] until [count] states are seen
-/// or [timeout] elapses.
-Future<List<RpcClientConnectionState>> _collectStates(
-  RpcClientConnection connection, {
-  required int count,
-  Duration timeout = const Duration(seconds: 2),
-}) async {
-  final states = <RpcClientConnectionState>[];
-  await for (final s in connection.state.timeout(timeout)) {
-    states.add(s);
-    if (states.length >= count) break;
-  }
-  return states;
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 void main() {
+  group('BackoffPolicy', () {
+    test('ExponentialBackoff without jitter', () {
+      const backoff = ExponentialBackoff(
+        baseDelay: Duration(milliseconds: 100),
+        maxDelay: Duration(seconds: 10),
+        jitter: false,
+      );
+
+      expect(backoff.delayFor(0), Duration(milliseconds: 100));
+      expect(backoff.delayFor(1), Duration(milliseconds: 200));
+      expect(backoff.delayFor(2), Duration(milliseconds: 400));
+      expect(backoff.delayFor(3), Duration(milliseconds: 800));
+    });
+
+    test('ExponentialBackoff caps at maxDelay', () {
+      const backoff = ExponentialBackoff(
+        baseDelay: Duration(seconds: 1),
+        maxDelay: Duration(seconds: 5),
+        jitter: false,
+      );
+
+      // 2^3 = 8s > 5s cap
+      expect(backoff.delayFor(3), Duration(seconds: 5));
+      expect(backoff.delayFor(10), Duration(seconds: 5));
+    });
+
+    test('ExponentialBackoff with jitter stays within bounds', () {
+      const backoff = ExponentialBackoff(
+        baseDelay: Duration(milliseconds: 100),
+        maxDelay: Duration(seconds: 10),
+        jitter: true,
+      );
+
+      for (var i = 0; i < 50; i++) {
+        final delay = backoff.delayFor(0);
+        expect(delay.inMilliseconds, greaterThan(0));
+        expect(delay.inMilliseconds, lessThanOrEqualTo(100));
+      }
+    });
+
+    test('FixedBackoff returns constant delay', () {
+      const backoff = FixedBackoff(Duration(milliseconds: 42));
+      expect(backoff.delayFor(0), Duration(milliseconds: 42));
+      expect(backoff.delayFor(99), Duration(milliseconds: 42));
+    });
+  });
+
   group('RpcClientConnection', () {
-    // ── Basic lifecycle ─────────────────────────────────────────────────────
+    // -- Basic lifecycle -----------------------------------------------------
 
     test('emits Online after successful connect', () async {
       final (client, _) = _pair();
@@ -70,6 +97,23 @@ void main() {
 
       expect(states, contains(isA<RpcClientOnline>()));
       expect(connection.currentState, isA<RpcClientOnline>());
+    });
+
+    test('emits Connecting on first attempt', () async {
+      final (client, _) = _pair();
+      final connection = RpcClientConnection(
+        transportFactory: () async => client,
+      );
+      addTearDown(connection.dispose);
+
+      final states = <RpcClientConnectionState>[];
+      connection.state.listen(states.add);
+      connection.connect();
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(states.first, isA<RpcClientConnecting>());
+      expect((states.first as RpcClientConnecting).attempt, 1);
     });
 
     test('transport is accessible after connect', () async {
@@ -123,7 +167,7 @@ void main() {
       expect(connection.transport.isClosed, isTrue);
     });
 
-    // ── Reconnect on drop ───────────────────────────────────────────────────
+    // -- Reconnect on drop ---------------------------------------------------
 
     test('reconnects after transport drop', () async {
       final (c1, s1) = _pair();
@@ -132,7 +176,7 @@ void main() {
 
       final connection = RpcClientConnection(
         transportFactory: queue.next,
-        policy: const FixedDelayPolicy(Duration(milliseconds: 20)),
+        backoff: const FixedBackoff(Duration(milliseconds: 20)),
       );
       addTearDown(connection.dispose);
 
@@ -140,16 +184,15 @@ void main() {
       connection.state.listen(states.add);
       connection.connect();
 
-      // Wait for first Online.
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(states, contains(isA<RpcClientOnline>()));
 
-      // Drop the first transport → should trigger Offline then Online again.
       await s1.close();
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
       expect(states.whereType<RpcClientOffline>(), isNotEmpty);
-      expect(states.whereType<RpcClientOnline>().length, greaterThanOrEqualTo(2));
+      expect(
+          states.whereType<RpcClientOnline>().length, greaterThanOrEqualTo(2));
       expect(queue.callCount, equals(2));
     });
 
@@ -163,7 +206,7 @@ void main() {
           if (factoryCalls < 3) throw Exception('not ready');
           return client;
         },
-        policy: const FixedDelayPolicy(Duration(milliseconds: 10)),
+        backoff: const FixedBackoff(Duration(milliseconds: 10)),
       );
       addTearDown(connection.dispose);
 
@@ -174,8 +217,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
       final connecting = all.whereType<RpcClientConnecting>().toList();
-      expect(connecting, isNotEmpty);
-      expect(connecting.map((s) => s.attempt).toList(), containsAll([1, 2]));
+      expect(connecting.length, greaterThanOrEqualTo(3));
       expect(all.last, isA<RpcClientOnline>());
     });
 
@@ -186,7 +228,7 @@ void main() {
 
       final connection = RpcClientConnection(
         transportFactory: queue.next,
-        policy: const FixedDelayPolicy(Duration(milliseconds: 10)),
+        backoff: const FixedBackoff(Duration(milliseconds: 10)),
       );
       addTearDown(connection.dispose);
 
@@ -201,10 +243,9 @@ void main() {
       expect(connection.currentState, isA<RpcClientOnline>());
     });
 
-    // ── shouldReconnect ─────────────────────────────────────────────────────
+    // -- shouldReconnect -----------------------------------------------------
 
-    test('emits Disconnected when shouldReconnect returns false on factory error',
-        () async {
+    test('emits Disconnected when shouldReconnect returns false', () async {
       final connection = RpcClientConnection(
         transportFactory: () async => throw Exception('unauthenticated'),
         shouldReconnect: (e) => !e.toString().contains('unauthenticated'),
@@ -241,21 +282,17 @@ void main() {
     test('emits Disconnected when shouldReconnect returns false on drop',
         () async {
       final (client, server) = _pair();
-      var drops = 0;
 
       final connection = RpcClientConnection(
         transportFactory: () async => client,
-        shouldReconnect: (e) {
-          drops++;
-          return false;
-        },
+        shouldReconnect: (e) => false,
       );
       addTearDown(connection.dispose);
 
       connection.connect();
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      await server.close(); // simulate drop
+      await server.close();
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
       expect(connection.currentState, isA<RpcClientDisconnected>());
@@ -282,28 +319,113 @@ void main() {
       expect(queue.callCount, equals(2));
     });
 
-    // ── Policy ──────────────────────────────────────────────────────────────
+    // -- maxAttempts ---------------------------------------------------------
 
-    test('ExponentialBackoffPolicy clamps at last delay', () {
-      const policy = ExponentialBackoffPolicy(delays: [
-        Duration(milliseconds: 10),
-        Duration(milliseconds: 50),
-        Duration(milliseconds: 200),
-      ]);
+    test('stops after maxAttempts exceeded', () async {
+      var factoryCalls = 0;
+      final connection = RpcClientConnection(
+        transportFactory: () async {
+          factoryCalls++;
+          throw Exception('always fails');
+        },
+        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+        maxAttempts: 3,
+      );
+      addTearDown(connection.dispose);
 
-      expect(policy.delayFor(1), const Duration(milliseconds: 10));
-      expect(policy.delayFor(2), const Duration(milliseconds: 50));
-      expect(policy.delayFor(3), const Duration(milliseconds: 200));
-      expect(policy.delayFor(100), const Duration(milliseconds: 200));
+      final states = <RpcClientConnectionState>[];
+      connection.state.listen(states.add);
+      connection.connect();
+
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(factoryCalls, 3);
+      expect(connection.currentState, isA<RpcClientDisconnected>());
     });
 
-    test('FixedDelayPolicy always returns same duration', () {
-      const policy = FixedDelayPolicy(Duration(milliseconds: 42));
-      expect(policy.delayFor(1), const Duration(milliseconds: 42));
-      expect(policy.delayFor(99), const Duration(milliseconds: 42));
+    // -- connectTimeout ------------------------------------------------------
+
+    test('connect timeout aborts slow factory', () async {
+      final connection = RpcClientConnection(
+        transportFactory: () async {
+          await Future<void>.delayed(const Duration(seconds: 10));
+          return _pair().$1;
+        },
+        connectTimeout: const Duration(milliseconds: 50),
+        maxAttempts: 1,
+      );
+      addTearDown(connection.dispose);
+
+      final states = <RpcClientConnectionState>[];
+      connection.state.listen(states.add);
+      connection.connect();
+
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(connection.currentState, isA<RpcClientDisconnected>());
     });
 
-    // ── Proxy transport ──────────────────────────────────────────────────────
+    // -- logging -------------------------------------------------------------
+
+    test('logger receives connection events', () async {
+      final (client, _) = _pair();
+      final logs = <String>[];
+
+      final connection = RpcClientConnection(
+        transportFactory: () async => client,
+        logger: (level, message) => logs.add('[$level] $message'),
+      );
+      addTearDown(connection.dispose);
+
+      connection.connect();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(logs, contains(matches(RegExp(r'\[info\] Connected'))));
+    });
+
+    test('logger captures failures', () async {
+      var calls = 0;
+      final (client, _) = _pair();
+      final logs = <String>[];
+
+      final connection = RpcClientConnection(
+        transportFactory: () async {
+          calls++;
+          if (calls < 2) throw Exception('oops');
+          return client;
+        },
+        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+        logger: (level, message) => logs.add('[$level] $message'),
+      );
+      addTearDown(connection.dispose);
+
+      connection.connect();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(logs, contains(matches(RegExp(r'\[warning\] Attempt 1 failed'))));
+      expect(logs, contains(matches(RegExp(r'\[info\] Connected'))));
+    });
+
+    // -- onStateChanged callback ---------------------------------------------
+
+    test('onStateChanged callback fires on every transition', () async {
+      final (client, _) = _pair();
+      final callbacks = <RpcClientConnectionState>[];
+
+      final connection = RpcClientConnection(
+        transportFactory: () async => client,
+        onStateChanged: callbacks.add,
+      );
+      addTearDown(connection.dispose);
+
+      connection.connect();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(callbacks, contains(isA<RpcClientConnecting>()));
+      expect(callbacks, contains(isA<RpcClientOnline>()));
+    });
+
+    // -- proxy transport -----------------------------------------------------
 
     test('proxy transport is not closed until dispose()', () async {
       final (c1, s1) = _pair();
@@ -312,32 +434,17 @@ void main() {
 
       final connection = RpcClientConnection(
         transportFactory: queue.next,
-        policy: const FixedDelayPolicy(Duration(milliseconds: 10)),
+        backoff: const FixedBackoff(Duration(milliseconds: 10)),
       );
       addTearDown(connection.dispose);
 
       connection.connect();
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      // Drop first transport.
       await s1.close();
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
-      // Proxy still open — it reconnected to c2.
       expect(connection.transport.isClosed, isFalse);
-    });
-
-    test('proxy transport closes on dispose()', () async {
-      final (client, _) = _pair();
-      final connection = RpcClientConnection(
-        transportFactory: () async => client,
-      );
-
-      connection.connect();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      await connection.dispose();
-
-      expect(connection.transport.isClosed, isTrue);
     });
 
     test('concurrent connect() calls do not start two loops', () async {
@@ -354,7 +461,7 @@ void main() {
       addTearDown(connection.dispose);
 
       connection.connect();
-      connection.connect(); // second call should be ignored
+      connection.connect();
       connection.connect();
 
       await Future<void>.delayed(const Duration(milliseconds: 150));

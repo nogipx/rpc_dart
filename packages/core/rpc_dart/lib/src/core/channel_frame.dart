@@ -21,6 +21,7 @@ import 'metadata.dart';
 /// - bit 0: endOfStream
 /// - bit 1: metadata frame (payload = encoded headers)
 abstract final class RpcChannelFrame {
+  /// Total header size in bytes (4 streamId + 1 flags + 4 length).
   static const int headerSize = 9;
 
   static const int _flagEndOfStream = 1 << 0;
@@ -155,8 +156,13 @@ abstract final class RpcChannelFrame {
 
 /// A decoded multiplexed frame.
 class RpcDecodedFrame {
+  /// The stream ID this frame belongs to.
   final int streamId;
+
+  /// Whether this is the last frame in the stream.
   final bool endOfStream;
+
+  /// Whether this frame carries metadata (headers) rather than data.
   final bool isMetadata;
 
   /// Raw payload bytes (null for metadata frames).
@@ -168,6 +174,7 @@ class RpcDecodedFrame {
   /// Method path extracted from metadata.
   final String? methodPath;
 
+  /// Creates an [RpcDecodedFrame].
   const RpcDecodedFrame({
     required this.streamId,
     required this.endOfStream,

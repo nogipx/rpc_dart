@@ -283,18 +283,12 @@ void main() {
         final caller = RpcCallerEndpoint(transport: clientTransport);
         final responder = RpcResponderEndpoint(transport: serverTransport);
 
-        // Track whether scope was seen by handler.
-        var scopeSeen = false;
-
         responder.registerServiceContract(
-          _ScopeTestContract(onScope: (scope) {
-            scopeSeen = scope != null;
-          }),
+          _ScopeTestContract(onScope: (_) {}),
         );
         responder.start();
 
-        final response = await caller
-            .unaryRequest<_TestRequest, _TestResponse>(
+        final response = await caller.unaryRequest<_TestRequest, _TestResponse>(
           serviceName: 'TestService',
           methodName: 'Echo',
           requestCodec: _TestRequest.codec,

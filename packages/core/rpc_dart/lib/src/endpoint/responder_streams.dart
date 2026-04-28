@@ -24,6 +24,8 @@ final class RpcResponderStreamState {
   final List<RpcTransportMessage> _preBindBufferedMessages = [];
   final List<RpcTransportMessage> _clientBufferedMessages = [];
   RpcContext? _cachedContext;
+
+  /// The responder bound to this pending stream.
   IRpcResponder? responder;
   bool _boundToMessageStream = false;
 

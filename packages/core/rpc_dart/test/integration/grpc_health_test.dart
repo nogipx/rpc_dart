@@ -28,7 +28,8 @@ void main() {
       expect(status.getStatus(''), equals(GrpcServingStatus.serving));
 
       status.setStatus('MyService', GrpcServingStatus.notServing);
-      expect(status.getStatus('MyService'), equals(GrpcServingStatus.notServing));
+      expect(
+          status.getStatus('MyService'), equals(GrpcServingStatus.notServing));
     });
 
     test('clearStatus removes the service', () {
@@ -210,8 +211,8 @@ void main() {
       final responses = <GrpcServingStatus>[];
       final completer = Completer<void>();
 
-      final stream = caller
-          .serverStream<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
+      final stream =
+          caller.serverStream<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
         serviceName: GrpcHealthCheckContract.grpcServiceName,
         methodName: 'Watch',
         requestCodec: GrpcHealthCheckRequest.codec,
@@ -246,8 +247,8 @@ void main() {
       final responses = <GrpcServingStatus>[];
       final completer = Completer<void>();
 
-      final stream = caller
-          .serverStream<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
+      final stream =
+          caller.serverStream<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
         serviceName: GrpcHealthCheckContract.grpcServiceName,
         methodName: 'Watch',
         requestCodec: GrpcHealthCheckRequest.codec,

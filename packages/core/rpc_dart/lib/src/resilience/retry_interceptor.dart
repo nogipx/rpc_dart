@@ -2,14 +2,12 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:math';
-
 import 'package:rpc_dart/rpc_dart.dart';
 
 /// Predicate that decides whether an error is retryable.
 typedef RpcRetryPredicate = bool Function(Object error);
 
-/// Interceptor that retries failed unary calls with exponential backoff.
+/// Interceptor that retries failed unary calls with backoff.
 ///
 /// Only retries unary calls. Streaming calls pass through unchanged
 /// because replaying a stream is not generally safe.
@@ -18,37 +16,29 @@ typedef RpcRetryPredicate = bool Function(Object error);
 /// ```dart
 /// caller.addInterceptor(RpcRetryInterceptor(
 ///   maxAttempts: 3,
-///   baseDelay: Duration(milliseconds: 200),
+///   backoff: ExponentialBackoff(baseDelay: Duration(milliseconds: 200)),
 /// ));
 /// ```
 class RpcRetryInterceptor extends IRpcInterceptor {
   /// Maximum number of attempts (including the initial call).
   final int maxAttempts;
 
-  /// Base delay between retries. Actual delay is `baseDelay * 2^attempt`
-  /// with optional jitter.
-  final Duration baseDelay;
-
-  /// Maximum delay cap. Backoff will not exceed this.
-  final Duration maxDelay;
-
-  /// Whether to add random jitter to backoff delays.
-  final bool jitter;
+  /// Backoff strategy for computing delays between retries.
+  final BackoffPolicy backoff;
 
   /// Predicate to decide if an error is retryable.
   /// Defaults to retrying all errors except cancellation and deadline exceeded.
   final RpcRetryPredicate? retryOn;
-
-  final Random _random = Random();
 
   /// Creates a retry interceptor.
   ///
   /// [maxAttempts] must be >= 1 (1 means no retries, just the initial call).
   RpcRetryInterceptor({
     this.maxAttempts = 3,
-    this.baseDelay = const Duration(milliseconds: 200),
-    this.maxDelay = const Duration(seconds: 5),
-    this.jitter = true,
+    this.backoff = const ExponentialBackoff(
+      baseDelay: Duration(milliseconds: 200),
+      maxDelay: Duration(seconds: 5),
+    ),
     this.retryOn,
   }) : assert(maxAttempts >= 1, 'maxAttempts must be >= 1');
 
@@ -73,8 +63,7 @@ class RpcRetryInterceptor extends IRpcInterceptor {
           break;
         }
 
-        final delay = _computeDelay(attempt);
-        await Future<void>.delayed(delay);
+        await Future<void>.delayed(backoff.delayFor(attempt));
       }
     }
 
@@ -97,17 +86,5 @@ class RpcRetryInterceptor extends IRpcInterceptor {
 
     // Default: retry everything else.
     return true;
-  }
-
-  Duration _computeDelay(int attempt) {
-    // Exponential backoff: baseDelay * 2^attempt.
-    final exponential = baseDelay * pow(2, attempt);
-    final capped = exponential > maxDelay ? maxDelay : exponential;
-
-    if (!jitter) return capped;
-
-    // Add jitter: random value between 0 and capped.
-    final jitterMs = _random.nextInt(capped.inMilliseconds.clamp(1, 1 << 30));
-    return Duration(milliseconds: jitterMs);
   }
 }
