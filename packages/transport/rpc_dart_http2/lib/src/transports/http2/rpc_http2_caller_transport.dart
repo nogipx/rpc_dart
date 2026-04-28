@@ -40,6 +40,10 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   /// Парсеры для каждого stream (для фрагментированных сообщений)
   final Map<int, RpcMessageParser> _streamParsers = {};
 
+  /// Tracks streams where initial response headers have been received.
+  /// Used to distinguish trailers from initial response headers on incoming.
+  final Set<int> _initialHeadersReceived = {};
+
   /// Целевой хост
   final String _host;
 
@@ -172,8 +176,9 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     final subscription = _streamSubscriptions.remove(streamId);
     subscription?.cancel();
 
-    // Удаляем парсер для этого stream
+    // Удаляем парсер и tracking для этого stream
     _streamParsers.remove(streamId);
+    _initialHeadersReceived.remove(streamId);
 
     return true;
   }
@@ -307,6 +312,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
         _activeStreams.remove(streamId);
         _streamSubscriptions.remove(streamId);
         _streamParsers.remove(streamId);
+        _initialHeadersReceived.remove(streamId);
       },
     );
 
@@ -342,12 +348,43 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     }
   }
 
-  /// Обрабатывает входящие HTTP/2 headers
+  /// Обрабатывает входящие HTTP/2 headers (initial response or trailers).
   void _handleHeadersMessage(
     int streamId,
     http2.HeadersStreamMessage message,
     String methodPath,
   ) {
+    // Check :status pseudo-header (present only in initial response, not trailers).
+    final httpStatus = extractHttpStatus(message.headers);
+
+    if (httpStatus != null && httpStatus != 200) {
+      // Non-200 HTTP status — map to gRPC INTERNAL error.
+      // Per gRPC spec, any non-200 must be treated as a transport error.
+      _logger?.warning('Non-200 HTTP status $httpStatus for stream $streamId');
+      final errorMetadata = RpcMetadata([
+        RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
+        RpcHeader(
+          RpcHeaders.grpcMessage,
+          RpcMetadata.encodeGrpcMessage('HTTP status $httpStatus'),
+        ),
+      ]);
+      if (!_messageController.isClosed) {
+        _messageController.add(RpcTransportMessage(
+          streamId: streamId,
+          metadata: errorMetadata,
+          isEndOfStream: true,
+          methodPath: methodPath,
+        ));
+      }
+      return;
+    }
+
+    // Track initial vs trailer headers.
+    final isInitialHeaders = !_initialHeadersReceived.contains(streamId);
+    if (isInitialHeaders) {
+      _initialHeadersReceived.add(streamId);
+    }
+
     // Конвертируем HTTP/2 headers в RPC метаданные (pseudo-headers отфильтрованы)
     final metadata = http2HeadersToRpcMetadata(message.headers);
     _policy.validateMetadata(metadata);
@@ -489,6 +526,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     _streamSubscriptions.clear();
     _streamParsers.clear();
     _activeStreams.clear();
+    _initialHeadersReceived.clear();
 
     try {
       _connection = await _connectionFactory();
@@ -571,8 +609,9 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     }
     _streamSubscriptions.clear();
 
-    // Очищаем парсеры
+    // Очищаем парсеры и tracking
     _streamParsers.clear();
+    _initialHeadersReceived.clear();
 
     // Закрываем контроллер сообщений
     if (!_messageController.isClosed) {

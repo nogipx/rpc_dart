@@ -45,7 +45,7 @@ List<http2.Header> rpcMetadataToHttp2RequestHeaders(
 
     if (name == 'user-agent') hasUserAgent = true;
 
-    headers.add(http2.Header.ascii(name, _asciiSafeValue(rpcHeader.value)));
+    headers.add(http2.Header.ascii(name, _headerValue(name, rpcHeader.value)));
   }
 
   if (!hasUserAgent) {
@@ -55,14 +55,12 @@ List<http2.Header> rpcMetadataToHttp2RequestHeaders(
   return headers;
 }
 
-/// Converts [RpcMetadata] to HTTP/2 response headers (responder → caller).
+/// Converts [RpcMetadata] to HTTP/2 initial response headers (responder → caller).
 ///
-/// Prepends `:status: 200` which is required by HTTP/2 for all responses.
-/// Transport-agnostic semantic headers from [metadata] are appended after
-/// the pseudo-header.
+/// Prepends `:status: 200` which is required by HTTP/2 for the initial
+/// response HEADERS frame. Any `:*` headers in [metadata] are skipped.
 ///
-/// Any `:*` headers in [metadata] are skipped — `:status` is always
-/// written unconditionally as `200`.
+/// Use [rpcMetadataToHttp2Trailers] for trailing metadata (no `:status`).
 List<http2.Header> rpcMetadataToHttp2ResponseHeaders(RpcMetadata metadata) {
   final headers = <http2.Header>[
     http2.Header.ascii(':status', '200'),
@@ -71,7 +69,54 @@ List<http2.Header> rpcMetadataToHttp2ResponseHeaders(RpcMetadata metadata) {
   for (final rpcHeader in metadata.headers) {
     final name = rpcHeader.name.toLowerCase();
     if (name.startsWith(':')) continue;
-    headers.add(http2.Header.ascii(name, _asciiSafeValue(rpcHeader.value)));
+    headers.add(http2.Header.ascii(name, _headerValue(name, rpcHeader.value)));
+  }
+
+  return headers;
+}
+
+/// Converts [RpcMetadata] to HTTP/2 trailers (responder → caller).
+///
+/// Trailers are sent after DATA frames with END_STREAM. Per HTTP/2 spec,
+/// pseudo-headers (`:status`, etc.) MUST NOT appear in trailers.
+///
+/// For Trailers-Only responses (error before any data), use
+/// [rpcMetadataToHttp2TrailersOnly] instead.
+List<http2.Header> rpcMetadataToHttp2Trailers(RpcMetadata metadata) {
+  final headers = <http2.Header>[];
+
+  for (final rpcHeader in metadata.headers) {
+    final name = rpcHeader.name.toLowerCase();
+    // Pseudo-headers MUST NOT appear in trailers (RFC 7540 Section 8.1.2.1).
+    if (name.startsWith(':')) continue;
+    headers.add(http2.Header.ascii(name, _headerValue(name, rpcHeader.value)));
+  }
+
+  return headers;
+}
+
+/// Converts [RpcMetadata] to HTTP/2 Trailers-Only response.
+///
+/// A Trailers-Only response is used when the server replies with an error
+/// (or OK) before sending any DATA frames. The single HEADERS frame carries
+/// `:status: 200`, `content-type`, and the gRPC trailer fields (`grpc-status`,
+/// `grpc-message`, etc.) with END_STREAM set.
+List<http2.Header> rpcMetadataToHttp2TrailersOnly(RpcMetadata metadata) {
+  final headers = <http2.Header>[
+    http2.Header.ascii(':status', '200'),
+  ];
+
+  // Ensure content-type is present.
+  bool hasContentType = false;
+  for (final rpcHeader in metadata.headers) {
+    final name = rpcHeader.name.toLowerCase();
+    if (name.startsWith(':')) continue;
+    if (name == 'content-type') hasContentType = true;
+    headers.add(http2.Header.ascii(name, _headerValue(name, rpcHeader.value)));
+  }
+
+  if (!hasContentType) {
+    headers.add(http2.Header.ascii('content-type', 'application/grpc'));
   }
 
   return headers;
@@ -83,6 +128,9 @@ List<http2.Header> rpcMetadataToHttp2ResponseHeaders(RpcMetadata metadata) {
 /// `:status`) are transport-specific and are filtered out.  The `:path`
 /// value is extracted separately and passed as [methodPath] so that
 /// [RpcMetadata.methodPath] works correctly without storing a pseudo-header.
+///
+/// Binary headers (names ending in `-bin`) have their values base64-decoded
+/// per the gRPC specification. Regular headers are kept as ASCII strings.
 ///
 /// Pass the `:path` value extracted from the raw headers as [methodPath].
 RpcMetadata http2HeadersToRpcMetadata(
@@ -97,11 +145,14 @@ RpcMetadata http2HeadersToRpcMetadata(
     if (name.startsWith(':')) continue;
 
     var value = String.fromCharCodes(header.value);
-    // Attempt to decode base64url-encoded binary header values.
-    try {
-      value = utf8.decode(base64Url.decode(value));
-    } on Object {
-      // Not base64url — use as-is.
+
+    // Per gRPC spec, headers ending in `-bin` carry base64-encoded binary.
+    if (name.endsWith('-bin')) {
+      try {
+        value = utf8.decode(base64Decode(value));
+      } on Object {
+        // Malformed base64 — keep raw value.
+      }
     }
 
     rpcHeaders.add(RpcHeader(name, value));
@@ -115,6 +166,18 @@ String? extractMethodPath(List<http2.Header> headers) {
   for (final header in headers) {
     if (String.fromCharCodes(header.name) == ':path') {
       return String.fromCharCodes(header.value);
+    }
+  }
+  return null;
+}
+
+/// Extracts the `:status` pseudo-header value from raw HTTP/2 headers.
+///
+/// Returns null if no `:status` header is present (e.g. in trailers).
+int? extractHttpStatus(List<http2.Header> headers) {
+  for (final header in headers) {
+    if (String.fromCharCodes(header.name) == ':status') {
+      return int.tryParse(String.fromCharCodes(header.value));
     }
   }
   return null;
@@ -159,9 +222,16 @@ bool isGrpcFrame(Uint8List data) {
   }
 }
 
-/// Returns [value] unchanged if it is valid ASCII; otherwise base64url-encodes
-/// the UTF-8 bytes.
-String _asciiSafeValue(String value) {
+/// Encodes a header value for HTTP/2 transport.
+///
+/// For binary headers (name ending in `-bin`), the value is always
+/// base64-encoded per the gRPC specification. For regular headers, the
+/// value is returned as-is if it is valid ASCII; otherwise it is
+/// base64url-encoded as a fallback.
+String _headerValue(String name, String value) {
+  if (name.endsWith('-bin')) {
+    return base64Encode(utf8.encode(value));
+  }
   try {
     ascii.encode(value);
     return value;

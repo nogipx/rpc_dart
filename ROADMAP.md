@@ -50,7 +50,7 @@ RpcChannelTransport      — wraps IRpcMultiplexedChannel into IRpcTransport
 
 ---
 
-## Phase 2 — Full gRPC wire compatibility [NOT STARTED]
+## Phase 2 — Full gRPC wire compatibility [IN PROGRESS]
 
 **Goal:** Any standard gRPC client (grpcurl, Postman, Go, Python, etc.) can talk to rpc_dart server over HTTP/2. And rpc_dart client can talk to any gRPC server.
 
@@ -69,11 +69,17 @@ Wire format on HTTP/2 transport must exactly match the gRPC spec:
 - Contract/endpoint layer stays the same.
 - Annotation-based codegen stays the same.
 
+**Done:**
+- [x] Audit current framing against gRPC spec, fix deviations
+- [x] Proper gRPC request/response header sets
+- [x] Trailers-Only responses for errors (transport auto-detects initial vs trailer)
+- [x] Correct trailer format — no `:status` in trailers (RFC 7540 Section 8.1.2.1)
+- [x] Binary header convention — `-bin` suffix headers base64-encoded/decoded
+- [x] Non-200 HTTP status handling on client side
+- [x] Wire-level compliance test suite (19 tests)
+
 **Tasks:**
-- [ ] Audit current framing against gRPC spec, fix deviations
-- [ ] Proper gRPC request/response header sets
-- [ ] Trailers-Only responses for errors
-- [ ] grpc-status-details-bin (structured error details via protobuf Any or equivalent)
+- [x] grpc-status-details-bin (structured error details via protobuf Any or equivalent)
 - [ ] Validate with `grpcurl` and a reference Go/Python gRPC client
 - [ ] gRPC Health Checking Protocol (grpc.health.v1)
 - [ ] gRPC Server Reflection (optional, for tooling)

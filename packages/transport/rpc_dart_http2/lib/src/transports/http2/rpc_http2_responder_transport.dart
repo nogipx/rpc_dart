@@ -39,6 +39,10 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
   /// Парсеры для каждого stream (для фрагментированных сообщений)
   final Map<int, RpcMessageParser> _streamParsers = {};
 
+  /// Tracks streams where initial response headers have been sent.
+  /// Used to distinguish trailers (no :status) from Trailers-Only (:status + grpc-status).
+  final Set<int> _initialHeadersSent = {};
+
   /// Флаг закрытия
   bool _isClosed = false;
 
@@ -295,8 +299,9 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
     final subscription = _streamSubscriptions.remove(streamId);
     subscription?.cancel();
 
-    // Удаляем парсер для этого stream
+    // Удаляем парсер и tracking для этого stream
     _streamParsers.remove(streamId);
+    _initialHeadersSent.remove(streamId);
 
     return true;
   }
@@ -321,14 +326,29 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
     }
 
     try {
-      // Транспорт добавляет :status: 200 и преобразует семантические headers.
-      // Pseudo-headers не хранятся в RpcMetadata — они добавляются здесь.
-      final headers = rpcMetadataToHttp2ResponseHeaders(metadata);
+      final List<http2.Header> headers;
 
-      // Отправляем headers в ответ
+      if (!endStream) {
+        // Initial response headers — includes :status: 200
+        headers = rpcMetadataToHttp2ResponseHeaders(metadata);
+        _initialHeadersSent.add(streamId);
+      } else if (!_initialHeadersSent.contains(streamId)) {
+        // Trailers-Only — first and last HEADERS frame.
+        // Must include :status: 200 and content-type per gRPC spec.
+        headers = rpcMetadataToHttp2TrailersOnly(metadata);
+        _initialHeadersSent.add(streamId);
+      } else {
+        // Trailers after initial headers + data.
+        // MUST NOT include :status per HTTP/2 spec (RFC 7540 Section 8.1.2.1).
+        headers = rpcMetadataToHttp2Trailers(metadata);
+      }
+
       incomingStream.sendHeaders(headers, endStream: endStream);
 
-      _logger?.internal('Ответные метаданные отправлены для stream $streamId');
+      _logger?.internal(
+        'Метаданные отправлены для stream $streamId '
+        '(${endStream ? (_initialHeadersSent.contains(streamId) ? "trailers" : "trailers-only") : "initial headers"})',
+      );
     } catch (e) {
       _logger?.error('Ошибка при отправке метаданных для stream $streamId: $e');
       rethrow;
@@ -516,8 +536,9 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
     }
     _streamSubscriptions.clear();
 
-    // Очищаем парсеры
+    // Очищаем парсеры и tracking
     _streamParsers.clear();
+    _initialHeadersSent.clear();
 
     // Закрываем HTTP/2 соединение
     await _connection.finish();

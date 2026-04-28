@@ -514,42 +514,20 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     try {
-      // If initial metadata was not sent, send an error response immediately.
+      // If initial metadata was not sent, this becomes a Trailers-Only response.
+      // The transport layer handles adding :status: 200 for Trailers-Only.
       if (!_initialMetadataSent) {
         _logger?.internal(
-          'Sending error without initial metadata [streamId: $_streamId]',
-        );
-        // Create combined metadata: initial response + error trailer.
-        final errorHeaders = [
-          RpcHeader(':status', '200'), // HTTP 200 for gRPC
-          RpcHeader(
-            RpcHeaders.contentType,
-            RpcHeaders.contentTypeGrpc,
-          ),
-          RpcHeader(RpcHeaders.grpcStatus, statusCode.toString()),
-        ];
-
-        if (message.isNotEmpty) {
-          errorHeaders.add(
-            RpcHeader(
-              RpcHeaders.grpcMessage,
-              RpcMetadata.encodeGrpcMessage(message),
-            ),
-          );
-        }
-
-        final errorMetadata = RpcMetadata(errorHeaders);
-        await _transport.sendMetadata(
-          _streamId,
-          errorMetadata,
-          endStream: true,
+          'Sending Trailers-Only error [streamId: $_streamId]',
         );
         _initialMetadataSent = true;
-      } else {
-        // Initial metadata already sent; send trailer only.
-        final trailers = RpcMetadata.forTrailer(statusCode, message: message);
-        await _transport.sendMetadata(_streamId, trailers, endStream: true);
       }
+
+      // Both Trailers-Only and post-data trailers use the same format:
+      // grpc-status + optional grpc-message. The transport distinguishes
+      // between the two based on whether initial headers were sent.
+      final trailers = RpcMetadata.forTrailer(statusCode, message: message);
+      await _transport.sendMetadata(_streamId, trailers, endStream: true);
 
       _logger?.internal('Error sent to client [streamId: $_streamId]');
       _trailerSent = true;
