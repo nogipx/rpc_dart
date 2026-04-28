@@ -18,8 +18,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// RPC context with cancellation/metadata.
   final RpcContext? _context;
 
-  /// Cancellation subscription.
-  StreamSubscription? _cancellationSubscription;
+  /// Call scope for automatic resource cleanup.
+  final RpcCallScope _scope;
 
   /// Parser for fragmented messages (serialization mode only).
   RpcMessageParser? _parser;
@@ -34,12 +34,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Outgoing responses controller.
   final StreamController<TResponse> _responseController =
       StreamController<TResponse>(sync: true);
-
-  /// Subscription to outgoing responses.
-  StreamSubscription<TResponse>? _responseSubscription;
-
-  /// Subscription to incoming transport messages.
-  StreamSubscription? _messageSubscription;
 
   /// Send sequence to preserve order and await completion before trailers.
   Future<void> _sendSequence = Future<void>.value();
@@ -82,6 +76,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         _requestCodec = requestCodec,
         _responseCodec = responseCodec,
         _context = context,
+        _scope = RpcCallScope(context: context),
         _logger = logger?.child('StreamProcessor') {
     // Serialization requires codecs.
     if (!_isZeroCopy) {
@@ -121,6 +116,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
     );
 
+    // Register controller cleanup with scope.
+    _scope.onDispose(() {
+      if (!_requestController.isClosed) _requestController.close();
+      if (!_responseController.isClosed) _responseController.close();
+    });
+
     _setupCancellationMonitoring();
     _setupResponseHandler();
   }
@@ -130,6 +131,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     final accept = context?.getHeader(RpcHeaders.grpcAcceptEncoding);
     return RpcGrpcCompression.selectResponseEncoding(accept);
   }
+
+  /// The call scope managing this processor's resources.
+  RpcCallScope get scope => _scope;
 
   /// Incoming request stream.
   Stream<TRequest> get requests => _requestController.stream;
@@ -142,7 +146,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Configures outgoing response handling.
   void _setupResponseHandler() {
-    _responseSubscription = _responseController.stream.listen(
+    _scope.listen<TResponse>(_responseController.stream,
       (response) {
         _sendSequence = _sendSequence.then((_) async {
           if (!_isActive) return;
@@ -251,9 +255,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
+  bool _messageBound = false;
+
   /// Binds the processor to an endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    if (_messageSubscription != null) {
+    if (_messageBound) {
       _logger?.logRpcWarning(
         message: 'Stream processor already bound to message stream',
         methodPath: _methodPath,
@@ -261,10 +267,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       );
       return;
     }
+    _messageBound = true;
 
     _logger?.logStreamBound(methodPath: _methodPath, streamId: _streamId);
 
-    _messageSubscription = messageStream.listen(
+    _scope.listen<RpcTransportMessage>(messageStream,
       _handleMessage,
       onError: (error, stackTrace) {
         _logger?.logRpcError(
@@ -566,6 +573,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   }
 
   /// Closes the processor and frees resources.
+  ///
+  /// Delegates to [RpcCallScope.close] which runs all registered
+  /// disposers (subscriptions, controllers) in reverse order.
   Future<void> close() async {
     if (!_isActive) return;
 
@@ -574,60 +584,44 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     );
     _isActive = false;
 
-    // Cancel all subscriptions.
-    unawaited(_messageSubscription?.cancel());
-    _messageSubscription = null;
-
-    unawaited(_cancellationSubscription?.cancel());
-    _cancellationSubscription = null;
-
-    unawaited(_responseSubscription?.cancel());
-    _responseSubscription = null;
-
-    if (!_requestController.isClosed) {
-      _requestController.close();
-    }
-
-    if (!_responseController.isClosed) {
-      _responseController.close();
-    }
+    await _scope.close();
   }
 
-  /// Sets up cancellation monitoring.
+  /// Sets up cancellation monitoring via the call scope.
+  ///
+  /// The scope already auto-closes on cancellation/deadline, but we
+  /// also need to push a [RpcCancelledException] into the controllers
+  /// so that handlers see the cancellation error.
   void _setupCancellationMonitoring() {
-    if (_context?.cancellationToken != null) {
-      _cancellationSubscription =
-          _context!.cancellationToken!.cancelled.asStream().listen(
-        (_) {
-          _logger?.internal(
-            'Operation cancelled, shutting down processor [streamId: $_streamId]',
-          );
-          _isActive = false;
+    if (_context?.cancellationToken == null) return;
 
-          final reason =
-              _context!.cancellationToken!.reason ?? 'Operation was cancelled';
-          final cancelledException = RpcCancelledException(reason);
+    _scope.listen<void>(
+      _context!.cancellationToken!.cancelled.asStream(),
+      (_) {
+        _logger?.internal(
+          'Operation cancelled, shutting down processor [streamId: $_streamId]',
+        );
+        _isActive = false;
 
-          if (!_requestController.isClosed) {
-            _requestController.addError(cancelledException);
-          }
-          if (!_responseController.isClosed) {
-            _responseController.addError(cancelledException);
-          }
+        final reason =
+            _context!.cancellationToken!.reason ?? 'Operation was cancelled';
+        final cancelledException = RpcCancelledException(reason);
 
-          // Cancel subscriptions.
-          _messageSubscription?.cancel();
-          _cancellationSubscription?.cancel();
-        },
-        onError: (error, stackTrace) {
-          _logger?.error(
-            'Error monitoring cancellation [streamId: $_streamId]',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        },
-      );
-    }
+        if (!_requestController.isClosed) {
+          _requestController.addError(cancelledException);
+        }
+        if (!_responseController.isClosed) {
+          _responseController.addError(cancelledException);
+        }
+      },
+      onError: (error, stackTrace) {
+        _logger?.error(
+          'Error monitoring cancellation [streamId: $_streamId]',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      },
+    );
   }
 }
 
@@ -656,8 +650,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// RPC context for metadata, timeouts, and cancellation.
   final RpcContext? _context;
 
-  /// Cancellation subscription.
-  StreamSubscription? _cancellationSubscription;
+  /// Call scope for automatic resource cleanup.
+  final RpcCallScope _scope;
 
   /// Parser for fragmented messages (serialization mode only).
   RpcMessageParser? _parser;
@@ -674,12 +668,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Incoming response controller.
   final StreamController<RpcMessage<TResponse>> _responseController =
       StreamController<RpcMessage<TResponse>>();
-
-  /// Outgoing request subscription.
-  StreamSubscription? _requestSubscription;
-
-  /// Incoming response subscription.
-  StreamSubscription? _responseSubscription;
 
   /// Processor active flag.
   bool _isActive = true;
@@ -707,6 +695,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         _requestCodec = requestCodec,
         _responseCodec = responseCodec,
         _context = context,
+        _scope = RpcCallScope(context: context),
         _logger = logger?.child('CallProcessor') {
     // Validation: codecs are required for serialization mode.
     if (!_isZeroCopy) {
@@ -744,6 +733,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
     );
 
+    // Register controller cleanup with scope.
+    _scope.onDispose(() {
+      if (!_requestController.isClosed) _requestController.close();
+      if (!_responseController.isClosed) _responseController.close();
+    });
+
     // Validate context before starting.
     _checkContextBeforeCall();
 
@@ -751,6 +746,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     _setupRequestHandler();
     _setupResponseHandler();
   }
+
+  /// The call scope managing this processor's resources.
+  RpcCallScope get scope => _scope;
 
   /// Incoming responses from server.
   Stream<RpcMessage<TResponse>> get responses => _responseController.stream;
@@ -766,7 +764,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Configures outgoing request handling.
   void _setupRequestHandler() {
-    _requestSubscription = _requestController.stream.listen(
+    _scope.listen<TRequest>(_requestController.stream,
       (request) async {
         if (!_isActive) return;
 
@@ -873,7 +871,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Configures incoming response handling.
   void _setupResponseHandler() {
-    _responseSubscription = _transport.getMessagesForStream(_streamId).listen(
+    _scope.listen<RpcTransportMessage>(_transport.getMessagesForStream(_streamId),
       _handleResponse,
       onError: (error, stackTrace) {
         _logger?.error(
@@ -950,55 +948,49 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     );
   }
 
-  /// Sets up cancellation monitoring for CallProcessor.
+  /// Sets up cancellation monitoring via the call scope.
   void _setupCancellationMonitoring() {
-    if (_context?.cancellationToken != null) {
-      _cancellationSubscription =
-          _context!.cancellationToken!.cancelled.asStream().listen(
-        (_) async {
-          _logger?.internal(
-            'Operation cancelled by client, notifying server [streamId: $_streamId]',
-          );
+    if (_context?.cancellationToken == null) return;
 
-          try {
-            // Send a cancellation notice to the server.
-            final reason = _context!.cancellationToken!.reason ??
-                'Operation cancelled by client';
-            await _sendCancellationToServer(reason);
-          } catch (e, stackTrace) {
-            _logger?.error(
-              'Failed to send cancellation notice [streamId: $_streamId]',
-              error: e,
-              stackTrace: stackTrace,
-            );
-          }
+    _scope.listen<void>(
+      _context!.cancellationToken!.cancelled.asStream(),
+      (_) async {
+        _logger?.internal(
+          'Operation cancelled by client, notifying server [streamId: $_streamId]',
+        );
 
-          _isActive = false;
-          final cancelledException = RpcCancelledException(
-            _context!.cancellationToken!.reason ?? 'Operation was cancelled',
-          );
-
-          if (!_requestController.isClosed) {
-            _requestController.addError(cancelledException);
-          }
-          if (!_responseController.isClosed) {
-            _responseController.addError(cancelledException);
-          }
-
-          // Cancel subscriptions.
-          await _requestSubscription?.cancel();
-          await _responseSubscription?.cancel();
-          _cancellationSubscription?.cancel();
-        },
-        onError: (error, stackTrace) {
+        try {
+          final reason = _context!.cancellationToken!.reason ??
+              'Operation cancelled by client';
+          await _sendCancellationToServer(reason);
+        } catch (e, stackTrace) {
           _logger?.error(
-            'Error monitoring cancellation [streamId: $_streamId]',
-            error: error,
+            'Failed to send cancellation notice [streamId: $_streamId]',
+            error: e,
             stackTrace: stackTrace,
           );
-        },
-      );
-    }
+        }
+
+        _isActive = false;
+        final cancelledException = RpcCancelledException(
+          _context!.cancellationToken!.reason ?? 'Operation was cancelled',
+        );
+
+        if (!_requestController.isClosed) {
+          _requestController.addError(cancelledException);
+        }
+        if (!_responseController.isClosed) {
+          _responseController.addError(cancelledException);
+        }
+      },
+      onError: (error, stackTrace) {
+        _logger?.error(
+          'Error monitoring cancellation [streamId: $_streamId]',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      },
+    );
   }
 
   /// Sends a cancellation notice to the server.
@@ -1243,6 +1235,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   }
 
   /// Closes the processor and releases resources.
+  ///
+  /// Delegates to [RpcCallScope.close] which runs all registered
+  /// disposers (subscriptions, controllers) in reverse order.
   Future<void> close() async {
     if (!_isActive) return;
 
@@ -1251,21 +1246,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     );
     _isActive = false;
 
-    await _requestSubscription?.cancel();
-    _requestSubscription = null;
-
-    await _responseSubscription?.cancel();
-    _responseSubscription = null;
-
-    await _cancellationSubscription?.cancel();
-    _cancellationSubscription = null;
-
-    if (!_requestController.isClosed) {
-      _requestController.close();
-    }
-
-    if (!_responseController.isClosed) {
-      _responseController.close();
-    }
+    await _scope.close();
   }
 }

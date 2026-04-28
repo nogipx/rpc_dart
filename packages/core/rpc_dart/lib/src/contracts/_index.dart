@@ -16,6 +16,7 @@ export 'dart:typed_data';
 export '../endpoint/_index.dart' show IRpcMiddleware;
 
 part 'annotations.dart';
+part 'call_scope.dart';
 part 'context.dart';
 part 'contract.dart';
 part 'models.dart';
