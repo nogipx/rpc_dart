@@ -9,7 +9,7 @@ import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:dart_style/dart_style.dart';
-import 'package:pub_semver/pub_semver.dart';
+import 'package:pub_semver/pub_semver.dart' show Version;
 import 'package:rpc_dart/rpc_dart.dart'
     show
         IRpcSerializable,
@@ -60,7 +60,7 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
   ) {
     if (element is! ClassElement) {
       throw InvalidGenerationSourceError(
-        '@RpcService может быть применен только к классу или интерфейсу',
+        '@RpcService can only be applied to a class or interface',
         element: element,
       );
     }
@@ -94,7 +94,7 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     final name = reader.peek('name')?.stringValue ?? '';
     if (name.trim().isEmpty) {
       throw InvalidGenerationSourceError(
-        'Имя сервиса в @RpcService не может быть пустым',
+        '@RpcService name must not be empty',
       );
     }
 
@@ -122,15 +122,8 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     return null;
   }
 
-  String _baseNameFor(ClassElement element) {
-    final name = element.displayName;
-    if (name.length > 1 &&
-        name.startsWith('I') &&
-        RegExp(r'[A-Z]').hasMatch(name[1])) {
-      return name.substring(1);
-    }
-    return name;
-  }
+  // Delegates to the top-level helper.
+  String _baseNameFor(ClassElement element) => _baseNameForClass(element);
 
   List<_MethodMeta> _collectMethods(
     ClassElement element,
@@ -149,7 +142,7 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
 
     if (methods.isEmpty) {
       log.warning(
-        'Класс ${element.name} помечен @RpcService, но не содержит методов с @RpcMethod',
+        'Class ${element.name} is annotated with @RpcService but has no @RpcMethod methods',
       );
     }
     return methods;
@@ -164,7 +157,7 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     final name = reader.peek('name')?.stringValue ?? '';
     if (name.trim().isEmpty) {
       throw InvalidGenerationSourceError(
-        'Метод ${method.name} должен иметь непустое имя в @RpcMethod',
+        'Method ${method.name} must have a non-empty name in @RpcMethod',
         element: method,
       );
     }
@@ -279,8 +272,8 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
       final existing = names[method.methodName];
       if (existing != null) {
         throw InvalidGenerationSourceError(
-          'Дублируется RPC имя метода "${method.methodName}" '
-          'в ${method.declarationName} и ${existing.name}',
+          'Duplicate RPC method name "${method.methodName}" '
+          'in ${method.declarationName} and ${existing.name}',
           element: method.signature.element,
         );
       }
@@ -304,27 +297,14 @@ class _Emitter {
   final _ParentInfo? parentInfo;
   final List<_RemovedMethodInfo> removedMethods;
 
-  String get _baseName {
-    final name = classElement.displayName;
-    if (name.length > 1 &&
-        name.startsWith('I') &&
-        RegExp(r'[A-Z]').hasMatch(name[1])) {
-      return name.substring(1);
-    }
-    return name;
-  }
+  String get _baseName => _baseNameForClass(classElement);
 
   bool _shouldUseCodec(
     _MethodMeta meta,
-    MethodElement element,
     RpcDataTransferMode effectiveMode,
   ) {
     final methodMode = meta.transferMode ?? effectiveMode;
-    if (methodMode == RpcDataTransferMode.zeroCopy) return false;
-    if (meta.requestCodecType != null || meta.responseCodecType != null) {
-      return true;
-    }
-    return true;
+    return methodMode != RpcDataTransferMode.zeroCopy;
   }
 
   String build() {
@@ -336,7 +316,7 @@ class _Emitter {
     buffer.writeln();
 
     final needsCodecs = methods.any(
-        (m) => _shouldUseCodec(m, m.signature.element, service.transferMode));
+        (m) => _shouldUseCodec(m, service.transferMode));
     if (needsCodecs) {
       buffer.writeln(_buildCodecs());
       buffer.writeln();
@@ -354,13 +334,13 @@ class _Emitter {
     final className = '${_baseName}Names';
     b.writeln('class $className {');
     b.writeln('  const $className._();');
-    b.writeln("  static const service = '${service.name}';");
+    b.writeln("  static const service = '${_escapeString(service.name)}';");
     b.writeln(
       r"  static String instance(String suffix) => '$service\_$suffix';",
     );
     for (final method in methods) {
       b.writeln(
-        "  static const ${method.declarationName} = '${method.methodName}';",
+        "  static const ${method.declarationName} = '${_escapeString(method.methodName)}';",
       );
     }
     b.writeln('}');
@@ -373,19 +353,19 @@ class _Emitter {
     b.writeln('class $className {');
     b.writeln('  const $className._();');
 
-    // Собираем уникальные типы с их кодеками
+    // Collect unique types with their codecs.
     final codecMap = <String, _CodecInfo>{};
 
     for (final method in methods) {
       final effectiveMode = method.transferMode ?? service.transferMode;
-      if (!_shouldUseCodec(method, method.signature.element, effectiveMode)) {
+      if (!_shouldUseCodec(method, effectiveMode)) {
         continue;
       }
 
       final requestTypeStr = method.signature.requestType.getDisplayString();
       final responseTypeStr = method.signature.responseType.getDisplayString();
 
-      // Добавляем request codec если ещё нет
+      // Add request codec if not already present.
       if (!codecMap.containsKey(requestTypeStr)) {
         codecMap[requestTypeStr] = _CodecInfo(
           typeName: requestTypeStr,
@@ -393,7 +373,7 @@ class _Emitter {
         );
       }
 
-      // Добавляем response codec если ещё нет
+      // Add response codec if not already present.
       if (!codecMap.containsKey(responseTypeStr)) {
         codecMap[responseTypeStr] = _CodecInfo(
           typeName: responseTypeStr,
@@ -402,11 +382,11 @@ class _Emitter {
       }
     }
 
-    // Генерируем константы в алфавитном порядке для стабильности
+    // Generate constants in alphabetical order for stability.
     final sortedTypes = codecMap.keys.toList()..sort();
     for (final typeName in sortedTypes) {
       final info = codecMap[typeName]!;
-      final codecName = 'codec$typeName';
+      final codecName = 'codec${_sanitizeTypeName(typeName)}';
 
       if (info.customCodecType != null) {
         b.writeln(
@@ -597,7 +577,7 @@ class _SignatureParser {
     if (contextParam != null &&
         !_contextChecker.isAssignableFromType(contextParam.type)) {
       throw InvalidGenerationSourceError(
-        'context должен быть RpcContext?',
+        'context parameter must be RpcContext?',
         element: contextParam,
       );
     }
@@ -638,21 +618,21 @@ class _SignatureParser {
 
     if (positional.isEmpty) {
       throw InvalidGenerationSourceError(
-        'Метод ${element.name} должен принимать хотя бы один параметр-запрос',
+        'Method ${element.name} must have at least one request parameter',
         element: element,
       );
     }
 
     if (positional.length > 1) {
       throw InvalidGenerationSourceError(
-        'Метод ${element.name} должен иметь только один позиционный параметр-запрос',
+        'Method ${element.name} must have exactly one positional request parameter',
         element: element,
       );
     }
 
     if (!positional.first.isRequiredPositional) {
       throw InvalidGenerationSourceError(
-        'Параметр-запрос метода ${element.name} должен быть обязательным позиционным',
+        'Request parameter of ${element.name} must be a required positional parameter',
         element: positional.first,
       );
     }
@@ -660,7 +640,7 @@ class _SignatureParser {
     final forbiddenNamed = named.where((p) => p.name != 'context').toList();
     if (forbiddenNamed.isNotEmpty) {
       throw InvalidGenerationSourceError(
-        'Метод ${element.name} поддерживает только именованный параметр context',
+        'Method ${element.name} only supports the named parameter "context"',
         element: forbiddenNamed.first,
       );
     }
@@ -673,12 +653,12 @@ class _SignatureParser {
   ) {
     if (request == null) {
       throw InvalidGenerationSourceError(
-        'Unary метод ${element.name} должен принимать запрос',
+        'Unary method ${element.name} must accept a request parameter',
         element: element,
       );
     }
 
-    final requestType = _expectNonStream(request.type, 'Unary запрос');
+    final requestType = _expectNonStream(request.type, 'Unary request');
     _assertSerializable(requestType, request, effectiveMode);
 
     final responseType = _extractFutureGeneric(returnType);
@@ -701,11 +681,11 @@ class _SignatureParser {
   ) {
     if (request == null) {
       throw InvalidGenerationSourceError(
-        'Server stream ${element.name} должен принимать запрос',
+        'Server stream method ${element.name} must accept a request parameter',
         element: element,
       );
     }
-    final requestType = _expectNonStream(request.type, 'ServerStream запрос');
+    final requestType = _expectNonStream(request.type, 'ServerStream request');
     _assertSerializable(requestType, request, effectiveMode);
 
     final responseType = _extractStreamGeneric(returnType);
@@ -726,7 +706,7 @@ class _SignatureParser {
     FormalParameterElement? context,
     DartType returnType,
   ) {
-    final streamType = _expectStream(request?.type, 'ClientStream запрос');
+    final streamType = _expectStream(request?.type, 'ClientStream request');
     final innerRequest = streamType.typeArguments.first;
     _assertSerializable(innerRequest, request, effectiveMode);
 
@@ -749,11 +729,11 @@ class _SignatureParser {
     FormalParameterElement? context,
     DartType returnType,
   ) {
-    final streamType = _expectStream(request?.type, 'Bidirectional запрос');
+    final streamType = _expectStream(request?.type, 'Bidirectional request');
     final innerRequest = streamType.typeArguments.first;
     _assertSerializable(innerRequest, request, effectiveMode);
 
-    final responseStream = _expectStream(returnType, 'Bidirectional ответ');
+    final responseStream = _expectStream(returnType, 'Bidirectional response');
     final innerResponse = responseStream.typeArguments.first;
     _assertSerializable(innerResponse, element, effectiveMode);
 
@@ -772,7 +752,7 @@ class _SignatureParser {
   DartType _expectNonStream(DartType type, String context) {
     if (_isStream(type)) {
       throw InvalidGenerationSourceError(
-        '$context не может быть Stream',
+        '$context must not be a Stream',
         element: element,
       );
     }
@@ -784,7 +764,7 @@ class _SignatureParser {
       return type;
     }
     throw InvalidGenerationSourceError(
-      '$context должен быть Stream<T>',
+      '$context must be Stream<T>',
       element: element,
     );
   }
@@ -794,7 +774,7 @@ class _SignatureParser {
       return type;
     }
     throw InvalidGenerationSourceError(
-      '$context должен возвращать Future<T>',
+      '$context must return Future<T>',
       element: element,
     );
   }
@@ -803,12 +783,12 @@ class _SignatureParser {
     if (type is InterfaceType && type.isDartAsyncFutureOr) {
       return type.typeArguments.first;
     }
-    final future = _expectFuture(type, 'Возврат');
+    final future = _expectFuture(type, 'Return type');
     return future.typeArguments.first;
   }
 
   DartType _extractStreamGeneric(DartType type) {
-    final stream = _expectStream(type, 'Возврат');
+    final stream = _expectStream(type, 'Return type');
     return stream.typeArguments.first;
   }
 
@@ -829,15 +809,14 @@ class _SignatureParser {
       return;
     }
     throw InvalidGenerationSourceError(
-      'Тип ${type.getDisplayString()} '
-      'не реализует IRpcSerializable',
+      'Type ${type.getDisplayString()} '
+      'does not implement IRpcSerializable',
       element: errorTarget ?? element,
     );
   }
 
   bool _isStream(DartType type) {
-    return type.isDartAsyncStream ||
-        (type is InterfaceType && type.element.name == 'Stream');
+    return type.isDartAsyncStream;
   }
 }
 
@@ -988,7 +967,7 @@ class _Signature {
     if (meta.requestCodecType != null || meta.responseCodecType != null) {
       return true;
     }
-    // transferMode auto/codec → подставляем дефолтный RpcCodec
+    // transferMode auto/codec — use default RpcCodec
     return true;
   }
 
@@ -1001,7 +980,7 @@ class _Signature {
   }) {
     final label = isResponse ? 'responseCodec' : 'requestCodec';
     if (!useDefault) return '';
-    return '$label: ${baseName}Codecs.codec$targetType, ';
+    return '$label: ${baseName}Codecs.codec${_sanitizeTypeName(targetType)}, ';
   }
 
   String _codecArg({
@@ -1012,7 +991,7 @@ class _Signature {
     required bool useCodec,
   }) {
     if (!useCodec) return '';
-    return '$label: ${baseName}Codecs.codec$targetType, ';
+    return '$label: ${baseName}Codecs.codec${_sanitizeTypeName(targetType)}, ';
   }
 
   String _escape(String value) => value.replaceAll("'", "\\'");
@@ -1080,6 +1059,34 @@ class _RemovedMethodInfo {
 
   final MethodElement element;
   final String message;
+}
+
+/// Escapes single quotes in a string for use in Dart string literals.
+String _escapeString(String value) => value.replaceAll("'", "\\'");
+
+/// Strips leading `I` from interface names (e.g. `ICalculator` -> `Calculator`).
+String _baseNameForClass(ClassElement element) {
+  final name = element.displayName;
+  if (name.length > 1 &&
+      name.startsWith('I') &&
+      RegExp(r'[A-Z]').hasMatch(name[1])) {
+    return name.substring(1);
+  }
+  return name;
+}
+
+/// Sanitizes a Dart type name into a valid identifier fragment.
+///
+/// Strips generic brackets, nullable markers, and special characters.
+/// Example: `Map<String, dynamic>?` -> `MapStringDynamic`.
+String _sanitizeTypeName(String typeName) {
+  return typeName
+      .replaceAll('?', '')
+      .replaceAll('<', '_')
+      .replaceAll('>', '')
+      .replaceAll(', ', '_')
+      .replaceAll(',', '_')
+      .replaceAll(' ', '');
 }
 
 extension<E> on Iterable<E> {

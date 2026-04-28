@@ -36,7 +36,6 @@ class RpcOtelMetrics {
   }
 
   void recordError(RpcMiddlewareContext call, Duration duration) {
-    _callsTotal.add(1, attributes: _attributes(call));
     _errorsTotal.add(1, attributes: _attributes(call));
   }
 

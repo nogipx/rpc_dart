@@ -57,11 +57,11 @@ final class RpcTransportMessage {
     this.isEndOfStream = false,
     this.methodPath,
     required this.streamId,
-  }) : assert(
-          (payload != null) ^ (directPayload != null) ||
-              (payload == null && directPayload == null),
-          'Specify either payload or directPayload, not both',
-        );
+  }) {
+    if (payload != null && directPayload != null) {
+      throw ArgumentError('Specify either payload or directPayload, not both');
+    }
+  }
 
   /// Factory for serialized-payload message (standard mode).
   factory RpcTransportMessage.withPayload({

@@ -18,30 +18,20 @@ import 'rpc_server_module.dart';
 
 /// The framework entry point.
 ///
-/// Use [RpcApp.server] for applications that expose RPC services, or
-/// [RpcApp.client] for applications that only make outgoing RPC calls.
+/// Use [RpcApp.server] for applications that expose RPC services.
+/// For outgoing RPC connections, use [RpcClientConnection] inside a plain
+/// [RpcModule] with [RpcModule.onStart]/[RpcModule.onStop].
 ///
-/// Each variant enforces strict module types at startup:
-/// - [RpcApp.server] rejects [RpcClientModule]s — use a plain [RpcModule]
-///   with [RpcModule.onStart]/[RpcModule.onStop] to manage outgoing connections.
-/// - [RpcApp.client] rejects [RpcServerModule]s.
-///
-/// Both variants accept plain [RpcModule] for shared infrastructure
+/// Plain [RpcModule]s are accepted for shared infrastructure
 /// (database pools, caches, background workers, etc.).
 ///
 /// ```dart
-/// // Server
 /// await RpcApp.server(
 ///   modules: [DatabaseModule(), UserModule(), OrderModule()],
 ///   server: (onEndpoint) => RpcHttp2Server(
 ///     host: '0.0.0.0', port: 50051, onEndpointCreated: onEndpoint,
 ///   ),
 ///   config: RpcAppConfig(onError: (e, st, svc, method) => logger.error(e)),
-/// ).run();
-///
-/// // Client (worker, CLI, background job)
-/// await RpcApp.client(
-///   modules: [PaymentClientModule(), NotificationClientModule()],
 /// ).run();
 /// ```
 class RpcApp {
@@ -135,16 +125,22 @@ class RpcApp {
       module.configureWithEnv(_container, _env);
     }
 
-    await _startServer();
+    try {
+      await _startServer();
 
-    for (final module in _modules) {
-      _log?.debug('onStart: ${module.name}');
-      await module.onStart(_container);
-    }
+      for (final module in _modules) {
+        _log?.debug('onStart: ${module.name}');
+        await module.onStart(_container);
+      }
 
-    if (_afterModulesStartHook != null) {
-      _log?.debug('afterModulesStart');
-      await _afterModulesStartHook(_container);
+      if (_afterModulesStartHook != null) {
+        _log?.debug('afterModulesStart');
+        await _afterModulesStartHook(_container);
+      }
+    } catch (e, st) {
+      _log?.error('RpcApp failed to start', error: e, stackTrace: st);
+      _started = false;
+      rethrow;
     }
 
     _log?.info('RpcApp started');
@@ -154,6 +150,9 @@ class RpcApp {
     if (!_started) return;
 
     _log?.info('RpcApp stopping');
+
+    // Drain in-flight streams first so handlers can still use module resources.
+    await _drainEndpoints();
 
     for (final module in _modules.reversed) {
       _log?.debug('onStop: ${module.name}');
@@ -170,7 +169,6 @@ class RpcApp {
       }
     }
 
-    await _drainEndpoints();
     _log?.info('Stopping transport server');
     await _server?.stop();
     for (final module in _modules.reversed) {
@@ -180,6 +178,7 @@ class RpcApp {
       }
     }
 
+    _started = false;
     _log?.info('RpcApp stopped');
     if (!_stopCompleter.isCompleted) _stopCompleter.complete();
   }

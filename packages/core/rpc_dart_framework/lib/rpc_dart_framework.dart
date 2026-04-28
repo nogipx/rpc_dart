@@ -9,12 +9,11 @@
 /// - [RpcEnvConfig]      — typed, parsed access to environment variables.
 /// - [RpcModule]         — shared lifecycle base: configure DI, start/stop/health.
 /// - [RpcServerModule]   — server-side module: buildContracts per connection.
-/// - [RpcClientModule]   — client-side module: createTransport + registerCallerContracts.
 /// - [RpcIsolateModule]  — server module variant that runs handlers in a dedicated isolate.
 /// - [RpcApp]            — application container with signal handling, graceful drain,
 ///                         topological module ordering, health aggregation,
 ///                         and auto-wired error/metrics interceptors.
-///                         Use [RpcApp.server] or [RpcApp.client].
+///                         Use [RpcApp.server].
 /// - [RpcTestApp]        — in-memory test harness (no network required).
 /// - [RpcRateLimiter]    — rate-limiting interceptor (global / per-service / per-method).
 /// - [RateLimit]         — rate-limit algorithm: [RateLimit.slidingWindow] or [RateLimit.tokenBucket].

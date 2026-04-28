@@ -178,7 +178,9 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     stopwatch.stop();
     if (!error) {
       span.setStatus(StatusCode.ok);
-      _metrics?.recordCall(call, stopwatch.elapsed);
+      try {
+        _metrics?.recordCall(call, stopwatch.elapsed);
+      } catch (_) {}
     }
     span.end();
   }
@@ -194,7 +196,9 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     span
       ..recordException(error, stackTrace: stackTrace)
       ..setStatus(StatusCode.error, error.toString());
-    _metrics?.recordError(call, stopwatch.elapsed);
+    try {
+      _metrics?.recordError(call, stopwatch.elapsed);
+    } catch (_) {}
     span.end();
   }
 
