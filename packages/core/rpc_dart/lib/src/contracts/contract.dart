@@ -133,9 +133,9 @@ abstract class RpcResponderContract implements IRpcContract {
         IRpcSerializable request, {
         RpcContext? context,
       }) async {
-        final typedRequest = request as TRequest;
+        final typedRequest = _OpaqueValue.unwrap<TRequest>(request);
         final response = await handler(typedRequest, context: context);
-        return response as IRpcSerializable;
+        return _OpaqueValue.wrap(response);
       }
 
       _methods[methodName] =
@@ -144,8 +144,8 @@ abstract class RpcResponderContract implements IRpcContract {
         type: RpcMethodType.unaryRequest,
         handler: wrappedHandler,
         description: description,
-        requestCodec: effectiveRequestCodec as IRpcCodec<IRpcSerializable>,
-        responseCodec: effectiveResponseCodec as IRpcCodec<IRpcSerializable>,
+        requestCodec: _OpaqueCodec(effectiveRequestCodec!),
+        responseCodec: _OpaqueCodec(effectiveResponseCodec!),
       );
     }
   }
@@ -189,10 +189,10 @@ abstract class RpcResponderContract implements IRpcContract {
         IRpcSerializable request, {
         RpcContext? context,
       }) async* {
-        final typedRequest = request as TRequest;
+        final typedRequest = _OpaqueValue.unwrap<TRequest>(request);
         final responseStream = handler(typedRequest, context: context);
         await for (final response in responseStream) {
-          yield response as IRpcSerializable;
+          yield _OpaqueValue.wrap(response);
         }
       }
 
@@ -202,8 +202,8 @@ abstract class RpcResponderContract implements IRpcContract {
         type: RpcMethodType.serverStream,
         handler: wrappedHandler,
         description: description,
-        requestCodec: effectiveRequestCodec as IRpcCodec<IRpcSerializable>,
-        responseCodec: effectiveResponseCodec as IRpcCodec<IRpcSerializable>,
+        requestCodec: _OpaqueCodec(effectiveRequestCodec!),
+        responseCodec: _OpaqueCodec(effectiveResponseCodec!),
       );
     }
   }
@@ -254,9 +254,10 @@ abstract class RpcResponderContract implements IRpcContract {
         Stream<IRpcSerializable> requests, {
         RpcContext? context,
       }) async {
-        final typedRequestStream = requests.cast<TRequest>();
+        final typedRequestStream = requests
+            .map<TRequest>((r) => _OpaqueValue.unwrap<TRequest>(r));
         final response = await handler(typedRequestStream, context: context);
-        return response as IRpcSerializable;
+        return _OpaqueValue.wrap(response);
       }
 
       _methods[methodName] =
@@ -265,8 +266,8 @@ abstract class RpcResponderContract implements IRpcContract {
         type: RpcMethodType.clientStream,
         handler: wrappedHandler,
         description: description,
-        requestCodec: effectiveRequestCodec as IRpcCodec<IRpcSerializable>,
-        responseCodec: effectiveResponseCodec as IRpcCodec<IRpcSerializable>,
+        requestCodec: _OpaqueCodec(effectiveRequestCodec!),
+        responseCodec: _OpaqueCodec(effectiveResponseCodec!),
       );
     }
   }
@@ -319,10 +320,11 @@ abstract class RpcResponderContract implements IRpcContract {
         Stream<IRpcSerializable> requests, {
         RpcContext? context,
       }) async* {
-        final typedRequestStream = requests.cast<TRequest>();
+        final typedRequestStream = requests
+            .map<TRequest>((r) => _OpaqueValue.unwrap<TRequest>(r));
         final responseStream = handler(typedRequestStream, context: context);
         await for (final response in responseStream) {
-          yield response as IRpcSerializable;
+          yield _OpaqueValue.wrap(response);
         }
       }
 
@@ -332,8 +334,8 @@ abstract class RpcResponderContract implements IRpcContract {
         type: RpcMethodType.bidirectionalStream,
         handler: wrappedHandler,
         description: description,
-        requestCodec: effectiveRequestCodec as IRpcCodec<IRpcSerializable>,
-        responseCodec: effectiveResponseCodec as IRpcCodec<IRpcSerializable>,
+        requestCodec: _OpaqueCodec(effectiveRequestCodec!),
+        responseCodec: _OpaqueCodec(effectiveResponseCodec!),
       );
     }
   }
@@ -583,5 +585,65 @@ abstract class RpcCallerContract implements IRpcContract {
       requests: requests,
       context: context,
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers: bridge non-IRpcSerializable types into the codec path.
+// ---------------------------------------------------------------------------
+
+/// Opaque wrapper that makes any value satisfy [IRpcSerializable].
+///
+/// Used internally by [RpcResponderContract] when the registered types do not
+/// implement [IRpcSerializable] (e.g. protobuf-generated classes).
+/// The wrapper is transparent to the codec layer — [_OpaqueCodec] unwraps it
+/// before serialising and wraps the result after deserialising.
+final class _OpaqueValue implements IRpcSerializable {
+  final Object _value;
+
+  const _OpaqueValue(this._value);
+
+  /// Wraps [value] in [_OpaqueValue] if it is not already [IRpcSerializable].
+  static IRpcSerializable wrap(Object value) {
+    if (value is IRpcSerializable) return value;
+    return _OpaqueValue(value);
+  }
+
+  /// Unwraps an [IRpcSerializable] that may be an [_OpaqueValue].
+  static T unwrap<T extends Object>(IRpcSerializable value) {
+    if (value is _OpaqueValue) return value._value as T;
+    return value as T;
+  }
+
+  @override
+  Map<String, dynamic> toJson() => const {};
+}
+
+/// Codec adapter that bridges [IRpcCodec<T>] to [IRpcCodec<IRpcSerializable>].
+///
+/// Serialisation: unwraps an [_OpaqueValue] (or casts directly if the value
+/// already is a [T]) and delegates to the inner codec.
+/// Deserialisation: delegates to the inner codec and wraps the result in
+/// [_OpaqueValue] so that the framework can treat it as [IRpcSerializable].
+final class _OpaqueCodec<T extends Object>
+    implements IRpcCodec<IRpcSerializable> {
+  final IRpcCodec<T> _inner;
+
+  const _OpaqueCodec(this._inner);
+
+  @override
+  Uint8List serialize(IRpcSerializable message) {
+    final T actual;
+    if (message is _OpaqueValue) {
+      actual = message._value as T;
+    } else {
+      actual = message as T;
+    }
+    return _inner.serialize(actual);
+  }
+
+  @override
+  IRpcSerializable deserialize(Uint8List bytes) {
+    return _OpaqueValue(_inner.deserialize(bytes));
   }
 }

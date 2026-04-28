@@ -123,7 +123,12 @@ final class ClientStreamResponder<TRequest extends Object,
         stackTrace: stackTrace,
       );
       try {
-        await _processor.sendError(RpcStatus.internal, error.toString());
+        final errorStatus = error is RpcStatusException
+            ? error.statusCode
+            : RpcStatus.internal;
+        final errorMsg =
+            error is RpcStatusException ? error.message : error.toString();
+        await _processor.sendError(errorStatus, errorMsg);
       } finally {
         _completeDone();
       }

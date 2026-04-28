@@ -376,13 +376,16 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // On error, send trailer with status.
+      // RpcStatusException carries a specific gRPC status code; all other
+      // exceptions map to INTERNAL.
       _logger?.internal('Sending error trailer [streamId: $streamId]');
+      final errorStatus =
+          e is RpcStatusException ? e.statusCode : RpcStatus.internal;
+      final errorMessage =
+          e is RpcStatusException ? e.message : 'Request processing error: $e';
       await _transport.sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(
-          RpcStatus.internal,
-          message: 'Request processing error: $e',
-        ),
+        RpcMetadata.forTrailer(errorStatus, message: errorMessage),
         endStream: true,
       );
     } finally {
@@ -500,9 +503,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // On error, send error trailer.
+      final errorStatus2 =
+          e is RpcStatusException ? e.statusCode : RpcStatus.internal;
+      final errorMessage2 = e is RpcStatusException ? e.message : e.toString();
       await _transport.sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(RpcStatus.internal, message: e.toString()),
+        RpcMetadata.forTrailer(errorStatus2, message: errorMessage2),
         endStream: true,
       );
     } finally {

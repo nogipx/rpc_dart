@@ -50,7 +50,7 @@ RpcChannelTransport      — wraps IRpcMultiplexedChannel into IRpcTransport
 
 ---
 
-## Phase 2 — Full gRPC wire compatibility [IN PROGRESS]
+## Phase 2 — Full gRPC wire compatibility [DONE]
 
 **Goal:** Any standard gRPC client (grpcurl, Postman, Go, Python, etc.) can talk to rpc_dart server over HTTP/2. And rpc_dart client can talk to any gRPC server.
 
@@ -79,10 +79,12 @@ Wire format on HTTP/2 transport must exactly match the gRPC spec:
 - [x] Wire-level compliance test suite (19 tests)
 - [x] grpc-status-details-bin (structured error details via protobuf Any or equivalent)
 - [x] gRPC Health Checking Protocol (grpc.health.v1)
+- [x] `RpcStatusException` — handlers can return specific gRPC status codes
+- [x] `RpcBinaryCodec<T>` — protobuf and other non-IRpcSerializable types work in contracts
+- [x] Validated with reference Go gRPC client/server — all 4 call types + error propagation pass (`packages/compat/rpc_dart_grpc_compat`)
 
-**Remaining:**
-- [ ] Validate with `grpcurl` and a reference Go/Python gRPC client
-- [ ] gRPC Server Reflection (optional, for tooling)
+**Not planned:**
+- gRPC Server Reflection (optional, for tooling)
 
 ---
 
@@ -122,7 +124,8 @@ to replace manual subscription management.
 ## Summary
 
 ```
-Phase 1 (transport)  [DONE] ──> Phase 2 (gRPC) [IN PROGRESS]
+Phase 1 (transport)  [DONE]
+Phase 2 (gRPC compat)[DONE]
 Phase 3 (call scope) [DONE]
-Phase 4 (resilience)  [DONE]
+Phase 4 (resilience) [DONE]
 ```
