@@ -609,12 +609,17 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
             _context!.cancellationToken!.reason ?? 'Operation was cancelled';
         final cancelledException = RpcCancelledException(reason);
 
-        if (!_requestController.isClosed) {
-          _requestController.addError(cancelledException);
-        }
-        if (!_responseController.isClosed) {
-          _responseController.addError(cancelledException);
-        }
+        try {
+          if (!_requestController.isClosed && _requestController.hasListener) {
+            _requestController.addError(cancelledException);
+          }
+        } catch (_) {}
+        try {
+          if (!_responseController.isClosed &&
+              _responseController.hasListener) {
+            _responseController.addError(cancelledException);
+          }
+        } catch (_) {}
       },
       onError: (error, stackTrace) {
         _logger?.error(
@@ -766,87 +771,96 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Configures outgoing request handling.
   void _setupRequestHandler() {
+    // Track the last pending send so onDone waits for it before finishing.
+    Future<void> pendingSend = Future<void>.value();
+
     _scope.listen<TRequest>(
       _requestController.stream,
       (request) async {
         if (!_isActive) return;
 
-        try {
-          // Send initial metadata with the first request.
-          if (!_initialMetadataSent) {
-            await _sendInitialMetadata();
-            _initialMetadataSent = true;
-          }
+        final future = () async {
+          try {
+            // Send initial metadata with the first request.
+            if (!_initialMetadataSent) {
+              await _sendInitialMetadata();
+              _initialMetadataSent = true;
+            }
 
-          _logger?.internal(
-            'Sending request for $_methodPath [streamId: $_streamId]',
-          );
-
-          if (_isZeroCopy) {
-            // Zero-copy path.
             _logger?.internal(
-              'Zero-copy request send [streamId: $_streamId]',
-            );
-            await _transport.sendDirectObject(_streamId, request);
-            _logger?.internal(
-              'Zero-copy request sent for $_methodPath [streamId: $_streamId]',
-            );
-          } else {
-            // Serialization for network transports.
-            final serialized = _requestCodec!.serialize(request);
-            _logger?.internal(
-              'Request serialized (${serialized.length} bytes) [streamId: $_streamId]',
+              'Sending request for $_methodPath [streamId: $_streamId]',
             );
 
-            final requestEncoding =
-                _context?.getHeader(RpcHeaders.grpcEncoding);
-            if (requestEncoding != null &&
-                requestEncoding != RpcGrpcCompression.identity &&
-                !RpcGrpcCompression.isSupported(requestEncoding)) {
-              throw RpcException(
-                'Unsupported grpc-encoding: $requestEncoding. '
-                'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}',
+            if (_isZeroCopy) {
+              // Zero-copy path.
+              _logger?.internal(
+                'Zero-copy request send [streamId: $_streamId]',
+              );
+              await _transport.sendDirectObject(_streamId, request);
+              _logger?.internal(
+                'Zero-copy request sent for $_methodPath [streamId: $_streamId]',
+              );
+            } else {
+              // Serialization for network transports.
+              final serialized = _requestCodec!.serialize(request);
+              _logger?.internal(
+                'Request serialized (${serialized.length} bytes) [streamId: $_streamId]',
+              );
+
+              final requestEncoding =
+                  _context?.getHeader(RpcHeaders.grpcEncoding);
+              if (requestEncoding != null &&
+                  requestEncoding != RpcGrpcCompression.identity &&
+                  !RpcGrpcCompression.isSupported(requestEncoding)) {
+                throw RpcException(
+                  'Unsupported grpc-encoding: $requestEncoding. '
+                  'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}',
+                );
+              }
+              final useCompression = requestEncoding != null &&
+                  requestEncoding != RpcGrpcCompression.identity;
+              final payload = useCompression
+                  ? RpcGrpcCompression.compress(
+                      serialized,
+                      encoding: requestEncoding,
+                    )
+                  : serialized;
+
+              final framedMessage = RpcMessageFrame.encode(
+                payload,
+                compressed: useCompression,
+              );
+              await _transport.sendMessage(_streamId, framedMessage);
+
+              _logger?.internal(
+                'Request sent for $_methodPath [streamId: $_streamId]',
               );
             }
-            final useCompression = requestEncoding != null &&
-                requestEncoding != RpcGrpcCompression.identity;
-            final payload = useCompression
-                ? RpcGrpcCompression.compress(
-                    serialized,
-                    encoding: requestEncoding,
-                  )
-                : serialized;
-
-            final framedMessage = RpcMessageFrame.encode(
-              payload,
-              compressed: useCompression,
+          } catch (e, stackTrace) {
+            _logger?.error(
+              'Failed to send request [streamId: $_streamId]',
+              error: e,
+              stackTrace: stackTrace,
             );
-            await _transport.sendMessage(_streamId, framedMessage);
+            if (!_responseController.isClosed) {
+              _responseController.addError(e, stackTrace);
+            }
 
-            _logger?.internal(
-              'Request sent for $_methodPath [streamId: $_streamId]',
-            );
+            // Critical: on routing error stop immediately to prevent further sends.
+            if (!_requestController.isClosed) {
+              _requestController.close();
+            }
           }
-        } catch (e, stackTrace) {
-          _logger?.error(
-            'Failed to send request [streamId: $_streamId]',
-            error: e,
-            stackTrace: stackTrace,
-          );
-          if (!_responseController.isClosed) {
-            _responseController.addError(e, stackTrace);
-          }
-
-          // Critical: on routing error stop immediately to prevent further sends.
-          if (!_requestController.isClosed) {
-            _requestController.close();
-          }
-        }
+        }();
+        pendingSend = future;
+        await future;
       },
       onDone: () async {
         if (!_isActive) return;
 
         try {
+          // Wait for any pending request send to complete before finishing.
+          await pendingSend;
           await _transport.finishSending(_streamId);
           _logger?.internal(
             'finishSending completed for $_methodPath [streamId: $_streamId]',
@@ -980,12 +994,17 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           _context!.cancellationToken!.reason ?? 'Operation was cancelled',
         );
 
-        if (!_requestController.isClosed) {
-          _requestController.addError(cancelledException);
-        }
-        if (!_responseController.isClosed) {
-          _responseController.addError(cancelledException);
-        }
+        try {
+          if (!_requestController.isClosed && _requestController.hasListener) {
+            _requestController.addError(cancelledException);
+          }
+        } catch (_) {}
+        try {
+          if (!_responseController.isClosed &&
+              _responseController.hasListener) {
+            _responseController.addError(cancelledException);
+          }
+        } catch (_) {}
       },
       onError: (error, stackTrace) {
         _logger?.error(

@@ -136,7 +136,7 @@ final class ServerStreamCaller<TRequest extends Object,
       _logger?.internal('Server stream completed');
     } catch (e) {
       _logger?.error('Server stream call failed', error: e);
-      rethrow;
+      if (e is! RpcCancelledException) rethrow;
     } finally {
       await close();
     }

@@ -5,6 +5,17 @@
 
 part of '_index.dart';
 
+/// Communication pattern for a service contract.
+enum RpcServiceKind {
+  /// One-directional: client calls server.
+  /// Generates [RpcCallerContract] + [RpcResponderContract].
+  unidirectional,
+
+  /// Bidirectional: either side can initiate calls to the other.
+  /// Generates [RpcPeerContract] only.
+  peer,
+}
+
 /// RPC method kinds supported by the generator.
 enum RpcMethodKind {
   /// Single request, single response.
@@ -25,18 +36,27 @@ class RpcService {
   /// Creates an [RpcService] annotation with the given [name].
   const RpcService({
     required this.name,
+    this.kind = RpcServiceKind.unidirectional,
     this.transferMode = RpcDataTransferMode.auto,
     this.description,
+    this.grpcDescriptor = false,
   });
 
   /// Contract/service name.
   final String name;
+
+  /// Communication pattern: unidirectional (Caller+Responder) or peer.
+  final RpcServiceKind kind;
 
   /// Default data transfer mode for the generated contracts.
   final RpcDataTransferMode transferMode;
 
   /// Optional docs that will be copied into generated code.
   final String? description;
+
+  /// Whether to generate a FileDescriptorProto binary for gRPC Server Reflection.
+  /// Disabled by default; enable only when gRPC reflection support is needed.
+  final bool grpcDescriptor;
 }
 
 /// Marks an inherited RPC method as removed in this contract version.

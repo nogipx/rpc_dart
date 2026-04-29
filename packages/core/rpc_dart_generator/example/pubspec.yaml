@@ -15,9 +15,11 @@ dependencies:
   json_annotation: ^4.10.0
   rpc_dart_grpc_reflection:
     path: ../../rpc_dart_grpc_reflection
-
-  rpc_dart_http2: any
+  rpc_dart_http2:
+    path: ../../../transport/rpc_dart_http2
 dependency_overrides:
+  rpc_dart_http2:
+    path: ../../../transport/rpc_dart_http2
   rpc_dart:
     path: ../../rpc_dart
   rpc_dart_grpc_reflection:

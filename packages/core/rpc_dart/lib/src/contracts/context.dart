@@ -358,11 +358,11 @@ abstract final class RpcContextUtils {
 
     return RpcContext.withHeaders(
       headers,
-    ).withTraceId(traceId ?? _generateTraceId());
+    ).withTraceId(traceId ?? generateTraceId());
   }
 
-  /// Генерирует новый trace ID
-  static String _generateTraceId() {
+  /// Generates a new trace ID.
+  static String generateTraceId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = (timestamp * 31 + 17) % 100000;
     return 'trace_${timestamp}_$random';
@@ -432,7 +432,7 @@ class RpcContextBuilder {
 
   /// Генерирует новый trace ID
   RpcContextBuilder withGeneratedTraceId() {
-    _context = _context.withTraceId(RpcContextUtils._generateTraceId());
+    _context = _context.withTraceId(RpcContextUtils.generateTraceId());
     return this;
   }
 

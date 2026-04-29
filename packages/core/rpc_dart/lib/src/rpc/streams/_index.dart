@@ -25,4 +25,7 @@ part 'unary/responder.dart';
 abstract interface class IRpcResponder {
   /// The transport-level stream ID for this responder.
   int get id;
+
+  /// Closes the responder and releases its resources.
+  Future<void> close();
 }

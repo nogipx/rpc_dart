@@ -1,0 +1,933 @@
+// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
+part of '_index.dart';
+
+/// Mixin providing the responder (incoming request handler) pipeline.
+///
+/// Manages method registration, incoming message routing, responder creation,
+/// and stream lifecycle. Concrete endpoints control which messages enter
+/// the pipeline via [startResponderListening]'s optional [messageFilter].
+base mixin RpcResponderPipelineMixin on RpcEndpointBase {
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
+
+  final RpcResponderMethodRegistry _respRegistry = RpcResponderMethodRegistry();
+  final RpcResponderStreamStore _respStreams = RpcResponderStreamStore();
+  late final RpcResponderPingHandler _respPingHandler;
+  StreamSubscription<RpcTransportMessage>? _respIncomingSub;
+  bool _respIsListening = false;
+
+  /// Whether the responder pipeline is currently listening.
+  bool get responderIsListening => _respIsListening;
+
+  /// Initializes responder state. Must be called from the endpoint constructor.
+  void initResponderPipeline() {
+    _respPingHandler = RpcResponderPingHandler(
+      transport: transport,
+      logger: logger,
+      debugLabel: debugLabel,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Contract registration
+  // ---------------------------------------------------------------------------
+
+  /// Registers [contract] so its methods can handle incoming requests.
+  void registerServiceContract(RpcResponderContract contract) {
+    _respRegistry.registerContract(contract, logger);
+  }
+
+  /// Removes the contract for [serviceName] and disposes its resources.
+  void unregisterServiceContract(String serviceName) {
+    _respRegistry.unregisterContract(serviceName, logger);
+  }
+
+  /// All contracts registered with this endpoint, keyed by service name.
+  Map<String, RpcResponderContract> get registeredContracts =>
+      _respRegistry.contracts;
+
+  /// All method bindings keyed by `serviceName.methodName`.
+  Map<String, RpcResponderMethodBinding> get registeredMethodBindings =>
+      _respRegistry.methods;
+
+  // ---------------------------------------------------------------------------
+  // Listening lifecycle
+  // ---------------------------------------------------------------------------
+
+  /// Starts listening to incoming messages.
+  ///
+  /// When [messageFilter] is provided, only messages for which it returns true
+  /// enter the responder pipeline. This is used by [RpcPeerEndpoint] to filter
+  /// by stream ID parity.
+  Future<void> startResponderListening({
+    bool Function(RpcTransportMessage)? messageFilter,
+  }) async {
+    if (_respIsListening) {
+      logger.warning('Already listening for incoming requests');
+      return;
+    }
+
+    final oldSub = _respIncomingSub;
+    _respIncomingSub = null;
+    await oldSub?.cancel();
+
+    _respIncomingSub = transport.incomingMessages.listen(
+      (message) {
+        if (messageFilter != null && !messageFilter(message)) return;
+        _processResponderMessage(message);
+      },
+      onError: (error, stackTrace) {
+        logger.error('Transport incoming error',
+            error: error, stackTrace: stackTrace);
+      },
+      onDone: () {
+        logger.internal('Transport incoming stream closed');
+      },
+    );
+
+    _respIsListening = true;
+  }
+
+  /// Stops listening and releases all responder resources.
+  Future<void> closeResponderResources() async {
+    await _respIncomingSub?.cancel();
+    _respIncomingSub = null;
+    _respIsListening = false;
+
+    final activeStreamIds =
+        _respStreams.values.map((s) => s.id).toList(growable: false);
+    for (final streamId in activeStreamIds) {
+      await _cleanupStream(streamId);
+    }
+
+    _respRegistry.disposeAll(logger);
+  }
+
+  /// Collects responder-specific metrics.
+  Map<String, Object?> collectResponderMetrics() {
+    return {
+      'registeredContracts': _respRegistry.contracts.length,
+      'registeredMethods': _respRegistry.methods.length,
+      'isListening': _respIsListening,
+      'openStreams': _respStreams.length,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Message processing pipeline
+  // ---------------------------------------------------------------------------
+
+  void _processResponderMessage(RpcTransportMessage message) {
+    if (!_respIsListening) {
+      logger.warning('Message received but endpoint is not started.');
+      return;
+    }
+
+    final state = _respStreams.obtain(message.streamId);
+
+    if (message.isMetadataOnly && message.metadata != null) {
+      final isCancelled =
+          message.metadata!.getHeaderValue('x-client-cancelled');
+      if (isCancelled == 'true') {
+        final reason =
+            message.metadata!.getHeaderValue('x-cancellation-reason') ??
+                'Cancelled by client';
+        unawaited(_handleClientCancellation(state, reason));
+        return;
+      }
+    }
+
+    if (message.isMetadataOnly && message.methodPath != null) {
+      _handleMetadataMessage(state, message);
+    }
+
+    final hasPayload = !message.isMetadataOnly &&
+        (message.payload != null ||
+            (message.isDirect && message.directPayload != null));
+
+    if (hasPayload) {
+      _handleDataMessage(state, message);
+    }
+
+    if (message.isEndOfStream) {
+      _handleEndOfStream(state);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Message handlers
+  // ---------------------------------------------------------------------------
+
+  void _handleMetadataMessage(
+    RpcResponderStreamState state,
+    RpcTransportMessage message,
+  ) {
+    final metadata = message.metadata;
+    if (metadata == null) {
+      unawaited(_sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.invalidArgument,
+        message: 'Missing metadata',
+      ));
+      return;
+    }
+
+    final contentType = metadata.getHeaderValue(RpcHeaders.contentType);
+    if (contentType != null &&
+        !contentType.toLowerCase().startsWith(RpcHeaders.contentTypeGrpc)) {
+      unawaited(_sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.invalidArgument,
+        message: 'Invalid content-type for gRPC',
+      ));
+      return;
+    }
+
+    final grpcEncoding = metadata.getHeaderValue(RpcHeaders.grpcEncoding);
+    if (grpcEncoding != null && !RpcGrpcCompression.isSupported(grpcEncoding)) {
+      unawaited(_sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.unimplemented,
+        message: 'Unsupported grpc-encoding: $grpcEncoding',
+      ));
+      return;
+    }
+
+    final methodPath = message.methodPath!;
+    final parsed = _parseMethodPath(methodPath);
+    if (parsed == null) {
+      unawaited(_sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.invalidArgument,
+        message: 'Invalid method path: $methodPath',
+      ));
+      return;
+    }
+
+    final serviceName = parsed.$1;
+    final methodName = parsed.$2;
+    final methodKey = '$serviceName.$methodName';
+
+    state.setMethodKey(methodKey);
+    state.storeMetadata(message);
+
+    final context = _cacheContext(state, message);
+
+    if (_isPingMethodKey(methodKey)) {
+      unawaited(_respPingHandler.respond(
+        streamId: state.id,
+        context: context,
+        onComplete: () => _cleanupStream(state.id),
+      ));
+      return;
+    }
+
+    final binding = _respRegistry.lookup(methodKey);
+    if (binding == null) {
+      unawaited(_sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.unimplemented,
+        message: 'Method $methodKey is not registered',
+        context: context,
+      ));
+      return;
+    }
+
+    logger.internal(
+        'Metadata received [method: $methodKey] [streamId: ${state.id}]');
+  }
+
+  void _handleDataMessage(
+    RpcResponderStreamState state,
+    RpcTransportMessage message,
+  ) {
+    if (!state.hasMethod && message.methodPath != null) {
+      final parsed = _parseMethodPath(message.methodPath!);
+      if (parsed == null) {
+        unawaited(_sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Invalid method path: ${message.methodPath}',
+        ));
+        return;
+      }
+      state.setMethodKey('${parsed.$1}.${parsed.$2}');
+      _cacheContext(state, message);
+    }
+
+    final methodKey = state.methodKey;
+    if (methodKey == null || _isPingMethodKey(methodKey)) return;
+
+    final binding = _respRegistry.lookup(methodKey);
+    if (binding == null) {
+      unawaited(_sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.unimplemented,
+        message: 'Method $methodKey is not registered',
+        context: _ensureResponderContext(state),
+      ));
+      return;
+    }
+
+    state.storePayload(
+      message,
+      bufferForClientStream: binding.type == RpcMethodType.clientStream,
+    );
+
+    if (binding.type != RpcMethodType.clientStream) {
+      unawaited(_ensureResponder(state, binding));
+    }
+  }
+
+  void _handleEndOfStream(RpcResponderStreamState state) {
+    final methodKey = state.methodKey;
+    if (methodKey == null) {
+      unawaited(_cleanupStream(state.id));
+      return;
+    }
+    if (_isPingMethodKey(methodKey)) return;
+
+    final binding = _respRegistry.lookup(methodKey);
+    if (binding == null) {
+      unawaited(_sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.unimplemented,
+        message: 'Method $methodKey is not registered',
+        context: state.cachedContext,
+      ));
+      return;
+    }
+
+    if (binding.type == RpcMethodType.clientStream) {
+      unawaited(_ensureResponder(state, binding));
+      return;
+    }
+
+    if (state.responder == null && state.lastPayloadMessage == null) {
+      unawaited(_sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.invalidArgument,
+        message: 'Request stream closed without payload for $methodKey',
+        context: state.cachedContext,
+      ));
+    }
+  }
+
+  Future<void> _handleClientCancellation(
+    RpcResponderStreamState state,
+    String reason,
+  ) async {
+    final responder = state.responder;
+    if (responder != null) await _closeResponder(responder);
+    await _cleanupStream(state.id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Responder creation
+  // ---------------------------------------------------------------------------
+
+  Future<void> _ensureResponder(
+    RpcResponderStreamState state,
+    RpcResponderMethodBinding binding,
+  ) async {
+    if (state.responder != null) return;
+
+    switch (binding.type) {
+      case RpcMethodType.unaryRequest:
+        await _ensureUnaryResponder(state, binding);
+      case RpcMethodType.clientStream:
+        await _ensureClientStreamResponder(state, binding);
+      case RpcMethodType.serverStream:
+        await _ensureServerStreamResponder(state, binding);
+      case RpcMethodType.bidirectionalStream:
+        await _ensureBidirectionalResponder(state, binding);
+    }
+  }
+
+  Future<void> _ensureUnaryResponder(
+    RpcResponderStreamState state,
+    RpcResponderMethodBinding binding,
+  ) async {
+    final context = _ensureResponderContext(state);
+    final contextLogger = _respContextLogger(context);
+    final streamId = state.id;
+    final methodKey = binding.methodKey;
+
+    if (binding.isZeroCopy) {
+      if (!transport.supportsZeroCopy) {
+        await _handleUnsupportedZeroCopy(state, context, methodKey);
+        return;
+      }
+
+      final processor = StreamProcessor<Object, Object>(
+        transport: transport,
+        streamId: streamId,
+        serviceName: binding.serviceName,
+        methodName: binding.methodName,
+        context: context,
+        logger: contextLogger,
+      );
+
+      final responder = _RpcZeroCopyUnaryResponder(
+        id: streamId,
+        processor: processor,
+      );
+      state.responder = responder;
+
+      var handled = false;
+      processor.requests.listen((request) async {
+        if (handled) return;
+        handled = true;
+        try {
+          final response = await handleUnary<Object, Object>(
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            request: request,
+            handler: (ctx, req) =>
+                binding.zeroCopyMethod.callUnaryHandler(ctx, req),
+          );
+          await processor.send(response);
+          await processor.finishSending();
+          await _cleanupStream(streamId);
+        } catch (error, stackTrace) {
+          contextLogger.error('Error in zero-copy unary handler',
+              error: error, stackTrace: stackTrace);
+          final errorMessage =
+              error is RpcException ? error.message : error.toString();
+          await processor.sendError(RpcStatus.internal, errorMessage);
+          await _cleanupStream(streamId);
+        }
+      });
+
+      responder.bindToMessageStream(
+        _stateBoundStream(state, streamId, consumePreBindBuffer: true),
+      );
+      return;
+    }
+
+    final method = binding.codecMethod;
+    final responder = UnaryResponder<IRpcSerializable, IRpcSerializable>(
+      id: streamId,
+      transport: transport,
+      serviceName: binding.serviceName,
+      methodName: binding.methodName,
+      requestCodec: method.requestCodec,
+      responseCodec: method.responseCodec,
+      handler: (request) async {
+        return handleUnary<IRpcSerializable, IRpcSerializable>(
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          context: context,
+          request: request,
+          handler: (ctx, req) async {
+            final response = await method.callUnaryHandler(ctx, req);
+            return method.castResponse(response);
+          },
+        );
+      },
+      context: context,
+      logger: contextLogger,
+    );
+
+    state.responder = responder;
+
+    final preBindMessages = state.takePreBindBufferedMessages();
+    final savedMessage = preBindMessages.isNotEmpty
+        ? preBindMessages.first
+        : state.takeLastPayload();
+    if (savedMessage != null) {
+      if (savedMessage.isDirect && savedMessage.directPayload != null) {
+        await responder.handleDirectMessage(savedMessage);
+      } else if (!savedMessage.isMetadataOnly && savedMessage.payload != null) {
+        await responder.handleMessage(savedMessage);
+      }
+    }
+
+    await _cleanupStream(streamId);
+  }
+
+  Future<void> _ensureClientStreamResponder(
+    RpcResponderStreamState state,
+    RpcResponderMethodBinding binding,
+  ) async {
+    final context = _ensureResponderContext(state);
+    final contextLogger = _respContextLogger(context);
+    final streamId = state.id;
+
+    if (binding.isZeroCopy) {
+      if (!transport.supportsZeroCopy) {
+        await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
+        return;
+      }
+
+      final responder = ClientStreamResponder<Object, Object>(
+        id: streamId,
+        transport: transport,
+        serviceName: binding.serviceName,
+        methodName: binding.methodName,
+        handler: (requests) {
+          return handleClientStream<Object, Object>(
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            requests: requests,
+            handler: (ctx, reqs) =>
+                binding.zeroCopyMethod.callClientStreamHandler(ctx, reqs),
+          );
+        },
+        context: context,
+        logger: contextLogger,
+      );
+
+      state.responder = responder;
+      unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+
+      final saved = state.takeClientBufferedMessages(markEndOfStream: true);
+      responder.bindToMessageStream(
+          _stateBoundStream(state, streamId, initialMessages: saved));
+      return;
+    }
+
+    final method = binding.codecMethod;
+    final responder = ClientStreamResponder<IRpcSerializable, IRpcSerializable>(
+      id: streamId,
+      transport: transport,
+      serviceName: binding.serviceName,
+      methodName: binding.methodName,
+      requestCodec: method.requestCodec,
+      responseCodec: method.responseCodec,
+      handler: (requests) async {
+        final response =
+            await handleClientStream<IRpcSerializable, IRpcSerializable>(
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          context: context,
+          requests: requests,
+          handler: (ctx, reqs) async {
+            final result = await method.callClientStreamHandler(
+                ctx, method.castRequestStream(reqs));
+            return method.castResponse(result);
+          },
+        );
+        return response;
+      },
+      context: context,
+      logger: contextLogger,
+    );
+
+    state.responder = responder;
+    unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+
+    final saved = state.takeClientBufferedMessages(markEndOfStream: true);
+    responder.bindToMessageStream(
+        _stateBoundStream(state, streamId, initialMessages: saved));
+  }
+
+  Future<void> _ensureServerStreamResponder(
+    RpcResponderStreamState state,
+    RpcResponderMethodBinding binding,
+  ) async {
+    final context = _ensureResponderContext(state);
+    final contextLogger = _respContextLogger(context);
+    final streamId = state.id;
+
+    if (binding.isZeroCopy) {
+      if (!transport.supportsZeroCopy) {
+        await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
+        return;
+      }
+
+      final responder = ServerStreamResponder<Object, Object>(
+        id: streamId,
+        transport: transport,
+        serviceName: binding.serviceName,
+        methodName: binding.methodName,
+        handler: (request) {
+          return handleServerStream<Object, Object>(
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            request: request,
+            handler: (ctx, req) =>
+                binding.zeroCopyMethod.callServerStreamHandler(ctx, req),
+          );
+        },
+        context: context,
+        logger: contextLogger,
+      );
+
+      state.responder = responder;
+      unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+      responder.bindToMessageStream(
+          _stateBoundStream(state, streamId, consumePreBindBuffer: true));
+      return;
+    }
+
+    final method = binding.codecMethod;
+    final responder = ServerStreamResponder<IRpcSerializable, IRpcSerializable>(
+      id: streamId,
+      transport: transport,
+      serviceName: binding.serviceName,
+      methodName: binding.methodName,
+      requestCodec: method.requestCodec,
+      responseCodec: method.responseCodec,
+      handler: (request) {
+        return handleServerStream<IRpcSerializable, IRpcSerializable>(
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          context: context,
+          request: request,
+          handler: (ctx, req) =>
+              method.callServerStreamHandler(ctx, req).map(method.castResponse),
+        );
+      },
+      context: context,
+      logger: contextLogger,
+    );
+
+    state.responder = responder;
+    unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+    responder.bindToMessageStream(
+        _stateBoundStream(state, streamId, consumePreBindBuffer: true));
+  }
+
+  Future<void> _ensureBidirectionalResponder(
+    RpcResponderStreamState state,
+    RpcResponderMethodBinding binding,
+  ) async {
+    final context = _ensureResponderContext(state);
+    final contextLogger = _respContextLogger(context);
+    final streamId = state.id;
+
+    if (binding.isZeroCopy) {
+      if (!transport.supportsZeroCopy) {
+        await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
+        return;
+      }
+
+      final responder = BidirectionalStreamResponder<Object, Object>(
+        id: streamId,
+        transport: transport,
+        serviceName: binding.serviceName,
+        methodName: binding.methodName,
+        context: context,
+        logger: contextLogger,
+      );
+
+      state.responder = responder;
+      unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+      responder.bindToMessageStream(
+          _stateBoundStream(state, streamId, consumePreBindBuffer: true));
+
+      unawaited(() async {
+        try {
+          final responseStream = handleBidirectionalStream<Object, Object>(
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            requests: responder.requests,
+            handler: (ctx, reqs) => binding.zeroCopyMethod
+                .callBidirectionalStreamHandler(ctx, reqs),
+          );
+          await for (final response in responseStream) {
+            await responder.send(response);
+          }
+          await responder.finishReceiving();
+        } catch (error, stackTrace) {
+          contextLogger.error('Error in zero-copy bidi handler',
+              error: error, stackTrace: stackTrace);
+          await responder.sendError(RpcStatus.internal, error.toString());
+        }
+      }());
+      return;
+    }
+
+    final method = binding.codecMethod;
+    final responder =
+        BidirectionalStreamResponder<IRpcSerializable, IRpcSerializable>(
+      id: streamId,
+      transport: transport,
+      serviceName: binding.serviceName,
+      methodName: binding.methodName,
+      requestCodec: method.requestCodec,
+      responseCodec: method.responseCodec,
+      context: context,
+      logger: contextLogger,
+    );
+
+    state.responder = responder;
+    unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+    responder.bindToMessageStream(
+        _stateBoundStream(state, streamId, consumePreBindBuffer: true));
+
+    unawaited(() async {
+      try {
+        final responseStream =
+            handleBidirectionalStream<IRpcSerializable, IRpcSerializable>(
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          context: context,
+          requests: responder.requests,
+          handler: (ctx, reqs) {
+            return method
+                .callBidirectionalStreamHandler(
+                    ctx, method.castRequestStream(reqs))
+                .map(method.castResponse);
+          },
+        );
+        await for (final response in responseStream) {
+          await responder.send(response);
+        }
+        await responder.finishReceiving();
+      } catch (error, stackTrace) {
+        contextLogger.error('Error in bidi handler',
+            error: error, stackTrace: stackTrace);
+        await responder.sendError(RpcStatus.internal, error.toString());
+      }
+    }());
+  }
+
+  // ---------------------------------------------------------------------------
+  // Error handling helpers
+  // ---------------------------------------------------------------------------
+
+  Future<void> _handleUnsupportedZeroCopy(
+    RpcResponderStreamState state,
+    RpcContext context,
+    String methodKey,
+  ) async {
+    try {
+      await transport.sendMetadata(
+        state.id,
+        RpcMetadata([
+          RpcHeader(RpcHeaders.grpcStatus, RpcStatus.unimplemented.toString()),
+          RpcHeader(
+            RpcHeaders.grpcMessage,
+            RpcMetadata.encodeGrpcMessage(
+                'Zero-copy method $methodKey requires zero-copy transport'),
+          ),
+        ]),
+        endStream: true,
+      );
+    } catch (error, stackTrace) {
+      logger.error('Failed to send zero-copy error for $methodKey',
+          rpcContext: context, error: error, stackTrace: stackTrace);
+    } finally {
+      await _cleanupStream(state.id);
+    }
+  }
+
+  Future<void> _sendGrpcErrorAndCleanup({
+    required int streamId,
+    required int status,
+    required String message,
+    RpcContext? context,
+  }) async {
+    try {
+      await transport.sendMetadata(
+        streamId,
+        RpcMetadata.forTrailer(status, message: message),
+        endStream: true,
+      );
+    } catch (error, stackTrace) {
+      logger.error('Failed to send gRPC error [$status] for streamId=$streamId',
+          rpcContext: context, error: error, stackTrace: stackTrace);
+    } finally {
+      await _cleanupStream(streamId);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Stream management
+  // ---------------------------------------------------------------------------
+
+  Future<void> _cleanupStream(int streamId) async {
+    final state = _respStreams.take(streamId);
+    if (state == null) return;
+
+    final responder = state.responder;
+    if (responder != null) await _closeResponder(responder);
+
+    try {
+      transport.releaseStreamId(streamId);
+    } catch (error) {
+      logger.warning('Error releasing stream ID $streamId: $error');
+    }
+  }
+
+  Future<void> _closeResponder(IRpcResponder responder) async {
+    try {
+      await responder.close();
+    } catch (error, stackTrace) {
+      logger.error('Error closing responder [id: ${responder.id}]',
+          error: error, stackTrace: stackTrace);
+    }
+  }
+
+  Stream<RpcTransportMessage> _stateBoundStream(
+    RpcResponderStreamState state,
+    int streamId, {
+    Iterable<RpcTransportMessage> initialMessages =
+        const <RpcTransportMessage>[],
+    bool consumePreBindBuffer = false,
+  }) {
+    final controller = StreamController<RpcTransportMessage>();
+    late final StreamSubscription<RpcTransportMessage> subscription;
+
+    subscription = transport.getMessagesForStream(streamId).listen(
+          controller.add,
+          onError: controller.addError,
+          onDone: () => unawaited(controller.close()),
+        );
+
+    subscription.pause();
+    state.markBoundToMessageStream();
+
+    final merged = <RpcTransportMessage>[
+      if (consumePreBindBuffer) ...state.takePreBindBufferedMessages(),
+      ...initialMessages,
+    ];
+    for (final message in merged) {
+      controller.add(message);
+    }
+
+    subscription.resume();
+    controller.onCancel = () async => subscription.cancel();
+
+    return controller.stream;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Context helpers
+  // ---------------------------------------------------------------------------
+
+  RpcContext _cacheContext(
+    RpcResponderStreamState state,
+    RpcTransportMessage message,
+  ) {
+    final context = _createContextFromMessage(message);
+    state.cacheContext(context);
+    return context;
+  }
+
+  RpcContext _ensureResponderContext(RpcResponderStreamState state) {
+    final cached = state.cachedContext;
+    if (cached != null) return cached;
+
+    final source = state.metadataMessage ??
+        state.lastPayloadMessage ??
+        RpcTransportMessage(
+          streamId: state.id,
+          methodPath: state.methodKey != null
+              ? _methodPathFromKey(state.methodKey!)
+              : '/UnknownService/UnknownMethod',
+        );
+
+    return _cacheContext(state, source);
+  }
+
+  RpcContext _createContextFromMessage(RpcTransportMessage message) {
+    final headers = <String, String>{};
+    if (message.metadata != null) {
+      for (final header in message.metadata!.headers) {
+        if (!header.name.startsWith(':') &&
+            header.name != 'content-type' &&
+            header.name != 'te') {
+          headers[header.name] = header.value;
+        }
+      }
+    }
+
+    var context = RpcContext.withHeaders(headers);
+
+    final timeoutHeader = context.getHeader(RpcHeaders.grpcTimeout);
+    if (timeoutHeader != null) {
+      final timeout = RpcMetadata.parseGrpcTimeout(timeoutHeader);
+      if (timeout != null) {
+        context = context.withDeadline(DateTime.now().add(timeout));
+      }
+    }
+
+    final clientTraceId = context.getHeader('x-trace-id');
+    if (clientTraceId != null) {
+      context = context.withTraceId(clientTraceId);
+    } else {
+      context = context.withTraceId(RpcContextUtils.generateTraceId());
+    }
+
+    return context;
+  }
+
+  RpcLogger _respContextLogger(RpcContext context) => RpcLogger(
+        logger.name,
+        colors: loggerColors,
+        label: debugLabel,
+        context: context,
+      );
+
+  // ---------------------------------------------------------------------------
+  // Utility
+  // ---------------------------------------------------------------------------
+
+  (String, String)? _parseMethodPath(String methodPath) {
+    if (methodPath.isEmpty || methodPath.length > 512) return null;
+    if (methodPath.contains('\r') || methodPath.contains('\n')) return null;
+
+    final parts = methodPath.split('/');
+    if (parts.length != 3 || parts[0].isNotEmpty) return null;
+    if (parts[1].isEmpty || parts[2].isEmpty) return null;
+
+    final tokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
+    if (!tokenPattern.hasMatch(parts[1]) || !tokenPattern.hasMatch(parts[2])) {
+      return null;
+    }
+
+    return (parts[1], parts[2]);
+  }
+
+  String _methodPathFromKey(String methodKey) {
+    final parts = methodKey.split('.');
+    if (parts.length != 2) return '/UnknownService/UnknownMethod';
+    return '/${parts[0]}/${parts[1]}';
+  }
+
+  bool _isPingMethodKey(String methodKey) =>
+      methodKey == RpcEndpointPingProtocol.methodKey;
+}
+
+// ---------------------------------------------------------------------------
+// Internal responder for zero-copy unary calls
+// ---------------------------------------------------------------------------
+
+final class _RpcZeroCopyUnaryResponder implements IRpcResponder {
+  _RpcZeroCopyUnaryResponder({
+    required this.id,
+    required this.processor,
+  });
+
+  @override
+  final int id;
+  final StreamProcessor<Object, Object> processor;
+
+  Stream<Object> get requests => processor.requests;
+
+  Future<void> send(Object response) => processor.send(response);
+
+  Future<void> finish() => processor.finishSending();
+
+  Future<void> sendError(int statusCode, String message) =>
+      processor.sendError(statusCode, message);
+
+  void bindToMessageStream(Stream<RpcTransportMessage> stream) {
+    processor.bindToMessageStream(stream);
+  }
+
+  @override
+  Future<void> close() => processor.close();
+}

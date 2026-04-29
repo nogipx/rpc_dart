@@ -253,6 +253,7 @@ class RpcClientConnection {
   RpcClientConnectionState _state = const RpcClientIdle();
   bool _isStopped = false;
   Completer<void>? _connectingGuard;
+  int _reconnectAttempts = 0;
 
   /// Observable connection state stream.
   Stream<RpcClientConnectionState> get state => _stateCtl.stream;
@@ -270,6 +271,7 @@ class RpcClientConnection {
   /// Starts the connection (or resumes after [disconnect]).
   void connect() {
     _isStopped = false;
+    _reconnectAttempts = 0;
     _connectWithBackoff();
   }
 
@@ -308,6 +310,7 @@ class RpcClientConnection {
       _emit(RpcClientDisconnected(reason: error));
       return;
     }
+    _reconnectAttempts++;
     _emit(const RpcClientOffline());
     _connectingGuard = null;
     _connectWithBackoff();
@@ -319,11 +322,9 @@ class RpcClientConnection {
     final guard = Completer<void>();
     _connectingGuard = guard;
 
-    var attempt = 0;
-
     while (!_isStopped) {
       // Check max attempts.
-      if (_maxAttempts != null && attempt >= _maxAttempts!) {
+      if (_maxAttempts != null && _reconnectAttempts >= _maxAttempts!) {
         _logger?.call(
           'error',
           'Max reconnect attempts ($_maxAttempts) exceeded',
@@ -336,12 +337,12 @@ class RpcClientConnection {
       }
 
       // Emit Connecting and wait for backoff delay (except first attempt).
-      _emit(RpcClientConnecting(attempt: attempt + 1));
-      if (attempt > 0) {
-        final delay = _backoff.delayFor(attempt - 1);
+      _emit(RpcClientConnecting(attempt: _reconnectAttempts + 1));
+      if (_reconnectAttempts > 0) {
+        final delay = _backoff.delayFor(_reconnectAttempts - 1);
         _logger?.call(
           'info',
-          'Reconnect attempt ${attempt + 1}, waiting ${delay.inMilliseconds}ms',
+          'Reconnect attempt ${_reconnectAttempts + 1}, waiting ${delay.inMilliseconds}ms',
         );
         await Future<void>.delayed(delay);
         if (_isStopped) break;
@@ -360,12 +361,13 @@ class RpcClientConnection {
           inner = await factoryFuture;
         }
         _proxy.attach(inner);
-        _logger?.call('info', 'Connected (attempt ${attempt + 1})');
+        _logger?.call('info', 'Connected (attempt ${_reconnectAttempts + 1})');
+        _reconnectAttempts = 0;
         _emit(const RpcClientOnline());
         guard.complete();
         return;
       } catch (e) {
-        _logger?.call('warning', 'Attempt ${attempt + 1} failed: $e');
+        _logger?.call('warning', 'Attempt ${_reconnectAttempts + 1} failed: $e');
         if (!_canReconnect(e)) {
           _logger?.call(
             'info',
@@ -375,7 +377,7 @@ class RpcClientConnection {
           guard.complete();
           return;
         }
-        attempt++;
+        _reconnectAttempts++;
       }
     }
 

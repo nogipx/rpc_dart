@@ -8,11 +8,14 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 
 part 'base_endpoint.dart';
+part 'responder_pipeline.dart';
+part 'caller_pipeline.dart';
+part 'responder_endpoint.dart';
 part 'caller_endpoint.dart';
+part 'peer_endpoint.dart';
 part 'diagnostics.dart';
 part 'middleware.dart';
 part 'ping.dart';
 part 'responder_registry.dart';
 part 'responder_streams.dart';
 part 'responder_ping_handler.dart';
-part 'responder_endpoint.dart';

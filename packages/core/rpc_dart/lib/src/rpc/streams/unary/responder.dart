@@ -529,6 +529,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   }
 
   /// Closes the responder; transport remains open.
+  @override
   Future<void> close() async {
     _logger?.internal('Closing unary server $_methodPath');
     await _subscription?.cancel();

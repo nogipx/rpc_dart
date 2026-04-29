@@ -37,6 +37,8 @@ class RpcStatusException extends RpcException {
   /// gRPC status code (see [RpcStatus] constants).
   final int statusCode;
 
+  /// An exception thrown from an RPC handler to return a specific gRPC status
+  /// code to the caller.
   RpcStatusException(this.statusCode, String message) : super(message);
 
   @override

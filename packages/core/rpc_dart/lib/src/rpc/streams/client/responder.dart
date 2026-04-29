@@ -135,6 +135,7 @@ final class ClientStreamResponder<TRequest extends Object,
   }
 
   /// Closes the stream and releases resources.
+  @override
   Future<void> close() async {
     await _processor.close();
     _completeDone();

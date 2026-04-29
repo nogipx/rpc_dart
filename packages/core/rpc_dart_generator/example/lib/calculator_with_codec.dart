@@ -16,6 +16,7 @@ part 'calculator_with_codec.g.dart';
 @RpcService(
   name: 'CalculatorSerialize',
   transferMode: RpcDataTransferMode.codec,
+  grpcDescriptor: true,
 )
 abstract class ICalculatorSerializeContract {
   @RpcMethod.unary(name: 'sum', description: 'Sum with default RpcCodec')

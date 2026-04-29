@@ -63,12 +63,80 @@ class Foo implements IRpcSerializable {
                 contains('methodName: CalcNames.sum'),
                 contains("addUnaryMethod<Foo, Foo>"),
                 contains("addServerStreamMethod<Foo, Foo>"),
+                // unidirectional → no Peer class
+                isNot(contains('abstract class CalcPeer')),
               ]),
             ),
           },
         );
       },
     );
+
+    test('generates custom method codec overrides', () async {
+      final packageConfig = await _loadPackageConfig();
+      final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+      await readerWriter.testing.loadIsolateSources();
+
+      const source = r'''
+import 'dart:async';
+
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_generator/rpc_dart_generator.dart';
+
+part 'custom_codec.g.dart';
+
+@RpcService(name: 'Render')
+abstract class IRender {
+  @RpcMethod(
+    name: 'patches',
+    kind: RpcMethodKind.serverStream,
+    responseCodec: CustomPatchCodec,
+  )
+  Stream<CustomPatch> patches(PodStreamRequest request);
+}
+
+class PodStreamRequest implements IRpcSerializable {
+  @override
+  Map<String, dynamic> toJson() => const {};
+
+  factory PodStreamRequest.fromJson(Map<String, dynamic> _) =>
+      PodStreamRequest();
+}
+
+class CustomPatch implements IRpcSerializable {
+  @override
+  Map<String, dynamic> toJson() => const {};
+}
+
+class CustomPatchCodec implements IRpcCodec<CustomPatch> {
+  const CustomPatchCodec();
+
+  @override
+  Uint8List serialize(CustomPatch message) => Uint8List(0);
+
+  @override
+  CustomPatch deserialize(Uint8List bytes) => CustomPatch();
+}
+''';
+
+      await testBuilder(
+        rpcDartBuilder(BuilderOptions({})),
+        {'rpc_dart_generator|lib/custom_codec.dart': source},
+        rootPackage: 'rpc_dart_generator',
+        packageConfig: packageConfig,
+        readerWriter: readerWriter,
+        outputs: {
+          'rpc_dart_generator|lib/custom_codec.rpc_dart.g.part': decodedMatches(
+            allOf([
+              contains('class RenderCodecs'),
+              contains('static const codecCustomPatch = CustomPatchCodec();'),
+              contains('responseCodec: RenderCodecs.codecCustomPatch'),
+              contains('requestCodec: RenderCodecs.codecPodStreamRequest'),
+            ]),
+          ),
+        },
+      );
+    });
 
     test('generates versioned contract with delegation', () async {
       final packageConfig = await _loadPackageConfig();
@@ -191,6 +259,214 @@ class Foo implements IRpcSerializable {
               contains('throw UnsupportedError('),
               contains('_parent.numbers('),
               isNot(contains('_parent.sum(')),
+            ]),
+          ),
+        },
+      );
+    });
+
+    test('generates peer class with onXxx handlers', () async {
+      final packageConfig = await _loadPackageConfig();
+      final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+      await readerWriter.testing.loadIsolateSources();
+      const source = r'''
+import 'dart:async';
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_generator/rpc_dart_generator.dart';
+part 'peer.g.dart';
+
+@RpcService(name: 'Chat', kind: RpcServiceKind.peer)
+abstract class IChat {
+  @RpcMethod(name: 'send')
+  Future<Msg> send(Msg request, {RpcContext? context});
+
+  @RpcMethod(name: 'events', kind: RpcMethodKind.serverStream)
+  Stream<Msg> events(Msg request);
+
+  @RpcMethod(name: 'bidi', kind: RpcMethodKind.bidirectionalStream)
+  Stream<Msg> bidi(Stream<Msg> requests);
+}
+
+class Msg implements IRpcSerializable {
+  @override
+  Map<String, dynamic> toJson() => {};
+}
+''';
+
+      await testBuilder(
+        rpcDartBuilder(BuilderOptions({})),
+        {'rpc_dart_generator|lib/peer.dart': source},
+        rootPackage: 'rpc_dart_generator',
+        packageConfig: packageConfig,
+        readerWriter: readerWriter,
+        outputs: {
+          'rpc_dart_generator|lib/peer.rpc_dart.g.part': decodedMatches(
+            allOf([
+              // Peer class is generated, no unidirectional Caller/Responder
+              contains('abstract class ChatPeer extends RpcPeerContract'),
+              contains('implements IChat'),
+              contains('RpcPeerEndpoint endpoint'),
+              isNot(contains('class ChatCaller ')),
+              isNot(contains('class ChatResponder')),
+              // PeerCaller is generated — concrete, caller-only, no onXxx
+              contains('class ChatPeerCaller extends RpcPeerContract'),
+              contains('void setup() {}'),
+              // setup() registers handlers with onXxx names
+              contains('handler: onSend'),
+              contains('handler: onEvents'),
+              contains('handler: onBidi'),
+              // Caller methods implement interface (outgoing calls)
+              contains('callUnary<Msg, Msg>'),
+              contains('callServerStream<Msg, Msg>'),
+              contains('callBidirectionalStream<Msg, Msg>'),
+              // Abstract handler declarations with on prefix
+              contains(
+                  'Future<Msg> onSend(Msg request, {RpcContext? context})'),
+              contains('Stream<Msg> onEvents(Msg request,'),
+              contains('Stream<Msg> onBidi(Stream<Msg> requests,'),
+            ]),
+          ),
+        },
+      );
+    });
+
+    test('generates PeerCaller without onXxx handlers', () async {
+      final packageConfig = await _loadPackageConfig();
+      final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+      await readerWriter.testing.loadIsolateSources();
+      const source = r'''
+import 'dart:async';
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_generator/rpc_dart_generator.dart';
+part 'peer_caller.g.dart';
+
+@RpcService(name: 'Notify', kind: RpcServiceKind.peer)
+abstract class INotify {
+  @RpcMethod(name: 'push')
+  Future<Ack> push(Evt request);
+
+  @RpcMethod(name: 'stream', kind: RpcMethodKind.serverStream)
+  Stream<Ack> stream(Evt request);
+}
+
+class Evt implements IRpcSerializable {
+  @override
+  Map<String, dynamic> toJson() => {};
+}
+
+class Ack implements IRpcSerializable {
+  @override
+  Map<String, dynamic> toJson() => {};
+}
+''';
+
+      await testBuilder(
+        rpcDartBuilder(BuilderOptions({})),
+        {'rpc_dart_generator|lib/peer_caller.dart': source},
+        rootPackage: 'rpc_dart_generator',
+        packageConfig: packageConfig,
+        readerWriter: readerWriter,
+        outputs: {
+          'rpc_dart_generator|lib/peer_caller.rpc_dart.g.part': decodedMatches(
+            allOf([
+              // NotifyPeer: abstract class with handlers
+              contains('abstract class NotifyPeer extends RpcPeerContract'),
+              contains(
+                  'Future<Ack> onPush(Evt request, {RpcContext? context})'),
+              contains(
+                  'Stream<Ack> onStream(Evt request, {RpcContext? context})'),
+              // NotifyPeerCaller: concrete, implements interface, empty setup, no abstract handlers
+              contains('class NotifyPeerCaller extends RpcPeerContract'),
+              contains('implements INotify'),
+              // empty setup() — differentiates from NotifyPeer whose setup() is non-empty
+              contains('void setup() {}'),
+              // caller methods are present
+              contains('callUnary<Evt, Ack>'),
+              contains('callServerStream<Evt, Ack>'),
+            ]),
+          ),
+        },
+      );
+    });
+
+    test('grpcDescriptor: false (default) omits descriptor', () async {
+      final packageConfig = await _loadPackageConfig();
+      final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+      await readerWriter.testing.loadIsolateSources();
+      const source = r'''
+import 'dart:async';
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_generator/rpc_dart_generator.dart';
+part 'no_desc.g.dart';
+
+@RpcService(name: 'Svc')
+abstract class ISvc {
+  @RpcMethod(name: 'ping')
+  Future<Pong> ping(Ping request);
+}
+
+class Ping implements IRpcSerializable {
+  @override Map<String, dynamic> toJson() => {};
+}
+class Pong implements IRpcSerializable {
+  @override Map<String, dynamic> toJson() => {};
+}
+''';
+
+      await testBuilder(
+        rpcDartBuilder(BuilderOptions({})),
+        {'rpc_dart_generator|lib/no_desc.dart': source},
+        rootPackage: 'rpc_dart_generator',
+        packageConfig: packageConfig,
+        readerWriter: readerWriter,
+        outputs: {
+          'rpc_dart_generator|lib/no_desc.rpc_dart.g.part': decodedMatches(
+            isNot(contains('grpcDescriptor')),
+          ),
+        },
+      );
+    });
+
+    test('grpcDescriptor: true generates FileDescriptorProto', () async {
+      final packageConfig = await _loadPackageConfig();
+      final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+      await readerWriter.testing.loadIsolateSources();
+      const source = r'''
+import 'dart:async';
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_generator/rpc_dart_generator.dart';
+part 'with_desc.g.dart';
+
+@RpcService(name: 'Svc', grpcDescriptor: true)
+abstract class ISvc2 {
+  @RpcMethod(name: 'ping')
+  Future<Pong2> ping(Ping2 request);
+}
+
+class Ping2 implements IRpcSerializable {
+  final String id;
+  const Ping2({required this.id});
+  @override Map<String, dynamic> toJson() => {'id': id};
+}
+class Pong2 implements IRpcSerializable {
+  final String result;
+  const Pong2({required this.result});
+  @override Map<String, dynamic> toJson() => {'result': result};
+}
+''';
+
+      await testBuilder(
+        rpcDartBuilder(BuilderOptions({})),
+        {'rpc_dart_generator|lib/with_desc.dart': source},
+        rootPackage: 'rpc_dart_generator',
+        packageConfig: packageConfig,
+        readerWriter: readerWriter,
+        outputs: {
+          'rpc_dart_generator|lib/with_desc.rpc_dart.g.part': decodedMatches(
+            allOf([
+              contains('grpcDescriptor'),
+              contains('FileDescriptorProto bytes'),
+              contains('Uint8List.fromList'),
             ]),
           ),
         },

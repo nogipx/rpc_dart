@@ -136,6 +136,9 @@ final class ServerStreamResponder<TRequest extends Object,
                   error: e,
                   stackTrace: stackTrace,
                 );
+                // Client disconnected or processor closed — stop iterating
+                // to avoid leaking the handler subscription on broadcast streams.
+                break;
               }
             }
 
@@ -181,6 +184,7 @@ final class ServerStreamResponder<TRequest extends Object,
   }
 
   /// Closes the stream and releases resources.
+  @override
   Future<void> close() async {
     await _subscription?.cancel();
     await _processor.close();

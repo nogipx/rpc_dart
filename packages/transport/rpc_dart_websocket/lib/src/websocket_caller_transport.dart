@@ -37,17 +37,25 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
   }
 
   /// Connects to the given WebSocket [uri] with automatic reconnect support.
-  static RpcWebSocketCallerTransport connect(
+  ///
+  /// Awaits [WebSocketChannel.ready] before returning, so the returned Future
+  /// rejects if the URL is invalid or the server is unreachable. This ensures
+  /// connection errors are reported through the transport factory rather than
+  /// leaking as unhandled stream errors.
+  static Future<RpcWebSocketCallerTransport> connect(
     Uri uri, {
     Iterable<String>? protocols,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
-  }) {
-    WebSocketChannel openChannel() =>
-        WebSocketChannel.connect(uri, protocols: protocols);
+  }) async {
+    Future<WebSocketChannel> openChannel() async {
+      final ch = WebSocketChannel.connect(uri, protocols: protocols);
+      await ch.ready;
+      return ch;
+    }
 
     return RpcWebSocketCallerTransport(
-      openChannel(),
-      reconnectFactory: () async => openChannel(),
+      await openChannel(),
+      reconnectFactory: openChannel,
       policy: policy,
     );
   }
@@ -66,7 +74,7 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
         if (!_incomingCtl.isClosed) _incomingCtl.addError(e);
       },
       onDone: () {
-        if (!_closed && _reconnectFactory == null) close();
+        if (!_closed) close();
       },
     );
   }

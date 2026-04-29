@@ -167,6 +167,7 @@ final class BidirectionalStreamResponder<TRequest extends Object,
   }
 
   /// Closes the stream and releases resources.
+  @override
   Future<void> close() async {
     if (!_isActive) return;
 

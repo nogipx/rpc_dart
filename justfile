@@ -24,6 +24,10 @@ upgrade_rpc_dart_all:
 docs:
   mkdocs serve --strict
 
+# Regenerate widlet binary codec seed strings from WidletWidgetType + prop DTOs.
+widlet_seed_strings:
+  cd widlet/widlet_protocol && fvm dart run tool/generate_seed_strings.dart
+
 upgrade_rpc_dart_generator_all:
   version=$(awk '/^version:/{print $2}' packages/core/rpc_dart_generator/pubspec.yaml); \
   echo "Updating rpc_dart_generator dependency to ^${version}"; \

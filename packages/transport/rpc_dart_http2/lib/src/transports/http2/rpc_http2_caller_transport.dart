@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:universal_io/io.dart';
 
 import 'package:http2/http2.dart' as http2;
@@ -78,27 +79,33 @@ class RpcHttp2CallerTransport implements IRpcTransport {
         _logger = logger?.child('Http2ClientTransport'),
         _policy = policy;
 
-  /// Создает клиентский HTTP/2 транспорт через защищенное соединение
+  /// Создает клиентский HTTP/2 транспорт через защищенное соединение.
+  ///
+  /// [proxyUri] — optional HTTP CONNECT proxy, e.g. `Uri.parse('http://proxy:3128')`.
+  /// Proxy auth is taken from the URI's userinfo (`http://user:pass@proxy:3128`).
   static Future<RpcHttp2CallerTransport> secureConnect({
     required String host,
     int port = 443,
+    Uri? proxyUri,
     RpcLogger? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) async {
     logger?.internal('Создание защищенного HTTP/2 соединения с $host:$port');
 
     Future<http2.ClientTransportConnection> createConnection() async {
-      final socket = await SecureSocket.connect(
-        host,
-        port,
-        supportedProtocols: ['h2'], // HTTP/2
-      );
-
+      if (proxyUri != null) {
+        return _connectH2ViaProxy(
+          proxyUri: proxyUri,
+          targetHost: host,
+          targetPort: port,
+          secure: true,
+        );
+      }
+      final socket = await SecureSocket.connect(host, port, supportedProtocols: ['h2']);
       return http2.ClientTransportConnection.viaSocket(socket);
     }
 
     final connection = await createConnection();
-
     logger?.internal('HTTP/2 соединение установлено');
 
     return RpcHttp2CallerTransport._(
@@ -112,22 +119,33 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     );
   }
 
-  /// Создает клиентский HTTP/2 транспорт через незащищенное соединение
+  /// Создает клиентский HTTP/2 транспорт через незащищенное соединение.
+  ///
+  /// [proxyUri] — optional HTTP CONNECT proxy, e.g. `Uri.parse('http://proxy:3128')`.
+  /// Proxy auth is taken from the URI's userinfo (`http://user:pass@proxy:3128`).
   static Future<RpcHttp2CallerTransport> connect({
     required String host,
     int port = 80,
+    Uri? proxyUri,
     RpcLogger? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) async {
     logger?.internal('Создание HTTP/2 соединения с $host:$port');
 
     Future<http2.ClientTransportConnection> createConnection() async {
+      if (proxyUri != null) {
+        return _connectH2ViaProxy(
+          proxyUri: proxyUri,
+          targetHost: host,
+          targetPort: port,
+          secure: false,
+        );
+      }
       final socket = await Socket.connect(host, port);
       return http2.ClientTransportConnection.viaSocket(socket);
     }
 
     final connection = await createConnection();
-
     logger?.internal('HTTP/2 соединение установлено');
 
     return RpcHttp2CallerTransport._(
@@ -139,6 +157,121 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       policy: policy,
       logger: logger,
     );
+  }
+
+  /// Establishes an HTTP/2 connection through an HTTP CONNECT proxy.
+  ///
+  /// The CONNECT handshake is performed with a single, persistent socket
+  /// subscription that is kept alive (non-TLS) or cancelled before TLS upgrade.
+  /// This avoids re-subscribing to a single-subscription Socket stream, which
+  /// would throw StateError when http2 tries to call socket.listen() again.
+  static Future<http2.ClientTransportConnection> _connectH2ViaProxy({
+    required Uri proxyUri,
+    required String targetHost,
+    required int targetPort,
+    required bool secure,
+  }) async {
+    final proxyHost = proxyUri.host;
+    final proxyPort = proxyUri.hasPort ? proxyUri.port : 3128;
+
+    final rawSocket = await Socket.connect(proxyHost, proxyPort);
+    rawSocket.setOption(SocketOption.tcpNoDelay, true);
+
+    // Build CONNECT request.
+    final reqBuf = StringBuffer()
+      ..write('CONNECT $targetHost:$targetPort HTTP/1.1\r\n')
+      ..write('Host: $targetHost:$targetPort\r\n');
+    if (proxyUri.userInfo.isNotEmpty) {
+      reqBuf.write(
+        'Proxy-Authorization: Basic ${base64Encode(utf8.encode(proxyUri.userInfo))}\r\n',
+      );
+    }
+    reqBuf.write('\r\n');
+    rawSocket.add(utf8.encode(reqBuf.toString()));
+
+    // Single subscription kept alive for the full lifetime of the tunnel.
+    // For non-TLS: data after CONNECT headers is forwarded to [forwardCtrl],
+    //   and http2 reads from forwardCtrl.stream via viaStreams.
+    // For TLS: subscription is cancelled after CONNECT so SecureSocket can
+    //   attach its own listener via _detachRaw() / SecureSocket.secure().
+    final forwardCtrl = StreamController<List<int>>();
+    final handshake = Completer<void>();
+    bool headersDone = false;
+    final headerBuf = <int>[];
+
+    final sub = rawSocket.listen(
+      (chunk) {
+        if (headersDone) {
+          if (!forwardCtrl.isClosed) forwardCtrl.add(chunk);
+          return;
+        }
+        headerBuf.addAll(chunk);
+        final endIdx = _indexOfEndOfHeaders(headerBuf);
+        if (endIdx == -1) return;
+
+        headersDone = true;
+        final statusLine = String.fromCharCodes(headerBuf).split('\r\n').first;
+        if (!RegExp(r'HTTP/\S+ 2\d\d').hasMatch(statusLine)) {
+          rawSocket.destroy();
+          if (!handshake.isCompleted) {
+            handshake.completeError(
+              SocketException('HTTP proxy CONNECT rejected: ${statusLine.trim()}'),
+            );
+          }
+          return;
+        }
+        // Bytes after \r\n\r\n (unusual but possible): forward immediately.
+        final leftover = headerBuf.sublist(endIdx + 4);
+        if (leftover.isNotEmpty && !forwardCtrl.isClosed) {
+          forwardCtrl.add(Uint8List.fromList(leftover));
+        }
+        if (!handshake.isCompleted) handshake.complete();
+      },
+      onError: (Object e) {
+        if (!handshake.isCompleted) {
+          handshake.completeError(e);
+        } else if (!forwardCtrl.isClosed) {
+          forwardCtrl.addError(e);
+        }
+      },
+      onDone: () {
+        if (!handshake.isCompleted) {
+          handshake.completeError(SocketException('Proxy closed during CONNECT'));
+        }
+        if (!forwardCtrl.isClosed) forwardCtrl.close();
+      },
+    );
+
+    await handshake.future;
+
+    if (secure) {
+      // Cancel our sub so SecureSocket.secure() (via _detachRaw) can attach.
+      await sub.cancel();
+      await forwardCtrl.close();
+      final secureSocket = await SecureSocket.secure(
+        rawSocket,
+        host: targetHost,
+        supportedProtocols: ['h2'],
+      );
+      return http2.ClientTransportConnection.viaSocket(secureSocket);
+    } else {
+      // Keep sub alive — it feeds forwardCtrl.
+      // http2 reads from forwardCtrl.stream; writes go directly to rawSocket.
+      return http2.ClientTransportConnection.viaStreams(
+        forwardCtrl.stream,
+        rawSocket,
+      );
+    }
+  }
+
+  static int _indexOfEndOfHeaders(List<int> bytes) {
+    for (var i = 0; i <= bytes.length - 4; i++) {
+      if (bytes[i] == 0x0D && bytes[i + 1] == 0x0A &&
+          bytes[i + 2] == 0x0D && bytes[i + 3] == 0x0A) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   @override

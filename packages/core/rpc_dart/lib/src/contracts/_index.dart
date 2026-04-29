@@ -9,7 +9,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart'
-    show IRpcCodec, IRpcSerializable, RpcCallerEndpoint;
+    show IRpcCodec, IRpcSerializable, RpcCallerEndpoint, RpcPeerEndpoint;
 
 export 'dart:typed_data';
 

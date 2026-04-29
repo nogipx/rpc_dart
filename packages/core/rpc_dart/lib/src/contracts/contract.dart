@@ -13,8 +13,15 @@ abstract interface class IRpcContract {
 
 /// Server-side contract that registers and handles methods.
 abstract class RpcResponderContract implements IRpcContract {
+  final String _baseServiceName;
+  String _serviceNameSuffix = '';
+
   @override
-  final String serviceName;
+  String get serviceName => '$_baseServiceName$_serviceNameSuffix';
+
+  /// Append a suffix to the service name.
+  /// Used by scoped registrars to add podId isolation.
+  set serviceNameSuffix(String value) => _serviceNameSuffix = value;
 
   /// Data transfer mode used by this contract's methods.
   final RpcDataTransferMode dataTransferMode;
@@ -23,9 +30,9 @@ abstract class RpcResponderContract implements IRpcContract {
 
   /// Creates a responder contract with the given [serviceName].
   RpcResponderContract(
-    this.serviceName, {
+    String serviceName, {
     this.dataTransferMode = RpcDataTransferMode.auto,
-  });
+  }) : _baseServiceName = serviceName;
 
   /// Declarative method registration hook.
   void setup() {}
@@ -583,6 +590,153 @@ abstract class RpcCallerContract implements IRpcContract {
       requestCodec: effectiveRequestCodec,
       responseCodec: effectiveResponseCodec,
       requests: requests,
+      context: context,
+    );
+  }
+}
+
+/// Bidirectional peer contract — registers handlers AND makes outgoing calls
+/// through the same [RpcPeerEndpoint].
+///
+/// Extend this class to define a peer protocol:
+/// - Override [setup] and call [addUnaryMethod] / [addServerStreamMethod] /
+///   [addClientStreamMethod] / [addBidirectionalMethod] to handle incoming requests.
+/// - Use [callUnary] / [callServerStream] / [callClientStream] /
+///   [callBidirectionalStream] to initiate outgoing calls to the remote peer.
+///
+/// Register the contract with [RpcPeerEndpoint.registerServiceContract].
+abstract class RpcPeerContract extends RpcResponderContract {
+  final RpcPeerEndpoint _peerEndpoint;
+
+  /// Data transfer mode used by this contract's outgoing calls.
+  final RpcDataTransferMode callerDataTransferMode;
+
+  /// Creates a peer contract bound to [serviceName] and [endpoint].
+  RpcPeerContract(
+    super.serviceName,
+    RpcPeerEndpoint endpoint, {
+    RpcDataTransferMode responderDataTransferMode = RpcDataTransferMode.auto,
+    this.callerDataTransferMode = RpcDataTransferMode.auto,
+  })  : _peerEndpoint = endpoint,
+        super(dataTransferMode: responderDataTransferMode);
+
+  /// The peer endpoint this contract is bound to.
+  RpcPeerEndpoint get endpoint => _peerEndpoint;
+
+  bool _isCallerZeroCopyAllowed<TRequest, TResponse>(
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    switch (callerDataTransferMode) {
+      case RpcDataTransferMode.zeroCopy:
+        return true;
+      case RpcDataTransferMode.codec:
+        return false;
+      case RpcDataTransferMode.auto:
+        return requestCodec == null && responseCodec == null;
+    }
+  }
+
+  (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?)
+      _getCallerEffectiveCodecs<TRequest, TResponse>(
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    return _isCallerZeroCopyAllowed(requestCodec, responseCodec)
+        ? (null, null)
+        : (requestCodec, responseCodec);
+  }
+
+  void _validateCallerCodecs<TRequest, TResponse>(
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    if (!_isCallerZeroCopyAllowed(requestCodec, responseCodec)) {
+      if (requestCodec == null || responseCodec == null) {
+        throw ArgumentError(
+          'Serialization mode requires both codecs. '
+          'Current mode: $callerDataTransferMode.',
+        );
+      }
+    }
+  }
+
+  /// Sends a unary request to the remote peer.
+  Future<TResponse>
+      callUnary<TRequest extends Object, TResponse extends Object>(
+          {required String methodName,
+          required TRequest request,
+          IRpcCodec<TRequest>? requestCodec,
+          IRpcCodec<TResponse>? responseCodec,
+          RpcContext? context}) {
+    _validateCallerCodecs(requestCodec, responseCodec);
+    final (rq, rs) = _getCallerEffectiveCodecs(requestCodec, responseCodec);
+    return _peerEndpoint.unaryRequest<TRequest, TResponse>(
+      serviceName: serviceName,
+      methodName: methodName,
+      request: request,
+      requestCodec: rq,
+      responseCodec: rs,
+      context: context,
+    );
+  }
+
+  /// Opens a server-stream call to the remote peer.
+  Stream<TResponse>
+      callServerStream<TRequest extends Object, TResponse extends Object>(
+          {required String methodName,
+          required TRequest request,
+          IRpcCodec<TRequest>? requestCodec,
+          IRpcCodec<TResponse>? responseCodec,
+          RpcContext? context}) {
+    _validateCallerCodecs(requestCodec, responseCodec);
+    final (rq, rs) = _getCallerEffectiveCodecs(requestCodec, responseCodec);
+    return _peerEndpoint.serverStream<TRequest, TResponse>(
+      serviceName: serviceName,
+      methodName: methodName,
+      request: request,
+      requestCodec: rq,
+      responseCodec: rs,
+      context: context,
+    );
+  }
+
+  /// Opens a client-stream call to the remote peer.
+  Future<TResponse>
+      callClientStream<TRequest extends Object, TResponse extends Object>(
+          {required String methodName,
+          required Stream<TRequest> requests,
+          IRpcCodec<TRequest>? requestCodec,
+          IRpcCodec<TResponse>? responseCodec,
+          RpcContext? context}) {
+    _validateCallerCodecs(requestCodec, responseCodec);
+    final (rq, rs) = _getCallerEffectiveCodecs(requestCodec, responseCodec);
+    final builder = _peerEndpoint.clientStream<TRequest, TResponse>(
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: rq,
+      responseCodec: rs,
+      context: context,
+    );
+    return builder(requests);
+  }
+
+  /// Opens a bidirectional-stream call to the remote peer.
+  Stream<TResponse> callBidirectionalStream<TRequest extends Object,
+          TResponse extends Object>(
+      {required String methodName,
+      required Stream<TRequest> requests,
+      IRpcCodec<TRequest>? requestCodec,
+      IRpcCodec<TResponse>? responseCodec,
+      RpcContext? context}) {
+    _validateCallerCodecs(requestCodec, responseCodec);
+    final (rq, rs) = _getCallerEffectiveCodecs(requestCodec, responseCodec);
+    return _peerEndpoint.bidirectionalStream<TRequest, TResponse>(
+      serviceName: serviceName,
+      methodName: methodName,
+      requests: requests,
+      requestCodec: rq,
+      responseCodec: rs,
       context: context,
     );
   }

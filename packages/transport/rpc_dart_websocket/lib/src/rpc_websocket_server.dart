@@ -21,6 +21,7 @@ class RpcWebSocketServer implements IRpcServer {
   final RpcSecurityPolicy _policy;
 
   final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
+  final void Function(RpcPeerEndpoint endpoint)? _onPeerEndpointCreated;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
   final void Function(WebSocketChannel channel)? _onConnectionOpened;
   final void Function(WebSocketChannel channel)? _onConnectionClosed;
@@ -35,6 +36,7 @@ class RpcWebSocketServer implements IRpcServer {
     RpcLogger? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
+    void Function(RpcPeerEndpoint endpoint)? onPeerEndpointCreated,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(WebSocketChannel channel)? onConnectionOpened,
     void Function(WebSocketChannel channel)? onConnectionClosed,
@@ -42,6 +44,7 @@ class RpcWebSocketServer implements IRpcServer {
         _logger = logger?.child('WebSocketServer'),
         _policy = policy,
         _onEndpointCreated = onEndpointCreated,
+        _onPeerEndpointCreated = onPeerEndpointCreated,
         _onConnectionError = onConnectionError,
         _onConnectionOpened = onConnectionOpened,
         _onConnectionClosed = onConnectionClosed;
@@ -124,24 +127,39 @@ class RpcWebSocketServer implements IRpcServer {
         channel,
         policy: _policy,
       );
-      final endpoint = RpcResponderEndpoint(
-        transport: transport,
-        debugLabel: 'WebSocketEndpoint-$clientLabel',
-        loggerColors: RpcLoggerColors.singleColor(AnsiColor.magenta),
-      );
-      _endpoints.add(endpoint);
-      _onEndpointCreated?.call(endpoint);
-      endpoint.start();
 
-      channel.sink.done
-          .then((_) {
-            _endpoints.remove(endpoint);
-            _onConnectionClosed?.call(channel);
-          })
-          .catchError((Object error) {
-            _endpoints.remove(endpoint);
-            _onConnectionClosed?.call(channel);
-          });
+      if (_onPeerEndpointCreated != null) {
+        final endpoint = RpcPeerEndpoint(
+          transport: transport,
+          debugLabel: 'WebSocketEndpoint-$clientLabel',
+          loggerColors: RpcLoggerColors.singleColor(AnsiColor.magenta),
+        );
+        _onPeerEndpointCreated(endpoint);
+        endpoint.start();
+
+        channel.sink.done
+            .then((_) => _onConnectionClosed?.call(channel))
+            .catchError((Object error) => _onConnectionClosed?.call(channel));
+      } else {
+        final endpoint = RpcResponderEndpoint(
+          transport: transport,
+          debugLabel: 'WebSocketEndpoint-$clientLabel',
+          loggerColors: RpcLoggerColors.singleColor(AnsiColor.magenta),
+        );
+        _endpoints.add(endpoint);
+        _onEndpointCreated?.call(endpoint);
+        endpoint.start();
+
+        channel.sink.done
+            .then((_) {
+              _endpoints.remove(endpoint);
+              _onConnectionClosed?.call(channel);
+            })
+            .catchError((Object error) {
+              _endpoints.remove(endpoint);
+              _onConnectionClosed?.call(channel);
+            });
+      }
     } catch (e, st) {
       _logger?.error(
         'Failed to create WebSocket RPC connection',

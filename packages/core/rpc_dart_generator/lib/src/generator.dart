@@ -20,7 +20,8 @@ import 'package:rpc_dart/rpc_dart.dart'
         RpcMethod,
         RpcMethodKind,
         RpcRemoved,
-        RpcService;
+        RpcService,
+        RpcServiceKind;
 import 'package:source_gen/source_gen.dart';
 
 final _rpcMethodChecker = const TypeChecker.typeNamed(
@@ -101,14 +102,28 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     }
 
     final transfer = reader.peek('transferMode')?.revive();
-    final transferStr = transfer?.accessor;
-    final transferMode = _transferFromAccessor(transferStr);
+    final transferMode = _transferFromAccessor(transfer?.accessor);
+
+    final kindRevive = reader.peek('kind')?.revive();
+    final serviceKind = _serviceKindFromAccessor(kindRevive?.accessor);
 
     return _ServiceMeta(
       name: name,
       description: reader.peek('description')?.literalValue as String?,
       transferMode: transferMode ?? RpcDataTransferMode.auto,
+      serviceKind: serviceKind ?? RpcServiceKind.unidirectional,
+      grpcDescriptor: reader.peek('grpcDescriptor')?.boolValue ?? false,
     );
+  }
+
+  RpcServiceKind? _serviceKindFromAccessor(String? accessor) {
+    switch (accessor) {
+      case 'RpcServiceKind.unidirectional':
+        return RpcServiceKind.unidirectional;
+      case 'RpcServiceKind.peer':
+        return RpcServiceKind.peer;
+    }
+    return null;
   }
 
   RpcDataTransferMode? _transferFromAccessor(String? accessor) {
@@ -324,9 +339,15 @@ class _Emitter {
       buffer.writeln();
     }
 
-    buffer.writeln(_buildCaller());
-    buffer.writeln();
-    buffer.writeln(_buildResponder());
+    if (service.serviceKind == RpcServiceKind.peer) {
+      buffer.writeln(_buildPeer());
+      buffer.writeln();
+      buffer.writeln(_buildPeerCaller());
+    } else {
+      buffer.writeln(_buildCaller());
+      buffer.writeln();
+      buffer.writeln(_buildResponder());
+    }
 
     return buffer.toString();
   }
@@ -346,19 +367,21 @@ class _Emitter {
       );
     }
 
-    final descriptorLiteral =
-        _GrpcDescriptorBuilder(service, methods).buildLiteral();
-    if (descriptorLiteral != null) {
-      b.writeln();
-      b.writeln(
-        '  /// FileDescriptorProto bytes for gRPC Server Reflection.',
-      );
-      b.writeln(
-        '  /// Register with: registry.addFileDescriptor($className.grpcDescriptor)',
-      );
-      b.writeln(
-        '  static final grpcDescriptor = Uint8List.fromList(const $descriptorLiteral);',
-      );
+    if (service.grpcDescriptor) {
+      final descriptorLiteral =
+          _GrpcDescriptorBuilder(service, methods).buildLiteral();
+      if (descriptorLiteral != null) {
+        b.writeln();
+        b.writeln(
+          '  /// FileDescriptorProto bytes for gRPC Server Reflection.',
+        );
+        b.writeln(
+          '  /// Register with: registry.addFileDescriptor($className.grpcDescriptor)',
+        );
+        b.writeln(
+          '  static final grpcDescriptor = Uint8List.fromList(const $descriptorLiteral);',
+        );
+      }
     }
 
     b.writeln('}');
@@ -524,6 +547,92 @@ class _Emitter {
           '    return _parent.${sig.element.name}(request$contextArg);\n'
           '  }';
     }
+  }
+
+  String _buildPeer() {
+    final b = StringBuffer();
+    final className = '${_baseName}Peer';
+    final defaultTransfer = 'RpcDataTransferMode.${service.transferMode.name}';
+
+    b.writeln(
+      'abstract class $className extends RpcPeerContract '
+      'implements ${classElement.name} {',
+    );
+    b.writeln('  $className(');
+    b.writeln('    RpcPeerEndpoint endpoint, {');
+    b.writeln('    String? serviceNameOverride,');
+    b.writeln('    RpcDataTransferMode dataTransferMode = $defaultTransfer,');
+    b.writeln('  }) : super(');
+    b.writeln('          serviceNameOverride ?? ${_baseName}Names.service,');
+    b.writeln('          endpoint,');
+    b.writeln('          responderDataTransferMode: dataTransferMode,');
+    b.writeln('          callerDataTransferMode: dataTransferMode,');
+    b.writeln('        );');
+    b.writeln();
+
+    // setup() — registers incoming handlers using onXxx names
+    b.writeln('  @override');
+    b.writeln('  void setup() {');
+    for (final method in methods) {
+      b.writeln(
+        '    ${method.signature.peerRegistration(method, service.transferMode)};',
+      );
+    }
+    b.writeln('  }');
+    b.writeln();
+
+    // Caller methods — implement interface, call remote peer
+    for (final method in methods) {
+      b.writeln(
+        method.signature.callerMethodImpl(method, service.transferMode),
+      );
+      b.writeln();
+    }
+
+    // Abstract handler declarations — onXxx, user overrides these
+    for (final method in methods) {
+      b.writeln(method.signature.peerHandlerDecl(method));
+      b.writeln();
+    }
+
+    b.writeln('}');
+    return b.toString();
+  }
+
+  String _buildPeerCaller() {
+    final b = StringBuffer();
+    final className = '${_baseName}PeerCaller';
+    final defaultTransfer = 'RpcDataTransferMode.${service.transferMode.name}';
+
+    b.writeln(
+      'class $className extends RpcPeerContract '
+      'implements ${classElement.name} {',
+    );
+    b.writeln('  $className(');
+    b.writeln('    RpcPeerEndpoint endpoint, {');
+    b.writeln('    String? serviceNameOverride,');
+    b.writeln('    RpcDataTransferMode dataTransferMode = $defaultTransfer,');
+    b.writeln('  }) : super(');
+    b.writeln('          serviceNameOverride ?? ${_baseName}Names.service,');
+    b.writeln('          endpoint,');
+    b.writeln('          responderDataTransferMode: dataTransferMode,');
+    b.writeln('          callerDataTransferMode: dataTransferMode,');
+    b.writeln('        );');
+    b.writeln();
+
+    b.writeln('  @override');
+    b.writeln('  void setup() {}');
+    b.writeln();
+
+    for (final method in methods) {
+      b.writeln(
+        method.signature.callerMethodImpl(method, service.transferMode),
+      );
+      b.writeln();
+    }
+
+    b.writeln('}');
+    return b.toString();
   }
 
   String _buildResponder() {
@@ -865,6 +974,62 @@ class _Signature {
     return '  $returnType ${element.name}(${_buildParam(requestTypeStr)});';
   }
 
+  /// `onXxx(request, {RpcContext? context})` — abstract handler for peer class.
+  String peerHandlerDecl(_MethodMeta meta) {
+    final returnType = element.returnType.getDisplayString();
+    final requestTypeStr = requestType.getDisplayString();
+    final handlerName = _peerHandlerName(meta.declarationName);
+    // Always include context in peer handlers regardless of interface signature.
+    final param = isRequestStream
+        ? 'Stream<$requestTypeStr> requests, {RpcContext? context}'
+        : '$requestTypeStr request, {RpcContext? context}';
+    return '  $returnType $handlerName($param);';
+  }
+
+  /// `addXxxMethod(..., handler: onXxx, ...)` — registration in peer setup().
+  String peerRegistration(_MethodMeta meta, RpcDataTransferMode serviceMode) {
+    final requestTypeStr = requestType.getDisplayString();
+    final responseTypeStr = responseType.getDisplayString();
+    final handlerName = _peerHandlerName(meta.declarationName);
+    final description = meta.description == null
+        ? ''
+        : "description: '${_escape(meta.description!)}', ";
+
+    final effectiveMode = meta.transferMode ?? serviceMode;
+    final useCodec = _shouldUseCodec(meta, effectiveMode);
+
+    final requestCodec = _codecString(
+      isResponse: false,
+      useDefault: useCodec,
+      providedCodecType: meta.requestCodecType,
+      targetType: requestTypeStr,
+      methodDeclarationName: meta.declarationName,
+    );
+    final responseCodec = _codecString(
+      isResponse: true,
+      useDefault: useCodec,
+      providedCodecType: meta.responseCodecType,
+      targetType: responseTypeStr,
+      methodDeclarationName: meta.declarationName,
+    );
+
+    switch (kind) {
+      case RpcMethodKind.unary:
+        return 'addUnaryMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
+      case RpcMethodKind.serverStream:
+        return 'addServerStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
+      case RpcMethodKind.clientStream:
+        return 'addClientStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
+      case RpcMethodKind.bidirectionalStream:
+        return 'addBidirectionalMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
+    }
+  }
+
+  static String _peerHandlerName(String declarationName) {
+    if (declarationName.isEmpty) return 'onHandle';
+    return 'on${declarationName[0].toUpperCase()}${declarationName.substring(1)}';
+  }
+
   String callerMethodImpl(_MethodMeta meta, RpcDataTransferMode serviceMode) {
     final buffer = StringBuffer();
     final returnType = element.returnType.getDisplayString();
@@ -1019,11 +1184,15 @@ class _ServiceMeta {
   _ServiceMeta({
     required this.name,
     required this.transferMode,
+    required this.serviceKind,
+    required this.grpcDescriptor,
     this.description,
   });
 
   final String name;
   final RpcDataTransferMode transferMode;
+  final RpcServiceKind serviceKind;
+  final bool grpcDescriptor;
   final String? description;
 }
 

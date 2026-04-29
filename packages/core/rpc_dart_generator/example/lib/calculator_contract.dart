@@ -12,7 +12,11 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 part 'calculator_contract.g.dart';
 
-@RpcService(name: 'Calculator', transferMode: RpcDataTransferMode.zeroCopy)
+@RpcService(
+  name: 'Calculator',
+  transferMode: RpcDataTransferMode.zeroCopy,
+  grpcDescriptor: true,
+)
 abstract class ICalculatorContract {
   @RpcMethod.unary(name: 'sum')
   Future<SumResponse> sum(SumRequest request, {RpcContext? context});
@@ -27,7 +31,11 @@ abstract class ICalculatorContract {
 
 /// V2 overrides [sum] to return richer [SumResponseV2] (adds [count]).
 /// [numbers] is inherited unchanged from [ICalculatorContract].
-@RpcService(name: 'Calculator.v2', transferMode: RpcDataTransferMode.zeroCopy)
+@RpcService(
+  name: 'Calculator.v2',
+  transferMode: RpcDataTransferMode.zeroCopy,
+  grpcDescriptor: true,
+)
 abstract class ICalculatorContractV2 implements ICalculatorContract {
   @override
   @RpcMethod.unary(name: 'sum')
@@ -35,7 +43,11 @@ abstract class ICalculatorContractV2 implements ICalculatorContract {
 }
 
 /// V3 adds [multiply]. Inherits [sum] from v2 and [numbers] from v1.
-@RpcService(name: 'Calculator.v3', transferMode: RpcDataTransferMode.zeroCopy)
+@RpcService(
+  name: 'Calculator.v3',
+  transferMode: RpcDataTransferMode.zeroCopy,
+  grpcDescriptor: true,
+)
 abstract class ICalculatorContractV3 implements ICalculatorContractV2 {
   @RpcMethod.unary(name: 'multiply')
   Future<MultiplyResponse> multiply(SumRequest request, {RpcContext? context});
