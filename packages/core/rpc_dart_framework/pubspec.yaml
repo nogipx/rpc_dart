@@ -8,7 +8,7 @@ environment:
 
 dependencies:
   rpc_dart:
-    path: ../rpc_dart
+    ^3.0.1 ../rpc_dart
   rpc_dart_isolate:
     path: ../../transport/rpc_dart_isolate
 

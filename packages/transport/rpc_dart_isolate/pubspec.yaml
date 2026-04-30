@@ -14,7 +14,7 @@ topics:
 
 dependency_overrides:
   rpc_dart:
-    path: ../../core/rpc_dart
+    ^3.0.1 ../../core/rpc_dart
 
 dependencies:
   rpc_dart: ^3.0.0
