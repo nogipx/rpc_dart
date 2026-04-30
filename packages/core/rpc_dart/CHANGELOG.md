@@ -1,3 +1,11 @@
+## 3.0.1
+
+- `RpcMessageParser`: replaced `List<int>` backing buffer with `Uint8List` — eliminates integer boxing and reduces message extraction from two copies to one.
+- `special_cbor.dart`: fixed JS-unsafe 64-bit integer encoding — replaced `>> 56` / `>> 48` / ... bit-shift chains with `ByteData.setUint64`, which is correctly implemented on both Dart VM and dart2js.
+- `RpcContext.withAdditionalHeaders`: removed duplicate `_sanitizeHeaders` call that could silently drop headers when the merged map exceeded the 128-header or 64 KB limit.
+- `RpcCallerEndpoint`: changed `compressionEnabled` default from `true` to `false` to avoid compatibility issues with servers that do not advertise compression support.
+- Removed CORD-specific API (`createChain`, `forBusinessOperation`, `forDomainCall`, `extractDomainMetadata`, `DomainMetadata`, `RpcContextAware`, `correlationId`).
+
 ## 3.0.0
 
 Breaking changes and major additions:

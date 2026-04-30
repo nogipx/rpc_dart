@@ -8,14 +8,12 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 void main() {
   group('RpcContext', () {
-    test('создает пустой контекст с уникальным request ID', () {
+    test('creates empty context with unique request ID', () {
       final context1 = RpcContext.empty();
-      // Небольшая задержка для гарантии разных timestamp
       final context2 = RpcContext.empty();
 
       expect(context1.requestId, isNotEmpty);
       expect(context2.requestId, isNotEmpty);
-      // В тестах может совпадать из-за скорости выполнения, проверим формат
       expect(context1.requestId, startsWith('req_'));
       expect(context2.requestId, startsWith('req_'));
       expect(context1.headers, isEmpty);
@@ -23,7 +21,7 @@ void main() {
       expect(context1.deadline, isNull);
     });
 
-    test('создает контекст с заголовками', () {
+    test('creates context with headers', () {
       final headers = {'x-user-id': '123', 'x-session': 'abc'};
       final context = RpcContext.withHeaders(headers);
 
@@ -33,7 +31,7 @@ void main() {
       expect(context.getHeader('nonexistent'), isNull);
     });
 
-    test('создает контекст с deadline', () {
+    test('creates context with deadline', () {
       final deadline = DateTime.now().add(Duration(minutes: 5));
       final context = RpcContext.withDeadline(deadline);
 
@@ -43,7 +41,7 @@ void main() {
       expect(context.remainingTime!.inMinutes, lessThanOrEqualTo(5));
     });
 
-    test('создает контекст с timeout', () {
+    test('creates context with timeout', () {
       final timeout = Duration(minutes: 10);
       final context = RpcContext.withTimeout(timeout);
 
@@ -52,7 +50,7 @@ void main() {
       expect(context.remainingTime!.inMinutes, lessThanOrEqualTo(10));
     });
 
-    test('проверяет истечение deadline', () {
+    test('detects expired deadline', () {
       final pastDeadline = DateTime.now().subtract(Duration(minutes: 1));
       final context = RpcContext.withDeadline(pastDeadline);
 
@@ -60,7 +58,7 @@ void main() {
       expect(context.remainingTime, equals(Duration.zero));
     });
 
-    test('добавляет дополнительные заголовки к существующим', () {
+    test('merges additional headers', () {
       final originalHeaders = {'x-user-id': '123'};
       final additionalHeaders = {'x-session': 'abc', 'x-trace': '456'};
 
@@ -74,7 +72,7 @@ void main() {
       expect(context.headers.length, equals(3));
     });
 
-    test('работает с значениями контекста', () {
+    test('stores and retrieves typed values', () {
       final key1 = 'user';
       final key2 = 42;
       final value1 = 'John Doe';
@@ -87,304 +85,8 @@ void main() {
       expect(context.getValue<Duration>(key2), equals(value2));
       expect(context.getValue<String>('nonexistent'), isNull);
     });
-  });
 
-  group('CancellationToken', () {
-    test('создает неотмененный токен', () {
-      final token = RpcCancellationToken();
-
-      expect(token.isCancelled, isFalse);
-      expect(token.reason, isNull);
-    });
-
-    test('создает уже отмененный токен', () {
-      final reason = 'User cancelled';
-      final token = RpcCancellationToken.cancelled(reason);
-
-      expect(token.isCancelled, isTrue);
-      expect(token.reason, equals(reason));
-    });
-
-    test('отменяет токен с причиной', () {
-      final token = RpcCancellationToken();
-      final reason = 'Timeout exceeded';
-
-      token.cancel(reason);
-
-      expect(token.isCancelled, isTrue);
-      expect(token.reason, equals(reason));
-    });
-
-    test('выбрасывает исключение при проверке отмененного токена', () {
-      final token = RpcCancellationToken.cancelled('Test cancellation');
-
-      expect(
-        () => token.throwIfCancelled(),
-        throwsA(isA<RpcCancelledException>()),
-      );
-    });
-
-    test('не выбрасывает исключение для неотмененного токена', () {
-      final token = RpcCancellationToken();
-
-      expect(() => token.throwIfCancelled(), returnsNormally);
-    });
-  });
-
-  group('RpcContextUtils', () {
-    test('создает контекст с Basic аутентификацией', () {
-      final context = RpcContextUtils.withBasicAuth('user', 'pass');
-      final authHeader = context.getHeader('authorization');
-
-      expect(authHeader, isNotNull);
-      expect(authHeader, startsWith('Basic '));
-      // Проверяем, что это base64(user:pass)
-      expect(authHeader, equals('Basic dXNlcjpwYXNz'));
-    });
-
-    test('создает контекст с Bearer токеном', () {
-      final token = 'abc123token';
-      final context = RpcContextUtils.withBearerToken(token);
-      final authHeader = context.getHeader('authorization');
-
-      expect(authHeader, equals('Bearer $token'));
-    });
-
-    test('создает контекст с API ключом', () {
-      final apiKey = 'secret-key-123';
-      final context = RpcContextUtils.withApiKey(apiKey);
-
-      expect(context.getHeader('x-api-key'), equals(apiKey));
-    });
-
-    test('создает контекст с пользовательским заголовком API ключа', () {
-      final apiKey = 'secret-key-123';
-      final headerName = 'x-custom-key';
-      final context = RpcContextUtils.withApiKey(
-        apiKey,
-        headerName: headerName,
-      );
-
-      expect(context.getHeader(headerName), equals(apiKey));
-      expect(context.getHeader('x-api-key'), isNull);
-    });
-
-    test('создает контекст для трассировки', () {
-      final traceId = 'trace-123';
-      final spanId = 'span-456';
-      final parentSpanId = 'parent-789';
-
-      final context = RpcContextUtils.withTracing(
-        traceId: traceId,
-        spanId: spanId,
-        parentSpanId: parentSpanId,
-      );
-
-      expect(context.getHeader('x-trace-id'), equals(traceId));
-      expect(context.getHeader('x-span-id'), equals(spanId));
-      expect(context.getHeader('x-parent-span-id'), equals(parentSpanId));
-      expect(context.traceId, equals(traceId));
-    });
-
-    test('создает контекст для трассировки с автогенерацией trace ID', () {
-      final context = RpcContextUtils.withTracing();
-
-      expect(context.traceId, isNotNull);
-      expect(context.traceId, startsWith('trace_'));
-      // withTracing() устанавливает traceId в сам контекст, но не всегда в заголовки
-      // если traceId не указан явно
-    });
-
-    test('объединяет контексты с приоритетом правого', () {
-      final leftContext = RpcContext.withHeaders({
-        'x-left': 'left-value',
-      }).withTraceId('left-trace').withValue('shared-key', 'left-shared');
-
-      final rightContext = RpcContext.withHeaders({
-        'x-right': 'right-value',
-      }).withTraceId('right-trace').withValue('shared-key', 'right-shared');
-
-      final merged = RpcContextUtils.merge(leftContext, rightContext);
-
-      // Правый контекст имеет приоритет
-      expect(merged.traceId, equals('right-trace'));
-      expect(merged.requestId, equals(rightContext.requestId));
-      expect(merged.getValue('shared-key'), equals('right-shared'));
-
-      // Заголовки объединяются
-      expect(merged.getHeader('x-left'), equals('left-value'));
-      expect(merged.getHeader('x-right'), equals('right-value'));
-    });
-  });
-
-  group('RpcContextBuilder', () {
-    test('создает контекст с fluent API', () {
-      final timeout = Duration(minutes: 5);
-      final traceId = 'trace-123';
-
-      final context = RpcContextBuilder()
-          .withTraceId(traceId)
-          .withTimeout(timeout)
-          .withHeader('x-user-id', '123')
-          .withBearerAuth('token-abc')
-          .withValue('custom-data', 'test-value')
-          .build();
-
-      expect(context.traceId, equals(traceId));
-      expect(context.deadline, isNotNull);
-      expect(context.getHeader('x-user-id'), equals('123'));
-      expect(context.getHeader('authorization'), equals('Bearer token-abc'));
-      expect(context.getValue('custom-data'), equals('test-value'));
-    });
-
-    test('наследует от родительского контекста', () {
-      final parentTraceId = 'parent-trace-123';
-      final parentHeaders = {'x-session': 'parent-session'};
-      final parent = RpcContext.withHeaders(
-        parentHeaders,
-      ).withTraceId(parentTraceId);
-
-      final child = RpcContextBuilder.inheritFrom(
-        parent,
-      ).withHeader('x-user-id', '456').build();
-
-      // Наследует trace ID
-      expect(child.traceId, equals(parentTraceId));
-      // Наследует заголовки
-      expect(child.getHeader('x-session'), equals('parent-session'));
-      // Добавляет новые заголовки
-      expect(child.getHeader('x-user-id'), equals('456'));
-      // Генерирует request ID правильного формата
-      expect(child.requestId, startsWith('req_'));
-    });
-
-    test('создает новый trace ID при отсутствии родительского', () {
-      final child = RpcContextBuilder.inheritFrom(null).build();
-
-      expect(child.traceId, isNotNull);
-      expect(child.traceId, startsWith('trace_'));
-      expect(child.requestId, isNotEmpty);
-    });
-
-    test('добавляет метаданные домена', () {
-      final context = RpcContextBuilder()
-          .withDomainMetadata(
-            userId: '123',
-            sessionId: 'session-abc',
-            tenantId: 'tenant-xyz',
-            correlationId: 'corr-456',
-          )
-          .build();
-
-      expect(context.getHeader('x-user-id'), equals('123'));
-      expect(context.getHeader('x-session-id'), equals('session-abc'));
-      expect(context.getHeader('x-tenant-id'), equals('tenant-xyz'));
-      expect(context.getHeader('x-correlation-id'), equals('corr-456'));
-    });
-  });
-
-  group('RpcContextExtensions', () {
-    test('создает дочерний контекст с новым request ID', () {
-      final parentTraceId = 'parent-trace-123';
-      final parent = RpcContext.withTraceId(parentTraceId);
-
-      final child = parent.createChild();
-
-      expect(child.traceId, equals(parentTraceId));
-      // В быстрых тестах может совпадать, проверим что это действительно request ID
-      expect(child.requestId, startsWith('req_'));
-      expect(parent.requestId, startsWith('req_'));
-    });
-
-    test('создает дочерний контекст с дополнительными параметрами', () {
-      final parent = RpcContext.withTraceId('trace-123');
-      final additionalHeaders = {'x-custom': 'value'};
-      final timeout = Duration(seconds: 30);
-
-      final child = parent.createChildWith(
-        headers: additionalHeaders,
-        timeout: timeout,
-        userId: '456',
-        sessionId: 'session-xyz',
-      );
-
-      expect(child.traceId, equals(parent.traceId));
-      expect(child.requestId, startsWith('req_'));
-      expect(child.getHeader('x-custom'), equals('value'));
-      expect(child.getHeader('x-user-id'), equals('456'));
-      expect(child.getHeader('x-session-id'), equals('session-xyz'));
-      expect(child.deadline, isNotNull);
-    });
-
-    test('возвращает correlation ID как алиас для trace ID', () {
-      final traceId = 'trace-correlation-123';
-      final context = RpcContext.withTraceId(traceId);
-
-      expect(context.correlationId, equals(traceId));
-    });
-  });
-
-  group('RpcContext', () {
-    test('создает контекст для бизнес-операции', () {
-      final userId = '123';
-      final operationType = 'CreateOrder';
-
-      final context = RpcContext.forBusinessOperation(
-        operationType: operationType,
-        userId: userId,
-      );
-
-      expect(context.getHeader('x-user-id'), equals(userId));
-      expect(context.getHeader('x-operation-type'), equals(operationType));
-      expect(context.traceId, isNotNull);
-      expect(context.traceId, startsWith('trace_'));
-    });
-
-    test('создает контекст для междоменного вызова', () {
-      final parentTraceId = 'parent-trace-123';
-      final parent = RpcContext.withTraceId(
-        parentTraceId,
-      ).withAdditionalHeaders({'x-user-id': '456'});
-
-      final context = RpcContext.forDomainCall(
-        parentContext: parent,
-        fromDomain: 'OrderDomain',
-        toDomain: 'UserService',
-        operation: 'GetUser',
-      );
-
-      expect(context.traceId, equals(parentTraceId));
-      expect(context.requestId, startsWith('req_'));
-      expect(context.getHeader('x-user-id'), equals('456'));
-      expect(context.getHeader('x-from-domain'), equals('OrderDomain'));
-      expect(context.getHeader('x-to-domain'), equals('UserService'));
-      expect(context.getHeader('x-domain-operation'), equals('GetUser'));
-    });
-
-    test('извлекает метаданные домена из контекста', () {
-      final context = RpcContext.withHeaders({
-        'x-user-id': '123',
-        'x-session-id': 'session-abc',
-        'x-tenant-id': 'tenant-xyz',
-        'x-from-domain': 'OrderService',
-        'x-to-domain': 'PaymentService',
-        'x-domain-operation': 'ProcessPayment',
-        'x-operation-type': 'Payment',
-      }).withTraceId('trace-456');
-
-      final metadata = RpcContext.extractDomainMetadata(context);
-
-      expect(metadata.userId, equals('123'));
-      expect(metadata.sessionId, equals('session-abc'));
-      expect(metadata.tenantId, equals('tenant-xyz'));
-      expect(metadata.fromDomain, equals('OrderService'));
-      expect(metadata.toDomain, equals('PaymentService'));
-      expect(metadata.operation, equals('ProcessPayment'));
-      expect(metadata.operationType, equals('Payment'));
-      expect(metadata.traceId, equals('trace-456'));
-    });
-
-    test('проверяет валидность контекста', () {
+    test('isContextValid detects expired and cancelled contexts', () {
       final validContext = RpcContext.empty();
       final expiredContext = RpcContext.withDeadline(
         DateTime.now().subtract(Duration(minutes: 1)),
@@ -398,40 +100,7 @@ void main() {
       expect(RpcContext.isContextValid(null), isFalse);
     });
 
-    test('создает цепочку контекстов', () {
-      final baseContext = RpcContext.withTraceId('base-trace-123');
-      final steps = ['OrderDomain', 'UserDomain', 'PaymentDomain'];
-
-      final chain = RpcContext.createChain(
-        baseContext,
-        steps: steps,
-        stepTimeout: Duration(seconds: 5),
-      );
-
-      expect(chain.keys.length, equals(3));
-      expect(chain.containsKey('OrderDomain'), isTrue);
-      expect(chain.containsKey('UserDomain'), isTrue);
-      expect(chain.containsKey('PaymentDomain'), isTrue);
-
-      // Все контексты должны иметь один trace ID
-      for (final stepContext in chain.values) {
-        expect(stepContext.traceId, equals('base-trace-123'));
-        expect(stepContext.deadline, isNotNull);
-      }
-
-      // Проверяем, что каждый контекст имеет правильную метку шага
-      expect(
-        chain['OrderDomain']!.getValue('cord.step'),
-        equals('OrderDomain'),
-      );
-      expect(chain['UserDomain']!.getValue('cord.step'), equals('UserDomain'));
-      expect(
-        chain['PaymentDomain']!.getValue('cord.step'),
-        equals('PaymentDomain'),
-      );
-    });
-
-    test('санитизирует контекст', () {
+    test('sanitize removes sensitive headers', () {
       final context = RpcContext.withHeaders({
         'authorization': 'Bearer secret-token',
         'x-api-key': 'secret-key',
@@ -451,140 +120,205 @@ void main() {
     });
   });
 
-  group('DomainMetadata', () {
-    test('создает метаданные со всеми полями', () {
-      final metadata = DomainMetadata(
-        userId: '123',
-        sessionId: 'session-abc',
-        tenantId: 'tenant-xyz',
-        fromDomain: 'OrderService',
-        toDomain: 'UserService',
-        operation: 'GetUser',
-        operationType: 'UserOp',
-        traceId: 'trace-456',
-        correlationId: 'corr-789',
-      );
+  group('CancellationToken', () {
+    test('creates uncancelled token', () {
+      final token = RpcCancellationToken();
 
-      expect(metadata.userId, equals('123'));
-      expect(metadata.sessionId, equals('session-abc'));
-      expect(metadata.tenantId, equals('tenant-xyz'));
-      expect(metadata.fromDomain, equals('OrderService'));
-      expect(metadata.toDomain, equals('UserService'));
-      expect(metadata.operation, equals('GetUser'));
-      expect(metadata.operationType, equals('UserOp'));
-      expect(metadata.traceId, equals('trace-456'));
-      expect(metadata.correlationId, equals('corr-789'));
+      expect(token.isCancelled, isFalse);
+      expect(token.reason, isNull);
     });
 
-    test('создает метаданные с минимальным набором полей', () {
-      final metadata = DomainMetadata(
-        toDomain: 'PaymentService',
-        operation: 'ProcessPayment',
-        traceId: 'trace-123',
-      );
+    test('creates pre-cancelled token', () {
+      final reason = 'User cancelled';
+      final token = RpcCancellationToken.cancelled(reason);
 
-      expect(metadata.toDomain, equals('PaymentService'));
-      expect(metadata.operation, equals('ProcessPayment'));
-      expect(metadata.traceId, equals('trace-123'));
-      expect(metadata.userId, isNull);
-      expect(metadata.sessionId, isNull);
-      expect(metadata.tenantId, isNull);
-      expect(metadata.fromDomain, isNull);
-      expect(metadata.operationType, isNull);
-      expect(metadata.correlationId, isNull);
+      expect(token.isCancelled, isTrue);
+      expect(token.reason, equals(reason));
     });
 
-    test('форматирует строковое представление', () {
-      final metadata = DomainMetadata(
-        userId: '123',
-        fromDomain: 'OrderService',
-        toDomain: 'UserService',
-        operation: 'GetUser',
-        traceId: 'trace-456',
-      );
+    test('cancels token with reason', () {
+      final token = RpcCancellationToken();
+      final reason = 'Timeout exceeded';
 
-      final str = metadata.toString();
+      token.cancel(reason);
 
-      expect(str, contains('OrderService→UserService'));
-      expect(str, contains('op:GetUser'));
-      expect(str, contains('trace:trace-456'));
-      expect(str, contains('user:123'));
+      expect(token.isCancelled, isTrue);
+      expect(token.reason, equals(reason));
     });
-  });
 
-  group('RpcContextAware', () {
-    test('миксин создает контекст для вызова', () {
-      final parentContext = RpcContext.withTraceId(
-        'parent-trace-123',
-      ).withAdditionalHeaders({'x-user-id': '456'});
-      final domain = TestDomain('TestDomain', parentContext);
+    test('throws on cancelled token check', () {
+      final token = RpcCancellationToken.cancelled('Test cancellation');
 
-      final callContext = domain.createCallContext(
-        targetDomain: 'PaymentService',
-        operation: 'ProcessPayment',
-      );
-
-      expect(callContext.traceId, equals('parent-trace-123'));
-      expect(callContext.requestId, startsWith('req_'));
-      expect(callContext.getHeader('x-user-id'), equals('456'));
-      expect(callContext.getHeader('x-to-domain'), equals('PaymentService'));
       expect(
-        callContext.getHeader('x-domain-operation'),
-        equals('ProcessPayment'),
+        () => token.throwIfCancelled(),
+        throwsA(isA<RpcCancelledException>()),
       );
-      expect(callContext.getHeader('x-from-domain'), equals('TestDomain'));
+    });
+
+    test('does not throw for uncancelled token', () {
+      final token = RpcCancellationToken();
+
+      expect(() => token.throwIfCancelled(), returnsNormally);
     });
   });
 
-  group('Интеграционные тесты', () {
-    test('полный цикл propagation через несколько доменов', () {
-      // Создаем начальный контекст операции
-      final initialContext = RpcContext.forBusinessOperation(
-        operationType: 'CreateOrder',
-        userId: '123',
-      );
+  group('RpcContextUtils', () {
+    test('creates context with Basic auth', () {
+      final context = RpcContextUtils.withBasicAuth('user', 'pass');
+      final authHeader = context.getHeader('authorization');
 
-      // OrderDomain делает вызов в UserDomain
-      final orderToUserContext = RpcContext.forDomainCall(
-        parentContext: initialContext,
-        fromDomain: 'OrderDomain',
-        toDomain: 'UserDomain',
-        operation: 'GetUser',
-      );
-
-      // UserDomain делает вызов в PaymentDomain
-      final userToPaymentContext = RpcContext.forDomainCall(
-        parentContext: orderToUserContext,
-        fromDomain: 'UserDomain',
-        toDomain: 'PaymentDomain',
-        operation: 'ValidateCard',
-      );
-
-      // Проверяем, что trace ID проходит через всю цепочку
-      expect(initialContext.traceId, equals(orderToUserContext.traceId));
-      expect(orderToUserContext.traceId, equals(userToPaymentContext.traceId));
-
-      // Каждый вызов имеет правильный формат request ID
-      expect(initialContext.requestId, startsWith('req_'));
-      expect(orderToUserContext.requestId, startsWith('req_'));
-      expect(userToPaymentContext.requestId, startsWith('req_'));
-
-      // User ID проходит через всю цепочку
-      expect(initialContext.getHeader('x-user-id'), equals('123'));
-      expect(orderToUserContext.getHeader('x-user-id'), equals('123'));
-      expect(userToPaymentContext.getHeader('x-user-id'), equals('123'));
-
-      // Проверяем метаданные последнего вызова
-      final paymentMetadata = RpcContext.extractDomainMetadata(
-        userToPaymentContext,
-      );
-      expect(paymentMetadata.userId, equals('123'));
-      expect(paymentMetadata.toDomain, equals('PaymentDomain'));
-      expect(paymentMetadata.operation, equals('ValidateCard'));
-      expect(paymentMetadata.traceId, equals(initialContext.traceId));
+      expect(authHeader, isNotNull);
+      expect(authHeader, startsWith('Basic '));
+      expect(authHeader, equals('Basic dXNlcjpwYXNz'));
     });
 
-    test('работа с таймаутами и отменой в цепочке', () {
+    test('creates context with Bearer token', () {
+      final token = 'abc123token';
+      final context = RpcContextUtils.withBearerToken(token);
+      final authHeader = context.getHeader('authorization');
+
+      expect(authHeader, equals('Bearer $token'));
+    });
+
+    test('creates context with API key', () {
+      final apiKey = 'secret-key-123';
+      final context = RpcContextUtils.withApiKey(apiKey);
+
+      expect(context.getHeader('x-api-key'), equals(apiKey));
+    });
+
+    test('creates context with custom API key header', () {
+      final apiKey = 'secret-key-123';
+      final headerName = 'x-custom-key';
+      final context = RpcContextUtils.withApiKey(
+        apiKey,
+        headerName: headerName,
+      );
+
+      expect(context.getHeader(headerName), equals(apiKey));
+      expect(context.getHeader('x-api-key'), isNull);
+    });
+
+    test('creates context with tracing headers', () {
+      final traceId = 'trace-123';
+      final spanId = 'span-456';
+      final parentSpanId = 'parent-789';
+
+      final context = RpcContextUtils.withTracing(
+        traceId: traceId,
+        spanId: spanId,
+        parentSpanId: parentSpanId,
+      );
+
+      expect(context.getHeader('x-trace-id'), equals(traceId));
+      expect(context.getHeader('x-span-id'), equals(spanId));
+      expect(context.getHeader('x-parent-span-id'), equals(parentSpanId));
+      expect(context.traceId, equals(traceId));
+    });
+
+    test('auto-generates trace ID when not provided', () {
+      final context = RpcContextUtils.withTracing();
+
+      expect(context.traceId, isNotNull);
+      expect(context.traceId, startsWith('trace_'));
+    });
+
+    test('merges contexts with right having priority', () {
+      final leftContext = RpcContext.withHeaders({
+        'x-left': 'left-value',
+      }).withTraceId('left-trace').withValue('shared-key', 'left-shared');
+
+      final rightContext = RpcContext.withHeaders({
+        'x-right': 'right-value',
+      }).withTraceId('right-trace').withValue('shared-key', 'right-shared');
+
+      final merged = RpcContextUtils.merge(leftContext, rightContext);
+
+      expect(merged.traceId, equals('right-trace'));
+      expect(merged.requestId, equals(rightContext.requestId));
+      expect(merged.getValue('shared-key'), equals('right-shared'));
+      expect(merged.getHeader('x-left'), equals('left-value'));
+      expect(merged.getHeader('x-right'), equals('right-value'));
+    });
+  });
+
+  group('RpcContextBuilder', () {
+    test('builds context with fluent API', () {
+      final timeout = Duration(minutes: 5);
+      final traceId = 'trace-123';
+
+      final context = RpcContextBuilder()
+          .withTraceId(traceId)
+          .withTimeout(timeout)
+          .withHeader('x-user-id', '123')
+          .withBearerAuth('token-abc')
+          .withValue('custom-data', 'test-value')
+          .build();
+
+      expect(context.traceId, equals(traceId));
+      expect(context.deadline, isNotNull);
+      expect(context.getHeader('x-user-id'), equals('123'));
+      expect(context.getHeader('authorization'), equals('Bearer token-abc'));
+      expect(context.getValue('custom-data'), equals('test-value'));
+    });
+
+    test('inherits from parent context', () {
+      final parentTraceId = 'parent-trace-123';
+      final parentHeaders = {'x-session': 'parent-session'};
+      final parent = RpcContext.withHeaders(
+        parentHeaders,
+      ).withTraceId(parentTraceId);
+
+      final child = RpcContextBuilder.inheritFrom(
+        parent,
+      ).withHeader('x-user-id', '456').build();
+
+      expect(child.traceId, equals(parentTraceId));
+      expect(child.getHeader('x-session'), equals('parent-session'));
+      expect(child.getHeader('x-user-id'), equals('456'));
+      expect(child.requestId, startsWith('req_'));
+    });
+
+    test('generates new trace ID when parent is null', () {
+      final child = RpcContextBuilder.inheritFrom(null).build();
+
+      expect(child.traceId, isNotNull);
+      expect(child.traceId, startsWith('trace_'));
+      expect(child.requestId, isNotEmpty);
+    });
+  });
+
+  group('RpcContextExtensions', () {
+    test('createChild inherits trace ID and generates new request ID', () {
+      final parentTraceId = 'parent-trace-123';
+      final parent = RpcContext.withTraceId(parentTraceId);
+
+      final child = parent.createChild();
+
+      expect(child.traceId, equals(parentTraceId));
+      expect(child.requestId, startsWith('req_'));
+      expect(parent.requestId, startsWith('req_'));
+    });
+
+    test('createChildWith applies headers and timeout', () {
+      final parent = RpcContext.withTraceId('trace-123');
+      final additionalHeaders = {'x-custom': 'value'};
+      final timeout = Duration(seconds: 30);
+
+      final child = parent.createChildWith(
+        headers: additionalHeaders,
+        timeout: timeout,
+      );
+
+      expect(child.traceId, equals(parent.traceId));
+      expect(child.requestId, startsWith('req_'));
+      expect(child.getHeader('x-custom'), equals('value'));
+      expect(child.deadline, isNotNull);
+    });
+  });
+
+  group('Integration', () {
+    test('cancellation propagates through child context', () {
       final cancellationToken = RpcCancellationToken();
       final timeout = Duration(seconds: 30);
 
@@ -594,16 +328,13 @@ void main() {
           .withCancellation(cancellationToken)
           .build();
 
-      // Создаем дочерний контекст
       final childContext = context.createChild();
 
-      // Проверяем наследование
       expect(childContext.traceId, equals(context.traceId));
       expect(childContext.deadline, equals(context.deadline));
       expect(childContext.cancellationToken, equals(context.cancellationToken));
       expect(childContext.isCancelled, isFalse);
 
-      // Отменяем операцию
       cancellationToken.cancel('User cancelled');
 
       expect(childContext.isCancelled, isTrue);
@@ -613,14 +344,4 @@ void main() {
       );
     });
   });
-}
-
-// Тестовый класс для проверки RpcContextAware mixin
-class TestDomain with RpcContextAware {
-  @override
-  final String serviceName;
-
-  TestDomain(this.serviceName, RpcContext? context) {
-    updateCurrentContext(context);
-  }
 }

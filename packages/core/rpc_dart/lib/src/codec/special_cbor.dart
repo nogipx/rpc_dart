@@ -171,15 +171,12 @@ abstract interface class CborCodec {
         ),
       );
 
-      // Correct 64-bit integer encoding per RFC 7049.
-      builder.addByte((value >> 56) & 0xFF);
-      builder.addByte((value >> 48) & 0xFF);
-      builder.addByte((value >> 40) & 0xFF);
-      builder.addByte((value >> 32) & 0xFF);
-      builder.addByte((value >> 24) & 0xFF);
-      builder.addByte((value >> 16) & 0xFF);
-      builder.addByte((value >> 8) & 0xFF);
-      builder.addByte(value & 0xFF);
+      // ByteData.setUint64 is correct on both VM and JS (unlike >> 56 which
+      // truncates to 32 bits on the JS target).
+      final v64 = ByteData(8)..setUint64(0, value, Endian.big);
+      for (var i = 0; i < 8; i++) {
+        builder.addByte(v64.getUint8(i));
+      }
     }
   }
 
@@ -214,15 +211,10 @@ abstract interface class CborCodec {
         ),
       );
 
-      // Correct 64-bit integer encoding per RFC 7049.
-      builder.addByte((value >> 56) & 0xFF);
-      builder.addByte((value >> 48) & 0xFF);
-      builder.addByte((value >> 40) & 0xFF);
-      builder.addByte((value >> 32) & 0xFF);
-      builder.addByte((value >> 24) & 0xFF);
-      builder.addByte((value >> 16) & 0xFF);
-      builder.addByte((value >> 8) & 0xFF);
-      builder.addByte(value & 0xFF);
+      final v64 = ByteData(8)..setUint64(0, value, Endian.big);
+      for (var i = 0; i < 8; i++) {
+        builder.addByte(v64.getUint8(i));
+      }
     }
   }
 
@@ -322,14 +314,10 @@ abstract interface class CborCodec {
       builder.addByte(
         _getMajorTypeByte(majorType, _additionalInfoEightByteFollow),
       );
-      builder.addByte((length >> 56) & 0xFF);
-      builder.addByte((length >> 48) & 0xFF);
-      builder.addByte((length >> 40) & 0xFF);
-      builder.addByte((length >> 32) & 0xFF);
-      builder.addByte((length >> 24) & 0xFF);
-      builder.addByte((length >> 16) & 0xFF);
-      builder.addByte((length >> 8) & 0xFF);
-      builder.addByte(length & 0xFF);
+      final v64 = ByteData(8)..setUint64(0, length, Endian.big);
+      for (var i = 0; i < 8; i++) {
+        builder.addByte(v64.getUint8(i));
+      }
     }
   }
 
@@ -952,15 +940,10 @@ class _FastCborWriter {
         ),
       );
 
-      // Correct 64-bit integer encoding per RFC 7049.
-      _builder.addByte((value >> 56) & 0xFF);
-      _builder.addByte((value >> 48) & 0xFF);
-      _builder.addByte((value >> 40) & 0xFF);
-      _builder.addByte((value >> 32) & 0xFF);
-      _builder.addByte((value >> 24) & 0xFF);
-      _builder.addByte((value >> 16) & 0xFF);
-      _builder.addByte((value >> 8) & 0xFF);
-      _builder.addByte(value & 0xFF);
+      final v64 = ByteData(8)..setUint64(0, value, Endian.big);
+      for (var i = 0; i < 8; i++) {
+        _builder.addByte(v64.getUint8(i));
+      }
     }
   }
 
@@ -1006,15 +989,10 @@ class _FastCborWriter {
         ),
       );
 
-      // Correct 64-bit integer encoding per RFC 7049.
-      _builder.addByte((value >> 56) & 0xFF);
-      _builder.addByte((value >> 48) & 0xFF);
-      _builder.addByte((value >> 40) & 0xFF);
-      _builder.addByte((value >> 32) & 0xFF);
-      _builder.addByte((value >> 24) & 0xFF);
-      _builder.addByte((value >> 16) & 0xFF);
-      _builder.addByte((value >> 8) & 0xFF);
-      _builder.addByte(value & 0xFF);
+      final v64 = ByteData(8)..setUint64(0, value, Endian.big);
+      for (var i = 0; i < 8; i++) {
+        _builder.addByte(v64.getUint8(i));
+      }
     }
   }
 
@@ -1117,14 +1095,10 @@ class _FastCborWriter {
       _builder.addByte(
         _getMajorTypeByte(majorType, CborCodec._additionalInfoEightByteFollow),
       );
-      _builder.addByte((length >> 56) & 0xFF);
-      _builder.addByte((length >> 48) & 0xFF);
-      _builder.addByte((length >> 40) & 0xFF);
-      _builder.addByte((length >> 32) & 0xFF);
-      _builder.addByte((length >> 24) & 0xFF);
-      _builder.addByte((length >> 16) & 0xFF);
-      _builder.addByte((length >> 8) & 0xFF);
-      _builder.addByte(length & 0xFF);
+      final v64 = ByteData(8)..setUint64(0, length, Endian.big);
+      for (var i = 0; i < 8; i++) {
+        _builder.addByte(v64.getUint8(i));
+      }
     }
   }
 

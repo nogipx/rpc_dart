@@ -14,19 +14,43 @@ import 'protocol.dart';
 /// Manages buffering and parse state for fragmented gRPC messages, which may
 /// arrive split across fragments or multiple messages per fragment.
 ///
-/// Uses a read-offset to avoid O(N²) buffer copies when multiple gRPC messages
-/// arrive in a single chunk. The buffer grows by appending; the read pointer
-/// advances without copying. One compact() call at the end of each parse pass
-/// drops already-consumed bytes.
+/// Uses a [Uint8List] backing buffer and a read-offset pointer to avoid O(N²)
+/// copies when multiple gRPC messages arrive in a single chunk. One compact()
+/// call at the end of each parse pass drops consumed bytes in a single O(n)
+/// copy, and sublist() on a Uint8List produces a typed copy without boxing.
 final class _MessageParserState {
   /// Accumulated byte buffer. May contain already-consumed bytes before [readOffset].
-  List<int> buffer = [];
+  Uint8List _bytes = Uint8List(0);
 
-  /// Index of the first unprocessed byte in [buffer].
+  /// Index of the first unprocessed byte in [_bytes].
   int readOffset = 0;
 
   /// Number of bytes not yet consumed.
-  int get available => buffer.length - readOffset;
+  int get available => _bytes.length - readOffset;
+
+  /// Appends [data] to the buffer.
+  ///
+  /// When the buffer is fully consumed, the new data is taken directly (one
+  /// copy). When there are unconsumed bytes, they are concatenated with the
+  /// new data (one copy of combined bytes, no boxing).
+  void addBytes(Uint8List data) {
+    if (readOffset == _bytes.length) {
+      // All previous bytes consumed — reuse incoming data directly.
+      _bytes = Uint8List.fromList(data);
+      readOffset = 0;
+    } else {
+      // Concat unconsumed tail + new data in a single allocation.
+      final unconsumed = _bytes.length - readOffset;
+      final merged = Uint8List(unconsumed + data.length);
+      merged.setRange(0, unconsumed, _bytes, readOffset);
+      merged.setRange(unconsumed, merged.length, data);
+      _bytes = merged;
+      readOffset = 0;
+    }
+  }
+
+  /// Returns a typed copy of bytes [from]..[to] — one copy, no boxing.
+  Uint8List sublist(int from, int to) => _bytes.sublist(from, to);
 
   /// Advances the read pointer by [n] bytes without copying.
   void advance(int n) => readOffset += n;
@@ -35,14 +59,14 @@ final class _MessageParserState {
   /// instead of slicing on every message — O(remaining) total instead of O(N²).
   void compact() {
     if (readOffset > 0) {
-      buffer = buffer.sublist(readOffset);
+      _bytes = _bytes.sublist(readOffset);
       readOffset = 0;
     }
   }
 
   /// Clears all buffered data and resets the read pointer.
   void clear() {
-    buffer.clear();
+    _bytes = Uint8List(0);
     readOffset = 0;
   }
 
@@ -112,7 +136,7 @@ final class RpcMessageParser {
     final result = <Uint8List>[];
 
     // Append incoming data to the buffer.
-    _state.buffer.addAll(data);
+    _state.addBytes(data);
     if (_state.available > _maxBufferedBytes) {
       final buffered = _state.available;
       _state.clear();
@@ -133,11 +157,9 @@ final class RpcMessageParser {
 
         try {
           final header = RpcMessageFrame.parseHeader(
-            Uint8List.fromList(
-              _state.buffer.sublist(
-                _state.readOffset,
-                _state.readOffset + RpcConstants.messagePrefixSize,
-              ),
+            _state.sublist(
+              _state.readOffset,
+              _state.readOffset + RpcConstants.messagePrefixSize,
             ),
           );
           _state.isCompressed = header.isCompressed;
@@ -169,12 +191,10 @@ final class RpcMessageParser {
       // Need the full body before we can emit the message.
       if (_state.available < _state.expectedMessageLength!) break;
 
-      // Extract the message body — one copy of exactly the payload bytes.
-      var payload = Uint8List.fromList(
-        _state.buffer.sublist(
-          _state.readOffset,
-          _state.readOffset + _state.expectedMessageLength!,
-        ),
+      // Extract the message body — one typed copy of exactly the payload bytes.
+      var payload = _state.sublist(
+        _state.readOffset,
+        _state.readOffset + _state.expectedMessageLength!,
       );
       if (_state.isCompressed) {
         final decompressor = _decompressor;

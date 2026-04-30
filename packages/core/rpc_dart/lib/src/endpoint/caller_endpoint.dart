@@ -65,7 +65,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase {
     required super.transport,
     super.debugLabel,
     super.loggerColors,
-    this.compressionEnabled = true,
+    this.compressionEnabled = false,
   }) {
     _validateClientTransport();
   }
