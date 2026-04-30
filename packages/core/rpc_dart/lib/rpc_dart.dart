@@ -5,5 +5,7 @@
 
 library;
 
-export 'src/_index.dart';
+export 'dart:typed_data';
+
 export 'logger.dart';
+export 'src/_index.dart';

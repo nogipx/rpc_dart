@@ -1,0 +1,25 @@
+name: rpc_dart_grpc_reflection
+description: >
+  gRPC Server Reflection (v1 + v1alpha) for rpc_dart.
+  Allows grpcurl, Postman, and other gRPC tools to discover services
+  registered on any rpc_dart endpoint.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  rpc_dart:
+    path: ../../core/rpc_dart
+
+dependency_overrides:
+  rpc_dart:
+    path: ../../core/rpc_dart
+
+dev_dependencies:
+  lints: ^3.0.0
+  test: ^1.25.5
+  protobuf: ^6.0.0
+  rpc_dart_http2:
+    path: ../../transport/rpc_dart_http2

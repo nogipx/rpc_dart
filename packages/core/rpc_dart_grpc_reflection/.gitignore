@@ -1,0 +1,7 @@
+.dart_tool/
+.fvm/
+.vscode/
+.idea/
+build/
+pubspec.lock
+proto/

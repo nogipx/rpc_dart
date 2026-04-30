@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
@@ -343,6 +345,22 @@ class _Emitter {
         "  static const ${method.declarationName} = '${_escapeString(method.methodName)}';",
       );
     }
+
+    final descriptorLiteral =
+        _GrpcDescriptorBuilder(service, methods).buildLiteral();
+    if (descriptorLiteral != null) {
+      b.writeln();
+      b.writeln(
+        '  /// FileDescriptorProto bytes for gRPC Server Reflection.',
+      );
+      b.writeln(
+        '  /// Register with: registry.addFileDescriptor($className.grpcDescriptor)',
+      );
+      b.writeln(
+        '  static final grpcDescriptor = Uint8List.fromList(const $descriptorLiteral);',
+      );
+    }
+
     b.writeln('}');
     return b.toString();
   }
@@ -1059,6 +1077,188 @@ class _RemovedMethodInfo {
 
   final MethodElement element;
   final String message;
+}
+
+// ---------------------------------------------------------------------------
+// gRPC descriptor generation (Tier 2)
+// ---------------------------------------------------------------------------
+
+/// Builds a FileDescriptorProto binary at generation time and returns
+/// it as a Dart list literal string, e.g. `[10, 5, 101, ...]`.
+///
+/// Returns null if the descriptor cannot be built (e.g. zeroCopy mode,
+/// unrepresentable field types).
+class _GrpcDescriptorBuilder {
+  final _ServiceMeta service;
+  final List<_MethodMeta> methods;
+
+  _GrpcDescriptorBuilder(this.service, this.methods);
+
+  String? buildLiteral() {
+    final bytes = _buildBytes();
+    if (bytes == null) return null;
+    return '[${bytes.join(', ')}]';
+  }
+
+  Uint8List? _buildBytes() {
+    final lastDot = service.name.lastIndexOf('.');
+    final package = lastDot >= 0 ? service.name.substring(0, lastDot) : '';
+    final serviceName =
+        lastDot >= 0 ? service.name.substring(lastDot + 1) : service.name;
+
+    // Collect unique non-zeroCopy message types.
+    final messageTypes = <String, DartType>{};
+    for (final method in methods) {
+      for (final t in [
+        method.signature.requestType,
+        method.signature.responseType,
+      ]) {
+        final name = _typeName(t);
+        messageTypes.putIfAbsent(name, () => t);
+      }
+    }
+    if (messageTypes.isEmpty) return null;
+
+    final messageBytesList = <Uint8List>[];
+    for (final entry in messageTypes.entries) {
+      final bytes = _buildMessageDescriptor(entry.key, entry.value);
+      if (bytes == null) return null;
+      messageBytesList.add(bytes);
+    }
+
+    final serviceBytes = _buildServiceDescriptor(serviceName, package);
+
+    final w = _ProtoWriter();
+    w.writeString(1, '${service.name.replaceAll('.', '_')}.proto');
+    w.writeString(2, package);
+    for (final msg in messageBytesList) {
+      w.writeBytes(4, msg);
+    }
+    w.writeBytes(6, serviceBytes);
+    return w.toBytes();
+  }
+
+  Uint8List? _buildMessageDescriptor(String name, DartType type) {
+    if (type is! InterfaceType) return null;
+    final fields =
+        type.element.fields.where((f) => !f.isStatic).toList();
+    if (fields.isEmpty) return null;
+
+    final w = _ProtoWriter();
+    w.writeString(1, name);
+    for (var i = 0; i < fields.length; i++) {
+      final fieldName = fields[i].name;
+      if (fieldName == null) continue;
+      final fb = _buildFieldDescriptor(fieldName, i + 1, fields[i].type);
+      if (fb != null) w.writeBytes(2, fb);
+    }
+    return w.toBytes();
+  }
+
+  Uint8List? _buildFieldDescriptor(String name, int number, DartType type) {
+    var label = 1; // LABEL_OPTIONAL
+    var actual = type;
+
+    if (actual is InterfaceType && actual.isDartCoreList) {
+      label = 3; // LABEL_REPEATED
+      actual = actual.typeArguments.isNotEmpty ? actual.typeArguments.first : actual;
+    }
+
+    int fieldType;
+    String? typeName;
+
+    if (actual.isDartCoreString) {
+      fieldType = 9;
+    } else if (actual.isDartCoreInt) {
+      fieldType = 5;
+    } else if (actual.isDartCoreDouble) {
+      fieldType = 1;
+    } else if (actual.isDartCoreBool) {
+      fieldType = 8;
+    } else if (actual is InterfaceType) {
+      fieldType = 11; // TYPE_MESSAGE
+      typeName = '.${actual.element.name ?? ''}';
+    } else {
+      return null;
+    }
+
+    final w = _ProtoWriter();
+    w.writeString(1, name);
+    w.writeInt32(3, number);
+    w.writeInt32(4, label);
+    w.writeInt32(5, fieldType);
+    if (typeName != null) w.writeString(6, typeName);
+    w.writeString(10, _toJsonName(name));
+    return w.toBytes();
+  }
+
+  Uint8List _buildServiceDescriptor(String serviceName, String package) {
+    final prefix = package.isEmpty ? '' : '$package.';
+    final w = _ProtoWriter();
+    w.writeString(1, serviceName);
+    for (final method in methods) {
+      final mw = _ProtoWriter();
+      mw.writeString(1, method.methodName);
+      mw.writeString(2, '.$prefix${_typeName(method.signature.requestType)}');
+      mw.writeString(3, '.$prefix${_typeName(method.signature.responseType)}');
+      if (method.signature.isRequestStream) mw.writeBool(5, true);
+      if (method.signature.isResponseStream) mw.writeBool(6, true);
+      w.writeBytes(2, mw.toBytes());
+    }
+    return w.toBytes();
+  }
+
+  static String _typeName(DartType t) =>
+      t.getDisplayString().replaceAll('?', '');
+
+  static String _toJsonName(String name) => name.replaceAllMapped(
+    RegExp(r'_([a-z])'),
+    (m) => m.group(1)!.toUpperCase(),
+  );
+}
+
+/// Minimal protobuf binary encoder (build-time only, not for runtime use).
+class _ProtoWriter {
+  final _buf = <int>[];
+
+  void writeVarint(int value) {
+    while (value > 0x7F) {
+      _buf.add((value & 0x7F) | 0x80);
+      value >>= 7;
+    }
+    _buf.add(value & 0x7F);
+  }
+
+  void _tag(int fieldNumber, int wireType) =>
+      writeVarint((fieldNumber << 3) | wireType);
+
+  void writeString(int fieldNumber, String value) {
+    if (value.isEmpty) return;
+    final encoded = utf8.encode(value);
+    _tag(fieldNumber, 2);
+    writeVarint(encoded.length);
+    _buf.addAll(encoded);
+  }
+
+  void writeBytes(int fieldNumber, Uint8List value) {
+    if (value.isEmpty) return;
+    _tag(fieldNumber, 2);
+    writeVarint(value.length);
+    _buf.addAll(value);
+  }
+
+  void writeBool(int fieldNumber, bool value) {
+    if (!value) return;
+    _tag(fieldNumber, 0);
+    writeVarint(1);
+  }
+
+  void writeInt32(int fieldNumber, int value) {
+    _tag(fieldNumber, 0);
+    writeVarint(value);
+  }
+
+  Uint8List toBytes() => Uint8List.fromList(_buf);
 }
 
 /// Escapes single quotes in a string for use in Dart string literals.
