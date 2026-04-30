@@ -278,3 +278,21 @@ test('sum', () async {
   await responder.close();
 });
 ```
+
+---
+
+## Ecosystem
+
+This package is the core of the rpc_dart ecosystem. Additional packages are available:
+
+| Package | Description |
+|---|---|
+| [rpc_dart_generator](https://pub.dev/packages/rpc_dart_generator) | Code generator for callers and responders |
+| [rpc_dart_framework](https://pub.dev/packages/rpc_dart_framework) | Server framework: modules, DI, lifecycle, rate limiting |
+| [rpc_dart_grpc_reflection](https://pub.dev/packages/rpc_dart_grpc_reflection) | gRPC Server Reflection (grpcurl, Postman support) |
+| [rpc_dart_opentelemetry](https://pub.dev/packages/rpc_dart_opentelemetry) | OpenTelemetry tracing and metrics |
+| [rpc_dart_http2](https://pub.dev/packages/rpc_dart_http2) | HTTP/2 transport (gRPC wire compatible) |
+| [rpc_dart_websocket](https://pub.dev/packages/rpc_dart_websocket) | WebSocket transport |
+| [rpc_dart_isolate](https://pub.dev/packages/rpc_dart_isolate) | Isolate transport |
+
+For the full list visit the [GitHub repository](https://github.com/nogipx/rpc_dart).
