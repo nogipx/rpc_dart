@@ -16,6 +16,7 @@ dependencies:
   rpc_dart_grpc_reflection:
     path: ../../rpc_dart_grpc_reflection
 
+  rpc_dart_http2: any
 dependency_overrides:
   rpc_dart:
     path: ../../rpc_dart
@@ -25,6 +26,3 @@ dependency_overrides:
 dev_dependencies:
   build_runner: ^2.11.1
   json_serializable: ^6.12.0
-  rpc_dart_http2:
-    path: ../../../transport/rpc_dart_http2
-

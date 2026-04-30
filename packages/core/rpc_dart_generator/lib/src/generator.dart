@@ -317,8 +317,8 @@ class _Emitter {
     buffer.writeln(_buildNames());
     buffer.writeln();
 
-    final needsCodecs = methods.any(
-        (m) => _shouldUseCodec(m, service.transferMode));
+    final needsCodecs =
+        methods.any((m) => _shouldUseCodec(m, service.transferMode));
     if (needsCodecs) {
       buffer.writeln(_buildCodecs());
       buffer.writeln();
@@ -1140,8 +1140,7 @@ class _GrpcDescriptorBuilder {
 
   Uint8List? _buildMessageDescriptor(String name, DartType type) {
     if (type is! InterfaceType) return null;
-    final fields =
-        type.element.fields.where((f) => !f.isStatic).toList();
+    final fields = type.element.fields.where((f) => !f.isStatic).toList();
     if (fields.isEmpty) return null;
 
     final w = _ProtoWriter();
@@ -1161,7 +1160,8 @@ class _GrpcDescriptorBuilder {
 
     if (actual is InterfaceType && actual.isDartCoreList) {
       label = 3; // LABEL_REPEATED
-      actual = actual.typeArguments.isNotEmpty ? actual.typeArguments.first : actual;
+      actual =
+          actual.typeArguments.isNotEmpty ? actual.typeArguments.first : actual;
     }
 
     int fieldType;
@@ -1212,9 +1212,9 @@ class _GrpcDescriptorBuilder {
       t.getDisplayString().replaceAll('?', '');
 
   static String _toJsonName(String name) => name.replaceAllMapped(
-    RegExp(r'_([a-z])'),
-    (m) => m.group(1)!.toUpperCase(),
-  );
+        RegExp(r'_([a-z])'),
+        (m) => m.group(1)!.toUpperCase(),
+      );
 }
 
 /// Minimal protobuf binary encoder (build-time only, not for runtime use).

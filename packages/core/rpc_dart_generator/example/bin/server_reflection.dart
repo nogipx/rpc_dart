@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
 
 // Integration test: codegen contract + gRPC Server Reflection (Tier 2).
@@ -17,7 +18,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_grpc_reflection/rpc_dart_grpc_reflection.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 
-import '../lib/calculator_contract.dart';
+import 'package:rpc_dart_generator_consumer/calculator_contract.dart';
 
 class CalculatorResponder extends CalculatorContractResponder {
   @override

@@ -72,7 +72,6 @@ class RpcReflectionRegistry {
     addFileDescriptor(builder.build());
   }
 
-
   /// All registered service names (fully qualified).
   List<String> get serviceNames => List.unmodifiable(_serviceNames);
 
@@ -85,9 +84,9 @@ class RpcReflectionRegistry {
   Uint8List? fileContainingSymbol(String symbol) {
     final filename =
         _symbolToFile[symbol] ??
-        _symbolToFile[
-          symbol.startsWith('.') ? symbol.substring(1) : '.$symbol'
-        ];
+        _symbolToFile[symbol.startsWith('.')
+            ? symbol.substring(1)
+            : '.$symbol'];
     return filename != null ? _files[filename] : null;
   }
 

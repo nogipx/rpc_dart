@@ -254,8 +254,8 @@ abstract class RpcResponderContract implements IRpcContract {
         Stream<IRpcSerializable> requests, {
         RpcContext? context,
       }) async {
-        final typedRequestStream = requests
-            .map<TRequest>((r) => _OpaqueValue.unwrap<TRequest>(r));
+        final typedRequestStream =
+            requests.map<TRequest>((r) => _OpaqueValue.unwrap<TRequest>(r));
         final response = await handler(typedRequestStream, context: context);
         return _OpaqueValue.wrap(response);
       }
@@ -320,8 +320,8 @@ abstract class RpcResponderContract implements IRpcContract {
         Stream<IRpcSerializable> requests, {
         RpcContext? context,
       }) async* {
-        final typedRequestStream = requests
-            .map<TRequest>((r) => _OpaqueValue.unwrap<TRequest>(r));
+        final typedRequestStream =
+            requests.map<TRequest>((r) => _OpaqueValue.unwrap<TRequest>(r));
         final responseStream = handler(typedRequestStream, context: context);
         await for (final response in responseStream) {
           yield _OpaqueValue.wrap(response);

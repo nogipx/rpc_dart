@@ -60,16 +60,17 @@ class ServerReflectionContract extends RpcResponderContract {
   }
 
   /// Returns contracts for both v1 and v1alpha reflection service names.
-  static List<ServerReflectionContract> both(RpcReflectionRegistry registry) => [
-    ServerReflectionContract(
-      registry,
-      serviceName: 'grpc.reflection.v1.ServerReflection',
-    ),
-    ServerReflectionContract(
-      registry,
-      serviceName: 'grpc.reflection.v1alpha.ServerReflection',
-    ),
-  ];
+  static List<ServerReflectionContract> both(RpcReflectionRegistry registry) =>
+      [
+        ServerReflectionContract(
+          registry,
+          serviceName: 'grpc.reflection.v1.ServerReflection',
+        ),
+        ServerReflectionContract(
+          registry,
+          serviceName: 'grpc.reflection.v1alpha.ServerReflection',
+        ),
+      ];
 
   Stream<Uint8List> _handleReflection(
     Stream<Uint8List> requests, {
@@ -157,7 +158,11 @@ class ServerReflectionContract extends RpcResponderContract {
   ) {
     final fileBytes = _registry.fileByFilename(filename);
     if (fileBytes == null) {
-      return _buildErrorResponse(originalRequest, 5, 'File not found: $filename');
+      return _buildErrorResponse(
+        originalRequest,
+        5,
+        'File not found: $filename',
+      );
     }
     return _buildFileDescriptorResponse(originalRequest, fileBytes);
   }
