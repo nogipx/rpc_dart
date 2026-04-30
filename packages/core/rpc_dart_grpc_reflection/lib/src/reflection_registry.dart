@@ -19,6 +19,17 @@ import 'reflection_contract.dart';
 /// );
 /// ```
 ///
+/// **With imports** — register dependencies first, then the importing file:
+/// ```dart
+/// registry.addFromPbjson(name: 'common.proto', package: 'common.v1', ...);
+/// registry.addFromPbjson(
+///   name: 'echo.proto',
+///   package: 'echo.v1',
+///   dependencies: ['common.proto'],
+///   ...
+/// );
+/// ```
+///
 /// **Codegen native services** — use generated descriptor:
 /// ```dart
 /// registry.addFileDescriptor(MyServiceNames.grpcDescriptor);
@@ -26,6 +37,9 @@ import 'reflection_contract.dart';
 class RpcReflectionRegistry {
   // filename → raw FileDescriptorProto bytes
   final Map<String, Uint8List> _files = {};
+
+  // filename → list of dependency filenames (from proto `import` statements)
+  final Map<String, List<String>> _dependencies = {};
 
   // fully-qualified symbol → filename
   final Map<String, String> _symbolToFile = {};
@@ -44,6 +58,7 @@ class RpcReflectionRegistry {
   ///
   /// [name] — proto filename (e.g. `'echo.proto'`)
   /// [package] — proto package (e.g. `'echo.v1'`), empty string if none
+  /// [dependencies] — list of imported proto filenames (e.g. `['common.proto']`)
   /// [messages] — list of message descriptor bytes (e.g. `echoRequestDescriptor`)
   /// [services] — list of service descriptor bytes (e.g. `echoServiceDescriptor`)
   ///
@@ -61,8 +76,12 @@ class RpcReflectionRegistry {
     required String package,
     required List<Uint8List> messages,
     required List<Uint8List> services,
+    List<String> dependencies = const [],
   }) {
     var builder = RpcFileDescriptorBuilder(name: name, package: package);
+    for (final dep in dependencies) {
+      builder = builder.addDependency(dep);
+    }
     for (final m in messages) {
       builder = builder.addMessageBytes(m);
     }
@@ -75,23 +94,29 @@ class RpcReflectionRegistry {
   /// All registered service names (fully qualified).
   List<String> get serviceNames => List.unmodifiable(_serviceNames);
 
-  /// Returns raw FileDescriptorProto bytes for [filename], or null if not found.
-  Uint8List? fileByFilename(String filename) => _files[filename];
-
-  /// Returns raw FileDescriptorProto bytes for the file containing [symbol].
-  ///
-  /// [symbol] may be a service name, message type name, etc.
-  Uint8List? fileContainingSymbol(String symbol) {
-    final filename =
-        _symbolToFile[symbol] ??
-        _symbolToFile[symbol.startsWith('.')
-            ? symbol.substring(1)
-            : '.$symbol'];
-    return filename != null ? _files[filename] : null;
-  }
-
   /// Whether any files with full schema have been registered.
   bool get hasDescriptors => _files.isNotEmpty;
+
+  /// Returns FileDescriptorProto bytes for [filename] plus all registered
+  /// transitive dependencies, or null if [filename] is not registered.
+  ///
+  /// Dependencies that are not registered (e.g. well-known types) are skipped.
+  List<Uint8List>? fileByFilename(String filename) {
+    if (!_files.containsKey(filename)) return null;
+    return _resolveWithDeps(filename);
+  }
+
+  /// Returns FileDescriptorProto bytes for the file containing [symbol] plus
+  /// all registered transitive dependencies, or null if not found.
+  ///
+  /// [symbol] may be a service name, message type name, nested type, or enum.
+  /// Accepts both `foo.v1.Bar` and `.foo.v1.Bar` forms.
+  List<Uint8List>? fileContainingSymbol(String symbol) {
+    final filename =
+        _symbolToFile[symbol] ??
+        _symbolToFile[symbol.startsWith('.') ? symbol.substring(1) : '.$symbol'];
+    return filename != null ? _resolveWithDeps(filename) : null;
+  }
 
   /// Registers reflection contracts (v1 + v1alpha) on [endpoint].
   ///
@@ -106,8 +131,26 @@ class RpcReflectionRegistry {
     }
   }
 
+  List<Uint8List> _resolveWithDeps(String filename) {
+    final result = <Uint8List>[];
+    final visited = <String>{};
+    _collectDeps(filename, result, visited);
+    return result;
+  }
+
+  void _collectDeps(String filename, List<Uint8List> result, Set<String> visited) {
+    if (!visited.add(filename)) return;
+    final bytes = _files[filename];
+    if (bytes == null) return; // not registered — skip (e.g. well-known types)
+    result.add(bytes);
+    for (final dep in (_dependencies[filename] ?? const [])) {
+      _collectDeps(dep, result, visited);
+    }
+  }
+
   void _registerParsed(ParsedFileDescriptor proto) {
     _files[proto.name] = proto.rawBytes;
+    _dependencies[proto.name] = proto.dependencies;
 
     final prefix = proto.package.isEmpty ? '' : '${proto.package}.';
 
@@ -123,6 +166,12 @@ class RpcReflectionRegistry {
       final fqn = '.$prefix$msg';
       _symbolToFile[fqn] = proto.name;
       _symbolToFile['$prefix$msg'] = proto.name;
+    }
+
+    for (final enm in proto.enumTypes) {
+      final fqn = '.$prefix$enm';
+      _symbolToFile[fqn] = proto.name;
+      _symbolToFile['$prefix$enm'] = proto.name;
     }
   }
 }

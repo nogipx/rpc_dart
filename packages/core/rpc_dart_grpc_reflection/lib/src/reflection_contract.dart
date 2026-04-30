@@ -82,7 +82,14 @@ class ServerReflectionContract extends RpcResponderContract {
   }
 
   Uint8List _processRequest(Uint8List bytes) {
-    // Parse ServerReflectionRequest
+    try {
+      return _parseAndDispatch(bytes);
+    } catch (_) {
+      return _buildErrorResponse(bytes, 2, 'Malformed request');
+    }
+  }
+
+  Uint8List _parseAndDispatch(Uint8List bytes) {
     var pos = 0;
     String? fileByFilename;
     String? fileContainingSymbol;
@@ -99,6 +106,9 @@ class ServerReflectionContract extends RpcResponderContract {
         final lenResult = _readVarint(bytes, pos);
         pos = lenResult.$2;
         final len = lenResult.$1;
+        if (len < 0 || pos + len > bytes.length) {
+          return _buildErrorResponse(bytes, 2, 'Malformed request: invalid field length');
+        }
         final data = bytes.sublist(pos, pos + len);
         pos += len;
 
@@ -113,12 +123,13 @@ class ServerReflectionContract extends RpcResponderContract {
             break; // skip unknown fields
         }
       } else if (wireType == 0) {
-        // skip varint field
         final v = _readVarint(bytes, pos);
         pos = v.$2;
       } else if (wireType == 1) {
+        if (pos + 8 > bytes.length) break;
         pos += 8;
       } else if (wireType == 5) {
+        if (pos + 4 > bytes.length) break;
         pos += 4;
       } else {
         break; // unknown wire type, stop parsing
@@ -142,8 +153,7 @@ class ServerReflectionContract extends RpcResponderContract {
     for (final name in _registry.serviceNames) {
       final svcMsg = ProtoWriter();
       svcMsg.writeString(1, name);
-      final svcBytes = svcMsg.toBytes();
-      servicesMsg.writeBytes(1, svcBytes);
+      servicesMsg.writeBytes(1, svcMsg.toBytes());
     }
 
     final response = ProtoWriter();
@@ -156,39 +166,33 @@ class ServerReflectionContract extends RpcResponderContract {
     Uint8List originalRequest,
     String filename,
   ) {
-    final fileBytes = _registry.fileByFilename(filename);
-    if (fileBytes == null) {
-      return _buildErrorResponse(
-        originalRequest,
-        5,
-        'File not found: $filename',
-      );
+    final fileBytesList = _registry.fileByFilename(filename);
+    if (fileBytesList == null) {
+      return _buildErrorResponse(originalRequest, 5, 'File not found: $filename');
     }
-    return _buildFileDescriptorResponse(originalRequest, fileBytes);
+    return _buildFileDescriptorResponse(originalRequest, fileBytesList);
   }
 
   Uint8List _buildFileContainingSymbolResponse(
     Uint8List originalRequest,
     String symbol,
   ) {
-    final fileBytes = _registry.fileContainingSymbol(symbol);
-    if (fileBytes == null) {
-      return _buildErrorResponse(
-        originalRequest,
-        5,
-        'Symbol not found: $symbol',
-      );
+    final fileBytesList = _registry.fileContainingSymbol(symbol);
+    if (fileBytesList == null) {
+      return _buildErrorResponse(originalRequest, 5, 'Symbol not found: $symbol');
     }
-    return _buildFileDescriptorResponse(originalRequest, fileBytes);
+    return _buildFileDescriptorResponse(originalRequest, fileBytesList);
   }
 
   Uint8List _buildFileDescriptorResponse(
     Uint8List originalRequest,
-    Uint8List fileDescriptorProtoBytes,
+    List<Uint8List> fileDescriptorProtoBytesList,
   ) {
     // file_descriptor_response (field 4) → file_descriptor_proto (repeated bytes, field 1)
     final fdMsg = ProtoWriter();
-    fdMsg.writeBytes(1, fileDescriptorProtoBytes);
+    for (final bytes in fileDescriptorProtoBytesList) {
+      fdMsg.writeBytes(1, bytes);
+    }
 
     final response = ProtoWriter();
     _writeOriginalRequest(response, originalRequest);
@@ -212,6 +216,10 @@ class ServerReflectionContract extends RpcResponderContract {
     return response.toBytes();
   }
 
+  // Exposed for unit testing — do not call in production code.
+  // ignore: invalid_use_of_visible_for_testing_member
+  Uint8List processRequestForTest(Uint8List bytes) => _processRequest(bytes);
+
   void _writeOriginalRequest(ProtoWriter response, Uint8List originalRequest) {
     // original_request (field 2, message)
     if (originalRequest.isNotEmpty) {
@@ -222,14 +230,16 @@ class ServerReflectionContract extends RpcResponderContract {
 
 /// Reads a varint from [bytes] starting at [pos].
 /// Returns (value, newPos).
+/// Throws [FormatException] if the varint is malformed (truncated or > 10 bytes).
 (int, int) _readVarint(Uint8List bytes, int pos) {
   var result = 0;
   var shift = 0;
   while (pos < bytes.length) {
+    if (shift >= 64) throw const FormatException('Varint exceeds 64 bits');
     final b = bytes[pos++];
     result |= (b & 0x7F) << shift;
-    if (b & 0x80 == 0) break;
+    if (b & 0x80 == 0) return (result, pos);
     shift += 7;
   }
-  return (result, pos);
+  throw const FormatException('Truncated varint');
 }

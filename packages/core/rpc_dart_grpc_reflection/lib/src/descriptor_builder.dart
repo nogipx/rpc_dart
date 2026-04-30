@@ -93,7 +93,56 @@ class RpcFieldDescriptor {
   }
 }
 
-/// Describes a protobuf message type with its fields.
+/// Describes a single enum value.
+class RpcEnumValueDescriptor {
+  /// Enum value name, e.g. `'UNKNOWN'`.
+  final String name;
+
+  /// Enum value number, e.g. `0`.
+  final int number;
+
+  const RpcEnumValueDescriptor({required this.name, required this.number});
+
+  Uint8List toBytes() {
+    final w = ProtoWriter();
+    w.writeString(1, name);
+    w.writeInt32(2, number);
+    return w.toBytes();
+  }
+}
+
+/// Describes a protobuf enum type.
+///
+/// Example:
+/// ```dart
+/// const RpcEnumDescriptor(
+///   name: 'Status',
+///   values: [
+///     RpcEnumValueDescriptor(name: 'UNKNOWN', number: 0),
+///     RpcEnumValueDescriptor(name: 'ACTIVE',  number: 1),
+///   ],
+/// )
+/// ```
+class RpcEnumDescriptor {
+  /// Enum name (unqualified), e.g. `'Status'`.
+  final String name;
+
+  /// Enum values.
+  final List<RpcEnumValueDescriptor> values;
+
+  const RpcEnumDescriptor({required this.name, required this.values});
+
+  Uint8List toBytes() {
+    final w = ProtoWriter();
+    w.writeString(1, name);
+    for (final v in values) {
+      w.writeBytes(2, v.toBytes());
+    }
+    return w.toBytes();
+  }
+}
+
+/// Describes a protobuf message type with its fields, nested messages, and enums.
 class RpcMessageDescriptor {
   /// Message name (unqualified), e.g. `'EchoRequest'`.
   final String name;
@@ -101,13 +150,30 @@ class RpcMessageDescriptor {
   /// Fields of this message.
   final List<RpcFieldDescriptor> fields;
 
-  const RpcMessageDescriptor({required this.name, required this.fields});
+  /// Nested message types (DescriptorProto.nested_type, field 3).
+  final List<RpcMessageDescriptor> nestedTypes;
+
+  /// Enum types defined inside this message (DescriptorProto.enum_type, field 4).
+  final List<RpcEnumDescriptor> enumTypes;
+
+  const RpcMessageDescriptor({
+    required this.name,
+    this.fields = const [],
+    this.nestedTypes = const [],
+    this.enumTypes = const [],
+  });
 
   Uint8List toBytes() {
     final w = ProtoWriter();
     w.writeString(1, name);
     for (final field in fields) {
-      w.writeBytes(2, field.toBytes());
+      w.writeBytes(2, field.toBytes()); // field
+    }
+    for (final nested in nestedTypes) {
+      w.writeBytes(3, nested.toBytes()); // nested_type
+    }
+    for (final enm in enumTypes) {
+      w.writeBytes(4, enm.toBytes()); // enum_type
     }
     return w.toBytes();
   }
@@ -148,7 +214,7 @@ class RpcMethodDescriptor {
 
 /// Builds a `FileDescriptorProto` binary for use with [RpcReflectionRegistry].
 ///
-/// Supports two usage patterns:
+/// Supports three usage patterns:
 ///
 /// **Tier 1 — protobuf services**: pass raw descriptor bytes from `.pbjson.dart`:
 /// ```dart
@@ -180,10 +246,28 @@ class RpcFileDescriptorBuilder {
   /// Proto package, e.g. `'echo.v1'`.
   final String package;
 
+  /// Proto syntax, defaults to `'proto3'`.
+  final String syntax;
+
+  final List<String> _dependencies = [];
   final List<Uint8List> _messageBytes = [];
+  final List<Uint8List> _enumBytes = [];
   final List<Uint8List> _serviceBytes = [];
 
-  RpcFileDescriptorBuilder({required this.name, required this.package});
+  RpcFileDescriptorBuilder({
+    required this.name,
+    required this.package,
+    this.syntax = 'proto3',
+  });
+
+  /// Declares an import dependency by proto filename, e.g. `'google/protobuf/timestamp.proto'`.
+  ///
+  /// The dependency must also be registered in [RpcReflectionRegistry] for the
+  /// reflection server to include it in responses.
+  RpcFileDescriptorBuilder addDependency(String protoFilename) {
+    _dependencies.add(protoFilename);
+    return this;
+  }
 
   /// Adds a message descriptor from raw `DescriptorProto` bytes.
   ///
@@ -196,9 +280,7 @@ class RpcFileDescriptorBuilder {
   /// Adds a service descriptor from raw `ServiceDescriptorProto` bytes.
   ///
   /// Use bytes from `.pbjson.dart`, e.g. `echoServiceDescriptor`.
-  RpcFileDescriptorBuilder addServiceBytes(
-    Uint8List serviceDescriptorProtoBytes,
-  ) {
+  RpcFileDescriptorBuilder addServiceBytes(Uint8List serviceDescriptorProtoBytes) {
     _serviceBytes.add(serviceDescriptorProtoBytes);
     return this;
   }
@@ -208,6 +290,12 @@ class RpcFileDescriptorBuilder {
   /// Used by codegen for native rpc_dart (non-protobuf) services.
   RpcFileDescriptorBuilder addMessage(RpcMessageDescriptor message) {
     _messageBytes.add(message.toBytes());
+    return this;
+  }
+
+  /// Adds a file-level enum descriptor.
+  RpcFileDescriptorBuilder addEnum(RpcEnumDescriptor enumDescriptor) {
+    _enumBytes.add(enumDescriptor.toBytes());
     return this;
   }
 
@@ -232,12 +320,19 @@ class RpcFileDescriptorBuilder {
     final w = ProtoWriter();
     w.writeString(1, name);
     w.writeString(2, package);
+    for (final dep in _dependencies) {
+      w.writeString(3, dep); // dependency
+    }
     for (final msg in _messageBytes) {
-      w.writeBytes(4, msg); // field 4 = message_type
+      w.writeBytes(4, msg); // message_type
+    }
+    for (final enm in _enumBytes) {
+      w.writeBytes(5, enm); // enum_type
     }
     for (final svc in _serviceBytes) {
-      w.writeBytes(6, svc); // field 6 = service
+      w.writeBytes(6, svc); // service
     }
+    w.writeString(12, syntax); // syntax
     return w.toBytes();
   }
 }

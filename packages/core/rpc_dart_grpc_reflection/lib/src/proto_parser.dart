@@ -11,25 +11,51 @@ import 'dart:typed_data';
 //   1 = I64
 //   2 = LEN (length-delimited)
 //   5 = I32
+//
+// FileDescriptorProto fields parsed:
+//   1  = name (string)
+//   2  = package (string)
+//   3  = dependency (repeated string)
+//   4  = message_type (repeated DescriptorProto)
+//   5  = enum_type (repeated EnumDescriptorProto)
+//   6  = service (repeated ServiceDescriptorProto)
+//
+// DescriptorProto fields parsed (recursive):
+//   1  = name (string)
+//   3  = nested_type (repeated DescriptorProto)
+//   4  = enum_type (repeated EnumDescriptorProto)
 
 const int _wireVarint = 0;
 const int _wireI64 = 1;
 const int _wireLen = 2;
 const int _wireI32 = 5;
 
-/// Parsed representation of a FileDescriptorProto (only fields used for reflection).
+/// Parsed representation of a FileDescriptorProto (fields used for reflection).
 class ParsedFileDescriptor {
   final String name;
   final String package;
+
+  /// Proto import paths, e.g. `['google/protobuf/timestamp.proto']`.
+  final List<String> dependencies;
+
   final List<String> services;
+
+  /// All message type names including nested, relative to package.
+  /// e.g. `['Outer', 'Outer.Inner']` for package `foo.v1`.
   final List<String> messageTypes;
+
+  /// All enum type names including nested, relative to package.
+  final List<String> enumTypes;
+
   final Uint8List rawBytes;
 
   const ParsedFileDescriptor({
     required this.name,
     required this.package,
+    required this.dependencies,
     required this.services,
     required this.messageTypes,
+    required this.enumTypes,
     required this.rawBytes,
   });
 }
@@ -64,8 +90,10 @@ ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
   final reader = _ProtoReader(bytes);
   var name = '';
   var package = '';
+  final dependencies = <String>[];
   final services = <String>[];
   final messageTypes = <String>[];
+  final enumTypes = <String>[];
 
   while (reader.hasMore) {
     final tag = reader.readTag();
@@ -74,20 +102,22 @@ ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
 
     switch (fieldNumber) {
       case 1 when wireType == _wireLen:
-        // string name = 1
         name = utf8.decode(reader.readLenDelimited());
       case 2 when wireType == _wireLen:
-        // string package = 2
         package = utf8.decode(reader.readLenDelimited());
+      case 3 when wireType == _wireLen:
+        // repeated string dependency
+        dependencies.add(utf8.decode(reader.readLenDelimited()));
       case 4 when wireType == _wireLen:
-        // repeated DescriptorProto message_type = 4
-        final msgBytes = reader.readLenDelimited();
-        final msgName = _parseNameField(msgBytes);
-        if (msgName.isNotEmpty) messageTypes.add(msgName);
+        // repeated DescriptorProto message_type — collect names recursively
+        _collectAllTypeNames(reader.readLenDelimited(), '', messageTypes, enumTypes);
+      case 5 when wireType == _wireLen:
+        // repeated EnumDescriptorProto enum_type (file-level)
+        final enumName = _parseNameField(reader.readLenDelimited());
+        if (enumName.isNotEmpty) enumTypes.add(enumName);
       case 6 when wireType == _wireLen:
-        // repeated ServiceDescriptorProto service = 6
-        final svcBytes = reader.readLenDelimited();
-        final svcName = _parseNameField(svcBytes);
+        // repeated ServiceDescriptorProto service
+        final svcName = _parseNameField(reader.readLenDelimited());
         if (svcName.isNotEmpty) services.add(svcName);
       default:
         reader.skipField(wireType);
@@ -97,13 +127,64 @@ ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
   return ParsedFileDescriptor(
     name: name,
     package: package,
+    dependencies: dependencies,
     services: services,
     messageTypes: messageTypes,
+    enumTypes: enumTypes,
     rawBytes: bytes,
   );
 }
 
-/// Reads field 1 (string name) from a proto message — used for Service/Message descriptors.
+/// Recursively collects all message and enum type names from a DescriptorProto.
+///
+/// [prefix] is the dotted path of enclosing messages, e.g. `'Outer.'`.
+/// Names are appended to [messages] and [enums] as `prefix + name`.
+void _collectAllTypeNames(
+  Uint8List bytes,
+  String prefix,
+  List<String> messages,
+  List<String> enums,
+) {
+  final reader = _ProtoReader(bytes);
+  var name = '';
+  final nestedMessageBytes = <Uint8List>[];
+  final nestedEnumBytes = <Uint8List>[];
+
+  while (reader.hasMore) {
+    final tag = reader.readTag();
+    final fn = tag >> 3;
+    final wt = tag & 0x7;
+
+    switch (fn) {
+      case 1 when wt == _wireLen:
+        name = utf8.decode(reader.readLenDelimited());
+      case 3 when wt == _wireLen:
+        // nested_type (repeated DescriptorProto)
+        nestedMessageBytes.add(reader.readLenDelimited());
+      case 4 when wt == _wireLen:
+        // enum_type (repeated EnumDescriptorProto)
+        nestedEnumBytes.add(reader.readLenDelimited());
+      default:
+        reader.skipField(wt);
+    }
+  }
+
+  if (name.isEmpty) return;
+
+  final fqn = '$prefix$name';
+  messages.add(fqn);
+
+  final nestedPrefix = '$fqn.';
+  for (final nb in nestedMessageBytes) {
+    _collectAllTypeNames(nb, nestedPrefix, messages, enums);
+  }
+  for (final eb in nestedEnumBytes) {
+    final enumName = _parseNameField(eb);
+    if (enumName.isNotEmpty) enums.add('$nestedPrefix$enumName');
+  }
+}
+
+/// Reads field 1 (string name) from a proto message.
 String _parseNameField(Uint8List bytes) {
   final reader = _ProtoReader(bytes);
   while (reader.hasMore) {
@@ -131,13 +212,14 @@ class _ProtoReader {
   int readVarint() {
     var result = 0;
     var shift = 0;
-    while (true) {
+    while (_pos < _bytes.length) {
+      if (shift >= 64) throw const FormatException('Varint exceeds 64 bits');
       final b = _bytes[_pos++];
       result |= (b & 0x7F) << shift;
-      if (b & 0x80 == 0) break;
+      if (b & 0x80 == 0) return result;
       shift += 7;
     }
-    return result;
+    throw const FormatException('Truncated varint');
   }
 
   Uint8List readLenDelimited() {
