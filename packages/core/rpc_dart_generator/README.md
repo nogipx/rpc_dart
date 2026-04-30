@@ -75,3 +75,29 @@ The builder emits `.rpc_dart.g.part` fragments to the build cache; `source_gen|c
 - In `auto/codec`, types must be serializable (`IRpcSerializable` or primitive), otherwise generation fails.
 
 [rpc_dart]: https://pub.dev/packages/rpc_dart
+
+## gRPC Server Reflection (grpcDescriptor)
+
+The generator automatically emits a `grpcDescriptor` static field on every `Names` class. It contains a `FileDescriptorProto` binary that describes the service schema — suitable for [rpc_dart_grpc_reflection].
+
+```dart
+// Generated in calculator_contract.g.dart:
+class CalculatorContractNames {
+  static const service = 'Calculator';
+  // ...
+  static final grpcDescriptor = Uint8List.fromList(const [...]);
+}
+```
+
+Register with `RpcReflectionRegistry` to enable `grpcurl list` / `describe`:
+
+```dart
+final registry = RpcReflectionRegistry()
+  ..addFileDescriptor(CalculatorContractNames.grpcDescriptor);
+
+registry.attachTo(endpoint);
+```
+
+See [rpc_dart_grpc_reflection] for full setup.
+
+[rpc_dart_grpc_reflection]: https://pub.dev/packages/rpc_dart_grpc_reflection

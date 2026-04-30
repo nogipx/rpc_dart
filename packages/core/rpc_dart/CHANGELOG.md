@@ -16,9 +16,6 @@ Breaking changes and major additions:
 - `RpcClientConnection` — reconnect state machine with health monitoring
 - `RpcRateLimiter` — pluggable rate limiting with per-key dynamic limits
 
-**Structured concurrency**:
-- `RpcCallScope` — structured scope for grouped RPC calls with shared cancellation and timeout
-
 **gRPC Health Checking Protocol**:
 - `RpcGrpcHealthService` — implements `grpc.health.v1.Health` (`Check` + `Watch`)
 - `RpcGrpcHealthClient` — typed client for health checks
