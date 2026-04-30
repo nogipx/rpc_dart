@@ -1,3 +1,7 @@
+## 0.3.1
+
+- Updated to `rpc_dart: ^3.0.1`.
+
 ## 0.3.0
 
 - Generator emits `grpcDescriptor` static field on generated `Names` classes — a `FileDescriptorProto` binary suitable for `RpcReflectionRegistry.addFileDescriptor()`.
