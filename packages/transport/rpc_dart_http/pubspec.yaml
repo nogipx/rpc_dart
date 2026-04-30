@@ -1,6 +1,6 @@
 name: rpc_dart_http
 description: HTTP/1.1 caller/responder transports for rpc_dart (unary only).
-version: 0.1.0
+version: 0.2.0
 publish_to: none
 
 environment:
@@ -15,7 +15,7 @@ dependency_overrides:
     path: ../../core/rpc_dart
 
 dependencies:
-  rpc_dart: ^2.6.2
+  rpc_dart: ^3.0.0
   http: ^1.6.0
   shelf: ^1.4.2
 

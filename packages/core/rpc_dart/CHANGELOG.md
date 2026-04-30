@@ -1,3 +1,34 @@
+## 3.0.0
+
+Breaking changes and major additions:
+
+**3-layer transport architecture** (`IRpcChannel` / `IRpcMultiplexedChannel` / `RpcChannelTransport`):
+- `IRpcChannel` — minimal raw byte pipe interface
+- `IRpcMultiplexedChannel` — multiplexed message channel between channel and transport
+- `RpcFrameMultiplexedChannel` — wraps `IRpcChannel` with 9-byte frame codec
+- `RpcDirectMultiplexedChannel` — zero-copy in-memory paired channel
+- `RpcChannelTransport` — `IRpcTransport` wrapper with `.pair()`, `.memoryPair()`, `.fromChannel()` factories
+- `RpcInMemoryTransport.pair()` is now a thin delegate to `RpcChannelTransport.memoryPair()`
+
+**Resilience primitives** (moved from `rpc_dart_framework` to core):
+- `RpcRetryInterceptor` — configurable retry with `BackoffPolicy` (constant, linear, exponential)
+- `RpcCircuitBreakerInterceptor` — circuit breaker with open/half-open/closed states
+- `RpcClientConnection` — reconnect state machine with health monitoring
+- `RpcRateLimiter` — pluggable rate limiting with per-key dynamic limits
+
+**Structured concurrency**:
+- `RpcCallScope` — structured scope for grouped RPC calls with shared cancellation and timeout
+
+**gRPC Health Checking Protocol**:
+- `RpcGrpcHealthService` — implements `grpc.health.v1.Health` (`Check` + `Watch`)
+- `RpcGrpcHealthClient` — typed client for health checks
+
+**Other**:
+- `RpcBinaryCodec<T>` now works with any `T extends Object` (not just `IRpcSerializable`)
+- `RpcStatusException(statusCode, message)` — handlers can return specific gRPC status codes
+- `dart:typed_data` re-exported via `rpc_dart.dart` (`Uint8List` available without extra import)
+- Removed `onServiceRegistered` callback from `RpcResponderEndpoint`
+
 ## 2.6.3
 
 - Added `RpcRemoved` annotation. Marks an inherited RPC method as removed in a versioned contract. The generator produces a `@Deprecated` + `throw UnsupportedError` implementation so callers receive a compile-time warning and a clear runtime error message.
