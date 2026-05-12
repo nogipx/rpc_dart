@@ -20,7 +20,7 @@ dependencies:
   paseto_dart: ^2.1.0
   sqlite3: ^3.1.4
   path: ^1.9.1
-  meta: ^1.18.1
+  meta: ^1.17.0
 
 dev_dependencies:
   lints: ^6.1.0

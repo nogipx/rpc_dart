@@ -3,7 +3,7 @@ description: >
   gRPC Server Reflection (v1 + v1alpha) for rpc_dart.
   Allows grpcurl, Postman, and other gRPC tools to discover services
   registered on any rpc_dart endpoint.
-version: 0.1.0
+version: 0.2.0
 publish_to: none
 
 environment:

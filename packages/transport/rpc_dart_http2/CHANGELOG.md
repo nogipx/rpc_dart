@@ -1,3 +1,8 @@
+## 0.2.1
+
+- `RpcHttp2CallerTransport`: added optional `proxyUri` parameter to both `secure` and `insecure` constructors — supports HTTP CONNECT proxy tunneling with optional Basic auth from URI userinfo.
+- Updated to `rpc_dart: ^3.1.0`.
+
 ## 0.2.0
 
 - Updated to `rpc_dart: ^3.0.0`.

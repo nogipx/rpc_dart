@@ -1,3 +1,7 @@
+## 0.3.1
+
+- Updated to `rpc_dart: ^3.1.0`.
+
 ## 0.3.0
 
 - Resilience primitives moved to `rpc_dart` core: `RpcRetryInterceptor`, `RpcCircuitBreakerInterceptor`, `RpcClientConnection`, `RpcRateLimiter`, `BackoffPolicy`.

@@ -1,3 +1,10 @@
+## 0.4.0
+
+- Added `RpcServiceKind.peer` support: `@RpcService(kind: RpcServiceKind.peer)` generates a peer contract pair (`XxxPeer` abstract class + `XxxPeerCaller` concrete implementation) instead of separate caller/responder.
+- Generated `XxxPeer` extends `RpcPeerContract` and registers both incoming handlers and outgoing call methods on the same `RpcPeerEndpoint`.
+- Added `grpcDescriptor` flag on `@RpcService`: when `true`, emits `static final grpcDescriptor = Uint8List.fromList(...)` for use with `RpcReflectionRegistry.addFileDescriptor()`.
+- Updated to `rpc_dart: ^3.1.0`.
+
 ## 0.3.1
 
 - Updated to `rpc_dart: ^3.0.1`.

@@ -367,7 +367,8 @@ class RpcClientConnection {
         guard.complete();
         return;
       } catch (e) {
-        _logger?.call('warning', 'Attempt ${_reconnectAttempts + 1} failed: $e');
+        _logger?.call(
+            'warning', 'Attempt ${_reconnectAttempts + 1} failed: $e');
         if (!_canReconnect(e)) {
           _logger?.call(
             'info',

@@ -1,3 +1,13 @@
+## 3.1.0
+
+- Added `RpcPeerContract` — base class for bidirectional contracts where either side can initiate calls. Extends `RpcResponderContract` and exposes `callUnary`, `callServerStream`, `callClientStream`, `callBidirectionalStream` methods bound to the same `RpcPeerEndpoint`.
+- `RpcPeerEndpoint` is now exported from the library public API.
+- `RpcServiceKind` enum added to `annotations.dart` (`unidirectional` / `peer`) for use with `@RpcService(kind: ...)`.
+- `@RpcService` gained `grpcDescriptor` flag (default `false`) — when `true`, the generator emits a `grpcDescriptor` static field for gRPC Server Reflection registration.
+- `RpcContextUtils.generateTraceId()` is now public (was `_generateTraceId`).
+- `RpcResponderContract.serviceName` supports dynamic suffix via `serviceNameSuffix` setter — used for scoped/isolated service registrations.
+- Internal refactor: `caller_pipeline.dart` and `responder_pipeline.dart` extracted as separate part files; logic unchanged.
+
 ## 3.0.1
 
 - `RpcMessageParser`: replaced `List<int>` backing buffer with `Uint8List` — eliminates integer boxing and reduces message extraction from two copies to one.

@@ -1,3 +1,9 @@
+## 0.2.1
+
+- `RpcWebSocketServer`: added `onPeerEndpointCreated` callback — when set, each accepted connection creates an `RpcPeerEndpoint` instead of `RpcResponderEndpoint`, enabling bidirectional server-initiated calls over WebSocket.
+- `RpcWebSocketCallerTransport.connect()`: now awaits `WebSocketChannel.ready` before returning, so connection errors are reported at connect time rather than leaking as unhandled stream errors.
+- Updated to `rpc_dart: ^3.1.0`.
+
 ## 0.2.0
 
 - Updated to `rpc_dart: ^3.0.0`.

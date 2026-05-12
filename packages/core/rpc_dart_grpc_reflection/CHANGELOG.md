@@ -1,3 +1,12 @@
+## 0.2.0
+
+- Full proto support: nested message types, nested enums, cross-file dependencies.
+- Added `RpcEnumDescriptor` and `RpcEnumValueDescriptor` for registering enum schemas in `RpcFileDescriptorBuilder`.
+- `RpcFileDescriptorBuilder.addDependency(protoFilename)` — declare proto import dependencies for correct cross-file symbol resolution.
+- `RpcReflectionRegistry`: `fileByFilename` and `fileContainingSymbol` now transitively resolve and include all dependencies in the response.
+- `ServerReflectionContract.both()` — convenience factory returning both v1 and v1alpha contracts.
+- Updated to `rpc_dart: ^3.1.0`.
+
 ## 0.1.0
 
 - Initial release: gRPC Server Reflection v1 and v1alpha for rpc_dart.
