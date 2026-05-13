@@ -5,6 +5,7 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
     private var channel: FlutterMethodChannel?
     private var messenger: FlutterBinaryMessenger?
     private var runtimes: [String: WasmRuntime] = [:]
+    private var checkSupportWebView: WKWebView?
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
@@ -40,6 +41,7 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
 
     private func checkSupport(result: @escaping FlutterResult) {
         let webView = WKWebView(frame: .zero)
+        checkSupportWebView = webView
         webView.evaluateJavaScript("""
             (function() {
               var r = {};
@@ -56,7 +58,8 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
               }
               return JSON.stringify(r);
             })()
-        """) { value, error in
+        """) { [weak self] value, error in
+            self?.checkSupportWebView = nil
             if let json = value as? String,
                let data = json.data(using: .utf8),
                let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -115,11 +118,11 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         }
         var _origConsole = typeof console !== 'undefined' ? console : {};
         console = {
-          log: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage('I:' + m); },
-          warn: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage('W:' + m); },
-          error: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage('E:' + m); },
-          info: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage('I:' + m); },
-          debug: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage('D:' + m); }
+          log: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage({level: 'info', message: m}); },
+          warn: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage({level: 'warn', message: m}); },
+          error: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage({level: 'error', message: m}); },
+          info: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage({level: 'info', message: m}); },
+          debug: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage({level: 'debug', message: m}); }
         };
         function setTimeout(fn, ms) {
           var id = ++_timerId;
@@ -133,22 +136,26 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         }
         function clearInterval(id) { delete _timers[id]; }
         function clearTimeout(id) { delete _timers[id]; }
-        function _bytesToBase64(bytes) {
-          var s = '';
-          for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-          return btoa(s);
-        }
-        function _base64ToBytes(b64) {
-          var s = atob(b64);
-          var bytes = new Uint8Array(s.length);
-          for (var i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
-          return bytes;
+        function _tickTimers() {
+          var now = Date.now();
+          var ids = Object.keys(_timers);
+          for (var i = 0; i < ids.length; i++) {
+            var id = ids[i];
+            var t = _timers[id];
+            if (!t) continue;
+            if (now >= t.next) {
+              if (t.interval) {
+                t.next = now + t.ms;
+              } else {
+                delete _timers[id];
+              }
+              try { t.fn(); } catch(e) { console.error(e); }
+            }
+          }
+          _flushMicrotasks();
         }
         function _rpcWasmSendBytes(bytes) {
-          window.webkit.messageHandlers.rpcBytes.postMessage(_bytesToBase64(bytes));
-        }
-        function _rpcWasmReceiveBytesB64(b64) {
-          _rpcWasmReceiveBytes(_base64ToBytes(b64));
+          window.webkit.messageHandlers.rpcBytes.postMessage(Array.from(bytes));
         }
         function _rpcWasmReceiveBytes(bytes) {
           if (typeof rpcWasmReceiveBytes === 'function') {
@@ -208,8 +215,8 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
 
     private func receiveRuntimeBytes(runtimeId: String, bytes: Data) {
         guard let runtime = runtimes[runtimeId] else { return }
-        let b64 = bytes.base64EncodedString()
-        runtime.evaluate("_rpcWasmReceiveBytesB64('\(b64)');")
+        let byteArray = [UInt8](bytes)
+        runtime.callJS("_rpcWasmReceiveBytes(new Uint8Array(args.bytes));", arguments: ["bytes": byteArray])
     }
 
     private func sendRuntimeBytes(runtimeId: String, bytes: Data) {
@@ -235,12 +242,16 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
 
 // MARK: - WasmRuntime (WKWebView wrapper)
 
-private class WasmRuntime: NSObject, WKScriptMessageHandler {
+private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     let runtimeId: String
     let webView: WKWebView
     private let messenger: FlutterBinaryMessenger
     private let rxChannel: String
     private var bootCompletion: ((String?) -> Void)?
+    private var bootTimeoutTimer: Timer?
+    private var timerDriver: Timer?
+
+    private static let bootTimeoutSeconds: TimeInterval = 30
 
     init(runtimeId: String, messenger: FlutterBinaryMessenger, rxChannel: String) {
         self.runtimeId = runtimeId
@@ -248,10 +259,10 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler {
         self.rxChannel = rxChannel
 
         let config = WKWebViewConfiguration()
-        config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
         self.webView = WKWebView(frame: .zero, configuration: config)
         super.init()
 
+        webView.navigationDelegate = self
         webView.configuration.userContentController.add(self, name: "rpcBytes")
         webView.configuration.userContentController.add(self, name: "rpcBoot")
         webView.configuration.userContentController.add(self, name: "rpcConsole")
@@ -260,17 +271,59 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler {
     func boot(html: String, completion: @escaping (String?) -> Void) {
         bootCompletion = completion
         webView.loadHTMLString(html, baseURL: nil)
+
+        bootTimeoutTimer = Timer.scheduledTimer(withTimeInterval: Self.bootTimeoutSeconds, repeats: false) { [weak self] _ in
+            guard let self = self, let cb = self.bootCompletion else { return }
+            self.bootCompletion = nil
+            self.bootTimeoutTimer = nil
+            cb("boot_timeout: no response within \(Int(Self.bootTimeoutSeconds))s")
+        }
     }
 
-    func evaluate(_ js: String) {
-        webView.evaluateJavaScript(js, completionHandler: nil)
+    func callJS(_ js: String, arguments: [String: Any] = [:]) {
+        webView.callAsyncJavaScript(js, arguments: arguments, in: nil, in: .page, completionHandler: nil)
     }
 
     func close() {
+        bootTimeoutTimer?.invalidate()
+        bootTimeoutTimer = nil
+        timerDriver?.invalidate()
+        timerDriver = nil
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "rpcBytes")
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "rpcBoot")
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "rpcConsole")
         webView.stopLoading()
+    }
+
+    private func finishBoot(_ error: String?) {
+        bootTimeoutTimer?.invalidate()
+        bootTimeoutTimer = nil
+        let cb = bootCompletion
+        bootCompletion = nil
+        if error == nil {
+            startTimerDriver()
+        }
+        cb?(error)
+    }
+
+    private func startTimerDriver() {
+        timerDriver = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { [weak self] _ in
+            self?.webView.evaluateJavaScript("_tickTimers();", completionHandler: nil)
+        }
+    }
+
+    // MARK: - WKNavigationDelegate
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        finishBoot("navigation_failed: \(error.localizedDescription)")
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        finishBoot("navigation_failed: \(error.localizedDescription)")
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        finishBoot("content_process_terminated")
     }
 
     // MARK: - WKScriptMessageHandler
@@ -279,17 +332,26 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler {
         if message.name == "rpcBoot" {
             let body = message.body as? String ?? ""
             if body == "ok" {
-                bootCompletion?(nil)
+                finishBoot(nil)
             } else {
                 let error = body.hasPrefix("error:") ? String(body.dropFirst(6)) : body
-                bootCompletion?(error)
+                finishBoot(error)
             }
-            bootCompletion = nil
             return
         }
 
         if message.name == "rpcConsole" {
-            if let log = message.body as? String {
+            if let dict = message.body as? [String: Any],
+               let level = dict["level"] as? String,
+               let msg = dict["message"] as? String {
+                let prefix: String
+                switch level {
+                case "warn": prefix = "W"
+                case "error": prefix = "E"
+                case "debug": prefix = "D"
+                default: prefix = "I"
+                }
+                let log = "\(prefix):\(msg)"
                 let consoleChannel = "rpc_dart_wasm/\(runtimeId)/console"
                 if let data = log.data(using: .utf8) {
                     messenger.send(onChannel: consoleChannel, message: data)
@@ -299,9 +361,10 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler {
         }
 
         if message.name == "rpcBytes" {
-            guard let b64 = message.body as? String,
-                  let bytes = Data(base64Encoded: b64) else {
-                return
+            guard let array = message.body as? [NSNumber] else { return }
+            var bytes = Data(count: array.count)
+            for i in 0..<array.count {
+                bytes[i] = array[i].uint8Value
             }
             messenger.send(onChannel: rxChannel, message: bytes)
         }
