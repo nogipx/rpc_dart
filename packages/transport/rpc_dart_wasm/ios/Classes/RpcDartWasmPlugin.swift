@@ -95,17 +95,16 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         let runtime = WasmRuntime(
             runtimeId: runtimeId,
             messenger: messenger,
-            rxChannel: runtimeRxChannel(runtimeId)
+            rxChannel: runtimeRxChannel(runtimeId),
+            wasmBytes: wasmBytes
         )
         runtimes[runtimeId] = runtime
         registerByteChannel(runtimeId: runtimeId)
 
         let plainJs = stripModuleSyntax(mjsCode)
-        let wasmBase64 = wasmBytes.base64EncodedString()
 
         let bootHtml = """
         <!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
-        var _rpcWasmOutbox = [];
         var _microtaskQueue = [];
         var _timerId = 0;
         var _timers = {};
@@ -155,8 +154,9 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
           _flushMicrotasks();
         }
         function _rpcWasmSendBytes(bytes) {
-          window.webkit.messageHandlers.rpcBytes.postMessage(Array.from(bytes));
+          fetch('rpc-wasm:///send', {method: 'POST', body: bytes});
         }
+        var _recvRunning = false;
         function _rpcWasmReceiveBytes(bytes) {
           if (typeof rpcWasmReceiveBytes === 'function') {
             rpcWasmReceiveBytes(bytes);
@@ -165,16 +165,34 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
           }
           _flushMicrotasks();
         }
+        function _startRecvLoop() {
+          if (_recvRunning) return;
+          _recvRunning = true;
+          (function poll() {
+            fetch('rpc-wasm:///recv').then(function(r) {
+              return r.arrayBuffer();
+            }).then(function(buf) {
+              _rpcWasmReceiveBytes(new Uint8Array(buf));
+              poll();
+            }).catch(function(e) {
+              _recvRunning = false;
+            });
+          })();
+        }
         \(jsBootPrefix)
         \(plainJs)
         (async function() {
           try {
-            var b64 = '\(wasmBase64)';
-            var binary = atob(b64);
-            var wasmBytes = new Uint8Array(binary.length);
-            for (var i = 0; i < binary.length; i++) wasmBytes[i] = binary.charCodeAt(i);
-            var compiled = await compile(wasmBytes);
+            var resp = await fetch('rpc-wasm:///module.wasm');
+            var compiled;
+            if (typeof compileStreaming === 'function') {
+              compiled = await compileStreaming(resp);
+            } else {
+              var wasmBytes = new Uint8Array(await resp.arrayBuffer());
+              compiled = await compile(wasmBytes);
+            }
             var app = await compiled.instantiate({});
+            _startRecvLoop();
             app.invokeMain();
             _flushMicrotasks();
             window.webkit.messageHandlers.rpcBoot.postMessage('ok');
@@ -215,12 +233,7 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
 
     private func receiveRuntimeBytes(runtimeId: String, bytes: Data) {
         guard let runtime = runtimes[runtimeId] else { return }
-        let byteArray = [UInt8](bytes)
-        runtime.callJS("_rpcWasmReceiveBytes(new Uint8Array(args.bytes));", arguments: ["bytes": byteArray])
-    }
-
-    private func sendRuntimeBytes(runtimeId: String, bytes: Data) {
-        messenger?.send(onChannel: runtimeRxChannel(runtimeId), message: bytes)
+        runtime.enqueueForJS(bytes)
     }
 
     private func stripModuleSyntax(_ code: String) -> String {
@@ -240,6 +253,151 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
     }
 }
 
+// MARK: - SchemeHandler (zero-copy byte transport + WASM serving)
+
+private class SchemeHandler: NSObject, WKURLSchemeHandler {
+    private var wasmBytes: Data?
+    private var pendingRecvTask: WKURLSchemeTask?
+    private var recvQueue: [Data] = []
+    private var stopped = false
+    var onSend: ((Data) -> Void)?
+
+    init(wasmBytes: Data) {
+        self.wasmBytes = wasmBytes
+        super.init()
+    }
+
+    func enqueue(_ data: Data) {
+        if let task = pendingRecvTask {
+            pendingRecvTask = nil
+            respond(task: task, data: data)
+        } else {
+            recvQueue.append(data)
+        }
+    }
+
+    func stop() {
+        stopped = true
+        wasmBytes = nil
+        if let task = pendingRecvTask {
+            pendingRecvTask = nil
+            let response = HTTPURLResponse(
+                url: task.request.url!,
+                statusCode: 499,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            task.didReceive(response)
+            task.didFinish()
+        }
+        recvQueue.removeAll()
+    }
+
+    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        guard !stopped else {
+            urlSchemeTask.didFailWithError(NSError(domain: "rpc-wasm", code: -1))
+            return
+        }
+
+        let path = urlSchemeTask.request.url?.path ?? ""
+
+        if path == "/module.wasm" || path == "module.wasm" {
+            guard let wasm = wasmBytes else {
+                urlSchemeTask.didFailWithError(NSError(domain: "rpc-wasm", code: -2))
+                return
+            }
+            let response = HTTPURLResponse(
+                url: urlSchemeTask.request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: [
+                    "Content-Type": "application/wasm",
+                    "Content-Length": "\(wasm.count)"
+                ]
+            )!
+            urlSchemeTask.didReceive(response)
+            urlSchemeTask.didReceive(wasm)
+            urlSchemeTask.didFinish()
+            self.wasmBytes = nil
+            return
+        }
+
+        if path == "/send" || path == "send" {
+            let bodyData = readBody(from: urlSchemeTask.request)
+            if !bodyData.isEmpty {
+                onSend?(bodyData)
+            }
+            let response = HTTPURLResponse(
+                url: urlSchemeTask.request.url!,
+                statusCode: 204,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            urlSchemeTask.didReceive(response)
+            urlSchemeTask.didFinish()
+            return
+        }
+
+        if path == "/recv" || path == "recv" {
+            if !recvQueue.isEmpty {
+                let data = recvQueue.removeFirst()
+                respond(task: urlSchemeTask, data: data)
+            } else {
+                if let prev = pendingRecvTask {
+                    prev.didFailWithError(NSError(domain: "rpc-wasm", code: -5,
+                        userInfo: [NSLocalizedDescriptionKey: "superseded by new recv"]))
+                }
+                pendingRecvTask = urlSchemeTask
+            }
+            return
+        }
+
+        urlSchemeTask.didFailWithError(NSError(domain: "rpc-wasm", code: -3))
+    }
+
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
+        if pendingRecvTask === urlSchemeTask {
+            pendingRecvTask = nil
+        }
+    }
+
+    private func readBody(from request: URLRequest) -> Data {
+        if let body = request.httpBody, !body.isEmpty {
+            return body
+        }
+        guard let stream = request.httpBodyStream else { return Data() }
+        stream.open()
+        defer { stream.close() }
+        var result = Data()
+        let bufferSize = 16384
+        var buffer = [UInt8](repeating: 0, count: bufferSize)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: bufferSize)
+            if read > 0 {
+                result.append(buffer, count: read)
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
+    private func respond(task: WKURLSchemeTask, data: Data) {
+        let response = HTTPURLResponse(
+            url: task.request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: [
+                "Content-Type": "application/octet-stream",
+                "Content-Length": "\(data.count)"
+            ]
+        )!
+        task.didReceive(response)
+        task.didReceive(data)
+        task.didFinish()
+    }
+}
+
 // MARK: - WasmRuntime (WKWebView wrapper)
 
 private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
@@ -247,23 +405,30 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     let webView: WKWebView
     private let messenger: FlutterBinaryMessenger
     private let rxChannel: String
+    private let schemeHandler: SchemeHandler
     private var bootCompletion: ((String?) -> Void)?
     private var bootTimeoutTimer: Timer?
     private var timerDriver: Timer?
 
     private static let bootTimeoutSeconds: TimeInterval = 30
 
-    init(runtimeId: String, messenger: FlutterBinaryMessenger, rxChannel: String) {
+    init(runtimeId: String, messenger: FlutterBinaryMessenger, rxChannel: String, wasmBytes: Data) {
         self.runtimeId = runtimeId
         self.messenger = messenger
         self.rxChannel = rxChannel
+        self.schemeHandler = SchemeHandler(wasmBytes: wasmBytes)
 
         let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(schemeHandler, forURLScheme: "rpc-wasm")
         self.webView = WKWebView(frame: .zero, configuration: config)
         super.init()
 
+        schemeHandler.onSend = { [weak self] data in
+            guard let self = self else { return }
+            self.messenger.send(onChannel: self.rxChannel, message: data)
+        }
+
         webView.navigationDelegate = self
-        webView.configuration.userContentController.add(self, name: "rpcBytes")
         webView.configuration.userContentController.add(self, name: "rpcBoot")
         webView.configuration.userContentController.add(self, name: "rpcConsole")
     }
@@ -280,8 +445,8 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         }
     }
 
-    func callJS(_ js: String, arguments: [String: Any] = [:]) {
-        webView.callAsyncJavaScript(js, arguments: arguments, in: nil, in: .page, completionHandler: nil)
+    func enqueueForJS(_ data: Data) {
+        schemeHandler.enqueue(data)
     }
 
     func close() {
@@ -289,10 +454,11 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         bootTimeoutTimer = nil
         timerDriver?.invalidate()
         timerDriver = nil
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "rpcBytes")
+        schemeHandler.stop()
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "rpcBoot")
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "rpcConsole")
         webView.stopLoading()
+        webView.loadHTMLString("", baseURL: nil)
     }
 
     private func finishBoot(_ error: String?) {
@@ -360,13 +526,5 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
             return
         }
 
-        if message.name == "rpcBytes" {
-            guard let array = message.body as? [NSNumber] else { return }
-            var bytes = Data(count: array.count)
-            for i in 0..<array.count {
-                bytes[i] = array[i].uint8Value
-            }
-            messenger.send(onChannel: rxChannel, message: bytes)
-        }
     }
 }
