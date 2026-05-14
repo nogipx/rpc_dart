@@ -105,9 +105,12 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
 
         let bootHtml = """
         <!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
+        var _nativeSetTimeout = setTimeout;
+        var _nativeClearTimeout = clearTimeout;
         var _microtaskQueue = [];
         var _timerId = 0;
         var _timers = {};
+        var _nextTickHandle = 0;
         function queueMicrotask(fn) { _microtaskQueue.push(fn); }
         function _flushMicrotasks() {
           while (_microtaskQueue.length > 0) {
@@ -126,16 +129,38 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         function setTimeout(fn, ms) {
           var id = ++_timerId;
           _timers[id] = { fn: fn, interval: false, ms: ms || 0, next: Date.now() + (ms || 0) };
+          _scheduleNextTick();
           return id;
         }
         function setInterval(fn, ms) {
           var id = ++_timerId;
           _timers[id] = { fn: fn, interval: true, ms: ms || 16, next: Date.now() + (ms || 16) };
+          _scheduleNextTick();
           return id;
         }
         function clearInterval(id) { delete _timers[id]; }
         function clearTimeout(id) { delete _timers[id]; }
-        function _tickTimers() {
+        function _scheduleNextTick() {
+          var now = Date.now();
+          var minDelay = Infinity;
+          var ids = Object.keys(_timers);
+          for (var i = 0; i < ids.length; i++) {
+            var t = _timers[ids[i]];
+            if (t) {
+              var d = t.next - now;
+              if (d < minDelay) minDelay = d;
+            }
+          }
+          if (_nextTickHandle) {
+            _nativeClearTimeout(_nextTickHandle);
+            _nextTickHandle = 0;
+          }
+          if (minDelay === Infinity) return;
+          if (minDelay < 0) minDelay = 0;
+          _nextTickHandle = _nativeSetTimeout(_runDueTimers, minDelay);
+        }
+        function _runDueTimers() {
+          _nextTickHandle = 0;
           var now = Date.now();
           var ids = Object.keys(_timers);
           for (var i = 0; i < ids.length; i++) {
@@ -152,6 +177,7 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
             }
           }
           _flushMicrotasks();
+          _scheduleNextTick();
         }
         function _rpcWasmSendBytes(bytes) {
           fetch('rpc-wasm:///send', {method: 'POST', body: bytes});
@@ -408,7 +434,6 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     private let schemeHandler: SchemeHandler
     private var bootCompletion: ((String?) -> Void)?
     private var bootTimeoutTimer: Timer?
-    private var timerDriver: Timer?
 
     private static let bootTimeoutSeconds: TimeInterval = 30
 
@@ -452,8 +477,6 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     func close() {
         bootTimeoutTimer?.invalidate()
         bootTimeoutTimer = nil
-        timerDriver?.invalidate()
-        timerDriver = nil
         schemeHandler.stop()
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "rpcBoot")
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "rpcConsole")
@@ -466,16 +489,7 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         bootTimeoutTimer = nil
         let cb = bootCompletion
         bootCompletion = nil
-        if error == nil {
-            startTimerDriver()
-        }
         cb?(error)
-    }
-
-    private func startTimerDriver() {
-        timerDriver = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { [weak self] _ in
-            self?.webView.evaluateJavaScript("_tickTimers();", completionHandler: nil)
-        }
     }
 
     // MARK: - WKNavigationDelegate
