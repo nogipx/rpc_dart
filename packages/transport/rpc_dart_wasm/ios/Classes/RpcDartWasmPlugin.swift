@@ -229,9 +229,11 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         </script></body></html>
         """
 
-        runtime.boot(html: bootHtml) { bootResult in
+        runtime.boot(html: bootHtml) { [weak self] bootResult in
             if let error = bootResult {
-                result(["runtimeId": runtimeId, "error": error])
+                self?.messenger?.setMessageHandlerOnChannel(self?.runtimeTxChannel(runtimeId) ?? "", binaryMessageHandler: nil)
+                self?.runtimes.removeValue(forKey: runtimeId)?.close()
+                result(["runtimeId": nil, "error": error] as [String: Any?])
             } else {
                 NSLog("[RpcDartWasm] Runtime %@ booted on WKWebView", runtimeId)
                 result(["runtimeId": runtimeId, "error": nil] as [String: Any?])

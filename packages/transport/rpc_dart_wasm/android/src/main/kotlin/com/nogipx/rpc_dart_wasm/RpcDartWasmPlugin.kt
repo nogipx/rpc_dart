@@ -7,14 +7,18 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.nio.ByteBuffer
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 
 class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private lateinit var channel: MethodChannel
@@ -24,7 +28,12 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private val runtimes = mutableMapOf<String, JavaScriptIsolate>()
     private var sandbox: JavaScriptSandbox? = null
     private var sandboxFuture: kotlinx.coroutines.Deferred<JavaScriptSandbox>? = null
-    private var messageCounter = 0
+    private val messageCounter = AtomicInteger(0)
+    private val driverWakers = mutableMapOf<String, CompletableDeferred<Unit>>()
+
+    companion object {
+        private const val NAMED_DATA_THRESHOLD = 65536
+    }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, "rpc_dart_wasm")
@@ -35,15 +44,16 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
-        scope.launch {
-            runtimes.keys.forEach { runtimeId ->
-                messenger.setMessageHandler(runtimeTxChannel(runtimeId), null)
-            }
-            runtimes.values.forEach { it.close() }
-            runtimes.clear()
-            sandbox?.close()
-            sandbox = null
+        scope.cancel()
+        driverWakers.values.forEach { it.complete(Unit) }
+        driverWakers.clear()
+        runtimes.keys.forEach { runtimeId ->
+            messenger.setMessageHandler(runtimeTxChannel(runtimeId), null)
         }
+        runtimes.values.forEach { it.close() }
+        runtimes.clear()
+        sandbox?.close()
+        sandbox = null
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -144,8 +154,8 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         val plainJs = stripModuleSyntax(mjsCode)
         val bootScript = """
             var globalThis = this;
-            var _rpcWasmOutbox = [];
             var _microtaskQueue = [];
+            var _rpcWasmOutbox = [];
             var _rpcWasmBootError = null;
             var _rpcWasmBootTrace = null;
             var _rpcWasmBootPhase = 'init';
@@ -184,30 +194,41 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             }
             function clearInterval(id) { delete _timers[id]; }
             function clearTimeout(id) { delete _timers[id]; }
-            function _tickTimers() {
+            function _tickAndReportNext() {
               var now = Date.now();
               var ids = Object.keys(_timers);
-              var active = 0;
               for (var i = 0; i < ids.length; i++) {
                 var id = ids[i];
                 var t = _timers[id];
                 if (!t) continue;
                 if (now >= t.next) {
-                  try { t.fn(); } catch(e) { console.error(e); }
                   if (t.interval) {
                     t.next = now + t.ms;
-                    active++;
                   } else {
                     delete _timers[id];
                   }
-                } else {
-                  active++;
+                  try { t.fn(); } catch(e) { console.error(e); }
                 }
               }
               _flushMicrotasks();
-              return '' + active;
+              now = Date.now();
+              var minDelay = Infinity;
+              ids = Object.keys(_timers);
+              for (var i = 0; i < ids.length; i++) {
+                var t = _timers[ids[i]];
+                if (t) {
+                  var d = t.next - now;
+                  if (d < minDelay) minDelay = d;
+                }
+              }
+              return minDelay === Infinity ? 'null' : '' + Math.max(0, minDelay);
             }
             var _b64c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+            var _b64lookup = (function() {
+              var l = {};
+              for (var i = 0; i < _b64c.length; i++) l[_b64c[i]] = i;
+              return l;
+            })();
             function _bytesToBase64(bytes) {
               var r = '', i = 0, len = bytes.length;
               while (i < len) {
@@ -218,6 +239,22 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 else { r += _b64c[((a & 3) << 4) | (b >> 4)] + _b64c[((b & 15) << 2) | (c >> 6)] + _b64c[c & 63]; }
               }
               return r;
+            }
+            function _base64ToBytes(b64) {
+              var lookup = _b64lookup;
+              var len = b64.length;
+              var pad = b64[len-1] === '=' ? (b64[len-2] === '=' ? 2 : 1) : 0;
+              var outLen = (len * 3 / 4) - pad;
+              var bytes = new Uint8Array(outLen);
+              var p = 0;
+              for (var i = 0; i < len; i += 4) {
+                var a = lookup[b64[i]], b = lookup[b64[i+1]];
+                var c = lookup[b64[i+2]], d = lookup[b64[i+3]];
+                bytes[p++] = (a << 2) | (b >> 4);
+                if (p < outLen) bytes[p++] = ((b & 15) << 4) | (c >> 2);
+                if (p < outLen) bytes[p++] = ((c & 3) << 6) | d;
+              }
+              return bytes;
             }
             function _rpcWasmSendBytes(bytes) {
               _rpcWasmOutbox.push(_bytesToBase64(bytes));
@@ -235,6 +272,9 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 globalThis.rpcWasmReceiveBytes(bytes);
               }
               _flushMicrotasks();
+            }
+            function _rpcWasmReceiveBytesB64(b64) {
+              _rpcWasmReceiveBytes(_base64ToBytes(b64));
             }
             $jsBootPrefix
             $plainJs
@@ -265,9 +305,12 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         """.trimIndent()
 
         return try {
-            val evalResult = isolate.evaluateJavaScriptAsync(bootScript).await()
+            val evalResult = withTimeoutOrNull(30_000) {
+                isolate.evaluateJavaScriptAsync(bootScript).await()
+            } ?: throw Exception("boot_timeout: no response within 30s")
             drainAndPush(runtimeId)
             android.util.Log.d("RpcDartWasm", "Runtime $runtimeId booted: ${evalResult.take(100)}")
+            startDriver(runtimeId)
             mapOf("runtimeId" to runtimeId, "error" to null)
         } catch (e: Exception) {
             val jsError = runCatching {
@@ -280,35 +323,83 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 "Runtime boot failed: $runtimeId jsError=$jsError",
                 e,
             )
+            messenger.setMessageHandler(runtimeTxChannel(runtimeId), null)
+            runtimes.remove(runtimeId)?.close()
             mapOf(
-                "runtimeId" to runtimeId,
+                "runtimeId" to null,
                 "error" to (jsError ?: e.message ?: e.toString()),
             )
         }
     }
 
+    // MARK: - Driver loop
+
+    private fun startDriver(runtimeId: String) {
+        scope.launch {
+            while (runtimes.containsKey(runtimeId)) {
+                try {
+                    val waker = CompletableDeferred<Unit>()
+                    driverWakers[runtimeId] = waker
+
+                    val nextDeadlineMs = tickAndDrain(runtimeId)
+
+                    if (waker.isCompleted) {
+                        driverWakers.remove(runtimeId)
+                        continue
+                    }
+
+                    if (nextDeadlineMs == null) {
+                        waker.await()
+                    } else if (nextDeadlineMs > 0) {
+                        withTimeoutOrNull(nextDeadlineMs) { waker.await() }
+                    }
+                    driverWakers.remove(runtimeId)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    android.util.Log.w("RpcDartWasm", "Driver loop error for $runtimeId", e)
+                    break
+                }
+            }
+            driverWakers.remove(runtimeId)
+        }
+    }
+
+    private fun wakeDriver(runtimeId: String) {
+        driverWakers[runtimeId]?.let { if (!it.isCompleted) it.complete(Unit) }
+    }
+
+    private suspend fun tickAndDrain(runtimeId: String): Long? {
+        val isolate = runtimes[runtimeId] ?: return null
+        val nextMs = isolate.evaluateJavaScriptAsync("_tickAndReportNext()").await()
+        drainAndPush(runtimeId)
+        return if (nextMs == "null" || nextMs.isEmpty()) null else nextMs.toLongOrNull()
+    }
+
+    // MARK: - Byte transport
+
     private suspend fun forwardBytesToRuntime(runtimeId: String, bytes: ByteArray) {
         val isolate = runtimes[runtimeId] ?: return
-        android.util.Log.d(
-            "RpcDartWasm",
-            "Forwarding ${bytes.size} bytes to runtime $runtimeId",
-        )
-        val name = "rpc_msg_${messageCounter++}"
-        isolate.provideNamedData(name, bytes)
-        isolate.evaluateJavaScriptAsync("""
-            (async function() {
-              var buf = await android.consumeNamedDataAsArrayBuffer('$name');
-              _rpcWasmReceiveBytes(new Uint8Array(buf));
-              return 'ok';
-            })()
-        """.trimIndent()).await()
-        drainAndPush(runtimeId)
+        if (bytes.size >= NAMED_DATA_THRESHOLD) {
+            val name = "rpc_msg_${messageCounter.getAndIncrement()}"
+            isolate.provideNamedData(name, bytes)
+            isolate.evaluateJavaScriptAsync("""
+                (async function() {
+                  var buf = await android.consumeNamedDataAsArrayBuffer('$name');
+                  _rpcWasmReceiveBytes(new Uint8Array(buf));
+                  return 'ok';
+                })()
+            """.trimIndent()).await()
+        } else {
+            val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            isolate.evaluateJavaScriptAsync("_rpcWasmReceiveBytesB64('$b64')").await()
+        }
+        wakeDriver(runtimeId)
     }
 
     private suspend fun drainAndPush(runtimeId: String) {
         val isolate = runtimes[runtimeId] ?: return
 
-        // Drain console logs and forward to Flutter.
         val consoleLogs = isolate.evaluateJavaScriptAsync("_rpcDrainConsole()").await()
         if (consoleLogs.isNotEmpty()) {
             sendConsoleLog(runtimeId, consoleLogs)
@@ -334,6 +425,7 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     private fun closeRuntime(runtimeId: String) {
         messenger.setMessageHandler(runtimeTxChannel(runtimeId), null)
+        wakeDriver(runtimeId)
         try {
             runtimes.remove(runtimeId)?.close()
         } catch (e: Exception) {
@@ -364,12 +456,6 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
 
     private fun sendRuntimeBytes(runtimeId: String, bytes: ByteArray) {
-        android.util.Log.d(
-            "RpcDartWasm",
-            "Sending ${bytes.size} bytes back to Flutter from runtime $runtimeId",
-        )
-        // Flutter JNI uses buffer.position() as data length, NOT as read offset.
-        // Do NOT call flip() or rewind() — leave position at end after put().
         val buffer = ByteBuffer.allocateDirect(bytes.size)
         buffer.put(bytes)
         messenger.send(runtimeRxChannel(runtimeId), buffer)
