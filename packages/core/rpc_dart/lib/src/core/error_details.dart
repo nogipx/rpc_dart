@@ -149,10 +149,13 @@ Uint8List encodeRpcStatus(
 
 /// Describes field-level validation errors.
 class RpcBadRequest extends RpcErrorDetail {
+  /// Protobuf type URL for BadRequest.
   static const type = 'type.googleapis.com/google.rpc.BadRequest';
 
+  /// Field-level violations that caused the error.
   final List<RpcFieldViolation> violations;
 
+  /// Creates a [RpcBadRequest] with the given [violations].
   RpcBadRequest(this.violations);
 
   @override
@@ -233,9 +236,13 @@ class RpcBadRequest extends RpcErrorDetail {
 
 /// A single field validation error.
 class RpcFieldViolation {
+  /// Field path that caused the violation (e.g. "user.email").
   final String field;
+
+  /// Human-readable description of the violation.
   final String description;
 
+  /// Creates a field violation.
   const RpcFieldViolation({required this.field, required this.description});
 
   @override
@@ -244,10 +251,13 @@ class RpcFieldViolation {
 
 /// Tells the client how long to wait before retrying.
 class RpcRetryInfo extends RpcErrorDetail {
+  /// Protobuf type URL for RetryInfo.
   static const type = 'type.googleapis.com/google.rpc.RetryInfo';
 
+  /// How long the client should wait before retrying.
   final Duration retryDelay;
 
+  /// Creates a [RpcRetryInfo] with the given [retryDelay].
   RpcRetryInfo(this.retryDelay);
 
   @override
@@ -318,11 +328,16 @@ class RpcRetryInfo extends RpcErrorDetail {
 
 /// Server-side debug information (stack traces, diagnostic details).
 class RpcDebugInfo extends RpcErrorDetail {
+  /// Protobuf type URL for DebugInfo.
   static const type = 'type.googleapis.com/google.rpc.DebugInfo';
 
+  /// Stack trace entries from the server.
   final List<String> stackEntries;
+
+  /// Additional diagnostic detail string.
   final String detail;
 
+  /// Creates a [RpcDebugInfo] with optional [stackEntries] and [detail].
   RpcDebugInfo({this.stackEntries = const [], this.detail = ''});
 
   @override
@@ -376,12 +391,19 @@ class RpcDebugInfo extends RpcErrorDetail {
 
 /// Describes the cause of an error with a reason, domain, and metadata.
 class RpcErrorInfo extends RpcErrorDetail {
+  /// Protobuf type URL for ErrorInfo.
   static const type = 'type.googleapis.com/google.rpc.ErrorInfo';
 
+  /// Machine-readable error reason (e.g. "QUOTA_EXCEEDED").
   final String reason;
+
+  /// Logical domain grouping (e.g. "billing.v1").
   final String domain;
+
+  /// Additional key-value metadata about the error.
   final Map<String, String> metadata;
 
+  /// Creates an [RpcErrorInfo] with the given [reason], [domain], and [metadata].
   RpcErrorInfo({
     required this.reason,
     this.domain = '',
@@ -489,8 +511,11 @@ class RpcErrorInfo extends RpcErrorDetail {
 class RpcRawErrorDetail extends RpcErrorDetail {
   @override
   final String typeUrl;
+
+  /// Raw protobuf-encoded value bytes.
   final Uint8List value;
 
+  /// Creates a raw error detail preserving unknown type data.
   RpcRawErrorDetail({required this.typeUrl, required this.value});
 
   @override
