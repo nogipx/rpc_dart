@@ -208,7 +208,11 @@ final class UnaryCaller<TRequest, TResponse> {
                   'gRPC error: $code - $decodedMessage [streamId: $streamId]',
                 );
                 completer.completeError(
-                  Exception('gRPC error $code: $decodedMessage'),
+                  RpcStatusException.fromTrailer(
+                    code,
+                    decodedMessage,
+                    detailsBin: message.metadata!.statusDetailsBin,
+                  ),
                 );
               }
             }

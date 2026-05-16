@@ -505,7 +505,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   }
 
   /// Sends an error to the client.
-  Future<void> sendError(int statusCode, String message) async {
+  Future<void> sendError(int statusCode, String message,
+      {Uint8List? statusDetailsBin}) async {
     if (!_isActive) {
       _logger?.warning('Attempted to send error on inactive processor');
       return;
@@ -535,7 +536,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // Both Trailers-Only and post-data trailers use the same format:
       // grpc-status + optional grpc-message. The transport distinguishes
       // between the two based on whether initial headers were sent.
-      final trailers = RpcMetadata.forTrailer(statusCode, message: message);
+      final trailers = RpcMetadata.forTrailer(statusCode,
+          message: message, statusDetailsBin: statusDetailsBin);
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
 
       _logger?.internal('Error sent to client [streamId: $_streamId]');

@@ -127,7 +127,11 @@ final class ServerStreamCaller<TRequest extends Object,
               _logger?.error(
                 'Server stream ended with error: $status - $decodedMessage',
               );
-              throw Exception('gRPC error $status: $decodedMessage');
+              throw RpcStatusException.fromTrailer(
+                status,
+                decodedMessage,
+                detailsBin: response.metadata!.statusDetailsBin,
+              );
             }
           }
         }

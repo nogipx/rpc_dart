@@ -82,13 +82,7 @@ void main() {
         // Act & Assert
         await expectLater(
           client.call('test request'.rpc),
-          throwsA(
-            isA<Exception>().having(
-              (e) => e.toString(),
-              'message',
-              contains('gRPC error'),
-            ),
-          ),
+          throwsA(isA<RpcStatusException>()),
         );
 
         // Cleanup
@@ -248,13 +242,7 @@ void main() {
         // Act & Assert
         await expectLater(
           client.call('test request'.rpc),
-          throwsA(
-            isA<Exception>().having(
-              (e) => e.toString(),
-              'message',
-              contains('gRPC error'),
-            ),
-          ),
+          throwsA(isA<RpcStatusException>()),
         );
 
         // Cleanup

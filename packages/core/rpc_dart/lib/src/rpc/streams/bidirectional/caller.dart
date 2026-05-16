@@ -95,7 +95,11 @@ final class BidirectionalStreamCaller<TRequest extends Object,
             _logger?.error(
               'Bidirectional stream ended with error: $status - $decodedMessage',
             );
-            throw Exception('gRPC error $status: $decodedMessage');
+            throw RpcStatusException.fromTrailer(
+              status,
+              decodedMessage,
+              detailsBin: response.metadata!.statusDetailsBin,
+            );
           }
         }
       }

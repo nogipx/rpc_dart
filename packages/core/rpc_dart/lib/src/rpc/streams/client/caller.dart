@@ -95,7 +95,11 @@ final class ClientStreamCaller<TRequest extends Object,
 
             if (!_responseCompleter.isCompleted) {
               _responseCompleter.completeError(
-                Exception('gRPC error $statusCode: $decodedMessage'),
+                RpcStatusException.fromTrailer(
+                  int.tryParse(statusCode) ?? RpcStatus.unknown,
+                  decodedMessage,
+                  detailsBin: rpcMessage.metadata!.statusDetailsBin,
+                ),
               );
             }
             return;

@@ -385,7 +385,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           e is RpcStatusException ? e.message : 'Request processing error: $e';
       await _transport.sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(errorStatus, message: errorMessage),
+        RpcMetadata.forTrailer(
+          errorStatus,
+          message: errorMessage,
+          statusDetailsBin:
+              e is RpcStatusException ? e.statusDetailsBin : null,
+        ),
         endStream: true,
       );
     } finally {
@@ -508,7 +513,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       final errorMessage2 = e is RpcStatusException ? e.message : e.toString();
       await _transport.sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(errorStatus2, message: errorMessage2),
+        RpcMetadata.forTrailer(
+          errorStatus2,
+          message: errorMessage2,
+          statusDetailsBin:
+              e is RpcStatusException ? e.statusDetailsBin : null,
+        ),
         endStream: true,
       );
     } finally {

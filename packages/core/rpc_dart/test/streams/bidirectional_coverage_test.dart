@@ -142,13 +142,7 @@ void main() {
 
       await expectLater(
         () => client.payloadResponses.toList(),
-        throwsA(
-          isA<Exception>().having(
-            (e) => e.toString(),
-            'msg',
-            contains('gRPC error'),
-          ),
-        ),
+        throwsA(isA<RpcStatusException>()),
       );
 
       await client.close();

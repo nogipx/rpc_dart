@@ -70,11 +70,7 @@ void main() {
 
       await expectLater(
         () => client.call('ping'.rpc),
-        throwsA(isA<Exception>().having(
-          (e) => e.toString(),
-          'msg',
-          contains('gRPC error'),
-        )),
+        throwsA(isA<RpcStatusException>()),
       );
 
       await client.close();

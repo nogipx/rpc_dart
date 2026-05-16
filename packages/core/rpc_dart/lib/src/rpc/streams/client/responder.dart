@@ -127,7 +127,9 @@ final class ClientStreamResponder<TRequest extends Object,
             error is RpcStatusException ? error.statusCode : RpcStatus.internal;
         final errorMsg =
             error is RpcStatusException ? error.message : error.toString();
-        await _processor.sendError(errorStatus, errorMsg);
+        await _processor.sendError(errorStatus, errorMsg,
+            statusDetailsBin:
+                error is RpcStatusException ? error.statusDetailsBin : null);
       } finally {
         _completeDone();
       }

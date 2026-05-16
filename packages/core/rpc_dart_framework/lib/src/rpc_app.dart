@@ -304,19 +304,16 @@ class RpcApp {
   }
 
   Future<void> _drainEndpoints() async {
+    final endpoints = _server?.endpoints ?? [];
+    if (endpoints.isEmpty) return;
+
     _log?.debug(
       'Draining in-flight streams (timeout: ${_config.drainTimeout.inSeconds}s)',
     );
-    final deadline = DateTime.now().add(_config.drainTimeout);
-    while (DateTime.now().isBefore(deadline)) {
-      final totalOpen = (_server?.endpoints ?? []).fold<int>(
-        0,
-        (sum, ep) =>
-            sum + ((ep.collectEndpointMetrics()['openStreams'] as int?) ?? 0),
-      );
-      if (totalOpen == 0) break;
-      _log?.debug('Waiting for $totalOpen stream(s) to finish');
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
+
+    // Signal all endpoints to start draining (rejects new streams, cancels active contexts).
+    await Future.wait([
+      for (final ep in endpoints) ep.drain(timeout: _config.drainTimeout),
+    ]);
   }
 }

@@ -20,6 +20,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   late final RpcResponderPingHandler _respPingHandler;
   StreamSubscription<RpcTransportMessage>? _respIncomingSub;
   bool _respIsListening = false;
+  bool _respIsDraining = false;
 
   /// Whether the responder pipeline is currently listening.
   bool get responderIsListening => _respIsListening;
@@ -108,12 +109,51 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     _respRegistry.disposeAll(logger);
   }
 
+  /// Whether the endpoint is draining (rejecting new streams, finishing active ones).
+  bool get isDraining => _respIsDraining;
+
+  /// Initiates graceful drain: rejects new streams and cancels active contexts.
+  ///
+  /// After calling [drain], new incoming streams receive `UNAVAILABLE` status.
+  /// Active streams have their cancellation tokens triggered with reason
+  /// "server draining", giving handlers a chance to finish gracefully.
+  ///
+  /// Returns a [Future] that completes when all active streams have finished,
+  /// or when [timeout] expires (whichever comes first).
+  Future<void> drain({Duration timeout = const Duration(seconds: 30)}) async {
+    if (_respIsDraining) return;
+    _respIsDraining = true;
+
+    logger.info('Drain started — cancelling ${_respStreams.length} active stream(s)');
+
+    // Cancel all active stream contexts.
+    for (final state in _respStreams.values) {
+      final ctx = state.cachedContext;
+      if (ctx != null && ctx.cancellationToken != null) {
+        ctx.cancellationToken!.cancel('server draining');
+      }
+    }
+
+    // Wait for streams to finish.
+    final deadline = DateTime.now().add(timeout);
+    while (_respStreams.length > 0 && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+
+    if (_respStreams.length > 0) {
+      logger.warning(
+        'Drain timeout — ${_respStreams.length} stream(s) still active, forcing cleanup',
+      );
+    }
+  }
+
   /// Collects responder-specific metrics.
   Map<String, Object?> collectResponderMetrics() {
     return {
       'registeredContracts': _respRegistry.contracts.length,
       'registeredMethods': _respRegistry.methods.length,
       'isListening': _respIsListening,
+      'isDraining': _respIsDraining,
       'openStreams': _respStreams.length,
     };
   }
@@ -125,6 +165,16 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   void _processResponderMessage(RpcTransportMessage message) {
     if (!_respIsListening) {
       logger.warning('Message received but endpoint is not started.');
+      return;
+    }
+
+    // During drain, reject new streams but allow messages for existing ones.
+    if (_respIsDraining && _respStreams[message.streamId] == null) {
+      unawaited(_sendGrpcErrorAndCleanup(
+        streamId: message.streamId,
+        status: RpcStatus.unavailable,
+        message: 'Server is shutting down',
+      ));
       return;
     }
 
@@ -859,6 +909,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       context = context.withTraceId(clientTraceId);
     } else {
       context = context.withTraceId(RpcContextUtils.generateTraceId());
+    }
+
+    // Attach a cancellation token so drain() can signal active handlers.
+    if (context.cancellationToken == null) {
+      context = context.withCancellation(RpcCancellationToken());
     }
 
     return context;
