@@ -1,3 +1,10 @@
+## 1.2.1
+
+**Bug fix:**
+- `BlobUploadChunk.toJson()` and `BlobDownloadFrame.toJson()` now coerce `bytes` via `Uint8List.fromList()` to guarantee correct CBOR byte string encoding on dart2js.
+- `_bytesFromJsonValue` handles `List<dynamic>` (from CBOR array decoding) as a fallback for cross-platform compatibility.
+- Bumped `rpc_dart` dependency to `^3.1.0`.
+
 ## 1.0.5
 
 - Allow to pass raw sqlite db connection to adapter

@@ -1,3 +1,8 @@
+## 3.1.1
+
+**Bug fix:**
+- Fixed `Uint8List` CBOR encoding on dart2js: added `TypedData` fallback in `_FastCborWriter` and `_encodeValue` to ensure typed byte arrays are always encoded as CBOR byte strings (major type 2), not integer arrays (major type 4). Without this fix, blob uploads from dart2js clients produced ~1.9x inflated byte counts on the server, causing "declared length does not match received bytes" errors.
+
 ## 3.1.0
 
 **Structured error model:**
