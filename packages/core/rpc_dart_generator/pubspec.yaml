@@ -16,10 +16,6 @@ dependencies:
   source_gen: ^4.2.0
   rpc_dart: ^3.1.0
 
-dependency_overrides:
-  rpc_dart:
-    path: ../rpc_dart
-
 dev_dependencies:
   build_runner: ^2.11.1
   build_test: ^3.5.7
