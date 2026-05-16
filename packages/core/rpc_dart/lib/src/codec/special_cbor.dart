@@ -92,6 +92,8 @@ abstract interface class CborCodec {
       _encodeString(value, builder);
     } else if (value is Uint8List) {
       _encodeByteString(value, builder);
+    } else if (value is TypedData && value is List<int>) {
+      _encodeByteString(Uint8List.fromList(value as List<int>), builder);
     } else if (value is List) {
       _encodeList(value, builder);
     } else if (value is Map) {
@@ -848,6 +850,10 @@ class _FastCborWriter {
       _writeString(value);
     } else if (value is Uint8List) {
       _writeByteString(value);
+    } else if (value is TypedData && value is List<int>) {
+      // Catch typed int arrays (e.g. Int8List, Uint8ClampedList) that dart2js
+      // may not recognize as Uint8List due to JS interop boundaries.
+      _writeByteString(Uint8List.fromList(value as List<int>));
     } else if (value is List) {
       _writeList(value);
     } else if (value is Map) {

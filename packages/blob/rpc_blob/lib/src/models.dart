@@ -511,7 +511,7 @@ class BlobUploadChunk extends Equatable implements IRpcSerializable {
     'collection': collection,
     'blobId': blobId,
     'offset': offset,
-    'data': bytes,
+    'data': Uint8List.fromList(bytes),
     if (totalLength != null) 'totalLength': totalLength,
     if (contentType != null) 'contentType': contentType,
     if (checksum != null) 'checksum': checksum,
@@ -572,7 +572,7 @@ class BlobDownloadFrame extends Equatable implements IRpcSerializable {
   @override
   Map<String, dynamic> toJson() => {
     'offset': offset,
-    'data': bytes,
+    'data': Uint8List.fromList(bytes),
     if (descriptor != null) 'descriptor': descriptor!.toJson(),
     if (rangeStart != null) 'rangeStart': rangeStart,
     if (rangeEnd != null) 'rangeEnd': rangeEnd,
@@ -793,6 +793,10 @@ Uint8List _bytesFromJsonValue(Object? raw) {
   }
   if (raw is List<int>) {
     return Uint8List.fromList(raw);
+  }
+  // Handle List<dynamic> from CBOR array decoding (dart2js encoding mismatch).
+  if (raw is List) {
+    return Uint8List.fromList(raw.cast<int>());
   }
   throw ArgumentError.value(raw, 'data', 'Unsupported byte representation');
 }

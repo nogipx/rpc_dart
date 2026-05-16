@@ -452,5 +452,66 @@ void main() {
         expect(cborEncoded.length, lessThan(jsonEncoded.length));
       });
     });
+
+    group('Uint8List encoding robustness (dart2js compat)', () {
+      test('Uint8List in map is encoded as CBOR byte string, not array', () {
+        final bytes = Uint8List.fromList([0, 24, 100, 200, 255]);
+        final data = <String, dynamic>{'data': bytes};
+
+        final encoded = CborCodec.encode(data);
+        final decoded = CborCodec.decode(encoded);
+
+        expect(decoded['data'], isA<Uint8List>());
+        expect(decoded['data'], equals(bytes));
+      });
+
+      test('Large Uint8List roundtrip preserves exact length', () {
+        final bytes = Uint8List(262144); // 256KB
+        for (var i = 0; i < bytes.length; i++) {
+          bytes[i] = i % 256;
+        }
+        final data = <String, dynamic>{'data': bytes, 'len': bytes.length};
+
+        final encoded = CborCodec.encode(data);
+        final decoded = CborCodec.decode(encoded);
+
+        final decodedBytes = decoded['data'] as Uint8List;
+        expect(decodedBytes.length, equals(bytes.length));
+        expect(decodedBytes.length, equals(decoded['len']));
+        expect(decodedBytes, equals(bytes));
+      });
+
+      test('Uint8List sublistView is encoded as byte string', () {
+        final buffer = Uint8List(1000);
+        for (var i = 0; i < buffer.length; i++) {
+          buffer[i] = i % 256;
+        }
+        // Create a view - this is common when slicing buffers
+        final view = Uint8List.sublistView(buffer, 100, 300);
+        final data = <String, dynamic>{'data': view};
+
+        final encoded = CborCodec.encode(data);
+        final decoded = CborCodec.decode(encoded);
+
+        expect(decoded['data'], isA<Uint8List>());
+        expect((decoded['data'] as Uint8List).length, equals(200));
+        expect(decoded['data'], equals(view));
+      });
+
+      test('CBOR byte string size is proportional to data (not ~2x)', () {
+        final bytes = Uint8List(1024);
+        for (var i = 0; i < bytes.length; i++) {
+          bytes[i] = 128 + (i % 128); // All values 128-255
+        }
+        final data = <String, dynamic>{'data': bytes};
+
+        final encoded = CborCodec.encode(data);
+
+        // CBOR byte string: ~5 bytes header + 1024 bytes data + map overhead
+        // If encoded as array: ~5 + 1024*2 = 2053 bytes (each value 128-255 = 2 bytes)
+        // Correct encoding should be much smaller than 2x
+        expect(encoded.length, lessThan(bytes.length * 1.1));
+      });
+    });
   });
 }
