@@ -1,3 +1,6 @@
+## 0.4.1
+- analyzer minimal version ^10.0.0
+
 ## 0.4.0
 
 - Added `RpcServiceKind.peer` support: `@RpcService(kind: RpcServiceKind.peer)` generates a peer contract pair (`XxxPeer` abstract class + `XxxPeerCaller` concrete implementation) instead of separate caller/responder.
