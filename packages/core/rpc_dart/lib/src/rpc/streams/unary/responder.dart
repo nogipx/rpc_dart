@@ -388,8 +388,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         RpcMetadata.forTrailer(
           errorStatus,
           message: errorMessage,
-          statusDetailsBin:
-              e is RpcStatusException ? e.statusDetailsBin : null,
+          statusDetailsBin: e is RpcStatusException ? e.statusDetailsBin : null,
         ),
         endStream: true,
       );
@@ -516,8 +515,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         RpcMetadata.forTrailer(
           errorStatus2,
           message: errorMessage2,
-          statusDetailsBin:
-              e is RpcStatusException ? e.statusDetailsBin : null,
+          statusDetailsBin: e is RpcStatusException ? e.statusDetailsBin : null,
         ),
         endStream: true,
       );

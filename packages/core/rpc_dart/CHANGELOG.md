@@ -1,5 +1,19 @@
 ## 3.1.0
 
+**Structured error model:**
+- `RpcStatusException` now carries typed `details` list — structured error information sent via `grpc-status-details-bin` trailer (wire-compatible with standard gRPC `google.rpc.Status`).
+- Added `RpcErrorDetail` hierarchy: `RpcBadRequest` (field violations), `RpcRetryInfo` (retry delay), `RpcDebugInfo` (stack traces), `RpcErrorInfo` (reason/domain/metadata), `RpcRawErrorDetail` (unknown types passthrough).
+- `RpcStatusException.fromTrailer()` factory reconstructs typed exceptions from wire data on the caller side.
+- All four caller patterns (unary, server-stream, client-stream, bidirectional) now throw `RpcStatusException` instead of generic `Exception` on gRPC errors.
+- All responder patterns forward `statusDetailsBin` in error trailers when handler throws `RpcStatusException` with details.
+- Minimal protobuf encoding/decoding for `google.rpc.Status` and `google.protobuf.Any` — no external protobuf dependency.
+
+**Graceful drain:**
+- Added `RpcResponderEndpoint.drain({Duration timeout})` — initiates graceful shutdown: rejects new streams with `UNAVAILABLE`, cancels active stream contexts via cancellation token, waits for completion.
+- Responder pipeline now attaches `RpcCancellationToken` to all incoming stream contexts automatically — handlers can listen for cancellation during shutdown.
+- `RpcApp._drainEndpoints()` (framework) now calls `endpoint.drain()` in parallel instead of polling.
+
+**Other:**
 - Added `RpcPeerContract` — base class for bidirectional contracts where either side can initiate calls. Extends `RpcResponderContract` and exposes `callUnary`, `callServerStream`, `callClientStream`, `callBidirectionalStream` methods bound to the same `RpcPeerEndpoint`.
 - `RpcPeerEndpoint` is now exported from the library public API.
 - `RpcServiceKind` enum added to `annotations.dart` (`unidirectional` / `peer`) for use with `@RpcService(kind: ...)`.

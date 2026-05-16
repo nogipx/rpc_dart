@@ -124,7 +124,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (_respIsDraining) return;
     _respIsDraining = true;
 
-    logger.info('Drain started — cancelling ${_respStreams.length} active stream(s)');
+    logger.info(
+        'Drain started — cancelling ${_respStreams.length} active stream(s)');
 
     // Cancel all active stream contexts.
     for (final state in _respStreams.values) {
