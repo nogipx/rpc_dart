@@ -40,9 +40,8 @@ class LogController {
     List<String> redactFields = const [],
   })  : _outputs = List.of(outputs),
         _enrichers = List.of(enrichers),
-        _redactor = redactFields.isNotEmpty
-            ? LogRedactor(fields: redactFields)
-            : null,
+        _redactor =
+            redactFields.isNotEmpty ? LogRedactor(fields: redactFields) : null,
         _sampling = sampling != null ? SamplingState(sampling) : null;
 
   // --- Level filtering ---
@@ -68,9 +67,9 @@ class LogController {
   }
 
   /// Quick check whether a record at [level] from [scope] would pass filtering.
-  /// Used by [LogScope] guards (isTrace, isInternal) to avoid unnecessary work.
-  bool accepts(RpcLogLevel level, String scope) {
-    final threshold = _resolveLevel(scope, null);
+  /// Used by [LogScope] guards (isTrace, isInternal) and pre-filter in _log().
+  bool accepts(RpcLogLevel level, String scope, [String? tag]) {
+    final threshold = _resolveLevel(scope, tag);
     return level >= threshold;
   }
 
@@ -118,7 +117,9 @@ class LogController {
     }
 
     // Step 4: Redact
-    if (_redactor != null && _redactor!.isActive && enrichedRecord.data != null) {
+    if (_redactor != null &&
+        _redactor!.isActive &&
+        enrichedRecord.data != null) {
       enrichedRecord = _redact(enrichedRecord);
     }
 
