@@ -72,6 +72,11 @@ class RpcAppConfig {
   /// Logger used by the framework itself. Null = silent.
   final LogScope? logger;
 
+  /// Log controller for endpoint injection. When set, every endpoint created by
+  /// the server will receive this controller so that `context.log` works inside
+  /// responder handlers.
+  final LogController? logController;
+
   /// Called for every unhandled exception that escapes an RPC handler.
   ///
   /// The framework automatically wires an interceptor that catches errors from
@@ -95,6 +100,7 @@ class RpcAppConfig {
     this.shutdownTimeout = const Duration(seconds: 30),
     this.drainTimeout = const Duration(seconds: 10),
     this.logger,
+    this.logController,
     this.onError,
     this.onCall,
     this.env,

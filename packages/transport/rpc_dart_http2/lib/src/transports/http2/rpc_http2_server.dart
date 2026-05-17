@@ -18,6 +18,7 @@ class RpcHttp2Server implements IRpcServer {
   final String _host;
   final int _port;
   final LogScope? _logger;
+  final LogController? _logController;
   final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
   final void Function(Socket socket)? _onConnectionOpened;
@@ -43,6 +44,7 @@ class RpcHttp2Server implements IRpcServer {
     String host = 'localhost',
     required int port,
     LogScope? logger,
+    LogController? logController,
     void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(Socket socket)? onConnectionOpened,
@@ -52,6 +54,7 @@ class RpcHttp2Server implements IRpcServer {
   }) : _host = host,
        _port = port,
        _logger = logger?.child('Http2Server'),
+       _logController = logController,
        _onEndpointCreated = onEndpointCreated,
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,
@@ -215,6 +218,7 @@ class RpcHttp2Server implements IRpcServer {
       final endpoint = RpcResponderEndpoint(
         transport: transport,
         debugLabel: 'Http2Endpoint-$clientAddress',
+        logger: _logController,
       );
 
       _endpoints.add(endpoint);

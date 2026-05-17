@@ -49,6 +49,7 @@ abstract final class RpcWasm {
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     String? debugLabel,
     bool compressionEnabled = false,
+    LogController? logController,
   }) {
     if (_initialized) {
       throw StateError('RpcWasm.run() may only be called once per runtime');
@@ -65,6 +66,7 @@ abstract final class RpcWasm {
       transport: transport,
       debugLabel: debugLabel,
       compressionEnabled: compressionEnabled,
+      logger: logController,
     );
 
     try {

@@ -64,6 +64,7 @@ class RpcHttpServer implements IRpcServer {
   final RpcHttpCorsPolicy? _corsPolicy;
   final void Function(RpcResponderEndpoint) _onEndpointCreated;
   final LogScope? _logger;
+  final LogController? _logController;
 
   RpcHttpResponderTransport? _transport;
   RpcResponderEndpoint? _endpoint;
@@ -76,10 +77,12 @@ class RpcHttpServer implements IRpcServer {
     required void Function(RpcResponderEndpoint) onEndpointCreated,
     RpcHttpCorsPolicy? corsPolicy,
     LogScope? logger,
+    LogController? logController,
   })  : _host = host,
         _port = port,
         _corsPolicy = corsPolicy,
         _onEndpointCreated = onEndpointCreated,
+        _logController = logController,
         _logger = logger?.child('HttpServer');
 
   @override
@@ -110,7 +113,7 @@ class RpcHttpServer implements IRpcServer {
   /// concerns that must be handled before RPC routing.
   Future<void> afterModulesStart({Handler? preamble}) async {
     final transport = _transport!;
-    _endpoint = RpcResponderEndpoint(transport: transport);
+    _endpoint = RpcResponderEndpoint(transport: transport, logger: _logController);
     _onEndpointCreated(_endpoint!);
 
     final Handler handler;

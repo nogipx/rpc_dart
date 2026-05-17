@@ -17,6 +17,7 @@ import 'websocket_responder_transport.dart';
 /// [RpcWebSocketResponderTransport] (3-layer architecture under the hood).
 class RpcWebSocketServer implements IRpcServer {
   final LogScope? _logger;
+  final LogController? _logController;
   final Stream<WebSocketChannel> _connections;
   final RpcSecurityPolicy _policy;
 
@@ -34,6 +35,7 @@ class RpcWebSocketServer implements IRpcServer {
   RpcWebSocketServer({
     required Stream<WebSocketChannel> connections,
     LogScope? logger,
+    LogController? logController,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
     void Function(RpcPeerEndpoint endpoint)? onPeerEndpointCreated,
@@ -42,6 +44,7 @@ class RpcWebSocketServer implements IRpcServer {
     void Function(WebSocketChannel channel)? onConnectionClosed,
   })  : _connections = connections,
         _logger = logger?.child('WebSocketServer'),
+        _logController = logController,
         _policy = policy,
         _onEndpointCreated = onEndpointCreated,
         _onPeerEndpointCreated = onPeerEndpointCreated,
@@ -132,7 +135,7 @@ class RpcWebSocketServer implements IRpcServer {
         final endpoint = RpcPeerEndpoint(
           transport: transport,
           debugLabel: 'WebSocketEndpoint-$clientLabel',
-
+          logger: _logController,
         );
         _onPeerEndpointCreated(endpoint);
         endpoint.start();
@@ -144,7 +147,7 @@ class RpcWebSocketServer implements IRpcServer {
         final endpoint = RpcResponderEndpoint(
           transport: transport,
           debugLabel: 'WebSocketEndpoint-$clientLabel',
-
+          logger: _logController,
         );
         _endpoints.add(endpoint);
         _onEndpointCreated?.call(endpoint);
