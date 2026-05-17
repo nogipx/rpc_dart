@@ -3,9 +3,11 @@
 //
 // SPDX-License-Identifier: MIT
 import 'package:rpc_dart/rpc_dart.dart';
+
 void main() async {
   await ServerStreamingExample.run();
 }
+
 /// Пример использования серверного стриминга (один запрос, много ответов)
 /// с использованием новых контрактов и RpcContext
 class ServerStreamingExample {
@@ -18,7 +20,6 @@ class ServerStreamingExample {
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
       debugLabel: 'Server',
-      
     );
     final service = DataStreamServiceResponder();
     serverEndpoint.registerServiceContract(service);
@@ -27,7 +28,6 @@ class ServerStreamingExample {
     final clientEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
       debugLabel: 'Client',
-      
     );
     final client = DataStreamServiceCaller(clientEndpoint);
     try {
@@ -84,6 +84,7 @@ class ServerStreamingExample {
     print('\n=== Пример завершен ===\n');
   }
 }
+
 //
 // СЕРВЕРНЫЙ КОНТРАКТ
 //
@@ -92,6 +93,7 @@ abstract interface class IDataStreamServiceContract implements IRpcContract {
   Stream<RpcInt> getNumberStream(RpcInt count);
   Stream<RpcString> getLongRunningStream(RpcString request);
 }
+
 final class DataStreamServiceResponder extends RpcResponderContract
     implements IDataStreamServiceContract {
   DataStreamServiceResponder() : super('DataStreamService');
@@ -119,6 +121,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
       description: 'Долгий поток для тестирования отмены',
     );
   }
+
   @override
   Stream<RpcString> getServerStream(
     RpcString request, {
@@ -139,6 +142,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
     }
     logger.info('✅ Завершен поток ответов');
   }
+
   @override
   Stream<RpcInt> getNumberStream(RpcInt count, {RpcContext? context}) async* {
     final logger = LogScope.noop;
@@ -159,6 +163,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
     }
     logger.info('✅ Завершен поток чисел');
   }
+
   @override
   Stream<RpcString> getLongRunningStream(
     RpcString request, {
@@ -183,6 +188,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
     }
   }
 }
+
 //
 // КЛИЕНТСКИЙ КОНТРАКТ
 //
@@ -200,6 +206,7 @@ final class DataStreamServiceCaller extends RpcCallerContract
       context: context,
     );
   }
+
   @override
   Stream<RpcInt> getNumberStream(RpcInt count, {RpcContext? context}) {
     return callServerStream<RpcInt, RpcInt>(
@@ -210,6 +217,7 @@ final class DataStreamServiceCaller extends RpcCallerContract
       context: context,
     );
   }
+
   @override
   Stream<RpcString> getLongRunningStream(
     RpcString request, {

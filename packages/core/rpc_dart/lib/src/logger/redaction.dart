@@ -7,8 +7,11 @@
 /// Matches field names (case-insensitive) and replaces values with [replacement].
 class LogRedactor {
   final Set<String> _fields;
+
+  /// String substituted for redacted values. Defaults to `'[REDACTED]'`.
   final String replacement;
 
+  /// Creates a redactor that masks the given [fields] (case-insensitive).
   LogRedactor({
     required List<String> fields,
     this.replacement = '[REDACTED]',

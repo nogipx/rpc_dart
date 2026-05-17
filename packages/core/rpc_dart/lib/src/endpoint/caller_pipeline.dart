@@ -211,7 +211,6 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       streamId: streamId,
       sentAt: sentAt,
     ).execute(metadata: metadata, timeout: timeout);
-
   }
 
   // ---------------------------------------------------------------------------

@@ -17,18 +17,21 @@ class SamplingConfig {
   /// Time window for counting records.
   final Duration interval;
 
+  /// Creates a sampling configuration with the given limits and time window.
   const SamplingConfig({
     this.interval = const Duration(seconds: 1),
     this.maxPerInterval = const {},
   });
 }
 
-/// Runtime sampling state. Tracks counts per level within current interval.
+/// Runtime sampling state that tracks record counts per level within the current interval.
 class SamplingState {
+  /// The sampling configuration used by this state.
   final SamplingConfig config;
   final Map<RpcLogLevel, int> _counts = {};
   DateTime _windowStart = DateTime.now();
 
+  /// Creates sampling state for the given [config].
   SamplingState(this.config);
 
   /// Returns true if the record should be kept (not sampled out).

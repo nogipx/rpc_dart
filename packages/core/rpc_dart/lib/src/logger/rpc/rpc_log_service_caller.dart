@@ -10,8 +10,12 @@ import '../log_record.dart';
 /// Callback types for RPC calls to the remote log service.
 typedef RpcLogUnaryCall = Future<Map<String, dynamic>> Function(
     String method, Map<String, dynamic> request);
+
+/// Callback type for streaming RPC calls to the remote log service.
 typedef RpcLogStreamCall = Stream<Map<String, dynamic>> Function(
     String method, Map<String, dynamic> request);
+
+/// Callback type for fire-and-forget RPC calls to the remote log service.
 typedef RpcLogVoidCall = Future<void> Function(
     String method, Map<String, dynamic> request);
 
@@ -24,6 +28,7 @@ class RpcLogServiceCaller {
   final RpcLogStreamCall _callStream;
   final RpcLogVoidCall _callVoid;
 
+  /// Creates a caller wired to the provided RPC transport callbacks.
   RpcLogServiceCaller({
     required RpcLogUnaryCall callUnary,
     required RpcLogStreamCall callStream,
@@ -42,7 +47,8 @@ class RpcLogServiceCaller {
   }
 
   /// Query recent log history from the remote process.
-  Future<List<LogRecord>> getHistory({int count = 100, LogFilter? filter}) async {
+  Future<List<LogRecord>> getHistory(
+      {int count = 100, LogFilter? filter}) async {
     final response = await _callUnary('getHistory', {
       'count': count,
       if (filter != null) 'filter': filter.toJson(),

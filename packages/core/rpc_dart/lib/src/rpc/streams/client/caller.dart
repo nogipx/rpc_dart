@@ -146,8 +146,7 @@ final class ClientStreamCaller<TRequest extends Object,
             );
           } catch (e) {
             // If completer already finished, ignore.
-            _logger
-                ?.internal('Completer already completed, skipping error: $e');
+            _logger.internal('Completer already completed, skipping error: $e');
           }
         }
       },

@@ -3,9 +3,11 @@
 //
 // SPDX-License-Identifier: MIT
 import 'package:rpc_dart/rpc_dart.dart';
+
 void main() async {
   await ClientStreamingExample.run();
 }
+
 /// Пример использования клиентского стриминга (много запросов, один ответ)
 ///
 /// Демонстрирует, как клиент отправляет поток запросов и получает один ответ
@@ -20,13 +22,11 @@ class ClientStreamingExample {
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
       debugLabel: 'ClientStreamServer',
-      
     );
     // Создаем клиентский эндпоинт
     final clientEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
       debugLabel: 'ClientStreamClient',
-      
     );
     // Регистрируем серверный контракт
     final serverContract = DataAggregatorResponder();
@@ -136,12 +136,14 @@ class ClientStreamingExample {
     print('\n=== Пример завершен ===\n');
   }
 }
+
 //
 // СЕРВЕРНЫЙ КОНТРАКТ
 //
 abstract interface class IDataAggregatorContract implements IRpcContract {
   Future<RpcString> aggregateMessages(Stream<RpcString> messages);
 }
+
 final class DataAggregatorResponder extends RpcResponderContract
     implements IDataAggregatorContract {
   DataAggregatorResponder() : super('DataAggregatorService');
@@ -155,6 +157,7 @@ final class DataAggregatorResponder extends RpcResponderContract
       description: 'Агрегирует поток сообщений и возвращает сводку',
     );
   }
+
   @override
   Future<RpcString> aggregateMessages(
     Stream<RpcString> messages, {
@@ -206,10 +209,12 @@ final class DataAggregatorResponder extends RpcResponderContract
       return partialResult.rpc;
     }
   }
+
   String _aggregateRegularMessages(List<String> messages, String? type) {
     final totalChars = messages.fold<int>(0, (sum, msg) => sum + msg.length);
     return 'Агрегировано ${messages.length} сообщений ($totalChars символов)';
   }
+
   String _aggregateSecureMessages(List<String> messages, String? format) {
     final adminCommands = messages.where((m) => m.startsWith('admin:')).length;
     if (format == 'structured') {
@@ -217,12 +222,14 @@ final class DataAggregatorResponder extends RpcResponderContract
     }
     return 'Обработано ${messages.length} защищенных сообщений ($adminCommands команд admin)';
   }
+
   String _aggregateFiles(List<String> messages) {
     final files = messages.where((m) => m.startsWith('file:')).length;
     final totalSize = messages.length * 1024; // Имитация размера
     return 'Обработано файлов: $files, общий размер: $totalSize KB';
   }
 }
+
 //
 // КЛИЕНТСКИЙ КОНТРАКТ
 //

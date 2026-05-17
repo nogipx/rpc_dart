@@ -117,4 +117,3 @@ final class _DummyTransport extends IRpcTransport {
   Future<RpcHealthStatus> reconnect() async =>
       RpcHealthStatus.healthy(component: 'DummyTransport');
 }
-

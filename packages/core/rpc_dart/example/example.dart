@@ -52,7 +52,8 @@ void main() async {
   scope.info('This will NOT appear (below warning)');
   scope.warning('This WILL appear');
 
-  log.setScopeLevel('app.database', RpcLogLevel.debug); // but enable debug for DB
+  log.setScopeLevel(
+      'app.database', RpcLogLevel.debug); // but enable debug for DB
   dbScope.debug('This WILL appear (scope override)');
 
   log.minLevel = RpcLogLevel.debug; // restore

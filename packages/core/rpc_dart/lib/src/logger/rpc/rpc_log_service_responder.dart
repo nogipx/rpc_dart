@@ -70,7 +70,8 @@ class RpcLogServiceResponder {
   }) {
     if (_ringBuffer == null) return const [];
 
-    final filter = filterJson != null ? LogFilter.fromJson(filterJson) : const LogFilter();
+    final filter =
+        filterJson != null ? LogFilter.fromJson(filterJson) : const LogFilter();
     final records = _ringBuffer!.query(filter, limit: count);
 
     return records.map((record) {

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
+
 // Zero-copy модели (простые классы)
 class ZeroCopyRequest {
   final String message;
@@ -11,12 +12,14 @@ class ZeroCopyRequest {
   @override
   String toString() => 'ZeroCopyRequest($message)';
 }
+
 class ZeroCopyResponse {
   final String reply;
   ZeroCopyResponse(this.reply);
   @override
   String toString() => 'ZeroCopyResponse($reply)';
 }
+
 // Сериализуемые модели
 class SerializableRequest implements IRpcSerializable {
   final String message;
@@ -29,6 +32,7 @@ class SerializableRequest implements IRpcSerializable {
   @override
   String toString() => 'SerializableRequest($message)';
 }
+
 class SerializableResponse implements IRpcSerializable {
   final String reply;
   SerializableResponse(this.reply);
@@ -40,6 +44,7 @@ class SerializableResponse implements IRpcSerializable {
   @override
   String toString() => 'SerializableResponse($reply)';
 }
+
 // Кодеки для сериализуемых типов
 final serializableRequestCodec = RpcCodec<SerializableRequest>(
   SerializableRequest.fromJson,
@@ -47,6 +52,7 @@ final serializableRequestCodec = RpcCodec<SerializableRequest>(
 final serializableResponseCodec = RpcCodec<SerializableResponse>(
   SerializableResponse.fromJson,
 );
+
 //
 // RESPONDER КОНТРАКТЫ С РАЗНЫМИ РЕЖИМАМИ
 //
@@ -68,6 +74,7 @@ final class ZeroCopyResponder extends RpcResponderContract {
     );
   }
 }
+
 /// Codec responder - принудительно использует сериализацию
 final class CodecResponder extends RpcResponderContract {
   CodecResponder()
@@ -87,6 +94,7 @@ final class CodecResponder extends RpcResponderContract {
     );
   }
 }
+
 /// Auto responder - автоматический выбор режима
 final class AutoResponder extends RpcResponderContract {
   AutoResponder()
@@ -116,6 +124,7 @@ final class AutoResponder extends RpcResponderContract {
     );
   }
 }
+
 //
 // CALLER КОНТРАКТЫ С РАЗНЫМИ РЕЖИМАМИ
 //
@@ -135,6 +144,7 @@ final class ZeroCopyCaller extends RpcCallerContract {
     );
   }
 }
+
 /// Codec caller
 final class CodecCaller extends RpcCallerContract {
   CodecCaller(RpcCallerEndpoint endpoint)
@@ -153,6 +163,7 @@ final class CodecCaller extends RpcCallerContract {
     );
   }
 }
+
 /// Auto caller
 final class AutoCaller extends RpcCallerContract {
   AutoCaller(RpcCallerEndpoint endpoint)
@@ -168,6 +179,7 @@ final class AutoCaller extends RpcCallerContract {
       request: request,
     );
   }
+
   Future<SerializableResponse> codecEcho(SerializableRequest request) {
     // Auto режим - кодеки указаны = codec
     return callUnary<SerializableRequest, SerializableResponse>(
@@ -178,6 +190,7 @@ final class AutoCaller extends RpcCallerContract {
     );
   }
 }
+
 //
 // ДЕМОНСТРАЦИЯ
 //
@@ -202,6 +215,7 @@ Future<void> main() async {
   await clientTransport.close();
   await serverTransport.close();
 }
+
 Future<void> demoZeroCopyMode(
   RpcResponderEndpoint responderEndpoint,
   RpcCallerEndpoint callerEndpoint,
@@ -221,6 +235,7 @@ Future<void> demoZeroCopyMode(
     print('❌ Ошибка: $e\n');
   }
 }
+
 Future<void> demoCodecMode(
   RpcResponderEndpoint responderEndpoint,
   RpcCallerEndpoint callerEndpoint,
@@ -240,6 +255,7 @@ Future<void> demoCodecMode(
     print('❌ Ошибка: $e\n');
   }
 }
+
 Future<void> demoAutoMode(
   RpcResponderEndpoint responderEndpoint,
   RpcCallerEndpoint callerEndpoint,
@@ -270,6 +286,7 @@ Future<void> demoAutoMode(
     print('❌ Codec ошибка: $e\n');
   }
 }
+
 Future<void> demoFlexibleCodecs(
   RpcResponderEndpoint responderEndpoint,
   RpcCallerEndpoint callerEndpoint,
@@ -304,6 +321,7 @@ Future<void> demoFlexibleCodecs(
   }
   print('\n✅ Гибкое управление кодеками работает корректно!');
 }
+
 final class FlexibleCaller extends RpcCallerContract {
   FlexibleCaller(RpcCallerEndpoint endpoint)
       : super(
@@ -323,6 +341,7 @@ final class FlexibleCaller extends RpcCallerContract {
     );
   }
 }
+
 final class FlexibleResponder extends RpcResponderContract {
   FlexibleResponder()
       : super('FlexibleService',

@@ -3,9 +3,11 @@
 //
 // SPDX-License-Identifier: MIT
 import 'package:rpc_dart/rpc_dart.dart';
+
 void main() async {
   await BidirectionalStreamExample.run();
 }
+
 /// Пример использования двунаправленного стриминга с контрактами и RpcContext
 class BidirectionalStreamExample {
   static Future<void> run() async {
@@ -17,7 +19,6 @@ class BidirectionalStreamExample {
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
       debugLabel: 'Server',
-      
     );
     final service = ChatServiceResponder();
     serverEndpoint.registerServiceContract(service);
@@ -26,7 +27,6 @@ class BidirectionalStreamExample {
     final clientEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
       debugLabel: 'Client',
-      
     );
     final client = ChatServiceCaller(clientEndpoint);
     try {
@@ -106,12 +106,14 @@ class BidirectionalStreamExample {
     print('\n=== Пример завершен ===\n');
   }
 }
+
 //
 // СЕРВЕРНЫЙ КОНТРАКТ
 //
 abstract interface class IChatServiceContract implements IRpcContract {
   Stream<RpcString> chatWithServer(Stream<RpcString> messages);
 }
+
 final class ChatServiceResponder extends RpcResponderContract
     implements IChatServiceContract {
   ChatServiceResponder() : super('ChatService');
@@ -125,6 +127,7 @@ final class ChatServiceResponder extends RpcResponderContract
       description: 'Двунаправленный чат с сервером',
     );
   }
+
   @override
   Stream<RpcString> chatWithServer(
     Stream<RpcString> messages, {
@@ -167,6 +170,7 @@ final class ChatServiceResponder extends RpcResponderContract
       await Future.delayed(Duration(milliseconds: 10));
     }
   }
+
   String _handleAdminCommand(String command) {
     switch (command) {
       case 'получить статус':
@@ -179,6 +183,7 @@ final class ChatServiceResponder extends RpcResponderContract
         return 'Неизвестная админ-команда: $command';
     }
   }
+
   String _handleRegularMessage(String message) {
     switch (message) {
       case 'ping':
@@ -195,6 +200,7 @@ final class ChatServiceResponder extends RpcResponderContract
     }
   }
 }
+
 //
 // КЛИЕНТСКИЙ КОНТРАКТ
 //

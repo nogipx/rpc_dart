@@ -209,10 +209,10 @@ class LogSpan implements LogRecord {
         traceId: json['traceId'] as String?,
         scope: json['scope'] as String? ?? '',
         name: json['name'] as String? ?? '',
-        startTime: DateTime.fromMillisecondsSinceEpoch(
-            json['startTime'] as int? ?? 0),
-        endTime: DateTime.fromMillisecondsSinceEpoch(
-            json['endTime'] as int? ?? 0),
+        startTime:
+            DateTime.fromMillisecondsSinceEpoch(json['startTime'] as int? ?? 0),
+        endTime:
+            DateTime.fromMillisecondsSinceEpoch(json['endTime'] as int? ?? 0),
         status: json['status'] == 'error' ? SpanStatus.error : SpanStatus.ok,
         error: json['error'],
         data: (json['data'] as Map<String, dynamic>?)?.cast<String, Object>(),

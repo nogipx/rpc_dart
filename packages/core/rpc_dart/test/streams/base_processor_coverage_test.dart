@@ -19,9 +19,6 @@ final class _ThrowingCodec<T> implements IRpcCodec<T> {
 }
 
 void main() {
-  
-  
-
   group('base_processor.dart: coverage', () {
     final codec = RpcCodec(RpcString.fromJson);
 

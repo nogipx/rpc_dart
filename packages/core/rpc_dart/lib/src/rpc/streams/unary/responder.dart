@@ -471,7 +471,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       } else {
         // Fallback to standard serialization for other transports.
         _logger
-            ?.internal('Fallback response serialization [streamId: $streamId]');
+            .internal('Fallback response serialization [streamId: $streamId]');
         final serializedResponse = _responseSerializer.serialize(response);
         final framedResponse = RpcMessageFrame.encode(serializedResponse);
         await _transport.sendMessage(streamId, framedResponse);

@@ -11,9 +11,6 @@ import 'package:test/test.dart';
 import '../utils/transport_wrappers.dart';
 
 void main() {
-  
-  
-
   group('RpcResponderMethodRegistry', () {
     test('exports zero-copy methods with wrapped handlers', () async {
       final (client, server) = RpcInMemoryTransport.pair();

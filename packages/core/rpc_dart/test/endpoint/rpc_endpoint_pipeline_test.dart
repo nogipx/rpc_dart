@@ -349,7 +349,6 @@ class _DummyTransport extends IRpcTransport {
       RpcHealthStatus.healthy(component: 'DummyTransport');
 }
 
-
 class _RecordingMiddleware extends IRpcMiddleware {
   final String name;
   final List<String> events;

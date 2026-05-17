@@ -3,9 +3,11 @@
 //
 // SPDX-License-Identifier: MIT
 import 'package:rpc_dart/rpc_dart.dart';
+
 void main() async {
   await UnaryRpcExample.run();
 }
+
 /// Пример использования унарного RPC вызова (один запрос - один ответ)
 /// с использованием новых контрактов и RpcContext
 class UnaryRpcExample {
@@ -18,7 +20,6 @@ class UnaryRpcExample {
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
       debugLabel: 'Server',
-      
     );
     final multiService = MultiServiceResponder();
     serverEndpoint.registerServiceContract(multiService);
@@ -27,7 +28,6 @@ class UnaryRpcExample {
     final clientEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
       debugLabel: 'Client',
-      
     );
     final client = MultiServiceCaller(clientEndpoint);
     try {
@@ -89,6 +89,7 @@ class UnaryRpcExample {
     print('\n=== Пример завершен ===\n');
   }
 }
+
 //
 // СЕРВЕРНЫЙ КОНТРАКТ
 //
@@ -99,6 +100,7 @@ abstract interface class IMultiServiceContract implements IRpcContract {
   Future<RpcString> throwError(RpcString message);
   Future<RpcString> longOperation(RpcString message);
 }
+
 final class MultiServiceResponder extends RpcResponderContract
     implements IMultiServiceContract {
   MultiServiceResponder() : super('MultiService');
@@ -140,6 +142,7 @@ final class MultiServiceResponder extends RpcResponderContract
       description: 'Долгая операция для тестирования отмены',
     );
   }
+
   @override
   Future<RpcString> sayHello(RpcString message, {RpcContext? context}) async {
     final logger = LogScope.noop;
@@ -148,6 +151,7 @@ final class MultiServiceResponder extends RpcResponderContract
     await Future.delayed(Duration(milliseconds: 10));
     return 'Здравствуйте! Это ответ от сервера: ${message.value}'.rpc;
   }
+
   @override
   Future<RpcString> getCurrentTime(
     RpcString message, {
@@ -162,6 +166,7 @@ final class MultiServiceResponder extends RpcResponderContract
     return 'Текущее время: ${DateTime.now()} [user: $userId, trace: $traceId]'
         .rpc;
   }
+
   @override
   Future<RpcString> checkHealth(
     RpcString message, {
@@ -175,6 +180,7 @@ final class MultiServiceResponder extends RpcResponderContract
     await Future.delayed(Duration(milliseconds: 30));
     return 'Все системы работают нормально [$requestType]'.rpc;
   }
+
   @override
   Future<RpcString> throwError(RpcString message, {RpcContext? context}) async {
     final logger = LogScope.noop;
@@ -182,6 +188,7 @@ final class MultiServiceResponder extends RpcResponderContract
     logger.info('🔍 Context: $context');
     throw Exception('Тестовая ошибка: ${message.value}');
   }
+
   @override
   Future<RpcString> longOperation(
     RpcString message, {
@@ -200,6 +207,7 @@ final class MultiServiceResponder extends RpcResponderContract
     return 'Долгая операция завершена: ${message.value}'.rpc;
   }
 }
+
 //
 // КЛИЕНТСКИЙ КОНТРАКТ
 //
@@ -217,6 +225,7 @@ final class MultiServiceCaller extends RpcCallerContract
       context: context,
     );
   }
+
   @override
   Future<RpcString> getCurrentTime(RpcString message, {RpcContext? context}) {
     return callUnary<RpcString, RpcString>(
@@ -227,6 +236,7 @@ final class MultiServiceCaller extends RpcCallerContract
       context: context,
     );
   }
+
   @override
   Future<RpcString> checkHealth(RpcString message, {RpcContext? context}) {
     return callUnary<RpcString, RpcString>(
@@ -237,6 +247,7 @@ final class MultiServiceCaller extends RpcCallerContract
       context: context,
     );
   }
+
   @override
   Future<RpcString> throwError(RpcString message, {RpcContext? context}) {
     return callUnary<RpcString, RpcString>(
@@ -247,6 +258,7 @@ final class MultiServiceCaller extends RpcCallerContract
       context: context,
     );
   }
+
   @override
   Future<RpcString> longOperation(RpcString message, {RpcContext? context}) {
     return callUnary<RpcString, RpcString>(

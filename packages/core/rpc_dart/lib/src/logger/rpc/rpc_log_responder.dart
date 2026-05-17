@@ -15,6 +15,7 @@ import '../log_record.dart';
 class RpcLogResponder {
   final LogController _sink;
 
+  /// Creates a responder that forwards received records into [sink].
   RpcLogResponder({required LogController sink}) : _sink = sink;
 
   /// Handle an incoming log record from a remote peer.

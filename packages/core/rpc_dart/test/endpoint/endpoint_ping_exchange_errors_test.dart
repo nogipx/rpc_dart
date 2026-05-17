@@ -11,9 +11,6 @@ import 'package:test/test.dart';
 import '../utils/transport_wrappers.dart';
 
 void main() {
-  
-  
-
   group('RpcEndpointPingExchange', () {
     test('throws TimeoutException when no trailers arrive', () async {
       final (client, server) = RpcInMemoryTransport.pair();

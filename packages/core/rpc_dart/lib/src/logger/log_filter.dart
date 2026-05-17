@@ -23,6 +23,7 @@ class LogFilter {
   /// Only include records with this request ID.
   final String? requestId;
 
+  /// Creates a filter; all fields are optional — omitted fields are not applied.
   const LogFilter({
     this.minLevel,
     this.scopes,
@@ -51,6 +52,7 @@ class LogFilter {
     return true;
   }
 
+  /// Serializes this filter to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
         if (minLevel != null) 'minLevel': minLevel!.name,
         if (scopes != null) 'scopes': scopes!.toList(),
@@ -59,6 +61,7 @@ class LogFilter {
         if (requestId != null) 'requestId': requestId,
       };
 
+  /// Deserializes a filter from a JSON-compatible map.
   factory LogFilter.fromJson(Map<String, dynamic> json) => LogFilter(
         minLevel: json['minLevel'] != null
             ? RpcLogLevel.values.firstWhere(

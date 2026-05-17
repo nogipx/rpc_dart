@@ -32,7 +32,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       logger: _log,
       debugLabel: debugLabel,
     );
-
   }
 
   // ---------------------------------------------------------------------------
@@ -767,7 +766,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         endStream: true,
       );
     } catch (error, stackTrace) {
-      _log.error('Failed to send zero-copy error for $methodKey', error: error, stackTrace: stackTrace);
+      _log.error('Failed to send zero-copy error for $methodKey',
+          error: error, stackTrace: stackTrace);
     } finally {
       await _cleanupStream(state.id);
     }
@@ -786,7 +786,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         endStream: true,
       );
     } catch (error, stackTrace) {
-      _log.error('Failed to send gRPC error [$status] for streamId=$streamId', error: error, stackTrace: stackTrace);
+      _log.error('Failed to send gRPC error [$status] for streamId=$streamId',
+          error: error, stackTrace: stackTrace);
     } finally {
       await _cleanupStream(streamId);
     }
@@ -925,7 +926,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     return context;
   }
-
 
   // ---------------------------------------------------------------------------
   // Utility

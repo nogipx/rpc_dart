@@ -214,5 +214,3 @@ final class _ConfigurableTransport implements IRpcTransport {
     return reconnectResult;
   }
 }
-
-

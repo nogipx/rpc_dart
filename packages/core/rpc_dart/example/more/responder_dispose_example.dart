@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
+
 /// 🧹 Пример использования dispose() метода в RPC респондерах
 ///
 /// Демонстрирует:
@@ -76,6 +77,7 @@ void main() async {
   await callerEndpoint.close();
   print('\n✅ Пример завершен. Все ресурсы освобождены!');
 }
+
 // =============================================================================
 // Модели данных (Zero-Copy)
 // =============================================================================
@@ -83,11 +85,13 @@ class ResourceRequest {
   final String operation;
   ResourceRequest(this.operation);
 }
+
 class ResourceResponse {
   final String result;
   final bool success;
   ResourceResponse(this.result, {this.success = true});
 }
+
 // =============================================================================
 // Пример 1: Сервис с database connections
 // =============================================================================
@@ -108,6 +112,7 @@ final class DatabaseService extends RpcResponderContract {
       handler: _executeQuery,
     );
   }
+
   Future<ResourceResponse> _initializeDatabase(
     ResourceRequest request, {
     RpcContext? context,
@@ -129,6 +134,7 @@ final class DatabaseService extends RpcResponderContract {
       'Database initialized with $activeConnections connections',
     );
   }
+
   Future<ResourceResponse> _executeQuery(
     ResourceRequest request, {
     RpcContext? context,
@@ -141,6 +147,7 @@ final class DatabaseService extends RpcResponderContract {
     }
     return ResourceResponse('Query executed successfully');
   }
+
   /// 🆕 Переопределяем dispose() для освобождения database ресурсов
   @override
   void dispose() {
@@ -161,6 +168,7 @@ final class DatabaseService extends RpcResponderContract {
     super.dispose();
   }
 }
+
 // =============================================================================
 // Пример 2: Caching сервис
 // =============================================================================
@@ -177,6 +185,7 @@ final class CachingService extends RpcResponderContract {
       handler: _initializeCache,
     );
   }
+
   Future<ResourceResponse> _initializeCache(
     ResourceRequest request, {
     RpcContext? context,
@@ -194,6 +203,7 @@ final class CachingService extends RpcResponderContract {
     print('  💾 [Cache] Кеш инициализирован с $cacheSize элементами');
     return ResourceResponse('Cache initialized with $cacheSize items');
   }
+
   /// 🆕 Переопределяем dispose() для освобождения cache ресурсов
   @override
   void dispose() {
@@ -209,6 +219,7 @@ final class CachingService extends RpcResponderContract {
     super.dispose();
   }
 }
+
 // =============================================================================
 // Пример 3: Analytics сервис с множественными ресурсами
 // =============================================================================
@@ -227,6 +238,7 @@ final class AnalyticsService extends RpcResponderContract {
     // Автоматически инициализируем при setup
     _autoInitialize();
   }
+
   void _autoInitialize() {
     print('  📊 [Analytics] Автоматическая инициализация...');
     // Создаем таймеры для метрик
@@ -246,6 +258,7 @@ final class AnalyticsService extends RpcResponderContract {
       '  📊 [Analytics] Создано $activeTimers таймеров и ${_eventStreams.length} event streams',
     );
   }
+
   Future<ResourceResponse> _initializeAnalytics(
     ResourceRequest request, {
     RpcContext? context,
@@ -254,6 +267,7 @@ final class AnalyticsService extends RpcResponderContract {
       'Analytics already initialized with $activeTimers timers',
     );
   }
+
   /// 🆕 Переопределяем dispose() для освобождения analytics ресурсов
   @override
   void dispose() {

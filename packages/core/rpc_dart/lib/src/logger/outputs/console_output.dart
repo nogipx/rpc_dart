@@ -59,7 +59,8 @@ class ConsoleOutput extends LogOutput {
   }
 
   void _writePrettySpanStart(LogSpanStart start) {
-    final line = '[${_formatTime(start.timestamp)}] SPAN ${_shortId(start.spanId)} >> ${start.scope}.${start.name}';
+    final line =
+        '[${_formatTime(start.timestamp)}] SPAN ${_shortId(start.spanId)} >> ${start.scope}.${start.name}';
     if (colored) {
       print('\x1B[36m$line\x1B[0m');
     } else {
@@ -96,7 +97,8 @@ class ConsoleOutput extends LogOutput {
 
   void _writePrettySpan(LogSpan span) {
     final buf = StringBuffer();
-    buf.write('[${_formatTime(span.endTime)}] SPAN ${_shortId(span.spanId)} ${span.scope}.${span.name}');
+    buf.write(
+        '[${_formatTime(span.endTime)}] SPAN ${_shortId(span.spanId)} ${span.scope}.${span.name}');
     buf.write(' ${span.duration.inMilliseconds}ms');
     buf.write(span.status == SpanStatus.ok ? ' [ok]' : ' [ERROR]');
 
@@ -121,9 +123,9 @@ class ConsoleOutput extends LogOutput {
     for (final entry in data.entries) {
       final value = entry.value;
       if (value is String && value.contains(' ')) {
-        buf.write(' ${entry.key}="${value}"');
+        buf.write(' ${entry.key}="$value"');
       } else {
-        buf.write(' ${entry.key}=${value}');
+        buf.write(' ${entry.key}=$value');
       }
     }
   }
@@ -155,8 +157,7 @@ class ConsoleOutput extends LogOutput {
     }
   }
 
-  String _formatTime(DateTime t) =>
-      '${t.hour.toString().padLeft(2, '0')}:'
+  String _formatTime(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:'
       '${t.minute.toString().padLeft(2, '0')}:'
       '${t.second.toString().padLeft(2, '0')}.'
       '${t.millisecond.toString().padLeft(3, '0')}';

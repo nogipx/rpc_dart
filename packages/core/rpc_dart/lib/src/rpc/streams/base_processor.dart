@@ -268,7 +268,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
     _messageBound = true;
 
-    _logger.internal('Stream bound [methodPath: $_methodPath, streamId: $_streamId]');
+    _logger.internal(
+        'Stream bound [methodPath: $_methodPath, streamId: $_streamId]');
 
     _scope.listen<RpcTransportMessage>(
       messageStream,

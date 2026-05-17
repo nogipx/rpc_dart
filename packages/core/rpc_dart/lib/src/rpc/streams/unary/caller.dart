@@ -110,7 +110,7 @@ final class UnaryCaller<TRequest, TResponse> {
 
       // Subscribe to responses for this stream.
       _logger
-          ?.internal('Configuring response subscription [streamId: $streamId]');
+          .internal('Configuring response subscription [streamId: $streamId]');
       subscription = _transport.getMessagesForStream(streamId).listen(
         (message) async {
           if (message.isDirect && message.directPayload != null) {
@@ -338,7 +338,7 @@ final class UnaryCaller<TRequest, TResponse> {
     } finally {
       // Always cancel response stream subscription.
       _logger
-          ?.internal('Cancelling response subscription [streamId: $streamId]');
+          .internal('Cancelling response subscription [streamId: $streamId]');
       await subscription?.cancel();
       await cancellationSubscription?.cancel();
     }

@@ -105,7 +105,10 @@ class LogSpanHandle {
   }
 
   /// End the span. Emits [LogSpan] to the pipeline.
-  void end({SpanStatus status = SpanStatus.ok, Object? error, StackTrace? stackTrace}) {
+  void end(
+      {SpanStatus status = SpanStatus.ok,
+      Object? error,
+      StackTrace? stackTrace}) {
     if (_ended) return;
     _ended = true;
 

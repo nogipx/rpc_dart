@@ -4,12 +4,14 @@
 // SPDX-License-Identifier: MIT
 import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
+
 void main() async {
   print('🚀 Transport Router - Реальные CORD сценарии');
   print('=' * 55);
   await _demonstrateRealWorldRouting();
   print('\n✅ Демонстрация завершена!');
 }
+
 /// Демонстрирует реальные сценарии роутинга в CORD архитектуре
 Future<void> _demonstrateRealWorldRouting() async {
   print('\n🎯 Создаем реалистичную роутинговую архитектуру...');
@@ -90,6 +92,7 @@ Future<void> _demonstrateRealWorldRouting() async {
   final stats = router.statistics;
   stats.forEach((key, value) => print('   $key: $value'));
 }
+
 /// Настраивает серверы доменов
 Future<void> _setupDomainServers(
   List<(IRpcTransport, String, String)> servers,
@@ -106,6 +109,7 @@ Future<void> _setupDomainServers(
     print('   ✅ $label запущен');
   }
 }
+
 /// Создает demo контракт для примера роутинга
 RpcResponderContract _createDemoServiceContract(
   String serviceName,
@@ -113,6 +117,7 @@ RpcResponderContract _createDemoServiceContract(
 ) {
   return _DemoServiceContract(serviceName, label);
 }
+
 /// Тестирует реальные сценарии роутинга
 Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   print('\n📝 Реальные сценарии использования:');
@@ -207,11 +212,13 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   }
   print('\n🎯 Все сценарии протестированы!');
 }
+
 /// Простая логика A/B тестирования
 bool _isInABTestGroup(String? userId) {
   if (userId == null) return false;
   return userId.hashCode % 2 == 0; // 50% пользователей
 }
+
 /// Demo контракт для демонстрации различных сервисов в routing примере
 final class _DemoServiceContract extends RpcResponderContract {
   final String _label;
