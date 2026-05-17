@@ -1,3 +1,46 @@
+## 3.2.0
+
+**Built-in logging system:**
+- New `LogController` / `LogScope` architecture replaces old `RpcLogger`
+- Pipeline: level filter -> sampling -> enrichers -> redaction -> outputs
+- `LogScope.noop` for zero-cost disable when no logger configured
+- `sealed LogRecord` with three types: `LogSpanStart`, `LogEvent`, `LogSpan`
+- Endpoints accept `LogController? logger` parameter
+
+**Spans (operations with duration):**
+- `withSpan()` / `startSpan()` API for measuring operation timing
+- Spans bypass level filter (telemetry, not logs) — available in production even with `minLevel = fatal`
+- `spansEnabled` flag for opt-out
+- Span ID (6 hex chars) links events to their span in console output
+
+**Console output (logfmt-style):**
+- One line per record, structured key=value fields
+- Three formats: `pretty` (colored), `json`, `compact`
+- traceId shown automatically when present
+- Span start (`>>`), events, and span end with duration on separate lines
+
+**Responder auto-logging:**
+- `context.log` in responder handlers auto-configured with scope, traceId, requestId
+- Scope includes service and method name: `rpc.{endpoint}.{Service}.{method}`
+- Works for all stream types (unary, server, client, bidirectional)
+
+**Production features:**
+- `SamplingConfig` — per-level rate limiting
+- `LogEnricher` — auto-attach fields (host, pid, etc.) to every record
+- `LogRedactor` — strip sensitive fields (password, token) from data
+- `RingBufferOutput` — in-memory history, queryable by `LogFilter`
+
+**RPC log transport:**
+- `RpcLogOutput` — send logs to remote peer with offline buffer
+- `RpcLogResponder` — accept remote logs into local controller
+- `RpcLogServiceResponder` — expose subscribe stream + history + remote control
+- `RpcLogServiceCaller` — client API for remote diagnostics
+
+**Breaking:**
+- Removed `RpcLogger`, `RpcLoggerColors`, `AnsiColor`, `RpcLoggerLevel`, `RpcContextAwareLogger`, `RpcContextualLogging`
+- Removed extension methods: `logRpcError`, `logRpcWarning`, `logStreamBound`, `logStreamFinished`, `logMessageReceived`
+- Endpoint constructors: `loggerColors` parameter removed, `logger` parameter now takes `LogController?`
+
 ## 3.1.1
 
 **Bug fix:**
