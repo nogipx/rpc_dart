@@ -13,14 +13,14 @@ class DataRepositoryClient implements IDataClient {
   DataRepositoryClient({
     required IDataRepository repository,
     bool disposeRepositoryOnClose = false,
-    RpcLogger? logger,
+    LogScope? logger,
   }) : _repository = repository,
        _disposeRepositoryOnClose = disposeRepositoryOnClose,
-       _log = logger ?? RpcLogger('DataRepositoryClient');
+       _log = logger ?? LogScope.noop;
 
   final IDataRepository _repository;
   final bool _disposeRepositoryOnClose;
-  final RpcLogger _log;
+  final LogScope _log;
 
   @override
   Future<DataRecord> create({

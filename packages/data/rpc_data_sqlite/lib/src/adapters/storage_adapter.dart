@@ -1194,15 +1194,15 @@ class SqliteDataChangeJournal implements DataChangeJournal {
   SqliteDataChangeJournal(
     this._database, {
     bool clearOnOpen = false,
-    RpcLogger? logger,
+    LogScope? logger,
   }) : _clearOnOpen = clearOnOpen,
-       _logger = (logger ?? RpcLogger('SqliteDataChangeJournal')).child(
+       _logger = (logger ?? LogScope.noop).child(
          'Replay',
        );
 
   final SqliteDataDatabase _database;
   final bool _clearOnOpen;
-  final RpcLogger _logger;
+  final LogScope _logger;
   bool _tableReady = false;
   bool _clearedOnOpen = false;
 
@@ -1366,7 +1366,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
         .get();
     final events = rows.map(_mapRow).toList(growable: false);
     for (final event in events) {
-      await _logger.debug(
+      _logger.debug(
         'Replaying change event '
         'collection=${event.collection} '
         'id=${event.id} '

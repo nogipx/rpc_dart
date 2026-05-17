@@ -11,7 +11,7 @@ typedef ToJson<T> = Map<String, dynamic> Function(T model);
 
 /// Wraps a data operation with logging on error while preserving the original exception.
 Future<T> _guard<T>({
-  required RpcLogger log,
+  required LogScope log,
   required String operation,
   required Future<T> Function() run,
 }) async {
@@ -75,13 +75,13 @@ class DataServiceCollection<T> implements IDataServiceCollection<T> {
     required this.toJson,
     required this.idSelector,
     this.idField = 'id',
-    RpcLogger? customLog,
-  }) : log = customLog ?? RpcLogger('DataCollection:$collection');
+    LogScope? customLog,
+  }) : log = customLog ?? LogScope.noop;
 
   @override
   final String collection;
   final IDataClient dataService;
-  final RpcLogger log;
+  final LogScope log;
   final FromJson<T> fromJson;
   final ToJson<T> toJson;
   final String Function(T model) idSelector;
