@@ -10,12 +10,8 @@ topics:
   - rpc
   - http
 
-dependency_overrides:
-  rpc_dart:
-    ^3.0.1 ../../core/rpc_dart
-
 dependencies:
-  rpc_dart: ^3.0.0
+  rpc_dart: ^3.2.0
   http: ^1.6.0
   shelf: ^1.4.2
 

@@ -9,7 +9,7 @@ environment:
   sdk: '>=3.10.0 <4.0.0'
 
 dependencies:
-  rpc_dart: ^3.1.0
+  rpc_dart: ^3.2.0
   equatable: ^2.0.8
   collection: ^1.19.1
   meta: ^1.17.0

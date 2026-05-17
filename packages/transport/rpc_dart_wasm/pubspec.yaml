@@ -20,15 +20,10 @@ topics:
   - rpc
   - wasm
 
-dependency_overrides:
-  rpc_dart:
-    path: ../../core/rpc_dart
-
 dependencies:
   flutter:
     sdk: flutter
-  rpc_dart:
-    path: ../../core/rpc_dart
+  rpc_dart: ^3.2.0
 
 dev_dependencies:
   flutter_test:

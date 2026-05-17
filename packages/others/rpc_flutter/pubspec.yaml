@@ -10,7 +10,7 @@ environment:
   flutter: ">=3.0.0"
 
 dependencies:
-  rpc_dart: ^3.0.1
+  rpc_dart: ^3.2.0
   rpc_dart_transports: ^1.4.2
   flutter_bloc: ^9.1.1
   flutter:

@@ -14,7 +14,7 @@ topics:
   - network
 
 dependencies:
-  rpc_dart: ^3.0.1
+  rpc_dart: ^3.2.0
   rpc_dart_transports: ^1.4.0
   universal_io: ^2.2.2
   crypto: ^3.0.6

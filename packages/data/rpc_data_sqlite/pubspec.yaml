@@ -16,7 +16,7 @@ hooks:
 dependencies:
   rpc_data:
     path: ../rpc_data
-  rpc_dart: ^3.1.0
+  rpc_dart: ^3.2.0
   paseto_dart: ^2.1.0
   sqlite3: ^3.1.4
   path: ^1.9.1
