@@ -72,22 +72,22 @@ final class RpcEndpointPingExchange {
   /// Transport used to send and receive ping messages.
   final IRpcTransport transport;
 
-  /// Logger for ping lifecycle events.
-  final RpcLogger logger;
-
   /// Stream ID reserved for this ping exchange.
   final int streamId;
 
   /// Timestamp when the ping was sent.
   final DateTime sentAt;
 
+  /// Logger for ping lifecycle.
+  late final LogScope _log;
+
   /// Creates an [RpcEndpointPingExchange] for the given transport.
   RpcEndpointPingExchange({
     required this.transport,
-    required this.logger,
+    LogScope? logger,
     required this.streamId,
     required this.sentAt,
-  });
+  }) : _log = logger ?? LogScope.noop;
 
   /// Sends the ping and waits for the pong response.
   Future<RpcEndpointPingResult> execute({
@@ -135,7 +135,7 @@ final class RpcEndpointPingExchange {
             return;
           }
 
-          logger.internal(
+          _log.internal(
             'Получены начальные метаданные ответа ping [streamId: $streamId]',
           );
           return;
@@ -152,7 +152,7 @@ final class RpcEndpointPingExchange {
           final statusMessage =
               headersMap[RpcHeaders.grpcMessage] ?? 'Unknown error';
           final decodedMessage = RpcMetadata.decodeGrpcMessage(statusMessage);
-          logger.warning(
+          _log.warning(
             'Ping завершился с ошибкой: status=$statusCode, message=$decodedMessage [streamId: $streamId]',
           );
           completeError(
@@ -182,14 +182,14 @@ final class RpcEndpointPingExchange {
           responseHeaders: headersMap,
         );
 
-        logger.internal(
+        _log.internal(
           'Ping успешно завершен, RTT=${result.roundTrip.inMilliseconds}мс [streamId: $streamId]',
         );
 
         completeSuccess(result);
       },
       onError: (error, stackTrace) {
-        logger.error(
+        _log.error(
           'Ошибка при получении ответа ping [streamId: $streamId]',
           error: error,
           stackTrace: stackTrace,
@@ -208,7 +208,7 @@ final class RpcEndpointPingExchange {
     );
 
     try {
-      logger.internal('Отправка ping запроса [streamId: $streamId]');
+      _log.internal('Отправка ping запроса [streamId: $streamId]');
       await transport.sendMetadata(
         streamId,
         metadata,
@@ -216,7 +216,7 @@ final class RpcEndpointPingExchange {
       );
     } catch (error, stackTrace) {
       await subscription.cancel();
-      logger.error(
+      _log.error(
         'Ошибка при отправке ping [streamId: $streamId]',
         error: error,
         stackTrace: stackTrace,
@@ -230,7 +230,7 @@ final class RpcEndpointPingExchange {
       future = future.timeout(
         timeout,
         onTimeout: () {
-          logger.warning(
+          _log.warning(
             'Ping превысил время ожидания ${timeout.inMilliseconds}мс [streamId: $streamId]',
           );
           throw TimeoutException(

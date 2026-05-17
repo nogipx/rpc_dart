@@ -94,7 +94,7 @@ class RpcApp {
     );
   }
 
-  RpcLogger? get _log => _config.logger;
+  LogScope? get _log => _config.logger;
 
   // -------------------------------------------------------------------------
   // Public API

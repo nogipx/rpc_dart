@@ -8,7 +8,7 @@ part of '../_index.dart';
 /// Server-stream responder: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Handles one request and streams responses.
 final class ServerStreamResponder<TRequest extends Object,
     TResponse extends Object> implements IRpcResponder {
-  late final RpcLogger? _logger;
+  late final LogScope _logger;
 
   @override
   final int id;
@@ -42,7 +42,7 @@ final class ServerStreamResponder<TRequest extends Object,
     IRpcCodec<TResponse>? responseCodec,
     required Stream<TResponse> Function(TRequest request) handler,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
@@ -62,8 +62,8 @@ final class ServerStreamResponder<TRequest extends Object,
       );
     }
 
-    _logger = logger?.child('ServerResponder');
-    _logger?.internal(
+    _logger = logger?.child('ServerResponder') ?? LogScope.noop;
+    _logger.internal(
       'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamResponder for $serviceName.$methodName [id: $id]',
     );
 
@@ -83,7 +83,7 @@ final class ServerStreamResponder<TRequest extends Object,
 
   /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger?.internal('Binding to message stream [id: $id]');
+    _logger.internal('Binding to message stream [id: $id]');
     _processor.bindToMessageStream(messageStream);
   }
 
@@ -91,47 +91,47 @@ final class ServerStreamResponder<TRequest extends Object,
   void _setupRequestHandler(
     Stream<TResponse> Function(TRequest request) handler,
   ) {
-    _logger?.internal(
+    _logger.internal(
       'Configuring request handler for server stream [id: $id]',
     );
 
     _subscription = _processor.requests.listen(
       (request) async {
-        _logger?.internal(
+        _logger.internal(
           'Received request for server stream: $request [id: $id]',
         );
 
         if (!_requestHandled) {
-          _logger?.internal(
+          _logger.internal(
             'Processing first request for server stream [id: $id]',
           );
           _requestHandled = true;
 
           try {
-            _logger?.internal('Invoking request handler [id: $id]');
+            _logger.internal('Invoking request handler [id: $id]');
             final handlerStream = handler(request);
-            _logger?.internal(
+            _logger.internal(
               'Handler invoked, response stream received [id: $id]',
             );
 
-            _logger?.internal(
+            _logger.internal(
               'Processing response stream from handler [id: $id]',
             );
 
             int responseCount = 0;
             await for (var response in handlerStream) {
               responseCount++;
-              _logger?.internal(
+              _logger.internal(
                 'Received response #$responseCount from handler: $response [id: $id]',
               );
 
               try {
                 await _processor.send(response);
-                _logger?.internal(
+                _logger.internal(
                   'Response #$responseCount sent to client [id: $id]',
                 );
               } catch (e, stackTrace) {
-                _logger?.error(
+                _logger.error(
                   'Failed to send response #$responseCount to client [id: $id]',
                   error: e,
                   stackTrace: stackTrace,
@@ -142,16 +142,16 @@ final class ServerStreamResponder<TRequest extends Object,
               }
             }
 
-            _logger?.internal(
+            _logger.internal(
               'Handler response stream completed, total responses: $responseCount [id: $id]',
             );
 
             // Finish sending responses.
             await _processor.finishSending();
-            _logger?.internal('Response sending finished [id: $id]');
+            _logger.internal('Response sending finished [id: $id]');
             _completeDone();
           } catch (error, trace) {
-            _logger?.error(
+            _logger.error(
               'Request handling failed [id: $id]',
               error: error,
               stackTrace: trace,
@@ -168,20 +168,20 @@ final class ServerStreamResponder<TRequest extends Object,
             _completeDone();
           }
         } else {
-          _logger?.internal(
+          _logger.internal(
             'Ignoring extra request (first already handled) [id: $id]',
           );
         }
       },
       onError: (error, stackTrace) {
-        _logger?.error(
+        _logger.error(
           'Error in request stream [id: $id]',
           error: error,
           stackTrace: stackTrace,
         );
       },
       onDone: () {
-        _logger?.internal('Request stream completed [id: $id]');
+        _logger.internal('Request stream completed [id: $id]');
       },
     );
   }

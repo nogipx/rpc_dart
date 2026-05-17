@@ -8,7 +8,7 @@ part of '../_index.dart';
 /// Bidirectional stream responder: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Handles incoming requests and sends responses independently.
 final class BidirectionalStreamResponder<TRequest extends Object,
     TResponse extends Object> implements IRpcResponder {
-  late final RpcLogger? _logger;
+  late final LogScope _logger;
 
   @override
   final int id;
@@ -38,7 +38,7 @@ final class BidirectionalStreamResponder<TRequest extends Object,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
@@ -58,8 +58,8 @@ final class BidirectionalStreamResponder<TRequest extends Object,
       );
     }
 
-    _logger = logger?.child('BidirectionalResponder');
-    _logger?.internal(
+    _logger = logger?.child('BidirectionalResponder') ?? LogScope.noop;
+    _logger.internal(
       'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamResponder for $serviceName.$methodName [id: $id]',
     );
 
@@ -103,9 +103,9 @@ final class BidirectionalStreamResponder<TRequest extends Object,
           await _processor.send(
             response,
           ); // Use processor directly to avoid cyclic dependency.
-          _logger?.internal('Response sent via responseSink [id: $id]');
+          _logger.internal('Response sent via responseSink [id: $id]');
         } catch (e, stackTrace) {
-          _logger?.error(
+          _logger.error(
             'Failed to send response via responseSink [id: $id]',
             error: e,
             stackTrace: stackTrace,
@@ -113,11 +113,11 @@ final class BidirectionalStreamResponder<TRequest extends Object,
         }
       },
       onDone: () async {
-        _logger?.internal('Response stream completed [id: $id]');
+        _logger.internal('Response stream completed [id: $id]');
         await finishReceiving();
       },
       onError: (error, stackTrace) {
-        _logger?.error(
+        _logger.error(
           'Error in response stream [id: $id]',
           error: error,
           stackTrace: stackTrace,
@@ -128,14 +128,14 @@ final class BidirectionalStreamResponder<TRequest extends Object,
 
   /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger?.internal('Binding to message stream [id: $id]');
+    _logger.internal('Binding to message stream [id: $id]');
     _processor.bindToMessageStream(messageStream);
   }
 
   /// Sends a response to the client.
   Future<void> send(TResponse response) async {
     if (!_isActive) {
-      _logger?.warning(
+      _logger.warning(
         'Attempted to send response on inactive responder [id: $id]',
       );
       return;

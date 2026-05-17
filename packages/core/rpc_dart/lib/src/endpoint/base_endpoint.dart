@@ -14,18 +14,14 @@ abstract base class RpcEndpointBase {
   /// Optional label attached to log messages for easier identification.
   final String? debugLabel;
 
-  /// Optional ANSI color palette used by the logger.
-  final RpcLoggerColors? loggerColors;
-
-  /// Logger for this endpoint.
-  RpcLogger get logger;
+  /// Logger scope for this endpoint.
+  LogScope get _log;
   bool _isActive = true;
 
   /// Creates an [RpcEndpointBase] bound to the given [transport].
   RpcEndpointBase({
     required IRpcTransport transport,
     this.debugLabel,
-    this.loggerColors,
   }) : _transport = transport;
 
   /// Collects endpoint metrics for health reporting; subclasses may extend.
@@ -47,7 +43,7 @@ abstract base class RpcEndpointBase {
 
   RpcHealthStatus _createEndpointStatus(RpcHealthStatus transportStatus) {
     final metrics = collectEndpointMetrics();
-    final componentName = logger.name;
+    final componentName = _log.name;
 
     if (!_isActive) {
       return RpcHealthStatus.closed(
@@ -95,7 +91,7 @@ abstract base class RpcEndpointBase {
     try {
       return await _transport.health();
     } catch (error, stackTrace) {
-      await logger.error(
+      _log.error(
         'Transport health check failed: $error',
         error: error,
         stackTrace: stackTrace,
@@ -139,7 +135,7 @@ abstract base class RpcEndpointBase {
     try {
       transportStatus = await _transport.reconnect();
     } on UnsupportedError catch (error) {
-      await logger.warning(
+      _log.warning(
         'Transport does not support reconnect: ${error.message ?? error.toString()}',
       );
       transportStatus = RpcHealthStatus.degraded(
@@ -152,7 +148,7 @@ abstract base class RpcEndpointBase {
         },
       );
     } catch (error, stackTrace) {
-      await logger.error(
+      _log.error(
         'Transport reconnect failed: $error',
         error: error,
         stackTrace: stackTrace,
@@ -170,13 +166,13 @@ abstract base class RpcEndpointBase {
   /// Adds [middleware] to the processing chain.
   void addMiddleware(IRpcMiddleware middleware) {
     _middlewares.add(middleware);
-    logger.internal('Добавлен middleware: ${middleware.toString()}');
+    _log.internal('Добавлен middleware: ${middleware.toString()}');
   }
 
   /// Adds [interceptor] to the processing chain.
   void addInterceptor(IRpcInterceptor interceptor) {
     _interceptors.add(interceptor);
-    logger.internal('Добавлен interceptor: ${interceptor.toString()}');
+    _log.internal('Добавлен interceptor: ${interceptor.toString()}');
   }
 
   /// Returns true while the endpoint has not been closed.
@@ -187,19 +183,19 @@ abstract base class RpcEndpointBase {
 
   /// Starts the endpoint.
   void start() {
-    logger.internal('Запуск RPC эндпоинта');
+    _log.internal('Запуск RPC эндпоинта');
   }
 
   /// Stops the endpoint.
   void stop() {
-    logger.internal('Остановка RPC эндпоинта');
+    _log.internal('Остановка RPC эндпоинта');
   }
 
   /// Closes the endpoint and releases all resources.
   Future<void> close() async {
     if (!_isActive) return;
 
-    logger.internal('Закрытие RpcEndpoint');
+    _log.internal('Закрытие RpcEndpoint');
     _isActive = false;
     _middlewares.clear();
     _interceptors.clear();
@@ -209,19 +205,19 @@ abstract base class RpcEndpointBase {
       await _transport.close().timeout(
         Duration(seconds: 5),
         onTimeout: () {
-          logger.warning('Таймаут при закрытии транспорта');
+          _log.warning('Таймаут при закрытии транспорта');
           // Не выбрасываем исключение, просто логируем предупреждение
           return;
         },
       );
     } catch (e) {
-      logger.warning('Ошибка при закрытии транспорта: $e');
+      _log.warning('Ошибка при закрытии транспорта: $e');
       // Не пробрасываем ошибку дальше, чтобы гарантировать, что метод close()
       // всегда завершается успешно
     } finally {
       // Гарантируем, что эндпоинт помечен как неактивный
       _isActive = false;
-      logger.internal('RpcEndpoint закрыт');
+      _log.internal('RpcEndpoint закрыт');
     }
   }
 

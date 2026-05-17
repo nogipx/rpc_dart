@@ -40,7 +40,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   final IRpcCodec<TResponse> _responseSerializer;
 
   /// Logger.
-  late final RpcLogger? _logger;
+  late final LogScope _logger;
 
   /// RPC context with cancellation/metadata.
   final RpcContext? _context;
@@ -78,7 +78,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     required IRpcCodec<TResponse> responseCodec,
     required FutureOr<TResponse> Function(TRequest request) handler,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   })  : _transport = transport,
         _serviceName = serviceName,
         _methodName = methodName,
@@ -86,7 +86,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         _responseSerializer = responseCodec,
         _context = context {
     _handler = handler;
-    _logger = logger?.child('UnaryResponder');
+    _logger = logger?.child('UnaryResponder') ?? LogScope.noop;
     _parser = RpcMessageParser(
       logger: _logger,
       decompressor: (payload) {
@@ -101,7 +101,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       },
     );
     _methodPath = '/$_serviceName/$_methodName';
-    _logger?.internal(
+    _logger.internal(
       'Created unary server for $_methodPath${_context?.cancellationToken != null ? " with cancellation token" : ""}',
     );
 
@@ -118,7 +118,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       _cancellationSubscription =
           _context!.cancellationToken!.cancelled.asStream().listen(
         (_) {
-          _logger?.internal(
+          _logger.internal(
             'Operation cancelled, stopping request handling [id: $id]',
           );
 
@@ -126,7 +126,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           _subscription?.cancel();
         },
         onError: (error, stackTrace) {
-          _logger?.error(
+          _logger.error(
             'Error monitoring cancellation [id: $id]',
             error: error,
             stackTrace: stackTrace,
@@ -142,7 +142,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   }
 
   void _setupRequestHandler() {
-    _logger?.internal('Configuring request handler for $_methodPath');
+    _logger.internal('Configuring request handler for $_methodPath');
 
     _subscription = _transport.incomingMessages.listen(
       (message) async {
@@ -158,7 +158,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           final state = _stateFor(streamId);
           if (message.methodPath == _methodPath) {
             state.belongsToThisMethod = true;
-            _logger?.internal(
+            _logger.internal(
               'Unary server: stream $streamId bound to method $_methodPath',
             );
           }
@@ -186,7 +186,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
         if (_streamStates[streamId]?.requestHandled == true) {
           // Ignore additional messages after first request handled.
-          _logger?.internal(
+          _logger.internal(
             'Ignoring extra message for stream $streamId (request already handled)',
           );
           return;
@@ -196,7 +196,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         try {
           _checkCancellation();
         } catch (e) {
-          _logger?.internal(
+          _logger.internal(
             'Message skipped due to cancellation [streamId: $streamId]',
           );
           return;
@@ -215,7 +215,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
             eosState?.belongsToThisMethod == true &&
             eosState?.requestHandled != true) {
           eosState!.requestHandled = true;
-          _logger?.warning(
+          _logger.warning(
             'Client closed stream without sending data [streamId: $streamId]',
           );
 
@@ -234,7 +234,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         }
       },
       onError: (error, stackTrace) async {
-        _logger?.error(
+        _logger.error(
           'Transport error for $_methodPath',
           error: error,
           stackTrace: stackTrace,
@@ -251,13 +251,13 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     try {
       _checkCancellation();
     } catch (e) {
-      _logger?.internal('Message processing cancelled [streamId: $streamId]');
+      _logger.internal('Message processing cancelled [streamId: $streamId]');
       return;
     }
 
     // Ensure the message targets this responder (id=0 accepts all for tests).
     if (id != 0 && streamId != id) {
-      _logger?.internal(
+      _logger.internal(
         'Message for stream $streamId does not belong to this responder (id=$id), skipping',
       );
       return;
@@ -266,20 +266,20 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     final state = _stateFor(streamId);
 
     if (state.requestHandled) {
-      _logger?.internal(
+      _logger.internal(
         'Message for stream $streamId already handled, skipping',
       );
       return;
     }
 
     if (message.isMetadataOnly || message.payload == null) {
-      _logger?.internal('Received message without payload, skipping');
+      _logger.internal('Received message without payload, skipping');
       return;
     }
 
     // Mark as handling immediately to prevent duplicates.
     state.requestHandled = true;
-    _logger?.internal(
+    _logger.internal(
       'Handling request for $_methodPath [streamId: $streamId]',
     );
 
@@ -289,7 +289,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
       // Send initial headers if not already sent.
       if (!state.initialHeadersSent) {
-        _logger?.internal(
+        _logger.internal(
           'Sending initial headers [streamId: $streamId]',
         );
         await _transport.sendMetadata(
@@ -300,36 +300,36 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // Deserialize request using parser to extract framed messages.
-      _logger?.internal(
+      _logger.internal(
         'Parsing request frame of ${message.payload!.length} bytes [streamId: $streamId]',
       );
       _activeRequestEncoding = state.clientRequestEncoding;
       final messages = _parser(message.payload!);
       _activeRequestEncoding = null;
       if (messages.isEmpty) {
-        _logger?.error(
+        _logger.error(
           'Failed to extract message from payload [streamId: $streamId]',
         );
         throw RpcException('Failed to extract message from payload');
       }
 
-      _logger?.internal('Deserializing request [streamId: $streamId]');
+      _logger.internal('Deserializing request [streamId: $streamId]');
       final request = _requestSerializer.deserialize(messages.first);
 
-      _logger?.internal(
+      _logger.internal(
         'Handling request for $_methodPath [streamId: $streamId]',
       );
 
       // Handle request.
       final response = await _handler(request);
-      _logger?.internal(
+      _logger.internal(
         'Request handled, preparing response [streamId: $streamId]',
       );
 
       // Serialize and optionally compress response.
-      _logger?.internal('Serializing response [streamId: $streamId]');
+      _logger.internal('Serializing response [streamId: $streamId]');
       final serializedResponse = _responseSerializer.serialize(response);
-      _logger?.internal(
+      _logger.internal(
         'Response serialized, size: ${serializedResponse.length} bytes [streamId: $streamId]',
       );
       final useCompression = responseEncoding != null;
@@ -343,11 +343,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         payload,
         compressed: useCompression,
       );
-      _logger?.internal('Sending response [streamId: $streamId]');
+      _logger.internal('Sending response [streamId: $streamId]');
       await _transport.sendMessage(streamId, framedResponse);
 
       // Send success trailer.
-      _logger?.internal(
+      _logger.internal(
         'Sending success trailer [streamId: $streamId]',
       );
       await _transport.sendMetadata(
@@ -356,11 +356,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         endStream: true,
       );
 
-      _logger?.internal(
+      _logger.internal(
         'Response sent for $_methodPath [streamId: $streamId]',
       );
     } catch (e, stackTrace) {
-      _logger?.error(
+      _logger.error(
         'Request processing failed [streamId: $streamId]',
         error: e,
         stackTrace: stackTrace,
@@ -378,7 +378,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       // On error, send trailer with status.
       // RpcStatusException carries a specific gRPC status code; all other
       // exceptions map to INTERNAL.
-      _logger?.internal('Sending error trailer [streamId: $streamId]');
+      _logger.internal('Sending error trailer [streamId: $streamId]');
       final errorStatus =
           e is RpcStatusException ? e.statusCode : RpcStatus.internal;
       final errorMessage =
@@ -394,7 +394,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
     } finally {
       // Clear state for this stream (single call removes all per-stream data).
-      _logger?.internal('Clearing state for stream $streamId');
+      _logger.internal('Clearing state for stream $streamId');
       _streamStates.remove(streamId);
     }
   }
@@ -407,7 +407,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     try {
       _checkCancellation();
     } catch (e) {
-      _logger?.internal(
+      _logger.internal(
         'Zero-copy message processing cancelled [streamId: $streamId]',
       );
       return;
@@ -415,7 +415,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
     // Ensure message targets this responder.
     if (id != 0 && streamId != id) {
-      _logger?.internal(
+      _logger.internal(
         'Zero-copy message for stream $streamId does not belong to this responder (id=$id), skipping',
       );
       return;
@@ -424,7 +424,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     final state = _stateFor(streamId);
 
     if (state.requestHandled) {
-      _logger?.internal(
+      _logger.internal(
         'Zero-copy message for stream $streamId already handled, skipping',
       );
       return;
@@ -432,14 +432,14 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
     // Mark as handling immediately.
     state.requestHandled = true;
-    _logger?.internal(
+    _logger.internal(
       'Zero-copy request processing for $_methodPath [streamId: $streamId]',
     );
 
     try {
       // Send initial headers if not already sent.
       if (!state.initialHeadersSent) {
-        _logger?.internal(
+        _logger.internal(
           'Sending initial headers [streamId: $streamId]',
         );
         // Zero-copy bypasses serialization/compression; no encoding header needed.
@@ -451,22 +451,22 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // Zero-copy: get object directly without deserialization.
-      _logger?.internal('Zero-copy object access [streamId: $streamId]');
+      _logger.internal('Zero-copy object access [streamId: $streamId]');
       final request = message.directPayload as TRequest;
 
-      _logger?.internal(
+      _logger.internal(
         'Zero-copy request handling for $_methodPath [streamId: $streamId]',
       );
 
       // Handle request.
       final response = await _handler(request);
-      _logger?.internal(
+      _logger.internal(
         'Zero-copy request completed, preparing response [streamId: $streamId]',
       );
 
       // Zero-copy: send response directly if supported.
       if (_transport.supportsZeroCopy) {
-        _logger?.internal('Zero-copy response sending [streamId: $streamId]');
+        _logger.internal('Zero-copy response sending [streamId: $streamId]');
         await _transport.sendDirectObject(streamId, response as Object);
       } else {
         // Fallback to standard serialization for other transports.
@@ -478,7 +478,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // Send success trailer.
-      _logger?.internal(
+      _logger.internal(
         'Zero-copy sending success trailer [streamId: $streamId]',
       );
       await _transport.sendMetadata(
@@ -487,11 +487,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         endStream: true,
       );
 
-      _logger?.internal(
+      _logger.internal(
         'Zero-copy response completed for $_methodPath [streamId: $streamId]',
       );
     } catch (e, stackTrace) {
-      _logger?.error(
+      _logger.error(
         'Zero-copy request processing error [streamId: $streamId]',
         error: e,
         stackTrace: stackTrace,
@@ -521,7 +521,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
     } finally {
       // Clear state for this stream (single call removes all per-stream data).
-      _logger?.internal('Zero-copy cleanup for stream $streamId');
+      _logger.internal('Zero-copy cleanup for stream $streamId');
       _streamStates.remove(streamId);
     }
   }
@@ -539,9 +539,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Closes the responder; transport remains open.
   @override
   Future<void> close() async {
-    _logger?.internal('Closing unary server $_methodPath');
+    _logger.internal('Closing unary server $_methodPath');
     await _subscription?.cancel();
     await _cancellationSubscription?.cancel();
-    _logger?.internal('All subscriptions cancelled');
+    _logger.internal('All subscriptions cancelled');
   }
 }

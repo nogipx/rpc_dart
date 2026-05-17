@@ -11,8 +11,8 @@ import 'package:test/test.dart';
 import '../utils/transport_wrappers.dart';
 
 void main() {
-  setUpAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.disabled));
-  tearDownAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info));
+  
+  
 
   group('RpcEndpointPingExchange', () {
     test('throws TimeoutException when no trailers arrive', () async {
@@ -25,7 +25,7 @@ void main() {
       final streamId = client.createStream();
       final exchange = RpcEndpointPingExchange(
         transport: client,
-        logger: RpcLogger('ping-test'),
+        logger: LogScope.noop,
         streamId: streamId,
         sentAt: DateTime.now().toUtc(),
       );
@@ -63,7 +63,7 @@ void main() {
 
       final exchange = RpcEndpointPingExchange(
         transport: client,
-        logger: RpcLogger('ping-test'),
+        logger: LogScope.noop,
         streamId: streamId,
         sentAt: DateTime.now().toUtc(),
       );
@@ -107,7 +107,7 @@ void main() {
 
       final exchange = RpcEndpointPingExchange(
         transport: client,
-        logger: RpcLogger('ping-test'),
+        logger: LogScope.noop,
         streamId: streamId,
         sentAt: DateTime.now().toUtc(),
       );
@@ -137,7 +137,7 @@ void main() {
       final streamId = throwingClient.createStream();
       final exchange = RpcEndpointPingExchange(
         transport: throwingClient,
-        logger: RpcLogger('ping-test'),
+        logger: LogScope.noop,
         streamId: streamId,
         sentAt: DateTime.now().toUtc(),
       );

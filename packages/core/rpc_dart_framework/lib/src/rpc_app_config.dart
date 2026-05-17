@@ -70,7 +70,7 @@ class RpcAppConfig {
   final Duration drainTimeout;
 
   /// Logger used by the framework itself. Null = silent.
-  final RpcLogger? logger;
+  final LogScope? logger;
 
   /// Called for every unhandled exception that escapes an RPC handler.
   ///

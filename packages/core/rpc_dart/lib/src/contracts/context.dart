@@ -30,6 +30,9 @@ final class RpcContext {
   /// Уникальный ID запроса
   final String requestId;
 
+  /// Logger scope for this request context.
+  final LogScope log;
+
   /// Дополнительные значения контекста (аналог gRPC Context.Value)
   final Map<Object, Object> _values;
 
@@ -39,9 +42,11 @@ final class RpcContext {
     this.cancellationToken,
     this.traceId,
     String? requestId,
+    LogScope? log,
     Map<Object, Object>? values,
   })  : _headers = Map.from(headers ?? {}),
         requestId = requestId ?? _generateRequestId(),
+        log = log ?? LogScope.noop,
         _values = Map.from(values ?? {});
 
   /// Создает новый пустой контекст
@@ -78,6 +83,7 @@ final class RpcContext {
       cancellationToken: cancellationToken,
       traceId: traceId,
       requestId: requestId,
+      log: log,
       values: _values,
     );
   }
@@ -89,6 +95,7 @@ final class RpcContext {
         cancellationToken: cancellationToken,
         traceId: traceId,
         requestId: requestId,
+        log: log,
         values: _values,
       );
 
@@ -103,6 +110,7 @@ final class RpcContext {
         cancellationToken: token,
         traceId: traceId,
         requestId: requestId,
+        log: log,
         values: _values,
       );
 
@@ -113,6 +121,7 @@ final class RpcContext {
         cancellationToken: cancellationToken,
         traceId: newTraceId,
         requestId: requestId,
+        log: log,
         values: _values,
       );
 
@@ -127,9 +136,21 @@ final class RpcContext {
       cancellationToken: cancellationToken,
       traceId: traceId,
       requestId: requestId,
+      log: log,
       values: newValues,
     );
   }
+
+  /// Создает копию контекста с указанным логгером.
+  RpcContext withLog(LogScope log) => RpcContext._(
+        headers: _headers,
+        deadline: deadline,
+        cancellationToken: cancellationToken,
+        traceId: traceId,
+        requestId: requestId,
+        log: log,
+        values: _values,
+      );
 
   /// Получает значение заголовка
   String? getHeader(String key) => _headers[_normalizeHeaderName(key)];
@@ -381,7 +402,8 @@ abstract final class RpcContextUtils {
       deadline: right.deadline ?? left.deadline,
       cancellationToken: right.cancellationToken ?? left.cancellationToken,
       traceId: right.traceId ?? left.traceId,
-      requestId: right.requestId, // Берем ID из правого контекста
+      requestId: right.requestId,
+      log: right.log,
       values: mergedValues,
     );
   }
@@ -438,13 +460,13 @@ class RpcContextBuilder {
 
   /// Генерирует новый request ID (для chain вызовов)
   RpcContextBuilder withGeneratedRequestId() {
-    // Создаем новый контекст с новым request ID
     _context = RpcContext._(
       headers: _context._headers,
       deadline: _context.deadline,
       cancellationToken: _context.cancellationToken,
       traceId: _context.traceId,
-      requestId: null, // Передаем null, чтобы _generateRequestId() создал новый
+      requestId: null,
+      log: _context.log,
       values: _context._values,
     );
     return this;

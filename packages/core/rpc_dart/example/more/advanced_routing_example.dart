@@ -2,36 +2,27 @@
 // SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
-
 import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
-
 void main() async {
   print('🚀 Transport Router - Реальные CORD сценарии');
   print('=' * 55);
-
   await _demonstrateRealWorldRouting();
-
   print('\n✅ Демонстрация завершена!');
 }
-
 /// Демонстрирует реальные сценарии роутинга в CORD архитектуре
 Future<void> _demonstrateRealWorldRouting() async {
   print('\n🎯 Создаем реалистичную роутинговую архитектуру...');
   print('-' * 50);
-
   // === СОЗДАЕМ ТРАНСПОРТЫ ДЛЯ РАЗНЫХ ДОМЕНОВ ===
-
   // Основные домены
   final userTransportPair = RpcInMemoryTransport.pair();
   final paymentV1TransportPair = RpcInMemoryTransport.pair();
   final paymentV2TransportPair = RpcInMemoryTransport.pair(); // Новая версия
   final orderTransportPair = RpcInMemoryTransport.pair();
-
   // Специальные транспорты
   final premiumUserTransportPair = RpcInMemoryTransport.pair(); // Для VIP
   final auditTransportPair = RpcInMemoryTransport.pair(); // Для аудита
-
   // === НАСТРАИВАЕМ СЕРВЕРЫ ===
   await _setupDomainServers([
     (userTransportPair.$2, 'UserService', 'Regular User Service'),
@@ -41,10 +32,8 @@ Future<void> _demonstrateRealWorldRouting() async {
     (orderTransportPair.$2, 'OrderService', 'Order Service'),
     (auditTransportPair.$2, 'AuditService', 'Audit Service'),
   ]);
-
   // === СОЗДАЕМ ПРОДВИНУТЫЙ ROUTER ===
   print('\n🛤️  Настройка Transport Router с приоритетами...');
-
   final router = RpcTransportRouterBuilder.client()
       // 🎯 ВЫСОКИЙ ПРИОРИТЕТ: Условные правила (срабатывают первыми)
       // Premium пользователи на отдельный сервис (приоритет 100)
@@ -90,23 +79,17 @@ Future<void> _demonstrateRealWorldRouting() async {
         priority: 10,
       )
       .build();
-
   final clientEndpoint = RpcCallerEndpoint(transport: router);
-
   // === ТЕСТИРУЕМ РОУТИНГ ===
   print('\n🧪 Тестируем реальные сценарии роутинга...');
-
   await _testRealWorldRouting(clientEndpoint);
-
   // === CLEANUP ===
   await router.close();
   await clientEndpoint.close();
-
   print('\n📊 Статистика роутера:');
   final stats = router.statistics;
   stats.forEach((key, value) => print('   $key: $value'));
 }
-
 /// Настраивает серверы доменов
 Future<void> _setupDomainServers(
   List<(IRpcTransport, String, String)> servers,
@@ -116,16 +99,13 @@ Future<void> _setupDomainServers(
       transport: transport,
       debugLabel: label,
     );
-
     server.registerServiceContract(
       _createDemoServiceContract(serviceName, label),
     );
-
     server.start();
     print('   ✅ $label запущен');
   }
 }
-
 /// Создает demo контракт для примера роутинга
 RpcResponderContract _createDemoServiceContract(
   String serviceName,
@@ -133,11 +113,9 @@ RpcResponderContract _createDemoServiceContract(
 ) {
   return _DemoServiceContract(serviceName, label);
 }
-
 /// Тестирует реальные сценарии роутинга
 Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   print('\n📝 Реальные сценарии использования:');
-
   // === ТЕСТ 1: Обычный пользователь ===
   print('\n   1️⃣ Обычный пользователь загружает профиль...');
   try {
@@ -153,7 +131,6 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   } catch (e) {
     print('       ❌ Ошибка: $e');
   }
-
   // === ТЕСТ 2: Premium пользователь ===
   print('\n   2️⃣ Premium пользователь загружает профиль...');
   try {
@@ -169,7 +146,6 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   } catch (e) {
     print('       ❌ Ошибка: $e');
   }
-
   // === ТЕСТ 3: A/B тестирование платежей группа A ===
   print('\n   3️⃣ Платеж пользователя группы A (Payment V2)...');
   try {
@@ -185,7 +161,6 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   } catch (e) {
     print('       ❌ Ошибка: $e');
   }
-
   // === ТЕСТ 4: A/B тестирование платежей группа B ===
   print('\n   4️⃣ Платеж пользователя группы B (Payment V1)...');
   try {
@@ -201,7 +176,6 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   } catch (e) {
     print('       ❌ Ошибка: $e');
   }
-
   // === ТЕСТ 5: Заказы ===
   print('\n   5️⃣ Создание нового заказа...');
   try {
@@ -216,7 +190,6 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   } catch (e) {
     print('       ❌ Ошибка: $e');
   }
-
   // === ТЕСТ 6: Аудит ===
   print('\n   6️⃣ Аудит операций безопасности...');
   try {
@@ -232,22 +205,17 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   } catch (e) {
     print('       ❌ Ошибка: $e');
   }
-
   print('\n🎯 Все сценарии протестированы!');
 }
-
 /// Простая логика A/B тестирования
 bool _isInABTestGroup(String? userId) {
   if (userId == null) return false;
   return userId.hashCode % 2 == 0; // 50% пользователей
 }
-
 /// Demo контракт для демонстрации различных сервисов в routing примере
 final class _DemoServiceContract extends RpcResponderContract {
   final String _label;
-
   _DemoServiceContract(super.serviceName, this._label);
-
   @override
   void setup() {
     // UserService методы
@@ -260,7 +228,6 @@ final class _DemoServiceContract extends RpcResponderContract {
         return RpcString('👤 $_label: профиль пользователя [$tier]');
       },
     );
-
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'deleteUser',
       requestCodec: RpcString.codec,
@@ -270,7 +237,6 @@ final class _DemoServiceContract extends RpcResponderContract {
         return RpcString('🗑️ $_label: пользователь удален [причина: $reason]');
       },
     );
-
     // PaymentService методы
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'processPayment',
@@ -281,7 +247,6 @@ final class _DemoServiceContract extends RpcResponderContract {
         return RpcString('💳 $_label: платеж обработан [\$$amount]');
       },
     );
-
     // OrderService методы
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'createOrder',
@@ -292,7 +257,6 @@ final class _DemoServiceContract extends RpcResponderContract {
         return RpcString('📦 $_label: заказ создан [$items товаров]');
       },
     );
-
     // AuditService методы
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'logSecurityEvent',
@@ -303,7 +267,6 @@ final class _DemoServiceContract extends RpcResponderContract {
         return RpcString('🔍 $_label: событие записано [$eventType]');
       },
     );
-
     // Аудит операций удаления - перехватываем deleteUser
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'deleteUser',

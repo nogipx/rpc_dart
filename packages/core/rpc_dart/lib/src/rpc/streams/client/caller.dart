@@ -8,7 +8,7 @@ part of '../_index.dart';
 /// Client streaming caller: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Sends many requests, receives one response.
 final class ClientStreamCaller<TRequest extends Object,
     TResponse extends Object> {
-  late final RpcLogger? _logger;
+  late final LogScope _logger;
 
   /// Stream processor.
   late final CallProcessor<TRequest, TResponse> _processor;
@@ -30,7 +30,7 @@ final class ClientStreamCaller<TRequest extends Object,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
@@ -50,8 +50,8 @@ final class ClientStreamCaller<TRequest extends Object,
       );
     }
 
-    _logger = logger?.child('ClientCaller');
-    _logger?.internal(
+    _logger = logger?.child('ClientCaller') ?? LogScope.noop;
+    _logger.internal(
       'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamCaller for $serviceName.$methodName',
     );
 
@@ -72,7 +72,7 @@ final class ClientStreamCaller<TRequest extends Object,
   void _setupResponseHandler() {
     _subscription = _processor.responses.listen(
       (rpcMessage) {
-        _logger?.internal(
+        _logger.internal(
           'Received response from server: isMetadataOnly=${rpcMessage.isMetadataOnly}, isEndOfStream=${rpcMessage.isEndOfStream}',
         );
 
@@ -81,7 +81,7 @@ final class ClientStreamCaller<TRequest extends Object,
           final statusCode = rpcMessage.metadata!.getHeaderValue(
             RpcHeaders.grpcStatus,
           );
-          _logger?.internal('Status code from metadata: $statusCode');
+          _logger.internal('Status code from metadata: $statusCode');
 
           if (statusCode != null && statusCode != '0') {
             final errorMessage = rpcMessage.metadata!.getHeaderValue(
@@ -89,7 +89,7 @@ final class ClientStreamCaller<TRequest extends Object,
                 ) ??
                 '';
             final decodedMessage = RpcMetadata.decodeGrpcMessage(errorMessage);
-            _logger?.error(
+            _logger.error(
               'Received error status code: $statusCode - $decodedMessage',
             );
 
@@ -109,7 +109,7 @@ final class ClientStreamCaller<TRequest extends Object,
           if (statusCode == '0' &&
               rpcMessage.isEndOfStream &&
               !_responseCompleter.isCompleted) {
-            _logger?.warning('Status OK but no response payload');
+            _logger.warning('Status OK but no response payload');
             _responseCompleter.completeError(
               Exception('Stream closed without response payload'),
             );
@@ -120,14 +120,14 @@ final class ClientStreamCaller<TRequest extends Object,
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
-          _logger?.internal(
+          _logger.internal(
             'Received payload: ${rpcMessage.payload}',
           );
           _responseCompleter.complete(rpcMessage.payload!);
         }
       },
       onError: (error, stackTrace) {
-        _logger?.error(
+        _logger.error(
           'Error in response stream',
           error: error,
           stackTrace: stackTrace,
@@ -137,7 +137,7 @@ final class ClientStreamCaller<TRequest extends Object,
         }
       },
       onDone: () {
-        _logger?.internal('Response stream completed');
+        _logger.internal('Response stream completed');
         if (!_responseCompleter.isCompleted) {
           // Might be transport close; surface error if still pending.
           try {
@@ -162,7 +162,7 @@ final class ClientStreamCaller<TRequest extends Object,
       );
     }
 
-    _logger?.internal('Sending request to client stream: $request');
+    _logger.internal('Sending request to client stream: $request');
     await _processor.send(request);
   }
 
@@ -179,13 +179,13 @@ final class ClientStreamCaller<TRequest extends Object,
     try {
       // Finish sending requests.
       await _processor.finishSending();
-      _logger?.internal('Send complete, waiting for response');
+      _logger.internal('Send complete, waiting for response');
 
       // Await single response with timeout.
       return await _responseCompleter.future.timeout(
         Duration(seconds: 30),
         onTimeout: () {
-          _logger?.error('Response wait timed out');
+          _logger.error('Response wait timed out');
           // Free resources on timeout.
           unawaited(close());
           throw TimeoutException(
@@ -195,7 +195,7 @@ final class ClientStreamCaller<TRequest extends Object,
         },
       );
     } catch (e, stackTrace) {
-      _logger?.error(
+      _logger.error(
         'Failed to finish sending',
         error: e,
         stackTrace: stackTrace,
@@ -213,21 +213,21 @@ final class ClientStreamCaller<TRequest extends Object,
 
   /// Convenience: send a request stream and return the single response (auto-closes).
   Future<TResponse> call(Stream<TRequest> requests) async {
-    _logger?.internal('Executing client stream call');
+    _logger.internal('Executing client stream call');
 
     try {
       // Send the request stream.
       await for (final request in requests) {
-        _logger?.internal('Sending request: $request');
+        _logger.internal('Sending request: $request');
         await send(request);
       }
 
-      _logger?.internal('Request stream finished, awaiting response');
+      _logger.internal('Request stream finished, awaiting response');
 
       // Finish sending and get the response.
       return await finishSending();
     } catch (e) {
-      _logger?.error('Client stream call failed', error: e);
+      _logger.error('Client stream call failed', error: e);
       rethrow;
     } finally {
       await close();
@@ -236,7 +236,7 @@ final class ClientStreamCaller<TRequest extends Object,
 
   /// Closes the stream and releases resources.
   Future<void> close() async {
-    _logger?.internal('Closing ClientStreamCaller');
+    _logger.internal('Closing ClientStreamCaller');
     await _subscription?.cancel();
     await _processor.close();
   }

@@ -29,9 +29,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   void initResponderPipeline() {
     _respPingHandler = RpcResponderPingHandler(
       transport: transport,
-      logger: logger,
+      logger: _log,
       debugLabel: debugLabel,
     );
+
   }
 
   // ---------------------------------------------------------------------------
@@ -40,12 +41,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   /// Registers [contract] so its methods can handle incoming requests.
   void registerServiceContract(RpcResponderContract contract) {
-    _respRegistry.registerContract(contract, logger);
+    _respRegistry.registerContract(contract, _log);
   }
 
   /// Removes the contract for [serviceName] and disposes its resources.
   void unregisterServiceContract(String serviceName) {
-    _respRegistry.unregisterContract(serviceName, logger);
+    _respRegistry.unregisterContract(serviceName, _log);
   }
 
   /// All contracts registered with this endpoint, keyed by service name.
@@ -69,7 +70,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     bool Function(RpcTransportMessage)? messageFilter,
   }) async {
     if (_respIsListening) {
-      logger.warning('Already listening for incoming requests');
+      _log.warning('Already listening for incoming requests');
       return;
     }
 
@@ -83,11 +84,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         _processResponderMessage(message);
       },
       onError: (error, stackTrace) {
-        logger.error('Transport incoming error',
+        _log.error('Transport incoming error',
             error: error, stackTrace: stackTrace);
       },
       onDone: () {
-        logger.internal('Transport incoming stream closed');
+        _log.internal('Transport incoming stream closed');
       },
     );
 
@@ -106,7 +107,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       await _cleanupStream(streamId);
     }
 
-    _respRegistry.disposeAll(logger);
+    _respRegistry.disposeAll(_log);
   }
 
   /// Whether the endpoint is draining (rejecting new streams, finishing active ones).
@@ -124,7 +125,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (_respIsDraining) return;
     _respIsDraining = true;
 
-    logger.info(
+    _log.info(
         'Drain started — cancelling ${_respStreams.length} active stream(s)');
 
     // Cancel all active stream contexts.
@@ -142,7 +143,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
 
     if (_respStreams.length > 0) {
-      logger.warning(
+      _log.warning(
         'Drain timeout — ${_respStreams.length} stream(s) still active, forcing cleanup',
       );
     }
@@ -165,7 +166,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   void _processResponderMessage(RpcTransportMessage message) {
     if (!_respIsListening) {
-      logger.warning('Message received but endpoint is not started.');
+      _log.warning('Message received but endpoint is not started.');
       return;
     }
 
@@ -289,7 +290,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
-    logger.internal(
+    _log.internal(
         'Metadata received [method: $methodKey] [streamId: ${state.id}]');
   }
 
@@ -320,7 +321,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         streamId: state.id,
         status: RpcStatus.unimplemented,
         message: 'Method $methodKey is not registered',
-        context: _ensureResponderContext(state),
       ));
       return;
     }
@@ -405,7 +405,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     RpcResponderMethodBinding binding,
   ) async {
     final context = _ensureResponderContext(state);
-    final contextLogger = _respContextLogger(context);
+    final contextLogger = context.log;
     final streamId = state.id;
     final methodKey = binding.methodKey;
 
@@ -508,7 +508,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     RpcResponderMethodBinding binding,
   ) async {
     final context = _ensureResponderContext(state);
-    final contextLogger = _respContextLogger(context);
+    final contextLogger = context.log;
     final streamId = state.id;
 
     if (binding.isZeroCopy) {
@@ -585,7 +585,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     RpcResponderMethodBinding binding,
   ) async {
     final context = _ensureResponderContext(state);
-    final contextLogger = _respContextLogger(context);
+    final contextLogger = context.log;
     final streamId = state.id;
 
     if (binding.isZeroCopy) {
@@ -653,7 +653,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     RpcResponderMethodBinding binding,
   ) async {
     final context = _ensureResponderContext(state);
-    final contextLogger = _respContextLogger(context);
+    final contextLogger = context.log;
     final streamId = state.id;
 
     if (binding.isZeroCopy) {
@@ -767,8 +767,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         endStream: true,
       );
     } catch (error, stackTrace) {
-      logger.error('Failed to send zero-copy error for $methodKey',
-          rpcContext: context, error: error, stackTrace: stackTrace);
+      _log.error('Failed to send zero-copy error for $methodKey', error: error, stackTrace: stackTrace);
     } finally {
       await _cleanupStream(state.id);
     }
@@ -787,8 +786,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         endStream: true,
       );
     } catch (error, stackTrace) {
-      logger.error('Failed to send gRPC error [$status] for streamId=$streamId',
-          rpcContext: context, error: error, stackTrace: stackTrace);
+      _log.error('Failed to send gRPC error [$status] for streamId=$streamId', error: error, stackTrace: stackTrace);
     } finally {
       await _cleanupStream(streamId);
     }
@@ -808,7 +806,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     try {
       transport.releaseStreamId(streamId);
     } catch (error) {
-      logger.warning('Error releasing stream ID $streamId: $error');
+      _log.warning('Error releasing stream ID $streamId: $error');
     }
   }
 
@@ -816,7 +814,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     try {
       await responder.close();
     } catch (error, stackTrace) {
-      logger.error('Error closing responder [id: ${responder.id}]',
+      _log.error('Error closing responder [id: ${responder.id}]',
           error: error, stackTrace: stackTrace);
     }
   }
@@ -862,7 +860,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     RpcResponderStreamState state,
     RpcTransportMessage message,
   ) {
-    final context = _createContextFromMessage(message);
+    var context = _createContextFromMessage(message);
+    // Attach logger with traceId/requestId and service/method name
+    final methodKey = state.methodKey; // e.g. 'Calculator.calculate'
+    final scopeName = methodKey ?? 'unknown';
+    final logScope = _log.child(scopeName).withContext(
+          requestId: context.requestId,
+          traceId: context.traceId,
+        );
+    context = context.withLog(logScope);
     state.cacheContext(context);
     return context;
   }
@@ -920,12 +926,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     return context;
   }
 
-  RpcLogger _respContextLogger(RpcContext context) => RpcLogger(
-        logger.name,
-        colors: loggerColors,
-        label: debugLabel,
-        context: context,
-      );
 
   // ---------------------------------------------------------------------------
   // Utility

@@ -8,7 +8,7 @@ part of '../_index.dart';
 /// Bidirectional stream caller: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Sends and receives concurrently with no ordering restrictions.
 final class BidirectionalStreamCaller<TRequest extends Object,
     TResponse extends Object> {
-  late final RpcLogger? _logger;
+  late final LogScope _logger;
 
   /// Stream processor.
   late final CallProcessor<TRequest, TResponse> _processor;
@@ -24,7 +24,7 @@ final class BidirectionalStreamCaller<TRequest extends Object,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
@@ -44,8 +44,8 @@ final class BidirectionalStreamCaller<TRequest extends Object,
       );
     }
 
-    _logger = logger?.child('BidirectionalCaller');
-    _logger?.internal(
+    _logger = logger?.child('BidirectionalCaller') ?? LogScope.noop;
+    _logger.internal(
       'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamCaller for $serviceName.$methodName',
     );
 
@@ -62,7 +62,7 @@ final class BidirectionalStreamCaller<TRequest extends Object,
 
   /// Sends a request to the server (can be called multiple times).
   Future<void> send(TRequest request) async {
-    _logger?.internal('Sending request to bidirectional stream: $request');
+    _logger.internal('Sending request to bidirectional stream: $request');
     await _processor.send(request);
   }
 
@@ -75,7 +75,7 @@ final class BidirectionalStreamCaller<TRequest extends Object,
   Stream<TResponse> get payloadResponses async* {
     await for (final response in responses) {
       if (response.payload != null) {
-        _logger?.internal('Received response in bidirectional stream');
+        _logger.internal('Received response in bidirectional stream');
         yield response.payload!;
       }
 
@@ -92,7 +92,7 @@ final class BidirectionalStreamCaller<TRequest extends Object,
                 ) ??
                 'Unknown error';
             final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
-            _logger?.error(
+            _logger.error(
               'Bidirectional stream ended with error: $status - $decodedMessage',
             );
             throw RpcStatusException.fromTrailer(
@@ -115,17 +115,17 @@ final class BidirectionalStreamCaller<TRequest extends Object,
       final controller = StreamController<TRequest>();
       controller.stream.listen(
         (request) async {
-          _logger?.internal(
+          _logger.internal(
             'Sending request in bidirectional stream: $request',
           );
           await send(request);
         },
         onDone: () async {
-          _logger?.internal('Request stream completed');
+          _logger.internal('Request stream completed');
           await finishSending();
         },
         onError: (error, stackTrace) {
-          _logger?.error(
+          _logger.error(
             'Error in request stream',
             error: error,
             stackTrace: stackTrace,
@@ -139,7 +139,7 @@ final class BidirectionalStreamCaller<TRequest extends Object,
 
   /// Closes the stream and releases resources.
   Future<void> close() async {
-    _logger?.internal('Closing BidirectionalStreamCaller');
+    _logger.internal('Closing BidirectionalStreamCaller');
     if (_requestSink != null) {
       _requestSink!.close(); // Do not await completion.
     }

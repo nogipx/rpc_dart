@@ -113,8 +113,6 @@ final class ZeroCopyTestService extends RpcResponderContract {
 }
 
 void main() {
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info);
-
   group('Zero-Copy Endpoint Streams Tests', () {
     late RpcResponderEndpoint serverEndpoint;
     late RpcCallerEndpoint clientEndpoint;

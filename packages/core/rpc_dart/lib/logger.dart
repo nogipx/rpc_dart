@@ -1,8 +1,7 @@
-// SPDX-FileCopyrightText: 2025 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 // SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
 library;
 
-export 'src/logs/_logs.dart';
+export 'src/logger/_index.dart';

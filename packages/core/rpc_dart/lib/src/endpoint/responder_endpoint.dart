@@ -9,18 +9,14 @@ part of '_index.dart';
 final class RpcResponderEndpoint extends RpcEndpointBase
     with RpcResponderPipelineMixin {
   @override
-  RpcLogger get logger => RpcLogger(
-        'RpcResponderEndpoint',
-        colors: loggerColors,
-        label: debugLabel,
-      );
+  final LogScope _log;
 
   /// Creates an [RpcResponderEndpoint] bound to the given transport.
   RpcResponderEndpoint({
     required super.transport,
     super.debugLabel,
-    super.loggerColors,
-  }) {
+    LogController? logger,
+  }) : _log = logger?.scope('rpc.responder') ?? LogScope.noop {
     initResponderPipeline();
     _validateServerTransport();
   }
@@ -103,10 +99,10 @@ final class RpcResponderEndpoint extends RpcEndpointBase
         );
       }
 
-      logger.internal('Transport validated: server (isClient: false)');
+      _log.internal('Transport validated: server (isClient: false)');
     } catch (error) {
       if (error is ArgumentError) rethrow;
-      logger.warning('Failed to validate transport role: $error');
+      _log.warning('Failed to validate transport role: $error');
     }
   }
 }

@@ -107,8 +107,6 @@ final class StreamingTestService extends RpcResponderContract {
 }
 
 void main() {
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info);
-
   group('🚀 Zero-Copy Streams Tests', () {
     late RpcResponderEndpoint serverEndpoint;
     late RpcCallerEndpoint clientEndpoint;

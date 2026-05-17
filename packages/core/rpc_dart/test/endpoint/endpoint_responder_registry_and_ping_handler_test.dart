@@ -11,8 +11,8 @@ import 'package:test/test.dart';
 import '../utils/transport_wrappers.dart';
 
 void main() {
-  setUpAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.disabled));
-  tearDownAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info));
+  
+  
 
   group('RpcResponderMethodRegistry', () {
     test('exports zero-copy methods with wrapped handlers', () async {
@@ -93,7 +93,7 @@ void main() {
       final streamId = client.createStream();
       final handler = RpcResponderPingHandler(
         transport: server,
-        logger: RpcLogger('ping-handler-test'),
+        logger: LogScope.noop,
         debugLabel: 'srv',
       );
 
@@ -140,7 +140,7 @@ void main() {
       final streamId = client.createStream();
       final handler = RpcResponderPingHandler(
         transport: server,
-        logger: RpcLogger('ping-handler-test'),
+        logger: LogScope.noop,
         debugLabel: null,
       );
 
@@ -187,7 +187,7 @@ void main() {
 
       final handler = RpcResponderPingHandler(
         transport: server,
-        logger: RpcLogger('ping-handler-test'),
+        logger: LogScope.noop,
         debugLabel: null,
       );
 

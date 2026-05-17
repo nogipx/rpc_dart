@@ -7,7 +7,7 @@ part of '_index.dart';
 
 /// Shared stream processor: zero-copy when no codecs (zero-copy transport required), otherwise serialized.
 final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
-  final RpcLogger? _logger;
+  final LogScope _logger;
   final IRpcTransport _transport;
   final int _streamId;
   final String _serviceName;
@@ -67,7 +67,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   })  : _transport = transport,
         _streamId = streamId,
         _serviceName = serviceName,
@@ -77,7 +77,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         _responseCodec = responseCodec,
         _context = context,
         _scope = RpcCallScope(context: context),
-        _logger = logger?.child('StreamProcessor') {
+        _logger = logger?.child('StreamProcessor') ?? LogScope.noop {
     // Serialization requires codecs.
     if (!_isZeroCopy) {
       if (_requestCodec == null || _responseCodec == null) {
@@ -112,7 +112,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     _methodPath = '/$_serviceName/$_methodName';
     _responseEncoding = _pickResponseEncoding(context);
 
-    _logger?.internal(
+    _logger.internal(
       'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
     );
 
@@ -152,17 +152,17 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         _sendSequence = _sendSequence.then((_) async {
           if (!_isActive) return;
 
-          _logger?.internal(
+          _logger.internal(
             'Sending response for $_methodPath [streamId: $_streamId]',
           );
           try {
             if (_isZeroCopy) {
               // Zero-copy path
-              _logger?.internal(
+              _logger.internal(
                 'Zero-copy send [streamId: $_streamId]',
               );
               await _transport.sendDirectObject(_streamId, response);
-              _logger?.internal(
+              _logger.internal(
                 'Zero-copy response sent for $_methodPath [streamId: $_streamId]',
               );
             } else {
@@ -182,7 +182,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
               // Serialization for network transports
               final serialized = _responseCodec!.serialize(response);
-              _logger?.internal(
+              _logger.internal(
                 'Response serialized (${serialized.length} bytes) [streamId: $_streamId]',
               );
 
@@ -199,7 +199,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
               );
               await _transport.sendMessage(_streamId, framedMessage);
 
-              _logger?.internal(
+              _logger.internal(
                 'Response sent for $_methodPath [streamId: $_streamId]',
               );
             }
@@ -207,12 +207,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
             // Skip if transport closed
             if (e.toString().contains('Transport is closed') ||
                 e.toString().contains('closed')) {
-              _logger?.internal(
+              _logger.internal(
                 'Transport closed, skipping response send [streamId: $_streamId]',
               );
               return;
             }
-            _logger?.error(
+            _logger.error(
               'Failed to send response [streamId: $_streamId]',
               error: e,
               stackTrace: stackTrace,
@@ -221,7 +221,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         });
       },
       onError: (error, stackTrace) {
-        _logger?.error(
+        _logger.error(
           'Error in response stream for $_methodPath [streamId: $_streamId]',
           error: error,
           stackTrace: stackTrace,
@@ -237,18 +237,18 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     try {
       final trailers = RpcMetadata.forTrailer(RpcStatus.ok);
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
-      _logger?.internal(
+      _logger.internal(
         'Trailer sent for $_methodPath [streamId: $_streamId]',
       );
     } catch (e, stackTrace) {
       if (e.toString().contains('Transport is closed') ||
           e.toString().contains('closed')) {
-        _logger?.internal(
+        _logger.internal(
           'Transport closed, skipping trailer send [streamId: $_streamId]',
         );
         return;
       }
-      _logger?.error(
+      _logger.error(
         'Failed to send trailer [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
@@ -261,37 +261,31 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Binds the processor to an endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
     if (_messageBound) {
-      _logger?.logRpcWarning(
-        message: 'Stream processor already bound to message stream',
-        methodPath: _methodPath,
-        streamId: _streamId,
+      _logger.warning(
+        'Stream processor already bound to message stream [methodPath: $_methodPath, streamId: $_streamId]',
       );
       return;
     }
     _messageBound = true;
 
-    _logger?.logStreamBound(methodPath: _methodPath, streamId: _streamId);
+    _logger.internal('Stream bound [methodPath: $_methodPath, streamId: $_streamId]');
 
     _scope.listen<RpcTransportMessage>(
       messageStream,
       _handleMessage,
       onError: (error, stackTrace) {
-        _logger?.logRpcError(
-          operation: 'message_stream_listen',
+        _logger.error(
+          'message_stream_listen error [methodPath: $_methodPath, streamId: $_streamId]',
           error: error,
           stackTrace: stackTrace,
-          methodPath: _methodPath,
-          streamId: _streamId,
         );
         if (!_requestController.isClosed) {
           _requestController.addError(error, stackTrace);
         }
       },
       onDone: () {
-        _logger?.logStreamFinished(
-          methodPath: _methodPath,
-          streamId: _streamId,
-          reason: 'message_stream_completed',
+        _logger.internal(
+          'Stream finished: message_stream_completed [methodPath: $_methodPath, streamId: $_streamId]',
         );
         if (!_requestController.isClosed) {
           _requestController.close();
@@ -316,21 +310,14 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     try {
       _checkCancellation();
     } catch (e) {
-      _logger?.internal(
+      _logger.internal(
         'Message skipped due to cancellation [streamId: $_streamId]',
       );
       return;
     }
 
-    _logger?.logMessageReceived(
-      streamId: message.streamId,
-      messageType: message.isMetadataOnly
-          ? 'metadata'
-          : message.isDirect
-              ? 'zero_copy'
-              : 'serialized',
-      payloadSize: message.payload?.length,
-      isDirectPayload: message.isDirect,
+    _logger.internal(
+      'Message received [streamId: ${message.streamId}, type: ${message.isMetadataOnly ? "metadata" : message.isDirect ? "zero_copy" : "serialized"}, size: ${message.payload?.length}]',
     );
 
     // Extract encoding hints from initial request metadata.
@@ -371,10 +358,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
     // End of stream.
     if (message.isEndOfStream) {
-      _logger?.logStreamFinished(
-        methodPath: _methodPath,
-        streamId: _streamId,
-        reason: 'end_of_stream_received',
+      _logger.internal(
+        'Stream finished: end_of_stream_received [methodPath: $_methodPath, streamId: $_streamId]',
       );
       if (!_requestController.isClosed) {
         _requestController.close();
@@ -390,21 +375,15 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       if (!_requestController.isClosed) {
         _requestController.add(request);
       } else {
-        _logger?.logRpcWarning(
-          message: 'Cannot add request to closed controller (zero-copy)',
-          methodPath: _methodPath,
-          streamId: _streamId,
-          metadata: {'transport_type': 'zero_copy'},
+        _logger.warning(
+          'Cannot add request to closed controller (zero-copy) [methodPath: $_methodPath, streamId: $_streamId]',
         );
       }
     } catch (e, stackTrace) {
-      _logger?.logRpcError(
-        operation: 'zero_copy_direct_object_processing',
+      _logger.error(
+        'zero_copy_direct_object_processing error [methodPath: $_methodPath, streamId: $_streamId, type: ${directPayload.runtimeType}]',
         error: e,
         stackTrace: stackTrace,
-        methodPath: _methodPath,
-        streamId: _streamId,
-        metadata: {'object_type': directPayload.runtimeType.toString()},
       );
       if (!_requestController.isClosed) {
         _requestController.addError(e, stackTrace);
@@ -415,18 +394,14 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Processes a serialized message (serialization mode only).
   void _processDataMessage(List<int> messageBytes) {
     if (_isZeroCopy) {
-      _logger?.logRpcWarning(
-        message: 'Serialized message received in zero-copy mode, ignoring',
-        methodPath: _methodPath,
-        streamId: _streamId,
+      _logger.warning(
+        'Serialized message received in zero-copy mode, ignoring [methodPath: $_methodPath, streamId: $_streamId]',
       );
       return;
     }
 
-    _logger?.logMessageReceived(
-      streamId: _streamId,
-      messageType: 'serialized_data',
-      payloadSize: messageBytes.length,
+    _logger.internal(
+      'Message received [streamId: $_streamId, type: serialized_data, size: ${messageBytes.length}]',
     );
 
     try {
@@ -444,21 +419,15 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           if (!_requestController.isClosed) {
             _requestController.add(request);
           } else {
-            _logger?.logRpcWarning(
-              message: 'Cannot add request to closed controller',
-              methodPath: _methodPath,
-              streamId: _streamId,
-              metadata: {'message_size': msgBytes.length},
+            _logger.warning(
+              'Cannot add request to closed controller [methodPath: $_methodPath, streamId: $_streamId, size: ${msgBytes.length}]',
             );
           }
         } catch (e, stackTrace) {
-          _logger?.logRpcError(
-            operation: 'request_deserialization',
+          _logger.error(
+            'request_deserialization error [methodPath: $_methodPath, streamId: $_streamId, size: ${msgBytes.length}]',
             error: e,
             stackTrace: stackTrace,
-            methodPath: _methodPath,
-            streamId: _streamId,
-            metadata: {'message_size': msgBytes.length},
           );
           if (!_requestController.isClosed) {
             _requestController.addError(e, stackTrace);
@@ -466,13 +435,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         }
       }
     } catch (e, stackTrace) {
-      _logger?.logRpcError(
-        operation: 'message_parsing',
+      _logger.error(
+        'message_parsing error [methodPath: $_methodPath, streamId: $_streamId, size: ${messageBytes.length}]',
         error: e,
         stackTrace: stackTrace,
-        methodPath: _methodPath,
-        streamId: _streamId,
-        metadata: {'message_size': messageBytes.length},
       );
       if (!_requestController.isClosed) {
         _requestController.addError(e, stackTrace);
@@ -483,7 +449,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Sends a response to the client.
   Future<void> send(TResponse response) async {
     if (!_isActive) {
-      _logger?.warning('Attempted to send response on inactive processor');
+      _logger.warning('Attempted to send response on inactive processor');
       return;
     }
 
@@ -491,7 +457,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     try {
       _checkCancellation();
     } catch (e) {
-      _logger?.internal(
+      _logger.internal(
         'Response skipped due to cancellation [streamId: $_streamId]',
       );
       return;
@@ -500,7 +466,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     if (!_responseController.isClosed) {
       _responseController.add(response);
     } else {
-      _logger?.warning('Attempted to send response to closed controller');
+      _logger.warning('Attempted to send response to closed controller');
     }
   }
 
@@ -508,11 +474,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> sendError(int statusCode, String message,
       {Uint8List? statusDetailsBin}) async {
     if (!_isActive) {
-      _logger?.warning('Attempted to send error on inactive processor');
+      _logger.warning('Attempted to send error on inactive processor');
       return;
     }
 
-    _logger?.error(
+    _logger.error(
       'Sending error to client: $statusCode - $message [streamId: $_streamId]',
     );
 
@@ -527,7 +493,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // If initial metadata was not sent, this becomes a Trailers-Only response.
       // The transport layer handles adding :status: 200 for Trailers-Only.
       if (!_initialMetadataSent) {
-        _logger?.internal(
+        _logger.internal(
           'Sending Trailers-Only error [streamId: $_streamId]',
         );
         _initialMetadataSent = true;
@@ -540,18 +506,18 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           message: message, statusDetailsBin: statusDetailsBin);
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
 
-      _logger?.internal('Error sent to client [streamId: $_streamId]');
+      _logger.internal('Error sent to client [streamId: $_streamId]');
       _trailerSent = true;
     } catch (e, stackTrace) {
       // Skip if transport is closed.
       if (e.toString().contains('Transport is closed') ||
           e.toString().contains('closed')) {
-        _logger?.internal(
+        _logger.internal(
           'Transport closed, skipping error send [streamId: $_streamId]',
         );
         return;
       }
-      _logger?.error(
+      _logger.error(
         'Failed to send error to client [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
@@ -563,7 +529,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> finishSending() async {
     if (!_isActive) return;
 
-    _logger?.internal(
+    _logger.internal(
       'Finishing response send for $_methodPath [streamId: $_streamId]',
     );
 
@@ -583,7 +549,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> close() async {
     if (!_isActive) return;
 
-    _logger?.internal(
+    _logger.internal(
       'Closing StreamProcessor for $_methodPath [streamId: $_streamId]',
     );
     _isActive = false;
@@ -602,7 +568,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     _scope.listen<void>(
       _context!.cancellationToken!.cancelled.asStream(),
       (_) {
-        _logger?.internal(
+        _logger.internal(
           'Operation cancelled, shutting down processor [streamId: $_streamId]',
         );
         _isActive = false;
@@ -624,7 +590,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         } catch (_) {}
       },
       onError: (error, stackTrace) {
-        _logger?.error(
+        _logger.error(
           'Error monitoring cancellation [streamId: $_streamId]',
           error: error,
           stackTrace: stackTrace,
@@ -648,7 +614,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 /// - Works with any object types, not just IRpcSerializable
 /// - Auto-optimized for in-memory transport
 final class CallProcessor<TRequest extends Object, TResponse extends Object> {
-  final RpcLogger? _logger;
+  final LogScope _logger;
   final IRpcTransport _transport;
   final int _streamId;
   final String _serviceName;
@@ -695,7 +661,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   })  : _transport = transport,
         _streamId = transport.createStream(),
         _serviceName = serviceName,
@@ -705,7 +671,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         _responseCodec = responseCodec,
         _context = context,
         _scope = RpcCallScope(context: context),
-        _logger = logger?.child('CallProcessor') {
+        _logger = logger?.child('CallProcessor') ?? LogScope.noop {
     // Validation: codecs are required for serialization mode.
     if (!_isZeroCopy) {
       if (_requestCodec == null || _responseCodec == null) {
@@ -738,7 +704,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
     _methodPath = '/$_serviceName/$_methodName';
 
-    _logger?.internal(
+    _logger.internal(
       'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
     );
 
@@ -789,23 +755,23 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
               _initialMetadataSent = true;
             }
 
-            _logger?.internal(
+            _logger.internal(
               'Sending request for $_methodPath [streamId: $_streamId]',
             );
 
             if (_isZeroCopy) {
               // Zero-copy path.
-              _logger?.internal(
+              _logger.internal(
                 'Zero-copy request send [streamId: $_streamId]',
               );
               await _transport.sendDirectObject(_streamId, request);
-              _logger?.internal(
+              _logger.internal(
                 'Zero-copy request sent for $_methodPath [streamId: $_streamId]',
               );
             } else {
               // Serialization for network transports.
               final serialized = _requestCodec!.serialize(request);
-              _logger?.internal(
+              _logger.internal(
                 'Request serialized (${serialized.length} bytes) [streamId: $_streamId]',
               );
 
@@ -834,12 +800,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
               );
               await _transport.sendMessage(_streamId, framedMessage);
 
-              _logger?.internal(
+              _logger.internal(
                 'Request sent for $_methodPath [streamId: $_streamId]',
               );
             }
           } catch (e, stackTrace) {
-            _logger?.error(
+            _logger.error(
               'Failed to send request [streamId: $_streamId]',
               error: e,
               stackTrace: stackTrace,
@@ -864,11 +830,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           // Wait for any pending request send to complete before finishing.
           await pendingSend;
           await _transport.finishSending(_streamId);
-          _logger?.internal(
+          _logger.internal(
             'finishSending completed for $_methodPath [streamId: $_streamId]',
           );
         } catch (e, stackTrace) {
-          _logger?.error(
+          _logger.error(
             'Failed to finish sending requests [streamId: $_streamId]',
             error: e,
             stackTrace: stackTrace,
@@ -876,7 +842,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       },
       onError: (error, stackTrace) {
-        _logger?.error(
+        _logger.error(
           'Error in request stream for $_methodPath [streamId: $_streamId]',
           error: error,
           stackTrace: stackTrace,
@@ -894,7 +860,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       _transport.getMessagesForStream(_streamId),
       _handleResponse,
       onError: (error, stackTrace) {
-        _logger?.error(
+        _logger.error(
           'Error in response stream',
           error: error,
           stackTrace: stackTrace,
@@ -904,7 +870,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       },
       onDone: () {
-        _logger?.internal(
+        _logger.internal(
           'Response stream completed for $_methodPath [streamId: $_streamId]',
         );
         if (!_responseController.isClosed) {
@@ -916,7 +882,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Sends initial metadata with context support.
   Future<void> _sendInitialMetadata() async {
-    _logger?.internal(
+    _logger.internal(
       'Sending initial metadata for $_methodPath [streamId: $_streamId]',
     );
 
@@ -946,13 +912,13 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       }
 
-      _logger?.internal(
+      _logger.internal(
         'Context headers added: ${_context!.headers.length} custom + system [streamId: $_streamId]',
       );
     } else {
       headerMap[RpcHeaders.xRequestId] = RpcContext.empty().requestId;
 
-      _logger?.internal(
+      _logger.internal(
         'Added base request-id for null context [streamId: $_streamId]',
       );
     }
@@ -963,7 +929,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     );
     await _transport.sendMetadata(_streamId, metadata);
 
-    _logger?.internal(
+    _logger.internal(
       'Initial metadata sent for $_methodPath [streamId: $_streamId]',
     );
   }
@@ -975,7 +941,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     _scope.listen<void>(
       _context!.cancellationToken!.cancelled.asStream(),
       (_) async {
-        _logger?.internal(
+        _logger.internal(
           'Operation cancelled by client, notifying server [streamId: $_streamId]',
         );
 
@@ -984,7 +950,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
               'Operation cancelled by client';
           await _sendCancellationToServer(reason);
         } catch (e, stackTrace) {
-          _logger?.error(
+          _logger.error(
             'Failed to send cancellation notice [streamId: $_streamId]',
             error: e,
             stackTrace: stackTrace,
@@ -1009,7 +975,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         } catch (_) {}
       },
       onError: (error, stackTrace) {
-        _logger?.error(
+        _logger.error(
           'Error monitoring cancellation [streamId: $_streamId]',
           error: error,
           stackTrace: stackTrace,
@@ -1033,7 +999,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
       final cancellationMetadata = RpcMetadata(cancellationHeaders);
 
-      _logger?.internal(
+      _logger.internal(
         'Sending cancellation notice to server [streamId: $_streamId]',
       );
 
@@ -1043,11 +1009,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         endStream: true,
       );
 
-      _logger?.internal(
+      _logger.internal(
         'Cancellation notice sent to server [streamId: $_streamId]',
       );
     } catch (e, stackTrace) {
-      _logger?.error(
+      _logger.error(
         'Failed to send cancellation metadata [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
@@ -1067,7 +1033,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       throw RpcDeadlineExceededException(_context!.deadline!, Duration.zero);
     }
 
-    _logger?.internal(
+    _logger.internal(
       'Context verified: requestId=${_context!.requestId}, traceId=${_context!.traceId} [streamId: $_streamId]',
     );
   }
@@ -1076,7 +1042,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   void _handleResponse(RpcTransportMessage message) {
     if (!_isActive) return;
 
-    _logger?.internal(
+    _logger.internal(
       'Handling response [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}, isDirect: ${message.isDirect}]',
     );
 
@@ -1097,7 +1063,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
         if (!_responseController.isClosed) {
           _responseController.add(rpcMessage);
-          _logger?.internal(
+          _logger.internal(
             'Metadata pushed to response stream [streamId: $_streamId]',
           );
         }
@@ -1114,7 +1080,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
       // Finish stream on END_STREAM.
       if (message.isEndOfStream) {
-        _logger?.internal(
+        _logger.internal(
           'END_STREAM received, closing response stream [streamId: $_streamId]',
         );
         if (!_responseController.isClosed) {
@@ -1122,7 +1088,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       }
     } catch (e, stackTrace) {
-      _logger?.error(
+      _logger.error(
         'Failed to process response [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
@@ -1135,7 +1101,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Zero-copy: handles a direct response object without serialization.
   void _processDirectResponse(Object directPayload) {
-    _logger?.internal(
+    _logger.internal(
       'Zero-copy response handling [streamId: $_streamId, type: ${directPayload.runtimeType}]',
     );
 
@@ -1145,16 +1111,16 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
       if (!_responseController.isClosed) {
         _responseController.add(rpcMessage);
-        _logger?.internal(
+        _logger.internal(
           'Zero-copy response added to response stream [streamId: $_streamId]',
         );
       } else {
-        _logger?.warning(
+        _logger.warning(
           'Zero-copy: cannot add response to closed controller [streamId: $_streamId]',
         );
       }
     } catch (e, stackTrace) {
-      _logger?.error(
+      _logger.error(
         'Zero-copy direct response handling error [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
@@ -1168,15 +1134,13 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Processes response data (serialization mode only).
   void _processResponseData(List<int> messageBytes) {
     if (_isZeroCopy) {
-      _logger?.logRpcWarning(
-        message: 'Serialized response received in zero-copy mode, ignoring',
-        methodPath: _methodPath,
-        streamId: _streamId,
+      _logger.warning(
+        'Serialized response received in zero-copy mode, ignoring [methodPath: $_methodPath, streamId: $_streamId]',
       );
       return;
     }
 
-    _logger?.internal(
+    _logger.internal(
       'Received response payload: ${messageBytes.length} bytes [streamId: $_streamId]',
     );
 
@@ -1186,13 +1150,13 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           : Uint8List.fromList(messageBytes);
 
       final messages = _parser!(uint8Message);
-      _logger?.internal(
+      _logger.internal(
         'Parser extracted ${messages.length} messages from frame [streamId: $_streamId]',
       );
 
       for (var msgBytes in messages) {
         try {
-          _logger?.internal(
+          _logger.internal(
             'Deserializing response of ${msgBytes.length} bytes [streamId: $_streamId]',
           );
           final response = _responseCodec!.deserialize(msgBytes);
@@ -1201,16 +1165,16 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
           if (!_responseController.isClosed) {
             _responseController.add(rpcMessage);
-            _logger?.internal(
+            _logger.internal(
               'Deserialized response added to stream [streamId: $_streamId]',
             );
           } else {
-            _logger?.warning(
+            _logger.warning(
               'Cannot add response to closed controller [streamId: $_streamId]',
             );
           }
         } catch (e, stackTrace) {
-          _logger?.error(
+          _logger.error(
             'Failed to deserialize response [streamId: $_streamId]',
             error: e,
             stackTrace: stackTrace,
@@ -1221,7 +1185,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       }
     } catch (e, stackTrace) {
-      _logger?.error(
+      _logger.error(
         'Failed to parse response [streamId: $_streamId]',
         error: e,
         stackTrace: stackTrace,
@@ -1235,14 +1199,14 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Sends a request to the server.
   Future<void> send(TRequest request) async {
     if (!_isActive) {
-      _logger?.warning('Attempted to send request on inactive processor');
+      _logger.warning('Attempted to send request on inactive processor');
       return;
     }
 
     if (!_requestController.isClosed) {
       _requestController.add(request);
     } else {
-      _logger?.warning('Attempted to send request to closed controller');
+      _logger.warning('Attempted to send request to closed controller');
     }
   }
 
@@ -1250,7 +1214,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> finishSending() async {
     if (!_isActive) return;
 
-    _logger?.internal(
+    _logger.internal(
       'Finishing request send for $_methodPath [streamId: $_streamId]',
     );
 
@@ -1266,7 +1230,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> close() async {
     if (!_isActive) return;
 
-    _logger?.internal(
+    _logger.internal(
       'Closing CallProcessor for $_methodPath [streamId: $_streamId]',
     );
     _isActive = false;

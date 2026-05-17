@@ -16,7 +16,7 @@ void main() {
         healthResult: RpcHealthStatus.reconnecting(component: 'transport'),
       );
 
-      final endpoint = _TestEndpoint(
+      final endpoint = RpcCallerEndpoint(
         transport: transport,
         debugLabel: 'dbg',
       );
@@ -38,7 +38,7 @@ void main() {
         throwOnHealth: true,
       );
 
-      final endpoint = _TestEndpoint(transport: transport);
+      final endpoint = RpcCallerEndpoint(transport: transport);
       addTearDown(() async => endpoint.close());
 
       final report = await endpoint.health();
@@ -56,7 +56,7 @@ void main() {
         throwOnHealth: true,
       );
 
-      final endpoint = _TestEndpoint(transport: transport);
+      final endpoint = RpcCallerEndpoint(transport: transport);
       addTearDown(() async => endpoint.close());
 
       final report = await endpoint.health();
@@ -73,7 +73,7 @@ void main() {
         throwUnsupportedOnReconnect: true,
       );
 
-      final endpoint = _TestEndpoint(transport: transport);
+      final endpoint = RpcCallerEndpoint(transport: transport);
       addTearDown(() async => endpoint.close());
 
       final report = await endpoint.reconnect();
@@ -90,7 +90,7 @@ void main() {
         throwOnReconnect: true,
       );
 
-      final endpoint = _TestEndpoint(transport: transport);
+      final endpoint = RpcCallerEndpoint(transport: transport);
       addTearDown(() async => endpoint.close());
 
       final report = await endpoint.reconnect();
@@ -106,7 +106,7 @@ void main() {
         throwOnClose: true,
       );
 
-      final endpoint = _TestEndpoint(transport: transport);
+      final endpoint = RpcCallerEndpoint(transport: transport);
 
       await endpoint.close();
       await endpoint.close();
@@ -215,119 +215,4 @@ final class _ConfigurableTransport implements IRpcTransport {
   }
 }
 
-base class _TestEndpoint extends RpcEndpointBase {
-  final RpcLogger _logger = const _NoopLogger();
 
-  _TestEndpoint({
-    required super.transport,
-    super.debugLabel,
-  });
-
-  @override
-  RpcLogger get logger => _logger;
-}
-
-class _NoopLogger implements RpcLogger {
-  final String _name;
-
-  const _NoopLogger([this._name = 'TestLogger']);
-
-  @override
-  String get name => _name;
-
-  @override
-  RpcLogger child(String childName, {String? label}) => _NoopLogger(childName);
-
-  Future<void> _complete() async {}
-
-  @override
-  Future<void> log({
-    required RpcLoggerLevel level,
-    required String message,
-    String? context,
-    String? requestId,
-    String? traceId,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> internal(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> debug(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> info(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> warning(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> error(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> critical(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-}

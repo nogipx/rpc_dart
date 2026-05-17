@@ -11,7 +11,7 @@ void main() {
 
 /// Пример использования изолята с пользовательской entrypoint функцией
 Future<void> runIsolateExample() async {
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+  // logging configured via LogController
   print('\n=== Запуск примера с пользовательским entrypoint ===\n');
 
   // Запускаем изолят с пользовательской entrypoint функцией
@@ -34,10 +34,7 @@ Future<void> runIsolateExample() async {
     transport: result.transport,
     serviceName: 'EchoService',
     methodName: 'Echo',
-    logger: RpcLogger(
-      "Host",
-      colors: RpcLoggerColors.singleColor(AnsiColor.brightMagenta),
-    ),
+    logger: LogScope.noop,
   );
 
   // Подписываемся на ответы
@@ -92,12 +89,9 @@ void customEchoServer(
 ) {
   print('customParams: $customParams');
   print('СЕРВЕР: Запущен эхо-сервер с новым API');
-  final logger = RpcLogger(
-    "Isolate",
-    colors: RpcLoggerColors.singleColor(AnsiColor.brightGreen),
-  );
+  final logger = LogScope.noop;
 
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+  // logging configured via LogController
 
   // Создаем двунаправленный стрим-сервер
   final server = BidirectionalStreamResponder<RpcString, RpcString>(

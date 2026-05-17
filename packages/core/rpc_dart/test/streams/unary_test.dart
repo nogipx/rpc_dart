@@ -39,7 +39,7 @@ void main() {
           methodName: 'TestMethod',
           requestCodec: serializer,
           responseCodec: serializer,
-          logger: RpcLogger('TestUnaryClient'),
+          logger: LogScope.noop,
         );
 
         // Act
@@ -76,7 +76,7 @@ void main() {
           methodName: 'TestMethod',
           requestCodec: serializer,
           responseCodec: serializer,
-          logger: RpcLogger('TestUnaryClient'),
+          logger: LogScope.noop,
         );
 
         // Act & Assert
@@ -113,7 +113,7 @@ void main() {
           methodName: 'TestMethod',
           requestCodec: serializer,
           responseCodec: serializer,
-          logger: RpcLogger('TestUnaryClient'),
+          logger: LogScope.noop,
         );
 
         // Act & Assert

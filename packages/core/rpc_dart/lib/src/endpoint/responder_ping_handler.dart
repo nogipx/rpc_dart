@@ -11,7 +11,7 @@ final class RpcResponderPingHandler {
   final IRpcTransport transport;
 
   /// Logger for ping handler events.
-  final RpcLogger logger;
+  final LogScope _log;
 
   /// Debug label included in ping responses.
   final String? debugLabel;
@@ -19,9 +19,9 @@ final class RpcResponderPingHandler {
   /// Creates an [RpcResponderPingHandler] with the given transport and logger.
   RpcResponderPingHandler({
     required this.transport,
-    required this.logger,
+    LogScope? logger,
     required this.debugLabel,
-  });
+  }) : _log = logger ?? LogScope.noop;
 
   /// Sends a ping response for the given [streamId].
   Future<void> respond({
@@ -67,14 +67,12 @@ final class RpcResponderPingHandler {
         endStream: true,
       );
 
-      logger.internal(
+      _log.internal(
         'Ping обработан успешно [streamId: $streamId]',
-        rpcContext: context,
       );
     } catch (error, stackTrace) {
-      logger.error(
+      _log.error(
         'Ошибка при обработке ping [streamId: $streamId]',
-        rpcContext: context,
         error: error,
         stackTrace: stackTrace,
       );
@@ -95,9 +93,8 @@ final class RpcResponderPingHandler {
           endStream: true,
         );
       } catch (sendError, sendStackTrace) {
-        logger.error(
+        _log.error(
           'Не удалось отправить ошибку ping [streamId: $streamId]',
-          rpcContext: context,
           error: sendError,
           stackTrace: sendStackTrace,
         );

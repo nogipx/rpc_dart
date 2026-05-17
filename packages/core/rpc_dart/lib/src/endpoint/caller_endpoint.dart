@@ -9,8 +9,7 @@ part of '_index.dart';
 final class RpcCallerEndpoint extends RpcEndpointBase
     with RpcCallerPipelineMixin {
   @override
-  RpcLogger get logger =>
-      RpcLogger('RpcCallerEndpoint', colors: loggerColors, label: debugLabel);
+  final LogScope _log;
 
   @override
   final bool compressionEnabled;
@@ -19,9 +18,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase
   RpcCallerEndpoint({
     required super.transport,
     super.debugLabel,
-    super.loggerColors,
+    LogController? logger,
     this.compressionEnabled = false,
-  }) {
+  }) : _log = logger?.scope('rpc.caller') ?? LogScope.noop {
     _validateClientTransport();
   }
 
@@ -69,7 +68,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase
         token.cancel(reason ?? 'Method cancelled by user');
       }
       _callerTokens.remove(key);
-      logger.internal('Cancelled all calls for method: $key ($count)');
+      _log.internal('Cancelled all calls for method: $key ($count)');
       return count;
     }
     return 0;
@@ -92,7 +91,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase
       _callerTokens.remove(key);
     }
 
-    logger.internal(
+    _log.internal(
       'Cancelled all methods of service $serviceName ($totalCancelled calls)',
     );
   }
@@ -117,10 +116,10 @@ final class RpcCallerEndpoint extends RpcEndpointBase
         );
       }
 
-      logger.internal('Transport validated: client (isClient: true)');
+      _log.internal('Transport validated: client (isClient: true)');
     } catch (e) {
       if (e is ArgumentError) rethrow;
-      logger.warning('Failed to validate transport role: $e');
+      _log.warning('Failed to validate transport role: $e');
     }
   }
 }

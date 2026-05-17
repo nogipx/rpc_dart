@@ -9,7 +9,7 @@ import 'package:test/test.dart';
 void main() {
   group('Middleware defaults', () {
     test('default middleware/interceptor are pass-through', () async {
-      final endpoint = _TestEndpoint(transport: _DummyTransport());
+      final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
       addTearDown(() async => endpoint.close());
 
       endpoint
@@ -33,7 +33,7 @@ void main() {
     });
 
     test('RpcMiddlewareContext.copyWith and updateContext preserve fields', () {
-      final endpoint = _TestEndpoint(transport: _DummyTransport());
+      final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
 
       final call = RpcMiddlewareContext(
         endpoint: endpoint,
@@ -118,116 +118,3 @@ final class _DummyTransport extends IRpcTransport {
       RpcHealthStatus.healthy(component: 'DummyTransport');
 }
 
-base class _TestEndpoint extends RpcEndpointBase {
-  final RpcLogger _logger = const _NoopLogger();
-
-  _TestEndpoint({required super.transport});
-
-  @override
-  RpcLogger get logger => _logger;
-}
-
-class _NoopLogger implements RpcLogger {
-  final String _name;
-
-  const _NoopLogger([this._name = 'TestLogger']);
-
-  @override
-  String get name => _name;
-
-  @override
-  RpcLogger child(String childName, {String? label}) => _NoopLogger(childName);
-
-  Future<void> _complete() async {}
-
-  @override
-  Future<void> log({
-    required RpcLoggerLevel level,
-    required String message,
-    String? context,
-    String? requestId,
-    String? traceId,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> internal(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> debug(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> info(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> warning(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> error(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> critical(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-}

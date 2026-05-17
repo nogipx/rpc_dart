@@ -23,16 +23,15 @@ final class RpcPeerEndpoint extends RpcEndpointBase
   final bool compressionEnabled;
 
   @override
-  RpcLogger get logger =>
-      RpcLogger('RpcPeerEndpoint', colors: loggerColors, label: debugLabel);
+  final LogScope _log;
 
   /// Creates an [RpcPeerEndpoint] bound to the given transport.
   RpcPeerEndpoint({
     required super.transport,
     super.debugLabel,
-    super.loggerColors,
+    LogController? logger,
     this.compressionEnabled = false,
-  }) {
+  }) : _log = logger?.scope('rpc.peer') ?? LogScope.noop {
     initResponderPipeline();
   }
 

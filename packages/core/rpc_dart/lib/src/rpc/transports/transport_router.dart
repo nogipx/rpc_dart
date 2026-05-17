@@ -7,7 +7,7 @@ import 'dart:async';
 
 import '../../contracts/_index.dart';
 import '../../core/_index.dart';
-import '../../logs/_logs.dart';
+import '../../logger/_index.dart';
 
 /// Predicate used to decide whether a routing rule applies.
 typedef RpcRoutingCondition = bool Function(
@@ -44,17 +44,17 @@ final class RpcTransportRouter implements IRpcTransport {
   final Map<int, StreamSubscription> _responseSubscriptions = {};
 
   /// Logger.
-  final RpcLogger _logger;
+  final LogScope _logger;
 
   /// Close flag.
   bool _closed = false;
 
   RpcTransportRouter._({
     required List<PrioritizedRoutingRule> routingRules,
-    RpcLogger? logger,
+    LogScope? logger,
     int maxActiveStreams = 10000,
   })  : _idManager = RpcStreamIdManager(isClient: true), // Always client-side
-        _logger = logger ?? RpcLogger('TransportRouter'),
+        _logger = logger ?? LogScope.noop,
         _maxActiveStreams = maxActiveStreams {
     // Sort rules by priority (highest first).
     _routingRules.addAll(routingRules);
@@ -490,7 +490,7 @@ final class RpcTransportRouter implements IRpcTransport {
       try {
         status = await transport.health();
       } catch (error, stackTrace) {
-        await _logger.error(
+        _logger.error(
           'Failed to fetch health from transport ${transport.runtimeType}: $error',
           error: error,
           stackTrace: stackTrace,
@@ -557,7 +557,7 @@ final class RpcTransportRouter implements IRpcTransport {
       try {
         status = await transport.reconnect();
       } catch (error, stackTrace) {
-        await _logger.error(
+        _logger.error(
           'Failed to reconnect transport ${transport.runtimeType}: $error',
           error: error,
           stackTrace: stackTrace,
@@ -647,7 +647,7 @@ final class RpcTransportRouter implements IRpcTransport {
 /// Builder for a prioritized Transport Router.
 final class RpcTransportRouterBuilder {
   final List<PrioritizedRoutingRule> _routingRules = [];
-  RpcLogger? _logger;
+  LogScope _logger = LogScope.noop;
   int _maxActiveStreams = 10000;
 
   /// Creates a client-side router builder (odd Stream IDs only).
@@ -659,8 +659,8 @@ final class RpcTransportRouterBuilder {
   RpcTransportRouterBuilder._();
 
   /// Sets a logger.
-  RpcTransportRouterBuilder logger(RpcLogger logger) {
-    _logger = logger;
+  RpcTransportRouterBuilder logger(LogScope? logger) {
+    _logger = logger ?? LogScope.noop;
     return this;
   }
 
@@ -681,7 +681,7 @@ final class RpcTransportRouterBuilder {
       testStreamId = transport.createStream();
     } catch (e) {
       // If creation fails (transport closed?), skip with a warning.
-      _logger?.warning('Could not verify transport role: $e');
+      _logger.warning('Could not verify transport role: $e');
       return;
     }
 

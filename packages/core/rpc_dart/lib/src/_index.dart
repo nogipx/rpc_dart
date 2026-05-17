@@ -8,7 +8,7 @@ export 'contracts/_index.dart';
 export 'core/_index.dart';
 export 'endpoint/_index.dart';
 export 'integration/_index.dart';
-export 'logs/_logs.dart';
+export 'logger/_index.dart';
 export 'primitives/_index.dart';
 export 'resilience/_index.dart';
 export 'rpc/_index.dart';

@@ -81,7 +81,7 @@ class RpcHttpCallerTransport implements IRpcTransport {
   final StreamController<RpcTransportMessage> _incoming =
       StreamController<RpcTransportMessage>.broadcast();
   bool _isClosed = false;
-  final RpcLogger? _logger;
+  final LogScope? _logger;
 
   /// Creates an HTTP caller transport.
   ///
@@ -103,7 +103,7 @@ class RpcHttpCallerTransport implements IRpcTransport {
   RpcHttpCallerTransport({
     required String baseUrl,
     http.Client? httpClient,
-    RpcLogger? logger,
+    LogScope? logger,
   })  : _baseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl,
         _httpClient = httpClient ?? http.Client(),
         _logger = logger?.child('HttpCallerTransport');

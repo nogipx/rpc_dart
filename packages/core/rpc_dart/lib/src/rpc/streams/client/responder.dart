@@ -8,7 +8,7 @@ part of '../_index.dart';
 /// Server-side handler for client streaming: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Consumes a request stream and returns one response.
 final class ClientStreamResponder<TRequest extends Object,
     TResponse extends Object> implements IRpcResponder {
-  late final RpcLogger? _logger;
+  late final LogScope _logger;
 
   @override
   final int id;
@@ -39,7 +39,7 @@ final class ClientStreamResponder<TRequest extends Object,
     IRpcCodec<TResponse>? responseCodec,
     required Future<TResponse> Function(Stream<TRequest> requests) handler,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
@@ -59,8 +59,8 @@ final class ClientStreamResponder<TRequest extends Object,
       );
     }
 
-    _logger = logger?.child('ClientResponder');
-    _logger?.internal(
+    _logger = logger?.child('ClientResponder') ?? LogScope.noop;
+    _logger.internal(
       'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamResponder for $serviceName.$methodName [id: $id]',
     );
 
@@ -80,7 +80,7 @@ final class ClientStreamResponder<TRequest extends Object,
 
   /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger?.internal('Binding to message stream [id: $id]');
+    _logger.internal('Binding to message stream [id: $id]');
     _processor.bindToMessageStream(messageStream);
   }
 
@@ -88,27 +88,27 @@ final class ClientStreamResponder<TRequest extends Object,
     Future<TResponse> Function(Stream<TRequest> requests) handler,
   ) {
     if (_handlerStarted) {
-      _logger?.warning('Request handler already started [id: $id]');
+      _logger.warning('Request handler already started [id: $id]');
       return;
     }
 
     _handlerStarted = true;
-    _logger?.internal(
+    _logger.internal(
       'Configuring request handler for client stream [id: $id]',
     );
 
     // Invoke handler directly with the request stream.
     handler(_processor.requests).then((response) async {
-      _logger?.internal(
+      _logger.internal(
         'Handler completed, sending response: $response [id: $id]',
       );
 
       try {
         await _processor.send(response);
         await _processor.finishSending();
-        _logger?.internal('Response delivered to client [id: $id]');
+        _logger.internal('Response delivered to client [id: $id]');
       } catch (e, stackTrace) {
-        _logger?.error(
+        _logger.error(
           'Failed to send response to client [id: $id]',
           error: e,
           stackTrace: stackTrace,
@@ -117,7 +117,7 @@ final class ClientStreamResponder<TRequest extends Object,
         _completeDone();
       }
     }).catchError((error, stackTrace) async {
-      _logger?.error(
+      _logger.error(
         'Client stream handling failed [id: $id]',
         error: error,
         stackTrace: stackTrace,

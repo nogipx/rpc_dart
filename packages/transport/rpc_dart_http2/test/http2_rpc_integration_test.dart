@@ -36,7 +36,7 @@ void main() {
       clientTransport = await RpcHttp2CallerTransport.connect(
         host: 'localhost',
         port: testServer.port,
-        logger: RpcLogger('TestClient'),
+        logger: LogScope.noop,
       );
 
       callerEndpoint = RpcCallerEndpoint(transport: clientTransport);

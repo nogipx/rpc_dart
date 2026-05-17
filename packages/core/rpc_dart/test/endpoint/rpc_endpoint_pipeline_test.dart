@@ -11,7 +11,7 @@ import 'package:test/test.dart';
 void main() {
   group('RpcEndpointBase middleware pipeline', () {
     test('handleUnary runs middlewares and interceptors in order', () async {
-      final endpoint = _TestEndpoint(transport: _DummyTransport());
+      final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
       addTearDown(() async => endpoint.close());
 
       final events = <String>[];
@@ -101,7 +101,7 @@ void main() {
 
     test('handleServerStream applies middleware to every response item',
         () async {
-      final endpoint = _TestEndpoint(transport: _DummyTransport());
+      final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
       addTearDown(() async => endpoint.close());
 
       final events = <String>[];
@@ -166,7 +166,7 @@ void main() {
 
     test('handleClientStream normalizes incoming stream and updates context',
         () async {
-      final endpoint = _TestEndpoint(transport: _DummyTransport());
+      final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
       addTearDown(() async => endpoint.close());
 
       final events = <String>[];
@@ -230,7 +230,7 @@ void main() {
 
     test('handleBidirectionalStream applies middleware to both directions',
         () async {
-      final endpoint = _TestEndpoint(transport: _DummyTransport());
+      final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
       addTearDown(() async => endpoint.close());
 
       final events = <String>[];
@@ -349,121 +349,6 @@ class _DummyTransport extends IRpcTransport {
       RpcHealthStatus.healthy(component: 'DummyTransport');
 }
 
-base class _TestEndpoint extends RpcEndpointBase {
-  _TestEndpoint({required super.transport});
-
-  final RpcLogger _logger = const _NoopLogger();
-
-  @override
-  RpcLogger get logger => _logger;
-}
-
-class _NoopLogger implements RpcLogger {
-  final String _name;
-
-  const _NoopLogger([this._name = 'TestLogger']);
-
-  @override
-  String get name => _name;
-
-  @override
-  RpcLogger child(String childName, {String? label}) {
-    return _NoopLogger('$_name.$childName');
-  }
-
-  Future<void> _complete() async {}
-
-  @override
-  Future<void> log({
-    required RpcLoggerLevel level,
-    required String message,
-    String? context,
-    String? requestId,
-    String? traceId,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> internal(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> debug(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> info(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> warning(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> error(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-
-  @override
-  Future<void> critical(
-    String message, {
-    String? context,
-    String? requestId,
-    String? traceId,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, dynamic>? data,
-    AnsiColor? color,
-    RpcContext? rpcContext,
-  }) =>
-      _complete();
-}
 
 class _RecordingMiddleware extends IRpcMiddleware {
   final String name;

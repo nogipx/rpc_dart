@@ -17,7 +17,7 @@ import 'rpc_http2_responder_transport.dart';
 class RpcHttp2Server implements IRpcServer {
   final String _host;
   final int _port;
-  final RpcLogger? _logger;
+  final LogScope? _logger;
   final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
   final void Function(Socket socket)? _onConnectionOpened;
@@ -42,7 +42,7 @@ class RpcHttp2Server implements IRpcServer {
   RpcHttp2Server({
     String host = 'localhost',
     required int port,
-    RpcLogger? logger,
+    LogScope? logger,
     void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(Socket socket)? onConnectionOpened,
@@ -68,7 +68,7 @@ class RpcHttp2Server implements IRpcServer {
     required int port,
     required List<RpcResponderContract> contracts,
     String host = 'localhost',
-    RpcLogger? logger,
+    LogScope? logger,
   }) {
     return RpcHttp2Server(
       host: host,
@@ -215,7 +215,6 @@ class RpcHttp2Server implements IRpcServer {
       final endpoint = RpcResponderEndpoint(
         transport: transport,
         debugLabel: 'Http2Endpoint-$clientAddress',
-        loggerColors: RpcLoggerColors.singleColor(AnsiColor.cyan),
       );
 
       _endpoints.add(endpoint);

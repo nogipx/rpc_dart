@@ -63,7 +63,7 @@ class RpcHttpServer implements IRpcServer {
   final int _port;
   final RpcHttpCorsPolicy? _corsPolicy;
   final void Function(RpcResponderEndpoint) _onEndpointCreated;
-  final RpcLogger? _logger;
+  final LogScope? _logger;
 
   RpcHttpResponderTransport? _transport;
   RpcResponderEndpoint? _endpoint;
@@ -75,7 +75,7 @@ class RpcHttpServer implements IRpcServer {
     required int port,
     required void Function(RpcResponderEndpoint) onEndpointCreated,
     RpcHttpCorsPolicy? corsPolicy,
-    RpcLogger? logger,
+    LogScope? logger,
   })  : _host = host,
         _port = port,
         _corsPolicy = corsPolicy,

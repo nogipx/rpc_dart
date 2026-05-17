@@ -9,7 +9,7 @@ import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 
 /// 🚀 Минимальный пример HTTP/2 RPC сервера
 Future<void> main() async {
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info);
+  // logging configured via LogController
 
   const port = 8080;
 

@@ -58,7 +58,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   bool _isClosed = false;
 
   /// Логгер
-  final RpcLogger? _logger;
+  final LogScope? _logger;
 
   final RpcSecurityPolicy _policy;
 
@@ -70,7 +70,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     required int port,
     required String scheme,
     required RpcSecurityPolicy policy,
-    RpcLogger? logger,
+    LogScope? logger,
   })  : _connection = connection,
         _connectionFactory = connectionFactory,
         _host = host,
@@ -87,7 +87,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     required String host,
     int port = 443,
     Uri? proxyUri,
-    RpcLogger? logger,
+    LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) async {
     logger?.internal('Создание защищенного HTTP/2 соединения с $host:$port');
@@ -127,7 +127,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     required String host,
     int port = 80,
     Uri? proxyUri,
-    RpcLogger? logger,
+    LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) async {
     logger?.internal('Создание HTTP/2 соединения с $host:$port');

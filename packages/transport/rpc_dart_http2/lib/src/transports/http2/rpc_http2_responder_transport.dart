@@ -47,14 +47,14 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
   bool _isClosed = false;
 
   /// Логгер
-  final RpcLogger? _logger;
+  final LogScope? _logger;
 
   final RpcSecurityPolicy _policy;
 
   RpcHttp2ResponderTransport({
     required http2.ServerTransportConnection connection,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
-    RpcLogger? logger,
+    LogScope? logger,
   })  : _connection = connection,
         _logger = logger?.child('Http2ServerTransport'),
         _policy = policy {

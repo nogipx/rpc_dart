@@ -16,7 +16,7 @@ import 'websocket_responder_transport.dart';
 /// Each incoming [WebSocketChannel] is wrapped via
 /// [RpcWebSocketResponderTransport] (3-layer architecture under the hood).
 class RpcWebSocketServer implements IRpcServer {
-  final RpcLogger? _logger;
+  final LogScope? _logger;
   final Stream<WebSocketChannel> _connections;
   final RpcSecurityPolicy _policy;
 
@@ -33,7 +33,7 @@ class RpcWebSocketServer implements IRpcServer {
 
   RpcWebSocketServer({
     required Stream<WebSocketChannel> connections,
-    RpcLogger? logger,
+    LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
     void Function(RpcPeerEndpoint endpoint)? onPeerEndpointCreated,
@@ -52,7 +52,7 @@ class RpcWebSocketServer implements IRpcServer {
   factory RpcWebSocketServer.createWithContracts({
     required Stream<WebSocketChannel> connections,
     required List<RpcResponderContract> contracts,
-    RpcLogger? logger,
+    LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
     return RpcWebSocketServer(
@@ -132,7 +132,7 @@ class RpcWebSocketServer implements IRpcServer {
         final endpoint = RpcPeerEndpoint(
           transport: transport,
           debugLabel: 'WebSocketEndpoint-$clientLabel',
-          loggerColors: RpcLoggerColors.singleColor(AnsiColor.magenta),
+
         );
         _onPeerEndpointCreated(endpoint);
         endpoint.start();
@@ -144,7 +144,7 @@ class RpcWebSocketServer implements IRpcServer {
         final endpoint = RpcResponderEndpoint(
           transport: transport,
           debugLabel: 'WebSocketEndpoint-$clientLabel',
-          loggerColors: RpcLoggerColors.singleColor(AnsiColor.magenta),
+
         );
         _endpoints.add(endpoint);
         _onEndpointCreated?.call(endpoint);

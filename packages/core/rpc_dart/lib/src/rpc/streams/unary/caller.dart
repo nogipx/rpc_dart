@@ -29,7 +29,7 @@ final class UnaryCaller<TRequest, TResponse> {
   final RpcContext? _context;
 
   /// Logger.
-  late final RpcLogger? _logger;
+  late final LogScope _logger;
 
   /// Frame parser.
   late final RpcMessageParser _parser;
@@ -44,14 +44,14 @@ final class UnaryCaller<TRequest, TResponse> {
     required IRpcCodec<TRequest> requestCodec,
     required IRpcCodec<TResponse> responseCodec,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   })  : _transport = transport,
         _serviceName = serviceName,
         _methodName = methodName,
         _requestSerializer = requestCodec,
         _responseSerializer = responseCodec,
         _context = context {
-    _logger = logger?.child('UnaryCaller');
+    _logger = logger?.child('UnaryCaller') ?? LogScope.noop;
     _parser = RpcMessageParser(
       logger: _logger,
       decompressor: (payload) {
@@ -65,7 +65,7 @@ final class UnaryCaller<TRequest, TResponse> {
       },
     );
     _methodPath = '/$_serviceName/$_methodName';
-    _logger?.internal(
+    _logger.internal(
       'Created unary client for $_methodPath${_context != null ? ' with context' : ''}',
     );
   }
@@ -83,7 +83,7 @@ final class UnaryCaller<TRequest, TResponse> {
     // Create a new stream for this call.
     final streamId = _transport.createStream();
 
-    _logger?.internal('Unary call $_methodPath started [streamId: $streamId]');
+    _logger.internal('Unary call $_methodPath started [streamId: $streamId]');
 
     final completer = Completer<TResponse>();
     StreamSubscription? subscription;
@@ -95,7 +95,7 @@ final class UnaryCaller<TRequest, TResponse> {
         cancellationSubscription =
             _context!.cancellationToken!.cancelled.asStream().listen((_) {
           if (!completer.isCompleted) {
-            _logger?.warning(
+            _logger.warning(
               'Operation cancelled via cancellation token [streamId: $streamId]',
             );
             completer.completeError(
@@ -115,24 +115,24 @@ final class UnaryCaller<TRequest, TResponse> {
         (message) async {
           if (message.isDirect && message.directPayload != null) {
             // Zero-copy: received object directly.
-            _logger?.internal(
+            _logger.internal(
               'Zero-copy response received [streamId: $streamId]',
             );
             try {
               final response = message.directPayload as TResponse;
               if (!completer.isCompleted) {
-                _logger?.internal(
+                _logger.internal(
                   'Zero-copy unary call $_methodPath completed [streamId: $streamId]',
                 );
                 completer.complete(response);
               } else {
-                _logger?.warning(
+                _logger.warning(
                   'Extra zero-copy response after call completion [streamId: $streamId]',
                 );
               }
             } catch (e, stackTrace) {
               if (!completer.isCompleted) {
-                _logger?.error(
+                _logger.error(
                   'Failed to process zero-copy response [streamId: $streamId]',
                   error: e,
                   stackTrace: stackTrace,
@@ -142,36 +142,36 @@ final class UnaryCaller<TRequest, TResponse> {
             }
           } else if (!message.isMetadataOnly && message.payload != null) {
             // Received response data (serialized).
-            _logger?.internal(
+            _logger.internal(
               'Received transport message of ${message.payload!.length} bytes [streamId: $streamId]',
             );
             try {
               // Use parser to extract messages from framed payload.
               final messages = _parser(message.payload!);
-              _logger?.internal(
+              _logger.internal(
                 'Parser extracted ${messages.length} messages from frame [streamId: $streamId]',
               );
 
               for (final msgBytes in messages) {
-                _logger?.internal(
+                _logger.internal(
                   'Deserializing response of ${msgBytes.length} bytes [streamId: $streamId]',
                 );
                 final response = _responseSerializer.deserialize(msgBytes);
                 if (!completer.isCompleted) {
-                  _logger?.internal(
+                  _logger.internal(
                     'Unary call $_methodPath completed [streamId: $streamId]',
                   );
                   completer.complete(response);
                   break; // Only first response is needed for unary call.
                 } else {
-                  _logger?.warning(
+                  _logger.warning(
                     'Extra response after call completion [streamId: $streamId]',
                   );
                 }
               }
             } catch (e, stackTrace) {
               if (!completer.isCompleted) {
-                _logger?.error(
+                _logger.error(
                   'Failed to process response [streamId: $streamId]',
                   error: e,
                   stackTrace: stackTrace,
@@ -181,7 +181,7 @@ final class UnaryCaller<TRequest, TResponse> {
             }
           } else if (message.isMetadataOnly && message.metadata != null) {
             // Received metadata (possibly trailers).
-            _logger?.internal('Metadata received [streamId: $streamId]');
+            _logger.internal('Metadata received [streamId: $streamId]');
             final encoding = message.metadata!.getHeaderValue(
               RpcHeaders.grpcEncoding,
             );
@@ -194,7 +194,7 @@ final class UnaryCaller<TRequest, TResponse> {
 
             if (statusCode != null && message.isEndOfStream) {
               final code = int.tryParse(statusCode) ?? RpcStatus.unknown;
-              _logger?.internal(
+              _logger.internal(
                 'Completion status received: $code [streamId: $streamId]',
               );
               if (code != RpcStatus.ok && !completer.isCompleted) {
@@ -204,7 +204,7 @@ final class UnaryCaller<TRequest, TResponse> {
                     '';
                 final decodedMessage =
                     RpcMetadata.decodeGrpcMessage(errorMessage);
-                _logger?.error(
+                _logger.error(
                   'gRPC error: $code - $decodedMessage [streamId: $streamId]',
                 );
                 completer.completeError(
@@ -219,7 +219,7 @@ final class UnaryCaller<TRequest, TResponse> {
           }
         },
         onError: (error, stackTrace) {
-          _logger?.error(
+          _logger.error(
             'Transport error [streamId: $streamId]',
             error: error,
             stackTrace: stackTrace,
@@ -231,7 +231,7 @@ final class UnaryCaller<TRequest, TResponse> {
       );
 
       // Send initial metadata with context headers.
-      _logger?.internal('Sending initial metadata [streamId: $streamId]');
+      _logger.internal('Sending initial metadata [streamId: $streamId]');
       final baseMetadata =
           RpcMetadata.forClientRequest(_serviceName, _methodName);
 
@@ -257,7 +257,7 @@ final class UnaryCaller<TRequest, TResponse> {
           }
         }
 
-        _logger?.internal(
+        _logger.internal(
           'Context headers added: ${_context!.headers.length} custom + system',
         );
       }
@@ -270,7 +270,7 @@ final class UnaryCaller<TRequest, TResponse> {
 
       // Zero-copy optimization for supporting transports.
       if (_transport.supportsZeroCopy) {
-        _logger?.internal('Zero-copy request send [streamId: $streamId]');
+        _logger.internal('Zero-copy request send [streamId: $streamId]');
         await _transport.sendDirectObject(
           streamId,
           request as Object,
@@ -278,7 +278,7 @@ final class UnaryCaller<TRequest, TResponse> {
         );
       } else {
         // Standard serialization for other transports.
-        _logger?.internal('Serializing request [streamId: $streamId]');
+        _logger.internal('Serializing request [streamId: $streamId]');
         final serializedRequest = _requestSerializer.serialize(request);
         final requestEncoding = _context?.getHeader(
           RpcHeaders.grpcEncoding,
@@ -299,27 +299,27 @@ final class UnaryCaller<TRequest, TResponse> {
                 encoding: requestEncoding,
               )
             : serializedRequest;
-        _logger?.internal(
+        _logger.internal(
           'Request serialized, size: ${serializedRequest.length} bytes [streamId: $streamId]',
         );
         final framedRequest = RpcMessageFrame.encode(
           payload,
           compressed: useCompression,
         );
-        _logger?.internal(
+        _logger.internal(
           'Sending request and closing request stream [streamId: $streamId]',
         );
         await _transport.sendMessage(streamId, framedRequest, endStream: true);
       }
 
       // Await response with timeout if provided.
-      _logger?.internal(
+      _logger.internal(
         'Response timeout set to $effectiveTimeout [streamId: $streamId]',
       );
       return await completer.future.timeout(
         effectiveTimeout,
         onTimeout: () {
-          _logger?.error(
+          _logger.error(
             'Response timeout: $effectiveTimeout [streamId: $streamId]',
           );
           throw TimeoutException(
@@ -329,7 +329,7 @@ final class UnaryCaller<TRequest, TResponse> {
         },
       );
     } catch (e, stackTrace) {
-      _logger?.error(
+      _logger.error(
         'Unary call $_methodPath failed [streamId: $streamId]',
         error: e,
         stackTrace: stackTrace,
@@ -347,7 +347,7 @@ final class UnaryCaller<TRequest, TResponse> {
   /// Closes the client; transport remains open.
   Future<void> close() async {
     // Client does not own the transport, so do not close it.
-    _logger?.internal('Unary client $_methodPath closed');
+    _logger.internal('Unary client $_methodPath closed');
   }
 
   /// Validates context before call.
@@ -362,7 +362,7 @@ final class UnaryCaller<TRequest, TResponse> {
       throw RpcDeadlineExceededException(_context!.deadline!, Duration.zero);
     }
 
-    _logger?.internal(
+    _logger.internal(
       'Context verified: requestId=${_context!.requestId}, traceId=${_context!.traceId}',
     );
   }

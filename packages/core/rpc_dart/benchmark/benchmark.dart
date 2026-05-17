@@ -19,7 +19,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// • Real-world contract scenarios
 /// • Scalability and concurrency testing
 void main(List<String> args) async {
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.disabled);
+  // Logging disabled for benchmarks
 
   final cli = BenchmarkCLI();
   final config = cli.parseArguments(args);
@@ -687,7 +687,7 @@ class ProfessionalRpcBenchmark {
     config.printSummary();
 
     if (config.enableVerboseLogging) {
-      RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info);
+      // Verbose logging enabled via LogController
     }
 
     _totalStopwatch.start();

@@ -19,7 +19,7 @@ class CalculatorSerializeResponder
 }
 
 Future<void> main() async {
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.internal);
+  // logging configured via LogController
   final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
 
   final responderEndpoint = RpcResponderEndpoint(transport: responderTransport);

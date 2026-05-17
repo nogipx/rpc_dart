@@ -42,7 +42,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
   final Map<int, _PendingResponse> _pending = {};
   final RpcStreamIdManager _idManager = RpcStreamIdManager(isClient: false);
   bool _isClosed = false;
-  final RpcLogger? _logger;
+  final LogScope? _logger;
 
   /// Optional security policy: limits concurrent requests, body size, and
   /// header sizes.
@@ -57,7 +57,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
   final Duration? bodyReadTimeout;
 
   RpcHttpResponderTransport({
-    RpcLogger? logger,
+    LogScope? logger,
     this.securityPolicy,
     this.corsPolicy,
     this.bodyReadTimeout,

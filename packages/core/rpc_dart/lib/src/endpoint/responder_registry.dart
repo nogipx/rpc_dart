@@ -55,6 +55,7 @@ final class RpcResponderMethodBinding {
 
 /// Stores and manages registered contracts and their method bindings.
 final class RpcResponderMethodRegistry {
+  LogScope _log = LogScope.noop;
   final Map<String, RpcResponderContract> _contracts = {};
   final Map<String, RpcResponderMethodBinding> _methods = {};
 
@@ -83,7 +84,8 @@ final class RpcResponderMethodRegistry {
   }
 
   /// Registers [contract] and indexes all its methods.
-  void registerContract(RpcResponderContract contract, RpcLogger logger) {
+  void registerContract(RpcResponderContract contract, LogScope? logger) {
+    if (logger != null) _log = logger;
     final serviceName = contract.serviceName;
 
     if (_contracts.containsKey(serviceName)) {
@@ -92,7 +94,7 @@ final class RpcResponderMethodRegistry {
       );
     }
 
-    logger.internal('Регистрируем контракт сервиса: $serviceName');
+    _log.internal('Регистрируем контракт сервиса: $serviceName');
     _contracts[serviceName] = contract;
 
     contract.setup();
@@ -106,7 +108,7 @@ final class RpcResponderMethodRegistry {
         throw RpcException('Метод $methodKey уже зарегистрирован');
       }
 
-      logger.internal(
+      _log.internal(
         'Регистрируем метод: $methodKey (${registration.type.name})',
       );
 
@@ -129,7 +131,7 @@ final class RpcResponderMethodRegistry {
         );
       }
 
-      logger.internal(
+      _log.internal(
         'Регистрируем zero-copy метод: '
         '$methodKey (${zeroCopyRegistration.type.name}) [ZERO-COPY]',
       );
@@ -142,7 +144,7 @@ final class RpcResponderMethodRegistry {
       );
     }
 
-    logger.internal(
+    _log.internal(
       'Контракт $serviceName зарегистрирован с '
       '${contract.methods.length} методами и '
       '${contract.zeroCopyMethods.length} zero-copy методами',
@@ -150,7 +152,8 @@ final class RpcResponderMethodRegistry {
   }
 
   /// Removes the contract for [serviceName] and its method bindings.
-  void unregisterContract(String serviceName, RpcLogger logger) {
+  void unregisterContract(String serviceName, LogScope? logger) {
+    if (logger != null) _log = logger;
     final contract = _contracts.remove(serviceName);
 
     if (contract == null) {
@@ -159,7 +162,7 @@ final class RpcResponderMethodRegistry {
       );
     }
 
-    logger.internal('Разрегистрируем контракт сервиса: $serviceName');
+    _log.internal('Разрегистрируем контракт сервиса: $serviceName');
 
     final methodKeys =
         _methods.keys.where((key) => key.startsWith('$serviceName.')).toList();
@@ -167,7 +170,7 @@ final class RpcResponderMethodRegistry {
     for (final methodKey in methodKeys) {
       final binding = _methods.remove(methodKey);
       if (binding != null) {
-        logger.internal(
+        _log.internal(
           'Разрегистрируем метод: $methodKey (${binding.type.name})',
         );
       }
@@ -175,9 +178,9 @@ final class RpcResponderMethodRegistry {
 
     try {
       contract.dispose();
-      logger.internal('Ресурсы контракта $serviceName освобождены');
+      _log.internal('Ресурсы контракта $serviceName освобождены');
     } catch (error, stackTrace) {
-      logger.error(
+      _log.error(
         'Ошибка при освобождении ресурсов контракта $serviceName: $error',
         error: error,
         stackTrace: stackTrace,
@@ -186,18 +189,19 @@ final class RpcResponderMethodRegistry {
   }
 
   /// Disposes all registered contracts and clears the registry.
-  void disposeAll(RpcLogger logger) {
+  void disposeAll(LogScope? logger) {
+    if (logger != null) _log = logger;
     for (final entry in _contracts.entries) {
       final serviceName = entry.key;
       final contract = entry.value;
 
       try {
         contract.dispose();
-        logger.internal(
+        _log.internal(
           'Ресурсы контракта $serviceName освобождены при закрытии endpoint',
         );
       } catch (error, stackTrace) {
-        logger.error(
+        _log.error(
           'Ошибка при освобождении ресурсов контракта $serviceName: $error',
           error: error,
           stackTrace: stackTrace,

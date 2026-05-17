@@ -51,7 +51,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         token.cancel(reason ?? 'Request cancelled by user');
         tokens.remove(requestId);
         if (tokens.isEmpty) _callerTokens.remove(key);
-        logger.internal('Request cancelled: $key[$requestId]');
+        _log.internal('Request cancelled: $key[$requestId]');
         return true;
       }
     }
@@ -207,10 +207,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
     return RpcEndpointPingExchange(
       transport: transport,
-      logger: logger,
+      logger: _log,
       streamId: streamId,
       sentAt: sentAt,
     ).execute(metadata: metadata, timeout: timeout);
+
   }
 
   // ---------------------------------------------------------------------------
@@ -254,7 +255,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
                 serviceName: serviceName,
                 methodName: methodName,
                 context: c,
-                logger: logger,
+                logger: _log,
               );
               return _executeUnaryCall(processor: processor, request: req);
             }
@@ -310,7 +311,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           requestCodec: requestCodec,
           responseCodec: responseCodec,
           context: c,
-          logger: logger,
+          logger: _log,
         ).call(req);
       },
     );
@@ -349,7 +350,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
               requestCodec: requestCodec,
               responseCodec: responseCodec,
               context: c,
-              logger: logger,
+              logger: _log,
             ).call(reqs);
           },
         );
@@ -406,7 +407,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       requestCodec: requestCodec,
       responseCodec: responseCodec,
       context: context,
-      logger: logger,
+      logger: _log,
     );
 
     StreamSubscription<RpcMessage<R>>? responseSub;

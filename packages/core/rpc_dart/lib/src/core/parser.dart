@@ -6,7 +6,7 @@
 import 'dart:typed_data';
 
 import 'errors.dart';
-import '../logs/_logs.dart';
+import '../logger/_index.dart';
 import 'protocol.dart';
 
 /// Internal state for parsing incoming gRPC stream data.
@@ -88,7 +88,7 @@ final class _MessageParserState {
 /// Collects full messages from HTTP/2 DATA frames where gRPC payloads may not
 /// align with frame boundaries.
 final class RpcMessageParser {
-  final RpcLogger? _logger;
+  final LogScope _logger;
   final int _maxMessageLength;
   final int _maxBufferedBytes;
   final Uint8List Function(Uint8List payload)? _decompressor;
@@ -96,12 +96,12 @@ final class RpcMessageParser {
 
   /// Creates an [RpcMessageParser] with the given configuration.
   RpcMessageParser({
-    RpcLogger? logger,
+    LogScope? logger,
     int maxMessageLength = 64 * 1024 * 1024,
     int? maxBufferedBytes,
     Uint8List Function(Uint8List payload)? decompressor,
     int maxMessagesPerChunk = 1024,
-  })  : _logger = logger,
+  })  : _logger = logger ?? LogScope.noop,
         _maxMessageLength = maxMessageLength,
         _maxBufferedBytes = maxBufferedBytes ??
             (maxMessageLength + RpcConstants.messagePrefixSize),
@@ -123,7 +123,7 @@ final class RpcMessageParser {
     try {
       return _call(data);
     } catch (e, trace) {
-      _logger?.error(
+      _logger.error(
         'Failed to parse incoming data: $e',
         error: e,
         stackTrace: trace,
@@ -177,7 +177,7 @@ final class RpcMessageParser {
           // Advance past the header — no copy.
           _state.advance(RpcConstants.messagePrefixSize);
         } catch (e, trace) {
-          _logger?.error(
+          _logger.error(
             'Failed to parse frame header: $e',
             error: e,
             stackTrace: trace,
@@ -235,7 +235,7 @@ final class RpcMessageParser {
     // instead of O(N) copies of shrinking buffer inside the loop above.
     _state.compact();
 
-    _logger?.internal(
+    _logger.internal(
       'Chunk processed, messages extracted: ${result.length}',
     );
     return result;

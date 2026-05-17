@@ -8,7 +8,7 @@ part of '../_index.dart';
 /// Server-stream caller: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Sends one request, receives a response stream.
 final class ServerStreamCaller<TRequest extends Object,
     TResponse extends Object> {
-  late final RpcLogger? _logger;
+  late final LogScope _logger;
 
   /// Stream processor.
   late final CallProcessor<TRequest, TResponse> _processor;
@@ -24,7 +24,7 @@ final class ServerStreamCaller<TRequest extends Object,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
-    RpcLogger? logger,
+    LogScope? logger,
   }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
@@ -44,8 +44,8 @@ final class ServerStreamCaller<TRequest extends Object,
       );
     }
 
-    _logger = logger?.child('ServerCaller');
-    _logger?.internal(
+    _logger = logger?.child('ServerCaller') ?? LogScope.noop;
+    _logger.internal(
       'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamCaller for $serviceName.$methodName',
     );
 
@@ -71,7 +71,7 @@ final class ServerStreamCaller<TRequest extends Object,
       );
     }
 
-    _logger?.internal(
+    _logger.internal(
       'Sending single request to server stream: $request',
     );
 
@@ -80,12 +80,12 @@ final class ServerStreamCaller<TRequest extends Object,
 
       // Send the request via processor.
       await _processor.send(request);
-      _logger?.internal('Request sent via CallProcessor');
+      _logger.internal('Request sent via CallProcessor');
 
       // Finish sending to signal only one request (server-stream semantics).
       await _processor.finishSending();
     } catch (e, stackTrace) {
-      _logger?.error(
+      _logger.error(
         'Failed to send request to server stream',
         error: e,
         stackTrace: stackTrace,
@@ -96,18 +96,18 @@ final class ServerStreamCaller<TRequest extends Object,
 
   /// Convenience helper to send a request and yield responses.
   Stream<TResponse> call(TRequest request) async* {
-    _logger?.internal('Executing server stream call');
+    _logger.internal('Executing server stream call');
 
     try {
       // Send request.
       await send(request);
 
-      _logger?.internal('Request sent, awaiting response stream');
+      _logger.internal('Request sent, awaiting response stream');
 
       // Process response stream.
       await for (final response in responses) {
         if (response.payload != null) {
-          _logger?.internal('Received response from server');
+          _logger.internal('Received response from server');
           yield response.payload!;
         }
 
@@ -124,7 +124,7 @@ final class ServerStreamCaller<TRequest extends Object,
                   ) ??
                   'Unknown error';
               final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
-              _logger?.error(
+              _logger.error(
                 'Server stream ended with error: $status - $decodedMessage',
               );
               throw RpcStatusException.fromTrailer(
@@ -137,9 +137,9 @@ final class ServerStreamCaller<TRequest extends Object,
         }
       }
 
-      _logger?.internal('Server stream completed');
+      _logger.internal('Server stream completed');
     } catch (e) {
-      _logger?.error('Server stream call failed', error: e);
+      _logger.error('Server stream call failed', error: e);
       if (e is! RpcCancelledException) rethrow;
     } finally {
       await close();
@@ -148,7 +148,7 @@ final class ServerStreamCaller<TRequest extends Object,
 
   /// Closes the caller and releases resources.
   Future<void> close() async {
-    _logger?.internal('Closing ServerStreamCaller');
+    _logger.internal('Closing ServerStreamCaller');
     await _processor.close();
   }
 }

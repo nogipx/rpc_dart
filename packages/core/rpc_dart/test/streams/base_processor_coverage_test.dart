@@ -19,8 +19,8 @@ final class _ThrowingCodec<T> implements IRpcCodec<T> {
 }
 
 void main() {
-  setUpAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.disabled));
-  tearDownAll(() => RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.info));
+  
+  
 
   group('base_processor.dart: coverage', () {
     final codec = RpcCodec(RpcString.fromJson);
@@ -325,7 +325,7 @@ void main() {
           methodName: 'M',
           requestCodec: codec,
           responseCodec: codec,
-          logger: RpcLogger('StreamProcessorClosedTransport'),
+          logger: LogScope.noop,
         );
 
         // Force "Transport is closed" branches.

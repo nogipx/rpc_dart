@@ -10,7 +10,7 @@ import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 /// Мощная демонстрация всех типов RPC с настоящим HTTP/2 транспортом! 🚀
 Future<void> main() async {
   // Настраиваем красивое логирование для отладки
-  RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
+  // logging configured via LogController
 
   print('🚀 === ДЕМОНСТРАЦИЯ ВСЕХ ТИПОВ RPC С HTTP/2 ТРАНСПОРТОМ === 🚀\n');
   print(
@@ -22,7 +22,7 @@ Future<void> main() async {
   final serverPort = 8765;
   final rpcServer = RpcHttp2Server.createWithContracts(
     port: serverPort,
-    logger: RpcLogger('Http2Server'),
+    logger: LogScope.noop,
     contracts: [_DemoServiceContract()],
   );
   await rpcServer.start();
@@ -36,7 +36,7 @@ Future<void> main() async {
     final transport = await RpcHttp2CallerTransport.connect(
       host: 'localhost',
       port: serverPort,
-      logger: RpcLogger('Http2Client'),
+      logger: LogScope.noop,
     );
 
     try {
