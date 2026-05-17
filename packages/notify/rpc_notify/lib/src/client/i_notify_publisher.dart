@@ -59,11 +59,11 @@ class _RepositoryPublisher implements INotifyPublisher {
 class _RpcPublisher implements INotifyPublisher {
   _RpcPublisher(this._endpoint)
       : _caller = NotifyPublishContractCaller(_endpoint),
-        _log = RpcLogger('NotifyPublisher.endpoint');
+        _log = LogScope.noop;
 
   final RpcCallerEndpoint _endpoint;
   final NotifyPublishContractCaller _caller;
-  final RpcLogger _log;
+  final LogScope _log;
 
   @override
   void publish(String topic, Map<String, dynamic> payload) {

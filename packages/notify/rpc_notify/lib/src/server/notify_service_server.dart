@@ -20,13 +20,13 @@ import '../models/notify_subscribe_request.dart';
 class NotifySubscribeResponder extends NotifySubscribeContractResponder {
   NotifySubscribeResponder({
     required INotifySubscriber subscriber,
-    RpcLogger? logger,
+    LogScope? logger,
     super.dataTransferMode,
   }) : _subscriber = subscriber,
-       _log = logger ?? RpcLogger('NotifySubscribeResponder');
+       _log = logger ?? LogScope.noop;
 
   final INotifySubscriber _subscriber;
-  final RpcLogger _log;
+  final LogScope _log;
 
   INotifySubscriber get subscriber => _subscriber;
 
@@ -58,13 +58,13 @@ class NotifySubscribeResponder extends NotifySubscribeContractResponder {
 class NotifyPublishResponder extends NotifyPublishContractResponder {
   NotifyPublishResponder({
     required INotifyPublisher publisher,
-    RpcLogger? logger,
+    LogScope? logger,
     super.dataTransferMode,
   }) : _publisher = publisher,
-       _log = logger ?? RpcLogger('NotifyPublishResponder');
+       _log = logger ?? LogScope.noop;
 
   final INotifyPublisher _publisher;
-  final RpcLogger _log;
+  final LogScope _log;
 
   INotifyPublisher get publisher => _publisher;
 

@@ -1,3 +1,0 @@
-linter:
-  rules:
-    - always_declare_return_types

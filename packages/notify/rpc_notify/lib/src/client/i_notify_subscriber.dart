@@ -47,10 +47,10 @@ const _uuid = Uuid();
 
 class _RepositorySubscriber implements INotifySubscriber {
   _RepositorySubscriber(this._repository)
-      : _log = RpcLogger('NotifySubscriber.repository');
+      : _log = LogScope.noop;
 
   final INotifyRepository _repository;
-  final RpcLogger _log;
+  final LogScope _log;
   final Map<String, String> _topicToClientId = {};
   final Map<String, Stream<NotifyEvent>> _streams = {};
 

@@ -17,14 +17,14 @@ class BlobRepositoryClient implements IBlobClient {
     bool disposeRepositoryOnClose = false,
     int uploadChunkBytes = defaultChunkBytes,
     int? maxChunkBytes,
-    RpcLogger? logger,
+    LogScope? logger,
     bool attachChunkChecksums = false,
   }) : _repository = repository,
        _disposeRepositoryOnClose = disposeRepositoryOnClose,
        _uploadChunkBytes = uploadChunkBytes,
        _maxChunkBytes = maxChunkBytes,
        _attachChunkChecksums = attachChunkChecksums,
-       _log = logger ?? RpcLogger('BlobRepositoryClient') {
+       _log = logger ?? LogScope.noop {
     assert(uploadChunkBytes > 0, 'uploadChunkBytes must be positive');
   }
 
@@ -33,7 +33,7 @@ class BlobRepositoryClient implements IBlobClient {
   final int _uploadChunkBytes;
   final int? _maxChunkBytes;
   final bool _attachChunkChecksums;
-  final RpcLogger _log;
+  final LogScope _log;
 
   static const int defaultChunkBytes = 256 * 1024;
 
