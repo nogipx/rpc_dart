@@ -12,6 +12,7 @@ import '../log_record.dart';
 /// Useful for: history queries, crash reports, in-app log viewer,
 /// [RpcLogServiceResponder.getHistory].
 class RingBufferOutput extends LogOutput {
+  /// Maximum number of records to keep in the buffer.
   final int maxEntries;
   final List<LogRecord> _buffer;
   int _head = 0;
@@ -20,6 +21,7 @@ class RingBufferOutput extends LogOutput {
   @override
   final String? scopeFilter;
 
+  /// Creates a [RingBufferOutput] with optional capacity and scope filter.
   RingBufferOutput({
     this.maxEntries = 1000,
     this.scopeFilter,

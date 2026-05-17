@@ -29,6 +29,7 @@ class ConsoleOutput extends LogOutput {
   @override
   final String? scopeFilter;
 
+  /// Creates a [ConsoleOutput] with optional color and format settings.
   ConsoleOutput({
     this.colored = true,
     this.format = ConsoleFormat.pretty,

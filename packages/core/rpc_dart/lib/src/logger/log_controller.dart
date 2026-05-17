@@ -31,6 +31,7 @@ class LogController {
       StreamController<LogRecord>.broadcast();
   bool _disposed = false;
 
+  /// Creates a [LogController] with optional outputs, enrichers, and filters.
   LogController({
     this.minLevel = RpcLogLevel.debug,
     this.spansEnabled = true,
@@ -75,10 +76,12 @@ class LogController {
 
   // --- Output management ---
 
+  /// Add an output to the pipeline at runtime.
   void addOutput(LogOutput output) {
     _outputs.add(output);
   }
 
+  /// Remove an output from the pipeline at runtime.
   void removeOutput(LogOutput output) {
     _outputs.remove(output);
   }
@@ -148,6 +151,7 @@ class LogController {
 
   // --- Current configuration (for remote control) ---
 
+  /// Current configuration snapshot (for remote control / diagnostics).
   LogConfig get config => LogConfig(
         minLevel: minLevel,
         scopeLevels: Map.unmodifiable(_scopeLevels),
@@ -156,6 +160,7 @@ class LogController {
 
   // --- Lifecycle ---
 
+  /// Dispose all outputs and close the record stream.
   void dispose() {
     if (_disposed) return;
     _disposed = true;
@@ -276,16 +281,23 @@ class LogController {
 
 /// Snapshot of controller configuration (for remote control / diagnostics).
 class LogConfig {
+  /// Global minimum log level.
   final RpcLogLevel minLevel;
+
+  /// Per-scope level overrides.
   final Map<String, RpcLogLevel> scopeLevels;
+
+  /// Per-tag level overrides.
   final Map<String, RpcLogLevel> tagLevels;
 
+  /// Creates a [LogConfig] snapshot.
   const LogConfig({
     required this.minLevel,
     this.scopeLevels = const {},
     this.tagLevels = const {},
   });
 
+  /// Serializes this config to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
         'minLevel': minLevel.name,
         if (scopeLevels.isNotEmpty)
@@ -294,6 +306,7 @@ class LogConfig {
           'tagLevels': tagLevels.map((k, v) => MapEntry(k, v.name)),
       };
 
+  /// Deserializes a [LogConfig] from a JSON-compatible map.
   factory LogConfig.fromJson(Map<String, dynamic> json) => LogConfig(
         minLevel: RpcLogLevel.values.firstWhere(
           (e) => e.name == json['minLevel'],

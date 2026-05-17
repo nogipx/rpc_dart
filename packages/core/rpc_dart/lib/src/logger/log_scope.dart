@@ -36,6 +36,7 @@ class LogScope {
   /// Parent span ID (for records emitted within a span context).
   final String? _parentSpanId;
 
+  /// Creates a [LogScope] bound to [_controller] with the given [name].
   const LogScope(
     this._controller,
     this.name, {
@@ -51,8 +52,13 @@ class LogScope {
 
   // --- Level guards for hot-path optimization ---
 
+  /// Whether internal-level records pass the current filter.
   bool get isInternal => _controller.accepts(RpcLogLevel.internal, name);
+
+  /// Whether trace-level records pass the current filter.
   bool get isTrace => _controller.accepts(RpcLogLevel.trace, name);
+
+  /// Whether debug-level records pass the current filter.
   bool get isDebug => _controller.accepts(RpcLogLevel.debug, name);
 
   // --- Hierarchy ---
@@ -112,28 +118,35 @@ class LogScope {
 
   // --- Event methods ---
 
+  /// Log at [RpcLogLevel.internal] level.
   void internal(String message, {Map<String, Object>? data}) =>
       _log(RpcLogLevel.internal, message, data: data);
 
+  /// Log at [RpcLogLevel.trace] level.
   void trace(String message, {Map<String, Object>? data}) =>
       _log(RpcLogLevel.trace, message, data: data);
 
+  /// Log at [RpcLogLevel.debug] level.
   void debug(String message, {Map<String, Object>? data}) =>
       _log(RpcLogLevel.debug, message, data: data);
 
+  /// Log at [RpcLogLevel.info] level.
   void info(String message, {Map<String, Object>? data}) =>
       _log(RpcLogLevel.info, message, data: data);
 
+  /// Log at [RpcLogLevel.warning] level with optional error and stack trace.
   void warning(String message,
           {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) =>
       _log(RpcLogLevel.warning, message,
           error: error, stackTrace: stackTrace, data: data);
 
+  /// Log at [RpcLogLevel.error] level with optional error and stack trace.
   void error(String message,
           {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) =>
       _log(RpcLogLevel.error, message,
           error: error, stackTrace: stackTrace, data: data);
 
+  /// Log at [RpcLogLevel.fatal] level with optional error and stack trace.
   void fatal(String message,
           {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) =>
       _log(RpcLogLevel.fatal, message,

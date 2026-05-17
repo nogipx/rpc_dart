@@ -23,7 +23,11 @@ typedef RpcLogConnectionCheck = bool Function();
 class RpcLogOutput extends LogOutput {
   final RpcLogSendCallback _send;
   final RpcLogConnectionCheck? _isConnected;
+
+  /// Maximum number of records to buffer while disconnected.
   final int bufferSize;
+
+  /// Whether to flush buffered records when the connection is re-established.
   final bool flushOnReconnect;
   final Queue<Map<String, dynamic>> _buffer = Queue();
   bool _flushing = false;
@@ -31,6 +35,7 @@ class RpcLogOutput extends LogOutput {
   @override
   final String? scopeFilter;
 
+  /// Creates an [RpcLogOutput] with the given send callback and options.
   RpcLogOutput({
     required RpcLogSendCallback send,
     RpcLogConnectionCheck? isConnected,

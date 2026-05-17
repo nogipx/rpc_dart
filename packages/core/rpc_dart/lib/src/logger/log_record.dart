@@ -33,6 +33,7 @@ class LogSpanStart implements LogRecord {
   /// Operation name.
   final String name;
 
+  /// Creates a [LogSpanStart] record.
   LogSpanStart({
     required this.spanId,
     required this.scope,
@@ -76,6 +77,7 @@ class LogEvent implements LogRecord {
   /// Span ID if this event occurred inside a span.
   final String? spanId;
 
+  /// Creates a [LogEvent] record.
   LogEvent({
     required this.scope,
     required this.level,
@@ -90,6 +92,7 @@ class LogEvent implements LogRecord {
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 
+  /// Serializes this event to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
         'type': 'event',
         'scope': scope,
@@ -105,6 +108,7 @@ class LogEvent implements LogRecord {
         'timestamp': timestamp.millisecondsSinceEpoch,
       };
 
+  /// Deserializes a [LogEvent] from a JSON-compatible map.
   factory LogEvent.fromJson(Map<String, dynamic> json) => LogEvent(
         scope: json['scope'] as String? ?? '',
         level: RpcLogLevel.values.firstWhere(
@@ -125,7 +129,13 @@ class LogEvent implements LogRecord {
 }
 
 /// Status of a completed span.
-enum SpanStatus { ok, error }
+enum SpanStatus {
+  /// Span completed successfully.
+  ok,
+
+  /// Span completed with an error.
+  error,
+}
 
 /// A completed operation span with duration.
 class LogSpan implements LogRecord {
@@ -171,6 +181,7 @@ class LogSpan implements LogRecord {
   /// Events that occurred inside this span.
   final List<LogEvent> events;
 
+  /// Creates a [LogSpan] record.
   LogSpan({
     required this.spanId,
     required this.scope,
@@ -186,6 +197,7 @@ class LogSpan implements LogRecord {
     this.events = const [],
   }) : timestamp = endTime;
 
+  /// Serializes this span to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
         'type': 'span',
         'spanId': spanId,
@@ -203,6 +215,7 @@ class LogSpan implements LogRecord {
         if (events.isNotEmpty) 'events': events.map((e) => e.toJson()).toList(),
       };
 
+  /// Deserializes a [LogSpan] from a JSON-compatible map.
   factory LogSpan.fromJson(Map<String, dynamic> json) => LogSpan(
         spanId: json['spanId'] as String? ?? '',
         parentSpanId: json['parentSpanId'] as String?,

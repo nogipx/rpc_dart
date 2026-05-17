@@ -23,6 +23,7 @@ class RpcLogServiceResponder {
   final LogController _source;
   final RingBufferOutput? _ringBuffer;
 
+  /// Creates an [RpcLogServiceResponder] wrapping [source] with optional history via [ringBuffer].
   RpcLogServiceResponder({
     required LogController source,
     RingBufferOutput? ringBuffer,

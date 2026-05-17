@@ -44,6 +44,7 @@ class LogSpanHandle {
   Map<String, Object>? _data;
   bool _ended = false;
 
+  /// Creates a [LogSpanHandle] and immediately emits a [LogSpanStart].
   LogSpanHandle({
     required this.name,
     required this.scope,
