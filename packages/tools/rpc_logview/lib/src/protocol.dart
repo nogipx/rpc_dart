@@ -4,9 +4,6 @@
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-/// Protocol version. Checked during handshake.
-const logviewProtocolVersion = 1;
-
 /// Device information sent by the client during handshake.
 class DeviceInfo {
   /// Human-readable device name (e.g. "iPhone 15 Pro", "Pixel 8").
@@ -28,20 +25,6 @@ class DeviceInfo {
     this.appVersion,
   });
 
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'app': app,
-        if (os != null) 'os': os,
-        if (appVersion != null) 'appVersion': appVersion,
-      };
-
-  factory DeviceInfo.fromJson(Map<String, dynamic> json) => DeviceInfo(
-        name: json['name'] as String? ?? 'unknown',
-        app: json['app'] as String? ?? 'unknown',
-        os: json['os'] as String?,
-        appVersion: json['appVersion'] as String?,
-      );
-
   @override
   String toString() {
     final parts = [name, app];
@@ -60,23 +43,9 @@ class TaggedRecord {
 }
 
 /// Deserialize a LogRecord from a JSON map received over the wire.
-/// Returns null if the map is not a recognized record type.
 LogRecord? deserializeRecord(Map<String, dynamic> json) {
   final type = json['type'] as String?;
-  if (type == 'span') {
-    return LogSpan.fromJson(json);
-  } else if (type == 'event') {
-    return LogEvent.fromJson(json);
-  }
+  if (type == 'span') return LogSpan.fromJson(json);
+  if (type == 'event') return LogEvent.fromJson(json);
   return null;
-}
-
-/// Serialize a LogRecord to a JSON map for sending over the wire.
-/// Returns null for LogSpanStart (transient, not sent remotely).
-Map<String, dynamic>? serializeRecord(LogRecord record) {
-  return switch (record) {
-    LogSpanStart() => null,
-    LogEvent event => event.toJson(),
-    LogSpan span => span.toJson(),
-  };
 }

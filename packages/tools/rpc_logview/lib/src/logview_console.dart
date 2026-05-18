@@ -33,25 +33,24 @@ class LogviewConsole {
     final now = _formatTime(DateTime.now());
     switch (event) {
       case DeviceConnected e:
-        final info = e.session.device;
+        final s = e.session;
         if (colored) {
           stdout.writeln(
             '$_dim$now$_reset $_green+$_reset '
-            '$_bold${info.name}$_reset '
-            '$_dim(${info.app}${info.appVersion != null ? ' v${info.appVersion}' : ''}'
-            '${info.os != null ? ', ${info.os}' : ''})$_reset',
+            '$_bold${s.deviceName}$_reset '
+            '$_dim(${s.app})$_reset',
           );
         } else {
-          stdout.writeln('$now + ${info.name} (${info.app})');
+          stdout.writeln('$now + ${s.deviceName} (${s.app})');
         }
       case DeviceDisconnected e:
         if (colored) {
           stdout.writeln(
             '$_dim$now$_reset $_red-$_reset '
-            '$_dim${e.session.device.name} disconnected$_reset',
+            '$_dim${e.session.deviceName} disconnected$_reset',
           );
         } else {
-          stdout.writeln('$now - ${e.session.device.name} disconnected');
+          stdout.writeln('$now - ${e.session.deviceName} disconnected');
         }
     }
   }

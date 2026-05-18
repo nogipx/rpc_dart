@@ -7,10 +7,13 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_logview/rpc_logview.dart';
 import 'package:rpc_logview/rpc_logview_server.dart';
+import 'package:rpc_logview/src/contract/logview_caller.dart';
+import 'package:rpc_logview/src/contract/logview_responder.dart';
+import 'package:rpc_logview/src/contract/messages.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('LogviewOutput + LogviewServer', () {
+  group('LogviewOutput + LogviewServer (contract-based)', () {
     late LogviewServer server;
 
     setUp(() async {
@@ -39,8 +42,8 @@ void main() {
       );
 
       final event = await connected.future.timeout(Duration(seconds: 5));
-      expect(event.session.device.name, 'TestDevice');
-      expect(event.session.device.app, 'TestApp');
+      expect(event.session.deviceName, 'TestDevice');
+      expect(event.session.app, 'TestApp');
       expect(server.sessions, hasLength(1));
 
       controller.dispose();
@@ -51,12 +54,11 @@ void main() {
       final received = Completer<void>();
       server.onRecord.listen((r) {
         records.add(r);
-        if (records.length >= 3) {
-          if (!received.isCompleted) received.complete();
+        if (records.length >= 3 && !received.isCompleted) {
+          received.complete();
         }
       });
 
-      // Wait for connection first
       final connected = Completer<void>();
       server.onConnection.listen((e) {
         if (e is DeviceConnected && !connected.isCompleted) {
@@ -94,7 +96,6 @@ void main() {
     });
 
     test('output buffers records when server is unavailable', () async {
-      // Create output pointing to a port with no server
       final output = LogviewOutput(
         uri: Uri.parse('ws://127.0.0.1:1'),
         device: DeviceInfo(name: 'Phone', app: 'App'),
@@ -106,7 +107,6 @@ void main() {
         outputs: [output],
       );
 
-      // Write records -- they should be buffered, not lost
       final log = controller.scope('test');
       for (var i = 0; i < 10; i++) {
         log.info('message $i');
@@ -144,6 +144,52 @@ void main() {
 
       await disconnected.future.timeout(Duration(seconds: 5));
       expect(server.sessions, isEmpty);
+    });
+  });
+
+  group('Contract unit test (in-memory)', () {
+    test('handshake and send via in-memory transport', () async {
+      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+
+      final responder = RpcResponderEndpoint(transport: serverTransport);
+      final caller = RpcCallerEndpoint(transport: clientTransport);
+
+      // Track received records on server side
+      final received = <LogviewRecord>[];
+      LogviewHandshake? handshakeInfo;
+
+      final contract = LogviewServiceResponder(
+        onHandshake: (info) => handshakeInfo = info,
+        onRecord: (record) => received.add(record),
+      );
+      responder.registerServiceContract(contract);
+
+      responder.start();
+      caller.start();
+
+      // Use caller contract
+      final callerContract = LogviewServiceCaller(caller);
+      final welcome = await callerContract.handshake(
+        LogviewHandshake(deviceName: 'TestPhone', app: 'TestApp'),
+      );
+
+      expect(welcome.sessionId, isPositive);
+      expect(handshakeInfo?.deviceName, 'TestPhone');
+      expect(handshakeInfo?.app, 'TestApp');
+
+      await callerContract.send(LogviewRecord({
+        'type': 'event',
+        'scope': 'test',
+        'level': 'info',
+        'message': 'hello',
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      }));
+
+      expect(received, hasLength(1));
+      expect(received[0].payload['message'], 'hello');
+
+      await clientTransport.close();
+      await serverTransport.close();
     });
   });
 }

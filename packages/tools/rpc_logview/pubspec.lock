@@ -216,6 +216,13 @@ packages:
       relative: true
     source: path
     version: "3.2.0"
+  rpc_dart_websocket:
+    dependency: "direct main"
+    description:
+      path: "../../transport/rpc_dart_websocket"
+      relative: true
+    source: path
+    version: "0.2.1"
   shelf:
     dependency: transitive
     description:
@@ -281,7 +288,7 @@ packages:
     source: hosted
     version: "1.12.1"
   stream_channel:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: stream_channel
       sha256: "969e04c80b8bcdf826f8f16579c7b14d780458bd97f56d107d3950fdbeef059d"

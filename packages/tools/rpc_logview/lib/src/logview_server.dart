@@ -3,11 +3,15 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
+import 'package:stream_channel/stream_channel.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'contract/logview_responder.dart';
+import 'contract/messages.dart';
 import 'protocol.dart';
 
 /// A connected client session.
@@ -15,18 +19,22 @@ class LogviewSession {
   /// Unique session identifier.
   final int id;
 
-  /// Device info received from the handshake.
-  final DeviceInfo device;
+  /// Device name received from the handshake.
+  final String deviceName;
 
-  /// Short label used in log output (e.g. "iPhone 15").
-  String get label => device.name;
+  /// Application name.
+  final String app;
+
+  /// Short label used in log output.
+  String get label => deviceName;
 
   /// When the client connected.
   final DateTime connectedAt;
 
   LogviewSession({
     required this.id,
-    required this.device,
+    required this.deviceName,
+    required this.app,
     DateTime? connectedAt,
   }) : connectedAt = connectedAt ?? DateTime.now();
 }
@@ -44,20 +52,22 @@ class DeviceDisconnected extends LogviewConnectionEvent {
   DeviceDisconnected(this.session);
 }
 
-/// Core logview server. Accepts WebSocket connections, receives log records,
-/// and feeds them into a [LogController].
+/// Core logview server. Accepts WebSocket connections, receives log records
+/// via rpc_dart contracts, and feeds them into a [LogController].
 ///
-/// This class handles the networking and protocol. Presentation (terminal,
-/// Flutter UI) is handled separately by consuming [onRecord] and
-/// [onConnection] streams.
+/// Presentation (terminal, Flutter UI) is handled separately by consuming
+/// [onRecord] and [onConnection] streams.
 class LogviewServer {
   final String host;
   final int port;
   final LogController controller;
 
   HttpServer? _httpServer;
+  RpcWebSocketServer? _rpcServer;
+  StreamController<WebSocketChannel>? _wsController;
   int _nextSessionId = 1;
   final Map<int, LogviewSession> _sessions = {};
+  final Map<RpcResponderEndpoint, LogviewSession> _endpointSessions = {};
 
   final StreamController<TaggedRecord> _recordController =
       StreamController<TaggedRecord>.broadcast();
@@ -78,103 +88,154 @@ class LogviewServer {
     this.host = '0.0.0.0',
     this.port = 9500,
     LogController? controller,
-  }) : controller = controller ?? LogController(minLevel: RpcLogLevel.internal);
+  }) : controller =
+            controller ?? LogController(minLevel: RpcLogLevel.internal);
 
   /// Start listening for WebSocket connections.
   Future<void> start() async {
     _httpServer = await HttpServer.bind(host, port);
-    _httpServer!.listen(_handleRequest);
-  }
+    _wsController = StreamController<WebSocketChannel>();
 
-  /// The actual address the server is listening on.
-  InternetAddress? get address => _httpServer?.address;
+    _httpServer!.listen((request) {
+      if (WebSocketTransformer.isUpgradeRequest(request)) {
+        WebSocketTransformer.upgrade(request).then(
+          (socket) {
+            final channel = _WebSocketAdapter(socket);
+            _wsController!.add(channel);
+          },
+          onError: (_) {},
+        );
+      } else {
+        request.response
+          ..statusCode = HttpStatus.badRequest
+          ..write('WebSocket upgrade required')
+          ..close();
+      }
+    });
+
+    _rpcServer = RpcWebSocketServer(
+      connections: _wsController!.stream,
+      onEndpointCreated: _onEndpointCreated,
+    );
+    await _rpcServer!.start();
+  }
 
   /// The actual port the server is listening on.
   int? get boundPort => _httpServer?.port;
 
   /// Stop the server and close all connections.
   Future<void> stop() async {
+    await _rpcServer?.stop();
+    await _wsController?.close();
     await _httpServer?.close(force: true);
     _httpServer = null;
+    _rpcServer = null;
     _sessions.clear();
+    _endpointSessions.clear();
     await _recordController.close();
     await _connectionController.close();
     controller.dispose();
   }
 
-  void _handleRequest(HttpRequest request) {
-    if (!WebSocketTransformer.isUpgradeRequest(request)) {
-      request.response
-        ..statusCode = HttpStatus.badRequest
-        ..write('WebSocket upgrade required')
-        ..close();
-      return;
+  void _onEndpointCreated(RpcResponderEndpoint endpoint) {
+    final responder = LogviewServiceResponder(
+      onHandshake: (info) => _handleHandshake(endpoint, info),
+      onRecord: (record) => _handleRecord(endpoint, record),
+    );
+    endpoint.registerServiceContract(responder);
+    endpoint.start();
+
+    // Detect disconnect via transport close
+    endpoint.transport.incomingMessages.listen(null, onDone: () {
+      _handleDisconnect(endpoint);
+    });
+  }
+
+  void _handleHandshake(RpcResponderEndpoint endpoint, LogviewHandshake info) {
+    final id = _nextSessionId++;
+    final session = LogviewSession(
+      id: id,
+      deviceName: info.deviceName,
+      app: info.app,
+    );
+    _sessions[id] = session;
+    _endpointSessions[endpoint] = session;
+    _connectionController.add(DeviceConnected(session));
+  }
+
+  void _handleRecord(RpcResponderEndpoint endpoint, LogviewRecord record) {
+    final session = _endpointSessions[endpoint];
+    final label = session?.label ?? 'unknown';
+
+    final logRecord = deserializeRecord(record.payload);
+    if (logRecord == null) return;
+
+    controller.add(logRecord);
+    _recordController.add(TaggedRecord(
+      deviceLabel: label,
+      record: logRecord,
+    ));
+  }
+
+  void _handleDisconnect(RpcResponderEndpoint endpoint) {
+    final session = _endpointSessions.remove(endpoint);
+    if (session != null) {
+      _sessions.remove(session.id);
+      if (!_connectionController.isClosed) {
+        _connectionController.add(DeviceDisconnected(session));
+      }
     }
-
-    WebSocketTransformer.upgrade(request).then(
-      (socket) => _handleSocket(socket, request),
-      onError: (_) {},
-    );
   }
+}
 
-  void _handleSocket(WebSocket socket, HttpRequest request) {
-    final clientAddress =
-        request.connectionInfo?.remoteAddress.address ?? 'unknown';
-    LogviewSession? session;
+/// Adapter to wrap a dart:io [WebSocket] as a [WebSocketChannel].
+///
+/// This is needed because [RpcWebSocketServer] expects
+/// `Stream<WebSocketChannel>` but [WebSocketTransformer.upgrade]
+/// returns a raw [WebSocket].
+class _WebSocketAdapter with StreamChannelMixin implements WebSocketChannel {
+  final WebSocket _socket;
 
-    socket.listen(
-      (data) {
-        if (data is! String) return;
-        final Map<String, dynamic> json;
-        try {
-          json = jsonDecode(data) as Map<String, dynamic>;
-        } catch (_) {
-          return;
-        }
+  _WebSocketAdapter(this._socket);
 
-        final type = json['type'] as String?;
+  @override
+  Stream get stream => _socket;
 
-        if (type == 'handshake') {
-          final device = DeviceInfo.fromJson(
-            json['device'] as Map<String, dynamic>? ?? {},
-          );
-          final id = _nextSessionId++;
-          session = LogviewSession(id: id, device: device);
-          _sessions[id] = session!;
-          _connectionController.add(DeviceConnected(session!));
+  @override
+  WebSocketSink get sink => _WebSocketSinkAdapter(_socket);
 
-          // Send welcome
-          socket.add(jsonEncode({
-            'type': 'welcome',
-            'sessionId': id,
-          }));
-          return;
-        }
+  @override
+  int? get closeCode => _socket.closeCode;
 
-        // Regular log record
-        final record = deserializeRecord(json);
-        if (record == null) return;
+  @override
+  String? get closeReason => _socket.closeReason;
 
-        final label = session?.label ?? clientAddress;
+  @override
+  String? get protocol => _socket.protocol;
 
-        controller.add(record);
-        _recordController.add(TaggedRecord(
-          deviceLabel: label,
-          record: record,
-        ));
-      },
-      onDone: () {
-        if (session != null) {
-          _sessions.remove(session!.id);
-          _connectionController.add(DeviceDisconnected(session!));
-        }
-      },
-      onError: (_) {
-        if (session != null) {
-          _sessions.remove(session!.id);
-          _connectionController.add(DeviceDisconnected(session!));
-        }
-      },
-    );
-  }
+  @override
+  Future<void> get ready => Future.value();
+}
+
+class _WebSocketSinkAdapter implements WebSocketSink {
+  final WebSocket _socket;
+
+  _WebSocketSinkAdapter(this._socket);
+
+  @override
+  void add(dynamic data) => _socket.add(data);
+
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) =>
+      _socket.addError(error, stackTrace);
+
+  @override
+  Future addStream(Stream stream) => _socket.addStream(stream);
+
+  @override
+  Future close([int? closeCode, String? closeReason]) =>
+      _socket.close(closeCode, closeReason);
+
+  @override
+  Future get done => _socket.done;
 }
