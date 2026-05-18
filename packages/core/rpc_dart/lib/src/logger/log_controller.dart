@@ -20,11 +20,15 @@ class LogController {
   /// Global minimum log level. Records below this are discarded.
   RpcLogLevel minLevel;
 
+  /// Clock function used for timestamps. Defaults to [DateTime.now].
+  /// Override in tests for deterministic timestamps.
+  final DateTime Function() clock;
+
   final Map<String, RpcLogLevel> _scopeLevels = {};
   final Map<String, RpcLogLevel> _tagLevels = {};
   final List<LogOutput> _outputs;
   final List<LogEnricher> _enrichers;
-  final LogRedactor? _redactor;
+  LogRedactor? _redactor;
   final SamplingState? _sampling;
 
   final StreamController<LogRecord> _streamController =
@@ -32,14 +36,18 @@ class LogController {
   bool _disposed = false;
 
   /// Creates a [LogController] with optional outputs, enrichers, and filters.
+  ///
+  /// Pass [clock] to override timestamp generation (useful for tests).
   LogController({
     this.minLevel = RpcLogLevel.debug,
     this.spansEnabled = true,
+    DateTime Function()? clock,
     List<LogOutput> outputs = const [],
     List<LogEnricher> enrichers = const [],
     SamplingConfig? sampling,
     List<String> redactFields = const [],
-  })  : _outputs = List.of(outputs),
+  })  : clock = clock ?? DateTime.now,
+        _outputs = List.of(outputs),
         _enrichers = List.of(enrichers),
         _redactor =
             redactFields.isNotEmpty ? LogRedactor(fields: redactFields) : null,
@@ -86,6 +94,25 @@ class LogController {
     _outputs.remove(output);
   }
 
+  // --- Enricher management ---
+
+  /// Add an enricher to the pipeline at runtime.
+  void addEnricher(LogEnricher enricher) {
+    _enrichers.add(enricher);
+  }
+
+  /// Remove an enricher from the pipeline at runtime.
+  void removeEnricher(LogEnricher enricher) {
+    _enrichers.remove(enricher);
+  }
+
+  // --- Redactor management ---
+
+  /// Replace the redactor at runtime. Pass null to disable redaction.
+  void setRedactor(LogRedactor? redactor) {
+    _redactor = redactor;
+  }
+
   // --- Entry point ---
 
   /// Whether spans are emitted. Defaults to true.
@@ -128,7 +155,11 @@ class LogController {
     for (final output in _outputs) {
       final filter = output.scopeFilter;
       if (filter != null && !enrichedRecord.scope.startsWith(filter)) continue;
-      output.write(enrichedRecord);
+      if (output.isAsync) {
+        unawaited(output.writeAsync(enrichedRecord));
+      } else {
+        output.write(enrichedRecord);
+      }
     }
 
     // Step 6: Stream
@@ -144,7 +175,7 @@ class LogController {
 
   /// Create a scoped logger bound to this controller.
   LogScope scope(String name, {String? tag}) {
-    return LogScope(this, name, tag: tag);
+    return LogScope(this, name, tag: tag, clock: clock);
   }
 
   // --- Current configuration (for remote control) ---

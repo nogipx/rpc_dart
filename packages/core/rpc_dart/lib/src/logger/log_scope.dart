@@ -14,7 +14,7 @@ import 'log_span_handle.dart';
 /// and routing.
 class LogScope {
   /// No-op logger. All methods are empty, zero cost.
-  static const LogScope noop = _NoopLogScope();
+  static final LogScope noop = _NoopLogScope();
 
   final LogController _controller;
 
@@ -36,8 +36,11 @@ class LogScope {
   /// Parent span ID (for records emitted within a span context).
   final String? _parentSpanId;
 
+  /// Clock function for timestamps. Inherited from [LogController].
+  final DateTime Function() _clock;
+
   /// Creates a [LogScope] bound to [_controller] with the given [name].
-  const LogScope(
+  LogScope(
     this._controller,
     this.name, {
     this.tag,
@@ -45,10 +48,12 @@ class LogScope {
     String? traceId,
     String? requestId,
     String? parentSpanId,
+    DateTime Function()? clock,
   })  : _boundData = boundData,
         _traceId = traceId,
         _requestId = requestId,
-        _parentSpanId = parentSpanId;
+        _parentSpanId = parentSpanId,
+        _clock = clock ?? DateTime.now;
 
   // --- Level guards for hot-path optimization ---
 
@@ -73,6 +78,7 @@ class LogScope {
       traceId: _traceId,
       requestId: _requestId,
       parentSpanId: _parentSpanId,
+      clock: _clock,
     );
   }
 
@@ -86,6 +92,7 @@ class LogScope {
       traceId: _traceId,
       requestId: _requestId,
       parentSpanId: _parentSpanId,
+      clock: _clock,
     );
   }
 
@@ -100,6 +107,7 @@ class LogScope {
       traceId: _traceId,
       requestId: _requestId,
       parentSpanId: _parentSpanId,
+      clock: _clock,
     );
   }
 
@@ -113,6 +121,7 @@ class LogScope {
       traceId: traceId ?? _traceId,
       requestId: requestId ?? _requestId,
       parentSpanId: _parentSpanId,
+      clock: _clock,
     );
   }
 
@@ -166,6 +175,7 @@ class LogScope {
       onComplete: (span) => _controller.add(span),
       onEvent: (event) => _controller.add(event),
       onStart: (start) => _controller.add(start),
+      clock: _clock,
     );
   }
 
@@ -228,13 +238,14 @@ class LogScope {
       requestId: _requestId,
       spanId: _parentSpanId,
       data: mergedData,
+      timestamp: _clock(),
     ));
   }
 }
 
 /// No-op implementation. All methods are empty.
 class _NoopLogScope implements LogScope {
-  const _NoopLogScope();
+  _NoopLogScope();
 
   @override
   LogController get _controller => throw UnsupportedError('noop');
@@ -250,6 +261,8 @@ class _NoopLogScope implements LogScope {
   String? get _requestId => null;
   @override
   String? get _parentSpanId => null;
+  @override
+  DateTime Function() get _clock => DateTime.now;
 
   @override
   bool get isInternal => false;

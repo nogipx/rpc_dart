@@ -40,6 +40,7 @@ class LogSpanHandle {
   final SpanCompleteCallback _onComplete;
   final SpanEventCallback _onEvent;
   final SpanStartCallback _onStart;
+  final DateTime Function() _clock;
   final List<LogEvent> _events = [];
   Map<String, Object>? _data;
   bool _ended = false;
@@ -54,13 +55,20 @@ class LogSpanHandle {
     this.parentSpanId,
     this.traceId,
     Map<String, Object>? data,
+    DateTime Function()? clock,
   })  : spanId = _generateSpanId(),
-        _startTime = DateTime.now(),
+        _clock = clock ?? DateTime.now,
+        _startTime = (clock ?? DateTime.now)(),
         _onComplete = onComplete,
         _onEvent = onEvent,
         _onStart = onStart,
         _data = data {
-    onStart(LogSpanStart(spanId: spanId, scope: scope, name: name));
+    onStart(LogSpanStart(
+      spanId: spanId,
+      scope: scope,
+      name: name,
+      timestamp: _startTime,
+    ));
   }
 
   /// Whether this span has been ended.
@@ -80,6 +88,7 @@ class LogSpanHandle {
       spanId: spanId,
       traceId: traceId,
       data: data,
+      timestamp: _clock(),
     );
     _events.add(logEvent);
     _onEvent(logEvent);
@@ -96,6 +105,7 @@ class LogSpanHandle {
       onComplete: _onComplete,
       onEvent: _onEvent,
       onStart: _onStart,
+      clock: _clock,
     );
   }
 
@@ -120,7 +130,7 @@ class LogSpanHandle {
       scope: scope,
       name: name,
       startTime: _startTime,
-      endTime: DateTime.now(),
+      endTime: _clock(),
       status: status,
       error: error,
       stackTrace: stackTrace,
