@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: MIT
 
-/// Client-side library for rpc_logview.
+/// Client-side library for rpc_dart_log.
 ///
 /// Import this in your Flutter/Dart app to stream logs to a logview collector:
 ///
 /// ```dart
-/// import 'package:rpc_logview/rpc_logview.dart';
+/// import 'package:rpc_dart_log/rpc_dart_log.dart';
 ///
 /// final controller = LogController(
 ///   outputs: [

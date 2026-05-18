@@ -9,8 +9,7 @@ import '../log_record.dart';
 
 /// In-memory circular buffer that keeps the last N log records.
 ///
-/// Useful for: history queries, crash reports, in-app log viewer,
-/// [RpcLogServiceResponder.getHistory].
+/// Useful for: history queries, crash reports, in-app log viewer.
 class RingBufferOutput extends LogOutput {
   /// Maximum number of records to keep in the buffer.
   final int maxEntries;

@@ -14,7 +14,3 @@ export 'sampling.dart';
 export 'redaction.dart';
 export 'outputs/console_output.dart';
 export 'outputs/ring_buffer_output.dart';
-export 'outputs/rpc_log_output.dart';
-export 'rpc/rpc_log_responder.dart';
-export 'rpc/rpc_log_service_responder.dart';
-export 'rpc/rpc_log_service_caller.dart';

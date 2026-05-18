@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-/// Server-side library for rpc_logview.
+/// Server-side library for rpc_dart_log.
 ///
 /// Use [LogviewServer] to receive logs from remote clients.
 /// Use [LogviewConsole] for terminal rendering with device labels.

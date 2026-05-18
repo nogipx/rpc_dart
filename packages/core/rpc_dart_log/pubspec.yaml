@@ -1,5 +1,5 @@
-name: rpc_logview
-description: Real-time remote log viewer for rpc_dart. Collect logs from mobile/server apps over WebSocket.
+name: rpc_dart_log
+description: Real-time remote log collector for rpc_dart. Collect logs from mobile/server apps over WebSocket.
 version: 0.1.0
 publish_to: none
 
@@ -8,7 +8,7 @@ environment:
 
 dependencies:
   rpc_dart:
-    path: ../../core/rpc_dart
+    path: ../rpc_dart
   rpc_dart_websocket:
     path: ../../transport/rpc_dart_websocket
   args: ^2.6.0
@@ -17,7 +17,7 @@ dependencies:
 
 dependency_overrides:
   rpc_dart:
-    path: ../../core/rpc_dart
+    path: ../rpc_dart
 
 dev_dependencies:
   lints: ^6.0.0

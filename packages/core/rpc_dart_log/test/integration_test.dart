@@ -5,11 +5,11 @@
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_logview/rpc_logview.dart';
-import 'package:rpc_logview/rpc_logview_server.dart';
-import 'package:rpc_logview/src/contract/logview_caller.dart';
-import 'package:rpc_logview/src/contract/logview_responder.dart';
-import 'package:rpc_logview/src/contract/messages.dart';
+import 'package:rpc_dart_log/rpc_dart_log.dart';
+import 'package:rpc_dart_log/rpc_dart_log_server.dart';
+import 'package:rpc_dart_log/src/contract/logview_caller.dart';
+import 'package:rpc_dart_log/src/contract/logview_responder.dart';
+import 'package:rpc_dart_log/src/contract/messages.dart';
 import 'package:test/test.dart';
 
 void main() {

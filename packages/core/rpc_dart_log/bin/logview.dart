@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:rpc_logview/rpc_logview_server.dart';
+import 'package:rpc_dart_log/rpc_dart_log_server.dart';
 
 void main(List<String> args) async {
   final parser = ArgParser()
@@ -27,8 +27,8 @@ void main(List<String> args) async {
   }
 
   if (parsed.flag('help')) {
-    stdout.writeln('rpc_logview -- real-time log collector for rpc_dart\n');
-    stdout.writeln('Usage: dart run rpc_logview [options]\n');
+    stdout.writeln('rpc_dart_log -- real-time log collector for rpc_dart\n');
+    stdout.writeln('Usage: dart run rpc_dart_log [options]\n');
     stdout.writeln(parser.usage);
     exit(0);
   }
@@ -79,10 +79,10 @@ void _printBanner(LogviewServer server, bool colored) {
   stdout.writeln('');
   if (colored) {
     stdout.writeln(
-      '\x1B[1mrpc_logview\x1B[0m listening on port \x1B[36m$port\x1B[0m',
+      '\x1B[1mrpc_dart_log\x1B[0m listening on port \x1B[36m$port\x1B[0m',
     );
   } else {
-    stdout.writeln('rpc_logview listening on port $port');
+    stdout.writeln('rpc_dart_log listening on port $port');
   }
 
   // Show LAN addresses
