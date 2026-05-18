@@ -1,3 +1,7 @@
+## 0.3.2
+
+- Fixed `RpcAppConfig.logController` not being wired to endpoints -- `context.log` now works in responder handlers when `logController` is set in config.
+
 ## 0.3.1
 
 - Updated to `rpc_dart: ^3.1.0`.

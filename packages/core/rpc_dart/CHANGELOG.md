@@ -1,3 +1,14 @@
+## 3.2.1
+
+**Fixes:**
+- Fixed `LogController.add()` redundant enricher condition that was always true
+- Fixed `LogRedactor` not redacting error messages and log message text -- now matches `field=value` / `field:value` patterns in strings
+- Fixed `ConsoleOutput` JSON key escaping -- keys containing `"`, `\`, newlines are now properly escaped
+- Fixed `RingBufferOutput` using fake `LogEvent` placeholder -- replaced with nullable list
+- Fixed `RpcLogOutput.flush()` silently swallowing send errors -- added `droppedCount` counter
+- Removed dead `noSuchMethod` override from noop span handle
+- Added `RpcResponderEndpoint.setLogController()` for post-construction logger injection
+
 ## 3.2.0
 
 **Built-in logging system:**

@@ -31,6 +31,7 @@ class RpcLogOutput extends LogOutput {
   final bool flushOnReconnect;
   final Queue<Map<String, dynamic>> _buffer = Queue();
   bool _flushing = false;
+  int _droppedCount = 0;
 
   @override
   final String? scopeFilter;
@@ -64,7 +65,9 @@ class RpcLogOutput extends LogOutput {
     }
 
     // Send immediately (fire-and-forget)
-    unawaited(_send(json).catchError((_) {}));
+    unawaited(_send(json).catchError((_) {
+      _droppedCount++;
+    }));
   }
 
   /// Flush buffered records. Call when connection is re-established.
@@ -74,7 +77,11 @@ class RpcLogOutput extends LogOutput {
     try {
       while (_buffer.isNotEmpty) {
         final json = _buffer.removeFirst();
-        await _send(json).catchError((_) {});
+        try {
+          await _send(json);
+        } catch (_) {
+          _droppedCount++;
+        }
       }
     } finally {
       _flushing = false;
@@ -83,6 +90,9 @@ class RpcLogOutput extends LogOutput {
 
   /// Number of currently buffered records.
   int get bufferedCount => _buffer.length;
+
+  /// Number of records that failed to send since creation.
+  int get droppedCount => _droppedCount;
 
   @override
   void dispose() {

@@ -34,4 +34,25 @@ class LogRedactor {
     }
     return result;
   }
+
+  /// Redacts sensitive patterns in a free-text string.
+  ///
+  /// Matches `field=value` and `field: value` patterns where [field] is one
+  /// of the configured sensitive field names (case-insensitive).
+  String redactString(String input) {
+    if (_pattern == null) return input;
+    return input.replaceAllMapped(_pattern!, (m) => '${m[1]}$replacement');
+  }
+
+  late final RegExp? _pattern = _buildPattern();
+
+  RegExp? _buildPattern() {
+    if (_fields.isEmpty) return null;
+    final escaped = _fields.map(RegExp.escape).join('|');
+    // Matches: field=value or field: value (up to whitespace, comma, or end)
+    return RegExp(
+      '($escaped[=:]\\s?)[^\\s,;]+',
+      caseSensitive: false,
+    );
+  }
 }

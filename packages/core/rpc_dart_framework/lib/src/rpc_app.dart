@@ -277,6 +277,9 @@ class RpcApp {
   }
 
   void _setupEndpoint(RpcResponderEndpoint endpoint) {
+    if (_config.logController != null) {
+      endpoint.setLogController(_config.logController!);
+    }
     for (final i in _autoInterceptors) {
       endpoint.addInterceptor(i);
     }

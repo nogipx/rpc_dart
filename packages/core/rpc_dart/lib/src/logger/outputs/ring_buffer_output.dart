@@ -14,7 +14,7 @@ import '../log_record.dart';
 class RingBufferOutput extends LogOutput {
   /// Maximum number of records to keep in the buffer.
   final int maxEntries;
-  final List<LogRecord> _buffer;
+  final List<LogRecord?> _buffer;
   int _head = 0;
   int _count = 0;
 
@@ -25,7 +25,7 @@ class RingBufferOutput extends LogOutput {
   RingBufferOutput({
     this.maxEntries = 1000,
     this.scopeFilter,
-  }) : _buffer = List<LogRecord>.filled(maxEntries, _placeholder);
+  }) : _buffer = List<LogRecord?>.filled(maxEntries, null);
 
   @override
   void write(LogRecord record) {
@@ -37,12 +37,14 @@ class RingBufferOutput extends LogOutput {
   /// All buffered entries in chronological order.
   List<LogRecord> get entries {
     if (_count < maxEntries) {
-      return List.unmodifiable(_buffer.sublist(0, _count));
+      return List<LogRecord>.unmodifiable(
+        _buffer.sublist(0, _count).cast<LogRecord>(),
+      );
     }
-    // Buffer is full — entries wrap around
-    return List.unmodifiable([
-      ..._buffer.sublist(_head),
-      ..._buffer.sublist(0, _head),
+    // Buffer is full -- entries wrap around
+    return List<LogRecord>.unmodifiable([
+      ..._buffer.sublist(_head).cast<LogRecord>(),
+      ..._buffer.sublist(0, _head).cast<LogRecord>(),
     ]);
   }
 
@@ -78,17 +80,11 @@ class RingBufferOutput extends LogOutput {
 
   /// Clear all buffered entries.
   void clear() {
-    _buffer.fillRange(0, maxEntries, _placeholder);
+    _buffer.fillRange(0, maxEntries, null);
     _head = 0;
     _count = 0;
   }
 
   /// Current number of entries in the buffer.
   int get length => _count;
-
-  static final _placeholder = LogEvent(
-    scope: '',
-    level: RpcLogLevel.debug,
-    message: '',
-  );
 }

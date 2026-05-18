@@ -9,7 +9,7 @@ part of '_index.dart';
 final class RpcResponderEndpoint extends RpcEndpointBase
     with RpcResponderPipelineMixin {
   @override
-  final LogScope _log;
+  LogScope _log;
 
   /// Creates an [RpcResponderEndpoint] bound to the given transport.
   RpcResponderEndpoint({
@@ -19,6 +19,14 @@ final class RpcResponderEndpoint extends RpcEndpointBase
   }) : _log = logger?.scope('rpc.responder') ?? LogScope.noop {
     initResponderPipeline();
     _validateServerTransport();
+  }
+
+  /// Inject a [LogController] after construction.
+  ///
+  /// Used by the framework to wire [RpcAppConfig.logController] into
+  /// endpoints that were created by transport servers without one.
+  void setLogController(LogController controller) {
+    _log = controller.scope('rpc.responder');
   }
 
   /// All method registrations exported from all contracts.

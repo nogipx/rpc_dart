@@ -330,8 +330,4 @@ class _NoopSpanHandle implements LogSpanHandle {
       {SpanStatus status = SpanStatus.ok,
       Object? error,
       StackTrace? stackTrace}) {}
-
-  // Private fields from LogSpanHandle — not applicable to noop
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
 }

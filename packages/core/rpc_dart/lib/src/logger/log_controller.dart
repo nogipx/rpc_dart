@@ -115,14 +115,12 @@ class LogController {
 
     // Step 3: Enrich
     var enrichedRecord = record;
-    if (_enrichers.isNotEmpty && record.data != null || _enrichers.isNotEmpty) {
+    if (_enrichers.isNotEmpty) {
       enrichedRecord = _enrich(record);
     }
 
     // Step 4: Redact
-    if (_redactor != null &&
-        _redactor!.isActive &&
-        enrichedRecord.data != null) {
+    if (_redactor != null && _redactor!.isActive) {
       enrichedRecord = _redact(enrichedRecord);
     }
 
@@ -242,16 +240,22 @@ class LogController {
 
   LogRecord _redact(LogRecord record) {
     final data = record.data;
-    if (data == null) return record;
-    final redacted = _redactor!.redact(data);
+    final redacted = data != null ? _redactor!.redact(data) : null;
+
+    Object? redactError(Object? error) {
+      if (error == null) return null;
+      final s = error.toString();
+      final rs = _redactor!.redactString(s);
+      return rs != s ? rs : error;
+    }
 
     if (record is LogEvent) {
       return LogEvent(
         scope: record.scope,
         level: record.level,
-        message: record.message,
+        message: _redactor!.redactString(record.message),
         tag: record.tag,
-        error: record.error,
+        error: redactError(record.error),
         stackTrace: record.stackTrace,
         traceId: record.traceId,
         requestId: record.requestId,
@@ -269,7 +273,7 @@ class LogController {
         startTime: record.startTime,
         endTime: record.endTime,
         status: record.status,
-        error: record.error,
+        error: redactError(record.error),
         stackTrace: record.stackTrace,
         data: redacted,
         events: record.events,

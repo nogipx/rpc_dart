@@ -194,18 +194,42 @@ class ConsoleOutput extends LogOutput {
     for (final entry in map.entries) {
       if (!first) buf.write(',');
       first = false;
-      buf.write('"${entry.key}":');
+      _writeJsonString(buf, entry.key);
+      buf.write(':');
       _writeJsonValue(buf, entry.value);
     }
     buf.write('}');
     return buf.toString();
   }
 
+  void _writeJsonString(StringBuffer buf, Object? value) {
+    final s = value.toString();
+    buf.write('"');
+    for (var i = 0; i < s.length; i++) {
+      final ch = s[i];
+      switch (ch) {
+        case '"':
+          buf.write(r'\"');
+        case '\\':
+          buf.write(r'\\');
+        case '\n':
+          buf.write(r'\n');
+        case '\r':
+          buf.write(r'\r');
+        case '\t':
+          buf.write(r'\t');
+        default:
+          buf.write(ch);
+      }
+    }
+    buf.write('"');
+  }
+
   void _writeJsonValue(StringBuffer buf, Object? value) {
     if (value == null) {
       buf.write('null');
     } else if (value is String) {
-      buf.write('"${value.replaceAll('"', '\\"').replaceAll('\n', '\\n')}"');
+      _writeJsonString(buf, value);
     } else if (value is num || value is bool) {
       buf.write(value);
     } else if (value is Map) {
@@ -214,7 +238,8 @@ class ConsoleOutput extends LogOutput {
       for (final e in value.entries) {
         if (!first) buf.write(',');
         first = false;
-        buf.write('"${e.key}":');
+        _writeJsonString(buf, e.key);
+        buf.write(':');
         _writeJsonValue(buf, e.value);
       }
       buf.write('}');
@@ -226,7 +251,7 @@ class ConsoleOutput extends LogOutput {
       }
       buf.write(']');
     } else {
-      buf.write('"$value"');
+      _writeJsonString(buf, value);
     }
   }
 }
