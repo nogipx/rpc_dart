@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:collection';
+import 'dart:math';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
@@ -16,8 +17,8 @@ import 'protocol.dart';
 /// A [LogOutput] that sends log records to a remote logview collector
 /// over WebSocket using rpc_dart contracts.
 ///
-/// Add this to your [LogController] outputs to stream logs to the
-/// collector in real time:
+/// Each instance generates a unique session ID so multiple connections
+/// from the same app are distinguishable in the collector.
 ///
 /// ```dart
 /// final controller = LogController(
@@ -25,20 +26,17 @@ import 'protocol.dart';
 ///     ConsoleOutput(),
 ///     LogviewOutput(
 ///       uri: Uri.parse('ws://192.168.1.10:9500'),
-///       device: DeviceInfo(name: 'iPhone 15', app: 'MyApp'),
+///       device: DeviceInfo(name: 'MyApp', app: 'com.example'),
 ///     ),
 ///   ],
 /// );
 /// ```
-///
-/// The output handles connection lifecycle automatically:
-/// - Connects on construction
-/// - Buffers records when disconnected (up to [bufferSize])
-/// - Reconnects with exponential backoff
-/// - Fire-and-forget: [write] never blocks
 class LogviewOutput extends LogOutput {
   final Uri _uri;
   final DeviceInfo _device;
+
+  /// Short random session ID to distinguish multiple connections.
+  final String sessionId;
 
   /// Maximum number of records to buffer while disconnected.
   final int bufferSize;
@@ -59,13 +57,15 @@ class LogviewOutput extends LogOutput {
   /// Creates a [LogviewOutput] that sends records to [uri].
   ///
   /// [device] identifies this client to the collector.
+  /// A random [sessionId] is generated to distinguish multiple connections.
   LogviewOutput({
     required Uri uri,
     required DeviceInfo device,
     this.bufferSize = 2000,
     this.scopeFilter,
   })  : _uri = uri,
-        _device = device {
+        _device = device,
+        sessionId = _generateSessionId() {
     _connect();
   }
 
@@ -91,16 +91,15 @@ class LogviewOutput extends LogOutput {
       while (_buffer.length > bufferSize) {
         _buffer.removeFirst();
       }
-      if (!_connecting) _connect();
     }
   }
 
   @override
   void dispose() {
+    if (_disposed) return;
     _disposed = true;
     _reconnectTimer?.cancel();
-    _endpoint?.close();
-    _transport?.close();
+    _closeTransport();
     _buffer.clear();
   }
 
@@ -108,61 +107,64 @@ class LogviewOutput extends LogOutput {
     if (_disposed || _connecting || _connected) return;
     _connecting = true;
 
-    final channel = WebSocketChannel.connect(_uri);
-    channel.ready.then((_) {
-      if (_disposed) {
-        channel.sink.close();
-        return;
-      }
-      _transport = RpcWebSocketCallerTransport(channel);
-      _endpoint = RpcCallerEndpoint(transport: _transport!);
-      _endpoint!.start();
-      _caller = LogviewServiceCaller(_endpoint!);
+    try {
+      final channel = WebSocketChannel.connect(_uri);
+      channel.ready.then((_) {
+        if (_disposed) {
+          channel.sink.close();
+          _connecting = false;
+          return;
+        }
 
-      // Handshake
-      _caller!
-          .handshake(LogviewHandshake(
-        deviceName: _device.name,
-        app: _device.app,
-        os: _device.os,
-        appVersion: _device.appVersion,
-      ))
-          .then((_) {
-        _connecting = false;
-        _connected = true;
-        _reconnectAttempt = 0;
-        _flushBuffer();
+        _transport = RpcWebSocketCallerTransport(channel);
+        _endpoint = RpcCallerEndpoint(transport: _transport!);
+        _endpoint!.start();
+        _caller = LogviewServiceCaller(_endpoint!);
+
+        final label = '${_device.name}/$sessionId';
+        _caller!
+            .handshake(LogviewHandshake(
+          deviceName: label,
+          app: _device.app,
+          os: _device.os,
+          appVersion: _device.appVersion,
+        ))
+            .then((_) {
+          _connecting = false;
+          _connected = true;
+          _reconnectAttempt = 0;
+          _flushBuffer();
+        }).catchError((Object _) {
+          _connecting = false;
+          _closeTransport();
+          _scheduleReconnect();
+        });
       }).catchError((Object _) {
-        _teardown();
+        _connecting = false;
         _scheduleReconnect();
       });
-
-      // Detect transport close
-      _transport!.incomingMessages.listen(null, onDone: () {
-        if (_connected) {
-          _connected = false;
-          _teardown();
-          _scheduleReconnect();
-        }
-      });
-    }).catchError((Object _) {
+    } catch (_) {
       _connecting = false;
       _scheduleReconnect();
-    });
+    }
   }
 
-  void _teardown() {
+  void _closeTransport() {
     _connected = false;
-    _connecting = false;
+    final ep = _endpoint;
+    final tr = _transport;
     _caller = null;
     _endpoint = null;
     _transport = null;
+    ep?.close();
+    tr?.close();
   }
 
   void _flushBuffer() {
     while (_buffer.isNotEmpty && _connected && _caller != null) {
       final record = _buffer.removeFirst();
-      unawaited(_caller!.send(record).catchError((Object _) => const LogviewAck()));
+      unawaited(
+          _caller!.send(record).catchError((Object _) => const LogviewAck()));
     }
   }
 
@@ -174,5 +176,12 @@ class LogviewOutput extends LogOutput {
     );
     _reconnectAttempt++;
     _reconnectTimer = Timer(delay, _connect);
+  }
+
+  static final _random = Random();
+
+  static String _generateSessionId() {
+    final bytes = List<int>.generate(3, (_) => _random.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 }

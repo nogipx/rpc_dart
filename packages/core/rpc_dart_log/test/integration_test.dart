@@ -42,7 +42,7 @@ void main() {
       );
 
       final event = await connected.future.timeout(Duration(seconds: 5));
-      expect(event.session.deviceName, 'TestDevice');
+      expect(event.session.deviceName, startsWith('TestDevice/'));
       expect(event.session.app, 'TestApp');
       expect(server.sessions, hasLength(1));
 
@@ -86,7 +86,7 @@ void main() {
       await received.future.timeout(Duration(seconds: 5));
 
       expect(records, hasLength(3));
-      expect(records[0].deviceLabel, 'Phone');
+      expect(records[0].deviceLabel, startsWith('Phone/'));
       expect((records[0].record as LogEvent).message, 'hello from mobile');
       expect((records[0].record as LogEvent).scope, 'test.service');
       expect((records[1].record as LogEvent).message, 'debug message');
