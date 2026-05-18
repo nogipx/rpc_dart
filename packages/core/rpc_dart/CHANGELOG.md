@@ -1,3 +1,14 @@
+## 3.2.2
+
+**Fixes:**
+- Fixed CBOR encoder using `ByteData.setUint64` which is unsupported in dart2js -- replaced with JS-safe 32-bit writes
+- Removed applied RPC log types (`RpcLogOutput`, `RpcLogResponder`, `RpcLogServiceResponder`, `RpcLogServiceCaller`) -- moved to `rpc_dart_log` package
+
+**Logger stabilization:**
+- Added `LogOutput.writeAsync()` and `isAsync` for async output backends (database, HTTP)
+- Added `LogController.addEnricher()` / `removeEnricher()` / `setRedactor()` for runtime pipeline management
+- Added `LogController(clock:)` for deterministic timestamps in tests -- propagated through `LogScope` and `LogSpanHandle`
+
 ## 3.2.1
 
 **Fixes:**

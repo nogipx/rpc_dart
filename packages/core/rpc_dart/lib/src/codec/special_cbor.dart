@@ -8,6 +8,23 @@ import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart' show IRpcSerializable;
 
+/// Writes a 64-bit unsigned integer as 8 big-endian bytes.
+///
+/// Uses two 32-bit writes instead of [ByteData.setUint64] which is
+/// unsupported in dart2js (JavaScript has no 64-bit integer type).
+void _writeUint64BigEndian(BytesBuilder builder, int value) {
+  final hi = (value ~/ 0x100000000) & 0xFFFFFFFF;
+  final lo = value & 0xFFFFFFFF;
+  builder.addByte((hi >> 24) & 0xFF);
+  builder.addByte((hi >> 16) & 0xFF);
+  builder.addByte((hi >> 8) & 0xFF);
+  builder.addByte(hi & 0xFF);
+  builder.addByte((lo >> 24) & 0xFF);
+  builder.addByte((lo >> 16) & 0xFF);
+  builder.addByte((lo >> 8) & 0xFF);
+  builder.addByte(lo & 0xFF);
+}
+
 /// CBOR (Concise Binary Object Representation) implementation for RPC.
 /// Format reference: RFC 7049 https://tools.ietf.org/html/rfc7049
 abstract interface class CborCodec {
@@ -173,12 +190,7 @@ abstract interface class CborCodec {
         ),
       );
 
-      // ByteData.setUint64 is correct on both VM and JS (unlike >> 56 which
-      // truncates to 32 bits on the JS target).
-      final v64 = ByteData(8)..setUint64(0, value, Endian.big);
-      for (var i = 0; i < 8; i++) {
-        builder.addByte(v64.getUint8(i));
-      }
+      _writeUint64BigEndian(builder, value);
     }
   }
 
@@ -213,10 +225,7 @@ abstract interface class CborCodec {
         ),
       );
 
-      final v64 = ByteData(8)..setUint64(0, value, Endian.big);
-      for (var i = 0; i < 8; i++) {
-        builder.addByte(v64.getUint8(i));
-      }
+      _writeUint64BigEndian(builder, value);
     }
   }
 
@@ -316,10 +325,7 @@ abstract interface class CborCodec {
       builder.addByte(
         _getMajorTypeByte(majorType, _additionalInfoEightByteFollow),
       );
-      final v64 = ByteData(8)..setUint64(0, length, Endian.big);
-      for (var i = 0; i < 8; i++) {
-        builder.addByte(v64.getUint8(i));
-      }
+      _writeUint64BigEndian(builder, length);
     }
   }
 
@@ -946,10 +952,7 @@ class _FastCborWriter {
         ),
       );
 
-      final v64 = ByteData(8)..setUint64(0, value, Endian.big);
-      for (var i = 0; i < 8; i++) {
-        _builder.addByte(v64.getUint8(i));
-      }
+      _writeUint64BigEndian(_builder, value);
     }
   }
 
@@ -995,10 +998,7 @@ class _FastCborWriter {
         ),
       );
 
-      final v64 = ByteData(8)..setUint64(0, value, Endian.big);
-      for (var i = 0; i < 8; i++) {
-        _builder.addByte(v64.getUint8(i));
-      }
+      _writeUint64BigEndian(_builder, value);
     }
   }
 
@@ -1101,10 +1101,7 @@ class _FastCborWriter {
       _builder.addByte(
         _getMajorTypeByte(majorType, CborCodec._additionalInfoEightByteFollow),
       );
-      final v64 = ByteData(8)..setUint64(0, length, Endian.big);
-      for (var i = 0; i < 8; i++) {
-        _builder.addByte(v64.getUint8(i));
-      }
+      _writeUint64BigEndian(_builder, length);
     }
   }
 

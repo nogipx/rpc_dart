@@ -82,10 +82,9 @@ class LogviewOutput extends LogOutput {
     final wrapped = LogviewRecord(json);
 
     if (_connected && _caller != null) {
-      unawaited(_caller!.send(wrapped).catchError((Object _) {
+      _caller!.send(wrapped).then(null, onError: (Object _) {
         _buffer.addLast(wrapped);
-        return const LogviewAck();
-      }));
+      });
     } else {
       _buffer.addLast(wrapped);
       while (_buffer.length > bufferSize) {
