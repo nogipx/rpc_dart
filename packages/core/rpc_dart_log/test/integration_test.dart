@@ -7,17 +7,17 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_log/rpc_dart_log.dart';
 import 'package:rpc_dart_log/rpc_dart_log_server.dart';
-import 'package:rpc_dart_log/src/contract/logview_caller.dart';
-import 'package:rpc_dart_log/src/contract/logview_responder.dart';
+import 'package:rpc_dart_log/src/contract/log_caller.dart';
+import 'package:rpc_dart_log/src/contract/log_responder.dart';
 import 'package:rpc_dart_log/src/contract/messages.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('LogviewOutput + LogviewServer (contract-based)', () {
-    late LogviewServer server;
+  group('LogCollectorOutput + LogCollectorServer (contract-based)', () {
+    late LogCollectorServer server;
 
     setUp(() async {
-      server = LogviewServer(host: '127.0.0.1', port: 0);
+      server = LogCollectorServer(host: '127.0.0.1', port: 0);
       await server.start();
     });
 
@@ -34,7 +34,7 @@ void main() {
       final controller = LogController(
         minLevel: RpcLogLevel.debug,
         outputs: [
-          LogviewOutput(
+          LogCollectorOutput(
             uri: Uri.parse('ws://127.0.0.1:${server.boundPort}'),
             device: DeviceInfo(name: 'TestDevice', app: 'TestApp'),
           ),
@@ -69,7 +69,7 @@ void main() {
       final controller = LogController(
         minLevel: RpcLogLevel.debug,
         outputs: [
-          LogviewOutput(
+          LogCollectorOutput(
             uri: Uri.parse('ws://127.0.0.1:${server.boundPort}'),
             device: DeviceInfo(name: 'Phone', app: 'App'),
           ),
@@ -96,7 +96,7 @@ void main() {
     });
 
     test('output buffers records when server is unavailable', () async {
-      final output = LogviewOutput(
+      final output = LogCollectorOutput(
         uri: Uri.parse('ws://127.0.0.1:1'),
         device: DeviceInfo(name: 'Phone', app: 'App'),
         bufferSize: 100,
@@ -132,7 +132,7 @@ void main() {
       final controller = LogController(
         minLevel: RpcLogLevel.debug,
         outputs: [
-          LogviewOutput(
+          LogCollectorOutput(
             uri: Uri.parse('ws://127.0.0.1:${server.boundPort}'),
             device: DeviceInfo(name: 'Phone', app: 'App'),
           ),
@@ -155,10 +155,10 @@ void main() {
       final caller = RpcCallerEndpoint(transport: clientTransport);
 
       // Track received records on server side
-      final received = <LogviewRecord>[];
-      LogviewHandshake? handshakeInfo;
+      final received = <LogCollectorRecord>[];
+      LogCollectorHandshake? handshakeInfo;
 
-      final contract = LogviewServiceResponder(
+      final contract = LogCollectorServiceResponder(
         onHandshake: (info) => handshakeInfo = info,
         onRecord: (record) => received.add(record),
       );
@@ -168,16 +168,16 @@ void main() {
       caller.start();
 
       // Use caller contract
-      final callerContract = LogviewServiceCaller(caller);
+      final callerContract = LogCollectorServiceCaller(caller);
       final welcome = await callerContract.handshake(
-        LogviewHandshake(deviceName: 'TestPhone', app: 'TestApp'),
+        LogCollectorHandshake(deviceName: 'TestPhone', app: 'TestApp'),
       );
 
       expect(welcome.sessionId, isPositive);
       expect(handshakeInfo?.deviceName, 'TestPhone');
       expect(handshakeInfo?.app, 'TestApp');
 
-      await callerContract.send(LogviewRecord({
+      await callerContract.send(LogCollectorRecord({
         'type': 'event',
         'scope': 'test',
         'level': 'info',

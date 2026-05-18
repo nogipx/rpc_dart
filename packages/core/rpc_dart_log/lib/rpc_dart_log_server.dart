@@ -4,16 +4,17 @@
 
 /// Server-side library for rpc_dart_log.
 ///
-/// Use [LogviewServer] to receive logs from remote clients.
-/// Use [LogviewConsole] for terminal rendering with device labels.
+/// Use [LogCollectorServer] to receive logs from remote clients.
+/// Use [LogCollectorConsole] for terminal rendering with device labels.
 library;
 
 export 'src/protocol.dart' show DeviceInfo, TaggedRecord;
-export 'src/logview_server.dart'
+export 'src/log_server.dart'
     show
-        LogviewServer,
-        LogviewSession,
-        LogviewConnectionEvent,
+        LogCollectorServer,
+        LogCollectorSession,
+        LogCollectorConnectionEvent,
         DeviceConnected,
         DeviceDisconnected;
-export 'src/logview_console.dart' show LogviewConsole;
+export 'src/log_console.dart' show LogCollectorConsole;
+export 'src/log_mcp.dart' show LogCollectorMcpServer;

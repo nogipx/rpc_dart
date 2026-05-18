@@ -9,13 +9,13 @@ import 'package:rpc_dart/rpc_dart.dart';
 // ---------------------------------------------------------------------------
 
 /// Sent by the client to identify itself.
-class LogviewHandshake implements IRpcSerializable {
+class LogCollectorHandshake implements IRpcSerializable {
   final String deviceName;
   final String app;
   final String? os;
   final String? appVersion;
 
-  const LogviewHandshake({
+  const LogCollectorHandshake({
     required this.deviceName,
     required this.app,
     this.os,
@@ -30,8 +30,8 @@ class LogviewHandshake implements IRpcSerializable {
         if (appVersion != null) 'appVersion': appVersion,
       };
 
-  static LogviewHandshake fromJson(Map<String, dynamic> json) =>
-      LogviewHandshake(
+  static LogCollectorHandshake fromJson(Map<String, dynamic> json) =>
+      LogCollectorHandshake(
         deviceName: json['deviceName'] as String? ?? 'unknown',
         app: json['app'] as String? ?? 'unknown',
         os: json['os'] as String?,
@@ -40,16 +40,16 @@ class LogviewHandshake implements IRpcSerializable {
 }
 
 /// Server response to a handshake.
-class LogviewWelcome implements IRpcSerializable {
+class LogCollectorWelcome implements IRpcSerializable {
   final int sessionId;
 
-  const LogviewWelcome({required this.sessionId});
+  const LogCollectorWelcome({required this.sessionId});
 
   @override
   Map<String, dynamic> toJson() => {'sessionId': sessionId};
 
-  static LogviewWelcome fromJson(Map<String, dynamic> json) =>
-      LogviewWelcome(sessionId: json['sessionId'] as int? ?? 0);
+  static LogCollectorWelcome fromJson(Map<String, dynamic> json) =>
+      LogCollectorWelcome(sessionId: json['sessionId'] as int? ?? 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -57,37 +57,37 @@ class LogviewWelcome implements IRpcSerializable {
 // ---------------------------------------------------------------------------
 
 /// A serialized log record (event or span) sent from client to collector.
-class LogviewRecord implements IRpcSerializable {
+class LogCollectorRecord implements IRpcSerializable {
   final Map<String, dynamic> payload;
 
-  const LogviewRecord(this.payload);
+  const LogCollectorRecord(this.payload);
 
   @override
   Map<String, dynamic> toJson() => payload;
 
-  static LogviewRecord fromJson(Map<String, dynamic> json) =>
-      LogviewRecord(json);
+  static LogCollectorRecord fromJson(Map<String, dynamic> json) =>
+      LogCollectorRecord(json);
 }
 
 /// Acknowledgement for a sent record.
-class LogviewAck implements IRpcSerializable {
-  const LogviewAck();
+class LogCollectorAck implements IRpcSerializable {
+  const LogCollectorAck();
 
   @override
   Map<String, dynamic> toJson() => {};
 
-  static LogviewAck fromJson(Map<String, dynamic> json) => const LogviewAck();
+  static LogCollectorAck fromJson(Map<String, dynamic> json) => const LogCollectorAck();
 }
 
 // ---------------------------------------------------------------------------
 // Codecs
 // ---------------------------------------------------------------------------
 
-final logviewHandshakeCodec =
-    RpcCodec<LogviewHandshake>.withDecoder(LogviewHandshake.fromJson);
-final logviewWelcomeCodec =
-    RpcCodec<LogviewWelcome>.withDecoder(LogviewWelcome.fromJson);
-final logviewRecordCodec =
-    RpcCodec<LogviewRecord>.withDecoder(LogviewRecord.fromJson);
-final logviewAckCodec =
-    RpcCodec<LogviewAck>.withDecoder(LogviewAck.fromJson);
+final logCollectorHandshakeCodec =
+    RpcCodec<LogCollectorHandshake>.withDecoder(LogCollectorHandshake.fromJson);
+final logCollectorWelcomeCodec =
+    RpcCodec<LogCollectorWelcome>.withDecoder(LogCollectorWelcome.fromJson);
+final logCollectorRecordCodec =
+    RpcCodec<LogCollectorRecord>.withDecoder(LogCollectorRecord.fromJson);
+final logCollectorAckCodec =
+    RpcCodec<LogCollectorAck>.withDecoder(LogCollectorAck.fromJson);

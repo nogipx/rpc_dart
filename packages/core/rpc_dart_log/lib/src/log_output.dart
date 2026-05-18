@@ -10,11 +10,11 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'contract/logview_caller.dart';
+import 'contract/log_caller.dart';
 import 'contract/messages.dart';
 import 'protocol.dart';
 
-/// A [LogOutput] that sends log records to a remote logview collector
+/// A [LogOutput] that sends log records to a remote logCollector collector
 /// over WebSocket using rpc_dart contracts.
 ///
 /// Each instance generates a unique session ID so multiple connections
@@ -24,14 +24,14 @@ import 'protocol.dart';
 /// final controller = LogController(
 ///   outputs: [
 ///     ConsoleOutput(),
-///     LogviewOutput(
+///     LogCollectorOutput(
 ///       uri: Uri.parse('ws://192.168.1.10:9500'),
 ///       device: DeviceInfo(name: 'MyApp', app: 'com.example'),
 ///     ),
 ///   ],
 /// );
 /// ```
-class LogviewOutput extends LogOutput {
+class LogCollectorOutput extends LogOutput {
   final Uri _uri;
   final DeviceInfo _device;
 
@@ -44,21 +44,21 @@ class LogviewOutput extends LogOutput {
   @override
   final String? scopeFilter;
 
-  final Queue<LogviewRecord> _buffer = Queue();
+  final Queue<LogCollectorRecord> _buffer = Queue();
   RpcWebSocketCallerTransport? _transport;
   RpcCallerEndpoint? _endpoint;
-  LogviewServiceCaller? _caller;
+  LogCollectorServiceCaller? _caller;
   bool _connected = false;
   bool _connecting = false;
   bool _disposed = false;
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
 
-  /// Creates a [LogviewOutput] that sends records to [uri].
+  /// Creates a [LogCollectorOutput] that sends records to [uri].
   ///
   /// [device] identifies this client to the collector.
   /// A random [sessionId] is generated to distinguish multiple connections.
-  LogviewOutput({
+  LogCollectorOutput({
     required Uri uri,
     required DeviceInfo device,
     this.bufferSize = 2000,
@@ -79,10 +79,10 @@ class LogviewOutput extends LogOutput {
       LogEvent event => event.toJson(),
       LogSpan span => span.toJson(),
     };
-    final wrapped = LogviewRecord(json);
+    final wrapped = LogCollectorRecord(json);
 
     if (_connected && _caller != null) {
-      _caller!.send(wrapped).then(null, onError: (Object _) {
+      _caller!.send(wrapped).then((_) {}, onError: (Object _) {
         _buffer.addLast(wrapped);
       });
     } else {
@@ -118,11 +118,11 @@ class LogviewOutput extends LogOutput {
         _transport = RpcWebSocketCallerTransport(channel);
         _endpoint = RpcCallerEndpoint(transport: _transport!);
         _endpoint!.start();
-        _caller = LogviewServiceCaller(_endpoint!);
+        _caller = LogCollectorServiceCaller(_endpoint!);
 
         final label = '${_device.name}/$sessionId';
         _caller!
-            .handshake(LogviewHandshake(
+            .handshake(LogCollectorHandshake(
           deviceName: label,
           app: _device.app,
           os: _device.os,
@@ -163,7 +163,7 @@ class LogviewOutput extends LogOutput {
     while (_buffer.isNotEmpty && _connected && _caller != null) {
       final record = _buffer.removeFirst();
       unawaited(
-          _caller!.send(record).catchError((Object _) => const LogviewAck()));
+          _caller!.send(record).catchError((Object _) => const LogCollectorAck()));
     }
   }
 

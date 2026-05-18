@@ -4,7 +4,7 @@
 
 /// Client-side library for rpc_dart_log.
 ///
-/// Import this in your Flutter/Dart app to stream logs to a logview collector:
+/// Import this in your Flutter/Dart app to stream logs to a log collector:
 ///
 /// ```dart
 /// import 'package:rpc_dart_log/rpc_dart_log.dart';
@@ -12,7 +12,7 @@
 /// final controller = LogController(
 ///   outputs: [
 ///     ConsoleOutput(),
-///     LogviewOutput(
+///     LogCollectorOutput(
 ///       uri: Uri.parse('ws://192.168.1.10:9500'),
 ///       device: DeviceInfo(name: 'iPhone 15', app: 'MyApp'),
 ///     ),
@@ -22,4 +22,4 @@
 library;
 
 export 'src/protocol.dart' show DeviceInfo;
-export 'src/logview_output.dart' show LogviewOutput;
+export 'src/log_output.dart' show LogCollectorOutput;

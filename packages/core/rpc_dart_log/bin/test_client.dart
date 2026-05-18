@@ -1,4 +1,4 @@
-// Quick smoke test: connect to a running logview server and send records.
+// Quick smoke test: connect to a running log collector server and send records.
 // Usage: dart run bin/test_client.dart [ws://host:port]
 
 import 'dart:async';
@@ -14,7 +14,7 @@ void main(List<String> args) async {
     minLevel: RpcLogLevel.debug,
     outputs: [
       ConsoleOutput(),
-      LogviewOutput(
+      LogCollectorOutput(
         uri: Uri.parse(uri),
         device: DeviceInfo(name: 'TestClient', app: 'smoke_test'),
       ),

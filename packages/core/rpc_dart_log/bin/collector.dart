@@ -6,12 +6,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:rpc_dart_log/rpc_dart_log_server.dart';
+import 'package:rpc_dart_log/src/log_mcp.dart';
 
 void main(List<String> args) async {
   final parser = ArgParser()
     ..addOption('port',
-        abbr: 'p', defaultsTo: '9500', help: 'Port to listen on')
+        abbr: 'p', defaultsTo: '9500', help: 'WebSocket collector port')
+    ..addOption('mcp-port',
+        defaultsTo: '9501', help: 'MCP HTTP server port')
     ..addOption('host',
         abbr: 'H', defaultsTo: '0.0.0.0', help: 'Host to bind to')
     ..addFlag('no-color', negatable: false, help: 'Disable ANSI colors')
@@ -27,31 +29,28 @@ void main(List<String> args) async {
   }
 
   if (parsed.flag('help')) {
-    stdout.writeln('rpc_dart_log -- real-time log collector for rpc_dart\n');
-    stdout.writeln('Usage: dart run rpc_dart_log [options]\n');
+    stdout.writeln('rpc_dart_log -- log collector + MCP server\n');
+    stdout.writeln('Usage: rpc_dart_log [options]\n');
     stdout.writeln(parser.usage);
     exit(0);
   }
 
   final port = int.tryParse(parsed.option('port')!) ?? 9500;
+  final mcpPort = int.tryParse(parsed.option('mcp-port')!) ?? 9501;
   final host = parsed.option('host')!;
   final colored = !parsed.flag('no-color') && stdout.hasTerminal;
 
-  final server = LogviewServer(host: host, port: port);
-  final console = LogviewConsole(colored: colored);
+  final mcp = await LogCollectorMcpServer.run(
+    host: host,
+    collectorPort: port,
+    mcpPort: mcpPort,
+    colored: colored,
+  );
 
-  await server.start();
-
-  // Print local network addresses for easy mobile connection
-  _printBanner(server, colored);
-
-  // Subscribe to events
-  server.onConnection.listen(console.printConnection);
-  server.onRecord.listen(console.printRecord);
+  _printBanner(port, mcpPort, colored);
 
   // Graceful shutdown
   final completer = Completer<void>();
-
   void onSignal(ProcessSignal _) {
     if (!completer.isCompleted) completer.complete();
   }
@@ -70,46 +69,41 @@ void main(List<String> args) async {
   sigint?.cancel();
 
   stdout.writeln('\nShutting down...');
-  await server.stop();
+  await mcp.stop();
 }
 
-void _printBanner(LogviewServer server, bool colored) {
-  final port = server.boundPort;
-
+void _printBanner(int port, int mcpPort, bool colored) {
   stdout.writeln('');
   if (colored) {
     stdout.writeln(
-      '\x1B[1mrpc_dart_log\x1B[0m listening on port \x1B[36m$port\x1B[0m',
+      '\x1B[1mrpc_dart_log\x1B[0m',
+    );
+    stdout.writeln(
+      '  collector: \x1B[36mws://0.0.0.0:$port\x1B[0m',
+    );
+    stdout.writeln(
+      '  mcp:       \x1B[36mhttp://0.0.0.0:$mcpPort\x1B[0m',
     );
   } else {
-    stdout.writeln('rpc_dart_log listening on port $port');
+    stdout.writeln('rpc_dart_log');
+    stdout.writeln('  collector: ws://0.0.0.0:$port');
+    stdout.writeln('  mcp:       http://0.0.0.0:$mcpPort');
   }
 
-  // Show LAN addresses
   try {
-    final interfaces = NetworkInterface.list(
-      type: InternetAddressType.IPv4,
-    );
-    interfaces.then((ifaces) {
+    NetworkInterface.list(type: InternetAddressType.IPv4).then((ifaces) {
       for (final iface in ifaces) {
         for (final addr in iface.addresses) {
           if (addr.isLoopback) continue;
-          final uri = 'ws://${addr.address}:$port';
           if (colored) {
             stdout.writeln(
-              '  \x1B[2m${iface.name}:\x1B[0m \x1B[4m$uri\x1B[0m',
+              '  \x1B[2m${iface.name}:\x1B[0m \x1B[4mws://${addr.address}:$port\x1B[0m',
             );
           } else {
-            stdout.writeln('  ${iface.name}: $uri');
+            stdout.writeln('  ${iface.name}: ws://${addr.address}:$port');
           }
         }
       }
-      stdout.writeln('');
-      stdout.writeln(
-        colored
-            ? '\x1B[2mWaiting for connections...\x1B[0m'
-            : 'Waiting for connections...',
-      );
       stdout.writeln('');
     });
   } catch (_) {

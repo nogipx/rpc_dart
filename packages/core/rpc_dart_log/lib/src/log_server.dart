@@ -10,12 +10,12 @@ import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'contract/logview_responder.dart';
+import 'contract/log_responder.dart';
 import 'contract/messages.dart';
 import 'protocol.dart';
 
 /// A connected client session.
-class LogviewSession {
+class LogCollectorSession {
   /// Unique session identifier.
   final int id;
 
@@ -31,7 +31,7 @@ class LogviewSession {
   /// When the client connected.
   final DateTime connectedAt;
 
-  LogviewSession({
+  LogCollectorSession({
     required this.id,
     required this.deviceName,
     required this.app,
@@ -40,24 +40,24 @@ class LogviewSession {
 }
 
 /// Event emitted when a device connects or disconnects.
-sealed class LogviewConnectionEvent {}
+sealed class LogCollectorConnectionEvent {}
 
-class DeviceConnected extends LogviewConnectionEvent {
-  final LogviewSession session;
+class DeviceConnected extends LogCollectorConnectionEvent {
+  final LogCollectorSession session;
   DeviceConnected(this.session);
 }
 
-class DeviceDisconnected extends LogviewConnectionEvent {
-  final LogviewSession session;
+class DeviceDisconnected extends LogCollectorConnectionEvent {
+  final LogCollectorSession session;
   DeviceDisconnected(this.session);
 }
 
-/// Core logview server. Accepts WebSocket connections, receives log records
+/// Core logCollector server. Accepts WebSocket connections, receives log records
 /// via rpc_dart contracts, and feeds them into a [LogController].
 ///
 /// Presentation (terminal, Flutter UI) is handled separately by consuming
 /// [onRecord] and [onConnection] streams.
-class LogviewServer {
+class LogCollectorServer {
   final String host;
   final int port;
   final LogController controller;
@@ -66,25 +66,25 @@ class LogviewServer {
   RpcWebSocketServer? _rpcServer;
   StreamController<WebSocketChannel>? _wsController;
   int _nextSessionId = 1;
-  final Map<int, LogviewSession> _sessions = {};
-  final Map<RpcResponderEndpoint, LogviewSession> _endpointSessions = {};
+  final Map<int, LogCollectorSession> _sessions = {};
+  final Map<RpcResponderEndpoint, LogCollectorSession> _endpointSessions = {};
 
   final StreamController<TaggedRecord> _recordController =
       StreamController<TaggedRecord>.broadcast();
-  final StreamController<LogviewConnectionEvent> _connectionController =
-      StreamController<LogviewConnectionEvent>.broadcast();
+  final StreamController<LogCollectorConnectionEvent> _connectionController =
+      StreamController<LogCollectorConnectionEvent>.broadcast();
 
   /// Stream of log records tagged with device labels.
   Stream<TaggedRecord> get onRecord => _recordController.stream;
 
   /// Stream of device connect/disconnect events.
-  Stream<LogviewConnectionEvent> get onConnection =>
+  Stream<LogCollectorConnectionEvent> get onConnection =>
       _connectionController.stream;
 
   /// Currently connected sessions.
-  List<LogviewSession> get sessions => List.unmodifiable(_sessions.values);
+  List<LogCollectorSession> get sessions => List.unmodifiable(_sessions.values);
 
-  LogviewServer({
+  LogCollectorServer({
     this.host = '0.0.0.0',
     this.port = 9500,
     LogController? controller,
@@ -138,7 +138,7 @@ class LogviewServer {
   }
 
   void _onEndpointCreated(RpcResponderEndpoint endpoint) {
-    final responder = LogviewServiceResponder(
+    final responder = LogCollectorServiceResponder(
       onHandshake: (info) => _handleHandshake(endpoint, info),
       onRecord: (record) => _handleRecord(endpoint, record),
     );
@@ -151,9 +151,9 @@ class LogviewServer {
     });
   }
 
-  void _handleHandshake(RpcResponderEndpoint endpoint, LogviewHandshake info) {
+  void _handleHandshake(RpcResponderEndpoint endpoint, LogCollectorHandshake info) {
     final id = _nextSessionId++;
-    final session = LogviewSession(
+    final session = LogCollectorSession(
       id: id,
       deviceName: info.deviceName,
       app: info.app,
@@ -163,7 +163,7 @@ class LogviewServer {
     _connectionController.add(DeviceConnected(session));
   }
 
-  void _handleRecord(RpcResponderEndpoint endpoint, LogviewRecord record) {
+  void _handleRecord(RpcResponderEndpoint endpoint, LogCollectorRecord record) {
     final session = _endpointSessions[endpoint];
     final label = session?.label ?? 'unknown';
 

@@ -7,7 +7,7 @@ import 'dart:io';
 import 'package:rpc_dart/rpc_dart.dart';
 
 import 'protocol.dart';
-import 'logview_server.dart';
+import 'log_server.dart';
 
 // ANSI color codes
 const _reset = '\x1B[0m';
@@ -20,37 +20,41 @@ const _magenta = '\x1B[35m';
 const _cyan = '\x1B[36m';
 const _white = '\x1B[37m';
 
-/// Terminal renderer for logview. Prints tagged log records with device
+/// Terminal renderer for logCollector. Prints tagged log records with device
 /// labels and ANSI colors.
-class LogviewConsole {
+class LogCollectorConsole {
   final bool colored;
   final int _maxLabelWidth;
+  final IOSink _sink;
 
-  LogviewConsole({this.colored = true}) : _maxLabelWidth = 20;
+  /// [sink] defaults to stdout. Use stderr when running alongside MCP.
+  LogCollectorConsole({this.colored = true, IOSink? sink})
+      : _maxLabelWidth = 20,
+        _sink = sink ?? stdout;
 
   /// Print a connection event.
-  void printConnection(LogviewConnectionEvent event) {
+  void printConnection(LogCollectorConnectionEvent event) {
     final now = _formatTime(DateTime.now());
     switch (event) {
       case DeviceConnected e:
         final s = e.session;
         if (colored) {
-          stdout.writeln(
+          _sink.writeln(
             '$_dim$now$_reset $_green+$_reset '
             '$_bold${s.deviceName}$_reset '
             '$_dim(${s.app})$_reset',
           );
         } else {
-          stdout.writeln('$now + ${s.deviceName} (${s.app})');
+          _sink.writeln('$now + ${s.deviceName} (${s.app})');
         }
       case DeviceDisconnected e:
         if (colored) {
-          stdout.writeln(
+          _sink.writeln(
             '$_dim$now$_reset $_red-$_reset '
             '$_dim${e.session.deviceName} disconnected$_reset',
           );
         } else {
-          stdout.writeln('$now - ${e.session.deviceName} disconnected');
+          _sink.writeln('$now - ${e.session.deviceName} disconnected');
         }
     }
   }
@@ -106,7 +110,7 @@ class LogviewConsole {
       if (event.error != null) buf.write(' err=${event.error}');
     }
 
-    stdout.writeln(buf);
+    _sink.writeln(buf);
   }
 
   void _printSpan(String label, LogSpan span) {
@@ -116,7 +120,7 @@ class LogviewConsole {
 
     if (colored) {
       final statusColor = span.status == SpanStatus.ok ? _green : _red;
-      stdout.writeln(
+      _sink.writeln(
         '$_dim$time$_reset '
         '$_cyan$label$_reset '
         '${_magenta}SPN$_reset '
@@ -127,7 +131,7 @@ class LogviewConsole {
         '${span.error != null ? ' ${_red}err=$_reset${span.error}' : ''}',
       );
     } else {
-      stdout.writeln(
+      _sink.writeln(
         '$time $label SPN ${span.scope} ${span.name} ${ms}ms $status'
         '${span.error != null ? ' err=${span.error}' : ''}',
       );
