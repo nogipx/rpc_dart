@@ -83,21 +83,27 @@ Future<Response> handle(Request request, {RpcContext? context}) async {
 
 Use `RpcOtelPropagator` to propagate trace context across service boundaries via `traceparent` / `tracestate` headers.
 
-**Client side — inject active span into outgoing context:**
+**Client side — add `OtelRpcClientInterceptor` on the caller endpoint.** It creates a `SpanKind.client` span for each outgoing call and injects `traceparent` / `tracestate` headers via `RpcOtelPropagator.inject`:
 
 ```dart
-// Wrap the context before passing it to a caller method.
-final ctx = RpcOtelPropagator.inject(RpcContext.empty());
-final response = await caller.myMethod(request, context: ctx);
+final endpoint = MyCallerEndpoint(transport: ...)
+  ..addInterceptor(OtelRpcClientInterceptor(tracer: tracer));
 ```
 
 **Server side — extraction is automatic.** `OtelRpcInterceptor` calls `RpcOtelPropagator.extract` internally on every incoming call, so the span created on the server is automatically linked to the parent span from the caller.
+
+For ad-hoc usage (no interceptor), the lower-level helper is still available:
+
+```dart
+final ctx = RpcOtelPropagator.inject(RpcContext.empty());
+final response = await caller.myMethod(request, context: ctx);
+```
 
 ---
 
 ## Metrics (optional)
 
-Pass a `RpcOtelMetrics` instance to record call counts and error counts:
+Pass a `RpcOtelMetrics` instance to record per-call counters labelled by gRPC status code:
 
 ```dart
 import 'package:opentelemetry/api.dart';
@@ -110,9 +116,49 @@ endpoint.addInterceptor(OtelRpcInterceptor(
 ));
 ```
 
-Two instruments are recorded per call:
+Metrics follow the [OpenTelemetry semantic conventions for RPC](https://opentelemetry.io/docs/specs/semconv/rpc/rpc-metrics/):
 
 | Instrument | Type | Attributes |
 |---|---|---|
-| `rpc_dart.calls.total` | Counter | `rpc.system`, `rpc.service`, `rpc.method` |
-| `rpc_dart.errors.total` | Counter | same |
+| `rpc.server.requests` | Counter | `rpc.system`, `rpc.service`, `rpc.method`, `rpc.grpc.status_code` |
+
+The `rpc.grpc.status_code` value is the canonical uppercase gRPC name (`OK`, `UNAVAILABLE`, `DEADLINE_EXCEEDED`, ...) — derived from `RpcStatusException.statusCode` when an error is thrown, or `OK` on success. Unknown codes fall back to `UNKNOWN`, keeping the label cardinality bounded.
+
+Histogram (`rpc.server.duration`) and active-request gauge (`rpc.server.active_requests`) will be added once the OpenTelemetry Dart API exposes those instrument types.
+
+---
+
+## Bridging `LogController` into OpenTelemetry
+
+`rpc_dart`'s `LogController` exposes its own span/event model. Use
+`LogControllerOtelOutput` as an additional `LogOutput` to mirror every
+`LogScope.withSpan(...)` block and every `LogScope.event(...)` into OTel:
+
+```dart
+final tracer = globalTracerProvider.getTracer('my-service');
+
+final logController = LogController(outputs: [
+  ConsoleOutput(),
+  LogControllerOtelOutput(
+    tracer: tracer,
+    // Nest log-spans under the active RPC span when called from inside a handler:
+    rootContextProvider: () => Context.current,
+  ),
+]);
+```
+
+Mapping:
+
+| LogController record | OpenTelemetry |
+|---|---|
+| `LogSpanStart` | `tracer.startSpan(name, startTime, parent=…)` |
+| `LogEvent` (with `spanId`) | `span.addEvent(message, attributes)` |
+| `LogEvent` (standalone) | single-shot span `log.<scope>` |
+| `LogSpan` (end) | sets attributes/status, then `span.end(endTime)` |
+
+Nested `LogScope.startSpan(...)` calls become child OTel spans automatically
+because `LogSpanStart` carries the `parentSpanId`. Inside an RPC handler,
+the bridge's `rootContextProvider` returns the active OTel context — so a
+`LogScope.withSpan('db.query', ...)` ends up as a child of the
+`OtelRpcInterceptor`-created server span, and you get a single connected
+trace from the caller down to your last `db.query` event in Grafana.

@@ -45,11 +45,16 @@ void main() async {
   print('OtelRpcInterceptor ready: $otelInterceptor');
 
   // -------------------------------------------------------------------------
-  // 4. Client side — propagate trace context into outgoing calls
+  // 4. Client side — register OtelRpcClientInterceptor on the caller endpoint
+  //    so every outgoing call gets a CLIENT span and W3C headers automatically.
   // -------------------------------------------------------------------------
   //
-  // final outgoingCtx = RpcOtelPropagator.inject(RpcContext.empty());
-  // final response = await callerEndpoint.myMethod(outgoingCtx, request);
+  // final callerEndpoint = MyCallerEndpoint(transport: ...)
+  //   ..addInterceptor(OtelRpcClientInterceptor(tracer: tracer));
+  //
+  // For ad-hoc one-off calls without an interceptor:
+  //   final outgoingCtx = RpcOtelPropagator.inject(RpcContext.empty());
+  //   final response = await callerEndpoint.myMethod(outgoingCtx, request);
 
   // -------------------------------------------------------------------------
   // 5. Accessing the active span inside a handler (optional enrichment)

@@ -11,51 +11,31 @@ import '../metrics/rpc_otel_metrics.dart';
 import '../metrics/rpc_status_names.dart';
 import '../propagation/rpc_otel_propagator.dart';
 
-/// Context key used to retrieve the active [Span] from [RpcContext.getValue].
+/// OpenTelemetry interceptor for the **client** side of rpc_dart.
 ///
-/// Business-layer code can access the current span to add custom attributes:
-/// ```dart
-/// final span = context.getValue(OtelRpcKeys.span) as Span?;
-/// span?.setAttribute(Attribute.fromString('user.id', userId));
-/// ```
-abstract final class OtelRpcKeys {
-  static const span = #otel_rpc_span;
-}
-
-/// OpenTelemetry interceptor for rpc_dart.
-///
-/// Wraps every RPC call in an OTel span, propagates W3C trace context through
-/// [RpcContext] headers, and optionally records call metrics.
+/// Each outgoing call gets:
+/// - A [SpanKind.client] span linked to the currently active OTel context,
+///   so cross-service traces stitch together with the server-side span
+///   created by [OtelRpcInterceptor].
+/// - W3C `traceparent` / `tracestate` headers injected into the outgoing
+///   [RpcContext] via [RpcOtelPropagator.inject].
+/// - Status code + duration recorded into [RpcOtelMetrics] if supplied.
 ///
 /// Setup:
 /// ```dart
-/// final tracer = globalTracerProvider.getTracer('my-service');
-///
-/// final endpoint = MyResponderEndpoint(transport: ...)
-///   ..addInterceptor(OtelRpcInterceptor(tracer: tracer));
+/// final tracer = globalTracerProvider.getTracer('my-client');
+/// final endpoint = MyCallerEndpoint(transport: ...)
+///   ..addInterceptor(OtelRpcClientInterceptor(tracer: tracer));
 /// ```
-///
-/// With metrics:
-/// ```dart
-/// final meter = globalMeterProvider.getMeter('my-service');
-/// endpoint.addInterceptor(OtelRpcInterceptor(
-///   tracer: tracer,
-///   metrics: RpcOtelMetrics(meter: meter),
-/// ));
-/// ```
-class OtelRpcInterceptor implements IRpcInterceptor {
+class OtelRpcClientInterceptor implements IRpcInterceptor {
   final Tracer _tracer;
   final RpcOtelMetrics? _metrics;
 
-  const OtelRpcInterceptor({
+  const OtelRpcClientInterceptor({
     required Tracer tracer,
     RpcOtelMetrics? metrics,
   })  : _tracer = tracer,
         _metrics = metrics;
-
-  // ---------------------------------------------------------------------------
-  // Unary
-  // ---------------------------------------------------------------------------
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
@@ -75,10 +55,6 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Server stream
-  // ---------------------------------------------------------------------------
-
   @override
   FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
     RpcMiddlewareContext call,
@@ -95,10 +71,6 @@ class OtelRpcInterceptor implements IRpcInterceptor {
       rethrow;
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Client stream
-  // ---------------------------------------------------------------------------
 
   @override
   Future<TResponse> interceptClientStream<TRequest, TResponse>(
@@ -118,10 +90,6 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Bidirectional stream
-  // ---------------------------------------------------------------------------
-
   @override
   FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
     RpcMiddlewareContext call,
@@ -139,35 +107,24 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-
-  /// Starts a new span, extracts W3C parent context from [RpcContext] headers,
-  /// and stores the span in [RpcContext] values for downstream access.
   (Span, RpcContext) _startSpan(RpcMiddlewareContext call, String callType) {
-    final parentContext = RpcOtelPropagator.extract(call.context);
-
-    final attributes = [
-      Attribute.fromString('rpc.system', 'rpc_dart'),
-      Attribute.fromString('rpc.service', call.serviceName),
-      Attribute.fromString('rpc.method', call.methodName),
-      Attribute.fromString('rpc.call_type', callType),
-      if (call.context.traceId != null)
-        Attribute.fromString('rpc.trace_id', call.context.traceId!),
-    ];
-
     final span = _tracer.startSpan(
       '${call.serviceName}/${call.methodName}',
-      context: parentContext,
-      kind: SpanKind.server,
-      attributes: attributes,
+      kind: SpanKind.client,
+      attributes: [
+        Attribute.fromString('rpc.system', 'rpc_dart'),
+        Attribute.fromString('rpc.service', call.serviceName),
+        Attribute.fromString('rpc.method', call.methodName),
+        Attribute.fromString('rpc.call_type', callType),
+      ],
     );
 
-    final updatedContext = call.context.withValue(OtelRpcKeys.span, span);
-    call.updateContext(updatedContext);
-
-    return (span, updatedContext);
+    final injected = RpcOtelPropagator.inject(
+      call.context,
+      context: contextWithSpan(Context.current, span),
+    );
+    call.updateContext(injected);
+    return (span, injected);
   }
 
   void _finish(
@@ -218,13 +175,6 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     span.end();
   }
 
-  /// Wraps a response stream in a span: ends the span when the stream completes,
-  /// errors, or the subscription is cancelled. Counts messages and records the
-  /// total as a span attribute on completion.
-  ///
-  /// Uses [StreamController] with an [onCancel] hook instead of
-  /// [StreamTransformer.fromHandlers] because the latter has no cancel callback,
-  /// which would leave spans open forever when consumers unsubscribe early.
   Stream<T> _wrapWithSpan<T>(
     Stream<T> source,
     Span span,
@@ -234,7 +184,8 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     var messageCount = 0;
     var finished = false;
 
-    void finishOnce({required bool isError, Object? error, StackTrace? stackTrace}) {
+    void finishOnce(
+        {required bool isError, Object? error, StackTrace? stackTrace}) {
       if (finished) return;
       finished = true;
       span.setAttribute(Attribute.fromInt('rpc.stream.messages', messageCount));

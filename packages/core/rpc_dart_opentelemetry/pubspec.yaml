@@ -1,6 +1,6 @@
 name: rpc_dart_opentelemetry
 description: OpenTelemetry tracing, metrics, and logging integration for rpc_dart.
-version: 0.2.0
+version: 0.3.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -11,8 +11,13 @@ environment:
 dependencies:
   rpc_dart: ^3.2.0
   opentelemetry: ^0.18.0
+  fixnum: ^1.1.0
   meta: ^1.17.0
 
 dev_dependencies:
   lints: ^6.0.0
   test: ^1.29.0
+
+dependency_overrides:
+  rpc_dart:
+    path: ../rpc_dart
