@@ -67,6 +67,8 @@ class LogSpanHandle {
       spanId: spanId,
       scope: scope,
       name: name,
+      parentSpanId: parentSpanId,
+      traceId: traceId,
       timestamp: _startTime,
     ));
   }

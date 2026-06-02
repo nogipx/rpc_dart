@@ -30,6 +30,14 @@ class LogSpanStart implements LogRecord {
   /// Span identifier (matches the [LogSpan.spanId] emitted on end).
   final String spanId;
 
+  /// Parent span ID — set when this span was created via
+  /// [LogSpanHandle.startSpan]. Lets downstream bridges (e.g. OpenTelemetry)
+  /// link nested spans without waiting for the parent's [LogSpan] end record.
+  final String? parentSpanId;
+
+  /// Trace ID for distributed tracing correlation.
+  final String? traceId;
+
   /// Operation name.
   final String name;
 
@@ -38,6 +46,8 @@ class LogSpanStart implements LogRecord {
     required this.spanId,
     required this.scope,
     required this.name,
+    this.parentSpanId,
+    this.traceId,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 }
