@@ -798,6 +798,10 @@ final class _OpaqueCodec<T extends Object>
 
   @override
   IRpcSerializable deserialize(Uint8List bytes) {
-    return _OpaqueValue(_inner.deserialize(bytes));
+    // Use wrap so values that already implement IRpcSerializable (the
+    // common case for codegen-generated DTOs) reach the interceptor
+    // chain as their typed selves — not as an opaque wrapper that
+    // interceptors can't introspect.
+    return _OpaqueValue.wrap(_inner.deserialize(bytes));
   }
 }
