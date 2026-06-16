@@ -37,10 +37,12 @@ class PgTableNames {
   String indexName(String base) => _q('$prefix$base');
 
   String get collectionRegistry => _qualified('${prefix}s_collection_registry');
-  String get indexRegistry => _qualified('${prefix}s_collection_index_registry');
+  String get indexRegistry =>
+      _qualified('${prefix}s_collection_index_registry');
   String get changeJournal => _qualified('${prefix}s_change_journal');
   String get schemaTable => _qualified('${prefix}s_collection_schemas');
-  String get schemaHistory => _qualified('${prefix}s_collection_schema_history');
+  String get schemaHistory =>
+      _qualified('${prefix}s_collection_schema_history');
   String get schemaCheckpoint =>
       _qualified('${prefix}s_collection_migration_checkpoint');
   String get schemaLog => _qualified('${prefix}s_collection_migration_log');
@@ -329,9 +331,7 @@ CREATE TABLE IF NOT EXISTS $table (
     if (_ready) {
       return;
     }
-    await _executor.execute(
-      'CREATE SCHEMA IF NOT EXISTS ${_names._q(schema)}',
-    );
+    await _executor.execute('CREATE SCHEMA IF NOT EXISTS ${_names._q(schema)}');
     await _executor.execute('''
 CREATE TABLE IF NOT EXISTS ${_names.collectionRegistry} (
   collection TEXT PRIMARY KEY,
