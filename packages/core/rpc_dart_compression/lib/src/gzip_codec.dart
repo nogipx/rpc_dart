@@ -13,21 +13,77 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// ```dart
 /// RpcGzipCodec.register();
 /// ```
+///
+/// The compression [level] (0..9) and a [maxDecompressedSize] guard against
+/// decompression bombs can be configured:
+/// ```dart
+/// RpcGzipCodec.register(level: 9); // smallest output, slowest
+/// ```
 final class RpcGzipCodec implements RpcCompressionCodec {
-  const RpcGzipCodec();
+  /// Compression level passed to the gzip encoder, in the range 0..9
+  /// (`0` = store/no compression, `1` = fastest, `9` = smallest output).
+  ///
+  /// Defaults to `6`, matching the archive package default
+  /// ([defaultLevel]); existing callers see unchanged behaviour.
+  final int level;
 
-  /// Registers this codec with [RpcGrpcCompression] for the `gzip` encoding.
+  /// Maximum allowed decompressed size in bytes. Decompression throws a
+  /// [FormatException] before allocating if the gzip ISIZE trailer declares a
+  /// larger output, guarding against decompression bombs.
+  ///
+  /// Defaults to unlimited ([_unlimited]). The check is cheap because gzip
+  /// already stores the uncompressed size (mod 2^32) in its trailer, so no
+  /// extra work is done for payloads within the limit.
+  ///
+  /// Note: ISIZE is only the size modulo 2^32, so this guard is exact only for
+  /// outputs below 4 GiB; for larger declared sizes set the limit accordingly.
+  final int maxDecompressedSize;
+
+  /// Default compression level (archive / zlib default).
+  static const int defaultLevel = 6;
+
+  /// Fastest compression level.
+  static const int fastestLevel = 1;
+
+  /// Smallest-output compression level.
+  static const int bestLevel = 9;
+
+  /// Sentinel for "no decompressed-size limit".
+  static const int _unlimited = -1;
+
+  const RpcGzipCodec({
+    this.level = defaultLevel,
+    this.maxDecompressedSize = _unlimited,
+  });
+
+  /// Registers a [RpcGzipCodec] with [RpcGrpcCompression] for the `gzip`
+  /// encoding.
   ///
   /// Replaces any previously registered gzip codec (including the built-in
-  /// dart:io one on native platforms).
-  static void register() {
-    RpcGrpcCompression.register(RpcGrpcCompression.gzip, const RpcGzipCodec());
+  /// dart:io one on native platforms). [level] and [maxDecompressedSize] are
+  /// forwarded to the codec constructor.
+  static void register({
+    int level = defaultLevel,
+    int maxDecompressedSize = _unlimited,
+  }) {
+    RpcGrpcCompression.register(
+      RpcGrpcCompression.gzip,
+      RpcGzipCodec(level: level, maxDecompressedSize: maxDecompressedSize),
+    );
   }
 
   @override
   Uint8List compress(Uint8List data) {
-    final result = GZipEncoder().encode(data);
-    return Uint8List.fromList(result);
+    // GZipEncoder.encodeBytes returns a Uint8List on every platform (native
+    // GZipCodec on the VM, OutputMemoryStream.getBytes on web), so no extra
+    // Uint8List.fromList copy is needed here.
+    //
+    // The archive 4.x streaming API (encodeStream + Output/InputMemoryStream)
+    // does not reduce peak memory for this Uint8List -> Uint8List interface:
+    // the output is still accumulated into a single contiguous OutputMemory
+    // Stream buffer before getBytes(). It would only add a no-op indirection,
+    // so the whole-buffer encode is kept.
+    return GZipEncoder().encodeBytes(data, level: level);
   }
 
   @override
@@ -38,9 +94,28 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // between VM and web. Guard explicitly so all platforms behave the same.
     _validateGzipHeader(data);
 
+    // Decompression-bomb guard: gzip stores the uncompressed size (mod 2^32) in
+    // the ISIZE trailer, so we can reject oversized declared output before
+    // allocating anything. Cheap and never triggers for in-limit payloads.
+    if (maxDecompressedSize != _unlimited) {
+      final n = data.length;
+      final declaredSize = data[n - 4] |
+          (data[n - 3] << 8) |
+          (data[n - 2] << 16) |
+          (data[n - 1] << 24);
+      if (declaredSize > maxDecompressedSize) {
+        throw FormatException(
+          'Invalid gzip data: declared size $declaredSize exceeds '
+          'maxDecompressedSize $maxDecompressedSize',
+        );
+      }
+    }
+
     final List<int> result;
     try {
       // verify:true enforces the CRC32 + ISIZE trailer check on the VM.
+      // decodeBytes already returns a Uint8List, but the trailer re-check below
+      // works on any List<int>, so keep the declared type loose.
       result = GZipDecoder().decodeBytes(data, verify: true);
     } catch (e) {
       throw FormatException('Invalid gzip data: $e');
@@ -52,7 +127,10 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // behaviour matches the VM on every platform.
     _verifyTrailer(data, result);
 
-    return Uint8List.fromList(result);
+    // decodeBytes returns a Uint8List on every platform, so avoid the extra
+    // Uint8List.fromList copy. Cast defensively in case a future archive
+    // version changes the concrete type.
+    return result is Uint8List ? result : Uint8List.fromList(result);
   }
 
   /// Validates the gzip trailer (RFC 1952): the last 8 bytes are CRC32 and

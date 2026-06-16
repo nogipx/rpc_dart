@@ -31,6 +31,74 @@ void main() {
     });
   });
 
+  group('RpcGzipCodec.level', () {
+    // Mildly compressible data so that level actually affects output size.
+    final data = Uint8List.fromList(
+      List.generate(8192, (i) => (i * 37 + (i ~/ 13)) & 0xff),
+    );
+
+    test('min_and_max_level_both_roundtrip', () {
+      const minCodec = RpcGzipCodec(level: RpcGzipCodec.fastestLevel);
+      const maxCodec = RpcGzipCodec(level: RpcGzipCodec.bestLevel);
+
+      final minCompressed = minCodec.compress(data);
+      final maxCompressed = maxCodec.compress(data);
+
+      // Either codec must decode any valid gzip stream back to the original.
+      expect(minCodec.decompress(minCompressed), equals(data));
+      expect(maxCodec.decompress(maxCompressed), equals(data));
+      expect(maxCodec.decompress(minCompressed), equals(data));
+      expect(minCodec.decompress(maxCompressed), equals(data));
+    });
+
+    test('higher_level_is_not_larger_than_lower_level', () {
+      const minCodec = RpcGzipCodec(level: RpcGzipCodec.fastestLevel);
+      const maxCodec = RpcGzipCodec(level: RpcGzipCodec.bestLevel);
+
+      final minSize = minCodec.compress(data).length;
+      final maxSize = maxCodec.compress(data).length;
+
+      expect(maxSize, lessThanOrEqualTo(minSize));
+    });
+
+    test('level_zero_stores_and_still_roundtrips', () {
+      const storeCodec = RpcGzipCodec(level: 0);
+      final compressed = storeCodec.compress(data);
+      expect(storeCodec.decompress(compressed), equals(data));
+    });
+
+    test('default_level_is_six', () {
+      expect(const RpcGzipCodec().level, equals(6));
+      expect(RpcGzipCodec.defaultLevel, equals(6));
+    });
+  });
+
+  group('RpcGzipCodec.maxDecompressedSize', () {
+    test('unlimited_by_default_allows_any_payload', () {
+      const codec = RpcGzipCodec();
+      final original = Uint8List.fromList(List.filled(100000, 7));
+      final compressed = codec.compress(original);
+      expect(codec.decompress(compressed), equals(original));
+    });
+
+    test('throws_when_declared_size_exceeds_limit', () {
+      final original = Uint8List.fromList(List.filled(10000, 7));
+      final compressed = const RpcGzipCodec().compress(original);
+      const guarded = RpcGzipCodec(maxDecompressedSize: 1000);
+      expect(
+        () => guarded.decompress(compressed),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('allows_payload_within_limit', () {
+      final original = Uint8List.fromList(List.filled(500, 7));
+      final compressed = const RpcGzipCodec().compress(original);
+      const guarded = RpcGzipCodec(maxDecompressedSize: 1000);
+      expect(guarded.decompress(compressed), equals(original));
+    });
+  });
+
   group('RpcGzipCodec.register', () {
     setUp(() => RpcGzipCodec.register());
 
