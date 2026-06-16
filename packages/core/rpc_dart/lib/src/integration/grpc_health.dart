@@ -213,20 +213,41 @@ final class GrpcHealthCheckContract extends RpcResponderContract {
   Stream<GrpcHealthCheckResponse> _watch(
     GrpcHealthCheckRequest request, {
     RpcContext? context,
-  }) async* {
+  }) {
     final service = request.service;
 
-    // Emit current status immediately.
-    final current = _status.getStatus(service);
-    var lastStatus = current ?? GrpcServingStatus.serviceUnknown;
-    yield GrpcHealthCheckResponse(status: lastStatus);
+    // ВАЖНО: не используем `async*` с `yield` перед `await for` --
+    // на dart2js такой генератор не подписывается на поток после первого
+    // yield, и события молча теряются. Используем StreamController.
+    late final StreamController<GrpcHealthCheckResponse> controller;
+    StreamSubscription<(String, GrpcServingStatus)>? sub;
 
-    // Stream subsequent changes.
-    await for (final (changedService, newStatus) in _status.changes) {
-      if (changedService != service) continue;
-      if (newStatus == lastStatus) continue;
-      lastStatus = newStatus;
-      yield GrpcHealthCheckResponse(status: newStatus);
-    }
+    controller = StreamController<GrpcHealthCheckResponse>(
+      onListen: () {
+        // Сразу отдаём текущий статус.
+        final current = _status.getStatus(service);
+        var lastStatus = current ?? GrpcServingStatus.serviceUnknown;
+        controller.add(GrpcHealthCheckResponse(status: lastStatus));
+
+        // Стримим последующие изменения.
+        sub = _status.changes.listen(
+          (change) {
+            final (changedService, newStatus) = change;
+            if (changedService != service) return;
+            if (newStatus == lastStatus) return;
+            lastStatus = newStatus;
+            controller.add(GrpcHealthCheckResponse(status: newStatus));
+          },
+          onError: controller.addError,
+          onDone: controller.close,
+        );
+      },
+      onCancel: () async {
+        await sub?.cancel();
+        sub = null;
+      },
+    );
+
+    return controller.stream;
   }
 }

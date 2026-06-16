@@ -79,10 +79,13 @@ void main() {
       expect(const RpcNum(7) % 2, const RpcNum(1));
       expect(-const RpcNum(7), const RpcNum(-7));
 
-      // Only int ~/ int is allowed.
+      // Only int ~/ int is allowed. The double operand must be an RpcDouble
+      // (not a plain RpcNum), because a plain RpcNum stores a type-erased num
+      // and `7.0 is int` is true on dart2js. The RpcInt/RpcDouble subtype is
+      // distinguishable identically on VM and dart2js.
       expect(const RpcNum(7) ~/ const RpcNum(2), const RpcNum(3));
       expect(
-        () => const RpcNum(7.0) ~/ const RpcNum(2),
+        () => const RpcNum(7) ~/ const RpcDouble(2.0),
         throwsA(isA<RpcException>()),
       );
     });

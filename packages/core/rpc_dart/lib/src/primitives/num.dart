@@ -53,13 +53,31 @@ class RpcNum extends RpcPrimitiveMessage<num> {
   RpcNum operator /(Object other) => RpcNum(value / _extractNum(other));
 
   /// Integer-divides this value by [other].
+  ///
+  /// Only integer `~/` integer is allowed. The int/double distinction is
+  /// derived from the RpcNum SUBTYPE (RpcInt vs RpcDouble), because on
+  /// dart2js there is a single JS number type and `value is int` returns
+  /// true even for whole doubles (e.g. `7.0 is int`). Subtype-based checks
+  /// are distinguishable identically on VM and dart2js.
   RpcNum operator ~/(Object other) {
+    if (_isDoubleTyped(this) || _isDoubleTyped(other)) {
+      throw _comparisonException(type: 'RpcNum', op: '~/');
+    }
     final a = value;
     final b = _extractNum(other);
     if (a is int && b is int) {
       return RpcNum(a ~/ b);
     }
     throw _comparisonException(type: 'RpcNum', op: '~/');
+  }
+
+  /// Returns true when [o] is known to carry a double value via its runtime
+  /// type (RpcDouble or a raw double). For a type-erased plain RpcNum/num
+  /// this cannot be determined reliably on dart2js, so it returns false.
+  static bool _isDoubleTyped(Object o) {
+    if (o is RpcDouble) return true;
+    if (o is RpcInt) return false;
+    return false;
   }
 
   /// Returns the remainder of dividing this value by [other].

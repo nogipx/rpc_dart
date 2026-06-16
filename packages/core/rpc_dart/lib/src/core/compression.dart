@@ -96,7 +96,7 @@ abstract final class RpcGrpcCompression {
     if (encoding == identity) return data;
     final codec = _codecs[encoding];
     if (codec == null) {
-      throw UnsupportedError('Unsupported grpc-encoding: $encoding');
+      throw UnsupportedError(_unsupportedMessage(encoding));
     }
     return codec.compress(data);
   }
@@ -106,7 +106,7 @@ abstract final class RpcGrpcCompression {
     if (encoding == identity) return data;
     final codec = _codecs[encoding];
     if (codec == null) {
-      throw UnsupportedError('Unsupported grpc-encoding: $encoding');
+      throw UnsupportedError(_unsupportedMessage(encoding));
     }
     return codec.decompress(data);
   }
@@ -130,4 +130,11 @@ abstract final class RpcGrpcCompression {
   static List<String> supportedEncodings() {
     return [identity, ..._codecs.keys];
   }
+
+  static String _unsupportedMessage(String encoding) =>
+      'Unsupported grpc-encoding: $encoding. '
+      'Supported: ${supportedEncodings().join(', ')}. '
+      'On web/dart2js the built-in gzip is unavailable; register a '
+      'cross-platform codec (e.g. RpcGzipCodec.register() from '
+      'package:rpc_dart_compression).';
 }

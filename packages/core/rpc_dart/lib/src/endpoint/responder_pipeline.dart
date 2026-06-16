@@ -286,7 +286,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       unawaited(_sendGrpcErrorAndCleanup(
         streamId: state.id,
         status: RpcStatus.unimplemented,
-        message: 'Unsupported grpc-encoding: $grpcEncoding',
+        message: 'Unsupported grpc-encoding: $grpcEncoding. '
+            'On web/dart2js the built-in gzip is unavailable; register a '
+            'cross-platform codec (e.g. RpcGzipCodec.register() from '
+            'package:rpc_dart_compression).',
       ));
       return;
     }

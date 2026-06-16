@@ -288,7 +288,10 @@ final class UnaryCaller<TRequest, TResponse> {
             !RpcGrpcCompression.isSupported(requestEncoding)) {
           throw RpcException(
             'Unsupported grpc-encoding: $requestEncoding. '
-            'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}',
+            'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}. '
+            'On web/dart2js the built-in gzip is unavailable; register a '
+            'cross-platform codec (e.g. RpcGzipCodec.register() from '
+            'package:rpc_dart_compression).',
           );
         }
         final useCompression = requestEncoding != null &&
