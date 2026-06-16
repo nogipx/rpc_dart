@@ -125,12 +125,14 @@ class RpcApp {
       module.configureWithEnv(_container, _env);
     }
 
+    final startedModules = <RpcModule>[];
     try {
       await _startServer();
 
       for (final module in _modules) {
         _log?.debug('onStart: ${module.name}');
         await module.onStart(_container);
+        startedModules.add(module);
       }
 
       if (_afterModulesStartHook != null) {
@@ -139,6 +141,7 @@ class RpcApp {
       }
     } catch (e, st) {
       _log?.error('RpcApp failed to start', error: e, stackTrace: st);
+      await _rollbackStart(startedModules);
       _started = false;
       rethrow;
     }
@@ -249,6 +252,19 @@ class RpcApp {
       if (lvl == 'degraded') level = RpcAppHealthLevel.degraded;
     }
 
+    // Factor endpoint health into the overall level. A closed/inactive endpoint
+    // means the app cannot serve through it, so it degrades to unhealthy.
+    if (level != RpcAppHealthLevel.unhealthy) {
+      for (final metrics in endpointHealth) {
+        final isActive = metrics['isActive'] == true;
+        final transportClosed = metrics['transportClosed'] == true;
+        if (!isActive || transportClosed) {
+          level = RpcAppHealthLevel.unhealthy;
+          break;
+        }
+      }
+    }
+
     return RpcAppHealth(
       level: level,
       modules: moduleHealth,
@@ -261,12 +277,17 @@ class RpcApp {
   // Private helpers
   // -------------------------------------------------------------------------
 
+  /// Isolates spawned during [_startServer], tracked so they can be terminated
+  /// if startup fails partway through.
+  final List<RpcIsolateModule> _spawnedIsolates = [];
+
   Future<void> _startServer() async {
     // Spawn isolates.
     for (final module in _modules) {
       if (module is RpcIsolateModule) {
         _log?.debug('spawning isolate: ${module.name}');
         await module.initIsolate();
+        _spawnedIsolates.add(module);
       }
     }
 
@@ -274,6 +295,51 @@ class RpcApp {
     _log?.info('Starting transport server');
     await _server!.start();
     _log?.info('Transport server started');
+  }
+
+  /// Unwinds a partially-completed [start]: stops already-started modules in
+  /// reverse order, stops the transport server, and terminates spawned
+  /// isolates. Best-effort — individual teardown failures are logged, not
+  /// propagated, so the original startup error reaches the caller.
+  Future<void> _rollbackStart(List<RpcModule> startedModules) async {
+    _log?.warning('Rolling back partial startup');
+
+    for (final module in startedModules.reversed) {
+      _log?.debug('rollback onStop: ${module.name}');
+      try {
+        await module.onStop();
+      } catch (e, st) {
+        _log?.error(
+          'Error during rollback onStop of ${module.name}',
+          error: e,
+          stackTrace: st,
+        );
+      }
+    }
+
+    if (_server != null) {
+      try {
+        await _server!.stop();
+      } catch (e, st) {
+        _log?.error('Error stopping server during rollback',
+            error: e, stackTrace: st);
+      }
+      _server = null;
+    }
+
+    for (final module in _spawnedIsolates.reversed) {
+      _log?.debug('rollback terminate isolate: ${module.name}');
+      try {
+        await module.terminateIsolate();
+      } catch (e, st) {
+        _log?.error(
+          'Error terminating isolate ${module.name} during rollback',
+          error: e,
+          stackTrace: st,
+        );
+      }
+    }
+    _spawnedIsolates.clear();
   }
 
   void _setupEndpoint(RpcResponderEndpoint endpoint) {

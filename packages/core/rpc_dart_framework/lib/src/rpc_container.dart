@@ -37,6 +37,27 @@ class RpcContainer {
     _factories[T] = (c) => factory(c);
   }
 
+  /// Registers a lazily-created singleton for type [T].
+  ///
+  /// [factory] runs at most once, on the first [get] call; the resulting
+  /// instance is memoized and returned for every subsequent resolution.
+  /// Unlike [registerFactory] (which creates a new instance per [get]), this
+  /// guarantees a single shared instance.
+  ///
+  /// Overwrites any existing registration for [T].
+  void registerLazySingleton<T extends Object>(
+    T Function(RpcContainer c) factory,
+  ) {
+    _singletons.remove(T);
+    _factories[T] = (c) {
+      final existing = _singletons[T];
+      if (existing != null) return existing;
+      final created = factory(c);
+      _singletons[T] = created;
+      return created;
+    };
+  }
+
   /// Resolves [T] from the container.
   ///
   /// Singletons take priority over factories.
@@ -55,12 +76,13 @@ class RpcContainer {
   }
 
   /// Resolves [T] from the container, returning null if not registered.
+  ///
+  /// Only the "not registered" case yields null. If [T] is registered but its
+  /// factory throws (including [StateError]), the error propagates — a failing
+  /// factory is not conflated with a missing registration.
   T? tryGet<T extends Object>() {
-    try {
-      return get<T>();
-    } on StateError {
-      return null;
-    }
+    if (!has<T>()) return null;
+    return get<T>();
   }
 
   /// Returns true when [T] has a singleton or factory registration.
