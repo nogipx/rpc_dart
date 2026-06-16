@@ -317,8 +317,12 @@ void main() {
               whenCondition: (service, method, context) {
                 final userId = context?.getHeader('x-user-id');
                 if (userId == null) return false;
+                // Стабильный платформонезависимый хэш (String.hashCode
+                // различается между VM и dart2js).
                 // Четный хэш → premium, нечетный → regular
-                return userId.hashCode % 2 == 0;
+                final stableHash =
+                    userId.codeUnits.fold<int>(0, (a, b) => a + b);
+                return stableHash % 2 == 0;
               },
               priority: 100,
               description: 'A/B тестирование по hash пользователя',
@@ -340,7 +344,7 @@ void main() {
         final evenStreamId = router.createStream();
         final evenMetadata = RpcMetadata([
           RpcHeader(RpcHeaders.xRouteService, 'UserService'),
-          RpcHeader('x-user-id', 'user_1'), // hashCode: 742579346 (четный)
+          RpcHeader('x-user-id', 'user_2'), // sum(codeUnits): 592 (четный)
         ]);
         await router.sendMetadata(evenStreamId, evenMetadata);
 
@@ -348,15 +352,15 @@ void main() {
         final oddStreamId = router.createStream();
         final oddMetadata = RpcMetadata([
           RpcHeader(RpcHeaders.xRouteService, 'UserService'),
-          RpcHeader('x-user-id', 'user_2'), // hashCode: 437041191 (нечетный)
+          RpcHeader('x-user-id', 'user_1'), // sum(codeUnits): 591 (нечетный)
         ]);
         await router.sendMetadata(oddStreamId, oddMetadata);
 
         await Future.delayed(Duration(milliseconds: 1));
 
         // Assert
-        expect(premiumMessages.length, equals(1)); // user_1 → premium
-        expect(userMessages.length, equals(1)); // user_2 → regular
+        expect(premiumMessages.length, equals(1)); // user_2 → premium
+        expect(userMessages.length, equals(1)); // user_1 → regular
 
         await router.close();
       });

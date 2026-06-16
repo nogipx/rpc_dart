@@ -212,8 +212,10 @@ void main() {
       // Обновляем активность только первого клиента
       testDistributor.publishToClient('client1', TestMessage('keep alive', 1));
 
-      // Ждем, чтобы второй клиент стал неактивным
-      await Future.delayed(Duration(milliseconds: 1));
+      // Ждем, чтобы второй клиент стал неактивным.
+      // Запас > порога: на dart2js DateTime.now() имеет разрешение в 1 мс,
+      // поэтому нужен реальный зазор сверх порога неактивности.
+      await Future.delayed(Duration(milliseconds: 25));
 
       // Получаем список неактивных клиентов
       final inactiveIds = testDistributor.getInactiveClientIds(

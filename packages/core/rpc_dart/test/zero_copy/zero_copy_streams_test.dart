@@ -286,7 +286,13 @@ void main() {
       await Future.delayed(Duration(milliseconds: 1));
 
       await requestController.close();
-      await Future.delayed(Duration(milliseconds: 1));
+
+      // Детерминированное ожидание вместо фиксированного сна: на dart2js
+      // планирование грубее, поэтому ждем прихода всех ответов с таймаутом.
+      final deadline = DateTime.now().add(Duration(seconds: 5));
+      while (responses.length < 3 && DateTime.now().isBefore(deadline)) {
+        await Future.delayed(Duration(milliseconds: 5));
+      }
 
       print('\n📊 Анализ сообщений:');
       print('   Всего сообщений: ${sentMessages.length}');

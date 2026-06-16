@@ -4,9 +4,15 @@
 
 import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_compression/rpc_dart_compression.dart';
 import 'package:test/test.dart';
 
 void main() {
+  // Register a cross-platform gzip codec so these tests behave identically on
+  // the VM and on web (dart2js), where the built-in dart:io gzip is absent.
+  setUpAll(() => RpcGzipCodec.register());
+  tearDownAll(() => RpcGrpcCompression.unregister(RpcGrpcCompression.gzip));
+
   final codec = RpcCodec(RpcString.fromJson);
 
   // A large-ish payload that benefits from compression.
