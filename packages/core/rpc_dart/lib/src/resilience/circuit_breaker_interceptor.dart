@@ -102,12 +102,17 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
-    _checkState();
+    try {
+      _checkState();
+    } on CircuitBreakerOpenException catch (e, st) {
+      // Surface the open-circuit rejection through the stream so consumers
+      // observe it the same way as an emitted stream error.
+      return Stream<TResponse>.error(e, st);
+    }
 
     try {
       final stream = await next(call.context, request);
-      _onSuccess();
-      return stream;
+      return _wrapStream(stream);
     } catch (e) {
       _onFailure(e);
       rethrow;
@@ -138,16 +143,42 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {
-    _checkState();
+    try {
+      _checkState();
+    } on CircuitBreakerOpenException catch (e, st) {
+      return Stream<TResponse>.error(e, st);
+    }
 
     try {
       final stream = await next(call.context, requests);
-      _onSuccess();
-      return stream;
+      return _wrapStream(stream);
     } catch (e) {
       _onFailure(e);
       rethrow;
     }
+  }
+
+  /// Wraps a returned stream so that failures emitted during stream production
+  /// are counted, and success is only recorded on clean completion.
+  ///
+  /// Since [next] returns the stream synchronously (before any item flows),
+  /// recording success eagerly would let stream errors bypass the breaker.
+  Stream<TResponse> _wrapStream<TResponse>(Stream<TResponse> source) {
+    var failed = false;
+    return source.transform(
+      StreamTransformer<TResponse, TResponse>.fromHandlers(
+        handleData: (data, sink) => sink.add(data),
+        handleError: (error, stackTrace, sink) {
+          failed = true;
+          _onFailure(error);
+          sink.addError(error, stackTrace);
+        },
+        handleDone: (sink) {
+          if (!failed) _onSuccess();
+          sink.close();
+        },
+      ),
+    );
   }
 
   /// Checks whether a request is allowed based on the current state.

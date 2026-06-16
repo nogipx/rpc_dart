@@ -418,12 +418,17 @@ class _CborReader {
             (_readByte() << 8) |
             _readByte();
       case CborCodec._additionalInfoEightByteFollow:
-        // Read 8 bytes as a big-endian integer.
-        int result = 0;
-        for (int i = 0; i < 8; i++) {
-          result = (result << 8) | _readByte();
-        }
-        return result;
+        // Read 8 bytes as a big-endian integer. Combine high/low 32-bit halves
+        // without a >32-bit shift, which is unsupported in dart2js.
+        final hi = (_readByte() * 0x1000000) +
+            (_readByte() << 16) +
+            (_readByte() << 8) +
+            _readByte();
+        final lo = (_readByte() * 0x1000000) +
+            (_readByte() << 16) +
+            (_readByte() << 8) +
+            _readByte();
+        return hi * 0x100000000 + lo;
       case CborCodec._additionalInfoIndefiniteLength:
         throw FormatException('Indefinite length not implemented');
       default:
@@ -730,11 +735,16 @@ class _FastCborReader {
             (_readByteFast() << 8) |
             _readByteFast();
       case CborCodec._additionalInfoEightByteFollow:
-        int result = 0;
-        for (int i = 0; i < 8; i++) {
-          result = (result << 8) | _readByteFast();
-        }
-        return result;
+        // Combine high/low 32-bit halves without a >32-bit shift (dart2js-safe).
+        final hi = (_readByteFast() * 0x1000000) +
+            (_readByteFast() << 16) +
+            (_readByteFast() << 8) +
+            _readByteFast();
+        final lo = (_readByteFast() * 0x1000000) +
+            (_readByteFast() << 16) +
+            (_readByteFast() << 8) +
+            _readByteFast();
+        return hi * 0x100000000 + lo;
       default:
         throw FormatException('Unknown additional info: $additionalInfo');
     }

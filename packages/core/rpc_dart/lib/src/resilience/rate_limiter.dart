@@ -47,7 +47,10 @@ sealed class RateLimit {
   }) = _TokenBucketSpec;
 
   /// Creates a fresh stateful counter for this spec.
-  _RateLimitCounter _createCounter();
+  ///
+  /// [nowMicros] supplies the current time in microseconds; injecting it makes
+  /// timing testable and immune to wall-clock jumps.
+  _RateLimitCounter _createCounter(int Function() nowMicros);
 
   /// The window duration of this spec (used for stale-entry cleanup).
   Duration get _window;
@@ -66,8 +69,8 @@ class _SlidingWindowSpec extends RateLimit {
       : _window = window;
 
   @override
-  _RateLimitCounter _createCounter() =>
-      _SlidingWindowCounter(max: max, window: _window);
+  _RateLimitCounter _createCounter(int Function() nowMicros) =>
+      _SlidingWindowCounter(max: max, window: _window, nowMicros: nowMicros);
 }
 
 class _TokenBucketSpec extends RateLimit {
@@ -81,8 +84,9 @@ class _TokenBucketSpec extends RateLimit {
       : _window = window;
 
   @override
-  _RateLimitCounter _createCounter() =>
-      _TokenBucketCounter(max: max, window: _window, burst: burst ?? max);
+  _RateLimitCounter _createCounter(int Function() nowMicros) =>
+      _TokenBucketCounter(
+          max: max, window: _window, burst: burst ?? max, nowMicros: nowMicros);
 }
 
 // ---------------------------------------------------------------------------
@@ -90,11 +94,17 @@ class _TokenBucketSpec extends RateLimit {
 // ---------------------------------------------------------------------------
 
 abstract class _RateLimitCounter {
-  int _lastUsedUs = DateTime.now().microsecondsSinceEpoch;
+  _RateLimitCounter(this._nowMicros)
+      : _lastUsedUs = _nowMicros();
+
+  /// Injected monotonic-friendly clock (microseconds).
+  final int Function() _nowMicros;
+
+  int _lastUsedUs;
 
   /// Attempts to acquire one request slot.
   bool tryAcquire() {
-    _lastUsedUs = DateTime.now().microsecondsSinceEpoch;
+    _lastUsedUs = _nowMicros();
     return _doAcquire();
   }
 
@@ -113,13 +123,17 @@ class _SlidingWindowCounter extends _RateLimitCounter {
   int _previous = 0;
   int _windowStartUs;
 
-  _SlidingWindowCounter({required this.max, required Duration window})
+  _SlidingWindowCounter(
+      {required this.max,
+      required Duration window,
+      required int Function() nowMicros})
       : _windowUs = window.inMicroseconds,
-        _windowStartUs = DateTime.now().microsecondsSinceEpoch;
+        _windowStartUs = nowMicros(),
+        super(nowMicros);
 
   @override
   bool _doAcquire() {
-    final nowUs = DateTime.now().microsecondsSinceEpoch;
+    final nowUs = _nowMicros();
     final elapsedUs = nowUs - _windowStartUs;
 
     if (elapsedUs >= _windowUs) {
@@ -152,14 +166,18 @@ class _TokenBucketCounter extends _RateLimitCounter {
   int _lastRefillUs;
 
   _TokenBucketCounter(
-      {required this.max, required Duration window, required this.burst})
+      {required this.max,
+      required Duration window,
+      required this.burst,
+      required int Function() nowMicros})
       : _windowUs = window.inMicroseconds,
         _tokens = burst.toDouble(),
-        _lastRefillUs = DateTime.now().microsecondsSinceEpoch;
+        _lastRefillUs = nowMicros(),
+        super(nowMicros);
 
   @override
   bool _doAcquire() {
-    final nowUs = DateTime.now().microsecondsSinceEpoch;
+    final nowUs = _nowMicros();
     final elapsedUs = nowUs - _lastRefillUs;
 
     final refill = (elapsedUs / _windowUs) * max;
@@ -242,6 +260,11 @@ class RpcRateLimiter extends IRpcInterceptor {
   ///
   /// [cleanupInterval] controls how often stale per-key counters are evicted
   /// (only relevant when [keyExtractor] is set).
+  ///
+  /// [nowMicros] supplies the current time in microseconds. It defaults to a
+  /// monotonic source (a process-wide [Stopwatch]) so timing cannot be broken
+  /// by wall-clock jumps and is testable. Pass a custom function to inject a
+  /// fake clock in tests.
   RpcRateLimiter({
     RateLimit? global,
     Map<String, RateLimit> perService = const {},
@@ -249,20 +272,24 @@ class RpcRateLimiter extends IRpcInterceptor {
     RateLimit? perKeyFallback,
     String? Function(RpcMiddlewareContext)? keyExtractor,
     Duration cleanupInterval = const Duration(minutes: 5),
+    int Function()? nowMicros,
   })  : _globalSpec = global,
         _perServiceSpec = Map.unmodifiable(perService),
         _perMethodSpec = Map.unmodifiable(perMethod),
         _perKeyFallbackSpec = perKeyFallback,
-        _keyExtractor = keyExtractor {
-    _globalCounter = global?._createCounter();
+        _keyExtractor = keyExtractor,
+        _nowMicros = nowMicros ?? _defaultMonotonicMicros {
+    _globalCounter = global?._createCounter(_nowMicros);
 
     if (keyExtractor == null) {
       // Static mode: create one counter per slot up front.
       _staticServiceCounters = {
-        for (final e in perService.entries) e.key: e.value._createCounter(),
+        for (final e in perService.entries)
+          e.key: e.value._createCounter(_nowMicros),
       };
       _staticMethodCounters = {
-        for (final e in perMethod.entries) e.key: e.value._createCounter(),
+        for (final e in perMethod.entries)
+          e.key: e.value._createCounter(_nowMicros),
       };
     } else {
       _staticServiceCounters = const {};
@@ -271,11 +298,17 @@ class RpcRateLimiter extends IRpcInterceptor {
     }
   }
 
+  /// Process-wide monotonic clock, immune to wall-clock jumps.
+  static final Stopwatch _monotonic = Stopwatch()..start();
+  static int _defaultMonotonicMicros() => _monotonic.elapsedMicroseconds;
+
   final RateLimit? _globalSpec;
   final Map<String, RateLimit> _perServiceSpec;
   final Map<String, RateLimit> _perMethodSpec;
   final RateLimit? _perKeyFallbackSpec;
   final String? Function(RpcMiddlewareContext)? _keyExtractor;
+  final int Function() _nowMicros;
+  bool _disposed = false;
 
   _RateLimitCounter? _globalCounter;
   late final Map<String, _RateLimitCounter> _staticServiceCounters;
@@ -291,7 +324,13 @@ class RpcRateLimiter extends IRpcInterceptor {
   Timer? _cleanupTimer;
 
   /// Cancels the cleanup timer and releases dynamic counter state.
+  ///
+  /// After disposal the limiter no longer enforces or creates counters; calls
+  /// to [_check] become no-ops so the cleared maps cannot be repopulated while
+  /// the cleanup timer is cancelled (which would otherwise grow unbounded).
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     _cleanupTimer?.cancel();
     _dynamicServiceCounters.clear();
     _dynamicMethodCounters.clear();
@@ -299,7 +338,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   }
 
   void _cleanup() {
-    final nowUs = DateTime.now().microsecondsSinceEpoch;
+    final nowUs = _nowMicros();
     final thresholdUs = _maxWindowUs() * 2;
 
     void evict(Map<String, Map<String, _RateLimitCounter>> store) {
@@ -338,10 +377,14 @@ class RpcRateLimiter extends IRpcInterceptor {
     if (spec == null) return null;
     return store
         .putIfAbsent(userKey, () => {})
-        .putIfAbsent(slotKey, spec._createCounter);
+        .putIfAbsent(slotKey, () => spec._createCounter(_nowMicros));
   }
 
   void _check(RpcMiddlewareContext call) {
+    // After dispose the cleanup timer is cancelled; creating new dynamic
+    // counters here would grow unbounded. No-op instead.
+    if (_disposed) return;
+
     final methodKey = '${call.serviceName}.${call.methodName}';
     final userKey = _keyExtractor?.call(call);
 

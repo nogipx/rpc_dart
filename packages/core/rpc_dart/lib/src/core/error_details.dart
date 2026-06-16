@@ -51,7 +51,7 @@ abstract class RpcErrorDetail {
         // length-delimited
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
-        final bytes = Uint8List.sublistView(data, offset, offset + len);
+        final bytes = _readLengthDelimited(data, offset, len);
         offset += len;
         if (fieldNumber == 1) typeUrl = utf8.decode(bytes);
         if (fieldNumber == 2) value = bytes;
@@ -130,7 +130,7 @@ Uint8List encodeRpcStatus(
     } else if (wireType == 2) {
       final (len, newOffset) = _readVarint(data, offset);
       offset = newOffset;
-      final bytes = Uint8List.sublistView(data, offset, offset + len);
+      final bytes = _readLengthDelimited(data, offset, len);
       offset += len;
       if (fieldNumber == 2) {
         message = utf8.decode(bytes);
@@ -198,7 +198,7 @@ class RpcBadRequest extends RpcErrorDetail {
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
-        final bytes = Uint8List.sublistView(data, offset, offset + len);
+        final bytes = _readLengthDelimited(data, offset, len);
         offset += len;
         violations.add(_decodeFieldViolation(bytes));
       } else {
@@ -219,7 +219,7 @@ class RpcBadRequest extends RpcErrorDetail {
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
-        final bytes = Uint8List.sublistView(data, offset, offset + len);
+        final bytes = _readLengthDelimited(data, offset, len);
         offset += len;
         if (fieldNumber == 1) field = utf8.decode(bytes);
         if (fieldNumber == 2) description = utf8.decode(bytes);
@@ -298,7 +298,7 @@ class RpcRetryInfo extends RpcErrorDetail {
       if (wireType == 2 && fieldNumber == 1) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
-        final durationBytes = Uint8List.sublistView(data, offset, offset + len);
+        final durationBytes = _readLengthDelimited(data, offset, len);
         offset += len;
         // parse Duration
         var dOffset = 0;
@@ -374,7 +374,7 @@ class RpcDebugInfo extends RpcErrorDetail {
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
-        final bytes = Uint8List.sublistView(data, offset, offset + len);
+        final bytes = _readLengthDelimited(data, offset, len);
         offset += len;
         if (fieldNumber == 1) entries.add(utf8.decode(bytes));
         if (fieldNumber == 2) detail = utf8.decode(bytes);
@@ -462,7 +462,7 @@ class RpcErrorInfo extends RpcErrorDetail {
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
-        final bytes = Uint8List.sublistView(data, offset, offset + len);
+        final bytes = _readLengthDelimited(data, offset, len);
         offset += len;
         if (fieldNumber == 1) reason = utf8.decode(bytes);
         if (fieldNumber == 2) domain = utf8.decode(bytes);
@@ -492,7 +492,7 @@ class RpcErrorInfo extends RpcErrorDetail {
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
-        final bytes = Uint8List.sublistView(data, offset, offset + len);
+        final bytes = _readLengthDelimited(data, offset, len);
         offset += len;
         if (fieldNumber == 1) key = utf8.decode(bytes);
         if (fieldNumber == 2) value = utf8.decode(bytes);
@@ -539,11 +539,36 @@ void _writeVarint(BytesBuilder buf, int value) {
 (int value, int newOffset) _readVarint(Uint8List data, int offset) {
   int result = 0;
   int shift = 0;
-  while (offset < data.length) {
+  var terminated = false;
+  // A 64-bit varint is at most 10 bytes; bound the loop to reject runaway/
+  // unterminated varints in hostile or truncated frames.
+  while (offset < data.length && shift < 64) {
     final byte = data[offset++];
     result |= (byte & 0x7F) << shift;
-    if ((byte & 0x80) == 0) break;
+    if ((byte & 0x80) == 0) {
+      terminated = true;
+      break;
+    }
     shift += 7;
   }
+  if (!terminated) {
+    throw const FormatException(
+      'Malformed protobuf: unterminated or truncated varint',
+    );
+  }
   return (result, offset);
+}
+
+/// Returns a view of [len] bytes starting at [offset], validating bounds.
+///
+/// Throws [FormatException] on a negative or out-of-range length instead of
+/// leaking an uncaught [RangeError] from [Uint8List.sublistView].
+Uint8List _readLengthDelimited(Uint8List data, int offset, int len) {
+  if (len < 0 || offset + len > data.length) {
+    throw FormatException(
+      'Malformed protobuf: length-delimited field of $len bytes at offset '
+      '$offset exceeds buffer of ${data.length} bytes',
+    );
+  }
+  return Uint8List.sublistView(data, offset, offset + len);
 }

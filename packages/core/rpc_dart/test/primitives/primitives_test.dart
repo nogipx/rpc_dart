@@ -47,7 +47,8 @@ void main() {
       expect(RpcNum.fromJson({'v': 1.25}), const RpcNum(1.25));
       expect(RpcNum.fromJson({'v': '2.0'}), const RpcNum(2));
       expect(RpcNum.fromJson({'v': '3.14'}), const RpcNum(3.14));
-      expect(RpcNum.fromJson({'v': 'nope'}), const RpcNum(0));
+      // Malformed input must surface a decode error, not silently become 0.
+      expect(() => RpcNum.fromJson({'v': 'nope'}), throwsFormatException);
       expect(RpcNum.fromJson({}), const RpcNum(0));
     });
 
@@ -86,13 +87,16 @@ void main() {
       );
     });
 
-    test('comparisons with raw num throw RpcException', () {
+    test('ordering comparisons with raw num throw RpcException', () {
       expect(() => const RpcInt(1) < 2, throwsA(isA<RpcException>()));
       expect(() => const RpcDouble(1.0) > 2.0, throwsA(isA<RpcException>()));
-      expect(
-        () => (const RpcNum(1) as dynamic) == 1,
-        throwsA(isA<RpcException>()),
-      );
+    });
+
+    test('operator == with raw num must not throw (returns false)', () {
+      // operator == must never throw (Dart core contract).
+      expect((const RpcNum(1) as dynamic) == 1, isFalse);
+      expect((const RpcInt(1) as dynamic) == 1, isFalse);
+      expect((const RpcDouble(1.0) as dynamic) == 1.0, isFalse);
     });
 
     test('unsupported operands throw RpcException', () {

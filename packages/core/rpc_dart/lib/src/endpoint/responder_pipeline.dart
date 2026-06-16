@@ -145,6 +145,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       _log.warning(
         'Drain timeout — ${_respStreams.length} stream(s) still active, forcing cleanup',
       );
+      // Actually force the cleanup the log promises: close remaining responders
+      // and release their state/stream IDs.
+      final remaining =
+          _respStreams.values.map((s) => s.id).toList(growable: false);
+      for (final streamId in remaining) {
+        await _cleanupStream(streamId);
+      }
     }
   }
 
@@ -179,6 +186,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
+    // Ignore meaningless control frames for streams we do not already track.
+    // A frame opens a new stream only if it carries a methodPath, a payload,
+    // an end-of-stream marker, or a client-cancellation header. Anything else
+    // (e.g. an empty metadata-only frame on a fresh stream ID) would otherwise
+    // materialize unbounded state via obtain() with no cleanup path.
+    if (_respStreams[message.streamId] == null &&
+        !_opensOrAdvancesStream(message)) {
+      _log.warning(
+        'Ignoring no-op frame for unknown stream ${message.streamId}',
+      );
+      return;
+    }
+
     final state = _respStreams.obtain(message.streamId);
 
     if (message.isMetadataOnly && message.metadata != null) {
@@ -208,6 +228,28 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (message.isEndOfStream) {
       _handleEndOfStream(state);
     }
+  }
+
+  /// Whether [message] carries enough to legitimately open or advance a stream.
+  ///
+  /// Used to reject meaningless control frames on unknown stream IDs before
+  /// they materialize state. A frame qualifies if it carries a methodPath, a
+  /// payload, an end-of-stream marker, or a client-cancellation header.
+  bool _opensOrAdvancesStream(RpcTransportMessage message) {
+    if (message.methodPath != null) return true;
+    if (message.isEndOfStream) return true;
+
+    final hasPayload = !message.isMetadataOnly &&
+        (message.payload != null ||
+            (message.isDirect && message.directPayload != null));
+    if (hasPayload) return true;
+
+    if (message.isMetadataOnly && message.metadata != null) {
+      if (message.metadata!.getHeaderValue('x-client-cancelled') == 'true') {
+        return true;
+      }
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------------------

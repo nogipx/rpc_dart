@@ -1,3 +1,17 @@
+## 3.2.3
+
+**Fixes (audit):**
+- CBOR 8-byte integer READ was truncated on dart2js (`(result << 8)` uses 32-bit JS bitops) -- now reads hi/lo 32-bit halves and recombines, mirroring the write-side fix. Values above 2^32 now round-trip correctly in the browser.
+- Circuit breaker was a no-op for streaming RPCs: it recorded success as soon as the `Stream` object was returned. Errors emitted during stream production now count as failures; an open circuit on a stream RPC surfaces as a stream error instead of a synchronous throw.
+- `TransportRouter` leaked the subscription, stream maps and server stream id when `sendMetadata` threw -- failed sends now roll back all state.
+- `error_details` decoding now validates length-delimited bounds and bounds the varint loop, throwing `FormatException` on malformed input instead of an uncaught `RangeError`.
+- `ResponderPipeline` no longer creates per-stream state for junk control frames (unbounded-memory vector); `drain()` now actually closes the remaining streams on timeout instead of only logging.
+- `RpcRateLimiter` no longer repopulates its counters after `dispose()` (added `_disposed` guard) and accepts an injectable monotonic clock via `nowMicros` (default monotonic, no longer wall-clock sensitive).
+
+**Behavioral changes:**
+- `RpcNum`/`RpcInt`/`RpcDouble.operator ==` no longer throws for a non-`RpcNum` operand -- it returns `false` per the Dart `==` contract.
+- `RpcNum.fromJson`/`RpcInt.fromJson`/`RpcDouble.fromJson` now throw `FormatException` on malformed input instead of silently returning `0`.
+
 ## 3.2.2
 
 **Fixes:**

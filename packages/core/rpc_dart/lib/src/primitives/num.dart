@@ -12,13 +12,13 @@ class RpcNum extends RpcPrimitiveMessage<num> {
 
   /// Creates RpcNum from JSON.
   factory RpcNum.fromJson(Map<String, dynamic> json) {
-    try {
-      final v = json['v'];
-      if (v == null) return const RpcNum(0);
-      if (v is num) return RpcNum(v);
+    final v = json['v'];
+    if (v == null) return const RpcNum(0);
+    if (v is num) return RpcNum(v);
 
+    if (v is String) {
       // Attempt to parse as number.
-      final asDouble = double.tryParse(v.toString());
+      final asDouble = double.tryParse(v);
       if (asDouble != null) {
         // Convert to int when the value is whole.
         if (asDouble == asDouble.toInt()) {
@@ -26,11 +26,11 @@ class RpcNum extends RpcPrimitiveMessage<num> {
         }
         return RpcNum(asDouble);
       }
-
-      return const RpcNum(0);
-    } catch (e) {
-      return const RpcNum(0);
     }
+
+    throw FormatException(
+      'RpcNum.fromJson: cannot decode value of type ${v.runtimeType}: $v',
+    );
   }
 
   /// Default codec for [RpcNum].
@@ -107,9 +107,6 @@ class RpcNum extends RpcPrimitiveMessage<num> {
   @override
   bool operator ==(Object other) {
     if (other is RpcNum) return value == other.value;
-    if (other is num) {
-      throw _comparisonException(type: 'RpcNum', op: '==');
-    }
     return false;
   }
 
@@ -132,15 +129,17 @@ class RpcInt extends RpcPrimitiveMessage<int> {
 
   /// Creates RpcInt from JSON.
   factory RpcInt.fromJson(Map<String, dynamic> json) {
-    try {
-      final v = json['v'];
-      if (v == null) return const RpcInt(0);
-      if (v is int) return RpcInt(v);
-      if (v is num) return RpcInt(v.toInt());
-      return RpcInt(int.tryParse(v.toString()) ?? 0);
-    } catch (e) {
-      return const RpcInt(0);
+    final v = json['v'];
+    if (v == null) return const RpcInt(0);
+    if (v is int) return RpcInt(v);
+    if (v is num) return RpcInt(v.toInt());
+    if (v is String) {
+      final parsed = int.tryParse(v) ?? double.tryParse(v)?.toInt();
+      if (parsed != null) return RpcInt(parsed);
     }
+    throw FormatException(
+      'RpcInt.fromJson: cannot decode value of type ${v.runtimeType}: $v',
+    );
   }
 
   /// Default codec for [RpcInt].
@@ -210,9 +209,6 @@ class RpcInt extends RpcPrimitiveMessage<int> {
   @override
   bool operator ==(Object other) {
     if (other is RpcInt) return value == other.value;
-    if (other is num) {
-      throw _comparisonException(type: 'RpcInt', op: '==');
-    }
     return false;
   }
 
@@ -236,22 +232,22 @@ class RpcDouble extends RpcPrimitiveMessage<double> {
 
   /// Creates RpcDouble from JSON.
   factory RpcDouble.fromJson(Map<String, dynamic> json) {
-    try {
-      final v = json['v'];
-      if (v == null) return const RpcDouble(0.0);
-      if (v is double) return RpcDouble(v);
-      if (v is num) return RpcDouble(v.toDouble());
+    final v = json['v'];
+    if (v == null) return const RpcDouble(0.0);
+    if (v is double) return RpcDouble(v);
+    if (v is num) return RpcDouble(v.toDouble());
 
+    if (v is String) {
       // Attempt to parse as double.
-      final asDouble = double.tryParse(v.toString());
+      final asDouble = double.tryParse(v);
       if (asDouble != null) {
         return RpcDouble(asDouble);
       }
-
-      return const RpcDouble(0.0);
-    } catch (e) {
-      return const RpcDouble(0.0);
     }
+
+    throw FormatException(
+      'RpcDouble.fromJson: cannot decode value of type ${v.runtimeType}: $v',
+    );
   }
 
   /// Default codec for [RpcDouble].
@@ -324,9 +320,6 @@ class RpcDouble extends RpcPrimitiveMessage<double> {
   @override
   bool operator ==(Object other) {
     if (other is RpcDouble) return value == other.value;
-    if (other is num) {
-      throw _comparisonException(type: 'RpcDouble', op: '==');
-    }
     return false;
   }
 

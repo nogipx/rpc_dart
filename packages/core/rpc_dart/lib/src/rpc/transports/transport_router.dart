@@ -369,13 +369,24 @@ final class RpcTransportRouter implements IRpcTransport {
     _logger.internal('Creating response subscription...');
     _subscribeToResponsesForStream(streamId, serverStreamId, transport);
 
-    // Forward the call using the new stream ID.
+    // Forward the call using the new stream ID. If the send fails, roll back
+    // ALL state registered above so the stream slot does not leak.
     _logger.internal('Sending metadata to target transport...');
-    await transport.sendMetadata(
-      serverStreamId,
-      metadata,
-      endStream: endStream,
-    );
+    try {
+      await transport.sendMetadata(
+        serverStreamId,
+        metadata,
+        endStream: endStream,
+      );
+    } catch (e) {
+      _logger.internal('sendMetadata failed, rolling back stream state: $e');
+      _streamTransports.remove(streamId);
+      _clientToServerStreamMapping.remove(streamId);
+      final subscription = _responseSubscriptions.remove(streamId);
+      await subscription?.cancel();
+      transport.releaseStreamId(serverStreamId);
+      rethrow;
+    }
 
     _logger.internal('sendMetadata completed successfully');
   }
