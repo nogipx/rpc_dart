@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 1: CBOR 8-byte integer READ broken on dart2js.
 //
 // special_cbor.dart:420-426 (_readUnsignedInt) and 722-737

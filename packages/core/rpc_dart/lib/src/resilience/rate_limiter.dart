@@ -94,8 +94,7 @@ class _TokenBucketSpec extends RateLimit {
 // ---------------------------------------------------------------------------
 
 abstract class _RateLimitCounter {
-  _RateLimitCounter(this._nowMicros)
-      : _lastUsedUs = _nowMicros();
+  _RateLimitCounter(this._nowMicros) : _lastUsedUs = _nowMicros();
 
   /// Injected monotonic-friendly clock (microseconds).
   final int Function() _nowMicros;

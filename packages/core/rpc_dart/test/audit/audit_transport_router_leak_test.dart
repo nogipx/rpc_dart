@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 3: TransportRouter.sendMetadata leaks state when the target
 // transport's sendMetadata throws.
 //

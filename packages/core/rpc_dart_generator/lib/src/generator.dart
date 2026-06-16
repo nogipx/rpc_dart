@@ -502,7 +502,8 @@ class _Emitter {
 
     for (final method in methods) {
       b.writeln(
-        method.signature.callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
+        method.signature
+            .callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
       );
       b.writeln();
     }
@@ -605,7 +606,8 @@ class _Emitter {
     // Caller methods — implement interface, call remote peer
     for (final method in methods) {
       b.writeln(
-        method.signature.callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
+        method.signature
+            .callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
       );
       b.writeln();
     }
@@ -647,7 +649,8 @@ class _Emitter {
 
     for (final method in methods) {
       b.writeln(
-        method.signature.callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
+        method.signature
+            .callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
       );
       b.writeln();
     }

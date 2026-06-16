@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 2: Circuit breaker is a no-op for STREAMING RPCs.
 //
 // circuit_breaker_interceptor.dart:108-110 (interceptServerStream) and

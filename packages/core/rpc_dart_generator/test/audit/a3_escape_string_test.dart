@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding A3: _escape / _escapeString only escape single-quotes.
 //
 // generator.dart:1180 (_escape) and generator.dart:1434 (_escapeString):

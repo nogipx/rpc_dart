@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 8: drain() busy-waits and on timeout logs "forcing cleanup"
 // but performs NO cleanup.
 //

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 7: responder_pipeline.dart:182 obtain(streamId) creates
 // unbounded state for arbitrary streamIds with no cleanup.
 //
@@ -22,8 +26,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('junk metadata frames accumulate unbounded responder state', () async {
-    final (clientTransport, serverTransport) =
-        RpcChannelTransport.memoryPair();
+    final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
 
     final responder = RpcResponderEndpoint(transport: serverTransport);
     responder.start();

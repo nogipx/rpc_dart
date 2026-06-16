@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 5: RpcNum/RpcInt/RpcDouble.fromJson catch-all swallows
 // malformed input and silently returns 0.
 //
@@ -59,7 +63,9 @@ void main() {
     test('RpcInt.fromJson with structurally wrong value (Map)', () {
       // A Map under 'v' is clearly corrupt; it must not silently become 0.
       expect(
-        () => RpcInt.fromJson({'v': <String, int>{'a': 1}}),
+        () => RpcInt.fromJson({
+          'v': <String, int>{'a': 1}
+        }),
         throwsA(anything),
         reason: 'structurally invalid value must not silently become RpcInt(0)',
       );

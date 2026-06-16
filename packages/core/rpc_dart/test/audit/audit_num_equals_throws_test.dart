@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 4: RpcNum/RpcInt/RpcDouble.operator == THROWS when compared
 // with a raw num.
 //
@@ -11,6 +15,10 @@
 // collection that compares elements against arbitrary values.
 //
 // CONFIRMED if `RpcInt(5) == 5` throws, or if Set membership throws.
+//
+// The unrelated-type `==` comparisons below are intentional (that is the bug
+// under test), so the corresponding analyzer hint is suppressed file-wide.
+// ignore_for_file: unrelated_type_equality_checks
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';

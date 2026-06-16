@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 6: error_details.dart decode has no bounds validation.
 //
 // _readVarint (error_details.dart:539-549) reads a length with no termination
@@ -15,8 +19,6 @@
 // an uncaught RangeError. CONFIRMED if it throws RangeError (or the wrong type).
 //
 // fvm dart test test/audit/audit_error_details_decode_test.dart
-
-import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';

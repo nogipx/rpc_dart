@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding A2: Map<String,dynamic> / primitive codec emits `.fromJson`.
 //
 // generator.dart:931-936: _assertSerializable allows String/int/double/bool and
