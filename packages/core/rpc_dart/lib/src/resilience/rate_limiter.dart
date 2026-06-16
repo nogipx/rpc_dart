@@ -379,38 +379,71 @@ class RpcRateLimiter extends IRpcInterceptor {
         .putIfAbsent(slotKey, () => spec._createCounter(_nowMicros));
   }
 
-  void _check(RpcMiddlewareContext call) {
+  /// Resolves the counter that applies to [call] (or null if no limit applies
+  /// or the limiter is disposed). The same resolution is used for unary calls
+  /// and for per-message accounting on streaming calls.
+  _RateLimitCounter? _resolveCounter(RpcMiddlewareContext call) {
     // After dispose the cleanup timer is cancelled; creating new dynamic
     // counters here would grow unbounded. No-op instead.
-    if (_disposed) return;
+    if (_disposed) return null;
 
     final methodKey = '${call.serviceName}.${call.methodName}';
     final userKey = _keyExtractor?.call(call);
 
-    final _RateLimitCounter? counter;
-
     if (userKey != null) {
-      counter = _getDynamic(_dynamicMethodCounters, userKey, methodKey,
+      return _getDynamic(_dynamicMethodCounters, userKey, methodKey,
               _perMethodSpec[methodKey]) ??
           _getDynamic(_dynamicServiceCounters, userKey, call.serviceName,
               _perServiceSpec[call.serviceName]) ??
           _getDynamic(_dynamicFallbackCounters, userKey, methodKey,
               _perKeyFallbackSpec) ??
           _globalCounter;
-    } else {
-      counter = _staticMethodCounters[methodKey] ??
-          _staticServiceCounters[call.serviceName] ??
-          _globalCounter;
     }
+    return _staticMethodCounters[methodKey] ??
+        _staticServiceCounters[call.serviceName] ??
+        _globalCounter;
+  }
 
+  RpcRateLimitException _exceededException(RpcMiddlewareContext call) {
+    final methodKey = '${call.serviceName}.${call.methodName}';
+    final userKey = _keyExtractor?.call(call);
+    return RpcRateLimitException(
+      'Rate limit exceeded for $methodKey'
+      '${userKey != null ? ' (key: $userKey)' : ''}'
+      ' (gRPC status $_statusResourceExhausted: RESOURCE_EXHAUSTED)',
+    );
+  }
+
+  void _check(RpcMiddlewareContext call) {
+    final counter = _resolveCounter(call);
     if (counter == null) return;
     if (!counter.tryAcquire()) {
-      throw RpcRateLimitException(
-        'Rate limit exceeded for $methodKey'
-        '${userKey != null ? ' (key: $userKey)' : ''}'
-        ' (gRPC status $_statusResourceExhausted: RESOURCE_EXHAUSTED)',
-      );
+      throw _exceededException(call);
     }
+  }
+
+  /// Wraps [source] so that EVERY element counts against the rate limit.
+  ///
+  /// When the limit is exceeded mid-stream, the wrapped stream emits a
+  /// [RpcRateLimitException] error (RESOURCE_EXHAUSTED) and stops forwarding,
+  /// consistent with the unary rejection path.
+  Stream<T> _meterStream<T>(RpcMiddlewareContext call, Stream<T> source) {
+    final counter = _resolveCounter(call);
+    if (counter == null) return source;
+    return source.transform(
+      StreamTransformer<T, T>.fromHandlers(
+        handleData: (data, sink) {
+          if (counter.tryAcquire()) {
+            sink.add(data);
+          } else {
+            sink.addError(_exceededException(call), StackTrace.current);
+          }
+        },
+        handleError: (error, stackTrace, sink) =>
+            sink.addError(error, stackTrace),
+        handleDone: (sink) => sink.close(),
+      ),
+    );
   }
 
   @override
@@ -429,8 +462,9 @@ class RpcRateLimiter extends IRpcInterceptor {
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
-    _check(call);
-    return next(call.context, request);
+    // Default: every produced response message counts against the limit.
+    final stream = await next(call.context, request);
+    return _meterStream(call, stream);
   }
 
   @override
@@ -439,8 +473,8 @@ class RpcRateLimiter extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) async {
-    _check(call);
-    return next(call.context, requests);
+    // Default: every inbound request message counts against the limit.
+    return next(call.context, _meterStream(call, requests));
   }
 
   @override
@@ -449,8 +483,8 @@ class RpcRateLimiter extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {
-    _check(call);
-    return next(call.context, requests);
+    // Default: every inbound request message counts against the limit.
+    return next(call.context, _meterStream(call, requests));
   }
 }
 

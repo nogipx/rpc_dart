@@ -65,6 +65,11 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   int _failureCount = 0;
   DateTime? _lastFailureTime;
 
+  /// Whether a half-open probe is currently in flight. Only one probe is
+  /// admitted in [CircuitBreakerState.halfOpen]; further calls are rejected
+  /// until the in-flight probe resolves (success -> close, failure -> reopen).
+  bool _probeInFlight = false;
+
   /// Creates a circuit breaker interceptor.
   RpcCircuitBreakerInterceptor({
     this.failureThreshold = 5,
@@ -193,8 +198,9 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
         if (_lastFailureTime != null) {
           final elapsed = DateTime.now().difference(_lastFailureTime!);
           if (elapsed >= resetTimeout) {
-            // Transition to half-open, allow one probe.
+            // Transition to half-open and admit exactly this one probe.
             _state = CircuitBreakerState.halfOpen;
+            _probeInFlight = true;
             return;
           }
           throw CircuitBreakerOpenException(
@@ -204,12 +210,19 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
         throw const CircuitBreakerOpenException();
 
       case CircuitBreakerState.halfOpen:
-        return; // Allow probe through.
+        // Single-probe gate: only one probe may run at a time. Reject the
+        // rest until the in-flight probe resolves (success or failure).
+        if (_probeInFlight) {
+          throw const CircuitBreakerOpenException();
+        }
+        _probeInFlight = true;
+        return;
     }
   }
 
   void _onSuccess() {
     _failureCount = 0;
+    _probeInFlight = false;
     _state = CircuitBreakerState.closed;
   }
 
@@ -222,7 +235,8 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     _lastFailureTime = DateTime.now();
 
     if (_state == CircuitBreakerState.halfOpen) {
-      // Probe failed — reopen.
+      // Probe failed — reopen and release the probe gate.
+      _probeInFlight = false;
       _state = CircuitBreakerState.open;
     } else if (_failureCount >= failureThreshold) {
       _state = CircuitBreakerState.open;
@@ -234,5 +248,6 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     _state = CircuitBreakerState.closed;
     _failureCount = 0;
     _lastFailureTime = null;
+    _probeInFlight = false;
   }
 }

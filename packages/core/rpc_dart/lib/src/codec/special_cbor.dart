@@ -13,6 +13,15 @@ import 'package:rpc_dart/rpc_dart.dart' show IRpcSerializable;
 /// Uses two 32-bit writes instead of [ByteData.setUint64] which is
 /// unsupported in dart2js (JavaScript has no 64-bit integer type).
 void _writeUint64BigEndian(BytesBuilder builder, int value) {
+  // Defensive backstop: a non-finite value here would make `~/` throw on
+  // dart2js with an opaque message. Callers route non-finite doubles to the
+  // double encoder, so reaching this is a programming error -- fail clearly.
+  final asNum = value as num;
+  if (asNum.isNaN || asNum.isInfinite) {
+    throw FormatException(
+      'Cannot encode non-finite value $value as a 64-bit integer',
+    );
+  }
   final hi = (value ~/ 0x100000000) & 0xFFFFFFFF;
   final lo = value & 0xFFFFFFFF;
   builder.addByte((hi >> 24) & 0xFF);
@@ -23,6 +32,42 @@ void _writeUint64BigEndian(BytesBuilder builder, int value) {
   builder.addByte((lo >> 16) & 0xFF);
   builder.addByte((lo >> 8) & 0xFF);
   builder.addByte(lo & 0xFF);
+}
+
+/// Decodes an IEEE 754 half-precision (16-bit) float from two big-endian bytes.
+///
+/// CBOR encoders may emit half floats (major type 7, additional info 25).
+/// Neither writer in this file produces them, but a conforming decoder must
+/// accept them for interoperability.
+double _decodeHalfFloat(int hi, int lo) {
+  final half = (hi << 8) | lo;
+  final exp = (half >> 10) & 0x1F;
+  final mant = half & 0x3FF;
+  final sign = (half & 0x8000) != 0 ? -1.0 : 1.0;
+
+  double value;
+  if (exp == 0) {
+    // Subnormal: value = mant * 2^-24.
+    value = mant * 5.960464477539063e-8;
+  } else if (exp == 0x1F) {
+    // Infinity or NaN.
+    value = mant == 0 ? double.infinity : double.nan;
+  } else {
+    // Normal: value = (1 + mant/1024) * 2^(exp-15).
+    value = (1.0 + mant / 1024.0) * _pow2(exp - 15);
+  }
+  return sign * value;
+}
+
+/// Computes 2^n for integer n without bit-shifts (dart2js-safe for any range).
+double _pow2(int n) {
+  double result = 1.0;
+  final base = n < 0 ? 0.5 : 2.0;
+  final count = n < 0 ? -n : n;
+  for (int i = 0; i < count; i++) {
+    result *= base;
+  }
+  return result;
 }
 
 /// CBOR (Concise Binary Object Representation) implementation for RPC.
@@ -51,6 +96,11 @@ abstract interface class CborCodec {
   static const int _simpleValueNull = 22;
   static const int _simpleValueUndefined = 23;
   static const int _simpleValueBreak = 31;
+
+  /// 2^64, the smallest magnitude a CBOR major-type-0/1 integer cannot hold.
+  /// On dart2js a finite integer-valued double at or beyond this (e.g. 1e300)
+  /// reports `is int`, so the integer encoders fall back to a double for it.
+  static const double _cborIntDoubleThreshold = 18446744073709551616.0;
 
   /// Encodes Map(String, dynamic) into CBOR bytes.
   static Uint8List encode(Map<String, dynamic> value) {
@@ -152,6 +202,20 @@ abstract interface class CborCodec {
 
   /// Encodes an int.
   static void _encodeInt(int value, BytesBuilder builder) {
+    // On dart2js there is a single number type, so a non-finite double
+    // (Infinity/NaN) can reach this path via `value is int`. Such values have
+    // no integer representation; encode them as IEEE 754 doubles instead.
+    final asNum = value as num;
+    // On dart2js a finite integer-valued double whose magnitude exceeds the
+    // CBOR 64-bit integer range (e.g. 1e300) also satisfies `value is int`.
+    // It cannot be encoded as a uint64/negative-int; encode it as a double.
+    if (asNum.isNaN ||
+        asNum.isInfinite ||
+        asNum >= _cborIntDoubleThreshold ||
+        asNum < -_cborIntDoubleThreshold) {
+      _encodeDouble(asNum.toDouble(), builder);
+      return;
+    }
     if (value >= 0) {
       _encodePositiveInt(value, builder);
     } else {
@@ -360,7 +424,13 @@ abstract interface class CborCodec {
   }
 }
 
-/// Helper reader for CBOR data.
+/// Helper reader for CBOR data (reference, feature-complete).
+///
+/// PARITY: this is the reference decoder. The production decode() path uses the
+/// faster [_FastCborReader], which MUST accept the same input set. The two have
+/// silently diverged before; any change to which inputs are accepted/rejected
+/// must be mirrored in [_FastCborReader] and is guarded by
+/// test/serializers/cbor_parity_test.dart -- keep them in sync.
 class _CborReader {
   final Uint8List _bytes;
   int _offset = 0;
@@ -438,6 +508,22 @@ class _CborReader {
 
   /// Reads a byte string.
   Uint8List _readByteString(int additionalInfo) {
+    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+      // Indefinite-length byte string: a sequence of definite-length byte
+      // string chunks terminated by a break marker.
+      final builder = BytesBuilder();
+      while (!_consumeBreakMarker('indefinite-length byte string')) {
+        final byte = _readByte();
+        if ((byte >> 5) != CborCodec._majorTypeByteString) {
+          throw FormatException(
+            'Indefinite-length byte string contains a non-byte-string chunk',
+          );
+        }
+        builder.add(_readByteString(byte & 0x1F));
+      }
+      return builder.toBytes();
+    }
+
     final length = _readLength(additionalInfo);
 
     if (_offset + length > _bytes.length) {
@@ -451,6 +537,22 @@ class _CborReader {
 
   /// Reads a text string.
   String _readTextString(int additionalInfo) {
+    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+      // Indefinite-length text string: a sequence of definite-length text
+      // string chunks terminated by a break marker.
+      final buffer = StringBuffer();
+      while (!_consumeBreakMarker('indefinite-length text string')) {
+        final byte = _readByte();
+        if ((byte >> 5) != CborCodec._majorTypeTextString) {
+          throw FormatException(
+            'Indefinite-length text string contains a non-text-string chunk',
+          );
+        }
+        buffer.write(_readTextString(byte & 0x1F));
+      }
+      return buffer.toString();
+    }
+
     final length = _readLength(additionalInfo);
 
     if (_offset + length > _bytes.length) {
@@ -465,6 +567,23 @@ class _CborReader {
     } catch (e) {
       throw FormatException('Invalid UTF-8 sequence in text string');
     }
+  }
+
+  /// Returns true and consumes a break marker if one is at the current offset.
+  /// Throws if the stream ends before a break is found.
+  bool _consumeBreakMarker(String context) {
+    if (_offset >= _bytes.length) {
+      throw FormatException('Unexpected end of CBOR data inside $context');
+    }
+    if (_bytes[_offset] ==
+        CborCodec._getMajorTypeByte(
+          CborCodec._majorTypeSimple,
+          CborCodec._simpleValueBreak,
+        )) {
+      _offset++;
+      return true;
+    }
+    return false;
   }
 
   /// Reads an array.
@@ -567,6 +686,16 @@ class _CborReader {
         throw FormatException(
           'Unexpected break value outside indefinite-length item',
         );
+      case CborCodec._additionalInfoTwoByteFollow:
+        // IEEE 754 half-precision float (16-bit).
+        return _decodeHalfFloat(_readByte(), _readByte());
+      case CborCodec._additionalInfoFourByteFollow:
+        // IEEE 754 single-precision float (32-bit).
+        final byteData = ByteData(4);
+        for (int i = 0; i < 4; i++) {
+          byteData.setUint8(i, _readByte());
+        }
+        return byteData.getFloat32(0, Endian.big);
       case CborCodec._additionalInfoEightByteFollow:
         // IEEE 754 Double.
         final byteData = ByteData(8);
@@ -620,6 +749,11 @@ class _CborReader {
 
 /// OPTIMIZED: Fast CBOR reader for Map(String, dynamic).
 /// Avoids redundant checks and type conversions.
+///
+/// PARITY: this reader MUST decode exactly the same input set as the reference
+/// [_CborReader]. The two have silently diverged before. Any change here that
+/// affects which inputs are accepted/rejected must be mirrored in [_CborReader]
+/// and is guarded by test/serializers/cbor_parity_test.dart -- keep them in sync.
 class _FastCborReader {
   final Uint8List _bytes;
   int _offset = 0;
@@ -645,8 +779,19 @@ class _FastCborReader {
 
   /// Fast map reading with minimal overhead.
   Map<String, dynamic> _readMapFast(int additionalInfo) {
-    final length = _readLength(additionalInfo);
     final result = <String, dynamic>{};
+
+    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+      // Indefinite-length map: read key/value pairs until a break marker.
+      while (!_consumeBreakMarker('indefinite-length map')) {
+        final key = _readStringFast();
+        final value = _readValueFast();
+        result[key] = value;
+      }
+      return result;
+    }
+
+    final length = _readLength(additionalInfo);
 
     for (int i = 0; i < length; i++) {
       // Keys are always strings.
@@ -667,6 +812,21 @@ class _FastCborReader {
 
     if (majorType != CborCodec._majorTypeTextString) {
       throw FormatException('Expected text string, got major type: $majorType');
+    }
+
+    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+      // Indefinite-length text string: definite-length chunks until a break.
+      final buffer = StringBuffer();
+      while (!_consumeBreakMarker('indefinite-length text string')) {
+        final chunkByte = _bytes[_offset];
+        if ((chunkByte >> 5) != CborCodec._majorTypeTextString) {
+          throw FormatException(
+            'Indefinite-length text string contains a non-text-string chunk',
+          );
+        }
+        buffer.write(_readStringFast());
+      }
+      return buffer.toString();
     }
 
     final length = _readLength(additionalInfo);
@@ -711,6 +871,10 @@ class _FastCborReader {
         return _readArrayFast(additionalInfo);
       case CborCodec._majorTypeMap:
         return _readMapFast(additionalInfo);
+      case CborCodec._majorTypeTag:
+        // Skip the tag and read the tagged value (mirrors the slow reader).
+        _readUnsignedIntFast(additionalInfo);
+        return _readValueFast();
       case CborCodec._majorTypeSimple:
         return _readSimpleValueFast(additionalInfo);
       default:
@@ -745,6 +909,9 @@ class _FastCborReader {
             (_readByteFast() << 8) +
             _readByteFast();
         return hi * 0x100000000 + lo;
+      case CborCodec._additionalInfoIndefiniteLength:
+        // Mirrors the slow reader's message for malformed indefinite ints/tags.
+        throw FormatException('Indefinite length not implemented');
       default:
         throw FormatException('Unknown additional info: $additionalInfo');
     }
@@ -752,6 +919,21 @@ class _FastCborReader {
 
   /// Fast byte string read.
   Uint8List _readByteStringFast(int additionalInfo) {
+    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+      // Indefinite-length byte string: definite-length chunks until a break.
+      final builder = BytesBuilder();
+      while (!_consumeBreakMarker('indefinite-length byte string')) {
+        final chunkByte = _readByteFast();
+        if ((chunkByte >> 5) != CborCodec._majorTypeByteString) {
+          throw FormatException(
+            'Indefinite-length byte string contains a non-byte-string chunk',
+          );
+        }
+        builder.add(_readByteStringFast(chunkByte & 0x1F));
+      }
+      return builder.toBytes();
+    }
+
     final length = _readLength(additionalInfo);
 
     if (_offset + length > _bytes.length) {
@@ -765,8 +947,17 @@ class _FastCborReader {
 
   /// Fast array read.
   List<dynamic> _readArrayFast(int additionalInfo) {
-    final length = _readLength(additionalInfo);
     final result = <dynamic>[];
+
+    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+      // Indefinite-length array: elements until a break marker.
+      while (!_consumeBreakMarker('indefinite-length array')) {
+        result.add(_readValueFast());
+      }
+      return result;
+    }
+
+    final length = _readLength(additionalInfo);
 
     for (int i = 0; i < length; i++) {
       result.add(_readValueFast());
@@ -784,6 +975,24 @@ class _FastCborReader {
         return true;
       case CborCodec._simpleValueNull:
         return null;
+      case CborCodec._simpleValueUndefined:
+        // Dart treats undefined as null (mirrors the slow reader).
+        return null;
+      case CborCodec._simpleValueBreak:
+        // Same dedicated message as the slow reader for parity.
+        throw FormatException(
+          'Unexpected break value outside indefinite-length item',
+        );
+      case CborCodec._additionalInfoTwoByteFollow:
+        // IEEE 754 half-precision float (16-bit).
+        return _decodeHalfFloat(_readByteFast(), _readByteFast());
+      case CborCodec._additionalInfoFourByteFollow:
+        // IEEE 754 single-precision float (32-bit).
+        final byteData = ByteData(4);
+        for (int i = 0; i < 4; i++) {
+          byteData.setUint8(i, _readByteFast());
+        }
+        return byteData.getFloat32(0, Endian.big);
       case CborCodec._additionalInfoEightByteFollow:
         // Inline IEEE 754 double for speed.
         final byteData = ByteData(8);
@@ -795,6 +1004,10 @@ class _FastCborReader {
         if (additionalInfo >= 0 && additionalInfo <= 19) {
           return additionalInfo;
         }
+        if (additionalInfo == CborCodec._additionalInfoOneByteFollow) {
+          // Extended simple value (1 byte), mirrors the slow reader.
+          return _readByteFast();
+        }
         throw FormatException('Unknown simple value: $additionalInfo');
     }
   }
@@ -804,7 +1017,29 @@ class _FastCborReader {
     if (additionalInfo < 24) {
       return additionalInfo;
     }
+    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+      // Indefinite length reaching this point means a non-container (e.g. int)
+      // used additional info 31, which is not a valid definite length.
+      throw FormatException('Indefinite length not implemented');
+    }
     return _readUnsignedIntFast(additionalInfo);
+  }
+
+  /// Returns true and consumes a break marker if one is at the current offset.
+  /// Throws if the stream ends before a break is found.
+  bool _consumeBreakMarker(String context) {
+    if (_offset >= _bytes.length) {
+      throw FormatException('Unexpected end of CBOR data inside $context');
+    }
+    if (_bytes[_offset] ==
+        CborCodec._getMajorTypeByte(
+          CborCodec._majorTypeSimple,
+          CborCodec._simpleValueBreak,
+        )) {
+      _offset++;
+      return true;
+    }
+    return false;
   }
 
   /// Inline fast single-byte read.
@@ -913,6 +1148,20 @@ class _FastCborWriter {
 
   /// Encodes an int.
   void _writeInt(int value) {
+    // On dart2js there is a single number type, so a non-finite double
+    // (Infinity/NaN) can reach this path via `value is int`. Such values have
+    // no integer representation; encode them as IEEE 754 doubles instead.
+    final asNum = value as num;
+    // On dart2js a finite integer-valued double whose magnitude exceeds the
+    // CBOR 64-bit integer range (e.g. 1e300) also satisfies `value is int`.
+    // It cannot be encoded as a uint64/negative-int; encode it as a double.
+    if (asNum.isNaN ||
+        asNum.isInfinite ||
+        asNum >= CborCodec._cborIntDoubleThreshold ||
+        asNum < -CborCodec._cborIntDoubleThreshold) {
+      _writeDouble(asNum.toDouble());
+      return;
+    }
     if (value >= 0) {
       _writePositiveInt(value);
     } else {
