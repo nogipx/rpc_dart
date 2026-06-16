@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -39,7 +40,7 @@ class LogCollectorMcpServer {
 
   /// Start the log collector (WebSocket) and MCP (HTTP) servers.
   static Future<LogCollectorMcpServer> run({
-    String host = '0.0.0.0',
+    String host = '127.0.0.1',
     int collectorPort = 9500,
     int mcpPort = 9501,
     int bufferSize = 5000,
@@ -96,8 +97,13 @@ class LogCollectorMcpServer {
     }
 
     if (request.method == 'POST' && path == 'register') {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      Map<String, dynamic> body;
+      try {
+        final decoded = jsonDecode(await request.readAsString());
+        body = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+      } on FormatException {
+        body = <String, dynamic>{};
+      }
       return _json({
         'client_id': 'rpc-dart-log-local',
         'client_name': body['client_name'] ?? 'claude',
@@ -109,9 +115,14 @@ class LogCollectorMcpServer {
     }
 
     if (request.method == 'GET' && path == 'authorize') {
+      // DEV-ONLY, UNAUTHENTICATED flow. To avoid an open redirect we only
+      // honour loopback redirect targets; anything else is rejected.
       final redirectUri = request.url.queryParameters['redirect_uri'];
       final state = request.url.queryParameters['state'];
       if (redirectUri != null) {
+        if (!_isLoopbackRedirect(redirectUri)) {
+          return Response(400, body: 'redirect_uri must target loopback');
+        }
         final sep = redirectUri.contains('?') ? '&' : '?';
         final location =
             '$redirectUri${sep}code=local-dev-code${state != null ? '&state=$state' : ''}';
@@ -121,8 +132,10 @@ class LogCollectorMcpServer {
     }
 
     if (request.method == 'POST' && path == 'token') {
+      // DEV-ONLY, UNAUTHENTICATED flow. Issue a fresh random token per call
+      // instead of a static, predictable one.
       return _json({
-        'access_token': 'local-dev-token',
+        'access_token': _randomToken(),
         'token_type': 'Bearer',
         'expires_in': 999999,
       });
@@ -139,6 +152,28 @@ class LogCollectorMcpServer {
     }
 
     return Response(405);
+  }
+
+  static final _tokenRandom = Random.secure();
+
+  /// A fresh, unpredictable opaque token for the dev-only OAuth flow.
+  static String _randomToken() {
+    final bytes = List<int>.generate(24, (_) => _tokenRandom.nextInt(256));
+    return base64Url.encode(bytes);
+  }
+
+  /// True only if [redirectUri] is a syntactically valid URI whose host is a
+  /// loopback address (localhost / 127.0.0.0/8 / ::1). Used to block the OAuth
+  /// open-redirect in this dev-only flow.
+  static bool _isLoopbackRedirect(String redirectUri) {
+    final uri = Uri.tryParse(redirectUri);
+    if (uri == null) return false;
+    final host = uri.host.toLowerCase();
+    if (host == 'localhost') return true;
+    if (host == '::1') return true;
+    final addr = InternetAddress.tryParse(host);
+    if (addr != null && addr.isLoopback) return true;
+    return false;
   }
 
   Response _json(Map<String, dynamic> body) =>
@@ -159,7 +194,19 @@ Investigation strategy:
 5. TraceIds in sources are shown as 8-char prefixes -- pass prefix to traceId filter.''';
 
   String _processJsonRpc(String body) {
-    final json = jsonDecode(body) as Map<String, dynamic>;
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(body);
+    } on FormatException {
+      // Malformed JSON -> JSON-RPC parse error.
+      return _rpcError(null, -32700, 'Parse error');
+    }
+    if (decoded is! Map<String, dynamic>) {
+      // Well-formed JSON but not a JSON-RPC object (e.g. an array). The body
+      // cannot be interpreted as a request, so we report a parse error.
+      return _rpcError(null, -32700, 'Parse error');
+    }
+    final json = decoded;
     final id = json['id'];
     final method = json['method'] as String?;
 

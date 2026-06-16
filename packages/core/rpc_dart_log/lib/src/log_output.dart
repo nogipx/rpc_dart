@@ -83,13 +83,24 @@ class LogCollectorOutput extends LogOutput {
 
     if (_connected && _caller != null) {
       _caller!.send(wrapped).then((_) {}, onError: (Object _) {
-        _buffer.addLast(wrapped);
+        // Send failed mid-flight: treat the connection as offline so the
+        // reconnect/offline path engages, and re-buffer with the cap enforced
+        // (drop oldest when over bufferSize, same as the offline branch).
+        _enqueue(wrapped);
+        if (_connected) {
+          _closeTransport();
+          _scheduleReconnect();
+        }
       });
     } else {
-      _buffer.addLast(wrapped);
-      while (_buffer.length > bufferSize) {
-        _buffer.removeFirst();
-      }
+      _enqueue(wrapped);
+    }
+  }
+
+  void _enqueue(LogCollectorRecord record) {
+    _buffer.addLast(record);
+    while (_buffer.length > bufferSize) {
+      _buffer.removeFirst();
     }
   }
 
@@ -159,11 +170,39 @@ class LogCollectorOutput extends LogOutput {
     tr?.close();
   }
 
+  bool _flushing = false;
+
   void _flushBuffer() {
-    while (_buffer.isNotEmpty && _connected && _caller != null) {
-      final record = _buffer.removeFirst();
-      unawaited(
-          _caller!.send(record).catchError((Object _) => const LogCollectorAck()));
+    // Run asynchronously so the caller is never blocked, but internally
+    // serialize: send each record and only remove it from the buffer AFTER
+    // the send succeeds. On failure the record stays at the head (order
+    // preserved) and the offline/reconnect path takes over.
+    if (_flushing) return;
+    _flushing = true;
+    unawaited(_drainBuffer());
+  }
+
+  Future<void> _drainBuffer() async {
+    try {
+      while (_buffer.isNotEmpty && _connected && _caller != null) {
+        final record = _buffer.first;
+        try {
+          await _caller!.send(record);
+        } catch (_) {
+          // Send failed: keep the record at the head, go offline, reconnect.
+          if (_connected) {
+            _closeTransport();
+            _scheduleReconnect();
+          }
+          return;
+        }
+        // Success: now safe to drop it. Guard against concurrent dispose/clear.
+        if (_buffer.isNotEmpty && identical(_buffer.first, record)) {
+          _buffer.removeFirst();
+        }
+      }
+    } finally {
+      _flushing = false;
     }
   }
 

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:rpc_dart/rpc_dart.dart';
@@ -17,7 +18,9 @@ import 'protocol.dart';
 class LogCollectorMcpBuffer {
   final int maxRecords;
 
-  final List<TaggedRecord> _records = [];
+  // ListQueue gives O(1) indexed access AND amortized O(1) removeFirst(),
+  // so oldest-eviction is O(1) instead of List.removeAt(0)'s O(n) shift.
+  final ListQueue<TaggedRecord> _records = ListQueue();
   int _cursor = 0;
 
   // Incremental stats
@@ -46,7 +49,7 @@ class LogCollectorMcpBuffer {
     _records.add(tagged);
     _cursor++;
     while (_records.length > maxRecords) {
-      _records.removeAt(0);
+      _records.removeFirst();
     }
 
     final r = tagged.record;
@@ -187,10 +190,20 @@ class LogCollectorMcpBuffer {
 
     // Resolve start index: cursor takes priority, then since
     int startIndex = 0;
+    bool staleCursor = false;
     if (afterCursor != null) {
       final skip = _cursor - afterCursor;
-      if (skip > 0 && skip < _records.length) {
+      if (skip <= 0) {
+        // Caller is up to date (or ahead): nothing new.
+        startIndex = _records.length;
+      } else if (skip < _records.length) {
         startIndex = _records.length - skip;
+      } else {
+        // skip >= retained window: the record after the cursor was evicted.
+        // Return the full retained window but flag the gap so an incremental
+        // tail consumer knows records were lost and can reset.
+        staleCursor = true;
+        startIndex = 0;
       }
     } else if (sinceStr != null) {
       final cutoff = _parseSince(sinceStr);
@@ -206,23 +219,30 @@ class LogCollectorMcpBuffer {
       type: typeFilter,
     );
 
+    final stalePrefix = staleCursor
+        ? 'WARNING: cursor stale -- records after it were evicted; '
+            'this is a reset, the window below may include already-seen records.\n'
+        : '';
+
     if (contextLines > 0) {
-      return _getLogsWithContext(
-        startIndex: startIndex,
-        limit: limit,
-        contextLines: contextLines,
-        filter: filter,
-        noData: noData,
-      );
+      return stalePrefix +
+          _getLogsWithContext(
+            startIndex: startIndex,
+            limit: limit,
+            contextLines: contextLines,
+            filter: filter,
+            noData: noData,
+          );
     }
 
-    return _getLogsSimple(
-      startIndex: startIndex,
-      limit: limit,
-      filter: filter,
-      collapse: collapse,
-      noData: noData,
-    );
+    return stalePrefix +
+        _getLogsSimple(
+          startIndex: startIndex,
+          limit: limit,
+          filter: filter,
+          collapse: collapse,
+          noData: noData,
+        );
   }
 
   // ---------------------------------------------------------------------------
@@ -237,9 +257,10 @@ class LogCollectorMcpBuffer {
     required bool noData,
   }) {
     // Iterate newest-first; collect limit+1 to detect hasMore without full scan
-    final source = startIndex == 0
-        ? _records.reversed
-        : _records.sublist(startIndex).reversed;
+    final source = (startIndex == 0
+            ? _records.toList()
+            : _records.skip(startIndex).toList())
+        .reversed;
 
     final matched = <TaggedRecord>[];
     bool hasMore = false;
@@ -285,7 +306,7 @@ class LogCollectorMcpBuffer {
     // Find matching indices in chronological order within [startIndex, end)
     final matchIndices = <int>[];
     for (int i = startIndex; i < _records.length; i++) {
-      if (!filter.passes(_records[i])) continue;
+      if (!filter.passes(_records.elementAt(i))) continue;
       matchIndices.add(i);
       if (matchIndices.length >= limit) break;
     }
@@ -318,7 +339,7 @@ class LogCollectorMcpBuffer {
       if (w > 0) buf.writeln('---');
       final window = windows[w];
       for (int i = window.start; i <= window.end; i++) {
-        final tagged = _records[i];
+        final tagged = _records.elementAt(i);
         if (tagged.record is LogSpanStart) continue;
         final line = _formatTaggedRecord(tagged, noData: noData);
         buf.writeln(window.matches.contains(i) ? '> $line' : '  $line');
@@ -477,7 +498,7 @@ class LogCollectorMcpBuffer {
     int lo = 0, hi = _records.length;
     while (lo < hi) {
       final mid = (lo + hi) >> 1;
-      if (_records[mid].record.timestamp.isBefore(cutoff)) {
+      if (_records.elementAt(mid).record.timestamp.isBefore(cutoff)) {
         lo = mid + 1;
       } else {
         hi = mid;

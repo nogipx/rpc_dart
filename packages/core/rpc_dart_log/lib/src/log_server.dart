@@ -85,7 +85,7 @@ class LogCollectorServer {
   List<LogCollectorSession> get sessions => List.unmodifiable(_sessions.values);
 
   LogCollectorServer({
-    this.host = '0.0.0.0',
+    this.host = '127.0.0.1',
     this.port = 9500,
     LogController? controller,
   }) : controller =
@@ -152,6 +152,11 @@ class LogCollectorServer {
   }
 
   void _handleHandshake(RpcResponderEndpoint endpoint, LogCollectorHandshake info) {
+    // Idempotent per endpoint: a duplicate handshake on an already-registered
+    // connection must NOT allocate a new session, leak the old one, or fire a
+    // spurious DeviceConnected. Reuse the existing session for this endpoint.
+    if (_endpointSessions.containsKey(endpoint)) return;
+
     final id = _nextSessionId++;
     final session = LogCollectorSession(
       id: id,
