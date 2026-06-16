@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+import 'dart:collection';
+
 import 'package:fixnum/fixnum.dart';
 import 'package:opentelemetry/api.dart' hide SpanStatus;
 import 'package:rpc_dart/rpc_dart.dart';
@@ -42,16 +45,38 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// Standalone [LogEvent]s (no `spanId`) emit a single-shot span named
 /// `log.<scope>` so they remain visible in OTel without polluting the
 /// `addEvent` API.
+///
+/// Open spans are bounded to prevent unbounded map growth when an end record
+/// never arrives (e.g. a crashed scope). Two guards apply:
+/// - [maxOpenSpans]: when the open map exceeds this size, the oldest open
+///   spans are ended (LRU eviction) until it fits.
+/// - [spanTtl]: a periodic sweep ends any open span older than this TTL.
+/// An evicted span is ended (and thus exported) so nothing leaks.
 class LogControllerOtelOutput extends LogOutput {
   final Tracer _tracer;
   final Context Function()? _rootContextProvider;
-  final Map<String, Span> _open = <String, Span>{};
+
+  /// Open spans keyed by spanId. A [LinkedHashMap] preserves insertion order
+  /// so the first entry is always the oldest (used for size-based eviction).
+  final LinkedHashMap<String, _OpenSpan> _open = LinkedHashMap<String, _OpenSpan>();
+
+  final int _maxOpenSpans;
+  final Duration _spanTtl;
+  Timer? _sweepTimer;
 
   LogControllerOtelOutput({
     required Tracer tracer,
     Context Function()? rootContextProvider,
-  })  : _tracer = tracer,
-        _rootContextProvider = rootContextProvider;
+    int maxOpenSpans = 1024,
+    Duration spanTtl = const Duration(milliseconds: 30),
+    Duration sweepInterval = const Duration(milliseconds: 10),
+  })  : assert(maxOpenSpans > 0),
+        _tracer = tracer,
+        _rootContextProvider = rootContextProvider,
+        _maxOpenSpans = maxOpenSpans,
+        _spanTtl = spanTtl {
+    _sweepTimer = Timer.periodic(sweepInterval, (_) => _sweepExpired());
+  }
 
   @override
   bool get isAsync => false;
@@ -70,9 +95,11 @@ class LogControllerOtelOutput extends LogOutput {
 
   @override
   void dispose() {
-    for (final span in _open.values) {
+    _sweepTimer?.cancel();
+    _sweepTimer = null;
+    for (final entry in _open.values) {
       try {
-        span.end();
+        entry.span.end();
       } catch (_) {}
     }
     _open.clear();
@@ -80,8 +107,40 @@ class LogControllerOtelOutput extends LogOutput {
 
   // ---------------------------------------------------------------------------
 
+  /// Ends any open span older than [_spanTtl] so the map cannot grow without
+  /// bound when end records never arrive.
+  void _sweepExpired() {
+    if (_open.isEmpty) return;
+    final now = DateTime.now();
+    final expired = <String>[];
+    for (final entry in _open.entries) {
+      if (now.difference(entry.value.openedAt) >= _spanTtl) {
+        expired.add(entry.key);
+      }
+    }
+    for (final key in expired) {
+      final entry = _open.remove(key);
+      try {
+        entry?.span.end();
+      } catch (_) {}
+    }
+  }
+
+  /// Ends the oldest open spans (LRU by insertion order) until the map is
+  /// within [_maxOpenSpans].
+  void _evictOverflow() {
+    while (_open.length > _maxOpenSpans) {
+      final oldestKey = _open.keys.first;
+      final entry = _open.remove(oldestKey);
+      try {
+        entry?.span.end();
+      } catch (_) {}
+    }
+  }
+
   void _onStart(LogSpanStart record) {
-    final parent = record.parentSpanId != null ? _open[record.parentSpanId] : null;
+    final parent =
+        record.parentSpanId != null ? _open[record.parentSpanId]?.span : null;
     final parentContext = parent != null
         ? contextWithSpan(_rootContextProvider?.call() ?? Context.current, parent)
         : (_rootContextProvider?.call() ?? Context.current);
@@ -98,15 +157,16 @@ class LogControllerOtelOutput extends LogOutput {
       ],
     );
 
-    _open[record.spanId] = span;
+    _open[record.spanId] = _OpenSpan(span, DateTime.now());
+    _evictOverflow();
   }
 
   void _onEvent(LogEvent record) {
     final spanId = record.spanId;
     if (spanId != null) {
-      final span = _open[spanId];
-      if (span != null) {
-        span.addEvent(
+      final entry = _open[spanId];
+      if (entry != null) {
+        entry.span.addEvent(
           record.message,
           attributes: _eventAttributes(record),
         );
@@ -125,8 +185,9 @@ class LogControllerOtelOutput extends LogOutput {
   }
 
   void _onEnd(LogSpan record) {
-    final span = _open.remove(record.spanId);
-    if (span == null) return; // start was never seen (or already closed).
+    final entry = _open.remove(record.spanId);
+    if (entry == null) return; // start was never seen (or already closed).
+    final span = entry.span;
 
     if (record.data != null) {
       for (final entry in record.data!.entries) {
@@ -178,4 +239,12 @@ class LogControllerOtelOutput extends LogOutput {
     // OTel SDK expects nanoseconds since epoch.
     return Int64(t.microsecondsSinceEpoch) * 1000;
   }
+}
+
+/// An open OTel span plus the wall-clock instant it was opened, used for
+/// TTL-based eviction of un-ended spans.
+class _OpenSpan {
+  final Span span;
+  final DateTime openedAt;
+  _OpenSpan(this.span, this.openedAt);
 }

@@ -1,3 +1,12 @@
+## 0.3.1
+
+**Fixes (audit):**
+- The RPC span is now installed as the ambient OTel `Context.current` for the duration of the handler, so spans and log-spans created inside the handler are correctly parented under the RPC span (server and client interceptors).
+- `rpc.grpc.status_code` is now emitted as the numeric semconv integer (0..16) on both spans and metrics; the human-readable name moved to the non-semconv key `rpc.grpc.status`.
+- `LogControllerOtelOutput` no longer leaks un-ended spans: the open-span map is now bounded with LRU + TTL eviction (configurable `maxOpenSpans`, `spanTtl`, `sweepInterval`).
+- Measured call duration is now recorded via the `rpc.server.duration` counter (was collected but discarded). TODO: switch to a histogram once the OTel API exposes one.
+- Added a test suite (the package previously shipped with none).
+
 ## 0.3.0
 
 - **`LogControllerOtelOutput`** — a `LogOutput` that mirrors every

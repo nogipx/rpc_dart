@@ -63,10 +63,12 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {
-    final (span, context) = _startSpan(call, 'unary');
+    final (span, context, otelContext) = _startSpan(call, 'unary');
     final stopwatch = Stopwatch()..start();
     try {
-      final response = await next(context, request);
+      final response = await zone(otelContext).run(
+        () async => await next(context, request),
+      );
       _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
       return response;
     } catch (e, st) {
@@ -85,10 +87,12 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
-    final (span, context) = _startSpan(call, 'server_stream');
+    final (span, context, otelContext) = _startSpan(call, 'server_stream');
     final stopwatch = Stopwatch()..start();
     try {
-      final stream = await next(context, request);
+      final stream = await zone(otelContext).run(
+        () async => await next(context, request),
+      );
       return _wrapWithSpan(stream, span, call, stopwatch);
     } catch (e, st) {
       _finishWithError(span, call, stopwatch, e, st);
@@ -106,10 +110,12 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) async {
-    final (span, context) = _startSpan(call, 'client_stream');
+    final (span, context, otelContext) = _startSpan(call, 'client_stream');
     final stopwatch = Stopwatch()..start();
     try {
-      final response = await next(context, requests);
+      final response = await zone(otelContext).run(
+        () async => await next(context, requests),
+      );
       _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
       return response;
     } catch (e, st) {
@@ -128,10 +134,12 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {
-    final (span, context) = _startSpan(call, 'bidirectional_stream');
+    final (span, context, otelContext) = _startSpan(call, 'bidirectional_stream');
     final stopwatch = Stopwatch()..start();
     try {
-      final stream = await next(context, requests);
+      final stream = await zone(otelContext).run(
+        () async => await next(context, requests),
+      );
       return _wrapWithSpan(stream, span, call, stopwatch);
     } catch (e, st) {
       _finishWithError(span, call, stopwatch, e, st);
@@ -145,7 +153,8 @@ class OtelRpcInterceptor implements IRpcInterceptor {
 
   /// Starts a new span, extracts W3C parent context from [RpcContext] headers,
   /// and stores the span in [RpcContext] values for downstream access.
-  (Span, RpcContext) _startSpan(RpcMiddlewareContext call, String callType) {
+  (Span, RpcContext, Context) _startSpan(
+      RpcMiddlewareContext call, String callType) {
     final parentContext = RpcOtelPropagator.extract(call.context);
 
     final attributes = [
@@ -167,7 +176,11 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     final updatedContext = call.context.withValue(OtelRpcKeys.span, span);
     call.updateContext(updatedContext);
 
-    return (span, updatedContext);
+    // Make the span the active ambient OTel context for the downstream call,
+    // so spans/log-spans created inside the handler nest under the RPC span.
+    final otelContext = contextWithSpan(parentContext, span);
+
+    return (span, updatedContext, otelContext);
   }
 
   void _finish(
@@ -178,7 +191,11 @@ class OtelRpcInterceptor implements IRpcInterceptor {
   }) {
     stopwatch.stop();
     final statusName = rpcGrpcStatusName(statusCode);
-    span.setAttribute(Attribute.fromString('rpc.grpc.status_code', statusName));
+    // semconv requires rpc.grpc.status_code as the numeric code (0..16);
+    // the human-readable name goes under the non-semconv rpc.grpc.status key.
+    span
+      ..setAttribute(Attribute.fromInt('rpc.grpc.status_code', statusCode))
+      ..setAttribute(Attribute.fromString('rpc.grpc.status', statusName));
     if (statusCode == RpcStatus.ok) {
       span.setStatus(StatusCode.ok);
     } else {
@@ -206,7 +223,8 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     final statusName = rpcGrpcStatusName(statusCode);
     span
       ..recordException(error, stackTrace: stackTrace)
-      ..setAttribute(Attribute.fromString('rpc.grpc.status_code', statusName))
+      ..setAttribute(Attribute.fromInt('rpc.grpc.status_code', statusCode))
+      ..setAttribute(Attribute.fromString('rpc.grpc.status', statusName))
       ..setStatus(StatusCode.error, error.toString());
     try {
       _metrics?.recordCall(
