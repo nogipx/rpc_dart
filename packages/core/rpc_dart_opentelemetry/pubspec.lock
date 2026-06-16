@@ -255,7 +255,7 @@ packages:
       path: "../rpc_dart"
       relative: true
     source: path
-    version: "3.2.2"
+    version: "3.2.3"
   shelf:
     dependency: transitive
     description:

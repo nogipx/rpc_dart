@@ -23,7 +23,7 @@ topics:
 dependencies:
   flutter:
     sdk: flutter
-  rpc_dart: ^3.2.0
+  rpc_dart: ^3.2.3
 
 dev_dependencies:
   flutter_test:

@@ -15,9 +15,9 @@ upgrade_rpc_dart_all:
   echo "Updating rpc_dart dependency to ^${version}"; \
   for file in packages/*/*/pubspec.yaml; do \
     [ "$file" = "packages/core/rpc_dart/pubspec.yaml" ] && continue; \
-    if grep -q '^  rpc_dart:' "$file"; then \
+    if grep -qE '^  rpc_dart:[ \t]+\^?[0-9]' "$file"; then \
       echo "  -> $file"; \
-      perl -0pi -e "s/^(\\s*rpc_dart:\\s*)\\^?[^\\s#\\n]+/\\1^${version}/m" "$file"; \
+      perl -0pi -e "s/^(\\s*rpc_dart:[ \\t]+)\\^?[^\\s#\\n]+/\\1^${version}/m" "$file"; \
     fi; \
   done
 
@@ -33,8 +33,8 @@ upgrade_rpc_dart_generator_all:
   echo "Updating rpc_dart_generator dependency to ^${version}"; \
   for file in packages/*/*/pubspec.yaml; do \
     [ "$file" = "packages/core/rpc_dart_generator/pubspec.yaml" ] && continue; \
-    if grep -q '^  rpc_dart_generator:' "$file"; then \
+    if grep -qE '^  rpc_dart_generator:[ \t]+\^?[0-9]' "$file"; then \
       echo "  -> $file"; \
-      perl -0pi -e "s/^(\\s*rpc_dart_generator:\\s*)\\^?[^\\s#\\n]+/\\1^${version}/m" "$file"; \
+      perl -0pi -e "s/^(\\s*rpc_dart_generator:[ \\t]+)\\^?[^\\s#\\n]+/\\1^${version}/m" "$file"; \
     fi; \
   done

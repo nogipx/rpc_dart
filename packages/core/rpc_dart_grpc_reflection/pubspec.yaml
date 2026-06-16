@@ -10,7 +10,7 @@ environment:
   sdk: ">=3.10.0 <4.0.0"
 
 dependencies:
-  rpc_dart: ^3.2.0
+  rpc_dart: ^3.2.3
 
 dependency_overrides:
   rpc_dart:

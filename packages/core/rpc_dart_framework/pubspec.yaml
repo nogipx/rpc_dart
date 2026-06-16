@@ -7,7 +7,7 @@ environment:
   sdk: ">=3.10.0 <4.0.0"
 
 dependencies:
-  rpc_dart: ^3.2.0
+  rpc_dart: ^3.2.3
   rpc_dart_isolate:
     path: ../../transport/rpc_dart_isolate
 

@@ -10,8 +10,7 @@ environment:
   sdk: ^3.10.1
 
 dependencies:
-  rpc_dart:
-    path: ../rpc_dart
+  rpc_dart: ^3.2.3
   rpc_dart_websocket:
     path: ../../transport/rpc_dart_websocket
   args: ^2.6.0
