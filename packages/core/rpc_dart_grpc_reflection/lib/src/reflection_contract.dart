@@ -126,13 +126,23 @@ class ServerReflectionContract extends RpcResponderContract {
         final v = _readVarint(bytes, pos);
         pos = v.$2;
       } else if (wireType == 1) {
-        if (pos + 8 > bytes.length) break;
+        if (pos + 8 > bytes.length) {
+          return _buildErrorResponse(
+              bytes, 2, 'Malformed request: truncated 64-bit field');
+        }
         pos += 8;
       } else if (wireType == 5) {
-        if (pos + 4 > bytes.length) break;
+        if (pos + 4 > bytes.length) {
+          return _buildErrorResponse(
+              bytes, 2, 'Malformed request: truncated 32-bit field');
+        }
         pos += 4;
       } else {
-        break; // unknown wire type, stop parsing
+        // Wire types 3/4 (group start/end) and any other value are not
+        // supported. Reject the request instead of dispatching whatever was
+        // parsed before the malformed byte.
+        return _buildErrorResponse(
+            bytes, 2, 'Malformed request: unsupported wire type $wireType');
       }
     }
 
@@ -232,13 +242,28 @@ class ServerReflectionContract extends RpcResponderContract {
 /// Returns (value, newPos).
 /// Throws [FormatException] if the varint is malformed (truncated or > 10 bytes).
 (int, int) _readVarint(Uint8List bytes, int pos) {
-  var result = 0;
+  // Accumulate the low and high 32-bit halves separately so full 64-bit values
+  // decode correctly under dart2js, where the native `<<` is a 32-bit op and a
+  // shift past bit 31 in a single int would lose the high bits.
+  var low = 0;
+  var high = 0;
   var shift = 0;
   while (pos < bytes.length) {
     if (shift >= 64) throw const FormatException('Varint exceeds 64 bits');
     final b = bytes[pos++];
-    result |= (b & 0x7F) << shift;
-    if (b & 0x80 == 0) return (result, pos);
+    final part = b & 0x7F;
+    if (shift < 28) {
+      low |= part << shift;
+    } else if (shift == 28) {
+      low |= (part & 0x0F) << 28;
+      high = (part >> 4) & 0x07;
+    } else {
+      high |= part << (shift - 32);
+    }
+    if (b & 0x80 == 0) {
+      final value = high == 0 ? low : (high * 0x100000000) + (low & 0xFFFFFFFF);
+      return (value, pos);
+    }
     shift += 7;
   }
   throw const FormatException('Truncated varint');

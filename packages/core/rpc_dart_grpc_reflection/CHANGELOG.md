@@ -1,3 +1,10 @@
+## 0.2.1
+
+**Fixes (audit):**
+- `readLenDelimited` now validates `length >= 0 && pos + length <= bytes.length` before slicing -- a truncated descriptor throws a typed `FormatException` instead of a raw `RangeError`.
+- Varint decoding is now JS-safe for full 64-bit values (hi/lo 32-bit recombination) instead of an overflowing native `<< shift` on dart2js.
+- `ServerReflectionRequest` parsing now returns a malformed-request error response on an unknown wire type (e.g. groups) instead of silently dispatching a partial parse as a valid lookup.
+
 ## 0.2.0
 
 - Full proto support: nested message types, nested enums, cross-file dependencies.

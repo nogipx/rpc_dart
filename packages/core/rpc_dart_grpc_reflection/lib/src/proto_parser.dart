@@ -210,13 +210,29 @@ class _ProtoReader {
   int readTag() => readVarint();
 
   int readVarint() {
-    var result = 0;
+    // Accumulate the low and high 32-bit halves separately. On dart2js the
+    // bitwise `<<` is a 32-bit operation, so shifting past bit 31 in a single
+    // native int saturates/loses the high bits. Combining the halves via
+    // multiplication keeps full 64-bit values correct under both the VM and JS.
+    var low = 0;
+    var high = 0;
     var shift = 0;
     while (_pos < _bytes.length) {
       if (shift >= 64) throw const FormatException('Varint exceeds 64 bits');
       final b = _bytes[_pos++];
-      result |= (b & 0x7F) << shift;
-      if (b & 0x80 == 0) return result;
+      final part = b & 0x7F;
+      if (shift < 28) {
+        low |= part << shift;
+      } else if (shift == 28) {
+        // 4 bits stay in the low half, the remaining 3 start the high half.
+        low |= (part & 0x0F) << 28;
+        high = (part >> 4) & 0x07;
+      } else {
+        high |= part << (shift - 32);
+      }
+      if (b & 0x80 == 0) {
+        return high == 0 ? low : (high * 0x100000000) + (low & 0xFFFFFFFF);
+      }
       shift += 7;
     }
     throw const FormatException('Truncated varint');
@@ -224,6 +240,13 @@ class _ProtoReader {
 
   Uint8List readLenDelimited() {
     final length = readVarint();
+    if (length < 0 || _pos + length > _bytes.length) {
+      throw FormatException(
+        'Length-delimited field runs past end of buffer: '
+        'need $length bytes at offset $_pos but only '
+        '${_bytes.length - _pos} remain',
+      );
+    }
     final data = Uint8List.sublistView(_bytes, _pos, _pos + length);
     _pos += length;
     return data;
