@@ -2,18 +2,19 @@
 //
 // SPDX-License-Identifier: MIT
 
-// PARITY GUARD: special_cbor.dart contains two readers (the reference
-// _CborReader behind decodeUnsafe, and the fast _FastCborReader behind decode)
-// plus two writers (the slow _encode behind encodeUnsafe, and _FastCborWriter
-// behind encode). They have silently diverged before. This corpus-based test
-// pins their behaviour together so future drift fails loudly.
+// DECODE GUARD: special_cbor.dart now has a single reader (_FastCborReader)
+// behind both decode (readMap, top-level map) and decodeUnsafe (readValue, any
+// top-level value), plus two writers (the static _encode behind encodeUnsafe,
+// and _FastCborWriter behind encode). This corpus-based test pins decoding
+// correctness and writer agreement so future drift fails loudly.
 //
 // For every corpus value (always wrapped in a top-level map, since production
 // only ever encodes maps) it asserts:
-//   * slow-encode -> fast-decode == slow-decode == original (round-trip)
+//   * encode/encodeUnsafe round-trips: decode(encode(x)) == x
+//   * decodeUnsafe == decode for the same bytes (the two entry points agree)
 //   * fast-encode == slow-encode (byte-identical writers)
 // Hand-crafted CBOR (indefinite lengths, tags, half/single floats, extended
-// simple values, undefined) is decoded by both readers and compared directly.
+// simple values, undefined) is decoded and checked against expected values.
 //
 // Run VM:   fvm dart test test/serializers/cbor_parity_test.dart
 // Run node: fvm dart test -p node test/serializers/cbor_parity_test.dart
@@ -88,30 +89,30 @@ void main() {
     'deep': _buildDeep(20),
   };
 
-  group('CBOR reader/writer parity (corpus)', () {
+  group('CBOR round-trip + writer parity (corpus)', () {
     corpus.forEach((name, value) {
       test('round-trip + writer parity: $name', () {
         final original = {'v': value};
 
-        // slow-encode -> both decoders.
+        // slow-encode -> both decode entry points (now one reader).
         final slowBytes = CborCodec.encodeUnsafe(original);
-        final fastDecoded = _normalize(CborCodec.decode(slowBytes));
-        final slowDecoded = _normalize(CborCodec.decodeUnsafe(slowBytes));
+        final mapDecoded = _normalize(CborCodec.decode(slowBytes));
+        final unsafeDecoded = _normalize(CborCodec.decodeUnsafe(slowBytes));
 
-        // The load-bearing guarantee: the two readers MUST agree, always and
-        // on every platform.
-        _expectEqual(fastDecoded, slowDecoded,
-            reason: 'fast-decode != slow-decode for $name');
+        // decode (readMap) and decodeUnsafe (readValue) share a reader and MUST
+        // agree, always and on every platform.
+        _expectEqual(mapDecoded, unsafeDecoded,
+            reason: 'decode != decodeUnsafe for $name');
 
         // Round-trip to original. On dart2js (-p node) there is a single JS
         // number type, so an integral-valued double (e.g. 1e300, Infinity,
         // -0.0 once it loses its sign) is indistinguishable from an int at
         // runtime and gets encoded via the integer path. That is a platform
-        // limitation, not a reader/writer divergence, so skip the strict
-        // original check for those values; fast==slow above still holds.
+        // limitation, not an encode/decode divergence, so skip the strict
+        // original check for those values.
         if (!_lossyOnThisPlatform(value)) {
-          _expectEqual(fastDecoded, _normalize(original),
-              reason: 'fast-decode != original for $name');
+          _expectEqual(mapDecoded, _normalize(original),
+              reason: 'decode != original for $name');
         }
 
         // fast-encode must be byte-identical to slow-encode.
@@ -119,131 +120,144 @@ void main() {
         expect(fastBytes, equals(slowBytes),
             reason: 'fast-encode bytes != slow-encode bytes for $name');
 
-        // And fast bytes must decode the same through both readers too.
-        _expectEqual(_normalize(CborCodec.decode(fastBytes)), slowDecoded,
-            reason: 'fast-encode -> fast-decode != slow-decode for $name');
+        // And fast bytes must decode back to the same value.
+        _expectEqual(_normalize(CborCodec.decode(fastBytes)), unsafeDecoded,
+            reason: 'fast-encode -> decode != decodeUnsafe for $name');
       });
     });
   });
 
-  group('CBOR hand-crafted reader parity (slow vs fast)', () {
-    void parity(String name, List<int> raw) {
+  group('CBOR hand-crafted decode (expected values)', () {
+    // Decodes a hand-crafted byte sequence and checks it against the expected
+    // value, through both decode (readMap) and decodeUnsafe (readValue) so the
+    // two entry points stay in agreement on exotic inputs.
+    void decodesTo(String name, List<int> raw, dynamic expected) {
       test(name, () {
         final bytes = Uint8List.fromList(raw);
-        final fast = _normalize(CborCodec.decode(bytes));
-        final slow = _normalize(CborCodec.decodeUnsafe(bytes));
-        _expectEqual(fast, slow, reason: 'reader divergence on $name');
+        final norm = _normalize(expected);
+        final viaMap = _normalize(CborCodec.decode(bytes));
+        final viaUnsafe = _normalize(CborCodec.decodeUnsafe(bytes));
+        _expectEqual(viaMap, norm, reason: 'decode mismatch on $name');
+        _expectEqual(viaUnsafe, norm, reason: 'decodeUnsafe mismatch on $name');
       });
     }
 
-    // { "a": tag(0) 1234, "u": undefined }
-    parity('tag + undefined', [
+    // { "a": tag(0) 1234, "u": undefined } -> tag skipped, undefined -> null
+    decodesTo('tag + undefined', [
       0xa2,
       0x61, 0x61, // "a"
       0xc0, 0x19, 0x04, 0xd2, // tag(0) 1234
       0x61, 0x75, // "u"
       0xf7, // undefined
-    ]);
+    ], {'a': 1234, 'u': null});
 
     // { "f": half-float 1.5 (0x3e00) }
-    parity('half float', [
+    decodesTo('half float', [
       0xa1,
       0x61, 0x66, // "f"
       0xf9, 0x3e, 0x00, // half 1.5
-    ]);
+    ], {'f': 1.5});
 
     // { "f": single float 1.5 (0x3fc00000) }
-    parity('single float', [
+    decodesTo('single float', [
       0xa1,
       0x61, 0x66, // "f"
       0xfa, 0x3f, 0xc0, 0x00, 0x00, // single 1.5
-    ]);
+    ], {'f': 1.5});
 
     // { "f": half NaN (0x7e00) }
-    parity('half NaN', [
+    decodesTo('half NaN', [
       0xa1,
       0x61,
       0x66,
       0xf9,
       0x7e,
       0x00,
-    ]);
+    ], {'f': double.nan});
 
     // { "f": half +Infinity (0x7c00) }
-    parity('half Infinity', [
+    decodesTo('half Infinity', [
       0xa1,
       0x61,
       0x66,
       0xf9,
       0x7c,
       0x00,
-    ]);
+    ], {'f': double.infinity});
 
-    // { "f": half subnormal smallest (0x0001) }
-    parity('half subnormal', [
+    // { "f": half subnormal smallest (0x0001) = 2^-24 }
+    decodesTo('half subnormal', [
       0xa1,
       0x61,
       0x66,
       0xf9,
       0x00,
       0x01,
-    ]);
+    ], {'f': 5.960464477539063e-8});
 
-    // { "s": extended simple value 200 (0xf8 0xc8) }
-    parity('extended simple value', [
+    // { "s": extended simple value 200 (0xf8 0xc8) -> 200 }
+    decodesTo('extended simple value', [
       0xa1,
       0x61, 0x73, // "s"
       0xf8, 0xc8,
-    ]);
+    ], {'s': 200});
 
     // { "l": indefinite array [1, 2, 3] }
-    parity('indefinite array', [
+    decodesTo('indefinite array', [
       0xa1,
       0x61, 0x6c, // "l"
       0x9f, 0x01, 0x02, 0x03, 0xff,
-    ]);
+    ], {
+      'l': [1, 2, 3]
+    });
 
     // { "m": indefinite map { "x": 1 } }
-    parity('indefinite map', [
+    decodesTo('indefinite map', [
       0xa1,
       0x61, 0x6d, // "m"
       0xbf, 0x61, 0x78, 0x01, 0xff,
-    ]);
+    ], {
+      'm': {'x': 1}
+    });
 
     // indefinite top-level map { "k": "v" }
-    parity('indefinite top-level map', [
+    decodesTo('indefinite top-level map', [
       0xbf,
       0x61, 0x6b, // "k"
       0x61, 0x76, // "v"
       0xff,
-    ]);
+    ], {'k': 'v'});
 
     // { "s": indefinite text string "hello" = "he"+"llo" }
-    parity('indefinite text string', [
+    decodesTo('indefinite text string', [
       0xa1,
       0x61, 0x73, // "s"
       0x7f,
       0x62, 0x68, 0x65, // "he"
       0x63, 0x6c, 0x6c, 0x6f, // "llo"
       0xff,
-    ]);
+    ], {'s': 'hello'});
 
-    // { "b": indefinite byte string 0x0102 + 0x03 }
-    parity('indefinite byte string', [
+    // { "b": indefinite byte string 0x0102 + 0x03 -> 0x010203 }
+    decodesTo('indefinite byte string', [
       0xa1,
       0x61, 0x62, // "b"
       0x5f,
       0x42, 0x01, 0x02,
       0x41, 0x03,
       0xff,
-    ]);
+    ], {
+      'b': Uint8List.fromList([1, 2, 3])
+    });
 
-    // { "n": tag(2) bignum-like bytes treated as skipped tag }
-    parity('nested tag in array', [
+    // { "n": [tag(2) 42, undefined] } -> tag skipped, undefined -> null
+    decodesTo('nested tag in array', [
       0xa1,
       0x61, 0x6e, // "n"
       0x82, 0xc2, 0x18, 0x2a, 0xf7, // [tag(2) 42, undefined]
-    ]);
+    ], {
+      'n': [42, null]
+    });
   });
 }
 

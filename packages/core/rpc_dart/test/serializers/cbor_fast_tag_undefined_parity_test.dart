@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Feature #4: the production decode() path (_FastCborReader) must decode the
-// same subset as the slow _CborReader. It previously lacked a tag case and an
+// Feature #4: the single decoder (_FastCborReader) must handle tags and the
+// CBOR `undefined` simple value. It previously lacked a tag case and an
 // undefined case. This test hand-crafts CBOR bytes containing a tagged value
-// and a CBOR `undefined`, then asserts the fast path (CborCodec.decode) matches
-// the slow path (CborCodec.decodeUnsafe).
+// and a CBOR `undefined`, then asserts decode (readMap) matches decodeUnsafe
+// (readValue) -- now the same reader behind both entry points.
 //
 // Run VM:   fvm dart test test/serializers/cbor_fast_tag_undefined_parity_test.dart
 // Run node: fvm dart test -p node test/serializers/cbor_fast_tag_undefined_parity_test.dart
