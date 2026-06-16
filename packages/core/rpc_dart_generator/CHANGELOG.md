@@ -1,3 +1,11 @@
+## 0.4.2
+
+**Fixes (audit):**
+- Fixed codec-name collisions: two distinct types sharing a simple name (e.g. `a.Foo` and `b.Foo`) collapsed to one `codecFoo` and the second was silently dropped, causing wrong deserialization. Codec identifiers are now disambiguated by a stable library hash.
+- `Map<String, dynamic>` and primitive types no longer emit a non-existent `Type.fromJson` (which produced uncompilable output) -- they now use `RpcBinaryCodec` with CBOR encode/decode.
+- String escaping in generated code now escapes `\`, `$`, `\n`, `\r`, `\t` (not just `'`), so descriptions and removed-message text with special characters produce valid Dart literals.
+- gRPC descriptor: Dart `int` now maps to proto `TYPE_INT64`, aligned with `rpc_dart_grpc_reflection`.
+
 ## 0.4.1
 - analyzer minimal version ^10.0.0
 

@@ -314,6 +314,8 @@ class _Emitter {
   final _ParentInfo? parentInfo;
   final List<_RemovedMethodInfo> removedMethods;
 
+  late final Set<String> _ambiguousCodecs = _ambiguousCodecNames(methods);
+
   String get _baseName => _baseNameForClass(classElement);
 
   bool _shouldUseCodec(
@@ -394,7 +396,10 @@ class _Emitter {
     b.writeln('class $className {');
     b.writeln('  const $className._();');
 
-    // Collect unique types with their codecs.
+    // Collect unique types with their codecs. The map is keyed by the codec
+    // identifier (which incorporates the declaring library), so two distinct
+    // types that share a simple name (e.g. `a.Foo` and `b.Foo`) get distinct
+    // codec constants instead of one silently overwriting the other.
     final codecMap = <String, _CodecInfo>{};
 
     for (final method in methods) {
@@ -403,38 +408,54 @@ class _Emitter {
         continue;
       }
 
-      final requestTypeStr = method.signature.requestType.getDisplayString();
-      final responseTypeStr = method.signature.responseType.getDisplayString();
+      final requestType = method.signature.requestType;
+      final responseType = method.signature.responseType;
+
+      final requestKey = _codecIdentifier(requestType, _ambiguousCodecs);
+      final responseKey = _codecIdentifier(responseType, _ambiguousCodecs);
 
       // Add request codec if not already present.
-      if (!codecMap.containsKey(requestTypeStr)) {
-        codecMap[requestTypeStr] = _CodecInfo(
-          typeName: requestTypeStr,
+      if (!codecMap.containsKey(requestKey)) {
+        codecMap[requestKey] = _CodecInfo(
+          typeName: requestType.getDisplayString(),
+          type: requestType,
           customCodecType: method.requestCodecType,
         );
       }
 
       // Add response codec if not already present.
-      if (!codecMap.containsKey(responseTypeStr)) {
-        codecMap[responseTypeStr] = _CodecInfo(
-          typeName: responseTypeStr,
+      if (!codecMap.containsKey(responseKey)) {
+        codecMap[responseKey] = _CodecInfo(
+          typeName: responseType.getDisplayString(),
+          type: responseType,
           customCodecType: method.responseCodecType,
         );
       }
     }
 
     // Generate constants in alphabetical order for stability.
-    final sortedTypes = codecMap.keys.toList()..sort();
-    for (final typeName in sortedTypes) {
-      final info = codecMap[typeName]!;
-      final codecName = 'codec${_sanitizeTypeName(typeName)}';
+    final sortedNames = codecMap.keys.toList()..sort();
+    for (final codecName in sortedNames) {
+      final info = codecMap[codecName]!;
+      final typeName = info.typeName;
 
       if (info.customCodecType != null) {
         b.writeln(
             '  static const $codecName = ${info.customCodecType!.getDisplayString()}();');
-      } else {
+      } else if (_hasJsonFactory(info.type)) {
         b.writeln(
             '  static const $codecName = RpcCodec<$typeName>.withDecoder($typeName.fromJson);');
+      } else if (info.type.getDisplayString() == 'Map<String, dynamic>') {
+        // `Map<String, dynamic>` has no `fromJson` factory. Encode/decode it
+        // directly via CBOR instead of referencing a non-existent
+        // `Map<String, dynamic>.fromJson`.
+        b.writeln(
+            '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encode, fromBytes: CborCodec.decode);');
+      } else {
+        // Primitive types (String/int/double/bool) have no `fromJson` factory.
+        // Round-trip them through CBOR via the unsafe (non-map) helpers.
+        b.writeln(
+            '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encodeUnsafe, fromBytes: CborCodec.decodeUnsafe);');
       }
     }
 
@@ -481,7 +502,7 @@ class _Emitter {
 
     for (final method in methods) {
       b.writeln(
-        method.signature.callerMethodImpl(method, service.transferMode),
+        method.signature.callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
       );
       b.writeln();
     }
@@ -505,7 +526,7 @@ class _Emitter {
   String _buildRemovedMethod(_RemovedMethodInfo info) {
     final method = info.element;
     final returnType = method.returnType.getDisplayString();
-    final escaped = info.message.replaceAll("'", "\\'");
+    final escaped = _escapeString(info.message);
 
     final positional = method.formalParameters
         .where((p) => p.isPositional)
@@ -575,7 +596,7 @@ class _Emitter {
     b.writeln('  void setup() {');
     for (final method in methods) {
       b.writeln(
-        '    ${method.signature.peerRegistration(method, service.transferMode)};',
+        '    ${method.signature.peerRegistration(method, service.transferMode, _ambiguousCodecs)};',
       );
     }
     b.writeln('  }');
@@ -584,7 +605,7 @@ class _Emitter {
     // Caller methods — implement interface, call remote peer
     for (final method in methods) {
       b.writeln(
-        method.signature.callerMethodImpl(method, service.transferMode),
+        method.signature.callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
       );
       b.writeln();
     }
@@ -626,7 +647,7 @@ class _Emitter {
 
     for (final method in methods) {
       b.writeln(
-        method.signature.callerMethodImpl(method, service.transferMode),
+        method.signature.callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
       );
       b.writeln();
     }
@@ -664,7 +685,7 @@ class _Emitter {
     b.writeln('  void setup() {');
     for (final method in methods) {
       b.writeln(
-        '    ${method.signature.addRegistration(method, service.transferMode)};',
+        '    ${method.signature.addRegistration(method, service.transferMode, _ambiguousCodecs)};',
       );
     }
     b.writeln('  }');
@@ -987,7 +1008,11 @@ class _Signature {
   }
 
   /// `addXxxMethod(..., handler: onXxx, ...)` — registration in peer setup().
-  String peerRegistration(_MethodMeta meta, RpcDataTransferMode serviceMode) {
+  String peerRegistration(
+    _MethodMeta meta,
+    RpcDataTransferMode serviceMode,
+    Set<String> ambiguousCodecs,
+  ) {
     final requestTypeStr = requestType.getDisplayString();
     final responseTypeStr = responseType.getDisplayString();
     final handlerName = _peerHandlerName(meta.declarationName);
@@ -1002,15 +1027,17 @@ class _Signature {
       isResponse: false,
       useDefault: useCodec,
       providedCodecType: meta.requestCodecType,
-      targetType: requestTypeStr,
+      targetType: requestType,
       methodDeclarationName: meta.declarationName,
+      ambiguousCodecs: ambiguousCodecs,
     );
     final responseCodec = _codecString(
       isResponse: true,
       useDefault: useCodec,
       providedCodecType: meta.responseCodecType,
-      targetType: responseTypeStr,
+      targetType: responseType,
       methodDeclarationName: meta.declarationName,
+      ambiguousCodecs: ambiguousCodecs,
     );
 
     switch (kind) {
@@ -1030,7 +1057,11 @@ class _Signature {
     return 'on${declarationName[0].toUpperCase()}${declarationName.substring(1)}';
   }
 
-  String callerMethodImpl(_MethodMeta meta, RpcDataTransferMode serviceMode) {
+  String callerMethodImpl(
+    _MethodMeta meta,
+    RpcDataTransferMode serviceMode,
+    Set<String> ambiguousCodecs,
+  ) {
     final buffer = StringBuffer();
     final returnType = element.returnType.getDisplayString();
     final requestTypeStr = requestType.getDisplayString();
@@ -1041,7 +1072,7 @@ class _Signature {
       '  $returnType ${element.name}(${_buildParam(requestTypeStr)}) {',
     );
     buffer.writeln(
-      '    return ${_callExpression(meta, requestTypeStr, responseTypeStr, serviceMode)};',
+      '    return ${_callExpression(meta, requestTypeStr, responseTypeStr, serviceMode, ambiguousCodecs)};',
     );
     buffer.writeln('  }');
     return buffer.toString();
@@ -1061,6 +1092,7 @@ class _Signature {
     String requestTypeStr,
     String responseTypeStr,
     RpcDataTransferMode serviceMode,
+    Set<String> ambiguousCodecs,
   ) {
     final contextArg = hasContext ? ', context: context' : '';
     final requestVar = isRequestStream ? 'requests' : 'request';
@@ -1071,15 +1103,17 @@ class _Signature {
       label: 'requestCodec',
       isResponse: false,
       meta: meta,
-      targetType: requestTypeStr,
+      targetType: requestType,
       useCodec: useCodec,
+      ambiguousCodecs: ambiguousCodecs,
     );
     final responseCodec = _codecArg(
       label: 'responseCodec',
       isResponse: true,
       meta: meta,
-      targetType: responseTypeStr,
+      targetType: responseType,
       useCodec: useCodec,
+      ambiguousCodecs: ambiguousCodecs,
     );
 
     String args(String mainArg) {
@@ -1108,7 +1142,11 @@ class _Signature {
     }
   }
 
-  String addRegistration(_MethodMeta meta, RpcDataTransferMode serviceMode) {
+  String addRegistration(
+    _MethodMeta meta,
+    RpcDataTransferMode serviceMode,
+    Set<String> ambiguousCodecs,
+  ) {
     final requestTypeStr = requestType.getDisplayString();
     final responseTypeStr = responseType.getDisplayString();
     final description = meta.description == null
@@ -1122,15 +1160,17 @@ class _Signature {
       isResponse: false,
       useDefault: useCodec,
       providedCodecType: meta.requestCodecType,
-      targetType: requestTypeStr,
+      targetType: requestType,
       methodDeclarationName: meta.declarationName,
+      ambiguousCodecs: ambiguousCodecs,
     );
     final responseCodec = _codecString(
       isResponse: true,
       useDefault: useCodec,
       providedCodecType: meta.responseCodecType,
-      targetType: responseTypeStr,
+      targetType: responseType,
       methodDeclarationName: meta.declarationName,
+      ambiguousCodecs: ambiguousCodecs,
     );
 
     switch (kind) {
@@ -1158,26 +1198,28 @@ class _Signature {
     required bool isResponse,
     required bool useDefault,
     required DartType? providedCodecType,
-    required String targetType,
+    required DartType targetType,
     required String methodDeclarationName,
+    required Set<String> ambiguousCodecs,
   }) {
     final label = isResponse ? 'responseCodec' : 'requestCodec';
     if (!useDefault) return '';
-    return '$label: ${baseName}Codecs.codec${_sanitizeTypeName(targetType)}, ';
+    return '$label: ${baseName}Codecs.${_codecIdentifier(targetType, ambiguousCodecs)}, ';
   }
 
   String _codecArg({
     required String label,
     required bool isResponse,
     required _MethodMeta meta,
-    required String targetType,
+    required DartType targetType,
     required bool useCodec,
+    required Set<String> ambiguousCodecs,
   }) {
     if (!useCodec) return '';
-    return '$label: ${baseName}Codecs.codec${_sanitizeTypeName(targetType)}, ';
+    return '$label: ${baseName}Codecs.${_codecIdentifier(targetType, ambiguousCodecs)}, ';
   }
 
-  String _escape(String value) => value.replaceAll("'", "\\'");
+  String _escape(String value) => _escapeString(value);
 }
 
 class _ServiceMeta {
@@ -1221,10 +1263,12 @@ class _MethodMeta {
 class _CodecInfo {
   _CodecInfo({
     required this.typeName,
+    required this.type,
     this.customCodecType,
   });
 
   final String typeName;
+  final DartType type;
   final DartType? customCodecType;
 }
 
@@ -1339,7 +1383,9 @@ class _GrpcDescriptorBuilder {
     if (actual.isDartCoreString) {
       fieldType = 9;
     } else if (actual.isDartCoreInt) {
-      fieldType = 5;
+      // Dart `int` is 64-bit; map to proto TYPE_INT64 (3) to match the value
+      // range and the reflection descriptor docs (was TYPE_INT32 (5)).
+      fieldType = 3;
     } else if (actual.isDartCoreDouble) {
       fieldType = 1;
     } else if (actual.isDartCoreBool) {
@@ -1430,8 +1476,16 @@ class _ProtoWriter {
   Uint8List toBytes() => Uint8List.fromList(_buf);
 }
 
-/// Escapes single quotes in a string for use in Dart string literals.
-String _escapeString(String value) => value.replaceAll("'", "\\'");
+/// Escapes special characters for embedding in a single-quoted Dart string
+/// literal. Backslash must be escaped first so subsequently inserted
+/// backslashes are not double-escaped.
+String _escapeString(String value) => value
+    .replaceAll('\\', '\\\\')
+    .replaceAll(r'$', '\\\$')
+    .replaceAll("'", "\\'")
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+    .replaceAll('\t', '\\t');
 
 /// Strips leading `I` from interface names (e.g. `ICalculator` -> `Calculator`).
 String _baseNameForClass(ClassElement element) {
@@ -1442,6 +1496,83 @@ String _baseNameForClass(ClassElement element) {
     return name.substring(1);
   }
   return name;
+}
+
+/// Builds a unique codec identifier for [type].
+///
+/// The simple display name alone is ambiguous: two distinct types that share a
+/// simple name but live in different libraries (e.g. `a.Foo` and `b.Foo`) would
+/// collapse to one identifier and one would be silently dropped. When such a
+/// name appears in [ambiguous], the declaring library URI is folded into a
+/// short stable suffix so the colliding types get distinct codec constants.
+/// Non-colliding types keep their clean `codec<Name>` identifier.
+String _codecIdentifier(DartType type, Set<String> ambiguous) {
+  final sanitized = _sanitizeTypeName(type.getDisplayString());
+  final base = 'codec$sanitized';
+  if (!ambiguous.contains(sanitized)) return base;
+  String? libraryUri;
+  if (type is InterfaceType) {
+    libraryUri = type.element.library.identifier;
+  }
+  if (libraryUri == null) return base;
+  return '${base}_${_stableSuffix(libraryUri)}';
+}
+
+/// Sanitized simple names that are shared by more than one distinct type across
+/// [methods]. Codec identifiers for these names must be disambiguated.
+Set<String> _ambiguousCodecNames(List<_MethodMeta> methods) {
+  final byName = <String, Set<String>>{};
+  void record(DartType type) {
+    final sanitized = _sanitizeTypeName(type.getDisplayString());
+    String identity = type.getDisplayString();
+    if (type is InterfaceType) {
+      identity = '${type.element.library.identifier}#$identity';
+    }
+    (byName[sanitized] ??= <String>{}).add(identity);
+  }
+
+  for (final method in methods) {
+    record(method.signature.requestType);
+    record(method.signature.responseType);
+  }
+  return {
+    for (final entry in byName.entries)
+      if (entry.value.length > 1) entry.key,
+  };
+}
+
+/// Deterministic short alphanumeric suffix derived from [input], used to
+/// disambiguate identifiers that would otherwise collide.
+String _stableSuffix(String input) {
+  // FNV-1a 32-bit hash kept in the 31-bit positive range; rendered base36 so
+  // it is a valid identifier fragment and stable across runs.
+  var hash = 0x811c9dc5;
+  for (var i = 0; i < input.length; i++) {
+    hash ^= input.codeUnitAt(i);
+    hash = (hash * 0x01000193) & 0x7fffffff;
+  }
+  return hash.toRadixString(36);
+}
+
+/// Whether [type] declares a usable `fromJson` factory/constructor that the
+/// generated `RpcCodec<T>.withDecoder(T.fromJson)` can reference.
+///
+/// Primitives and `Map<String, dynamic>` pass serialization checks but have no
+/// such factory, so emitting `Type.fromJson` for them would not compile.
+bool _hasJsonFactory(DartType type) {
+  if (type is! InterfaceType) return false;
+  if (type.isDartCoreString ||
+      type.isDartCoreInt ||
+      type.isDartCoreDouble ||
+      type.isDartCoreBool ||
+      type.isDartCoreMap ||
+      type.isDartCoreList) {
+    return false;
+  }
+  // User-declared request/response types are required to implement
+  // IRpcSerializable (verified earlier by _assertSerializable) and therefore
+  // expose a `fromJson` factory the generated decoder can reference.
+  return true;
 }
 
 /// Sanitizes a Dart type name into a valid identifier fragment.
