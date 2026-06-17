@@ -1,6 +1,6 @@
 name: rpc_blob_sqlite
 description: SQLite/SQLCipher storage adapter for rpc_blob.
-version: 1.0.0
+version: 1.0.1
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

@@ -1,3 +1,21 @@
+## 1.0.1
+
+- Web (dart2js / Wasm) path correctness. Verified the injected-`CommonDatabase`
+  adapter surface (`SqliteBlobRepository.db`) imports only
+  `package:sqlite3/common.dart` (Wasm-compatible); `dart:io`, `dart:ffi` and
+  `package:sqlite3/sqlite3.dart` (FFI) stay confined to the
+  `if (dart.library.io)` loader files and never leak onto the web import chain.
+  The `.memory()`/`.file()` convenience factories go through the conditional
+  loader whose web stub throws `UnsupportedError` (web apps inject their own
+  `sqlite3mc`-on-Wasm db). The adapter's `async*` generators (`_chunkedPayload`,
+  read/list streams) are `await`-first / yield-only over already-materialized
+  bytes, so there is no `yield`-before-`await for` cancel-deadlock on dart2js.
+  The `1 << 32` random-seed pattern exists only in the io-only loader (VM-only)
+  and is not web-reachable. Added a JS compile smoke test
+  (`test/web_smoke_test.dart`, `dart test -p node`) proving the web-facing API
+  compiles to JS clean. Full Wasm db execution still requires the app to supply
+  `sqlite3mc.wasm`.
+
 ## 1.0.5
 
 - Allow to pass raw sqlite db connection to adapter
