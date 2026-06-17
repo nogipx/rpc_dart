@@ -1,4 +1,11 @@
+@TestOn('vm || chrome')
+library;
+
 // SPDX-License-Identifier: MIT
+//
+// Runs on vm and chrome (the real web target) but not node: the audit suite
+// builds a real opentelemetry SDK tracer whose IdGenerator calls
+// Random.secure(), which is unavailable under the node test platform.
 //
 // AUDIT A4: duration is collected (Stopwatch) and passed to recordCall, but
 // never recorded into any instrument. rpc_otel_metrics.dart:47-53.

@@ -236,7 +236,15 @@ class LogControllerOtelOutput extends LogOutput {
   }
 
   Int64 _toInt64(DateTime t) {
-    // OTel SDK expects nanoseconds since epoch.
+    // OTel SDK expects nanoseconds since epoch. We use fixnum [Int64] (not a
+    // plain int) so the *1000 stays exact past 2^53 on dart2js, where the web
+    // int is a JS double.
+    //
+    // dart2js caveat: [DateTime.microsecondsSinceEpoch] only has millisecond
+    // resolution on the web (the sub-millisecond digits are always 000), so
+    // span timestamps are rounded to the nearest millisecond there. This does
+    // not break anything — the value is still a valid nanosecond epoch and
+    // ordering is preserved — it only reduces timestamp precision.
     return Int64(t.microsecondsSinceEpoch) * 1000;
   }
 }

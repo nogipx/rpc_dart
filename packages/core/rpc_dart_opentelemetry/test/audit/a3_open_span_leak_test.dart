@@ -1,4 +1,11 @@
+@TestOn('vm || chrome')
+library;
+
 // SPDX-License-Identifier: MIT
+//
+// Runs on vm and chrome (the real web target) but not node: the audit suite
+// builds a real opentelemetry SDK tracer whose IdGenerator calls
+// Random.secure(), which is unavailable under the node test platform.
 //
 // AUDIT A3: LogControllerOtelOutput._open leaks entries when no end record
 // arrives. log_controller_otel_output.dart:48,101,128.

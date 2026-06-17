@@ -1,3 +1,14 @@
+## 0.3.2
+
+**Web / dart2js correctness:**
+- Verified the full web-facing surface (both interceptors, `RpcOtelMetrics`, `RpcOtelPropagator`, `LogControllerOtelOutput`) compiles to JS and runs on the real web target: the audit suite passes under `-p chrome`. No `dart:io` is imported; stream wrapping uses an explicit `StreamController` with an `onCancel` hook (no `async*` generator), so subscription cancel propagates cleanly on dart2js.
+- Added `test/web_smoke_test.dart` — a dart2js smoke that exercises the propagator inject/extract round-trip, the status-name/error-code tables, and the `Int64` nanosecond timestamp conversion. It runs green on `vm`, `chrome`, and `node`.
+- The audit suite is now tagged `@TestOn('vm || chrome')`: it builds a real opentelemetry SDK tracer whose `IdGenerator` calls `Random.secure()`, which is unavailable under the `node` test platform (an environment limitation, not a package bug). This keeps `dart test -p node test/` green.
+- Documented the dart2js timestamp caveat in `LogControllerOtelOutput._toInt64`: `DateTime.microsecondsSinceEpoch` has only millisecond resolution on the web, so span timestamps round to the nearest millisecond there. Values remain valid nanosecond epochs with preserved ordering — only precision is reduced.
+
+**Metrics (#6 — OTel histogram):**
+- Still blocked upstream. Checked `opentelemetry` up to the latest published version (0.18.11); `Meter` exposes only `createCounter` (no Histogram / UpDownCounter). `rpc.server.duration` therefore remains a sum counter; the `TODO(#6)` now records the version surveyed.
+
 ## 0.3.1
 
 **Fixes (audit):**
