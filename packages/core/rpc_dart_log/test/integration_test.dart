@@ -177,16 +177,29 @@ void main() {
       expect(handshakeInfo?.deviceName, 'TestPhone');
       expect(handshakeInfo?.app, 'TestApp');
 
-      await callerContract.send(LogCollectorRecord({
-        'type': 'event',
-        'scope': 'test',
-        'level': 'info',
-        'message': 'hello',
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      }));
+      // Pipelined unary sends: issue without awaiting per-record acks, then
+      // await all acks together.
+      final acks = <Future<LogCollectorAck>>[
+        callerContract.send(LogCollectorRecord({
+          'type': 'event',
+          'scope': 'test',
+          'level': 'info',
+          'message': 'hello',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        })),
+        callerContract.send(LogCollectorRecord({
+          'type': 'event',
+          'scope': 'test',
+          'level': 'info',
+          'message': 'world',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        })),
+      ];
+      await Future.wait(acks);
 
-      expect(received, hasLength(1));
+      expect(received, hasLength(2));
       expect(received[0].payload['message'], 'hello');
+      expect(received[1].payload['message'], 'world');
 
       await clientTransport.close();
       await serverTransport.close();

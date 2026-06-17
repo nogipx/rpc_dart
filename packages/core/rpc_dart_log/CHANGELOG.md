@@ -1,3 +1,26 @@
+## 0.2.0
+
+Protocol redesign of the client transport path (breaking).
+
+**Client (`LogCollectorOutput`):**
+- Web-safe: the client library (`package:rpc_dart_log/rpc_dart_log.dart` ->
+  `LogCollectorOutput` + `DeviceInfo` + contracts) no longer pulls any
+  `dart:io` server code, so it compiles and runs on dart2js / node / browser.
+  Server-side code stays behind `rpc_dart_log_server.dart`. Mobile and
+  Flutter-Web apps embed exactly this client.
+- Reconnect now uses the WebSocket transport's built-in
+  `RpcWebSocketCallerTransport.reconnect`: the transport, endpoint and caller
+  are built once and reused across reconnects via a channel reconnect factory,
+  instead of rebuilding the whole endpoint per attempt.
+- Record sends are pipelined fire-and-forget on the logging hot path: `write`
+  never blocks and the pump issues the next send without awaiting the previous
+  ack, so per-record round-trip latency no longer caps throughput. The empty-Ack
+  reply is consumed off the hot path only to advance the bounded in-flight
+  window; unacked in-flight records are requeued at the buffer head on reconnect
+  (order preserved, no loss).
+- New public surface for diagnostics/tests: `channelFactory` constructor param,
+  `sessionId`, `isConnected`, `bufferedCount`, `inFlightCount`.
+
 ## 0.1.1
 
 **Fixes (audit):**

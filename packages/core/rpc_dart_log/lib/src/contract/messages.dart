@@ -69,14 +69,20 @@ class LogCollectorRecord implements IRpcSerializable {
       LogCollectorRecord(json);
 }
 
-/// Acknowledgement for a sent record.
+/// Acknowledgement returned by the collector for a received record.
+///
+/// The client ([LogCollectorOutput]) pipelines `send` calls: it does not await
+/// the ack before sending the next record, so per-record RTT no longer caps
+/// throughput. The ack is still used off the hot path to advance the in-flight
+/// window and drop confirmed records from the buffer (no loss on reconnect).
 class LogCollectorAck implements IRpcSerializable {
   const LogCollectorAck();
 
   @override
-  Map<String, dynamic> toJson() => {};
+  Map<String, dynamic> toJson() => const {};
 
-  static LogCollectorAck fromJson(Map<String, dynamic> json) => const LogCollectorAck();
+  static LogCollectorAck fromJson(Map<String, dynamic> json) =>
+      const LogCollectorAck();
 }
 
 // ---------------------------------------------------------------------------

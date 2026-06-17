@@ -26,7 +26,7 @@ packages:
     source: hosted
     version: "2.7.0"
   async:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: async
       sha256: e2eb0491ba5ddb6177742d2da23904574082139b07c1e33b8503b9f46f3e1a37
@@ -215,14 +215,14 @@ packages:
       path: "../rpc_dart"
       relative: true
     source: path
-    version: "3.2.3"
+    version: "3.3.0"
   rpc_dart_websocket:
     dependency: "direct main"
     description:
       path: "../../transport/rpc_dart_websocket"
       relative: true
     source: path
-    version: "0.2.1"
+    version: "0.2.2"
   shelf:
     dependency: "direct main"
     description:
