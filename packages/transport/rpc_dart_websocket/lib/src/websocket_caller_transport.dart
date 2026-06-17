@@ -77,8 +77,10 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
         // The underlying socket dropped. If a reconnect factory is configured,
         // keep the stable [incomingMessages] controller open (and stay
         // un-closed) so subscribers survive and reconnect() can re-attach to a
-        // fresh socket. The rpc_dart_log client relies on this: it builds the
-        // transport once and calls reconnect() after a server-side drop.
+        // fresh socket. This is a lower-level, transport-specific primitive
+        // (reuse this transport, swap the channel). For transport-agnostic
+        // auto-reconnect with observable state and backoff, prefer wrapping any
+        // transport in `RpcClientConnection` instead.
         // Without a factory there is nothing to recover to, so close fully.
         if (_closed) return;
         if (_reconnectFactory != null) return;
@@ -147,6 +149,14 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
     return _inner.health();
   }
 
+  /// Re-attaches this transport to a fresh channel from the configured
+  /// reconnect factory, reusing the same transport object and the stable
+  /// [incomingMessages] stream.
+  ///
+  /// This is a low-level primitive. For client auto-reconnect with backoff,
+  /// attempt limits and observable state, prefer wrapping a transport factory
+  /// in `RpcClientConnection` (transport-agnostic) rather than driving this
+  /// directly.
   @override
   Future<RpcHealthStatus> reconnect() async {
     if (_closed || _incomingCtl.isClosed) {
