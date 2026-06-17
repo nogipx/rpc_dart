@@ -149,21 +149,28 @@ void main() {
       0xc0, 0x19, 0x04, 0xd2, // tag(0) 1234
       0x61, 0x75, // "u"
       0xf7, // undefined
-    ], {'a': 1234, 'u': null});
+    ], {
+      'a': 1234,
+      'u': null
+    });
 
     // { "f": half-float 1.5 (0x3e00) }
     decodesTo('half float', [
       0xa1,
       0x61, 0x66, // "f"
       0xf9, 0x3e, 0x00, // half 1.5
-    ], {'f': 1.5});
+    ], {
+      'f': 1.5
+    });
 
     // { "f": single float 1.5 (0x3fc00000) }
     decodesTo('single float', [
       0xa1,
       0x61, 0x66, // "f"
       0xfa, 0x3f, 0xc0, 0x00, 0x00, // single 1.5
-    ], {'f': 1.5});
+    ], {
+      'f': 1.5
+    });
 
     // { "f": half NaN (0x7e00) }
     decodesTo('half NaN', [
@@ -173,7 +180,9 @@ void main() {
       0xf9,
       0x7e,
       0x00,
-    ], {'f': double.nan});
+    ], {
+      'f': double.nan
+    });
 
     // { "f": half +Infinity (0x7c00) }
     decodesTo('half Infinity', [
@@ -183,7 +192,9 @@ void main() {
       0xf9,
       0x7c,
       0x00,
-    ], {'f': double.infinity});
+    ], {
+      'f': double.infinity
+    });
 
     // { "f": half subnormal smallest (0x0001) = 2^-24 }
     decodesTo('half subnormal', [
@@ -193,14 +204,18 @@ void main() {
       0xf9,
       0x00,
       0x01,
-    ], {'f': 5.960464477539063e-8});
+    ], {
+      'f': 5.960464477539063e-8
+    });
 
     // { "s": extended simple value 200 (0xf8 0xc8) -> 200 }
     decodesTo('extended simple value', [
       0xa1,
       0x61, 0x73, // "s"
       0xf8, 0xc8,
-    ], {'s': 200});
+    ], {
+      's': 200
+    });
 
     // { "l": indefinite array [1, 2, 3] }
     decodesTo('indefinite array', [
@@ -226,7 +241,9 @@ void main() {
       0x61, 0x6b, // "k"
       0x61, 0x76, // "v"
       0xff,
-    ], {'k': 'v'});
+    ], {
+      'k': 'v'
+    });
 
     // { "s": indefinite text string "hello" = "he"+"llo" }
     decodesTo('indefinite text string', [
@@ -236,7 +253,9 @@ void main() {
       0x62, 0x68, 0x65, // "he"
       0x63, 0x6c, 0x6c, 0x6f, // "llo"
       0xff,
-    ], {'s': 'hello'});
+    ], {
+      's': 'hello'
+    });
 
     // { "b": indefinite byte string 0x0102 + 0x03 -> 0x010203 }
     decodesTo('indefinite byte string', [
