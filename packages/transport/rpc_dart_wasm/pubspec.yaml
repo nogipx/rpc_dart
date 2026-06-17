@@ -1,6 +1,6 @@
 name: rpc_dart_wasm
 description: WASM runtime bridge transport for rpc_dart.
-version: 0.1.0
+version: 0.1.1
 publish_to: none
 
 environment:
