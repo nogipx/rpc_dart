@@ -1,3 +1,7 @@
+## 3.3.1
+
+- Removed the `rpc_dart_compression` dev-dependency. The compression negotiation test now registers a small test-local reversible codec under the `gzip` encoding instead of pulling in `RpcGzipCodec`, so the published package has no path dependency. No runtime/API change.
+
 ## 3.3.0
 
 **Features / changes:**

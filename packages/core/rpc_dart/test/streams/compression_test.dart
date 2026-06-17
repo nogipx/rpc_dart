@@ -4,13 +4,37 @@
 
 import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_dart_compression/rpc_dart_compression.dart';
 import 'package:test/test.dart';
 
+/// Test-only reversible codec registered under the `gzip` encoding. These tests
+/// only verify the grpc-encoding negotiation + round-trip machinery, not real
+/// gzip framing, so a self-inverse XOR transform (identical on VM and dart2js)
+/// is sufficient and avoids depending on `rpc_dart_compression`.
+class _XorCodec implements RpcCompressionCodec {
+  const _XorCodec();
+
+  @override
+  Uint8List compress(Uint8List data) => _xor(data);
+
+  @override
+  Uint8List decompress(Uint8List data) => _xor(data);
+
+  static Uint8List _xor(Uint8List data) {
+    final out = Uint8List(data.length);
+    for (var i = 0; i < data.length; i++) {
+      out[i] = data[i] ^ 0x5a;
+    }
+    return out;
+  }
+}
+
 void main() {
-  // Register a cross-platform gzip codec so these tests behave identically on
-  // the VM and on web (dart2js), where the built-in dart:io gzip is absent.
-  setUpAll(() => RpcGzipCodec.register());
+  // Register a cross-platform codec under "gzip" so these tests behave
+  // identically on the VM and on web (dart2js), where the built-in dart:io gzip
+  // is absent. A test-local reversible codec keeps rpc_dart free of a
+  // dev-dependency on rpc_dart_compression.
+  setUpAll(
+      () => RpcGrpcCompression.register(RpcGrpcCompression.gzip, _XorCodec()));
   tearDownAll(() => RpcGrpcCompression.unregister(RpcGrpcCompression.gzip));
 
   final codec = RpcCodec(RpcString.fromJson);
