@@ -34,6 +34,9 @@ test_web:
   cd packages/blob/rpc_blob && fvm dart test -p node test/web_smoke_test.dart
   cd packages/data/rpc_data_sqlite && fvm dart test -p node test/web_smoke_test.dart
   cd packages/blob/rpc_blob_sqlite && fvm dart test -p node test/web_smoke_test.dart
+  # Isolate web variant (Web Workers) needs browser globals -> chrome, not node.
+  # Real e2e needs the worker pre-compiled; target browser test files explicitly.
+  cd packages/transport/rpc_dart_isolate && fvm dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js && fvm dart test -p chrome test/web_smoke_test.dart test/web_worker/echo_worker_test.dart
 
 docs:
   mkdocs serve --strict

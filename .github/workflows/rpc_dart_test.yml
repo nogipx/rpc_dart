@@ -146,6 +146,18 @@ jobs:
         web_test packages/data/rpc_data_sqlite test/web_smoke_test.dart
         web_test packages/blob/rpc_blob_sqlite test/web_smoke_test.dart
 
+    # Isolate web variant (Web Workers) needs real browser globals -> chrome.
+    # ubuntu-latest ships Google Chrome, which `dart test -p chrome` uses.
+    # The real Web Worker e2e needs the worker pre-compiled to JS first.
+    # Target the browser test files explicitly: the VM tests import dart:isolate
+    # and would fail to compile for the browser.
+    - name: Isolate web (Web Worker) compile-guard + real e2e on chrome
+      run: |
+        cd packages/transport/rpc_dart_isolate
+        dart pub get
+        dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js
+        dart test -p chrome test/web_smoke_test.dart test/web_worker/echo_worker_test.dart
+
   # Тестирование совместимости с версиями Dart
   compatibility:
     name: "Sdk Compatibility"
