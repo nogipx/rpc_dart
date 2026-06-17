@@ -62,3 +62,9 @@ Dockerfile.build
 # OS
 .DS_Store
 Thumbs.db
+# Pre-compiled Web Worker artifact for the real Web Worker e2e test
+# (test/web_worker/echo_worker_test.dart). Rebuild with:
+#   fvm dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js
+test/web_worker/echo_worker.dart.js
+test/web_worker/echo_worker.dart.js.deps
+test/web_worker/echo_worker.dart.js.map

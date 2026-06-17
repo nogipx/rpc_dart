@@ -24,7 +24,7 @@ external DedicatedWorkerGlobalScope get _workerSelf;
 
 // -- Bridge message format (Map-based, for structured-clone transfer) ---------
 
-enum _BridgeType { init, metadata, data, finish, close }
+enum _BridgeType { init, ready, metadata, data, finish, close }
 
 class _BridgeMessage {
   final _BridgeType type;
@@ -46,6 +46,7 @@ class _BridgeMessage {
   Map<String, Object?> toMap() => {
         'type': switch (type) {
           _BridgeType.init => 'init',
+          _BridgeType.ready => 'ready',
           _BridgeType.metadata => 'metadata',
           _BridgeType.data => 'data',
           _BridgeType.finish => 'finish',
@@ -65,6 +66,7 @@ class _BridgeMessage {
     if (typeRaw is! String || streamId == null) return null;
     final type = switch (typeRaw) {
       'init' => _BridgeType.init,
+      'ready' => _BridgeType.ready,
       'metadata' => _BridgeType.metadata,
       'data' => _BridgeType.data,
       'finish' => _BridgeType.finish,
@@ -180,6 +182,7 @@ class _WebMultiplexedChannel implements IRpcMultiplexedChannel {
 
     switch (message.type) {
       case _BridgeType.init:
+      case _BridgeType.ready:
         break;
       case _BridgeType.metadata:
         _incomingCtl.add(RpcTransportMessage(
@@ -247,9 +250,24 @@ abstract interface class RpcIsolateTransport {
       policy: policy,
     );
 
-    // Wait for worker init acknowledgment.
+    // Wait for worker init acknowledgment (isolate_manager `initialized()`).
+    // NOTE: this only confirms the worker scope is wired -- it does NOT confirm
+    // the user `entrypoint` has run and subscribed its responder. We must wait
+    // for the worker's own `ready` ack (sent after `entrypoint` returns) before
+    // returning the transport, otherwise early RPC frames race ahead of the
+    // responder subscription and are dropped (the bridge streams do not buffer).
     await controller.ensureInitialized.future
         .timeout(const Duration(seconds: 5), onTimeout: () {});
+
+    // Listen for the worker's post-entrypoint readiness ack before any RPC
+    // frames are allowed to flow.
+    final ready = Completer<void>();
+    final readySub = controller.onMessage.listen((raw) {
+      final msg = _BridgeMessage.fromMap(raw);
+      if (msg != null && msg.type == _BridgeType.ready && !ready.isCompleted) {
+        ready.complete();
+      }
+    });
 
     // Deliver initial parameters to the worker.
     controller.sendIsolate(
@@ -259,6 +277,13 @@ abstract interface class RpcIsolateTransport {
         payload: customParams ?? const <String, Object?>{},
       ).toMap(),
     );
+
+    // Wait for the worker responder to be ready. If the worker predates this
+    // protocol (no `ready` ack), fall back after a short grace period so we do
+    // not hang older worker builds.
+    await ready.future
+        .timeout(const Duration(seconds: 5), onTimeout: () {});
+    await readySub.cancel();
 
     void kill() {
       unawaited(transport.close());
@@ -296,17 +321,26 @@ void runRpcIsolateManagerWorker(
   // Signal ready state.
   controller.initialized();
 
+  void signalReady() {
+    controller
+        .sendResult(_BridgeMessage(type: _BridgeType.ready, streamId: 0).toMap());
+  }
+
   controller.onIsolateMessage.first.then((raw) {
     try {
       final msg = _BridgeMessage.fromMap(raw);
       if (msg != null && msg.type == _BridgeType.init && msg.payload is Map) {
         final params = (msg.payload as Map).cast<String, dynamic>();
         entrypoint(transport, Map<String, dynamic>.from(params));
+        // Ack readiness only AFTER the entrypoint has wired its responder, so
+        // the host does not race RPC frames ahead of the subscription.
+        signalReady();
         return;
       }
     } catch (_) {}
     try {
       entrypoint(transport, const <String, dynamic>{});
+      signalReady();
     } catch (error, stackTrace) {
       unawaited(transport.close());
       Zone.current.handleUncaughtError(error, stackTrace);
