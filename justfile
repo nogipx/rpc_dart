@@ -29,6 +29,7 @@ test_web:
   cd packages/core/rpc_dart_grpc_reflection && fvm dart test -p node
   cd packages/core/rpc_dart_opentelemetry && fvm dart test -p node test/web_smoke_test.dart
   cd packages/transport/rpc_dart_websocket && fvm dart test -p node test/websocket_web_smoke_test.dart
+  cd packages/transport/rpc_dart_http && fvm dart test -p node test/web_smoke_test.dart
   cd packages/core/rpc_dart_log && fvm dart test -p node test/client_web_smoke_test.dart
   cd packages/data/rpc_data && fvm dart test -p node test/web_smoke_test.dart
   cd packages/blob/rpc_blob && fvm dart test -p node test/web_smoke_test.dart

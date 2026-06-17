@@ -125,7 +125,7 @@ jobs:
     - name: Setup Node (dart2js test runtime)
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '24'
 
     - name: Run web-relevant suites on node (dart2js)
       run: |
@@ -140,6 +140,7 @@ jobs:
         web_test packages/core/rpc_dart_grpc_reflection
         web_test packages/core/rpc_dart_opentelemetry test/web_smoke_test.dart
         web_test packages/transport/rpc_dart_websocket test/websocket_web_smoke_test.dart
+        web_test packages/transport/rpc_dart_http test/web_smoke_test.dart
         web_test packages/core/rpc_dart_log test/client_web_smoke_test.dart
         web_test packages/data/rpc_data test/web_smoke_test.dart
         web_test packages/blob/rpc_blob test/web_smoke_test.dart
