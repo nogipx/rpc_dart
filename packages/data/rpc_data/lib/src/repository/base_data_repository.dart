@@ -85,7 +85,12 @@ abstract class BaseDataRepository implements IDataRepository {
     if (_idGenerator != null) {
       return _idGenerator(collection);
     }
-    final suffix = _random.nextInt(1 << 32).toRadixString(16);
+    // На dart2js `1 << 32` переполняется до 0, и `nextInt(0)` бросает RangeError.
+    // Собираем 32-битное значение из двух 16-битных розыгрышей, что одинаково
+    // работает на VM и web.
+    final high = _random.nextInt(0x10000);
+    final low = _random.nextInt(0x10000);
+    final suffix = ((high << 16) | low).toRadixString(16);
     final timestamp = _clock().microsecondsSinceEpoch;
     return '$collection-$timestamp-$suffix';
   }
@@ -901,8 +906,12 @@ abstract class BaseDataRepository implements IDataRepository {
             onDone: listener.close,
           );
 
-      listener.onCancel = () async {
-        await subscription.cancel();
+      // Намеренно НЕ ждём subscription.cancel(): на dart2js отмена подписки
+      // на цепочку приостановленных async*/await for может не завершиться,
+      // что заблокировало бы отмену со стороны клиента (web). Запускаем
+      // отмену «вдогонку», делая поведение одинаковым на VM и dart2js.
+      listener.onCancel = () {
+        unawaited(subscription.cancel().catchError((_) {}));
       };
     });
   }

@@ -284,10 +284,45 @@ class DataServiceClient implements IDataClient {
     String? cursor,
     RpcContext? context,
   }) {
-    return _caller.watchChanges(
-      WatchChangesRequest(collection: collection, cursor: cursor),
-      context: context,
+    // Мост через StreamController. На dart2js/web отмена подписки на
+    // серверный стрим caller-pipeline может зависнуть навсегда, если её ждать.
+    // Явный StreamController с onCancel, который НЕ ждёт inner.cancel(), делает
+    // отмену детерминированной и одинаковой на VM и dart2js.
+    late final StreamController<DataChangeEvent> controller;
+    StreamSubscription<DataChangeEvent>? sub;
+
+    controller = StreamController<DataChangeEvent>(
+      onListen: () {
+        sub = _caller
+            .watchChanges(
+              WatchChangesRequest(collection: collection, cursor: cursor),
+              context: context,
+            )
+            .listen(
+              (event) {
+                if (!controller.isClosed) controller.add(event);
+              },
+              onError: (Object error, StackTrace stackTrace) {
+                if (!controller.isClosed) {
+                  controller.addError(error, stackTrace);
+                }
+              },
+              onDone: () {
+                if (!controller.isClosed) controller.close();
+              },
+              cancelOnError: false,
+            );
+      },
+      onCancel: () {
+        // Намеренно НЕ ждём sub.cancel(): на dart2js отмена внутренней цепочки
+        // серверного стрима может не завершиться. Запускаем отмену «вдогонку».
+        final inner = sub;
+        sub = null;
+        unawaited(inner?.cancel().catchError((_) {}));
+      },
     );
+
+    return controller.stream;
   }
 
   @override

@@ -226,19 +226,51 @@ class DataRepositoryClient implements IDataClient {
   }
 
   @override
-  Stream<Uint8List> exportDatabase({RpcContext? context}) async* {
+  Stream<Uint8List> exportDatabase({RpcContext? context}) {
     _ensureContext(context);
-    try {
-      yield* _repository.exportDatabase(const ExportDatabaseRequest());
-    } catch (error, stackTrace) {
-      if (error is RpcDataError) {
-        Error.throwWithStackTrace(error, stackTrace);
-      }
-      Error.throwWithStackTrace(
-        RpcDataError.internal('Failed to export database', error: error),
-        stackTrace,
-      );
+
+    // Мост через StreamController вместо `async* { yield* repo.exportDatabase }`.
+    // На dart2js отмена подписки на цепочку приостановленных async*/await for
+    // генераторов долгоживущего экспорта может зависнуть навсегда. Явный
+    // StreamController с onCancel, который НЕ ждёт inner.cancel(), делает
+    // отмену детерминированной и одинаковой на VM и dart2js.
+    late final StreamController<Uint8List> controller;
+    StreamSubscription<Uint8List>? sub;
+
+    RpcDataError wrapError(Object error) {
+      if (error is RpcDataError) return error;
+      return RpcDataError.internal('Failed to export database', error: error);
     }
+
+    controller = StreamController<Uint8List>(
+      onListen: () {
+        sub = _repository
+            .exportDatabase(const ExportDatabaseRequest())
+            .listen(
+              (chunk) {
+                if (!controller.isClosed) controller.add(chunk);
+              },
+              onError: (Object error, StackTrace stackTrace) {
+                if (!controller.isClosed) {
+                  controller.addError(wrapError(error), stackTrace);
+                }
+              },
+              onDone: () {
+                if (!controller.isClosed) controller.close();
+              },
+              cancelOnError: false,
+            );
+      },
+      onCancel: () {
+        // Намеренно НЕ ждём sub.cancel(): на dart2js отмена внутренней цепочки
+        // async*-генераторов может не завершиться. Запускаем отмену «вдогонку».
+        final inner = sub;
+        sub = null;
+        unawaited(inner?.cancel().catchError((_) {}));
+      },
+    );
+
+    return controller.stream;
   }
 
   @override

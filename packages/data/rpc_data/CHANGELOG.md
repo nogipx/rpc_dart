@@ -1,3 +1,11 @@
+## 4.0.1
+
+- Web/dart2js correctness for the client surfaces (now verified on node):
+  - `DataServiceClient.watchChanges` and `DataRepositoryClient.exportDatabase` bridge the underlying stream through a `StreamController` whose `onCancel` does not await the inner subscription cancel. On dart2js, awaiting the cancel of a server-stream / `async*` chain could hang forever, deadlocking client-side cancellation. The runaway cancel is now fire-and-forget, making cancel deterministic on both VM and dart2js.
+  - `BaseDataRepository.watch` cancel made non-blocking for the same reason.
+  - `BaseDataRepository` id generation no longer uses `1 << 32`, which overflows to `0` on dart2js (making `nextInt(0)` throw `RangeError`); the 32-bit suffix is now assembled from two 16-bit draws.
+- Added `test/web_smoke_test.dart` running on `vm || node`.
+
 ## 4.0.0
 
 - Breaking: renamed `rpc_dart_data` to `rpc_data` and split drivers into separate packages: `rpc_data_sqlite` (SQLite/SQLCipher, web/IO) and `rpc_data_postgres` (PostgreSQL). The core package now has no IO/FFI dependencies and works on WASM targets out of the box.
