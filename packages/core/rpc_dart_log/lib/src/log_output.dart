@@ -20,13 +20,16 @@ import 'protocol.dart';
 /// Each instance generates a unique session ID so multiple connections
 /// from the same app are distinguishable in the collector.
 ///
-/// ## Design (0.2.0)
+/// ## Design (0.2.1)
 ///
-/// Reconnect uses the transport's built-in
-/// [RpcWebSocketCallerTransport.reconnect]: the transport, endpoint and caller
-/// are built once (the transport's reconnect factory reopens the channel) and
-/// reused across reconnects, instead of rebuilding the whole endpoint per
-/// attempt.
+/// Reconnect is delegated to [RpcClientConnection], the canonical
+/// transport-agnostic auto-reconnect wrapper. It owns the backoff loop, rebuilds
+/// the WebSocket transport via the [channelFactory] on every attempt and exposes
+/// a stable proxy [RpcClientConnection.transport]; the [RpcCallerEndpoint] and
+/// caller are built once on that proxy and survive reconnects. Lifecycle is
+/// driven off [RpcClientConnection.state]: on the transition to
+/// [RpcClientOnline] the client (re-)handshakes and flushes the buffer, and
+/// while not online it buffers.
 ///
 /// Sends are pipelined: the pump issues the next `send` without awaiting the
 /// previous ack, so per-record round-trip latency no longer caps throughput,
@@ -72,17 +75,19 @@ class LogCollectorOutput extends LogOutput {
   // Records sent but not yet acked, in send order. Requeued on reconnect.
   final Queue<LogCollectorRecord> _inFlight = Queue();
 
-  // Built once and reused across reconnects.
-  RpcWebSocketCallerTransport? _transport;
-  RpcCallerEndpoint? _endpoint;
-  LogCollectorServiceCaller? _caller;
+  // Auto-reconnect wrapper. Builds the transport via the factory and exposes a
+  // stable proxy the endpoint is built on once.
+  late final RpcClientConnection _connection;
+  StreamSubscription<RpcClientConnectionState>? _stateSub;
+  // Built exactly once on the connection's stable proxy transport; survive
+  // reconnects.
+  late final RpcCallerEndpoint _endpoint;
+  late final LogCollectorServiceCaller _caller;
 
   bool _connected = false;
-  bool _connecting = false;
   bool _disposed = false;
   bool _pumping = false;
-  Timer? _reconnectTimer;
-  int _reconnectAttempt = 0;
+  bool _handshaking = false;
 
   /// Creates a [LogCollectorOutput] that sends records to [uri].
   ///
@@ -99,7 +104,20 @@ class LogCollectorOutput extends LogOutput {
         _device = device,
         _channelFactory = channelFactory ?? _defaultChannelFactory,
         sessionId = _generateSessionId() {
-    _connect();
+    _connection = RpcClientConnection(
+      transportFactory: () async {
+        final ch = await _channelFactory(_uri);
+        await ch.ready;
+        return RpcWebSocketCallerTransport(ch);
+      },
+    );
+    // Build the endpoint and caller exactly once on the connection's stable
+    // proxy transport; they survive reconnects transparently.
+    _endpoint = RpcCallerEndpoint(transport: _connection.transport);
+    _endpoint.start();
+    _caller = LogCollectorServiceCaller(_endpoint);
+    _stateSub = _connection.state.listen(_onState);
+    _connection.connect();
   }
 
   static Future<WebSocketChannel> _defaultChannelFactory(Uri uri) async {
@@ -156,78 +174,63 @@ class LogCollectorOutput extends LogOutput {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    _reconnectTimer?.cancel();
     _connected = false;
-    _closeTransport();
+    _stateSub?.cancel();
+    _stateSub = null;
+    _endpoint.close();
+    _connection.dispose();
     _buffer.clear();
     _inFlight.clear();
   }
 
   // ---------------------------------------------------------------------------
-  // Connection lifecycle
+  // Connection lifecycle (driven off RpcClientConnection.state)
   // ---------------------------------------------------------------------------
 
-  Future<WebSocketChannel> _openChannel() => _channelFactory(_uri);
+  void _onState(RpcClientConnectionState state) {
+    if (_disposed) return;
+    if (state is RpcClientOnline) {
+      _onOnline();
+    } else {
+      // Connecting / Offline / Disconnected / Idle: we are not usable. Requeue
+      // any in-flight records at the buffer head (order preserved) so they are
+      // resent after the next Online and never lost across the reconnect.
+      if (_connected) {
+        _connected = false;
+        _requeueInFlight();
+      }
+    }
+  }
 
-  void _connect() {
-    if (_disposed || _connecting || _connected) return;
-    _connecting = true;
+  // On every (re)connect: handshake first, then mark connected and flush. The
+  // handshake runs on the stable endpoint over the freshly-attached transport.
+  void _onOnline() {
+    if (_disposed || _handshaking) return;
+    _handshaking = true;
 
     () async {
       try {
-        // Build the transport (with reconnect support) and endpoint exactly
-        // once; later attempts reuse them via the transport's reconnect().
-        if (_transport == null) {
-          final channel = await _openChannel();
-          if (_disposed) {
-            await channel.sink.close();
-            _connecting = false;
-            return;
-          }
-          _transport = RpcWebSocketCallerTransport(
-            channel,
-            reconnectFactory: _openChannel,
-          );
-          _endpoint = RpcCallerEndpoint(transport: _transport!);
-          _endpoint!.start();
-          _caller = LogCollectorServiceCaller(_endpoint!);
-        } else {
-          final status = await _transport!.reconnect();
-          if (!status.isHealthy) {
-            throw StateError('reconnect failed: ${status.message}');
-          }
-        }
-
-        if (_disposed) {
-          _connecting = false;
-          return;
-        }
-
         final label = '${_device.name}/$sessionId';
-        await _caller!.handshake(LogCollectorHandshake(
+        await _caller.handshake(LogCollectorHandshake(
           deviceName: label,
           app: _device.app,
           os: _device.os,
           appVersion: _device.appVersion,
         ));
-
-        if (_disposed) {
-          _connecting = false;
-          return;
-        }
-
-        // A fresh connection: any records still marked in-flight from the
-        // previous socket were never acked. Requeue them at the buffer head
-        // (preserving order) so they are resent and not lost.
+        _handshaking = false;
+        if (_disposed) return;
+        // Records still marked in-flight from a previous socket were never
+        // acked. Requeue them at the buffer head (preserving order) so they are
+        // resent and not lost.
         _requeueInFlight();
-        _connecting = false;
         _connected = true;
-        _reconnectAttempt = 0;
         _pump();
       } catch (_) {
-        _connecting = false;
-        _connected = false;
-        _scheduleReconnect();
+        _handshaking = false;
+        if (_disposed) return;
+        // Handshake failed on this connection; drop it and let the connection
+        // rebuild the transport via the factory and retry.
+        _connection.forceReconnect();
       }
     }();
   }
@@ -236,23 +239,6 @@ class LogCollectorOutput extends LogOutput {
     while (_inFlight.isNotEmpty) {
       _buffer.addFirst(_inFlight.removeLast());
     }
-  }
-
-  void _closeTransport() {
-    final ep = _endpoint;
-    final tr = _transport;
-    _caller = null;
-    _endpoint = null;
-    _transport = null;
-    ep?.close();
-    tr?.close();
-  }
-
-  void _goOffline() {
-    if (!_connected) return;
-    _connected = false;
-    _requeueInFlight();
-    _scheduleReconnect();
   }
 
   // ---------------------------------------------------------------------------
@@ -267,14 +253,13 @@ class LogCollectorOutput extends LogOutput {
     if (_pumping) return;
     _pumping = true;
     try {
-      final caller = _caller;
-      if (!_connected || caller == null) return;
+      if (!_connected) return;
       while (_connected &&
           _buffer.isNotEmpty &&
           _inFlight.length < maxInFlight) {
         final record = _buffer.removeFirst();
         _inFlight.addLast(record);
-        caller.send(record).then(
+        _caller.send(record).then(
           (_) => _onAck(record),
           onError: (Object _) => _onSendError(record),
         );
@@ -293,23 +278,14 @@ class LogCollectorOutput extends LogOutput {
 
   void _onSendError(LogCollectorRecord record) {
     if (_disposed) return;
-    // The record stays in [_inFlight]; _goOffline requeues the whole window at
-    // the buffer head (order preserved) and triggers reconnect.
-    _goOffline();
-  }
-
-  void _scheduleReconnect() {
-    if (_disposed) return;
-    _reconnectTimer?.cancel();
-    // Cap the shift exponent so the backoff math stays small-int / JS-safe
-    // (an unbounded `1 << n` overflows on dart2js). The clamp bounds the delay
-    // anyway, but we never feed a huge exponent into the shift.
-    final exp = _reconnectAttempt > 4 ? 4 : _reconnectAttempt;
-    final delay = Duration(
-      milliseconds: (1000 * (1 << exp)).clamp(1000, 15000),
-    );
-    _reconnectAttempt++;
-    _reconnectTimer = Timer(delay, _connect);
+    if (!_connected) return;
+    // The send failed: the underlying transport is broken. Mark offline and
+    // requeue the whole in-flight window at the buffer head (order preserved),
+    // then ask the connection to rebuild the transport. State will return to
+    // Online when the new socket is up, re-handshaking and flushing.
+    _connected = false;
+    _requeueInFlight();
+    _connection.forceReconnect();
   }
 
   static final _random = Random();

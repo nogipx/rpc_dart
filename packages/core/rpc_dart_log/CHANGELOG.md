@@ -1,3 +1,25 @@
+## 0.2.1
+
+**Client (`LogCollectorOutput`):**
+- Reconnect handling now delegates to `RpcClientConnection` (from
+  `package:rpc_dart`), the canonical transport-agnostic auto-reconnect wrapper,
+  instead of a hand-rolled backoff loop on top of
+  `RpcWebSocketCallerTransport.reconnect`. `RpcClientConnection` owns the backoff
+  and attempt limits, rebuilds the WebSocket transport via the existing
+  `channelFactory` on every attempt, and exposes a stable proxy transport. The
+  `RpcCallerEndpoint` and caller are built once on that proxy and survive
+  reconnects. This removes the duplicated reconnect/backoff code
+  (`_scheduleReconnect`, the manual attempt counter, direct transport
+  `reconnect()` calls).
+- Lifecycle is driven off `RpcClientConnection.state`: on the transition to
+  `RpcClientOnline` the client re-handshakes (device info) and flushes the
+  buffer; while not online it buffers. Same observable guarantees as before --
+  bounded buffer (drop oldest), pipelined fire-and-forget sends that never block
+  `write`, ordered flush, and no loss across reconnect (unacked in-flight
+  records are requeued at the buffer head and re-sent after the next Online).
+- Public API unchanged: `channelFactory`, `sessionId`, `isConnected`,
+  `bufferedCount`, `inFlightCount`.
+
 ## 0.2.0
 
 Protocol redesign of the client transport path (breaking).
