@@ -105,6 +105,47 @@ jobs:
         path-to-lcov: ${{ env.WORKING_DIRECTORY }}/coverage/lcov.info
 
 
+  # Кроссплатформенный (dart2js/web) регрессионный гард.
+  # Зеркалит рецепт `just test_web`: веб-релевантные пакеты ДОЛЖНЫ проходить на node.
+  # Дефолтный VM-прогон не ловит dart2js-баги (см. июньский web-sweep).
+  web:
+    name: "Web (dart2js / node)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: lint
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Dart
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: stable
+
+    - name: Setup Node (dart2js test runtime)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Run web-relevant suites on node (dart2js)
+      run: |
+        set -e
+        web_test() {
+          echo "::group::node: $1"
+          (cd "$1" && dart pub get && dart test -p node ${2:-})
+          echo "::endgroup::"
+        }
+        web_test packages/core/rpc_dart
+        web_test packages/core/rpc_dart_compression
+        web_test packages/core/rpc_dart_grpc_reflection
+        web_test packages/core/rpc_dart_opentelemetry test/web_smoke_test.dart
+        web_test packages/transport/rpc_dart_websocket test/websocket_web_smoke_test.dart
+        web_test packages/core/rpc_dart_log test/client_web_smoke_test.dart
+        web_test packages/data/rpc_data test/web_smoke_test.dart
+        web_test packages/blob/rpc_blob test/web_smoke_test.dart
+        web_test packages/data/rpc_data_sqlite test/web_smoke_test.dart
+        web_test packages/blob/rpc_blob_sqlite test/web_smoke_test.dart
+
   # Тестирование совместимости с версиями Dart
   compatibility:
     name: "Sdk Compatibility"
