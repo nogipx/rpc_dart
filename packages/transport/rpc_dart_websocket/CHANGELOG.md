@@ -1,3 +1,9 @@
+## 0.2.2
+
+- Web-correctness verification: the client transport (`RpcWebSocketCallerTransport` / `RpcWebSocketChannel`) is confirmed dart2js-safe. No `dart:io` on the client path; the frame multiplexer header uses only 32-bit `ByteData` ops (no `setUint64`/`getUint64`), so it is safe under dart2js' 32-bit integer semantics.
+- Added `test/websocket_web_smoke_test.dart`: frame round-trip plus caller/responder round-trips over an in-memory `WebSocketChannel` pair (no `dart:io`). Passes on VM, node, and chrome (`fvm dart test -p vm|node|chrome`).
+- Added `async` and `stream_channel` dev dependencies for the in-memory channel pair used by the web smoke test.
+
 ## 0.2.1
 
 - `RpcWebSocketServer`: added `onPeerEndpointCreated` callback — when set, each accepted connection creates an `RpcPeerEndpoint` instead of `RpcResponderEndpoint`, enabling bidirectional server-initiated calls over WebSocket.
