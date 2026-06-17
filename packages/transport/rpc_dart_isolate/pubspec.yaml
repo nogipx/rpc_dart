@@ -13,7 +13,7 @@ topics:
   - isolate
 
 dependencies:
-  rpc_dart: ^3.2.3
+  rpc_dart: ^3.3.0
   isolate_manager: ^6.1.2
   web: ^1.1.1
 

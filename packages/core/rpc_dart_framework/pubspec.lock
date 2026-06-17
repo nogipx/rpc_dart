@@ -223,7 +223,7 @@ packages:
       path: "../rpc_dart"
       relative: true
     source: path
-    version: "3.2.3"
+    version: "3.3.0"
   rpc_dart_isolate:
     dependency: "direct main"
     description:
