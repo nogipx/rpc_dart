@@ -1,3 +1,10 @@
+## 0.2.3
+
+- Fixed: `RpcWebSocketCallerTransport` no longer permanently closes itself when the underlying socket drops gracefully (server-side FIN) *and* a `reconnectFactory` is configured. Previously the `onDone` cascade flipped the transport to closed, so a later `reconnect()` returned "Transport closed" — defeating reconnect after a server-initiated drop. The stable `incomingMessages` stream now survives the drop so subscribers persist and `reconnect()` can re-attach. This is the recovery path the `rpc_dart_log` client relies on. Without a `reconnectFactory` the transport still closes fully on drop (unchanged).
+- Expanded test coverage of the flagship streaming transport:
+  - `test/websocket_rpc_contract_test.dart`: full typed RPC contract end-to-end over a real `dart:io` WebSocket server (`RpcWebSocketServer` + `RpcResponderEndpoint`/`RpcCallerEndpoint`, ephemeral localhost port). Covers unary, server-stream (ordered delivery + completion), client-stream (aggregation), bidirectional (ordered echo), typed `RpcStatusException` propagation, mid-stream cancellation (no hang, transport stays usable), concurrent calls/streams (no cross-wiring), and a high-volume ordered stream.
+  - `test/websocket_reconnect_test.dart`: reconnect coverage (previously zero). Proves `reconnect()` re-establishes the socket, the stable `incomingMessages` stream survives for pre-existing subscribers, requests issued after reconnect reach a freshly-bound server, full endpoint-level RPC recovers after a server swap, the no-factory/already-closed paths report correctly, and a regression guard for the graceful-drop fix above.
+
 ## 0.2.2
 
 - Web-correctness verification: the client transport (`RpcWebSocketCallerTransport` / `RpcWebSocketChannel`) is confirmed dart2js-safe. No `dart:io` on the client path; the frame multiplexer header uses only 32-bit `ByteData` ops (no `setUint64`/`getUint64`), so it is safe under dart2js' 32-bit integer semantics.

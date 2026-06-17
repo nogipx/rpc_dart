@@ -74,7 +74,15 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
         if (!_incomingCtl.isClosed) _incomingCtl.addError(e);
       },
       onDone: () {
-        if (!_closed) close();
+        // The underlying socket dropped. If a reconnect factory is configured,
+        // keep the stable [incomingMessages] controller open (and stay
+        // un-closed) so subscribers survive and reconnect() can re-attach to a
+        // fresh socket. The rpc_dart_log client relies on this: it builds the
+        // transport once and calls reconnect() after a server-side drop.
+        // Without a factory there is nothing to recover to, so close fully.
+        if (_closed) return;
+        if (_reconnectFactory != null) return;
+        close();
       },
     );
   }
