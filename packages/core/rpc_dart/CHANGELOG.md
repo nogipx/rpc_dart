@@ -1,5 +1,6 @@
 ## 3.3.1
 
+- `RpcClientConnection.forceReconnect()` now resets the attempt counter and resumes even after `disconnect()` -- previously it could leave the connection stuck in `Offline` (the reconnect loop exited immediately because `_isStopped` was still set) or inherit a stale attempt count and hit `maxAttempts` early. Documented that in-flight calls do not survive a reconnect (only the endpoint and new calls do) and that `maxAttempts` counts from the initial drop. Added regression tests.
 - Removed the `rpc_dart_compression` dev-dependency. The compression negotiation test now registers a small test-local reversible codec under the `gzip` encoding instead of pulling in `RpcGzipCodec`, so the published package has no path dependency. No runtime/API change.
 
 ## 3.3.0

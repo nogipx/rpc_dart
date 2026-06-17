@@ -243,6 +243,65 @@ void main() {
       expect(connection.currentState, isA<RpcClientOnline>());
     });
 
+    test('forceReconnect() resumes after disconnect() (not stuck Offline)',
+        () async {
+      final (c1, _) = _pair();
+      final (c2, _) = _pair();
+      final queue = _TransportQueue([c1, c2]);
+
+      final connection = RpcClientConnection(
+        transportFactory: queue.next,
+        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+      );
+      addTearDown(connection.dispose);
+
+      connection.connect();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(connection.currentState, isA<RpcClientOnline>());
+
+      await connection.disconnect();
+      expect(connection.currentState, isA<RpcClientIdle>());
+
+      // forceReconnect after a disconnect must resume, not leave it stuck.
+      connection.forceReconnect();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(connection.currentState, isA<RpcClientOnline>());
+      expect(queue.callCount, equals(2));
+    });
+
+    test('forceReconnect() resets the attempt counter after Disconnected',
+        () async {
+      var fail = true;
+      final (good, _) = _pair();
+
+      final connection = RpcClientConnection(
+        transportFactory: () async {
+          if (fail) throw Exception('boom');
+          return good;
+        },
+        backoff: const FixedBackoff(Duration(milliseconds: 5)),
+        maxAttempts: 2,
+      );
+      addTearDown(connection.dispose);
+
+      connection.connect();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(connection.currentState, isA<RpcClientDisconnected>());
+
+      // Allow success and force a fresh reconnect: the attempt counter must
+      // reset, so the first Connecting after the kick is attempt 1.
+      fail = false;
+      final states = <RpcClientConnectionState>[];
+      connection.state.listen(states.add);
+      connection.forceReconnect();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(connection.currentState, isA<RpcClientOnline>());
+      final connectings = states.whereType<RpcClientConnecting>().toList();
+      expect(connectings.first.attempt, equals(1));
+    });
+
     // -- shouldReconnect -----------------------------------------------------
 
     test('emits Disconnected when shouldReconnect returns false', () async {

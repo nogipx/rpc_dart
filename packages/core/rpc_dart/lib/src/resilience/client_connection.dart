@@ -203,6 +203,20 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
 /// [transport] to [RpcCallerEndpoint] once — the endpoint does not need to
 /// be recreated when the underlying connection drops and re-establishes.
 ///
+/// This is the recommended, transport-agnostic way to get auto-reconnect on a
+/// client: it works with any [IRpcTransport] via [transportFactory] and exposes
+/// observable state, backoff and attempt limits. (A transport's own
+/// `reconnect()` is a lower-level primitive; prefer this wrapper for new code.)
+///
+/// Note on semantics:
+/// - **In-flight calls do not survive a reconnect.** Only the endpoint and
+///   *new* calls survive: a call that is in flight when the connection drops is
+///   lost, because its stream id belongs to the old transport. Reissue the call
+///   after the state returns to [RpcClientOnline].
+/// - [maxAttempts] counts from the initial drop: the drop itself is attempt 1,
+///   so `maxAttempts: N` permits up to N total attempts (N-1 retries after the
+///   first reconnect kick-off). `maxAttempts: 1` therefore does not retry.
+///
 /// ```dart
 /// final connection = RpcClientConnection(
 ///   transportFactory: () async {
@@ -275,10 +289,17 @@ class RpcClientConnection {
     _connectWithBackoff();
   }
 
-  /// Drops the current transport and immediately starts reconnecting.
+  /// Drops the current transport and immediately starts a fresh reconnect.
+  ///
+  /// Resets the attempt counter and resumes even if [disconnect] was previously
+  /// called, so it always means "reconnect now from scratch". A no-op if a
+  /// connect loop is already running.
   void forceReconnect() {
     if (_connectingGuard != null && !_connectingGuard!.isCompleted) return;
+    _isStopped = false;
+    _reconnectAttempts = 0;
     _proxy.detach().then((_) {
+      if (_isStopped) return; // disconnect() raced in during detach
       _emit(const RpcClientOffline());
       _connectWithBackoff();
     });
