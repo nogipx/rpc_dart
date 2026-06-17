@@ -1,12 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 // SPDX-License-Identifier: MIT
 
-import 'dart:typed_data';
-
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_grpc_reflection/rpc_dart_grpc_reflection.dart';
 import 'package:test/test.dart';
 
 import 'helpers.dart';
+
+/// Captures emitted [LogRecord]s for assertions.
+class _CapturingLogOutput extends LogOutput {
+  final List<LogEvent> events = [];
+
+  @override
+  void write(LogRecord record) {
+    if (record is LogEvent) events.add(record);
+  }
+}
 
 void main() {
   group('RpcReflectionRegistry', () {
@@ -218,7 +227,7 @@ void main() {
       expect(result, hasLength(3)); // top + mid + base
     });
 
-    test('missing dependency is silently skipped', () {
+    test('missing dependency is omitted but partial set still returned', () {
       registry.addFileDescriptor(buildMinimalFileDescriptor(
         name: 'echo.proto',
         package: 'echo.v1',
@@ -228,6 +237,94 @@ void main() {
 
       final result = registry.fileByFilename('echo.proto')!;
       expect(result, hasLength(1)); // only the file itself
+    });
+
+    // --- Missing-dependency reporting (backlog #7) ---
+
+    test('missingDependencies lists unregistered declared deps', () {
+      registry.addFileDescriptor(buildMinimalFileDescriptor(
+        name: 'echo.proto',
+        package: 'echo.v1',
+        serviceNames: ['EchoService'],
+        dependencies: ['google/protobuf/timestamp.proto'],
+      ));
+
+      expect(
+        registry.missingDependencies(),
+        {'google/protobuf/timestamp.proto'},
+      );
+    });
+
+    test('missingDependencies empty when closure complete', () {
+      registry.addFileDescriptor(buildMinimalFileDescriptor(
+        name: 'common.proto',
+        package: 'common.v1',
+        serviceNames: [],
+      ));
+      registry.addFileDescriptor(buildMinimalFileDescriptor(
+        name: 'echo.proto',
+        package: 'echo.v1',
+        serviceNames: ['EchoService'],
+        dependencies: ['common.proto'],
+      ));
+
+      expect(registry.missingDependencies(), isEmpty);
+    });
+
+    test('warning fires naming missing deps on incomplete resolution', () {
+      final output = _CapturingLogOutput();
+      final logger =
+          LogController(outputs: [output]).scope('test.reflection');
+      final reg = RpcReflectionRegistry(logger: logger);
+
+      reg.addFileDescriptor(buildMinimalFileDescriptor(
+        name: 'echo.proto',
+        package: 'echo.v1',
+        serviceNames: ['EchoService'],
+        dependencies: ['google/protobuf/timestamp.proto'], // not registered
+      ));
+
+      final result = reg.fileByFilename('echo.proto')!;
+      expect(result, hasLength(1)); // partial set still returned
+
+      final warnings =
+          output.events.where((e) => e.level == RpcLogLevel.warning).toList();
+      expect(warnings, hasLength(1));
+      expect(warnings.single.message, contains('INCOMPLETE'));
+      expect(
+        warnings.single.message,
+        contains('google/protobuf/timestamp.proto'),
+      );
+      expect(
+        warnings.single.data?['missingFiles'],
+        contains('google/protobuf/timestamp.proto'),
+      );
+    });
+
+    test('no warning when all deps registered', () {
+      final output = _CapturingLogOutput();
+      final logger =
+          LogController(outputs: [output]).scope('test.reflection');
+      final reg = RpcReflectionRegistry(logger: logger);
+
+      reg.addFileDescriptor(buildMinimalFileDescriptor(
+        name: 'common.proto',
+        package: 'common.v1',
+        serviceNames: [],
+      ));
+      reg.addFileDescriptor(buildMinimalFileDescriptor(
+        name: 'echo.proto',
+        package: 'echo.v1',
+        serviceNames: ['EchoService'],
+        dependencies: ['common.proto'],
+      ));
+
+      reg.fileByFilename('echo.proto');
+
+      expect(
+        output.events.where((e) => e.level == RpcLogLevel.warning),
+        isEmpty,
+      );
     });
 
     test('circular dependencies do not cause infinite loop', () {

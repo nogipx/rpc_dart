@@ -1,3 +1,13 @@
+## 0.2.2
+
+**Fixes (backlog #7 — partial-deps were dropped silently):**
+- `RpcReflectionRegistry` now emits a WARNING naming every declared dependency file that is referenced but not registered, instead of silently truncating the reflection response. The partial descriptor set is still returned (non-breaking); a reflection client now has a clear signal when its descriptor set is incomplete.
+- The warning is routed through an injectable `LogScope` (new optional `RpcReflectionRegistry({LogScope? logger})` constructor) so it flows through the application's `LogController`; when no logger is injected it falls back to a console-backed default.
+- Added `RpcReflectionRegistry.missingDependencies()` — reports the set of unregistered declared dependencies across the registry, for use as a startup completeness assertion.
+
+**Cross-platform:**
+- Verified web (dart2js) clean: full test suite passes under `dart test -p node`. Reflection's `async*`/`await for` handler is purely reactive (one response per request, no independent producer), so the long-lived bidi cancel-deadlock pattern does not apply. Varint decode/encode confirmed JS-safe (hi/lo 32-bit recombination retained).
+
 ## 0.2.1
 
 **Fixes (audit):**
