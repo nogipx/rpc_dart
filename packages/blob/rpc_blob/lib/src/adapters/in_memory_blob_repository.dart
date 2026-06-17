@@ -407,4 +407,14 @@ class InMemoryBlobRepository implements IBlobRepository {
   }
 }
 
-final Random _rng = Random.secure();
+/// `Random.secure()` недоступен в некоторых web-рантаймах (например, node без
+/// корректного байндинга globalThis в dart2js), поэтому деградируем до обычного
+/// `Random()`. Идентификаторы блобов не являются секретами, так что это
+/// безопасный и кросс-платформенный компромисс.
+final Random _rng = () {
+  try {
+    return Random.secure();
+  } catch (_) {
+    return Random();
+  }
+}();

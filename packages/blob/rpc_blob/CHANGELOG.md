@@ -1,3 +1,9 @@
+## 1.2.2
+
+**Web/dart2js correctness (verified on node):**
+- `InMemoryBlobRepository` blob-id generation falls back from `Random.secure()` to `Random()` when secure randomness is unavailable in the runtime (e.g. node/dart2js without a proper `globalThis` crypto binding). Blob ids are not secrets, so this is a safe cross-platform compromise that no longer throws at startup on web.
+- Added `test/web_smoke_test.dart` (runs on `vm || node`) exercising the full RPC client round-trip (put/get/list) and a mid-download `get` server-stream cancel; confirmed the client surface has no `dart:io` leak and the streaming `get` cancel does not deadlock on dart2js.
+
 ## 1.2.1
 
 **Bug fix:**
