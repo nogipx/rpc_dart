@@ -21,6 +21,20 @@ upgrade_rpc_dart_all:
     fi; \
   done
 
+# Cross-platform (dart2js/web) regression guard. The web-relevant packages and
+# their web smoke tests MUST stay green on the `node` platform. Run before release.
+test_web:
+  cd packages/core/rpc_dart && fvm dart test -p node
+  cd packages/core/rpc_dart_compression && fvm dart test -p node
+  cd packages/core/rpc_dart_grpc_reflection && fvm dart test -p node
+  cd packages/core/rpc_dart_opentelemetry && fvm dart test -p node test/web_smoke_test.dart
+  cd packages/transport/rpc_dart_websocket && fvm dart test -p node test/websocket_web_smoke_test.dart
+  cd packages/core/rpc_dart_log && fvm dart test -p node test/client_web_smoke_test.dart
+  cd packages/data/rpc_data && fvm dart test -p node test/web_smoke_test.dart
+  cd packages/blob/rpc_blob && fvm dart test -p node test/web_smoke_test.dart
+  cd packages/data/rpc_data_sqlite && fvm dart test -p node test/web_smoke_test.dart
+  cd packages/blob/rpc_blob_sqlite && fvm dart test -p node test/web_smoke_test.dart
+
 docs:
   mkdocs serve --strict
 
