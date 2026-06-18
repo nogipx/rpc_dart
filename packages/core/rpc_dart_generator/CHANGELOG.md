@@ -1,3 +1,10 @@
+## 0.4.3
+
+**gRPC descriptor — proto-wire stability (protobuf-wire fixes E/F/G):**
+- Added `@RpcProtoField(number)` (exported from `package:rpc_dart_generator/rpc_dart_generator.dart`) to pin a model field's proto field number. When `grpcDescriptor: true`, annotated fields use the explicit number; unannotated fields fall back to declaration order **and now emit a `log.warning`** that declaration-order numbering is unstable (reordering/inserting/removing a field silently changes the wire format). Duplicate numbers also warn.
+- Dart `enum` fields now map to proto `TYPE_ENUM` (14) instead of `TYPE_MESSAGE` (11), with the enum name as `type_name`. Other non-primitive types still map to `TYPE_MESSAGE`.
+- Consolidation note (backlog #5): the build-time `_ProtoWriter` is now a byte-for-byte copy of `rpc_dart_grpc_reflection`'s `ProtoWriter`. The two are not merged into one shared class because that package is `publish_to: none` and this generator is published (a published package may not depend on an unpublished one). A parity test pins identical golden bytes on both sides, and a new test round-trips the generator's emitted descriptor through the reflection parser.
+
 ## 0.4.2
 
 **Fixes (audit):**

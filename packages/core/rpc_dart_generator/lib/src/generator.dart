@@ -24,6 +24,8 @@ import 'package:rpc_dart/rpc_dart.dart'
         RpcServiceKind;
 import 'package:source_gen/source_gen.dart';
 
+import '../rpc_dart_generator.dart' show RpcProtoField;
+
 final _rpcMethodChecker = const TypeChecker.typeNamed(
   RpcMethod,
   inPackage: 'rpc_dart',
@@ -43,6 +45,12 @@ final _serializableChecker = const TypeChecker.typeNamed(
 final _contextChecker = const TypeChecker.typeNamed(
   RpcContext,
   inPackage: 'rpc_dart',
+);
+// `RpcProtoField` is declared in this generator package (not in rpc_dart core),
+// so it is matched by name within `rpc_dart_generator`.
+final _protoFieldChecker = const TypeChecker.typeNamed(
+  RpcProtoField,
+  inPackage: 'rpc_dart_generator',
 );
 
 /// Code generator for RPC Dart service contracts annotated with [RpcService].
@@ -1359,15 +1367,59 @@ class _GrpcDescriptorBuilder {
     final fields = type.element.fields.where((f) => !f.isStatic).toList();
     if (fields.isEmpty) return null;
 
+    // Determine field numbers. An explicit @RpcProtoField(n) pins the number;
+    // otherwise we fall back to declaration order (i + 1), which is unstable
+    // across field reorders/inserts/removals and breaks proto wire
+    // compatibility. Warn loudly when any field relies on the fallback.
+    final usedNumbers = <int, String>{};
+    final declarationOrderFields = <String>[];
+
     final w = _ProtoWriter();
     w.writeString(1, name);
     for (var i = 0; i < fields.length; i++) {
       final fieldName = fields[i].name;
       if (fieldName == null) continue;
-      final fb = _buildFieldDescriptor(fieldName, i + 1, fields[i].type);
+
+      final explicit = _explicitFieldNumber(fields[i]);
+      final number = explicit ?? (i + 1);
+      if (explicit == null) {
+        declarationOrderFields.add(fieldName);
+      }
+
+      final clash = usedNumbers[number];
+      if (clash != null) {
+        log.warning(
+          'gRPC descriptor for "$name": field number $number is assigned to '
+          'both "$clash" and "$fieldName". Pin unique numbers with '
+          '@RpcProtoField to avoid wire-format collisions.',
+        );
+      }
+      usedNumbers[number] = fieldName;
+
+      final fb = _buildFieldDescriptor(fieldName, number, fields[i].type);
       if (fb != null) w.writeBytes(2, fb);
     }
+
+    if (declarationOrderFields.isNotEmpty) {
+      log.warning(
+        'gRPC descriptor for "$name": field(s) '
+        '${declarationOrderFields.join(', ')} have no @RpcProtoField number '
+        'and were numbered by declaration order. This is unstable — '
+        'reordering, inserting, or removing a field silently changes the proto '
+        'wire format. Annotate these fields with @RpcProtoField(n) to pin '
+        'stable numbers.',
+      );
+    }
+
     return w.toBytes();
+  }
+
+  /// Reads an explicit `@RpcProtoField(number)` from [field], or null when the
+  /// field is not annotated.
+  int? _explicitFieldNumber(FieldElement field) {
+    final anno = _protoFieldChecker.firstAnnotationOfExact(field);
+    if (anno == null) return null;
+    return ConstantReader(anno).peek('number')?.intValue;
   }
 
   Uint8List? _buildFieldDescriptor(String name, int number, DartType type) {
@@ -1393,6 +1445,10 @@ class _GrpcDescriptorBuilder {
       fieldType = 1;
     } else if (actual.isDartCoreBool) {
       fieldType = 8;
+    } else if (actual is InterfaceType && actual.element is EnumElement) {
+      // A Dart enum maps to proto TYPE_ENUM (14), not TYPE_MESSAGE.
+      fieldType = 14;
+      typeName = '.${actual.element.name ?? ''}';
     } else if (actual is InterfaceType) {
       fieldType = 11; // TYPE_MESSAGE
       typeName = '.${actual.element.name ?? ''}';
@@ -1435,11 +1491,25 @@ class _GrpcDescriptorBuilder {
       );
 }
 
+// Protobuf wire types used by the descriptor encoder.
+const int _wireVarint = 0;
+const int _wireLen = 2;
+
 /// Minimal protobuf binary encoder (build-time only, not for runtime use).
+///
+/// This is a byte-for-byte copy of `ProtoWriter` in `rpc_dart_grpc_reflection`
+/// (lib/src/proto_writer.dart). The two cannot be merged into a single shared
+/// class because `rpc_dart_grpc_reflection` is `publish_to: none` and this
+/// generator is published — a published package may not depend on an
+/// unpublished one. Keep both implementations identical: any change here must
+/// be mirrored there (and is guarded by a parity test). The generator emits the
+/// descriptor bytes that the reflection server later serves, so they must agree
+/// on the wire format.
 class _ProtoWriter {
   final _buf = <int>[];
 
   void writeVarint(int value) {
+    assert(value >= 0);
     while (value > 0x7F) {
       _buf.add((value & 0x7F) | 0x80);
       value >>= 7;
@@ -1447,32 +1517,33 @@ class _ProtoWriter {
     _buf.add(value & 0x7F);
   }
 
-  void _tag(int fieldNumber, int wireType) =>
-      writeVarint((fieldNumber << 3) | wireType);
+  void _writeTag(int fieldNumber, int wireType) {
+    writeVarint((fieldNumber << 3) | wireType);
+  }
 
   void writeString(int fieldNumber, String value) {
     if (value.isEmpty) return;
     final encoded = utf8.encode(value);
-    _tag(fieldNumber, 2);
+    _writeTag(fieldNumber, _wireLen);
     writeVarint(encoded.length);
     _buf.addAll(encoded);
   }
 
   void writeBytes(int fieldNumber, Uint8List value) {
     if (value.isEmpty) return;
-    _tag(fieldNumber, 2);
+    _writeTag(fieldNumber, _wireLen);
     writeVarint(value.length);
     _buf.addAll(value);
   }
 
   void writeBool(int fieldNumber, bool value) {
     if (!value) return;
-    _tag(fieldNumber, 0);
+    _writeTag(fieldNumber, _wireVarint);
     writeVarint(1);
   }
 
   void writeInt32(int fieldNumber, int value) {
-    _tag(fieldNumber, 0);
+    _writeTag(fieldNumber, _wireVarint);
     writeVarint(value);
   }
 

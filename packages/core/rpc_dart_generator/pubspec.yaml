@@ -1,6 +1,6 @@
 name: rpc_dart_generator
 description: Code generator for rpc_dart callers and responders.
-version: 0.4.2
+version: 0.4.3
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -24,3 +24,8 @@ dev_dependencies:
   package_config: ^2.2.0
   path: ^1.9.1
   test: ^1.29.0
+  # Test-only: validates that the descriptor bytes emitted by this generator
+  # are parseable by the reflection server that serves them, and that the two
+  # byte-identical proto writers agree. Not a runtime dependency.
+  rpc_dart_grpc_reflection:
+    path: ../rpc_dart_grpc_reflection
