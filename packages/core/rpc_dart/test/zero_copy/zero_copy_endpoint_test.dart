@@ -62,6 +62,17 @@ final class TestService extends RpcResponderContract {
       requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
       responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
     );
+
+    // Хендлер, который всегда падает с UNAVAILABLE — для проверки,
+    // что zero-copy unary путь пробрасывает типизированный RpcStatusException.
+    addUnaryMethod<TestRequest, TestResponse>(
+      methodName: 'failUnavailable',
+      handler: (request, {context}) async {
+        throw RpcStatusException(RpcStatus.unavailable, 'service down');
+      },
+      requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+      responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+    );
   }
 }
 
@@ -233,6 +244,57 @@ void main() {
         print('   ✅ Объект передан по ссылке без сериализации!');
         print('   ✅ Размер данных: 0 bytes (указатель на объект)');
       }
+    });
+
+    // Регрессия BUG C: zero-copy unary путь (_executeUnaryCall) должен
+    // бросать типизированный RpcStatusException с реальным статусом, а не
+    // обёрнутый Exception. Иначе retry-предикат и circuit breaker не видят
+    // gRPC-статус, и консервативный retry-дефолт не сработает.
+    test('zero-copy unary путь бросает типизированный RpcStatusException',
+        () async {
+      Object? caught;
+      try {
+        await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+          serviceName: 'TestService',
+          methodName: 'failUnavailable',
+          // Без кодеков -> zero-copy путь через _executeUnaryCall.
+          request: TestRequest('boom', const []),
+        );
+        fail('Должно было бросить исключение');
+      } catch (e) {
+        caught = e;
+      }
+
+      expect(
+        caught,
+        isA<RpcStatusException>(),
+        reason: 'Должен быть типизированный RpcStatusException, не Exception',
+      );
+      final ex = caught as RpcStatusException;
+      expect(ex.statusCode, RpcStatus.unavailable);
+
+      // Дефолтный retry-предикат должен срабатывать на этом статусе.
+      final interceptor = RpcRetryInterceptor(maxAttempts: 3);
+      var attempts = 0;
+      try {
+        await interceptor.interceptUnary<TestRequest, TestResponse>(
+          RpcMiddlewareContext(
+            endpoint: callerEndpoint,
+            serviceName: 'TestService',
+            methodName: 'failUnavailable',
+            context: RpcContext.empty(),
+          ),
+          TestRequest('boom', const []),
+          (ctx, req) async {
+            attempts++;
+            throw ex;
+          },
+        );
+        fail('Должно было бросить после исчерпания попыток');
+      } on RpcStatusException catch (e) {
+        expect(e.statusCode, RpcStatus.unavailable);
+      }
+      expect(attempts, 3, reason: 'Дефолтный retry должен повторить UNAVAILABLE');
     });
   });
 }

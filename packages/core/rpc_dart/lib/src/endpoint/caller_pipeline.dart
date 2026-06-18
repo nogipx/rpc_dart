@@ -546,15 +546,14 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
               final message =
                   response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
                       'Unknown error';
-              throw Exception(
-                  'gRPC error $status: ${RpcMetadata.decodeGrpcMessage(message)}');
+              throw RpcStatusException(
+                  status, RpcMetadata.decodeGrpcMessage(message));
             }
           }
         }
       }
 
-      throw Exception(
-          'gRPC error ${RpcStatus.unavailable}: No response received');
+      throw RpcStatusException(RpcStatus.unavailable, 'No response received');
     } finally {
       await processor.close();
     }

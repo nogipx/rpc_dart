@@ -111,7 +111,10 @@ final class ClientStreamCaller<TRequest extends Object,
               !_responseCompleter.isCompleted) {
             _logger.warning('Status OK but no response payload');
             _responseCompleter.completeError(
-              Exception('Stream closed without response payload'),
+              RpcStatusException(
+                RpcStatus.internal,
+                'Stream closed without response payload',
+              ),
             );
           }
         }
@@ -142,7 +145,10 @@ final class ClientStreamCaller<TRequest extends Object,
           // Might be transport close; surface error if still pending.
           try {
             _responseCompleter.completeError(
-              Exception('Stream closed without receiving response'),
+              RpcStatusException(
+                RpcStatus.unavailable,
+                'Stream closed without receiving response',
+              ),
             );
           } catch (e) {
             // If completer already finished, ignore.

@@ -36,7 +36,7 @@ class RpcChannelTransport implements IRpcTransport {
   final Set<int> _activeStreams = {};
   final Set<int> _finishedStreams = {};
   final StreamController<RpcTransportMessage> _incomingCtl =
-      StreamController<RpcTransportMessage>.broadcast(sync: true);
+      StreamController<RpcTransportMessage>.broadcast();
   StreamSubscription<RpcTransportMessage>? _channelSub;
   bool _closed = false;
 

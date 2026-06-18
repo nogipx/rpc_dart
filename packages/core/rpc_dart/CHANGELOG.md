@@ -1,3 +1,11 @@
+## 3.5.0
+
+**Behavioral changes:**
+- **Zero-copy unary path now throws typed `RpcStatusException` instead of a plain `Exception`.** `RpcCallerPipeline._executeUnaryCall` (the zero-copy unary code path) previously threw an untyped `Exception('gRPC error ...')` for a non-OK trailer status and `Exception('gRPC error 14: No response received')` when the stream closed with no response. Because these were plain `Exception`s, the gRPC status was only stringified, so callers, the circuit breaker `failureOn`, and the retry predicate could not read it. **This directly undermined the 3.4.0 conservative retry default:** that default retries ONLY `RpcStatusException` with `UNAVAILABLE`/`RESOURCE_EXHAUSTED`, and the "No response received" (dropped connection) case is exactly the `UNAVAILABLE` case it is meant to retry -- but on the zero-copy path it threw a plain `Exception`, so the retry never fired despite the 3.4.0 CHANGELOG claiming it does. Both sites now throw `RpcStatusException`: the non-OK trailer carries the actual status code and decoded `grpc-message`, and the no-response case is `RpcStatusException(RpcStatus.unavailable, 'No response received')`. The conservative retry default now actually fires on the zero-copy "no response" path. Same fix applied to the client stream caller (`rpc/streams/client/caller.dart`): "Stream closed without response payload" -> `RpcStatusException(INTERNAL)`, "Stream closed without receiving response" -> `RpcStatusException(UNAVAILABLE)`. New regression test asserts the thrown type and status on the zero-copy path and that the default retry retries it.
+
+**Robustness:**
+- Removed `sync: true` from two stream controllers to eliminate a reentrancy hazard. `RpcChannelTransport._incomingCtl` (broadcast) and `RpcStreamBaseProcessor._responseController` delivered events synchronously on the caller's stack, so a listener re-entering the transport (e.g. calling `createStream`/`send` from within `onData`) could race or mutate state mid-dispatch. Both now deliver asynchronously (events scheduled on the microtask queue), removing the reentrancy race. Full suite stays green on VM and `-p node` -- sync delivery was not load-bearing for ordering or back-pressure.
+
 ## 3.4.0
 
 **Behavioral changes:**

@@ -33,7 +33,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Outgoing responses controller.
   final StreamController<TResponse> _responseController =
-      StreamController<TResponse>(sync: true);
+      StreamController<TResponse>();
 
   /// Send sequence to preserve order and await completion before trailers.
   Future<void> _sendSequence = Future<void>.value();
