@@ -277,6 +277,7 @@ class RpcChannelTransport implements IRpcTransport {
       message: 'Transport ready',
       details: {
         'activeStreams': _activeStreams.length,
+        'streamControllers': _streamControllers.length,
         'zeroCopy': _channel.supportsZeroCopy,
       },
     );
