@@ -1,37 +1,32 @@
-name: "Setup pinned SDK + melos"
+name: "Setup fvm + pinned SDK + melos"
 description: >
-  Install the project-pinned Flutter/Dart SDK and melos for CI. The melos
-  scripts call `fvm dart`/`fvm flutter`; locally that is real fvm, in CI we add a
-  thin `fvm` shim that forwards to the SDK the Flutter action already installed,
-  so we do NOT download a second Flutter under ~/fvm.
+  Install fvm and the project-pinned Flutter/Dart SDK (from .fvmrc), plus melos.
+  Real fvm, so CI runs the exact same `fvm dart`/`fvm flutter` commands as local.
+  The pinned SDK under ~/fvm is cached, so the download is a one-time cost.
 
 runs:
   using: composite
   steps:
-    - uses: subosito/flutter-action@v2
+    # Bootstrap Dart only to activate the fvm + melos CLIs from pub.
+    - uses: dart-lang/setup-dart@v1
       with:
-        # Keep in sync with .fvmrc (currently {"flutter": "3.38.3"}).
-        flutter-version: "3.38.3"
-        channel: stable
-        cache: true
+        sdk: stable
 
-    - name: fvm shim + melos
+    # fvm keeps its managed SDKs under ~/fvm — cache them so `fvm install` only
+    # downloads on the first run / when .fvmrc changes.
+    - name: Cache fvm SDK
+      uses: actions/cache@v4
+      with:
+        path: ~/fvm
+        key: fvm-${{ runner.os }}-${{ hashFiles('.fvmrc') }}
+
+    - name: Install fvm + pinned SDK + melos
       shell: bash
       run: |
         set -e
-        # Thin `fvm` that forwards to the SDK on PATH:
-        #   `fvm dart ...`    -> `dart ...`
-        #   `fvm flutter ...` -> `flutter ...`
-        #   `fvm exec X ...`  -> `X ...`
-        mkdir -p "$HOME/bin"
-        cat > "$HOME/bin/fvm" <<'SH'
-        #!/usr/bin/env bash
-        [ "$1" = "exec" ] && shift
-        exec "$@"
-        SH
-        chmod +x "$HOME/bin/fvm"
-        echo "$HOME/bin" >> "$GITHUB_PATH"
-
-        # melos must be on PATH: its `exec:` scripts re-invoke `melos`.
-        dart pub global activate melos
+        dart pub global activate fvm
+        dart pub global activate melos        # exec: scripts re-invoke `melos`
         echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+        export PATH="$HOME/.pub-cache/bin:$PATH"
+        # Reads .fvmrc -> ensures the pinned Flutter (+ bundled Dart) is present.
+        fvm install
