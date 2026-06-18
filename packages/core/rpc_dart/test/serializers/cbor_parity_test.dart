@@ -19,8 +19,6 @@
 // Run VM:   fvm dart test test/serializers/cbor_parity_test.dart
 // Run node: fvm dart test -p node test/serializers/cbor_parity_test.dart
 
-import 'dart:typed_data';
-
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 

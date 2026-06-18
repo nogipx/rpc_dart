@@ -1,3 +1,19 @@
+## 0.2.3
+
+- BEHAVIORAL CHANGE (secure-by-default CORS): `RpcHttpCorsPolicy.allowedOrigins`
+  now defaults to `const []` (CLOSED) instead of `const ['*']`. With the closed
+  default, cross-origin browser preflights are rejected (`403`, no
+  `access-control-allow-origin`) and cross-origin actual requests receive no
+  CORS headers, so the browser blocks the response read. Same-origin requests
+  (which carry no `Origin` header) are unaffected. The previous allow-any-origin
+  default let any web page (including DNS-rebinding / drive-by attackers) call a
+  local/internal RPC server. To restore the old behavior, pass
+  `allowedOrigins: ['*']` explicitly, or list specific origins.
+- Allowing any origin via `allowedOrigins: ['*']` now emits a one-time warning
+  (via an optional `logger` on the policy constructor, falling back to stderr),
+  noting it is intended for dev / public-API use only. The existing assert that
+  `'*'` is incompatible with `allowCredentials` is unchanged.
+
 ## 0.2.2
 
 - Server-side hardening. `RpcHttpServer` now forwards a `securityPolicy` and an

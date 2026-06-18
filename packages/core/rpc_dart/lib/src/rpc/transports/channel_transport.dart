@@ -82,7 +82,8 @@ class RpcChannelTransport implements IRpcTransport {
   static (RpcChannelTransport, RpcChannelTransport) pair({
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
-    final (clientCh, serverCh) = RpcFrameMultiplexedChannel.pair(policy: policy);
+    final (clientCh, serverCh) =
+        RpcFrameMultiplexedChannel.pair(policy: policy);
     return (
       RpcChannelTransport(channel: clientCh, isClient: true, policy: policy),
       RpcChannelTransport(channel: serverCh, isClient: false, policy: policy),

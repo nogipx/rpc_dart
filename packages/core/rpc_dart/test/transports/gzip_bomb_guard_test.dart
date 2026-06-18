@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
 // SPDX-License-Identifier: MIT
-//
-// BUG 3 regression: the built-in dart:io gzip decompressor is bounded so a
-// decompression bomb is rejected before its full expansion is materialized.
-// Uses dart:io gzip to build the bomb, so this suite is VM-only.
 @TestOn('vm')
 library;
 

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:shelf/shelf.dart';
 
 /// gRPC headers that must always be exposed to the browser.
@@ -29,10 +30,22 @@ const _requiredGrpcAllowedHeaders = [
 ///
 /// The required gRPC headers (`grpc-encoding`, `grpc-status`, etc.) are always
 /// included in `Access-Control-Expose-Headers` regardless of [extraExposedHeaders].
+///
+/// Secure-by-default: [allowedOrigins] defaults to `const []` (CLOSED — no
+/// cross-origin access; same-origin requests, which carry no `Origin` header,
+/// are unaffected). Allowing any origin via `['*']` is an explicit opt-in and
+/// emits a one-time warning, since it lets any web page (including
+/// DNS-rebinding / drive-by attackers) call the server.
 final class RpcHttpCorsPolicy {
+  /// Origins that have already emitted the `['*']` opt-in warning.
+  static bool _starWarningEmitted = false;
+
   /// Origins allowed to access the server.
   ///
-  /// Use `['*']` to allow any origin (incompatible with [allowCredentials]).
+  /// Defaults to `const []` (CLOSED — cross-origin browser calls are rejected;
+  /// same-origin requests are unaffected). List explicit origins to allow them,
+  /// or use `['*']` to allow any origin (incompatible with [allowCredentials];
+  /// emits a one-time warning).
   final List<String> allowedOrigins;
 
   /// Additional request headers the browser may include on top of the
@@ -53,7 +66,7 @@ final class RpcHttpCorsPolicy {
   final Duration? preflightMaxAge;
 
   RpcHttpCorsPolicy({
-    this.allowedOrigins = const ['*'],
+    this.allowedOrigins = const [],
     this.allowedHeaders = const [
       'content-type',
       'authorization',
@@ -64,10 +77,34 @@ final class RpcHttpCorsPolicy {
     this.extraExposedHeaders = const [],
     this.allowCredentials = false,
     this.preflightMaxAge,
+    LogScope? logger,
   }) : assert(
           !(allowCredentials && allowedOrigins.contains('*')),
           'allowCredentials=true requires specific origins, not ["*"]',
-        );
+        ) {
+    if (allowedOrigins.contains('*')) {
+      _warnAllowAnyOrigin(logger);
+    }
+  }
+
+  /// Emits a one-time warning that `allowedOrigins: ['*']` allows any web
+  /// origin to call the server (intended for dev / public-API use only).
+  static void _warnAllowAnyOrigin(LogScope? logger) {
+    if (_starWarningEmitted) return;
+    _starWarningEmitted = true;
+    const message =
+        'RpcHttpCorsPolicy: allowedOrigins contains "*" — any web origin may '
+        'call this server (including DNS-rebinding / drive-by attackers). '
+        'Use an explicit origin allowlist in production; "*" is for dev or '
+        'public APIs only.';
+    if (logger != null) {
+      logger.warning(message);
+    } else {
+      // No logger wired in — fall back to stderr so the opt-in is still visible.
+      // ignore: avoid_print
+      print(message);
+    }
+  }
 
   List<String> get _allAllowedHeaders => [
         ..._requiredGrpcAllowedHeaders,

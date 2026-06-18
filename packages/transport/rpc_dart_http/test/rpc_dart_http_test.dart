@@ -757,6 +757,73 @@ void main() {
 
     test('cors_headers_attached_to_regular_responses', () async {
       final serverDone = Completer<void>();
+      // Explicit '*' opt-in (the default is now CLOSED, see closed-default test).
+      final transport = RpcHttpResponderTransport(
+        corsPolicy: RpcHttpCorsPolicy(allowedOrigins: ['*']),
+      );
+      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
+      transport.incomingMessages.listen((msg) async {
+        if (msg.isEndOfStream) {
+          await transport.sendMetadata(
+            msg.streamId,
+            RpcMetadata.forServerInitialResponse(),
+          );
+          await transport.sendMetadata(
+            msg.streamId,
+            RpcMetadata.forTrailer(RpcStatus.ok),
+            endStream: true,
+          );
+          serverDone.complete();
+        }
+      });
+
+      final frame = RpcMessageFrame.encode(Uint8List.fromList([1]));
+      final request = http.Request(
+        'POST',
+        Uri.parse('http://127.0.0.1:${server.port}/Svc/Method'),
+      );
+      request.headers['content-type'] = 'application/grpc';
+      request.headers['origin'] = 'http://localhost:3000';
+      request.bodyBytes = frame;
+      final streamed = await http.Client().send(request);
+      final response = await http.Response.fromStream(streamed);
+
+      await serverDone.future.timeout(const Duration(seconds: 5));
+      expect(response.statusCode, 200);
+      expect(response.headers['access-control-allow-origin'], '*');
+
+      await transport.close();
+      await server.close(force: true);
+    });
+
+    test('closed_default_rejects_cross_origin_preflight', () async {
+      // Secure-by-default: an empty allowlist (the default) must reject a
+      // cross-origin preflight with 403 and no allow-origin header.
+      final transport = RpcHttpResponderTransport(
+        corsPolicy: RpcHttpCorsPolicy(),
+      );
+      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
+      transport.incomingMessages.listen((_) {});
+
+      final request = http.Request(
+        'OPTIONS',
+        Uri.parse('http://127.0.0.1:${server.port}/Svc/Method'),
+      );
+      request.headers['origin'] = 'https://evil.example';
+      request.headers['access-control-request-method'] = 'POST';
+      final streamed = await http.Client().send(request);
+
+      expect(streamed.statusCode, 403);
+      expect(streamed.headers['access-control-allow-origin'], isNull);
+
+      await transport.close();
+      await server.close(force: true);
+    });
+
+    test('closed_default_omits_cors_headers_on_cross_origin_request', () async {
+      // With the closed default, a cross-origin actual request still completes
+      // but receives NO access-control-allow-origin (browser blocks the read).
+      final serverDone = Completer<void>();
       final transport = RpcHttpResponderTransport(
         corsPolicy: RpcHttpCorsPolicy(),
       );
@@ -789,7 +856,7 @@ void main() {
 
       await serverDone.future.timeout(const Duration(seconds: 5));
       expect(response.statusCode, 200);
-      expect(response.headers['access-control-allow-origin'], '*');
+      expect(response.headers['access-control-allow-origin'], isNull);
 
       await transport.close();
       await server.close(force: true);

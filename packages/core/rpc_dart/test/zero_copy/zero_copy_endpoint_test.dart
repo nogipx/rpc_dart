@@ -294,7 +294,8 @@ void main() {
       } on RpcStatusException catch (e) {
         expect(e.statusCode, RpcStatus.unavailable);
       }
-      expect(attempts, 3, reason: 'Дефолтный retry должен повторить UNAVAILABLE');
+      expect(attempts, 3,
+          reason: 'Дефолтный retry должен повторить UNAVAILABLE');
     });
   });
 }

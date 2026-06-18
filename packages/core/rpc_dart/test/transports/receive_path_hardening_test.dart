@@ -257,5 +257,4 @@ void main() {
       expect(frames.single.methodPath, equals('/svc/Method'));
     });
   });
-
 }
