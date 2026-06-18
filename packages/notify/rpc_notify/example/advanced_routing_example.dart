@@ -3,7 +3,13 @@
 //
 // SPDX-License-Identifier: MIT
 import 'dart:async';
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart'
+    hide
+        RpcTransportRouter,
+        RpcTransportRouterBuilder,
+        RpcRoutingCondition,
+        PrioritizedRoutingRule;
+import 'package:rpc_notify/src/transport_router.dart';
 
 void main() async {
   print('🚀 Transport Router - Реальные CORD сценарии');

@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart'
+    hide StreamDistributor, StreamDistributorConfig, StreamDistributorMetrics;
+import 'package:rpc_notify/src/stream_distributor.dart';
 import 'package:test/test.dart';
 
 // Тестовое сообщение, которое реализует IRpcSerializable

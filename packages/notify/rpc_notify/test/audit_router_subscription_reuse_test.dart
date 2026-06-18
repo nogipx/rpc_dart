@@ -18,7 +18,13 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart'
+    hide
+        RpcTransportRouter,
+        RpcTransportRouterBuilder,
+        RpcRoutingCondition,
+        PrioritizedRoutingRule;
+import 'package:rpc_notify/src/transport_router.dart';
 import 'package:test/test.dart';
 
 /// Client-side transport with a controllable incoming response stream and

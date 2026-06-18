@@ -1,5 +1,7 @@
 ## 3.5.1
 
+- Moved RpcTransportRouter and StreamDistributor out to rpc_notify.
+
 **Behavioral change:**
 - **Metadata header values must now be printable ASCII (`%x20-%x7E`) on ALL transports.** `RpcSecurityPolicy.isValidHeaderValue` previously rejected only CR/LF/NUL and let arbitrary non-ASCII through; the value was then silently corrupted by some transports (e.g. HTTP/2 base64url-encoded it on send but never decoded it). Per the gRPC HTTP/2 spec, ASCII-valued metadata must be printable ASCII; binary or non-ASCII data must use a `-bin` key (base64), and human-readable text belongs in the message body or the percent-encoded `grpc-message`. Non-conforming values now throw `ArgumentError` at `validateMetadata` time on every send path (this hook is already called by `RpcChannelTransport` — and thus isolate/WebSocket/WASM — and by the HTTP/1.1 and HTTP/2 transports). This also uniformly blocks CR/LF header injection. New regression test (`test/audit/audit_header_ascii_test.dart`).
 

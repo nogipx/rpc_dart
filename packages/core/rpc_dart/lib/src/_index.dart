@@ -12,4 +12,3 @@ export 'logger/_index.dart';
 export 'primitives/_index.dart';
 export 'resilience/_index.dart';
 export 'rpc/_index.dart';
-export 'utils/_index.dart';

@@ -6,7 +6,8 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart'
+    hide StreamDistributor, StreamDistributorConfig, StreamDistributorMetrics;
 
 /// Менеджер для управления серверными стримами
 ///

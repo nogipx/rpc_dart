@@ -24,7 +24,13 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart'
+    hide
+        RpcTransportRouter,
+        RpcTransportRouterBuilder,
+        RpcRoutingCondition,
+        PrioritizedRoutingRule;
+import 'package:rpc_notify/src/transport_router.dart';
 import 'package:test/test.dart';
 
 /// Minimal client-side transport whose sendMetadata always throws.

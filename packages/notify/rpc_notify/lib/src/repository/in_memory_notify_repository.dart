@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart'
+    hide StreamDistributor, StreamDistributorConfig, StreamDistributorMetrics;
 
 import '../models/notify_event.dart';
+import '../stream_distributor.dart';
 import 'i_notify_repository.dart';
 
 /// In-memory implementation of [INotifyRepository] backed by [StreamDistributor].
