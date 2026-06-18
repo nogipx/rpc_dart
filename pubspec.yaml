@@ -55,6 +55,9 @@ melos:
 
         {new_package_versions}
 
+  # Scripts use `fvm dart`/`fvm flutter` so a local run uses the pinned SDK with
+  # no PATH hacking: `fvm dart run melos run analyze`. CI installs fvm too, so
+  # the exact same commands run there (see .github/workflows).
   scripts:
     # --- Static analysis (all packages, strict like CI) ---
     analyze:
@@ -92,13 +95,11 @@ melos:
           - rpc_data_sqlite
           - rpc_blob_sqlite
 
-    # Generator golden tests (build_test) — run standalone, outside workspace mode.
-    test:generator:
-      description: Run rpc_dart_generator build_test golden tests.
-      run: fvm dart test --reporter expanded
-      exec: {}
-      packageFilters:
-        scope: [rpc_dart_generator]
+    # NOTE: rpc_dart_generator golden tests (build_test) cannot run in workspace
+    # mode (build_test needs a per-package .dart_tool/package_config.json, which
+    # workspaces centralize at the root). Run them by temporarily removing
+    # `resolution: workspace` from the generator + the root `workspace:` list.
+    # Its `lib` is still analyzed by the `analyze` script.
 
     # Flutter (wasm) — NOT a workspace member, run separately.
     test:wasm:

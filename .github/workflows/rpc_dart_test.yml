@@ -1,248 +1,149 @@
-name: Test & Benchmark RPC Dart
+name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:  # Возможность ручного запуска
+  workflow_dispatch:
 
-# Отменяем предыдущие запуски workflow'а если новый коммит пушится в ту же ветку
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Глобальная переменная для рабочей директории
-  # Измените это значение, если переместите библиотеку в подпапку
-  WORKING_DIRECTORY: "packages/core/rpc_dart"
-
 jobs:
-  # Быстрая проверка форматирования и анализа кода
+  # Workspace-wide format check + analyze (covers ALL packages, not just core).
   lint:
     name: "Lint & Format"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    defaults:
-      run:
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-    
+    timeout-minutes: 15
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Setup Dart
-      uses: dart-lang/setup-dart@v1
-      with:
-        sdk: stable
-    
-    - name: Cache pub dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ env.PUB_CACHE }}
-          ${{ env.WORKING_DIRECTORY }}/.dart_tool/package_config.json
-        key: ${{ runner.os }}-pub-${{ hashFiles(format('{0}/**/pubspec.lock', env.WORKING_DIRECTORY)) }}
-        restore-keys: |
-          ${{ runner.os }}-pub-
-    
-    - name: Install dependencies
-      run: dart pub get
-    
-    - name: Verify formatting
-      run: dart format --output=none --set-exit-if-changed .
-    
-    - name: Analyze project source
-      run: dart analyze --fatal-infos --fatal-warnings
-    
-    - name: Check pub dependencies
-      run: dart pub deps
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Resolve workspace
+        run: fvm dart pub get
+      - name: Format check
+        run: melos run format:check
+      - name: Analyze (all packages, --fatal-infos --fatal-warnings)
+        run: melos run analyze
 
-  # Быстрые unit тесты
+  # Workspace-wide tests. Excludes the generator (build_test vs workspace) and
+  # service-dependent packages (postgres/minio/sqlcipher).
   test:
     name: "Tests"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     needs: lint
-    defaults:
-      run:
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-    
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Setup Dart
-      uses: dart-lang/setup-dart@v1
-      with:
-        sdk: stable
-    
-    - name: Cache pub dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ env.PUB_CACHE }}
-          ${{ env.WORKING_DIRECTORY }}/.dart_tool/package_config.json
-        key: ${{ runner.os }}-pub-${{ hashFiles(format('{0}/**/pubspec.lock', env.WORKING_DIRECTORY)) }}
-        restore-keys: |
-          ${{ runner.os }}-pub-
-    
-    - name: Install dependencies
-      run: dart pub get
-    
-    - name: Run main tests (excluding performance/concurrency)
-      run: dart test --exclude-tags=performance,concurrency --reporter=github --coverage=coverage --concurrency=5 --timeout=10s
-    
-    - name: Generate coverage report
-      run: |
-        dart pub global activate coverage
-        dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
-    
-    - name: Upload coverage to Coveralls
-      uses: coverallsapp/github-action@v2
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        path-to-lcov: ${{ env.WORKING_DIRECTORY }}/coverage/lcov.info
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Resolve workspace
+        run: fvm dart pub get
+      - name: Run tests (no external services)
+        run: melos run test:unit
 
+  # Flutter wasm transport is NOT a workspace member; test it standalone.
+  wasm:
+    name: "Wasm (Flutter)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Test rpc_dart_wasm
+        working-directory: packages/transport/rpc_dart_wasm
+        run: |
+          fvm flutter pub get
+          fvm flutter test
 
-  # Кроссплатформенный (dart2js/web) регрессионный гард.
-  # Зеркалит рецепт `just test_web`: веб-релевантные пакеты ДОЛЖНЫ проходить на node.
-  # Дефолтный VM-прогон не ловит dart2js-баги (см. июньский web-sweep).
+  # Cross-platform (dart2js/node + chrome) web regression guard.
+  # Default VM runs do not catch dart2js bugs (async* cancel, int > 2^53, ...).
   web:
     name: "Web (dart2js / node)"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     needs: lint
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Resolve workspace
+        run: fvm dart pub get
+      - name: Web-relevant suites on node (dart2js)
+        run: |
+          set -e
+          web_test() {
+            echo "::group::node: $1"
+            (cd "$1" && fvm dart test -p node ${2:-})
+            echo "::endgroup::"
+          }
+          web_test packages/core/rpc_dart
+          web_test packages/core/rpc_dart_compression
+          web_test packages/core/rpc_dart_grpc_reflection
+          web_test packages/core/rpc_dart_opentelemetry test/web_smoke_test.dart
+          web_test packages/transport/rpc_dart_websocket test/websocket_web_smoke_test.dart
+          web_test packages/transport/rpc_dart_http test/web_smoke_test.dart
+          web_test packages/core/rpc_dart_log test/client_web_smoke_test.dart
+          web_test packages/data/rpc_data test/web_smoke_test.dart
+          web_test packages/blob/rpc_blob test/web_smoke_test.dart
+      - name: Isolate web (Web Worker) compile-guard + e2e on chrome
+        working-directory: packages/transport/rpc_dart_isolate
+        run: |
+          fvm dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js
+          fvm dart test -p chrome test/web_smoke_test.dart test/web_worker/echo_worker_test.dart
 
-    - name: Setup Dart
-      uses: dart-lang/setup-dart@v1
-      with:
-        sdk: stable
-
-    - name: Setup Node (dart2js test runtime)
-      uses: actions/setup-node@v4
-      with:
-        node-version: '24'
-
-    - name: Run web-relevant suites on node (dart2js)
-      run: |
-        set -e
-        web_test() {
-          echo "::group::node: $1"
-          (cd "$1" && dart pub get && dart test -p node ${2:-})
-          echo "::endgroup::"
-        }
-        web_test packages/core/rpc_dart
-        web_test packages/core/rpc_dart_compression
-        web_test packages/core/rpc_dart_grpc_reflection
-        web_test packages/core/rpc_dart_opentelemetry test/web_smoke_test.dart
-        web_test packages/transport/rpc_dart_websocket test/websocket_web_smoke_test.dart
-        web_test packages/transport/rpc_dart_http test/web_smoke_test.dart
-        web_test packages/core/rpc_dart_log test/client_web_smoke_test.dart
-        web_test packages/data/rpc_data test/web_smoke_test.dart
-        web_test packages/blob/rpc_blob test/web_smoke_test.dart
-        web_test packages/data/rpc_data_sqlite test/web_smoke_test.dart
-        web_test packages/blob/rpc_blob_sqlite test/web_smoke_test.dart
-
-    # Isolate web variant (Web Workers) needs real browser globals -> chrome.
-    # ubuntu-latest ships Google Chrome, which `dart test -p chrome` uses.
-    # The real Web Worker e2e needs the worker pre-compiled to JS first.
-    # Target the browser test files explicitly: the VM tests import dart:isolate
-    # and would fail to compile for the browser.
-    - name: Isolate web (Web Worker) compile-guard + real e2e on chrome
-      run: |
-        cd packages/transport/rpc_dart_isolate
-        dart pub get
-        dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js
-        dart test -p chrome test/web_smoke_test.dart test/web_worker/echo_worker_test.dart
-
-  # Тестирование совместимости с версиями Dart
-  compatibility:
-    name: "Sdk Compatibility"
+  # Validate that the publishable packages (rpc_dart, rpc_dart_generator) stay
+  # publishable. Catches path-dep / resolution / versioning regressions early.
+  publish-dry:
+    name: "Publish dry-run"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: test
-    defaults:
-      run:
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        sdk: ['3.0.0', 'stable']
-    
+    timeout-minutes: 12
+    needs: lint
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Setup Dart ${{ matrix.sdk }}
-      uses: dart-lang/setup-dart@v1
-      with:
-        sdk: ${{ matrix.sdk }}
-    
-    - name: Install dependencies
-      run: dart pub get
-    
-    - name: Run smoke tests on Dart ${{ matrix.sdk }}
-      run: dart run example/example.dart
-  
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Resolve workspace
+        run: fvm dart pub get
+      - name: melos publish --dry-run
+        run: melos run publish:dry
+
   benchmark:
     name: "Benchmark"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     needs: test
-    defaults:
-      run:
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-    
+    if: github.event_name == 'push'
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Dart
-      uses: dart-lang/setup-dart@v1
-      with:
-        sdk: stable
-    
-    - name: Install dependencies
-      run: dart pub get
-    
-    - name: Install Bencher CLI
-      uses: bencherdev/bencher@main
-    
-    - name: Create benchmark results directory
-      run: mkdir -p benchmark_results
-    
-    - name: Run Benchmark with Bencher
-      run: |
-        # Создаем проект если его нет (игнорируем ошибки если проект уже существует)
-        bencher project create \
-          --name "RPC Dart Performance" \
-          --slug rpc-dart \
-          --url "https://github.com/${{ github.repository }}" \
-          --public 2>/dev/null || echo "Project already exists or creation failed"
-        
-        # Запускаем бенчмарк через Bencher
-        bencher run \
-          --project rpc-dart \
-          --branch '${{ github.head_ref || github.ref_name }}' \
-          --testbed github-actions \
-          --adapter json \
-          --file benchmark_results/bencher_results.json \
-          --err \
-          --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-          --ci-only-thresholds \
-          "dart run benchmark/benchmark.dart --output=benchmark_results"
-      env:
-        BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
-        BENCHER_PROJECT: rpc-dart
-    
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: benchmark-results
-        path: ${{ env.WORKING_DIRECTORY }}/benchmark_results/
-        retention-days: 30
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Resolve workspace
+        run: fvm dart pub get
+      - name: Install Bencher CLI
+        uses: bencherdev/bencher@main
+      - name: Run benchmark
+        working-directory: packages/core/rpc_dart
+        run: |
+          mkdir -p benchmark_results
+          bencher run \
+            --project rpc-dart \
+            --branch '${{ github.head_ref || github.ref_name }}' \
+            --testbed github-actions \
+            --adapter json \
+            --file benchmark_results/bencher_results.json \
+            --err \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+            --ci-only-thresholds \
+            "fvm dart run benchmark/benchmark.dart --output=benchmark_results"
+        env:
+          BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+          BENCHER_PROJECT: rpc-dart
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: packages/core/rpc_dart/benchmark_results/
+          retention-days: 30

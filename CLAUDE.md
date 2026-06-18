@@ -32,16 +32,27 @@ transitive deps). It resolves standalone — test it separately.
 
 ## Common commands
 
+One-time setup (puts `melos` on PATH; its `exec:` scripts re-invoke `melos`, so
+it must be a global executable, not `dart run melos`):
+
 ```
-fvm dart run melos run analyze        # analyze all packages (lib+test, strict)
-fvm dart run melos run test           # tests (excludes generator, see below)
-fvm dart run melos run test:unit      # tests, no service-dependent packages
-fvm dart run melos run test:wasm      # the Flutter wasm package (separate)
-fvm dart run melos run test:web       # dart2js/node web regression guard
-fvm dart run melos run format:check   # formatting gate
-fvm dart run melos run publish:dry    # validate publishable packages
-fvm dart run melos exec --scope=rpc_dart_http2 -- fvm dart test   # one package
-fvm dart run melos list --category transport                      # group filter
+fvm dart pub global activate melos     # once; ensure ~/.pub-cache/bin is on PATH
+fvm dart pub get                        # resolve the workspace (run at repo root)
+```
+
+Then run the scripts (each spawns `fvm dart`/`fvm flutter`, so the pinned SDK is
+used for the actual work):
+
+```
+melos run analyze        # analyze all packages (lib+test, strict)
+melos run test           # tests (excludes generator, see below)
+melos run test:unit      # tests, no service-dependent packages
+melos run test:wasm      # the Flutter wasm package (separate)
+melos run test:web       # dart2js/node web regression guard
+melos run format:check   # formatting gate
+melos run publish:dry    # validate publishable packages
+melos exec --scope=rpc_dart_http2 -- fvm dart test   # one package
+melos list --category transport                      # group filter
 ```
 
 Categories: `core`, `transport`, `data`, `notify`, `blob`.
