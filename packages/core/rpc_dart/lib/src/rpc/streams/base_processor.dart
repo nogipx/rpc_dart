@@ -589,7 +589,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         _isActive = false;
 
         final reason =
-            _context!.cancellationToken!.reason ?? 'Operation was cancelled';
+            _context.cancellationToken!.reason ?? 'Operation was cancelled';
         final cancelledException = RpcCancelledException(reason);
 
         try {
@@ -934,15 +934,15 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
     if (_context != null) {
       // Context headers override base — handles grpc-accept-encoding dedup.
-      headerMap.addAll(_context!.headers);
+      headerMap.addAll(_context.headers);
 
-      if (_context!.traceId != null) {
-        headerMap[RpcHeaders.xTraceId] = _context!.traceId!;
+      if (_context.traceId != null) {
+        headerMap[RpcHeaders.xTraceId] = _context.traceId!;
       }
-      headerMap[RpcHeaders.xRequestId] = _context!.requestId;
+      headerMap[RpcHeaders.xRequestId] = _context.requestId;
 
-      if (_context!.deadline != null) {
-        final timeout = _context!.remainingTime;
+      if (_context.deadline != null) {
+        final timeout = _context.remainingTime;
         if (timeout != null) {
           headerMap[RpcHeaders.grpcTimeout] =
               RpcMetadata.encodeGrpcTimeout(timeout);
@@ -950,7 +950,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       }
 
       _logger.internal(
-        'Context headers added: ${_context!.headers.length} custom + system [streamId: $_streamId]',
+        'Context headers added: ${_context.headers.length} custom + system [streamId: $_streamId]',
       );
     } else {
       headerMap[RpcHeaders.xRequestId] = RpcContext.empty().requestId;
@@ -983,7 +983,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         );
 
         try {
-          final reason = _context!.cancellationToken!.reason ??
+          final reason = _context.cancellationToken!.reason ??
               'Operation cancelled by client';
           await _sendCancellationToServer(reason);
         } catch (e, stackTrace) {
@@ -996,7 +996,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
         _isActive = false;
         final cancelledException = RpcCancelledException(
-          _context!.cancellationToken!.reason ?? 'Operation was cancelled',
+          _context.cancellationToken!.reason ?? 'Operation was cancelled',
         );
 
         try {
@@ -1078,15 +1078,15 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     if (_context == null) return;
 
     // Check cancellation.
-    _context!.cancellationToken?.throwIfCancelled();
+    _context.cancellationToken?.throwIfCancelled();
 
     // Check deadline.
-    if (_context!.isExpired) {
-      throw RpcDeadlineExceededException(_context!.deadline!, Duration.zero);
+    if (_context.isExpired) {
+      throw RpcDeadlineExceededException(_context.deadline!, Duration.zero);
     }
 
     _logger.internal(
-      'Context verified: requestId=${_context!.requestId}, traceId=${_context!.traceId} [streamId: $_streamId]',
+      'Context verified: requestId=${_context.requestId}, traceId=${_context.traceId} [streamId: $_streamId]',
     );
   }
 

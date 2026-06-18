@@ -137,7 +137,7 @@ class LogController {
       if (!_acceptsEvent(record)) return;
 
       // Step 2: Sampling (events only)
-      if (_sampling != null && !_sampling!.shouldKeep(record.level)) return;
+      if (_sampling != null && !_sampling.shouldKeep(record.level)) return;
     }
 
     // Step 3: Enrich

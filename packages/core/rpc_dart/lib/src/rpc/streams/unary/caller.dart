@@ -104,7 +104,7 @@ final class UnaryCaller<TRequest, TResponse> {
             );
             completer.completeError(
               RpcCancelledException(
-                _context!.cancellationToken!.reason ??
+                _context.cancellationToken!.reason ??
                     'Operation was cancelled',
               ),
             );
@@ -246,15 +246,15 @@ final class UnaryCaller<TRequest, TResponse> {
       };
 
       if (_context != null) {
-        headerMap.addAll(_context!.headers);
+        headerMap.addAll(_context.headers);
 
-        if (_context!.traceId != null) {
-          headerMap[RpcHeaders.xTraceId] = _context!.traceId!;
+        if (_context.traceId != null) {
+          headerMap[RpcHeaders.xTraceId] = _context.traceId!;
         }
-        headerMap[RpcHeaders.xRequestId] = _context!.requestId;
+        headerMap[RpcHeaders.xRequestId] = _context.requestId;
 
-        if (_context!.deadline != null) {
-          final timeout = _context!.remainingTime;
+        if (_context.deadline != null) {
+          final timeout = _context.remainingTime;
           if (timeout != null) {
             headerMap[RpcHeaders.grpcTimeout] =
                 RpcMetadata.encodeGrpcTimeout(timeout);
@@ -262,7 +262,7 @@ final class UnaryCaller<TRequest, TResponse> {
         }
 
         _logger.internal(
-          'Context headers added: ${_context!.headers.length} custom + system',
+          'Context headers added: ${_context.headers.length} custom + system',
         );
       }
 
@@ -362,15 +362,15 @@ final class UnaryCaller<TRequest, TResponse> {
     if (_context == null) return;
 
     // Check cancellation.
-    _context!.cancellationToken?.throwIfCancelled();
+    _context.cancellationToken?.throwIfCancelled();
 
     // Check deadline.
-    if (_context!.isExpired) {
-      throw RpcDeadlineExceededException(_context!.deadline!, Duration.zero);
+    if (_context.isExpired) {
+      throw RpcDeadlineExceededException(_context.deadline!, Duration.zero);
     }
 
     _logger.internal(
-      'Context verified: requestId=${_context!.requestId}, traceId=${_context!.traceId}',
+      'Context verified: requestId=${_context.requestId}, traceId=${_context.traceId}',
     );
   }
 }

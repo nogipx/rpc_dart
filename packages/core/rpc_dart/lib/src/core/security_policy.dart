@@ -77,7 +77,7 @@ final class RpcSecurityPolicy {
   /// Serializes this policy to a plain map.
   Map<String, Object> toMap() => {
         'maxMessageLengthBytes': maxMessageLengthBytes,
-        if (maxBufferedBytes != null) 'maxBufferedBytes': maxBufferedBytes!,
+        'maxBufferedBytes': ?maxBufferedBytes,
         'maxMessagesPerChunk': maxMessagesPerChunk,
         'maxActiveStreams': maxActiveStreams,
         'maxWebSocketMessageBytes': maxWebSocketMessageBytes,

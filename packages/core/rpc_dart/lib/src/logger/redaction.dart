@@ -64,7 +64,7 @@ class LogRedactor {
   /// of the configured sensitive field names (case-insensitive).
   String redactString(String input) {
     if (_pattern == null) return input;
-    return input.replaceAllMapped(_pattern!, (m) => '${m[1]}$replacement');
+    return input.replaceAllMapped(_pattern, (m) => '${m[1]}$replacement');
   }
 
   late final RegExp? _pattern = _buildPattern();

@@ -22,8 +22,9 @@
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-/// Normalizes a decoded structure so Map<String,dynamic> and Map<dynamic,
-/// dynamic> from the two readers compare equal, and byte lists compare by value.
+/// Normalizes a decoded structure so `Map<String,dynamic>` and
+/// `Map<dynamic, dynamic>` from the two readers compare equal, and byte lists
+/// compare by value.
 dynamic _normalize(dynamic value) {
   if (value is Map) {
     final out = <String, dynamic>{};

@@ -1,6 +1,7 @@
 name: rpc_notify_postgres
 description: PostgreSQL LISTEN/NOTIFY backed repository for rpc_notify.
 version: 1.0.0
+publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

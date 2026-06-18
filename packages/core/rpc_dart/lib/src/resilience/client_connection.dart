@@ -345,7 +345,7 @@ class RpcClientConnection {
 
     while (!_isStopped) {
       // Check max attempts.
-      if (_maxAttempts != null && _reconnectAttempts >= _maxAttempts!) {
+      if (_maxAttempts != null && _reconnectAttempts >= _maxAttempts) {
         _logger?.call(
           'error',
           'Max reconnect attempts ($_maxAttempts) exceeded',
@@ -374,7 +374,7 @@ class RpcClientConnection {
         final IRpcTransport inner;
         if (_connectTimeout != null) {
           inner = await factoryFuture.timeout(
-            _connectTimeout!,
+            _connectTimeout,
             onTimeout: () =>
                 throw TimeoutException('Connect timed out', _connectTimeout),
           );

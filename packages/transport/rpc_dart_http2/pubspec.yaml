@@ -1,6 +1,7 @@
 name: rpc_dart_http2
 description: HTTP/2 caller/responder transports and server bootstrap for rpc_dart.
 version: 0.2.4
+publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
