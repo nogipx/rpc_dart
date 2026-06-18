@@ -4,6 +4,27 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.1.1
+
+Transport hot-path performance.
+
+**Performance:**
+- `RpcChannelTransport` now routes incoming messages to a dedicated per-stream
+  controller instead of every `getMessagesForStream` caller adding a
+  `.where(streamId == id)` listener to one shared broadcast. The old approach
+  delivered each message to all active-stream listeners and re-filtered it per
+  stream (~O(streams^2) work), which collapsed aggregate throughput under many
+  concurrent streams. With routing, throughput no longer degrades under load
+  (measured +24% at 500 concurrent streams in-process). Per-call latency is
+  unchanged.
+
+**Behavioral note:**
+- `getMessagesForStream` now returns a single-subscription stream (one listener
+  per stream id, buffered until listened) rather than a broadcast-derived one.
+  This matches the one-call-one-stream contract; transports and endpoints use it
+  this way already. Code that listened to the same stream id more than once would
+  need to fan out itself.
+
 ## 4.1.0
 
 Error-semantics fixes, two concurrency fixes, and hot-path performance.
