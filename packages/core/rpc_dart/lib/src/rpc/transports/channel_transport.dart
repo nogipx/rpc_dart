@@ -37,6 +37,15 @@ class RpcChannelTransport implements IRpcTransport {
   final Set<int> _finishedStreams = {};
   final StreamController<RpcTransportMessage> _incomingCtl =
       StreamController<RpcTransportMessage>.broadcast();
+
+  /// Per-stream dedicated controllers for [getMessagesForStream].
+  ///
+  /// Instead of every caller adding a `.where(streamId == id)` listener to the
+  /// shared broadcast (O(active-streams) predicate evaluations per message),
+  /// each stream gets its own single-subscription controller and incoming
+  /// messages are routed to it directly. The global broadcast is still fed for
+  /// consumers that need every message (the responder's new-stream dispatch).
+  final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
   StreamSubscription<RpcTransportMessage>? _channelSub;
   bool _closed = false;
 
@@ -120,8 +129,16 @@ class RpcChannelTransport implements IRpcTransport {
   Stream<RpcTransportMessage> get incomingMessages => _incomingCtl.stream;
 
   @override
-  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
-      _incomingCtl.stream.where((m) => m.streamId == streamId);
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    if (_closed) return const Stream.empty();
+    final existing = _streamControllers[streamId];
+    if (existing != null) return existing.stream;
+    final ctl = StreamController<RpcTransportMessage>(
+      onCancel: () => _streamControllers.remove(streamId),
+    );
+    _streamControllers[streamId] = ctl;
+    return ctl.stream;
+  }
 
   @override
   int createStream() {
@@ -231,6 +248,11 @@ class RpcChannelTransport implements IRpcTransport {
       await _channel.close();
     } catch (_) {}
 
+    for (final ctl in _streamControllers.values) {
+      if (!ctl.isClosed) unawaited(ctl.close());
+    }
+    _streamControllers.clear();
+
     if (!_incomingCtl.isClosed) {
       await _incomingCtl.close();
     }
@@ -290,9 +312,15 @@ class RpcChannelTransport implements IRpcTransport {
 
   void _onMessage(RpcTransportMessage message) {
     if (!_incomingCtl.isClosed) _incomingCtl.add(message);
+    final ctl = _streamControllers[message.streamId];
+    if (ctl != null && !ctl.isClosed) ctl.add(message);
     if (message.isEndOfStream) {
       _releaseStream(message.streamId);
       _finishedStreams.remove(message.streamId);
+      // Close the per-stream controller after the end message is enqueued, so
+      // the subscriber sees the final message followed by done.
+      final ended = _streamControllers.remove(message.streamId);
+      if (ended != null && !ended.isClosed) unawaited(ended.close());
     }
   }
 }
