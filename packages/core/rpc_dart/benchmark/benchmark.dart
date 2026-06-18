@@ -21,14 +21,21 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// codecs are supplied (`UnaryCaller` checks `transport.supportsZeroCopy`). So
 /// the only way to actually exercise serialization is the framed transport.
 ///
-/// Two distinct things are reported, never conflated:
-///   - Sequential latency: time for one call with one in flight (mean/p50/p95/
-///     p99). The derived "1/latency ops/sec" is NOT throughput.
-///   - Saturation throughput: real ops/sec with a bounded number of calls in
-///     flight, ramped until it stops improving.
+/// Per scenario we report latency (mean/p50/p95/p99) pooled across runs, plus
+/// the run-to-run spread of the per-run medians. The derived "1/latency ops/s"
+/// is NOT throughput — with a single isolate there is no real call-level
+/// parallelism, so it is just the inverse of latency.
+///
+/// Scalability scenarios run N concurrent unary calls (N in {1,5,10,20}) and
+/// measure the batch latency, matching the legacy benchmark.
 ///
 /// Handlers do NO artificial work (no Future.delayed), and request data is
 /// generated OUTSIDE the timed region.
+///
+/// The Bencher export (`bencher_results.json`) is kept in the legacy format
+/// (same benchmark names + measure slugs) so the existing dashboard carries
+/// over; values are taken from the `serialized` mode, which is what the legacy
+/// benchmark measured.
 void main(List<String> args) async {
   final cli = BenchmarkCLI();
   final config = cli.parseArguments(args);
@@ -449,19 +456,6 @@ class LatencyStats {
   };
 }
 
-class ThroughputResult {
-  final String mode;
-  final int inFlight;
-  final double opsPerSec;
-  ThroughputResult(this.mode, this.inFlight, this.opsPerSec);
-
-  Map<String, dynamic> toJson() => {
-    'mode': mode,
-    'in_flight': inFlight,
-    'throughput_ops_per_sec': opsPerSec,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Benchmark runner
 // ---------------------------------------------------------------------------
@@ -469,7 +463,6 @@ class ThroughputResult {
 class RpcBenchmark {
   final BenchmarkConfiguration config;
   final List<LatencyStats> latencyResults = [];
-  final List<ThroughputResult> throughputResults = [];
   final Stopwatch _total = Stopwatch();
 
   RpcBenchmark(this.config);
@@ -575,6 +568,16 @@ class RpcBenchmark {
           (i) => caller.bidi(Stream.fromIterable(bidiBatches[i])).toList(),
         ),
       );
+      // Scalability: batch of N concurrent unary calls (old-format scenarios).
+      for (final c in _concurrencyLevels) {
+        collect(
+          'scalability/$c',
+          await _measure(
+            50,
+            () => Future.wait(List.generate(c, (_) => caller.unary(medium))),
+          ),
+        );
+      }
     }
 
     for (final name in pools.keys) {
@@ -588,18 +591,12 @@ class RpcBenchmark {
       latencyResults.add(stats);
     }
 
-    // Saturation throughput: ramp the number of in-flight calls.
-    print('  -- saturation throughput (unary/medium) --');
-    for (final inFlight in const [1, 4, 16, 64]) {
-      final ops = await _saturation(caller, medium, inFlight: inFlight);
-      print('    in-flight=$inFlight: ${ops.toStringAsFixed(0)} ops/s');
-      throughputResults.add(ThroughputResult(mode.label, inFlight, ops));
-    }
     print('');
-
     await ctx.client.close();
     await ctx.server.close();
   }
+
+  static const _concurrencyLevels = [1, 5, 10, 20];
 
   Future<void> _warmup(TestRpcCaller caller) async {
     final s = TestData.simple();
@@ -644,40 +641,6 @@ class RpcBenchmark {
     return lat;
   }
 
-  /// Real throughput: keep [inFlight] unary calls in flight until [total]
-  /// complete, then report total/elapsed.
-  Future<double> _saturation(
-    TestRpcCaller caller,
-    TestRequest req, {
-    required int inFlight,
-    int total = 4000,
-  }) async {
-    await _settle();
-    final done = Completer<void>();
-    var launched = 0;
-    var completed = 0;
-
-    void pump() {
-      while (launched - completed < inFlight && launched < total) {
-        launched++;
-        caller.unary(req).then((_) {
-          completed++;
-          if (completed >= total) {
-            if (!done.isCompleted) done.complete();
-          } else {
-            pump();
-          }
-        });
-      }
-    }
-
-    final sw = Stopwatch()..start();
-    pump();
-    await done.future;
-    sw.stop();
-    return total / (sw.elapsedMicroseconds / 1000000);
-  }
-
   /// Yields a couple of event-loop turns to let pending microtasks/GC settle.
   Future<void> _settle() async {
     for (int i = 0; i < 2; i++) {
@@ -694,14 +657,6 @@ class RpcBenchmark {
         '(run-to-run ${(s.runSpread * 100).toStringAsFixed(1)}%)',
       );
     }
-    print('  Peak saturation throughput:');
-    final byMode = <String, double>{};
-    for (final t in throughputResults) {
-      byMode[t.mode] = math.max(byMode[t.mode] ?? 0, t.opsPerSec);
-    }
-    byMode.forEach((mode, ops) {
-      print('    [$mode]: ${ops.toStringAsFixed(0)} ops/s');
-    });
     print('');
     print(
       '  Total: ${(_total.elapsedMilliseconds / 1000).toStringAsFixed(1)}s',
@@ -727,34 +682,45 @@ class RpcBenchmark {
           'modes': config.modes.map((m) => m.label).toList(),
         },
         'latency': latencyResults.map((s) => s.toJson()).toList(),
-        'throughput': throughputResults.map((t) => t.toJson()).toList(),
       };
       await File(
         '${config.outputDirectory}/rpc_benchmark_results.json',
       ).writeAsString(const JsonEncoder.withIndent('  ').convert(data));
 
-      // Bencher.dev format: latency p50/p95/p99 per scenario + peak throughput.
+      // Bencher.dev format: kept identical to the legacy benchmark so the
+      // existing dashboard (benchmark names + measure slugs) carries over.
+      // Values come from the `serialized` mode (the legacy benchmark used the
+      // framed transport, i.e. serialize + frame), falling back to whatever
+      // single mode was run. throughput_ops_per_sec is 1e6/mean, as before.
+      const legacyKeys = {
+        'unary/simple': 'unary_rpc_simple_data',
+        'unary/medium': 'unary_rpc_medium_data',
+        'unary/complex': 'unary_rpc_complex_data',
+        'serverStream/5': 'server_stream_rpc_multi_response_stream',
+        'clientStream/10': 'client_stream_rpc_multi_request_collection',
+        'bidi/5': 'bidirectional_stream_rpc_bidirectional_processing',
+        'scalability/1': 'scalability_1_concurrent_operations',
+        'scalability/5': 'scalability_5_concurrent_operations',
+        'scalability/10': 'scalability_10_concurrent_operations',
+        'scalability/20': 'scalability_20_concurrent_operations',
+      };
+      final targetMode =
+          (config.modes.contains(BenchMode.serialized)
+                  ? BenchMode.serialized
+                  : config.modes.first)
+              .label;
       final bencher = <String, dynamic>{};
       for (final s in latencyResults) {
-        final key = '${s.mode}_${s.name}'
-            .replaceAll(RegExp(r'[ /\-]'), '_')
-            .toLowerCase();
+        if (s.mode != targetMode) continue;
+        final key = legacyKeys[s.name];
+        if (key == null) continue;
         bencher[key] = {
-          'latency_p50_us': {'value': s.median},
-          'latency_p95_us': {'value': s.p95},
-          'latency_p99_us': {'value': s.p99},
+          'throughput_ops_per_sec': {'value': 1000000 / s.mean},
+          'latency_mean_microseconds': {'value': s.mean},
+          'latency_p95_microseconds': {'value': s.p95},
+          'latency_p99_microseconds': {'value': s.p99},
         };
       }
-      final byMode = <String, double>{};
-      for (final t in throughputResults) {
-        byMode[t.mode] = math.max(byMode[t.mode] ?? 0, t.opsPerSec);
-      }
-      byMode.forEach((mode, ops) {
-        final key = 'throughput_$mode'.replaceAll('-', '_').toLowerCase();
-        bencher[key] = {
-          'throughput_ops_per_sec': {'value': ops},
-        };
-      });
       await File(
         '${config.outputDirectory}/bencher_results.json',
       ).writeAsString(const JsonEncoder.withIndent('  ').convert(bencher));
