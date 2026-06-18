@@ -30,9 +30,6 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
   /// Активные HTTP/2 streams (входящие от клиента)
   final Map<int, http2.ServerTransportStream> _incomingStreams = {};
 
-  /// Исходящие streams (responses)
-  final Map<int, http2.ServerTransportStream> _outgoingStreams = {};
-
   /// Подписки на входящие сообщения streams
   final Map<int, StreamSubscription> _streamSubscriptions = {};
 
@@ -254,8 +251,31 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
     final streamId = _nextStreamId;
     _nextStreamId += 2; // Сервер использует четные ID (2, 4, 6, ...)
 
+    // NOTE: server-push / server-initiated streams are NOT supported on the
+    // HTTP/2 responder. A minted even id is not a real http2 stream, so any
+    // subsequent send on it would silently lose data. We hand back the id for
+    // API compatibility, but sends will fail fast via [_requireIncomingStream].
     _logger?.internal('Создан исходящий stream: $streamId');
     return streamId;
+  }
+
+  /// Resolves the http2 stream that a server-side send must target.
+  ///
+  /// Responder sends always reply on the client-initiated stream id (which is
+  /// in [_incomingStreams]). An unknown id means either a server-initiated
+  /// stream from [createStream] (unsupported) or a stale/released id — both are
+  /// programming errors that must fail loudly instead of dropping data.
+  http2.ServerTransportStream _requireIncomingStream(int streamId, String op) {
+    final incomingStream = _incomingStreams[streamId];
+    if (incomingStream == null) {
+      throw StateError(
+        'Cannot $op on stream $streamId: not a known incoming stream. '
+        'Server-initiated streams are not supported on the HTTP/2 responder '
+        '(server-push is unimplemented); responses must use the '
+        'client-initiated stream id.',
+      );
+    }
+    return incomingStream;
   }
 
   @override
@@ -280,22 +300,6 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
       }
     }
 
-    // Закрываем исходящий stream мягко если он активен
-    final outgoingStream = _outgoingStreams.remove(streamId);
-    if (outgoingStream != null) {
-      try {
-        outgoingStream.sendData(Uint8List(0), endStream: true);
-        _logger?.internal(
-          'Отправлен END_STREAM при освобождении исходящего stream $streamId',
-        );
-      } catch (e) {
-        _logger?.internal(
-          'Используем terminate для исходящего stream $streamId: $e',
-        );
-        outgoingStream.terminate();
-      }
-    }
-
     // Отменяем подписку на сообщения
     final subscription = _streamSubscriptions.remove(streamId);
     subscription?.cancel();
@@ -317,14 +321,9 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
 
     _logger?.internal('Отправка ответных метаданных для stream $streamId');
 
-    // Для серверных ответов ищем входящий stream
-    final incomingStream = _incomingStreams[streamId];
-    if (incomingStream == null) {
-      _logger?.warning(
-        'Incoming stream $streamId not found, skipping metadata send',
-      );
-      return;
-    }
+    // Для серверных ответов ищем входящий stream. Неизвестный id (server-push)
+    // должен падать громко, а не молча терять метаданные.
+    final incomingStream = _requireIncomingStream(streamId, 'send metadata');
 
     try {
       final List<http2.Header> headers;
@@ -364,13 +363,7 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
   }) async {
     if (_isClosed) throw StateError('Transport is closed');
 
-    final incomingStream = _incomingStreams[streamId];
-    if (incomingStream == null) {
-      _logger?.warning(
-        'Incoming stream $streamId not found, skipping message send',
-      );
-      return;
-    }
+    final incomingStream = _requireIncomingStream(streamId, 'send message');
 
     _logger?.internal(
       'Отправка ответных данных для stream $streamId: ${data.length} байт',
@@ -429,7 +422,6 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
   Map<String, Object?> _buildHealthDetails() => {
         'isClosed': _isClosed,
         'incomingStreams': _incomingStreams.length,
-        'outgoingStreams': _outgoingStreams.length,
         'streamSubscriptions': _streamSubscriptions.length,
         'streamParsers': _streamParsers.length,
         'messageControllerClosed': _messageController.isClosed,
@@ -479,7 +471,7 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
     _isClosed = true;
 
     // Даем время на завершение активных потоков
-    final totalStreams = _incomingStreams.length + _outgoingStreams.length;
+    final totalStreams = _incomingStreams.length;
     if (totalStreams > 0) {
       _logger?.internal('Ожидание завершения $totalStreams активных потоков');
       await Future.delayed(Duration(milliseconds: 50));
@@ -508,28 +500,6 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
       }
     }
     _incomingStreams.clear();
-
-    // Закрываем все исходящие streams осторожно
-    for (final stream in _outgoingStreams.values) {
-      try {
-        stream.sendData(Uint8List(0), endStream: true);
-        _logger?.internal(
-          'Отправлен END_STREAM для исходящего stream ${stream.id}',
-        );
-      } catch (e) {
-        _logger?.internal(
-          'Используем terminate для исходящего stream ${stream.id}: $e',
-        );
-        try {
-          stream.terminate();
-        } catch (e2) {
-          _logger?.warning(
-            'Ошибка при terminate исходящего stream ${stream.id}: $e2',
-          );
-        }
-      }
-    }
-    _outgoingStreams.clear();
 
     // Отменяем все подписки
     for (final subscription in _streamSubscriptions.values) {

@@ -1,3 +1,15 @@
+## 0.2.3
+
+- BUG (silent data loss on server-initiated streams): `RpcHttp2ResponderTransport`
+  sends (`sendMetadata` / `sendMessage`) now THROW a `StateError` when targeting
+  a stream id that is not a known incoming (client-initiated) stream — i.e. an
+  id minted by `createStream()` (server-push, unimplemented) or a stale/released
+  id. Previously such sends logged a warning and returned, silently dropping the
+  data. Legitimate unary/streaming responses, which reply on the client's stream
+  id, are unaffected. Server-push remains unimplemented; the dead
+  `_outgoingStreams` map (read but never populated) was removed along with its
+  health/clear references.
+
 ## 0.2.2
 
 Server-side hardening and a per-stream error-routing correctness fix.
