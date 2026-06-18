@@ -1,5 +1,16 @@
 ## 0.2.4
 
+- BUG (non-ASCII regular header values were silently corrupted): `_headerValue`
+  base64url-encoded any non-ASCII value on send but the decode side never
+  reversed it, so the peer received a mangled string (the same asymmetry class
+  as the `-bin` bug). Per the gRPC HTTP/2 spec, ASCII metadata values must be
+  printable ASCII (`%x20-%x7E`); a non-conforming value is now rejected with an
+  `ArgumentError` instead of silently transformed. Binary or non-ASCII data must
+  use a `-bin` key (base64). This also rejects CR/LF in values, closing a header
+  injection vector. Tests in `test/grpc_wire_compliance_test.dart`.
+  (`grpc-message` is unaffected — the core layer percent-encodes it to ASCII
+  before it reaches the transport.)
+
 - BUG (`-bin` header wire format was double-encoded and corrupted true binary):
   the metadata layer already stores `-bin` values base64-encoded (e.g.
   `base64Encode(statusDetailsBin)`), but the HTTP/2 transport base64-encoded

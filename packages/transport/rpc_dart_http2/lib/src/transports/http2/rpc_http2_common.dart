@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
@@ -283,17 +282,30 @@ bool isGrpcFrame(Uint8List data) {
 /// base64 string produced by the metadata layer (e.g.
 /// `base64Encode(statusDetailsBin)`), which is exactly what gRPC puts on the
 /// wire — so it is passed through verbatim. Re-encoding it here would
-/// double-encode the value. For regular headers, the value is returned as-is
-/// if it is valid ASCII; otherwise it is base64url-encoded as a fallback.
+/// double-encode the value.
+///
+/// For regular (ASCII) headers, the gRPC HTTP/2 spec requires the value to be
+/// printable ASCII (`%x20-%x7E`). A non-conforming value is rejected with an
+/// [ArgumentError] rather than silently transformed: the previous base64url
+/// fallback was never reversed on decode and corrupted the value. Binary or
+/// non-ASCII data must use a `-bin` key (base64). Rejecting also blocks CR/LF
+/// header injection.
 String _headerValue(String name, String value) {
   if (name.endsWith('-bin')) {
     return value;
   }
-  try {
-    ascii.encode(value);
-    return value;
-  } on Object catch (_) {
-    // Non-ASCII header value: HTTP/2 requires ASCII, so base64url-encode it.
-    return base64UrlEncode(utf8.encode(value));
+  for (var i = 0; i < value.length; i++) {
+    final c = value.codeUnitAt(i);
+    if (c < 0x20 || c > 0x7E) {
+      throw ArgumentError.value(
+        value,
+        'value',
+        'Metadata header "$name" contains a non-printable-ASCII character '
+            '(U+${c.toRadixString(16).toUpperCase().padLeft(4, '0')}). gRPC '
+            'ASCII metadata values must be %x20-%x7E; use a "-bin" key with '
+            'base64 for binary or non-ASCII data.',
+      );
+    }
   }
+  return value;
 }

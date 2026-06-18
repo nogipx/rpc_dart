@@ -178,6 +178,46 @@ void main() {
       // Should NOT be decoded — it's not a -bin header
       expect(metadata.getHeaderValue('grpc-message'), equals('SGVsbG8='));
     });
+
+    test('printable-ASCII regular header values pass through verbatim', () {
+      final metadata = RpcMetadata([
+        RpcHeader('x-custom', 'plain ascii ~!@#\$%^&*()_+-='),
+      ]);
+      final headers = rpcMetadataToHttp2Trailers(metadata);
+      expect(_toMap(headers)['x-custom'], equals('plain ascii ~!@#\$%^&*()_+-='));
+    });
+
+    test('non-ASCII regular header value is rejected (use -bin instead)', () {
+      final metadata = RpcMetadata([
+        RpcHeader('x-user', 'Müller'),
+      ]);
+      expect(
+        () => rpcMetadataToHttp2Trailers(metadata),
+        throwsA(isA<ArgumentError>()),
+        reason: 'gRPC ASCII metadata must be %x20-%x7E; binary uses -bin',
+      );
+    });
+
+    test('control chars (CR/LF) in a regular header value are rejected', () {
+      final metadata = RpcMetadata([
+        RpcHeader('x-inject', 'value\r\nevil-header: x'),
+      ]);
+      expect(
+        () => rpcMetadataToHttp2Trailers(metadata),
+        throwsA(isA<ArgumentError>()),
+        reason: 'CR/LF must be rejected to block header injection',
+      );
+    });
+
+    test('percent-encoded grpc-message (ASCII) still passes through', () {
+      // The core metadata layer percent-encodes grpc-message to ASCII before
+      // it reaches the transport, so a Unicode status message is fine.
+      final metadata = RpcMetadata.forTrailer(2, message: 'Ошибка');
+      final headers = rpcMetadataToHttp2Trailers(metadata);
+      final wire = _toMap(headers)['grpc-message']!;
+      // Already ASCII (percent-encoded) on the wire.
+      expect(wire.codeUnits.every((c) => c >= 0x20 && c <= 0x7E), isTrue);
+    });
   });
 
   group('gRPC wire compliance — HTTP status extraction', () {
