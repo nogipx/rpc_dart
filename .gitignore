@@ -8,3 +8,7 @@
 .idea/
 __pycache__/
 site/
+
+# Test coverage artifacts (matches any depth: root + every package).
+coverage/
+*.lcov

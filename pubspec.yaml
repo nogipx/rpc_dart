@@ -118,6 +118,50 @@ melos:
           - rpc_data_sqlite
           - rpc_blob_sqlite
 
+    # Coverage for the package(s) you choose: `melos run coverage` prompts a
+    # package multi-select, runs coverage for each, and opens its HTML report.
+    #   one/few:  melos run coverage            (then pick from the prompt)
+    #   explicit: MELOS_PACKAGES='rpc_dart_http2' melos run coverage
+    #   all:      melos run coverage --no-select
+    # Needs the `coverage` CLI (`fvm dart pub global activate coverage`) and
+    # `genhtml` (`brew install lcov`).
+    coverage:
+      description: Coverage for the package(s) you pick; opens the HTML report.
+      run: >
+        fvm dart test --coverage=coverage &&
+        fvm dart pub global run coverage:format_coverage
+        --lcov --in=coverage --out=coverage/lcov.info
+        --report-on=lib --base-directory="$MELOS_PACKAGE_PATH"
+        --packages="$MELOS_ROOT_PATH/.dart_tool/package_config.json" &&
+        genhtml coverage/lcov.info -o coverage/html --quiet &&
+        open coverage/html/index.html
+      exec:
+        concurrency: 1
+      packageFilters:
+        dirExists: test
+
+    # Per-package lcov only (no HTML/open). Used by CI. In a workspace the package
+    # config lives at the root, so format_coverage reads $MELOS_ROOT_PATH.
+    coverage:collect:
+      description: Run tests with coverage; write coverage/lcov.info per package.
+      run: >
+        fvm dart test --coverage=coverage &&
+        fvm dart pub global run coverage:format_coverage
+        --lcov --in=coverage --out=coverage/lcov.info
+        --report-on=lib
+        --base-directory="$MELOS_ROOT_PATH"
+        --packages="$MELOS_ROOT_PATH/.dart_tool/package_config.json"
+      exec:
+        concurrency: 1
+      packageFilters:
+        dirExists: test
+        ignore:
+          - rpc_dart_generator
+          - "*_postgres"
+          - "*_minio"
+          - rpc_data_sqlite
+          - rpc_blob_sqlite
+
     # NOTE: rpc_dart_generator golden tests (build_test) cannot run in workspace
     # mode (build_test needs a per-package .dart_tool/package_config.json, which
     # workspaces centralize at the root). Run them by temporarily removing
@@ -166,6 +210,24 @@ melos:
         --license MIT
         --copyright 'Karim "nogipx" Mamatkazin <nogipx@gmail.com>'
         --merge-copyrights --skip-existing --skip-unrecognised --recursive .
+
+    # --- Pre-publish: one command that fixes + verifies everything ---
+    # Run before publishing. It applies fixes (format, license headers, LICENSE
+    # sync), then gates (analyze, reuse lint, tests, publish dry-run). Review the
+    # resulting working-tree changes, commit them, then publish yourself.
+    # It applies fixes (LICENSE sync, license headers, format) then gates
+    # (analyze, reuse lint, tests). publish:dry is intentionally NOT here: it
+    # checks for a clean git tree, which prepare's own fixes would dirty. After
+    # prepare, review + commit, then run `melos run publish:dry` and publish.
+    prepare:
+      description: Fix + verify everything before a release (then review, commit, publish).
+      run: >
+        melos run license:sync &&
+        melos run license:annotate &&
+        melos run format &&
+        melos run analyze &&
+        melos run license:check &&
+        melos run test:unit
 
     # --- Publishing (only rpc_dart + rpc_dart_generator are public) ---
     publish:dry:

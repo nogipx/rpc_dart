@@ -30,6 +30,10 @@ jobs:
         run: melos run format:check
       - name: Analyze (all packages, --fatal-infos --fatal-warnings)
         run: melos run analyze
+      - name: Install reuse
+        run: pipx install reuse
+      - name: License check (REUSE/SPDX)
+        run: melos run license:check
 
   # Workspace-wide tests. Excludes the generator (build_test vs workspace) and
   # service-dependent packages (postgres/minio/sqlcipher).
@@ -113,6 +117,26 @@ jobs:
         run: fvm dart pub get
       - name: melos publish --dry-run
         run: melos run publish:dry
+
+  coverage:
+    name: "Coverage (rpc_dart)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Install coverage CLI
+        run: fvm dart pub global activate coverage
+      - name: Resolve workspace
+        run: fvm dart pub get
+      - name: Collect coverage (rpc_dart only)
+        run: MELOS_PACKAGES=rpc_dart melos run coverage:collect
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: packages/core/rpc_dart/coverage/lcov.info
 
   benchmark:
     name: "Benchmark"
