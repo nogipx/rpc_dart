@@ -1,19 +1,9 @@
 @TestOn('vm || chrome')
 library;
 
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
-//
-// Runs on vm and chrome (the real web target) but not node: the audit suite
-// builds a real opentelemetry SDK tracer whose IdGenerator calls
-// Random.secure(), which is unavailable under the node test platform.
-//
-// AUDIT A2: rpc.grpc.status_code emitted as STRING ('OK') where the OTel
-// semantic conventions require an INT.
-// otel_rpc_interceptor.dart:181,209 ; rpc_otel_metrics.dart:60-63.
-//
-// Per semconv (rpc.grpc.status_code) the value MUST be an int (0 = OK).
-// CORRECT: the span attribute value is an int. With the bug it is the String
-// 'OK' -> CONFIRMED.
 
 import 'package:rpc_dart_opentelemetry/rpc_dart_opentelemetry.dart';
 import 'package:test/test.dart';

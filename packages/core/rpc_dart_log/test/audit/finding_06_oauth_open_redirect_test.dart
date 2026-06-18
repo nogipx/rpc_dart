@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 6: MCP "OAuth" open redirect + accepts any token.
 //
 // log_mcp.dart:111-129. The `authorize` handler (a GET endpoint, contrary to

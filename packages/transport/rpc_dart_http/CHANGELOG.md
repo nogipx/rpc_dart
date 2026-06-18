@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 ## 0.2.4
 
 - Validate outgoing metadata on send. Both the caller (`sendMetadata`) and the

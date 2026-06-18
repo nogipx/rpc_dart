@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_blob
 
 Core contract and RPC wiring for streamed blob storage over `rpc_dart`. Think of it as the binary twin of `rpc_data`: optimized for chunked uploads/downloads, checksums, and content types, without forcing base64 inside JSON payloads. Storage adapters now live in sibling packages (`rpc_blob_sqlite`, `rpc_blob_minio`).

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Routing & composition
 
 RPC Dart is transport-agnostic. You can start with a single in-memory pair and

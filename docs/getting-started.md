@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Getting Started
 
 This guide builds a small calculator service end-to-end: define the interface, generate code, implement the server, wire both sides, make a call, and write a test.

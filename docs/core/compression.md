@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Compression
 
 The `rpc_dart_compression` package provides a cross-platform gzip codec for `rpc_dart`. It replaces the built-in `dart:io` gzip implementation, which is native-only, with one backed by `package:archive` that works on all platforms — native, web, JS, and Wasm.

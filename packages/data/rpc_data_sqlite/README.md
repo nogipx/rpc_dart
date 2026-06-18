@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_data_sqlite
 
 SQLite/SQLCipher adapter and repository for [`rpc_data`](../rpc_data). Includes cross-platform connection helpers (IO + WebAssembly), change journal, schema registry, FTS/index helpers, and SQLCipher loader hooks.

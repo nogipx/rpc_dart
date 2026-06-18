@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Core Framework
 
 The `rpc_dart` package is the foundation of the entire ecosystem. It defines the transport abstraction, contract model, endpoint lifecycle, context propagation, and the middleware/interceptor pipeline.

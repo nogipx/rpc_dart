@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 3: RpcRateLimiter has no `_disposed` guard.
 // Source: packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart
 //   - dispose() at 294-299 cancels the cleanup timer AND clears the dynamic maps.

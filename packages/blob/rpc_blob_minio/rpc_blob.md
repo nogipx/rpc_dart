@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_blob_minio: функциональный набросок
 
 Цель: отдельный сервис для блобов (картинки/файлы), совместимый по стилю с `rpc_data`, но оптимизированный под бинарные стримы и хранения вне JSON.

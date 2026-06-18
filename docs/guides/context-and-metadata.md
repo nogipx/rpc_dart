@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Context, metadata & deadlines
 
 `RpcContext` is the **metadata envelope** that travels with every call. It stores

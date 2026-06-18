@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # TURN relay
 
 `TurnRelayServer` implements an RFC 5766 compatible relay in pure Dart. Clients

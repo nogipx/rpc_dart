@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 5: MCP server malformed JSON body -> unhandled exception/500
 // instead of a JSON-RPC -32700 parse error.
 //

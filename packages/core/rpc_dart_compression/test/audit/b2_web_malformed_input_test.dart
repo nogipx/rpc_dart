@@ -1,15 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
-//
-// AUDIT B2: the WEB decode path silently accepts malformed / non-gzip input,
-// returning garbage or empty with NO exception (archive 4.x web GZipDecoder
-// has its signature checks commented out / behaves differently from the VM
-// inflate path). gzip_codec.dart:34.
-//
-// This test is platform-aware. Feed clearly non-gzip bytes (no 0x1f 0x8b
-// magic) to decompress and assert it THROWS.
-//   - On the VM the native/inflate path generally rejects it.
-//   - On the web (run with `-p node` or `-p chrome`) it does NOT throw
-//     -> CONFIRMED. Compare the two runs.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_compression/rpc_dart_compression.dart';

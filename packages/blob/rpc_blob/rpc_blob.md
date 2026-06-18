@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_blob: функциональный набросок
 
 - Адаптеры вынесены в отдельные пакеты: `rpc_blob_sqlite`, `rpc_blob_minio`.

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # OpenTelemetry
 
 The `rpc_dart_opentelemetry` package integrates [OpenTelemetry](https://opentelemetry.io/) into rpc_dart. It wraps every RPC call in a span, propagates W3C Trace Context through `RpcContext` headers, and optionally records call metrics.

@@ -1,22 +1,9 @@
 @TestOn('vm || chrome')
 library;
 
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
-//
-// Runs on vm and chrome (the real web target) but not node: the audit suite
-// builds a real opentelemetry SDK tracer whose IdGenerator calls
-// Random.secure(), which is unavailable under the node test platform.
-//
-// AUDIT A3: LogControllerOtelOutput._open leaks entries when no end record
-// arrives. log_controller_otel_output.dart:48,101,128.
-//
-// A LogSpanStart with no matching LogSpan(end) stays in `_open` forever and the
-// OTel span is never ended (only dispose() drains it). An un-ended span is a
-// leak (never exported / unbounded map growth).
-//
-// CORRECT: an un-ended span should not be retained indefinitely (some eviction
-// / it should be ended). With the bug it is retained and never exported until
-// dispose() -> CONFIRMED.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_opentelemetry/rpc_dart_opentelemetry.dart';

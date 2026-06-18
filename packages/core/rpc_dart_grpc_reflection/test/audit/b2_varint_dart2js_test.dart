@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding B2: varint decode uses native int `<< shift`, broken on dart2js.
 //
 // proto_parser.dart:212-223 and reflection_contract.dart:234-245:

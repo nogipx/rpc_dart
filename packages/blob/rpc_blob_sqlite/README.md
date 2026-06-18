@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_blob_sqlite
 
 SQLite/SQLCipher adapter for `rpc_blob` (streamed blob storage over `rpc_dart`). Use this when you want an embedded/local store; S3/MinIO lives in `rpc_blob_minio`.

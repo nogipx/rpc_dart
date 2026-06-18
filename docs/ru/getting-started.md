@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Быстрый старт
 
 Добро пожаловать в **RPC Dart**! Это руководство поможет вам быстро начать работу с RPC Dart в вашем проекте на Dart или Flutter.

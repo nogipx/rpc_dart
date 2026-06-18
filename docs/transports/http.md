@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # HTTP/1.1 Transport
 
 `rpc_dart_http` provides an HTTP/1.1 transport built on [`package:http`](https://pub.dev/packages/http) (caller) and [`package:shelf`](https://pub.dev/packages/shelf) (responder). It compiles to all platforms including JS and Wasm.

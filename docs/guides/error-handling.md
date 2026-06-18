@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Error handling & status codes
 
 Robust RPC systems make failures explicit. RPC Dart follows gRPC semantics and

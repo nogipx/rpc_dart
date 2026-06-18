@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 7: mcp_buffer stale cursor silently returns the whole buffer.
 //
 // mcp_buffer.dart:190-193 (getLogs cursor resolution):

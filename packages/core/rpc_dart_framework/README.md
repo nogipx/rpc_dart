@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_dart_framework
 
 Application framework for `rpc_dart`. Provides module lifecycle management, dependency injection, environment configuration, rate limiting, reconnecting client transport, and an in-process test harness.

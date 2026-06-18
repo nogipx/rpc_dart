@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: _rpc_dart_workspace
 publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
@@ -140,6 +144,28 @@ melos:
       description: Verify formatting without writing (CI gate).
       run: fvm dart format --output=none --set-exit-if-changed .
       exec: {}
+
+    # --- Licensing (REUSE / SPDX headers; needs the `reuse` CLI) ---
+    # Single source of truth for the license text is the ROOT `LICENSE` file.
+    # Change it, then `melos run license:sync` to propagate to every package.
+    license:check:
+      description: Verify REUSE/SPDX license compliance (CI gate).
+      run: reuse lint
+
+    license:sync:
+      description: Copy the root LICENSE into every package (single source).
+      run: >
+        find packages -name pubspec.yaml -not -path '*/.*'
+        | xargs -n1 dirname
+        | while read d; do cp LICENSE "$d/LICENSE"; done
+
+    license:annotate:
+      description: Add the SPDX MIT header to source files that lack it.
+      run: >
+        reuse annotate
+        --license MIT
+        --copyright 'Karim "nogipx" Mamatkazin <nogipx@gmail.com>'
+        --merge-copyrights --skip-existing --skip-unrecognised --recursive .
 
     # --- Publishing (only rpc_dart + rpc_dart_generator are public) ---
     publish:dry:

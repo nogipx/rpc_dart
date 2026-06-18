@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: rpc_dart_http
 description: HTTP/1.1 caller/responder transports for rpc_dart (unary only).
 version: 0.2.4

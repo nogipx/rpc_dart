@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 6: RpcContainer.registerFactory creates a NEW instance per
 // get(), and docs recommend it for services -> a new service instance per
 // resolution (per connection), silently breaking singleton expectations and

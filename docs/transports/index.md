@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Choosing a Transport
 
 Every transport implements `IRpcTransport`. Swapping transports requires changing only the transport construction — service and contract code stays identical.

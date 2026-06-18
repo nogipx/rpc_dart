@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Code Generation
 
 The `rpc_dart_generator` package eliminates boilerplate. You define an annotated abstract interface; `build_runner` generates the caller and responder implementations.

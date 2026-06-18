@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 # Project-wide formatter standard.
 #
 # `dart format` reads `formatter.page_width`. Packages without their own

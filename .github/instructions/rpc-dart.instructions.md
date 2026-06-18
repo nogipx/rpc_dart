@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # RPC Dart Library AI Agent Guide
 
 This is a **transport-agnostic RPC framework** for Dart with type-safe contracts, streaming support, and flexible architecture for building distributed applications.

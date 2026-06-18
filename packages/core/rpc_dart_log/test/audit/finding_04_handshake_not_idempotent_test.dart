@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 4: _handleHandshake is not idempotent.
 //
 // log_server.dart:154-164. Each handshake unconditionally allocates a new

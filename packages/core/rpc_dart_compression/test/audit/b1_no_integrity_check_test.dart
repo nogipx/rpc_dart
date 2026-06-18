@@ -1,12 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
-//
-// AUDIT B1: decompress uses verify:false implicitly (GZipDecoder default) so
-// no CRC32 / ISIZE length check is performed; corrupted or truncated input is
-// not detected. gzip_codec.dart:34-36.
-//
-// CORRECT: decompressing a payload whose CRC has been corrupted, or which has
-// been truncated, MUST throw (integrity violation). If it returns silently
-// (possibly wrong/short data) the bug is CONFIRMED.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_compression/rpc_dart_compression.dart';

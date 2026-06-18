@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 1: RpcApp.start() has NO rollback on partial startup failure.
 // Source: lib/src/rpc_app.dart:103-147 (start), specifically the try/catch at
 // 128-144 which only sets `_started = false` and rethrows — it does NOT call

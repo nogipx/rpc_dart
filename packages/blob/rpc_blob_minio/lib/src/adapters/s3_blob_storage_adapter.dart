@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // The minio package does not export its signing/client helpers from a public
 // library, so the S3 presign/sign implementation has to reach into its `src/`.
 // ignore_for_file: implementation_imports

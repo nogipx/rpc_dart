@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: rpc_blob_sqlite
 description: SQLite/SQLCipher storage adapter for rpc_blob.
 version: 1.0.1

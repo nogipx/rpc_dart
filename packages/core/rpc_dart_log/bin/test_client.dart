@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Quick smoke test: connect to a running log collector server and send records.
 // Usage: dart run bin/test_client.dart [ws://host:port]
 

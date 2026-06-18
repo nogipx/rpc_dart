@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 5: RpcApp.health() ignores endpoint health in overall level.
 // Source: lib/src/rpc_app.dart:216-258. Endpoint metrics are collected at
 // 237-240 but the overall `level` loop at 242-250 only iterates module health

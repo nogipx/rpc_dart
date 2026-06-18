@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_blob_minio
 
 S3/MinIO adapter for `rpc_blob` (streamed blob storage over `rpc_dart`). Provides presigned download URLs; SQLite lives in `rpc_blob_sqlite`.

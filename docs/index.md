@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_dart
 
 `rpc_dart` is a transport-agnostic RPC framework for Dart. Write your service contracts once and run them over any transport — in-process, HTTP/2, WebSocket, or Dart Isolates — without changing the service code. It uses gRPC-compatible 5-byte message framing and supports all four RPC call patterns.

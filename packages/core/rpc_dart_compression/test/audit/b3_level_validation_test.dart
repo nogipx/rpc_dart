@@ -1,13 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
-//
-// AUDIT B3: the `level` constructor / register param (0..9) was not validated.
-// An out-of-range level (e.g. 10) makes archive's deflate silently emit a gzip
-// frame with NO compressed payload (its range throw is commented out), so
-// compress() produced silently-corrupt output. gzip_codec.dart.
-//
-// CORRECT: an out-of-range level either throws in dev (assert) or is clamped
-// defensively at the encode site so release / dart2js builds still produce a
-// valid gzip that round-trips to the original.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_compression/rpc_dart_compression.dart';

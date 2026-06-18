@@ -1,18 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
-//
-// Web/dart2js smoke test: exercises the parts of this package that DO NOT
-// depend on the opentelemetry SDK's secure RNG, so they run on both
-// `-p chrome` (the real web target) and `-p node`.
-//
-// The full interceptor span lifecycle is covered by the audit suite on
-// `-p chrome`; it cannot run on `-p node` because the opentelemetry SDK's
-// IdGenerator calls `Random.secure()`, which is unavailable under the node
-// test platform (a node/dart2js environment limitation, not a package bug).
-//
-// What this verifies on JS:
-// - propagator inject -> extract round-trip (no secure RNG involved),
-// - status-name table and error->code mapping (pure int/string logic),
-// - Int64 nanosecond timestamp conversion (fixnum, dart2js-safe).
 
 import 'package:fixnum/fixnum.dart';
 import 'package:opentelemetry/api.dart';

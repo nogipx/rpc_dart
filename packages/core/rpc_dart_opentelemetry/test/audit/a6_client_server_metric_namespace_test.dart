@@ -1,22 +1,9 @@
 @TestOn('vm || chrome')
 library;
 
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
-//
-// Runs on vm and chrome (the real web target) but not node: the audit suite
-// builds a real opentelemetry SDK tracer whose IdGenerator calls
-// Random.secure(), which is unavailable under the node test platform.
-//
-// AUDIT A6: the same RpcOtelMetrics instance is shared by both the server
-// interceptor (OtelRpcInterceptor) and the client interceptor
-// (OtelRpcClientInterceptor). Before the fix, recordCall always wrote to the
-// hardcoded `rpc.server.*` instruments, so client-side calls were recorded
-// under the server namespace, violating OTel RPC semantic conventions.
-//
-// After the fix, RpcOtelMetrics owns both `rpc.server.*` and `rpc.client.*`
-// instrument sets and recordCall routes by RpcMetricSide. Each interceptor
-// passes its own side. We assert that a server call lands only in
-// `rpc.server.*` and a client call only in `rpc.client.*`.
 
 import 'package:opentelemetry/api.dart';
 // ignore: implementation_imports

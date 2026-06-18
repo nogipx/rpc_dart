@@ -1,20 +1,9 @@
 @TestOn('vm || chrome')
 library;
 
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
-//
-// Runs on vm and chrome (the real web target) but not node: the audit suite
-// builds a real opentelemetry SDK tracer whose IdGenerator calls
-// Random.secure(), which is unavailable under the node test platform.
-//
-// AUDIT A4: duration is collected (Stopwatch) and passed to recordCall, but
-// never recorded into any instrument. rpc_otel_metrics.dart:47-53.
-//
-// recordCall only does `_requests.add(1, ...)`. The `duration` argument is
-// ignored. We install a recording Meter that captures every value pushed to
-// every instrument and assert that the measured duration (in any unit) shows
-// up somewhere. With the bug, only the constant `1` (the call count) is ever
-// recorded -> CONFIRMED dead plumbing.
 
 import 'package:opentelemetry/api.dart';
 // ignore: implementation_imports

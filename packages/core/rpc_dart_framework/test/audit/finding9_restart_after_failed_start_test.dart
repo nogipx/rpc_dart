@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 9: restart after a failed start threw LateInitializationError.
 // Source: lib/src/rpc_app.dart — `_modules`, `_container`, `_env`,
 // `_autoInterceptors` are `late final`, assigned inside start(). On a failed

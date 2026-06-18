@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # HTTP/2 транспорт
 
 HTTP/2 транспорт использует тот же gRPC wire-формат, который ожидают классические

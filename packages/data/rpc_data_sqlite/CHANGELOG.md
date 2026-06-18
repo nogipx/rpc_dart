@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 ## 1.0.1
 
 - Web (dart2js / Wasm) path correctness. Verified the injected-`CommonDatabase`

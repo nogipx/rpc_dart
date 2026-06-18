@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 ## 0.1.2
 
 - fix: align `RpcWasm.run` stub signature with the real implementation. The VM/host stub (`rpc_wasm_stub.dart`) was missing the `LogController? logController` named parameter, so code calling `RpcWasm.run(logController: ...)` compiled on the WASM/JS target but failed to compile on the host/VM stub target. The stub now matches the real implementation parameter-for-parameter.

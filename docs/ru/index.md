@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # RPC Dart
 
 [![Pub Version](https://img.shields.io/pub/v/rpc_dart.svg?style=for-the-badge&logo=dart&logoColor=white&color=3c69aa)](https://pub.dev/packages/rpc_dart)

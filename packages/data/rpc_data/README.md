@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_data
 
 Driver-agnostic data layer (CRUD, queries, change streams) for [`rpc_dart`](https://pub.dev/packages/rpc_dart). Core package stays free of IO/FFI so it works in WASM and other constrained targets; database drivers live in companion packages.

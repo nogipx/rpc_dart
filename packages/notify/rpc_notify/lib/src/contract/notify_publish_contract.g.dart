@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'notify_publish_contract.dart';

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: "Setup fvm + pinned SDK + melos"
 description: >
   Install fvm and the project-pinned Flutter/Dart SDK (from .fvmrc), plus melos.

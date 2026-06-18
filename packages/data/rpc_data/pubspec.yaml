@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: rpc_data
 description: Driver-agnostic data service layer (CRUD + querying + change streams) built on rpc_dart.
 version: 4.0.1

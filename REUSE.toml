@@ -1,0 +1,26 @@
+version = 1
+
+# Files that cannot (or should not) carry an inline SPDX header: tool configs,
+# pub ignore lists, build recipes, docs, and generated platform files. Source
+# code carries inline SPDX headers instead; this only covers the rest so the
+# whole tree is REUSE-compliant.
+[[annotations]]
+path = [
+  ".fvmrc",
+  "justfile",
+  "**/justfile",
+  "**/.pubignore",
+  "**/*.podspec",
+  "docs/**",
+  "**/*.md",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
+SPDX-License-Identifier = "MIT"
+
+# Per-package LICENSE files (required by pub.dev) and the REUSE license store.
+[[annotations]]
+path = ["LICENSE", "**/LICENSE", "LICENSES/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
+SPDX-License-Identifier = "MIT"

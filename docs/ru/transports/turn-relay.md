@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # TURN реле
 
 `TurnRelayServer` реализует релей по RFC 5766 на чистом Dart. Клиенты

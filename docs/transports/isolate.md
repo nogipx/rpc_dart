@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Isolate Transport
 
 `rpc_dart_isolate` provides a transport that runs the responder side in a separate Dart isolate. Use it to offload CPU-intensive work without blocking the main isolate. On native platforms it uses `dart:isolate`; on web it uses `isolate_manager` with web workers.

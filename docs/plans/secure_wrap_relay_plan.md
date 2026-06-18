@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # План изменений для `rpc_dart_data:serve`
 
 ## 1. Подготовка инфраструктуры конфигурации

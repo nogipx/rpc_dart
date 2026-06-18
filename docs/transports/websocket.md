@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # WebSocket Transport
 
 `rpc_dart_websocket` provides a WebSocket transport built on [`package:web_socket_channel`](https://pub.dev/packages/web_socket_channel). It supports all four RPC patterns, compiles to all platforms including JS and Wasm, and is the recommended choice for browser clients that need streaming.

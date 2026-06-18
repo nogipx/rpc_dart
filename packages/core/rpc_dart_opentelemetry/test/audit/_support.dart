@@ -1,7 +1,6 @@
-// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 //
-// Shared test support: in-memory span exporter + helpers to drive the
-// interceptor without a live transport.
+// SPDX-License-Identifier: MIT
 
 import 'package:opentelemetry/api.dart' as api;
 import 'package:opentelemetry/sdk.dart' as sdk;

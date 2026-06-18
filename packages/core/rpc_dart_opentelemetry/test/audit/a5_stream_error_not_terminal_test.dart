@@ -1,23 +1,9 @@
 @TestOn('vm || chrome')
 library;
 
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
 // SPDX-License-Identifier: MIT
-//
-// Runs on vm and chrome (the real web target) but not node: the audit suite
-// builds a real opentelemetry SDK tracer whose IdGenerator calls
-// Random.secure(), which is unavailable under the node test platform.
-//
-// AUDIT A5: _wrapWithSpan ended the span on the FIRST onError event even though
-// the source is listened with cancelOnError:false (so an onError is NOT
-// terminal). otel_rpc_interceptor.dart / otel_rpc_client_interceptor.dart.
-//
-// A server/bidi stream can emit a non-fatal item error and then keep going /
-// complete normally. With the bug the span was force-ended + marked errored on
-// the first error, and the later real completion was dropped (finished==true).
-//
-// CORRECT: the span ends on TERMINATION (onDone), exactly once. A non-terminal
-// error is recorded but does not close the span; if the stream then completes
-// without a trailing error the span carries the full message count.
 
 import 'dart:async';
 
@@ -42,12 +28,11 @@ void main() {
       yield 'c';
     }
 
-    final wrapped =
-        await interceptor.interceptServerStream<String, String>(
-              call,
-              'req',
-              (ctx, req) async => source(),
-            );
+    final wrapped = await interceptor.interceptServerStream<String, String>(
+      call,
+      'req',
+      (ctx, req) async => source(),
+    );
 
     final received = <String>[];
     Object? sawError;

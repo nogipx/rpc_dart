@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # InMemory Transport
 
 `RpcInMemoryTransport` is a bidirectional in-process transport. Both sides of a connection live in the same Dart isolate — no sockets, no serialization, no ports. It is the default transport for unit tests and for co-located services that run in the same process.

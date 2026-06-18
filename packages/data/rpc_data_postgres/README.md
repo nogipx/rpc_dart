@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # rpc_data_postgres
 
 PostgreSQL adapter and repository for [`rpc_data`](../rpc_data). Stores collections as JSONB tables with optimistic concurrency, index management, and schema registry support.

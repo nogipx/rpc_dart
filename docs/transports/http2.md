@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # HTTP/2 Transport
 
 `rpc_dart_http2` provides an HTTP/2 transport for native platforms. It supports all four RPC patterns, multiplexes streams over a single TCP connection, and uses gRPC-compatible pseudo-headers — making it interoperable with any gRPC server or client that speaks the wire protocol.

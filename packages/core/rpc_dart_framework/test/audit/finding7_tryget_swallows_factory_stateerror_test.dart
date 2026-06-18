@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 7: RpcContainer.tryGet swallows a StateError thrown INSIDE a
 // factory, conflating "not registered" with "factory failed".
 // Source: lib/src/rpc_container.dart:58-64.

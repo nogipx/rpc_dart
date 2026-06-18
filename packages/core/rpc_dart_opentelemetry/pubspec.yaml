@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: rpc_dart_opentelemetry
 description: OpenTelemetry tracing, metrics, and logging integration for rpc_dart.
 version: 0.3.6

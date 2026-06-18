@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Audit finding 2: isolates spawned before server start are orphaned if
 // server.start() throws (e.g. port bind failure).
 // Source: lib/src/rpc_app.dart:264-277 (_startServer): isolates are spawned in
