@@ -284,6 +284,43 @@ void main() {
       );
       expect(field.toBytes(), isNotEmpty);
     });
+
+    test('enum field encodes proto type 14 (TYPE_ENUM)', () {
+      const field = RpcFieldDescriptor(
+        name: 'status',
+        number: 1,
+        type: RpcFieldType.typeEnum,
+        typeName: '.foo.v1.Status',
+      );
+      final bytes = field.toBytes();
+      // FieldDescriptorProto.type is field 5 (varint): tag = (5 << 3) | 0 = 40.
+      final typeTagIndex = bytes.indexOf(40);
+      expect(typeTagIndex, greaterThanOrEqualTo(0));
+      expect(bytes[typeTagIndex + 1], RpcFieldType.typeEnum.value);
+    });
+  });
+
+  group('RpcFieldType — protobuf type values', () {
+    test('matches FieldDescriptorProto.Type from descriptor.proto', () {
+      expect(RpcFieldType.typeDouble.value, 1);
+      expect(RpcFieldType.typeFloat.value, 2);
+      expect(RpcFieldType.typeInt64.value, 3);
+      expect(RpcFieldType.typeUint64.value, 4);
+      expect(RpcFieldType.typeInt32.value, 5);
+      expect(RpcFieldType.typeFixed64.value, 6);
+      expect(RpcFieldType.typeFixed32.value, 7);
+      expect(RpcFieldType.typeBool.value, 8);
+      expect(RpcFieldType.typeString.value, 9);
+      expect(RpcFieldType.typeGroup.value, 10);
+      expect(RpcFieldType.typeMessage.value, 11);
+      expect(RpcFieldType.typeBytes.value, 12);
+      expect(RpcFieldType.typeUint32.value, 13);
+      expect(RpcFieldType.typeEnum.value, 14);
+      expect(RpcFieldType.typeSfixed32.value, 15);
+      expect(RpcFieldType.typeSfixed64.value, 16);
+      expect(RpcFieldType.typeSint32.value, 17);
+      expect(RpcFieldType.typeSint64.value, 18);
+    });
   });
 }
 

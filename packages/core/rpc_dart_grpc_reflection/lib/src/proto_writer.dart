@@ -10,6 +10,14 @@ import 'dart:typed_data';
 const int _wireVarint = 0;
 const int _wireLen = 2;
 
+/// Minimal protobuf binary encoder for descriptor.proto.
+///
+/// A byte-identical copy of `_ProtoWriter` lives in `rpc_dart_generator`
+/// (lib/src/generator.dart). The two are not merged into one shared class
+/// because this package is `publish_to: none` while the generator is published,
+/// and a published package may not depend on an unpublished one. Any change
+/// here must be mirrored there; a parity test guards that the two produce
+/// identical bytes for the same input.
 class ProtoWriter {
   final _buf = <int>[];
 

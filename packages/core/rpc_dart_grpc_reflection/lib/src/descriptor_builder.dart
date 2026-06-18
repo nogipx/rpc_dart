@@ -10,17 +10,27 @@ import 'proto_writer.dart';
 // ---------------------------------------------------------------------------
 
 /// Protobuf scalar field types for use in [RpcFieldDescriptor].
+///
+/// Values match `FieldDescriptorProto.Type` from `descriptor.proto`.
 enum RpcFieldType {
   typeDouble(1),
   typeFloat(2),
   typeInt64(3),
   typeUint64(4),
   typeInt32(5),
+  typeFixed64(6),
+  typeFixed32(7),
   typeBool(8),
   typeString(9),
+  typeGroup(10),
   typeMessage(11),
   typeBytes(12),
-  typeUint32(13);
+  typeUint32(13),
+  typeEnum(14),
+  typeSfixed32(15),
+  typeSfixed64(16),
+  typeSint32(17),
+  typeSint64(18);
 
   const RpcFieldType(this.value);
   final int value;

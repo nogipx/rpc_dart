@@ -1,3 +1,9 @@
+## 0.2.3
+
+**Fixes (protobuf-wire G/E):**
+- `RpcFieldType` now covers the full `FieldDescriptorProto.Type` set. Added the missing values: `typeEnum` (14) — previously absent, so enum-typed fields could not be described — plus `typeGroup` (10), `typeFixed64` (6), `typeFixed32` (7), `typeSfixed32` (15), `typeSfixed64` (16), `typeSint32` (17), `typeSint64` (18).
+- Documented `ProtoWriter` as the canonical proto-wire encoder. `rpc_dart_generator` carries a byte-identical private copy (it cannot depend on this `publish_to: none` package). A new `proto_writer_parity_test.dart` pins the canonical golden bytes; the generator's parity test asserts the same goldens.
+
 ## 0.2.2
 
 **Fixes (backlog #7 — partial-deps were dropped silently):**
