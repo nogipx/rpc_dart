@@ -4,6 +4,21 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.0.0
+
+First release since 3.3.0. Rolls up the unreleased 3.4.0 - 3.5.1 work below.
+
+**BREAKING:**
+- `RpcTransportRouter` and `StreamDistributor` were removed from this package and
+  moved to `rpc_notify`. Import them from there if you used them.
+- Metadata header values must be printable ASCII (`%x20-%x7E`) on every
+  transport; non-ASCII / binary must use a `-bin` (base64) key, otherwise
+  `validateMetadata` throws `ArgumentError`. (This is why it is a major bump.)
+
+See the 3.4.0 - 3.5.1 sections below for the full list of fixes (zero-copy retry,
+redaction, transport-closed detection, cancellation delivery, varint codec,
+router subscription leak, etc.).
+
 ## 3.5.1
 
 - Moved RpcTransportRouter and StreamDistributor out to rpc_notify.

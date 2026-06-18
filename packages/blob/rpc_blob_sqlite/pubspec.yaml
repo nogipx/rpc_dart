@@ -18,7 +18,7 @@ resolution: workspace
 dependencies:
   rpc_blob:
     path: ../rpc_blob
-  rpc_dart: ^3.3.0
+  rpc_dart: '>=3.3.0 <5.0.0'
   sqlite3: ^3.1.4
   crypto: ^3.0.7
   paseto_dart: ^2.1.0

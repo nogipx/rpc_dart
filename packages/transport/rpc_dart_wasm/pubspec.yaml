@@ -27,7 +27,7 @@ topics:
 dependencies:
   flutter:
     sdk: flutter
-  rpc_dart: ^3.3.0
+  rpc_dart: '>=3.3.0 <5.0.0'
 
 dev_dependencies:
   lints: ^6.0.0

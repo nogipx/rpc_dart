@@ -20,7 +20,7 @@ topics:
   - isolate
 
 dependencies:
-  rpc_dart: ^3.3.0
+  rpc_dart: '>=3.3.0 <5.0.0'
   # Pinned exactly: the web transport (isolate_transport_web.dart) imports
   # isolate_manager's private `src/` (implementation_imports), so a minor bump
   # can silently break it. Bump deliberately and re-run the web tests.

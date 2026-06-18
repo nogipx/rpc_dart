@@ -17,7 +17,7 @@ topics:
   - websocket
 
 dependencies:
-  rpc_dart: ^3.3.0
+  rpc_dart: '>=3.3.0 <5.0.0'
   web_socket_channel: ^3.0.3
 
 dev_dependencies:
