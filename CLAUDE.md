@@ -113,13 +113,28 @@ pub.dev`). Every other package is `publish_to: none`. Do not flip a package to
 public without checking it has no `path:` deps and no dependency on a private
 package.
 
-Release flow:
-1. `fvm dart run melos version` — bumps versions + CHANGELOGs from commits,
-   updates inter-package constraints, creates per-package git tags
-   (`<package>-vX.Y.Z`).
-2. `fvm dart run melos run publish:dry` — validate.
-3. Publish: either `fvm dart pub login` then `melos run publish:release`, or
-   pub.dev "Automated publishing" triggered by the git tag (preferred).
+### Release flow (do this EVERY release, in order)
+
+0. **`melos run prepare` — MANDATORY first, and it must be green.** This is the
+   gate: it syncs licenses, formats, runs `analyze` (strict: `--fatal-infos
+   --fatal-warnings`, lib AND test), `reuse lint`, and `test:unit` across the
+   whole workspace (so it catches lint/test breakage that a `dart analyze lib`
+   or a single-package test run misses — e.g. a behavior change in `rpc_dart`
+   that breaks a transport's tests). If it finds anything: fix, commit, re-run.
+   Do NOT proceed to publish until `prepare` exits 0. (Skipping this once shipped
+   a `curly_braces` lint into a published rpc_dart.)
+1. Bump the version + write the CHANGELOG entry. `melos version` does this from
+   Conventional Commits + creates tags, BUT its interactive prompt is not
+   skippable in non-TTY (CI/automation); in that case bump the pubspec +
+   CHANGELOG by hand and tag manually — same result. Tag format is
+   `<package>-<version>` (no `v`; the `melos version` post-hook strips it).
+2. Commit the release, push commits + tags: `git push --follow-tags`.
+3. `melos run publish:dry` — must validate with 0 warnings (a dirty git tree
+   shows up as a warning here, so commit first).
+4. Publish: `fvm dart pub login` then `melos run publish:release`, or pub.dev
+   "Automated publishing" triggered by the pushed git tag (preferred). Publishing
+   is irreversible — confirm the version (esp. major bumps for breaking changes)
+   before this step.
 
 ## Known caveats
 
