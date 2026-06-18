@@ -166,38 +166,33 @@ final class RpcMetadata {
 
   /// Encodes a [Duration] into `grpc-timeout` format.
   ///
-  /// Chooses the largest unit that fits into 8 digits.
+  /// Uses the FINEST unit whose value fits in 8 digits. This preserves
+  /// precision and, crucially, never rounds a positive timeout down to a
+  /// coarser unit's zero — e.g. a 5s timeout must NOT encode as `0H` (which a
+  /// "largest unit that fits" strategy produces, silently zeroing every
+  /// sub-hour deadline). Matches the gRPC wire format.
   static String encodeGrpcTimeout(Duration timeout) {
     final micros = timeout.inMicroseconds;
     if (micros <= 0) return '0u';
 
-    String? tryUnit(int value, String unit) {
-      if (value < 0) return null;
-      if (value.toString().length > 8) return null;
-      return '$value$unit';
-    }
-
-    final hours = timeout.inHours;
-    final hoursEncoded = tryUnit(hours, 'H');
-    if (hoursEncoded != null) return hoursEncoded;
-
-    final minutes = timeout.inMinutes;
-    final minutesEncoded = tryUnit(minutes, 'M');
-    if (minutesEncoded != null) return minutesEncoded;
-
-    final seconds = timeout.inSeconds;
-    final secondsEncoded = tryUnit(seconds, 'S');
-    if (secondsEncoded != null) return secondsEncoded;
+    // 1e8 is the first value that needs 9 digits; grpc-timeout allows max 8.
+    const maxValue = 100000000;
+    if (micros < maxValue) return '${micros}u';
 
     final millis = timeout.inMilliseconds;
-    final millisEncoded = tryUnit(millis, 'm');
-    if (millisEncoded != null) return millisEncoded;
+    if (millis < maxValue) return '${millis}m';
 
-    final microsEncoded = tryUnit(micros, 'u');
-    if (microsEncoded != null) return microsEncoded;
+    final seconds = timeout.inSeconds;
+    if (seconds < maxValue) return '${seconds}S';
 
-    // Fall back to max 8 digits microseconds.
-    return '99999999u';
+    final minutes = timeout.inMinutes;
+    if (minutes < maxValue) return '${minutes}M';
+
+    final hours = timeout.inHours;
+    if (hours < maxValue) return '${hours}H';
+
+    // Absurdly large; clamp to the max representable hours.
+    return '99999999H';
   }
 
   /// Returns the binary status details from the `grpc-status-details-bin` header.
