@@ -12,8 +12,10 @@ import 'package:test/test.dart';
 void main() {
   group('encodeGrpcTimeout', () {
     test('does not zero sub-hour timeouts (regression for 0H bug)', () {
-      expect(RpcMetadata.encodeGrpcTimeout(const Duration(seconds: 5)),
-          isNot('0H'));
+      expect(
+        RpcMetadata.encodeGrpcTimeout(const Duration(seconds: 5)),
+        isNot('0H'),
+      );
       expect(
         RpcMetadata.encodeGrpcTimeout(const Duration(milliseconds: 150)),
         isNot('0H'),
@@ -52,10 +54,7 @@ void main() {
 
     test('zero / negative encodes to 0u', () {
       expect(RpcMetadata.encodeGrpcTimeout(Duration.zero), '0u');
-      expect(
-        RpcMetadata.encodeGrpcTimeout(const Duration(seconds: -1)),
-        '0u',
-      );
+      expect(RpcMetadata.encodeGrpcTimeout(const Duration(seconds: -1)), '0u');
     });
   });
 }

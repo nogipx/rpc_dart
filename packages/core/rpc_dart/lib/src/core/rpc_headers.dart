@@ -77,12 +77,7 @@ abstract final class RpcHeaders {
   /// Unlike gRPC, rpc_dart negotiates compression by carrying those headers
   /// through the call context, so they are framework-controlled signals that
   /// must pass through, not user headers to strip.
-  static const reserved = <String>{
-    contentType,
-    te,
-    userAgent,
-    grpcTimeout,
-  };
+  static const reserved = <String>{contentType, te, userAgent, grpcTimeout};
 
   /// Whether [name] (case-insensitive) is a protocol-reserved header that user
   /// metadata is not allowed to set.

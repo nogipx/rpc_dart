@@ -110,21 +110,19 @@ final class _DeadlineContract extends RpcResponderContract {
 final class _DeadlineCaller extends RpcCallerContract {
   _DeadlineCaller(RpcCallerEndpoint endpoint) : super('S', endpoint);
 
-  Future<_Msg> fast(_Msg m, {RpcContext? context}) =>
-      callUnary<_Msg, _Msg>(
-        methodName: 'fast',
-        request: m,
-        requestCodec: _Msg.codec,
-        responseCodec: _Msg.codec,
-        context: context,
-      );
+  Future<_Msg> fast(_Msg m, {RpcContext? context}) => callUnary<_Msg, _Msg>(
+    methodName: 'fast',
+    request: m,
+    requestCodec: _Msg.codec,
+    responseCodec: _Msg.codec,
+    context: context,
+  );
 
-  Future<_Msg> slow(_Msg m, {RpcContext? context}) =>
-      callUnary<_Msg, _Msg>(
-        methodName: 'slow',
-        request: m,
-        requestCodec: _Msg.codec,
-        responseCodec: _Msg.codec,
-        context: context,
-      );
+  Future<_Msg> slow(_Msg m, {RpcContext? context}) => callUnary<_Msg, _Msg>(
+    methodName: 'slow',
+    request: m,
+    requestCodec: _Msg.codec,
+    responseCodec: _Msg.codec,
+    context: context,
+  );
 }

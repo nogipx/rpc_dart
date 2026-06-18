@@ -4,6 +4,35 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.2.0
+
+Deadline handling, a wire-format bug fix, and header hardening — adopted from a
+review of the gRPC client/server implementation.
+
+**Fixes:**
+- `encodeGrpcTimeout` picked the largest unit "that fits in 8 digits" and
+  accepted a zero value, so EVERY sub-hour timeout encoded to `0H`, zeroing the
+  deadline on the wire. It now uses the finest unit that fits (e.g. `5s` →
+  `5000000u`), preserving the value exactly. This was invisible until the server
+  began enforcing deadlines.
+- Outgoing client requests strip protocol-reserved headers (`content-type`,
+  `te`, `user-agent`, `grpc-timeout`) from user-supplied metadata, so user
+  headers can no longer clobber protocol framing/negotiation. Added
+  `RpcHeaders.te` / `RpcHeaders.userAgent` / `RpcHeaders.isReserved`.
+  `grpc-encoding` / `grpc-accept-encoding` are intentionally NOT reserved —
+  rpc_dart routes compression negotiation through the call context.
+
+**Features:**
+- The server now enforces the client's `grpc-timeout` deadline: it arms a timer
+  and, on expiry, cancels the handler's cancellation token (the same path
+  `drain()` uses). Dart cannot preempt a bare `await`, so a purely
+  non-cooperative handler's future still completes in the background, but
+  cooperative handlers (checking the token / `isExpired`) and request-stream
+  readers unwind, and the response path is torn down.
+- The default client call timeout (used when no deadline is set) is raised from
+  30s to 60s. Note: this is a client-local `.timeout()` and is not propagated as
+  `grpc-timeout`; set a context deadline to have the server enforce it too.
+
 ## 4.1.1
 
 Transport hot-path performance.
