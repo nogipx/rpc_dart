@@ -28,6 +28,26 @@ final class RpcResponderStreamState {
   /// The responder bound to this pending stream.
   IRpcResponder? responder;
   bool _boundToMessageStream = false;
+  Timer? _deadlineTimer;
+
+  /// Arms a deadline timer that fires [onExceeded] after [remaining]. If the
+  /// deadline has already passed, fires on the next microtask. Re-arming
+  /// cancels any prior timer (idempotent for the same deadline).
+  void armDeadline(Duration remaining, void Function() onExceeded) {
+    _deadlineTimer?.cancel();
+    if (remaining <= Duration.zero) {
+      _deadlineTimer = null;
+      Future<void>.microtask(onExceeded);
+      return;
+    }
+    _deadlineTimer = Timer(remaining, onExceeded);
+  }
+
+  /// Cancels the deadline timer, if any.
+  void cancelDeadline() {
+    _deadlineTimer?.cancel();
+    _deadlineTimer = null;
+  }
 
   /// True when a method key has been assigned.
   bool get hasMethod => methodKey != null;

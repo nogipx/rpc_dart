@@ -914,6 +914,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   Future<void> _cleanupStream(int streamId) async {
     final state = _respStreams.take(streamId);
     if (state == null) return;
+    state.cancelDeadline();
 
     final responder = state.responder;
     if (responder != null) await _closeResponder(responder);
@@ -989,7 +990,31 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         .withContext(requestId: context.requestId, traceId: context.traceId);
     context = context.withLog(logScope);
     state.cacheContext(context);
+
+    // Enforce the client deadline (grpc-timeout) on the server: arm a timer
+    // that cancels the handler's cancellation token when the deadline passes.
+    // Dart cannot preempt a bare `await`, but cooperative handlers (checking
+    // the token / `isExpired`, or reading the request stream) unwind, and the
+    // response path is torn down so a late result is discarded.
+    final deadline = context.deadline;
+    if (deadline != null) {
+      state.armDeadline(
+        deadline.difference(DateTime.now()),
+        () => _onDeadlineExceeded(state),
+      );
+    }
     return context;
+  }
+
+  /// Called when a stream's deadline elapses: cancels the handler via its
+  /// cancellation token (same path drain() uses) with a deadline reason.
+  void _onDeadlineExceeded(RpcResponderStreamState state) {
+    final token = state.cachedContext?.cancellationToken;
+    if (token == null || token.isCancelled) return;
+    _log.internal(
+      'Stream ${state.id} exceeded its deadline — cancelling handler',
+    );
+    token.cancel('deadline exceeded');
   }
 
   RpcContext _ensureResponderContext(RpcResponderStreamState state) {
