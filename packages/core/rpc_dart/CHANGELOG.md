@@ -4,6 +4,41 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.1.0
+
+Error-semantics fixes, two concurrency fixes, and hot-path performance.
+
+**Behavioral change:**
+- The raw `responses` getter on the server-stream and bidirectional callers now
+  surfaces a non-OK `grpc-status` trailer as an error (it used to complete
+  silently — only `.call()` / `.payloadResponses` threw). Code that iterated
+  `responses` directly will now observe the error instead of a silent finish.
+
+**Fixes:**
+- Zero-copy unary/bidi error paths forward the real `RpcStatusException` status
+  code + message (+ details where supported) instead of hardcoding `INTERNAL`.
+- Server-stream `call()` no longer swallows `RpcCancelledException`.
+- A compressed payload without `grpc-encoding` now throws `RpcStatusException`
+  (not a bare `RpcException`), so status-code branching matches.
+- `RpcContextBuilder.inheritFrom` keeps a non-null parent's cancellation token,
+  deadline and headers even when its `traceId` is null.
+- `send()` queues the transmit synchronously, so `send()` immediately followed by
+  `sendError()` / `finishSending()` no longer drops the last message or sends the
+  trailer first.
+- Rate limiter re-resolves the counter per element, so cleanup-eviction of an
+  in-flight stream's counter cannot double the effective limit.
+- Circuit breaker subscribes to the half-open probe source eagerly (+ safety
+  timeout), so an abandoned/never-listened probe stream cannot wedge it half-open.
+
+**Performance (behavior-preserving):**
+- `RpcMessageFrame.encode`: single `Uint8List` + `setRange` (was a boxed list,
+  byte-by-byte copy, then a second copy).
+- CBOR map-key sort encodes each key's UTF-8 bytes once (was ~3x per key).
+- Metadata caches the parsed service/method and the accept-encoding header.
+- `channel_frame.decodeAll` reads each frame header once.
+- Hot-path internal log calls are guarded by `isInternal`, so the message string
+  is not built when logging is off (the default).
+
 ## 4.0.0
 
 First release since 3.3.0. Rolls up the unreleased 3.4.0 - 3.5.1 work below.
