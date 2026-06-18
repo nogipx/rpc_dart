@@ -1,3 +1,9 @@
+## 0.3.3
+
+**Fixes (audit):**
+- `LogControllerOtelOutput`: the default `spanTtl` was `30ms`, which made the periodic sweep force-end ANY log-span still doing work after 30ms — truncating normal traces (exported with a ~30ms duration, missing the final status/attributes/error, and silently dropping the real end record). The TTL is now a leak-guard, not a duration cap: the default is `5 minutes` (sweep interval `30s`). `maxOpenSpans` LRU eviction remains the primary bound. Both stay configurable. Added a regression test asserting a span legitimately open longer than the sweep interval is NOT force-ended while live and carries its real duration on its real end record.
+- Stream-wrapping span end (`_wrapWithSpan` in both server and client interceptors): the source is listened with `cancelOnError: false`, so an `onError` is NOT terminal — a server/bidi stream may emit a non-fatal item error and then keep emitting or complete normally. Previously the span was ended (and marked errored) on the FIRST error, dropping all later messages and the real completion. The span now ends on stream TERMINATION (`onDone` / `onCancel`) exactly once; each error is recorded on the span as an exception event as it arrives, and the last error sets the final error status. Added a regression test.
+
 ## 0.3.2
 
 **Web / dart2js correctness:**

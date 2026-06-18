@@ -236,9 +236,16 @@ class OtelRpcInterceptor implements IRpcInterceptor {
     span.end();
   }
 
-  /// Wraps a response stream in a span: ends the span when the stream completes,
-  /// errors, or the subscription is cancelled. Counts messages and records the
-  /// total as a span attribute on completion.
+  /// Wraps a response stream in a span: ends the span when the stream
+  /// terminates (completes, is cancelled, or errors fatally). Counts messages
+  /// and records the total as a span attribute on completion.
+  ///
+  /// The source is listened with `cancelOnError: false`, so an `onError` event
+  /// is NOT terminal: a server/bidi stream may emit a non-fatal item error and
+  /// then keep going (or complete normally). The span therefore must end on
+  /// stream TERMINATION (onDone / onCancel), not on the first error. Each error
+  /// is recorded on the span as it arrives, and the *last* one determines the
+  /// final error status; the span still ends exactly once.
   ///
   /// Uses [StreamController] with an [onCancel] hook instead of
   /// [StreamTransformer.fromHandlers] because the latter has no cancel callback,
@@ -251,13 +258,16 @@ class OtelRpcInterceptor implements IRpcInterceptor {
   ) {
     var messageCount = 0;
     var finished = false;
+    Object? lastError;
+    StackTrace? lastStackTrace;
 
-    void finishOnce({required bool isError, Object? error, StackTrace? stackTrace}) {
+    void finishOnce() {
       if (finished) return;
       finished = true;
       span.setAttribute(Attribute.fromInt('rpc.stream.messages', messageCount));
-      if (isError && error != null) {
-        _finishWithError(span, call, stopwatch, error, stackTrace!);
+      if (lastError != null) {
+        _finishWithError(
+            span, call, stopwatch, lastError!, lastStackTrace ?? StackTrace.empty);
       } else {
         _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
       }
@@ -274,18 +284,23 @@ class OtelRpcInterceptor implements IRpcInterceptor {
             controller.add(data);
           },
           onError: (Object error, StackTrace st) {
-            finishOnce(isError: true, error: error, stackTrace: st);
+            // Non-terminal under cancelOnError:false. Record the error on the
+            // span but keep it open — the stream may still complete normally.
+            // The span ends on termination (onDone / onCancel).
+            span.recordException(error, stackTrace: st);
+            lastError = error;
+            lastStackTrace = st;
             controller.addError(error, st);
           },
           onDone: () {
-            finishOnce(isError: false);
+            finishOnce();
             controller.close();
           },
           cancelOnError: false,
         );
       },
       onCancel: () {
-        finishOnce(isError: false);
+        finishOnce();
         return subscription.cancel();
       },
     );

@@ -188,6 +188,12 @@ class OtelRpcClientInterceptor implements IRpcInterceptor {
     span.end();
   }
 
+  /// Wraps a response stream in a span: ends the span on stream TERMINATION
+  /// (onDone / onCancel), not on the first error. With `cancelOnError: false`
+  /// an `onError` is non-terminal — a server/bidi stream may emit a non-fatal
+  /// item error and still complete normally — so each error is recorded on the
+  /// span as it arrives and the *last* one sets the final error status. The
+  /// span still ends exactly once.
   Stream<T> _wrapWithSpan<T>(
     Stream<T> source,
     Span span,
@@ -196,14 +202,16 @@ class OtelRpcClientInterceptor implements IRpcInterceptor {
   ) {
     var messageCount = 0;
     var finished = false;
+    Object? lastError;
+    StackTrace? lastStackTrace;
 
-    void finishOnce(
-        {required bool isError, Object? error, StackTrace? stackTrace}) {
+    void finishOnce() {
       if (finished) return;
       finished = true;
       span.setAttribute(Attribute.fromInt('rpc.stream.messages', messageCount));
-      if (isError && error != null) {
-        _finishWithError(span, call, stopwatch, error, stackTrace!);
+      if (lastError != null) {
+        _finishWithError(
+            span, call, stopwatch, lastError!, lastStackTrace ?? StackTrace.empty);
       } else {
         _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
       }
@@ -220,18 +228,22 @@ class OtelRpcClientInterceptor implements IRpcInterceptor {
             controller.add(data);
           },
           onError: (Object error, StackTrace st) {
-            finishOnce(isError: true, error: error, stackTrace: st);
+            // Non-terminal under cancelOnError:false. Record but keep open;
+            // the span ends on termination (onDone / onCancel).
+            span.recordException(error, stackTrace: st);
+            lastError = error;
+            lastStackTrace = st;
             controller.addError(error, st);
           },
           onDone: () {
-            finishOnce(isError: false);
+            finishOnce();
             controller.close();
           },
           cancelOnError: false,
         );
       },
       onCancel: () {
-        finishOnce(isError: false);
+        finishOnce();
         return subscription.cancel();
       },
     );

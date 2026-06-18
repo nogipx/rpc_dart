@@ -49,8 +49,11 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// Open spans are bounded to prevent unbounded map growth when an end record
 /// never arrives (e.g. a crashed scope). Two guards apply:
 /// - [maxOpenSpans]: when the open map exceeds this size, the oldest open
-///   spans are ended (LRU eviction) until it fits.
-/// - [spanTtl]: a periodic sweep ends any open span older than this TTL.
+///   spans are ended (LRU eviction) until it fits. This is the primary bound.
+/// - [spanTtl]: a periodic sweep ends any open span older than this TTL. This
+///   is a leak-guard for genuinely-abandoned spans, NOT a cap on normal span
+///   duration, so it defaults to a generous 5 minutes — a span legitimately
+///   doing work for several seconds must not be force-ended mid-flight.
 /// An evicted span is ended (and thus exported) so nothing leaks.
 class LogControllerOtelOutput extends LogOutput {
   final Tracer _tracer;
@@ -68,8 +71,8 @@ class LogControllerOtelOutput extends LogOutput {
     required Tracer tracer,
     Context Function()? rootContextProvider,
     int maxOpenSpans = 1024,
-    Duration spanTtl = const Duration(milliseconds: 30),
-    Duration sweepInterval = const Duration(milliseconds: 10),
+    Duration spanTtl = const Duration(minutes: 5),
+    Duration sweepInterval = const Duration(seconds: 30),
   })  : assert(maxOpenSpans > 0),
         _tracer = tracer,
         _rootContextProvider = rootContextProvider,
