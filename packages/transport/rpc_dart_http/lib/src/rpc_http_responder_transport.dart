@@ -223,6 +223,9 @@ class RpcHttpResponderTransport implements IRpcTransport {
       _logger?.warning('sendMetadata: no pending response for [streamId: $streamId]');
       return;
     }
+    // Enforce metadata invariants (printable-ASCII header values, etc.) on the
+    // outgoing response, consistent with every other transport.
+    (securityPolicy ?? const RpcSecurityPolicy()).validateMetadata(metadata);
     pending.responseHeaders.addAll(metadata.headers);
     if (endStream) {
       await _flushResponse(streamId);

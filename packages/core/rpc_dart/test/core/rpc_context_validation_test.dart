@@ -44,7 +44,6 @@ void main() {
           'custom-header': 'custom-value',
           'special-chars': 'value with spaces & symbols!',
           'numbers': '12345',
-          'unicode': 'тест с unicode 🚀',
         });
 
         // Act
@@ -67,7 +66,27 @@ void main() {
           contains('special-chars:value with spaces & symbols!'),
         );
         expect(response, contains('numbers:12345'));
-        expect(response, contains('unicode:тест с unicode 🚀'));
+      });
+
+      test('не-ASCII значение заголовка отклоняется на отправке', () async {
+        // Per gRPC, ASCII metadata values must be printable ASCII; non-ASCII /
+        // binary must use a -bin key. Sending a unicode header value must fail
+        // rather than silently corrupt on the wire.
+        final context = RpcContext.withHeaders({
+          'x-name': 'тест с unicode 🚀',
+        });
+
+        await expectLater(
+          clientEndpoint.unaryRequest<RpcString, RpcString>(
+            serviceName: 'ValidationService',
+            methodName: 'ValidateHeaders',
+            requestCodec: RpcString.codec,
+            responseCodec: RpcString.codec,
+            request: 'test'.rpc,
+            context: context,
+          ),
+          throwsA(isA<ArgumentError>()),
+        );
       });
 
       test('системные_заголовки_работают_корректно', () async {

@@ -133,6 +133,10 @@ class RpcHttpCallerTransport implements IRpcTransport {
     bool endStream = false,
   }) async {
     if (_isClosed) throw StateError('Transport is closed');
+    // Enforce the metadata invariants (printable-ASCII header values, etc.)
+    // on send, consistent with every other transport. HTTP/1.1 puts these on
+    // the wire as headers, so non-ASCII / CR-LF would corrupt or inject.
+    const RpcSecurityPolicy().validateMetadata(metadata);
     final methodPath = metadata.methodPath ?? '/Unknown/Unknown';
     _pending[streamId] = _PendingCall(
       methodPath: methodPath,

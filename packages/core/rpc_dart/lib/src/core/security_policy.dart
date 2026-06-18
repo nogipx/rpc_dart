@@ -144,11 +144,18 @@ final class RpcSecurityPolicy {
     return true;
   }
 
-  /// Returns true if [value] contains no CR, LF, or NUL characters.
+  /// Header-value validation for transport-level metadata.
+  ///
+  /// Per the gRPC HTTP/2 spec, ASCII-valued metadata must be printable ASCII
+  /// (`%x20-%x7E`). This is enforced for ALL transports (not just HTTP): binary
+  /// or non-ASCII data must use a `-bin` key (base64), and human-readable text
+  /// in any language belongs in the message body or the percent-encoded
+  /// `grpc-message`. Restricting to printable ASCII also blocks CR/LF/NUL
+  /// header injection.
   bool isValidHeaderValue(String value) {
     if (value.length > maxHeaderValueBytes) return false;
     for (final unit in value.codeUnits) {
-      if (unit == 0x0D || unit == 0x0A || unit == 0x00) return false;
+      if (unit < 0x20 || unit > 0x7E) return false;
     }
     return true;
   }

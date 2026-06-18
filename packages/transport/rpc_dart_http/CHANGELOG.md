@@ -1,3 +1,14 @@
+## 0.2.4
+
+- Validate outgoing metadata on send. Both the caller (`sendMetadata`) and the
+  responder (`sendMetadata`) now run `RpcSecurityPolicy.validateMetadata` before
+  writing headers, closing the gap where HTTP/1.1 sent metadata without the
+  checks every other transport applies. Combined with the core change, this
+  enforces printable-ASCII header values (`%x20-%x7E`) — non-ASCII / CR-LF
+  values are rejected with an `ArgumentError` instead of corrupting or injecting
+  HTTP headers. The caller uses a default `RpcSecurityPolicy`; the responder
+  uses its configured `securityPolicy` (or the default when unset).
+
 ## 0.2.3
 
 - BEHAVIORAL CHANGE (secure-by-default CORS): `RpcHttpCorsPolicy.allowedOrigins`
