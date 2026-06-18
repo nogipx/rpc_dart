@@ -1,3 +1,8 @@
+## 0.1.3
+
+**Fixes (audit):**
+- `RpcGzipCodec` now validates the compression `level` (0..9). An out-of-range level (e.g. `10`) made archive's deflate silently emit a gzip frame with NO compressed payload (its range throw is commented out upstream) — silently corrupt output. The constructor and `register({int level})` now `assert` the range for dev builds, and `compress` defensively `level.clamp(0, 9)` at the encode site so release / dart2js builds (where asserts are stripped) cannot emit a corrupt frame. Added a regression test: out-of-range throws in dev, and boundary levels always produce a valid gzip that decompresses back to the original.
+
 ## 0.1.2
 
 **Features:**

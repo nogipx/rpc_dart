@@ -54,7 +54,10 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   const RpcGzipCodec({
     this.level = defaultLevel,
     this.maxDecompressedSize = _unlimited,
-  });
+  }) : assert(
+          level >= 0 && level <= 9,
+          'gzip level must be in 0..9, got $level',
+        );
 
   /// Registers a [RpcGzipCodec] with [RpcGrpcCompression] for the `gzip`
   /// encoding.
@@ -66,6 +69,10 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     int level = defaultLevel,
     int maxDecompressedSize = _unlimited,
   }) {
+    assert(
+      level >= 0 && level <= 9,
+      'gzip level must be in 0..9, got $level',
+    );
     RpcGrpcCompression.register(
       RpcGrpcCompression.gzip,
       RpcGzipCodec(level: level, maxDecompressedSize: maxDecompressedSize),
@@ -83,7 +90,13 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // the output is still accumulated into a single contiguous OutputMemory
     // Stream buffer before getBytes(). It would only add a no-op indirection,
     // so the whole-buffer encode is kept.
-    return GZipEncoder().encodeBytes(data, level: level);
+    //
+    // Defensively clamp the level at the encode site: the constructor `assert`
+    // guards dev builds, but asserts are stripped in release / dart2js, and an
+    // out-of-range level makes archive's deflate silently emit a gzip frame
+    // with NO compressed payload (its range throw is commented out). Clamping
+    // guarantees valid output everywhere.
+    return GZipEncoder().encodeBytes(data, level: level.clamp(0, 9));
   }
 
   @override
