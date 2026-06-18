@@ -103,7 +103,12 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
 
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
-      _incomingCtl.stream.where((m) => m.streamId == streamId);
+      // Delegate to the inner transport's per-stream routing instead of
+      // re-filtering the outer broadcast (which exists only to keep
+      // [incomingMessages] stable across reconnects). A call's streamId is
+      // connection-scoped and never spans a reconnect, so this is safe and
+      // avoids the O(active-streams) broadcast+filter on the hot path.
+      _inner.getMessagesForStream(streamId);
 
   @override
   int createStream() => _inner.createStream();
