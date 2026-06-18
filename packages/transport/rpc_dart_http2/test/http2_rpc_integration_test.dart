@@ -230,7 +230,11 @@ void main() {
             completer.complete();
           }
         },
-        onError: (error) => completer.completeError(error),
+        onError: (error) {
+          // A late stream error can arrive after the 3 expected responses have
+          // already completed the future; don't double-complete.
+          if (!completer.isCompleted) completer.completeError(error);
+        },
         onDone: () {
           print('🏁 Bidirectional response stream завершен');
           if (!completer.isCompleted) {

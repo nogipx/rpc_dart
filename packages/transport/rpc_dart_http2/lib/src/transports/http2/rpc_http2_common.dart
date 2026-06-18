@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http2/http2.dart' as http2;
@@ -10,6 +11,62 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 /// gRPC User-Agent header value.
 const String kGrpcUserAgent = 'rpc-dart/1.0.0';
+
+/// Wraps a stream-scoped error so it can travel through the shared broadcast
+/// [incomingMessages] controller without leaking onto unrelated streams.
+///
+/// HTTP/2 multiplexes many RPC calls over a single connection. The transports
+/// expose all incoming messages on one broadcast `StreamController`, and
+/// `getMessagesForStream(id)` filters that broadcast by `streamId`. A plain
+/// `addError` on a broadcast stream is delivered to EVERY subscriber regardless
+/// of which stream the error belongs to, so a parse error on stream 3 would
+/// surface as an error on stream 5.
+///
+/// To keep errors scoped, per-stream errors are added as
+/// [RpcHttp2StreamError] envelopes. [filterStreamEvents] then re-throws the
+/// inner error only on the matching stream's subscriber. Connection-level fatal
+/// errors are added without an envelope and fan out to all subscribers, which
+/// is the correct behavior.
+class RpcHttp2StreamError {
+  final int streamId;
+  final Object error;
+  final StackTrace? stackTrace;
+
+  const RpcHttp2StreamError(this.streamId, this.error, [this.stackTrace]);
+}
+
+/// Filters a broadcast transport stream down to a single [streamId].
+///
+/// - Data messages are passed through only when their `streamId` matches.
+/// - [RpcHttp2StreamError] envelopes are unwrapped and re-thrown only on the
+///   matching stream; envelopes for other streams are dropped.
+/// - Any other (connection-level) error is re-thrown to every subscriber.
+Stream<RpcTransportMessage> filterStreamEvents(
+  Stream<RpcTransportMessage> source,
+  int streamId,
+) {
+  return source.transform(
+    StreamTransformer<RpcTransportMessage, RpcTransportMessage>.fromHandlers(
+      handleData: (message, sink) {
+        if (message.streamId == streamId) {
+          sink.add(message);
+        }
+      },
+      handleError: (error, stackTrace, sink) {
+        if (error is RpcHttp2StreamError) {
+          // Stream-scoped error — deliver only to the owning stream.
+          if (error.streamId == streamId) {
+            sink.addError(error.error, error.stackTrace ?? stackTrace);
+          }
+          // Otherwise drop: it belongs to a different stream.
+        } else {
+          // Connection-level error — fan out to all subscribers.
+          sink.addError(error, stackTrace);
+        }
+      },
+    ),
+  );
+}
 
 /// Converts [RpcMetadata] to HTTP/2 request headers (caller → responder).
 ///

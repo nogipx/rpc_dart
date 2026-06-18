@@ -119,6 +119,38 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     );
   }
 
+  /// Создает клиентский HTTP/2 транспорт поверх уже установленного сокета.
+  ///
+  /// Use this when you need full control over the underlying connection — for
+  /// example a TLS [SecureSocket] with custom certificate validation /
+  /// pinning, or a socket obtained through a custom tunnel. The caller owns the
+  /// socket lifecycle; [reconnect] is not supported (the factory cannot rebuild
+  /// the original socket), so a closed transport stays closed.
+  ///
+  /// [scheme] should be `https` for TLS sockets and `http` otherwise.
+  factory RpcHttp2CallerTransport.viaSocket(
+    Socket socket, {
+    required String host,
+    required int port,
+    String scheme = 'https',
+    LogScope? logger,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  }) {
+    final connection = http2.ClientTransportConnection.viaSocket(socket);
+    return RpcHttp2CallerTransport._(
+      connection: connection,
+      connectionFactory: () => throw StateError(
+        'RpcHttp2CallerTransport.viaSocket does not support reconnect: '
+        'the originating socket cannot be recreated.',
+      ),
+      host: host,
+      port: port,
+      scheme: scheme,
+      policy: policy,
+      logger: logger,
+    );
+  }
+
   /// Создает клиентский HTTP/2 транспорт через незащищенное соединение.
   ///
   /// [proxyUri] — optional HTTP CONNECT proxy, e.g. `Uri.parse('http://proxy:3128')`.
@@ -428,7 +460,8 @@ class RpcHttp2CallerTransport implements IRpcTransport {
         );
 
         if (!_messageController.isClosed) {
-          _messageController.addError(error, stackTrace);
+          _messageController
+              .addError(RpcHttp2StreamError(streamId, error, stackTrace));
         }
       },
       onDone: () {
@@ -476,7 +509,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       );
 
       if (!_messageController.isClosed) {
-        _messageController.addError(e, stackTrace);
+        _messageController.addError(RpcHttp2StreamError(streamId, e, stackTrace));
       }
     }
   }
@@ -591,7 +624,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       );
 
       if (!_messageController.isClosed) {
-        _messageController.addError(e, stackTrace);
+        _messageController.addError(RpcHttp2StreamError(streamId, e, stackTrace));
       }
     }
   }
@@ -601,7 +634,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
 
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
-    return incomingMessages.where((message) => message.streamId == streamId);
+    return filterStreamEvents(incomingMessages, streamId);
   }
 
   @override

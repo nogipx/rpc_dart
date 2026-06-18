@@ -17,6 +17,8 @@ import 'rpc_http2_responder_transport.dart';
 class RpcHttp2Server implements IRpcServer {
   final String _host;
   final int _port;
+  final RpcSecurityPolicy _securityPolicy;
+  final SecurityContext? _securityContext;
   final LogScope? _logger;
   final LogController? _logController;
   final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
@@ -26,8 +28,14 @@ class RpcHttp2Server implements IRpcServer {
   final IRpcTransport Function(IRpcTransport inner, Socket socket)?
   _transportWrapper;
 
+  // Plaintext (h2c) listener. Mutually exclusive with [_secureServerSocket].
   ServerSocket? _serverSocket;
+  // TLS (h2) listener. Used when a SecurityContext is provided.
+  SecureServerSocket? _secureServerSocket;
   bool _isRunning = false;
+
+  /// Whether the server is serving over TLS (`true`) or plaintext h2c (`false`).
+  bool get isSecure => _securityContext != null;
   final List<StreamSubscription> _subscriptions = [];
   final List<RpcResponderEndpoint> _endpoints = [];
 
@@ -40,9 +48,20 @@ class RpcHttp2Server implements IRpcServer {
   /// [onConnectionError] - вызывается при ошибке соединения
   /// [onConnectionOpened] - вызывается при открытии нового соединения
   /// [onConnectionClosed] - вызывается при закрытии соединения
+  /// [securityPolicy] - bounds per-stream message size, buffered bytes, and the
+  ///   number of concurrent active streams per connection. Forwarded to every
+  ///   [RpcHttp2ResponderTransport]. Defaults to `const RpcSecurityPolicy()`
+  ///   so the built-in limits are enforced.
+  /// [securityContext] - when non-null, the server binds a TLS socket
+  ///   ([SecureServerSocket]) advertising ALPN `h2` instead of a plaintext
+  ///   ([ServerSocket]) `h2c` socket. Provide a [SecurityContext] with a
+  ///   certificate chain and private key to serve HTTP/2 over TLS. Defaults to
+  ///   `null` (plaintext h2c) for backward compatibility.
   RpcHttp2Server({
     String host = 'localhost',
     required int port,
+    RpcSecurityPolicy securityPolicy = const RpcSecurityPolicy(),
+    SecurityContext? securityContext,
     LogScope? logger,
     LogController? logController,
     void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
@@ -53,6 +72,8 @@ class RpcHttp2Server implements IRpcServer {
     transportWrapper,
   }) : _host = host,
        _port = port,
+       _securityPolicy = securityPolicy,
+       _securityContext = securityContext,
        _logger = logger?.child('Http2Server'),
        _logController = logController,
        _onEndpointCreated = onEndpointCreated,
@@ -71,11 +92,15 @@ class RpcHttp2Server implements IRpcServer {
     required int port,
     required List<RpcResponderContract> contracts,
     String host = 'localhost',
+    RpcSecurityPolicy securityPolicy = const RpcSecurityPolicy(),
+    SecurityContext? securityContext,
     LogScope? logger,
   }) {
     return RpcHttp2Server(
       host: host,
       port: port,
+      securityPolicy: securityPolicy,
+      securityContext: securityContext,
       logger: logger,
       onEndpointCreated: (endpoint) {
         logger?.debug(
@@ -100,7 +125,11 @@ class RpcHttp2Server implements IRpcServer {
   String get host => _host;
 
   /// Порт сервера
-  int get port => _port;
+  ///
+  /// Returns the OS-assigned port once bound when constructed with port `0`;
+  /// otherwise the requested port.
+  int get port =>
+      _serverSocket?.port ?? _secureServerSocket?.port ?? _port;
 
   /// Активные endpoints
   @override
@@ -118,16 +147,32 @@ class RpcHttp2Server implements IRpcServer {
       return;
     }
 
-    _logger?.info('Запуск HTTP/2 сервера на $_host:$_port');
+    final scheme = isSecure ? 'h2 (TLS)' : 'h2c (plaintext)';
+    _logger?.info('Запуск HTTP/2 сервера ($scheme) на $_host:$_port');
 
     try {
-      _serverSocket = await ServerSocket.bind(_host, _port);
+      final Stream<Socket> connections;
+      if (_securityContext != null) {
+        // TLS with ALPN: only negotiate HTTP/2 ('h2'). Clients that do not
+        // offer 'h2' will fail ALPN negotiation, which is the desired behavior
+        // for an h2-only server.
+        _secureServerSocket = await SecureServerSocket.bind(
+          _host,
+          _port,
+          _securityContext,
+          supportedProtocols: const ['h2'],
+        );
+        connections = _secureServerSocket!;
+      } else {
+        _serverSocket = await ServerSocket.bind(_host, _port);
+        connections = _serverSocket!;
+      }
       _isRunning = true;
 
-      _logger?.info('HTTP/2 сервер запущен на $_host:$_port');
+      _logger?.info('HTTP/2 сервер запущен ($scheme) на $_host:$port');
 
       // Слушаем входящие соединения
-      final subscription = _serverSocket!.listen(
+      final subscription = connections.listen(
         _handleConnection,
         onError: (error, stackTrace) {
           _logger?.error(
@@ -165,19 +210,25 @@ class RpcHttp2Server implements IRpcServer {
     }
     _subscriptions.clear();
 
-    // Закрываем все endpoints
-    for (final endpoint in _endpoints) {
+    // Закрываем все endpoints.
+    // Iterate over a snapshot: closing an endpoint can trigger socket.done,
+    // whose handler removes the endpoint from _endpoints, mutating the list
+    // mid-iteration ("Concurrent modification during iteration").
+    final endpointsToClose = List.of(_endpoints);
+    _endpoints.clear();
+    for (final endpoint in endpointsToClose) {
       try {
         await endpoint.close();
       } catch (e) {
         _logger?.warning('Ошибка при закрытии endpoint: $e');
       }
     }
-    _endpoints.clear();
 
     // Закрываем серверный сокет
     await _serverSocket?.close();
     _serverSocket = null;
+    await _secureServerSocket?.close();
+    _secureServerSocket = null;
 
     _logger?.info('HTTP/2 сервер остановлен');
   }
@@ -196,6 +247,7 @@ class RpcHttp2Server implements IRpcServer {
       // Создаем серверный транспорт (правильный способ!)
       IRpcTransport transport = RpcHttp2ResponderTransport(
         connection: connection,
+        policy: _securityPolicy,
         logger: _logger,
       );
 

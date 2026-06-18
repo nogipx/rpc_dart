@@ -112,7 +112,8 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
         );
 
         if (!_messageController.isClosed) {
-          _messageController.addError(error, stackTrace);
+          _messageController
+              .addError(RpcHttp2StreamError(streamId, error, stackTrace));
         }
       },
       onDone: () {
@@ -155,7 +156,7 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
       );
 
       if (!_messageController.isClosed) {
-        _messageController.addError(e, stackTrace);
+        _messageController.addError(RpcHttp2StreamError(streamId, e, stackTrace));
       }
     }
   }
@@ -241,7 +242,7 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
       );
 
       if (!_messageController.isClosed) {
-        _messageController.addError(e, stackTrace);
+        _messageController.addError(RpcHttp2StreamError(streamId, e, stackTrace));
       }
     }
   }
@@ -422,7 +423,7 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
 
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
-    return incomingMessages.where((message) => message.streamId == streamId);
+    return filterStreamEvents(incomingMessages, streamId);
   }
 
   Map<String, Object?> _buildHealthDetails() => {
