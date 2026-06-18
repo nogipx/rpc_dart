@@ -113,8 +113,9 @@ final class ServerStreamCaller<
       // Process response stream.
       await for (final response in responses) {
         if (response.payload != null) {
-          if (_logger.isInternal)
+          if (_logger.isInternal) {
             _logger.internal('Received response from server');
+          }
           yield response.payload!;
         }
 
