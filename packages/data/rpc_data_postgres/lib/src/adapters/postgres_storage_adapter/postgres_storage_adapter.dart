@@ -85,12 +85,11 @@ class PostgresDataStorageAdapter
     required this.tablePrefix,
     Connection? ownedConnection,
     bool enableFts = false,
-    bool enableChangeJournal = true,
+    this.enableChangeJournal = true,
   }) : _executor = executor,
        _ownedConnection = ownedConnection,
        _names = PgTableNames(schema: schema, prefix: tablePrefix),
        _ftsEnabled = enableFts,
-       enableChangeJournal = enableChangeJournal,
        schemaRegistry = PostgresSchemaRegistry(
          executor,
          names: PgTableNames(schema: schema, prefix: tablePrefix),
@@ -1603,7 +1602,7 @@ CREATE TABLE IF NOT EXISTS ${_names.changeJournal} (
         '${threshold != null ? 'AND sequence > @s ' : ''}'
         'ORDER BY sequence ASC',
       ),
-      parameters: {'c': collection, if (threshold != null) 's': threshold},
+      parameters: {'c': collection, 's': ?threshold},
     );
     final events = <DataChangeEvent>[];
     for (final row in result) {

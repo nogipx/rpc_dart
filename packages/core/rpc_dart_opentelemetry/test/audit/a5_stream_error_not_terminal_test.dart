@@ -47,8 +47,7 @@ void main() {
               call,
               'req',
               (ctx, req) async => source(),
-            )
-            as Stream<String>;
+            );
 
     final received = <String>[];
     Object? sawError;

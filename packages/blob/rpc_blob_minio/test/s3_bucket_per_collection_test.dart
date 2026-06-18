@@ -310,7 +310,7 @@ void main() {
       for (final c in collections) {
         final size = await repo.collectionSize(c);
         // ignore: avoid_print
-        print('  bucket "${testBucketPrefix}$c" → $size bytes');
+        print('  bucket "$testBucketPrefix$c" → $size bytes');
       }
     }
 

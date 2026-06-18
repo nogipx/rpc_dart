@@ -613,8 +613,9 @@ class _ScopeStats {
   void add(LogRecord r) {
     total++;
     if (r is LogEvent) {
-      if (r.level == RpcLogLevel.error || r.level == RpcLogLevel.fatal)
+      if (r.level == RpcLogLevel.error || r.level == RpcLogLevel.fatal) {
         errors++;
+      }
       if (r.level == RpcLogLevel.warning) warnings++;
     }
     if (r is LogSpan) spans++;

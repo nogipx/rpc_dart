@@ -53,7 +53,6 @@ void main() {
 
     test('http2_unary_payload_has_single_grpc_prefix', () async {
       final request = RpcString('Check nested prefix elimination');
-      final serializedRequest = RpcString.codec.serialize(request);
       final payloadFuture = serverRequestPayloads.stream.first;
 
       final response = await callerEndpoint.unaryRequest<RpcString, RpcString>(

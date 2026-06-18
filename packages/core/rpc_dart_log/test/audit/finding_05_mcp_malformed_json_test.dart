@@ -42,7 +42,7 @@ void main() {
       await mcp.stop();
     });
 
-    Future<HttpClientResponse> _post(String body) async {
+    Future<HttpClientResponse> post(String body) async {
       final client = HttpClient();
       final req = await client.postUrl(Uri.parse('http://127.0.0.1:$port/'));
       req.headers.contentType = ContentType.json;
@@ -52,7 +52,7 @@ void main() {
     }
 
     test('malformed JSON body returns JSON-RPC parse error (-32700)', () async {
-      final resp = await _post('{ this is not valid json ');
+      final resp = await post('{ this is not valid json ');
       final body = await resp.transform(utf8.decoder).join();
 
       expect(
@@ -73,7 +73,7 @@ void main() {
 
     test('JSON array body (valid JSON, wrong shape) returns -32700', () async {
       // Valid JSON but not a Map -> the `as Map<String, dynamic>` cast throws.
-      final resp = await _post('[1,2,3]');
+      final resp = await post('[1,2,3]');
       final body = await resp.transform(utf8.decoder).join();
 
       expect(

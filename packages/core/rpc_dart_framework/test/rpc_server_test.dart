@@ -978,7 +978,6 @@ void main() {
         modules: [EchoModule()],
         interceptors: [spy],
       );
-      final client = EchoCallerContract(app.caller);
       await app.dispose();
 
       expect(spy.wasCalled('EchoService', 'ping'), isFalse);
@@ -1303,10 +1302,9 @@ class _InfraModule extends RpcModule {
   String get name => 'InfraModule';
 }
 
-/// Minimal IRpcServer that calls onEndpointCreated once then does nothing.
+/// Minimal IRpcServer that ignores the endpoint callback and does nothing.
 class _NullServer implements IRpcServer {
-  final void Function(RpcResponderEndpoint) _onEndpoint;
-  _NullServer(this._onEndpoint);
+  _NullServer(void Function(RpcResponderEndpoint) _);
 
   @override
   Future<void> start() async {}

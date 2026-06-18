@@ -15,7 +15,6 @@
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_dart_log/rpc_dart_log.dart';
 import 'package:rpc_dart_log/rpc_dart_log_server.dart';
 import 'package:rpc_dart_log/src/contract/log_caller.dart';
 import 'package:rpc_dart_log/src/contract/messages.dart';
