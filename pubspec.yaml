@@ -1,5 +1,6 @@
 name: _rpc_dart_workspace
 publish_to: none
+repository: https://github.com/nogipx/rpc_dart.git
 environment:
   sdk: ">=3.10.0 <4.0.0"
 workspace:
@@ -32,12 +33,99 @@ dev_dependencies:
 
 melos:
   name: rpc_dart
+
+  # Named package groups for `--category <name>` filtering.
+  categories:
+    core: [packages/core/**]
+    transport: [packages/transport/**]
+    data: [packages/data/**]
+    notify: [packages/notify/**]
+    blob: [packages/blob/**]
+
+  command:
+    version:
+      # Conventional-Commits driven. Commit format: `type(scope): subject`
+      # where scope is the package name (see CLAUDE.md). Breaking: `type(scope)!:`
+      # or a `BREAKING CHANGE:` footer.
+      branch: main
+      linkToCommits: true
+      workspaceChangelog: true
+      message: |
+        chore(release): publish packages
+
+        {new_package_versions}
+
   scripts:
+    # --- Static analysis (all packages, strict like CI) ---
     analyze:
-      description: Run dart analyze across all workspace packages.
-      exec: dart analyze .
+      description: Analyze every package (lib + test) with warnings/infos fatal.
+      run: fvm dart analyze --fatal-infos --fatal-warnings .
+      exec:
+        concurrency: 6
+        failFast: false
+
+    # --- Tests ---
+    # generator is excluded: its build_test golden tests are incompatible with
+    # pub-workspace layout (no per-member package_config.json). Run it on its own.
     test:
-      description: Run dart test across all workspace packages that have tests.
-      exec: dart test
+      description: Run dart tests across packages that have a test/ dir.
+      run: fvm dart test --reporter expanded
+      exec:
+        concurrency: 4
+        failFast: false
       packageFilters:
         dirExists: test
+        ignore: [rpc_dart_generator]
+
+    # Tests that need NO external services (skip postgres/minio/sqlcipher infra).
+    test:unit:
+      description: Tests excluding service-dependent packages.
+      run: fvm dart test --reporter expanded
+      exec:
+        concurrency: 4
+      packageFilters:
+        dirExists: test
+        ignore:
+          - rpc_dart_generator
+          - "*_postgres"
+          - "*_minio"
+          - rpc_data_sqlite
+          - rpc_blob_sqlite
+
+    # Generator golden tests (build_test) — run standalone, outside workspace mode.
+    test:generator:
+      description: Run rpc_dart_generator build_test golden tests.
+      run: fvm dart test --reporter expanded
+      exec: {}
+      packageFilters:
+        scope: [rpc_dart_generator]
+
+    # Flutter (wasm) — NOT a workspace member, run separately.
+    test:wasm:
+      description: Run the rpc_dart_wasm Flutter tests (outside the workspace).
+      run: cd packages/transport/rpc_dart_wasm && fvm flutter pub get && fvm flutter test
+
+    # Cross-platform (dart2js/node + chrome) web regression guard.
+    test:web:
+      description: Web (dart2js) smoke regression guard. Mirrors `just test_web`.
+      run: just test_web
+
+    # --- Formatting ---
+    format:
+      description: Format all Dart sources.
+      run: fvm dart format .
+      exec: {}
+
+    format:check:
+      description: Verify formatting without writing (CI gate).
+      run: fvm dart format --output=none --set-exit-if-changed .
+      exec: {}
+
+    # --- Publishing (only rpc_dart + rpc_dart_generator are public) ---
+    publish:dry:
+      description: Validate publishable packages without publishing.
+      run: fvm dart run melos publish --dry-run --yes
+
+    publish:release:
+      description: Publish public packages to pub.dev (real). Requires auth.
+      run: fvm dart run melos publish --no-dry-run --yes
