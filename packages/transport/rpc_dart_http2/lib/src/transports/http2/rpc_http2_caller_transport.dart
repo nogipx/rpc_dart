@@ -29,6 +29,15 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   final StreamController<RpcTransportMessage> _messageController =
       StreamController<RpcTransportMessage>.broadcast();
 
+  /// Per-stream dedicated controllers for [getMessagesForStream].
+  ///
+  /// HTTP/2 already demultiplexes by stream natively, yet every message was
+  /// funnelled onto the shared broadcast above and then re-filtered per stream
+  /// (O(active-streams) per message). Each stream now gets its own controller
+  /// and messages are routed to it directly; the broadcast is still fed for
+  /// global consumers (and keeps the [RpcHttp2StreamError] envelope semantics).
+  final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
+
   /// Счетчик для генерации Stream ID
   int _nextStreamId = 1; // Клиент использует нечетные ID
 
@@ -469,21 +478,13 @@ class RpcHttp2CallerTransport implements IRpcTransport {
           stackTrace: stackTrace,
         );
 
-        if (!_messageController.isClosed) {
-          _messageController.addError(
-            RpcHttp2StreamError(streamId, error, stackTrace),
-          );
-        }
+        _emitStreamError(streamId, error, stackTrace);
       },
       onDone: () {
         _logger?.internal('Stream $streamId завершен');
 
         // Отправляем сообщение о завершении потока
-        if (!_messageController.isClosed) {
-          _messageController.add(
-            RpcTransportMessage(streamId: streamId, isEndOfStream: true),
-          );
-        }
+        _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
 
         // Очищаем ресурсы
         _activeStreams.remove(streamId);
@@ -519,11 +520,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
         stackTrace: stackTrace,
       );
 
-      if (!_messageController.isClosed) {
-        _messageController.addError(
-          RpcHttp2StreamError(streamId, e, stackTrace),
-        );
-      }
+      _emitStreamError(streamId, e, stackTrace);
     }
   }
 
@@ -547,16 +544,14 @@ class RpcHttp2CallerTransport implements IRpcTransport {
           RpcMetadata.encodeGrpcMessage('HTTP status $httpStatus'),
         ),
       ]);
-      if (!_messageController.isClosed) {
-        _messageController.add(
-          RpcTransportMessage(
-            streamId: streamId,
-            metadata: errorMetadata,
-            isEndOfStream: true,
-            methodPath: methodPath,
-          ),
-        );
-      }
+      _emit(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: errorMetadata,
+          isEndOfStream: true,
+          methodPath: methodPath,
+        ),
+      );
       return;
     }
 
@@ -578,9 +573,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       methodPath: methodPath,
     );
 
-    if (!_messageController.isClosed) {
-      _messageController.add(transportMessage);
-    }
+    _emit(transportMessage);
   }
 
   /// Обрабатывает входящие HTTP/2 данные
@@ -626,9 +619,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
           methodPath: methodPath,
         );
 
-        if (!_messageController.isClosed) {
-          _messageController.add(transportMessage);
-        }
+        _emit(transportMessage);
       }
 
       _logger?.internal(
@@ -641,11 +632,7 @@ class RpcHttp2CallerTransport implements IRpcTransport {
         stackTrace: stackTrace,
       );
 
-      if (!_messageController.isClosed) {
-        _messageController.addError(
-          RpcHttp2StreamError(streamId, e, stackTrace),
-        );
-      }
+      _emitStreamError(streamId, e, stackTrace);
     }
   }
 
@@ -654,7 +641,37 @@ class RpcHttp2CallerTransport implements IRpcTransport {
 
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
-    return filterStreamEvents(incomingMessages, streamId);
+    final existing = _streamControllers[streamId];
+    if (existing != null) return existing.stream;
+    final ctl = StreamController<RpcTransportMessage>(
+      onCancel: () => _streamControllers.remove(streamId),
+    );
+    _streamControllers[streamId] = ctl;
+    return ctl.stream;
+  }
+
+  /// Routes an incoming message to the shared broadcast and to the stream's
+  /// dedicated controller, closing the latter on end-of-stream.
+  void _emit(RpcTransportMessage message) {
+    if (!_messageController.isClosed) _messageController.add(message);
+    final ctl = _streamControllers[message.streamId];
+    if (ctl != null && !ctl.isClosed) ctl.add(message);
+    if (message.isEndOfStream) {
+      final ended = _streamControllers.remove(message.streamId);
+      if (ended != null && !ended.isClosed) unawaited(ended.close());
+    }
+  }
+
+  /// Routes a stream-scoped error: raw on the dedicated controller, enveloped
+  /// on the broadcast (so it does not leak onto unrelated streams there).
+  void _emitStreamError(int streamId, Object error, [StackTrace? stackTrace]) {
+    final ctl = _streamControllers[streamId];
+    if (ctl != null && !ctl.isClosed) ctl.addError(error, stackTrace);
+    if (!_messageController.isClosed) {
+      _messageController.addError(
+        RpcHttp2StreamError(streamId, error, stackTrace),
+      );
+    }
   }
 
   @override
@@ -798,6 +815,12 @@ class RpcHttp2CallerTransport implements IRpcTransport {
     // Очищаем парсеры и tracking
     _streamParsers.clear();
     _initialHeadersReceived.clear();
+
+    // Закрываем per-stream контроллеры
+    for (final ctl in _streamControllers.values) {
+      if (!ctl.isClosed) unawaited(ctl.close());
+    }
+    _streamControllers.clear();
 
     // Закрываем контроллер сообщений
     if (!_messageController.isClosed) {
