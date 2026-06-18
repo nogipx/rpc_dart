@@ -1,3 +1,19 @@
+## 0.2.2
+
+- Server-side hardening. `RpcHttpServer` now forwards a `securityPolicy` and an
+  optional `bodyReadTimeout` to its `RpcHttpResponderTransport`. Previously the
+  server constructed the transport with only the CORS policy, so request bodies
+  reached via the public server API were buffered UNBOUNDED (DoS via large/slow
+  POST) and had no read timeout (slowloris).
+- BEHAVIORAL CHANGE: `securityPolicy` defaults to a non-null
+  `const RpcSecurityPolicy()`, so the built-in `maxMessageLengthBytes` (16 MiB),
+  header, and concurrency limits are now ENFORCED out of the box. Requests
+  exceeding the body limit are rejected with `400` instead of being buffered.
+  Pass `securityPolicy: null` to opt out (not recommended), or a tuned
+  `RpcSecurityPolicy` to adjust the limits.
+- Added `RpcHttpServer.actualPort` getter (returns the OS-assigned port after
+  binding when constructed with port `0`).
+
 ## 0.2.1
 
 - Added `test/web_smoke_test.dart`: cross-platform (dart2js) smoke test proving

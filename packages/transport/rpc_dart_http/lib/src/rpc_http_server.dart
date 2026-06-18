@@ -62,6 +62,8 @@ class RpcHttpServer implements IRpcServer {
   final String _host;
   final int _port;
   final RpcHttpCorsPolicy? _corsPolicy;
+  final RpcSecurityPolicy? _securityPolicy;
+  final Duration? _bodyReadTimeout;
   final void Function(RpcResponderEndpoint) _onEndpointCreated;
   final LogScope? _logger;
   final LogController? _logController;
@@ -71,22 +73,42 @@ class RpcHttpServer implements IRpcServer {
   HttpServer? _httpServer;
   bool _isRunning = false;
 
+  /// Creates an HTTP/1.1 RPC server.
+  ///
+  /// [securityPolicy] bounds request body size, header sizes, and concurrent
+  /// requests. It defaults to a non-null [RpcSecurityPolicy] so the built-in
+  /// limits (e.g. `maxMessageLengthBytes`) are enforced out of the box; pass
+  /// an explicit policy to tune them. Set to `null` only to disable all limits
+  /// (not recommended — this allows unbounded request bodies).
+  ///
+  /// [bodyReadTimeout] bounds how long the server waits for a full request
+  /// body. When set, slow request bodies are rejected with `408` instead of
+  /// being buffered indefinitely (slowloris mitigation).
   RpcHttpServer({
     required String host,
     required int port,
     required void Function(RpcResponderEndpoint) onEndpointCreated,
     RpcHttpCorsPolicy? corsPolicy,
+    RpcSecurityPolicy? securityPolicy = const RpcSecurityPolicy(),
+    Duration? bodyReadTimeout,
     LogScope? logger,
     LogController? logController,
   })  : _host = host,
         _port = port,
         _corsPolicy = corsPolicy,
+        _securityPolicy = securityPolicy,
+        _bodyReadTimeout = bodyReadTimeout,
         _onEndpointCreated = onEndpointCreated,
         _logController = logController,
         _logger = logger?.child('HttpServer');
 
   @override
   bool get isRunning => _isRunning;
+
+  /// The port the server is actually listening on, or `null` before
+  /// [afterModulesStart] has bound the port. When constructed with port `0`,
+  /// this returns the OS-assigned ephemeral port after binding.
+  int? get actualPort => _httpServer?.port;
 
   @override
   List<RpcResponderEndpoint> get endpoints =>
@@ -97,6 +119,8 @@ class RpcHttpServer implements IRpcServer {
   Future<void> start() async {
     _transport = RpcHttpResponderTransport(
       corsPolicy: _corsPolicy,
+      securityPolicy: _securityPolicy,
+      bodyReadTimeout: _bodyReadTimeout,
       logger: _logger,
     );
     _logger?.debug('Transport created — port binding deferred to afterModulesStart');

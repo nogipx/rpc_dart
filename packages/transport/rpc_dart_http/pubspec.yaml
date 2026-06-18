@@ -1,6 +1,6 @@
 name: rpc_dart_http
 description: HTTP/1.1 caller/responder transports for rpc_dart (unary only).
-version: 0.2.1
+version: 0.2.2
 publish_to: none
 
 environment:

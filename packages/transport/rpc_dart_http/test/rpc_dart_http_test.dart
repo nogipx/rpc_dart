@@ -796,6 +796,69 @@ void main() {
     });
   });
 
+  group('RpcHttpServer default security policy', () {
+    test('explicit_policy_via_server_rejects_oversized_body', () async {
+      // Regression: RpcHttpServer.start() previously did NOT forward
+      // securityPolicy to the transport, so request bodies were buffered
+      // unbounded via the public server API. A body over the limit must now be
+      // rejected with 400.
+      final server = RpcHttpServer(
+        host: '127.0.0.1',
+        port: 0,
+        securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 10),
+        onEndpointCreated: (endpoint) {
+          endpoint.registerServiceContract(_EchoService());
+        },
+      );
+      await server.start();
+      await server.afterModulesStart();
+      final port = server.actualPort!;
+
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:$port/Echo/Echo'),
+        headers: {'content-type': 'application/grpc'},
+        body: Uint8List(100),
+      );
+
+      expect(response.statusCode, 400);
+
+      await server.stop();
+    });
+
+    test('default_server_enforces_builtin_policy_and_accepts_small_request',
+        () async {
+      // No securityPolicy passed → default const RpcSecurityPolicy is used, so
+      // a normal small request still works end-to-end.
+      final server = RpcHttpServer(
+        host: '127.0.0.1',
+        port: 0,
+        onEndpointCreated: (endpoint) {
+          endpoint.registerServiceContract(_EchoService());
+          endpoint.start();
+        },
+      );
+      await server.start();
+      await server.afterModulesStart();
+      final port = server.actualPort!;
+
+      final clientTransport = RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:$port',
+      );
+      final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
+      final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        serviceName: 'Echo',
+        methodName: 'Echo',
+        requestCodec: RpcString.codec,
+        responseCodec: RpcString.codec,
+        request: RpcString('hi'),
+      );
+      expect(result.value, 'Echo: hi');
+
+      await clientEndpoint.close();
+      await server.stop();
+    });
+  });
+
   group('Caller custom HTTP client', () {
     test('custom_http_client_is_accepted', () async {
       // Smoke test: constructing with a custom client must not throw.
