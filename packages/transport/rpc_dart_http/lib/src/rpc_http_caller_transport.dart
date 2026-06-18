@@ -80,6 +80,12 @@ class RpcHttpCallerTransport implements IRpcTransport {
   final Set<int> _inFlight = {};
   final StreamController<RpcTransportMessage> _incoming =
       StreamController<RpcTransportMessage>.broadcast();
+
+  /// Per-stream dedicated controllers for [getMessagesForStream], so each call
+  /// is fed directly instead of every caller re-filtering the shared broadcast
+  /// (O(active-streams) per message). Also keeps a stream-scoped error from
+  /// leaking onto other concurrent calls' subscribers.
+  final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
   bool _isClosed = false;
   final LogScope? _logger;
 
@@ -208,23 +214,21 @@ class RpcHttpCallerTransport implements IRpcTransport {
 
       if (response.statusCode != 200) {
         final grpcCode = _httpStatusToGrpcCode(response.statusCode);
-        if (!_incoming.isClosed) {
-          _incoming.add(
-            RpcTransportMessage(
-              streamId: streamId,
-              metadata: RpcMetadata([
-                RpcHeader(RpcHeaders.grpcStatus, '$grpcCode'),
-                RpcHeader(
-                  RpcHeaders.grpcMessage,
-                  Uri.encodeComponent(
-                    'HTTP ${response.statusCode} from ${call.methodPath}',
-                  ),
+        _emit(
+          RpcTransportMessage(
+            streamId: streamId,
+            metadata: RpcMetadata([
+              RpcHeader(RpcHeaders.grpcStatus, '$grpcCode'),
+              RpcHeader(
+                RpcHeaders.grpcMessage,
+                Uri.encodeComponent(
+                  'HTTP ${response.statusCode} from ${call.methodPath}',
                 ),
-              ]),
-              isEndOfStream: true,
-            ),
-          );
-        }
+              ),
+            ]),
+            isEndOfStream: true,
+          ),
+        );
         return;
       }
 
@@ -243,20 +247,18 @@ class RpcHttpCallerTransport implements IRpcTransport {
         }
       });
 
-      if (!_incoming.isClosed) {
-        _incoming.add(
-          RpcTransportMessage(
-            streamId: streamId,
-            metadata: RpcMetadata(initialHeaders),
-            isEndOfStream: false,
-            methodPath: call.methodPath,
-          ),
-        );
-      }
+      _emit(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: RpcMetadata(initialHeaders),
+          isEndOfStream: false,
+          methodPath: call.methodPath,
+        ),
+      );
 
       final responseBytes = response.bodyBytes;
-      if (responseBytes.isNotEmpty && !_incoming.isClosed) {
-        _incoming.add(
+      if (responseBytes.isNotEmpty) {
+        _emit(
           RpcTransportMessage(
             streamId: streamId,
             payload: responseBytes,
@@ -266,24 +268,20 @@ class RpcHttpCallerTransport implements IRpcTransport {
         );
       }
 
-      if (!_incoming.isClosed) {
-        _incoming.add(
-          RpcTransportMessage(
-            streamId: streamId,
-            metadata: RpcMetadata(trailerHeaders),
-            isEndOfStream: true,
-          ),
-        );
-      }
+      _emit(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: RpcMetadata(trailerHeaders),
+          isEndOfStream: true,
+        ),
+      );
     } catch (e, st) {
       _logger?.error(
         'HTTP request failed for [streamId: $streamId]',
         error: e,
         stackTrace: st,
       );
-      if (!_incoming.isClosed) {
-        _incoming.addError(e, st);
-      }
+      _emitError(streamId, e, st);
     } finally {
       _inFlight.remove(streamId);
       _idManager.releaseId(streamId);
@@ -294,8 +292,36 @@ class RpcHttpCallerTransport implements IRpcTransport {
   Stream<RpcTransportMessage> get incomingMessages => _incoming.stream;
 
   @override
-  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
-      incomingMessages.where((m) => m.streamId == streamId);
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    final existing = _streamControllers[streamId];
+    if (existing != null) return existing.stream;
+    final ctl = StreamController<RpcTransportMessage>(
+      onCancel: () => _streamControllers.remove(streamId),
+    );
+    _streamControllers[streamId] = ctl;
+    return ctl.stream;
+  }
+
+  /// Routes a message to the shared broadcast and the stream's dedicated
+  /// controller, closing the latter on end-of-stream.
+  void _emit(RpcTransportMessage message) {
+    if (!_incoming.isClosed) _incoming.add(message);
+    final ctl = _streamControllers[message.streamId];
+    if (ctl != null && !ctl.isClosed) ctl.add(message);
+    if (message.isEndOfStream) {
+      final ended = _streamControllers.remove(message.streamId);
+      if (ended != null && !ended.isClosed) unawaited(ended.close());
+    }
+  }
+
+  /// Routes a stream-scoped error to the dedicated controller (so it does not
+  /// leak onto other calls) while preserving the broadcast for global
+  /// consumers.
+  void _emitError(int streamId, Object error, StackTrace stackTrace) {
+    final ctl = _streamControllers[streamId];
+    if (ctl != null && !ctl.isClosed) ctl.addError(error, stackTrace);
+    if (!_incoming.isClosed) _incoming.addError(error, stackTrace);
+  }
 
   @override
   Future<RpcHealthStatus> health() async {
@@ -327,6 +353,15 @@ class RpcHttpCallerTransport implements IRpcTransport {
     _isClosed = true;
     _pending.clear();
     _httpClient.close();
+    for (final entry in _streamControllers.entries) {
+      final ctl = entry.value;
+      if (ctl.isClosed) continue;
+      if (_inFlight.contains(entry.key)) {
+        ctl.addError(StateError('Transport was closed'));
+      }
+      unawaited(ctl.close());
+    }
+    _streamControllers.clear();
     if (!_incoming.isClosed) {
       if (_inFlight.isNotEmpty) {
         _incoming.addError(StateError('Transport was closed'));

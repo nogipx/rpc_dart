@@ -39,6 +39,10 @@ final class _PendingResponse {
 class RpcHttpResponderTransport implements IRpcTransport {
   final StreamController<RpcTransportMessage> _incoming =
       StreamController<RpcTransportMessage>.broadcast();
+
+  /// Per-stream dedicated controllers for [getMessagesForStream]; the broadcast
+  /// above is still fed for the responder pipeline's new-stream dispatch.
+  final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
   final Map<int, _PendingResponse> _pending = {};
   final RpcStreamIdManager _idManager = RpcStreamIdManager(isClient: false);
   bool _isClosed = false;
@@ -130,16 +134,14 @@ class RpcHttpResponderTransport implements IRpcTransport {
         }
       }
 
-      if (!_incoming.isClosed) {
-        _incoming.add(
-          RpcTransportMessage(
-            streamId: streamId,
-            metadata: RpcMetadata(requestHeaders),
-            isEndOfStream: false,
-            methodPath: methodPath,
-          ),
-        );
-      }
+      _emit(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: RpcMetadata(requestHeaders),
+          isEndOfStream: false,
+          methodPath: methodPath,
+        ),
+      );
 
       // Read request body.
       Future<Uint8List> readBody() async {
@@ -168,16 +170,14 @@ class RpcHttpResponderTransport implements IRpcTransport {
         body = await readBody();
       }
 
-      if (!_incoming.isClosed) {
-        _incoming.add(
-          RpcTransportMessage(
-            streamId: streamId,
-            payload: body.isNotEmpty ? body : null,
-            isEndOfStream: true,
-            methodPath: methodPath,
-          ),
-        );
-      }
+      _emit(
+        RpcTransportMessage(
+          streamId: streamId,
+          payload: body.isNotEmpty ? body : null,
+          isEndOfStream: true,
+          methodPath: methodPath,
+        ),
+      );
     } catch (e, st) {
       _pending.remove(streamId);
       _idManager.releaseId(streamId);
@@ -300,8 +300,27 @@ class RpcHttpResponderTransport implements IRpcTransport {
   Stream<RpcTransportMessage> get incomingMessages => _incoming.stream;
 
   @override
-  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
-      incomingMessages.where((m) => m.streamId == streamId);
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    final existing = _streamControllers[streamId];
+    if (existing != null) return existing.stream;
+    final ctl = StreamController<RpcTransportMessage>(
+      onCancel: () => _streamControllers.remove(streamId),
+    );
+    _streamControllers[streamId] = ctl;
+    return ctl.stream;
+  }
+
+  /// Routes a message to the broadcast and the stream's dedicated controller,
+  /// closing the latter on end-of-stream.
+  void _emit(RpcTransportMessage message) {
+    if (!_incoming.isClosed) _incoming.add(message);
+    final ctl = _streamControllers[message.streamId];
+    if (ctl != null && !ctl.isClosed) ctl.add(message);
+    if (message.isEndOfStream) {
+      final ended = _streamControllers.remove(message.streamId);
+      if (ended != null && !ended.isClosed) unawaited(ended.close());
+    }
+  }
 
   @override
   Future<RpcHealthStatus> health() async {
@@ -339,6 +358,11 @@ class RpcHttpResponderTransport implements IRpcTransport {
       }
     }
     _pending.clear();
+
+    for (final ctl in _streamControllers.values) {
+      if (!ctl.isClosed) unawaited(ctl.close());
+    }
+    _streamControllers.clear();
 
     if (!_incoming.isClosed) {
       await _incoming.close();
