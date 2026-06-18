@@ -134,9 +134,7 @@ void main() {
         // Act
         final encoded = RpcMessageFrame.encode(originalMessage);
         final header = RpcMessageFrame.parseHeader(encoded);
-        final decodedPayload = encoded.sublist(
-          RpcConstants.messagePrefixSize,
-        );
+        final decodedPayload = encoded.sublist(RpcConstants.messagePrefixSize);
 
         // Assert
         expect(header.messageLength, equals(originalMessage.length));

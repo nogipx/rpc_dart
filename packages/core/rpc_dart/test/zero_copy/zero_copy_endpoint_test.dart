@@ -52,8 +52,9 @@ final class TestService extends RpcResponderContract {
       methodName: 'processData',
       handler: (request, {context}) async {
         // Симуляция обработки
-        final processedData =
-            request.data.map((item) => item.toUpperCase()).toList();
+        final processedData = request.data
+            .map((item) => item.toUpperCase())
+            .toList();
         return TestResponse(
           'Processed: ${request.message}. Items: ${processedData.join(", ")}',
           request.data.length,
@@ -145,14 +146,14 @@ void main() {
       });
 
       // Выполняем RPC вызов через endpoint
-      final response =
-          await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-        serviceName: 'TestService',
-        methodName: 'processData',
-        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-        request: request,
-      );
+      final response = await callerEndpoint
+          .unaryRequest<TestRequest, TestResponse>(
+            serviceName: 'TestService',
+            methodName: 'processData',
+            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+            request: request,
+          );
 
       print('\n📥 Получен ответ:');
       print('   Результат: ${response.result}');
@@ -164,8 +165,9 @@ void main() {
       print('\n📊 Анализ сообщений:');
       print('   Всего сообщений: ${sentMessages.length}');
 
-      final serializedMessages =
-          sentMessages.where((m) => m.isSerialized).length;
+      final serializedMessages = sentMessages
+          .where((m) => m.isSerialized)
+          .length;
       final directMessages = sentMessages.where((m) => m.isDirect).length;
       final metadataMessages = sentMessages
           .where((m) => m.metadata != null && !m.isSerialized && !m.isDirect)
@@ -229,8 +231,11 @@ void main() {
             .timeout(Duration(seconds: 2)); // Добавляем таймаут для отладки
 
         // Теперь отправляем сообщение
-        await clientTransport.sendDirectObject(streamId, request,
-            endStream: true);
+        await clientTransport.sendDirectObject(
+          streamId,
+          request,
+          endStream: true,
+        );
 
         // Ждем сообщение
         final directMessage = await messagesFuture;
@@ -250,52 +255,57 @@ void main() {
     // бросать типизированный RpcStatusException с реальным статусом, а не
     // обёрнутый Exception. Иначе retry-предикат и circuit breaker не видят
     // gRPC-статус, и консервативный retry-дефолт не сработает.
-    test('zero-copy unary путь бросает типизированный RpcStatusException',
-        () async {
-      Object? caught;
-      try {
-        await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-          serviceName: 'TestService',
-          methodName: 'failUnavailable',
-          // Без кодеков -> zero-copy путь через _executeUnaryCall.
-          request: TestRequest('boom', const []),
-        );
-        fail('Должно было бросить исключение');
-      } catch (e) {
-        caught = e;
-      }
-
-      expect(
-        caught,
-        isA<RpcStatusException>(),
-        reason: 'Должен быть типизированный RpcStatusException, не Exception',
-      );
-      final ex = caught as RpcStatusException;
-      expect(ex.statusCode, RpcStatus.unavailable);
-
-      // Дефолтный retry-предикат должен срабатывать на этом статусе.
-      final interceptor = RpcRetryInterceptor(maxAttempts: 3);
-      var attempts = 0;
-      try {
-        await interceptor.interceptUnary<TestRequest, TestResponse>(
-          RpcMiddlewareContext(
-            endpoint: callerEndpoint,
+    test(
+      'zero-copy unary путь бросает типизированный RpcStatusException',
+      () async {
+        Object? caught;
+        try {
+          await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
             serviceName: 'TestService',
             methodName: 'failUnavailable',
-            context: RpcContext.empty(),
-          ),
-          TestRequest('boom', const []),
-          (ctx, req) async {
-            attempts++;
-            throw ex;
-          },
+            // Без кодеков -> zero-copy путь через _executeUnaryCall.
+            request: TestRequest('boom', const []),
+          );
+          fail('Должно было бросить исключение');
+        } catch (e) {
+          caught = e;
+        }
+
+        expect(
+          caught,
+          isA<RpcStatusException>(),
+          reason: 'Должен быть типизированный RpcStatusException, не Exception',
         );
-        fail('Должно было бросить после исчерпания попыток');
-      } on RpcStatusException catch (e) {
-        expect(e.statusCode, RpcStatus.unavailable);
-      }
-      expect(attempts, 3,
-          reason: 'Дефолтный retry должен повторить UNAVAILABLE');
-    });
+        final ex = caught as RpcStatusException;
+        expect(ex.statusCode, RpcStatus.unavailable);
+
+        // Дефолтный retry-предикат должен срабатывать на этом статусе.
+        final interceptor = RpcRetryInterceptor(maxAttempts: 3);
+        var attempts = 0;
+        try {
+          await interceptor.interceptUnary<TestRequest, TestResponse>(
+            RpcMiddlewareContext(
+              endpoint: callerEndpoint,
+              serviceName: 'TestService',
+              methodName: 'failUnavailable',
+              context: RpcContext.empty(),
+            ),
+            TestRequest('boom', const []),
+            (ctx, req) async {
+              attempts++;
+              throw ex;
+            },
+          );
+          fail('Должно было бросить после исчерпания попыток');
+        } on RpcStatusException catch (e) {
+          expect(e.statusCode, RpcStatus.unavailable);
+        }
+        expect(
+          attempts,
+          3,
+          reason: 'Дефолтный retry должен повторить UNAVAILABLE',
+        );
+      },
+    );
   });
 }

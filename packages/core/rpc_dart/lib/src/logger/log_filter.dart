@@ -54,24 +54,24 @@ class LogFilter {
 
   /// Serializes this filter to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
-        if (minLevel != null) 'minLevel': minLevel!.name,
-        if (scopes != null) 'scopes': scopes!.toList(),
-        if (tags != null) 'tags': tags!.toList(),
-        if (traceId != null) 'traceId': traceId,
-        if (requestId != null) 'requestId': requestId,
-      };
+    if (minLevel != null) 'minLevel': minLevel!.name,
+    if (scopes != null) 'scopes': scopes!.toList(),
+    if (tags != null) 'tags': tags!.toList(),
+    if (traceId != null) 'traceId': traceId,
+    if (requestId != null) 'requestId': requestId,
+  };
 
   /// Deserializes a filter from a JSON-compatible map.
   factory LogFilter.fromJson(Map<String, dynamic> json) => LogFilter(
-        minLevel: json['minLevel'] != null
-            ? RpcLogLevel.values.firstWhere(
-                (e) => e.name == json['minLevel'],
-                orElse: () => RpcLogLevel.debug,
-              )
-            : null,
-        scopes: (json['scopes'] as List<dynamic>?)?.cast<String>().toSet(),
-        tags: (json['tags'] as List<dynamic>?)?.cast<String>().toSet(),
-        traceId: json['traceId'] as String?,
-        requestId: json['requestId'] as String?,
-      );
+    minLevel: json['minLevel'] != null
+        ? RpcLogLevel.values.firstWhere(
+            (e) => e.name == json['minLevel'],
+            orElse: () => RpcLogLevel.debug,
+          )
+        : null,
+    scopes: (json['scopes'] as List<dynamic>?)?.cast<String>().toSet(),
+    tags: (json['tags'] as List<dynamic>?)?.cast<String>().toSet(),
+    traceId: json['traceId'] as String?,
+    requestId: json['requestId'] as String?,
+  );
 }

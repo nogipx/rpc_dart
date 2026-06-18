@@ -28,110 +28,115 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('cancellation buffered for a late subscriber (no hasListener gate)', () {
-    test(
-        'StreamProcessor: cancel before subscribing still delivers '
-        'RpcCancelledException to requests stream', () async {
-      final token = RpcCancellationToken();
-      final context = RpcContext.withCancellation(token);
+  group(
+    'cancellation buffered for a late subscriber (no hasListener gate)',
+    () {
+      test('StreamProcessor: cancel before subscribing still delivers '
+          'RpcCancelledException to requests stream', () async {
+        final token = RpcCancellationToken();
+        final context = RpcContext.withCancellation(token);
 
-      final (client, rawServer) = RpcInMemoryTransport.pair();
+        final (client, rawServer) = RpcInMemoryTransport.pair();
 
-      // Zero-copy: in-memory transport, no codecs.
-      final processor = StreamProcessor<RpcString, RpcString>(
-        transport: rawServer,
-        streamId: 1,
-        serviceName: 'S',
-        methodName: 'M',
-        context: context,
-      );
+        // Zero-copy: in-memory transport, no codecs.
+        final processor = StreamProcessor<RpcString, RpcString>(
+          transport: rawServer,
+          streamId: 1,
+          serviceName: 'S',
+          methodName: 'M',
+          context: context,
+        );
 
-      // Cancel BEFORE anyone subscribes to `requests`.
-      token.cancel('cancelled before listen');
+        // Cancel BEFORE anyone subscribes to `requests`.
+        token.cancel('cancelled before listen');
 
-      // Let the cancellation monitor run and buffer the error.
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+        // Let the cancellation monitor run and buffer the error.
+        await Future<void>.delayed(const Duration(milliseconds: 10));
 
-      // Now subscribe (the late subscriber).
-      final errorCompleter = Completer<Object>();
-      processor.requests.listen(
-        (_) {},
-        onError: (Object e) {
-          if (!errorCompleter.isCompleted) errorCompleter.complete(e);
-        },
-        onDone: () {
-          if (!errorCompleter.isCompleted) {
-            errorCompleter.completeError(
-              StateError('stream closed without delivering cancellation'),
-            );
-          }
-        },
-      );
+        // Now subscribe (the late subscriber).
+        final errorCompleter = Completer<Object>();
+        processor.requests.listen(
+          (_) {},
+          onError: (Object e) {
+            if (!errorCompleter.isCompleted) errorCompleter.complete(e);
+          },
+          onDone: () {
+            if (!errorCompleter.isCompleted) {
+              errorCompleter.completeError(
+                StateError('stream closed without delivering cancellation'),
+              );
+            }
+          },
+        );
 
-      final received = await errorCompleter.future
-          .timeout(const Duration(seconds: 2));
+        final received = await errorCompleter.future.timeout(
+          const Duration(seconds: 2),
+        );
 
-      expect(
-        received,
-        isA<RpcCancelledException>(),
-        reason: 'cancellation fired before subscription must be buffered and '
-            'delivered to the late subscriber, not dropped',
-      );
+        expect(
+          received,
+          isA<RpcCancelledException>(),
+          reason:
+              'cancellation fired before subscription must be buffered and '
+              'delivered to the late subscriber, not dropped',
+        );
 
-      await processor.close();
-      await client.close();
-      await rawServer.close();
-    });
+        await processor.close();
+        await client.close();
+        await rawServer.close();
+      });
 
-    test(
-        'CallProcessor: cancel before subscribing still delivers '
-        'RpcCancelledException to responses stream', () async {
-      final token = RpcCancellationToken();
-      final context = RpcContext.withCancellation(token);
+      test('CallProcessor: cancel before subscribing still delivers '
+          'RpcCancelledException to responses stream', () async {
+        final token = RpcCancellationToken();
+        final context = RpcContext.withCancellation(token);
 
-      final (client, rawServer) = RpcInMemoryTransport.pair();
+        final (client, rawServer) = RpcInMemoryTransport.pair();
 
-      // Zero-copy: in-memory transport, no codecs.
-      final processor = CallProcessor<RpcString, RpcString>(
-        transport: client,
-        serviceName: 'S',
-        methodName: 'M',
-        context: context,
-      );
+        // Zero-copy: in-memory transport, no codecs.
+        final processor = CallProcessor<RpcString, RpcString>(
+          transport: client,
+          serviceName: 'S',
+          methodName: 'M',
+          context: context,
+        );
 
-      // Cancel BEFORE anyone subscribes to `responses`.
-      token.cancel('cancelled before listen');
+        // Cancel BEFORE anyone subscribes to `responses`.
+        token.cancel('cancelled before listen');
 
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
 
-      final errorCompleter = Completer<Object>();
-      processor.responses.listen(
-        (_) {},
-        onError: (Object e) {
-          if (!errorCompleter.isCompleted) errorCompleter.complete(e);
-        },
-        onDone: () {
-          if (!errorCompleter.isCompleted) {
-            errorCompleter.completeError(
-              StateError('stream closed without delivering cancellation'),
-            );
-          }
-        },
-      );
+        final errorCompleter = Completer<Object>();
+        processor.responses.listen(
+          (_) {},
+          onError: (Object e) {
+            if (!errorCompleter.isCompleted) errorCompleter.complete(e);
+          },
+          onDone: () {
+            if (!errorCompleter.isCompleted) {
+              errorCompleter.completeError(
+                StateError('stream closed without delivering cancellation'),
+              );
+            }
+          },
+        );
 
-      final received = await errorCompleter.future
-          .timeout(const Duration(seconds: 2));
+        final received = await errorCompleter.future.timeout(
+          const Duration(seconds: 2),
+        );
 
-      expect(
-        received,
-        isA<RpcCancelledException>(),
-        reason: 'cancellation fired before subscription must be buffered and '
-            'delivered to the late subscriber, not dropped',
-      );
+        expect(
+          received,
+          isA<RpcCancelledException>(),
+          reason:
+              'cancellation fired before subscription must be buffered and '
+              'delivered to the late subscriber, not dropped',
+        );
 
-      await processor.close();
-      await client.close();
-      await rawServer.close();
-    });
-  });
+        await processor.close();
+        await client.close();
+        await rawServer.close();
+      });
+    },
+  );
 }

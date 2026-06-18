@@ -85,8 +85,11 @@ void main() {
       if (before > 0) break;
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
-    expect(before, greaterThan(0),
-        reason: 'precondition: a lingering open stream must exist');
+    expect(
+      before,
+      greaterThan(0),
+      reason: 'precondition: a lingering open stream must exist',
+    );
 
     // Drain with a short timeout; the handler ignores cancellation so the
     // busy-wait expires and the force-cleanup branch must remove the stream.
@@ -99,7 +102,8 @@ void main() {
     expect(
       after,
       0,
-      reason: 'drain logged "forcing cleanup" but left $after stream(s) alive '
+      reason:
+          'drain logged "forcing cleanup" but left $after stream(s) alive '
           '(was $before before, waited ${sw.elapsedMilliseconds}ms) — '
           'no cleanup is performed on timeout',
     );

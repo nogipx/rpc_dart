@@ -14,8 +14,7 @@ import 'i_notify_repository.dart';
 /// instantiated on first publish/subscribe and disposed when the last
 /// subscriber leaves.
 class InMemoryNotifyRepository implements INotifyRepository {
-  InMemoryNotifyRepository({LogScope? logger})
-      : _log = logger ?? LogScope.noop;
+  InMemoryNotifyRepository({LogScope? logger}) : _log = logger ?? LogScope.noop;
 
   final LogScope _log;
   final _distributors = <String, StreamDistributor<NotifyEvent>>{};

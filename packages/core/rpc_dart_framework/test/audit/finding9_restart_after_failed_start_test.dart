@@ -60,8 +60,11 @@ void main() {
     }
 
     expect(thrown, isNotNull, reason: 'second start() must throw');
-    expect(thrown.runtimeType.toString(), isNot('LateInitializationError'),
-        reason: 'restart must not surface LateInitializationError');
+    expect(
+      thrown.runtimeType.toString(),
+      isNot('LateInitializationError'),
+      reason: 'restart must not surface LateInitializationError',
+    );
     expect(thrown, isA<StateError>());
     expect(thrown.toString(), contains('can only be called once'));
   });

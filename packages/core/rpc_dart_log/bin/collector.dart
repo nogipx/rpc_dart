@@ -10,19 +10,28 @@ import 'package:rpc_dart_log/src/log_mcp.dart';
 
 void main(List<String> args) async {
   final parser = ArgParser()
-    ..addOption('port',
-        abbr: 'p', defaultsTo: '9500', help: 'WebSocket collector port')
-    ..addOption('mcp-port',
-        defaultsTo: '9501', help: 'MCP HTTP server port')
-    ..addOption('host',
-        abbr: 'H',
-        defaultsTo: '127.0.0.1',
-        help: 'Host to bind to (loopback by default; use --bind-all or set '
-            'an explicit host to expose on the network)')
-    ..addFlag('bind-all',
-        negatable: false,
-        help: 'Bind to 0.0.0.0 (all interfaces). DEV ONLY: the MCP OAuth '
-            'flow is unauthenticated.')
+    ..addOption(
+      'port',
+      abbr: 'p',
+      defaultsTo: '9500',
+      help: 'WebSocket collector port',
+    )
+    ..addOption('mcp-port', defaultsTo: '9501', help: 'MCP HTTP server port')
+    ..addOption(
+      'host',
+      abbr: 'H',
+      defaultsTo: '127.0.0.1',
+      help:
+          'Host to bind to (loopback by default; use --bind-all or set '
+          'an explicit host to expose on the network)',
+    )
+    ..addFlag(
+      'bind-all',
+      negatable: false,
+      help:
+          'Bind to 0.0.0.0 (all interfaces). DEV ONLY: the MCP OAuth '
+          'flow is unauthenticated.',
+    )
     ..addFlag('no-color', negatable: false, help: 'Disable ANSI colors')
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show usage');
 
@@ -82,15 +91,9 @@ void main(List<String> args) async {
 void _printBanner(String host, int port, int mcpPort, bool colored) {
   stdout.writeln('');
   if (colored) {
-    stdout.writeln(
-      '\x1B[1mrpc_dart_log\x1B[0m',
-    );
-    stdout.writeln(
-      '  collector: \x1B[36mws://$host:$port\x1B[0m',
-    );
-    stdout.writeln(
-      '  mcp:       \x1B[36mhttp://$host:$mcpPort\x1B[0m',
-    );
+    stdout.writeln('\x1B[1mrpc_dart_log\x1B[0m');
+    stdout.writeln('  collector: \x1B[36mws://$host:$port\x1B[0m');
+    stdout.writeln('  mcp:       \x1B[36mhttp://$host:$mcpPort\x1B[0m');
   } else {
     stdout.writeln('rpc_dart_log');
     stdout.writeln('  collector: ws://$host:$port');

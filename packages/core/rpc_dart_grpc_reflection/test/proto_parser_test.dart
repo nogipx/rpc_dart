@@ -11,22 +11,26 @@ import 'helpers.dart';
 void main() {
   group('parseFileDescriptorProto', () {
     test('extracts name and package', () {
-      final parsed = parseFileDescriptorProto(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: [],
-      ));
+      final parsed = parseFileDescriptorProto(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: [],
+        ),
+      );
 
       expect(parsed.name, 'echo.proto');
       expect(parsed.package, 'echo.v1');
     });
 
     test('extracts service names', () {
-      final parsed = parseFileDescriptorProto(buildMinimalFileDescriptor(
-        name: 'svc.proto',
-        package: 'svc.v1',
-        serviceNames: ['Alpha', 'Beta'],
-      ));
+      final parsed = parseFileDescriptorProto(
+        buildMinimalFileDescriptor(
+          name: 'svc.proto',
+          package: 'svc.v1',
+          serviceNames: ['Alpha', 'Beta'],
+        ),
+      );
 
       expect(parsed.services, containsAll(['Alpha', 'Beta']));
     });
@@ -59,12 +63,14 @@ void main() {
     });
 
     test('extracts import dependencies', () {
-      final parsed = parseFileDescriptorProto(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: [],
-        dependencies: ['common.proto', 'google/protobuf/timestamp.proto'],
-      ));
+      final parsed = parseFileDescriptorProto(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: [],
+          dependencies: ['common.proto', 'google/protobuf/timestamp.proto'],
+        ),
+      );
 
       expect(
         parsed.dependencies,
@@ -73,12 +79,14 @@ void main() {
     });
 
     test('extracts nested message type names', () {
-      final parsed = parseFileDescriptorProto(buildDescriptorWithNesting(
-        name: 'nested.proto',
-        package: 'nested.v1',
-        outerName: 'Outer',
-        nestedMessageNames: ['Inner', 'AnotherInner'],
-      ));
+      final parsed = parseFileDescriptorProto(
+        buildDescriptorWithNesting(
+          name: 'nested.proto',
+          package: 'nested.v1',
+          outerName: 'Outer',
+          nestedMessageNames: ['Inner', 'AnotherInner'],
+        ),
+      );
 
       expect(parsed.messageTypes, contains('Outer'));
       expect(parsed.messageTypes, contains('Outer.Inner'));
@@ -86,23 +94,27 @@ void main() {
     });
 
     test('extracts nested enum type names', () {
-      final parsed = parseFileDescriptorProto(buildDescriptorWithNesting(
-        name: 'nested.proto',
-        package: 'nested.v1',
-        outerName: 'Outer',
-        nestedEnumNames: ['Status', 'Priority'],
-      ));
+      final parsed = parseFileDescriptorProto(
+        buildDescriptorWithNesting(
+          name: 'nested.proto',
+          package: 'nested.v1',
+          outerName: 'Outer',
+          nestedEnumNames: ['Status', 'Priority'],
+        ),
+      );
 
       expect(parsed.enumTypes, contains('Outer.Status'));
       expect(parsed.enumTypes, contains('Outer.Priority'));
     });
 
     test('empty package is preserved', () {
-      final parsed = parseFileDescriptorProto(buildMinimalFileDescriptor(
-        name: 'svc.proto',
-        package: '',
-        serviceNames: ['MyService'],
-      ));
+      final parsed = parseFileDescriptorProto(
+        buildMinimalFileDescriptor(
+          name: 'svc.proto',
+          package: '',
+          serviceNames: ['MyService'],
+        ),
+      );
 
       expect(parsed.package, '');
       expect(parsed.dependencies, isEmpty);

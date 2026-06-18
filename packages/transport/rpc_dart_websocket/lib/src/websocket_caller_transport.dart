@@ -31,8 +31,8 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
     WebSocketChannel channel, {
     Future<WebSocketChannel> Function()? reconnectFactory,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
-  })  : _reconnectFactory = reconnectFactory,
-        _policy = policy {
+  }) : _reconnectFactory = reconnectFactory,
+       _policy = policy {
     _attach(channel);
   }
 
@@ -116,24 +116,21 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
     int streamId,
     RpcMetadata metadata, {
     bool endStream = false,
-  }) =>
-      _inner.sendMetadata(streamId, metadata, endStream: endStream);
+  }) => _inner.sendMetadata(streamId, metadata, endStream: endStream);
 
   @override
   Future<void> sendMessage(
     int streamId,
     Uint8List data, {
     bool endStream = false,
-  }) =>
-      _inner.sendMessage(streamId, data, endStream: endStream);
+  }) => _inner.sendMessage(streamId, data, endStream: endStream);
 
   @override
   Future<void> sendDirectObject(
     int streamId,
     Object object, {
     bool endStream = false,
-  }) =>
-      _inner.sendDirectObject(streamId, object, endStream: endStream);
+  }) => _inner.sendDirectObject(streamId, object, endStream: endStream);
 
   @override
   Future<void> finishSending(int streamId) => _inner.finishSending(streamId);

@@ -31,8 +31,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase
     metrics['trackedMethods'] = _callerTokens.length;
 
     if (_callerTokens.isNotEmpty) {
-      metrics['activeMethodKeys'] =
-          List<String>.unmodifiable(_callerTokens.keys);
+      metrics['activeMethodKeys'] = List<String>.unmodifiable(
+        _callerTokens.keys,
+      );
     }
 
     return metrics;

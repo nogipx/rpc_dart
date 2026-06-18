@@ -21,8 +21,8 @@ final class RpcEndpointHealth {
     required this.endpointStatus,
     Map<String, RpcHealthStatus>? dependencies,
     DateTime? timestamp,
-  })  : dependencies = Map.unmodifiable(dependencies ?? const {}),
-        timestamp = timestamp ?? DateTime.now();
+  }) : dependencies = Map.unmodifiable(dependencies ?? const {}),
+       timestamp = timestamp ?? DateTime.now();
 
   /// True when the endpoint and all dependencies are healthy.
   bool get isHealthy =>

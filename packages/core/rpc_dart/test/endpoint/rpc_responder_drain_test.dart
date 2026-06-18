@@ -103,8 +103,11 @@ void main() {
           responseCodec: RpcCodec<_Resp>(_Resp.fromJson),
         ),
         throwsA(
-          isA<RpcStatusException>()
-              .having((e) => e.statusCode, 'statusCode', RpcStatus.unavailable),
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unavailable,
+          ),
         ),
       );
     });

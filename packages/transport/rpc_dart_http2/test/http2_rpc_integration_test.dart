@@ -211,14 +211,14 @@ void main() {
 
       final requestStream = requestController.stream;
 
-      final responseStream =
-          callerEndpoint.bidirectionalStream<RpcString, RpcString>(
-        serviceName: 'TestService',
-        methodName: 'BidirectionalStream',
-        requestCodec: RpcString.codec,
-        responseCodec: RpcString.codec,
-        requests: requestStream,
-      );
+      final responseStream = callerEndpoint
+          .bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'TestService',
+            methodName: 'BidirectionalStream',
+            requestCodec: RpcString.codec,
+            responseCodec: RpcString.codec,
+            requests: requestStream,
+          );
 
       // Слушаем ответы
       responseStream.listen(
@@ -269,16 +269,16 @@ void main() {
       futures.add(
         callerEndpoint
             .unaryRequest<RpcString, RpcString>(
-          serviceName: 'TestService',
-          methodName: 'Echo',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          request: RpcString('Parallel unary'),
-        )
+              serviceName: 'TestService',
+              methodName: 'Echo',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: RpcString('Parallel unary'),
+            )
             .then((response) {
-          expect(response.value, contains('Parallel unary'));
-          print('✅ Параллельный unary завершен: ${response.value}');
-        }),
+              expect(response.value, contains('Parallel unary'));
+              print('✅ Параллельный unary завершен: ${response.value}');
+            }),
       );
 
       // Server streaming вызов
@@ -294,11 +294,11 @@ void main() {
             .take(2)
             .toList()
             .then((responses) {
-          expect(responses.length, equals(2));
-          print(
-            '✅ Параллельный server streaming завершен: ${responses.length} ответов',
-          );
-        }),
+              expect(responses.length, equals(2));
+              print(
+                '✅ Параллельный server streaming завершен: ${responses.length} ответов',
+              );
+            }),
       );
 
       // Assert

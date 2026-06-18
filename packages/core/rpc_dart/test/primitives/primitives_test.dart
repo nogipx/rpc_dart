@@ -11,7 +11,9 @@ void main() {
     test('RpcPrimitiveMessage equality/hashCode/toJson', () {
       expect(const RpcString('a'), equals(const RpcString('a')));
       expect(
-          const RpcString('a').hashCode, equals(const RpcString('a').hashCode));
+        const RpcString('a').hashCode,
+        equals(const RpcString('a').hashCode),
+      );
 
       expect(const RpcBool(true).toJson(), equals({'v': true}));
       expect(const RpcInt(1).toJson(), equals({'v': 1}));
@@ -140,12 +142,14 @@ void main() {
       );
       expect(restored.toList(), equals(list.toList()));
 
-      final restoredViaFactory =
-          RpcList.fromJson<RpcString>(RpcString.fromJson)(json);
+      final restoredViaFactory = RpcList.fromJson<RpcString>(
+        RpcString.fromJson,
+      )(json);
       expect(restoredViaFactory.toList(), equals(list.toList()));
 
-      final missingItems =
-          RpcList.fromJson<RpcString>(RpcString.fromJson)({'nope': true});
+      final missingItems = RpcList.fromJson<RpcString>(RpcString.fromJson)({
+        'nope': true,
+      });
       expect(missingItems.isEmpty, isTrue);
 
       expect(list.remove(const RpcString('missing')), isFalse);

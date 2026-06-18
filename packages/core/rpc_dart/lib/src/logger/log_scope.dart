@@ -49,11 +49,11 @@ class LogScope {
     String? requestId,
     String? parentSpanId,
     DateTime Function()? clock,
-  })  : _boundData = boundData,
-        _traceId = traceId,
-        _requestId = requestId,
-        _parentSpanId = parentSpanId,
-        _clock = clock ?? DateTime.now;
+  }) : _boundData = boundData,
+       _traceId = traceId,
+       _requestId = requestId,
+       _parentSpanId = parentSpanId,
+       _clock = clock ?? DateTime.now;
 
   // --- Level guards for hot-path optimization ---
 
@@ -144,28 +144,55 @@ class LogScope {
       _log(RpcLogLevel.info, message, data: data);
 
   /// Log at [RpcLogLevel.warning] level with optional error and stack trace.
-  void warning(String message,
-          {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) =>
-      _log(RpcLogLevel.warning, message,
-          error: error, stackTrace: stackTrace, data: data);
+  void warning(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object>? data,
+  }) => _log(
+    RpcLogLevel.warning,
+    message,
+    error: error,
+    stackTrace: stackTrace,
+    data: data,
+  );
 
   /// Log at [RpcLogLevel.error] level with optional error and stack trace.
-  void error(String message,
-          {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) =>
-      _log(RpcLogLevel.error, message,
-          error: error, stackTrace: stackTrace, data: data);
+  void error(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object>? data,
+  }) => _log(
+    RpcLogLevel.error,
+    message,
+    error: error,
+    stackTrace: stackTrace,
+    data: data,
+  );
 
   /// Log at [RpcLogLevel.fatal] level with optional error and stack trace.
-  void fatal(String message,
-          {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) =>
-      _log(RpcLogLevel.fatal, message,
-          error: error, stackTrace: stackTrace, data: data);
+  void fatal(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object>? data,
+  }) => _log(
+    RpcLogLevel.fatal,
+    message,
+    error: error,
+    stackTrace: stackTrace,
+    data: data,
+  );
 
   // --- Span methods ---
 
   /// Start a span. Must be ended explicitly via [LogSpanHandle.end].
-  LogSpanHandle startSpan(String spanName,
-      {Map<String, Object>? data, String? traceId}) {
+  LogSpanHandle startSpan(
+    String spanName, {
+    Map<String, Object>? data,
+    String? traceId,
+  }) {
     return LogSpanHandle(
       name: spanName,
       scope: name,
@@ -224,22 +251,25 @@ class LogScope {
   }) {
     if (!_controller.accepts(level, name, tag)) return;
 
-    final mergedData =
-        _boundData != null || data != null ? {...?_boundData, ...?data} : null;
+    final mergedData = _boundData != null || data != null
+        ? {...?_boundData, ...?data}
+        : null;
 
-    _controller.add(LogEvent(
-      scope: name,
-      level: level,
-      message: message,
-      tag: tag,
-      error: error,
-      stackTrace: stackTrace,
-      traceId: _traceId,
-      requestId: _requestId,
-      spanId: _parentSpanId,
-      data: mergedData,
-      timestamp: _clock(),
-    ));
+    _controller.add(
+      LogEvent(
+        scope: name,
+        level: level,
+        message: message,
+        tag: tag,
+        error: error,
+        stackTrace: stackTrace,
+        traceId: _traceId,
+        requestId: _requestId,
+        spanId: _parentSpanId,
+        data: mergedData,
+        timestamp: _clock(),
+      ),
+    );
   }
 }
 
@@ -289,32 +319,54 @@ class _NoopLogScope implements LogScope {
   @override
   void info(String message, {Map<String, Object>? data}) {}
   @override
-  void warning(String message,
-      {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) {}
+  void warning(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object>? data,
+  }) {}
   @override
-  void error(String message,
-      {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) {}
+  void error(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object>? data,
+  }) {}
   @override
-  void fatal(String message,
-      {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) {}
+  void fatal(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object>? data,
+  }) {}
 
   @override
-  LogSpanHandle startSpan(String spanName,
-          {Map<String, Object>? data, String? traceId}) =>
-      _NoopSpanHandle();
+  LogSpanHandle startSpan(
+    String spanName, {
+    Map<String, Object>? data,
+    String? traceId,
+  }) => _NoopSpanHandle();
   @override
   Future<T> withSpan<T>(
-          String spanName, Future<T> Function(LogSpanHandle span) body,
-          {Map<String, Object>? data}) =>
-      body(_NoopSpanHandle());
+    String spanName,
+    Future<T> Function(LogSpanHandle span) body, {
+    Map<String, Object>? data,
+  }) => body(_NoopSpanHandle());
   @override
-  T withSpanSync<T>(String spanName, T Function(LogSpanHandle span) body,
-          {Map<String, Object>? data}) =>
-      body(_NoopSpanHandle());
+  T withSpanSync<T>(
+    String spanName,
+    T Function(LogSpanHandle span) body, {
+    Map<String, Object>? data,
+  }) => body(_NoopSpanHandle());
 
   @override
-  void _log(RpcLogLevel level, String message,
-      {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) {}
+  void _log(
+    RpcLogLevel level,
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object>? data,
+  }) {}
 }
 
 class _NoopSpanHandle implements LogSpanHandle {
@@ -331,16 +383,20 @@ class _NoopSpanHandle implements LogSpanHandle {
   @override
   bool get isEnded => true;
   @override
-  void event(String message,
-      {RpcLogLevel level = RpcLogLevel.info, Map<String, Object>? data}) {}
+  void event(
+    String message, {
+    RpcLogLevel level = RpcLogLevel.info,
+    Map<String, Object>? data,
+  }) {}
   @override
   LogSpanHandle startSpan(String childName, {Map<String, Object>? data}) =>
       this;
   @override
   void addData(Map<String, Object> data) {}
   @override
-  void end(
-      {SpanStatus status = SpanStatus.ok,
-      Object? error,
-      StackTrace? stackTrace}) {}
+  void end({
+    SpanStatus status = SpanStatus.ok,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {}
 }

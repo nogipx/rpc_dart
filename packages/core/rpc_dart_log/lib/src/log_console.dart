@@ -29,8 +29,8 @@ class LogCollectorConsole {
 
   /// [sink] defaults to stdout. Use stderr when running alongside MCP.
   LogCollectorConsole({this.colored = true, IOSink? sink})
-      : _maxLabelWidth = 20,
-        _sink = sink ?? stdout;
+    : _maxLabelWidth = 20,
+      _sink = sink ?? stdout;
 
   /// Print a connection event.
   void printConnection(LogCollectorConnectionEvent event) {
@@ -89,7 +89,9 @@ class LogCollectorConsole {
       buf.write(msg);
 
       if (event.traceId != null) {
-        buf.write(' $_dim${event.traceId!.substring(0, 8.clamp(0, event.traceId!.length))}$_reset');
+        buf.write(
+          ' $_dim${event.traceId!.substring(0, 8.clamp(0, event.traceId!.length))}$_reset',
+        );
       }
       if (event.data != null && event.data!.isNotEmpty) {
         for (final entry in event.data!.entries) {
@@ -100,7 +102,9 @@ class LogCollectorConsole {
         buf.write(' ${_red}err=$_reset${event.error}');
       }
     } else {
-      buf.write('$time $label ${event.level.name.toUpperCase().padRight(3)} $scope $msg');
+      buf.write(
+        '$time $label ${event.level.name.toUpperCase().padRight(3)} $scope $msg',
+      );
       if (event.traceId != null) buf.write(' trace=${event.traceId}');
       if (event.data != null) {
         for (final entry in event.data!.entries) {

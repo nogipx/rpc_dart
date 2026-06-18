@@ -123,7 +123,8 @@ void main() {
     expect(
       activeStreams,
       0,
-      reason: 'failed sendMetadata must roll back _streamTransports / '
+      reason:
+          'failed sendMetadata must roll back _streamTransports / '
           '_clientToServerStreamMapping / subscription; leaked slot found',
     );
 

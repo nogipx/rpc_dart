@@ -18,7 +18,7 @@ final class RpcResponderMethodBinding {
 
   /// Codec-based registration, present when not zero-copy.
   final RpcMethodRegistration<IRpcSerializable, IRpcSerializable>?
-      codecRegistration;
+  codecRegistration;
 
   /// Zero-copy registration, present when not using serialization.
   final RpcZeroCopyMethodRegistration<Object, Object>? zeroCopyRegistration;
@@ -31,9 +31,9 @@ final class RpcResponderMethodBinding {
     this.codecRegistration,
     this.zeroCopyRegistration,
   }) : assert(
-          codecRegistration != null || zeroCopyRegistration != null,
-          'Method binding requires either codec or zero-copy registration',
-        );
+         codecRegistration != null || zeroCopyRegistration != null,
+         'Method binding requires either codec or zero-copy registration',
+       );
 
   /// Fully-qualified key `serviceName.methodName`.
   String get methodKey => '$serviceName.$methodName';
@@ -69,7 +69,7 @@ final class RpcResponderMethodRegistry {
 
   /// Exports all bindings as codec-typed registrations (wrapping zero-copy when needed).
   Map<String, RpcMethodRegistration<IRpcSerializable, IRpcSerializable>>
-      exportMethodRegistrations() {
+  exportMethodRegistrations() {
     final exported =
         <String, RpcMethodRegistration<IRpcSerializable, IRpcSerializable>>{};
 
@@ -164,8 +164,9 @@ final class RpcResponderMethodRegistry {
 
     _log.internal('Разрегистрируем контракт сервиса: $serviceName');
 
-    final methodKeys =
-        _methods.keys.where((key) => key.startsWith('$serviceName.')).toList();
+    final methodKeys = _methods.keys
+        .where((key) => key.startsWith('$serviceName.'))
+        .toList();
 
     for (final methodKey in methodKeys) {
       final binding = _methods.remove(methodKey);
@@ -245,13 +246,13 @@ final class RpcResponderMethodRegistry {
       case RpcMethodType.clientStream:
         wrappedHandler =
             (Stream<dynamic> requests, {RpcContext? context}) async {
-          final objectStream = requests.cast<Object>();
-          final result = await zeroCopyMethod.callClientStreamHandler(
-            context!,
-            objectStream,
-          );
-          return result;
-        };
+              final objectStream = requests.cast<Object>();
+              final result = await zeroCopyMethod.callClientStreamHandler(
+                context!,
+                objectStream,
+              );
+              return result;
+            };
         break;
       case RpcMethodType.bidirectionalStream:
         wrappedHandler = (Stream<dynamic> requests, {RpcContext? context}) {

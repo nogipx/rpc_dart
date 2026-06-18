@@ -246,8 +246,9 @@ void main() {
           equals('UserService'),
         );
         expect(
-          paymentMessages.first.metadata
-              ?.getHeaderValue(RpcHeaders.xRouteService),
+          paymentMessages.first.metadata?.getHeaderValue(
+            RpcHeaders.xRouteService,
+          ),
           equals('PaymentService'),
         );
 
@@ -321,8 +322,10 @@ void main() {
                 // Стабильный платформонезависимый хэш (String.hashCode
                 // различается между VM и dart2js).
                 // Четный хэш → premium, нечетный → regular
-                final stableHash =
-                    userId.codeUnits.fold<int>(0, (a, b) => a + b);
+                final stableHash = userId.codeUnits.fold<int>(
+                  0,
+                  (a, b) => a + b,
+                );
                 return stableHash % 2 == 0;
               },
               priority: 100,

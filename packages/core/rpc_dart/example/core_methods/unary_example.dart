@@ -38,8 +38,8 @@ class UnaryRpcExample {
       // Пример 2: Вызов с базовым контекстом
       print('\n--- Пример 2: Вызов с контекстом ---');
       final context2 = RpcContextUtils.withBearerToken('secret-token-123')
-          .withAdditionalHeaders({'user-id': 'user-456'}).withTraceId(
-              'trace-${DateTime.now().millisecondsSinceEpoch}');
+          .withAdditionalHeaders({'user-id': 'user-456'})
+          .withTraceId('trace-${DateTime.now().millisecondsSinceEpoch}');
       final response2 = await client.getCurrentTime(
         'Время'.rpc,
         context: context2,
@@ -214,7 +214,7 @@ final class MultiServiceResponder extends RpcResponderContract
 final class MultiServiceCaller extends RpcCallerContract
     implements IMultiServiceContract {
   MultiServiceCaller(RpcCallerEndpoint endpoint)
-      : super('MultiService', endpoint);
+    : super('MultiService', endpoint);
   @override
   Future<RpcString> sayHello(RpcString message, {RpcContext? context}) {
     return callUnary<RpcString, RpcString>(

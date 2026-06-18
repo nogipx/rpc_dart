@@ -13,8 +13,8 @@ import 'package:isolate_manager/src/isolate_manager_controller/web.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:web/web.dart';
 
-typedef RpcIsolateEntrypoint = void Function(
-    IRpcTransport transport, Map<String, dynamic> customParams);
+typedef RpcIsolateEntrypoint =
+    void Function(IRpcTransport transport, Map<String, dynamic> customParams);
 
 const bool _kIsWasm = bool.fromEnvironment('dart.tool.dart2wasm');
 const String _defaultWorkerName = 'rpcIsolateWorker';
@@ -44,20 +44,20 @@ class _BridgeMessage {
   });
 
   Map<String, Object?> toMap() => {
-        'type': switch (type) {
-          _BridgeType.init => 'init',
-          _BridgeType.ready => 'ready',
-          _BridgeType.metadata => 'metadata',
-          _BridgeType.data => 'data',
-          _BridgeType.finish => 'finish',
-          _BridgeType.close => 'close',
-        },
-        'streamId': streamId,
-        if (endStream) 'endStream': true,
-        if (metadata != null) 'metadata': metadata,
-        if (payload != null) 'payload': payload,
-        if (methodPath != null) 'methodPath': methodPath,
-      };
+    'type': switch (type) {
+      _BridgeType.init => 'init',
+      _BridgeType.ready => 'ready',
+      _BridgeType.metadata => 'metadata',
+      _BridgeType.data => 'data',
+      _BridgeType.finish => 'finish',
+      _BridgeType.close => 'close',
+    },
+    'streamId': streamId,
+    if (endStream) 'endStream': true,
+    if (metadata != null) 'metadata': metadata,
+    if (payload != null) 'payload': payload,
+    if (methodPath != null) 'methodPath': methodPath,
+  };
 
   static _BridgeMessage? fromMap(dynamic raw) {
     if (raw is! Map) return null;
@@ -103,8 +103,8 @@ class _WebMultiplexedChannel implements IRpcMultiplexedChannel {
     required Stream<dynamic> messageStream,
     required void Function(Map<String, Object?> data) send,
     void Function()? onClose,
-  })  : _send = send,
-        _onClose = onClose {
+  }) : _send = send,
+       _onClose = onClose {
     _messageSub = messageStream.listen(
       (raw) {
         final msg = _BridgeMessage.fromMap(raw);
@@ -149,14 +149,16 @@ class _WebMultiplexedChannel implements IRpcMultiplexedChannel {
     }
 
     try {
-      _send(_BridgeMessage(
-        type: type,
-        streamId: message.streamId,
-        endStream: message.isEndOfStream,
-        metadata: metadata,
-        payload: payload,
-        methodPath: message.methodPath,
-      ).toMap());
+      _send(
+        _BridgeMessage(
+          type: type,
+          streamId: message.streamId,
+          endStream: message.isEndOfStream,
+          metadata: metadata,
+          payload: payload,
+          methodPath: message.methodPath,
+        ).toMap(),
+      );
     } catch (_) {
       await close();
     }
@@ -185,25 +187,29 @@ class _WebMultiplexedChannel implements IRpcMultiplexedChannel {
       case _BridgeType.ready:
         break;
       case _BridgeType.metadata:
-        _incomingCtl.add(RpcTransportMessage(
-          metadata:
-              _decodeMetadata(message.metadata ?? const <String, Object?>{}),
-          isEndOfStream: message.endStream,
-          streamId: message.streamId,
-          methodPath: message.methodPath,
-        ));
+        _incomingCtl.add(
+          RpcTransportMessage(
+            metadata: _decodeMetadata(
+              message.metadata ?? const <String, Object?>{},
+            ),
+            isEndOfStream: message.endStream,
+            streamId: message.streamId,
+            methodPath: message.methodPath,
+          ),
+        );
       case _BridgeType.data:
-        _incomingCtl.add(RpcTransportMessage(
-          payload: _materializeBytes(message.payload),
-          isEndOfStream: message.endStream,
-          streamId: message.streamId,
-          methodPath: message.methodPath,
-        ));
+        _incomingCtl.add(
+          RpcTransportMessage(
+            payload: _materializeBytes(message.payload),
+            isEndOfStream: message.endStream,
+            streamId: message.streamId,
+            methodPath: message.methodPath,
+          ),
+        );
       case _BridgeType.finish:
-        _incomingCtl.add(RpcTransportMessage(
-          isEndOfStream: true,
-          streamId: message.streamId,
-        ));
+        _incomingCtl.add(
+          RpcTransportMessage(isEndOfStream: true, streamId: message.streamId),
+        );
       case _BridgeType.close:
         close();
     }
@@ -257,8 +263,10 @@ abstract interface class RpcIsolateTransport {
     // for the worker's own `ready` ack (sent after `entrypoint` returns) before
     // returning the transport, otherwise early RPC frames race ahead of the
     // responder subscription and are dropped (the bridge streams do not buffer).
-    await controller.ensureInitialized.future
-        .timeout(const Duration(seconds: 5), onTimeout: () {});
+    await controller.ensureInitialized.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {},
+    );
 
     // Listen for the worker's post-entrypoint readiness ack before any RPC
     // frames are allowed to flow.
@@ -282,8 +290,7 @@ abstract interface class RpcIsolateTransport {
     // Wait for the worker responder to be ready. If the worker predates this
     // protocol (no `ready` ack), fall back after a short grace period so we do
     // not hang older worker builds.
-    await ready.future
-        .timeout(const Duration(seconds: 5), onTimeout: () {});
+    await ready.future.timeout(const Duration(seconds: 5), onTimeout: () {});
     await readySub.cancel();
 
     void kill() {
@@ -302,8 +309,10 @@ void runRpcIsolateManagerWorker(
 }) {
   final scope = _workerSelf;
 
-  final controller = IsolateManagerControllerImpl<Object?, Object?>(scope,
-      onDispose: () => scope.close());
+  final controller = IsolateManagerControllerImpl<Object?, Object?>(
+    scope,
+    onDispose: () => scope.close(),
+  );
 
   final channel = _WebMultiplexedChannel(
     messageStream: controller.onIsolateMessage,
@@ -323,8 +332,9 @@ void runRpcIsolateManagerWorker(
   controller.initialized();
 
   void signalReady() {
-    controller
-        .sendResult(_BridgeMessage(type: _BridgeType.ready, streamId: 0).toMap());
+    controller.sendResult(
+      _BridgeMessage(type: _BridgeType.ready, streamId: 0).toMap(),
+    );
   }
 
   controller.onIsolateMessage.first.then((raw) {
@@ -358,19 +368,21 @@ RpcMetadata _decodeMetadata(Map<String, Object?> raw) {
   }
   final headers = headersRaw
       .whereType<Map>()
-      .map((header) => RpcHeader(
-            header['name']?.toString() ?? '',
-            header['value']?.toString() ?? '',
-          ))
+      .map(
+        (header) => RpcHeader(
+          header['name']?.toString() ?? '',
+          header['value']?.toString() ?? '',
+        ),
+      )
       .toList();
   return RpcMetadata(headers);
 }
 
 Map<String, Object?> _encodeMetadata(RpcMetadata metadata) => {
-      'headers': metadata.headers
-          .map((header) => {'name': header.name, 'value': header.value})
-          .toList(),
-    };
+  'headers': metadata.headers
+      .map((header) => {'name': header.name, 'value': header.value})
+      .toList(),
+};
 
 int? _asInt(Object? value) {
   if (value is int) return value;

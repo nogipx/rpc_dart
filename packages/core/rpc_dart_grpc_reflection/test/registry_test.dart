@@ -33,32 +33,41 @@ void main() {
     });
 
     test('addFileDescriptor registers service name', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+        ),
+      );
 
       expect(registry.serviceNames, ['echo.v1.EchoService']);
       expect(registry.hasDescriptors, isTrue);
     });
 
     test('addFileDescriptor registers multiple services', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'multi.proto',
-        package: 'svc.v1',
-        serviceNames: ['Alpha', 'Beta'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'multi.proto',
+          package: 'svc.v1',
+          serviceNames: ['Alpha', 'Beta'],
+        ),
+      );
 
-      expect(registry.serviceNames, containsAll(['svc.v1.Alpha', 'svc.v1.Beta']));
+      expect(
+        registry.serviceNames,
+        containsAll(['svc.v1.Alpha', 'svc.v1.Beta']),
+      );
     });
 
     test('no-package service uses unqualified name', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'svc.proto',
-        package: '',
-        serviceNames: ['MyService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'svc.proto',
+          package: '',
+          serviceNames: ['MyService'],
+        ),
+      );
 
       expect(registry.serviceNames, contains('MyService'));
       expect(registry.fileContainingSymbol('MyService'), isNotNull);
@@ -86,11 +95,13 @@ void main() {
     // --- fileByFilename ---
 
     test('fileByFilename returns bytes for registered file', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+        ),
+      );
 
       expect(registry.fileByFilename('echo.proto'), isNotNull);
     });
@@ -100,11 +111,13 @@ void main() {
     });
 
     test('fileByFilename includes the file itself in returned list', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+        ),
+      );
 
       final result = registry.fileByFilename('echo.proto')!;
       expect(result, hasLength(1));
@@ -113,21 +126,25 @@ void main() {
     // --- fileContainingSymbol ---
 
     test('fileContainingSymbol finds service by FQN', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+        ),
+      );
 
       expect(registry.fileContainingSymbol('echo.v1.EchoService'), isNotNull);
     });
 
     test('fileContainingSymbol finds service with leading dot', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+        ),
+      );
 
       expect(registry.fileContainingSymbol('.echo.v1.EchoService'), isNotNull);
     });
@@ -137,50 +154,67 @@ void main() {
     });
 
     test('fileContainingSymbol finds message type', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptorWithMessages(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        messageNames: ['EchoRequest'],
-        serviceNames: [],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptorWithMessages(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          messageNames: ['EchoRequest'],
+          serviceNames: [],
+        ),
+      );
 
       expect(registry.fileContainingSymbol('echo.v1.EchoRequest'), isNotNull);
       expect(registry.fileContainingSymbol('.echo.v1.EchoRequest'), isNotNull);
     });
 
     test('fileContainingSymbol finds nested message type', () {
-      registry.addFileDescriptor(buildDescriptorWithNesting(
-        name: 'nested.proto',
-        package: 'nested.v1',
-        outerName: 'Outer',
-        nestedMessageNames: ['Inner'],
-      ));
+      registry.addFileDescriptor(
+        buildDescriptorWithNesting(
+          name: 'nested.proto',
+          package: 'nested.v1',
+          outerName: 'Outer',
+          nestedMessageNames: ['Inner'],
+        ),
+      );
 
       expect(registry.fileContainingSymbol('nested.v1.Outer'), isNotNull);
       expect(registry.fileContainingSymbol('nested.v1.Outer.Inner'), isNotNull);
-      expect(registry.fileContainingSymbol('.nested.v1.Outer.Inner'), isNotNull);
+      expect(
+        registry.fileContainingSymbol('.nested.v1.Outer.Inner'),
+        isNotNull,
+      );
     });
 
     test('fileContainingSymbol finds nested enum type', () {
-      registry.addFileDescriptor(buildDescriptorWithNesting(
-        name: 'nested.proto',
-        package: 'nested.v1',
-        outerName: 'Outer',
-        nestedEnumNames: ['Status'],
-      ));
+      registry.addFileDescriptor(
+        buildDescriptorWithNesting(
+          name: 'nested.proto',
+          package: 'nested.v1',
+          outerName: 'Outer',
+          nestedEnumNames: ['Status'],
+        ),
+      );
 
-      expect(registry.fileContainingSymbol('nested.v1.Outer.Status'), isNotNull);
-      expect(registry.fileContainingSymbol('.nested.v1.Outer.Status'), isNotNull);
+      expect(
+        registry.fileContainingSymbol('nested.v1.Outer.Status'),
+        isNotNull,
+      );
+      expect(
+        registry.fileContainingSymbol('.nested.v1.Outer.Status'),
+        isNotNull,
+      );
     });
 
     test('fileContainingSymbol finds file-level enum type', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptorWithMessages(
-        name: 'enums.proto',
-        package: 'enums.v1',
-        messageNames: [],
-        serviceNames: [],
-        enumNames: ['GlobalStatus'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptorWithMessages(
+          name: 'enums.proto',
+          package: 'enums.v1',
+          messageNames: [],
+          serviceNames: [],
+          enumNames: ['GlobalStatus'],
+        ),
+      );
 
       expect(registry.fileContainingSymbol('enums.v1.GlobalStatus'), isNotNull);
     });
@@ -188,52 +222,64 @@ void main() {
     // --- Dependency resolution ---
 
     test('fileByFilename includes registered dependency', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'common.proto',
-        package: 'common.v1',
-        serviceNames: [],
-      ));
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-        dependencies: ['common.proto'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'common.proto',
+          package: 'common.v1',
+          serviceNames: [],
+        ),
+      );
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+          dependencies: ['common.proto'],
+        ),
+      );
 
       final result = registry.fileByFilename('echo.proto')!;
       expect(result, hasLength(2));
     });
 
     test('fileContainingSymbol includes transitive dependencies', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'base.proto',
-        package: 'base.v1',
-        serviceNames: [],
-      ));
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'mid.proto',
-        package: 'mid.v1',
-        serviceNames: [],
-        dependencies: ['base.proto'],
-      ));
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'top.proto',
-        package: 'top.v1',
-        serviceNames: ['TopService'],
-        dependencies: ['mid.proto'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'base.proto',
+          package: 'base.v1',
+          serviceNames: [],
+        ),
+      );
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'mid.proto',
+          package: 'mid.v1',
+          serviceNames: [],
+          dependencies: ['base.proto'],
+        ),
+      );
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'top.proto',
+          package: 'top.v1',
+          serviceNames: ['TopService'],
+          dependencies: ['mid.proto'],
+        ),
+      );
 
       final result = registry.fileContainingSymbol('top.v1.TopService')!;
       expect(result, hasLength(3)); // top + mid + base
     });
 
     test('missing dependency is omitted but partial set still returned', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-        dependencies: ['google/protobuf/timestamp.proto'], // not registered
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+          dependencies: ['google/protobuf/timestamp.proto'], // not registered
+        ),
+      );
 
       final result = registry.fileByFilename('echo.proto')!;
       expect(result, hasLength(1)); // only the file itself
@@ -242,53 +288,60 @@ void main() {
     // --- Missing-dependency reporting (backlog #7) ---
 
     test('missingDependencies lists unregistered declared deps', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-        dependencies: ['google/protobuf/timestamp.proto'],
-      ));
-
-      expect(
-        registry.missingDependencies(),
-        {'google/protobuf/timestamp.proto'},
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+          dependencies: ['google/protobuf/timestamp.proto'],
+        ),
       );
+
+      expect(registry.missingDependencies(), {
+        'google/protobuf/timestamp.proto',
+      });
     });
 
     test('missingDependencies empty when closure complete', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'common.proto',
-        package: 'common.v1',
-        serviceNames: [],
-      ));
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-        dependencies: ['common.proto'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'common.proto',
+          package: 'common.v1',
+          serviceNames: [],
+        ),
+      );
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+          dependencies: ['common.proto'],
+        ),
+      );
 
       expect(registry.missingDependencies(), isEmpty);
     });
 
     test('warning fires naming missing deps on incomplete resolution', () {
       final output = _CapturingLogOutput();
-      final logger =
-          LogController(outputs: [output]).scope('test.reflection');
+      final logger = LogController(outputs: [output]).scope('test.reflection');
       final reg = RpcReflectionRegistry(logger: logger);
 
-      reg.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-        dependencies: ['google/protobuf/timestamp.proto'], // not registered
-      ));
+      reg.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+          dependencies: ['google/protobuf/timestamp.proto'], // not registered
+        ),
+      );
 
       final result = reg.fileByFilename('echo.proto')!;
       expect(result, hasLength(1)); // partial set still returned
 
-      final warnings =
-          output.events.where((e) => e.level == RpcLogLevel.warning).toList();
+      final warnings = output.events
+          .where((e) => e.level == RpcLogLevel.warning)
+          .toList();
       expect(warnings, hasLength(1));
       expect(warnings.single.message, contains('INCOMPLETE'));
       expect(
@@ -303,21 +356,24 @@ void main() {
 
     test('no warning when all deps registered', () {
       final output = _CapturingLogOutput();
-      final logger =
-          LogController(outputs: [output]).scope('test.reflection');
+      final logger = LogController(outputs: [output]).scope('test.reflection');
       final reg = RpcReflectionRegistry(logger: logger);
 
-      reg.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'common.proto',
-        package: 'common.v1',
-        serviceNames: [],
-      ));
-      reg.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-        dependencies: ['common.proto'],
-      ));
+      reg.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'common.proto',
+          package: 'common.v1',
+          serviceNames: [],
+        ),
+      );
+      reg.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+          dependencies: ['common.proto'],
+        ),
+      );
 
       reg.fileByFilename('echo.proto');
 
@@ -328,23 +384,24 @@ void main() {
     });
 
     test('circular dependencies do not cause infinite loop', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'a.proto',
-        package: 'a.v1',
-        serviceNames: [],
-        dependencies: ['b.proto'],
-      ));
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'b.proto',
-        package: 'b.v1',
-        serviceNames: ['BService'],
-        dependencies: ['a.proto'],
-      ));
-
-      expect(
-        () => registry.fileByFilename('a.proto'),
-        returnsNormally,
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'a.proto',
+          package: 'a.v1',
+          serviceNames: [],
+          dependencies: ['b.proto'],
+        ),
       );
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'b.proto',
+          package: 'b.v1',
+          serviceNames: ['BService'],
+          dependencies: ['a.proto'],
+        ),
+      );
+
+      expect(() => registry.fileByFilename('a.proto'), returnsNormally);
     });
 
     // --- addFromPbjson ---

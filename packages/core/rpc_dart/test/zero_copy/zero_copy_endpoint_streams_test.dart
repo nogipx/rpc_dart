@@ -161,13 +161,14 @@ void main() {
       print('📤 Вызываем serverStream через endpoint...');
 
       try {
-        await for (final response in clientEndpoint
-            .serverStream<TestRequest, TestResponse>(
-              serviceName: 'ZeroCopyTestService',
-              methodName: 'GetNumbers',
-              request: request,
-            )
-            .timeout(Duration(seconds: 5))) {
+        await for (final response
+            in clientEndpoint
+                .serverStream<TestRequest, TestResponse>(
+                  serviceName: 'ZeroCopyTestService',
+                  methodName: 'GetNumbers',
+                  request: request,
+                )
+                .timeout(Duration(seconds: 5))) {
           responses.add(response);
           print('📥 Получен ответ: ${response.result}');
         }
@@ -232,8 +233,9 @@ void main() {
 
         print('\n📊 Анализ:');
         final directCount = sentMessages.where((m) => m.isDirect).length;
-        final serializedCount =
-            sentMessages.where((m) => m.isSerialized).length;
+        final serializedCount = sentMessages
+            .where((m) => m.isSerialized)
+            .length;
 
         print('   🚀 Zero-copy: $directCount');
         print('   📡 Сериализованных: $serializedCount');
@@ -277,12 +279,12 @@ void main() {
       print('📤 Вызываем bidirectionalStream через endpoint...');
 
       try {
-        final responseStream =
-            clientEndpoint.bidirectionalStream<TestRequest, TestResponse>(
-          serviceName: 'ZeroCopyTestService',
-          methodName: 'Chat',
-          requests: requestController.stream,
-        );
+        final responseStream = clientEndpoint
+            .bidirectionalStream<TestRequest, TestResponse>(
+              serviceName: 'ZeroCopyTestService',
+              methodName: 'Chat',
+              requests: requestController.stream,
+            );
 
         final subscription = responseStream.listen((response) {
           responses.add(response);
@@ -301,8 +303,9 @@ void main() {
 
         print('\n📊 Анализ:');
         final directCount = sentMessages.where((m) => m.isDirect).length;
-        final serializedCount =
-            sentMessages.where((m) => m.isSerialized).length;
+        final serializedCount = sentMessages
+            .where((m) => m.isSerialized)
+            .length;
 
         print('   Ответов получено: ${responses.length}');
         print('   🚀 Zero-copy: $directCount');

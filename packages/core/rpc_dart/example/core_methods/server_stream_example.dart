@@ -151,8 +151,9 @@ final class DataStreamServiceResponder extends RpcResponderContract
     final requestedCount = count.value;
     final countHeader = context?.getHeader('count');
     final delayHeader = context?.getHeader('delay');
-    final actualCount =
-        countHeader != null ? int.parse(countHeader) : requestedCount;
+    final actualCount = countHeader != null
+        ? int.parse(countHeader)
+        : requestedCount;
     final delay = delayHeader != null ? int.parse(delayHeader) : 50;
     logger.info('🔢 Отправляем $actualCount чисел с задержкой $delay мс');
     for (int i = 0; i < actualCount; i++) {
@@ -195,7 +196,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
 final class DataStreamServiceCaller extends RpcCallerContract
     implements IDataStreamServiceContract {
   DataStreamServiceCaller(RpcCallerEndpoint endpoint)
-      : super('DataStreamService', endpoint);
+    : super('DataStreamService', endpoint);
   @override
   Stream<RpcString> getServerStream(RpcString request, {RpcContext? context}) {
     return callServerStream<RpcString, RpcString>(

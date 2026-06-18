@@ -84,34 +84,41 @@ class _RawEchoServer {
 
 void main() {
   group('RpcWebSocketCallerTransport reconnect', () {
-    test('reconnect re-establishes the connection and reports healthy',
-        () async {
-      final server = await _RawEchoServer.start();
-      addTearDown(server.stop);
-
-      final transport = await RpcWebSocketCallerTransport.connect(server.url);
-      addTearDown(transport.close);
-
-      // Sanity: an echo round-trips before any drop.
-      final firstEcho = _waitForEcho(transport);
-      final sid1 = transport.createStream();
-      await transport.sendMessage(
-        sid1,
-        RpcMessageFrame.encode(Uint8List.fromList([1, 2, 3])),
-        endStream: true,
-      );
-      expect((await firstEcho.timeout(const Duration(seconds: 5))).streamId,
-          equals(sid1));
-
-      final status =
-          await transport.reconnect().timeout(const Duration(seconds: 5));
-      expect(status.isHealthy, isTrue,
-          reason: 'reconnect to a live server must report healthy');
-      expect(transport.isClosed, isFalse);
-    });
-
     test(
-        'stable incomingMessages stream survives reconnect for pre-existing '
+      'reconnect re-establishes the connection and reports healthy',
+      () async {
+        final server = await _RawEchoServer.start();
+        addTearDown(server.stop);
+
+        final transport = await RpcWebSocketCallerTransport.connect(server.url);
+        addTearDown(transport.close);
+
+        // Sanity: an echo round-trips before any drop.
+        final firstEcho = _waitForEcho(transport);
+        final sid1 = transport.createStream();
+        await transport.sendMessage(
+          sid1,
+          RpcMessageFrame.encode(Uint8List.fromList([1, 2, 3])),
+          endStream: true,
+        );
+        expect(
+          (await firstEcho.timeout(const Duration(seconds: 5))).streamId,
+          equals(sid1),
+        );
+
+        final status = await transport.reconnect().timeout(
+          const Duration(seconds: 5),
+        );
+        expect(
+          status.isHealthy,
+          isTrue,
+          reason: 'reconnect to a live server must report healthy',
+        );
+        expect(transport.isClosed, isFalse);
+      },
+    );
+
+    test('stable incomingMessages stream survives reconnect for pre-existing '
         'subscribers', () async {
       final server = await _RawEchoServer.start();
       addTearDown(server.stop);
@@ -128,8 +135,9 @@ void main() {
       addTearDown(sub.cancel);
 
       // Reconnect (same transport object, same stream, fresh socket).
-      final status =
-          await transport.reconnect().timeout(const Duration(seconds: 5));
+      final status = await transport.reconnect().timeout(
+        const Duration(seconds: 5),
+      );
       expect(status.isHealthy, isTrue);
 
       // A request issued AFTER reconnect reaches the server and the echo comes
@@ -141,154 +149,172 @@ void main() {
         endStream: true,
       );
 
-      await _pumpUntil(() => received.contains(sid),
-          timeout: const Duration(seconds: 5),
-          reason: 'echo after reconnect must reach the original subscriber');
+      await _pumpUntil(
+        () => received.contains(sid),
+        timeout: const Duration(seconds: 5),
+        reason: 'echo after reconnect must reach the original subscriber',
+      );
 
       expect(received, contains(sid));
     });
 
-    test('reconnect to a FRESHLY-bound server after the first one drops',
-        () async {
-      // First server: connect, prove echo, then tear it down entirely.
-      var server = await _RawEchoServer.start();
-      var targetUrl = server.url;
+    test(
+      'reconnect to a FRESHLY-bound server after the first one drops',
+      () async {
+        // First server: connect, prove echo, then tear it down entirely.
+        var server = await _RawEchoServer.start();
+        var targetUrl = server.url;
 
-      Future<WebSocketChannel> openChannel() async {
-        final ch = WebSocketChannel.connect(targetUrl);
-        await ch.ready;
-        return ch;
-      }
+        Future<WebSocketChannel> openChannel() async {
+          final ch = WebSocketChannel.connect(targetUrl);
+          await ch.ready;
+          return ch;
+        }
 
-      final transport = RpcWebSocketCallerTransport(
-        await openChannel(),
-        reconnectFactory: openChannel,
-      );
-      addTearDown(transport.close);
+        final transport = RpcWebSocketCallerTransport(
+          await openChannel(),
+          reconnectFactory: openChannel,
+        );
+        addTearDown(transport.close);
 
-      // Pre-existing subscriber that must survive the server swap.
-      final received = <int>[];
-      final sub = transport.incomingMessages.listen((m) {
-        if (m.payload != null) received.add(m.streamId);
-      });
-      addTearDown(sub.cancel);
+        // Pre-existing subscriber that must survive the server swap.
+        final received = <int>[];
+        final sub = transport.incomingMessages.listen((m) {
+          if (m.payload != null) received.add(m.streamId);
+        });
+        addTearDown(sub.cancel);
 
-      // Echo works against server #1.
-      final firstEcho = _waitForEcho(transport);
-      final sid1 = transport.createStream();
-      await transport.sendMessage(
-        sid1,
-        RpcMessageFrame.encode(Uint8List.fromList([1])),
-        endStream: true,
-      );
-      await firstEcho.timeout(const Duration(seconds: 5));
+        // Echo works against server #1.
+        final firstEcho = _waitForEcho(transport);
+        final sid1 = transport.createStream();
+        await transport.sendMessage(
+          sid1,
+          RpcMessageFrame.encode(Uint8List.fromList([1])),
+          endStream: true,
+        );
+        await firstEcho.timeout(const Duration(seconds: 5));
 
-      // Drop server #1 entirely, then stand up server #2 on a new port.
-      await server.stop();
-      server = await _RawEchoServer.start();
-      targetUrl = server.url;
-      addTearDown(server.stop);
+        // Drop server #1 entirely, then stand up server #2 on a new port.
+        await server.stop();
+        server = await _RawEchoServer.start();
+        targetUrl = server.url;
+        addTearDown(server.stop);
 
-      // Reconnect: factory now points at server #2.
-      final status =
-          await transport.reconnect().timeout(const Duration(seconds: 5));
-      expect(status.isHealthy, isTrue,
-          reason: 'reconnect to a freshly-bound server must succeed');
+        // Reconnect: factory now points at server #2.
+        final status = await transport.reconnect().timeout(
+          const Duration(seconds: 5),
+        );
+        expect(
+          status.isHealthy,
+          isTrue,
+          reason: 'reconnect to a freshly-bound server must succeed',
+        );
 
-      // A request after reconnect reaches server #2 and the echo returns on
-      // the original (stable) subscriber.
-      final sid2 = transport.createStream();
-      await transport.sendMessage(
-        sid2,
-        RpcMessageFrame.encode(Uint8List.fromList([2])),
-        endStream: true,
-      );
+        // A request after reconnect reaches server #2 and the echo returns on
+        // the original (stable) subscriber.
+        final sid2 = transport.createStream();
+        await transport.sendMessage(
+          sid2,
+          RpcMessageFrame.encode(Uint8List.fromList([2])),
+          endStream: true,
+        );
 
-      await _pumpUntil(() => received.contains(sid2),
+        await _pumpUntil(
+          () => received.contains(sid2),
           timeout: const Duration(seconds: 5),
-          reason: 'echo from server #2 must reach the original subscriber');
+          reason: 'echo from server #2 must reach the original subscriber',
+        );
 
-      expect(received, contains(sid2),
-          reason: 'stable stream survived a full server swap');
-    });
-
-    test('full RPC call succeeds after reconnect (endpoint-level recovery)',
-        () async {
-      // Here we use RpcWebSocketServer + endpoints to prove a real unary call
-      // works after a reconnect against a freshly-bound server.
-      var harness = await _ContractHarness.start();
-      var targetUrl = harness.url;
-
-      Future<WebSocketChannel> openChannel() async {
-        final ch = WebSocketChannel.connect(targetUrl);
-        await ch.ready;
-        return ch;
-      }
-
-      final transport = RpcWebSocketCallerTransport(
-        await openChannel(),
-        reconnectFactory: openChannel,
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
-      addTearDown(() async {
-        await caller.close();
-      });
-
-      // Works before drop.
-      final before = await caller
-          .unaryRequest<EchoRequest, EchoResponse>(
-            serviceName: serviceName,
-            methodName: 'Unary',
-            request: const EchoRequest('before', count: 1),
-            requestCodec: _reqCodec,
-            responseCodec: _resCodec,
-          )
-          .timeout(const Duration(seconds: 5));
-      expect(before.text, equals('reply:before'));
-
-      // Drop server, bind a fresh one, point the factory at it.
-      await harness.stop();
-      harness = await _ContractHarness.start();
-      targetUrl = harness.url;
-      addTearDown(harness.stop);
-
-      final status =
-          await transport.reconnect().timeout(const Duration(seconds: 5));
-      expect(status.isHealthy, isTrue);
-
-      // A request after reconnect reaches the new server.
-      final after = await caller
-          .unaryRequest<EchoRequest, EchoResponse>(
-            serviceName: serviceName,
-            methodName: 'Unary',
-            request: const EchoRequest('after', count: 2),
-            requestCodec: _reqCodec,
-            responseCodec: _resCodec,
-          )
-          .timeout(const Duration(seconds: 5));
-      expect(after.text, equals('reply:after'));
-      expect(after.index, equals(2));
-    });
-
-    test('reconnect without a factory reports degraded (not configured)',
-        () async {
-      final server = await _RawEchoServer.start();
-      addTearDown(server.stop);
-
-      // Constructed WITHOUT a reconnect factory.
-      final ch = WebSocketChannel.connect(server.url);
-      await ch.ready;
-      final transport = RpcWebSocketCallerTransport(ch);
-      addTearDown(transport.close);
-
-      final status =
-          await transport.reconnect().timeout(const Duration(seconds: 5));
-      expect(status.isHealthy, isFalse);
-      expect(status.details['supported'], isFalse);
-    });
+        expect(
+          received,
+          contains(sid2),
+          reason: 'stable stream survived a full server swap',
+        );
+      },
+    );
 
     test(
-        'server-initiated graceful drop does NOT permanently close a '
+      'full RPC call succeeds after reconnect (endpoint-level recovery)',
+      () async {
+        // Here we use RpcWebSocketServer + endpoints to prove a real unary call
+        // works after a reconnect against a freshly-bound server.
+        var harness = await _ContractHarness.start();
+        var targetUrl = harness.url;
+
+        Future<WebSocketChannel> openChannel() async {
+          final ch = WebSocketChannel.connect(targetUrl);
+          await ch.ready;
+          return ch;
+        }
+
+        final transport = RpcWebSocketCallerTransport(
+          await openChannel(),
+          reconnectFactory: openChannel,
+        );
+        final caller = RpcCallerEndpoint(transport: transport);
+        addTearDown(() async {
+          await caller.close();
+        });
+
+        // Works before drop.
+        final before = await caller
+            .unaryRequest<EchoRequest, EchoResponse>(
+              serviceName: serviceName,
+              methodName: 'Unary',
+              request: const EchoRequest('before', count: 1),
+              requestCodec: _reqCodec,
+              responseCodec: _resCodec,
+            )
+            .timeout(const Duration(seconds: 5));
+        expect(before.text, equals('reply:before'));
+
+        // Drop server, bind a fresh one, point the factory at it.
+        await harness.stop();
+        harness = await _ContractHarness.start();
+        targetUrl = harness.url;
+        addTearDown(harness.stop);
+
+        final status = await transport.reconnect().timeout(
+          const Duration(seconds: 5),
+        );
+        expect(status.isHealthy, isTrue);
+
+        // A request after reconnect reaches the new server.
+        final after = await caller
+            .unaryRequest<EchoRequest, EchoResponse>(
+              serviceName: serviceName,
+              methodName: 'Unary',
+              request: const EchoRequest('after', count: 2),
+              requestCodec: _reqCodec,
+              responseCodec: _resCodec,
+            )
+            .timeout(const Duration(seconds: 5));
+        expect(after.text, equals('reply:after'));
+        expect(after.index, equals(2));
+      },
+    );
+
+    test(
+      'reconnect without a factory reports degraded (not configured)',
+      () async {
+        final server = await _RawEchoServer.start();
+        addTearDown(server.stop);
+
+        // Constructed WITHOUT a reconnect factory.
+        final ch = WebSocketChannel.connect(server.url);
+        await ch.ready;
+        final transport = RpcWebSocketCallerTransport(ch);
+        addTearDown(transport.close);
+
+        final status = await transport.reconnect().timeout(
+          const Duration(seconds: 5),
+        );
+        expect(status.isHealthy, isFalse);
+        expect(status.details['supported'], isFalse);
+      },
+    );
+
+    test('server-initiated graceful drop does NOT permanently close a '
         'reconnect-capable transport (regression)', () async {
       // Regression for the auto-close-on-drop bug: when the peer closes the
       // socket gracefully (FIN), the underlying stream completes with onDone.
@@ -327,18 +353,25 @@ void main() {
       // Give the onDone cascade time to propagate.
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      expect(transport.isClosed, isFalse,
-          reason: 'reconnect-capable transport must survive a graceful drop');
+      expect(
+        transport.isClosed,
+        isFalse,
+        reason: 'reconnect-capable transport must survive a graceful drop',
+      );
 
       // And it can actually recover.
       server = await _RawEchoServer.start();
       targetUrl = server.url;
       addTearDown(server.stop);
 
-      final status =
-          await transport.reconnect().timeout(const Duration(seconds: 5));
-      expect(status.isHealthy, isTrue,
-          reason: 'reconnect after a graceful drop must succeed');
+      final status = await transport.reconnect().timeout(
+        const Duration(seconds: 5),
+      );
+      expect(
+        status.isHealthy,
+        isTrue,
+        reason: 'reconnect after a graceful drop must succeed',
+      );
     });
 
     test('reconnect after close reports closed', () async {
@@ -348,8 +381,9 @@ void main() {
       final transport = await RpcWebSocketCallerTransport.connect(server.url);
       await transport.close();
 
-      final status =
-          await transport.reconnect().timeout(const Duration(seconds: 5));
+      final status = await transport.reconnect().timeout(
+        const Duration(seconds: 5),
+      );
       expect(status.isHealthy, isFalse);
       expect(transport.isClosed, isTrue);
     });
@@ -419,7 +453,7 @@ const serviceName = 'ws.Reconnect';
 
 final class _ReconnectResponder extends RpcResponderContract {
   _ReconnectResponder()
-      : super(serviceName, dataTransferMode: RpcDataTransferMode.codec);
+    : super(serviceName, dataTransferMode: RpcDataTransferMode.codec);
 
   @override
   void setup() {

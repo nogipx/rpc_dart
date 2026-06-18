@@ -63,7 +63,8 @@ void main() {
       expect(
         cb.state,
         CircuitBreakerState.open,
-        reason: 'breaker must count errors emitted by the returned stream; '
+        reason:
+            'breaker must count errors emitted by the returned stream; '
             'it currently calls _onSuccess() before any item is produced',
       );
       expect(cb.failureCount, greaterThanOrEqualTo(3));

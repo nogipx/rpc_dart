@@ -63,14 +63,14 @@ void main() {
 
         // Act
         final responses = <RpcString>[];
-        final responseStream =
-            clientEndpoint.serverStream<RpcString, RpcString>(
-          serviceName: 'UserService',
-          methodName: 'GetNumbers',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          request: '3'.rpc,
-        );
+        final responseStream = clientEndpoint
+            .serverStream<RpcString, RpcString>(
+              serviceName: 'UserService',
+              methodName: 'GetNumbers',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: '3'.rpc,
+            );
 
         await for (final response in responseStream) {
           responses.add(response);
@@ -129,15 +129,15 @@ void main() {
         final premiumContext = RpcContext.withHeaders({'x-tier': 'premium'});
         final responses = <RpcString>[];
 
-        final responseStream =
-            clientEndpoint.serverStream<RpcString, RpcString>(
-          serviceName: 'UserService',
-          methodName: 'GetNumbers',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          request: '3'.rpc,
-          context: premiumContext,
-        );
+        final responseStream = clientEndpoint
+            .serverStream<RpcString, RpcString>(
+              serviceName: 'UserService',
+              methodName: 'GetNumbers',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: '3'.rpc,
+              context: premiumContext,
+            );
 
         await for (final response in responseStream) {
           responses.add(response);
@@ -184,13 +184,13 @@ void main() {
 
         // Act
         final requests = ['payment1'.rpc, 'payment2'.rpc, 'payment3'.rpc];
-        final clientStreamBuilder =
-            clientEndpoint.clientStream<RpcString, RpcString>(
-          serviceName: 'PaymentService',
-          methodName: 'ProcessPayments',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-        );
+        final clientStreamBuilder = clientEndpoint
+            .clientStream<RpcString, RpcString>(
+              serviceName: 'PaymentService',
+              methodName: 'ProcessPayments',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+            );
 
         final response = await clientStreamBuilder(
           Stream.fromIterable(requests),
@@ -233,13 +233,13 @@ void main() {
         const batchSize = 50;
         final requests = List.generate(batchSize, (i) => 'batch_item_$i'.rpc);
 
-        final clientStreamBuilder =
-            clientEndpoint.clientStream<RpcString, RpcString>(
-          serviceName: 'PaymentService',
-          methodName: 'ProcessPayments',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-        );
+        final clientStreamBuilder = clientEndpoint
+            .clientStream<RpcString, RpcString>(
+              serviceName: 'PaymentService',
+              methodName: 'ProcessPayments',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+            );
 
         final response = await clientStreamBuilder(
           Stream.fromIterable(requests),
@@ -289,14 +289,14 @@ void main() {
         final requestController = StreamController<RpcString>();
         final responses = <RpcString>[];
 
-        final responseStream =
-            clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-          serviceName: 'ChatService',
-          methodName: 'Chat',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          requests: requestController.stream,
-        );
+        final responseStream = clientEndpoint
+            .bidirectionalStream<RpcString, RpcString>(
+              serviceName: 'ChatService',
+              methodName: 'Chat',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              requests: requestController.stream,
+            );
 
         final subscription = responseStream.listen(responses.add);
 
@@ -350,23 +350,23 @@ void main() {
           final responses1 = <RpcString>[];
           final responses2 = <RpcString>[];
 
-          final responseStream1 =
-              clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-            serviceName: 'ChatService',
-            methodName: 'Chat',
-            requestCodec: RpcString.codec,
-            responseCodec: RpcString.codec,
-            requests: stream1Controller.stream,
-          );
+          final responseStream1 = clientEndpoint
+              .bidirectionalStream<RpcString, RpcString>(
+                serviceName: 'ChatService',
+                methodName: 'Chat',
+                requestCodec: RpcString.codec,
+                responseCodec: RpcString.codec,
+                requests: stream1Controller.stream,
+              );
 
-          final responseStream2 =
-              clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-            serviceName: 'ChatService',
-            methodName: 'Chat',
-            requestCodec: RpcString.codec,
-            responseCodec: RpcString.codec,
-            requests: stream2Controller.stream,
-          );
+          final responseStream2 = clientEndpoint
+              .bidirectionalStream<RpcString, RpcString>(
+                serviceName: 'ChatService',
+                methodName: 'Chat',
+                requestCodec: RpcString.codec,
+                responseCodec: RpcString.codec,
+                requests: stream2Controller.stream,
+              );
 
           final subscription1 = responseStream1.listen(responses1.add);
           final subscription2 = responseStream2.listen(responses2.add);
@@ -468,13 +468,13 @@ void main() {
 
             // 3. Client Stream
             futures.add(() async {
-              final clientStreamBuilder =
-                  clientEndpoint.clientStream<RpcString, RpcString>(
-                serviceName: 'MixedService',
-                methodName: 'ProcessPayments',
-                requestCodec: RpcString.codec,
-                responseCodec: RpcString.codec,
-              );
+              final clientStreamBuilder = clientEndpoint
+                  .clientStream<RpcString, RpcString>(
+                    serviceName: 'MixedService',
+                    methodName: 'ProcessPayments',
+                    requestCodec: RpcString.codec,
+                    responseCodec: RpcString.codec,
+                  );
 
               final requests = ['item1'.rpc, 'item2'.rpc];
               final response = await clientStreamBuilder(
@@ -488,14 +488,14 @@ void main() {
               final requestController = StreamController<RpcString>();
               final responses = <RpcString>[];
 
-              final responseStream =
-                  clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-                serviceName: 'MixedService',
-                methodName: 'Chat',
-                requestCodec: RpcString.codec,
-                responseCodec: RpcString.codec,
-                requests: requestController.stream,
-              );
+              final responseStream = clientEndpoint
+                  .bidirectionalStream<RpcString, RpcString>(
+                    serviceName: 'MixedService',
+                    methodName: 'Chat',
+                    requestCodec: RpcString.codec,
+                    responseCodec: RpcString.codec,
+                    requests: requestController.stream,
+                  );
 
               final subscription = responseStream
                   .timeout(Duration(seconds: 5))
@@ -547,15 +547,12 @@ void main() {
             return false;
           }
 
-          await runZonedGuarded(
-            () async {
-              await expectLater(
-                () async => action(),
-                throwsA(predicate(matches)),
-              );
-            },
-            (error, stack) => captured.add(error),
-          );
+          await runZonedGuarded(() async {
+            await expectLater(
+              () async => action(),
+              throwsA(predicate(matches)),
+            );
+          }, (error, stack) => captured.add(error));
 
           for (final error in captured) {
             expect(matches(error), isTrue);
@@ -565,10 +562,7 @@ void main() {
         await expectRoutingError(() {
           return router.sendMetadata(
             1,
-            RpcMetadata.forClientRequest(
-              'NonExistentService',
-              'GetNumbers',
-            ),
+            RpcMetadata.forClientRequest('NonExistentService', 'GetNumbers'),
           );
         });
 
@@ -584,7 +578,7 @@ final class _TestStreamingService extends RpcResponderContract {
   final String prefix;
 
   _TestStreamingService({this.prefix = '', String serviceName = 'UserService'})
-      : super(serviceName);
+    : super(serviceName);
 
   @override
   void setup() {

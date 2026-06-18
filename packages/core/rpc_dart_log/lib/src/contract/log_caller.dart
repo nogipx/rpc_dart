@@ -9,8 +9,11 @@ import 'messages.dart';
 /// Client-side contract for sending log records to a logCollector collector.
 class LogCollectorServiceCaller extends RpcCallerContract {
   LogCollectorServiceCaller(RpcCallerEndpoint endpoint)
-      : super('LogCollectorService', endpoint,
-            dataTransferMode: RpcDataTransferMode.codec);
+    : super(
+        'LogCollectorService',
+        endpoint,
+        dataTransferMode: RpcDataTransferMode.codec,
+      );
 
   /// Identify this client to the collector.
   Future<LogCollectorWelcome> handshake(LogCollectorHandshake info) =>

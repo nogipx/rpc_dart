@@ -83,8 +83,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         _processResponderMessage(message);
       },
       onError: (error, stackTrace) {
-        _log.error('Transport incoming error',
-            error: error, stackTrace: stackTrace);
+        _log.error(
+          'Transport incoming error',
+          error: error,
+          stackTrace: stackTrace,
+        );
       },
       onDone: () {
         _log.internal('Transport incoming stream closed');
@@ -100,8 +103,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     _respIncomingSub = null;
     _respIsListening = false;
 
-    final activeStreamIds =
-        _respStreams.values.map((s) => s.id).toList(growable: false);
+    final activeStreamIds = _respStreams.values
+        .map((s) => s.id)
+        .toList(growable: false);
     for (final streamId in activeStreamIds) {
       await _cleanupStream(streamId);
     }
@@ -125,7 +129,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     _respIsDraining = true;
 
     _log.info(
-        'Drain started — cancelling ${_respStreams.length} active stream(s)');
+      'Drain started — cancelling ${_respStreams.length} active stream(s)',
+    );
 
     // Cancel all active stream contexts.
     for (final state in _respStreams.values) {
@@ -147,8 +152,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       );
       // Actually force the cleanup the log promises: close remaining responders
       // and release their state/stream IDs.
-      final remaining =
-          _respStreams.values.map((s) => s.id).toList(growable: false);
+      final remaining = _respStreams.values
+          .map((s) => s.id)
+          .toList(growable: false);
       for (final streamId in remaining) {
         await _cleanupStream(streamId);
       }
@@ -178,11 +184,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     // During drain, reject new streams but allow messages for existing ones.
     if (_respIsDraining && _respStreams[message.streamId] == null) {
-      unawaited(_sendGrpcErrorAndCleanup(
-        streamId: message.streamId,
-        status: RpcStatus.unavailable,
-        message: 'Server is shutting down',
-      ));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: message.streamId,
+          status: RpcStatus.unavailable,
+          message: 'Server is shutting down',
+        ),
+      );
       return;
     }
 
@@ -202,12 +210,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final state = _respStreams.obtain(message.streamId);
 
     if (message.isMetadataOnly && message.metadata != null) {
-      final isCancelled =
-          message.metadata!.getHeaderValue('x-client-cancelled');
+      final isCancelled = message.metadata!.getHeaderValue(
+        'x-client-cancelled',
+      );
       if (isCancelled == 'true') {
         final reason =
             message.metadata!.getHeaderValue('x-cancellation-reason') ??
-                'Cancelled by client';
+            'Cancelled by client';
         unawaited(_handleClientCancellation(state, reason));
         return;
       }
@@ -217,7 +226,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       _handleMetadataMessage(state, message);
     }
 
-    final hasPayload = !message.isMetadataOnly &&
+    final hasPayload =
+        !message.isMetadataOnly &&
         (message.payload != null ||
             (message.isDirect && message.directPayload != null));
 
@@ -239,7 +249,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (message.methodPath != null) return true;
     if (message.isEndOfStream) return true;
 
-    final hasPayload = !message.isMetadataOnly &&
+    final hasPayload =
+        !message.isMetadataOnly &&
         (message.payload != null ||
             (message.isDirect && message.directPayload != null));
     if (hasPayload) return true;
@@ -262,46 +273,55 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   ) {
     final metadata = message.metadata;
     if (metadata == null) {
-      unawaited(_sendGrpcErrorAndCleanup(
-        streamId: state.id,
-        status: RpcStatus.invalidArgument,
-        message: 'Missing metadata',
-      ));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Missing metadata',
+        ),
+      );
       return;
     }
 
     final contentType = metadata.getHeaderValue(RpcHeaders.contentType);
     if (contentType != null &&
         !contentType.toLowerCase().startsWith(RpcHeaders.contentTypeGrpc)) {
-      unawaited(_sendGrpcErrorAndCleanup(
-        streamId: state.id,
-        status: RpcStatus.invalidArgument,
-        message: 'Invalid content-type for gRPC',
-      ));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Invalid content-type for gRPC',
+        ),
+      );
       return;
     }
 
     final grpcEncoding = metadata.getHeaderValue(RpcHeaders.grpcEncoding);
     if (grpcEncoding != null && !RpcGrpcCompression.isSupported(grpcEncoding)) {
-      unawaited(_sendGrpcErrorAndCleanup(
-        streamId: state.id,
-        status: RpcStatus.unimplemented,
-        message: 'Unsupported grpc-encoding: $grpcEncoding. '
-            'On web/dart2js the built-in gzip is unavailable; register a '
-            'cross-platform codec (e.g. RpcGzipCodec.register() from '
-            'package:rpc_dart_compression).',
-      ));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.unimplemented,
+          message:
+              'Unsupported grpc-encoding: $grpcEncoding. '
+              'On web/dart2js the built-in gzip is unavailable; register a '
+              'cross-platform codec (e.g. RpcGzipCodec.register() from '
+              'package:rpc_dart_compression).',
+        ),
+      );
       return;
     }
 
     final methodPath = message.methodPath!;
     final parsed = _parseMethodPath(methodPath);
     if (parsed == null) {
-      unawaited(_sendGrpcErrorAndCleanup(
-        streamId: state.id,
-        status: RpcStatus.invalidArgument,
-        message: 'Invalid method path: $methodPath',
-      ));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Invalid method path: $methodPath',
+        ),
+      );
       return;
     }
 
@@ -315,27 +335,32 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final context = _cacheContext(state, message);
 
     if (_isPingMethodKey(methodKey)) {
-      unawaited(_respPingHandler.respond(
-        streamId: state.id,
-        context: context,
-        onComplete: () => _cleanupStream(state.id),
-      ));
+      unawaited(
+        _respPingHandler.respond(
+          streamId: state.id,
+          context: context,
+          onComplete: () => _cleanupStream(state.id),
+        ),
+      );
       return;
     }
 
     final binding = _respRegistry.lookup(methodKey);
     if (binding == null) {
-      unawaited(_sendGrpcErrorAndCleanup(
-        streamId: state.id,
-        status: RpcStatus.unimplemented,
-        message: 'Method $methodKey is not registered',
-        context: context,
-      ));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.unimplemented,
+          message: 'Method $methodKey is not registered',
+          context: context,
+        ),
+      );
       return;
     }
 
     _log.internal(
-        'Metadata received [method: $methodKey] [streamId: ${state.id}]');
+      'Metadata received [method: $methodKey] [streamId: ${state.id}]',
+    );
   }
 
   void _handleDataMessage(
@@ -345,11 +370,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (!state.hasMethod && message.methodPath != null) {
       final parsed = _parseMethodPath(message.methodPath!);
       if (parsed == null) {
-        unawaited(_sendGrpcErrorAndCleanup(
-          streamId: state.id,
-          status: RpcStatus.invalidArgument,
-          message: 'Invalid method path: ${message.methodPath}',
-        ));
+        unawaited(
+          _sendGrpcErrorAndCleanup(
+            streamId: state.id,
+            status: RpcStatus.invalidArgument,
+            message: 'Invalid method path: ${message.methodPath}',
+          ),
+        );
         return;
       }
       state.setMethodKey('${parsed.$1}.${parsed.$2}');
@@ -361,11 +388,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final binding = _respRegistry.lookup(methodKey);
     if (binding == null) {
-      unawaited(_sendGrpcErrorAndCleanup(
-        streamId: state.id,
-        status: RpcStatus.unimplemented,
-        message: 'Method $methodKey is not registered',
-      ));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.unimplemented,
+          message: 'Method $methodKey is not registered',
+        ),
+      );
       return;
     }
 
@@ -389,12 +418,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final binding = _respRegistry.lookup(methodKey);
     if (binding == null) {
-      unawaited(_sendGrpcErrorAndCleanup(
-        streamId: state.id,
-        status: RpcStatus.unimplemented,
-        message: 'Method $methodKey is not registered',
-        context: state.cachedContext,
-      ));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.unimplemented,
+          message: 'Method $methodKey is not registered',
+          context: state.cachedContext,
+        ),
+      );
       return;
     }
 
@@ -404,12 +435,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
 
     if (state.responder == null && state.lastPayloadMessage == null) {
-      unawaited(_sendGrpcErrorAndCleanup(
-        streamId: state.id,
-        status: RpcStatus.invalidArgument,
-        message: 'Request stream closed without payload for $methodKey',
-        context: state.cachedContext,
-      ));
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.invalidArgument,
+          message: 'Request stream closed without payload for $methodKey',
+          context: state.cachedContext,
+        ),
+      );
     }
   }
 
@@ -491,10 +524,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           await processor.finishSending();
           await _cleanupStream(streamId);
         } catch (error, stackTrace) {
-          contextLogger.error('Error in zero-copy unary handler',
-              error: error, stackTrace: stackTrace);
-          final errorMessage =
-              error is RpcException ? error.message : error.toString();
+          contextLogger.error(
+            'Error in zero-copy unary handler',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          final errorMessage = error is RpcException
+              ? error.message
+              : error.toString();
           await processor.sendError(RpcStatus.internal, errorMessage);
           await _cleanupStream(streamId);
         }
@@ -585,7 +622,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
       final saved = state.takeClientBufferedMessages(markEndOfStream: true);
       responder.bindToMessageStream(
-          _stateBoundStream(state, streamId, initialMessages: saved));
+        _stateBoundStream(state, streamId, initialMessages: saved),
+      );
       return;
     }
 
@@ -600,16 +638,18 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       handler: (requests) async {
         final response =
             await handleClientStream<IRpcSerializable, IRpcSerializable>(
-          serviceName: binding.serviceName,
-          methodName: binding.methodName,
-          context: context,
-          requests: requests,
-          handler: (ctx, reqs) async {
-            final result = await method.callClientStreamHandler(
-                ctx, method.castRequestStream(reqs));
-            return method.castResponse(result);
-          },
-        );
+              serviceName: binding.serviceName,
+              methodName: binding.methodName,
+              context: context,
+              requests: requests,
+              handler: (ctx, reqs) async {
+                final result = await method.callClientStreamHandler(
+                  ctx,
+                  method.castRequestStream(reqs),
+                );
+                return method.castResponse(result);
+              },
+            );
         return response;
       },
       context: context,
@@ -621,7 +661,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final saved = state.takeClientBufferedMessages(markEndOfStream: true);
     responder.bindToMessageStream(
-        _stateBoundStream(state, streamId, initialMessages: saved));
+      _stateBoundStream(state, streamId, initialMessages: saved),
+    );
   }
 
   Future<void> _ensureServerStreamResponder(
@@ -660,7 +701,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       state.responder = responder;
       unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
       responder.bindToMessageStream(
-          _stateBoundStream(state, streamId, consumePreBindBuffer: true));
+        _stateBoundStream(state, streamId, consumePreBindBuffer: true),
+      );
       return;
     }
 
@@ -689,7 +731,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     state.responder = responder;
     unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
     responder.bindToMessageStream(
-        _stateBoundStream(state, streamId, consumePreBindBuffer: true));
+      _stateBoundStream(state, streamId, consumePreBindBuffer: true),
+    );
   }
 
   Future<void> _ensureBidirectionalResponder(
@@ -718,7 +761,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       state.responder = responder;
       unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
       responder.bindToMessageStream(
-          _stateBoundStream(state, streamId, consumePreBindBuffer: true));
+        _stateBoundStream(state, streamId, consumePreBindBuffer: true),
+      );
 
       unawaited(() async {
         try {
@@ -735,8 +779,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           }
           await responder.finishReceiving();
         } catch (error, stackTrace) {
-          contextLogger.error('Error in zero-copy bidi handler',
-              error: error, stackTrace: stackTrace);
+          contextLogger.error(
+            'Error in zero-copy bidi handler',
+            error: error,
+            stackTrace: stackTrace,
+          );
           await responder.sendError(RpcStatus.internal, error.toString());
         }
       }());
@@ -746,43 +793,49 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final method = binding.codecMethod;
     final responder =
         BidirectionalStreamResponder<IRpcSerializable, IRpcSerializable>(
-      id: streamId,
-      transport: transport,
-      serviceName: binding.serviceName,
-      methodName: binding.methodName,
-      requestCodec: method.requestCodec,
-      responseCodec: method.responseCodec,
-      context: context,
-      logger: contextLogger,
-    );
+          id: streamId,
+          transport: transport,
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          requestCodec: method.requestCodec,
+          responseCodec: method.responseCodec,
+          context: context,
+          logger: contextLogger,
+        );
 
     state.responder = responder;
     unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
     responder.bindToMessageStream(
-        _stateBoundStream(state, streamId, consumePreBindBuffer: true));
+      _stateBoundStream(state, streamId, consumePreBindBuffer: true),
+    );
 
     unawaited(() async {
       try {
         final responseStream =
             handleBidirectionalStream<IRpcSerializable, IRpcSerializable>(
-          serviceName: binding.serviceName,
-          methodName: binding.methodName,
-          context: context,
-          requests: responder.requests,
-          handler: (ctx, reqs) {
-            return method
-                .callBidirectionalStreamHandler(
-                    ctx, method.castRequestStream(reqs))
-                .map(method.castResponse);
-          },
-        );
+              serviceName: binding.serviceName,
+              methodName: binding.methodName,
+              context: context,
+              requests: responder.requests,
+              handler: (ctx, reqs) {
+                return method
+                    .callBidirectionalStreamHandler(
+                      ctx,
+                      method.castRequestStream(reqs),
+                    )
+                    .map(method.castResponse);
+              },
+            );
         await for (final response in responseStream) {
           await responder.send(response);
         }
         await responder.finishReceiving();
       } catch (error, stackTrace) {
-        contextLogger.error('Error in bidi handler',
-            error: error, stackTrace: stackTrace);
+        contextLogger.error(
+          'Error in bidi handler',
+          error: error,
+          stackTrace: stackTrace,
+        );
         await responder.sendError(RpcStatus.internal, error.toString());
       }
     }());
@@ -805,14 +858,18 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           RpcHeader(
             RpcHeaders.grpcMessage,
             RpcMetadata.encodeGrpcMessage(
-                'Zero-copy method $methodKey requires zero-copy transport'),
+              'Zero-copy method $methodKey requires zero-copy transport',
+            ),
           ),
         ]),
         endStream: true,
       );
     } catch (error, stackTrace) {
-      _log.error('Failed to send zero-copy error for $methodKey',
-          error: error, stackTrace: stackTrace);
+      _log.error(
+        'Failed to send zero-copy error for $methodKey',
+        error: error,
+        stackTrace: stackTrace,
+      );
     } finally {
       await _cleanupStream(state.id);
     }
@@ -831,8 +888,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         endStream: true,
       );
     } catch (error, stackTrace) {
-      _log.error('Failed to send gRPC error [$status] for streamId=$streamId',
-          error: error, stackTrace: stackTrace);
+      _log.error(
+        'Failed to send gRPC error [$status] for streamId=$streamId',
+        error: error,
+        stackTrace: stackTrace,
+      );
     } finally {
       await _cleanupStream(streamId);
     }
@@ -860,8 +920,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     try {
       await responder.close();
     } catch (error, stackTrace) {
-      _log.error('Error closing responder [id: ${responder.id}]',
-          error: error, stackTrace: stackTrace);
+      _log.error(
+        'Error closing responder [id: ${responder.id}]',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -875,7 +938,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final controller = StreamController<RpcTransportMessage>();
     late final StreamSubscription<RpcTransportMessage> subscription;
 
-    subscription = transport.getMessagesForStream(streamId).listen(
+    subscription = transport
+        .getMessagesForStream(streamId)
+        .listen(
           controller.add,
           onError: controller.addError,
           onDone: () => unawaited(controller.close()),
@@ -910,10 +975,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // Attach logger with traceId/requestId and service/method name
     final methodKey = state.methodKey; // e.g. 'Calculator.calculate'
     final scopeName = methodKey ?? 'unknown';
-    final logScope = _log.child(scopeName).withContext(
-          requestId: context.requestId,
-          traceId: context.traceId,
-        );
+    final logScope = _log
+        .child(scopeName)
+        .withContext(requestId: context.requestId, traceId: context.traceId);
     context = context.withLog(logScope);
     state.cacheContext(context);
     return context;
@@ -923,7 +987,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final cached = state.cachedContext;
     if (cached != null) return cached;
 
-    final source = state.metadataMessage ??
+    final source =
+        state.metadataMessage ??
         state.lastPayloadMessage ??
         RpcTransportMessage(
           streamId: state.id,
@@ -1007,10 +1072,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 // ---------------------------------------------------------------------------
 
 final class _RpcZeroCopyUnaryResponder implements IRpcResponder {
-  _RpcZeroCopyUnaryResponder({
-    required this.id,
-    required this.processor,
-  });
+  _RpcZeroCopyUnaryResponder({required this.id, required this.processor});
 
   @override
   final int id;

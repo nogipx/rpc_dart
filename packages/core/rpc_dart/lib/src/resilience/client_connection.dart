@@ -139,8 +139,7 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
     int streamId,
     Object object, {
     bool endStream = false,
-  }) =>
-      _require().sendDirectObject(streamId, object, endStream: endStream);
+  }) => _require().sendDirectObject(streamId, object, endStream: endStream);
 
   @override
   int createStream() => _require().createStream();
@@ -154,16 +153,14 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
     int streamId,
     RpcMetadata metadata, {
     bool endStream = false,
-  }) =>
-      _require().sendMetadata(streamId, metadata, endStream: endStream);
+  }) => _require().sendMetadata(streamId, metadata, endStream: endStream);
 
   @override
   Future<void> sendMessage(
     int streamId,
     Uint8List data, {
     bool endStream = false,
-  }) =>
-      _require().sendMessage(streamId, data, endStream: endStream);
+  }) => _require().sendMessage(streamId, data, endStream: endStream);
 
   @override
   Future<void> finishSending(int streamId) =>
@@ -181,16 +178,18 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
       _inner?.health() ??
       Future.value(
         RpcHealthStatus.unhealthy(
-            component: 'transport', message: 'not connected'),
+          component: 'transport',
+          message: 'not connected',
+        ),
       );
 
   @override
   Future<RpcHealthStatus> reconnect() => Future.value(
-        RpcHealthStatus.degraded(
-          component: 'transport',
-          message: 'reconnect is managed by RpcClientConnection',
-        ),
-      );
+    RpcHealthStatus.degraded(
+      component: 'transport',
+      message: 'reconnect is managed by RpcClientConnection',
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -243,13 +242,13 @@ class RpcClientConnection {
     Duration? connectTimeout,
     RpcConnectionLogger? logger,
     void Function(RpcClientConnectionState state)? onStateChanged,
-  })  : _factory = transportFactory,
-        _backoff = backoff,
-        _shouldReconnect = shouldReconnect,
-        _maxAttempts = maxAttempts,
-        _connectTimeout = connectTimeout,
-        _logger = logger,
-        _onStateChanged = onStateChanged {
+  }) : _factory = transportFactory,
+       _backoff = backoff,
+       _shouldReconnect = shouldReconnect,
+       _maxAttempts = maxAttempts,
+       _connectTimeout = connectTimeout,
+       _logger = logger,
+       _onStateChanged = onStateChanged {
     _proxy.onDropped = _onTransportDropped;
   }
 
@@ -327,7 +326,9 @@ class RpcClientConnection {
     _logger?.call('warning', 'Transport dropped: $error');
     if (!_canReconnect(error)) {
       _logger?.call(
-          'info', 'Will not reconnect (shouldReconnect returned false)');
+        'info',
+        'Will not reconnect (shouldReconnect returned false)',
+      );
       _emit(RpcClientDisconnected(reason: error));
       return;
     }
@@ -350,9 +351,11 @@ class RpcClientConnection {
           'error',
           'Max reconnect attempts ($_maxAttempts) exceeded',
         );
-        _emit(const RpcClientDisconnected(
-          reason: 'max reconnect attempts exceeded',
-        ));
+        _emit(
+          const RpcClientDisconnected(
+            reason: 'max reconnect attempts exceeded',
+          ),
+        );
         guard.complete();
         return;
       }
@@ -389,7 +392,9 @@ class RpcClientConnection {
         return;
       } catch (e) {
         _logger?.call(
-            'warning', 'Attempt ${_reconnectAttempts + 1} failed: $e');
+          'warning',
+          'Attempt ${_reconnectAttempts + 1} failed: $e',
+        );
         if (!_canReconnect(e)) {
           _logger?.call(
             'info',

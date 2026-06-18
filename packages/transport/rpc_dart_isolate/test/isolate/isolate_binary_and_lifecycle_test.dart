@@ -43,8 +43,11 @@ void binaryEchoServer(IRpcTransport transport, Map<String, dynamic> params) {
 void pingServer(IRpcTransport transport, Map<String, dynamic> params) {
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload == 'PING') {
-      await transport.sendDirectObject(message.streamId, 'PONG',
-          endStream: true);
+      await transport.sendDirectObject(
+        message.streamId,
+        'PONG',
+        endStream: true,
+      );
     }
   });
 }
@@ -56,7 +59,9 @@ Future<Uint8List> _roundtrip(
   final streamId = transport.createStream();
   final responseFuture = transport
       .getMessagesForStream(streamId)
-      .where((msg) => msg.isDirect && msg.directPayload is TransferableTypedData)
+      .where(
+        (msg) => msg.isDirect && msg.directPayload is TransferableTypedData,
+      )
       .map((msg) => msg.directPayload as TransferableTypedData)
       .first
       .timeout(const Duration(seconds: 5));
@@ -107,8 +112,10 @@ void main() {
         final empty = await _roundtrip(spawned.transport, Uint8List(0));
         expect(empty, isEmpty);
 
-        final single =
-            await _roundtrip(spawned.transport, Uint8List.fromList([0xAB]));
+        final single = await _roundtrip(
+          spawned.transport,
+          Uint8List.fromList([0xAB]),
+        );
         expect(single, orderedEquals([0xAB]));
       } finally {
         spawned.kill();
@@ -127,8 +134,11 @@ void main() {
             List<int>.generate(1024, (i) => (i + n) & 0xFF),
           );
           final roundtrip = await _roundtrip(spawned.transport, original);
-          expect(roundtrip, orderedEquals(original),
-              reason: 'payload #$n must round-trip intact');
+          expect(
+            roundtrip,
+            orderedEquals(original),
+            reason: 'payload #$n must round-trip intact',
+          );
         }
       } finally {
         spawned.kill();
@@ -182,8 +192,10 @@ void main() {
         completes,
       );
       // releaseStreamId on a closed transport must not throw.
-      expect(() => spawned.transport.releaseStreamId(streamId),
-          returnsNormally);
+      expect(
+        () => spawned.transport.releaseStreamId(streamId),
+        returnsNormally,
+      );
 
       spawned.kill();
     });

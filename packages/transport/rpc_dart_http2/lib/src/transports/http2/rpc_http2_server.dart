@@ -128,8 +128,7 @@ class RpcHttp2Server implements IRpcServer {
   ///
   /// Returns the OS-assigned port once bound when constructed with port `0`;
   /// otherwise the requested port.
-  int get port =>
-      _serverSocket?.port ?? _secureServerSocket?.port ?? _port;
+  int get port => _serverSocket?.port ?? _secureServerSocket?.port ?? _port;
 
   /// Активные endpoints
   @override

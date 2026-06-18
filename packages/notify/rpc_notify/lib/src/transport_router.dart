@@ -8,8 +8,8 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 
 /// Predicate used to decide whether a routing rule applies.
-typedef RpcRoutingCondition = bool Function(
-    String? serviceName, String? methodPath, RpcContext? context);
+typedef RpcRoutingCondition =
+    bool Function(String? serviceName, String? methodPath, RpcContext? context);
 
 /// Routing rule with a priority value.
 typedef PrioritizedRoutingRule = ({
@@ -51,9 +51,9 @@ final class RpcTransportRouter implements IRpcTransport {
     required List<PrioritizedRoutingRule> routingRules,
     LogScope? logger,
     int maxActiveStreams = 10000,
-  })  : _idManager = RpcStreamIdManager(isClient: true), // Always client-side
-        _logger = logger ?? LogScope.noop,
-        _maxActiveStreams = maxActiveStreams {
+  }) : _idManager = RpcStreamIdManager(isClient: true), // Always client-side
+       _logger = logger ?? LogScope.noop,
+       _maxActiveStreams = maxActiveStreams {
     // Sort rules by priority (highest first).
     _routingRules.addAll(routingRules);
     _routingRules.sort((a, b) => b.priority.compareTo(a.priority));
@@ -84,44 +84,44 @@ final class RpcTransportRouter implements IRpcTransport {
     final subscription = transport.incomingMessages
         .where((message) => message.streamId == serverStreamId)
         .listen(
-      (message) {
-        _logger.internal(
-          'Received response from transport: server[$serverStreamId] -> client[$clientStreamId], payload=${message.payload != null ? "present" : "absent"}, isEndOfStream=${message.isEndOfStream}',
-        );
+          (message) {
+            _logger.internal(
+              'Received response from transport: server[$serverStreamId] -> client[$clientStreamId], payload=${message.payload != null ? "present" : "absent"}, isEndOfStream=${message.isEndOfStream}',
+            );
 
-        // Core logic: forward responses with the correct stream ID.
-        final redirectedMessage = RpcTransportMessage(
-          payload: message.payload,
-          metadata: message.metadata,
-          isEndOfStream: message.isEndOfStream,
-          methodPath: message.methodPath,
-          streamId: clientStreamId, // Replace stream ID.
-          // Keep zero-copy payload.
-          directPayload: message.directPayload,
-        );
+            // Core logic: forward responses with the correct stream ID.
+            final redirectedMessage = RpcTransportMessage(
+              payload: message.payload,
+              metadata: message.metadata,
+              isEndOfStream: message.isEndOfStream,
+              methodPath: message.methodPath,
+              streamId: clientStreamId, // Replace stream ID.
+              // Keep zero-copy payload.
+              directPayload: message.directPayload,
+            );
 
-        _logger.internal(
-          'Forwarding response: server[$serverStreamId] -> client[$clientStreamId]',
-        );
-        _incomingController.add(redirectedMessage);
+            _logger.internal(
+              'Forwarding response: server[$serverStreamId] -> client[$clientStreamId]',
+            );
+            _incomingController.add(redirectedMessage);
 
-        // Cleanup is handled in onDone to avoid double cleanup.
-      },
-      onError: (error) {
-        _logger.error(
-          'Transport error in stream $serverStreamId',
-          error: error,
+            // Cleanup is handled in onDone to avoid double cleanup.
+          },
+          onError: (error) {
+            _logger.error(
+              'Transport error in stream $serverStreamId',
+              error: error,
+            );
+            // Cleanup is required on errors too.
+            _cleanupStream(clientStreamId, serverStreamId);
+          },
+          onDone: () {
+            _logger.internal(
+              'Response stream completed for stream $serverStreamId',
+            );
+            _cleanupStream(clientStreamId, serverStreamId);
+          },
         );
-        // Cleanup is required on errors too.
-        _cleanupStream(clientStreamId, serverStreamId);
-      },
-      onDone: () {
-        _logger.internal(
-          'Response stream completed for stream $serverStreamId',
-        );
-        _cleanupStream(clientStreamId, serverStreamId);
-      },
-    );
 
     // Stream IDs are reused over the router's lifetime. If a stale subscription
     // is still registered for this client stream, cancel it before overwriting
@@ -241,9 +241,9 @@ final class RpcTransportRouter implements IRpcTransport {
     };
 
     final keys = context.headers.keys.toList()..sort();
-    final safeKeys = keys.take(24).map(
-          (k) => redactedKeys.contains(k) ? '$k=<redacted>' : k,
-        );
+    final safeKeys = keys
+        .take(24)
+        .map((k) => redactedKeys.contains(k) ? '$k=<redacted>' : k);
     final suffix = keys.length > 24 ? ', ...' : '';
     return 'headers=${keys.length} keys=[${safeKeys.join(', ')}$suffix]';
   }
@@ -266,7 +266,8 @@ final class RpcTransportRouter implements IRpcTransport {
   IRpcTransport _selectTransport(RpcTransportMessage message) {
     final context = _extractContextFromMessage(message);
     final methodPath = message.methodPath;
-    final serviceName = _serviceNameFromMethodPath(methodPath) ??
+    final serviceName =
+        _serviceNameFromMethodPath(methodPath) ??
         context?.getHeader('x-route-service');
 
     _logger.internal(
@@ -277,9 +278,7 @@ final class RpcTransportRouter implements IRpcTransport {
 
     // Evaluate rules in descending priority.
     for (final rule in _routingRules) {
-      _logger.debug(
-        'Checking rule [P${rule.priority}]: ${rule.description}',
-      );
+      _logger.debug('Checking rule [P${rule.priority}]: ${rule.description}');
 
       if (rule.matches(serviceName, methodPath, context)) {
         _logger.internal(
@@ -642,13 +641,13 @@ final class RpcTransportRouter implements IRpcTransport {
 
   /// Router statistics.
   Map<String, dynamic> get statistics => {
-        'totalRules': _routingRules.length,
-        'rulesByPriority': {
-          for (final rule in _routingRules) rule.priority: rule.description,
-        },
-        'activeStreams': _streamTransports.length,
-        'closed': _closed,
-      };
+    'totalRules': _routingRules.length,
+    'rulesByPriority': {
+      for (final rule in _routingRules) rule.priority: rule.description,
+    },
+    'activeStreams': _streamTransports.length,
+    'closed': _closed,
+  };
 
   @override
   bool get isClient => _idManager.isClient;

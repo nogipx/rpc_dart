@@ -26,10 +26,10 @@ void main() {
 
       final response = await caller
           .unaryRequest<TransferableTypedData, TransferableTypedData>(
-        serviceName: TransferableEchoContract.serviceNameStatic,
-        methodName: TransferableEchoContract.methodName,
-        request: request,
-      );
+            serviceName: TransferableEchoContract.serviceNameStatic,
+            methodName: TransferableEchoContract.methodName,
+            request: request,
+          );
 
       final materialized = response.materialize().asUint8List();
       expect(materialized, orderedEquals(bytes));
@@ -61,7 +61,7 @@ final class TransferableEchoContract extends RpcResponderContract {
   static const methodName = 'Echo';
 
   TransferableEchoContract()
-      : super(serviceNameStatic, dataTransferMode: RpcDataTransferMode.auto);
+    : super(serviceNameStatic, dataTransferMode: RpcDataTransferMode.auto);
 
   @override
   void setup() {

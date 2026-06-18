@@ -34,12 +34,12 @@ enum GrpcServingStatus {
 
   /// Creates a [GrpcServingStatus] from its wire [v]alue.
   static GrpcServingStatus fromValue(int v) => switch (v) {
-        0 => unknown,
-        1 => serving,
-        2 => notServing,
-        3 => serviceUnknown,
-        _ => unknown,
-      };
+    0 => unknown,
+    1 => serving,
+    2 => notServing,
+    3 => serviceUnknown,
+    _ => unknown,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -58,9 +58,7 @@ final class GrpcHealthCheckRequest implements IRpcSerializable {
   /// Deserializes from JSON.
   factory GrpcHealthCheckRequest.fromJson(Map<String, dynamic> json) {
     final s = json['service'];
-    return GrpcHealthCheckRequest(
-      service: s is String ? s : '',
-    );
+    return GrpcHealthCheckRequest(service: s is String ? s : '');
   }
 
   @override

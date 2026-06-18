@@ -13,117 +13,125 @@ void main() {
   group('Unary streams: serialized paths & responder branches', () {
     final codec = RpcCodec(RpcString.fromJson);
 
-    test('UnaryCaller/UnaryResponder use serialized framing when zero-copy off',
-        () async {
-      final (rawClient, rawServer) = RpcInMemoryTransport.pair();
-      final clientTransport = NoZeroCopyTransport(rawClient);
-      final serverTransport = NoZeroCopyTransport(rawServer);
+    test(
+      'UnaryCaller/UnaryResponder use serialized framing when zero-copy off',
+      () async {
+        final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+        final clientTransport = NoZeroCopyTransport(rawClient);
+        final serverTransport = NoZeroCopyTransport(rawServer);
 
-      final server = UnaryResponder<RpcString, RpcString>(
-        transport: serverTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-        handler: (req) => 'Echo: $req'.rpc,
-      );
+        final server = UnaryResponder<RpcString, RpcString>(
+          transport: serverTransport,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+          handler: (req) => 'Echo: $req'.rpc,
+        );
 
-      final client = UnaryCaller<RpcString, RpcString>(
-        transport: clientTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-      );
+        final client = UnaryCaller<RpcString, RpcString>(
+          transport: clientTransport,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+        );
 
-      final response = await client.call('ping'.rpc);
-      expect(response, 'Echo: ping'.rpc);
+        final response = await client.call('ping'.rpc);
+        expect(response, 'Echo: ping'.rpc);
 
-      await client.close();
-      await server.close();
-      await rawClient.close();
-      await rawServer.close();
-    });
-
-    test('UnaryResponder serialized path sends error trailer on handler throw',
-        () async {
-      final (rawClient, rawServer) = RpcInMemoryTransport.pair();
-      final clientTransport = NoZeroCopyTransport(rawClient);
-      final serverTransport = NoZeroCopyTransport(rawServer);
-
-      final server = UnaryResponder<RpcString, RpcString>(
-        transport: serverTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-        handler: (_) => throw StateError('boom'),
-      );
-
-      final client = UnaryCaller<RpcString, RpcString>(
-        transport: clientTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-      );
-
-      await expectLater(
-        () => client.call('ping'.rpc),
-        throwsA(isA<RpcStatusException>()),
-      );
-
-      await client.close();
-      await server.close();
-      await rawClient.close();
-      await rawServer.close();
-    });
+        await client.close();
+        await server.close();
+        await rawClient.close();
+        await rawServer.close();
+      },
+    );
 
     test(
-        'UnaryResponder.handleDirectMessage falls back to serialization when zero-copy off',
-        () async {
-      final (rawClient, rawServer) = RpcInMemoryTransport.pair();
-      final serverTransport = NoZeroCopyTransport(rawServer);
+      'UnaryResponder serialized path sends error trailer on handler throw',
+      () async {
+        final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+        final clientTransport = NoZeroCopyTransport(rawClient);
+        final serverTransport = NoZeroCopyTransport(rawServer);
 
-      final server = UnaryResponder<RpcString, RpcString>(
-        id: 1,
-        transport: serverTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-        handler: (req) => 'ok:$req'.rpc,
-      );
+        final server = UnaryResponder<RpcString, RpcString>(
+          transport: serverTransport,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+          handler: (_) => throw StateError('boom'),
+        );
 
-      final received = <RpcTransportMessage>[];
-      final sub = rawClient.incomingMessages
-          .where((m) => m.streamId == 1)
-          .listen(received.add);
+        final client = UnaryCaller<RpcString, RpcString>(
+          transport: clientTransport,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+        );
 
-      await server.handleDirectMessage(
-        RpcTransportMessage.withDirectObject(
-          directPayload: 'req'.rpc,
-          streamId: 1,
-          isEndOfStream: true,
-        ),
-      );
+        await expectLater(
+          () => client.call('ping'.rpc),
+          throwsA(isA<RpcStatusException>()),
+        );
 
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      expect(received.where((m) => m.isMetadataOnly).length,
-          greaterThanOrEqualTo(2));
+        await client.close();
+        await server.close();
+        await rawClient.close();
+        await rawServer.close();
+      },
+    );
 
-      final payloadMsg =
-          received.firstWhere((m) => !m.isMetadataOnly && m.payload != null);
-      final parser = RpcMessageParser();
-      final frames = parser(payloadMsg.payload!);
-      expect(frames, isNotEmpty);
-      expect(codec.deserialize(frames.first), 'ok:req'.rpc);
+    test(
+      'UnaryResponder.handleDirectMessage falls back to serialization when zero-copy off',
+      () async {
+        final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+        final serverTransport = NoZeroCopyTransport(rawServer);
 
-      await sub.cancel();
-      await server.close();
-      await rawClient.close();
-      await rawServer.close();
-    });
+        final server = UnaryResponder<RpcString, RpcString>(
+          id: 1,
+          transport: serverTransport,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+          handler: (req) => 'ok:$req'.rpc,
+        );
+
+        final received = <RpcTransportMessage>[];
+        final sub = rawClient.incomingMessages
+            .where((m) => m.streamId == 1)
+            .listen(received.add);
+
+        await server.handleDirectMessage(
+          RpcTransportMessage.withDirectObject(
+            directPayload: 'req'.rpc,
+            streamId: 1,
+            isEndOfStream: true,
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(
+          received.where((m) => m.isMetadataOnly).length,
+          greaterThanOrEqualTo(2),
+        );
+
+        final payloadMsg = received.firstWhere(
+          (m) => !m.isMetadataOnly && m.payload != null,
+        );
+        final parser = RpcMessageParser();
+        final frames = parser(payloadMsg.payload!);
+        expect(frames, isNotEmpty);
+        expect(codec.deserialize(frames.first), 'ok:req'.rpc);
+
+        await sub.cancel();
+        await server.close();
+        await rawClient.close();
+        await rawServer.close();
+      },
+    );
 
     test('UnaryResponder ignores messages for other stream id', () async {
       final (rawClient, rawServer) = RpcInMemoryTransport.pair();

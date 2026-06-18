@@ -56,9 +56,7 @@ List<RpcModule> sortModulesByDependencies(List<RpcModule> modules) {
         .where((m) => !sorted.contains(m))
         .map((m) => m.name)
         .join(', ');
-    throw StateError(
-      'Circular dependency detected among modules: $unresolved',
-    );
+    throw StateError('Circular dependency detected among modules: $unresolved');
   }
 
   return sorted;
@@ -163,15 +161,17 @@ class CallMetricsInterceptor extends IRpcInterceptor {
     required bool success,
     Object? error,
   }) {
-    _observer(RpcCallEvent(
-      serviceName: call.serviceName,
-      methodName: call.methodName,
-      callType: callType,
-      duration: sw.elapsed,
-      success: success,
-      context: call.context,
-      error: error,
-    ));
+    _observer(
+      RpcCallEvent(
+        serviceName: call.serviceName,
+        methodName: call.methodName,
+        callType: callType,
+        duration: sw.elapsed,
+        success: success,
+        context: call.context,
+        error: error,
+      ),
+    );
   }
 
   @override
@@ -204,7 +204,13 @@ class CallMetricsInterceptor extends IRpcInterceptor {
       );
       return _timedStream(stream, call, 'serverStream', sw);
     } catch (e) {
-      _emit(call: call, callType: 'serverStream', sw: sw, success: false, error: e);
+      _emit(
+        call: call,
+        callType: 'serverStream',
+        sw: sw,
+        success: false,
+        error: e,
+      );
       rethrow;
     }
   }
@@ -221,7 +227,13 @@ class CallMetricsInterceptor extends IRpcInterceptor {
       _emit(call: call, callType: 'clientStream', sw: sw, success: true);
       return res;
     } catch (e) {
-      _emit(call: call, callType: 'clientStream', sw: sw, success: false, error: e);
+      _emit(
+        call: call,
+        callType: 'clientStream',
+        sw: sw,
+        success: false,
+        error: e,
+      );
       rethrow;
     }
   }
@@ -239,7 +251,13 @@ class CallMetricsInterceptor extends IRpcInterceptor {
       );
       return _timedStream(stream, call, 'bidiStream', sw);
     } catch (e) {
-      _emit(call: call, callType: 'bidiStream', sw: sw, success: false, error: e);
+      _emit(
+        call: call,
+        callType: 'bidiStream',
+        sw: sw,
+        success: false,
+        error: e,
+      );
       rethrow;
     }
   }

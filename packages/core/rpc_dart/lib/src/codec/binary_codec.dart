@@ -18,8 +18,8 @@ class RpcBinaryCodec<T> implements IRpcCodec<T> {
   const RpcBinaryCodec({
     required Uint8List Function(T value) toBytes,
     required T Function(Uint8List bytes) fromBytes,
-  })  : _toBytes = toBytes,
-        _fromBytes = fromBytes;
+  }) : _toBytes = toBytes,
+       _fromBytes = fromBytes;
 
   @override
   Uint8List serialize(T message) => _toBytes(message);

@@ -20,9 +20,12 @@ class LogCollectorServiceResponder extends RpcResponderContract {
   LogCollectorServiceResponder({
     OnHandshake? onHandshake,
     OnLogRecord? onRecord,
-  })  : _onHandshake = onHandshake,
-        _onRecord = onRecord,
-        super('LogCollectorService', dataTransferMode: RpcDataTransferMode.codec) {
+  }) : _onHandshake = onHandshake,
+       _onRecord = onRecord,
+       super(
+         'LogCollectorService',
+         dataTransferMode: RpcDataTransferMode.codec,
+       ) {
     addUnaryMethod<LogCollectorHandshake, LogCollectorWelcome>(
       methodName: 'handshake',
       handler: _handleHandshake,

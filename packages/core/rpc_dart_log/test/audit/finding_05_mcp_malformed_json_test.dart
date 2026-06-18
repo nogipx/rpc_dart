@@ -55,13 +55,20 @@ void main() {
       final resp = await _post('{ this is not valid json ');
       final body = await resp.transform(utf8.decoder).join();
 
-      expect(resp.statusCode, 200,
-          reason: 'parse error must be a JSON-RPC envelope, not a 500. '
-              'Got ${resp.statusCode}: $body');
+      expect(
+        resp.statusCode,
+        200,
+        reason:
+            'parse error must be a JSON-RPC envelope, not a 500. '
+            'Got ${resp.statusCode}: $body',
+      );
 
       final json = jsonDecode(body) as Map<String, dynamic>;
-      expect(json['error']?['code'], -32700,
-          reason: 'expected JSON-RPC parse error -32700, got: $body');
+      expect(
+        json['error']?['code'],
+        -32700,
+        reason: 'expected JSON-RPC parse error -32700, got: $body',
+      );
     });
 
     test('JSON array body (valid JSON, wrong shape) returns -32700', () async {
@@ -69,13 +76,20 @@ void main() {
       final resp = await _post('[1,2,3]');
       final body = await resp.transform(utf8.decoder).join();
 
-      expect(resp.statusCode, 200,
-          reason: 'wrong-shape body must be a JSON-RPC envelope, not a 500. '
-              'Got ${resp.statusCode}: $body');
+      expect(
+        resp.statusCode,
+        200,
+        reason:
+            'wrong-shape body must be a JSON-RPC envelope, not a 500. '
+            'Got ${resp.statusCode}: $body',
+      );
 
       final json = jsonDecode(body) as Map<String, dynamic>;
-      expect(json['error']?['code'], -32700,
-          reason: 'expected JSON-RPC parse error -32700, got: $body');
+      expect(
+        json['error']?['code'],
+        -32700,
+        reason: 'expected JSON-RPC parse error -32700, got: $body',
+      );
     });
   });
 }

@@ -83,8 +83,11 @@ abstract final class RpcChannelFrame {
 
     if (data.length < headerSize + payloadLen) return null;
 
-    final payload =
-        Uint8List.sublistView(data, headerSize, headerSize + payloadLen);
+    final payload = Uint8List.sublistView(
+      data,
+      headerSize,
+      headerSize + payloadLen,
+    );
     final endOfStream = (flags & _flagEndOfStream) != 0;
     final isMetadata = (flags & _flagMetadata) != 0;
 
@@ -139,8 +142,11 @@ abstract final class RpcChannelFrame {
       final frameSize = headerSize + payloadLen;
       if (offset + frameSize > data.length) break;
 
-      final frameBytes =
-          Uint8List.sublistView(data, offset, offset + frameSize);
+      final frameBytes = Uint8List.sublistView(
+        data,
+        offset,
+        offset + frameSize,
+      );
       final frame = decode(frameBytes, maxPayloadLen: maxPayloadLen);
       if (frame == null) break;
       frames.add(frame);
@@ -230,10 +236,7 @@ abstract final class RpcChannelFrame {
       }
     }
 
-    return (
-      RpcMetadata(headers, methodPath: methodPath),
-      methodPath,
-    );
+    return (RpcMetadata(headers, methodPath: methodPath), methodPath);
   }
 }
 

@@ -28,43 +28,44 @@ import '../../lib/src/reflection_registry.dart';
 import '../helpers.dart';
 
 void main() {
-  test('B3: request with unknown wire type is rejected, not silently dispatched',
-      () {
-    final registry = RpcReflectionRegistry();
-    final contract = ServerReflectionContract(registry);
+  test(
+    'B3: request with unknown wire type is rejected, not silently dispatched',
+    () {
+      final registry = RpcReflectionRegistry();
+      final contract = ServerReflectionContract(registry);
 
-    // Valid file_by_filename (field 3) followed by a group-start tag (field 5,
-    // wire type 3) which this parser does not support.
-    final valid = fileByFilenameRequest('missing.proto');
-    final groupStartTag = (5 << 3) | 3; // wire type 3 = START_GROUP (unknown)
+      // Valid file_by_filename (field 3) followed by a group-start tag (field 5,
+      // wire type 3) which this parser does not support.
+      final valid = fileByFilenameRequest('missing.proto');
+      final groupStartTag = (5 << 3) | 3; // wire type 3 = START_GROUP (unknown)
 
-    final request = Uint8List.fromList([
-      ...valid,
-      groupStartTag,
-    ]);
+      final request = Uint8List.fromList([...valid, groupStartTag]);
 
-    // ignore: invalid_use_of_visible_for_testing_member
-    final response = contract.processRequestForTest(request);
+      // ignore: invalid_use_of_visible_for_testing_member
+      final response = contract.processRequestForTest(request);
 
-    final err = parseErrorResponse(response);
+      final err = parseErrorResponse(response);
 
-    // A malformed request (contains an unsupported wire type) must produce an
-    // error_response. The current code instead dispatches the file lookup and,
-    // for a missing file, returns a "File not found" error — but for the bug we
-    // assert that the malformed-request error (code 2) is surfaced. If parsing
-    // silently succeeded and dispatched, this will fail.
-    expect(
-      err,
-      isNotNull,
-      reason: 'expected an error_response for a malformed request, got a '
-          'non-error response (partial parse treated as success)',
-    );
-    expect(
-      err!.code,
-      2,
-      reason: 'malformed request (unknown wire type 3) must yield error_code 2 '
-          '(Malformed request), not be silently dispatched. Got code '
-          '${err.code}: "${err.message}"',
-    );
-  });
+      // A malformed request (contains an unsupported wire type) must produce an
+      // error_response. The current code instead dispatches the file lookup and,
+      // for a missing file, returns a "File not found" error — but for the bug we
+      // assert that the malformed-request error (code 2) is surfaced. If parsing
+      // silently succeeded and dispatched, this will fail.
+      expect(
+        err,
+        isNotNull,
+        reason:
+            'expected an error_response for a malformed request, got a '
+            'non-error response (partial parse treated as success)',
+      );
+      expect(
+        err!.code,
+        2,
+        reason:
+            'malformed request (unknown wire type 3) must yield error_code 2 '
+            '(Malformed request), not be silently dispatched. Got code '
+            '${err.code}: "${err.message}"',
+      );
+    },
+  );
 }

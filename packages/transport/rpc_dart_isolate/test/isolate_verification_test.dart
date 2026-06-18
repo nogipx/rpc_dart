@@ -516,7 +516,8 @@ void main() {
         expect(isolateNames.length, equals(isolateCount));
 
         // Параллельное выполнение должно быть быстрее последовательного
-        final averageTaskTime = results
+        final averageTaskTime =
+            results
                 .map((r) => r.processingTime.inMilliseconds)
                 .reduce((a, b) => a + b) /
             results.length;

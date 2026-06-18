@@ -71,8 +71,11 @@ void main() {
 
     expect(meter.hasValues('rpc.server.requests'), isTrue);
     expect(meter.hasValues('rpc.server.duration'), isTrue);
-    expect(meter.hasValues('rpc.client.requests'), isFalse,
-        reason: 'server call must not touch the client namespace');
+    expect(
+      meter.hasValues('rpc.client.requests'),
+      isFalse,
+      reason: 'server call must not touch the client namespace',
+    );
     expect(meter.hasValues('rpc.client.duration'), isFalse);
   });
 
@@ -80,8 +83,10 @@ void main() {
     final meter = _RecordingMeter();
     final metrics = RpcOtelMetrics(meter: meter);
     final t = buildTracer();
-    final interceptor =
-        OtelRpcClientInterceptor(tracer: t.tracer, metrics: metrics);
+    final interceptor = OtelRpcClientInterceptor(
+      tracer: t.tracer,
+      metrics: metrics,
+    );
 
     await interceptor.interceptUnary<String, String>(
       buildCall(),
@@ -91,9 +96,13 @@ void main() {
 
     expect(meter.hasValues('rpc.client.requests'), isTrue);
     expect(meter.hasValues('rpc.client.duration'), isTrue);
-    expect(meter.hasValues('rpc.server.requests'), isFalse,
-        reason: 'client call must not be recorded under rpc.server.* '
-            '(OTel semconv violation)');
+    expect(
+      meter.hasValues('rpc.server.requests'),
+      isFalse,
+      reason:
+          'client call must not be recorded under rpc.server.* '
+          '(OTel semconv violation)',
+    );
     expect(meter.hasValues('rpc.server.duration'), isFalse);
   });
 
@@ -102,8 +111,7 @@ void main() {
     final metrics = RpcOtelMetrics(meter: meter);
     final t = buildTracer();
     final server = OtelRpcInterceptor(tracer: t.tracer, metrics: metrics);
-    final client =
-        OtelRpcClientInterceptor(tracer: t.tracer, metrics: metrics);
+    final client = OtelRpcClientInterceptor(tracer: t.tracer, metrics: metrics);
 
     await server.interceptUnary<String, String>(
       buildCall(),

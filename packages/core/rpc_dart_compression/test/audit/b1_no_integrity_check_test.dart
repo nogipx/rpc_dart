@@ -38,9 +38,10 @@ void main() {
       expect(
         thrown,
         isNotNull,
-        reason: 'CRC-corrupted gzip must throw. Instead decoded '
+        reason:
+            'CRC-corrupted gzip must throw. Instead decoded '
             '${decoded is Uint8List ? '${decoded.length} bytes '
-                '(matches original: ${decoded.length == original.length && _eq(decoded, original)})' : decoded}. '
+                      '(matches original: ${decoded.length == original.length && _eq(decoded, original)})' : decoded}. '
             'No integrity check -> CONFIRMED.',
       );
     });
@@ -61,7 +62,8 @@ void main() {
       expect(
         thrown,
         isNotNull,
-        reason: 'Truncated gzip must throw. Instead decoded '
+        reason:
+            'Truncated gzip must throw. Instead decoded '
             '${decoded is Uint8List ? '${decoded.length} bytes' : decoded}. '
             'No length/CRC check -> CONFIRMED.',
       );

@@ -28,9 +28,9 @@ class LogCollectorMcpServer {
     required LogCollectorServer server,
     required LogCollectorConsole console,
     required LogCollectorMcpBuffer buffer,
-  })  : _server = server,
-        _console = console,
-        _buffer = buffer {
+  }) : _server = server,
+       _console = console,
+       _buffer = buffer {
     _server.onConnection.listen(_console.printConnection);
     _server.onRecord.listen((tagged) {
       _console.printRecord(tagged);
@@ -61,7 +61,9 @@ class LogCollectorMcpServer {
   }
 
   static Future<LogCollectorServer> _buildCollectorServer(
-      String host, int port) async {
+    String host,
+    int port,
+  ) async {
     final server = LogCollectorServer(host: host, port: port);
     await server.start();
     return server;
@@ -176,8 +178,10 @@ class LogCollectorMcpServer {
     return false;
   }
 
-  Response _json(Map<String, dynamic> body) =>
-      Response.ok(jsonEncode(body), headers: {'content-type': 'application/json'});
+  Response _json(Map<String, dynamic> body) => Response.ok(
+    jsonEncode(body),
+    headers: {'content-type': 'application/json'},
+  );
 
   // ---------------------------------------------------------------------------
   // MCP JSON-RPC
@@ -212,17 +216,19 @@ Investigation strategy:
 
     return switch (method) {
       'initialize' => _rpcResult(id, {
-          'protocolVersion': '2024-11-05',
-          'capabilities': {'tools': {}},
-          'serverInfo': {'name': 'rpc_dart_log', 'version': '0.1.0'},
-          'instructions': _mcpInstructions,
-        }),
+        'protocolVersion': '2024-11-05',
+        'capabilities': {'tools': {}},
+        'serverInfo': {'name': 'rpc_dart_log', 'version': '0.1.0'},
+        'instructions': _mcpInstructions,
+      }),
       'notifications/initialized' => _rpcResult(id, {}),
       'tools/list' => _rpcResult(id, {
-          'tools': [_sourcesTool, _getLogsTool],
-        }),
-      'tools/call' =>
-        _handleToolCall(id, json['params'] as Map<String, dynamic>?),
+        'tools': [_sourcesTool, _getLogsTool],
+      }),
+      'tools/call' => _handleToolCall(
+        id,
+        json['params'] as Map<String, dynamic>?,
+      ),
       _ => _rpcError(id, -32601, 'Method not found: $method'),
     };
   }
@@ -231,16 +237,16 @@ Investigation strategy:
       jsonEncode({'jsonrpc': '2.0', 'id': id, 'result': result});
 
   String _rpcError(Object? id, int code, String message) => jsonEncode({
-        'jsonrpc': '2.0',
-        'id': id,
-        'error': {'code': code, 'message': message},
-      });
+    'jsonrpc': '2.0',
+    'id': id,
+    'error': {'code': code, 'message': message},
+  });
 
   String _rpcToolResult(Object? id, String text) => _rpcResult(id, {
-        'content': [
-          {'type': 'text', 'text': text}
-        ],
-      });
+    'content': [
+      {'type': 'text', 'text': text},
+    ],
+  });
 
   // ---------------------------------------------------------------------------
   // Tool dispatch
@@ -284,16 +290,26 @@ Investigation strategy:
       'properties': {
         'count': {
           'type': 'integer',
-          'description': 'Max records to return (default: 50, max: 500). Returns chronological.',
+          'description':
+              'Max records to return (default: 50, max: 500). Returns chronological.',
         },
         'level': {
           'type': 'string',
           'description': 'Minimum log level filter',
-          'enum': ['internal', 'trace', 'debug', 'info', 'warning', 'error', 'fatal'],
+          'enum': [
+            'internal',
+            'trace',
+            'debug',
+            'info',
+            'warning',
+            'error',
+            'fatal',
+          ],
         },
         'scope': {
           'type': 'string',
-          'description': 'Scope prefix filter (e.g. "engine" matches "engine.connection")',
+          'description':
+              'Scope prefix filter (e.g. "engine" matches "engine.connection")',
         },
         'device': {
           'type': 'string',
@@ -326,7 +342,8 @@ Investigation strategy:
         },
         'type': {
           'type': 'string',
-          'description': 'Filter by record type: "event" or "span". Omit for both.',
+          'description':
+              'Filter by record type: "event" or "span". Omit for both.',
           'enum': ['event', 'span'],
         },
         'collapse': {

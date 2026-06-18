@@ -61,7 +61,8 @@ class LogControllerOtelOutput extends LogOutput {
 
   /// Open spans keyed by spanId. A [LinkedHashMap] preserves insertion order
   /// so the first entry is always the oldest (used for size-based eviction).
-  final LinkedHashMap<String, _OpenSpan> _open = LinkedHashMap<String, _OpenSpan>();
+  final LinkedHashMap<String, _OpenSpan> _open =
+      LinkedHashMap<String, _OpenSpan>();
 
   final int _maxOpenSpans;
   final Duration _spanTtl;
@@ -73,11 +74,11 @@ class LogControllerOtelOutput extends LogOutput {
     int maxOpenSpans = 1024,
     Duration spanTtl = const Duration(minutes: 5),
     Duration sweepInterval = const Duration(seconds: 30),
-  })  : assert(maxOpenSpans > 0),
-        _tracer = tracer,
-        _rootContextProvider = rootContextProvider,
-        _maxOpenSpans = maxOpenSpans,
-        _spanTtl = spanTtl {
+  }) : assert(maxOpenSpans > 0),
+       _tracer = tracer,
+       _rootContextProvider = rootContextProvider,
+       _maxOpenSpans = maxOpenSpans,
+       _spanTtl = spanTtl {
     _sweepTimer = Timer.periodic(sweepInterval, (_) => _sweepExpired());
   }
 
@@ -152,10 +153,14 @@ class LogControllerOtelOutput extends LogOutput {
   }
 
   void _onStart(LogSpanStart record) {
-    final parent =
-        record.parentSpanId != null ? _open[record.parentSpanId]?.span : null;
+    final parent = record.parentSpanId != null
+        ? _open[record.parentSpanId]?.span
+        : null;
     final parentContext = parent != null
-        ? contextWithSpan(_rootContextProvider?.call() ?? Context.current, parent)
+        ? contextWithSpan(
+            _rootContextProvider?.call() ?? Context.current,
+            parent,
+          )
         : (_rootContextProvider?.call() ?? Context.current);
 
     final span = _tracer.startSpan(
@@ -231,13 +236,17 @@ class LogControllerOtelOutput extends LogOutput {
       if (record.error != null)
         Attribute.fromString('exception.message', record.error.toString()),
       if (record.stackTrace != null)
-        Attribute.fromString('exception.stacktrace', record.stackTrace.toString()),
+        Attribute.fromString(
+          'exception.stacktrace',
+          record.stackTrace.toString(),
+        ),
       if (record.traceId != null)
         Attribute.fromString('log.trace_id', record.traceId!),
       if (record.requestId != null)
         Attribute.fromString('log.request_id', record.requestId!),
       if (record.data != null)
-        for (final entry in record.data!.entries) _attribute(entry.key, entry.value),
+        for (final entry in record.data!.entries)
+          _attribute(entry.key, entry.value),
     ];
   }
 

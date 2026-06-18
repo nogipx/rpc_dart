@@ -48,8 +48,9 @@ void main() {
         );
 
         // Act
-        final receivedResponses =
-            await client.call('test request'.rpc).toList();
+        final receivedResponses = await client
+            .call('test request'.rpc)
+            .toList();
 
         // Assert
         expect(receivedResponses.length, equals(3));
@@ -168,8 +169,9 @@ void main() {
         expect(response.isMetadataOnly, isTrue);
         expect(response.metadata, isNotNull);
 
-        final grpcStatus =
-            response.metadata!.getHeaderValue(RpcHeaders.grpcStatus);
+        final grpcStatus = response.metadata!.getHeaderValue(
+          RpcHeaders.grpcStatus,
+        );
         expect(grpcStatus, isNotNull);
         expect(
           grpcStatus,
@@ -350,8 +352,9 @@ void main() {
         expect(response.isMetadataOnly, isTrue);
         expect(response.metadata, isNotNull);
 
-        final grpcStatus =
-            response.metadata!.getHeaderValue(RpcHeaders.grpcStatus);
+        final grpcStatus = response.metadata!.getHeaderValue(
+          RpcHeaders.grpcStatus,
+        );
         expect(grpcStatus, isNotNull);
         expect(
           grpcStatus,
@@ -461,8 +464,9 @@ void main() {
         await client.send('test request'.rpc);
 
         // Получаем все ответы до закрытия стрима (initial metadata + data + error trailer)
-        final responses =
-            await client.responses.toList().timeout(Duration(seconds: 5));
+        final responses = await client.responses.toList().timeout(
+          Duration(seconds: 5),
+        );
 
         // Должен быть хотя бы один ответ с данными и один с метаданными ошибки
         expect(responses.length, greaterThanOrEqualTo(1));

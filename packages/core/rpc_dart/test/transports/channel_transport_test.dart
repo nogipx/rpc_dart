@@ -60,13 +60,10 @@ void main() {
     });
 
     test('encodes and decodes metadata with headers', () {
-      final metadata = RpcMetadata(
-        [
-          RpcHeader('x-custom', 'value1'),
-          RpcHeader('x-another', 'value2'),
-        ],
-        methodPath: '/Svc/Method',
-      );
+      final metadata = RpcMetadata([
+        RpcHeader('x-custom', 'value1'),
+        RpcHeader('x-another', 'value2'),
+      ], methodPath: '/Svc/Method');
       final encoded = RpcChannelFrame.encodeMetadata(
         streamId: 3,
         metadata: metadata,
@@ -349,13 +346,10 @@ void main() {
         server.incomingMessages.listen(received.add);
 
         final streamId = client.createStream();
-        final metadata = RpcMetadata(
-          [
-            RpcHeader('x-request-id', 'abc-123'),
-            RpcHeader('x-trace-id', 'trace-456'),
-          ],
-          methodPath: '/Svc/Method',
-        );
+        final metadata = RpcMetadata([
+          RpcHeader('x-request-id', 'abc-123'),
+          RpcHeader('x-trace-id', 'trace-456'),
+        ], methodPath: '/Svc/Method');
         await client.sendMetadata(streamId, metadata);
 
         await Future.delayed(Duration(milliseconds: 10));
@@ -456,18 +450,9 @@ void main() {
         server.getMessagesForStream(stream1).listen(msgs1.add);
         server.getMessagesForStream(stream3).listen(msgs3.add);
 
-        await client.sendMessage(
-          stream1,
-          Uint8List.fromList('a'.codeUnits),
-        );
-        await client.sendMessage(
-          stream3,
-          Uint8List.fromList('b'.codeUnits),
-        );
-        await client.sendMessage(
-          stream1,
-          Uint8List.fromList('c'.codeUnits),
-        );
+        await client.sendMessage(stream1, Uint8List.fromList('a'.codeUnits));
+        await client.sendMessage(stream3, Uint8List.fromList('b'.codeUnits));
+        await client.sendMessage(stream1, Uint8List.fromList('c'.codeUnits));
 
         await Future.delayed(Duration(milliseconds: 10));
 
@@ -731,7 +716,9 @@ void main() {
 
         expect(received.length, equals(1));
         expect(
-            received.first.payload, equals(Uint8List.fromList([10, 20, 30])));
+          received.first.payload,
+          equals(Uint8List.fromList([10, 20, 30])),
+        );
 
         await sub.cancel();
         await transport.close();

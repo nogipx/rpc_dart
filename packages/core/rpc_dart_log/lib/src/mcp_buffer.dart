@@ -119,8 +119,9 @@ class LogCollectorMcpBuffer {
 
     final first = _records.first.record.timestamp;
     final last = _records.last.record.timestamp;
-    final overflow =
-        _records.length >= maxRecords ? ' (buffer full -- oldest evicted)' : '';
+    final overflow = _records.length >= maxRecords
+        ? ' (buffer full -- oldest evicted)'
+        : '';
     buf.writeln(
       'Buffer: ${_records.length} records | ${_fmtTime(first)} - ${_fmtTime(last)} | cursor: $_cursor$overflow',
     );
@@ -153,11 +154,13 @@ class LogCollectorMcpBuffer {
     if (_traceIdOrder.isNotEmpty) {
       const maxTrace = 10;
       final shown = _traceIdOrder.take(maxTrace).toList();
-      final parts = shown.map((tid) {
-        final prefix = tid.length > 8 ? tid.substring(0, 8) : tid;
-        final errs = _traceErrorCounts[tid]!;
-        return errs > 0 ? '$prefix ($errs err)' : prefix;
-      }).join(', ');
+      final parts = shown
+          .map((tid) {
+            final prefix = tid.length > 8 ? tid.substring(0, 8) : tid;
+            final errs = _traceErrorCounts[tid]!;
+            return errs > 0 ? '$prefix ($errs err)' : prefix;
+          })
+          .join(', ');
       buf.write('TraceIds (${_traceIdOrder.length}): $parts');
       if (_traceIdOrder.length > maxTrace) {
         buf.write(' ... +${_traceIdOrder.length - maxTrace} more');
@@ -221,7 +224,7 @@ class LogCollectorMcpBuffer {
 
     final stalePrefix = staleCursor
         ? 'WARNING: cursor stale -- records after it were evicted; '
-            'this is a reset, the window below may include already-seen records.\n'
+              'this is a reset, the window below may include already-seen records.\n'
         : '';
 
     if (contextLines > 0) {
@@ -257,10 +260,11 @@ class LogCollectorMcpBuffer {
     required bool noData,
   }) {
     // Iterate newest-first; collect limit+1 to detect hasMore without full scan
-    final source = (startIndex == 0
-            ? _records.toList()
-            : _records.skip(startIndex).toList())
-        .reversed;
+    final source =
+        (startIndex == 0
+                ? _records.toList()
+                : _records.skip(startIndex).toList())
+            .reversed;
 
     final matched = <TaggedRecord>[];
     bool hasMore = false;
@@ -279,7 +283,9 @@ class LogCollectorMcpBuffer {
     final chronological = matched.reversed.toList();
     final lines = collapse
         ? _collapseRecords(chronological, noData: noData)
-        : chronological.map((t) => _formatTaggedRecord(t, noData: noData)).toList();
+        : chronological
+              .map((t) => _formatTaggedRecord(t, noData: noData))
+              .toList();
 
     final countLabel = hasMore
         ? 'Showing ${matched.length} of ${matched.length}+ matching records (cursor: $_cursor)'
@@ -353,7 +359,10 @@ class LogCollectorMcpBuffer {
   // Collapse -- period detection 1-3
   // ---------------------------------------------------------------------------
 
-  List<String> _collapseRecords(List<TaggedRecord> records, {bool noData = false}) {
+  List<String> _collapseRecords(
+    List<TaggedRecord> records, {
+    bool noData = false,
+  }) {
     final lines = <String>[];
     int i = 0;
 
@@ -365,7 +374,8 @@ class LogCollectorMcpBuffer {
 
         bool patternMatches = true;
         for (int j = 0; j < p; j++) {
-          if (_collapseKey(records[i + j]) != _collapseKey(records[i + p + j])) {
+          if (_collapseKey(records[i + j]) !=
+              _collapseKey(records[i + p + j])) {
             patternMatches = false;
             break;
           }
@@ -376,7 +386,8 @@ class LogCollectorMcpBuffer {
         while (i + (reps + 1) * p <= records.length) {
           bool nextMatches = true;
           for (int j = 0; j < p; j++) {
-            if (_collapseKey(records[i + j]) != _collapseKey(records[i + reps * p + j])) {
+            if (_collapseKey(records[i + j]) !=
+                _collapseKey(records[i + reps * p + j])) {
               nextMatches = false;
               break;
             }
@@ -386,11 +397,15 @@ class LogCollectorMcpBuffer {
         }
 
         if (p == 1) {
-          lines.add('[x$reps] ${_formatTaggedRecord(records[i], noData: noData)}');
+          lines.add(
+            '[x$reps] ${_formatTaggedRecord(records[i], noData: noData)}',
+          );
         } else {
           lines.add('[x$reps cycles]:');
           for (int j = 0; j < p; j++) {
-            lines.add('  ${_formatTaggedRecord(records[i + j], noData: noData)}');
+            lines.add(
+              '  ${_formatTaggedRecord(records[i + j], noData: noData)}',
+            );
           }
         }
 
@@ -409,10 +424,10 @@ class LogCollectorMcpBuffer {
   }
 
   String _collapseKey(TaggedRecord tagged) => switch (tagged.record) {
-        LogEvent e => '${tagged.deviceLabel}|${e.scope}|${e.message}',
-        LogSpan s => '${tagged.deviceLabel}|${s.scope}|${s.name}',
-        LogSpanStart s => '${tagged.deviceLabel}|${s.scope}|start',
-      };
+    LogEvent e => '${tagged.deviceLabel}|${e.scope}|${e.message}',
+    LogSpan s => '${tagged.deviceLabel}|${s.scope}|${s.name}',
+    LogSpanStart s => '${tagged.deviceLabel}|${s.scope}|start',
+  };
 
   // ---------------------------------------------------------------------------
   // Formatting
@@ -435,10 +450,12 @@ class LogCollectorMcpBuffer {
     if (event.error != null) sb.write('  err=${event.error}');
     if (event.traceId != null) sb.write('  trace=${event.traceId}');
     if (!noData && event.data != null && event.data!.isNotEmpty) {
-      final dataStr =
-          event.data!.entries.map((e) => '${e.key}=${e.value}').join(' ');
-      final truncated =
-          dataStr.length > 120 ? '${dataStr.substring(0, 120)}...' : dataStr;
+      final dataStr = event.data!.entries
+          .map((e) => '${e.key}=${e.value}')
+          .join(' ');
+      final truncated = dataStr.length > 120
+          ? '${dataStr.substring(0, 120)}...'
+          : dataStr;
       sb.write('  $truncated');
     }
     return sb.toString();
@@ -477,7 +494,9 @@ class LogCollectorMcpBuffer {
     }
 
     // Absolute HH:MM or HH:MM:SS
-    final abs = RegExp(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$').firstMatch(since.trim());
+    final abs = RegExp(
+      r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$',
+    ).firstMatch(since.trim());
     if (abs != null) {
       final now = DateTime.now();
       return DateTime(
@@ -594,7 +613,8 @@ class _ScopeStats {
   void add(LogRecord r) {
     total++;
     if (r is LogEvent) {
-      if (r.level == RpcLogLevel.error || r.level == RpcLogLevel.fatal) errors++;
+      if (r.level == RpcLogLevel.error || r.level == RpcLogLevel.fatal)
+        errors++;
       if (r.level == RpcLogLevel.warning) warnings++;
     }
     if (r is LogSpan) spans++;

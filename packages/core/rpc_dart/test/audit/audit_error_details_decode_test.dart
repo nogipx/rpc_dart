@@ -35,7 +35,8 @@ void main() {
       expect(
         () => RpcErrorDetail.decodeAny(hostile),
         throwsA(isNot(isA<RangeError>())),
-        reason: 'decodeAny must not leak an uncaught RangeError on truncated '
+        reason:
+            'decodeAny must not leak an uncaught RangeError on truncated '
             'length; it should surface a typed protocol error',
       );
     });
@@ -57,10 +58,7 @@ void main() {
       // declared length 0xFF with empty payload.
       final hostile = Uint8List.fromList([0x12, 0xFF]);
 
-      expect(
-        () => decodeRpcStatus(hostile),
-        throwsA(isNot(isA<RangeError>())),
-      );
+      expect(() => decodeRpcStatus(hostile), throwsA(isNot(isA<RangeError>())));
     });
   });
 }

@@ -33,10 +33,7 @@ void main() {
 
       final received = <RpcString>[];
       final done = Completer<void>();
-      server.requests.listen(
-        received.add,
-        onDone: done.complete,
-      );
+      server.requests.listen(received.add, onDone: done.complete);
 
       final client = BidirectionalStreamCaller<RpcString, RpcString>(
         transport: clientTransport,
@@ -59,57 +56,59 @@ void main() {
       await rawServer.close();
     });
 
-    test('responseSink forwards responses and finishReceiving completes done',
-        () async {
-      final (rawClient, rawServer) = RpcInMemoryTransport.pair();
-      final clientTransport = NoZeroCopyTransport(rawClient);
-      final serverTransport = NoZeroCopyTransport(rawServer);
+    test(
+      'responseSink forwards responses and finishReceiving completes done',
+      () async {
+        final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+        final clientTransport = NoZeroCopyTransport(rawClient);
+        final serverTransport = NoZeroCopyTransport(rawServer);
 
-      final server = BidirectionalStreamResponder<RpcString, RpcString>(
-        id: 1,
-        transport: serverTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-      );
-      server.bindToMessageStream(
-        serverTransport.incomingMessages.where((m) => m.streamId == 1),
-      );
+        final server = BidirectionalStreamResponder<RpcString, RpcString>(
+          id: 1,
+          transport: serverTransport,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+        );
+        server.bindToMessageStream(
+          serverTransport.incomingMessages.where((m) => m.streamId == 1),
+        );
 
-      final client = BidirectionalStreamCaller<RpcString, RpcString>(
-        transport: clientTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-      );
+        final client = BidirectionalStreamCaller<RpcString, RpcString>(
+          transport: clientTransport,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+        );
 
-      final payloads = <RpcString>[];
-      final sub = client.responses.listen((msg) {
-        if (!msg.isMetadataOnly && msg.payload != null) {
-          payloads.add(msg.payload!);
-        }
-      });
+        final payloads = <RpcString>[];
+        final sub = client.responses.listen((msg) {
+          if (!msg.isMetadataOnly && msg.payload != null) {
+            payloads.add(msg.payload!);
+          }
+        });
 
-      // Start the stream.
-      await client.send('start'.rpc);
+        // Start the stream.
+        await client.send('start'.rpc);
 
-      server.responseSink.add('x'.rpc);
-      server.responseSink.add('y'.rpc);
-      await server.responseSink.close();
+        server.responseSink.add('x'.rpc);
+        server.responseSink.add('y'.rpc);
+        await server.responseSink.close();
 
-      await server.done.timeout(const Duration(seconds: 2));
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+        await server.done.timeout(const Duration(seconds: 2));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
 
-      expect(payloads, ['x'.rpc, 'y'.rpc]);
+        expect(payloads, ['x'.rpc, 'y'.rpc]);
 
-      await sub.cancel();
-      await client.close();
-      await server.close();
-      await rawClient.close();
-      await rawServer.close();
-    });
+        await sub.cancel();
+        await client.close();
+        await server.close();
+        await rawClient.close();
+        await rawServer.close();
+      },
+    );
 
     test('payloadResponses throws on non-OK gRPC trailer', () async {
       final (rawClient, rawServer) = RpcInMemoryTransport.pair();

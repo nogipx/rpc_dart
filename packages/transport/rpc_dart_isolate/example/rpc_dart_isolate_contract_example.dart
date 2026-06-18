@@ -301,14 +301,16 @@ final class CalculatorResponder extends RpcResponderContract
             currentResult = request.numbers.length.toDouble();
             break;
           case 'validation':
-            currentResult =
-                request.numbers.where((n) => n > 0).length.toDouble();
+            currentResult = request.numbers
+                .where((n) => n > 0)
+                .length
+                .toDouble();
             break;
           case 'computation':
             currentResult = request.numbers.isEmpty
                 ? 0.0
                 : request.numbers.reduce((a, b) => a + b) /
-                    request.numbers.length;
+                      request.numbers.length;
             break;
           case 'optimization':
             currentResult = currentResult * 1.1; // "оптимизированный" результат
@@ -336,7 +338,7 @@ final class CalculatorResponder extends RpcResponderContract
 final class CalculatorCaller extends RpcCallerContract
     implements ICalculatorContract {
   CalculatorCaller(RpcCallerEndpoint endpoint)
-      : super(ICalculatorContract.name, endpoint);
+    : super(ICalculatorContract.name, endpoint);
 
   @override
   Future<ComputeResponse> compute(ComputeRequest request) async {
@@ -471,18 +473,19 @@ Future<void> main() async {
     print('\n🌊 === BIDIRECTIONAL STREAMING ===');
 
     // Создаем асинхронный стрим с задержками для корректной работы
-    final streamingRequests = Stream.fromIterable([
-      ComputeRequest(operationType: 'mean', numbers: [10.0, 20.0, 30.0]),
-      ComputeRequest(operationType: 'sum', numbers: [1.0, 2.0, 3.0, 4.0]),
-      ComputeRequest(
-        operationType: 'variance',
-        numbers: [5.0, 15.0, 25.0, 35.0],
-      ),
-    ]).asyncMap((request) async {
-      // Небольшая задержка между запросами для корректной передачи
-      await Future.delayed(Duration(milliseconds: 100));
-      return request;
-    });
+    final streamingRequests =
+        Stream.fromIterable([
+          ComputeRequest(operationType: 'mean', numbers: [10.0, 20.0, 30.0]),
+          ComputeRequest(operationType: 'sum', numbers: [1.0, 2.0, 3.0, 4.0]),
+          ComputeRequest(
+            operationType: 'variance',
+            numbers: [5.0, 15.0, 25.0, 35.0],
+          ),
+        ]).asyncMap((request) async {
+          // Небольшая задержка между запросами для корректной передачи
+          await Future.delayed(Duration(milliseconds: 100));
+          return request;
+        });
 
     print('📊 Потоковая обработка нескольких запросов...');
     await for (final step in calculator.streamCompute(streamingRequests)) {

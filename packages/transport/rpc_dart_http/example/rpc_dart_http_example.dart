@@ -228,7 +228,8 @@ abstract interface class IEchoContract implements IRpcContract {
   Future<RpcString> echo(RpcString message);
 }
 
-final class EchoResponder extends RpcResponderContract implements IEchoContract {
+final class EchoResponder extends RpcResponderContract
+    implements IEchoContract {
   EchoResponder() : super('Echo');
 
   @override

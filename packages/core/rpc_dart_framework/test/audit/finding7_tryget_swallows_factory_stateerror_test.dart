@@ -11,19 +11,21 @@ import 'package:test/test.dart';
 class _Service {}
 
 void main() {
-  test('tryGet does not silently swallow a StateError from the factory body',
-      () {
-    final c = RpcContainer();
-    c.registerFactory<_Service>(
-      (_) => throw StateError('dependency misconfigured'),
-    );
+  test(
+    'tryGet does not silently swallow a StateError from the factory body',
+    () {
+      final c = RpcContainer();
+      c.registerFactory<_Service>(
+        (_) => throw StateError('dependency misconfigured'),
+      );
 
-    // CORRECT behavior: a registered-but-failing factory must surface its
-    // error, NOT be reported as "not registered" (null).
-    expect(
-      () => c.tryGet<_Service>(),
-      throwsA(isA<StateError>()),
-      reason: 'factory failure must not be conflated with "not registered"',
-    );
-  });
+      // CORRECT behavior: a registered-but-failing factory must surface its
+      // error, NOT be reported as "not registered" (null).
+      expect(
+        () => c.tryGet<_Service>(),
+        throwsA(isA<StateError>()),
+        reason: 'factory failure must not be conflated with "not registered"',
+      );
+    },
+  );
 }

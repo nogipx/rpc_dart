@@ -28,8 +28,7 @@ import 'package:test/test.dart';
 import '_support.dart';
 
 void main() {
-  test(
-      'a non-terminal stream error does not prematurely end the span; '
+  test('a non-terminal stream error does not prematurely end the span; '
       'span ends once on completion with full message count', () async {
     final t = buildTracer();
     final interceptor = OtelRpcInterceptor(tracer: t.tracer);
@@ -43,11 +42,13 @@ void main() {
       yield 'c';
     }
 
-    final wrapped = await interceptor.interceptServerStream<String, String>(
-      call,
-      'req',
-      (ctx, req) async => source(),
-    ) as Stream<String>;
+    final wrapped =
+        await interceptor.interceptServerStream<String, String>(
+              call,
+              'req',
+              (ctx, req) async => source(),
+            )
+            as Stream<String>;
 
     final received = <String>[];
     Object? sawError;
@@ -68,16 +69,23 @@ void main() {
     final spans = t.exporter.spans
         .where((s) => s.name == 'TestService/testMethod')
         .toList();
-    expect(spans, hasLength(1),
-        reason: 'Span must end exactly once on termination.');
+    expect(
+      spans,
+      hasLength(1),
+      reason: 'Span must end exactly once on termination.',
+    );
 
     final span = spans.single;
 
     // All three messages counted (the old code stopped counting at the error).
     final msgAttr = span.attributes.get('rpc.stream.messages');
-    expect(msgAttr, equals(3),
-        reason: 'Span must reflect every message, including those after the '
-            'non-fatal error.');
+    expect(
+      msgAttr,
+      equals(3),
+      reason:
+          'Span must reflect every message, including those after the '
+          'non-fatal error.',
+    );
 
     // The non-fatal error was recorded as an exception event on the span.
     expect(

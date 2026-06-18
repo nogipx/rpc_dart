@@ -112,8 +112,9 @@ abstract interface class RpcMessageFrame {
     );
 
     // Write compression flag.
-    result[RpcConstants.compressionFlagIndex] =
-        compressed ? RpcConstants.compressed : RpcConstants.noCompression;
+    result[RpcConstants.compressionFlagIndex] = compressed
+        ? RpcConstants.compressed
+        : RpcConstants.noCompression;
 
     // Write message length (big-endian).
     final length = messageBytes.length;
@@ -151,7 +152,8 @@ abstract interface class RpcMessageFrame {
 
     final isCompressed = compressionFlag == RpcConstants.compressed;
 
-    final length = (headerBytes[RpcConstants.messageLengthIndex] << 24) |
+    final length =
+        (headerBytes[RpcConstants.messageLengthIndex] << 24) |
         (headerBytes[RpcConstants.messageLengthIndex + 1] << 16) |
         (headerBytes[RpcConstants.messageLengthIndex + 2] << 8) |
         headerBytes[RpcConstants.messageLengthIndex + 3];

@@ -52,14 +52,13 @@ Uint8List buildMinimalFileDescriptor({
   required String package,
   required List<String> serviceNames,
   List<String> dependencies = const [],
-}) =>
-    buildMinimalFileDescriptorWithMessages(
-      name: name,
-      package: package,
-      messageNames: [],
-      serviceNames: serviceNames,
-      dependencies: dependencies,
-    );
+}) => buildMinimalFileDescriptorWithMessages(
+  name: name,
+  package: package,
+  messageNames: [],
+  serviceNames: serviceNames,
+  dependencies: dependencies,
+);
 
 /// Builds a `FileDescriptorProto` with messages and services.
 Uint8List buildMinimalFileDescriptorWithMessages({
@@ -157,8 +156,7 @@ Uint8List buildMinimalFileDescriptorSet(
 // ---------------------------------------------------------------------------
 
 /// list_services request: field 7, any non-empty string.
-Uint8List listServicesRequest() =>
-    Uint8List.fromList(_encodeString(7, '*'));
+Uint8List listServicesRequest() => Uint8List.fromList(_encodeString(7, '*'));
 
 /// file_by_filename request: field 3 = filename string.
 Uint8List fileByFilenameRequest(String filename) =>
@@ -185,7 +183,10 @@ List<String> parseListServicesResponse(Uint8List bytes) {
   if (listSvcBytes == null) return [];
 
   final services = <String>[];
-  for (final svcBytes in _parseRepeatedBytes(Uint8List.fromList(listSvcBytes), 1)) {
+  for (final svcBytes in _parseRepeatedBytes(
+    Uint8List.fromList(listSvcBytes),
+    1,
+  )) {
     final svcFields = _parseFields(Uint8List.fromList(svcBytes));
     final nameBytes = svcFields[1];
     if (nameBytes != null) services.add(utf8.decode(nameBytes));
@@ -202,14 +203,14 @@ List<Uint8List> extractAllFileDescriptorBytes(Uint8List bytes) {
   final outer = _parseFields(bytes);
   final fdRespBytes = outer[4];
   if (fdRespBytes == null) return [];
-  return _parseRepeatedBytes(Uint8List.fromList(fdRespBytes), 1)
-      .map((b) => Uint8List.fromList(b))
-      .toList();
+  return _parseRepeatedBytes(
+    Uint8List.fromList(fdRespBytes),
+    1,
+  ).map((b) => Uint8List.fromList(b)).toList();
 }
 
 /// Returns true if field 2 (original_request) is present.
-bool hasOriginalRequest(Uint8List bytes) =>
-    _parseFields(bytes).containsKey(2);
+bool hasOriginalRequest(Uint8List bytes) => _parseFields(bytes).containsKey(2);
 
 /// Parses field 7 (error_response). Returns null if not an error response.
 ErrorResult? parseErrorResponse(Uint8List bytes) {
@@ -262,7 +263,10 @@ Map<int, List<int>> _parseFields(Uint8List bytes) {
         shift += 7;
       }
       if (pos + len > bytes.length) break;
-      result.putIfAbsent(fieldNumber, () => bytes.sublist(pos, pos + len).toList());
+      result.putIfAbsent(
+        fieldNumber,
+        () => bytes.sublist(pos, pos + len).toList(),
+      );
       pos += len;
     } else if (wireType == 1) {
       pos += 8;
@@ -336,17 +340,20 @@ int _decodeVarint(List<int> bytes) {
 // ---------------------------------------------------------------------------
 
 final Uint8List echoRequestDescriptor = $convert.base64Decode(
-    'CgtFY2hvUmVxdWVzdBIYCgdtZXNzYWdlGAEgASgJUgdtZXNzYWdlEhQKBWNvdW50GAIgASgFUg'
-    'Vjb3VudA==');
+  'CgtFY2hvUmVxdWVzdBIYCgdtZXNzYWdlGAEgASgJUgdtZXNzYWdlEhQKBWNvdW50GAIgASgFUg'
+  'Vjb3VudA==',
+);
 
 final Uint8List echoResponseDescriptor = $convert.base64Decode(
-    'CgxFY2hvUmVzcG9uc2USGAoHbWVzc2FnZRgBIAEoCVIHbWVzc2FnZRIUCgVpbmRleBgCIAEoBV'
-    'IFaW5kZXg=');
+  'CgxFY2hvUmVzcG9uc2USGAoHbWVzc2FnZRgBIAEoCVIHbWVzc2FnZRIUCgVpbmRleBgCIAEoBV'
+  'IFaW5kZXg=',
+);
 
 final Uint8List echoServiceDescriptor = $convert.base64Decode(
-    'CgtFY2hvU2VydmljZRIzCgRFY2hvEhQuZWNoby52MS5FY2hvUmVxdWVzdBoVLmVjaG8udjEuRW'
-    'Nob1Jlc3BvbnNlEjsKCkVjaG9TdHJlYW0SFC5lY2hvLnYxLkVjaG9SZXF1ZXN0GhUuZWNoby52'
-    'MS5FY2hvUmVzcG9uc2UwAQ==');
+  'CgtFY2hvU2VydmljZRIzCgRFY2hvEhQuZWNoby52MS5FY2hvUmVxdWVzdBoVLmVjaG8udjEuRW'
+  'Nob1Jlc3BvbnNlEjsKCkVjaG9TdHJlYW0SFC5lY2hvLnYxLkVjaG9SZXF1ZXN0GhUuZWNoby52'
+  'MS5FY2hvUmVzcG9uc2UwAQ==',
+);
 
 /// Builds a FileDescriptorProto for echo.proto from real pbjson descriptors.
 Uint8List echoFileDescriptorBytes() {

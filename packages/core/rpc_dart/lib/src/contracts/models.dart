@@ -36,8 +36,10 @@ enum RpcMethodType {
 }
 
 /// Method registration within a contract.
-final class RpcMethodRegistration<TRequest extends IRpcSerializable,
-    TResponse extends IRpcSerializable> {
+final class RpcMethodRegistration<
+  TRequest extends IRpcSerializable,
+  TResponse extends IRpcSerializable
+> {
   /// Method identifier used for routing.
   final String name;
 
@@ -91,10 +93,12 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
     RpcContext context,
     Stream<TRequest> requests,
   ) async {
-    final typedHandler = handler as Future<TResponse> Function(
-      Stream<TRequest>, {
-      RpcContext? context,
-    });
+    final typedHandler =
+        handler
+            as Future<TResponse> Function(
+              Stream<TRequest>, {
+              RpcContext? context,
+            });
     return await typedHandler(requests, context: context);
   }
 
@@ -103,10 +107,12 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
     RpcContext context,
     Stream<TRequest> requests,
   ) {
-    final typedHandler = handler as Stream<TResponse> Function(
-      Stream<TRequest>, {
-      RpcContext? context,
-    });
+    final typedHandler =
+        handler
+            as Stream<TResponse> Function(
+              Stream<TRequest>, {
+              RpcContext? context,
+            });
     return typedHandler(requests, context: context);
   }
 
@@ -122,8 +128,10 @@ final class RpcMethodRegistration<TRequest extends IRpcSerializable,
 }
 
 /// Zero-copy method registration without [IRpcSerializable] bounds.
-final class RpcZeroCopyMethodRegistration<TRequest extends Object,
-    TResponse extends Object> {
+final class RpcZeroCopyMethodRegistration<
+  TRequest extends Object,
+  TResponse extends Object
+> {
   /// Method identifier used for routing.
   final String name;
 
@@ -169,10 +177,12 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     RpcContext context,
     Stream<TRequest> requests,
   ) async {
-    final typedHandler = handler as Future<TResponse> Function(
-      Stream<TRequest>, {
-      RpcContext? context,
-    });
+    final typedHandler =
+        handler
+            as Future<TResponse> Function(
+              Stream<TRequest>, {
+              RpcContext? context,
+            });
     return await typedHandler(requests, context: context);
   }
 
@@ -181,10 +191,12 @@ final class RpcZeroCopyMethodRegistration<TRequest extends Object,
     RpcContext context,
     Stream<TRequest> requests,
   ) {
-    final typedHandler = handler as Stream<TResponse> Function(
-      Stream<TRequest>, {
-      RpcContext? context,
-    });
+    final typedHandler =
+        handler
+            as Stream<TResponse> Function(
+              Stream<TRequest>, {
+              RpcContext? context,
+            });
     return typedHandler(requests, context: context);
   }
 }

@@ -61,10 +61,14 @@ class RpcDirectMultiplexedChannel implements IRpcMultiplexedChannel {
     final c2s = StreamController<RpcTransportMessage>();
     final s2c = StreamController<RpcTransportMessage>();
 
-    final client =
-        RpcDirectMultiplexedChannel._(output: c2s, input: s2c.stream);
-    final server =
-        RpcDirectMultiplexedChannel._(output: s2c, input: c2s.stream);
+    final client = RpcDirectMultiplexedChannel._(
+      output: c2s,
+      input: s2c.stream,
+    );
+    final server = RpcDirectMultiplexedChannel._(
+      output: s2c,
+      input: c2s.stream,
+    );
 
     return (client, server);
   }

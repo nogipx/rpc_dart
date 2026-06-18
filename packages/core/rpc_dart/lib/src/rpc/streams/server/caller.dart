@@ -6,8 +6,10 @@
 part of '../_index.dart';
 
 /// Server-stream caller: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Sends one request, receives a response stream.
-final class ServerStreamCaller<TRequest extends Object,
-    TResponse extends Object> {
+final class ServerStreamCaller<
+  TRequest extends Object,
+  TResponse extends Object
+> {
   late final LogScope _logger;
 
   /// Stream processor.
@@ -71,9 +73,7 @@ final class ServerStreamCaller<TRequest extends Object,
       );
     }
 
-    _logger.internal(
-      'Sending single request to server stream: $request',
-    );
+    _logger.internal('Sending single request to server stream: $request');
 
     try {
       _requestSent = true; // Set flag immediately to block duplicates.
@@ -119,9 +119,8 @@ final class ServerStreamCaller<TRequest extends Object,
           if (statusStr != null) {
             final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
             if (status != RpcStatus.ok) {
-              final message = response.metadata!.getHeaderValue(
-                    RpcHeaders.grpcMessage,
-                  ) ??
+              final message =
+                  response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
                   'Unknown error';
               final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
               _logger.error(

@@ -69,8 +69,10 @@ final class SandboxContract extends RpcResponderContract {
 
     addUnaryMethod<SandboxRequest, SandboxResponse>(
       methodName: 'Boom',
-      handler: (req, {context}) async =>
-          throw RpcStatusException(RpcStatus.invalidArgument, 'bad:${req.text}'),
+      handler: (req, {context}) async => throw RpcStatusException(
+        RpcStatus.invalidArgument,
+        'bad:${req.text}',
+      ),
       requestCodec: _requestCodec,
       responseCodec: _responseCodec,
     );
@@ -130,39 +132,39 @@ final class HostCaller extends RpcCallerContract {
   HostCaller(RpcCallerEndpoint endpoint) : super('Sandbox', endpoint);
 
   Future<SandboxResponse> echo(String text) => callUnary(
-        methodName: 'Echo',
-        request: SandboxRequest(text),
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-      );
+    methodName: 'Echo',
+    request: SandboxRequest(text),
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+  );
 
   Future<SandboxResponse> boom(String text) => callUnary(
-        methodName: 'Boom',
-        request: SandboxRequest(text),
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-      );
+    methodName: 'Boom',
+    request: SandboxRequest(text),
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+  );
 
   Stream<SandboxResponse> count(String text) => callServerStream(
-        methodName: 'Count',
-        request: SandboxRequest(text),
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-      );
+    methodName: 'Count',
+    request: SandboxRequest(text),
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+  );
 
   Stream<SandboxResponse> forever(String text) => callServerStream(
-        methodName: 'Forever',
-        request: SandboxRequest(text),
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-      );
+    methodName: 'Forever',
+    request: SandboxRequest(text),
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+  );
 
   Future<SandboxResponse> join(List<String> texts) => callClientStream(
-        methodName: 'Join',
-        requests: Stream.fromIterable(texts.map(SandboxRequest.new)),
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-      );
+    methodName: 'Join',
+    requests: Stream.fromIterable(texts.map(SandboxRequest.new)),
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+  );
 
   Stream<SandboxResponse> mirror(Stream<String> texts) =>
       callBidirectionalStream(
@@ -279,7 +281,8 @@ void main() {
   group('client stream over WASM bridge', () {
     test('aggregates all uploaded items into one response', () async {
       final resp = await caller
-          .join(['x', 'y', 'z']).timeout(const Duration(seconds: 5));
+          .join(['x', 'y', 'z'])
+          .timeout(const Duration(seconds: 5));
       expect(resp.text, 'x-y-z');
     });
   });

@@ -46,10 +46,7 @@ final class RpcResponderPingHandler {
           RpcEndpointPingProtocol.responseTransportHeader,
           transport.runtimeType.toString(),
         ),
-        RpcHeader(
-          RpcHeaders.grpcStatus,
-          RpcStatus.ok.toString(),
-        ),
+        RpcHeader(RpcHeaders.grpcStatus, RpcStatus.ok.toString()),
       ];
 
       if (debugLabel != null && debugLabel!.isNotEmpty) {
@@ -67,9 +64,7 @@ final class RpcResponderPingHandler {
         endStream: true,
       );
 
-      _log.internal(
-        'Ping обработан успешно [streamId: $streamId]',
-      );
+      _log.internal('Ping обработан успешно [streamId: $streamId]');
     } catch (error, stackTrace) {
       _log.error(
         'Ошибка при обработке ping [streamId: $streamId]',
@@ -81,10 +76,7 @@ final class RpcResponderPingHandler {
         await transport.sendMetadata(
           streamId,
           RpcMetadata([
-            RpcHeader(
-              RpcHeaders.grpcStatus,
-              RpcStatus.internal.toString(),
-            ),
+            RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
             RpcHeader(
               RpcHeaders.grpcMessage,
               RpcMetadata.encodeGrpcMessage('Ping handling error: $error'),

@@ -60,10 +60,9 @@ void main() {
     });
 
     test('withContext sets traceId and requestId', () {
-      final scope = controller.scope('app').withContext(
-            traceId: 'trace_1',
-            requestId: 'req_1',
-          );
+      final scope = controller
+          .scope('app')
+          .withContext(traceId: 'trace_1', requestId: 'req_1');
       scope.info('msg');
 
       expect(output.events.first.traceId, 'trace_1');
@@ -73,7 +72,8 @@ void main() {
     test('child inherits bound data and context', () {
       final parent = controller
           .scope('app')
-          .withData({'env': 'prod'}).withContext(traceId: 'trace_1');
+          .withData({'env': 'prod'})
+          .withContext(traceId: 'trace_1');
       final child = parent.child('handler');
       child.info('msg');
 

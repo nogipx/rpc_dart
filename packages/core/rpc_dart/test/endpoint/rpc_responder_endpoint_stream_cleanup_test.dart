@@ -121,10 +121,7 @@ void main() {
       );
 
       final res = await call(
-        Stream.fromIterable(const [
-          RpcString('a'),
-          RpcString('b'),
-        ]),
+        Stream.fromIterable(const [RpcString('a'), RpcString('b')]),
       );
       expect(res.value, equals('a,b'));
 
@@ -157,32 +154,33 @@ void main() {
     });
 
     test(
-        'returns invalidArgument and cleans up when request ends without payload',
-        () async {
-      final streamId = clientTransport.createStream();
+      'returns invalidArgument and cleans up when request ends without payload',
+      () async {
+        final streamId = clientTransport.createStream();
 
-      final response = clientTransport.incomingMessages.firstWhere(
-        (message) =>
-            message.streamId == streamId &&
-            message.isMetadataOnly &&
-            message.metadata?.getHeaderValue(RpcHeaders.grpcStatus) != null,
-      );
+        final response = clientTransport.incomingMessages.firstWhere(
+          (message) =>
+              message.streamId == streamId &&
+              message.isMetadataOnly &&
+              message.metadata?.getHeaderValue(RpcHeaders.grpcStatus) != null,
+        );
 
-      await clientTransport.sendMetadata(
-        streamId,
-        RpcMetadata.forClientRequest(_TestService.name, 'EchoUnary'),
-        endStream: true,
-      );
+        await clientTransport.sendMetadata(
+          streamId,
+          RpcMetadata.forClientRequest(_TestService.name, 'EchoUnary'),
+          endStream: true,
+        );
 
-      final trailer = await response;
-      expect(
-        trailer.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
-        equals(RpcStatus.invalidArgument.toString()),
-      );
+        final trailer = await response;
+        expect(
+          trailer.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
+          equals(RpcStatus.invalidArgument.toString()),
+        );
 
-      await Future<void>.delayed(const Duration(milliseconds: 1));
-      expect(await _openStreams(responderEndpoint), equals(0));
-    });
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+        expect(await _openStreams(responderEndpoint), equals(0));
+      },
+    );
 
     test('returns unimplemented and cleans up for unknown method', () async {
       final streamId = clientTransport.createStream();

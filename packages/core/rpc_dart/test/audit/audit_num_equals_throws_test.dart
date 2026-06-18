@@ -26,8 +26,11 @@ import 'package:test/test.dart';
 void main() {
   group('RpcNum/RpcInt/RpcDouble operator == must not throw on raw num', () {
     test('RpcInt(5) == 5 must not throw (should be false)', () {
-      expect(() => RpcInt(5) == 5, returnsNormally,
-          reason: 'operator == must never throw');
+      expect(
+        () => RpcInt(5) == 5,
+        returnsNormally,
+        reason: 'operator == must never throw',
+      );
       // gRPC/Dart contract: comparing to an unrelated type yields false.
       expect(RpcInt(5) == 5, isFalse);
     });
@@ -43,8 +46,11 @@ void main() {
     test('Set membership against raw num must not throw', () {
       final set = <Object>{RpcInt(1), RpcInt(2)};
       // Checking whether a raw int is in the set forces element == 5 comparisons.
-      expect(() => set.contains(5), returnsNormally,
-          reason: 'Set.contains must not throw due to a throwing operator ==');
+      expect(
+        () => set.contains(5),
+        returnsNormally,
+        reason: 'Set.contains must not throw due to a throwing operator ==',
+      );
     });
 
     test('List.contains against raw num must not throw', () {

@@ -29,7 +29,9 @@ void main() {
       });
 
       clientSocket = await Socket.connect('127.0.0.1', serverSocket.port);
-      clientConnection = http2.ClientTransportConnection.viaSocket(clientSocket);
+      clientConnection = http2.ClientTransportConnection.viaSocket(
+        clientSocket,
+      );
 
       final serverConnection = await serverConnectionFuture;
       responder = RpcHttp2ResponderTransport(connection: serverConnection);
@@ -116,15 +118,18 @@ void main() {
         endStream: true,
       );
 
-      clientStream.incomingMessages.listen((message) {
-        if (message is http2.DataStreamMessage) {
-          responseBytes.addAll(message.bytes);
-        }
-      }, onDone: () {
-        if (!responseReceived.isCompleted) {
-          responseReceived.complete(responseBytes);
-        }
-      });
+      clientStream.incomingMessages.listen(
+        (message) {
+          if (message is http2.DataStreamMessage) {
+            responseBytes.addAll(message.bytes);
+          }
+        },
+        onDone: () {
+          if (!responseReceived.isCompleted) {
+            responseReceived.complete(responseBytes);
+          }
+        },
+      );
 
       final received = await responseReceived.future.timeout(
         const Duration(seconds: 5),

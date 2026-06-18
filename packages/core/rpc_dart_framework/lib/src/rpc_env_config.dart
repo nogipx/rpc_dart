@@ -73,7 +73,11 @@ class RpcEnvConfig {
   List<String> getList(String key, {String separator = ','}) {
     final val = _env[key];
     if (val == null || val.trim().isEmpty) return const [];
-    return val.split(separator).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    return val
+        .split(separator)
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
   }
 
   /// Parses a human-readable [Duration] from [key].
@@ -88,10 +92,10 @@ class RpcEnvConfig {
     final n = int.parse(match.group(1)!);
     return switch (match.group(2)!) {
       'ms' => Duration(milliseconds: n),
-      's'  => Duration(seconds: n),
-      'm'  => Duration(minutes: n),
-      'h'  => Duration(hours: n),
-      _    => null,
+      's' => Duration(seconds: n),
+      'm' => Duration(minutes: n),
+      'h' => Duration(hours: n),
+      _ => null,
     };
   }
 

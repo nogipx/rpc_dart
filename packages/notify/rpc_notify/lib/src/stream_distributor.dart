@@ -48,10 +48,10 @@ class StreamDistributor<T extends IRpcSerializable> {
   ///
   /// [config] позволяет настроить поведение дистрибьютора
   StreamDistributor({StreamDistributorConfig? config, LogScope? logger})
-      : _mainController = StreamController<_StreamMessage<T>>.broadcast(),
-        _clientStreams = <String, _ClientStreamWrapper<T>>{},
-        _logger = logger ?? LogScope.noop,
-        _config = config ?? StreamDistributorConfig() {
+    : _mainController = StreamController<_StreamMessage<T>>.broadcast(),
+      _clientStreams = <String, _ClientStreamWrapper<T>>{},
+      _logger = logger ?? LogScope.noop,
+      _config = config ?? StreamDistributorConfig() {
     // Настраиваем периодическую очистку неактивных стримов
     if (_config.enableAutoCleanup) {
       _startCleanupTimer();
@@ -455,10 +455,7 @@ class StreamDistributor<T extends IRpcSerializable> {
         return true;
       }
     } catch (e) {
-      _logger.error(
-        'Ошибка при публикации данных клиенту $clientId',
-        error: e,
-      );
+      _logger.error('Ошибка при публикации данных клиенту $clientId', error: e);
       _metrics.incrementErrors();
     }
 
@@ -791,8 +788,9 @@ class _DistributorMetrics {
 
   /// Создает снимок текущих метрик
   StreamDistributorMetrics snapshot() {
-    final avgSize =
-        _messageSizeCount > 0 ? _messageSizeSum / _messageSizeCount : 0.0;
+    final avgSize = _messageSizeCount > 0
+        ? _messageSizeSum / _messageSizeCount
+        : 0.0;
 
     return StreamDistributorMetrics(
       totalStreams: _totalStreams,

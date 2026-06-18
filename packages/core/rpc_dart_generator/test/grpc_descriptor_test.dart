@@ -25,7 +25,9 @@ void main() {
       'explicit @RpcProtoField numbers + enum field round-trip via reflection',
       () async {
         final packageConfig = await _loadPackageConfig();
-        final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+        final readerWriter = TestReaderWriter(
+          rootPackage: 'rpc_dart_generator',
+        );
         await readerWriter.testing.loadIsolateSources();
 
         const source = r'''
@@ -69,11 +71,12 @@ class Item implements IRpcSerializable {
           readerWriter: readerWriter,
           onLog: (record) => captured.add(record.message),
           outputs: {
-            'rpc_dart_generator|lib/field_num.rpc_dart.g.part':
-                decodedMatches(predicate<String>((s) {
-              output = s;
-              return true;
-            })),
+            'rpc_dart_generator|lib/field_num.rpc_dart.g.part': decodedMatches(
+              predicate<String>((s) {
+                output = s;
+                return true;
+              }),
+            ),
           },
         );
 
@@ -143,8 +146,10 @@ class Ack implements IRpcSerializable {
       );
 
       expect(
-        captured.any((m) =>
-            m.contains('declaration order') && m.contains('@RpcProtoField')),
+        captured.any(
+          (m) =>
+              m.contains('declaration order') && m.contains('@RpcProtoField'),
+        ),
         isTrue,
         reason: 'unpinned fields must warn about unstable numbering',
       );
@@ -156,7 +161,9 @@ class Ack implements IRpcSerializable {
       'message field type names are package-qualified like service refs',
       () async {
         final packageConfig = await _loadPackageConfig();
-        final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+        final readerWriter = TestReaderWriter(
+          rootPackage: 'rpc_dart_generator',
+        );
         await readerWriter.testing.loadIsolateSources();
 
         // The service name carries the proto package `shop.v1`. A field that
@@ -205,19 +212,23 @@ class Order implements IRpcSerializable {
           packageConfig: packageConfig,
           readerWriter: readerWriter,
           outputs: {
-            'rpc_dart_generator|lib/qualified.rpc_dart.g.part':
-                decodedMatches(predicate<String>((s) {
-              output = s;
-              return true;
-            })),
+            'rpc_dart_generator|lib/qualified.rpc_dart.g.part': decodedMatches(
+              predicate<String>((s) {
+                output = s;
+                return true;
+              }),
+            ),
           },
         );
 
         final descriptor = _extractDescriptorBytes(output!);
 
         // The field Order.item references Item -> must be fully-qualified.
-        final fieldTypeName =
-            _messageFieldTypeName(descriptor, 'Order', 'item');
+        final fieldTypeName = _messageFieldTypeName(
+          descriptor,
+          'Order',
+          'item',
+        );
         expect(
           fieldTypeName,
           '.shop.v1.Item',
@@ -246,11 +257,30 @@ class Order implements IRpcSerializable {
       expect(
         w.toBytes(),
         Uint8List.fromList([
-          10, 3, 77, 115, 103,
-          24, 1,
-          32, 1,
-          40, 14,
-          50, 11, 46, 102, 111, 111, 46, 83, 116, 97, 116, 117, 115,
+          10,
+          3,
+          77,
+          115,
+          103,
+          24,
+          1,
+          32,
+          1,
+          40,
+          14,
+          50,
+          11,
+          46,
+          102,
+          111,
+          111,
+          46,
+          83,
+          116,
+          97,
+          116,
+          117,
+          115,
         ]),
       );
     });
@@ -287,12 +317,18 @@ Uint8List _extractDescriptorBytes(String generated) {
 
 /// Returns true if [fileBytes] contains a message named [messageName] with a
 /// field whose proto type equals [protoType].
-bool _messageHasFieldType(Uint8List fileBytes, String messageName, int protoType) =>
-    _scanMessageField(fileBytes, messageName, 5, protoType);
+bool _messageHasFieldType(
+  Uint8List fileBytes,
+  String messageName,
+  int protoType,
+) => _scanMessageField(fileBytes, messageName, 5, protoType);
 
 /// Returns true if [messageName] has a field with the given proto field number.
-bool _messageHasFieldNumber(Uint8List fileBytes, String messageName, int number) =>
-    _scanMessageField(fileBytes, messageName, 3, number);
+bool _messageHasFieldNumber(
+  Uint8List fileBytes,
+  String messageName,
+  int number,
+) => _scanMessageField(fileBytes, messageName, 3, number);
 
 /// Walks the FileDescriptorProto to find [messageName], then checks whether any
 /// of its fields carries a varint sub-field [fieldTag] equal to [expected].

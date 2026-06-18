@@ -57,7 +57,7 @@ final _protoFieldChecker = const TypeChecker.typeNamed(
 class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
   /// Creates an [RpcDartGenerator] with optional [BuilderOptions].
   RpcDartGenerator([BuilderOptions? options])
-      : _options = options ?? BuilderOptions({});
+    : _options = options ?? BuilderOptions({});
 
   // BuilderOptions reserved for future config.
   // ignore: unused_field
@@ -104,9 +104,7 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
   _ServiceMeta _parseService(ConstantReader reader) {
     final name = reader.peek('name')?.stringValue ?? '';
     if (name.trim().isEmpty) {
-      throw InvalidGenerationSourceError(
-        '@RpcService name must not be empty',
-      );
+      throw InvalidGenerationSourceError('@RpcService name must not be empty');
     }
 
     final transfer = reader.peek('transferMode')?.revive();
@@ -254,8 +252,11 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
       if (anno != null) {
         final serviceMeta = _parseService(ConstantReader(anno));
         final baseName = _baseNameFor(cls);
-        final methods =
-            _collectMethods(cls, baseName, serviceMeta.transferMode);
+        final methods = _collectMethods(
+          cls,
+          baseName,
+          serviceMeta.transferMode,
+        );
         for (final m in methods) {
           if (!ownMethodNames.contains(m.declarationName) &&
               !seen.contains(m.declarationName)) {
@@ -284,7 +285,8 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     for (final method in element.methods) {
       final anno = _rpcRemovedChecker.firstAnnotationOf(method);
       if (anno == null) continue;
-      final message = ConstantReader(anno).peek('message')?.stringValue ??
+      final message =
+          ConstantReader(anno).peek('message')?.stringValue ??
           '${method.name} has been removed.';
       result.add(_RemovedMethodInfo(element: method, message: message));
     }
@@ -326,10 +328,7 @@ class _Emitter {
 
   String get _baseName => _baseNameForClass(classElement);
 
-  bool _shouldUseCodec(
-    _MethodMeta meta,
-    RpcDataTransferMode effectiveMode,
-  ) {
+  bool _shouldUseCodec(_MethodMeta meta, RpcDataTransferMode effectiveMode) {
     final methodMode = meta.transferMode ?? effectiveMode;
     return methodMode != RpcDataTransferMode.zeroCopy;
   }
@@ -342,8 +341,9 @@ class _Emitter {
     buffer.writeln(_buildNames());
     buffer.writeln();
 
-    final needsCodecs =
-        methods.any((m) => _shouldUseCodec(m, service.transferMode));
+    final needsCodecs = methods.any(
+      (m) => _shouldUseCodec(m, service.transferMode),
+    );
     if (needsCodecs) {
       buffer.writeln(_buildCodecs());
       buffer.writeln();
@@ -378,8 +378,10 @@ class _Emitter {
     }
 
     if (service.grpcDescriptor) {
-      final descriptorLiteral =
-          _GrpcDescriptorBuilder(service, methods).buildLiteral();
+      final descriptorLiteral = _GrpcDescriptorBuilder(
+        service,
+        methods,
+      ).buildLiteral();
       if (descriptorLiteral != null) {
         b.writeln();
         b.writeln(
@@ -449,21 +451,25 @@ class _Emitter {
 
       if (info.customCodecType != null) {
         b.writeln(
-            '  static const $codecName = ${info.customCodecType!.getDisplayString()}();');
+          '  static const $codecName = ${info.customCodecType!.getDisplayString()}();',
+        );
       } else if (_hasJsonFactory(info.type)) {
         b.writeln(
-            '  static const $codecName = RpcCodec<$typeName>.withDecoder($typeName.fromJson);');
+          '  static const $codecName = RpcCodec<$typeName>.withDecoder($typeName.fromJson);',
+        );
       } else if (info.type.getDisplayString() == 'Map<String, dynamic>') {
         // `Map<String, dynamic>` has no `fromJson` factory. Encode/decode it
         // directly via CBOR instead of referencing a non-existent
         // `Map<String, dynamic>.fromJson`.
         b.writeln(
-            '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encode, fromBytes: CborCodec.decode);');
+          '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encode, fromBytes: CborCodec.decode);',
+        );
       } else {
         // Primitive types (String/int/double/bool) have no `fromJson` factory.
         // Round-trip them through CBOR via the unsafe (non-map) helpers.
         b.writeln(
-            '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encodeUnsafe, fromBytes: CborCodec.decodeUnsafe);');
+          '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encodeUnsafe, fromBytes: CborCodec.decodeUnsafe);',
+        );
       }
     }
 
@@ -510,8 +516,11 @@ class _Emitter {
 
     for (final method in methods) {
       b.writeln(
-        method.signature
-            .callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
+        method.signature.callerMethodImpl(
+          method,
+          service.transferMode,
+          _ambiguousCodecs,
+        ),
       );
       b.writeln();
     }
@@ -548,8 +557,8 @@ class _Emitter {
     final params = named.isEmpty
         ? positional
         : positional.isEmpty
-            ? '{$named}'
-            : '$positional, {$named}';
+        ? '{$named}'
+        : '$positional, {$named}';
 
     return "  @Deprecated('$escaped')\n"
         '  @override\n'
@@ -614,8 +623,11 @@ class _Emitter {
     // Caller methods — implement interface, call remote peer
     for (final method in methods) {
       b.writeln(
-        method.signature
-            .callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
+        method.signature.callerMethodImpl(
+          method,
+          service.transferMode,
+          _ambiguousCodecs,
+        ),
       );
       b.writeln();
     }
@@ -657,8 +669,11 @@ class _Emitter {
 
     for (final method in methods) {
       b.writeln(
-        method.signature
-            .callerMethodImpl(method, service.transferMode, _ambiguousCodecs),
+        method.signature.callerMethodImpl(
+          method,
+          service.transferMode,
+          _ambiguousCodecs,
+        ),
       );
       b.writeln();
     }
@@ -677,8 +692,9 @@ class _Emitter {
     // handle their own slice of methods. Implementing the parent interface
     // would force users to implement inherited methods that belong to the
     // parent responder.
-    final implementsClause =
-        isVersioned ? '' : 'implements ${classElement.name} ';
+    final implementsClause = isVersioned
+        ? ''
+        : 'implements ${classElement.name} ';
 
     b.writeln(
       'abstract class $className extends RpcResponderContract '
@@ -745,25 +761,25 @@ class _SignatureParser {
 
     return switch (kind) {
       RpcMethodKind.unary => _parseUnary(
-          requestParam,
-          contextParam,
-          element.returnType,
-        ),
+        requestParam,
+        contextParam,
+        element.returnType,
+      ),
       RpcMethodKind.serverStream => _parseServerStream(
-          requestParam,
-          contextParam,
-          element.returnType,
-        ),
+        requestParam,
+        contextParam,
+        element.returnType,
+      ),
       RpcMethodKind.clientStream => _parseClientStream(
-          requestParam,
-          contextParam,
-          element.returnType,
-        ),
+        requestParam,
+        contextParam,
+        element.returnType,
+      ),
       RpcMethodKind.bidirectionalStream => _parseBidi(
-          requestParam,
-          contextParam,
-          element.returnType,
-        ),
+        requestParam,
+        contextParam,
+        element.returnType,
+      ),
     };
   }
 
@@ -1284,20 +1300,14 @@ class _CodecInfo {
 }
 
 class _ParentInfo {
-  _ParentInfo({
-    required this.callerClassName,
-    required this.delegateMethods,
-  });
+  _ParentInfo({required this.callerClassName, required this.delegateMethods});
 
   final String callerClassName;
   final List<_MethodMeta> delegateMethods;
 }
 
 class _RemovedMethodInfo {
-  _RemovedMethodInfo({
-    required this.element,
-    required this.message,
-  });
+  _RemovedMethodInfo({required this.element, required this.message});
 
   final MethodElement element;
   final String message;
@@ -1343,8 +1353,9 @@ class _GrpcDescriptorBuilder {
   Uint8List? _buildBytes() {
     final lastDot = service.name.lastIndexOf('.');
     final package = _package;
-    final serviceName =
-        lastDot >= 0 ? service.name.substring(lastDot + 1) : service.name;
+    final serviceName = lastDot >= 0
+        ? service.name.substring(lastDot + 1)
+        : service.name;
 
     // Collect unique non-zeroCopy message types.
     final messageTypes = <String, DartType>{};
@@ -1444,8 +1455,9 @@ class _GrpcDescriptorBuilder {
 
     if (actual is InterfaceType && actual.isDartCoreList) {
       label = 3; // LABEL_REPEATED
-      actual =
-          actual.typeArguments.isNotEmpty ? actual.typeArguments.first : actual;
+      actual = actual.typeArguments.isNotEmpty
+          ? actual.typeArguments.first
+          : actual;
     } else if (actual is InterfaceType &&
         (actual.isDartCoreMap ||
             actual.isDartCoreSet ||
@@ -1504,9 +1516,13 @@ class _GrpcDescriptorBuilder {
       final mw = _ProtoWriter();
       mw.writeString(1, method.methodName);
       mw.writeString(
-          2, _qualifiedTypeName(_typeName(method.signature.requestType)));
+        2,
+        _qualifiedTypeName(_typeName(method.signature.requestType)),
+      );
       mw.writeString(
-          3, _qualifiedTypeName(_typeName(method.signature.responseType)));
+        3,
+        _qualifiedTypeName(_typeName(method.signature.responseType)),
+      );
       if (method.signature.isRequestStream) mw.writeBool(5, true);
       if (method.signature.isResponseStream) mw.writeBool(6, true);
       w.writeBytes(2, mw.toBytes());
@@ -1518,9 +1534,9 @@ class _GrpcDescriptorBuilder {
       t.getDisplayString().replaceAll('?', '');
 
   static String _toJsonName(String name) => name.replaceAllMapped(
-        RegExp(r'_([a-z])'),
-        (m) => m.group(1)!.toUpperCase(),
-      );
+    RegExp(r'_([a-z])'),
+    (m) => m.group(1)!.toUpperCase(),
+  );
 }
 
 // Protobuf wire types used by the descriptor encoder.

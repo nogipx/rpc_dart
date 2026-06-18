@@ -52,7 +52,9 @@ void main() {
       span.end();
 
       expect(
-          output.spans.first.duration.inMilliseconds, greaterThanOrEqualTo(15));
+        output.spans.first.duration.inMilliseconds,
+        greaterThanOrEqualTo(15),
+      );
     });
 
     test('span events are collected and emitted immediately', () {

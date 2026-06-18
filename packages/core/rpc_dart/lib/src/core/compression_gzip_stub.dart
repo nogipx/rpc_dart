@@ -10,9 +10,11 @@ bool get rpcGzipSupported => false;
 
 /// Throws [UnsupportedError] on non-native platforms.
 Uint8List rpcGzipCompress(Uint8List data) => throw UnsupportedError(
-    'gzip compression is not supported on this platform');
+  'gzip compression is not supported on this platform',
+);
 
 /// Throws [UnsupportedError] on non-native platforms.
 Uint8List rpcGzipDecompress(Uint8List data, {int? maxOutputBytes}) =>
     throw UnsupportedError(
-        'gzip decompression is not supported on this platform');
+      'gzip decompression is not supported on this platform',
+    );

@@ -38,7 +38,8 @@ class RpcApp {
   final List<RpcModule> _modulesRaw;
   final List<IRpcInterceptor> _interceptors;
   final List<IRpcMiddleware> _middlewares;
-  final IRpcServer Function(void Function(RpcResponderEndpoint))? _serverBuilder;
+  final IRpcServer Function(void Function(RpcResponderEndpoint))?
+  _serverBuilder;
   final Future<void> Function(RpcContainer container)? _afterModulesStartHook;
   final RpcAppConfig _config;
 
@@ -59,12 +60,12 @@ class RpcApp {
     required List<IRpcMiddleware> middlewares,
     Future<void> Function(RpcContainer container)? afterModulesStart,
     required RpcAppConfig config,
-  })  : _modulesRaw = modules,
-        _serverBuilder = serverBuilder,
-        _interceptors = List.unmodifiable(interceptors),
-        _middlewares = List.unmodifiable(middlewares),
-        _afterModulesStartHook = afterModulesStart,
-        _config = config;
+  }) : _modulesRaw = modules,
+       _serverBuilder = serverBuilder,
+       _interceptors = List.unmodifiable(interceptors),
+       _middlewares = List.unmodifiable(middlewares),
+       _afterModulesStartHook = afterModulesStart,
+       _config = config;
 
   /// Creates an [RpcApp] that listens for incoming connections via [server].
   ///
@@ -127,7 +128,9 @@ class RpcApp {
       '${_modules.map((m) => m.name).join(' → ')}',
     );
 
-    _env = _config.env != null ? RpcEnvConfig.from(_config.env!) : RpcEnvConfig();
+    _env = _config.env != null
+        ? RpcEnvConfig.from(_config.env!)
+        : RpcEnvConfig();
 
     _container = RpcContainer();
     for (final module in _modules) {
@@ -179,7 +182,11 @@ class RpcApp {
           ),
         );
       } catch (e, st) {
-        _log?.error('Error in ${module.name}.onStop()', error: e, stackTrace: st);
+        _log?.error(
+          'Error in ${module.name}.onStop()',
+          error: e,
+          stackTrace: st,
+        );
       }
     }
 
@@ -332,8 +339,11 @@ class RpcApp {
       try {
         await _server!.stop();
       } catch (e, st) {
-        _log?.error('Error stopping server during rollback',
-            error: e, stackTrace: st);
+        _log?.error(
+          'Error stopping server during rollback',
+          error: e,
+          stackTrace: st,
+        );
       }
       _server = null;
     }

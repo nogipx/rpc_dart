@@ -23,10 +23,7 @@ void main() {
   test('memory loader stub throws UnsupportedError on web (no FFI leak)', () {
     // The `.memory()` convenience factory goes through the conditional loader,
     // whose web variant is a stub that throws instead of pulling FFI.
-    expect(
-      SqliteDataStorageAdapter.memory(),
-      throwsA(isA<UnsupportedError>()),
-    );
+    expect(SqliteDataStorageAdapter.memory(), throwsA(isA<UnsupportedError>()));
   });
 
   test('web-facing types are reachable and JS-compatible', () {

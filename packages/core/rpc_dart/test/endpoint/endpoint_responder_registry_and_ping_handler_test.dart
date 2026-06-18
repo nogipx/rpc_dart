@@ -117,7 +117,8 @@ void main() {
       final debugLabel = metadata
           .expand((m) => m.headers)
           .where(
-              (h) => h.name == RpcEndpointPingProtocol.responseDebugLabelHeader)
+            (h) => h.name == RpcEndpointPingProtocol.responseDebugLabelHeader,
+          )
           .map((h) => h.value)
           .toList();
       expect(debugLabel, equals(['srv']));
@@ -202,7 +203,7 @@ void main() {
 
 final class _ZeroCopyContract extends RpcResponderContract {
   _ZeroCopyContract()
-      : super('ZeroCopy', dataTransferMode: RpcDataTransferMode.auto);
+    : super('ZeroCopy', dataTransferMode: RpcDataTransferMode.auto);
 
   @override
   void setup() {
@@ -298,16 +299,14 @@ final class _ThrowOnceOnSendMetadata implements IRpcTransport {
     int streamId,
     Uint8List data, {
     bool endStream = false,
-  }) =>
-      _inner.sendMessage(streamId, data, endStream: endStream);
+  }) => _inner.sendMessage(streamId, data, endStream: endStream);
 
   @override
   Future<void> sendDirectObject(
     int streamId,
     Object object, {
     bool endStream = false,
-  }) =>
-      _inner.sendDirectObject(streamId, object, endStream: endStream);
+  }) => _inner.sendDirectObject(streamId, object, endStream: endStream);
 
   @override
   Stream<RpcTransportMessage> get incomingMessages => _inner.incomingMessages;

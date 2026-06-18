@@ -28,7 +28,9 @@ void main() {
       final subB = streamB.listen(dataB.add, onError: (e) => errorB = e);
 
       // Inject a stream-scoped error for stream 3.
-      controller.addError(RpcHttp2StreamError(3, StateError('parse error on 3')));
+      controller.addError(
+        RpcHttp2StreamError(3, StateError('parse error on 3')),
+      );
       // Stream 5 keeps receiving data normally.
       controller.add(RpcTransportMessage(streamId: 5, isEndOfStream: true));
 
@@ -168,10 +170,21 @@ void main() {
 
       // Generate a self-signed cert for 127.0.0.1.
       final result = Process.runSync('openssl', [
-        'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-        '-keyout', keyPath, '-out', certPath, '-days', '1',
-        '-subj', '/CN=localhost',
-        '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1',
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-keyout',
+        keyPath,
+        '-out',
+        certPath,
+        '-days',
+        '1',
+        '-subj',
+        '/CN=localhost',
+        '-addext',
+        'subjectAltName=DNS:localhost,IP:127.0.0.1',
       ]);
       if (result.exitCode != 0) {
         throw StateError('openssl failed: ${result.stderr}');
@@ -258,7 +271,8 @@ final class _EchoContract extends RpcResponderContract {
   void setup() {
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'Echo',
-      handler: (request, {context}) async => RpcString('Echo: ${request.value}'),
+      handler: (request, {context}) async =>
+          RpcString('Echo: ${request.value}'),
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
     );

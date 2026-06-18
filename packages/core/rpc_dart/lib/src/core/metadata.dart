@@ -47,7 +47,7 @@ final class RpcMetadata {
 
   /// Builds metadata from a list of headers with an optional method path.
   const RpcMetadata(this.headers, {String? methodPath})
-      : _explicitMethodPath = methodPath;
+    : _explicitMethodPath = methodPath;
 
   /// Creates metadata for a client request.
   ///
@@ -56,22 +56,16 @@ final class RpcMetadata {
   ///
   /// [serviceName] Service name (e.g., "ChatService").
   /// [methodName] Method name (e.g., "Send").
-  static RpcMetadata forClientRequest(
-    String serviceName,
-    String methodName,
-  ) {
+  static RpcMetadata forClientRequest(String serviceName, String methodName) {
     _validateMethodToken(serviceName, 'serviceName');
     _validateMethodToken(methodName, 'methodName');
-    return RpcMetadata(
-      [
-        const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
-        RpcHeader(
-          RpcHeaders.grpcAcceptEncoding,
-          RpcGrpcCompression.supportedEncodings().join(','),
-        ),
-      ],
-      methodPath: '/$serviceName/$methodName',
-    );
+    return RpcMetadata([
+      const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
+      RpcHeader(
+        RpcHeaders.grpcAcceptEncoding,
+        RpcGrpcCompression.supportedEncodings().join(','),
+      ),
+    ], methodPath: '/$serviceName/$methodName');
   }
 
   /// Creates client metadata when the method path is already computed.
@@ -85,16 +79,13 @@ final class RpcMetadata {
         'Invalid method path (expected /Service/Method)',
       );
     }
-    return RpcMetadata(
-      [
-        const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
-        RpcHeader(
-          RpcHeaders.grpcAcceptEncoding,
-          RpcGrpcCompression.supportedEncodings().join(','),
-        ),
-      ],
-      methodPath: methodPath,
-    );
+    return RpcMetadata([
+      const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
+      RpcHeader(
+        RpcHeaders.grpcAcceptEncoding,
+        RpcGrpcCompression.supportedEncodings().join(','),
+      ),
+    ], methodPath: methodPath);
   }
 
   /// Creates initial metadata for a server response.
@@ -120,9 +111,7 @@ final class RpcMetadata {
     String message = '',
     Uint8List? statusDetailsBin,
   }) {
-    final headers = [
-      RpcHeader(RpcHeaders.grpcStatus, statusCode.toString()),
-    ];
+    final headers = [RpcHeader(RpcHeaders.grpcStatus, statusCode.toString())];
 
     if (message.isNotEmpty) {
       headers.add(

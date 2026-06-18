@@ -117,103 +117,102 @@ final class RpcEndpointPingExchange {
       }
     }
 
-    subscription = transport.getMessagesForStream(streamId).listen(
-      (message) {
-        if (!message.isMetadataOnly || message.metadata == null) {
-          return;
-        }
+    subscription = transport
+        .getMessagesForStream(streamId)
+        .listen(
+          (message) {
+            if (!message.isMetadataOnly || message.metadata == null) {
+              return;
+            }
 
-        final headersMap = metadataToMap(message.metadata!);
+            final headersMap = metadataToMap(message.metadata!);
 
-        if (!headersMap.containsKey(RpcHeaders.grpcStatus)) {
-          if (message.isEndOfStream) {
-            completeError(
-              StateError(
-                'Ping stream завершен без трейлеров [streamId: $streamId]',
-              ),
+            if (!headersMap.containsKey(RpcHeaders.grpcStatus)) {
+              if (message.isEndOfStream) {
+                completeError(
+                  StateError(
+                    'Ping stream завершен без трейлеров [streamId: $streamId]',
+                  ),
+                );
+                return;
+              }
+
+              _log.internal(
+                'Получены начальные метаданные ответа ping [streamId: $streamId]',
+              );
+              return;
+            }
+
+            final statusCode =
+                int.tryParse(headersMap[RpcHeaders.grpcStatus] ?? '') ??
+                RpcStatus.unknown;
+
+            final receivedAt = DateTime.now().toUtc();
+
+            if (statusCode != RpcStatus.ok) {
+              final statusMessage =
+                  headersMap[RpcHeaders.grpcMessage] ?? 'Unknown error';
+              final decodedMessage = RpcMetadata.decodeGrpcMessage(
+                statusMessage,
+              );
+              _log.warning(
+                'Ping завершился с ошибкой: status=$statusCode, message=$decodedMessage [streamId: $streamId]',
+              );
+              completeError(
+                RpcException(
+                  'Ping failed with status $statusCode: $decodedMessage',
+                ),
+              );
+              return;
+            }
+
+            DateTime? responderTimestamp;
+            final responderTimestampRaw =
+                headersMap[RpcEndpointPingProtocol.responseTimestampHeader];
+            if (responderTimestampRaw != null) {
+              responderTimestamp = DateTime.tryParse(responderTimestampRaw);
+            }
+
+            final result = RpcEndpointPingResult(
+              sentAt: sentAt,
+              receivedAt: receivedAt,
+              roundTrip: receivedAt.difference(sentAt),
+              responderTimestamp: responderTimestamp,
+              responderDebugLabel:
+                  headersMap[RpcEndpointPingProtocol.responseDebugLabelHeader],
+              responderTransportType:
+                  headersMap[RpcEndpointPingProtocol.responseTransportHeader],
+              responseHeaders: headersMap,
             );
-            return;
-          }
 
-          _log.internal(
-            'Получены начальные метаданные ответа ping [streamId: $streamId]',
-          );
-          return;
-        }
+            _log.internal(
+              'Ping успешно завершен, RTT=${result.roundTrip.inMilliseconds}мс [streamId: $streamId]',
+            );
 
-        final statusCode = int.tryParse(
-              headersMap[RpcHeaders.grpcStatus] ?? '',
-            ) ??
-            RpcStatus.unknown;
-
-        final receivedAt = DateTime.now().toUtc();
-
-        if (statusCode != RpcStatus.ok) {
-          final statusMessage =
-              headersMap[RpcHeaders.grpcMessage] ?? 'Unknown error';
-          final decodedMessage = RpcMetadata.decodeGrpcMessage(statusMessage);
-          _log.warning(
-            'Ping завершился с ошибкой: status=$statusCode, message=$decodedMessage [streamId: $streamId]',
-          );
-          completeError(
-            RpcException(
-              'Ping failed with status $statusCode: $decodedMessage',
-            ),
-          );
-          return;
-        }
-
-        DateTime? responderTimestamp;
-        final responderTimestampRaw =
-            headersMap[RpcEndpointPingProtocol.responseTimestampHeader];
-        if (responderTimestampRaw != null) {
-          responderTimestamp = DateTime.tryParse(responderTimestampRaw);
-        }
-
-        final result = RpcEndpointPingResult(
-          sentAt: sentAt,
-          receivedAt: receivedAt,
-          roundTrip: receivedAt.difference(sentAt),
-          responderTimestamp: responderTimestamp,
-          responderDebugLabel:
-              headersMap[RpcEndpointPingProtocol.responseDebugLabelHeader],
-          responderTransportType:
-              headersMap[RpcEndpointPingProtocol.responseTransportHeader],
-          responseHeaders: headersMap,
+            completeSuccess(result);
+          },
+          onError: (error, stackTrace) {
+            _log.error(
+              'Ошибка при получении ответа ping [streamId: $streamId]',
+              error: error,
+              stackTrace: stackTrace,
+            );
+            completeError(error, stackTrace);
+          },
+          onDone: () {
+            if (!completer.isCompleted) {
+              completeError(
+                StateError(
+                  'Ping stream завершен без трейлеров [streamId: $streamId]',
+                ),
+              );
+            }
+          },
         );
-
-        _log.internal(
-          'Ping успешно завершен, RTT=${result.roundTrip.inMilliseconds}мс [streamId: $streamId]',
-        );
-
-        completeSuccess(result);
-      },
-      onError: (error, stackTrace) {
-        _log.error(
-          'Ошибка при получении ответа ping [streamId: $streamId]',
-          error: error,
-          stackTrace: stackTrace,
-        );
-        completeError(error, stackTrace);
-      },
-      onDone: () {
-        if (!completer.isCompleted) {
-          completeError(
-            StateError(
-              'Ping stream завершен без трейлеров [streamId: $streamId]',
-            ),
-          );
-        }
-      },
-    );
 
     try {
       _log.internal('Отправка ping запроса [streamId: $streamId]');
-      await transport.sendMetadata(
-        streamId,
-        metadata,
-        endStream: true,
-      );
+      await transport.sendMetadata(streamId, metadata, endStream: true);
     } catch (error, stackTrace) {
       await subscription.cancel();
       _log.error(

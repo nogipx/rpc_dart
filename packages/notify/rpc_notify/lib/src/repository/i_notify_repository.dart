@@ -12,11 +12,7 @@ abstract interface class INotifyRepository {
   void publish(String topic, Map<String, dynamic> payload);
 
   /// Publish an event only to [clientId] on [topic].
-  void publishTo(
-    String clientId,
-    String topic,
-    Map<String, dynamic> payload,
-  );
+  void publishTo(String clientId, String topic, Map<String, dynamic> payload);
 
   /// Returns a stream of events for [clientId] on [topic].
   /// Creates a new subscription if one does not exist.

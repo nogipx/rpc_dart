@@ -56,10 +56,7 @@ void main() {
       );
 
       // Broadcast — both clients should receive this.
-      await env.publisher.publish(
-        topic: 'chat',
-        payload: {'msg': 'broadcast'},
-      );
+      await env.publisher.publish(topic: 'chat', payload: {'msg': 'broadcast'});
 
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
@@ -82,10 +79,7 @@ void main() {
       env.server.publish(topic: 'alerts', payload: {'src': 'direct'});
 
       // Via RPC publish contract.
-      await env.publisher.publish(
-        topic: 'alerts',
-        payload: {'src': 'rpc'},
-      );
+      await env.publisher.publish(topic: 'alerts', payload: {'src': 'rpc'});
 
       await Future<void>.delayed(const Duration(milliseconds: 100));
 

@@ -91,13 +91,15 @@ abstract class ICollide {
 
     // Two distinct codec constants must exist for the two distinct Foo types.
     // With the collision bug, only ONE `codecFoo` is emitted.
-    final codecCount =
-        RegExp(r'static const codec\w*\s*=').allMatches(generated!).length;
+    final codecCount = RegExp(
+      r'static const codec\w*\s*=',
+    ).allMatches(generated!).length;
 
     expect(
       codecCount,
       greaterThanOrEqualTo(2),
-      reason: 'Expected 2 distinct codecs for two distinct Foo types, got '
+      reason:
+          'Expected 2 distinct codecs for two distinct Foo types, got '
           '$codecCount. Generated:\n$generated',
     );
   });

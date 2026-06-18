@@ -78,7 +78,8 @@ class Foo implements IRpcSerializable {
     expect(
       generated,
       isNotNull,
-      reason: 'generator produced no output for a description containing '
+      reason:
+          'generator produced no output for a description containing '
           'newline / backslash / \$ -> broken escaping. Build logs:\n'
           '${logs.join('\n')}',
     );
@@ -86,8 +87,11 @@ class Foo implements IRpcSerializable {
 
     // Locate the description literal.
     final idx = out.indexOf('description:');
-    expect(idx, greaterThanOrEqualTo(0),
-        reason: 'no description emitted:\n$out');
+    expect(
+      idx,
+      greaterThanOrEqualTo(0),
+      reason: 'no description emitted:\n$out',
+    );
 
     // Extract from `description:` to end of that statement's segment.
     // The description is emitted as `description: '<...>',` (the dart formatter
@@ -99,14 +103,18 @@ class Foo implements IRpcSerializable {
     //    We check the first 200 chars after `description:` for a raw \n that is
     //    part of the literal value (not the trailing source formatting).
     final descSegmentEnd = tail.indexOf("',");
-    expect(descSegmentEnd, greaterThanOrEqualTo(0),
-        reason: 'could not find end of description literal in:\n$tail');
+    expect(
+      descSegmentEnd,
+      greaterThanOrEqualTo(0),
+      reason: 'could not find end of description literal in:\n$tail',
+    );
     final descLiteral = tail.substring(0, descSegmentEnd);
 
     expect(
       descLiteral.contains('\n'),
       isFalse,
-      reason: 'raw newline inside single-quoted literal -> invalid Dart:\n'
+      reason:
+          'raw newline inside single-quoted literal -> invalid Dart:\n'
           '$descLiteral',
     );
 
@@ -115,7 +123,8 @@ class Foo implements IRpcSerializable {
     expect(
       descLiteral.contains(r'$5') && !descLiteral.contains(r'\$5'),
       isFalse,
-      reason: 'unescaped \$ in description literal -> interpolation/compile '
+      reason:
+          'unescaped \$ in description literal -> interpolation/compile '
           'error:\n$descLiteral',
     );
   });

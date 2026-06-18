@@ -6,8 +6,11 @@
 part of '../_index.dart';
 
 /// Server-stream responder: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Handles one request and streams responses.
-final class ServerStreamResponder<TRequest extends Object,
-    TResponse extends Object> implements IRpcResponder {
+final class ServerStreamResponder<
+  TRequest extends Object,
+  TResponse extends Object
+>
+    implements IRpcResponder {
   late final LogScope _logger;
 
   @override
@@ -91,9 +94,7 @@ final class ServerStreamResponder<TRequest extends Object,
   void _setupRequestHandler(
     Stream<TResponse> Function(TRequest request) handler,
   ) {
-    _logger.internal(
-      'Configuring request handler for server stream [id: $id]',
-    );
+    _logger.internal('Configuring request handler for server stream [id: $id]');
 
     _subscription = _processor.requests.listen(
       (request) async {
@@ -159,12 +160,16 @@ final class ServerStreamResponder<TRequest extends Object,
             final errorStatus = error is RpcStatusException
                 ? error.statusCode
                 : RpcStatus.internal;
-            final errorMsg =
-                error is RpcStatusException ? error.message : error.toString();
-            await _processor.sendError(errorStatus, errorMsg,
-                statusDetailsBin: error is RpcStatusException
-                    ? error.statusDetailsBin
-                    : null);
+            final errorMsg = error is RpcStatusException
+                ? error.message
+                : error.toString();
+            await _processor.sendError(
+              errorStatus,
+              errorMsg,
+              statusDetailsBin: error is RpcStatusException
+                  ? error.statusDetailsBin
+                  : null,
+            );
             _completeDone();
           }
         } else {

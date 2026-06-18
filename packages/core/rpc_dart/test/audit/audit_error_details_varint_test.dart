@@ -54,18 +54,20 @@ void main() {
       expect(back.retryDelay.inSeconds, bigSeconds);
     });
 
-    test('large length-delimited payload (> 2^32 boundary nearby) is intact',
-        () {
-      // Exercise the varint length path with a non-trivial size to ensure the
-      // multi-byte length encoding/decoding stays exact.
-      final big = 'x' * 200000; // length 200000 needs a 3-byte varint
-      final info = RpcErrorInfo(reason: big, domain: 'd');
-      final status = encodeRpcStatus(3, 'm', [info]);
-      final decoded = decodeRpcStatus(status);
-      final back = decoded.details.single as RpcErrorInfo;
-      expect(back.reason.length, big.length);
-      expect(back.domain, 'd');
-    });
+    test(
+      'large length-delimited payload (> 2^32 boundary nearby) is intact',
+      () {
+        // Exercise the varint length path with a non-trivial size to ensure the
+        // multi-byte length encoding/decoding stays exact.
+        final big = 'x' * 200000; // length 200000 needs a 3-byte varint
+        final info = RpcErrorInfo(reason: big, domain: 'd');
+        final status = encodeRpcStatus(3, 'm', [info]);
+        final decoded = decodeRpcStatus(status);
+        final back = decoded.details.single as RpcErrorInfo;
+        expect(back.reason.length, big.length);
+        expect(back.domain, 'd');
+      },
+    );
 
     test('positive boundary values round-trip (127, 128, 16384)', () {
       for (final code in const [16, 127, 128, 300, 16384]) {

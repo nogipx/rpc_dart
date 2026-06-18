@@ -4,8 +4,8 @@
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-typedef RpcIsolateEntrypoint = void Function(
-    IRpcTransport transport, Map<String, dynamic> customParams);
+typedef RpcIsolateEntrypoint =
+    void Function(IRpcTransport transport, Map<String, dynamic> customParams);
 
 /// Fallback stub for platforms without `dart:isolate` (e.g., web).
 /// Always throws [UnsupportedError] when used.

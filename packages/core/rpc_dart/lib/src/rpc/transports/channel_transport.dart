@@ -47,9 +47,9 @@ class RpcChannelTransport implements IRpcTransport {
     required IRpcMultiplexedChannel channel,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
-  })  : _channel = channel,
-        _idManager = RpcStreamIdManager(isClient: isClient),
-        _policy = policy {
+  }) : _channel = channel,
+       _idManager = RpcStreamIdManager(isClient: isClient),
+       _policy = policy {
     _channelSub = _channel.incoming.listen(
       _onMessage,
       onError: (Object e) {
@@ -82,8 +82,9 @@ class RpcChannelTransport implements IRpcTransport {
   static (RpcChannelTransport, RpcChannelTransport) pair({
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
-    final (clientCh, serverCh) =
-        RpcFrameMultiplexedChannel.pair(policy: policy);
+    final (clientCh, serverCh) = RpcFrameMultiplexedChannel.pair(
+      policy: policy,
+    );
     return (
       RpcChannelTransport(channel: clientCh, isClient: true, policy: policy),
       RpcChannelTransport(channel: serverCh, isClient: false, policy: policy),
@@ -149,12 +150,14 @@ class RpcChannelTransport implements IRpcTransport {
   }) async {
     if (_closed) return;
     _policy.validateMetadata(metadata);
-    await _channel.send(RpcTransportMessage.withMetadata(
-      metadata: metadata,
-      isEndOfStream: endStream,
-      methodPath: metadata.methodPath,
-      streamId: streamId,
-    ));
+    await _channel.send(
+      RpcTransportMessage.withMetadata(
+        metadata: metadata,
+        isEndOfStream: endStream,
+        methodPath: metadata.methodPath,
+        streamId: streamId,
+      ),
+    );
     if (endStream) _markFinished(streamId);
   }
 
@@ -165,11 +168,13 @@ class RpcChannelTransport implements IRpcTransport {
     bool endStream = false,
   }) async {
     if (_closed) return;
-    await _channel.send(RpcTransportMessage.withPayload(
-      payload: data,
-      isEndOfStream: endStream,
-      streamId: streamId,
-    ));
+    await _channel.send(
+      RpcTransportMessage.withPayload(
+        payload: data,
+        isEndOfStream: endStream,
+        streamId: streamId,
+      ),
+    );
     if (endStream) _markFinished(streamId);
   }
 
@@ -186,11 +191,13 @@ class RpcChannelTransport implements IRpcTransport {
       );
     }
     if (_closed) return;
-    await _channel.send(RpcTransportMessage.withDirectObject(
-      directPayload: object,
-      isEndOfStream: endStream,
-      streamId: streamId,
-    ));
+    await _channel.send(
+      RpcTransportMessage.withDirectObject(
+        directPayload: object,
+        isEndOfStream: endStream,
+        streamId: streamId,
+      ),
+    );
     if (endStream) _markFinished(streamId);
   }
 
@@ -199,11 +206,13 @@ class RpcChannelTransport implements IRpcTransport {
     if (_closed) return;
     if (_finishedStreams.contains(streamId)) return;
     _finishedStreams.add(streamId);
-    await _channel.send(RpcTransportMessage(
-      metadata: RpcMetadata([]),
-      isEndOfStream: true,
-      streamId: streamId,
-    ));
+    await _channel.send(
+      RpcTransportMessage(
+        metadata: RpcMetadata([]),
+        isEndOfStream: true,
+        streamId: streamId,
+      ),
+    );
     _releaseStream(streamId);
   }
 

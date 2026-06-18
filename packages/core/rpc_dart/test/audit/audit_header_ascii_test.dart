@@ -44,8 +44,7 @@ void main() {
 
     test('a base64 -bin value is plain ASCII and passes', () {
       final bin = base64Encode([0, 255, 1, 254, 0x80]);
-      final metadata =
-          RpcMetadata([RpcHeader('grpc-status-details-bin', bin)]);
+      final metadata = RpcMetadata([RpcHeader('grpc-status-details-bin', bin)]);
       expect(() => policy.validateMetadata(metadata), returnsNormally);
     });
   });

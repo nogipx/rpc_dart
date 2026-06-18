@@ -110,7 +110,12 @@ ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
         dependencies.add(utf8.decode(reader.readLenDelimited()));
       case 4 when wireType == _wireLen:
         // repeated DescriptorProto message_type — collect names recursively
-        _collectAllTypeNames(reader.readLenDelimited(), '', messageTypes, enumTypes);
+        _collectAllTypeNames(
+          reader.readLenDelimited(),
+          '',
+          messageTypes,
+          enumTypes,
+        );
       case 5 when wireType == _wireLen:
         // repeated EnumDescriptorProto enum_type (file-level)
         final enumName = _parseNameField(reader.readLenDelimited());

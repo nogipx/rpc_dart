@@ -118,9 +118,7 @@ List<http2.Header> rpcMetadataToHttp2RequestHeaders(
 ///
 /// Use [rpcMetadataToHttp2Trailers] for trailing metadata (no `:status`).
 List<http2.Header> rpcMetadataToHttp2ResponseHeaders(RpcMetadata metadata) {
-  final headers = <http2.Header>[
-    http2.Header.ascii(':status', '200'),
-  ];
+  final headers = <http2.Header>[http2.Header.ascii(':status', '200')];
 
   for (final rpcHeader in metadata.headers) {
     final name = rpcHeader.name.toLowerCase();
@@ -158,9 +156,7 @@ List<http2.Header> rpcMetadataToHttp2Trailers(RpcMetadata metadata) {
 /// `:status: 200`, `content-type`, and the gRPC trailer fields (`grpc-status`,
 /// `grpc-message`, etc.) with END_STREAM set.
 List<http2.Header> rpcMetadataToHttp2TrailersOnly(RpcMetadata metadata) {
-  final headers = <http2.Header>[
-    http2.Header.ascii(':status', '200'),
-  ];
+  final headers = <http2.Header>[http2.Header.ascii(':status', '200')];
 
   // Ensure content-type is present.
   bool hasContentType = false;

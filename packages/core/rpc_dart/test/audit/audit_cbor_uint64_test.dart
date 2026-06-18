@@ -25,37 +25,43 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('CBOR 8-byte int roundtrip (run with -p node to expose dart2js bug)',
-      () {
-    test('2^32 + 1 survives encode/decode roundtrip', () {
-      // 4294967297 = 0x1_0000_0001. > 0xFFFFFFFF => encoder uses the 8-byte
-      // form. Exactly representable in JS. The 32-bit `<<` on read drops the
-      // high bit, yielding 1 on dart2js.
-      const value = 4294967297;
-      final encoded = CborCodec.encode({'v': value});
-      final decoded = CborCodec.decode(encoded);
+  group(
+    'CBOR 8-byte int roundtrip (run with -p node to expose dart2js bug)',
+    () {
+      test('2^32 + 1 survives encode/decode roundtrip', () {
+        // 4294967297 = 0x1_0000_0001. > 0xFFFFFFFF => encoder uses the 8-byte
+        // form. Exactly representable in JS. The 32-bit `<<` on read drops the
+        // high bit, yielding 1 on dart2js.
+        const value = 4294967297;
+        final encoded = CborCodec.encode({'v': value});
+        final decoded = CborCodec.decode(encoded);
 
-      expect(
-        decoded['v'],
-        equals(value),
-        reason: 'decoded ${decoded['v']} != $value; dart2js (result << 8)|byte '
-            'is a 32-bit op and truncates 8-byte ints',
-      );
-    });
+        expect(
+          decoded['v'],
+          equals(value),
+          reason:
+              'decoded ${decoded['v']} != $value; dart2js (result << 8)|byte '
+              'is a 32-bit op and truncates 8-byte ints',
+        );
+      });
 
-    test('0xFF_0000_0000 survives roundtrip', () {
-      const value = 0xFF00000000; // 1095216660480, fits JS double exactly
-      final encoded = CborCodec.encode({'v': value});
-      final decoded = CborCodec.decode(encoded);
-      expect(decoded['v'], equals(value),
-          reason: 'high bytes lost via 32-bit shift on dart2js');
-    });
+      test('0xFF_0000_0000 survives roundtrip', () {
+        const value = 0xFF00000000; // 1095216660480, fits JS double exactly
+        final encoded = CborCodec.encode({'v': value});
+        final decoded = CborCodec.decode(encoded);
+        expect(
+          decoded['v'],
+          equals(value),
+          reason: 'high bytes lost via 32-bit shift on dart2js',
+        );
+      });
 
-    test('5_000_000_000 survives roundtrip', () {
-      const value = 5000000000; // > 2^32, well within 2^53
-      final encoded = CborCodec.encode({'v': value});
-      final decoded = CborCodec.decode(encoded);
-      expect(decoded['v'], equals(value));
-    });
-  });
+      test('5_000_000_000 survives roundtrip', () {
+        const value = 5000000000; // > 2^32, well within 2^53
+        final encoded = CborCodec.encode({'v': value});
+        final decoded = CborCodec.decode(encoded);
+        expect(decoded['v'], equals(value));
+      });
+    },
+  );
 }

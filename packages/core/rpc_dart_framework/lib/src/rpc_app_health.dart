@@ -58,9 +58,9 @@ class RpcAppHealth {
 
   /// Serialises to a plain map suitable for a health-check HTTP response body.
   Map<String, Object?> toJson() => {
-        'level': level.name,
-        'checkedAt': checkedAt.toIso8601String(),
-        'modules': modules,
-        'endpoints': endpoints,
-      };
+    'level': level.name,
+    'checkedAt': checkedAt.toIso8601String(),
+    'modules': modules,
+    'endpoints': endpoints,
+  };
 }

@@ -33,7 +33,8 @@ void main() {
     final out = LogCollectorOutput(
       uri: Uri.parse('ws://127.0.0.1:9'),
       device: DeviceInfo(name: 'JSDevice', app: 'JSApp'),
-      channelFactory: (_) => Completer<WebSocketChannel>().future, // never ready
+      channelFactory: (_) =>
+          Completer<WebSocketChannel>().future, // never ready
     );
     expect(out.sessionId, isNotEmpty);
     expect(out.isConnected, isFalse);
@@ -67,62 +68,75 @@ void main() {
     out.dispose();
   });
 
-  test('connects, handshakes and flushes buffered records to the collector',
-      () async {
-    final received = <LogCollectorRecord>[];
-    LogCollectorHandshake? handshake;
+  test(
+    'connects, handshakes and flushes buffered records to the collector',
+    () async {
+      final received = <LogCollectorRecord>[];
+      LogCollectorHandshake? handshake;
 
-    // In-memory WS pair: server side runs a real responder endpoint.
-    WebSocketChannel? serverChannel;
+      // In-memory WS pair: server side runs a real responder endpoint.
+      WebSocketChannel? serverChannel;
 
-    Future<WebSocketChannel> factory(Uri uri) async {
-      final (client, server) = _wsPair();
-      serverChannel = server;
-      // Wire the server side: responder endpoint with the log contract.
-      final transport = RpcWebSocketResponderTransport(server);
-      final endpoint = RpcResponderEndpoint(transport: transport);
-      endpoint.registerServiceContract(LogCollectorServiceResponder(
-        onHandshake: (h) => handshake = h,
-        onRecord: received.add,
-      ));
-      endpoint.start();
-      return client;
-    }
+      Future<WebSocketChannel> factory(Uri uri) async {
+        final (client, server) = _wsPair();
+        serverChannel = server;
+        // Wire the server side: responder endpoint with the log contract.
+        final transport = RpcWebSocketResponderTransport(server);
+        final endpoint = RpcResponderEndpoint(transport: transport);
+        endpoint.registerServiceContract(
+          LogCollectorServiceResponder(
+            onHandshake: (h) => handshake = h,
+            onRecord: received.add,
+          ),
+        );
+        endpoint.start();
+        return client;
+      }
 
-    final out = LogCollectorOutput(
-      uri: Uri.parse('ws://memory'),
-      device: DeviceInfo(name: 'JSDevice', app: 'JSApp'),
-      channelFactory: factory,
-    );
+      final out = LogCollectorOutput(
+        uri: Uri.parse('ws://memory'),
+        device: DeviceInfo(name: 'JSDevice', app: 'JSApp'),
+        channelFactory: factory,
+      );
 
-    final controller = LogController(
-      minLevel: RpcLogLevel.debug,
-      outputs: [out],
-    );
-    final log = controller.scope('web.service');
+      final controller = LogController(
+        minLevel: RpcLogLevel.debug,
+        outputs: [out],
+      );
+      final log = controller.scope('web.service');
 
-    // Emit before and after the connection settles.
-    log.info('early one');
-    log.info('early two');
+      // Emit before and after the connection settles.
+      log.info('early one');
+      log.info('early two');
 
-    await _pumpUntil(() => out.isConnected, timeout: const Duration(seconds: 5));
-    expect(handshake?.deviceName, startsWith('JSDevice/'));
+      await _pumpUntil(
+        () => out.isConnected,
+        timeout: const Duration(seconds: 5),
+      );
+      expect(handshake?.deviceName, startsWith('JSDevice/'));
 
-    log.info('late three');
+      log.info('late three');
 
-    await _pumpUntil(() => received.length >= 3,
-        timeout: const Duration(seconds: 5));
+      await _pumpUntil(
+        () => received.length >= 3,
+        timeout: const Duration(seconds: 5),
+      );
 
-    final messages =
-        received.map((r) => r.payload['message'] as String?).toList();
-    expect(messages, containsAll(['early one', 'early two', 'late three']));
-    // Order preserved.
-    expect(messages.indexOf('early one'), lessThan(messages.indexOf('early two')));
-    expect(out.bufferedCount, 0);
+      final messages = received
+          .map((r) => r.payload['message'] as String?)
+          .toList();
+      expect(messages, containsAll(['early one', 'early two', 'late three']));
+      // Order preserved.
+      expect(
+        messages.indexOf('early one'),
+        lessThan(messages.indexOf('early two')),
+      );
+      expect(out.bufferedCount, 0);
 
-    out.dispose();
-    await serverChannel?.sink.close();
-  });
+      out.dispose();
+      await serverChannel?.sink.close();
+    },
+  );
 }
 
 /// Spins the event loop until [cond] is true or [timeout] elapses.
@@ -160,8 +174,8 @@ class _MemoryWebSocketChannel extends StreamChannelMixin<Object?>
   _MemoryWebSocketChannel({
     required Stream<Object?> incoming,
     required StreamSink<Object?> outgoing,
-  })  : stream = incoming,
-        sink = _MemoryWebSocketSink(outgoing);
+  }) : stream = incoming,
+       sink = _MemoryWebSocketSink(outgoing);
 
   @override
   final Stream<Object?> stream;

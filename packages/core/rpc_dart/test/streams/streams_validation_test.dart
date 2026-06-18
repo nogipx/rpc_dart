@@ -38,8 +38,9 @@ void main() {
 
     test('UnaryCaller throws when context deadline already expired', () async {
       final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-      final context =
-          RpcContext.withDeadline(DateTime.fromMillisecondsSinceEpoch(0));
+      final context = RpcContext.withDeadline(
+        DateTime.fromMillisecondsSinceEpoch(0),
+      );
 
       final client = UnaryCaller<RpcString, RpcString>(
         transport: clientTransport,
@@ -242,22 +243,24 @@ void main() {
       await serverTransport.close();
     });
 
-    test('BidirectionalStreamCaller validates zero-copy requirements',
-        () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-      final transport = NoZeroCopyTransport(clientTransport);
-      expect(
-        () => BidirectionalStreamCaller<RpcString, RpcString>(
-          transport: transport,
-          serviceName: 'S',
-          methodName: 'M',
-          // null codecs => request zero-copy
-        ),
-        throwsArgumentError,
-      );
+    test(
+      'BidirectionalStreamCaller validates zero-copy requirements',
+      () async {
+        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final transport = NoZeroCopyTransport(clientTransport);
+        expect(
+          () => BidirectionalStreamCaller<RpcString, RpcString>(
+            transport: transport,
+            serviceName: 'S',
+            methodName: 'M',
+            // null codecs => request zero-copy
+          ),
+          throwsArgumentError,
+        );
 
-      await clientTransport.close();
-      await serverTransport.close();
-    });
+        await clientTransport.close();
+        await serverTransport.close();
+      },
+    );
   });
 }

@@ -55,9 +55,9 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     this.level = defaultLevel,
     this.maxDecompressedSize = _unlimited,
   }) : assert(
-          level >= 0 && level <= 9,
-          'gzip level must be in 0..9, got $level',
-        );
+         level >= 0 && level <= 9,
+         'gzip level must be in 0..9, got $level',
+       );
 
   /// Registers a [RpcGzipCodec] with [RpcGrpcCompression] for the `gzip`
   /// encoding.
@@ -69,10 +69,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     int level = defaultLevel,
     int maxDecompressedSize = _unlimited,
   }) {
-    assert(
-      level >= 0 && level <= 9,
-      'gzip level must be in 0..9, got $level',
-    );
+    assert(level >= 0 && level <= 9, 'gzip level must be in 0..9, got $level');
     RpcGrpcCompression.register(
       RpcGrpcCompression.gzip,
       RpcGzipCodec(level: level, maxDecompressedSize: maxDecompressedSize),
@@ -125,7 +122,8 @@ final class RpcGzipCodec implements RpcCompressionCodec {
 
     if (effectiveLimit != _unlimited) {
       final n = data.length;
-      final declaredSize = data[n - 4] |
+      final declaredSize =
+          data[n - 4] |
           (data[n - 3] << 8) |
           (data[n - 2] << 16) |
           (data[n - 1] << 24);
@@ -174,11 +172,13 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   /// [FormatException] if either does not match the decoded output.
   static void _verifyTrailer(Uint8List data, List<int> output) {
     final n = data.length;
-    final expectedCrc = data[n - 8] |
+    final expectedCrc =
+        data[n - 8] |
         (data[n - 7] << 8) |
         (data[n - 6] << 16) |
         (data[n - 5] << 24);
-    final expectedSize = data[n - 4] |
+    final expectedSize =
+        data[n - 4] |
         (data[n - 3] << 8) |
         (data[n - 2] << 16) |
         (data[n - 1] << 24);

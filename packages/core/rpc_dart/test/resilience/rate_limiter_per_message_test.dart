@@ -32,12 +32,13 @@ void main() {
     // Fixed clock so the sliding window never advances during the test.
     int frozenClock() => 0;
 
-    test(
-        'server-stream: each response message consumes a token and then '
+    test('server-stream: each response message consumes a token and then '
         'emits RESOURCE_EXHAUSTED after limit', () async {
       final limiter = RpcRateLimiter(
-        global:
-            RateLimit.slidingWindow(max: 3, window: const Duration(hours: 1)),
+        global: RateLimit.slidingWindow(
+          max: 3,
+          window: const Duration(hours: 1),
+        ),
         nowMicros: frozenClock,
       );
 
@@ -71,8 +72,10 @@ void main() {
 
     test('client-stream: each request message consumes a token', () async {
       final limiter = RpcRateLimiter(
-        global:
-            RateLimit.slidingWindow(max: 2, window: const Duration(hours: 1)),
+        global: RateLimit.slidingWindow(
+          max: 2,
+          window: const Duration(hours: 1),
+        ),
         nowMicros: frozenClock,
       );
 
@@ -122,8 +125,10 @@ void main() {
 
     test('unary behavior unchanged: one token per call', () async {
       final limiter = RpcRateLimiter(
-        global:
-            RateLimit.slidingWindow(max: 2, window: const Duration(hours: 1)),
+        global: RateLimit.slidingWindow(
+          max: 2,
+          window: const Duration(hours: 1),
+        ),
         nowMicros: frozenClock,
       );
       final unaryCtx = RpcMiddlewareContext(
@@ -134,10 +139,10 @@ void main() {
       );
 
       Future<String> call() => limiter.interceptUnary<String, String>(
-            unaryCtx,
-            'req',
-            (ctx, req) async => 'ok',
-          );
+        unaryCtx,
+        'req',
+        (ctx, req) async => 'ok',
+      );
 
       expect(await call(), 'ok');
       expect(await call(), 'ok');

@@ -22,7 +22,10 @@ void main() {
     });
 
     final limiter = RpcRateLimiter(
-      perKeyFallback: RateLimit.slidingWindow(max: 1, window: Duration(hours: 1)),
+      perKeyFallback: RateLimit.slidingWindow(
+        max: 1,
+        window: Duration(hours: 1),
+      ),
       keyExtractor: (_) => 'user-1',
     );
 
@@ -33,11 +36,8 @@ void main() {
       context: RpcContext.empty(),
     );
 
-    Future<void> call() => limiter.interceptUnary<int, int>(
-          ctx,
-          1,
-          (c, r) async => r,
-        );
+    Future<void> call() =>
+        limiter.interceptUnary<int, int>(ctx, 1, (c, r) async => r);
 
     // Sanity: limit is 1/hour, 2nd call before dispose throws.
     await call();

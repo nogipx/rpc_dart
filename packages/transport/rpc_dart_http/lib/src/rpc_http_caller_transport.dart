@@ -104,9 +104,11 @@ class RpcHttpCallerTransport implements IRpcTransport {
     required String baseUrl,
     http.Client? httpClient,
     LogScope? logger,
-  })  : _baseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl,
-        _httpClient = httpClient ?? http.Client(),
-        _logger = logger?.child('HttpCallerTransport');
+  }) : _baseUrl = baseUrl.endsWith('/')
+           ? baseUrl.substring(0, baseUrl.length - 1)
+           : baseUrl,
+       _httpClient = httpClient ?? http.Client(),
+       _logger = logger?.child('HttpCallerTransport');
 
   @override
   bool get isClient => true;
@@ -156,7 +158,9 @@ class RpcHttpCallerTransport implements IRpcTransport {
     if (_isClosed) throw StateError('Transport is closed');
     final call = _pending[streamId];
     if (call == null) {
-      throw StateError('No pending call for stream $streamId. Call sendMetadata first.');
+      throw StateError(
+        'No pending call for stream $streamId. Call sendMetadata first.',
+      );
     }
     call.bodyBuffer.addAll(data);
     if (endStream) {
@@ -174,7 +178,9 @@ class RpcHttpCallerTransport implements IRpcTransport {
     if (call == null) return;
 
     _inFlight.add(streamId);
-    _logger?.internal('Firing HTTP POST ${call.methodPath} [streamId: $streamId]');
+    _logger?.internal(
+      'Firing HTTP POST ${call.methodPath} [streamId: $streamId]',
+    );
 
     final uri = Uri.parse('$_baseUrl${call.methodPath}');
     try {
@@ -203,17 +209,21 @@ class RpcHttpCallerTransport implements IRpcTransport {
       if (response.statusCode != 200) {
         final grpcCode = _httpStatusToGrpcCode(response.statusCode);
         if (!_incoming.isClosed) {
-          _incoming.add(RpcTransportMessage(
-            streamId: streamId,
-            metadata: RpcMetadata([
-              RpcHeader(RpcHeaders.grpcStatus, '$grpcCode'),
-              RpcHeader(
-                RpcHeaders.grpcMessage,
-                Uri.encodeComponent('HTTP ${response.statusCode} from ${call.methodPath}'),
-              ),
-            ]),
-            isEndOfStream: true,
-          ));
+          _incoming.add(
+            RpcTransportMessage(
+              streamId: streamId,
+              metadata: RpcMetadata([
+                RpcHeader(RpcHeaders.grpcStatus, '$grpcCode'),
+                RpcHeader(
+                  RpcHeaders.grpcMessage,
+                  Uri.encodeComponent(
+                    'HTTP ${response.statusCode} from ${call.methodPath}',
+                  ),
+                ),
+              ]),
+              isEndOfStream: true,
+            ),
+          );
         }
         return;
       }
@@ -234,30 +244,36 @@ class RpcHttpCallerTransport implements IRpcTransport {
       });
 
       if (!_incoming.isClosed) {
-        _incoming.add(RpcTransportMessage(
-          streamId: streamId,
-          metadata: RpcMetadata(initialHeaders),
-          isEndOfStream: false,
-          methodPath: call.methodPath,
-        ));
+        _incoming.add(
+          RpcTransportMessage(
+            streamId: streamId,
+            metadata: RpcMetadata(initialHeaders),
+            isEndOfStream: false,
+            methodPath: call.methodPath,
+          ),
+        );
       }
 
       final responseBytes = response.bodyBytes;
       if (responseBytes.isNotEmpty && !_incoming.isClosed) {
-        _incoming.add(RpcTransportMessage(
-          streamId: streamId,
-          payload: responseBytes,
-          isEndOfStream: false,
-          methodPath: call.methodPath,
-        ));
+        _incoming.add(
+          RpcTransportMessage(
+            streamId: streamId,
+            payload: responseBytes,
+            isEndOfStream: false,
+            methodPath: call.methodPath,
+          ),
+        );
       }
 
       if (!_incoming.isClosed) {
-        _incoming.add(RpcTransportMessage(
-          streamId: streamId,
-          metadata: RpcMetadata(trailerHeaders),
-          isEndOfStream: true,
-        ));
+        _incoming.add(
+          RpcTransportMessage(
+            streamId: streamId,
+            metadata: RpcMetadata(trailerHeaders),
+            isEndOfStream: true,
+          ),
+        );
       }
     } catch (e, st) {
       _logger?.error(
@@ -329,6 +345,8 @@ class RpcHttpCallerTransport implements IRpcTransport {
     Object object, {
     bool endStream = false,
   }) async {
-    throw UnsupportedError('HTTP/1.1 transport does not support direct object transfer');
+    throw UnsupportedError(
+      'HTTP/1.1 transport does not support direct object transfer',
+    );
   }
 }

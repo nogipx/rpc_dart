@@ -138,14 +138,14 @@ void main() {
 
     test('Унарный запрос возвращает корректный ответ', () async {
       // Отправляем унарный запрос
-      final response =
-          await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-        serviceName: 'TestService',
-        methodName: 'UnaryMethod',
-        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-        request: TestRequest('Hello from test'),
-      );
+      final response = await callerEndpoint
+          .unaryRequest<TestRequest, TestResponse>(
+            serviceName: 'TestService',
+            methodName: 'UnaryMethod',
+            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+            request: TestRequest('Hello from test'),
+          );
 
       // Проверяем ответ
       expect(response.message, equals('Reply to: Hello from test'));
@@ -161,8 +161,10 @@ void main() {
         request: TestRequest('Stream request'),
       );
 
-      final responses =
-          await stream.take(3).toList().timeout(const Duration(seconds: 5));
+      final responses = await stream
+          .take(3)
+          .toList()
+          .timeout(const Duration(seconds: 5));
 
       expect(responses.length, 3);
       expect(responses[0].message, equals('Reply 1 to: Stream request'));
@@ -183,13 +185,13 @@ void main() {
       ]);
 
       // Получаем функцию ответа
-      final getResponse =
-          callerEndpoint.clientStream<TestRequest, TestResponse>(
-        serviceName: 'TestService',
-        methodName: 'ClientStreamMethod',
-        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-      );
+      final getResponse = callerEndpoint
+          .clientStream<TestRequest, TestResponse>(
+            serviceName: 'TestService',
+            methodName: 'ClientStreamMethod',
+            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+          );
 
       // Вызываем getResponse для отправки всех сообщений и получения ответа
       final response = await getResponse(requestStream).timeout(
@@ -215,14 +217,14 @@ void main() {
       final controller = StreamController<TestRequest>();
 
       // Запускаем двунаправленный стрим
-      final responseStream =
-          callerEndpoint.bidirectionalStream<TestRequest, TestResponse>(
-        serviceName: 'TestService',
-        methodName: 'BidirectionalMethod',
-        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-        requests: controller.stream,
-      );
+      final responseStream = callerEndpoint
+          .bidirectionalStream<TestRequest, TestResponse>(
+            serviceName: 'TestService',
+            methodName: 'BidirectionalMethod',
+            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+            requests: controller.stream,
+          );
 
       // ВАЖНО: начинаем слушать ответы до отправки запросов
       final responsesFuture = responseStream.take(3).toList();
@@ -243,8 +245,9 @@ void main() {
       // Закрываем контроллер, сигнализируя конец потока запросов
       await controller.close();
 
-      final allResponses =
-          await responsesFuture.timeout(const Duration(seconds: 5));
+      final allResponses = await responsesFuture.timeout(
+        const Duration(seconds: 5),
+      );
 
       expect(allResponses.length, equals(3));
       expect(allResponses[0].message, equals('Echo: Bi Message 1'));
@@ -253,23 +256,29 @@ void main() {
 
       expect(testService.callLog, contains('BidirectionalMethod: начат'));
       expect(
-          testService.callLog, contains('BidirectionalMethod: Bi Message 1'));
+        testService.callLog,
+        contains('BidirectionalMethod: Bi Message 1'),
+      );
       expect(
-          testService.callLog, contains('BidirectionalMethod: Bi Message 2'));
+        testService.callLog,
+        contains('BidirectionalMethod: Bi Message 2'),
+      );
       expect(
-          testService.callLog, contains('BidirectionalMethod: Bi Message 3'));
+        testService.callLog,
+        contains('BidirectionalMethod: Bi Message 3'),
+      );
     });
 
     test('Закрытие эндпоинта корректно освобождает ресурсы', () async {
       // Отправляем запрос до закрытия
-      final response =
-          await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-        serviceName: 'TestService',
-        methodName: 'UnaryMethod',
-        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-        request: TestRequest('Pre-close request'),
-      );
+      final response = await callerEndpoint
+          .unaryRequest<TestRequest, TestResponse>(
+            serviceName: 'TestService',
+            methodName: 'UnaryMethod',
+            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+            request: TestRequest('Pre-close request'),
+          );
 
       expect(response.message, equals('Reply to: Pre-close request'));
 

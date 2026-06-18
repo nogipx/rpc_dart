@@ -6,7 +6,8 @@
 import 'dart:typed_data';
 
 import 'compression_gzip_stub.dart'
-    if (dart.library.io) 'compression_gzip_io.dart' as gzip_impl;
+    if (dart.library.io) 'compression_gzip_io.dart'
+    as gzip_impl;
 
 /// Interface for a pluggable compression codec.
 ///

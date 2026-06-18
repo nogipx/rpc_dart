@@ -70,11 +70,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
   /// Collects caller-specific metrics.
   Map<String, Object?> collectCallerMetrics() {
-    final activeCalls =
-        _callerTokens.values.fold<int>(0, (sum, tokens) => sum + tokens.length);
-    return {
-      'pendingRequests': activeCalls,
-    };
+    final activeCalls = _callerTokens.values.fold<int>(
+      0,
+      (sum, tokens) => sum + tokens.length,
+    );
+    return {'pendingRequests': activeCalls};
   }
 
   // ---------------------------------------------------------------------------
@@ -96,8 +96,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     if (compressionEnabled &&
         !transport.supportsZeroCopy &&
         !result.headers.containsKey(RpcHeaders.grpcEncoding)) {
-      result = result.withAdditionalHeaders(
-          {RpcHeaders.grpcEncoding: RpcGrpcCompression.gzip});
+      result = result.withAdditionalHeaders({
+        RpcHeaders.grpcEncoding: RpcGrpcCompression.gzip,
+      });
     }
 
     if (!transport.supportsZeroCopy &&
@@ -105,8 +106,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       final accept = compressionEnabled
           ? RpcGrpcCompression.supportedEncodings().join(',')
           : RpcGrpcCompression.identity;
-      result =
-          result.withAdditionalHeaders({RpcHeaders.grpcAcceptEncoding: accept});
+      result = result.withAdditionalHeaders({
+        RpcHeaders.grpcAcceptEncoding: accept,
+      });
     }
 
     return result;
@@ -125,9 +127,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     _callerTokens[key] ??= {};
     _callerTokens[key]![requestId] = token;
 
-    return context
-        .withCancellation(token)
-        .withAdditionalHeaders({'x-route-service': serviceName});
+    return context.withCancellation(token).withAdditionalHeaders({
+      'x-route-service': serviceName,
+    });
   }
 
   /// Fully prepares context for an outgoing call.
@@ -135,15 +137,20 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     RpcContext? context,
     String serviceName,
     String methodName,
-  ) =>
-      _enhanceCallerContext(
-          _ensureCallerContext(context), serviceName, methodName);
+  ) => _enhanceCallerContext(
+    _ensureCallerContext(context),
+    serviceName,
+    methodName,
+  );
 
   String _callerMethodKey(String serviceName, String methodName) =>
       '$serviceName/$methodName';
 
   void _untrackCallerRequest(
-      String serviceName, String methodName, String requestId) {
+    String serviceName,
+    String methodName,
+    String requestId,
+  ) {
     final key = _callerMethodKey(serviceName, methodName);
     final tokens = _callerTokens[key];
     if (tokens == null) return;
@@ -174,7 +181,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     routingContext.cancellationToken?.throwIfCancelled();
     if (routingContext.isExpired) {
       throw RpcDeadlineExceededException(
-          routingContext.deadline!, Duration.zero);
+        routingContext.deadline!,
+        Duration.zero,
+      );
     }
 
     final baseMetadata = RpcMetadata.forClientRequest(
@@ -193,17 +202,17 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     if (routingContext.deadline != null) {
       final remaining = routingContext.remainingTime;
       if (remaining != null) {
-        headerMap[RpcHeaders.grpcTimeout] =
-            RpcMetadata.encodeGrpcTimeout(remaining);
+        headerMap[RpcHeaders.grpcTimeout] = RpcMetadata.encodeGrpcTimeout(
+          remaining,
+        );
       }
     }
-    headerMap[RpcEndpointPingProtocol.requestTimestampHeader] =
-        sentAt.toIso8601String();
+    headerMap[RpcEndpointPingProtocol.requestTimestampHeader] = sentAt
+        .toIso8601String();
 
-    final metadata = RpcMetadata(
-      [for (final e in headerMap.entries) RpcHeader(e.key, e.value)],
-      methodPath: baseMetadata.methodPath,
-    );
+    final metadata = RpcMetadata([
+      for (final e in headerMap.entries) RpcHeader(e.key, e.value),
+    ], methodPath: baseMetadata.methodPath);
 
     return RpcEndpointPingExchange(
       transport: transport,
@@ -219,7 +228,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
   /// Sends a unary request.
   Future<TResponse>
-      unaryRequest<TRequest extends Object, TResponse extends Object>({
+  unaryRequest<TRequest extends Object, TResponse extends Object>({
     required String serviceName,
     required String methodName,
     required TRequest request,
@@ -232,7 +241,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     final isZeroCopy = requestCodec == null && responseCodec == null;
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy requires a transport that supports zero-copy.');
+        'Zero-copy requires a transport that supports zero-copy.',
+      );
     }
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
       throw ArgumentError('Both codecs are required for serialization mode.');
@@ -276,7 +286,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
   /// Opens a server-stream call.
   Stream<TResponse>
-      serverStream<TRequest extends Object, TResponse extends Object>({
+  serverStream<TRequest extends Object, TResponse extends Object>({
     required String serviceName,
     required String methodName,
     required TRequest request,
@@ -289,7 +299,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     final isZeroCopy = requestCodec == null && responseCodec == null;
     if (isZeroCopy && !transport.supportsZeroCopy) {
       throw ArgumentError(
-          'Zero-copy requires a transport that supports zero-copy.');
+        'Zero-copy requires a transport that supports zero-copy.',
+      );
     }
     if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
       throw ArgumentError('Both codecs are required for serialization mode.');
@@ -366,7 +377,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
   /// Creates a client-stream call builder.
   Future<R> Function(Stream<C>)
-      clientStream<C extends Object, R extends Object>({
+  clientStream<C extends Object, R extends Object>({
     required String serviceName,
     required String methodName,
     IRpcCodec<C>? requestCodec,
@@ -526,7 +537,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   // ---------------------------------------------------------------------------
 
   Future<TResponse>
-      _executeUnaryCall<TRequest extends Object, TResponse extends Object>({
+  _executeUnaryCall<TRequest extends Object, TResponse extends Object>({
     required CallProcessor<TRequest, TResponse> processor,
     required TRequest request,
   }) async {
@@ -538,16 +549,19 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         if (response.payload != null) return response.payload!;
 
         if (response.metadata != null) {
-          final statusStr =
-              response.metadata!.getHeaderValue(RpcHeaders.grpcStatus);
+          final statusStr = response.metadata!.getHeaderValue(
+            RpcHeaders.grpcStatus,
+          );
           if (statusStr != null) {
             final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
             if (status != RpcStatus.ok) {
               final message =
                   response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
-                      'Unknown error';
+                  'Unknown error';
               throw RpcStatusException(
-                  status, RpcMetadata.decodeGrpcMessage(message));
+                status,
+                RpcMetadata.decodeGrpcMessage(message),
+              );
             }
           }
         }

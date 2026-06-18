@@ -32,8 +32,8 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
   RpcFrameMultiplexedChannel({
     required IRpcChannel channel,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
-  })  : _channel = channel,
-        _policy = policy {
+  }) : _channel = channel,
+       _policy = policy {
     _channelSub = _channel.incoming.listen(
       _onData,
       onError: (Object e) {
@@ -117,10 +117,12 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
     // here even before the per-frame length check fires.
     if (_readBuffer.length > _policy.effectiveMaxBufferedBytes) {
       final buffered = _readBuffer.length;
-      _failChannel(RpcFrameException(
-        'Incoming frame buffer overflow: $buffered bytes '
-        '(max: ${_policy.effectiveMaxBufferedBytes})',
-      ));
+      _failChannel(
+        RpcFrameException(
+          'Incoming frame buffer overflow: $buffered bytes '
+          '(max: ${_policy.effectiveMaxBufferedBytes})',
+        ),
+      );
       return;
     }
 

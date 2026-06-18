@@ -51,9 +51,9 @@ class RpcHealthStatus {
     String? message,
     Map<String, Object?>? details,
     DateTime? timestamp,
-  })  : message = message ?? '',
-        details = Map.unmodifiable(details ?? const {}),
-        timestamp = timestamp ?? DateTime.now();
+  }) : message = message ?? '',
+       details = Map.unmodifiable(details ?? const {}),
+       timestamp = timestamp ?? DateTime.now();
 
   /// Returns true when the component is fully operational without degradation.
   bool get isHealthy => level == RpcHealthLevel.healthy;
@@ -63,75 +63,70 @@ class RpcHealthStatus {
     required String component,
     String message = 'Component healthy',
     Map<String, Object?>? details,
-  }) =>
-      RpcHealthStatus(
-        component: component,
-        level: RpcHealthLevel.healthy,
-        message: message,
-        details: details,
-      );
+  }) => RpcHealthStatus(
+    component: component,
+    level: RpcHealthLevel.healthy,
+    message: message,
+    details: details,
+  );
 
   /// Builds a status for a degraded component.
   factory RpcHealthStatus.degraded({
     required String component,
     String message = 'Component degraded',
     Map<String, Object?>? details,
-  }) =>
-      RpcHealthStatus(
-        component: component,
-        level: RpcHealthLevel.degraded,
-        message: message,
-        details: details,
-      );
+  }) => RpcHealthStatus(
+    component: component,
+    level: RpcHealthLevel.degraded,
+    message: message,
+    details: details,
+  );
 
   /// Builds a status for a reconnecting component.
   factory RpcHealthStatus.reconnecting({
     required String component,
     String message = 'Component reconnecting',
     Map<String, Object?>? details,
-  }) =>
-      RpcHealthStatus(
-        component: component,
-        level: RpcHealthLevel.reconnecting,
-        message: message,
-        details: details,
-      );
+  }) => RpcHealthStatus(
+    component: component,
+    level: RpcHealthLevel.reconnecting,
+    message: message,
+    details: details,
+  );
 
   /// Builds a status for an unhealthy component.
   factory RpcHealthStatus.unhealthy({
     required String component,
     String message = 'Component unhealthy',
     Map<String, Object?>? details,
-  }) =>
-      RpcHealthStatus(
-        component: component,
-        level: RpcHealthLevel.unhealthy,
-        message: message,
-        details: details,
-      );
+  }) => RpcHealthStatus(
+    component: component,
+    level: RpcHealthLevel.unhealthy,
+    message: message,
+    details: details,
+  );
 
   /// Builds a status for a closed component.
   factory RpcHealthStatus.closed({
     required String component,
     String message = 'Component closed',
     Map<String, Object?>? details,
-  }) =>
-      RpcHealthStatus(
-        component: component,
-        level: RpcHealthLevel.closed,
-        message: message,
-        details: details,
-      );
+  }) => RpcHealthStatus(
+    component: component,
+    level: RpcHealthLevel.closed,
+    message: message,
+    details: details,
+  );
 }
 
 /// Extension to compare health-level severity.
 extension RpcHealthLevelSeverity on RpcHealthLevel {
   /// Integer severity score; higher means worse state.
   int get severity => switch (this) {
-        RpcHealthLevel.healthy => 0,
-        RpcHealthLevel.reconnecting => 1,
-        RpcHealthLevel.degraded => 2,
-        RpcHealthLevel.unhealthy => 3,
-        RpcHealthLevel.closed => 4,
-      };
+    RpcHealthLevel.healthy => 0,
+    RpcHealthLevel.reconnecting => 1,
+    RpcHealthLevel.degraded => 2,
+    RpcHealthLevel.unhealthy => 3,
+    RpcHealthLevel.closed => 4,
+  };
 }

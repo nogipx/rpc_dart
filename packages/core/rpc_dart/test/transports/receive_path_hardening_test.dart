@@ -66,79 +66,81 @@ void main() {
       );
     });
 
-    test('frame channel surfaces a typed error and does not buffer gigabytes',
-        () async {
-      final channel = _ManualChannel();
-      final mux = RpcFrameMultiplexedChannel(
-        channel: channel,
-        policy: const RpcSecurityPolicy(
-          maxMessageLengthBytes: 1024,
-          maxBufferedBytes: 4096,
-        ),
-      );
+    test(
+      'frame channel surfaces a typed error and does not buffer gigabytes',
+      () async {
+        final channel = _ManualChannel();
+        final mux = RpcFrameMultiplexedChannel(
+          channel: channel,
+          policy: const RpcSecurityPolicy(
+            maxMessageLengthBytes: 1024,
+            maxBufferedBytes: 4096,
+          ),
+        );
 
-      final errors = <Object>[];
-      final done = Completer<void>();
-      mux.incoming.listen(
-        (_) {},
-        onError: (Object e) {
-          errors.add(e);
-          if (!done.isCompleted) done.complete();
-        },
-      );
+        final errors = <Object>[];
+        final done = Completer<void>();
+        mux.incoming.listen(
+          (_) {},
+          onError: (Object e) {
+            errors.add(e);
+            if (!done.isCompleted) done.complete();
+          },
+        );
 
-      // Feed only a header that claims a 100 MB payload. No payload bytes.
-      // Must be rejected from the header alone, without allocating 100 MB.
-      channel.feed(_frameHeader(
-        streamId: 1,
-        flags: 0,
-        payloadLen: 100 * 1024 * 1024,
-      ));
+        // Feed only a header that claims a 100 MB payload. No payload bytes.
+        // Must be rejected from the header alone, without allocating 100 MB.
+        channel.feed(
+          _frameHeader(streamId: 1, flags: 0, payloadLen: 100 * 1024 * 1024),
+        );
 
-      await done.future.timeout(const Duration(seconds: 2));
-      expect(errors, isNotEmpty);
-      expect(errors.first, isA<RpcFrameException>());
-      expect(mux.isClosed, isTrue);
-    });
+        await done.future.timeout(const Duration(seconds: 2));
+        expect(errors, isNotEmpty);
+        expect(errors.first, isA<RpcFrameException>());
+        expect(mux.isClosed, isTrue);
+      },
+    );
 
-    test('buffer overflow cap fires before a full huge frame is assembled',
-        () async {
-      final channel = _ManualChannel();
-      final mux = RpcFrameMultiplexedChannel(
-        channel: channel,
-        // Small message limit but a larger buffer cap so we exercise the
-        // buffer-cap path with legitimately-shaped (but oversized) dribbles.
-        policy: const RpcSecurityPolicy(
-          maxMessageLengthBytes: 16 * 1024,
-          maxBufferedBytes: 8 * 1024,
-        ),
-      );
+    test(
+      'buffer overflow cap fires before a full huge frame is assembled',
+      () async {
+        final channel = _ManualChannel();
+        final mux = RpcFrameMultiplexedChannel(
+          channel: channel,
+          // Small message limit but a larger buffer cap so we exercise the
+          // buffer-cap path with legitimately-shaped (but oversized) dribbles.
+          policy: const RpcSecurityPolicy(
+            maxMessageLengthBytes: 16 * 1024,
+            maxBufferedBytes: 8 * 1024,
+          ),
+        );
 
-      final errors = <Object>[];
-      final done = Completer<void>();
-      mux.incoming.listen(
-        (_) {},
-        onError: (Object e) {
-          errors.add(e);
-          if (!done.isCompleted) done.complete();
-        },
-      );
+        final errors = <Object>[];
+        final done = Completer<void>();
+        mux.incoming.listen(
+          (_) {},
+          onError: (Object e) {
+            errors.add(e);
+            if (!done.isCompleted) done.complete();
+          },
+        );
 
-      // No complete frame yet (header claims more than is present), so the
-      // bytes accumulate. Once accumulation passes the buffer cap we must
-      // fail rather than keep buffering.
-      final partial = _frameHeader(
-        streamId: 1,
-        flags: 0,
-        payloadLen: 16 * 1024,
-        body: Uint8List(10 * 1024),
-      );
-      channel.feed(partial);
+        // No complete frame yet (header claims more than is present), so the
+        // bytes accumulate. Once accumulation passes the buffer cap we must
+        // fail rather than keep buffering.
+        final partial = _frameHeader(
+          streamId: 1,
+          flags: 0,
+          payloadLen: 16 * 1024,
+          body: Uint8List(10 * 1024),
+        );
+        channel.feed(partial);
 
-      await done.future.timeout(const Duration(seconds: 2));
-      expect(errors.single, isA<RpcFrameException>());
-      expect(mux.isClosed, isTrue);
-    });
+        await done.future.timeout(const Duration(seconds: 2));
+        expect(errors.single, isA<RpcFrameException>());
+        expect(mux.isClosed, isTrue);
+      },
+    );
 
     test('legitimate frame within limits still decodes', () async {
       final (client, server) = RpcFrameMultiplexedChannel.pair(
@@ -152,10 +154,12 @@ void main() {
       final received = <RpcTransportMessage>[];
       server.incoming.listen(received.add);
 
-      await client.send(RpcTransportMessage.withPayload(
-        payload: Uint8List.fromList([1, 2, 3, 4]),
-        streamId: 1,
-      ));
+      await client.send(
+        RpcTransportMessage.withPayload(
+          payload: Uint8List.fromList([1, 2, 3, 4]),
+          streamId: 1,
+        ),
+      );
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
       expect(received, hasLength(1));
@@ -163,98 +167,108 @@ void main() {
     });
   });
 
-  group('BUG 2: malformed metadata yields a typed error, not an uncaught throw',
-      () {
-    const flagMetadata = 1 << 1;
+  group(
+    'BUG 2: malformed metadata yields a typed error, not an uncaught throw',
+    () {
+      const flagMetadata = 1 << 1;
 
-    Uint8List metaFrame(List<int> jsonBytes) => _frameHeader(
-          streamId: 1,
-          flags: flagMetadata,
-          payloadLen: jsonBytes.length,
-          body: Uint8List.fromList(jsonBytes),
+      Uint8List metaFrame(List<int> jsonBytes) => _frameHeader(
+        streamId: 1,
+        flags: flagMetadata,
+        payloadLen: jsonBytes.length,
+        body: Uint8List.fromList(jsonBytes),
+      );
+
+      test('top-level JSON array is rejected', () {
+        final body = utf8.encode('[1,2,3]');
+        expect(
+          () => RpcChannelFrame.decodeAll(metaFrame(body)),
+          throwsA(isA<RpcFrameException>()),
         );
+      });
 
-    test('top-level JSON array is rejected', () {
-      final body = utf8.encode('[1,2,3]');
-      expect(
-        () => RpcChannelFrame.decodeAll(metaFrame(body)),
-        throwsA(isA<RpcFrameException>()),
-      );
-    });
+      test('malformed JSON is rejected', () {
+        final body = utf8.encode('{not valid json');
+        expect(
+          () => RpcChannelFrame.decodeAll(metaFrame(body)),
+          throwsA(isA<RpcFrameException>()),
+        );
+      });
 
-    test('malformed JSON is rejected', () {
-      final body = utf8.encode('{not valid json');
-      expect(
-        () => RpcChannelFrame.decodeAll(metaFrame(body)),
-        throwsA(isA<RpcFrameException>()),
-      );
-    });
+      test('invalid UTF-8 is rejected', () {
+        final body = <int>[0xFF, 0xFE, 0xFD];
+        expect(
+          () => RpcChannelFrame.decodeAll(metaFrame(body)),
+          throwsA(isA<RpcFrameException>()),
+        );
+      });
 
-    test('invalid UTF-8 is rejected', () {
-      final body = <int>[0xFF, 0xFE, 0xFD];
-      expect(
-        () => RpcChannelFrame.decodeAll(metaFrame(body)),
-        throwsA(isA<RpcFrameException>()),
-      );
-    });
+      test('non-string header value is rejected', () {
+        final body = utf8.encode(
+          json.encode({
+            'h': [
+              ['x', 1],
+            ],
+          }),
+        );
+        expect(
+          () => RpcChannelFrame.decodeAll(metaFrame(body)),
+          throwsA(isA<RpcFrameException>()),
+        );
+      });
 
-    test('non-string header value is rejected', () {
-      final body = utf8.encode(json.encode({
-        'h': [
-          ['x', 1],
-        ],
-      }));
-      expect(
-        () => RpcChannelFrame.decodeAll(metaFrame(body)),
-        throwsA(isA<RpcFrameException>()),
-      );
-    });
+      test('header entry with wrong arity is rejected', () {
+        final body = utf8.encode(
+          json.encode({
+            'h': [
+              ['only-one'],
+            ],
+          }),
+        );
+        expect(
+          () => RpcChannelFrame.decodeAll(metaFrame(body)),
+          throwsA(isA<RpcFrameException>()),
+        );
+      });
 
-    test('header entry with wrong arity is rejected', () {
-      final body = utf8.encode(json.encode({
-        'h': [
-          ['only-one'],
-        ],
-      }));
-      expect(
-        () => RpcChannelFrame.decodeAll(metaFrame(body)),
-        throwsA(isA<RpcFrameException>()),
-      );
-    });
-
-    test('malformed metadata over the channel surfaces a clean typed error',
+      test(
+        'malformed metadata over the channel surfaces a clean typed error',
         () async {
-      final channel = _ManualChannel();
-      final mux = RpcFrameMultiplexedChannel(channel: channel);
+          final channel = _ManualChannel();
+          final mux = RpcFrameMultiplexedChannel(channel: channel);
 
-      final errors = <Object>[];
-      final done = Completer<void>();
-      mux.incoming.listen(
-        (_) {},
-        onError: (Object e) {
-          errors.add(e);
-          if (!done.isCompleted) done.complete();
+          final errors = <Object>[];
+          final done = Completer<void>();
+          mux.incoming.listen(
+            (_) {},
+            onError: (Object e) {
+              errors.add(e);
+              if (!done.isCompleted) done.complete();
+            },
+          );
+
+          channel.feed(metaFrame(utf8.encode('[1,2,3]')));
+
+          await done.future.timeout(const Duration(seconds: 2));
+          expect(errors.single, isA<RpcFrameException>());
+          expect(mux.isClosed, isTrue);
         },
       );
 
-      channel.feed(metaFrame(utf8.encode('[1,2,3]')));
-
-      await done.future.timeout(const Duration(seconds: 2));
-      expect(errors.single, isA<RpcFrameException>());
-      expect(mux.isClosed, isTrue);
-    });
-
-    test('well-formed metadata still decodes', () {
-      final body = utf8.encode(json.encode({
-        'p': '/svc/Method',
-        'h': [
-          ['k', 'v'],
-        ],
-      }));
-      final (frames, _) = RpcChannelFrame.decodeAll(metaFrame(body));
-      expect(frames, hasLength(1));
-      expect(frames.single.metadata, isNotNull);
-      expect(frames.single.methodPath, equals('/svc/Method'));
-    });
-  });
+      test('well-formed metadata still decodes', () {
+        final body = utf8.encode(
+          json.encode({
+            'p': '/svc/Method',
+            'h': [
+              ['k', 'v'],
+            ],
+          }),
+        );
+        final (frames, _) = RpcChannelFrame.decodeAll(metaFrame(body));
+        expect(frames, hasLength(1));
+        expect(frames.single.metadata, isNotNull);
+        expect(frames.single.methodPath, equals('/svc/Method'));
+      });
+    },
+  );
 }

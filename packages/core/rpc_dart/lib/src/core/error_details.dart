@@ -84,7 +84,10 @@ abstract class RpcErrorDetail {
 
 /// Encodes a `google.rpc.Status` message (used for `grpc-status-details-bin`).
 Uint8List encodeRpcStatus(
-    int code, String message, List<RpcErrorDetail> details) {
+  int code,
+  String message,
+  List<RpcErrorDetail> details,
+) {
   final buf = BytesBuilder(copy: false);
   // field 1 (code): tag=0x08, varint
   if (code != 0) {
@@ -111,7 +114,8 @@ Uint8List encodeRpcStatus(
 /// Decodes a `google.rpc.Status` message from `grpc-status-details-bin`.
 /// Returns (code, message, details).
 ({int code, String message, List<RpcErrorDetail> details}) decodeRpcStatus(
-    Uint8List data) {
+  Uint8List data,
+) {
   int code = 0;
   String message = '';
   final details = <RpcErrorDetail>[];

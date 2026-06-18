@@ -283,9 +283,7 @@ void main() {
         final caller = RpcCallerEndpoint(transport: clientTransport);
         final responder = RpcResponderEndpoint(transport: serverTransport);
 
-        responder.registerServiceContract(
-          _ScopeTestContract(onScope: (_) {}),
-        );
+        responder.registerServiceContract(_ScopeTestContract(onScope: (_) {}));
         responder.start();
 
         final response = await caller.unaryRequest<_TestRequest, _TestResponse>(

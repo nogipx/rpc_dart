@@ -46,8 +46,7 @@ abstract interface class INotifySubscriber {
 const _uuid = Uuid();
 
 class _RepositorySubscriber implements INotifySubscriber {
-  _RepositorySubscriber(this._repository)
-      : _log = LogScope.noop;
+  _RepositorySubscriber(this._repository) : _log = LogScope.noop;
 
   final INotifyRepository _repository;
   final LogScope _log;

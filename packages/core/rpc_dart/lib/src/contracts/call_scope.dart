@@ -84,9 +84,7 @@ final class RpcCallScope {
     late StreamSubscription<T> sub;
     late StreamController<T> controller;
 
-    controller = StreamController<T>(
-      onCancel: () => sub.cancel(),
-    );
+    controller = StreamController<T>(onCancel: () => sub.cancel());
 
     sub = stream.listen(
       controller.add,

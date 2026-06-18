@@ -50,11 +50,11 @@ class ClientStreamingExample {
       print('КЛИЕНТ: Отправляем ${messages.length} сообщений');
       final messageStream = Stream.fromIterable(messages.map((m) => m.rpc))
           .asyncMap((message) async {
-        print('КЛИЕНТ: → "${message.value}"');
-        // Небольшая задержка между сообщениями
-        await Future.delayed(Duration(milliseconds: 50));
-        return message;
-      });
+            print('КЛИЕНТ: → "${message.value}"');
+            // Небольшая задержка между сообщениями
+            await Future.delayed(Duration(milliseconds: 50));
+            return message;
+          });
       final result1 = await client.aggregateMessages(
         messageStream,
         context: context1,
@@ -64,9 +64,10 @@ class ClientStreamingExample {
       print('\n--- Пример 2: Агрегация с аутентификацией ---');
       final authContext = RpcContextUtils.withBearerToken('aggregate-token-456')
           .withAdditionalHeaders({
-        'client-version': '1.4.0',
-        'aggregation-format': 'structured',
-      }).withTraceId('auth-aggregate-456');
+            'client-version': '1.4.0',
+            'aggregation-format': 'structured',
+          })
+          .withTraceId('auth-aggregate-456');
       final secureMessages = [
         'admin:status',
         'admin:reports',
@@ -75,10 +76,10 @@ class ClientStreamingExample {
       ];
       final secureStream = Stream.fromIterable(secureMessages.map((m) => m.rpc))
           .asyncMap((message) async {
-        print('КЛИЕНТ: → Защищенное сообщение: "${message.value}"');
-        await Future.delayed(Duration(milliseconds: 30));
-        return message;
-      });
+            print('КЛИЕНТ: → Защищенное сообщение: "${message.value}"');
+            await Future.delayed(Duration(milliseconds: 30));
+            return message;
+          });
       final result2 = await client.aggregateMessages(
         secureStream,
         context: authContext,
@@ -236,7 +237,7 @@ final class DataAggregatorResponder extends RpcResponderContract
 final class DataAggregatorCaller extends RpcCallerContract
     implements IDataAggregatorContract {
   DataAggregatorCaller(RpcCallerEndpoint endpoint)
-      : super('DataAggregatorService', endpoint);
+    : super('DataAggregatorService', endpoint);
   @override
   Future<RpcString> aggregateMessages(
     Stream<RpcString> messages, {

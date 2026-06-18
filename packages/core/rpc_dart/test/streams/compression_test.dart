@@ -34,7 +34,8 @@ void main() {
   // is absent. A test-local reversible codec keeps rpc_dart free of a
   // dev-dependency on rpc_dart_compression.
   setUpAll(
-      () => RpcGrpcCompression.register(RpcGrpcCompression.gzip, _XorCodec()));
+    () => RpcGrpcCompression.register(RpcGrpcCompression.gzip, _XorCodec()),
+  );
   tearDownAll(() => RpcGrpcCompression.unregister(RpcGrpcCompression.gzip));
 
   final codec = RpcCodec(RpcString.fromJson);
@@ -133,94 +134,98 @@ void main() {
   });
 
   group('Compression - Client Stream', () {
-    test('client_sends_compressed_requests_server_receives_correctly',
-        () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+    test(
+      'client_sends_compressed_requests_server_receives_correctly',
+      () async {
+        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-      final server = ClientStreamResponder<RpcString, RpcString>(
-        id: 1,
-        transport: serverTransport,
-        serviceName: 'TestService',
-        methodName: 'TestMethod',
-        requestCodec: codec,
-        responseCodec: codec,
-        handler: (requests) async {
-          final all = await requests.toList();
-          return 'count:${all.length}'.rpc;
-        },
-      );
+        final server = ClientStreamResponder<RpcString, RpcString>(
+          id: 1,
+          transport: serverTransport,
+          serviceName: 'TestService',
+          methodName: 'TestMethod',
+          requestCodec: codec,
+          responseCodec: codec,
+          handler: (requests) async {
+            final all = await requests.toList();
+            return 'count:${all.length}'.rpc;
+          },
+        );
 
-      server.bindToMessageStream(
-        serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-      );
+        server.bindToMessageStream(
+          serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
+        );
 
-      // Client context: compress outgoing requests with gzip.
-      final clientContext = RpcContext.withHeaders({
-        RpcHeaders.grpcEncoding: 'gzip',
-      });
+        // Client context: compress outgoing requests with gzip.
+        final clientContext = RpcContext.withHeaders({
+          RpcHeaders.grpcEncoding: 'gzip',
+        });
 
-      final client = ClientStreamCaller<RpcString, RpcString>(
-        transport: clientTransport,
-        serviceName: 'TestService',
-        methodName: 'TestMethod',
-        requestCodec: codec,
-        responseCodec: codec,
-        context: clientContext,
-      );
+        final client = ClientStreamCaller<RpcString, RpcString>(
+          transport: clientTransport,
+          serviceName: 'TestService',
+          methodName: 'TestMethod',
+          requestCodec: codec,
+          responseCodec: codec,
+          context: clientContext,
+        );
 
-      await client.send(largePayload);
-      await client.send(largePayload);
-      await client.send(largePayload);
-      final response = await client.finishSending();
+        await client.send(largePayload);
+        await client.send(largePayload);
+        await client.send(largePayload);
+        final response = await client.finishSending();
 
-      expect(response, equals('count:3'.rpc));
+        expect(response, equals('count:3'.rpc));
 
-      await server.close();
-    });
+        await server.close();
+      },
+    );
 
-    test('server_compresses_response_when_client_stream_advertises_gzip',
-        () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+    test(
+      'server_compresses_response_when_client_stream_advertises_gzip',
+      () async {
+        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-      // Server context: advertise gzip acceptance → compress the single response.
-      final serverContext = RpcContext.withHeaders({
-        RpcHeaders.grpcAcceptEncoding: 'identity,gzip',
-      });
+        // Server context: advertise gzip acceptance → compress the single response.
+        final serverContext = RpcContext.withHeaders({
+          RpcHeaders.grpcAcceptEncoding: 'identity,gzip',
+        });
 
-      final server = ClientStreamResponder<RpcString, RpcString>(
-        id: 1,
-        transport: serverTransport,
-        serviceName: 'TestService',
-        methodName: 'TestMethod',
-        requestCodec: codec,
-        responseCodec: codec,
-        context: serverContext,
-        handler: (requests) async {
-          final all = await requests.toList();
-          return 'count:${all.length}'.rpc;
-        },
-      );
+        final server = ClientStreamResponder<RpcString, RpcString>(
+          id: 1,
+          transport: serverTransport,
+          serviceName: 'TestService',
+          methodName: 'TestMethod',
+          requestCodec: codec,
+          responseCodec: codec,
+          context: serverContext,
+          handler: (requests) async {
+            final all = await requests.toList();
+            return 'count:${all.length}'.rpc;
+          },
+        );
 
-      server.bindToMessageStream(
-        serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
-      );
+        server.bindToMessageStream(
+          serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
+        );
 
-      final client = ClientStreamCaller<RpcString, RpcString>(
-        transport: clientTransport,
-        serviceName: 'TestService',
-        methodName: 'TestMethod',
-        requestCodec: codec,
-        responseCodec: codec,
-      );
+        final client = ClientStreamCaller<RpcString, RpcString>(
+          transport: clientTransport,
+          serviceName: 'TestService',
+          methodName: 'TestMethod',
+          requestCodec: codec,
+          responseCodec: codec,
+        );
 
-      await client.send('a'.rpc);
-      await client.send('b'.rpc);
-      final response = await client.finishSending();
+        await client.send('a'.rpc);
+        await client.send('b'.rpc);
+        final response = await client.finishSending();
 
-      expect(response, equals('count:2'.rpc));
+        expect(response, equals('count:2'.rpc));
 
-      await server.close();
-    });
+        await server.close();
+      },
+    );
   });
 
   group('Compression - Bidirectional Stream', () {
@@ -288,7 +293,7 @@ void main() {
         receivedResponses,
         equals([
           'echo:${largePayload.value}'.rpc,
-          'echo:${largePayload.value}'.rpc
+          'echo:${largePayload.value}'.rpc,
         ]),
       );
 

@@ -70,14 +70,13 @@ final class RpcTransportMessage {
     bool isEndOfStream = false,
     String? methodPath,
     required int streamId,
-  }) =>
-      RpcTransportMessage(
-        payload: payload,
-        metadata: metadata,
-        isEndOfStream: isEndOfStream,
-        methodPath: methodPath,
-        streamId: streamId,
-      );
+  }) => RpcTransportMessage(
+    payload: payload,
+    metadata: metadata,
+    isEndOfStream: isEndOfStream,
+    methodPath: methodPath,
+    streamId: streamId,
+  );
 
   /// Factory for direct-object message (zero-copy mode).
   factory RpcTransportMessage.withDirectObject({
@@ -86,14 +85,13 @@ final class RpcTransportMessage {
     bool isEndOfStream = false,
     String? methodPath,
     required int streamId,
-  }) =>
-      RpcTransportMessage(
-        directPayload: directPayload,
-        metadata: metadata,
-        isEndOfStream: isEndOfStream,
-        methodPath: methodPath,
-        streamId: streamId,
-      );
+  }) => RpcTransportMessage(
+    directPayload: directPayload,
+    metadata: metadata,
+    isEndOfStream: isEndOfStream,
+    methodPath: methodPath,
+    streamId: streamId,
+  );
 
   /// Factory for metadata-only message.
   factory RpcTransportMessage.withMetadata({
@@ -101,13 +99,12 @@ final class RpcTransportMessage {
     bool isEndOfStream = false,
     String? methodPath,
     required int streamId,
-  }) =>
-      RpcTransportMessage(
-        metadata: metadata,
-        isEndOfStream: isEndOfStream,
-        methodPath: methodPath,
-        streamId: streamId,
-      );
+  }) => RpcTransportMessage(
+    metadata: metadata,
+    isEndOfStream: isEndOfStream,
+    methodPath: methodPath,
+    streamId: streamId,
+  );
 }
 
 /// Transport interface with Stream ID multiplexing.
@@ -234,15 +231,13 @@ final class RpcStreamIdManager {
   ///
   /// [isClient] True to generate client (odd) IDs; false for server (even).
   /// [customMaxId] Optional custom upper bound (tests, specialized transports).
-  RpcStreamIdManager({
-    required this.isClient,
-    int? customMaxId,
-  })  : _lastId = isClient ? -1 : 0,
-        _firstAssignableId = isClient ? 1 : 2,
-        _maxAssignableId = _computeMaxAssignableId(
-          isClient: isClient,
-          maxIdOverride: customMaxId,
-        );
+  RpcStreamIdManager({required this.isClient, int? customMaxId})
+    : _lastId = isClient ? -1 : 0,
+      _firstAssignableId = isClient ? 1 : 2,
+      _maxAssignableId = _computeMaxAssignableId(
+        isClient: isClient,
+        maxIdOverride: customMaxId,
+      );
 
   /// Computes the upper ID bound respecting parity.
   static int _computeMaxAssignableId({

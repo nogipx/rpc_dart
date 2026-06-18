@@ -12,11 +12,11 @@ class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
   /// Creates a CBOR serializer.
   /// [fromJson] builds an object from a JSON map.
   const RpcCodec([T Function(Map<String, dynamic> json)? fromJson])
-      : _fromJson = fromJson;
+    : _fromJson = fromJson;
 
   /// Creates a CBOR serializer with a required decoder.
   const RpcCodec.withDecoder(T Function(Map<String, dynamic> json) fromJson)
-      : _fromJson = fromJson;
+    : _fromJson = fromJson;
 
   @override
   Uint8List serialize(T message) {

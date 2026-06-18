@@ -79,9 +79,9 @@ final class RpcHttpCorsPolicy {
     this.preflightMaxAge,
     LogScope? logger,
   }) : assert(
-          !(allowCredentials && allowedOrigins.contains('*')),
-          'allowCredentials=true requires specific origins, not ["*"]',
-        ) {
+         !(allowCredentials && allowedOrigins.contains('*')),
+         'allowCredentials=true requires specific origins, not ["*"]',
+       ) {
     if (allowedOrigins.contains('*')) {
       _warnAllowAnyOrigin(logger);
     }
@@ -107,14 +107,14 @@ final class RpcHttpCorsPolicy {
   }
 
   List<String> get _allAllowedHeaders => [
-        ..._requiredGrpcAllowedHeaders,
-        ...allowedHeaders,
-      ];
+    ..._requiredGrpcAllowedHeaders,
+    ...allowedHeaders,
+  ];
 
   List<String> get _allExposedHeaders => [
-        ..._requiredGrpcExposedHeaders,
-        ...extraExposedHeaders,
-      ];
+    ..._requiredGrpcExposedHeaders,
+    ...extraExposedHeaders,
+  ];
 
   /// Applies CORS response headers into [headers] map for a regular request.
   void applyTo(Map<String, String> headers, String? requestOrigin) {

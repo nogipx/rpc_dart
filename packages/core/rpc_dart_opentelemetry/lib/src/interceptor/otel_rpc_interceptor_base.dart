@@ -21,10 +21,7 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
   final Tracer tracer;
   final RpcOtelMetrics? metrics;
 
-  const OtelRpcInterceptorBase({
-    required this.tracer,
-    this.metrics,
-  });
+  const OtelRpcInterceptorBase({required this.tracer, this.metrics});
 
   /// Which side this interceptor sits on. Determines the metric namespace
   /// (`rpc.server.*` vs `rpc.client.*`) used by [recordCall]. Mirrors the
@@ -53,9 +50,9 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     final (span, context, otelContext) = startSpan(call, 'unary');
     final stopwatch = Stopwatch()..start();
     try {
-      final response = await zone(otelContext).run(
-        () async => await next(context, request),
-      );
+      final response = await zone(
+        otelContext,
+      ).run(() async => await next(context, request));
       _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
       return response;
     } catch (e, st) {
@@ -77,9 +74,9 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     final (span, context, otelContext) = startSpan(call, 'server_stream');
     final stopwatch = Stopwatch()..start();
     try {
-      final stream = await zone(otelContext).run(
-        () async => await next(context, request),
-      );
+      final stream = await zone(
+        otelContext,
+      ).run(() async => await next(context, request));
       return _wrapWithSpan(stream, span, call, stopwatch);
     } catch (e, st) {
       _finishWithError(span, call, stopwatch, e, st);
@@ -100,9 +97,9 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     final (span, context, otelContext) = startSpan(call, 'client_stream');
     final stopwatch = Stopwatch()..start();
     try {
-      final response = await zone(otelContext).run(
-        () async => await next(context, requests),
-      );
+      final response = await zone(
+        otelContext,
+      ).run(() async => await next(context, requests));
       _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
       return response;
     } catch (e, st) {
@@ -121,12 +118,15 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {
-    final (span, context, otelContext) = startSpan(call, 'bidirectional_stream');
+    final (span, context, otelContext) = startSpan(
+      call,
+      'bidirectional_stream',
+    );
     final stopwatch = Stopwatch()..start();
     try {
-      final stream = await zone(otelContext).run(
-        () async => await next(context, requests),
-      );
+      final stream = await zone(
+        otelContext,
+      ).run(() async => await next(context, requests));
       return _wrapWithSpan(stream, span, call, stopwatch);
     } catch (e, st) {
       _finishWithError(span, call, stopwatch, e, st);
@@ -247,7 +247,12 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
       span.setAttribute(Attribute.fromInt('rpc.stream.messages', messageCount));
       if (lastError != null) {
         _finishWithError(
-            span, call, stopwatch, lastError!, lastStackTrace ?? StackTrace.empty);
+          span,
+          call,
+          stopwatch,
+          lastError!,
+          lastStackTrace ?? StackTrace.empty,
+        );
       } else {
         _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
       }

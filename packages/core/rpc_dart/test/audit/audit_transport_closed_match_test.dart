@@ -40,92 +40,100 @@ class _CollectorOutput extends LogOutput {
 }
 
 void main() {
-  group('StreamProcessor transport-closed detection by type, not substring',
-      () {
-    final codec = RpcCodec(RpcString.fromJson);
+  group(
+    'StreamProcessor transport-closed detection by type, not substring',
+    () {
+      final codec = RpcCodec(RpcString.fromJson);
 
-    test('unrelated error containing "closed" is surfaced (logged as error)',
+      test(
+        'unrelated error containing "closed" is surfaced (logged as error)',
         () async {
-      final output = _CollectorOutput();
-      final controller = LogController(
-        minLevel: RpcLogLevel.debug,
-        outputs: [output],
+          final output = _CollectorOutput();
+          final controller = LogController(
+            minLevel: RpcLogLevel.debug,
+            outputs: [output],
+          );
+          final logger = controller.scope('test');
+
+          final (client, rawServer) = RpcInMemoryTransport.pair();
+          final transport = ThrowingTransport(rawServer)
+            ..throwOnSendMessage = true
+            ..throwOnSendMetadata = true
+            // Not a transport-closed signal, but the text contains "closed".
+            ..errorToThrow = StateError('database connection was closed');
+
+          final processor = StreamProcessor<RpcString, RpcString>(
+            transport: transport,
+            streamId: 1,
+            serviceName: 'S',
+            methodName: 'M',
+            requestCodec: codec,
+            responseCodec: codec,
+            logger: logger,
+          );
+
+          await processor.send('resp'.rpc);
+          await processor.finishSending();
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+
+          expect(
+            output.errors.any((e) => e.message.contains('Failed to send')),
+            isTrue,
+            reason:
+                'a non-transport-closed error must NOT be swallowed just '
+                'because its text contains "closed"',
+          );
+
+          await processor.close();
+          controller.dispose();
+          await client.close();
+          await rawServer.close();
+        },
       );
-      final logger = controller.scope('test');
 
-      final (client, rawServer) = RpcInMemoryTransport.pair();
-      final transport = ThrowingTransport(rawServer)
-        ..throwOnSendMessage = true
-        ..throwOnSendMetadata = true
-        // Not a transport-closed signal, but the text contains "closed".
-        ..errorToThrow = StateError('database connection was closed');
-
-      final processor = StreamProcessor<RpcString, RpcString>(
-        transport: transport,
-        streamId: 1,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-        logger: logger,
-      );
-
-      await processor.send('resp'.rpc);
-      await processor.finishSending();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-
-      expect(
-        output.errors.any((e) => e.message.contains('Failed to send')),
-        isTrue,
-        reason: 'a non-transport-closed error must NOT be swallowed just '
-            'because its text contains "closed"',
-      );
-
-      await processor.close();
-      controller.dispose();
-      await client.close();
-      await rawServer.close();
-    });
-
-    test('genuine StateError("Transport is closed") is swallowed (no error log)',
+      test(
+        'genuine StateError("Transport is closed") is swallowed (no error log)',
         () async {
-      final output = _CollectorOutput();
-      final controller = LogController(
-        minLevel: RpcLogLevel.debug,
-        outputs: [output],
+          final output = _CollectorOutput();
+          final controller = LogController(
+            minLevel: RpcLogLevel.debug,
+            outputs: [output],
+          );
+          final logger = controller.scope('test');
+
+          final (client, rawServer) = RpcInMemoryTransport.pair();
+          final transport = ThrowingTransport(rawServer)
+            ..throwOnSendMessage = true
+            ..throwOnSendMetadata = true
+            ..errorToThrow = StateError('Transport is closed');
+
+          final processor = StreamProcessor<RpcString, RpcString>(
+            transport: transport,
+            streamId: 1,
+            serviceName: 'S',
+            methodName: 'M',
+            requestCodec: codec,
+            responseCodec: codec,
+            logger: logger,
+          );
+
+          await processor.send('resp'.rpc);
+          await processor.finishSending();
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+
+          expect(
+            output.errors,
+            isEmpty,
+            reason:
+                'genuine transport-closed must keep being swallowed quietly',
+          );
+
+          await processor.close();
+          controller.dispose();
+          await client.close();
+          await rawServer.close();
+        },
       );
-      final logger = controller.scope('test');
-
-      final (client, rawServer) = RpcInMemoryTransport.pair();
-      final transport = ThrowingTransport(rawServer)
-        ..throwOnSendMessage = true
-        ..throwOnSendMetadata = true
-        ..errorToThrow = StateError('Transport is closed');
-
-      final processor = StreamProcessor<RpcString, RpcString>(
-        transport: transport,
-        streamId: 1,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-        logger: logger,
-      );
-
-      await processor.send('resp'.rpc);
-      await processor.finishSending();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-
-      expect(
-        output.errors,
-        isEmpty,
-        reason: 'genuine transport-closed must keep being swallowed quietly',
-      );
-
-      await processor.close();
-      controller.dispose();
-      await client.close();
-      await rawServer.close();
-    });
-  });
+    },
+  );
 }

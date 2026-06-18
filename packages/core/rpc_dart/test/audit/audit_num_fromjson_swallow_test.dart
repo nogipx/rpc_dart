@@ -25,15 +25,15 @@ void main() {
   group('fromJson must not silently coerce malformed input to 0', () {
     test('RpcInt.fromJson with non-numeric string', () {
       // Correct behavior would be to throw / surface an error, NOT return 0.
-      expect(
-        () {
-          final r = RpcInt.fromJson({'v': 'not-a-number'});
-          // If it did not throw, it must at least not be a silent 0.
-          expect(r.value, isNot(0),
-              reason: 'malformed string silently became RpcInt(0)');
-        },
-        anyOf(throwsA(anything), returnsNormally),
-      );
+      expect(() {
+        final r = RpcInt.fromJson({'v': 'not-a-number'});
+        // If it did not throw, it must at least not be a silent 0.
+        expect(
+          r.value,
+          isNot(0),
+          reason: 'malformed string silently became RpcInt(0)',
+        );
+      }, anyOf(throwsA(anything), returnsNormally));
       // Direct assertion that captures the actual bug: malformed input must
       // NOT silently become 0. Surfacing it as a thrown error is acceptable
       // (and is the implemented behavior); a silent 0 is not.
@@ -64,7 +64,7 @@ void main() {
       // A Map under 'v' is clearly corrupt; it must not silently become 0.
       expect(
         () => RpcInt.fromJson({
-          'v': <String, int>{'a': 1}
+          'v': <String, int>{'a': 1},
         }),
         throwsA(anything),
         reason: 'structurally invalid value must not silently become RpcInt(0)',

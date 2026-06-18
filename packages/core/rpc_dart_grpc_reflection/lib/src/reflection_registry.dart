@@ -133,7 +133,9 @@ class RpcReflectionRegistry {
   List<Uint8List>? fileContainingSymbol(String symbol) {
     final filename =
         _symbolToFile[symbol] ??
-        _symbolToFile[symbol.startsWith('.') ? symbol.substring(1) : '.$symbol'];
+        _symbolToFile[symbol.startsWith('.')
+            ? symbol.substring(1)
+            : '.$symbol'];
     return filename != null ? _resolveWithDeps(filename) : null;
   }
 

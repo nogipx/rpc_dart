@@ -16,8 +16,7 @@ import 'i_notify_subscriber.dart';
 /// Each call to [subscribe] opens a server-stream RPC call for the requested
 /// topic.  Multiple topics are supported: each topic gets its own stream.
 class NotifySubscriber implements INotifySubscriber {
-  NotifySubscriber(this._endpoint, this._caller)
-    : _log = LogScope.noop;
+  NotifySubscriber(this._endpoint, this._caller) : _log = LogScope.noop;
 
   factory NotifySubscriber.endpoint(RpcCallerEndpoint endpoint) =>
       NotifySubscriber(

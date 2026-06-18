@@ -60,7 +60,10 @@ void main() {
     );
 
     // CORRECT behavior: a dead endpoint must not yield overall `healthy`.
-    expect(report.level, isNot(RpcAppHealthLevel.healthy),
-        reason: 'overall level must factor in unhealthy endpoints');
+    expect(
+      report.level,
+      isNot(RpcAppHealthLevel.healthy),
+      reason: 'overall level must factor in unhealthy endpoints',
+    );
   });
 }

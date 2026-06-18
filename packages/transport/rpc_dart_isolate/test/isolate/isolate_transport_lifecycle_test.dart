@@ -88,10 +88,7 @@ void _workerClosesEntrypoint(
   });
 }
 
-void _crashingEntrypoint(
-  IRpcTransport transport,
-  Map<String, dynamic> params,
-) {
+void _crashingEntrypoint(IRpcTransport transport, Map<String, dynamic> params) {
   Future.microtask(() {
     throw StateError('worker crash');
   });

@@ -33,10 +33,7 @@ void main() {
       w.writeInt32(4, 300); // tag 32, value 300 -> varint [172, 2]
       w.writeBool(5, true); // tag 40, value 1
       w.writeBool(6, false); // omitted
-      expect(
-        w.toBytes(),
-        Uint8List.fromList([24, 5, 32, 172, 2, 40, 1]),
-      );
+      expect(w.toBytes(), Uint8List.fromList([24, 5, 32, 172, 2, 40, 1]));
     });
 
     test('writeBytes golden bytes', () {

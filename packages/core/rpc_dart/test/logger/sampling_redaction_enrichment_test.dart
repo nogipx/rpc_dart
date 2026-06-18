@@ -46,9 +46,7 @@ void main() {
       final output = _CollectorOutput();
       final controller = LogController(
         minLevel: RpcLogLevel.debug,
-        sampling: SamplingConfig(
-          maxPerInterval: {RpcLogLevel.debug: 2},
-        ),
+        sampling: SamplingConfig(maxPerInterval: {RpcLogLevel.debug: 2}),
         outputs: [output],
       );
 
@@ -92,11 +90,10 @@ void main() {
       );
 
       final scope = controller.scope('test');
-      scope.info('login', data: {
-        'username': 'john',
-        'password': 'secret123',
-        'token': 'abc',
-      });
+      scope.info(
+        'login',
+        data: {'username': 'john', 'password': 'secret123', 'token': 'abc'},
+      );
 
       final data = output.events.first.data!;
       expect(data['username'], 'john');
@@ -114,12 +111,12 @@ void main() {
       );
 
       final scope = controller.scope('test');
-      scope.info('nested', data: {
-        'config': <String, Object>{
-          'host': 'localhost',
-          'secret': 'hidden',
+      scope.info(
+        'nested',
+        data: {
+          'config': <String, Object>{'host': 'localhost', 'secret': 'hidden'},
         },
-      });
+      );
 
       final config = output.events.first.data!['config'] as Map<String, Object>;
       expect(config['host'], 'localhost');
@@ -149,7 +146,7 @@ void main() {
       final controller = LogController(
         minLevel: RpcLogLevel.debug,
         enrichers: [
-          _TestEnricher({'host': 'prod-01', 'pid': 1234})
+          _TestEnricher({'host': 'prod-01', 'pid': 1234}),
         ],
         outputs: [output],
       );
@@ -168,7 +165,7 @@ void main() {
       final controller = LogController(
         minLevel: RpcLogLevel.debug,
         enrichers: [
-          _TestEnricher({'host': 'prod-01'})
+          _TestEnricher({'host': 'prod-01'}),
         ],
         outputs: [output],
       );

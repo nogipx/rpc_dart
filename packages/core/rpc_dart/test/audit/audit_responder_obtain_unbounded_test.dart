@@ -54,7 +54,8 @@ void main() {
     expect(
       openStreams,
       lessThan(count),
-      reason: 'openStreams=$openStreams — obtain() accumulates state for junk '
+      reason:
+          'openStreams=$openStreams — obtain() accumulates state for junk '
           'stream IDs with no cleanup path',
     );
 

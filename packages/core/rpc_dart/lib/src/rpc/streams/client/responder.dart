@@ -6,8 +6,11 @@
 part of '../_index.dart';
 
 /// Server-side handler for client streaming: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Consumes a request stream and returns one response.
-final class ClientStreamResponder<TRequest extends Object,
-    TResponse extends Object> implements IRpcResponder {
+final class ClientStreamResponder<
+  TRequest extends Object,
+  TResponse extends Object
+>
+    implements IRpcResponder {
   late final LogScope _logger;
 
   @override
@@ -93,47 +96,53 @@ final class ClientStreamResponder<TRequest extends Object,
     }
 
     _handlerStarted = true;
-    _logger.internal(
-      'Configuring request handler for client stream [id: $id]',
-    );
+    _logger.internal('Configuring request handler for client stream [id: $id]');
 
     // Invoke handler directly with the request stream.
-    handler(_processor.requests).then((response) async {
-      _logger.internal(
-        'Handler completed, sending response: $response [id: $id]',
-      );
+    handler(_processor.requests)
+        .then((response) async {
+          _logger.internal(
+            'Handler completed, sending response: $response [id: $id]',
+          );
 
-      try {
-        await _processor.send(response);
-        await _processor.finishSending();
-        _logger.internal('Response delivered to client [id: $id]');
-      } catch (e, stackTrace) {
-        _logger.error(
-          'Failed to send response to client [id: $id]',
-          error: e,
-          stackTrace: stackTrace,
-        );
-      } finally {
-        _completeDone();
-      }
-    }).catchError((error, stackTrace) async {
-      _logger.error(
-        'Client stream handling failed [id: $id]',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      try {
-        final errorStatus =
-            error is RpcStatusException ? error.statusCode : RpcStatus.internal;
-        final errorMsg =
-            error is RpcStatusException ? error.message : error.toString();
-        await _processor.sendError(errorStatus, errorMsg,
-            statusDetailsBin:
-                error is RpcStatusException ? error.statusDetailsBin : null);
-      } finally {
-        _completeDone();
-      }
-    });
+          try {
+            await _processor.send(response);
+            await _processor.finishSending();
+            _logger.internal('Response delivered to client [id: $id]');
+          } catch (e, stackTrace) {
+            _logger.error(
+              'Failed to send response to client [id: $id]',
+              error: e,
+              stackTrace: stackTrace,
+            );
+          } finally {
+            _completeDone();
+          }
+        })
+        .catchError((error, stackTrace) async {
+          _logger.error(
+            'Client stream handling failed [id: $id]',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          try {
+            final errorStatus = error is RpcStatusException
+                ? error.statusCode
+                : RpcStatus.internal;
+            final errorMsg = error is RpcStatusException
+                ? error.message
+                : error.toString();
+            await _processor.sendError(
+              errorStatus,
+              errorMsg,
+              statusDetailsBin: error is RpcStatusException
+                  ? error.statusDetailsBin
+                  : null,
+            );
+          } finally {
+            _completeDone();
+          }
+        });
   }
 
   /// Closes the stream and releases resources.

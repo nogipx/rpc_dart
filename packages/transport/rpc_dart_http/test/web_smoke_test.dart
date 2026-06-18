@@ -33,7 +33,9 @@ http.Client _echoClient(String Function(String request) transform) {
     final payload = framed.sublist(RpcConstants.messagePrefixSize);
     final decoded = RpcString.codec.deserialize(Uint8List.fromList(payload));
 
-    final replyBytes = RpcString.codec.serialize(RpcString(transform(decoded.value)));
+    final replyBytes = RpcString.codec.serialize(
+      RpcString(transform(decoded.value)),
+    );
     final responseBody = RpcMessageFrame.encode(replyBytes);
 
     return http.Response.bytes(
@@ -78,11 +80,15 @@ void main() {
       baseUrl: 'http://web-smoke.invalid',
       httpClient: MockClient((request) async {
         seenTenant = request.headers['x-tenant-id'];
-        final payload =
-            request.bodyBytes.sublist(RpcConstants.messagePrefixSize);
-        final decoded = RpcString.codec.deserialize(Uint8List.fromList(payload));
-        final replyBytes =
-            RpcString.codec.serialize(RpcString('seen ${decoded.value}'));
+        final payload = request.bodyBytes.sublist(
+          RpcConstants.messagePrefixSize,
+        );
+        final decoded = RpcString.codec.deserialize(
+          Uint8List.fromList(payload),
+        );
+        final replyBytes = RpcString.codec.serialize(
+          RpcString('seen ${decoded.value}'),
+        );
         return http.Response.bytes(
           RpcMessageFrame.encode(replyBytes),
           200,
@@ -103,8 +109,9 @@ void main() {
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       request: RpcString('ping'),
-      context: RpcContextUtils.withBearerToken('test-token')
-          .withAdditionalHeaders({'x-tenant-id': 'tenant-42'}),
+      context: RpcContextUtils.withBearerToken(
+        'test-token',
+      ).withAdditionalHeaders({'x-tenant-id': 'tenant-42'}),
     );
 
     expect(response.value, 'seen ping');

@@ -99,7 +99,8 @@ class ConsoleOutput extends LogOutput {
   void _writePrettySpan(LogSpan span) {
     final buf = StringBuffer();
     buf.write(
-        '[${_formatTime(span.endTime)}] SPAN ${_shortId(span.spanId)} ${span.scope}.${span.name}');
+      '[${_formatTime(span.endTime)}] SPAN ${_shortId(span.spanId)} ${span.scope}.${span.name}',
+    );
     buf.write(' ${span.duration.inMilliseconds}ms');
     buf.write(span.status == SpanStatus.ok ? ' [ok]' : ' [ERROR]');
 
@@ -153,12 +154,15 @@ class ConsoleOutput extends LogOutput {
       case LogSpan span:
         final time = _formatTime(span.endTime);
         final status = span.status == SpanStatus.ok ? 'OK' : 'ERR';
-        print('$time SPN ${span.scope}.${span.name} '
-            '${span.duration.inMilliseconds}ms $status');
+        print(
+          '$time SPN ${span.scope}.${span.name} '
+          '${span.duration.inMilliseconds}ms $status',
+        );
     }
   }
 
-  String _formatTime(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:'
+  String _formatTime(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:'
       '${t.minute.toString().padLeft(2, '0')}:'
       '${t.second.toString().padLeft(2, '0')}.'
       '${t.millisecond.toString().padLeft(3, '0')}';

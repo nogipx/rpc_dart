@@ -26,17 +26,16 @@ import 'otel_rpc_interceptor_base.dart';
 ///   ..addInterceptor(OtelRpcClientInterceptor(tracer: tracer));
 /// ```
 class OtelRpcClientInterceptor extends OtelRpcInterceptorBase {
-  const OtelRpcClientInterceptor({
-    required super.tracer,
-    super.metrics,
-  });
+  const OtelRpcClientInterceptor({required super.tracer, super.metrics});
 
   @override
   RpcMetricSide get metricSide => RpcMetricSide.client;
 
   @override
   (Span, RpcContext, Context) startSpan(
-      RpcMiddlewareContext call, String callType) {
+    RpcMiddlewareContext call,
+    String callType,
+  ) {
     final span = tracer.startSpan(
       '${call.serviceName}/${call.methodName}',
       kind: SpanKind.client,

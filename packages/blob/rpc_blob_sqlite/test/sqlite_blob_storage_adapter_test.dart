@@ -258,13 +258,21 @@ void main() {
     });
 
     test('sums sizes of all blobs in collection', () async {
-      final data1 = Uint8List.fromList([1, 2, 3]);      // 3 bytes
-      final data2 = Uint8List.fromList([4, 5, 6, 7]);   // 4 bytes
+      final data1 = Uint8List.fromList([1, 2, 3]); // 3 bytes
+      final data2 = Uint8List.fromList([4, 5, 6, 7]); // 4 bytes
       await adapter.writeBlob(
-        BlobWriteRequest(collection: 'docs', id: 'a', bytes: Stream.value(data1)),
+        BlobWriteRequest(
+          collection: 'docs',
+          id: 'a',
+          bytes: Stream.value(data1),
+        ),
       );
       await adapter.writeBlob(
-        BlobWriteRequest(collection: 'docs', id: 'b', bytes: Stream.value(data2)),
+        BlobWriteRequest(
+          collection: 'docs',
+          id: 'b',
+          bytes: Stream.value(data2),
+        ),
       );
 
       final size = await adapter.collectionSize('docs');

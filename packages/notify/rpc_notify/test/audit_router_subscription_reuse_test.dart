@@ -91,55 +91,60 @@ class _ControllableTransport implements IRpcTransport {
 }
 
 void main() {
-  test('reusing a client stream id cancels the prior response subscription',
-      () async {
-    final target = _ControllableTransport();
+  test(
+    'reusing a client stream id cancels the prior response subscription',
+    () async {
+      final target = _ControllableTransport();
 
-    final router = RpcTransportRouterBuilder()
-        .routeWhen(
-          toTransport: target,
-          whenCondition: (serviceName, methodPath, context) => true,
-          description: 'route all',
-        )
-        .build();
+      final router = RpcTransportRouterBuilder()
+          .routeWhen(
+            toTransport: target,
+            whenCondition: (serviceName, methodPath, context) => true,
+            description: 'route all',
+          )
+          .build();
 
-    final metadata = RpcMetadata.forClientRequest('Svc', 'Method');
+      final metadata = RpcMetadata.forClientRequest('Svc', 'Method');
 
-    // First routing for client stream id 1. The target transport allocates the
-    // first server stream id (odd ids on a fresh client transport => 1).
-    await router.sendMetadata(1, metadata);
-    const firstServerId = 1;
+      // First routing for client stream id 1. The target transport allocates the
+      // first server stream id (odd ids on a fresh client transport => 1).
+      await router.sendMetadata(1, metadata);
+      const firstServerId = 1;
 
-    // Re-route the SAME client stream id 1 (id reuse) before any END_STREAM
-    // cleanup. This creates a NEW subscription on a NEW server stream id (3)
-    // and must cancel the previous subscription bound to server id 1.
-    await router.sendMetadata(1, metadata);
+      // Re-route the SAME client stream id 1 (id reuse) before any END_STREAM
+      // cleanup. This creates a NEW subscription on a NEW server stream id (3)
+      // and must cancel the previous subscription bound to server id 1.
+      await router.sendMetadata(1, metadata);
 
-    final forwarded = <int>[];
-    final sub = router.incomingMessages.listen((m) => forwarded.add(m.streamId));
+      final forwarded = <int>[];
+      final sub = router.incomingMessages.listen(
+        (m) => forwarded.add(m.streamId),
+      );
 
-    // Emit a response on the FIRST (now stale) server stream id. Before the
-    // fix, the leaked old subscription is still live and forwards this to
-    // client stream 1. After the fix, the old subscription was cancelled, so
-    // nothing is forwarded.
-    target.emit(
-      RpcTransportMessage(
-        metadata: metadata,
-        streamId: firstServerId,
-        isEndOfStream: false,
-      ),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+      // Emit a response on the FIRST (now stale) server stream id. Before the
+      // fix, the leaked old subscription is still live and forwards this to
+      // client stream 1. After the fix, the old subscription was cancelled, so
+      // nothing is forwarded.
+      target.emit(
+        RpcTransportMessage(
+          metadata: metadata,
+          streamId: firstServerId,
+          isEndOfStream: false,
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
-    expect(
-      forwarded.where((id) => id == 1),
-      isEmpty,
-      reason: 'a response on the stale server stream id must not be forwarded; '
-          'the prior subscription must be cancelled on stream id reuse',
-    );
+      expect(
+        forwarded.where((id) => id == 1),
+        isEmpty,
+        reason:
+            'a response on the stale server stream id must not be forwarded; '
+            'the prior subscription must be cancelled on stream id reuse',
+      );
 
-    await sub.cancel();
-    await router.close();
-    await target.close();
-  });
+      await sub.cancel();
+      await router.close();
+      await target.close();
+    },
+  );
 }

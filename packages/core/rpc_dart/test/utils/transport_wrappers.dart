@@ -30,16 +30,14 @@ final class NoZeroCopyTransport implements IRpcTransport {
     int streamId,
     RpcMetadata metadata, {
     bool endStream = false,
-  }) =>
-      _inner.sendMetadata(streamId, metadata, endStream: endStream);
+  }) => _inner.sendMetadata(streamId, metadata, endStream: endStream);
 
   @override
   Future<void> sendMessage(
     int streamId,
     Uint8List data, {
     bool endStream = false,
-  }) =>
-      _inner.sendMessage(streamId, data, endStream: endStream);
+  }) => _inner.sendMessage(streamId, data, endStream: endStream);
 
   @override
   Future<void> sendDirectObject(

@@ -201,8 +201,11 @@ class Bar implements IRpcSerializable {
               // Versioned caller has own sum method
               contains('callUnary<Bar, Bar>'),
               // Versioned responder does NOT implement ICalcV2
-              isNot(contains(
-                  'abstract class CalcV2Responder extends RpcResponderContract implements')),
+              isNot(
+                contains(
+                  'abstract class CalcV2Responder extends RpcResponderContract implements',
+                ),
+              ),
               // Versioned responder has abstract sum declaration
               contains('Future<Bar> sum('),
             ]),
@@ -321,7 +324,8 @@ class Msg implements IRpcSerializable {
               contains('callBidirectionalStream<Msg, Msg>'),
               // Abstract handler declarations with on prefix
               contains(
-                  'Future<Msg> onSend(Msg request, {RpcContext? context})'),
+                'Future<Msg> onSend(Msg request, {RpcContext? context})',
+              ),
               contains('Stream<Msg> onEvents(Msg request,'),
               contains('Stream<Msg> onBidi(Stream<Msg> requests,'),
             ]),
@@ -372,9 +376,11 @@ class Ack implements IRpcSerializable {
               // NotifyPeer: abstract class with handlers
               contains('abstract class NotifyPeer extends RpcPeerContract'),
               contains(
-                  'Future<Ack> onPush(Evt request, {RpcContext? context})'),
+                'Future<Ack> onPush(Evt request, {RpcContext? context})',
+              ),
               contains(
-                  'Stream<Ack> onStream(Evt request, {RpcContext? context})'),
+                'Stream<Ack> onStream(Evt request, {RpcContext? context})',
+              ),
               // NotifyPeerCaller: concrete, implements interface, empty setup, no abstract handlers
               contains('class NotifyPeerCaller extends RpcPeerContract'),
               contains('implements INotify'),

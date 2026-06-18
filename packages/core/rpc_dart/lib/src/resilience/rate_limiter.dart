@@ -66,7 +66,7 @@ class _SlidingWindowSpec extends RateLimit {
   final Duration _window;
 
   const _SlidingWindowSpec({required this.max, required Duration window})
-      : _window = window;
+    : _window = window;
 
   @override
   _RateLimitCounter _createCounter(int Function() nowMicros) =>
@@ -79,14 +79,20 @@ class _TokenBucketSpec extends RateLimit {
   @override
   final Duration _window;
 
-  const _TokenBucketSpec(
-      {required this.max, required Duration window, this.burst})
-      : _window = window;
+  const _TokenBucketSpec({
+    required this.max,
+    required Duration window,
+    this.burst,
+  }) : _window = window;
 
   @override
   _RateLimitCounter _createCounter(int Function() nowMicros) =>
       _TokenBucketCounter(
-          max: max, window: _window, burst: burst ?? max, nowMicros: nowMicros);
+        max: max,
+        window: _window,
+        burst: burst ?? max,
+        nowMicros: nowMicros,
+      );
 }
 
 // ---------------------------------------------------------------------------
@@ -122,13 +128,13 @@ class _SlidingWindowCounter extends _RateLimitCounter {
   int _previous = 0;
   int _windowStartUs;
 
-  _SlidingWindowCounter(
-      {required this.max,
-      required Duration window,
-      required int Function() nowMicros})
-      : _windowUs = window.inMicroseconds,
-        _windowStartUs = nowMicros(),
-        super(nowMicros);
+  _SlidingWindowCounter({
+    required this.max,
+    required Duration window,
+    required int Function() nowMicros,
+  }) : _windowUs = window.inMicroseconds,
+       _windowStartUs = nowMicros(),
+       super(nowMicros);
 
   @override
   bool _doAcquire() {
@@ -164,15 +170,15 @@ class _TokenBucketCounter extends _RateLimitCounter {
   double _tokens;
   int _lastRefillUs;
 
-  _TokenBucketCounter(
-      {required this.max,
-      required Duration window,
-      required this.burst,
-      required int Function() nowMicros})
-      : _windowUs = window.inMicroseconds,
-        _tokens = burst.toDouble(),
-        _lastRefillUs = nowMicros(),
-        super(nowMicros);
+  _TokenBucketCounter({
+    required this.max,
+    required Duration window,
+    required this.burst,
+    required int Function() nowMicros,
+  }) : _windowUs = window.inMicroseconds,
+       _tokens = burst.toDouble(),
+       _lastRefillUs = nowMicros(),
+       super(nowMicros);
 
   @override
   bool _doAcquire() {
@@ -272,12 +278,12 @@ class RpcRateLimiter extends IRpcInterceptor {
     String? Function(RpcMiddlewareContext)? keyExtractor,
     Duration cleanupInterval = const Duration(minutes: 5),
     int Function()? nowMicros,
-  })  : _globalSpec = global,
-        _perServiceSpec = Map.unmodifiable(perService),
-        _perMethodSpec = Map.unmodifiable(perMethod),
-        _perKeyFallbackSpec = perKeyFallback,
-        _keyExtractor = keyExtractor,
-        _nowMicros = nowMicros ?? _defaultMonotonicMicros {
+  }) : _globalSpec = global,
+       _perServiceSpec = Map.unmodifiable(perService),
+       _perMethodSpec = Map.unmodifiable(perMethod),
+       _perKeyFallbackSpec = perKeyFallback,
+       _keyExtractor = keyExtractor,
+       _nowMicros = nowMicros ?? _defaultMonotonicMicros {
     _globalCounter = global?._createCounter(_nowMicros);
 
     if (keyExtractor == null) {
@@ -391,12 +397,24 @@ class RpcRateLimiter extends IRpcInterceptor {
     final userKey = _keyExtractor?.call(call);
 
     if (userKey != null) {
-      return _getDynamic(_dynamicMethodCounters, userKey, methodKey,
-              _perMethodSpec[methodKey]) ??
-          _getDynamic(_dynamicServiceCounters, userKey, call.serviceName,
-              _perServiceSpec[call.serviceName]) ??
-          _getDynamic(_dynamicFallbackCounters, userKey, methodKey,
-              _perKeyFallbackSpec) ??
+      return _getDynamic(
+            _dynamicMethodCounters,
+            userKey,
+            methodKey,
+            _perMethodSpec[methodKey],
+          ) ??
+          _getDynamic(
+            _dynamicServiceCounters,
+            userKey,
+            call.serviceName,
+            _perServiceSpec[call.serviceName],
+          ) ??
+          _getDynamic(
+            _dynamicFallbackCounters,
+            userKey,
+            methodKey,
+            _perKeyFallbackSpec,
+          ) ??
           _globalCounter;
     }
     return _staticMethodCounters[methodKey] ??

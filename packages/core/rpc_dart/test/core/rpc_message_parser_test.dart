@@ -147,8 +147,11 @@ void main() {
       final full = _frame(payload);
 
       for (var i = 0; i < full.length - 1; i++) {
-        expect(parser(full.sublist(i, i + 1)), isEmpty,
-            reason: 'должен ждать после байта $i');
+        expect(
+          parser(full.sublist(i, i + 1)),
+          isEmpty,
+          reason: 'должен ждать после байта $i',
+        );
       }
       final result = parser(full.sublist(full.length - 1));
       expect(result, hasLength(1));
@@ -179,7 +182,7 @@ void main() {
       final parser = RpcMessageParser();
       final chunk = _concat([
         _frame([1, 2]),
-        _frame([3, 4])
+        _frame([3, 4]),
       ]);
 
       final result = parser(chunk);
@@ -220,7 +223,7 @@ void main() {
       final batch = _concat([
         _frame([1]),
         _frame([2]),
-        _frame([3])
+        _frame([3]),
       ]);
       final next = _frame([99]);
 
@@ -278,7 +281,7 @@ void main() {
       final chunk = _concat([
         _frame([1]),
         _frame([2]),
-        _frame([3])
+        _frame([3]),
       ]);
 
       expect(() => parser(chunk), throwsA(isA<RpcException>()));
@@ -323,18 +326,20 @@ void main() {
   // Compression passthrough
   // -------------------------------------------------------------------------
   group('RpcMessageParser — сжатие', () {
-    test('сжатый фрейм без декомпрессора передаётся как есть (с заголовком)',
-        () {
-      final parser = RpcMessageParser(); // без decompressor
-      final payload = [1, 2, 3];
-      final compressedFrame = _frame(payload, compressed: true);
+    test(
+      'сжатый фрейм без декомпрессора передаётся как есть (с заголовком)',
+      () {
+        final parser = RpcMessageParser(); // без decompressor
+        final payload = [1, 2, 3];
+        final compressedFrame = _frame(payload, compressed: true);
 
-      final result = parser(compressedFrame);
+        final result = parser(compressedFrame);
 
-      expect(result, hasLength(1));
-      // Должен вернуть полный gRPC-фрейм с выставленным флагом сжатия
-      expect(result[0][0], equals(1)); // compression flag = 1
-    });
+        expect(result, hasLength(1));
+        // Должен вернуть полный gRPC-фрейм с выставленным флагом сжатия
+        expect(result[0][0], equals(1)); // compression flag = 1
+      },
+    );
 
     test('декомпрессор вызывается для сжатого фрейма', () {
       var decompressorCalled = false;

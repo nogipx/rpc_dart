@@ -39,18 +39,16 @@ abstract class RpcPrimitiveMessage<T> implements IRpcSerializable {
   RpcException _comparisonException({
     required String type,
     required String op,
-  }) =>
-      RpcException(
-        'Operation "$op" of $type with primitive type is prohibited. '
-        'Use value for comparison.',
-      );
+  }) => RpcException(
+    'Operation "$op" of $type with primitive type is prohibited. '
+    'Use value for comparison.',
+  );
 
   RpcException _unsupportedOperand({
     required String type,
     required String op,
     required Object other,
-  }) =>
-      RpcException(
-        'Unsupported operand type for operation "$op" with $type: ${other.toString()}',
-      );
+  }) => RpcException(
+    'Unsupported operand type for operation "$op" with $type: ${other.toString()}',
+  );
 }

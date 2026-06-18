@@ -132,7 +132,13 @@ class S3BlobRepository implements IBlobRepository {
       final stat = await _client.statObject(bucketName, id);
       final tags = await _getObjectTags(bucketName, id);
       final url = await _downloadUrl(bucketName, id);
-      return _descriptorFromStat(collection, id, stat, downloadUrl: url, tags: tags);
+      return _descriptorFromStat(
+        collection,
+        id,
+        stat,
+        downloadUrl: url,
+        tags: tags,
+      );
     } on MinioError catch (e) {
       if (_isNotFound(e)) return null;
       rethrow;
@@ -152,7 +158,12 @@ class S3BlobRepository implements IBlobRepository {
       length = request.rangeEnd! - offset;
     }
 
-    final stream = await _client.getPartialObject(bucketName, request.id, offset, length);
+    final stream = await _client.getPartialObject(
+      bucketName,
+      request.id,
+      offset,
+      length,
+    );
 
     return BlobReadResult(
       descriptor: stat,
@@ -183,9 +194,16 @@ class S3BlobRepository implements IBlobRepository {
       );
     }
 
-    final collected = await _collectBytes(request.bytes, declaredLength: request.length);
+    final collected = await _collectBytes(
+      request.bytes,
+      declaredLength: request.length,
+    );
     if (request.checksum != null) {
-      _verifyChecksum(collected, request.checksum!, algorithm: request.checksumAlgorithm);
+      _verifyChecksum(
+        collected,
+        request.checksum!,
+        algorithm: request.checksumAlgorithm,
+      );
     }
 
     final now = _clock().toUtc();
@@ -224,7 +242,11 @@ class S3BlobRepository implements IBlobRepository {
   }
 
   @override
-  Future<bool> deleteBlob(String collection, String id, {int? expectedVersion}) async {
+  Future<bool> deleteBlob(
+    String collection,
+    String id, {
+    int? expectedVersion,
+  }) async {
     final existing = await headBlob(collection, id);
     if (existing == null) return false;
     if (expectedVersion != null && existing.version != expectedVersion) {
@@ -249,7 +271,10 @@ class S3BlobRepository implements IBlobRepository {
     final items = <BlobDescriptor>[];
     String? nextCursor;
 
-    await for (final chunk in _client.listObjects(bucketName, recursive: true)) {
+    await for (final chunk in _client.listObjects(
+      bucketName,
+      recursive: true,
+    )) {
       for (final object in chunk.objects) {
         final id = object.key ?? '';
         if (id.isEmpty) continue;
@@ -292,7 +317,10 @@ class S3BlobRepository implements IBlobRepository {
     if (!exists) return false;
 
     // Remove all objects first (S3 requires empty bucket before deletion).
-    await for (final chunk in _client.listObjects(bucketName, recursive: true)) {
+    await for (final chunk in _client.listObjects(
+      bucketName,
+      recursive: true,
+    )) {
       for (final object in chunk.objects) {
         final key = object.key;
         if (key == null) continue;
@@ -316,7 +344,10 @@ class S3BlobRepository implements IBlobRepository {
 
     // Fallback: list objects and sum sizes.
     var total = 0;
-    await for (final chunk in _client.listObjects(bucketName, recursive: true)) {
+    await for (final chunk in _client.listObjects(
+      bucketName,
+      recursive: true,
+    )) {
       for (final object in chunk.objects) {
         total += object.size ?? 0;
       }
@@ -459,7 +490,9 @@ class S3BlobRepository implements IBlobRepository {
 
   Future<String?> _downloadUrl(String bucketName, String key) async {
     final isPublic = await _isBucketPublic(bucketName);
-    return isPublic ? _publicUrl(bucketName, key) : _presignedUrl(bucketName, key);
+    return isPublic
+        ? _publicUrl(bucketName, key)
+        : _presignedUrl(bucketName, key);
   }
 
   Future<String?> _presignedUrl(String bucketName, String key) async {
@@ -476,7 +509,9 @@ class S3BlobRepository implements IBlobRepository {
 
   Future<String?> _publicUrl(String bucketName, String key) async {
     try {
-      final client = _presignRawClient ??= minio_internal.MinioClient(_presignClient);
+      final client = _presignRawClient ??= minio_internal.MinioClient(
+        _presignClient,
+      );
       final uri = client.getRequestUrl(bucketName, key, null, null);
       return uri.toString();
     } catch (_) {
@@ -526,7 +561,10 @@ class S3BlobRepository implements IBlobRepository {
     return false;
   }
 
-  Future<Map<String, String>> _getObjectTags(String bucketName, String key) async {
+  Future<Map<String, String>> _getObjectTags(
+    String bucketName,
+    String key,
+  ) async {
     try {
       final client = _rawClient ??= minio_internal.MinioClient(_client);
       final response = await client.request(
@@ -588,7 +626,9 @@ class S3BlobRepository implements IBlobRepository {
       chunks.addAll(chunk);
     }
     if (declaredLength != null && total != declaredLength) {
-      throw StateError('Length mismatch: declared=$declaredLength actual=$total bytes');
+      throw StateError(
+        'Length mismatch: declared=$declaredLength actual=$total bytes',
+      );
     }
     return Uint8List.fromList(chunks);
   }
@@ -603,7 +643,9 @@ class S3BlobRepository implements IBlobRepository {
       case ChecksumAlgorithm.sha256:
         final digest = sha256.convert(bytes).toString();
         if (digest != expected.toLowerCase()) {
-          throw StateError('Checksum mismatch: expected $expected actual $digest');
+          throw StateError(
+            'Checksum mismatch: expected $expected actual $digest',
+          );
         }
     }
   }
@@ -632,7 +674,8 @@ class S3BlobRepository implements IBlobRepository {
     return String.fromCharCodes(codeUnits);
   }
 
-  static String _etagLikeChecksum(Uint8List bytes) => md5.convert(bytes).toString();
+  static String _etagLikeChecksum(Uint8List bytes) =>
+      md5.convert(bytes).toString();
 
   static Minio _buildPresignClient(Minio client, S3BlobStorageOptions options) {
     final region = options.presignRegion ?? client.region;

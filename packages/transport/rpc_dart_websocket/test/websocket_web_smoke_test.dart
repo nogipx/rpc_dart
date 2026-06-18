@@ -23,7 +23,9 @@ void main() {
   test('channel frame round-trips with 32-bit header (JS-safe)', () {
     // Large streamId near the 32-bit boundary to catch >32-bit shift bugs.
     const streamId = 0x7FFFFFFF;
-    final payload = Uint8List.fromList(List<int>.generate(300, (i) => i & 0xFF));
+    final payload = Uint8List.fromList(
+      List<int>.generate(300, (i) => i & 0xFF),
+    );
 
     final encoded = RpcChannelFrame.encodeData(
       streamId: streamId,
@@ -39,61 +41,68 @@ void main() {
     expect(frames.single.payload, payload);
   });
 
-  test('caller -> responder round-trip over in-memory WebSocket pair',
-      () async {
-    final (clientWs, serverWs) = _wsPair();
+  test(
+    'caller -> responder round-trip over in-memory WebSocket pair',
+    () async {
+      final (clientWs, serverWs) = _wsPair();
 
-    final caller = RpcWebSocketCallerTransport(clientWs);
-    final responder = RpcWebSocketResponderTransport(serverWs);
+      final caller = RpcWebSocketCallerTransport(clientWs);
+      final responder = RpcWebSocketResponderTransport(serverWs);
 
-    final received = <RpcTransportMessage>[];
-    final sub = responder.incomingMessages.listen(received.add);
+      final received = <RpcTransportMessage>[];
+      final sub = responder.incomingMessages.listen(received.add);
 
-    final streamId = caller.createStream();
-    await caller.sendMetadata(
-      streamId,
-      RpcMetadata([const RpcHeader('x-test', 'web')]),
-    );
-    final grpcFrame = RpcMessageFrame.encode(Uint8List.fromList([1, 2, 3, 4]));
-    await caller.sendMessage(streamId, grpcFrame, endStream: true);
+      final streamId = caller.createStream();
+      await caller.sendMetadata(
+        streamId,
+        RpcMetadata([const RpcHeader('x-test', 'web')]),
+      );
+      final grpcFrame = RpcMessageFrame.encode(
+        Uint8List.fromList([1, 2, 3, 4]),
+      );
+      await caller.sendMessage(streamId, grpcFrame, endStream: true);
 
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
-    expect(received, hasLength(2));
-    expect(received.first.metadata?.headers.first.value, 'web');
-    expect(received[1].payload, grpcFrame);
-    expect(received[1].isEndOfStream, isTrue);
+      expect(received, hasLength(2));
+      expect(received.first.metadata?.headers.first.value, 'web');
+      expect(received[1].payload, grpcFrame);
+      expect(received[1].isEndOfStream, isTrue);
 
-    await sub.cancel();
-    await caller.close();
-    await responder.close();
-  });
+      await sub.cancel();
+      await caller.close();
+      await responder.close();
+    },
+  );
 
-  test('responder -> caller round-trip over in-memory WebSocket pair',
-      () async {
-    final (clientWs, serverWs) = _wsPair();
+  test(
+    'responder -> caller round-trip over in-memory WebSocket pair',
+    () async {
+      final (clientWs, serverWs) = _wsPair();
 
-    final caller = RpcWebSocketCallerTransport(clientWs);
-    final responder = RpcWebSocketResponderTransport(serverWs);
+      final caller = RpcWebSocketCallerTransport(clientWs);
+      final responder = RpcWebSocketResponderTransport(serverWs);
 
-    final incoming = <RpcTransportMessage>[];
-    final sub = caller.incomingMessages.listen(incoming.add);
+      final incoming = <RpcTransportMessage>[];
+      final sub = caller.incomingMessages.listen(incoming.add);
 
-    final streamId = responder.createStream();
-    final grpcFrame =
-        RpcMessageFrame.encode(Uint8List.fromList([5, 6, 7, 8, 9]));
-    await responder.sendMessage(streamId, grpcFrame, endStream: true);
+      final streamId = responder.createStream();
+      final grpcFrame = RpcMessageFrame.encode(
+        Uint8List.fromList([5, 6, 7, 8, 9]),
+      );
+      await responder.sendMessage(streamId, grpcFrame, endStream: true);
 
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
-    expect(incoming, hasLength(1));
-    expect(incoming.single.payload, grpcFrame);
-    expect(incoming.single.streamId, streamId);
+      expect(incoming, hasLength(1));
+      expect(incoming.single.payload, grpcFrame);
+      expect(incoming.single.streamId, streamId);
 
-    await sub.cancel();
-    await caller.close();
-    await responder.close();
-  });
+      await sub.cancel();
+      await caller.close();
+      await responder.close();
+    },
+  );
 
   test('caller close cancels subscription without deadlock', () async {
     final (clientWs, serverWs) = _wsPair();
@@ -130,8 +139,8 @@ class _MemoryWebSocketChannel extends StreamChannelMixin<Object?>
   _MemoryWebSocketChannel({
     required Stream<Object?> incoming,
     required StreamSink<Object?> outgoing,
-  })  : stream = incoming,
-        sink = _MemoryWebSocketSink(outgoing);
+  }) : stream = incoming,
+       sink = _MemoryWebSocketSink(outgoing);
 
   @override
   final Stream<Object?> stream;

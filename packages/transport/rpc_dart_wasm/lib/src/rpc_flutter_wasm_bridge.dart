@@ -47,8 +47,9 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
       StreamController<Uint8List>.broadcast(sync: true);
   bool _closed = false;
 
-  final StreamController<String> _console =
-      StreamController<String>.broadcast(sync: true);
+  final StreamController<String> _console = StreamController<String>.broadcast(
+    sync: true,
+  );
 
   /// Console log stream from WASM JS sandbox.
   /// Each entry is prefixed with level: "I:", "W:", "E:", "D:".
@@ -62,7 +63,9 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
     _messenger.setMessageHandler(consoleChannel, (ByteData? message) async {
       if (message == null || _closed) return null;
       final bytes = Uint8List.view(
-        message.buffer, message.offsetInBytes, message.lengthInBytes,
+        message.buffer,
+        message.offsetInBytes,
+        message.lengthInBytes,
       );
       final text = String.fromCharCodes(bytes);
       for (final line in text.split('\n')) {

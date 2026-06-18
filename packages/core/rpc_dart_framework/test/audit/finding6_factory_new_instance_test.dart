@@ -12,22 +12,30 @@ import 'package:test/test.dart';
 class _Service {}
 
 void main() {
-  test('registerFactory returns a fresh instance per get() (no lazy-singleton)',
-      () {
-    final c = RpcContainer();
-    c.registerFactory<_Service>((_) => _Service());
+  test(
+    'registerFactory returns a fresh instance per get() (no lazy-singleton)',
+    () {
+      final c = RpcContainer();
+      c.registerFactory<_Service>((_) => _Service());
 
-    final a = c.get<_Service>();
-    final b = c.get<_Service>();
+      final a = c.get<_Service>();
+      final b = c.get<_Service>();
 
-    // registerFactory must yield a fresh instance per get() (by contract).
-    expect(identical(a, b), isFalse,
-        reason: 'factory yields a new instance per get()');
+      // registerFactory must yield a fresh instance per get() (by contract).
+      expect(
+        identical(a, b),
+        isFalse,
+        reason: 'factory yields a new instance per get()',
+      );
 
-    // The shared-instance use case is now served by registerLazySingleton.
-    final d = RpcContainer();
-    d.registerLazySingleton<_Service>((_) => _Service());
-    expect(identical(d.get<_Service>(), d.get<_Service>()), isTrue,
-        reason: 'lazy singleton memoizes a single shared instance');
-  });
+      // The shared-instance use case is now served by registerLazySingleton.
+      final d = RpcContainer();
+      d.registerLazySingleton<_Service>((_) => _Service());
+      expect(
+        identical(d.get<_Service>(), d.get<_Service>()),
+        isTrue,
+        reason: 'lazy singleton memoizes a single shared instance',
+      );
+    },
+  );
 }

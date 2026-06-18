@@ -1,0 +1,8 @@
+# Project-wide formatter standard.
+#
+# `dart format` reads `formatter.page_width`. Packages without their own
+# analysis_options inherit this; the packages that have one either set 80
+# explicitly or rely on the Dart default (also 80). So the whole repo formats
+# at width 80 and `melos run format:check` enforces it.
+formatter:
+  page_width: 80

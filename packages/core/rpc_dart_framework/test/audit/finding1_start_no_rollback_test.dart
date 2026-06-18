@@ -63,7 +63,10 @@ void main() {
     await expectLater(app.start(), throwsA(isA<StateError>()));
 
     // CORRECT behavior: the successfully started module must be stopped.
-    expect(started.onStopCalled, isTrue,
-        reason: 'StartedModule.onStop must be called during rollback');
+    expect(
+      started.onStopCalled,
+      isTrue,
+      reason: 'StartedModule.onStop must be called during rollback',
+    );
   });
 }

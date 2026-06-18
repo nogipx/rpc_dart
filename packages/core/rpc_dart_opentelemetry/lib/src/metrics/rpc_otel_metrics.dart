@@ -48,32 +48,32 @@ class RpcOtelMetrics {
   final Counter<int> _clientDurationMs;
 
   RpcOtelMetrics({required Meter meter})
-      : _serverRequests = meter.createCounter<int>(
-          'rpc.server.requests',
-          description:
-              'Count of RPC calls handled by the server, labelled by status_code.',
-          unit: '{call}',
-        ),
-        _serverDurationMs = meter.createCounter<int>(
-          'rpc.server.duration',
-          description:
-              'Running sum of RPC call durations in milliseconds (server side), '
-              'labelled by status_code.',
-          unit: 'ms',
-        ),
-        _clientRequests = meter.createCounter<int>(
-          'rpc.client.requests',
-          description:
-              'Count of RPC calls issued by the client, labelled by status_code.',
-          unit: '{call}',
-        ),
-        _clientDurationMs = meter.createCounter<int>(
-          'rpc.client.duration',
-          description:
-              'Running sum of RPC call durations in milliseconds (client side), '
-              'labelled by status_code.',
-          unit: 'ms',
-        );
+    : _serverRequests = meter.createCounter<int>(
+        'rpc.server.requests',
+        description:
+            'Count of RPC calls handled by the server, labelled by status_code.',
+        unit: '{call}',
+      ),
+      _serverDurationMs = meter.createCounter<int>(
+        'rpc.server.duration',
+        description:
+            'Running sum of RPC call durations in milliseconds (server side), '
+            'labelled by status_code.',
+        unit: 'ms',
+      ),
+      _clientRequests = meter.createCounter<int>(
+        'rpc.client.requests',
+        description:
+            'Count of RPC calls issued by the client, labelled by status_code.',
+        unit: '{call}',
+      ),
+      _clientDurationMs = meter.createCounter<int>(
+        'rpc.client.duration',
+        description:
+            'Running sum of RPC call durations in milliseconds (client side), '
+            'labelled by status_code.',
+        unit: 'ms',
+      );
 
   /// Records one finished RPC call.
   ///
@@ -91,10 +91,12 @@ class RpcOtelMetrics {
     RpcMetricSide side = RpcMetricSide.server,
   }) {
     final attributes = _attributes(call, statusCode);
-    final requests =
-        side == RpcMetricSide.client ? _clientRequests : _serverRequests;
-    final durationMs =
-        side == RpcMetricSide.client ? _clientDurationMs : _serverDurationMs;
+    final requests = side == RpcMetricSide.client
+        ? _clientRequests
+        : _serverRequests;
+    final durationMs = side == RpcMetricSide.client
+        ? _clientDurationMs
+        : _serverDurationMs;
     requests.add(1, attributes: attributes);
     durationMs.add(duration.inMilliseconds, attributes: attributes);
   }

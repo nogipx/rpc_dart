@@ -307,17 +307,16 @@ void main() {
       var serverCallCount = 0;
 
       responder.registerServiceContract(
-        _FailThenSucceedContract(
-          failCount: 2,
-          onCall: () => serverCallCount++,
-        ),
+        _FailThenSucceedContract(failCount: 2, onCall: () => serverCallCount++),
       );
       responder.start();
 
-      caller.addInterceptor(RpcRetryInterceptor(
-        maxAttempts: 4,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
-      ));
+      caller.addInterceptor(
+        RpcRetryInterceptor(
+          maxAttempts: 4,
+          backoff: FixedBackoff(Duration(milliseconds: 10)),
+        ),
+      );
 
       final response = await caller.unaryRequest<_TestRequest, _TestResponse>(
         serviceName: 'TestService',
@@ -366,7 +365,7 @@ final class _FailThenSucceedContract extends RpcResponderContract {
   int _callCount = 0;
 
   _FailThenSucceedContract({required this.failCount, required this.onCall})
-      : super('TestService');
+    : super('TestService');
 
   @override
   void setup() {

@@ -78,8 +78,9 @@ void main() {
       final value1 = 'John Doe';
       final value2 = Duration(minutes: 5);
 
-      final context =
-          RpcContext.empty().withValue(key1, value1).withValue(key2, value2);
+      final context = RpcContext.empty()
+          .withValue(key1, value1)
+          .withValue(key2, value2);
 
       expect(context.getValue<String>(key1), equals(value1));
       expect(context.getValue<Duration>(key2), equals(value2));

@@ -52,9 +52,9 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
     required http2.ServerTransportConnection connection,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     LogScope? logger,
-  })  : _connection = connection,
-        _logger = logger?.child('Http2ServerTransport'),
-        _policy = policy {
+  }) : _connection = connection,
+       _logger = logger?.child('Http2ServerTransport'),
+       _policy = policy {
     _setupConnectionListener();
   }
 
@@ -109,8 +109,9 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
         );
 
         if (!_messageController.isClosed) {
-          _messageController
-              .addError(RpcHttp2StreamError(streamId, error, stackTrace));
+          _messageController.addError(
+            RpcHttp2StreamError(streamId, error, stackTrace),
+          );
         }
       },
       onDone: () {
@@ -153,7 +154,9 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
       );
 
       if (!_messageController.isClosed) {
-        _messageController.addError(RpcHttp2StreamError(streamId, e, stackTrace));
+        _messageController.addError(
+          RpcHttp2StreamError(streamId, e, stackTrace),
+        );
       }
     }
   }
@@ -242,7 +245,9 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
       );
 
       if (!_messageController.isClosed) {
-        _messageController.addError(RpcHttp2StreamError(streamId, e, stackTrace));
+        _messageController.addError(
+          RpcHttp2StreamError(streamId, e, stackTrace),
+        );
       }
     }
   }
@@ -423,12 +428,12 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
   }
 
   Map<String, Object?> _buildHealthDetails() => {
-        'isClosed': _isClosed,
-        'incomingStreams': _incomingStreams.length,
-        'streamSubscriptions': _streamSubscriptions.length,
-        'streamParsers': _streamParsers.length,
-        'messageControllerClosed': _messageController.isClosed,
-      };
+    'isClosed': _isClosed,
+    'incomingStreams': _incomingStreams.length,
+    'streamSubscriptions': _streamSubscriptions.length,
+    'streamParsers': _streamParsers.length,
+    'messageControllerClosed': _messageController.isClosed,
+  };
 
   @override
   Future<RpcHealthStatus> health() async {

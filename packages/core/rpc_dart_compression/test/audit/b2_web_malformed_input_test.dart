@@ -35,7 +35,8 @@ void main() {
     expect(
       thrown,
       isNotNull,
-      reason: 'Non-gzip input must throw (invalid magic / signature). '
+      reason:
+          'Non-gzip input must throw (invalid magic / signature). '
           'Instead returned '
           '${decoded is Uint8List ? '${decoded.length} bytes: $decoded' : decoded}. '
           'Silent accept on web -> CONFIRMED.',

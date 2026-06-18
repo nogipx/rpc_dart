@@ -70,19 +70,17 @@ void main() {
       expect(result, equals(389));
       expect(
         events,
-        equals(
-          [
-            'mw1 request 1',
-            'mw2 request 2',
-            'outer before 4',
-            'inner before 14',
-            'handler request 42 headers {initial: value, a: yes, b: true}',
-            'inner after 47',
-            'outer after 94',
-            'mw2 response 194',
-            'mw1 response 388',
-          ],
-        ),
+        equals([
+          'mw1 request 1',
+          'mw2 request 2',
+          'outer before 4',
+          'inner before 14',
+          'handler request 42 headers {initial: value, a: yes, b: true}',
+          'inner after 47',
+          'outer after 94',
+          'mw2 response 194',
+          'mw1 response 388',
+        ]),
       );
 
       expect(mw1ResponseContexts, hasLength(1));
@@ -99,50 +97,52 @@ void main() {
       expect(mw1ResponseContexts.single.endpoint, same(endpoint));
     });
 
-    test('handleServerStream applies middleware to every response item',
-        () async {
-      final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
-      addTearDown(() async => endpoint.close());
+    test(
+      'handleServerStream applies middleware to every response item',
+      () async {
+        final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
+        addTearDown(() async => endpoint.close());
 
-      final events = <String>[];
-      final responseContexts = <RpcMiddlewareContext>[];
+        final events = <String>[];
+        final responseContexts = <RpcMiddlewareContext>[];
 
-      endpoint
-        ..addMiddleware(
-          _RecordingMiddleware(
-            name: 'mw',
-            events: events,
-            onRequest: (context, value) => (value as int) + 1,
-            onResponse: (context, value) {
-              responseContexts.add(context);
-              expect(context.context.getHeader('srv'), equals('yes'));
-              expect(context.context.getHeader('initial'), equals('1'));
-              return (value as int) * 10;
-            },
-          ),
-        )
-        ..addInterceptor(_ServerStreamInterceptor(events));
+        endpoint
+          ..addMiddleware(
+            _RecordingMiddleware(
+              name: 'mw',
+              events: events,
+              onRequest: (context, value) => (value as int) + 1,
+              onResponse: (context, value) {
+                responseContexts.add(context);
+                expect(context.context.getHeader('srv'), equals('yes'));
+                expect(context.context.getHeader('initial'), equals('1'));
+                return (value as int) * 10;
+              },
+            ),
+          )
+          ..addInterceptor(_ServerStreamInterceptor(events));
 
-      final stream = endpoint.handleServerStream<int, int>(
-        serviceName: 'svc',
-        methodName: 'serverStream',
-        context: RpcContext.withHeaders({'initial': '1'}),
-        request: 5,
-        handler: (ctx, request) {
-          return Stream<int>.fromIterable([request, request + 1]).map((value) {
-            events.add('handler emit $value headers ${ctx.headers}');
-            expect(ctx.getHeader('srv'), equals('yes'));
-            return value;
-          });
-        },
-      );
+        final stream = endpoint.handleServerStream<int, int>(
+          serviceName: 'svc',
+          methodName: 'serverStream',
+          context: RpcContext.withHeaders({'initial': '1'}),
+          request: 5,
+          handler: (ctx, request) {
+            return Stream<int>.fromIterable([request, request + 1]).map((
+              value,
+            ) {
+              events.add('handler emit $value headers ${ctx.headers}');
+              expect(ctx.getHeader('srv'), equals('yes'));
+              return value;
+            });
+          },
+        );
 
-      final results = await stream.toList();
-      expect(results, equals([1120, 1130]));
-      expect(
-        events,
-        equals(
-          [
+        final results = await stream.toList();
+        expect(results, equals([1120, 1130]));
+        expect(
+          events,
+          equals([
             'mw request 5',
             'server before 6',
             'handler emit 12 headers {initial: 1, srv: yes}',
@@ -151,147 +151,154 @@ void main() {
             'handler emit 13 headers {initial: 1, srv: yes}',
             'server emit 13',
             'mw response 113',
-          ],
-        ),
-      );
+          ]),
+        );
 
-      expect(responseContexts, hasLength(2));
-      expect(
-        responseContexts.every(
-          (ctx) => identical(ctx.context, responseContexts.first.context),
-        ),
-        isTrue,
-      );
-    });
-
-    test('handleClientStream normalizes incoming stream and updates context',
-        () async {
-      final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
-      addTearDown(() async => endpoint.close());
-
-      final events = <String>[];
-      final responseContexts = <RpcMiddlewareContext>[];
-
-      endpoint
-        ..addMiddleware(
-          _RecordingMiddleware(
-            name: 'mw',
-            events: events,
-            onRequest: (context, value) => (value as int) + 1,
-            onResponse: (context, value) {
-              responseContexts.add(context);
-              expect(context.context.getHeader('client'), equals('ok'));
-              return (value as int) + 2;
-            },
+        expect(responseContexts, hasLength(2));
+        expect(
+          responseContexts.every(
+            (ctx) => identical(ctx.context, responseContexts.first.context),
           ),
-        )
-        ..addInterceptor(_ClientStreamInterceptor(events));
+          isTrue,
+        );
+      },
+    );
 
-      final result = await endpoint.handleClientStream<int, int>(
-        serviceName: 'svc',
-        methodName: 'clientStream',
-        context: RpcContext.withHeaders({'initial': '1'}),
-        requests: Stream<int>.fromIterable([1, 2, 3]),
-        handler: (ctx, requests) async {
-          events.add('handler ctx client=${ctx.getHeader('client')}');
-          final values = await requests.cast<int>().toList();
-          events.add('handler values $values');
-          expect(ctx.getHeader('client'), equals('ok'));
-          return values.reduce((a, b) => a + b);
-        },
-      );
+    test(
+      'handleClientStream normalizes incoming stream and updates context',
+      () async {
+        final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
+        addTearDown(() async => endpoint.close());
 
-      expect(result, equals(70));
-      expect(events, hasLength(10));
-      expect(
-        events,
-        containsAllInOrder([
-          'mw request 1',
-          'client received 2',
-          'mw request 2',
-          'client received 3',
-          'mw request 3',
-          'client received 4',
-          'handler ctx client=ok',
-          'handler values [4, 6, 8]',
-          'client response 18',
-          'mw response 68',
-        ]),
-      );
+        final events = <String>[];
+        final responseContexts = <RpcMiddlewareContext>[];
 
-      int indexOf(String value) => events.indexOf(value);
-      expect(indexOf('mw request 1'), lessThan(indexOf('client received 2')));
-      expect(indexOf('mw request 2'), lessThan(indexOf('client received 3')));
-      expect(indexOf('mw request 3'), lessThan(indexOf('client received 4')));
+        endpoint
+          ..addMiddleware(
+            _RecordingMiddleware(
+              name: 'mw',
+              events: events,
+              onRequest: (context, value) => (value as int) + 1,
+              onResponse: (context, value) {
+                responseContexts.add(context);
+                expect(context.context.getHeader('client'), equals('ok'));
+                return (value as int) + 2;
+              },
+            ),
+          )
+          ..addInterceptor(_ClientStreamInterceptor(events));
 
-      expect(responseContexts, hasLength(1));
-      expect(responseContexts.single.context.getHeader('client'), equals('ok'));
-    });
+        final result = await endpoint.handleClientStream<int, int>(
+          serviceName: 'svc',
+          methodName: 'clientStream',
+          context: RpcContext.withHeaders({'initial': '1'}),
+          requests: Stream<int>.fromIterable([1, 2, 3]),
+          handler: (ctx, requests) async {
+            events.add('handler ctx client=${ctx.getHeader('client')}');
+            final values = await requests.cast<int>().toList();
+            events.add('handler values $values');
+            expect(ctx.getHeader('client'), equals('ok'));
+            return values.reduce((a, b) => a + b);
+          },
+        );
 
-    test('handleBidirectionalStream applies middleware to both directions',
-        () async {
-      final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
-      addTearDown(() async => endpoint.close());
+        expect(result, equals(70));
+        expect(events, hasLength(10));
+        expect(
+          events,
+          containsAllInOrder([
+            'mw request 1',
+            'client received 2',
+            'mw request 2',
+            'client received 3',
+            'mw request 3',
+            'client received 4',
+            'handler ctx client=ok',
+            'handler values [4, 6, 8]',
+            'client response 18',
+            'mw response 68',
+          ]),
+        );
 
-      final events = <String>[];
-      final responseContexts = <RpcMiddlewareContext>[];
+        int indexOf(String value) => events.indexOf(value);
+        expect(indexOf('mw request 1'), lessThan(indexOf('client received 2')));
+        expect(indexOf('mw request 2'), lessThan(indexOf('client received 3')));
+        expect(indexOf('mw request 3'), lessThan(indexOf('client received 4')));
 
-      endpoint
-        ..addMiddleware(
-          _RecordingMiddleware(
-            name: 'mw',
-            events: events,
-            onRequest: (context, value) => (value as int) + 1,
-            onResponse: (context, value) {
-              responseContexts.add(context);
-              expect(context.context.getHeader('bidi'), equals('yes'));
-              return (value as int) * 2;
-            },
-          ),
-        )
-        ..addInterceptor(_BidirectionalStreamInterceptor(events));
+        expect(responseContexts, hasLength(1));
+        expect(
+          responseContexts.single.context.getHeader('client'),
+          equals('ok'),
+        );
+      },
+    );
 
-      final responses = endpoint.handleBidirectionalStream<int, int>(
-        serviceName: 'svc',
-        methodName: 'bidi',
-        context: RpcContext.withHeaders({'initial': '1'}),
-        requests: Stream<int>.fromIterable([1, 2]),
-        handler: (ctx, requests) {
-          return requests.cast<int>().map((value) {
-            events.add('handler saw $value headers ${ctx.headers}');
-            expect(ctx.getHeader('bidi'), equals('yes'));
-            return value + 100;
-          });
-        },
-      );
+    test(
+      'handleBidirectionalStream applies middleware to both directions',
+      () async {
+        final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
+        addTearDown(() async => endpoint.close());
 
-      final result = await responses.toList();
-      expect(result, equals([250, 270]));
-      expect(events, hasLength(10));
-      expect(
-        events,
-        containsAllInOrder([
-          'mw request 1',
-          'bidi request 2',
-          'mw response 125',
-          'mw request 2',
-          'bidi request 3',
-          'mw response 135',
-        ]),
-      );
+        final events = <String>[];
+        final responseContexts = <RpcMiddlewareContext>[];
 
-      final firstRequestIndex = events.indexOf('mw request 1');
-      final firstForwardIndex = events.indexOf('bidi request 2');
-      expect(firstRequestIndex, lessThan(firstForwardIndex));
+        endpoint
+          ..addMiddleware(
+            _RecordingMiddleware(
+              name: 'mw',
+              events: events,
+              onRequest: (context, value) => (value as int) + 1,
+              onResponse: (context, value) {
+                responseContexts.add(context);
+                expect(context.context.getHeader('bidi'), equals('yes'));
+                return (value as int) * 2;
+              },
+            ),
+          )
+          ..addInterceptor(_BidirectionalStreamInterceptor(events));
 
-      final secondRequestIndex = events.indexOf('mw request 2');
-      final secondForwardIndex = events.lastIndexOf('bidi request 3');
-      expect(secondRequestIndex, lessThan(secondForwardIndex));
+        final responses = endpoint.handleBidirectionalStream<int, int>(
+          serviceName: 'svc',
+          methodName: 'bidi',
+          context: RpcContext.withHeaders({'initial': '1'}),
+          requests: Stream<int>.fromIterable([1, 2]),
+          handler: (ctx, requests) {
+            return requests.cast<int>().map((value) {
+              events.add('handler saw $value headers ${ctx.headers}');
+              expect(ctx.getHeader('bidi'), equals('yes'));
+              return value + 100;
+            });
+          },
+        );
 
-      expect(responseContexts, hasLength(2));
-      expect(responseContexts.first.context.getHeader('bidi'), equals('yes'));
-      expect(responseContexts.last.context.getHeader('bidi'), equals('yes'));
-    });
+        final result = await responses.toList();
+        expect(result, equals([250, 270]));
+        expect(events, hasLength(10));
+        expect(
+          events,
+          containsAllInOrder([
+            'mw request 1',
+            'bidi request 2',
+            'mw response 125',
+            'mw request 2',
+            'bidi request 3',
+            'mw response 135',
+          ]),
+        );
+
+        final firstRequestIndex = events.indexOf('mw request 1');
+        final firstForwardIndex = events.indexOf('bidi request 2');
+        expect(firstRequestIndex, lessThan(firstForwardIndex));
+
+        final secondRequestIndex = events.indexOf('mw request 2');
+        final secondForwardIndex = events.lastIndexOf('bidi request 3');
+        expect(secondRequestIndex, lessThan(secondForwardIndex));
+
+        expect(responseContexts, hasLength(2));
+        expect(responseContexts.first.context.getHeader('bidi'), equals('yes'));
+        expect(responseContexts.last.context.getHeader('bidi'), equals('yes'));
+      },
+    );
   });
 }
 
@@ -354,7 +361,7 @@ class _RecordingMiddleware extends IRpcMiddleware {
   final List<String> events;
   final dynamic Function(RpcMiddlewareContext context, dynamic value) onRequest;
   final dynamic Function(RpcMiddlewareContext context, dynamic value)
-      onResponse;
+  onResponse;
   final bool asyncRequest;
   final bool asyncResponse;
 
@@ -434,9 +441,7 @@ class _InnerUnaryInterceptor extends IRpcInterceptor {
     final response = await next(newContext, (intRequest * 3) as TRequest);
     final intResponse = response as int;
     events.add('inner after $intResponse');
-    call.updateContext(
-      call.context.withAdditionalHeaders({'C': 'done'}),
-    );
+    call.updateContext(call.context.withAdditionalHeaders({'C': 'done'}));
     return (intResponse * 2) as TResponse;
   }
 }
@@ -485,8 +490,9 @@ class _ClientStreamInterceptor extends IRpcInterceptor {
     final newContext = call.context.withAdditionalHeaders({'client': 'ok'});
     final response = await next(
       newContext,
-      Stream<int>.fromIterable(values)
-          .map<TRequest>((value) => value as TRequest),
+      Stream<int>.fromIterable(
+        values,
+      ).map<TRequest>((value) => value as TRequest),
     );
     events.add('client response $response');
     return ((response as int) + 50) as TResponse;

@@ -114,7 +114,9 @@ abstract class RpcIsolateModule extends RpcServerModule {
   /// through [isolateCaller] to the worker isolate.
   ///
   /// Implement this instead of [buildContracts].
-  List<RpcResponderContract> buildProxyContracts(RpcCallerEndpoint isolateCaller);
+  List<RpcResponderContract> buildProxyContracts(
+    RpcCallerEndpoint isolateCaller,
+  );
 
   /// Sealed — delegates to [buildProxyContracts].
   @override

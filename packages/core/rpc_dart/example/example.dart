@@ -53,7 +53,9 @@ void main() async {
   scope.warning('This WILL appear');
 
   log.setScopeLevel(
-      'app.database', RpcLogLevel.debug); // but enable debug for DB
+    'app.database',
+    RpcLogLevel.debug,
+  ); // but enable debug for DB
   dbScope.debug('This WILL appear (scope override)');
 
   log.minLevel = RpcLogLevel.debug; // restore
@@ -133,9 +135,7 @@ void main() async {
   svc.error('Connection lost', error: 'ECONNRESET');
   svc.info('Request B');
 
-  final warnings = buffer.query(
-    LogFilter(minLevel: RpcLogLevel.warning),
-  );
+  final warnings = buffer.query(LogFilter(minLevel: RpcLogLevel.warning));
   print('  Buffered warnings+: ${warnings.length}');
 
   logWithBuffer.dispose();
@@ -153,11 +153,14 @@ void main() async {
   );
 
   final auth = prodLog.scope('auth');
-  auth.info('Login attempt', data: {
-    'username': 'john',
-    'password': 'hunter2',
-    'token': 'eyJhbGciOiJIUzI...',
-  });
+  auth.info(
+    'Login attempt',
+    data: {
+      'username': 'john',
+      'password': 'hunter2',
+      'token': 'eyJhbGciOiJIUzI...',
+    },
+  );
 
   prodLog.dispose();
 
@@ -287,7 +290,7 @@ final class CalculatorResponder extends RpcResponderContract
 final class CalculatorCaller extends RpcCallerContract
     implements ICalculatorContract {
   CalculatorCaller(RpcCallerEndpoint endpoint)
-      : super(ICalculatorContract.name, endpoint);
+    : super(ICalculatorContract.name, endpoint);
 
   Future<Response> calculate(Request request) {
     return callUnary<Request, Response>(

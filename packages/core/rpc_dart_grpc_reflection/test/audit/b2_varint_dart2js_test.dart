@@ -65,7 +65,8 @@ List<int> encodeVarintSafe(int value) {
   final out = <int>[];
   while (value > 0x7F) {
     out.add((value & 0x7F) | 0x80);
-    value = value ~/ 128; // integer division avoids dart2js >> 32-bit saturation
+    value =
+        value ~/ 128; // integer division avoids dart2js >> 32-bit saturation
   }
   out.add(value % 128);
   return out;
@@ -75,8 +76,11 @@ void main() {
   group('B2: parser varint decode (primitive-level)', () {
     test('values up to 2^32 decode correctly', () {
       for (final v in [0, 1, 0x7F, 0x3FFF, 0x7FFFFFFF, 0xFFFFFFFF]) {
-        expect(decodeVarintAsInParser(encodeVarintSafe(v)), v,
-            reason: 'failed at v=$v');
+        expect(
+          decodeVarintAsInParser(encodeVarintSafe(v)),
+          v,
+          reason: 'failed at v=$v',
+        );
       }
     });
 

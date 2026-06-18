@@ -29,7 +29,9 @@ void main() {
 
       status.setStatus('MyService', GrpcServingStatus.notServing);
       expect(
-          status.getStatus('MyService'), equals(GrpcServingStatus.notServing));
+        status.getStatus('MyService'),
+        equals(GrpcServingStatus.notServing),
+      );
     });
 
     test('clearStatus removes the service', () {
@@ -150,9 +152,7 @@ void main() {
       caller = RpcCallerEndpoint(transport: clientTransport);
       responder = RpcResponderEndpoint(transport: serverTransport);
 
-      responder.registerServiceContract(
-        GrpcHealthCheckContract(healthStatus),
-      );
+      responder.registerServiceContract(GrpcHealthCheckContract(healthStatus));
       responder.start();
     });
 
@@ -167,12 +167,12 @@ void main() {
 
       final response = await caller
           .unaryRequest<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
-        serviceName: GrpcHealthCheckContract.grpcServiceName,
-        methodName: 'Check',
-        requestCodec: GrpcHealthCheckRequest.codec,
-        responseCodec: GrpcHealthCheckResponse.codec,
-        request: GrpcHealthCheckRequest(service: ''),
-      );
+            serviceName: GrpcHealthCheckContract.grpcServiceName,
+            methodName: 'Check',
+            requestCodec: GrpcHealthCheckRequest.codec,
+            responseCodec: GrpcHealthCheckResponse.codec,
+            request: GrpcHealthCheckRequest(service: ''),
+          );
 
       expect(response.status, equals(GrpcServingStatus.serving));
     });
@@ -182,12 +182,12 @@ void main() {
 
       final response = await caller
           .unaryRequest<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
-        serviceName: GrpcHealthCheckContract.grpcServiceName,
-        methodName: 'Check',
-        requestCodec: GrpcHealthCheckRequest.codec,
-        responseCodec: GrpcHealthCheckResponse.codec,
-        request: GrpcHealthCheckRequest(service: 'MySvc'),
-      );
+            serviceName: GrpcHealthCheckContract.grpcServiceName,
+            methodName: 'Check',
+            requestCodec: GrpcHealthCheckRequest.codec,
+            responseCodec: GrpcHealthCheckResponse.codec,
+            request: GrpcHealthCheckRequest(service: 'MySvc'),
+          );
 
       expect(response.status, equals(GrpcServingStatus.notServing));
     });
@@ -195,12 +195,12 @@ void main() {
     test('Check returns serviceUnknown for unregistered service', () async {
       final response = await caller
           .unaryRequest<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
-        serviceName: GrpcHealthCheckContract.grpcServiceName,
-        methodName: 'Check',
-        requestCodec: GrpcHealthCheckRequest.codec,
-        responseCodec: GrpcHealthCheckResponse.codec,
-        request: GrpcHealthCheckRequest(service: 'NoSuchService'),
-      );
+            serviceName: GrpcHealthCheckContract.grpcServiceName,
+            methodName: 'Check',
+            requestCodec: GrpcHealthCheckRequest.codec,
+            responseCodec: GrpcHealthCheckResponse.codec,
+            request: GrpcHealthCheckRequest(service: 'NoSuchService'),
+          );
 
       expect(response.status, equals(GrpcServingStatus.serviceUnknown));
     });
@@ -211,14 +211,14 @@ void main() {
       final responses = <GrpcServingStatus>[];
       final completer = Completer<void>();
 
-      final stream =
-          caller.serverStream<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
-        serviceName: GrpcHealthCheckContract.grpcServiceName,
-        methodName: 'Watch',
-        requestCodec: GrpcHealthCheckRequest.codec,
-        responseCodec: GrpcHealthCheckResponse.codec,
-        request: GrpcHealthCheckRequest(service: 'WatchMe'),
-      );
+      final stream = caller
+          .serverStream<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
+            serviceName: GrpcHealthCheckContract.grpcServiceName,
+            methodName: 'Watch',
+            requestCodec: GrpcHealthCheckRequest.codec,
+            responseCodec: GrpcHealthCheckResponse.codec,
+            request: GrpcHealthCheckRequest(service: 'WatchMe'),
+          );
 
       final sub = stream.listen((r) {
         responses.add(r.status);
@@ -247,14 +247,14 @@ void main() {
       final responses = <GrpcServingStatus>[];
       final completer = Completer<void>();
 
-      final stream =
-          caller.serverStream<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
-        serviceName: GrpcHealthCheckContract.grpcServiceName,
-        methodName: 'Watch',
-        requestCodec: GrpcHealthCheckRequest.codec,
-        responseCodec: GrpcHealthCheckResponse.codec,
-        request: GrpcHealthCheckRequest(service: 'NewSvc'),
-      );
+      final stream = caller
+          .serverStream<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
+            serviceName: GrpcHealthCheckContract.grpcServiceName,
+            methodName: 'Watch',
+            requestCodec: GrpcHealthCheckRequest.codec,
+            responseCodec: GrpcHealthCheckResponse.codec,
+            request: GrpcHealthCheckRequest(service: 'NewSvc'),
+          );
 
       final sub = stream.listen((r) {
         responses.add(r.status);

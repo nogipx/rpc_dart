@@ -10,8 +10,5 @@ import 'src/generator.dart';
 
 /// Creates the RPC Dart code generation builder.
 Builder rpcDartBuilder(BuilderOptions options) {
-  return SharedPartBuilder(
-    [RpcDartGenerator(options)],
-    'rpc_dart',
-  );
+  return SharedPartBuilder([RpcDartGenerator(options)], 'rpc_dart');
 }

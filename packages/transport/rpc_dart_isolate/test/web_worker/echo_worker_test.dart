@@ -61,15 +61,16 @@ void main() {
 
       // Server-stream round-trip.
       final received = <String>[];
-      await for (final item in caller
-          .serverStream<RpcString, RpcString>(
-            serviceName: 'EchoService',
-            methodName: 'EchoStream',
-            requestCodec: RpcString.codec,
-            responseCodec: RpcString.codec,
-            request: 'x'.rpc,
-          )
-          .timeout(const Duration(seconds: 10))) {
+      await for (final item
+          in caller
+              .serverStream<RpcString, RpcString>(
+                serviceName: 'EchoService',
+                methodName: 'EchoStream',
+                requestCodec: RpcString.codec,
+                responseCodec: RpcString.codec,
+                request: 'x'.rpc,
+              )
+              .timeout(const Duration(seconds: 10))) {
         received.add(item.value);
       }
 

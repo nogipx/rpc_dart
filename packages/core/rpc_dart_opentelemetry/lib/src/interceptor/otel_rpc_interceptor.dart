@@ -42,10 +42,7 @@ abstract final class OtelRpcKeys {
 /// ));
 /// ```
 class OtelRpcInterceptor extends OtelRpcInterceptorBase {
-  const OtelRpcInterceptor({
-    required super.tracer,
-    super.metrics,
-  });
+  const OtelRpcInterceptor({required super.tracer, super.metrics});
 
   @override
   RpcMetricSide get metricSide => RpcMetricSide.server;
@@ -54,7 +51,9 @@ class OtelRpcInterceptor extends OtelRpcInterceptorBase {
   /// and stores the span in [RpcContext] values for downstream access.
   @override
   (Span, RpcContext, Context) startSpan(
-      RpcMiddlewareContext call, String callType) {
+    RpcMiddlewareContext call,
+    String callType,
+  ) {
     final parentContext = RpcOtelPropagator.extract(call.context);
 
     final attributes = [

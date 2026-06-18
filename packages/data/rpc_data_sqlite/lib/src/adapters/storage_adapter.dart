@@ -1196,9 +1196,7 @@ class SqliteDataChangeJournal implements DataChangeJournal {
     bool clearOnOpen = false,
     LogScope? logger,
   }) : _clearOnOpen = clearOnOpen,
-       _logger = (logger ?? LogScope.noop).child(
-         'Replay',
-       );
+       _logger = (logger ?? LogScope.noop).child('Replay');
 
   final SqliteDataDatabase _database;
   final bool _clearOnOpen;

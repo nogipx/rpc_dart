@@ -78,16 +78,16 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     LogScope? logger,
-  })  : _transport = transport,
-        _streamId = streamId,
-        _serviceName = serviceName,
-        _methodName = methodName,
-        _isZeroCopy = requestCodec == null && responseCodec == null,
-        _requestCodec = requestCodec,
-        _responseCodec = responseCodec,
-        _context = context,
-        _scope = RpcCallScope(context: context),
-        _logger = logger?.child('StreamProcessor') ?? LogScope.noop {
+  }) : _transport = transport,
+       _streamId = streamId,
+       _serviceName = serviceName,
+       _methodName = methodName,
+       _isZeroCopy = requestCodec == null && responseCodec == null,
+       _requestCodec = requestCodec,
+       _responseCodec = responseCodec,
+       _context = context,
+       _scope = RpcCallScope(context: context),
+       _logger = logger?.child('StreamProcessor') ?? LogScope.noop {
     // Serialization requires codecs.
     if (!_isZeroCopy) {
       if (_requestCodec == null || _responseCodec == null) {
@@ -172,9 +172,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           try {
             if (_isZeroCopy) {
               // Zero-copy path
-              _logger.internal(
-                'Zero-copy send [streamId: $_streamId]',
-              );
+              _logger.internal('Zero-copy send [streamId: $_streamId]');
               await _transport.sendDirectObject(_streamId, response);
               _logger.internal(
                 'Zero-copy response sent for $_methodPath [streamId: $_streamId]',
@@ -253,9 +251,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     try {
       final trailers = RpcMetadata.forTrailer(RpcStatus.ok);
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
-      _logger.internal(
-        'Trailer sent for $_methodPath [streamId: $_streamId]',
-      );
+      _logger.internal('Trailer sent for $_methodPath [streamId: $_streamId]');
     } catch (e, stackTrace) {
       if (_isTransportClosed(e)) {
         _logger.debug(
@@ -284,7 +280,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     _messageBound = true;
 
     _logger.internal(
-        'Stream bound [methodPath: $_methodPath, streamId: $_streamId]');
+      'Stream bound [methodPath: $_methodPath, streamId: $_streamId]',
+    );
 
     _scope.listen<RpcTransportMessage>(
       messageStream,
@@ -333,7 +330,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     _logger.internal(
-      'Message received [streamId: ${message.streamId}, type: ${message.isMetadataOnly ? "metadata" : message.isDirect ? "zero_copy" : "serialized"}, size: ${message.payload?.length}]',
+      'Message received [streamId: ${message.streamId}, type: ${message.isMetadataOnly
+          ? "metadata"
+          : message.isDirect
+          ? "zero_copy"
+          : "serialized"}, size: ${message.payload?.length}]',
     );
 
     // Extract encoding hints from initial request metadata.
@@ -348,9 +349,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
       // grpc-accept-encoding: what the peer can decompress → use for responses.
       if (_responseEncoding == null) {
-        final accept = meta.getHeaderValue(
-          RpcHeaders.grpcAcceptEncoding,
-        );
+        final accept = meta.getHeaderValue(RpcHeaders.grpcAcceptEncoding);
         if (accept != null) {
           for (final enc in accept.split(',').map((e) => e.trim())) {
             if (enc != RpcGrpcCompression.identity &&
@@ -487,8 +486,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   }
 
   /// Sends an error to the client.
-  Future<void> sendError(int statusCode, String message,
-      {Uint8List? statusDetailsBin}) async {
+  Future<void> sendError(
+    int statusCode,
+    String message, {
+    Uint8List? statusDetailsBin,
+  }) async {
     if (!_isActive) {
       _logger.warning('Attempted to send error on inactive processor');
       return;
@@ -509,17 +511,18 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // If initial metadata was not sent, this becomes a Trailers-Only response.
       // The transport layer handles adding :status: 200 for Trailers-Only.
       if (!_initialMetadataSent) {
-        _logger.internal(
-          'Sending Trailers-Only error [streamId: $_streamId]',
-        );
+        _logger.internal('Sending Trailers-Only error [streamId: $_streamId]');
         _initialMetadataSent = true;
       }
 
       // Both Trailers-Only and post-data trailers use the same format:
       // grpc-status + optional grpc-message. The transport distinguishes
       // between the two based on whether initial headers were sent.
-      final trailers = RpcMetadata.forTrailer(statusCode,
-          message: message, statusDetailsBin: statusDetailsBin);
+      final trailers = RpcMetadata.forTrailer(
+        statusCode,
+        message: message,
+        statusDetailsBin: statusDetailsBin,
+      );
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
 
       _logger.internal('Error sent to client [streamId: $_streamId]');
@@ -692,16 +695,16 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     LogScope? logger,
-  })  : _transport = transport,
-        _streamId = transport.createStream(),
-        _serviceName = serviceName,
-        _methodName = methodName,
-        _isZeroCopy = requestCodec == null && responseCodec == null,
-        _requestCodec = requestCodec,
-        _responseCodec = responseCodec,
-        _context = context,
-        _scope = RpcCallScope(context: context),
-        _logger = logger?.child('CallProcessor') ?? LogScope.noop {
+  }) : _transport = transport,
+       _streamId = transport.createStream(),
+       _serviceName = serviceName,
+       _methodName = methodName,
+       _isZeroCopy = requestCodec == null && responseCodec == null,
+       _requestCodec = requestCodec,
+       _responseCodec = responseCodec,
+       _context = context,
+       _scope = RpcCallScope(context: context),
+       _logger = logger?.child('CallProcessor') ?? LogScope.noop {
     // Validation: codecs are required for serialization mode.
     if (!_isZeroCopy) {
       if (_requestCodec == null || _responseCodec == null) {
@@ -795,9 +798,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
             if (_isZeroCopy) {
               // Zero-copy path.
-              _logger.internal(
-                'Zero-copy request send [streamId: $_streamId]',
-              );
+              _logger.internal('Zero-copy request send [streamId: $_streamId]');
               await _transport.sendDirectObject(_streamId, request);
               _logger.internal(
                 'Zero-copy request sent for $_methodPath [streamId: $_streamId]',
@@ -809,8 +810,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
                 'Request serialized (${serialized.length} bytes) [streamId: $_streamId]',
               );
 
-              final requestEncoding =
-                  _context?.getHeader(RpcHeaders.grpcEncoding);
+              final requestEncoding = _context?.getHeader(
+                RpcHeaders.grpcEncoding,
+              );
               if (requestEncoding != null &&
                   requestEncoding != RpcGrpcCompression.identity &&
                   !RpcGrpcCompression.isSupported(requestEncoding)) {
@@ -822,7 +824,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
                   'package:rpc_dart_compression).',
                 );
               }
-              final useCompression = requestEncoding != null &&
+              final useCompression =
+                  requestEncoding != null &&
                   requestEncoding != RpcGrpcCompression.identity;
               final payload = useCompression
                   ? RpcGrpcCompression.compress(
@@ -923,8 +926,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       'Sending initial metadata for $_methodPath [streamId: $_streamId]',
     );
 
-    final baseMetadata =
-        RpcMetadata.forClientRequest(_serviceName, _methodName);
+    final baseMetadata = RpcMetadata.forClientRequest(
+      _serviceName,
+      _methodName,
+    );
 
     // Use a map so context headers naturally override base headers,
     // preventing duplicates (e.g. grpc-accept-encoding).
@@ -944,8 +949,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       if (_context.deadline != null) {
         final timeout = _context.remainingTime;
         if (timeout != null) {
-          headerMap[RpcHeaders.grpcTimeout] =
-              RpcMetadata.encodeGrpcTimeout(timeout);
+          headerMap[RpcHeaders.grpcTimeout] = RpcMetadata.encodeGrpcTimeout(
+            timeout,
+          );
         }
       }
 
@@ -960,10 +966,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       );
     }
 
-    final metadata = RpcMetadata(
-      [for (final e in headerMap.entries) RpcHeader(e.key, e.value)],
-      methodPath: baseMetadata.methodPath,
-    );
+    final metadata = RpcMetadata([
+      for (final e in headerMap.entries) RpcHeader(e.key, e.value),
+    ], methodPath: baseMetadata.methodPath);
     await _transport.sendMetadata(_streamId, metadata);
 
     _logger.internal(
@@ -983,7 +988,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         );
 
         try {
-          final reason = _context.cancellationToken!.reason ??
+          final reason =
+              _context.cancellationToken!.reason ??
               'Operation cancelled by client';
           await _sendCancellationToServer(reason);
         } catch (e, stackTrace) {
@@ -1043,10 +1049,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       final cancellationHeaders = [
         RpcHeader('x-client-cancelled', 'true'),
         RpcHeader('x-cancellation-reason', reason),
-        RpcHeader(
-          RpcHeaders.grpcStatus,
-          RpcStatus.cancelled.toString(),
-        ),
+        RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
       ];
 
       final cancellationMetadata = RpcMetadata(cancellationHeaders);

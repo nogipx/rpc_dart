@@ -36,7 +36,8 @@ void main() {
     expect(
       () => parseFileDescriptorProto(bytes),
       throwsA(isA<FormatException>()),
-      reason: 'truncated descriptor leaked a raw RangeError instead of a '
+      reason:
+          'truncated descriptor leaked a raw RangeError instead of a '
           'typed FormatException',
     );
   });

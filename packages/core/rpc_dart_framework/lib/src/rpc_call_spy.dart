@@ -106,16 +106,18 @@ class RpcCallSpy extends IRpcInterceptor {
     required bool success,
     Object? error,
   }) {
-    _entries.add(RpcSpyEntry(
-      serviceName: call.serviceName,
-      methodName: call.methodName,
-      callType: callType,
-      success: success,
-      error: error,
-      duration: sw.elapsed,
-      calledAt: DateTime.now(),
-      context: call.context,
-    ));
+    _entries.add(
+      RpcSpyEntry(
+        serviceName: call.serviceName,
+        methodName: call.methodName,
+        callType: callType,
+        success: success,
+        error: error,
+        duration: sw.elapsed,
+        calledAt: DateTime.now(),
+        context: call.context,
+      ),
+    );
   }
 
   @override
@@ -148,7 +150,13 @@ class RpcCallSpy extends IRpcInterceptor {
       );
       return _trackStream(stream, call, 'serverStream', sw);
     } catch (e) {
-      _record(call: call, callType: 'serverStream', sw: sw, success: false, error: e);
+      _record(
+        call: call,
+        callType: 'serverStream',
+        sw: sw,
+        success: false,
+        error: e,
+      );
       rethrow;
     }
   }
@@ -165,7 +173,13 @@ class RpcCallSpy extends IRpcInterceptor {
       _record(call: call, callType: 'clientStream', sw: sw, success: true);
       return res;
     } catch (e) {
-      _record(call: call, callType: 'clientStream', sw: sw, success: false, error: e);
+      _record(
+        call: call,
+        callType: 'clientStream',
+        sw: sw,
+        success: false,
+        error: e,
+      );
       rethrow;
     }
   }
@@ -183,7 +197,13 @@ class RpcCallSpy extends IRpcInterceptor {
       );
       return _trackStream(stream, call, 'bidiStream', sw);
     } catch (e) {
-      _record(call: call, callType: 'bidiStream', sw: sw, success: false, error: e);
+      _record(
+        call: call,
+        callType: 'bidiStream',
+        sw: sw,
+        success: false,
+        error: e,
+      );
       rethrow;
     }
   }

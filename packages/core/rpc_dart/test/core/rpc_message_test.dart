@@ -87,9 +87,7 @@ void main() {
 
       test('создает_сообщение_с_метаданными_и_флагом_конца_потока', () {
         // Arrange
-        final metadata = RpcMetadata([
-          RpcHeader(RpcHeaders.grpcStatus, '0'),
-        ]);
+        final metadata = RpcMetadata([RpcHeader(RpcHeaders.grpcStatus, '0')]);
 
         // Act
         final message = RpcMessage.withMetadata<String>(

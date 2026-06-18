@@ -28,77 +28,78 @@ import 'package:rpc_dart_http2/src/transports/http2/rpc_http2_responder_transpor
 import 'package:test/test.dart';
 
 void main() {
-  test(
-    'END_STREAM selection is positional, not value-based '
-    '(repeated object reference does not flag an earlier message)',
-    () {
-      // A batch where messages[0] and messages.last are the SAME instance.
-      // Under the old `msgData == messages.last` predicate this flagged index 0
-      // as end-of-stream too. The positional predicate must flag only index 2.
-      final shared = Uint8List.fromList([1, 2, 3]);
-      final messages = <Uint8List>[
-        shared,
-        Uint8List.fromList([4, 5, 6]),
-        shared,
-      ];
-      const endStream = true;
+  test('END_STREAM selection is positional, not value-based '
+      '(repeated object reference does not flag an earlier message)', () {
+    // A batch where messages[0] and messages.last are the SAME instance.
+    // Under the old `msgData == messages.last` predicate this flagged index 0
+    // as end-of-stream too. The positional predicate must flag only index 2.
+    final shared = Uint8List.fromList([1, 2, 3]);
+    final messages = <Uint8List>[
+      shared,
+      Uint8List.fromList([4, 5, 6]),
+      shared,
+    ];
+    const endStream = true;
 
-      final flags = [
-        for (var i = 0; i < messages.length; i++)
-          endStream && i == messages.length - 1,
-      ];
+    final flags = [
+      for (var i = 0; i < messages.length; i++)
+        endStream && i == messages.length - 1,
+    ];
 
-      expect(flags, equals([false, false, true]),
-          reason: 'Only the genuinely last element is end-of-stream');
+    expect(
+      flags,
+      equals([false, false, true]),
+      reason: 'Only the genuinely last element is end-of-stream',
+    );
 
-      // Guard: demonstrate the OLD predicate was wrong for this input.
-      final buggy = [
-        for (final m in messages) endStream && m == messages.last,
-      ];
-      expect(buggy, equals([true, false, true]),
-          reason:
-              'Sanity: the old value-based predicate mis-flagged index 0');
-    },
-  );
+    // Guard: demonstrate the OLD predicate was wrong for this input.
+    final buggy = [for (final m in messages) endStream && m == messages.last];
+    expect(
+      buggy,
+      equals([true, false, true]),
+      reason: 'Sanity: the old value-based predicate mis-flagged index 0',
+    );
+  });
 
-  test(
-    'responder transport marks only the last message of a multi-message '
-    'DATA frame as end-of-stream',
-    () async {
-      final connection = _FakeServerConnection();
-      final transport = RpcHttp2ResponderTransport(connection: connection);
+  test('responder transport marks only the last message of a multi-message '
+      'DATA frame as end-of-stream', () async {
+    final connection = _FakeServerConnection();
+    final transport = RpcHttp2ResponderTransport(connection: connection);
 
-      // Two distinct gRPC frames in one chunk, endStream on the frame.
-      final f0 = RpcMessageFrame.encode(
-          Uint8List.fromList([10, 11]), compressed: false);
-      final f1 = RpcMessageFrame.encode(
-          Uint8List.fromList([20, 21]), compressed: false);
-      final chunk = Uint8List(f0.length + f1.length)
-        ..setRange(0, f0.length, f0)
-        ..setRange(f0.length, f0.length + f1.length, f1);
+    // Two distinct gRPC frames in one chunk, endStream on the frame.
+    final f0 = RpcMessageFrame.encode(
+      Uint8List.fromList([10, 11]),
+      compressed: false,
+    );
+    final f1 = RpcMessageFrame.encode(
+      Uint8List.fromList([20, 21]),
+      compressed: false,
+    );
+    final chunk = Uint8List(f0.length + f1.length)
+      ..setRange(0, f0.length, f0)
+      ..setRange(f0.length, f0.length + f1.length, f1);
 
-      final received = <RpcTransportMessage>[];
-      final done = Completer<void>();
-      final sub = transport.incomingMessages.listen((m) {
-        if (m.payload != null) {
-          received.add(m);
-          if (received.length == 2 && !done.isCompleted) done.complete();
-        }
-      });
+    final received = <RpcTransportMessage>[];
+    final done = Completer<void>();
+    final sub = transport.incomingMessages.listen((m) {
+      if (m.payload != null) {
+        received.add(m);
+        if (received.length == 2 && !done.isCompleted) done.complete();
+      }
+    });
 
-      final stream = _FakeServerStream(7);
-      connection.emitStream(stream);
-      stream.emitData(http2.DataStreamMessage(chunk, endStream: true));
+    final stream = _FakeServerStream(7);
+    connection.emitStream(stream);
+    stream.emitData(http2.DataStreamMessage(chunk, endStream: true));
 
-      await done.future.timeout(const Duration(seconds: 2));
-      await sub.cancel();
-      await transport.close();
+    await done.future.timeout(const Duration(seconds: 2));
+    await sub.cancel();
+    await transport.close();
 
-      expect(received.length, equals(2));
-      expect(received[0].isEndOfStream, isFalse);
-      expect(received[1].isEndOfStream, isTrue);
-    },
-  );
+    expect(received.length, equals(2));
+    expect(received[0].isEndOfStream, isFalse);
+    expect(received[1].isEndOfStream, isTrue);
+  });
 }
 
 /// Minimal fake [http2.ServerTransportConnection] that lets the test push

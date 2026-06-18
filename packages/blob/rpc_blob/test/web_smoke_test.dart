@@ -14,9 +14,7 @@ void main() {
       storage: InMemoryBlobRepository(),
     );
 
-    final data = Uint8List.fromList(
-      List<int>.generate(4096, (i) => i % 256),
-    );
+    final data = Uint8List.fromList(List<int>.generate(4096, (i) => i % 256));
     await env.client.putBytes(
       collection: 'c',
       id: 'b1',

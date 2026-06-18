@@ -131,12 +131,14 @@ class RpcHttpResponderTransport implements IRpcTransport {
       }
 
       if (!_incoming.isClosed) {
-        _incoming.add(RpcTransportMessage(
-          streamId: streamId,
-          metadata: RpcMetadata(requestHeaders),
-          isEndOfStream: false,
-          methodPath: methodPath,
-        ));
+        _incoming.add(
+          RpcTransportMessage(
+            streamId: streamId,
+            metadata: RpcMetadata(requestHeaders),
+            isEndOfStream: false,
+            methodPath: methodPath,
+          ),
+        );
       }
 
       // Read request body.
@@ -167,12 +169,14 @@ class RpcHttpResponderTransport implements IRpcTransport {
       }
 
       if (!_incoming.isClosed) {
-        _incoming.add(RpcTransportMessage(
-          streamId: streamId,
-          payload: body.isNotEmpty ? body : null,
-          isEndOfStream: true,
-          methodPath: methodPath,
-        ));
+        _incoming.add(
+          RpcTransportMessage(
+            streamId: streamId,
+            payload: body.isNotEmpty ? body : null,
+            isEndOfStream: true,
+            methodPath: methodPath,
+          ),
+        );
       }
     } catch (e, st) {
       _pending.remove(streamId);
@@ -220,7 +224,9 @@ class RpcHttpResponderTransport implements IRpcTransport {
     if (_isClosed) return;
     final pending = _pending[streamId];
     if (pending == null) {
-      _logger?.warning('sendMetadata: no pending response for [streamId: $streamId]');
+      _logger?.warning(
+        'sendMetadata: no pending response for [streamId: $streamId]',
+      );
       return;
     }
     // Enforce metadata invariants (printable-ASCII header values, etc.) on the
@@ -241,7 +247,9 @@ class RpcHttpResponderTransport implements IRpcTransport {
     if (_isClosed) return;
     final pending = _pending[streamId];
     if (pending == null) {
-      _logger?.warning('sendMessage: no pending response for [streamId: $streamId]');
+      _logger?.warning(
+        'sendMessage: no pending response for [streamId: $streamId]',
+      );
       return;
     }
     pending.bodyBuffer.addAll(data);
@@ -262,9 +270,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
     _logger?.internal('Flushing HTTP response [streamId: $streamId]');
 
     // Use Map<String, Object> to support multi-value headers (List<String>).
-    final headers = <String, Object>{
-      'content-type': 'application/grpc+proto',
-    };
+    final headers = <String, Object>{'content-type': 'application/grpc+proto'};
 
     if (corsPolicy != null) {
       final requestOrigin = pending.shelfRequest.headers['origin'];
@@ -348,6 +354,8 @@ class RpcHttpResponderTransport implements IRpcTransport {
     Object object, {
     bool endStream = false,
   }) async {
-    throw UnsupportedError('HTTP/1.1 transport does not support direct object transfer');
+    throw UnsupportedError(
+      'HTTP/1.1 transport does not support direct object transfer',
+    );
   }
 }

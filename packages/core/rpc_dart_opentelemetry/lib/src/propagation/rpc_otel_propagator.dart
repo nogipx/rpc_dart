@@ -29,7 +29,11 @@ abstract final class RpcOtelPropagator {
   /// Returns a new [RpcContext] with traceparent (and tracestate if present) headers added.
   static RpcContext inject(RpcContext rpcContext, {Context? context}) {
     final carrier = <String, String>{};
-    _propagator.inject(context ?? Context.current, carrier, _RpcContextSetter());
+    _propagator.inject(
+      context ?? Context.current,
+      carrier,
+      _RpcContextSetter(),
+    );
     if (carrier.isEmpty) return rpcContext;
     return rpcContext.withAdditionalHeaders(carrier);
   }

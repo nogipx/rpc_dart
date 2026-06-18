@@ -42,33 +42,39 @@ void main() {
       await mcp.stop();
     });
 
-    test('authorize must not reflect attacker redirect_uri unvalidated',
-        () async {
-      const attacker = 'https://evil.example.com/steal';
-      final client = HttpClient();
-      final req = await client.getUrl(Uri.parse(
-          'http://127.0.0.1:$port/authorize?redirect_uri=${Uri.encodeQueryComponent(attacker)}&state=xyz'));
-      req.followRedirects = false;
-      final resp = await req.close();
-      await resp.drain<void>();
-      client.close();
+    test(
+      'authorize must not reflect attacker redirect_uri unvalidated',
+      () async {
+        const attacker = 'https://evil.example.com/steal';
+        final client = HttpClient();
+        final req = await client.getUrl(
+          Uri.parse(
+            'http://127.0.0.1:$port/authorize?redirect_uri=${Uri.encodeQueryComponent(attacker)}&state=xyz',
+          ),
+        );
+        req.followRedirects = false;
+        final resp = await req.close();
+        await resp.drain<void>();
+        client.close();
 
-      final location = resp.headers.value('location');
+        final location = resp.headers.value('location');
 
-      expect(
-        location == null || !location.startsWith(attacker),
-        isTrue,
-        reason:
-            'Open redirect: authorize reflected attacker redirect_uri into '
-            'Location header unvalidated. Status=${resp.statusCode} '
-            'Location=$location',
-      );
-    });
+        expect(
+          location == null || !location.startsWith(attacker),
+          isTrue,
+          reason:
+              'Open redirect: authorize reflected attacker redirect_uri into '
+              'Location header unvalidated. Status=${resp.statusCode} '
+              'Location=$location',
+        );
+      },
+    );
 
     test('token endpoint must not hand a static token to any caller', () async {
       final client = HttpClient();
-      final req =
-          await client.postUrl(Uri.parse('http://127.0.0.1:$port/token'));
+      final req = await client.postUrl(
+        Uri.parse('http://127.0.0.1:$port/token'),
+      );
       req.headers.contentType = ContentType.json;
       req.write(jsonEncode({'grant_type': 'authorization_code', 'code': 'x'}));
       final resp = await req.close();

@@ -12,10 +12,8 @@ class LogRedactor {
   final String replacement;
 
   /// Creates a redactor that masks the given [fields] (case-insensitive).
-  LogRedactor({
-    required List<String> fields,
-    this.replacement = '[REDACTED]',
-  }) : _fields = fields.map((f) => f.toLowerCase()).toSet();
+  LogRedactor({required List<String> fields, this.replacement = '[REDACTED]'})
+    : _fields = fields.map((f) => f.toLowerCase()).toSet();
 
   /// Returns true if there are fields to redact.
   bool get isActive => _fields.isNotEmpty;
@@ -73,9 +71,6 @@ class LogRedactor {
     if (_fields.isEmpty) return null;
     final escaped = _fields.map(RegExp.escape).join('|');
     // Matches: field=value or field: value (up to whitespace, comma, or end)
-    return RegExp(
-      '($escaped[=:]\\s?)[^\\s,;]+',
-      caseSensitive: false,
-    );
+    return RegExp('($escaped[=:]\\s?)[^\\s,;]+', caseSensitive: false);
   }
 }

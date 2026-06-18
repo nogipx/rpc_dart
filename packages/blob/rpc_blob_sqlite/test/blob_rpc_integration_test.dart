@@ -121,22 +121,20 @@ void main() {
         final first = Uint8List.fromList([1, 2, 3]);
         final second = Uint8List.fromList([4, 5, 6, 7]);
 
-        final resp = await client.bulkPutBytes(
-          [
-            BulkPutBlobItem(
-              collection: 'rpc',
-              id: 'put-a',
-              bytes: Stream.value(first),
-              length: first.length,
-            ),
-            BulkPutBlobItem(
-              collection: 'rpc',
-              id: 'put-b',
-              bytes: Stream.value(second),
-              length: second.length,
-            ),
-          ],
-        );
+        final resp = await client.bulkPutBytes([
+          BulkPutBlobItem(
+            collection: 'rpc',
+            id: 'put-a',
+            bytes: Stream.value(first),
+            length: first.length,
+          ),
+          BulkPutBlobItem(
+            collection: 'rpc',
+            id: 'put-b',
+            bytes: Stream.value(second),
+            length: second.length,
+          ),
+        ]);
         expect(resp.items.map((e) => e.id), containsAll(['put-a', 'put-b']));
 
         final aFrames = await client.get('rpc', 'put-a').toList();
@@ -154,16 +152,14 @@ void main() {
         );
         final bytes = Uint8List.fromList([10, 11, 12, 13, 14]);
 
-        final resp = await clientWithChecksums.bulkPutBytes(
-          [
-            BulkPutBlobItem(
-              collection: 'rpc',
-              id: 'chk',
-              bytes: Stream.value(bytes),
-              length: bytes.length,
-            ),
-          ],
-        );
+        final resp = await clientWithChecksums.bulkPutBytes([
+          BulkPutBlobItem(
+            collection: 'rpc',
+            id: 'chk',
+            bytes: Stream.value(bytes),
+            length: bytes.length,
+          ),
+        ]);
         expect(resp.items.single.id, 'chk');
 
         // Download to confirm content intact.
@@ -198,7 +194,10 @@ void main() {
           blobId: 'bad',
           offset: 2,
           bytes: badBytes,
-          chunkChecksum: sha256.convert([3, 4]).toString(), // expected good bytes
+          chunkChecksum: sha256.convert([
+            3,
+            4,
+          ]).toString(), // expected good bytes
           checksumAlgorithm: ChecksumAlgorithm.sha256,
           last: true,
         );
@@ -207,11 +206,13 @@ void main() {
 
         expect(
           () => clientWithChecksums.bulkPutBlob(stream),
-          throwsA(isA<StateError>().having(
-            (e) => e.message,
-            'message',
-            contains('Chunk checksum mismatch'),
-          )),
+          throwsA(
+            isA<StateError>().having(
+              (e) => e.message,
+              'message',
+              contains('Chunk checksum mismatch'),
+            ),
+          ),
         );
 
         await clientWithChecksums.close();
@@ -247,7 +248,9 @@ void main() {
         );
 
         expect(
-          () => clientWithChecksums.putBlob(Stream.fromIterable([badFirst, next])),
+          () => clientWithChecksums.putBlob(
+            Stream.fromIterable([badFirst, next]),
+          ),
           throwsA(isA<StateError>()),
         );
 

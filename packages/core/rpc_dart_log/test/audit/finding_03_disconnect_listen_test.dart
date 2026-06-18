@@ -21,8 +21,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test(
-      'finding 3: attaching a second incomingMessages listener after start() '
+  test('finding 3: attaching a second incomingMessages listener after start() '
       'must not throw or steal', () async {
     final (clientT, serverT) = RpcInMemoryTransport.pair();
 
@@ -52,8 +51,11 @@ void main() {
     await clientT.close();
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
-    expect(sawDone, isTrue,
-        reason: 'onDone never fired; disconnect would not be detected');
+    expect(
+      sawDone,
+      isTrue,
+      reason: 'onDone never fired; disconnect would not be detected',
+    );
 
     await responder.close();
     await serverT.close();

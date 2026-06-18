@@ -37,26 +37,28 @@ void main() {
       await sub.cancel();
     });
 
-    test('two clients subscribed to different topics — no cross-contamination',
-        () async {
-      final ordersEvents = <NotifyEvent>[];
-      final chatEvents = <NotifyEvent>[];
+    test(
+      'two clients subscribed to different topics — no cross-contamination',
+      () async {
+        final ordersEvents = <NotifyEvent>[];
+        final chatEvents = <NotifyEvent>[];
 
-      env.subscriber.subscribe('orders').listen(ordersEvents.add);
-      env.subscriber.subscribe('chat').listen(chatEvents.add);
+        env.subscriber.subscribe('orders').listen(ordersEvents.add);
+        env.subscriber.subscribe('chat').listen(chatEvents.add);
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      env.server.publish(topic: 'orders', payload: {'x': 1});
-      env.server.publish(topic: 'chat', payload: {'msg': 'hi'});
+        env.server.publish(topic: 'orders', payload: {'x': 1});
+        env.server.publish(topic: 'chat', payload: {'msg': 'hi'});
 
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
 
-      expect(ordersEvents.length, 1);
-      expect(chatEvents.length, 1);
-      expect(ordersEvents.first.topic, 'orders');
-      expect(chatEvents.first.topic, 'chat');
-    });
+        expect(ordersEvents.length, 1);
+        expect(chatEvents.length, 1);
+        expect(ordersEvents.first.topic, 'orders');
+        expect(chatEvents.first.topic, 'chat');
+      },
+    );
 
     test('unsubscribe stops delivery', () async {
       final received = <NotifyEvent>[];

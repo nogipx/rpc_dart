@@ -89,8 +89,9 @@ class EchoModule extends RpcServerModule {
       c.registerSingleton<EchoService>(EchoService());
 
   @override
-  List<RpcResponderContract> buildContracts(RpcContainer c) =>
-      [EchoResponderContract(c.get<EchoService>())];
+  List<RpcResponderContract> buildContracts(RpcContainer c) => [
+    EchoResponderContract(c.get<EchoService>()),
+  ];
 
   @override
   Future<void> onStart(RpcContainer c) async => startCalled = true;
@@ -125,7 +126,10 @@ void main() {
     });
 
     test('throws when not registered', () {
-      expect(() => RpcContainer().get<EchoService>(), throwsA(isA<StateError>()));
+      expect(
+        () => RpcContainer().get<EchoService>(),
+        throwsA(isA<StateError>()),
+      );
     });
 
     test('tryGet returns null when not registered', () {
@@ -161,7 +165,10 @@ void main() {
     });
 
     test('require throws on missing', () {
-      expect(() => RpcEnvConfig.from({}).require('X'), throwsA(isA<StateError>()));
+      expect(
+        () => RpcEnvConfig.from({}).require('X'),
+        throwsA(isA<StateError>()),
+      );
     });
 
     test('getInt parses integer', () {
@@ -206,9 +213,11 @@ void main() {
 
     test('configureWithEnv is called during RpcTestApp.start', () async {
       var envSeen = false;
-      final module = _EnvModule(onEnv: (env) {
-        envSeen = env['CUSTOM_KEY'] == 'hello';
-      });
+      final module = _EnvModule(
+        onEnv: (env) {
+          envSeen = env['CUSTOM_KEY'] == 'hello';
+        },
+      );
       final app = await RpcTestApp.start(
         modules: [module],
         env: {'CUSTOM_KEY': 'hello'},
@@ -271,7 +280,12 @@ void main() {
     test('dependency starts before dependant', () async {
       final log = <String>[];
       final dep = _LogModule('Dep', [], log);
-      final mod = _LogModule('Mod', [_LogModule], log, depType: dep.runtimeType);
+      final mod = _LogModule(
+        'Mod',
+        [_LogModule],
+        log,
+        depType: dep.runtimeType,
+      );
       // Register mod before dep — framework must reorder.
       final app = await RpcTestApp.start(modules: [mod, dep]);
       await app.dispose();
@@ -282,24 +296,18 @@ void main() {
     test('circular dependency throws', () {
       // Can't easily test via RpcTestApp (throws during start).
       // Test the sort directly via RpcApp internal logic through a real start.
-      expect(
-        () async {
-          final a = _CircularA();
-          final b = _CircularB();
-          await RpcTestApp.start(modules: [a, b]);
-        },
-        throwsA(isA<StateError>()),
-      );
+      expect(() async {
+        final a = _CircularA();
+        final b = _CircularB();
+        await RpcTestApp.start(modules: [a, b]);
+      }, throwsA(isA<StateError>()));
     });
 
     test('unknown dependency throws', () {
-      expect(
-        () async {
-          final m = _LogModule('X', [EchoService], null, depType: EchoService);
-          await RpcTestApp.start(modules: [m]);
-        },
-        throwsA(isA<StateError>()),
-      );
+      expect(() async {
+        final m = _LogModule('X', [EchoService], null, depType: EchoService);
+        await RpcTestApp.start(modules: [m]);
+      }, throwsA(isA<StateError>()));
     });
   });
 
@@ -329,7 +337,10 @@ void main() {
         modules: [EchoModule()],
         interceptors: [
           RpcRateLimiter(
-            global: RateLimit.slidingWindow(max: 5, window: Duration(seconds: 1)),
+            global: RateLimit.slidingWindow(
+              max: 5,
+              window: Duration(seconds: 1),
+            ),
           ),
         ],
       );
@@ -345,7 +356,10 @@ void main() {
         modules: [EchoModule()],
         interceptors: [
           RpcRateLimiter(
-            global: RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+            global: RateLimit.slidingWindow(
+              max: 2,
+              window: Duration(seconds: 10),
+            ),
           ),
         ],
       );
@@ -371,7 +385,10 @@ void main() {
         interceptors: [
           RpcRateLimiter(
             perMethod: {
-              'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+              'EchoService.ping': RateLimit.slidingWindow(
+                max: 1,
+                window: Duration(seconds: 10),
+              ),
             },
           ),
         ],
@@ -401,7 +418,10 @@ void main() {
         interceptors: [
           RpcRateLimiter(
             perService: {
-              'EchoService': RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+              'EchoService': RateLimit.slidingWindow(
+                max: 2,
+                window: Duration(seconds: 10),
+              ),
             },
           ),
         ],
@@ -430,11 +450,17 @@ void main() {
         interceptors: [
           RpcRateLimiter(
             perService: {
-              'EchoService': RateLimit.slidingWindow(max: 10, window: Duration(seconds: 10)),
+              'EchoService': RateLimit.slidingWindow(
+                max: 10,
+                window: Duration(seconds: 10),
+              ),
             },
             perMethod: {
               // Stricter limit on ping — should win over service limit
-              'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+              'EchoService.ping': RateLimit.slidingWindow(
+                max: 1,
+                window: Duration(seconds: 10),
+              ),
             },
           ),
         ],
@@ -463,10 +489,16 @@ void main() {
         modules: [EchoModule()],
         interceptors: [
           RpcRateLimiter(
-            global: RateLimit.slidingWindow(max: 10, window: Duration(seconds: 10)),
+            global: RateLimit.slidingWindow(
+              max: 10,
+              window: Duration(seconds: 10),
+            ),
             perService: {
               // Stricter limit on EchoService — should win over global
-              'EchoService': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+              'EchoService': RateLimit.slidingWindow(
+                max: 1,
+                window: Duration(seconds: 10),
+              ),
             },
           ),
         ],
@@ -600,7 +632,10 @@ void main() {
       test('different keys have independent counters', () async {
         final limiter = RpcRateLimiter(
           perMethod: {
-            'EchoService.ping': RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+            'EchoService.ping': RateLimit.slidingWindow(
+              max: 2,
+              window: Duration(seconds: 10),
+            ),
           },
           keyExtractor: (call) => call.context.getHeader('x-user-id'),
         );
@@ -629,12 +664,19 @@ void main() {
 
       test('null key falls through to global', () async {
         final limiter = RpcRateLimiter(
-          global: RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+          global: RateLimit.slidingWindow(
+            max: 2,
+            window: Duration(seconds: 10),
+          ),
           perMethod: {
             // Would be strict limit per key, but key will be null → skipped
-            'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
+            'EchoService.ping': RateLimit.slidingWindow(
+              max: 1,
+              window: Duration(seconds: 10),
+            ),
           },
-          keyExtractor: (call) => call.context.getHeader('x-user-id'), // no header → null
+          keyExtractor: (call) =>
+              call.context.getHeader('x-user-id'), // no header → null
         );
         final app = await RpcTestApp.start(
           modules: [EchoModule()],
@@ -654,75 +696,93 @@ void main() {
         limiter.dispose();
       });
 
-      test('perService per-key: shared budget across methods for same key', () async {
-        final limiter = RpcRateLimiter(
-          perService: {
-            'EchoService': RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
-          },
-          keyExtractor: (call) => call.context.getHeader('x-user-id'),
-        );
-        final app = await RpcTestApp.start(
-          modules: [EchoModule()],
-          interceptors: [limiter],
-        );
-        final client = EchoCallerContract(app.caller);
-        final ctx = RpcContext.withHeaders({'x-user-id': 'user_a'});
+      test(
+        'perService per-key: shared budget across methods for same key',
+        () async {
+          final limiter = RpcRateLimiter(
+            perService: {
+              'EchoService': RateLimit.slidingWindow(
+                max: 2,
+                window: Duration(seconds: 10),
+              ),
+            },
+            keyExtractor: (call) => call.context.getHeader('x-user-id'),
+          );
+          final app = await RpcTestApp.start(
+            modules: [EchoModule()],
+            interceptors: [limiter],
+          );
+          final client = EchoCallerContract(app.caller);
+          final ctx = RpcContext.withHeaders({'x-user-id': 'user_a'});
 
-        // Two calls across different methods consume user_a's service budget
-        await client.ping(const PingRequest('1'), context: ctx);
-        await client.echo(const PingRequest('2'), context: ctx);
-        // Third call (any method) must be rejected for user_a
-        await expectLater(
-          client.ping(const PingRequest('3'), context: ctx),
-          throwsA(_isRateLimited),
-        );
+          // Two calls across different methods consume user_a's service budget
+          await client.ping(const PingRequest('1'), context: ctx);
+          await client.echo(const PingRequest('2'), context: ctx);
+          // Third call (any method) must be rejected for user_a
+          await expectLater(
+            client.ping(const PingRequest('3'), context: ctx),
+            throwsA(_isRateLimited),
+          );
 
-        // user_b has their own budget — must work
-        final ctxB = RpcContext.withHeaders({'x-user-id': 'user_b'});
-        await client.ping(const PingRequest('b1'), context: ctxB);
-        await client.echo(const PingRequest('b2'), context: ctxB);
+          // user_b has their own budget — must work
+          final ctxB = RpcContext.withHeaders({'x-user-id': 'user_b'});
+          await client.ping(const PingRequest('b1'), context: ctxB);
+          await client.echo(const PingRequest('b2'), context: ctxB);
 
-        await app.dispose();
-        limiter.dispose();
-      });
+          await app.dispose();
+          limiter.dispose();
+        },
+      );
 
-      test('perMethod per-key takes priority over perService per-key', () async {
-        final limiter = RpcRateLimiter(
-          perService: {
-            'EchoService': RateLimit.slidingWindow(max: 10, window: Duration(seconds: 10)),
-          },
-          perMethod: {
-            'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
-          },
-          keyExtractor: (call) => call.context.getHeader('x-user-id'),
-        );
-        final app = await RpcTestApp.start(
-          modules: [EchoModule()],
-          interceptors: [limiter],
-        );
-        final client = EchoCallerContract(app.caller);
-        final ctx = RpcContext.withHeaders({'x-user-id': 'user_a'});
+      test(
+        'perMethod per-key takes priority over perService per-key',
+        () async {
+          final limiter = RpcRateLimiter(
+            perService: {
+              'EchoService': RateLimit.slidingWindow(
+                max: 10,
+                window: Duration(seconds: 10),
+              ),
+            },
+            perMethod: {
+              'EchoService.ping': RateLimit.slidingWindow(
+                max: 1,
+                window: Duration(seconds: 10),
+              ),
+            },
+            keyExtractor: (call) => call.context.getHeader('x-user-id'),
+          );
+          final app = await RpcTestApp.start(
+            modules: [EchoModule()],
+            interceptors: [limiter],
+          );
+          final client = EchoCallerContract(app.caller);
+          final ctx = RpcContext.withHeaders({'x-user-id': 'user_a'});
 
-        // ping is limited to 1 per user (perMethod wins)
-        await client.ping(const PingRequest('1'), context: ctx);
-        await expectLater(
-          client.ping(const PingRequest('2'), context: ctx),
-          throwsA(_isRateLimited),
-        );
-        // echo uses perService counter (max 10 per user) — must work
-        for (var i = 0; i < 5; i++) {
-          await client.echo(PingRequest('e$i'), context: ctx);
-        }
+          // ping is limited to 1 per user (perMethod wins)
+          await client.ping(const PingRequest('1'), context: ctx);
+          await expectLater(
+            client.ping(const PingRequest('2'), context: ctx),
+            throwsA(_isRateLimited),
+          );
+          // echo uses perService counter (max 10 per user) — must work
+          for (var i = 0; i < 5; i++) {
+            await client.echo(PingRequest('e$i'), context: ctx);
+          }
 
-        await app.dispose();
-        limiter.dispose();
-      });
+          await app.dispose();
+          limiter.dispose();
+        },
+      );
 
       test('global is always shared regardless of keyExtractor', () async {
         // No perMethod/perService — all calls fall through to global.
         // Global is a single shared counter even when keyExtractor is set.
         final limiter = RpcRateLimiter(
-          global: RateLimit.slidingWindow(max: 3, window: Duration(seconds: 10)),
+          global: RateLimit.slidingWindow(
+            max: 3,
+            window: Duration(seconds: 10),
+          ),
           keyExtractor: (call) => call.context.getHeader('x-user-id'),
         );
         final app = await RpcTestApp.start(
@@ -749,7 +809,10 @@ void main() {
 
       test('perKeyFallback applies per (key, method) for any method', () async {
         final limiter = RpcRateLimiter(
-          perKeyFallback: RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
+          perKeyFallback: RateLimit.slidingWindow(
+            max: 2,
+            window: Duration(seconds: 10),
+          ),
           keyExtractor: (call) => call.context.getHeader('x-user-id'),
         );
         final app = await RpcTestApp.start(
@@ -778,42 +841,58 @@ void main() {
         limiter.dispose();
       });
 
-      test('perKeyFallback is overridden by perMethod for matching methods', () async {
-        final limiter = RpcRateLimiter(
-          perKeyFallback: RateLimit.slidingWindow(max: 10, window: Duration(seconds: 10)),
-          perMethod: {
-            // Stricter limit for ping — overrides perKeyFallback
-            'EchoService.ping': RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
-          },
-          keyExtractor: (call) => call.context.getHeader('x-user-id'),
-        );
-        final app = await RpcTestApp.start(
-          modules: [EchoModule()],
-          interceptors: [limiter],
-        );
-        final client = EchoCallerContract(app.caller);
-        final ctx = RpcContext.withHeaders({'x-user-id': 'user_a'});
+      test(
+        'perKeyFallback is overridden by perMethod for matching methods',
+        () async {
+          final limiter = RpcRateLimiter(
+            perKeyFallback: RateLimit.slidingWindow(
+              max: 10,
+              window: Duration(seconds: 10),
+            ),
+            perMethod: {
+              // Stricter limit for ping — overrides perKeyFallback
+              'EchoService.ping': RateLimit.slidingWindow(
+                max: 1,
+                window: Duration(seconds: 10),
+              ),
+            },
+            keyExtractor: (call) => call.context.getHeader('x-user-id'),
+          );
+          final app = await RpcTestApp.start(
+            modules: [EchoModule()],
+            interceptors: [limiter],
+          );
+          final client = EchoCallerContract(app.caller);
+          final ctx = RpcContext.withHeaders({'x-user-id': 'user_a'});
 
-        // ping uses perMethod (max 1) — not perKeyFallback (max 10)
-        await client.ping(const PingRequest('1'), context: ctx);
-        await expectLater(
-          client.ping(const PingRequest('2'), context: ctx),
-          throwsA(_isRateLimited),
-        );
-        // echo falls through to perKeyFallback (max 10) — works fine
-        for (var i = 0; i < 5; i++) {
-          await client.echo(PingRequest('e$i'), context: ctx);
-        }
+          // ping uses perMethod (max 1) — not perKeyFallback (max 10)
+          await client.ping(const PingRequest('1'), context: ctx);
+          await expectLater(
+            client.ping(const PingRequest('2'), context: ctx),
+            throwsA(_isRateLimited),
+          );
+          // echo falls through to perKeyFallback (max 10) — works fine
+          for (var i = 0; i < 5; i++) {
+            await client.echo(PingRequest('e$i'), context: ctx);
+          }
 
-        await app.dispose();
-        limiter.dispose();
-      });
+          await app.dispose();
+          limiter.dispose();
+        },
+      );
 
       test('perKeyFallback null key falls through to global', () async {
         final limiter = RpcRateLimiter(
-          global: RateLimit.slidingWindow(max: 2, window: Duration(seconds: 10)),
-          perKeyFallback: RateLimit.slidingWindow(max: 1, window: Duration(seconds: 10)),
-          keyExtractor: (call) => call.context.getHeader('x-user-id'), // no header → null
+          global: RateLimit.slidingWindow(
+            max: 2,
+            window: Duration(seconds: 10),
+          ),
+          perKeyFallback: RateLimit.slidingWindow(
+            max: 1,
+            window: Duration(seconds: 10),
+          ),
+          keyExtractor: (call) =>
+              call.context.getHeader('x-user-id'), // no header → null
         );
         final app = await RpcTestApp.start(
           modules: [EchoModule()],
@@ -990,7 +1069,10 @@ void main() {
         interceptors: [faults],
       );
       final client = EchoCallerContract(app.caller);
-      await expectLater(client.ping(const PingRequest('first')), throwsException);
+      await expectLater(
+        client.ping(const PingRequest('first')),
+        throwsException,
+      );
       final res = await client.ping(const PingRequest('second'));
       expect(res.reply, 'pong: second');
       await app.dispose();
@@ -1111,15 +1193,17 @@ void main() {
 
   // -------------------------------------------------------------------------
   group('RpcApp module type validation', () {
-    test('RpcApp.server accepts plain RpcModule alongside RpcServerModule',
-        () async {
-      final app = RpcApp.server(
-        modules: [_InfraModule(), EchoModule()],
-        server: (onEndpoint) => _NullServer(onEndpoint),
-      );
-      await app.start();
-      await app.stop();
-    });
+    test(
+      'RpcApp.server accepts plain RpcModule alongside RpcServerModule',
+      () async {
+        final app = RpcApp.server(
+          modules: [_InfraModule(), EchoModule()],
+          server: (onEndpoint) => _NullServer(onEndpoint),
+        );
+        await app.start();
+        await app.stop();
+      },
+    );
 
     test('RpcApp.server rejects RpcServerModule in wrong position', () async {
       // topo sort still works with plain modules
@@ -1158,7 +1242,7 @@ class _LogModule extends RpcServerModule {
   final List<String>? _log;
 
   _LogModule(this.name, this._deps, this._log, {Type? depType})
-      : _depType = depType;
+    : _depType = depType;
 
   final Type? _depType;
 
@@ -1196,8 +1280,8 @@ class _ThrowingModule extends RpcServerModule {
 
   @override
   List<RpcResponderContract> buildContracts(RpcContainer c) => [
-        _ThrowingContract(),
-      ];
+    _ThrowingContract(),
+  ];
 }
 
 class _ThrowingContract extends RpcResponderContract {

@@ -192,8 +192,10 @@ void main() {
 
         await _waitForClosed(crashResult.transport);
         final health = await crashResult.transport.health();
-        expect(health.level,
-            anyOf(RpcHealthLevel.closed, RpcHealthLevel.unhealthy));
+        expect(
+          health.level,
+          anyOf(RpcHealthLevel.closed, RpcHealthLevel.unhealthy),
+        );
         print('✅ Crashed worker отмечен как закрытый/ошибочный');
       } finally {
         // Cleanup

@@ -108,7 +108,11 @@ class ServerReflectionContract extends RpcResponderContract {
         pos = lenResult.$2;
         final len = lenResult.$1;
         if (len < 0 || pos + len > bytes.length) {
-          return _buildErrorResponse(bytes, 2, 'Malformed request: invalid field length');
+          return _buildErrorResponse(
+            bytes,
+            2,
+            'Malformed request: invalid field length',
+          );
         }
         final data = bytes.sublist(pos, pos + len);
         pos += len;
@@ -129,13 +133,19 @@ class ServerReflectionContract extends RpcResponderContract {
       } else if (wireType == 1) {
         if (pos + 8 > bytes.length) {
           return _buildErrorResponse(
-              bytes, 2, 'Malformed request: truncated 64-bit field');
+            bytes,
+            2,
+            'Malformed request: truncated 64-bit field',
+          );
         }
         pos += 8;
       } else if (wireType == 5) {
         if (pos + 4 > bytes.length) {
           return _buildErrorResponse(
-              bytes, 2, 'Malformed request: truncated 32-bit field');
+            bytes,
+            2,
+            'Malformed request: truncated 32-bit field',
+          );
         }
         pos += 4;
       } else {
@@ -143,7 +153,10 @@ class ServerReflectionContract extends RpcResponderContract {
         // supported. Reject the request instead of dispatching whatever was
         // parsed before the malformed byte.
         return _buildErrorResponse(
-            bytes, 2, 'Malformed request: unsupported wire type $wireType');
+          bytes,
+          2,
+          'Malformed request: unsupported wire type $wireType',
+        );
       }
     }
 
@@ -179,7 +192,11 @@ class ServerReflectionContract extends RpcResponderContract {
   ) {
     final fileBytesList = _registry.fileByFilename(filename);
     if (fileBytesList == null) {
-      return _buildErrorResponse(originalRequest, 5, 'File not found: $filename');
+      return _buildErrorResponse(
+        originalRequest,
+        5,
+        'File not found: $filename',
+      );
     }
     return _buildFileDescriptorResponse(originalRequest, fileBytesList);
   }
@@ -190,7 +207,11 @@ class ServerReflectionContract extends RpcResponderContract {
   ) {
     final fileBytesList = _registry.fileContainingSymbol(symbol);
     if (fileBytesList == null) {
-      return _buildErrorResponse(originalRequest, 5, 'Symbol not found: $symbol');
+      return _buildErrorResponse(
+        originalRequest,
+        5,
+        'Symbol not found: $symbol',
+      );
     }
     return _buildFileDescriptorResponse(originalRequest, fileBytesList);
   }

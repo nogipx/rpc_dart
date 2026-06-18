@@ -59,8 +59,7 @@ final serializableResponseCodec = RpcCodec<SerializableResponse>(
 /// Zero-copy responder - принудительно использует zero-copy режим
 final class ZeroCopyResponder extends RpcResponderContract {
   ZeroCopyResponder()
-      : super('ZeroCopyService',
-            dataTransferMode: RpcDataTransferMode.zeroCopy);
+    : super('ZeroCopyService', dataTransferMode: RpcDataTransferMode.zeroCopy);
   @override
   void setup() {
     // В zero-copy режиме кодеки не нужны и не должны передаваться
@@ -78,7 +77,7 @@ final class ZeroCopyResponder extends RpcResponderContract {
 /// Codec responder - принудительно использует сериализацию
 final class CodecResponder extends RpcResponderContract {
   CodecResponder()
-      : super('CodecService', dataTransferMode: RpcDataTransferMode.codec);
+    : super('CodecService', dataTransferMode: RpcDataTransferMode.codec);
   @override
   void setup() {
     // В codec режиме кодеки обязательны
@@ -98,7 +97,7 @@ final class CodecResponder extends RpcResponderContract {
 /// Auto responder - автоматический выбор режима
 final class AutoResponder extends RpcResponderContract {
   AutoResponder()
-      : super('AutoService', dataTransferMode: RpcDataTransferMode.auto);
+    : super('AutoService', dataTransferMode: RpcDataTransferMode.auto);
   @override
   void setup() {
     // Режим auto позволяет смешивать zero-copy и codec методы
@@ -131,11 +130,11 @@ final class AutoResponder extends RpcResponderContract {
 /// Zero-copy caller
 final class ZeroCopyCaller extends RpcCallerContract {
   ZeroCopyCaller(RpcCallerEndpoint endpoint)
-      : super(
-          'ZeroCopyService',
-          endpoint,
-          dataTransferMode: RpcDataTransferMode.zeroCopy,
-        );
+    : super(
+        'ZeroCopyService',
+        endpoint,
+        dataTransferMode: RpcDataTransferMode.zeroCopy,
+      );
   Future<ZeroCopyResponse> echo(ZeroCopyRequest request) {
     // В zero-copy режиме кодеки передавать нельзя
     return callUnary<ZeroCopyRequest, ZeroCopyResponse>(
@@ -148,11 +147,11 @@ final class ZeroCopyCaller extends RpcCallerContract {
 /// Codec caller
 final class CodecCaller extends RpcCallerContract {
   CodecCaller(RpcCallerEndpoint endpoint)
-      : super(
-          'CodecService',
-          endpoint,
-          dataTransferMode: RpcDataTransferMode.codec,
-        );
+    : super(
+        'CodecService',
+        endpoint,
+        dataTransferMode: RpcDataTransferMode.codec,
+      );
   Future<SerializableResponse> echo(SerializableRequest request) {
     // В codec режиме кодеки обязательны
     return callUnary<SerializableRequest, SerializableResponse>(
@@ -167,11 +166,11 @@ final class CodecCaller extends RpcCallerContract {
 /// Auto caller
 final class AutoCaller extends RpcCallerContract {
   AutoCaller(RpcCallerEndpoint endpoint)
-      : super(
-          'AutoService',
-          endpoint,
-          dataTransferMode: RpcDataTransferMode.auto,
-        );
+    : super(
+        'AutoService',
+        endpoint,
+        dataTransferMode: RpcDataTransferMode.auto,
+      );
   Future<ZeroCopyResponse> zeroCopyEcho(ZeroCopyRequest request) {
     // Auto режим - кодеки не указаны = zero-copy
     return callUnary<ZeroCopyRequest, ZeroCopyResponse>(
@@ -324,11 +323,11 @@ Future<void> demoFlexibleCodecs(
 
 final class FlexibleCaller extends RpcCallerContract {
   FlexibleCaller(RpcCallerEndpoint endpoint)
-      : super(
-          'FlexibleService',
-          endpoint,
-          dataTransferMode: RpcDataTransferMode.zeroCopy,
-        );
+    : super(
+        'FlexibleService',
+        endpoint,
+        dataTransferMode: RpcDataTransferMode.zeroCopy,
+      );
   Future<ZeroCopyResponse> flexibleEcho(ZeroCopyRequest request) {
     // Демонстрируем что в zero-copy режиме можно передать кодеки
     // Они будут проигнорированы системой
@@ -344,8 +343,7 @@ final class FlexibleCaller extends RpcCallerContract {
 
 final class FlexibleResponder extends RpcResponderContract {
   FlexibleResponder()
-      : super('FlexibleService',
-            dataTransferMode: RpcDataTransferMode.zeroCopy);
+    : super('FlexibleService', dataTransferMode: RpcDataTransferMode.zeroCopy);
   @override
   void setup() {
     // Регистрируем метод который может работать с любыми кодеками

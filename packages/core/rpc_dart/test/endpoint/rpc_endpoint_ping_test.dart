@@ -46,8 +46,9 @@ void main() {
         equals(RpcStatus.ok.toString()),
       );
       expect(
-        result.responseHeaders
-            .containsKey(RpcEndpointPingProtocol.responseTimestampHeader),
+        result.responseHeaders.containsKey(
+          RpcEndpointPingProtocol.responseTimestampHeader,
+        ),
         isTrue,
       );
       expect(result.responderTransportType, contains('RpcChannelTransport'));

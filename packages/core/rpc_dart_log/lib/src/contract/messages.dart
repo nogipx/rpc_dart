@@ -24,11 +24,11 @@ class LogCollectorHandshake implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'deviceName': deviceName,
-        'app': app,
-        if (os != null) 'os': os,
-        if (appVersion != null) 'appVersion': appVersion,
-      };
+    'deviceName': deviceName,
+    'app': app,
+    if (os != null) 'os': os,
+    if (appVersion != null) 'appVersion': appVersion,
+  };
 
   static LogCollectorHandshake fromJson(Map<String, dynamic> json) =>
       LogCollectorHandshake(
@@ -89,11 +89,15 @@ class LogCollectorAck implements IRpcSerializable {
 // Codecs
 // ---------------------------------------------------------------------------
 
-final logCollectorHandshakeCodec =
-    RpcCodec<LogCollectorHandshake>.withDecoder(LogCollectorHandshake.fromJson);
-final logCollectorWelcomeCodec =
-    RpcCodec<LogCollectorWelcome>.withDecoder(LogCollectorWelcome.fromJson);
-final logCollectorRecordCodec =
-    RpcCodec<LogCollectorRecord>.withDecoder(LogCollectorRecord.fromJson);
-final logCollectorAckCodec =
-    RpcCodec<LogCollectorAck>.withDecoder(LogCollectorAck.fromJson);
+final logCollectorHandshakeCodec = RpcCodec<LogCollectorHandshake>.withDecoder(
+  LogCollectorHandshake.fromJson,
+);
+final logCollectorWelcomeCodec = RpcCodec<LogCollectorWelcome>.withDecoder(
+  LogCollectorWelcome.fromJson,
+);
+final logCollectorRecordCodec = RpcCodec<LogCollectorRecord>.withDecoder(
+  LogCollectorRecord.fromJson,
+);
+final logCollectorAckCodec = RpcCodec<LogCollectorAck>.withDecoder(
+  LogCollectorAck.fromJson,
+);

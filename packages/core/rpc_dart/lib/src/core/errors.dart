@@ -60,11 +60,8 @@ class RpcStatusException extends RpcException {
   /// [statusCode] gRPC status code.
   /// [message] Human-readable error message.
   /// [details] Optional structured details (field violations, retry info, etc.)
-  RpcStatusException(
-    this.statusCode,
-    String message, {
-    this.details = const [],
-  }) : super(message);
+  RpcStatusException(this.statusCode, String message, {this.details = const []})
+    : super(message);
 
   /// Encodes [details] into a `google.rpc.Status` binary for the
   /// `grpc-status-details-bin` trailer. Returns null if no details.

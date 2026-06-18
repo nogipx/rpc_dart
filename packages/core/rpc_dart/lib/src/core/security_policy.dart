@@ -76,20 +76,20 @@ final class RpcSecurityPolicy {
 
   /// Serializes this policy to a plain map.
   Map<String, Object> toMap() => {
-        'maxMessageLengthBytes': maxMessageLengthBytes,
-        'maxBufferedBytes': ?maxBufferedBytes,
-        'maxMessagesPerChunk': maxMessagesPerChunk,
-        'maxActiveStreams': maxActiveStreams,
-        'maxWebSocketMessageBytes': maxWebSocketMessageBytes,
-        'maxChunkedMessageBytes': maxChunkedMessageBytes,
-        'maxChunkCount': maxChunkCount,
-        'maxMetadataBytes': maxMetadataBytes,
-        'maxHeaders': maxHeaders,
-        'maxHeaderNameBytes': maxHeaderNameBytes,
-        'maxHeaderValueBytes': maxHeaderValueBytes,
-        'maxMethodPathLength': maxMethodPathLength,
-        'closeOnProtocolError': closeOnProtocolError,
-      };
+    'maxMessageLengthBytes': maxMessageLengthBytes,
+    'maxBufferedBytes': ?maxBufferedBytes,
+    'maxMessagesPerChunk': maxMessagesPerChunk,
+    'maxActiveStreams': maxActiveStreams,
+    'maxWebSocketMessageBytes': maxWebSocketMessageBytes,
+    'maxChunkedMessageBytes': maxChunkedMessageBytes,
+    'maxChunkCount': maxChunkCount,
+    'maxMetadataBytes': maxMetadataBytes,
+    'maxHeaders': maxHeaders,
+    'maxHeaderNameBytes': maxHeaderNameBytes,
+    'maxHeaderValueBytes': maxHeaderValueBytes,
+    'maxMethodPathLength': maxMethodPathLength,
+    'closeOnProtocolError': closeOnProtocolError,
+  };
 
   /// Creates an [RpcSecurityPolicy] from a plain map, using defaults for missing keys.
   factory RpcSecurityPolicy.fromMap(Map<String, Object?> map) {
@@ -106,14 +106,19 @@ final class RpcSecurityPolicy {
     final maxBuffered = map['maxBufferedBytes'];
     return RpcSecurityPolicy(
       maxMessageLengthBytes: readInt('maxMessageLengthBytes', 16 * 1024 * 1024),
-      maxBufferedBytes:
-          maxBuffered is int && maxBuffered > 0 ? maxBuffered : null,
+      maxBufferedBytes: maxBuffered is int && maxBuffered > 0
+          ? maxBuffered
+          : null,
       maxMessagesPerChunk: readInt('maxMessagesPerChunk', 1024),
       maxActiveStreams: readInt('maxActiveStreams', 4096),
-      maxWebSocketMessageBytes:
-          readInt('maxWebSocketMessageBytes', 64 * 1024 * 1024),
-      maxChunkedMessageBytes:
-          readInt('maxChunkedMessageBytes', 64 * 1024 * 1024),
+      maxWebSocketMessageBytes: readInt(
+        'maxWebSocketMessageBytes',
+        64 * 1024 * 1024,
+      ),
+      maxChunkedMessageBytes: readInt(
+        'maxChunkedMessageBytes',
+        64 * 1024 * 1024,
+      ),
       maxChunkCount: readInt('maxChunkCount', 1024),
       maxMetadataBytes: readInt('maxMetadataBytes', 64 * 1024),
       maxHeaders: readInt('maxHeaders', 128),
@@ -183,7 +188,8 @@ final class RpcSecurityPolicy {
       }
       if (!isValidHeaderValue(header.value)) {
         throw ArgumentError(
-            'Invalid metadata header value for: ${header.name}');
+          'Invalid metadata header value for: ${header.name}',
+        );
       }
     }
 

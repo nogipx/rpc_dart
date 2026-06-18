@@ -58,8 +58,8 @@ class RpcTestApp {
     required this.caller,
     required RpcResponderEndpoint responder,
     required List<RpcModule> modules,
-  })  : _responder = responder,
-        _modules = modules;
+  }) : _responder = responder,
+       _modules = modules;
 
   /// Starts the test harness.
   ///
@@ -78,8 +78,9 @@ class RpcTestApp {
     Map<String, String>? env,
   }) async {
     final effectiveEnv = env ?? config.env;
-    final envConfig =
-        effectiveEnv != null ? RpcEnvConfig.from(effectiveEnv) : RpcEnvConfig();
+    final envConfig = effectiveEnv != null
+        ? RpcEnvConfig.from(effectiveEnv)
+        : RpcEnvConfig();
 
     final sorted = sortModulesByDependencies(modules);
 

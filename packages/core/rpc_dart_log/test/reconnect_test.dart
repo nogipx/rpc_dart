@@ -33,8 +33,7 @@ import 'package:rpc_dart_log/src/contract/log_responder.dart';
 import 'package:rpc_dart_log/src/contract/messages.dart';
 
 void main() {
-  test(
-      'reconnects to a fresh collector and delivers all buffered records, '
+  test('reconnects to a fresh collector and delivers all buffered records, '
       'in order, with no loss and no duplicates', () async {
     // Two independent collectors. The first dies mid-stream; the second
     // receives everything the client buffered while offline.
@@ -66,17 +65,22 @@ void main() {
     log.info('pre-1');
     log.info('pre-2');
 
-    await _pumpUntil(() => out.isConnected,
-        timeout: const Duration(seconds: 5));
+    await _pumpUntil(
+      () => out.isConnected,
+      timeout: const Duration(seconds: 5),
+    );
     expect(c1.handshake?.deviceName, startsWith('JSDevice/'));
 
-    await _pumpUntil(() => c1.received.length >= 2,
-        timeout: const Duration(seconds: 5));
+    await _pumpUntil(
+      () => c1.received.length >= 2,
+      timeout: const Duration(seconds: 5),
+    );
     expect(_messages(c1.received), ['pre-1', 'pre-2']);
     // All records acked -> client fully drained.
     await _pumpUntil(
-        () => out.bufferedCount == 0 && out.inFlightCount == 0,
-        timeout: const Duration(seconds: 5));
+      () => out.bufferedCount == 0 && out.inFlightCount == 0,
+      timeout: const Duration(seconds: 5),
+    );
 
     // -- Phase 2: DROP collector #1, keep emitting ---------------------------
     // Closing the server side closes the client's incoming stream, which
@@ -84,8 +88,10 @@ void main() {
     await c1.dropServer();
 
     // The client must observe the drop and go not-connected.
-    await _pumpUntil(() => !out.isConnected,
-        timeout: const Duration(seconds: 5));
+    await _pumpUntil(
+      () => !out.isConnected,
+      timeout: const Duration(seconds: 5),
+    );
 
     // Emit while offline. These MUST buffer and survive the reconnect.
     final offline = <String>[];
@@ -96,33 +102,47 @@ void main() {
     }
     // Records are buffered (not lost), nothing more reached collector #1.
     expect(out.bufferedCount + out.inFlightCount, greaterThan(0));
-    expect(_messages(c1.received), ['pre-1', 'pre-2'],
-        reason: 'no record may leak to the dead collector #1');
+    expect(
+      _messages(c1.received),
+      ['pre-1', 'pre-2'],
+      reason: 'no record may leak to the dead collector #1',
+    );
 
     // -- Phase 3: RECONNECT to collector #2 ----------------------------------
-    await _pumpUntil(() => out.isConnected,
-        timeout: const Duration(seconds: 10));
+    await _pumpUntil(
+      () => out.isConnected,
+      timeout: const Duration(seconds: 10),
+    );
     // Re-handshake happened on the fresh collector.
     expect(c2.handshake, isNotNull, reason: 'client must re-handshake');
     expect(c2.handshake?.deviceName, startsWith('JSDevice/'));
 
     // ALL offline records delivered to collector #2.
-    await _pumpUntil(() => c2.received.length >= offline.length,
-        timeout: const Duration(seconds: 10));
     await _pumpUntil(
-        () => out.bufferedCount == 0 && out.inFlightCount == 0,
-        timeout: const Duration(seconds: 5));
+      () => c2.received.length >= offline.length,
+      timeout: const Duration(seconds: 10),
+    );
+    await _pumpUntil(
+      () => out.bufferedCount == 0 && out.inFlightCount == 0,
+      timeout: const Duration(seconds: 5),
+    );
 
     final got2 = _messages(c2.received);
 
     // No loss: every offline record arrived.
     expect(got2.toSet(), containsAll(offline));
     // No duplicates: collector #2 saw each exactly once.
-    expect(got2.length, got2.toSet().length,
-        reason: 'no record may be delivered twice');
+    expect(
+      got2.length,
+      got2.toSet().length,
+      reason: 'no record may be delivered twice',
+    );
     // In order: offline records arrive in emission order.
-    expect(got2, offline,
-        reason: 'buffered records must arrive in emission order');
+    expect(
+      got2,
+      offline,
+      reason: 'buffered records must arrive in emission order',
+    );
 
     // Cross-boundary: already-acked pre-drop records were NOT re-sent.
     expect(got2, isNot(contains('pre-1')));
@@ -181,10 +201,12 @@ class _Collector {
 
     final transport = RpcWebSocketResponderTransport(server);
     final endpoint = RpcResponderEndpoint(transport: transport);
-    endpoint.registerServiceContract(LogCollectorServiceResponder(
-      onHandshake: (h) => handshake = h,
-      onRecord: received.add,
-    ));
+    endpoint.registerServiceContract(
+      LogCollectorServiceResponder(
+        onHandshake: (h) => handshake = h,
+        onRecord: received.add,
+      ),
+    );
     endpoint.start();
     return client;
   }
@@ -208,8 +230,8 @@ class _MemoryWebSocketChannel extends StreamChannelMixin<Object?>
   _MemoryWebSocketChannel({
     required Stream<Object?> incoming,
     required StreamSink<Object?> outgoing,
-  })  : stream = incoming,
-        sink = _MemoryWebSocketSink(outgoing);
+  }) : stream = incoming,
+       sink = _MemoryWebSocketSink(outgoing);
 
   @override
   final Stream<Object?> stream;

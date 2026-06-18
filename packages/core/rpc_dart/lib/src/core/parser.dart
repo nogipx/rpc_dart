@@ -92,7 +92,7 @@ final class RpcMessageParser {
   final int _maxMessageLength;
   final int _maxBufferedBytes;
   final Uint8List Function(Uint8List payload, {int? maxOutputBytes})?
-      _decompressor;
+  _decompressor;
   final int _maxMessagesPerChunk;
 
   /// Creates an [RpcMessageParser] with the given configuration.
@@ -106,12 +106,13 @@ final class RpcMessageParser {
     int? maxBufferedBytes,
     Uint8List Function(Uint8List payload, {int? maxOutputBytes})? decompressor,
     int maxMessagesPerChunk = 1024,
-  })  : _logger = logger ?? LogScope.noop,
-        _maxMessageLength = maxMessageLength,
-        _maxBufferedBytes = maxBufferedBytes ??
-            (maxMessageLength + RpcConstants.messagePrefixSize),
-        _decompressor = decompressor,
-        _maxMessagesPerChunk = maxMessagesPerChunk;
+  }) : _logger = logger ?? LogScope.noop,
+       _maxMessageLength = maxMessageLength,
+       _maxBufferedBytes =
+           maxBufferedBytes ??
+           (maxMessageLength + RpcConstants.messagePrefixSize),
+       _decompressor = decompressor,
+       _maxMessagesPerChunk = maxMessagesPerChunk;
 
   /// Internal parser state.
   final _MessageParserState _state = _MessageParserState();
@@ -243,9 +244,7 @@ final class RpcMessageParser {
     // instead of O(N) copies of shrinking buffer inside the loop above.
     _state.compact();
 
-    _logger.internal(
-      'Chunk processed, messages extracted: ${result.length}',
-    );
+    _logger.internal('Chunk processed, messages extracted: ${result.length}');
     return result;
   }
 }

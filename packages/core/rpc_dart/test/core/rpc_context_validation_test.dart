@@ -72,9 +72,7 @@ void main() {
         // Per gRPC, ASCII metadata values must be printable ASCII; non-ASCII /
         // binary must use a -bin key. Sending a unicode header value must fail
         // rather than silently corrupt on the wire.
-        final context = RpcContext.withHeaders({
-          'x-name': 'тест с unicode 🚀',
-        });
+        final context = RpcContext.withHeaders({'x-name': 'тест с unicode 🚀'});
 
         await expectLater(
           clientEndpoint.unaryRequest<RpcString, RpcString>(
@@ -211,13 +209,13 @@ void main() {
         final responses = <RpcString>[];
         await for (final response
             in clientEndpoint.serverStream<RpcString, RpcString>(
-          serviceName: 'ValidationService',
-          methodName: 'GenerateWithContext',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          request: 'generate'.rpc,
-          context: context,
-        )) {
+              serviceName: 'ValidationService',
+              methodName: 'GenerateWithContext',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: 'generate'.rpc,
+              context: context,
+            )) {
           responses.add(response);
         }
 
@@ -240,14 +238,14 @@ void main() {
         }).withTraceId('client-stream-trace');
 
         final requestsController = StreamController<RpcString>();
-        final clientStreamFn =
-            clientEndpoint.clientStream<RpcString, RpcString>(
-          serviceName: 'ValidationService',
-          methodName: 'AggregateWithContext',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          context: context,
-        );
+        final clientStreamFn = clientEndpoint
+            .clientStream<RpcString, RpcString>(
+              serviceName: 'ValidationService',
+              methodName: 'AggregateWithContext',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              context: context,
+            );
 
         // Act
         final responsePromise = clientStreamFn(requestsController.stream);
@@ -281,15 +279,15 @@ void main() {
         final responses = <RpcString>[];
 
         // Act
-        final responseStream =
-            clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-          serviceName: 'ValidationService',
-          methodName: 'ProcessWithContext',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          requests: requestController.stream,
-          context: context,
-        );
+        final responseStream = clientEndpoint
+            .bidirectionalStream<RpcString, RpcString>(
+              serviceName: 'ValidationService',
+              methodName: 'ProcessWithContext',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              requests: requestController.stream,
+              context: context,
+            );
 
         final subscription = responseStream.listen((response) {
           responses.add(response);
@@ -539,8 +537,9 @@ final class ValidationServiceContract extends RpcResponderContract {
   }) async {
     final headers = context?.headers ?? <String, String>{};
     final values = context?.values ?? <Object, Object>{};
-    final headersList =
-        headers.entries.map((e) => '${e.key}:${e.value}').join('|');
+    final headersList = headers.entries
+        .map((e) => '${e.key}:${e.value}')
+        .join('|');
     return '$headersList|context-values-count:${values.length}'.rpc;
   }
 

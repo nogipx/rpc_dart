@@ -104,38 +104,38 @@ class LogEvent implements LogRecord {
 
   /// Serializes this event to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
-        'type': 'event',
-        'scope': scope,
-        'level': level.name,
-        'message': message,
-        if (tag != null) 'tag': tag,
-        if (error != null) 'error': error.toString(),
-        if (stackTrace != null) 'stackTrace': stackTrace.toString(),
-        if (traceId != null) 'traceId': traceId,
-        if (requestId != null) 'requestId': requestId,
-        if (spanId != null) 'spanId': spanId,
-        if (data != null) 'data': data,
-        'timestamp': timestamp.millisecondsSinceEpoch,
-      };
+    'type': 'event',
+    'scope': scope,
+    'level': level.name,
+    'message': message,
+    if (tag != null) 'tag': tag,
+    if (error != null) 'error': error.toString(),
+    if (stackTrace != null) 'stackTrace': stackTrace.toString(),
+    if (traceId != null) 'traceId': traceId,
+    if (requestId != null) 'requestId': requestId,
+    if (spanId != null) 'spanId': spanId,
+    if (data != null) 'data': data,
+    'timestamp': timestamp.millisecondsSinceEpoch,
+  };
 
   /// Deserializes a [LogEvent] from a JSON-compatible map.
   factory LogEvent.fromJson(Map<String, dynamic> json) => LogEvent(
-        scope: json['scope'] as String? ?? '',
-        level: RpcLogLevel.values.firstWhere(
-          (e) => e.name == json['level'],
-          orElse: () => RpcLogLevel.info,
-        ),
-        message: json['message'] as String? ?? '',
-        tag: json['tag'] as String?,
-        error: json['error'],
-        traceId: json['traceId'] as String?,
-        requestId: json['requestId'] as String?,
-        spanId: json['spanId'] as String?,
-        data: (json['data'] as Map<String, dynamic>?)?.cast<String, Object>(),
-        timestamp: json['timestamp'] != null
-            ? DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int)
-            : null,
-      );
+    scope: json['scope'] as String? ?? '',
+    level: RpcLogLevel.values.firstWhere(
+      (e) => e.name == json['level'],
+      orElse: () => RpcLogLevel.info,
+    ),
+    message: json['message'] as String? ?? '',
+    tag: json['tag'] as String?,
+    error: json['error'],
+    traceId: json['traceId'] as String?,
+    requestId: json['requestId'] as String?,
+    spanId: json['spanId'] as String?,
+    data: (json['data'] as Map<String, dynamic>?)?.cast<String, Object>(),
+    timestamp: json['timestamp'] != null
+        ? DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int)
+        : null,
+  );
 }
 
 /// Status of a completed span.
@@ -209,39 +209,40 @@ class LogSpan implements LogRecord {
 
   /// Serializes this span to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
-        'type': 'span',
-        'spanId': spanId,
-        if (parentSpanId != null) 'parentSpanId': parentSpanId,
-        if (traceId != null) 'traceId': traceId,
-        'scope': scope,
-        'name': name,
-        'startTime': startTime.millisecondsSinceEpoch,
-        'endTime': endTime.millisecondsSinceEpoch,
-        'durationMs': duration.inMilliseconds,
-        'status': status.name,
-        if (error != null) 'error': error.toString(),
-        if (stackTrace != null) 'stackTrace': stackTrace.toString(),
-        if (data != null) 'data': data,
-        if (events.isNotEmpty) 'events': events.map((e) => e.toJson()).toList(),
-      };
+    'type': 'span',
+    'spanId': spanId,
+    if (parentSpanId != null) 'parentSpanId': parentSpanId,
+    if (traceId != null) 'traceId': traceId,
+    'scope': scope,
+    'name': name,
+    'startTime': startTime.millisecondsSinceEpoch,
+    'endTime': endTime.millisecondsSinceEpoch,
+    'durationMs': duration.inMilliseconds,
+    'status': status.name,
+    if (error != null) 'error': error.toString(),
+    if (stackTrace != null) 'stackTrace': stackTrace.toString(),
+    if (data != null) 'data': data,
+    if (events.isNotEmpty) 'events': events.map((e) => e.toJson()).toList(),
+  };
 
   /// Deserializes a [LogSpan] from a JSON-compatible map.
   factory LogSpan.fromJson(Map<String, dynamic> json) => LogSpan(
-        spanId: json['spanId'] as String? ?? '',
-        parentSpanId: json['parentSpanId'] as String?,
-        traceId: json['traceId'] as String?,
-        scope: json['scope'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        startTime:
-            DateTime.fromMillisecondsSinceEpoch(json['startTime'] as int? ?? 0),
-        endTime:
-            DateTime.fromMillisecondsSinceEpoch(json['endTime'] as int? ?? 0),
-        status: json['status'] == 'error' ? SpanStatus.error : SpanStatus.ok,
-        error: json['error'],
-        data: (json['data'] as Map<String, dynamic>?)?.cast<String, Object>(),
-        events: (json['events'] as List<dynamic>?)
-                ?.map((e) => LogEvent.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    spanId: json['spanId'] as String? ?? '',
+    parentSpanId: json['parentSpanId'] as String?,
+    traceId: json['traceId'] as String?,
+    scope: json['scope'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    startTime: DateTime.fromMillisecondsSinceEpoch(
+      json['startTime'] as int? ?? 0,
+    ),
+    endTime: DateTime.fromMillisecondsSinceEpoch(json['endTime'] as int? ?? 0),
+    status: json['status'] == 'error' ? SpanStatus.error : SpanStatus.ok,
+    error: json['error'],
+    data: (json['data'] as Map<String, dynamic>?)?.cast<String, Object>(),
+    events:
+        (json['events'] as List<dynamic>?)
+            ?.map((e) => LogEvent.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }

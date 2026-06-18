@@ -93,14 +93,14 @@ class RpcHttpServer implements IRpcServer {
     Duration? bodyReadTimeout,
     LogScope? logger,
     LogController? logController,
-  })  : _host = host,
-        _port = port,
-        _corsPolicy = corsPolicy,
-        _securityPolicy = securityPolicy,
-        _bodyReadTimeout = bodyReadTimeout,
-        _onEndpointCreated = onEndpointCreated,
-        _logController = logController,
-        _logger = logger?.child('HttpServer');
+  }) : _host = host,
+       _port = port,
+       _corsPolicy = corsPolicy,
+       _securityPolicy = securityPolicy,
+       _bodyReadTimeout = bodyReadTimeout,
+       _onEndpointCreated = onEndpointCreated,
+       _logController = logController,
+       _logger = logger?.child('HttpServer');
 
   @override
   bool get isRunning => _isRunning;
@@ -123,7 +123,9 @@ class RpcHttpServer implements IRpcServer {
       bodyReadTimeout: _bodyReadTimeout,
       logger: _logger,
     );
-    _logger?.debug('Transport created — port binding deferred to afterModulesStart');
+    _logger?.debug(
+      'Transport created — port binding deferred to afterModulesStart',
+    );
   }
 
   /// Call this inside [RpcApp.server]'s `afterModulesStart` callback.
@@ -137,7 +139,10 @@ class RpcHttpServer implements IRpcServer {
   /// concerns that must be handled before RPC routing.
   Future<void> afterModulesStart({Handler? preamble}) async {
     final transport = _transport!;
-    _endpoint = RpcResponderEndpoint(transport: transport, logger: _logController);
+    _endpoint = RpcResponderEndpoint(
+      transport: transport,
+      logger: _logController,
+    );
     _onEndpointCreated(_endpoint!);
 
     final Handler handler;

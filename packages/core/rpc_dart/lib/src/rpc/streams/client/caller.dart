@@ -6,8 +6,10 @@
 part of '../_index.dart';
 
 /// Client streaming caller: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Sends many requests, receives one response.
-final class ClientStreamCaller<TRequest extends Object,
-    TResponse extends Object> {
+final class ClientStreamCaller<
+  TRequest extends Object,
+  TResponse extends Object
+> {
   late final LogScope _logger;
 
   /// Stream processor.
@@ -84,9 +86,8 @@ final class ClientStreamCaller<TRequest extends Object,
           _logger.internal('Status code from metadata: $statusCode');
 
           if (statusCode != null && statusCode != '0') {
-            final errorMessage = rpcMessage.metadata!.getHeaderValue(
-                  RpcHeaders.grpcMessage,
-                ) ??
+            final errorMessage =
+                rpcMessage.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
                 '';
             final decodedMessage = RpcMetadata.decodeGrpcMessage(errorMessage);
             _logger.error(
@@ -123,9 +124,7 @@ final class ClientStreamCaller<TRequest extends Object,
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
-          _logger.internal(
-            'Received payload: ${rpcMessage.payload}',
-          );
+          _logger.internal('Received payload: ${rpcMessage.payload}');
           _responseCompleter.complete(rpcMessage.payload!);
         }
       },

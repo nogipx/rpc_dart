@@ -88,8 +88,7 @@ class LogCollectorServer {
     this.host = '127.0.0.1',
     this.port = 9500,
     LogController? controller,
-  }) : controller =
-            controller ?? LogController(minLevel: RpcLogLevel.internal);
+  }) : controller = controller ?? LogController(minLevel: RpcLogLevel.internal);
 
   /// Start listening for WebSocket connections.
   Future<void> start() async {
@@ -107,7 +106,9 @@ class LogCollectorServer {
           // keep serving. Logged to stderr rather than `controller` because the
           // controller is the collected-records pipeline, not a server diagnostic.
           onError: (Object error) {
-            stderr.writeln('LogCollectorServer: WebSocket upgrade failed: $error');
+            stderr.writeln(
+              'LogCollectorServer: WebSocket upgrade failed: $error',
+            );
           },
         );
       } else {
@@ -151,12 +152,18 @@ class LogCollectorServer {
     endpoint.start();
 
     // Detect disconnect via transport close
-    endpoint.transport.incomingMessages.listen(null, onDone: () {
-      _handleDisconnect(endpoint);
-    });
+    endpoint.transport.incomingMessages.listen(
+      null,
+      onDone: () {
+        _handleDisconnect(endpoint);
+      },
+    );
   }
 
-  void _handleHandshake(RpcResponderEndpoint endpoint, LogCollectorHandshake info) {
+  void _handleHandshake(
+    RpcResponderEndpoint endpoint,
+    LogCollectorHandshake info,
+  ) {
     // Idempotent per endpoint: a duplicate handshake on an already-registered
     // connection must NOT allocate a new session, leak the old one, or fire a
     // spurious DeviceConnected. Reuse the existing session for this endpoint.
@@ -181,10 +188,7 @@ class LogCollectorServer {
     if (logRecord == null) return;
 
     controller.add(logRecord);
-    _recordController.add(TaggedRecord(
-      deviceLabel: label,
-      record: logRecord,
-    ));
+    _recordController.add(TaggedRecord(deviceLabel: label, record: logRecord));
   }
 
   void _handleDisconnect(RpcResponderEndpoint endpoint) {

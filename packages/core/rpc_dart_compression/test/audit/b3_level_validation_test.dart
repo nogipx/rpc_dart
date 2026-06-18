@@ -32,29 +32,33 @@ void main() {
       // an out-of-range level outright.
       expect(() => RpcGzipCodec(level: 10), throwsA(isA<AssertionError>()));
       expect(() => RpcGzipCodec(level: -1), throwsA(isA<AssertionError>()));
-      expect(() => RpcGzipCodec.register(level: 10),
-          throwsA(isA<AssertionError>()));
+      expect(
+        () => RpcGzipCodec.register(level: 10),
+        throwsA(isA<AssertionError>()),
+      );
     });
 
-    test('encode never emits an empty/corrupt gzip frame (clamp safety net)',
-        () {
-      // In release / dart2js builds the constructor assert is stripped, so the
-      // defensive `level.clamp(0, 9)` at the encode site is the real guard
-      // against archive's silent "empty payload" behaviour for out-of-range
-      // levels. Verify the boundary levels (what the clamp maps to) always
-      // produce a valid, decompressible gzip — proving compress() can never
-      // emit an empty/corrupt frame regardless of the requested level.
-      for (final level in [0, 9]) {
-        final codec = RpcGzipCodec(level: level);
-        final compressed = codec.compress(original);
-        // Valid gzip header.
-        expect(compressed[0], equals(0x1f));
-        expect(compressed[1], equals(0x8b));
-        // Non-empty frame (header 10 + trailer 8 = 18 minimum).
-        expect(compressed.length, greaterThan(18));
-        // Round-trips back to the original.
-        expect(codec.decompress(compressed), equals(original));
-      }
-    });
+    test(
+      'encode never emits an empty/corrupt gzip frame (clamp safety net)',
+      () {
+        // In release / dart2js builds the constructor assert is stripped, so the
+        // defensive `level.clamp(0, 9)` at the encode site is the real guard
+        // against archive's silent "empty payload" behaviour for out-of-range
+        // levels. Verify the boundary levels (what the clamp maps to) always
+        // produce a valid, decompressible gzip — proving compress() can never
+        // emit an empty/corrupt frame regardless of the requested level.
+        for (final level in [0, 9]) {
+          final codec = RpcGzipCodec(level: level);
+          final compressed = codec.compress(original);
+          // Valid gzip header.
+          expect(compressed[0], equals(0x1f));
+          expect(compressed[1], equals(0x8b));
+          // Non-empty frame (header 10 + trailer 8 = 18 minimum).
+          expect(compressed.length, greaterThan(18));
+          // Round-trips back to the original.
+          expect(codec.decompress(compressed), equals(original));
+        }
+      },
+    );
   });
 }

@@ -64,7 +64,7 @@ const serviceName = 'ws.Contract';
 
 final class _ContractResponder extends RpcResponderContract {
   _ContractResponder()
-      : super(serviceName, dataTransferMode: RpcDataTransferMode.codec);
+    : super(serviceName, dataTransferMode: RpcDataTransferMode.codec);
 
   @override
   void setup() {
@@ -224,8 +224,11 @@ void main() {
       expect(responses.length, equals(10));
       for (var i = 0; i < responses.length; i++) {
         expect(responses[i].text, equals('item'));
-        expect(responses[i].index, equals(i),
-            reason: 'server-stream responses must keep order');
+        expect(
+          responses[i].index,
+          equals(i),
+          reason: 'server-stream responses must keep order',
+        );
       }
     });
 
@@ -237,9 +240,11 @@ void main() {
         responseCodec: _resCodec,
       );
 
-      final requests = Stream<EchoRequest>.fromIterable(
-        const [EchoRequest('a'), EchoRequest('b'), EchoRequest('c')],
-      );
+      final requests = Stream<EchoRequest>.fromIterable(const [
+        EchoRequest('a'),
+        EchoRequest('b'),
+        EchoRequest('c'),
+      ]);
 
       final response = await call(requests).timeout(const Duration(seconds: 5));
 
@@ -250,14 +255,14 @@ void main() {
     test('bidirectional stream echoes each request in order', () async {
       final controller = StreamController<EchoRequest>();
 
-      final responseStream =
-          caller.bidirectionalStream<EchoRequest, EchoResponse>(
-        serviceName: serviceName,
-        methodName: 'BidiStream',
-        requests: controller.stream,
-        requestCodec: _reqCodec,
-        responseCodec: _resCodec,
-      );
+      final responseStream = caller
+          .bidirectionalStream<EchoRequest, EchoResponse>(
+            serviceName: serviceName,
+            methodName: 'BidiStream',
+            requests: controller.stream,
+            requestCodec: _reqCodec,
+            responseCodec: _resCodec,
+          );
 
       final received = <EchoResponse>[];
       final done = Completer<void>();
@@ -276,8 +281,10 @@ void main() {
       await done.future.timeout(const Duration(seconds: 5));
       await sub.cancel();
 
-      expect(received.map((r) => r.text).toList(),
-          equals(['echo:one', 'echo:two', 'echo:three']));
+      expect(
+        received.map((r) => r.text).toList(),
+        equals(['echo:one', 'echo:two', 'echo:three']),
+      );
       expect(received.map((r) => r.index).toList(), equals([0, 1, 2]));
     });
 
@@ -294,51 +301,56 @@ void main() {
             .timeout(const Duration(seconds: 5)),
         throwsA(
           isA<RpcStatusException>()
-              .having((e) => e.statusCode, 'statusCode',
-                  RpcStatus.invalidArgument)
+              .having(
+                (e) => e.statusCode,
+                'statusCode',
+                RpcStatus.invalidArgument,
+              )
               .having((e) => e.message, 'message', contains('BOOM')),
         ),
       );
     });
 
-    test('cancelling a server stream mid-flight tears down without hang',
-        () async {
-      final stream = caller.serverStream<EchoRequest, EchoResponse>(
-        serviceName: serviceName,
-        methodName: 'InfiniteStream',
-        request: const EchoRequest('forever'),
-        requestCodec: _reqCodec,
-        responseCodec: _resCodec,
-      );
+    test(
+      'cancelling a server stream mid-flight tears down without hang',
+      () async {
+        final stream = caller.serverStream<EchoRequest, EchoResponse>(
+          serviceName: serviceName,
+          methodName: 'InfiniteStream',
+          request: const EchoRequest('forever'),
+          requestCodec: _reqCodec,
+          responseCodec: _resCodec,
+        );
 
-      final received = <EchoResponse>[];
-      final gotSome = Completer<void>();
-      final sub = stream.listen((r) {
-        received.add(r);
-        if (received.length >= 3 && !gotSome.isCompleted) gotSome.complete();
-      });
+        final received = <EchoResponse>[];
+        final gotSome = Completer<void>();
+        final sub = stream.listen((r) {
+          received.add(r);
+          if (received.length >= 3 && !gotSome.isCompleted) gotSome.complete();
+        });
 
-      await gotSome.future.timeout(const Duration(seconds: 5));
+        await gotSome.future.timeout(const Duration(seconds: 5));
 
-      // Cancel must complete promptly (mirrors the core serverStream cancel
-      // fix: cancel must not deadlock on the inner async* chain).
-      await sub.cancel().timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => fail('server-stream cancel hung'),
-          );
+        // Cancel must complete promptly (mirrors the core serverStream cancel
+        // fix: cancel must not deadlock on the inner async* chain).
+        await sub.cancel().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => fail('server-stream cancel hung'),
+        );
 
-      // Transport stays usable after cancelling one call.
-      final after = await caller
-          .unaryRequest<EchoRequest, EchoResponse>(
-            serviceName: serviceName,
-            methodName: 'Unary',
-            request: const EchoRequest('post-cancel'),
-            requestCodec: _reqCodec,
-            responseCodec: _resCodec,
-          )
-          .timeout(const Duration(seconds: 5));
-      expect(after.text, equals('reply:post-cancel'));
-    });
+        // Transport stays usable after cancelling one call.
+        final after = await caller
+            .unaryRequest<EchoRequest, EchoResponse>(
+              serviceName: serviceName,
+              methodName: 'Unary',
+              request: const EchoRequest('post-cancel'),
+              requestCodec: _reqCodec,
+              responseCodec: _resCodec,
+            )
+            .timeout(const Duration(seconds: 5));
+        expect(after.text, equals('reply:post-cancel'));
+      },
+    );
 
     test('concurrent unary calls do not cross wires', () async {
       final futures = <Future<EchoResponse>>[];
@@ -354,12 +366,16 @@ void main() {
         );
       }
 
-      final results =
-          await Future.wait(futures).timeout(const Duration(seconds: 10));
+      final results = await Future.wait(
+        futures,
+      ).timeout(const Duration(seconds: 10));
 
       for (var i = 0; i < results.length; i++) {
-        expect(results[i].text, equals('reply:req$i'),
-            reason: 'response must match its own request');
+        expect(
+          results[i].text,
+          equals('reply:req$i'),
+          reason: 'response must match its own request',
+        );
         expect(results[i].index, equals(i));
       }
     });
@@ -377,8 +393,11 @@ void main() {
             .timeout(const Duration(seconds: 5))
             .toList();
         for (final r in responses) {
-          expect(r.text, equals(tag),
-              reason: 'every response must belong to its own call');
+          expect(
+            r.text,
+            equals(tag),
+            reason: 'every response must belong to its own call',
+          );
         }
         return responses.map((r) => r.index).toList();
       }

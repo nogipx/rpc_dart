@@ -49,8 +49,11 @@ void main() {
 
       final headerMap = _toMap(headers);
 
-      expect(headerMap.containsKey(':status'), isFalse,
-          reason: 'Trailers MUST NOT contain :status pseudo-header');
+      expect(
+        headerMap.containsKey(':status'),
+        isFalse,
+        reason: 'Trailers MUST NOT contain :status pseudo-header',
+      );
       expect(headerMap['grpc-status'], equals('0'));
     });
 
@@ -77,19 +80,23 @@ void main() {
 
       final headerMap = _toMap(headers);
 
-      expect(headerMap[':status'], equals('200'),
-          reason: 'Trailers-Only must include :status: 200');
-      expect(headerMap['content-type'], equals('application/grpc'),
-          reason: 'Trailers-Only must include content-type');
+      expect(
+        headerMap[':status'],
+        equals('200'),
+        reason: 'Trailers-Only must include :status: 200',
+      );
+      expect(
+        headerMap['content-type'],
+        equals('application/grpc'),
+        reason: 'Trailers-Only must include content-type',
+      );
       expect(headerMap['grpc-status'], equals('12'));
       expect(headerMap['grpc-message'], isNotNull);
     });
 
     test('Trailers-Only adds content-type if missing', () {
       // Metadata without content-type header
-      final metadata = RpcMetadata([
-        RpcHeader('grpc-status', '13'),
-      ]);
+      final metadata = RpcMetadata([RpcHeader('grpc-status', '13')]);
       final headers = rpcMetadataToHttp2TrailersOnly(metadata);
 
       final headerMap = _toMap(headers);
@@ -104,8 +111,9 @@ void main() {
       ]);
       final headers = rpcMetadataToHttp2TrailersOnly(metadata);
 
-      final contentTypes =
-          headers.where((h) => String.fromCharCodes(h.name) == 'content-type');
+      final contentTypes = headers.where(
+        (h) => String.fromCharCodes(h.name) == 'content-type',
+      );
       expect(contentTypes.length, equals(1));
     });
   });
@@ -125,8 +133,11 @@ void main() {
       final headerMap = _toMap(headers);
 
       // -bin header goes on the wire exactly as stored (single base64).
-      expect(headerMap['grpc-status-details-bin'], equals(wireValue),
-          reason: '-bin values are already base64; must not be re-encoded');
+      expect(
+        headerMap['grpc-status-details-bin'],
+        equals(wireValue),
+        reason: '-bin values are already base64; must not be re-encoded',
+      );
 
       // Regular header should be as-is
       expect(headerMap['x-custom'], equals('plain ascii'));
@@ -169,9 +180,7 @@ void main() {
 
     test('incoming regular headers are NOT base64-decoded', () {
       // A regular header that happens to look like base64
-      final headers = [
-        http2.Header.ascii('grpc-message', 'SGVsbG8='),
-      ];
+      final headers = [http2.Header.ascii('grpc-message', 'SGVsbG8=')];
 
       final metadata = http2HeadersToRpcMetadata(headers);
 
@@ -184,13 +193,14 @@ void main() {
         RpcHeader('x-custom', 'plain ascii ~!@#\$%^&*()_+-='),
       ]);
       final headers = rpcMetadataToHttp2Trailers(metadata);
-      expect(_toMap(headers)['x-custom'], equals('plain ascii ~!@#\$%^&*()_+-='));
+      expect(
+        _toMap(headers)['x-custom'],
+        equals('plain ascii ~!@#\$%^&*()_+-='),
+      );
     });
 
     test('non-ASCII regular header value is rejected (use -bin instead)', () {
-      final metadata = RpcMetadata([
-        RpcHeader('x-user', 'Müller'),
-      ]);
+      final metadata = RpcMetadata([RpcHeader('x-user', 'Müller')]);
       expect(
         () => rpcMetadataToHttp2Trailers(metadata),
         throwsA(isA<ArgumentError>()),
@@ -231,9 +241,7 @@ void main() {
     });
 
     test('extractHttpStatus returns null when :status absent', () {
-      final headers = [
-        http2.Header.ascii('grpc-status', '0'),
-      ];
+      final headers = [http2.Header.ascii('grpc-status', '0')];
 
       expect(extractHttpStatus(headers), isNull);
     });
@@ -264,13 +272,19 @@ void main() {
 
       // No pseudo-headers should be in the metadata
       for (final header in metadata.headers) {
-        expect(header.name.startsWith(':'), isFalse,
-            reason:
-                'Pseudo-header ${header.name} should be filtered from metadata');
+        expect(
+          header.name.startsWith(':'),
+          isFalse,
+          reason:
+              'Pseudo-header ${header.name} should be filtered from metadata',
+        );
       }
 
       // Regular headers should be present
-      expect(metadata.getHeaderValue('content-type'), equals('application/grpc'));
+      expect(
+        metadata.getHeaderValue('content-type'),
+        equals('application/grpc'),
+      );
       expect(metadata.getHeaderValue('grpc-status'), equals('0'));
     });
 
@@ -294,7 +308,11 @@ void main() {
       final framed = RpcMessageFrame.encode(payload, compressed: false);
 
       expect(framed.length, equals(5 + payload.length));
-      expect(framed[0], equals(0), reason: 'Compression flag = 0 (uncompressed)');
+      expect(
+        framed[0],
+        equals(0),
+        reason: 'Compression flag = 0 (uncompressed)',
+      );
 
       final header = RpcMessageFrame.parseHeader(framed);
       expect(header.isCompressed, isFalse);
@@ -317,8 +335,11 @@ void main() {
       final framed = RpcMessageFrame.encode(payload, compressed: false);
       final reframed = ensureGrpcFrame(framed);
 
-      expect(reframed.length, equals(framed.length),
-          reason: 'Already-framed data should not be double-wrapped');
+      expect(
+        reframed.length,
+        equals(framed.length),
+        reason: 'Already-framed data should not be double-wrapped',
+      );
     });
 
     test('ensureGrpcFrame wraps raw data', () {

@@ -21,10 +21,8 @@ class RingBufferOutput extends LogOutput {
   final String? scopeFilter;
 
   /// Creates a [RingBufferOutput] with optional capacity and scope filter.
-  RingBufferOutput({
-    this.maxEntries = 1000,
-    this.scopeFilter,
-  }) : _buffer = List<LogRecord?>.filled(maxEntries, null);
+  RingBufferOutput({this.maxEntries = 1000, this.scopeFilter})
+    : _buffer = List<LogRecord?>.filled(maxEntries, null);
 
   @override
   void write(LogRecord record) {
@@ -58,17 +56,17 @@ class RingBufferOutput extends LogOutput {
       final matches = switch (record) {
         LogSpanStart() => false, // span starts are transient, not queryable
         LogEvent event => filter.matches(
-            level: event.level,
-            scope: event.scope,
-            tag: event.tag,
-            traceId: event.traceId,
-            requestId: event.requestId,
-          ),
+          level: event.level,
+          scope: event.scope,
+          tag: event.tag,
+          traceId: event.traceId,
+          requestId: event.requestId,
+        ),
         LogSpan span => filter.matches(
-            level: RpcLogLevel.info, // spans don't have a level; treat as info
-            scope: span.scope,
-            traceId: span.traceId,
-          ),
+          level: RpcLogLevel.info, // spans don't have a level; treat as info
+          scope: span.scope,
+          traceId: span.traceId,
+        ),
       };
 
       if (matches) results.add(record);

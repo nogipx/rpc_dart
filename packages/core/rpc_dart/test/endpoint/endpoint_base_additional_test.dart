@@ -48,71 +48,79 @@ void main() {
       expect(report.transportStatus?.details['isClosed'], isFalse);
     });
 
-    test('health is closed when transport.health throws and transport closed',
-        () async {
-      final transport = _ConfigurableTransport(
-        isClient: true,
-        isClosed: true,
-        throwOnHealth: true,
-      );
+    test(
+      'health is closed when transport.health throws and transport closed',
+      () async {
+        final transport = _ConfigurableTransport(
+          isClient: true,
+          isClosed: true,
+          throwOnHealth: true,
+        );
 
-      final endpoint = RpcCallerEndpoint(transport: transport);
-      addTearDown(() async => endpoint.close());
+        final endpoint = RpcCallerEndpoint(transport: transport);
+        addTearDown(() async => endpoint.close());
 
-      final report = await endpoint.health();
+        final report = await endpoint.health();
 
-      expect(report.transportStatus?.level, RpcHealthLevel.closed);
-      expect(report.endpointStatus.level, RpcHealthLevel.degraded);
-      expect(report.transportStatus?.details['isClosed'], isTrue);
-    });
+        expect(report.transportStatus?.level, RpcHealthLevel.closed);
+        expect(report.endpointStatus.level, RpcHealthLevel.degraded);
+        expect(report.transportStatus?.details['isClosed'], isTrue);
+      },
+    );
 
-    test('reconnect returns degraded when transport does not support reconnect',
-        () async {
-      final transport = _ConfigurableTransport(
-        isClient: true,
-        throwUnsupportedOnReconnect: true,
-      );
+    test(
+      'reconnect returns degraded when transport does not support reconnect',
+      () async {
+        final transport = _ConfigurableTransport(
+          isClient: true,
+          throwUnsupportedOnReconnect: true,
+        );
 
-      final endpoint = RpcCallerEndpoint(transport: transport);
-      addTearDown(() async => endpoint.close());
+        final endpoint = RpcCallerEndpoint(transport: transport);
+        addTearDown(() async => endpoint.close());
 
-      final report = await endpoint.reconnect();
+        final report = await endpoint.reconnect();
 
-      expect(report.transportStatus?.level, RpcHealthLevel.degraded);
-      expect(report.transportStatus?.details['supported'], isFalse);
-      expect(report.endpointStatus.level, RpcHealthLevel.degraded);
-    });
+        expect(report.transportStatus?.level, RpcHealthLevel.degraded);
+        expect(report.transportStatus?.details['supported'], isFalse);
+        expect(report.endpointStatus.level, RpcHealthLevel.degraded);
+      },
+    );
 
-    test('reconnect returns unhealthy when transport.reconnect throws',
-        () async {
-      final transport = _ConfigurableTransport(
-        isClient: true,
-        throwOnReconnect: true,
-      );
+    test(
+      'reconnect returns unhealthy when transport.reconnect throws',
+      () async {
+        final transport = _ConfigurableTransport(
+          isClient: true,
+          throwOnReconnect: true,
+        );
 
-      final endpoint = RpcCallerEndpoint(transport: transport);
-      addTearDown(() async => endpoint.close());
+        final endpoint = RpcCallerEndpoint(transport: transport);
+        addTearDown(() async => endpoint.close());
 
-      final report = await endpoint.reconnect();
+        final report = await endpoint.reconnect();
 
-      expect(report.transportStatus?.level, RpcHealthLevel.unhealthy);
-      expect(report.endpointStatus.level, RpcHealthLevel.unhealthy);
-    });
+        expect(report.transportStatus?.level, RpcHealthLevel.unhealthy);
+        expect(report.endpointStatus.level, RpcHealthLevel.unhealthy);
+      },
+    );
 
-    test('close swallows transport.close error and deactivates endpoint',
-        () async {
-      final transport = _ConfigurableTransport(
-        isClient: true,
-        throwOnClose: true,
-      );
+    test(
+      'close swallows transport.close error and deactivates endpoint',
+      () async {
+        final transport = _ConfigurableTransport(
+          isClient: true,
+          throwOnClose: true,
+        );
 
-      final endpoint = RpcCallerEndpoint(transport: transport);
+        final endpoint = RpcCallerEndpoint(transport: transport);
 
-      await endpoint.close();
-      await endpoint.close();
+        await endpoint.close();
+        await endpoint.close();
 
-      expect(endpoint.isActive, isFalse);
-    });
+        expect(endpoint.isActive, isFalse);
+      },
+    );
   });
 }
 
@@ -137,12 +145,14 @@ final class _ConfigurableTransport implements IRpcTransport {
     this.throwOnClose = false,
     RpcHealthStatus? healthResult,
     RpcHealthStatus? reconnectResult,
-  })  : _isClient = isClient,
-        _isClosed = isClosed,
-        healthResult = healthResult ??
-            RpcHealthStatus.healthy(component: '_ConfigurableTransport'),
-        reconnectResult = reconnectResult ??
-            RpcHealthStatus.healthy(component: '_ConfigurableTransport');
+  }) : _isClient = isClient,
+       _isClosed = isClosed,
+       healthResult =
+           healthResult ??
+           RpcHealthStatus.healthy(component: '_ConfigurableTransport'),
+       reconnectResult =
+           reconnectResult ??
+           RpcHealthStatus.healthy(component: '_ConfigurableTransport');
 
   @override
   bool get isClient => _isClient;

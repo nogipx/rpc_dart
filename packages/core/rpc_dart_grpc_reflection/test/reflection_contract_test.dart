@@ -19,11 +19,13 @@ void main() {
 
   group('list_services', () {
     test('returns all registered service names', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'svc.proto',
-        package: 'svc.v1',
-        serviceNames: ['Alpha', 'Beta'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'svc.proto',
+          package: 'svc.v1',
+          serviceNames: ['Alpha', 'Beta'],
+        ),
+      );
 
       final response = contract.processRequestForTest(listServicesRequest());
       final services = parseListServicesResponse(response);
@@ -45,11 +47,13 @@ void main() {
 
   group('file_by_filename', () {
     test('returns file_descriptor_response for registered file', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+        ),
+      );
 
       final response = contract.processRequestForTest(
         fileByFilenameRequest('echo.proto'),
@@ -70,11 +74,13 @@ void main() {
     });
 
     test('response contains one file_descriptor_proto for standalone file', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+        ),
+      );
 
       final response = contract.processRequestForTest(
         fileByFilenameRequest('echo.proto'),
@@ -84,17 +90,21 @@ void main() {
     });
 
     test('response contains file + dependency bytes', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'common.proto',
-        package: 'common.v1',
-        serviceNames: [],
-      ));
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-        dependencies: ['common.proto'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'common.proto',
+          package: 'common.v1',
+          serviceNames: [],
+        ),
+      );
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+          dependencies: ['common.proto'],
+        ),
+      );
 
       final response = contract.processRequestForTest(
         fileByFilenameRequest('echo.proto'),
@@ -106,11 +116,13 @@ void main() {
 
   group('file_containing_symbol', () {
     test('finds file by service FQN', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+        ),
+      );
 
       final response = contract.processRequestForTest(
         fileContainingSymbolRequest('echo.v1.EchoService'),
@@ -120,11 +132,13 @@ void main() {
     });
 
     test('finds file by service FQN with leading dot', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+        ),
+      );
 
       final response = contract.processRequestForTest(
         fileContainingSymbolRequest('.echo.v1.EchoService'),
@@ -134,12 +148,14 @@ void main() {
     });
 
     test('finds file by message type', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptorWithMessages(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        messageNames: ['EchoRequest'],
-        serviceNames: [],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptorWithMessages(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          messageNames: ['EchoRequest'],
+          serviceNames: [],
+        ),
+      );
 
       final response = contract.processRequestForTest(
         fileContainingSymbolRequest('echo.v1.EchoRequest'),
@@ -149,12 +165,14 @@ void main() {
     });
 
     test('finds file by nested message type', () {
-      registry.addFileDescriptor(buildDescriptorWithNesting(
-        name: 'nested.proto',
-        package: 'nested.v1',
-        outerName: 'Outer',
-        nestedMessageNames: ['Inner'],
-      ));
+      registry.addFileDescriptor(
+        buildDescriptorWithNesting(
+          name: 'nested.proto',
+          package: 'nested.v1',
+          outerName: 'Outer',
+          nestedMessageNames: ['Inner'],
+        ),
+      );
 
       final response = contract.processRequestForTest(
         fileContainingSymbolRequest('nested.v1.Outer.Inner'),
@@ -164,12 +182,14 @@ void main() {
     });
 
     test('finds file by nested enum type', () {
-      registry.addFileDescriptor(buildDescriptorWithNesting(
-        name: 'nested.proto',
-        package: 'nested.v1',
-        outerName: 'Outer',
-        nestedEnumNames: ['Status'],
-      ));
+      registry.addFileDescriptor(
+        buildDescriptorWithNesting(
+          name: 'nested.proto',
+          package: 'nested.v1',
+          outerName: 'Outer',
+          nestedEnumNames: ['Status'],
+        ),
+      );
 
       final response = contract.processRequestForTest(
         fileContainingSymbolRequest('nested.v1.Outer.Status'),
@@ -179,17 +199,21 @@ void main() {
     });
 
     test('response includes transitive dependency bytes', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'common.proto',
-        package: 'common.v1',
-        serviceNames: [],
-      ));
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'echo.proto',
-        package: 'echo.v1',
-        serviceNames: ['EchoService'],
-        dependencies: ['common.proto'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'common.proto',
+          package: 'common.v1',
+          serviceNames: [],
+        ),
+      );
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'echo.proto',
+          package: 'echo.v1',
+          serviceNames: ['EchoService'],
+          dependencies: ['common.proto'],
+        ),
+      );
 
       final response = contract.processRequestForTest(
         fileContainingSymbolRequest('echo.v1.EchoService'),
@@ -246,11 +270,13 @@ void main() {
 
   group('v1 and v1alpha', () {
     test('both contracts return identical list_services response', () {
-      registry.addFileDescriptor(buildMinimalFileDescriptor(
-        name: 'svc.proto',
-        package: 'svc.v1',
-        serviceNames: ['MyService'],
-      ));
+      registry.addFileDescriptor(
+        buildMinimalFileDescriptor(
+          name: 'svc.proto',
+          package: 'svc.v1',
+          serviceNames: ['MyService'],
+        ),
+      );
 
       final v1 = ServerReflectionContract(
         registry,

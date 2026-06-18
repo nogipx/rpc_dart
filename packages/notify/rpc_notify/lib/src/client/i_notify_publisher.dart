@@ -58,8 +58,8 @@ class _RepositoryPublisher implements INotifyPublisher {
 
 class _RpcPublisher implements INotifyPublisher {
   _RpcPublisher(this._endpoint)
-      : _caller = NotifyPublishContractCaller(_endpoint),
-        _log = LogScope.noop;
+    : _caller = NotifyPublishContractCaller(_endpoint),
+      _log = LogScope.noop;
 
   final RpcCallerEndpoint _endpoint;
   final NotifyPublishContractCaller _caller;

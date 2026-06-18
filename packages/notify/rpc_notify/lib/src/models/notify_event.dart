@@ -19,17 +19,17 @@ class NotifyEvent implements IRpcSerializable {
   }) : timestamp = timestamp ?? DateTime.now();
 
   factory NotifyEvent.fromJson(Map<String, dynamic> json) => NotifyEvent(
-        topic: json['topic'] as String,
-        payload: Map<String, dynamic>.from(json['payload'] as Map),
-        timestamp: DateTime.parse(json['timestamp'] as String),
-        eventId: json['eventId'] as String?,
-      );
+    topic: json['topic'] as String,
+    payload: Map<String, dynamic>.from(json['payload'] as Map),
+    timestamp: DateTime.parse(json['timestamp'] as String),
+    eventId: json['eventId'] as String?,
+  );
 
   @override
   Map<String, dynamic> toJson() => {
-        'topic': topic,
-        'payload': payload,
-        'timestamp': timestamp.toIso8601String(),
-        if (eventId != null) 'eventId': eventId,
-      };
+    'topic': topic,
+    'payload': payload,
+    'timestamp': timestamp.toIso8601String(),
+    if (eventId != null) 'eventId': eventId,
+  };
 }

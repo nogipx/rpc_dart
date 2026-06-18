@@ -180,20 +180,24 @@ void main() {
       // Pipelined unary sends: issue without awaiting per-record acks, then
       // await all acks together.
       final acks = <Future<LogCollectorAck>>[
-        callerContract.send(LogCollectorRecord({
-          'type': 'event',
-          'scope': 'test',
-          'level': 'info',
-          'message': 'hello',
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-        })),
-        callerContract.send(LogCollectorRecord({
-          'type': 'event',
-          'scope': 'test',
-          'level': 'info',
-          'message': 'world',
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-        })),
+        callerContract.send(
+          LogCollectorRecord({
+            'type': 'event',
+            'scope': 'test',
+            'level': 'info',
+            'message': 'hello',
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          }),
+        ),
+        callerContract.send(
+          LogCollectorRecord({
+            'type': 'event',
+            'scope': 'test',
+            'level': 'info',
+            'message': 'world',
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          }),
+        ),
       ];
       await Future.wait(acks);
 

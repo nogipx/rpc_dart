@@ -86,10 +86,7 @@ void main() {
     });
 
     test('Переиспользует освобожденные ID при достижении предела', () {
-      final manager = RpcStreamIdManager(
-        isClient: true,
-        customMaxId: 9,
-      );
+      final manager = RpcStreamIdManager(isClient: true, customMaxId: 9);
 
       final id1 = manager.generateId();
       final id2 = manager.generateId();
@@ -111,10 +108,7 @@ void main() {
     });
 
     test('Сбрасывает последовательность при полном освобождении', () {
-      final manager = RpcStreamIdManager(
-        isClient: false,
-        customMaxId: 10,
-      );
+      final manager = RpcStreamIdManager(isClient: false, customMaxId: 10);
 
       final allocated = <int>[];
       for (var i = 0; i < 5; i++) {
@@ -131,19 +125,13 @@ void main() {
     });
 
     test('Выбрасывает исключение если нет свободных ID', () {
-      final manager = RpcStreamIdManager(
-        isClient: true,
-        customMaxId: 5,
-      );
+      final manager = RpcStreamIdManager(isClient: true, customMaxId: 5);
 
       expect(manager.generateId(), equals(1));
       expect(manager.generateId(), equals(3));
       expect(manager.generateId(), equals(5));
 
-      expect(
-        () => manager.generateId(),
-        throwsA(isA<RpcException>()),
-      );
+      expect(() => manager.generateId(), throwsA(isA<RpcException>()));
     });
   });
 

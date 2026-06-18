@@ -93,10 +93,7 @@ void main() {
           );
           await server.sendMetadata(
             streamId,
-            RpcMetadata.forTrailer(
-              RpcStatus.internal,
-              message: 'boom',
-            ),
+            RpcMetadata.forTrailer(RpcStatus.internal, message: 'boom'),
             endStream: true,
           );
         }),

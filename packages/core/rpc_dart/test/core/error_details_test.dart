@@ -170,7 +170,9 @@ void main() {
       expect(reconstructed.details.length, 2);
       expect(reconstructed.details[0], isA<RpcRetryInfo>());
       expect(
-          (reconstructed.details[0] as RpcRetryInfo).retryDelay.inSeconds, 30);
+        (reconstructed.details[0] as RpcRetryInfo).retryDelay.inSeconds,
+        30,
+      );
       expect(reconstructed.details[1], isA<RpcErrorInfo>());
       expect((reconstructed.details[1] as RpcErrorInfo).reason, 'LIMIT');
     });

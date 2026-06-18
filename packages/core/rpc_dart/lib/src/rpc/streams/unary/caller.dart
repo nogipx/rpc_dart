@@ -45,12 +45,12 @@ final class UnaryCaller<TRequest, TResponse> {
     required IRpcCodec<TResponse> responseCodec,
     RpcContext? context,
     LogScope? logger,
-  })  : _transport = transport,
-        _serviceName = serviceName,
-        _methodName = methodName,
-        _requestSerializer = requestCodec,
-        _responseSerializer = responseCodec,
-        _context = context {
+  }) : _transport = transport,
+       _serviceName = serviceName,
+       _methodName = methodName,
+       _requestSerializer = requestCodec,
+       _responseSerializer = responseCodec,
+       _context = context {
     _logger = logger?.child('UnaryCaller') ?? LogScope.noop;
     _parser = RpcMessageParser(
       logger: _logger,
@@ -96,148 +96,156 @@ final class UnaryCaller<TRequest, TResponse> {
     try {
       // Subscribe to cancellation token if present.
       if (_context?.cancellationToken != null) {
-        cancellationSubscription =
-            _context!.cancellationToken!.cancelled.asStream().listen((_) {
-          if (!completer.isCompleted) {
-            _logger.warning(
-              'Operation cancelled via cancellation token [streamId: $streamId]',
-            );
-            completer.completeError(
-              RpcCancelledException(
-                _context.cancellationToken!.reason ??
-                    'Operation was cancelled',
-              ),
-            );
-          }
-        });
-      }
-
-      // Subscribe to responses for this stream.
-      _logger
-          .internal('Configuring response subscription [streamId: $streamId]');
-      subscription = _transport.getMessagesForStream(streamId).listen(
-        (message) async {
-          if (message.isDirect && message.directPayload != null) {
-            // Zero-copy: received object directly.
-            _logger.internal(
-              'Zero-copy response received [streamId: $streamId]',
-            );
-            try {
-              final response = message.directPayload as TResponse;
+        cancellationSubscription = _context!.cancellationToken!.cancelled
+            .asStream()
+            .listen((_) {
               if (!completer.isCompleted) {
-                _logger.internal(
-                  'Zero-copy unary call $_methodPath completed [streamId: $streamId]',
-                );
-                completer.complete(response);
-              } else {
                 _logger.warning(
-                  'Extra zero-copy response after call completion [streamId: $streamId]',
-                );
-              }
-            } catch (e, stackTrace) {
-              if (!completer.isCompleted) {
-                _logger.error(
-                  'Failed to process zero-copy response [streamId: $streamId]',
-                  error: e,
-                  stackTrace: stackTrace,
-                );
-                completer.completeError(e);
-              }
-            }
-          } else if (!message.isMetadataOnly && message.payload != null) {
-            // Received response data (serialized).
-            _logger.internal(
-              'Received transport message of ${message.payload!.length} bytes [streamId: $streamId]',
-            );
-            try {
-              // Use parser to extract messages from framed payload.
-              final messages = _parser(message.payload!);
-              _logger.internal(
-                'Parser extracted ${messages.length} messages from frame [streamId: $streamId]',
-              );
-
-              for (final msgBytes in messages) {
-                _logger.internal(
-                  'Deserializing response of ${msgBytes.length} bytes [streamId: $streamId]',
-                );
-                final response = _responseSerializer.deserialize(msgBytes);
-                if (!completer.isCompleted) {
-                  _logger.internal(
-                    'Unary call $_methodPath completed [streamId: $streamId]',
-                  );
-                  completer.complete(response);
-                  break; // Only first response is needed for unary call.
-                } else {
-                  _logger.warning(
-                    'Extra response after call completion [streamId: $streamId]',
-                  );
-                }
-              }
-            } catch (e, stackTrace) {
-              if (!completer.isCompleted) {
-                _logger.error(
-                  'Failed to process response [streamId: $streamId]',
-                  error: e,
-                  stackTrace: stackTrace,
-                );
-                completer.completeError(e);
-              }
-            }
-          } else if (message.isMetadataOnly && message.metadata != null) {
-            // Received metadata (possibly trailers).
-            _logger.internal('Metadata received [streamId: $streamId]');
-            final encoding = message.metadata!.getHeaderValue(
-              RpcHeaders.grpcEncoding,
-            );
-            if (encoding != null) {
-              _peerGrpcEncoding = encoding;
-            }
-            final statusCode = message.metadata!.getHeaderValue(
-              RpcHeaders.grpcStatus,
-            );
-
-            if (statusCode != null && message.isEndOfStream) {
-              final code = int.tryParse(statusCode) ?? RpcStatus.unknown;
-              _logger.internal(
-                'Completion status received: $code [streamId: $streamId]',
-              );
-              if (code != RpcStatus.ok && !completer.isCompleted) {
-                final errorMessage = message.metadata!.getHeaderValue(
-                      RpcHeaders.grpcMessage,
-                    ) ??
-                    '';
-                final decodedMessage =
-                    RpcMetadata.decodeGrpcMessage(errorMessage);
-                _logger.error(
-                  'gRPC error: $code - $decodedMessage [streamId: $streamId]',
+                  'Operation cancelled via cancellation token [streamId: $streamId]',
                 );
                 completer.completeError(
-                  RpcStatusException.fromTrailer(
-                    code,
-                    decodedMessage,
-                    detailsBin: message.metadata!.statusDetailsBin,
+                  RpcCancelledException(
+                    _context.cancellationToken!.reason ??
+                        'Operation was cancelled',
                   ),
                 );
               }
-            }
-          }
-        },
-        onError: (error, stackTrace) {
-          _logger.error(
-            'Transport error [streamId: $streamId]',
-            error: error,
-            stackTrace: stackTrace,
-          );
-          if (!completer.isCompleted) {
-            completer.completeError(error);
-          }
-        },
+            });
+      }
+
+      // Subscribe to responses for this stream.
+      _logger.internal(
+        'Configuring response subscription [streamId: $streamId]',
       );
+      subscription = _transport
+          .getMessagesForStream(streamId)
+          .listen(
+            (message) async {
+              if (message.isDirect && message.directPayload != null) {
+                // Zero-copy: received object directly.
+                _logger.internal(
+                  'Zero-copy response received [streamId: $streamId]',
+                );
+                try {
+                  final response = message.directPayload as TResponse;
+                  if (!completer.isCompleted) {
+                    _logger.internal(
+                      'Zero-copy unary call $_methodPath completed [streamId: $streamId]',
+                    );
+                    completer.complete(response);
+                  } else {
+                    _logger.warning(
+                      'Extra zero-copy response after call completion [streamId: $streamId]',
+                    );
+                  }
+                } catch (e, stackTrace) {
+                  if (!completer.isCompleted) {
+                    _logger.error(
+                      'Failed to process zero-copy response [streamId: $streamId]',
+                      error: e,
+                      stackTrace: stackTrace,
+                    );
+                    completer.completeError(e);
+                  }
+                }
+              } else if (!message.isMetadataOnly && message.payload != null) {
+                // Received response data (serialized).
+                _logger.internal(
+                  'Received transport message of ${message.payload!.length} bytes [streamId: $streamId]',
+                );
+                try {
+                  // Use parser to extract messages from framed payload.
+                  final messages = _parser(message.payload!);
+                  _logger.internal(
+                    'Parser extracted ${messages.length} messages from frame [streamId: $streamId]',
+                  );
+
+                  for (final msgBytes in messages) {
+                    _logger.internal(
+                      'Deserializing response of ${msgBytes.length} bytes [streamId: $streamId]',
+                    );
+                    final response = _responseSerializer.deserialize(msgBytes);
+                    if (!completer.isCompleted) {
+                      _logger.internal(
+                        'Unary call $_methodPath completed [streamId: $streamId]',
+                      );
+                      completer.complete(response);
+                      break; // Only first response is needed for unary call.
+                    } else {
+                      _logger.warning(
+                        'Extra response after call completion [streamId: $streamId]',
+                      );
+                    }
+                  }
+                } catch (e, stackTrace) {
+                  if (!completer.isCompleted) {
+                    _logger.error(
+                      'Failed to process response [streamId: $streamId]',
+                      error: e,
+                      stackTrace: stackTrace,
+                    );
+                    completer.completeError(e);
+                  }
+                }
+              } else if (message.isMetadataOnly && message.metadata != null) {
+                // Received metadata (possibly trailers).
+                _logger.internal('Metadata received [streamId: $streamId]');
+                final encoding = message.metadata!.getHeaderValue(
+                  RpcHeaders.grpcEncoding,
+                );
+                if (encoding != null) {
+                  _peerGrpcEncoding = encoding;
+                }
+                final statusCode = message.metadata!.getHeaderValue(
+                  RpcHeaders.grpcStatus,
+                );
+
+                if (statusCode != null && message.isEndOfStream) {
+                  final code = int.tryParse(statusCode) ?? RpcStatus.unknown;
+                  _logger.internal(
+                    'Completion status received: $code [streamId: $streamId]',
+                  );
+                  if (code != RpcStatus.ok && !completer.isCompleted) {
+                    final errorMessage =
+                        message.metadata!.getHeaderValue(
+                          RpcHeaders.grpcMessage,
+                        ) ??
+                        '';
+                    final decodedMessage = RpcMetadata.decodeGrpcMessage(
+                      errorMessage,
+                    );
+                    _logger.error(
+                      'gRPC error: $code - $decodedMessage [streamId: $streamId]',
+                    );
+                    completer.completeError(
+                      RpcStatusException.fromTrailer(
+                        code,
+                        decodedMessage,
+                        detailsBin: message.metadata!.statusDetailsBin,
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+            onError: (error, stackTrace) {
+              _logger.error(
+                'Transport error [streamId: $streamId]',
+                error: error,
+                stackTrace: stackTrace,
+              );
+              if (!completer.isCompleted) {
+                completer.completeError(error);
+              }
+            },
+          );
 
       // Send initial metadata with context headers.
       _logger.internal('Sending initial metadata [streamId: $streamId]');
-      final baseMetadata =
-          RpcMetadata.forClientRequest(_serviceName, _methodName);
+      final baseMetadata = RpcMetadata.forClientRequest(
+        _serviceName,
+        _methodName,
+      );
 
       // Use a map so context headers naturally override base headers,
       // preventing duplicates (e.g. grpc-accept-encoding).
@@ -256,8 +264,9 @@ final class UnaryCaller<TRequest, TResponse> {
         if (_context.deadline != null) {
           final timeout = _context.remainingTime;
           if (timeout != null) {
-            headerMap[RpcHeaders.grpcTimeout] =
-                RpcMetadata.encodeGrpcTimeout(timeout);
+            headerMap[RpcHeaders.grpcTimeout] = RpcMetadata.encodeGrpcTimeout(
+              timeout,
+            );
           }
         }
 
@@ -266,10 +275,9 @@ final class UnaryCaller<TRequest, TResponse> {
         );
       }
 
-      final metadata = RpcMetadata(
-        [for (final e in headerMap.entries) RpcHeader(e.key, e.value)],
-        methodPath: baseMetadata.methodPath,
-      );
+      final metadata = RpcMetadata([
+        for (final e in headerMap.entries) RpcHeader(e.key, e.value),
+      ], methodPath: baseMetadata.methodPath);
       await _transport.sendMetadata(streamId, metadata);
 
       // Zero-copy optimization for supporting transports.
@@ -284,9 +292,7 @@ final class UnaryCaller<TRequest, TResponse> {
         // Standard serialization for other transports.
         _logger.internal('Serializing request [streamId: $streamId]');
         final serializedRequest = _requestSerializer.serialize(request);
-        final requestEncoding = _context?.getHeader(
-          RpcHeaders.grpcEncoding,
-        );
+        final requestEncoding = _context?.getHeader(RpcHeaders.grpcEncoding);
         if (requestEncoding != null &&
             requestEncoding != RpcGrpcCompression.identity &&
             !RpcGrpcCompression.isSupported(requestEncoding)) {
@@ -298,7 +304,8 @@ final class UnaryCaller<TRequest, TResponse> {
             'package:rpc_dart_compression).',
           );
         }
-        final useCompression = requestEncoding != null &&
+        final useCompression =
+            requestEncoding != null &&
             requestEncoding != RpcGrpcCompression.identity;
         final payload = useCompression
             ? RpcGrpcCompression.compress(
@@ -344,8 +351,9 @@ final class UnaryCaller<TRequest, TResponse> {
       rethrow;
     } finally {
       // Always cancel response stream subscription.
-      _logger
-          .internal('Cancelling response subscription [streamId: $streamId]');
+      _logger.internal(
+        'Cancelling response subscription [streamId: $streamId]',
+      );
       await subscription?.cancel();
       await cancellationSubscription?.cancel();
     }

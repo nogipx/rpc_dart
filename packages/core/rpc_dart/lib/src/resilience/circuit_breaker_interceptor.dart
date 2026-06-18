@@ -209,9 +209,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
             _probeInFlight = true;
             return;
           }
-          throw CircuitBreakerOpenException(
-            retryAfter: resetTimeout - elapsed,
-          );
+          throw CircuitBreakerOpenException(retryAfter: resetTimeout - elapsed);
         }
         throw const CircuitBreakerOpenException();
 

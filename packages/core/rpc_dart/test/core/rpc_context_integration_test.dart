@@ -40,15 +40,15 @@ void main() {
         final context = RpcContextUtils.withBearerToken('test-token-123');
 
         // Act
-        final response =
-            await clientEndpoint.unaryRequest<RpcString, RpcString>(
-          serviceName: 'TestService',
-          methodName: 'GetUserData',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          request: 'user-123'.rpc,
-          context: context,
-        );
+        final response = await clientEndpoint
+            .unaryRequest<RpcString, RpcString>(
+              serviceName: 'TestService',
+              methodName: 'GetUserData',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: 'user-123'.rpc,
+              context: context,
+            );
 
         // Assert
         expect(response.value, contains('Bearer test-token-123'));
@@ -69,15 +69,15 @@ void main() {
         );
 
         // Act
-        final response =
-            await clientEndpoint.unaryRequest<RpcString, RpcString>(
-          serviceName: 'TracingService',
-          methodName: 'TracedOperation',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          request: 'trace-me'.rpc,
-          context: context,
-        );
+        final response = await clientEndpoint
+            .unaryRequest<RpcString, RpcString>(
+              serviceName: 'TracingService',
+              methodName: 'TracedOperation',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: 'trace-me'.rpc,
+              context: context,
+            );
 
         // Assert
         expect(response.value, contains(traceId));
@@ -103,15 +103,15 @@ void main() {
         );
 
         // Act
-        final response =
-            await clientEndpoint.unaryRequest<RpcString, RpcString>(
-          serviceName: 'CombinedContextService',
-          methodName: 'ProcessWithFullContext',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          request: 'combined-request'.rpc,
-          context: combinedContext,
-        );
+        final response = await clientEndpoint
+            .unaryRequest<RpcString, RpcString>(
+              serviceName: 'CombinedContextService',
+              methodName: 'ProcessWithFullContext',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: 'combined-request'.rpc,
+              context: combinedContext,
+            );
 
         // Assert
         expect(response.value, contains('Bearer auth-token'));
@@ -137,13 +137,13 @@ void main() {
         final responses = <RpcString>[];
         await for (final response
             in clientEndpoint.serverStream<RpcString, RpcString>(
-          serviceName: 'StreamService',
-          methodName: 'GenerateStream',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          request: 'stream-request'.rpc,
-          context: context,
-        )) {
+              serviceName: 'StreamService',
+              methodName: 'GenerateStream',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: 'stream-request'.rpc,
+              context: context,
+            )) {
           responses.add(response);
         }
 
@@ -162,25 +162,26 @@ void main() {
         serverEndpoint.registerServiceContract(streamService);
         serverEndpoint.start();
 
-        final context = RpcContextUtils.withTracing(
-          traceId: 'server-stream-trace-456',
-        ).withAdditionalHeaders({
-          'streaming-mode': 'traced',
-          'user-id': 'traced-user',
-          'stream-count': '2',
-        });
+        final context =
+            RpcContextUtils.withTracing(
+              traceId: 'server-stream-trace-456',
+            ).withAdditionalHeaders({
+              'streaming-mode': 'traced',
+              'user-id': 'traced-user',
+              'stream-count': '2',
+            });
 
         // Act
         final responses = <RpcString>[];
         await for (final response
             in clientEndpoint.serverStream<RpcString, RpcString>(
-          serviceName: 'StreamService',
-          methodName: 'GenerateStream',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          request: 'traced-stream'.rpc,
-          context: context,
-        )) {
+              serviceName: 'StreamService',
+              methodName: 'GenerateStream',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: 'traced-stream'.rpc,
+              context: context,
+            )) {
           responses.add(response);
         }
 
@@ -206,14 +207,14 @@ void main() {
 
         // Act
         final requestsController = StreamController<RpcString>();
-        final responsesFuture =
-            clientEndpoint.clientStream<RpcString, RpcString>(
-          serviceName: 'AggregationService',
-          methodName: 'AggregateData',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          context: context,
-        )(requestsController.stream);
+        final responsesFuture = clientEndpoint
+            .clientStream<RpcString, RpcString>(
+              serviceName: 'AggregationService',
+              methodName: 'AggregateData',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              context: context,
+            )(requestsController.stream);
 
         // Отправляем данные
         final requests = ['data1', 'data2', 'data3'];
@@ -239,20 +240,20 @@ void main() {
 
         final context = RpcContextUtils.withBearerToken('client-stream-token')
             .withAdditionalHeaders({
-          'aggregation-type': 'authenticated',
-          'user-id': 'auth-user-789',
-        });
+              'aggregation-type': 'authenticated',
+              'user-id': 'auth-user-789',
+            });
 
         // Act
         final requestsController = StreamController<RpcString>();
-        final responsesFuture =
-            clientEndpoint.clientStream<RpcString, RpcString>(
-          serviceName: 'AggregationService',
-          methodName: 'AggregateData',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          context: context,
-        )(requestsController.stream);
+        final responsesFuture = clientEndpoint
+            .clientStream<RpcString, RpcString>(
+              serviceName: 'AggregationService',
+              methodName: 'AggregateData',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              context: context,
+            )(requestsController.stream);
 
         // Отправляем данные
         final requests = ['auth-data1', 'auth-data2'];
@@ -286,15 +287,15 @@ void main() {
 
         // Act
         final requestsController = StreamController<RpcString>();
-        final responsesStream =
-            clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-          serviceName: 'EchoService',
-          methodName: 'EchoStream',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          requests: requestsController.stream,
-          context: context,
-        );
+        final responsesStream = clientEndpoint
+            .bidirectionalStream<RpcString, RpcString>(
+              serviceName: 'EchoService',
+              methodName: 'EchoStream',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              requests: requestsController.stream,
+              context: context,
+            );
 
         final receivedResponses = <RpcString>[];
         final responseSubscription = responsesStream.listen((message) {
@@ -338,22 +339,22 @@ void main() {
         final context = RpcContextUtils.withBearerToken('bidi-token')
             .withTraceId('bidi-trace-123')
             .withAdditionalHeaders({
-          'echo-prefix': 'SECURE:',
-          'session-id': 'secure-session',
-          'user-id': 'bidi-user',
-        });
+              'echo-prefix': 'SECURE:',
+              'session-id': 'secure-session',
+              'user-id': 'bidi-user',
+            });
 
         // Act
         final requestsController = StreamController<RpcString>();
-        final responsesStream =
-            clientEndpoint.bidirectionalStream<RpcString, RpcString>(
-          serviceName: 'EchoService',
-          methodName: 'EchoStream',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-          requests: requestsController.stream,
-          context: context,
-        );
+        final responsesStream = clientEndpoint
+            .bidirectionalStream<RpcString, RpcString>(
+              serviceName: 'EchoService',
+              methodName: 'EchoStream',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              requests: requestsController.stream,
+              context: context,
+            );
 
         final receivedResponses = <RpcString>[];
         final responseSubscription = responsesStream.listen((message) {
@@ -649,7 +650,7 @@ final class _ErrorServiceContract extends RpcResponderContract {
 /// Клиентский контракт для тестового сервиса
 final class _TestServiceCallerContract extends RpcCallerContract {
   _TestServiceCallerContract(RpcCallerEndpoint endpoint)
-      : super('TestService', endpoint);
+    : super('TestService', endpoint);
 
   Future<RpcString> getUserData(RpcString userId, RpcContext? context) {
     return callUnary<RpcString, RpcString>(
@@ -665,7 +666,7 @@ final class _TestServiceCallerContract extends RpcCallerContract {
 /// Клиентский контракт для стримового сервиса
 final class _StreamServiceCallerContract extends RpcCallerContract {
   _StreamServiceCallerContract(RpcCallerEndpoint endpoint)
-      : super('StreamService', endpoint);
+    : super('StreamService', endpoint);
 
   Future<List<RpcString>> generateStream(
     RpcString request,

@@ -19,10 +19,8 @@ abstract base class RpcEndpointBase {
   bool _isActive = true;
 
   /// Creates an [RpcEndpointBase] bound to the given [transport].
-  RpcEndpointBase({
-    required IRpcTransport transport,
-    this.debugLabel,
-  }) : _transport = transport;
+  RpcEndpointBase({required IRpcTransport transport, this.debugLabel})
+    : _transport = transport;
 
   /// Collects endpoint metrics for health reporting; subclasses may extend.
   Map<String, Object?> collectEndpointMetrics() {
@@ -283,7 +281,7 @@ abstract base class RpcEndpointBase {
   }
 
   Future<({TResponse response, RpcContext context})>
-      _invokeUnaryInterceptors<TRequest, TResponse>(
+  _invokeUnaryInterceptors<TRequest, TResponse>(
     RpcMiddlewareContext context,
     TRequest request,
     Future<TResponse> Function(RpcContext ctx, TRequest request) handler,
@@ -312,18 +310,13 @@ abstract base class RpcEndpointBase {
   }
 
   Future<({Stream<TResponse> stream, RpcContext context})>
-      _invokeServerStreamInterceptors<TRequest, TResponse>(
+  _invokeServerStreamInterceptors<TRequest, TResponse>(
     RpcMiddlewareContext context,
     TRequest request,
-    FutureOr<Stream<TResponse>> Function(
-      RpcContext ctx,
-      TRequest request,
-    ) handler,
+    FutureOr<Stream<TResponse>> Function(RpcContext ctx, TRequest request)
+    handler,
   ) async {
-    FutureOr<Stream<TResponse>> invokeHandler(
-      RpcContext ctx,
-      TRequest req,
-    ) {
+    FutureOr<Stream<TResponse>> invokeHandler(RpcContext ctx, TRequest req) {
       context.updateContext(ctx);
       return handler(context.context, req);
     }
@@ -350,13 +343,11 @@ abstract base class RpcEndpointBase {
   }
 
   Future<({TResponse response, RpcContext context})>
-      _invokeClientStreamInterceptors<TRequest, TResponse>(
+  _invokeClientStreamInterceptors<TRequest, TResponse>(
     RpcMiddlewareContext context,
     Stream<TRequest> requests,
-    Future<TResponse> Function(
-      RpcContext ctx,
-      Stream<TRequest> requests,
-    ) handler,
+    Future<TResponse> Function(RpcContext ctx, Stream<TRequest> requests)
+    handler,
   ) async {
     Future<TResponse> invokeHandler(
       RpcContext ctx,
@@ -385,13 +376,14 @@ abstract base class RpcEndpointBase {
   }
 
   Future<({Stream<TResponse> stream, RpcContext context})>
-      _invokeBidirectionalInterceptors<TRequest, TResponse>(
+  _invokeBidirectionalInterceptors<TRequest, TResponse>(
     RpcMiddlewareContext context,
     Stream<TRequest> requests,
     FutureOr<Stream<TResponse>> Function(
       RpcContext ctx,
       Stream<TRequest> requests,
-    ) handler,
+    )
+    handler,
   ) async {
     FutureOr<Stream<TResponse>> invokeHandler(
       RpcContext ctx,
@@ -428,22 +420,25 @@ abstract base class RpcEndpointBase {
     required String methodName,
     required RpcContext context,
     required TRequest request,
-    required Future<TResponse> Function(
-      RpcContext ctx,
-      TRequest request,
-    ) handler,
+    required Future<TResponse> Function(RpcContext ctx, TRequest request)
+    handler,
   }) async {
-    final middlewareContext =
-        _createMiddlewareContext(serviceName, methodName, context);
-    final normalizedRequest =
-        await _applyRequestMiddlewares<TRequest>(middlewareContext, request);
+    final middlewareContext = _createMiddlewareContext(
+      serviceName,
+      methodName,
+      context,
+    );
+    final normalizedRequest = await _applyRequestMiddlewares<TRequest>(
+      middlewareContext,
+      request,
+    );
 
     final interceptorResult =
         await _invokeUnaryInterceptors<TRequest, TResponse>(
-      middlewareContext,
-      normalizedRequest,
-      handler,
-    );
+          middlewareContext,
+          normalizedRequest,
+          handler,
+        );
 
     middlewareContext.updateContext(interceptorResult.context);
     final normalizedResponse = await _applyResponseMiddlewares<TResponse>(
@@ -463,19 +458,25 @@ abstract base class RpcEndpointBase {
     required FutureOr<Stream<TResponse>> Function(
       RpcContext ctx,
       TRequest request,
-    ) handler,
+    )
+    handler,
   }) async* {
-    final middlewareContext =
-        _createMiddlewareContext(serviceName, methodName, context);
-    final normalizedRequest =
-        await _applyRequestMiddlewares<TRequest>(middlewareContext, request);
+    final middlewareContext = _createMiddlewareContext(
+      serviceName,
+      methodName,
+      context,
+    );
+    final normalizedRequest = await _applyRequestMiddlewares<TRequest>(
+      middlewareContext,
+      request,
+    );
 
     final interceptorResult =
         await _invokeServerStreamInterceptors<TRequest, TResponse>(
-      middlewareContext,
-      normalizedRequest,
-      handler,
-    );
+          middlewareContext,
+          normalizedRequest,
+          handler,
+        );
 
     middlewareContext.updateContext(interceptorResult.context);
 
@@ -494,10 +495,14 @@ abstract base class RpcEndpointBase {
     required Future<TResponse> Function(
       RpcContext ctx,
       Stream<TRequest> requests,
-    ) handler,
+    )
+    handler,
   }) async {
-    final middlewareContext =
-        _createMiddlewareContext(serviceName, methodName, context);
+    final middlewareContext = _createMiddlewareContext(
+      serviceName,
+      methodName,
+      context,
+    );
     final normalizedRequests = _applyRequestMiddlewaresToStream<TRequest>(
       middlewareContext,
       requests,
@@ -505,10 +510,10 @@ abstract base class RpcEndpointBase {
 
     final interceptorResult =
         await _invokeClientStreamInterceptors<TRequest, TResponse>(
-      middlewareContext,
-      normalizedRequests,
-      handler,
-    );
+          middlewareContext,
+          normalizedRequests,
+          handler,
+        );
 
     middlewareContext.updateContext(interceptorResult.context);
     return _applyResponseMiddlewares<TResponse>(
@@ -526,10 +531,14 @@ abstract base class RpcEndpointBase {
     required FutureOr<Stream<TResponse>> Function(
       RpcContext ctx,
       Stream<TRequest> requests,
-    ) handler,
+    )
+    handler,
   }) async* {
-    final middlewareContext =
-        _createMiddlewareContext(serviceName, methodName, context);
+    final middlewareContext = _createMiddlewareContext(
+      serviceName,
+      methodName,
+      context,
+    );
     final normalizedRequests = _applyRequestMiddlewaresToStream<TRequest>(
       middlewareContext,
       requests,
@@ -537,10 +546,10 @@ abstract base class RpcEndpointBase {
 
     final interceptorResult =
         await _invokeBidirectionalInterceptors<TRequest, TResponse>(
-      middlewareContext,
-      normalizedRequests,
-      handler,
-    );
+          middlewareContext,
+          normalizedRequests,
+          handler,
+        );
 
     yield* _applyResponseMiddlewaresToStream<TResponse>(
       middlewareContext,

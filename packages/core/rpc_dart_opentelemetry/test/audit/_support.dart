@@ -27,8 +27,12 @@ class InMemorySpanExporter implements sdk.SpanExporter {
 }
 
 /// Builds a tracer wired to an [InMemorySpanExporter] via a SimpleSpanProcessor.
-({api.Tracer tracer, InMemorySpanExporter exporter, sdk.TracerProviderBase provider})
-    buildTracer() {
+({
+  api.Tracer tracer,
+  InMemorySpanExporter exporter,
+  sdk.TracerProviderBase provider,
+})
+buildTracer() {
   final exporter = InMemorySpanExporter();
   final provider = sdk.TracerProviderBase(
     processors: [sdk.SimpleSpanProcessor(exporter)],

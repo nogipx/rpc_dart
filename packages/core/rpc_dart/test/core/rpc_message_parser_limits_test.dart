@@ -13,9 +13,6 @@ void main() {
     // Header: compression=0, length=10
     final header = Uint8List.fromList([0, 0, 0, 0, 10]);
 
-    expect(
-      () => parser(header),
-      throwsA(isA<RpcException>()),
-    );
+    expect(() => parser(header), throwsA(isA<RpcException>()));
   });
 }

@@ -138,8 +138,8 @@ class BenchmarkConfiguration {
     this.maxConcurrentOps = 20,
     this.enableVerboseLogging = false,
   }) : outputDirectory = outputPath?.contains('/') == true
-            ? outputPath!.substring(0, outputPath.lastIndexOf('/'))
-            : 'benchmark_results';
+           ? outputPath!.substring(0, outputPath.lastIndexOf('/'))
+           : 'benchmark_results';
 
   void printSummary() {
     print('📋 BENCHMARK CONFIGURATION');
@@ -212,19 +212,19 @@ class TestRequest implements IRpcSerializable {
   });
 
   factory TestRequest.fromJson(Map<String, dynamic> json) => TestRequest(
-        id: json['id'] as String,
-        message: json['message'] as String,
-        data: Map<String, dynamic>.from(json['data'] as Map),
-        timestamp: DateTime.parse(json['timestamp'] as String),
-      );
+    id: json['id'] as String,
+    message: json['message'] as String,
+    data: Map<String, dynamic>.from(json['data'] as Map),
+    timestamp: DateTime.parse(json['timestamp'] as String),
+  );
 
   @override
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'message': message,
-        'data': data,
-        'timestamp': timestamp.toIso8601String(),
-      };
+    'id': id,
+    'message': message,
+    'data': data,
+    'timestamp': timestamp.toIso8601String(),
+  };
 }
 
 class TestResponse implements IRpcSerializable {
@@ -241,19 +241,19 @@ class TestResponse implements IRpcSerializable {
   });
 
   factory TestResponse.fromJson(Map<String, dynamic> json) => TestResponse(
-        requestId: json['requestId'] as String,
-        result: json['result'] as String,
-        processingTimeMs: json['processingTimeMs'] as int,
-        metadata: Map<String, dynamic>.from(json['metadata'] as Map),
-      );
+    requestId: json['requestId'] as String,
+    result: json['result'] as String,
+    processingTimeMs: json['processingTimeMs'] as int,
+    metadata: Map<String, dynamic>.from(json['metadata'] as Map),
+  );
 
   @override
   Map<String, dynamic> toJson() => {
-        'requestId': requestId,
-        'result': result,
-        'processingTimeMs': processingTimeMs,
-        'metadata': metadata,
-      };
+    'requestId': requestId,
+    'result': result,
+    'processingTimeMs': processingTimeMs,
+    'metadata': metadata,
+  };
 }
 
 /// Генератор тестовых данных разной сложности
@@ -262,90 +262,87 @@ class TestDataGenerator {
 
   /// Простые данные
   static TestRequest generateSimple() => TestRequest(
-        id: 'simple_${_random.nextInt(1000)}',
-        message: 'Simple test message',
-        data: {'value': _random.nextInt(100)},
-        timestamp: DateTime.now(),
-      );
+    id: 'simple_${_random.nextInt(1000)}',
+    message: 'Simple test message',
+    data: {'value': _random.nextInt(100)},
+    timestamp: DateTime.now(),
+  );
 
   /// Средние данные (реалистичные)
   static TestRequest generateMedium() => TestRequest(
-        id: 'medium_${_random.nextInt(1000)}',
-        message:
-            'Medium complexity message with more text data that represents typical usage',
-        data: {
-          'user_id': _random.nextInt(10000),
-          'session': 'session_${_random.nextInt(1000)}',
-          'preferences': {
-            'language': 'en',
-            'theme': 'dark',
-            'notifications': _random.nextBool(),
-          },
-          'tags': List.generate(5, (i) => 'tag_$i'),
-          'metrics': List.generate(10, (i) => _random.nextDouble() * 100),
-        },
-        timestamp: DateTime.now(),
-      );
+    id: 'medium_${_random.nextInt(1000)}',
+    message:
+        'Medium complexity message with more text data that represents typical usage',
+    data: {
+      'user_id': _random.nextInt(10000),
+      'session': 'session_${_random.nextInt(1000)}',
+      'preferences': {
+        'language': 'en',
+        'theme': 'dark',
+        'notifications': _random.nextBool(),
+      },
+      'tags': List.generate(5, (i) => 'tag_$i'),
+      'metrics': List.generate(10, (i) => _random.nextDouble() * 100),
+    },
+    timestamp: DateTime.now(),
+  );
 
   /// Сложные данные (enterprise level)
   static TestRequest generateComplex() => TestRequest(
-        id: 'complex_${_random.nextInt(1000)}',
-        message:
-            'Complex enterprise-level message with extensive metadata, multiple nested structures, and comprehensive data payload that simulates real-world enterprise applications with rich data models',
-        data: {
-          'entity': {
-            'id': _random.nextInt(100000),
-            'type': 'enterprise_entity',
-            'attributes': Map.fromEntries(
-              List.generate(
-                20,
-                (i) => MapEntry('attr_$i', _random.nextDouble() * 1000),
-              ),
-            ),
-            'relations': List.generate(
-              10,
-              (i) => {
-                'id': _random.nextInt(1000),
-                'type': 'relation_$i',
-                'weight': _random.nextDouble(),
-              },
-            ),
+    id: 'complex_${_random.nextInt(1000)}',
+    message:
+        'Complex enterprise-level message with extensive metadata, multiple nested structures, and comprehensive data payload that simulates real-world enterprise applications with rich data models',
+    data: {
+      'entity': {
+        'id': _random.nextInt(100000),
+        'type': 'enterprise_entity',
+        'attributes': Map.fromEntries(
+          List.generate(
+            20,
+            (i) => MapEntry('attr_$i', _random.nextDouble() * 1000),
+          ),
+        ),
+        'relations': List.generate(
+          10,
+          (i) => {
+            'id': _random.nextInt(1000),
+            'type': 'relation_$i',
+            'weight': _random.nextDouble(),
           },
-          'analytics': {
-            'metrics': Map.fromEntries(
-              List.generate(
-                50,
-                (i) => MapEntry('metric_$i', _random.nextDouble() * 10000),
-              ),
-            ),
-            'trends': List.generate(100, (i) => _random.nextDouble() * 100),
-            'segments': List.generate(
-              20,
-              (i) => {
-                'name': 'segment_$i',
-                'size': _random.nextInt(10000),
-                'conversion': _random.nextDouble(),
-              },
-            ),
+        ),
+      },
+      'analytics': {
+        'metrics': Map.fromEntries(
+          List.generate(
+            50,
+            (i) => MapEntry('metric_$i', _random.nextDouble() * 10000),
+          ),
+        ),
+        'trends': List.generate(100, (i) => _random.nextDouble() * 100),
+        'segments': List.generate(
+          20,
+          (i) => {
+            'name': 'segment_$i',
+            'size': _random.nextInt(10000),
+            'conversion': _random.nextDouble(),
           },
-          'metadata': {
-            'version': '1.0.0',
-            'source': 'benchmark_generator',
-            'generated_at': DateTime.now().toIso8601String(),
-            'features': List.generate(30, (i) => 'feature_$i'),
-          },
-        },
-        timestamp: DateTime.now(),
-      );
+        ),
+      },
+      'metadata': {
+        'version': '1.0.0',
+        'source': 'benchmark_generator',
+        'generated_at': DateTime.now().toIso8601String(),
+        'features': List.generate(30, (i) => 'feature_$i'),
+      },
+    },
+    timestamp: DateTime.now(),
+  );
 }
 
 /// Серверный контракт для тестирования
 final class TestRpcContract extends RpcResponderContract {
   TestRpcContract()
-      : super(
-          'TestService',
-          dataTransferMode: RpcDataTransferMode.codec,
-        );
+    : super('TestService', dataTransferMode: RpcDataTransferMode.codec);
 
   static final _requestCodec = RpcCodec.withDecoder(TestRequest.fromJson);
   static final _responseCodec = RpcCodec.withDecoder(TestResponse.fromJson);
@@ -463,59 +460,55 @@ final class TestRpcCallerContract extends RpcCallerContract {
   static final _responseCodec = RpcCodec.withDecoder(TestResponse.fromJson);
 
   TestRpcCallerContract(RpcCallerEndpoint endpoint)
-      : super(
-          'TestService',
-          endpoint,
-          dataTransferMode: RpcDataTransferMode.codec,
-        );
+    : super(
+        'TestService',
+        endpoint,
+        dataTransferMode: RpcDataTransferMode.codec,
+      );
 
   Future<TestResponse> processRequest(
     TestRequest request, {
     RpcContext? context,
-  }) =>
-      callUnary<TestRequest, TestResponse>(
-        methodName: 'processRequest',
-        request: request,
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-        context: context,
-      );
+  }) => callUnary<TestRequest, TestResponse>(
+    methodName: 'processRequest',
+    request: request,
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+    context: context,
+  );
 
   Stream<TestResponse> streamResponses(
     TestRequest request, {
     RpcContext? context,
-  }) =>
-      callServerStream<TestRequest, TestResponse>(
-        methodName: 'streamResponses',
-        request: request,
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-        context: context,
-      );
+  }) => callServerStream<TestRequest, TestResponse>(
+    methodName: 'streamResponses',
+    request: request,
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+    context: context,
+  );
 
   Future<TestResponse> collectRequests(
     Stream<TestRequest> requests, {
     RpcContext? context,
-  }) =>
-      callClientStream<TestRequest, TestResponse>(
-        methodName: 'collectRequests',
-        requests: requests,
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-        context: context,
-      );
+  }) => callClientStream<TestRequest, TestResponse>(
+    methodName: 'collectRequests',
+    requests: requests,
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+    context: context,
+  );
 
   Stream<TestResponse> processStream(
     Stream<TestRequest> requests, {
     RpcContext? context,
-  }) =>
-      callBidirectionalStream<TestRequest, TestResponse>(
-        methodName: 'processStream',
-        requests: requests,
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-        context: context,
-      );
+  }) => callBidirectionalStream<TestRequest, TestResponse>(
+    methodName: 'processStream',
+    requests: requests,
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+    context: context,
+  );
 }
 
 /// Enhanced statistics with professional metrics and analysis
@@ -551,7 +544,7 @@ class ProfessionalBenchmarkStats {
     final m = mean;
     final variance =
         latencies.map((v) => math.pow(v - m, 2)).reduce((a, b) => a + b) /
-            latencies.length;
+        latencies.length;
     return math.sqrt(variance);
   }
 
@@ -568,8 +561,9 @@ class ProfessionalBenchmarkStats {
     final lowerBound = q25 - 1.5 * iqr;
     final upperBound = q75 + 1.5 * iqr;
 
-    final outliers =
-        latencies.where((v) => v < lowerBound || v > upperBound).length;
+    final outliers = latencies
+        .where((v) => v < lowerBound || v > upperBound)
+        .length;
     final extremeOutliers = latencies.where((v) => v > p99 + 3 * iqr).length;
 
     return OutlierAnalysis(
@@ -619,8 +613,9 @@ class ProfessionalBenchmarkStats {
 
     // Metadata
     if (metadata.isNotEmpty) {
-      final metaItems =
-          metadata.entries.map((e) => '${e.key}=${e.value}').join(', ');
+      final metaItems = metadata.entries
+          .map((e) => '${e.key}=${e.value}')
+          .join(', ');
       print('   Meta: $metaItems');
     }
 
@@ -638,28 +633,28 @@ class ProfessionalBenchmarkStats {
   }
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'category': category,
-        'timestamp': timestamp.toIso8601String(),
-        'sample_size': latencies.length,
-        'latency_distribution': {
-          'mean': mean,
-          'median': median,
-          'min': min,
-          'max': max,
-          'std_dev': standardDeviation,
-          'coefficient_of_variation': coefficientOfVariation,
-        },
-        'percentiles': {'p90': p90, 'p95': p95, 'p99': p99, 'p999': p999},
-        'performance': {'throughput_ops_per_sec': throughputPerSecond},
-        'quality': {
-          'outliers_count': outlierAnalysis.total,
-          'outliers_percentage': outlierAnalysis.percentage,
-          'extreme_outliers': outlierAnalysis.extreme,
-        },
-        'metadata': metadata,
-        'unit': unit,
-      };
+    'name': name,
+    'category': category,
+    'timestamp': timestamp.toIso8601String(),
+    'sample_size': latencies.length,
+    'latency_distribution': {
+      'mean': mean,
+      'median': median,
+      'min': min,
+      'max': max,
+      'std_dev': standardDeviation,
+      'coefficient_of_variation': coefficientOfVariation,
+    },
+    'percentiles': {'p90': p90, 'p95': p95, 'p99': p99, 'p999': p999},
+    'performance': {'throughput_ops_per_sec': throughputPerSecond},
+    'quality': {
+      'outliers_count': outlierAnalysis.total,
+      'outliers_percentage': outlierAnalysis.percentage,
+      'extreme_outliers': outlierAnalysis.extreme,
+    },
+    'metadata': metadata,
+    'unit': unit,
+  };
 }
 
 class OutlierAnalysis {
@@ -756,7 +751,7 @@ class ProfessionalRpcBenchmark {
 
   /// Setup comprehensive RPC infrastructure
   Future<(RpcResponderEndpoint, RpcCallerEndpoint, TestRpcCallerContract)>
-      _setupInfrastructure() async {
+  _setupInfrastructure() async {
     print('⚙️  Setting up RPC infrastructure...');
 
     // Create transport pair with frame codec (realistic path)
@@ -1106,7 +1101,7 @@ class ProfessionalRpcBenchmark {
     groups.forEach((category, stats) {
       final avgThroughput =
           stats.map((s) => s.throughputPerSecond).reduce((a, b) => a + b) /
-              stats.length;
+          stats.length;
       final avgLatency =
           stats.map((s) => s.mean).reduce((a, b) => a + b) / stats.length;
 
@@ -1158,8 +1153,9 @@ class ProfessionalRpcBenchmark {
         'test_results': results.map((stat) => stat.toJson()).toList(),
         'summary': {
           'total_tests': results.length,
-          'total_measurements':
-              results.map((r) => r.latencies.length).reduce((a, b) => a + b),
+          'total_measurements': results
+              .map((r) => r.latencies.length)
+              .reduce((a, b) => a + b),
           'categories': results.map((r) => r.category).toSet().toList(),
         },
       };

@@ -71,7 +71,9 @@ void main() {
 
         expect(metadata.headers.length, equals(2));
         expect(
-            _getHeaderValue(metadata, RpcHeaders.grpcEncoding), equals('gzip'));
+          _getHeaderValue(metadata, RpcHeaders.grpcEncoding),
+          equals('gzip'),
+        );
       });
     });
 
@@ -82,10 +84,7 @@ void main() {
         final metadata = RpcMetadata.forTrailer(statusCode);
 
         expect(metadata.headers.length, equals(1));
-        expect(
-          _getHeaderValue(metadata, RpcHeaders.grpcStatus),
-          equals('0'),
-        );
+        expect(_getHeaderValue(metadata, RpcHeaders.grpcStatus), equals('0'));
       });
 
       test('создает_трейлер_с_ошибкой_и_сообщением', () {
@@ -95,10 +94,7 @@ void main() {
         final metadata = RpcMetadata.forTrailer(statusCode, message: message);
 
         expect(metadata.headers.length, equals(2));
-        expect(
-          _getHeaderValue(metadata, RpcHeaders.grpcStatus),
-          equals('13'),
-        );
+        expect(_getHeaderValue(metadata, RpcHeaders.grpcStatus), equals('13'));
         expect(
           _getHeaderValue(metadata, RpcHeaders.grpcMessage),
           equals(RpcMetadata.encodeGrpcMessage(message)),
@@ -123,7 +119,9 @@ void main() {
         ]);
 
         expect(
-            metadata.getHeaderValue('custom-header'), equals('custom-value'));
+          metadata.getHeaderValue('custom-header'),
+          equals('custom-value'),
+        );
       });
 
       test('возвращает_null_для_несуществующего_заголовка', () {
@@ -135,8 +133,10 @@ void main() {
 
     group('methodPath', () {
       test('возвращает_explicit_field_из_factory', () {
-        final metadata =
-            RpcMetadata.forClientRequest('TestService', 'TestMethod');
+        final metadata = RpcMetadata.forClientRequest(
+          'TestService',
+          'TestMethod',
+        );
 
         expect(metadata.methodPath, equals('/TestService/TestMethod'));
       });
@@ -159,8 +159,10 @@ void main() {
 
     group('serviceName', () {
       test('извлекает_имя_сервиса_из_пути', () {
-        final metadata =
-            RpcMetadata.forClientRequest('TestService', 'TestMethod');
+        final metadata = RpcMetadata.forClientRequest(
+          'TestService',
+          'TestMethod',
+        );
 
         expect(metadata.serviceName, equals('TestService'));
       });
@@ -188,8 +190,10 @@ void main() {
 
     group('methodName', () {
       test('извлекает_имя_метода_из_пути', () {
-        final metadata =
-            RpcMetadata.forClientRequest('TestService', 'TestMethod');
+        final metadata = RpcMetadata.forClientRequest(
+          'TestService',
+          'TestMethod',
+        );
 
         expect(metadata.methodName, equals('TestMethod'));
       });

@@ -46,19 +46,19 @@ class BidirectionalStreamExample {
       final responses = <String>[];
       await client
           .chatWithServer(
-        Stream.fromIterable(messagesToSend.map((m) => m.rpc)),
-        context: context1,
-      )
+            Stream.fromIterable(messagesToSend.map((m) => m.rpc)),
+            context: context1,
+          )
           .forEach((response) {
-        responses.add(response.value);
-        print('КЛИЕНТ: Получен ответ: "${response.value}"');
-      });
+            responses.add(response.value);
+            print('КЛИЕНТ: Получен ответ: "${response.value}"');
+          });
       print('КЛИЕНТ: Получено всего ответов: ${responses.length}');
       // Пример 2: Чат с аутентификацией
       print('\n--- Пример 2: Чат с аутентификацией ---');
       final authContext = RpcContextUtils.withBearerToken('secret-token-123')
-          .withAdditionalHeaders({'user-role': 'admin'}).withTraceId(
-              'auth-chat-trace-456');
+          .withAdditionalHeaders({'user-role': 'admin'})
+          .withTraceId('auth-chat-trace-456');
       final secureMessages = [
         'admin:получить статус',
         'admin:получить пользователей',
@@ -66,12 +66,12 @@ class BidirectionalStreamExample {
       ];
       await client
           .chatWithServer(
-        Stream.fromIterable(secureMessages.map((m) => m.rpc)),
-        context: authContext,
-      )
+            Stream.fromIterable(secureMessages.map((m) => m.rpc)),
+            context: authContext,
+          )
           .forEach((response) {
-        print('КЛИЕНТ: Защищенный ответ: "${response.value}"');
-      });
+            print('КЛИЕНТ: Защищенный ответ: "${response.value}"');
+          });
       // Пример 3: Чат с отменой
       print('\n--- Пример 3: Чат с отменой ---');
       final cancellationToken = RpcCancellationToken();
@@ -91,8 +91,8 @@ class BidirectionalStreamExample {
         await client
             .chatWithServer(longMessages, context: cancelContext)
             .forEach((response) {
-          print('КЛИЕНТ: Долгий ответ: "${response.value}"');
-        });
+              print('КЛИЕНТ: Долгий ответ: "${response.value}"');
+            });
       } catch (e) {
         print('КЛИЕНТ: Чат отменен: $e');
       }
@@ -207,7 +207,7 @@ final class ChatServiceResponder extends RpcResponderContract
 final class ChatServiceCaller extends RpcCallerContract
     implements IChatServiceContract {
   ChatServiceCaller(RpcCallerEndpoint endpoint)
-      : super('ChatService', endpoint);
+    : super('ChatService', endpoint);
   @override
   Stream<RpcString> chatWithServer(
     Stream<RpcString> messages, {

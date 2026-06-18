@@ -26,13 +26,9 @@ import 'package:rpc_dart_log/src/protocol.dart';
 import 'package:test/test.dart';
 
 TaggedRecord _ev(String msg) => TaggedRecord(
-      deviceLabel: 'dev',
-      record: LogEvent(
-        scope: 'app',
-        level: RpcLogLevel.info,
-        message: msg,
-      ),
-    );
+  deviceLabel: 'dev',
+  record: LogEvent(scope: 'app', level: RpcLogLevel.info, message: msg),
+);
 
 void main() {
   test('finding 7: stale cursor must not silently return whole buffer', () {
@@ -63,7 +59,8 @@ void main() {
     // signals staleness.
     final returnedAll =
         out.contains('Found 10 records') || out.contains('of 10');
-    final signalsStale = out.toLowerCase().contains('stale') ||
+    final signalsStale =
+        out.toLowerCase().contains('stale') ||
         out.toLowerCase().contains('reset') ||
         out.toLowerCase().contains('evicted');
 

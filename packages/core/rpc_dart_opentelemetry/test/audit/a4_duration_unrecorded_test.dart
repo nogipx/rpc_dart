@@ -62,16 +62,15 @@ void main() {
     final interceptor = OtelRpcInterceptor(tracer: t.tracer, metrics: metrics);
     final call = buildCall();
 
-    await interceptor.interceptUnary<String, String>(
-      call,
-      'req',
-      (ctx, req) async {
-        // Make the call take a measurable, distinctive amount of time so a
-        // recorded duration would be > 1 in millis/micros.
-        await Future<void>.delayed(const Duration(milliseconds: 25));
-        return 'res';
-      },
-    );
+    await interceptor.interceptUnary<String, String>(call, 'req', (
+      ctx,
+      req,
+    ) async {
+      // Make the call take a measurable, distinctive amount of time so a
+      // recorded duration would be > 1 in millis/micros.
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      return 'res';
+    });
 
     final recorded = meter.allValues.toList();
 
@@ -80,7 +79,8 @@ void main() {
     expect(
       recorded.any((v) => v != 1),
       isTrue,
-      reason: 'No instrument received the measured duration; only the request '
+      reason:
+          'No instrument received the measured duration; only the request '
           'count was recorded: $recorded. Duration plumbing is dead -> CONFIRMED.',
     );
   });

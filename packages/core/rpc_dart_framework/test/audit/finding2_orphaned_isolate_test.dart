@@ -48,18 +48,18 @@ class _ThrowingServer implements IRpcServer {
 void main() {
   test('spawned isolate is terminated when server.start() throws', () async {
     final mod = _IsolateMod();
-    final app = RpcApp.server(
-      modules: [mod],
-      server: (_) => _ThrowingServer(),
-    );
+    final app = RpcApp.server(modules: [mod], server: (_) => _ThrowingServer());
 
     await expectLater(app.start(), throwsA(isA<StateError>()));
 
     // CORRECT behavior: the isolate should have been torn down -> reading
     // isolateCaller throws StateError ('isolate not started yet').
     // If it returns a live caller, the isolate is orphaned (CONFIRMED bug).
-    expect(() => mod.isolateCaller, throwsA(isA<StateError>()),
-        reason: 'isolate must be terminated after failed server start');
+    expect(
+      () => mod.isolateCaller,
+      throwsA(isA<StateError>()),
+      reason: 'isolate must be terminated after failed server start',
+    );
 
     // Best-effort cleanup so the test process can exit.
     try {

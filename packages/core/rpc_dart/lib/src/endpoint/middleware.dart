@@ -81,28 +81,23 @@ abstract class IRpcMiddleware {
 }
 
 /// Handler type for the next step of a unary call.
-typedef RpcUnaryNext<TRequest, TResponse> = Future<TResponse> Function(
-    RpcContext context, TRequest request);
+typedef RpcUnaryNext<TRequest, TResponse> =
+    Future<TResponse> Function(RpcContext context, TRequest request);
 
 /// Handler type for the next step of a server-stream call.
-typedef RpcServerStreamNext<TRequest, TResponse> = FutureOr<Stream<TResponse>>
-    Function(
-  RpcContext context,
-  TRequest request,
-);
+typedef RpcServerStreamNext<TRequest, TResponse> =
+    FutureOr<Stream<TResponse>> Function(RpcContext context, TRequest request);
 
 /// Handler type for the next step of a client-stream call.
-typedef RpcClientStreamNext<TRequest, TResponse> = Future<TResponse> Function(
-  RpcContext context,
-  Stream<TRequest> requests,
-);
+typedef RpcClientStreamNext<TRequest, TResponse> =
+    Future<TResponse> Function(RpcContext context, Stream<TRequest> requests);
 
 /// Handler type for the next step of a bidirectional-stream call.
-typedef RpcBidirectionalStreamNext<TRequest, TResponse>
-    = FutureOr<Stream<TResponse>> Function(
-  RpcContext context,
-  Stream<TRequest> requests,
-);
+typedef RpcBidirectionalStreamNext<TRequest, TResponse> =
+    FutureOr<Stream<TResponse>> Function(
+      RpcContext context,
+      Stream<TRequest> requests,
+    );
 
 /// Interceptor interface.
 ///

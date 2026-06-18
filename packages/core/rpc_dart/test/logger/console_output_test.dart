@@ -10,10 +10,12 @@ import 'package:test/test.dart';
 /// Captures print() output by overriding Zone's print.
 List<String> capturePrints(void Function() body) {
   final lines = <String>[];
-  runZoned(body,
-      zoneSpecification: ZoneSpecification(
-        print: (self, parent, zone, line) => lines.add(line),
-      ));
+  runZoned(
+    body,
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, line) => lines.add(line),
+    ),
+  );
   return lines;
 }
 

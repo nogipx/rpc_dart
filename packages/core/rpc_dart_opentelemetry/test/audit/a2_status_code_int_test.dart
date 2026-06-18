@@ -40,7 +40,8 @@ void main() {
     expect(
       value,
       isA<int>(),
-      reason: 'semconv requires rpc.grpc.status_code as int. '
+      reason:
+          'semconv requires rpc.grpc.status_code as int. '
           'Got: $value (${value.runtimeType}). '
           'String -> CONFIRMED.',
     );

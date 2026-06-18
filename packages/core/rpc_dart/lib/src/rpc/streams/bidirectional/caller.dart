@@ -6,8 +6,10 @@
 part of '../_index.dart';
 
 /// Bidirectional stream caller: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Sends and receives concurrently with no ordering restrictions.
-final class BidirectionalStreamCaller<TRequest extends Object,
-    TResponse extends Object> {
+final class BidirectionalStreamCaller<
+  TRequest extends Object,
+  TResponse extends Object
+> {
   late final LogScope _logger;
 
   /// Stream processor.
@@ -87,9 +89,8 @@ final class BidirectionalStreamCaller<TRequest extends Object,
         if (statusStr != null) {
           final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
           if (status != RpcStatus.ok) {
-            final message = response.metadata!.getHeaderValue(
-                  RpcHeaders.grpcMessage,
-                ) ??
+            final message =
+                response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
                 'Unknown error';
             final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
             _logger.error(
@@ -115,9 +116,7 @@ final class BidirectionalStreamCaller<TRequest extends Object,
       final controller = StreamController<TRequest>();
       controller.stream.listen(
         (request) async {
-          _logger.internal(
-            'Sending request in bidirectional stream: $request',
-          );
+          _logger.internal('Sending request in bidirectional stream: $request');
           await send(request);
         },
         onDone: () async {

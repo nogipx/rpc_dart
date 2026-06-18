@@ -21,19 +21,18 @@ TaggedRecord _event(
   Object? error,
   Map<String, Object>? data,
   DateTime? timestamp,
-}) =>
-    TaggedRecord(
-      deviceLabel: device,
-      record: LogEvent(
-        scope: scope,
-        level: level,
-        message: message,
-        traceId: traceId,
-        error: error,
-        data: data,
-        timestamp: timestamp,
-      ),
-    );
+}) => TaggedRecord(
+  deviceLabel: device,
+  record: LogEvent(
+    scope: scope,
+    level: level,
+    message: message,
+    traceId: traceId,
+    error: error,
+    data: data,
+    timestamp: timestamp,
+  ),
+);
 
 TaggedRecord _span(
   String device, {
@@ -60,11 +59,8 @@ TaggedRecord _span(
   );
 }
 
-LogCollectorSession _session(String name, String app) => LogCollectorSession(
-      id: 1,
-      deviceName: name,
-      app: app,
-    );
+LogCollectorSession _session(String name, String app) =>
+    LogCollectorSession(id: 1, deviceName: name, app: app);
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -78,16 +74,26 @@ void main() {
 
     test('cursor increments on each record', () {
       expect(buf.cursor, 0);
-      buf.addRecord(_event('d', scope: 'a', level: RpcLogLevel.info, message: 'x'));
+      buf.addRecord(
+        _event('d', scope: 'a', level: RpcLogLevel.info, message: 'x'),
+      );
       expect(buf.cursor, 1);
-      buf.addRecord(_event('d', scope: 'a', level: RpcLogLevel.info, message: 'y'));
+      buf.addRecord(
+        _event('d', scope: 'a', level: RpcLogLevel.info, message: 'y'),
+      );
       expect(buf.cursor, 2);
     });
 
     test('scope stats accumulate correctly', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'ok'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.error, message: 'fail'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.warning, message: 'warn'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'ok'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.error, message: 'fail'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.warning, message: 'warn'),
+      );
       buf.addRecord(_span('d', scope: 'svc', name: 'op'));
 
       final output = buf.sources([]);
@@ -97,7 +103,12 @@ void main() {
     test('recent errors rolling window keeps last 5', () {
       for (var i = 0; i < 7; i++) {
         buf.addRecord(
-          _event('d', scope: 'svc', level: RpcLogLevel.error, message: 'error $i'),
+          _event(
+            'd',
+            scope: 'svc',
+            level: RpcLogLevel.error,
+            message: 'error $i',
+          ),
         );
       }
       final output = buf.sources([]);
@@ -112,20 +123,32 @@ void main() {
     });
 
     test('fatal counts as recent error', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.fatal, message: 'crash'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.fatal, message: 'crash'),
+      );
       expect(buf.sources([]), contains('Recent errors (1 unique)'));
     });
 
     test('info/warning do not appear in recent errors', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'hello'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.warning, message: 'warn'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'hello'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.warning, message: 'warn'),
+      );
       expect(buf.sources([]), isNot(contains('Recent errors')));
     });
 
     test('duplicate error counted not duplicated in recent errors', () {
       for (var i = 0; i < 10; i++) {
         buf.addRecord(
-            _event('d', scope: 'svc', level: RpcLogLevel.error, message: 'conn failed'));
+          _event(
+            'd',
+            scope: 'svc',
+            level: RpcLogLevel.error,
+            message: 'conn failed',
+          ),
+        );
       }
       final out = buf.sources([]);
       // Only 1 unique error shown
@@ -138,7 +161,13 @@ void main() {
     test('up to 5 unique errors tracked', () {
       for (var i = 0; i < 7; i++) {
         buf.addRecord(
-            _event('d', scope: 'svc', level: RpcLogLevel.error, message: 'error $i'));
+          _event(
+            'd',
+            scope: 'svc',
+            level: RpcLogLevel.error,
+            message: 'error $i',
+          ),
+        );
       }
       final out = buf.sources([]);
       expect(out, contains('Recent errors (5 unique)'));
@@ -149,25 +178,54 @@ void main() {
     });
 
     test('totals line shows error and warning counts', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.error, message: 'e'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.warning, message: 'w'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'i'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.error, message: 'e'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.warning, message: 'w'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'i'),
+      );
       final out = buf.sources([]);
       expect(out, contains('Totals: 1 errors, 1 warnings'));
     });
 
     test('totals line absent when no errors or warnings', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'ok'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'ok'),
+      );
       expect(buf.sources([]), isNot(contains('Totals')));
     });
 
     test('traceId tracked with error count', () {
-      buf.addRecord(_event('d',
-          scope: 'svc', level: RpcLogLevel.info, message: 'ok', traceId: 'trace-abc-123'));
-      buf.addRecord(_event('d',
-          scope: 'svc', level: RpcLogLevel.error, message: 'fail', traceId: 'trace-abc-123'));
-      buf.addRecord(_event('d',
-          scope: 'svc', level: RpcLogLevel.error, message: 'fail2', traceId: 'trace-abc-123'));
+      buf.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.info,
+          message: 'ok',
+          traceId: 'trace-abc-123',
+        ),
+      );
+      buf.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.error,
+          message: 'fail',
+          traceId: 'trace-abc-123',
+        ),
+      );
+      buf.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.error,
+          message: 'fail2',
+          traceId: 'trace-abc-123',
+        ),
+      );
 
       final output = buf.sources([]);
       expect(output, contains('trace-ab')); // 8-char prefix of 'trace-abc-123'
@@ -175,8 +233,15 @@ void main() {
     });
 
     test('traceId without errors shows no annotation', () {
-      buf.addRecord(_event('d',
-          scope: 'svc', level: RpcLogLevel.info, message: 'ok', traceId: 'trace-xyz-000'));
+      buf.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.info,
+          message: 'ok',
+          traceId: 'trace-xyz-000',
+        ),
+      );
       final output = buf.sources([]);
       expect(output, contains('trace-xy'));
       expect(output, isNot(contains('err)')));
@@ -184,10 +249,18 @@ void main() {
 
     test('buffer evicts oldest when full', () {
       final small = LogCollectorMcpBuffer(maxRecords: 3);
-      small.addRecord(_event('d', scope: 'a', level: RpcLogLevel.info, message: 'first'));
-      small.addRecord(_event('d', scope: 'a', level: RpcLogLevel.info, message: 'second'));
-      small.addRecord(_event('d', scope: 'a', level: RpcLogLevel.info, message: 'third'));
-      small.addRecord(_event('d', scope: 'a', level: RpcLogLevel.info, message: 'fourth'));
+      small.addRecord(
+        _event('d', scope: 'a', level: RpcLogLevel.info, message: 'first'),
+      );
+      small.addRecord(
+        _event('d', scope: 'a', level: RpcLogLevel.info, message: 'second'),
+      );
+      small.addRecord(
+        _event('d', scope: 'a', level: RpcLogLevel.info, message: 'third'),
+      );
+      small.addRecord(
+        _event('d', scope: 'a', level: RpcLogLevel.info, message: 'fourth'),
+      );
       expect(small.recordCount, 3);
       expect(small.cursor, 4);
     });
@@ -205,21 +278,31 @@ void main() {
     });
 
     test('shows connected device', () {
-      buf.addRecord(_event('Phone', scope: 'svc', level: RpcLogLevel.info, message: 'x'));
+      buf.addRecord(
+        _event('Phone', scope: 'svc', level: RpcLogLevel.info, message: 'x'),
+      );
       final out = buf.sources([_session('Phone', 'com.app')]);
       expect(out, contains('Phone [com.app]'));
     });
 
     test('includes cursor in buffer line', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'),
+      );
       expect(buf.sources([]), contains('cursor: 1'));
     });
 
     test('buffer full note when maxRecords reached', () {
       final small = LogCollectorMcpBuffer(maxRecords: 2);
-      small.addRecord(_event('d', scope: 's', level: RpcLogLevel.info, message: 'a'));
-      small.addRecord(_event('d', scope: 's', level: RpcLogLevel.info, message: 'b'));
-      small.addRecord(_event('d', scope: 's', level: RpcLogLevel.info, message: 'c'));
+      small.addRecord(
+        _event('d', scope: 's', level: RpcLogLevel.info, message: 'a'),
+      );
+      small.addRecord(
+        _event('d', scope: 's', level: RpcLogLevel.info, message: 'b'),
+      );
+      small.addRecord(
+        _event('d', scope: 's', level: RpcLogLevel.info, message: 'c'),
+      );
       expect(small.sources([]), contains('buffer full'));
     });
 
@@ -235,9 +318,13 @@ void main() {
 
     test('scopes sorted by total descending', () {
       for (var i = 0; i < 3; i++) {
-        buf.addRecord(_event('d', scope: 'busy', level: RpcLogLevel.info, message: 'x'));
+        buf.addRecord(
+          _event('d', scope: 'busy', level: RpcLogLevel.info, message: 'x'),
+        );
       }
-      buf.addRecord(_event('d', scope: 'idle', level: RpcLogLevel.info, message: 'x'));
+      buf.addRecord(
+        _event('d', scope: 'idle', level: RpcLogLevel.info, message: 'x'),
+      );
 
       final out = buf.sources([]);
       expect(out.indexOf('busy'), lessThan(out.indexOf('idle')));
@@ -245,22 +332,30 @@ void main() {
 
     test('caps traceIds at 10, shows remainder count', () {
       for (var i = 0; i < 12; i++) {
-        buf.addRecord(_event('d',
+        buf.addRecord(
+          _event(
+            'd',
             scope: 'svc',
             level: RpcLogLevel.info,
             message: 'x',
-            traceId: 'trace-${i.toString().padLeft(8, '0')}'));
+            traceId: 'trace-${i.toString().padLeft(8, '0')}',
+          ),
+        );
       }
       final out = buf.sources([]);
       expect(out, contains('+2 more'));
     });
 
     test('traceId shown as 8-char prefix', () {
-      buf.addRecord(_event('d',
+      buf.addRecord(
+        _event(
+          'd',
           scope: 'svc',
           level: RpcLogLevel.info,
           message: 'x',
-          traceId: 'abcdef12-rest-of-uuid'));
+          traceId: 'abcdef12-rest-of-uuid',
+        ),
+      );
       final out = buf.sources([]);
       expect(out, contains('abcdef12'));
       expect(out, isNot(contains('abcdef12-rest')));
@@ -272,10 +367,30 @@ void main() {
 
     setUp(() {
       buf = LogCollectorMcpBuffer();
-      buf.addRecord(_event('Phone', scope: 'engine', level: RpcLogLevel.info, message: 'started'));
       buf.addRecord(
-          _event('Phone', scope: 'engine.conn', level: RpcLogLevel.error, message: 'conn failed'));
-      buf.addRecord(_event('CLI', scope: 'sync', level: RpcLogLevel.debug, message: 'syncing'));
+        _event(
+          'Phone',
+          scope: 'engine',
+          level: RpcLogLevel.info,
+          message: 'started',
+        ),
+      );
+      buf.addRecord(
+        _event(
+          'Phone',
+          scope: 'engine.conn',
+          level: RpcLogLevel.error,
+          message: 'conn failed',
+        ),
+      );
+      buf.addRecord(
+        _event(
+          'CLI',
+          scope: 'sync',
+          level: RpcLogLevel.debug,
+          message: 'syncing',
+        ),
+      );
       buf.addRecord(_span('Phone', scope: 'engine', name: 'connect-op'));
     });
 
@@ -320,10 +435,24 @@ void main() {
 
     test('traceId prefix filter (startsWith)', () {
       final b = LogCollectorMcpBuffer();
-      b.addRecord(_event('d',
-          scope: 'svc', level: RpcLogLevel.info, message: 'a', traceId: 'abcdef12-long-uuid'));
-      b.addRecord(_event('d',
-          scope: 'svc', level: RpcLogLevel.info, message: 'b', traceId: 'other-trace'));
+      b.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.info,
+          message: 'a',
+          traceId: 'abcdef12-long-uuid',
+        ),
+      );
+      b.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.info,
+          message: 'b',
+          traceId: 'other-trace',
+        ),
+      );
 
       final out = b.getLogs({'traceId': 'abcdef12'});
       expect(out, contains('  a  '));
@@ -332,8 +461,15 @@ void main() {
 
     test('traceId full match still works', () {
       final b = LogCollectorMcpBuffer();
-      b.addRecord(_event('d',
-          scope: 'svc', level: RpcLogLevel.info, message: 'hit', traceId: 'exact-trace-id'));
+      b.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.info,
+          message: 'hit',
+          traceId: 'exact-trace-id',
+        ),
+      );
       final out = b.getLogs({'traceId': 'exact-trace-id'});
       expect(out, contains('hit'));
     });
@@ -341,7 +477,9 @@ void main() {
     test('count limits results', () {
       final b = LogCollectorMcpBuffer();
       for (var i = 0; i < 10; i++) {
-        b.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'msg $i'));
+        b.addRecord(
+          _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'msg $i'),
+        );
       }
       final out = b.getLogs({'count': 3});
       // 3 returned, more exist -- shows "Showing X of X+"
@@ -350,10 +488,16 @@ void main() {
 
     test('cursor returns only new records', () {
       final b = LogCollectorMcpBuffer();
-      b.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'old'));
-      b.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'old2'));
+      b.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'old'),
+      );
+      b.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'old2'),
+      );
       final cursorAfterTwo = b.cursor;
-      b.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'new'));
+      b.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'new'),
+      );
 
       final out = b.getLogs({'cursor': cursorAfterTwo});
       expect(out, contains('new'));
@@ -382,7 +526,9 @@ void main() {
     test('showing X of X+ when count truncates results', () {
       final b = LogCollectorMcpBuffer();
       for (var i = 0; i < 10; i++) {
-        b.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'msg $i'));
+        b.addRecord(
+          _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'msg $i'),
+        );
       }
       final out = b.getLogs({'count': 3});
       expect(out, contains('Showing 3 of 3+'));
@@ -396,11 +542,15 @@ void main() {
 
     test('no_data omits data field from events', () {
       final b = LogCollectorMcpBuffer();
-      b.addRecord(_event('d',
+      b.addRecord(
+        _event(
+          'd',
           scope: 'svc',
           level: RpcLogLevel.info,
           message: 'hello',
-          data: {'key': 'value', 'num': 42}));
+          data: {'key': 'value', 'num': 42},
+        ),
+      );
 
       final withData = b.getLogs({});
       final withoutData = b.getLogs({'no_data': true});
@@ -411,20 +561,26 @@ void main() {
 
     test('no_data=false (default) includes data', () {
       final b = LogCollectorMcpBuffer();
-      b.addRecord(_event('d',
+      b.addRecord(
+        _event(
+          'd',
           scope: 'svc',
           level: RpcLogLevel.info,
           message: 'hello',
-          data: {'k': 'v'}));
+          data: {'k': 'v'},
+        ),
+      );
       expect(b.getLogs({}), contains('k=v'));
     });
 
     test('LogSpanStart records are always excluded', () {
       final b = LogCollectorMcpBuffer();
-      b.addRecord(TaggedRecord(
-        deviceLabel: 'd',
-        record: LogSpanStart(spanId: 'x', scope: 'svc', name: 'op'),
-      ));
+      b.addRecord(
+        TaggedRecord(
+          deviceLabel: 'd',
+          record: LogSpanStart(spanId: 'x', scope: 'svc', name: 'op'),
+        ),
+      );
       final out = b.getLogs({});
       expect(out, contains('No logs found'));
     });
@@ -436,7 +592,9 @@ void main() {
     setUp(() {
       buf = LogCollectorMcpBuffer();
       for (var i = 0; i < 10; i++) {
-        buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'msg $i'));
+        buf.addRecord(
+          _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'msg $i'),
+        );
       }
     });
 
@@ -468,13 +626,20 @@ void main() {
 
     test('context lines prefixed with spaces (not >)', () {
       final out = buf.getLogs({'message': 'msg 5', 'context': 1});
-      final contextLine = out.split('\n').firstWhere((l) => l.contains('msg 4'));
+      final contextLine = out
+          .split('\n')
+          .firstWhere((l) => l.contains('msg 4'));
       expect(contextLine, startsWith('  '));
       expect(contextLine, isNot(startsWith('>')));
     });
 
     test('two close matches -- windows merge, no separator', () {
-      final out = buf.getLogs({'message': 'msg', 'level': 'info', 'context': 1, 'count': 2});
+      final out = buf.getLogs({
+        'message': 'msg',
+        'level': 'info',
+        'context': 1,
+        'count': 2,
+      });
       // msg 0 and msg 1 both match, context=1, windows overlap -> no ---
       expect(out, isNot(contains('---')));
     });
@@ -482,13 +647,26 @@ void main() {
     test('two far matches -- separated by ---', () {
       final b = LogCollectorMcpBuffer();
       for (var i = 0; i < 10; i++) {
-        b.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'ok $i'));
+        b.addRecord(
+          _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'ok $i'),
+        );
       }
-      b.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.error, message: 'err A'));
+      b.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.error, message: 'err A'),
+      );
       for (var i = 0; i < 10; i++) {
-        b.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'ok ${i + 10}'));
+        b.addRecord(
+          _event(
+            'd',
+            scope: 'svc',
+            level: RpcLogLevel.info,
+            message: 'ok ${i + 10}',
+          ),
+        );
       }
-      b.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.error, message: 'err B'));
+      b.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.error, message: 'err B'),
+      );
 
       final out = b.getLogs({'level': 'error', 'context': 1});
       expect(out, contains('---'));
@@ -516,16 +694,24 @@ void main() {
     setUp(() {
       buf = LogCollectorMcpBuffer();
       now = DateTime.now();
-      buf.addRecord(_event('d',
+      buf.addRecord(
+        _event(
+          'd',
           scope: 'svc',
           level: RpcLogLevel.info,
           message: 'old record',
-          timestamp: now.subtract(const Duration(minutes: 10))));
-      buf.addRecord(_event('d',
+          timestamp: now.subtract(const Duration(minutes: 10)),
+        ),
+      );
+      buf.addRecord(
+        _event(
+          'd',
           scope: 'svc',
           level: RpcLogLevel.info,
           message: 'recent record',
-          timestamp: now.subtract(const Duration(seconds: 30))));
+          timestamp: now.subtract(const Duration(seconds: 30)),
+        ),
+      );
     });
 
     test('since=2m returns only recent records', () {
@@ -543,16 +729,24 @@ void main() {
     test('since=30s returns only very recent', () {
       // recent record is 30s ago -- borderline, add one clearly within window
       final b = LogCollectorMcpBuffer();
-      b.addRecord(_event('d',
+      b.addRecord(
+        _event(
+          'd',
           scope: 'svc',
           level: RpcLogLevel.info,
           message: 'ancient',
-          timestamp: now.subtract(const Duration(minutes: 5))));
-      b.addRecord(_event('d',
+          timestamp: now.subtract(const Duration(minutes: 5)),
+        ),
+      );
+      b.addRecord(
+        _event(
+          'd',
           scope: 'svc',
           level: RpcLogLevel.info,
           message: 'fresh',
-          timestamp: now.subtract(const Duration(seconds: 5))));
+          timestamp: now.subtract(const Duration(seconds: 5)),
+        ),
+      );
       final out = b.getLogs({'since': '30s'});
       expect(out, contains('fresh'));
       expect(out, isNot(contains('ancient')));
@@ -563,16 +757,24 @@ void main() {
       final cutoff = now.subtract(const Duration(minutes: 5));
       final hh = cutoff.hour.toString().padLeft(2, '0');
       final mm = cutoff.minute.toString().padLeft(2, '0');
-      b.addRecord(_event('d',
+      b.addRecord(
+        _event(
+          'd',
           scope: 'svc',
           level: RpcLogLevel.info,
           message: 'before cutoff',
-          timestamp: cutoff.subtract(const Duration(minutes: 1))));
-      b.addRecord(_event('d',
+          timestamp: cutoff.subtract(const Duration(minutes: 1)),
+        ),
+      );
+      b.addRecord(
+        _event(
+          'd',
           scope: 'svc',
           level: RpcLogLevel.info,
           message: 'after cutoff',
-          timestamp: cutoff.add(const Duration(minutes: 1))));
+          timestamp: cutoff.add(const Duration(minutes: 1)),
+        ),
+      );
       final out = b.getLogs({'since': '$hh:$mm'});
       expect(out, contains('after cutoff'));
       expect(out, isNot(contains('before cutoff')));
@@ -598,10 +800,33 @@ void main() {
 
     setUp(() {
       buf = LogCollectorMcpBuffer();
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'connection timeout'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'connection refused'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'auth failed'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'sync ok'));
+      buf.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.info,
+          message: 'connection timeout',
+        ),
+      );
+      buf.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.info,
+          message: 'connection refused',
+        ),
+      );
+      buf.addRecord(
+        _event(
+          'd',
+          scope: 'svc',
+          level: RpcLogLevel.info,
+          message: 'auth failed',
+        ),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'sync ok'),
+      );
     });
 
     test('plain substring still works', () {
@@ -662,11 +887,15 @@ void main() {
     test('traceIdOrder capped at 500', () {
       final buf = LogCollectorMcpBuffer();
       for (var i = 0; i < 501; i++) {
-        buf.addRecord(_event('d',
+        buf.addRecord(
+          _event(
+            'd',
             scope: 'svc',
             level: RpcLogLevel.info,
             message: 'x',
-            traceId: 'trace-${i.toString().padLeft(6, '0')}'));
+            traceId: 'trace-${i.toString().padLeft(6, '0')}',
+          ),
+        );
       }
       // Internal: only 500 traceIds kept. Verify sources doesn't crash and shows 500.
       final out = buf.sources([]);
@@ -676,11 +905,15 @@ void main() {
     test('traceId count in sources never exceeds 500', () {
       final buf = LogCollectorMcpBuffer();
       for (var i = 0; i < 510; i++) {
-        buf.addRecord(_event('d',
+        buf.addRecord(
+          _event(
+            'd',
             scope: 'svc',
             level: RpcLogLevel.info,
             message: 'x',
-            traceId: 'uid-$i'));
+            traceId: 'uid-$i',
+          ),
+        );
       }
       // sources shows exactly 500, not 510
       final out = buf.sources([]);
@@ -695,9 +928,15 @@ void main() {
     setUp(() => buf = LogCollectorMcpBuffer());
 
     test('collapse=false does not collapse (default)', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'),
+      );
 
       final out = buf.getLogs({});
       expect(out, contains('Found 3 records'));
@@ -707,9 +946,15 @@ void main() {
     // --- P=1 ---
 
     test('P=1: folds consecutive identical messages', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'retry'),
+      );
 
       final out = buf.getLogs({'collapse': true});
       expect(out, contains('[x3]'));
@@ -717,24 +962,41 @@ void main() {
     });
 
     test('P=1: single record produces no prefix', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'once'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'once'),
+      );
       final out = buf.getLogs({'collapse': true});
       expect(out, isNot(contains('[x')));
       expect(out, contains('once'));
     });
 
     test('P=1: respects device boundary', () {
-      buf.addRecord(_event('Phone', scope: 'svc', level: RpcLogLevel.info, message: 'retry'));
-      buf.addRecord(_event('CLI', scope: 'svc', level: RpcLogLevel.info, message: 'retry'));
+      buf.addRecord(
+        _event(
+          'Phone',
+          scope: 'svc',
+          level: RpcLogLevel.info,
+          message: 'retry',
+        ),
+      );
+      buf.addRecord(
+        _event('CLI', scope: 'svc', level: RpcLogLevel.info, message: 'retry'),
+      );
 
       final out = buf.getLogs({'collapse': true});
       expect(out, isNot(contains('[x')));
     });
 
     test('P=1: run then different', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'tick'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'tick'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'done'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'tick'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'tick'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'done'),
+      );
 
       final out = buf.getLogs({'collapse': true});
       expect(out, contains('[x2]'));
@@ -757,8 +1019,12 @@ void main() {
     test('P=2: 2-line cycle collapsed', () {
       // a b a b a b
       for (var i = 0; i < 3; i++) {
-        buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'start'));
-        buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'done'));
+        buf.addRecord(
+          _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'start'),
+        );
+        buf.addRecord(
+          _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'done'),
+        );
       }
 
       final out = buf.getLogs({'collapse': true});
@@ -769,11 +1035,21 @@ void main() {
 
     test('P=2: 2-line cycle then trailing record', () {
       // a b a b c
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'start'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'done'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'start'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'done'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'exit'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'start'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'done'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'start'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'done'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'exit'),
+      );
 
       final out = buf.getLogs({'collapse': true});
       expect(out, contains('[x2 cycles]'));
@@ -782,10 +1058,18 @@ void main() {
 
     test('P=2: prefers P=1 over P=2 when both match', () {
       // a a a a -- P=1 wins over treating as 2-cycle [a,a]
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'x'),
+      );
 
       final out = buf.getLogs({'collapse': true});
       expect(out, contains('[x4]')); // not [x2 cycles]
@@ -797,9 +1081,15 @@ void main() {
     test('P=3: 3-line cycle collapsed', () {
       // a b c a b c a b c
       for (var i = 0; i < 3; i++) {
-        buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'init'));
-        buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'work'));
-        buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'flush'));
+        buf.addRecord(
+          _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'init'),
+        );
+        buf.addRecord(
+          _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'work'),
+        );
+        buf.addRecord(
+          _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'flush'),
+        );
       }
 
       final out = buf.getLogs({'collapse': true});
@@ -810,9 +1100,15 @@ void main() {
     });
 
     test('P=3: non-repeating sequence is not collapsed', () {
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'a'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'b'));
-      buf.addRecord(_event('d', scope: 'svc', level: RpcLogLevel.info, message: 'c'));
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'a'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'b'),
+      );
+      buf.addRecord(
+        _event('d', scope: 'svc', level: RpcLogLevel.info, message: 'c'),
+      );
 
       final out = buf.getLogs({'collapse': true});
       expect(out, isNot(contains('[x')));

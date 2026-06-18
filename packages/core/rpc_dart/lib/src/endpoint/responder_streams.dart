@@ -143,7 +143,9 @@ final class RpcResponderStreamStore {
   /// Returns or creates the stream state for [streamId].
   RpcResponderStreamState obtain(int streamId) {
     return _states.putIfAbsent(
-        streamId, () => RpcResponderStreamState(streamId));
+      streamId,
+      () => RpcResponderStreamState(streamId),
+    );
   }
 
   /// Returns the stream state for [streamId], or null if absent.

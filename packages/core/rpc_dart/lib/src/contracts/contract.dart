@@ -55,11 +55,10 @@ abstract class RpcResponderContract implements IRpcContract {
   }
 
   /// Returns effective codecs based on the configured transfer mode.
-  (
-    IRpcCodec<TRequest>?,
-    IRpcCodec<TResponse>?
-  ) _getEffectiveCodecs<TRequest, TResponse>(
-      IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) {
+  (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?) _getEffectiveCodecs<
+    TRequest,
+    TResponse
+  >(IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) {
     final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
 
     if (isZeroCopy) {
@@ -109,7 +108,7 @@ abstract class RpcResponderContract implements IRpcContract {
   void addUnaryMethod<TRequest extends Object, TResponse extends Object>({
     required String methodName,
     required Future<TResponse> Function(TRequest, {RpcContext? context})
-        handler,
+    handler,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
@@ -129,11 +128,11 @@ abstract class RpcResponderContract implements IRpcContract {
       // Zero-copy registration.
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<TRequest, TResponse>(
-        name: methodName,
-        type: RpcMethodType.unaryRequest,
-        handler: handler,
-        description: '$description [ZERO-COPY]',
-      );
+            name: methodName,
+            type: RpcMethodType.unaryRequest,
+            handler: handler,
+            description: '$description [ZERO-COPY]',
+          );
     } else {
       // Serialized registration with type-safe wrapper.
       Future<IRpcSerializable> wrappedHandler(
@@ -147,13 +146,13 @@ abstract class RpcResponderContract implements IRpcContract {
 
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
-        name: methodName,
-        type: RpcMethodType.unaryRequest,
-        handler: wrappedHandler,
-        description: description,
-        requestCodec: _OpaqueCodec(effectiveRequestCodec!),
-        responseCodec: _OpaqueCodec(effectiveResponseCodec!),
-      );
+            name: methodName,
+            type: RpcMethodType.unaryRequest,
+            handler: wrappedHandler,
+            description: description,
+            requestCodec: _OpaqueCodec(effectiveRequestCodec!),
+            responseCodec: _OpaqueCodec(effectiveResponseCodec!),
+          );
     }
   }
 
@@ -162,10 +161,10 @@ abstract class RpcResponderContract implements IRpcContract {
   /// Codecs provided → serialized mode; codecs omitted → zero-copy (requires
   /// zero-copy-capable transport).
   void
-      addServerStreamMethod<TRequest extends Object, TResponse extends Object>({
+  addServerStreamMethod<TRequest extends Object, TResponse extends Object>({
     required String methodName,
     required Stream<TResponse> Function(TRequest, {RpcContext? context})
-        handler,
+    handler,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
@@ -185,11 +184,11 @@ abstract class RpcResponderContract implements IRpcContract {
       // Zero-copy registration.
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<TRequest, TResponse>(
-        name: methodName,
-        type: RpcMethodType.serverStream,
-        handler: handler,
-        description: '$description [ZERO-COPY]',
-      );
+            name: methodName,
+            type: RpcMethodType.serverStream,
+            handler: handler,
+            description: '$description [ZERO-COPY]',
+          );
     } else {
       // Serialized registration with type-safe wrapper.
       Stream<IRpcSerializable> wrappedHandler(
@@ -205,13 +204,13 @@ abstract class RpcResponderContract implements IRpcContract {
 
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
-        name: methodName,
-        type: RpcMethodType.serverStream,
-        handler: wrappedHandler,
-        description: description,
-        requestCodec: _OpaqueCodec(effectiveRequestCodec!),
-        responseCodec: _OpaqueCodec(effectiveResponseCodec!),
-      );
+            name: methodName,
+            type: RpcMethodType.serverStream,
+            handler: wrappedHandler,
+            description: description,
+            requestCodec: _OpaqueCodec(effectiveRequestCodec!),
+            responseCodec: _OpaqueCodec(effectiveResponseCodec!),
+          );
     }
   }
 
@@ -220,10 +219,10 @@ abstract class RpcResponderContract implements IRpcContract {
   /// Codecs provided → serialized mode; codecs omitted → zero-copy (requires
   /// zero-copy-capable transport).
   void
-      addClientStreamMethod<TRequest extends Object, TResponse extends Object>({
+  addClientStreamMethod<TRequest extends Object, TResponse extends Object>({
     required String methodName,
     required Future<TResponse> Function(Stream<TRequest>, {RpcContext? context})
-        handler,
+    handler,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
@@ -250,32 +249,33 @@ abstract class RpcResponderContract implements IRpcContract {
 
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<Object, Object>(
-        name: methodName,
-        type: RpcMethodType.clientStream,
-        handler: adaptedHandler,
-        description: '$description [ZERO-COPY]',
-      );
+            name: methodName,
+            type: RpcMethodType.clientStream,
+            handler: adaptedHandler,
+            description: '$description [ZERO-COPY]',
+          );
     } else {
       // Serialized registration with type-safe wrapper.
       Future<IRpcSerializable> wrappedHandler(
         Stream<IRpcSerializable> requests, {
         RpcContext? context,
       }) async {
-        final typedRequestStream =
-            requests.map<TRequest>((r) => _OpaqueValue.unwrap<TRequest>(r));
+        final typedRequestStream = requests.map<TRequest>(
+          (r) => _OpaqueValue.unwrap<TRequest>(r),
+        );
         final response = await handler(typedRequestStream, context: context);
         return _OpaqueValue.wrap(response);
       }
 
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
-        name: methodName,
-        type: RpcMethodType.clientStream,
-        handler: wrappedHandler,
-        description: description,
-        requestCodec: _OpaqueCodec(effectiveRequestCodec!),
-        responseCodec: _OpaqueCodec(effectiveResponseCodec!),
-      );
+            name: methodName,
+            type: RpcMethodType.clientStream,
+            handler: wrappedHandler,
+            description: description,
+            requestCodec: _OpaqueCodec(effectiveRequestCodec!),
+            responseCodec: _OpaqueCodec(effectiveResponseCodec!),
+          );
     }
   }
 
@@ -283,11 +283,11 @@ abstract class RpcResponderContract implements IRpcContract {
   ///
   /// Codecs provided → serialized mode; codecs omitted → zero-copy (requires
   /// zero-copy-capable transport).
-  void addBidirectionalMethod<TRequest extends Object,
-      TResponse extends Object>({
+  void
+  addBidirectionalMethod<TRequest extends Object, TResponse extends Object>({
     required String methodName,
     required Stream<TResponse> Function(Stream<TRequest>, {RpcContext? context})
-        handler,
+    handler,
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
@@ -316,19 +316,20 @@ abstract class RpcResponderContract implements IRpcContract {
 
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<Object, Object>(
-        name: methodName,
-        type: RpcMethodType.bidirectionalStream,
-        handler: adaptedHandler,
-        description: '$description [ZERO-COPY]',
-      );
+            name: methodName,
+            type: RpcMethodType.bidirectionalStream,
+            handler: adaptedHandler,
+            description: '$description [ZERO-COPY]',
+          );
     } else {
       // Serialized registration with type-safe wrapper.
       Stream<IRpcSerializable> wrappedHandler(
         Stream<IRpcSerializable> requests, {
         RpcContext? context,
       }) async* {
-        final typedRequestStream =
-            requests.map<TRequest>((r) => _OpaqueValue.unwrap<TRequest>(r));
+        final typedRequestStream = requests.map<TRequest>(
+          (r) => _OpaqueValue.unwrap<TRequest>(r),
+        );
         final responseStream = handler(typedRequestStream, context: context);
         await for (final response in responseStream) {
           yield _OpaqueValue.wrap(response);
@@ -337,13 +338,13 @@ abstract class RpcResponderContract implements IRpcContract {
 
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
-        name: methodName,
-        type: RpcMethodType.bidirectionalStream,
-        handler: wrappedHandler,
-        description: description,
-        requestCodec: _OpaqueCodec(effectiveRequestCodec!),
-        responseCodec: _OpaqueCodec(effectiveResponseCodec!),
-      );
+            name: methodName,
+            type: RpcMethodType.bidirectionalStream,
+            handler: wrappedHandler,
+            description: description,
+            requestCodec: _OpaqueCodec(effectiveRequestCodec!),
+            responseCodec: _OpaqueCodec(effectiveResponseCodec!),
+          );
     }
   }
 
@@ -424,11 +425,10 @@ abstract class RpcCallerContract implements IRpcContract {
   }
 
   /// Returns effective codecs based on the transfer mode.
-  (
-    IRpcCodec<TRequest>?,
-    IRpcCodec<TResponse>?
-  ) _getEffectiveCodecs<TRequest, TResponse>(
-      IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) {
+  (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?) _getEffectiveCodecs<
+    TRequest,
+    TResponse
+  >(IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) {
     final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
 
     if (isZeroCopy) {
@@ -478,7 +478,7 @@ abstract class RpcCallerContract implements IRpcContract {
   /// - codec → forced serialization (any transport)
   /// - auto → codecs provided → serialization, otherwise zero-copy.
   Future<TResponse>
-      callUnary<TRequest extends Object, TResponse extends Object>({
+  callUnary<TRequest extends Object, TResponse extends Object>({
     required String methodName,
     required TRequest request,
     IRpcCodec<TRequest>? requestCodec,
@@ -508,7 +508,7 @@ abstract class RpcCallerContract implements IRpcContract {
   ///
   /// Mode derives from [dataTransferMode].
   Stream<TResponse>
-      callServerStream<TRequest extends Object, TResponse extends Object>({
+  callServerStream<TRequest extends Object, TResponse extends Object>({
     required String methodName,
     required TRequest request,
     IRpcCodec<TRequest>? requestCodec,
@@ -538,7 +538,7 @@ abstract class RpcCallerContract implements IRpcContract {
   ///
   /// Mode derives from [dataTransferMode].
   Future<TResponse>
-      callClientStream<TRequest extends Object, TResponse extends Object>({
+  callClientStream<TRequest extends Object, TResponse extends Object>({
     required String methodName,
     required Stream<TRequest> requests,
     IRpcCodec<TRequest>? requestCodec,
@@ -567,8 +567,8 @@ abstract class RpcCallerContract implements IRpcContract {
   /// 🚀 Unified bidirectional-stream call with centralized mode control.
   ///
   /// Mode derives from [dataTransferMode].
-  Stream<TResponse> callBidirectionalStream<TRequest extends Object,
-      TResponse extends Object>({
+  Stream<TResponse>
+  callBidirectionalStream<TRequest extends Object, TResponse extends Object>({
     required String methodName,
     required Stream<TRequest> requests,
     IRpcCodec<TRequest>? requestCodec,
@@ -617,8 +617,8 @@ abstract class RpcPeerContract extends RpcResponderContract {
     RpcPeerEndpoint endpoint, {
     RpcDataTransferMode responderDataTransferMode = RpcDataTransferMode.auto,
     this.callerDataTransferMode = RpcDataTransferMode.auto,
-  })  : _peerEndpoint = endpoint,
-        super(dataTransferMode: responderDataTransferMode);
+  }) : _peerEndpoint = endpoint,
+       super(dataTransferMode: responderDataTransferMode);
 
   /// The peer endpoint this contract is bound to.
   RpcPeerEndpoint get endpoint => _peerEndpoint;
@@ -637,11 +637,10 @@ abstract class RpcPeerContract extends RpcResponderContract {
     }
   }
 
-  (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?)
-      _getCallerEffectiveCodecs<TRequest, TResponse>(
-    IRpcCodec<TRequest>? requestCodec,
-    IRpcCodec<TResponse>? responseCodec,
-  ) {
+  (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?) _getCallerEffectiveCodecs<
+    TRequest,
+    TResponse
+  >(IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) {
     return _isCallerZeroCopyAllowed(requestCodec, responseCodec)
         ? (null, null)
         : (requestCodec, responseCodec);
@@ -663,12 +662,13 @@ abstract class RpcPeerContract extends RpcResponderContract {
 
   /// Sends a unary request to the remote peer.
   Future<TResponse>
-      callUnary<TRequest extends Object, TResponse extends Object>(
-          {required String methodName,
-          required TRequest request,
-          IRpcCodec<TRequest>? requestCodec,
-          IRpcCodec<TResponse>? responseCodec,
-          RpcContext? context}) {
+  callUnary<TRequest extends Object, TResponse extends Object>({
+    required String methodName,
+    required TRequest request,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+    RpcContext? context,
+  }) {
     _validateCallerCodecs(requestCodec, responseCodec);
     final (rq, rs) = _getCallerEffectiveCodecs(requestCodec, responseCodec);
     return _peerEndpoint.unaryRequest<TRequest, TResponse>(
@@ -683,12 +683,13 @@ abstract class RpcPeerContract extends RpcResponderContract {
 
   /// Opens a server-stream call to the remote peer.
   Stream<TResponse>
-      callServerStream<TRequest extends Object, TResponse extends Object>(
-          {required String methodName,
-          required TRequest request,
-          IRpcCodec<TRequest>? requestCodec,
-          IRpcCodec<TResponse>? responseCodec,
-          RpcContext? context}) {
+  callServerStream<TRequest extends Object, TResponse extends Object>({
+    required String methodName,
+    required TRequest request,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+    RpcContext? context,
+  }) {
     _validateCallerCodecs(requestCodec, responseCodec);
     final (rq, rs) = _getCallerEffectiveCodecs(requestCodec, responseCodec);
     return _peerEndpoint.serverStream<TRequest, TResponse>(
@@ -703,12 +704,13 @@ abstract class RpcPeerContract extends RpcResponderContract {
 
   /// Opens a client-stream call to the remote peer.
   Future<TResponse>
-      callClientStream<TRequest extends Object, TResponse extends Object>(
-          {required String methodName,
-          required Stream<TRequest> requests,
-          IRpcCodec<TRequest>? requestCodec,
-          IRpcCodec<TResponse>? responseCodec,
-          RpcContext? context}) {
+  callClientStream<TRequest extends Object, TResponse extends Object>({
+    required String methodName,
+    required Stream<TRequest> requests,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+    RpcContext? context,
+  }) {
     _validateCallerCodecs(requestCodec, responseCodec);
     final (rq, rs) = _getCallerEffectiveCodecs(requestCodec, responseCodec);
     final builder = _peerEndpoint.clientStream<TRequest, TResponse>(
@@ -722,13 +724,14 @@ abstract class RpcPeerContract extends RpcResponderContract {
   }
 
   /// Opens a bidirectional-stream call to the remote peer.
-  Stream<TResponse> callBidirectionalStream<TRequest extends Object,
-          TResponse extends Object>(
-      {required String methodName,
-      required Stream<TRequest> requests,
-      IRpcCodec<TRequest>? requestCodec,
-      IRpcCodec<TResponse>? responseCodec,
-      RpcContext? context}) {
+  Stream<TResponse>
+  callBidirectionalStream<TRequest extends Object, TResponse extends Object>({
+    required String methodName,
+    required Stream<TRequest> requests,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+    RpcContext? context,
+  }) {
     _validateCallerCodecs(requestCodec, responseCodec);
     final (rq, rs) = _getCallerEffectiveCodecs(requestCodec, responseCodec);
     return _peerEndpoint.bidirectionalStream<TRequest, TResponse>(

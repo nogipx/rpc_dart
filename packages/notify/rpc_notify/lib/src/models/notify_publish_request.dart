@@ -42,10 +42,10 @@ class NotifyPublishToRequest implements IRpcSerializable {
 
   @override
   Map<String, dynamic> toJson() => {
-        'clientId': clientId,
-        'topic': topic,
-        'payload': payload,
-      };
+    'clientId': clientId,
+    'topic': topic,
+    'payload': payload,
+  };
 }
 
 /// Acknowledgement returned after a successful publish.

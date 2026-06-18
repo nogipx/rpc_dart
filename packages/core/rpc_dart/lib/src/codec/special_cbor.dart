@@ -324,11 +324,13 @@ class _FastCborReader {
             _readByteFast();
       case CborCodec._additionalInfoEightByteFollow:
         // Combine high/low 32-bit halves without a >32-bit shift (dart2js-safe).
-        final hi = (_readByteFast() * 0x1000000) +
+        final hi =
+            (_readByteFast() * 0x1000000) +
             (_readByteFast() << 16) +
             (_readByteFast() << 8) +
             _readByteFast();
-        final lo = (_readByteFast() * 0x1000000) +
+        final lo =
+            (_readByteFast() * 0x1000000) +
             (_readByteFast() << 16) +
             (_readByteFast() << 8) +
             _readByteFast();

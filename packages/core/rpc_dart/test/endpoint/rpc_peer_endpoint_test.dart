@@ -49,7 +49,7 @@ final class ChatContract extends RpcPeerContract {
   final List<String> log = [];
 
   ChatContract(RpcPeerEndpoint endpoint, this._prefix)
-      : super('ChatService', endpoint);
+    : super('ChatService', endpoint);
 
   @override
   void setup() {
@@ -104,32 +104,32 @@ final class ChatContract extends RpcPeerContract {
   // Outgoing call helpers — delegated via RpcPeerContract.callXxx
 
   Future<PeerResponse> echo(String text) => callUnary(
-        methodName: 'Echo',
-        request: PeerRequest(text),
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-      );
+    methodName: 'Echo',
+    request: PeerRequest(text),
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+  );
 
   Stream<PeerResponse> stream(String text) => callServerStream(
-        methodName: 'Stream',
-        request: PeerRequest(text),
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-      );
+    methodName: 'Stream',
+    request: PeerRequest(text),
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+  );
 
   Future<PeerResponse> collect(List<String> texts) => callClientStream(
-        methodName: 'Collect',
-        requests: Stream.fromIterable(texts.map(PeerRequest.new)),
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-      );
+    methodName: 'Collect',
+    requests: Stream.fromIterable(texts.map(PeerRequest.new)),
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+  );
 
   Stream<PeerResponse> mirror(Stream<String> texts) => callBidirectionalStream(
-        methodName: 'Mirror',
-        requests: texts.map(PeerRequest.new),
-        requestCodec: _requestCodec,
-        responseCodec: _responseCodec,
-      );
+    methodName: 'Mirror',
+    requests: texts.map(PeerRequest.new),
+    requestCodec: _requestCodec,
+    responseCodec: _responseCodec,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -175,14 +175,17 @@ void main() {
     });
 
     test('server stream', () async {
-      final items =
-          await contractA.stream('x').toList().timeout(Duration(seconds: 5));
+      final items = await contractA
+          .stream('x')
+          .toList()
+          .timeout(Duration(seconds: 5));
       expect(items.map((r) => r.text).toList(), ['B:1:x', 'B:2:x', 'B:3:x']);
     });
 
     test('client stream', () async {
       final resp = await contractA
-          .collect(['a', 'b', 'c']).timeout(Duration(seconds: 5));
+          .collect(['a', 'b', 'c'])
+          .timeout(Duration(seconds: 5));
       expect(resp.text, 'B:a,b,c');
     });
 
@@ -210,14 +213,17 @@ void main() {
     });
 
     test('server stream', () async {
-      final items =
-          await contractB.stream('y').toList().timeout(Duration(seconds: 5));
+      final items = await contractB
+          .stream('y')
+          .toList()
+          .timeout(Duration(seconds: 5));
       expect(items.map((r) => r.text).toList(), ['A:1:y', 'A:2:y', 'A:3:y']);
     });
 
     test('client stream', () async {
       final resp = await contractB
-          .collect(['x', 'y', 'z']).timeout(Duration(seconds: 5));
+          .collect(['x', 'y', 'z'])
+          .timeout(Duration(seconds: 5));
       expect(resp.text, 'A:x,y,z');
     });
 

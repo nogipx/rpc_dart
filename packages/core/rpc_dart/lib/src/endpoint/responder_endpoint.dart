@@ -31,27 +31,30 @@ final class RpcResponderEndpoint extends RpcEndpointBase
 
   /// All method registrations exported from all contracts.
   Map<String, RpcMethodRegistration<IRpcSerializable, IRpcSerializable>>
-      get registeredMethods => _respRegistry.exportMethodRegistrations();
+  get registeredMethods => _respRegistry.exportMethodRegistrations();
 
   @override
   Map<String, Object?> collectEndpointMetrics() {
     final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
     metrics.addAll(collectResponderMetrics());
 
-    metrics['metadataStreams'] =
-        _respStreams.values.where((state) => state.hasMetadata).length;
+    metrics['metadataStreams'] = _respStreams.values
+        .where((state) => state.hasMetadata)
+        .length;
     metrics['bufferedMessages'] = _respStreams.values
         .where((state) => state.lastPayloadMessage != null)
         .length;
     metrics['clientStreamBuffers'] = _respStreams.values
         .where((state) => state.hasBufferedClientMessages)
         .length;
-    metrics['activeResponders'] =
-        _respStreams.values.where((state) => state.hasResponder).length;
+    metrics['activeResponders'] = _respStreams.values
+        .where((state) => state.hasResponder)
+        .length;
 
     if (_respRegistry.contracts.isNotEmpty) {
-      metrics['contractKeys'] =
-          List<String>.unmodifiable(_respRegistry.contracts.keys);
+      metrics['contractKeys'] = List<String>.unmodifiable(
+        _respRegistry.contracts.keys,
+      );
     }
 
     return metrics;

@@ -82,10 +82,10 @@ void main() {
       'a': [
         1,
         {
-          'b': [2, 3]
-        }
+          'b': [2, 3],
+        },
       ],
-      'c': {'d': 'e'}
+      'c': {'d': 'e'},
     },
     'deep': _buildDeep(20),
   };
@@ -102,8 +102,11 @@ void main() {
 
         // decode (readMap) and decodeUnsafe (readValue) share a reader and MUST
         // agree, always and on every platform.
-        _expectEqual(mapDecoded, unsafeDecoded,
-            reason: 'decode != decodeUnsafe for $name');
+        _expectEqual(
+          mapDecoded,
+          unsafeDecoded,
+          reason: 'decode != decodeUnsafe for $name',
+        );
 
         // Round-trip to original. On dart2js (-p node) there is a single JS
         // number type, so an integral-valued double (e.g. 1e300, Infinity,
@@ -112,18 +115,27 @@ void main() {
         // limitation, not an encode/decode divergence, so skip the strict
         // original check for those values.
         if (!_lossyOnThisPlatform(value)) {
-          _expectEqual(mapDecoded, _normalize(original),
-              reason: 'decode != original for $name');
+          _expectEqual(
+            mapDecoded,
+            _normalize(original),
+            reason: 'decode != original for $name',
+          );
         }
 
         // fast-encode must be byte-identical to slow-encode.
         final fastBytes = CborCodec.encode(original);
-        expect(fastBytes, equals(slowBytes),
-            reason: 'fast-encode bytes != slow-encode bytes for $name');
+        expect(
+          fastBytes,
+          equals(slowBytes),
+          reason: 'fast-encode bytes != slow-encode bytes for $name',
+        );
 
         // And fast bytes must decode back to the same value.
-        _expectEqual(_normalize(CborCodec.decode(fastBytes)), unsafeDecoded,
-            reason: 'fast-encode -> decode != decodeUnsafe for $name');
+        _expectEqual(
+          _normalize(CborCodec.decode(fastBytes)),
+          unsafeDecoded,
+          reason: 'fast-encode -> decode != decodeUnsafe for $name',
+        );
       });
     });
   });
@@ -144,140 +156,152 @@ void main() {
     }
 
     // { "a": tag(0) 1234, "u": undefined } -> tag skipped, undefined -> null
-    decodesTo('tag + undefined', [
-      0xa2,
-      0x61, 0x61, // "a"
-      0xc0, 0x19, 0x04, 0xd2, // tag(0) 1234
-      0x61, 0x75, // "u"
-      0xf7, // undefined
-    ], {
-      'a': 1234,
-      'u': null
-    });
+    decodesTo(
+      'tag + undefined',
+      [
+        0xa2,
+        0x61, 0x61, // "a"
+        0xc0, 0x19, 0x04, 0xd2, // tag(0) 1234
+        0x61, 0x75, // "u"
+        0xf7, // undefined
+      ],
+      {'a': 1234, 'u': null},
+    );
 
     // { "f": half-float 1.5 (0x3e00) }
-    decodesTo('half float', [
-      0xa1,
-      0x61, 0x66, // "f"
-      0xf9, 0x3e, 0x00, // half 1.5
-    ], {
-      'f': 1.5
-    });
+    decodesTo(
+      'half float',
+      [
+        0xa1,
+        0x61, 0x66, // "f"
+        0xf9, 0x3e, 0x00, // half 1.5
+      ],
+      {'f': 1.5},
+    );
 
     // { "f": single float 1.5 (0x3fc00000) }
-    decodesTo('single float', [
-      0xa1,
-      0x61, 0x66, // "f"
-      0xfa, 0x3f, 0xc0, 0x00, 0x00, // single 1.5
-    ], {
-      'f': 1.5
-    });
+    decodesTo(
+      'single float',
+      [
+        0xa1,
+        0x61, 0x66, // "f"
+        0xfa, 0x3f, 0xc0, 0x00, 0x00, // single 1.5
+      ],
+      {'f': 1.5},
+    );
 
     // { "f": half NaN (0x7e00) }
-    decodesTo('half NaN', [
-      0xa1,
-      0x61,
-      0x66,
-      0xf9,
-      0x7e,
-      0x00,
-    ], {
-      'f': double.nan
-    });
+    decodesTo(
+      'half NaN',
+      [0xa1, 0x61, 0x66, 0xf9, 0x7e, 0x00],
+      {'f': double.nan},
+    );
 
     // { "f": half +Infinity (0x7c00) }
-    decodesTo('half Infinity', [
-      0xa1,
-      0x61,
-      0x66,
-      0xf9,
-      0x7c,
-      0x00,
-    ], {
-      'f': double.infinity
-    });
+    decodesTo(
+      'half Infinity',
+      [0xa1, 0x61, 0x66, 0xf9, 0x7c, 0x00],
+      {'f': double.infinity},
+    );
 
     // { "f": half subnormal smallest (0x0001) = 2^-24 }
-    decodesTo('half subnormal', [
-      0xa1,
-      0x61,
-      0x66,
-      0xf9,
-      0x00,
-      0x01,
-    ], {
-      'f': 5.960464477539063e-8
-    });
+    decodesTo(
+      'half subnormal',
+      [0xa1, 0x61, 0x66, 0xf9, 0x00, 0x01],
+      {'f': 5.960464477539063e-8},
+    );
 
     // { "s": extended simple value 200 (0xf8 0xc8) -> 200 }
-    decodesTo('extended simple value', [
-      0xa1,
-      0x61, 0x73, // "s"
-      0xf8, 0xc8,
-    ], {
-      's': 200
-    });
+    decodesTo(
+      'extended simple value',
+      [
+        0xa1,
+        0x61, 0x73, // "s"
+        0xf8, 0xc8,
+      ],
+      {'s': 200},
+    );
 
     // { "l": indefinite array [1, 2, 3] }
-    decodesTo('indefinite array', [
-      0xa1,
-      0x61, 0x6c, // "l"
-      0x9f, 0x01, 0x02, 0x03, 0xff,
-    ], {
-      'l': [1, 2, 3]
-    });
+    decodesTo(
+      'indefinite array',
+      [
+        0xa1,
+        0x61, 0x6c, // "l"
+        0x9f, 0x01, 0x02, 0x03, 0xff,
+      ],
+      {
+        'l': [1, 2, 3],
+      },
+    );
 
     // { "m": indefinite map { "x": 1 } }
-    decodesTo('indefinite map', [
-      0xa1,
-      0x61, 0x6d, // "m"
-      0xbf, 0x61, 0x78, 0x01, 0xff,
-    ], {
-      'm': {'x': 1}
-    });
+    decodesTo(
+      'indefinite map',
+      [
+        0xa1,
+        0x61, 0x6d, // "m"
+        0xbf, 0x61, 0x78, 0x01, 0xff,
+      ],
+      {
+        'm': {'x': 1},
+      },
+    );
 
     // indefinite top-level map { "k": "v" }
-    decodesTo('indefinite top-level map', [
-      0xbf,
-      0x61, 0x6b, // "k"
-      0x61, 0x76, // "v"
-      0xff,
-    ], {
-      'k': 'v'
-    });
+    decodesTo(
+      'indefinite top-level map',
+      [
+        0xbf,
+        0x61, 0x6b, // "k"
+        0x61, 0x76, // "v"
+        0xff,
+      ],
+      {'k': 'v'},
+    );
 
     // { "s": indefinite text string "hello" = "he"+"llo" }
-    decodesTo('indefinite text string', [
-      0xa1,
-      0x61, 0x73, // "s"
-      0x7f,
-      0x62, 0x68, 0x65, // "he"
-      0x63, 0x6c, 0x6c, 0x6f, // "llo"
-      0xff,
-    ], {
-      's': 'hello'
-    });
+    decodesTo(
+      'indefinite text string',
+      [
+        0xa1,
+        0x61, 0x73, // "s"
+        0x7f,
+        0x62, 0x68, 0x65, // "he"
+        0x63, 0x6c, 0x6c, 0x6f, // "llo"
+        0xff,
+      ],
+      {'s': 'hello'},
+    );
 
     // { "b": indefinite byte string 0x0102 + 0x03 -> 0x010203 }
-    decodesTo('indefinite byte string', [
-      0xa1,
-      0x61, 0x62, // "b"
-      0x5f,
-      0x42, 0x01, 0x02,
-      0x41, 0x03,
-      0xff,
-    ], {
-      'b': Uint8List.fromList([1, 2, 3])
-    });
+    decodesTo(
+      'indefinite byte string',
+      [
+        0xa1,
+        0x61, 0x62, // "b"
+        0x5f,
+        0x42, 0x01, 0x02,
+        0x41, 0x03,
+        0xff,
+      ],
+      {
+        'b': Uint8List.fromList([1, 2, 3]),
+      },
+    );
 
     // { "n": [tag(2) 42, undefined] } -> tag skipped, undefined -> null
-    decodesTo('nested tag in array', [
-      0xa1,
-      0x61, 0x6e, // "n"
-      0x82, 0xc2, 0x18, 0x2a, 0xf7, // [tag(2) 42, undefined]
-    ], {
-      'n': [42, null]
-    });
+    decodesTo(
+      'nested tag in array',
+      [
+        0xa1,
+        0x61, 0x6e, // "n"
+        0x82, 0xc2, 0x18, 0x2a, 0xf7, // [tag(2) 42, undefined]
+      ],
+      {
+        'n': [42, null],
+      },
+    );
   });
 
   group('CBOR recursion-depth guard (untrusted input)', () {
@@ -308,11 +332,13 @@ void main() {
       // A pathological depth throws instead of crashing the isolate.
       expect(
         () => CborCodec.decodeUnsafe(nestedArrays(5000)),
-        throwsA(isA<FormatException>().having(
-          (e) => e.message,
-          'message',
-          contains('nesting too deep'),
-        )),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('nesting too deep'),
+          ),
+        ),
       );
     });
 
@@ -320,11 +346,13 @@ void main() {
       expect(CborCodec.decode(nestedMaps(10)), isA<Map>());
       expect(
         () => CborCodec.decode(nestedMaps(5000)),
-        throwsA(isA<FormatException>().having(
-          (e) => e.message,
-          'message',
-          contains('nesting too deep'),
-        )),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('nesting too deep'),
+          ),
+        ),
       );
     });
 

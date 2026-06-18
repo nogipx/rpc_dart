@@ -65,19 +65,19 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   RpcHttp2CallerTransport._({
     required http2.ClientTransportConnection connection,
     required Future<http2.ClientTransportConnection> Function()
-        connectionFactory,
+    connectionFactory,
     required String host,
     required int port,
     required String scheme,
     required RpcSecurityPolicy policy,
     LogScope? logger,
-  })  : _connection = connection,
-        _connectionFactory = connectionFactory,
-        _host = host,
-        _port = port,
-        _scheme = scheme,
-        _logger = logger?.child('Http2ClientTransport'),
-        _policy = policy;
+  }) : _connection = connection,
+       _connectionFactory = connectionFactory,
+       _host = host,
+       _port = port,
+       _scheme = scheme,
+       _logger = logger?.child('Http2ClientTransport'),
+       _policy = policy;
 
   /// Создает клиентский HTTP/2 транспорт через защищенное соединение.
   ///
@@ -101,7 +101,11 @@ class RpcHttp2CallerTransport implements IRpcTransport {
           secure: true,
         );
       }
-      final socket = await SecureSocket.connect(host, port, supportedProtocols: ['h2']);
+      final socket = await SecureSocket.connect(
+        host,
+        port,
+        supportedProtocols: ['h2'],
+      );
       return http2.ClientTransportConnection.viaSocket(socket);
     }
 
@@ -247,7 +251,9 @@ class RpcHttp2CallerTransport implements IRpcTransport {
           rawSocket.destroy();
           if (!handshake.isCompleted) {
             handshake.completeError(
-              SocketException('HTTP proxy CONNECT rejected: ${statusLine.trim()}'),
+              SocketException(
+                'HTTP proxy CONNECT rejected: ${statusLine.trim()}',
+              ),
             );
           }
           return;
@@ -268,7 +274,9 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       },
       onDone: () {
         if (!handshake.isCompleted) {
-          handshake.completeError(SocketException('Proxy closed during CONNECT'));
+          handshake.completeError(
+            SocketException('Proxy closed during CONNECT'),
+          );
         }
         if (!forwardCtrl.isClosed) forwardCtrl.close();
       },
@@ -298,8 +306,10 @@ class RpcHttp2CallerTransport implements IRpcTransport {
 
   static int _indexOfEndOfHeaders(List<int> bytes) {
     for (var i = 0; i <= bytes.length - 4; i++) {
-      if (bytes[i] == 0x0D && bytes[i + 1] == 0x0A &&
-          bytes[i + 2] == 0x0D && bytes[i + 3] == 0x0A) {
+      if (bytes[i] == 0x0D &&
+          bytes[i + 1] == 0x0A &&
+          bytes[i + 2] == 0x0D &&
+          bytes[i + 3] == 0x0A) {
         return i;
       }
     }
@@ -430,15 +440,15 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   }
 
   Map<String, Object?> _buildHealthDetails() => {
-        'isClosed': _isClosed,
-        'activeStreams': _activeStreams.length,
-        'pendingSubscriptions': _streamSubscriptions.length,
-        'pendingParsers': _streamParsers.length,
-        'host': _host,
-        'port': _port,
-        'scheme': _scheme,
-        'messageControllerClosed': _messageController.isClosed,
-      };
+    'isClosed': _isClosed,
+    'activeStreams': _activeStreams.length,
+    'pendingSubscriptions': _streamSubscriptions.length,
+    'pendingParsers': _streamParsers.length,
+    'host': _host,
+    'port': _port,
+    'scheme': _scheme,
+    'messageControllerClosed': _messageController.isClosed,
+  };
 
   /// Настраивает обработчик входящих сообщений для HTTP/2 stream
   void _setupStreamListener(
@@ -460,8 +470,9 @@ class RpcHttp2CallerTransport implements IRpcTransport {
         );
 
         if (!_messageController.isClosed) {
-          _messageController
-              .addError(RpcHttp2StreamError(streamId, error, stackTrace));
+          _messageController.addError(
+            RpcHttp2StreamError(streamId, error, stackTrace),
+          );
         }
       },
       onDone: () {
@@ -509,7 +520,9 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       );
 
       if (!_messageController.isClosed) {
-        _messageController.addError(RpcHttp2StreamError(streamId, e, stackTrace));
+        _messageController.addError(
+          RpcHttp2StreamError(streamId, e, stackTrace),
+        );
       }
     }
   }
@@ -535,12 +548,14 @@ class RpcHttp2CallerTransport implements IRpcTransport {
         ),
       ]);
       if (!_messageController.isClosed) {
-        _messageController.add(RpcTransportMessage(
-          streamId: streamId,
-          metadata: errorMetadata,
-          isEndOfStream: true,
-          methodPath: methodPath,
-        ));
+        _messageController.add(
+          RpcTransportMessage(
+            streamId: streamId,
+            metadata: errorMetadata,
+            isEndOfStream: true,
+            methodPath: methodPath,
+          ),
+        );
       }
       return;
     }
@@ -627,7 +642,9 @@ class RpcHttp2CallerTransport implements IRpcTransport {
       );
 
       if (!_messageController.isClosed) {
-        _messageController.addError(RpcHttp2StreamError(streamId, e, stackTrace));
+        _messageController.addError(
+          RpcHttp2StreamError(streamId, e, stackTrace),
+        );
       }
     }
   }

@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:io' show HttpServer, Socket; // HttpServer for raw handler tests; Socket for raw TCP tests
+import 'dart:io'
+    show
+        HttpServer,
+        Socket; // HttpServer for raw handler tests; Socket for raw TCP tests
 
 import 'package:http/http.dart' as http;
 import 'package:rpc_dart/rpc_dart.dart';
@@ -104,32 +107,27 @@ void main() {
       await sub.cancel();
 
       final metaMsg = receivedMessages.first;
-      expect(
-        metaMsg.metadata?.getHeaderValue('x-custom-header'),
-        'my-value',
-      );
+      expect(metaMsg.metadata?.getHeaderValue('x-custom-header'), 'my-value');
     });
 
     test('client_receives_response_from_server', () async {
-      final serverSub = serverTransport.incomingMessages.listen(
-        (msg) async {
-          if (!msg.isMetadataOnly && msg.payload != null) {
-            await serverTransport.sendMetadata(
-              msg.streamId,
-              RpcMetadata.forServerInitialResponse(),
-            );
-            final responseBody = RpcMessageFrame.encode(
-              Uint8List.fromList([10, 20, 30]),
-            );
-            await serverTransport.sendMessage(msg.streamId, responseBody);
-            await serverTransport.sendMetadata(
-              msg.streamId,
-              RpcMetadata.forTrailer(RpcStatus.ok),
-              endStream: true,
-            );
-          }
-        },
-      );
+      final serverSub = serverTransport.incomingMessages.listen((msg) async {
+        if (!msg.isMetadataOnly && msg.payload != null) {
+          await serverTransport.sendMetadata(
+            msg.streamId,
+            RpcMetadata.forServerInitialResponse(),
+          );
+          final responseBody = RpcMessageFrame.encode(
+            Uint8List.fromList([10, 20, 30]),
+          );
+          await serverTransport.sendMessage(msg.streamId, responseBody);
+          await serverTransport.sendMetadata(
+            msg.streamId,
+            RpcMetadata.forTrailer(RpcStatus.ok),
+            endStream: true,
+          );
+        }
+      });
 
       final clientMessages = <RpcTransportMessage>[];
       final streamId = clientTransport.createStream();
@@ -175,10 +173,7 @@ void main() {
     test('createStream_on_closed_transport_throws_StateError', () async {
       await clientTransport.close();
 
-      expect(
-        () => clientTransport.createStream(),
-        throwsA(isA<StateError>()),
-      );
+      expect(() => clientTransport.createStream(), throwsA(isA<StateError>()));
     });
   });
 
@@ -259,8 +254,9 @@ void main() {
     });
 
     test('context_headers_arrive_on_server', () async {
-      final context = RpcContextUtils.withBearerToken('test-token')
-          .withAdditionalHeaders({'x-tenant-id': 'tenant-42'});
+      final context = RpcContextUtils.withBearerToken(
+        'test-token',
+      ).withAdditionalHeaders({'x-tenant-id': 'tenant-42'});
 
       final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
         serviceName: 'Echo',
@@ -330,7 +326,11 @@ void main() {
 
     test('responder_transport_closes_pending_with_503', () async {
       final serverTransport = RpcHttpResponderTransport();
-      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
+      final server = await shelf_io.serve(
+        serverTransport.handler,
+        '127.0.0.1',
+        0,
+      );
 
       // Nobody listens on incomingMessages → completer never resolves.
       serverTransport.incomingMessages.listen((_) {});
@@ -359,7 +359,11 @@ void main() {
   group('Bug: caller close() during in-flight request', () {
     test('close_during_in_flight_call_completes_future_with_error', () async {
       final serverTransport = RpcHttpResponderTransport();
-      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
+      final server = await shelf_io.serve(
+        serverTransport.handler,
+        '127.0.0.1',
+        0,
+      );
       // Nobody responds → shelf handler blocks.
       serverTransport.incomingMessages.listen((_) {});
 
@@ -399,7 +403,11 @@ void main() {
   group('Bug: responder _handleRequest errors are silently swallowed', () {
     test('client_disconnect_mid_body_removes_pending_entry', () async {
       final serverTransport = RpcHttpResponderTransport();
-      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
+      final server = await shelf_io.serve(
+        serverTransport.handler,
+        '127.0.0.1',
+        0,
+      );
       serverTransport.incomingMessages.listen((_) {});
 
       // Connect via raw TCP and send partial body, then close abruptly.
@@ -425,48 +433,61 @@ void main() {
   });
 
   group('Bug: double releaseId', () {
-    test('releaseStreamId_after_completed_call_returns_false_not_throws',
-        () async {
-      final serverTransport = RpcHttpResponderTransport();
-      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
-      serverTransport.incomingMessages.listen((msg) async {
-        if (msg.isEndOfStream) {
-          await serverTransport.sendMetadata(
-            msg.streamId,
-            RpcMetadata.forServerInitialResponse(),
-          );
-          await serverTransport.sendMetadata(
-            msg.streamId,
-            RpcMetadata.forTrailer(RpcStatus.ok),
-            endStream: true,
-          );
-        }
-      });
+    test(
+      'releaseStreamId_after_completed_call_returns_false_not_throws',
+      () async {
+        final serverTransport = RpcHttpResponderTransport();
+        final server = await shelf_io.serve(
+          serverTransport.handler,
+          '127.0.0.1',
+          0,
+        );
+        serverTransport.incomingMessages.listen((msg) async {
+          if (msg.isEndOfStream) {
+            await serverTransport.sendMetadata(
+              msg.streamId,
+              RpcMetadata.forServerInitialResponse(),
+            );
+            await serverTransport.sendMetadata(
+              msg.streamId,
+              RpcMetadata.forTrailer(RpcStatus.ok),
+              endStream: true,
+            );
+          }
+        });
 
-      final clientTransport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${server.port}',
-      );
+        final clientTransport = RpcHttpCallerTransport(
+          baseUrl: 'http://127.0.0.1:${server.port}',
+        );
 
-      final streamId = clientTransport.createStream();
-      await clientTransport.sendMetadata(
-        streamId,
-        RpcMetadata.forClientRequest('Svc', 'Method'),
-      );
-      final body = RpcMessageFrame.encode(Uint8List.fromList([1]));
-      await clientTransport.sendMessage(streamId, body, endStream: true);
+        final streamId = clientTransport.createStream();
+        await clientTransport.sendMetadata(
+          streamId,
+          RpcMetadata.forClientRequest('Svc', 'Method'),
+        );
+        final body = RpcMessageFrame.encode(Uint8List.fromList([1]));
+        await clientTransport.sendMessage(streamId, body, endStream: true);
 
-      expect(() => clientTransport.releaseStreamId(streamId), returnsNormally);
+        expect(
+          () => clientTransport.releaseStreamId(streamId),
+          returnsNormally,
+        );
 
-      await clientTransport.close();
-      await serverTransport.close();
-      await server.close(force: true);
-    });
+        await clientTransport.close();
+        await serverTransport.close();
+        await server.close(force: true);
+      },
+    );
   });
 
   group('Bug: headers.set overwrites duplicate header names', () {
     test('multiple_values_for_same_header_name_all_reach_client', () async {
       final serverTransport = RpcHttpResponderTransport();
-      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
+      final server = await shelf_io.serve(
+        serverTransport.handler,
+        '127.0.0.1',
+        0,
+      );
       serverTransport.incomingMessages.listen((msg) async {
         if (msg.isEndOfStream) {
           await serverTransport.sendMetadata(
@@ -717,8 +738,9 @@ void main() {
         (m) => m.isEndOfStream,
         orElse: () => throw StateError('No end-of-stream message received'),
       );
-      final grpcStatus =
-          trailer.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
+      final grpcStatus = trailer.metadata?.getHeaderValue(
+        RpcHeaders.grpcStatus,
+      );
       expect(grpcStatus, '${RpcStatus.unimplemented}');
 
       await clientTransport.close();
@@ -729,9 +751,7 @@ void main() {
   group('CORS policy', () {
     test('preflight_OPTIONS_returns_204_with_cors_headers', () async {
       final transport = RpcHttpResponderTransport(
-        corsPolicy: RpcHttpCorsPolicy(
-          allowedOrigins: ['https://example.com'],
-        ),
+        corsPolicy: RpcHttpCorsPolicy(allowedOrigins: ['https://example.com']),
       );
       final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((_) {});
@@ -892,38 +912,40 @@ void main() {
       await server.stop();
     });
 
-    test('default_server_enforces_builtin_policy_and_accepts_small_request',
-        () async {
-      // No securityPolicy passed → default const RpcSecurityPolicy is used, so
-      // a normal small request still works end-to-end.
-      final server = RpcHttpServer(
-        host: '127.0.0.1',
-        port: 0,
-        onEndpointCreated: (endpoint) {
-          endpoint.registerServiceContract(_EchoService());
-          endpoint.start();
-        },
-      );
-      await server.start();
-      await server.afterModulesStart();
-      final port = server.actualPort!;
+    test(
+      'default_server_enforces_builtin_policy_and_accepts_small_request',
+      () async {
+        // No securityPolicy passed → default const RpcSecurityPolicy is used, so
+        // a normal small request still works end-to-end.
+        final server = RpcHttpServer(
+          host: '127.0.0.1',
+          port: 0,
+          onEndpointCreated: (endpoint) {
+            endpoint.registerServiceContract(_EchoService());
+            endpoint.start();
+          },
+        );
+        await server.start();
+        await server.afterModulesStart();
+        final port = server.actualPort!;
 
-      final clientTransport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:$port',
-      );
-      final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
-      final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
-        serviceName: 'Echo',
-        methodName: 'Echo',
-        requestCodec: RpcString.codec,
-        responseCodec: RpcString.codec,
-        request: RpcString('hi'),
-      );
-      expect(result.value, 'Echo: hi');
+        final clientTransport = RpcHttpCallerTransport(
+          baseUrl: 'http://127.0.0.1:$port',
+        );
+        final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
+        final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+          serviceName: 'Echo',
+          methodName: 'Echo',
+          requestCodec: RpcString.codec,
+          responseCodec: RpcString.codec,
+          request: RpcString('hi'),
+        );
+        expect(result.value, 'Echo: hi');
 
-      await clientEndpoint.close();
-      await server.stop();
-    });
+        await clientEndpoint.close();
+        await server.stop();
+      },
+    );
   });
 
   group('Caller custom HTTP client', () {
@@ -942,7 +964,11 @@ void main() {
   group('gzip compression', () {
     test('compressed_request_and_response_round_trip', () async {
       final serverTransport = RpcHttpResponderTransport();
-      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
+      final server = await shelf_io.serve(
+        serverTransport.handler,
+        '127.0.0.1',
+        0,
+      );
       final serverEndpoint = RpcResponderEndpoint(
         transport: serverTransport,
         debugLabel: 'CompressServer',
@@ -957,9 +983,7 @@ void main() {
 
       final payload = 'hello-gzip ' * 500;
 
-      final context = RpcContext.withHeaders(
-        {RpcHeaders.grpcEncoding: 'gzip'},
-      );
+      final context = RpcContext.withHeaders({RpcHeaders.grpcEncoding: 'gzip'});
 
       final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
         serviceName: 'Echo',
@@ -979,7 +1003,11 @@ void main() {
 
     test('server_compresses_response_when_client_advertises_gzip', () async {
       final serverTransport = RpcHttpResponderTransport();
-      final server = await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
+      final server = await shelf_io.serve(
+        serverTransport.handler,
+        '127.0.0.1',
+        0,
+      );
       final serverEndpoint = RpcResponderEndpoint(
         transport: serverTransport,
         debugLabel: 'CompressServer',
@@ -1022,42 +1050,48 @@ void main() {
       await server.close(force: true);
     });
 
-    test('compression_disabled_endpoint_does_not_trigger_server_compression',
-        () async {
-      final serverTransport = RpcHttpResponderTransport();
-      final server =
-          await shelf_io.serve(serverTransport.handler, '127.0.0.1', 0);
-      final serverEndpoint = RpcResponderEndpoint(
-        transport: serverTransport,
-        debugLabel: 'CompressServer',
-      );
-      serverEndpoint.registerServiceContract(_EchoService());
-      serverEndpoint.start();
+    test(
+      'compression_disabled_endpoint_does_not_trigger_server_compression',
+      () async {
+        final serverTransport = RpcHttpResponderTransport();
+        final server = await shelf_io.serve(
+          serverTransport.handler,
+          '127.0.0.1',
+          0,
+        );
+        final serverEndpoint = RpcResponderEndpoint(
+          transport: serverTransport,
+          debugLabel: 'CompressServer',
+        );
+        serverEndpoint.registerServiceContract(_EchoService());
+        serverEndpoint.start();
 
-      final clientTransport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${server.port}',
-      );
-      // compressionEnabled = false: server must NOT compress the response even
-      // if gzip is globally registered.
-      final clientEndpoint = RpcCallerEndpoint(
-        transport: clientTransport,
-        compressionEnabled: false,
-      );
+        final clientTransport = RpcHttpCallerTransport(
+          baseUrl: 'http://127.0.0.1:${server.port}',
+        );
+        // compressionEnabled = false: server must NOT compress the response even
+        // if gzip is globally registered.
+        final clientEndpoint = RpcCallerEndpoint(
+          transport: clientTransport,
+          compressionEnabled: false,
+        );
 
-      final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
-        serviceName: 'Echo',
-        methodName: 'Echo',
-        requestCodec: RpcString.codec,
-        responseCodec: RpcString.codec,
-        request: RpcString('hello'),
-      );
+        final response = await clientEndpoint
+            .unaryRequest<RpcString, RpcString>(
+              serviceName: 'Echo',
+              methodName: 'Echo',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: RpcString('hello'),
+            );
 
-      expect(response.value, 'Echo: hello');
+        expect(response.value, 'Echo: hello');
 
-      await clientEndpoint.close();
-      await serverEndpoint.close();
-      await server.close(force: true);
-    });
+        await clientEndpoint.close();
+        await serverEndpoint.close();
+        await server.close(force: true);
+      },
+    );
   });
 }
 

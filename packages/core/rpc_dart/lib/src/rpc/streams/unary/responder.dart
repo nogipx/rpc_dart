@@ -79,18 +79,19 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     required FutureOr<TResponse> Function(TRequest request) handler,
     RpcContext? context,
     LogScope? logger,
-  })  : _transport = transport,
-        _serviceName = serviceName,
-        _methodName = methodName,
-        _requestSerializer = requestCodec,
-        _responseSerializer = responseCodec,
-        _context = context {
+  }) : _transport = transport,
+       _serviceName = serviceName,
+       _methodName = methodName,
+       _requestSerializer = requestCodec,
+       _responseSerializer = responseCodec,
+       _context = context {
     _handler = handler;
     _logger = logger?.child('UnaryResponder') ?? LogScope.noop;
     _parser = RpcMessageParser(
       logger: _logger,
       decompressor: (payload, {int? maxOutputBytes}) {
-        final encoding = _activeRequestEncoding ??
+        final encoding =
+            _activeRequestEncoding ??
             _context?.getHeader(RpcHeaders.grpcEncoding);
         if (encoding == null || encoding == RpcGrpcCompression.identity) {
           throw RpcException(
@@ -119,24 +120,25 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Sets up cancellation monitoring.
   void _setupCancellationMonitoring() {
     if (_context?.cancellationToken != null) {
-      _cancellationSubscription =
-          _context!.cancellationToken!.cancelled.asStream().listen(
-        (_) {
-          _logger.internal(
-            'Operation cancelled, stopping request handling [id: $id]',
-          );
+      _cancellationSubscription = _context!.cancellationToken!.cancelled
+          .asStream()
+          .listen(
+            (_) {
+              _logger.internal(
+                'Operation cancelled, stopping request handling [id: $id]',
+              );
 
-          // Cancel subscription to incoming messages.
-          _subscription?.cancel();
-        },
-        onError: (error, stackTrace) {
-          _logger.error(
-            'Error monitoring cancellation [id: $id]',
-            error: error,
-            stackTrace: stackTrace,
+              // Cancel subscription to incoming messages.
+              _subscription?.cancel();
+            },
+            onError: (error, stackTrace) {
+              _logger.error(
+                'Error monitoring cancellation [id: $id]',
+                error: error,
+                stackTrace: stackTrace,
+              );
+            },
           );
-        },
-      );
     }
   }
 
@@ -283,9 +285,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
     // Mark as handling immediately to prevent duplicates.
     state.requestHandled = true;
-    _logger.internal(
-      'Handling request for $_methodPath [streamId: $streamId]',
-    );
+    _logger.internal('Handling request for $_methodPath [streamId: $streamId]');
 
     try {
       // Determine response encoding from client's grpc-accept-encoding.
@@ -293,9 +293,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
       // Send initial headers if not already sent.
       if (!state.initialHeadersSent) {
-        _logger.internal(
-          'Sending initial headers [streamId: $streamId]',
-        );
+        _logger.internal('Sending initial headers [streamId: $streamId]');
         await _transport.sendMetadata(
           streamId,
           RpcMetadata.forServerInitialResponse(encoding: responseEncoding),
@@ -351,18 +349,14 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       await _transport.sendMessage(streamId, framedResponse);
 
       // Send success trailer.
-      _logger.internal(
-        'Sending success trailer [streamId: $streamId]',
-      );
+      _logger.internal('Sending success trailer [streamId: $streamId]');
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(RpcStatus.ok),
         endStream: true,
       );
 
-      _logger.internal(
-        'Response sent for $_methodPath [streamId: $streamId]',
-      );
+      _logger.internal('Response sent for $_methodPath [streamId: $streamId]');
     } catch (e, stackTrace) {
       _logger.error(
         'Request processing failed [streamId: $streamId]',
@@ -383,10 +377,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       // RpcStatusException carries a specific gRPC status code; all other
       // exceptions map to INTERNAL.
       _logger.internal('Sending error trailer [streamId: $streamId]');
-      final errorStatus =
-          e is RpcStatusException ? e.statusCode : RpcStatus.internal;
-      final errorMessage =
-          e is RpcStatusException ? e.message : 'Request processing error: $e';
+      final errorStatus = e is RpcStatusException
+          ? e.statusCode
+          : RpcStatus.internal;
+      final errorMessage = e is RpcStatusException
+          ? e.message
+          : 'Request processing error: $e';
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(
@@ -443,9 +439,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     try {
       // Send initial headers if not already sent.
       if (!state.initialHeadersSent) {
-        _logger.internal(
-          'Sending initial headers [streamId: $streamId]',
-        );
+        _logger.internal('Sending initial headers [streamId: $streamId]');
         // Zero-copy bypasses serialization/compression; no encoding header needed.
         await _transport.sendMetadata(
           streamId,
@@ -474,8 +468,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         await _transport.sendDirectObject(streamId, response as Object);
       } else {
         // Fallback to standard serialization for other transports.
-        _logger
-            .internal('Fallback response serialization [streamId: $streamId]');
+        _logger.internal(
+          'Fallback response serialization [streamId: $streamId]',
+        );
         final serializedResponse = _responseSerializer.serialize(response);
         final framedResponse = RpcMessageFrame.encode(serializedResponse);
         await _transport.sendMessage(streamId, framedResponse);
@@ -511,8 +506,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // On error, send error trailer.
-      final errorStatus2 =
-          e is RpcStatusException ? e.statusCode : RpcStatus.internal;
+      final errorStatus2 = e is RpcStatusException
+          ? e.statusCode
+          : RpcStatus.internal;
       final errorMessage2 = e is RpcStatusException ? e.message : e.toString();
       await _transport.sendMetadata(
         streamId,
@@ -535,7 +531,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Checks incoming request metadata first, then falls back to server context.
   /// Returns `null` if no compression should be applied (identity or unknown).
   String? _selectResponseEncoding(int streamId) {
-    final accept = _streamStates[streamId]?.clientAcceptEncoding ??
+    final accept =
+        _streamStates[streamId]?.clientAcceptEncoding ??
         _context?.getHeader(RpcHeaders.grpcAcceptEncoding);
     return RpcGrpcCompression.selectResponseEncoding(accept);
   }

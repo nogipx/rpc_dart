@@ -36,9 +36,13 @@ void main() {
           caught = e;
         }
 
-        expect(caught, isNotNull,
-            reason: 'spawn() must throw, not hang, when the isolate crashes '
-                'before the handshake');
+        expect(
+          caught,
+          isNotNull,
+          reason:
+              'spawn() must throw, not hang, when the isolate crashes '
+              'before the handshake',
+        );
         // The original isolate error message must be surfaced.
         expect(caught.toString(), contains('boom: worker failed'));
       },

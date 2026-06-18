@@ -114,7 +114,8 @@ class PostgresNotifyRepository implements INotifyRepository {
   Future<void> _reconnectLoop() async {
     var attempt = 0;
     while (!_disposed) {
-      final delaySecs = _reconnectDelays[attempt.clamp(0, _reconnectDelays.length - 1)];
+      final delaySecs =
+          _reconnectDelays[attempt.clamp(0, _reconnectDelays.length - 1)];
       await Future<void>.delayed(Duration(seconds: delaySecs));
       if (_disposed) return;
       try {
@@ -143,7 +144,8 @@ class PostgresNotifyRepository implements INotifyRepository {
     final event = NotifyEvent(
       topic: topic,
       payload: Map<String, dynamic>.from(payloadRaw),
-      timestamp: DateTime.tryParse(
+      timestamp:
+          DateTime.tryParse(
             envelope[_kTimestampKey] as String? ?? '',
           )?.toUtc() ??
           DateTime.now().toUtc(),
@@ -182,11 +184,7 @@ class PostgresNotifyRepository implements INotifyRepository {
   }
 
   @override
-  void publishTo(
-    String clientId,
-    String topic,
-    Map<String, dynamic> payload,
-  ) {
+  void publishTo(String clientId, String topic, Map<String, dynamic> payload) {
     final connection = _connection;
     if (connection == null || !connection.isOpen) return;
     final envelope = _encodeEnvelope(payload, targetClientId: clientId);

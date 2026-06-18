@@ -160,11 +160,11 @@ void main() {
       final responses = <TestResponse>[];
       await for (final response
           in clientEndpoint.serverStream<TestRequest, TestResponse>(
-        serviceName: 'StreamingTestService',
-        methodName: 'GetNumbers',
-        // ✅ НЕ передаем кодеки → автоматически zero-copy режим
-        request: request,
-      )) {
+            serviceName: 'StreamingTestService',
+            methodName: 'GetNumbers',
+            // ✅ НЕ передаем кодеки → автоматически zero-copy режим
+            request: request,
+          )) {
         responses.add(response);
         print('📥 Получен ответ: ${response.result}');
       }
@@ -175,8 +175,9 @@ void main() {
       print('\n📊 Анализ сообщений:');
       print('   Всего сообщений: ${sentMessages.length}');
 
-      final serializedMessages =
-          sentMessages.where((m) => m.isSerialized).length;
+      final serializedMessages = sentMessages
+          .where((m) => m.isSerialized)
+          .length;
       final directMessages = sentMessages.where((m) => m.isDirect).length;
       final metadataMessages = sentMessages
           .where((m) => m.metadata != null && !m.isSerialized && !m.isDirect)
@@ -216,12 +217,12 @@ void main() {
         TestRequest('item3'),
       ]);
 
-      final response =
-          await clientEndpoint.clientStream<TestRequest, TestResponse>(
-        serviceName: 'StreamingTestService',
-        methodName: 'ProcessItems',
-        // ✅ НЕ передаем кодеки → автоматически zero-copy режим
-      )(requestStream);
+      final response = await clientEndpoint
+          .clientStream<TestRequest, TestResponse>(
+            serviceName: 'StreamingTestService',
+            methodName: 'ProcessItems',
+            // ✅ НЕ передаем кодеки → автоматически zero-copy режим
+          )(requestStream);
 
       print('📥 Получен итоговый ответ: ${response.result}');
 
@@ -231,8 +232,9 @@ void main() {
       print('\n📊 Анализ сообщений:');
       print('   Всего сообщений: ${sentMessages.length}');
 
-      final serializedMessages =
-          sentMessages.where((m) => m.isSerialized).length;
+      final serializedMessages = sentMessages
+          .where((m) => m.isSerialized)
+          .length;
       final directMessages = sentMessages.where((m) => m.isDirect).length;
 
       print('   📡 Сериализованных: $serializedMessages');
@@ -262,13 +264,13 @@ void main() {
       final requestController = StreamController<TestRequest>();
       final responses = <TestResponse>[];
 
-      final responseStream =
-          clientEndpoint.bidirectionalStream<TestRequest, TestResponse>(
-        serviceName: 'StreamingTestService',
-        methodName: 'Chat',
-        // ✅ НЕ передаем кодеки → автоматически zero-copy режим
-        requests: requestController.stream,
-      );
+      final responseStream = clientEndpoint
+          .bidirectionalStream<TestRequest, TestResponse>(
+            serviceName: 'StreamingTestService',
+            methodName: 'Chat',
+            // ✅ НЕ передаем кодеки → автоматически zero-copy режим
+            requests: requestController.stream,
+          );
 
       final subscription = responseStream.listen((response) {
         responses.add(response);
@@ -297,8 +299,9 @@ void main() {
       print('\n📊 Анализ сообщений:');
       print('   Всего сообщений: ${sentMessages.length}');
 
-      final serializedMessages =
-          sentMessages.where((m) => m.isSerialized).length;
+      final serializedMessages = sentMessages
+          .where((m) => m.isSerialized)
+          .length;
       final directMessages = sentMessages.where((m) => m.isDirect).length;
 
       print('   📡 Сериализованных: $serializedMessages');
@@ -338,11 +341,11 @@ void main() {
       final responses = <TestResponse>[];
       await for (final response
           in clientEndpoint.serverStream<TestRequest, TestResponse>(
-        serviceName: 'StreamingTestService',
-        methodName: 'GetNumbers',
-        // ✅ НЕ передаем кодеки → автоматически zero-copy режим
-        request: largeRequest,
-      )) {
+            serviceName: 'StreamingTestService',
+            methodName: 'GetNumbers',
+            // ✅ НЕ передаем кодеки → автоматически zero-copy режим
+            request: largeRequest,
+          )) {
         responses.add(response);
       }
 
@@ -352,8 +355,9 @@ void main() {
         '⏱️ Время выполнения: ${stopwatch.elapsedMicroseconds} микросекунд',
       );
 
-      final serializedMessages =
-          sentMessages.where((m) => m.isSerialized).length;
+      final serializedMessages = sentMessages
+          .where((m) => m.isSerialized)
+          .length;
       final directMessages = sentMessages.where((m) => m.isDirect).length;
 
       print('📊 Результаты:');

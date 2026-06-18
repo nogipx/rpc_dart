@@ -42,15 +42,15 @@ class RpcWebSocketServer implements IRpcServer {
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(WebSocketChannel channel)? onConnectionOpened,
     void Function(WebSocketChannel channel)? onConnectionClosed,
-  })  : _connections = connections,
-        _logger = logger?.child('WebSocketServer'),
-        _logController = logController,
-        _policy = policy,
-        _onEndpointCreated = onEndpointCreated,
-        _onPeerEndpointCreated = onPeerEndpointCreated,
-        _onConnectionError = onConnectionError,
-        _onConnectionOpened = onConnectionOpened,
-        _onConnectionClosed = onConnectionClosed;
+  }) : _connections = connections,
+       _logger = logger?.child('WebSocketServer'),
+       _logController = logController,
+       _policy = policy,
+       _onEndpointCreated = onEndpointCreated,
+       _onPeerEndpointCreated = onPeerEndpointCreated,
+       _onConnectionError = onConnectionError,
+       _onConnectionOpened = onConnectionOpened,
+       _onConnectionClosed = onConnectionClosed;
 
   factory RpcWebSocketServer.createWithContracts({
     required Stream<WebSocketChannel> connections,

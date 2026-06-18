@@ -46,12 +46,13 @@ class LogController {
     List<LogEnricher> enrichers = const [],
     SamplingConfig? sampling,
     List<String> redactFields = const [],
-  })  : clock = clock ?? DateTime.now,
-        _outputs = List.of(outputs),
-        _enrichers = List.of(enrichers),
-        _redactor =
-            redactFields.isNotEmpty ? LogRedactor(fields: redactFields) : null,
-        _sampling = sampling != null ? SamplingState(sampling) : null;
+  }) : clock = clock ?? DateTime.now,
+       _outputs = List.of(outputs),
+       _enrichers = List.of(enrichers),
+       _redactor = redactFields.isNotEmpty
+           ? LogRedactor(fields: redactFields)
+           : null,
+       _sampling = sampling != null ? SamplingState(sampling) : null;
 
   // --- Level filtering ---
 
@@ -182,10 +183,10 @@ class LogController {
 
   /// Current configuration snapshot (for remote control / diagnostics).
   LogConfig get config => LogConfig(
-        minLevel: minLevel,
-        scopeLevels: Map.unmodifiable(_scopeLevels),
-        tagLevels: Map.unmodifiable(_tagLevels),
-      );
+    minLevel: minLevel,
+    scopeLevels: Map.unmodifiable(_scopeLevels),
+    tagLevels: Map.unmodifiable(_tagLevels),
+  );
 
   // --- Lifecycle ---
 
@@ -334,38 +335,40 @@ class LogConfig {
 
   /// Serializes this config to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
-        'minLevel': minLevel.name,
-        if (scopeLevels.isNotEmpty)
-          'scopeLevels': scopeLevels.map((k, v) => MapEntry(k, v.name)),
-        if (tagLevels.isNotEmpty)
-          'tagLevels': tagLevels.map((k, v) => MapEntry(k, v.name)),
-      };
+    'minLevel': minLevel.name,
+    if (scopeLevels.isNotEmpty)
+      'scopeLevels': scopeLevels.map((k, v) => MapEntry(k, v.name)),
+    if (tagLevels.isNotEmpty)
+      'tagLevels': tagLevels.map((k, v) => MapEntry(k, v.name)),
+  };
 
   /// Deserializes a [LogConfig] from a JSON-compatible map.
   factory LogConfig.fromJson(Map<String, dynamic> json) => LogConfig(
-        minLevel: RpcLogLevel.values.firstWhere(
-          (e) => e.name == json['minLevel'],
-          orElse: () => RpcLogLevel.debug,
-        ),
-        scopeLevels: (json['scopeLevels'] as Map<String, dynamic>?)?.map(
-              (k, v) => MapEntry(
-                k,
-                RpcLogLevel.values.firstWhere(
-                  (e) => e.name == v,
-                  orElse: () => RpcLogLevel.debug,
-                ),
-              ),
-            ) ??
-            const {},
-        tagLevels: (json['tagLevels'] as Map<String, dynamic>?)?.map(
-              (k, v) => MapEntry(
-                k,
-                RpcLogLevel.values.firstWhere(
-                  (e) => e.name == v,
-                  orElse: () => RpcLogLevel.debug,
-                ),
-              ),
-            ) ??
-            const {},
-      );
+    minLevel: RpcLogLevel.values.firstWhere(
+      (e) => e.name == json['minLevel'],
+      orElse: () => RpcLogLevel.debug,
+    ),
+    scopeLevels:
+        (json['scopeLevels'] as Map<String, dynamic>?)?.map(
+          (k, v) => MapEntry(
+            k,
+            RpcLogLevel.values.firstWhere(
+              (e) => e.name == v,
+              orElse: () => RpcLogLevel.debug,
+            ),
+          ),
+        ) ??
+        const {},
+    tagLevels:
+        (json['tagLevels'] as Map<String, dynamic>?)?.map(
+          (k, v) => MapEntry(
+            k,
+            RpcLogLevel.values.firstWhere(
+              (e) => e.name == v,
+              orElse: () => RpcLogLevel.debug,
+            ),
+          ),
+        ) ??
+        const {},
+  );
 }

@@ -54,8 +54,8 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
     required SendPort sendPort,
     required Stream<dynamic> messageStream,
     void Function()? onClose,
-  })  : _sendPort = sendPort,
-        _onClose = onClose {
+  }) : _sendPort = sendPort,
+       _onClose = onClose {
     _messageSub = messageStream.listen(
       _handleMessage,
       onDone: () {
@@ -97,13 +97,15 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
     }
 
     try {
-      _sendPort.send(_IsolateMessage(
-        type: type,
-        streamId: message.streamId,
-        data: data,
-        isEndOfStream: message.isEndOfStream,
-        methodPath: message.methodPath,
-      ));
+      _sendPort.send(
+        _IsolateMessage(
+          type: type,
+          streamId: message.streamId,
+          data: data,
+          isEndOfStream: message.isEndOfStream,
+          methodPath: message.methodPath,
+        ),
+      );
     } catch (_) {
       await close();
     }
@@ -132,33 +134,38 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
     switch (message.type) {
       case _IsolateMessageType.metadata:
         if (message.streamId == 0) return;
-        _incomingCtl.add(RpcTransportMessage(
-          metadata: message.data as RpcMetadata,
-          isEndOfStream: message.isEndOfStream,
-          streamId: message.streamId,
-          methodPath: message.methodPath,
-        ));
+        _incomingCtl.add(
+          RpcTransportMessage(
+            metadata: message.data as RpcMetadata,
+            isEndOfStream: message.isEndOfStream,
+            streamId: message.streamId,
+            methodPath: message.methodPath,
+          ),
+        );
       case _IsolateMessageType.data:
         if (message.streamId == 0) return;
-        _incomingCtl.add(RpcTransportMessage(
-          payload: _materializeBytes(message.data),
-          isEndOfStream: message.isEndOfStream,
-          streamId: message.streamId,
-          methodPath: message.methodPath,
-        ));
+        _incomingCtl.add(
+          RpcTransportMessage(
+            payload: _materializeBytes(message.data),
+            isEndOfStream: message.isEndOfStream,
+            streamId: message.streamId,
+            methodPath: message.methodPath,
+          ),
+        );
       case _IsolateMessageType.directObject:
         if (message.streamId == 0) return;
-        _incomingCtl.add(RpcTransportMessage(
-          streamId: message.streamId,
-          isEndOfStream: message.isEndOfStream,
-          directPayload: message.data,
-        ));
+        _incomingCtl.add(
+          RpcTransportMessage(
+            streamId: message.streamId,
+            isEndOfStream: message.isEndOfStream,
+            directPayload: message.data,
+          ),
+        );
       case _IsolateMessageType.finish:
         if (message.streamId == 0) return;
-        _incomingCtl.add(RpcTransportMessage(
-          isEndOfStream: true,
-          streamId: message.streamId,
-        ));
+        _incomingCtl.add(
+          RpcTransportMessage(isEndOfStream: true, streamId: message.streamId),
+        );
       case _IsolateMessageType.close:
         close();
       case _IsolateMessageType.init:
@@ -171,8 +178,8 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
 
 // -- Public API ---------------------------------------------------------------
 
-typedef RpcIsolateEntrypoint = void Function(
-    IRpcTransport transport, Map<String, dynamic> customParams);
+typedef RpcIsolateEntrypoint =
+    void Function(IRpcTransport transport, Map<String, dynamic> customParams);
 
 /// Factory for spawning an isolate with an [IRpcTransport] on each side.
 ///
@@ -226,11 +233,13 @@ abstract interface class RpcIsolateTransport {
 
       () async {
         try {
-          final initMessage = await messageController.stream.firstWhere(
-            (message) =>
-                message is _IsolateMessage &&
-                message.type == _IsolateMessageType.init,
-          ) as _IsolateMessage;
+          final initMessage =
+              await messageController.stream.firstWhere(
+                    (message) =>
+                        message is _IsolateMessage &&
+                        message.type == _IsolateMessageType.init,
+                  )
+                  as _IsolateMessage;
 
           final mainHostSendPort = initMessage.data as SendPort;
 

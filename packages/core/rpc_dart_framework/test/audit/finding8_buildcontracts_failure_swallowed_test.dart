@@ -66,8 +66,7 @@ class _FakeServer implements IRpcServer {
 }
 
 void main() {
-  test(
-      'buildContracts failure aborts start() with original error, '
+  test('buildContracts failure aborts start() with original error, '
       'endpoint not started', () async {
     late _FakeServer captured;
     final app = RpcApp.server(
@@ -77,8 +76,12 @@ void main() {
 
     await expectLater(app.start(), throwsA(isA<_ContractError>()));
 
-    expect(captured.setupCompleted, isFalse,
-        reason: 'endpoint setup (and endpoint.start()) must not complete '
-            'when contracts failed');
+    expect(
+      captured.setupCompleted,
+      isFalse,
+      reason:
+          'endpoint setup (and endpoint.start()) must not complete '
+          'when contracts failed',
+    );
   });
 }

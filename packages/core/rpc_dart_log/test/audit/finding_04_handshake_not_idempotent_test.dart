@@ -36,40 +36,51 @@ void main() {
       await server.stop();
     });
 
-    test('two handshakes on one connection -> one session, one connect event',
-        () async {
-      final connects = <DeviceConnected>[];
-      server.onConnection.listen((e) {
-        if (e is DeviceConnected) connects.add(e);
-      });
+    test(
+      'two handshakes on one connection -> one session, one connect event',
+      () async {
+        final connects = <DeviceConnected>[];
+        server.onConnection.listen((e) {
+          if (e is DeviceConnected) connects.add(e);
+        });
 
-      // Raw client (not LogCollectorOutput) so we control handshake count.
-      final channel = WebSocketChannel.connect(
-          Uri.parse('ws://127.0.0.1:${server.boundPort}'));
-      await channel.ready;
-      final transport = RpcWebSocketCallerTransport(channel);
-      final endpoint = RpcCallerEndpoint(transport: transport);
-      endpoint.start();
-      final caller = LogCollectorServiceCaller(endpoint);
+        // Raw client (not LogCollectorOutput) so we control handshake count.
+        final channel = WebSocketChannel.connect(
+          Uri.parse('ws://127.0.0.1:${server.boundPort}'),
+        );
+        await channel.ready;
+        final transport = RpcWebSocketCallerTransport(channel);
+        final endpoint = RpcCallerEndpoint(transport: transport);
+        endpoint.start();
+        final caller = LogCollectorServiceCaller(endpoint);
 
-      await caller.handshake(const LogCollectorHandshake(
-          deviceName: 'devA', app: 'appA'));
-      await caller.handshake(const LogCollectorHandshake(
-          deviceName: 'devA-again', app: 'appA'));
+        await caller.handshake(
+          const LogCollectorHandshake(deviceName: 'devA', app: 'appA'),
+        );
+        await caller.handshake(
+          const LogCollectorHandshake(deviceName: 'devA-again', app: 'appA'),
+        );
 
-      // Let events settle.
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+        // Let events settle.
+        await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      expect(server.sessions.length, 1,
+        expect(
+          server.sessions.length,
+          1,
           reason:
-              'second handshake leaked a session; active sessions=${server.sessions.map((s) => s.deviceName).toList()}');
-      expect(connects.length, 1,
+              'second handshake leaked a session; active sessions=${server.sessions.map((s) => s.deviceName).toList()}',
+        );
+        expect(
+          connects.length,
+          1,
           reason:
               'second handshake fired a spurious DeviceConnected with no matching disconnect; '
-              'connects=${connects.map((c) => c.session.deviceName).toList()}');
+              'connects=${connects.map((c) => c.session.deviceName).toList()}',
+        );
 
-      await endpoint.close();
-      await transport.close();
-    });
+        await endpoint.close();
+        await transport.close();
+      },
+    );
   });
 }

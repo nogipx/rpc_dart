@@ -49,12 +49,13 @@ class RpcCallEvent {
 }
 
 /// Signature for the global error hook.
-typedef RpcErrorHandler = void Function(
-  Object error,
-  StackTrace stackTrace,
-  String serviceName,
-  String methodName,
-);
+typedef RpcErrorHandler =
+    void Function(
+      Object error,
+      StackTrace stackTrace,
+      String serviceName,
+      String methodName,
+    );
 
 /// Signature for the per-call metrics observer.
 typedef RpcCallObserver = void Function(RpcCallEvent event);

@@ -290,7 +290,9 @@ class RpcFileDescriptorBuilder {
   /// Adds a service descriptor from raw `ServiceDescriptorProto` bytes.
   ///
   /// Use bytes from `.pbjson.dart`, e.g. `echoServiceDescriptor`.
-  RpcFileDescriptorBuilder addServiceBytes(Uint8List serviceDescriptorProtoBytes) {
+  RpcFileDescriptorBuilder addServiceBytes(
+    Uint8List serviceDescriptorProtoBytes,
+  ) {
     _serviceBytes.add(serviceDescriptorProtoBytes);
     return this;
   }

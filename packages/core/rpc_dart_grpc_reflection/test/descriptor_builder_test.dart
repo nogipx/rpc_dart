@@ -23,84 +23,80 @@ void main() {
     });
 
     test('addDependency is included in parsed dependencies', () {
-      final bytes = RpcFileDescriptorBuilder(
-        name: 'echo.proto',
-        package: 'echo.v1',
-      )
-          .addDependency('common.proto')
-          .addDependency('google/protobuf/timestamp.proto')
-          .build();
+      final bytes =
+          RpcFileDescriptorBuilder(name: 'echo.proto', package: 'echo.v1')
+              .addDependency('common.proto')
+              .addDependency('google/protobuf/timestamp.proto')
+              .build();
       final parsed = parseFileDescriptorProto(bytes);
 
-      expect(parsed.dependencies,
-          containsAll(['common.proto', 'google/protobuf/timestamp.proto']));
+      expect(
+        parsed.dependencies,
+        containsAll(['common.proto', 'google/protobuf/timestamp.proto']),
+      );
     });
 
     test('addMessage registers message name', () {
-      final bytes = RpcFileDescriptorBuilder(
-        name: 'echo.proto',
-        package: 'echo.v1',
-      )
-          .addMessage(const RpcMessageDescriptor(name: 'EchoRequest'))
-          .addMessage(const RpcMessageDescriptor(name: 'EchoResponse'))
-          .build();
+      final bytes =
+          RpcFileDescriptorBuilder(name: 'echo.proto', package: 'echo.v1')
+              .addMessage(const RpcMessageDescriptor(name: 'EchoRequest'))
+              .addMessage(const RpcMessageDescriptor(name: 'EchoResponse'))
+              .build();
       final parsed = parseFileDescriptorProto(bytes);
 
       expect(parsed.messageTypes, containsAll(['EchoRequest', 'EchoResponse']));
     });
 
     test('addService registers service name', () {
-      final bytes = RpcFileDescriptorBuilder(
-        name: 'echo.proto',
-        package: 'echo.v1',
-      )
-          .addService(
-            name: 'EchoService',
-            methods: [
-              const RpcMethodDescriptor(
-                name: 'Echo',
-                inputType: '.echo.v1.EchoRequest',
-                outputType: '.echo.v1.EchoResponse',
-              ),
-            ],
-          )
-          .build();
+      final bytes =
+          RpcFileDescriptorBuilder(name: 'echo.proto', package: 'echo.v1')
+              .addService(
+                name: 'EchoService',
+                methods: [
+                  const RpcMethodDescriptor(
+                    name: 'Echo',
+                    inputType: '.echo.v1.EchoRequest',
+                    outputType: '.echo.v1.EchoResponse',
+                  ),
+                ],
+              )
+              .build();
       final parsed = parseFileDescriptorProto(bytes);
 
       expect(parsed.services, contains('EchoService'));
     });
 
     test('addEnum registers file-level enum', () {
-      final bytes = RpcFileDescriptorBuilder(
-        name: 'enums.proto',
-        package: 'enums.v1',
-      )
-          .addEnum(const RpcEnumDescriptor(
-            name: 'Status',
-            values: [
-              RpcEnumValueDescriptor(name: 'UNKNOWN', number: 0),
-              RpcEnumValueDescriptor(name: 'ACTIVE', number: 1),
-            ],
-          ))
-          .build();
+      final bytes =
+          RpcFileDescriptorBuilder(name: 'enums.proto', package: 'enums.v1')
+              .addEnum(
+                const RpcEnumDescriptor(
+                  name: 'Status',
+                  values: [
+                    RpcEnumValueDescriptor(name: 'UNKNOWN', number: 0),
+                    RpcEnumValueDescriptor(name: 'ACTIVE', number: 1),
+                  ],
+                ),
+              )
+              .build();
       final parsed = parseFileDescriptorProto(bytes);
 
       expect(parsed.enumTypes, contains('Status'));
     });
 
     test('nested message types are included in parsed messageTypes', () {
-      final bytes = RpcFileDescriptorBuilder(
-        name: 'nested.proto',
-        package: 'nested.v1',
-      )
-          .addMessage(const RpcMessageDescriptor(
-            name: 'Outer',
-            nestedTypes: [
-              RpcMessageDescriptor(name: 'Inner'),
-              RpcMessageDescriptor(name: 'AnotherInner'),
-            ],
-          ))
-          .build();
+      final bytes =
+          RpcFileDescriptorBuilder(name: 'nested.proto', package: 'nested.v1')
+              .addMessage(
+                const RpcMessageDescriptor(
+                  name: 'Outer',
+                  nestedTypes: [
+                    RpcMessageDescriptor(name: 'Inner'),
+                    RpcMessageDescriptor(name: 'AnotherInner'),
+                  ],
+                ),
+              )
+              .build();
       final parsed = parseFileDescriptorProto(bytes);
 
       expect(parsed.messageTypes, contains('Outer'));
@@ -108,43 +104,46 @@ void main() {
       expect(parsed.messageTypes, contains('Outer.AnotherInner'));
     });
 
-    test('nested enum types inside message are included in parsed enumTypes', () {
-      final bytes = RpcFileDescriptorBuilder(
-        name: 'nested.proto',
-        package: 'nested.v1',
-      )
-          .addMessage(const RpcMessageDescriptor(
-            name: 'Outer',
-            enumTypes: [
-              RpcEnumDescriptor(
-                name: 'Status',
-                values: [RpcEnumValueDescriptor(name: 'UNKNOWN', number: 0)],
-              ),
-            ],
-          ))
-          .build();
-      final parsed = parseFileDescriptorProto(bytes);
+    test(
+      'nested enum types inside message are included in parsed enumTypes',
+      () {
+        final bytes =
+            RpcFileDescriptorBuilder(name: 'nested.proto', package: 'nested.v1')
+                .addMessage(
+                  const RpcMessageDescriptor(
+                    name: 'Outer',
+                    enumTypes: [
+                      RpcEnumDescriptor(
+                        name: 'Status',
+                        values: [
+                          RpcEnumValueDescriptor(name: 'UNKNOWN', number: 0),
+                        ],
+                      ),
+                    ],
+                  ),
+                )
+                .build();
+        final parsed = parseFileDescriptorProto(bytes);
 
-      expect(parsed.enumTypes, contains('Outer.Status'));
-    });
+        expect(parsed.enumTypes, contains('Outer.Status'));
+      },
+    );
 
     test('deeply nested message types are included', () {
-      final bytes = RpcFileDescriptorBuilder(
-        name: 'deep.proto',
-        package: 'deep.v1',
-      )
-          .addMessage(const RpcMessageDescriptor(
-            name: 'L1',
-            nestedTypes: [
-              RpcMessageDescriptor(
-                name: 'L2',
-                nestedTypes: [
-                  RpcMessageDescriptor(name: 'L3'),
-                ],
-              ),
-            ],
-          ))
-          .build();
+      final bytes =
+          RpcFileDescriptorBuilder(name: 'deep.proto', package: 'deep.v1')
+              .addMessage(
+                const RpcMessageDescriptor(
+                  name: 'L1',
+                  nestedTypes: [
+                    RpcMessageDescriptor(
+                      name: 'L2',
+                      nestedTypes: [RpcMessageDescriptor(name: 'L3')],
+                    ),
+                  ],
+                ),
+              )
+              .build();
       final parsed = parseFileDescriptorProto(bytes);
 
       expect(parsed.messageTypes, containsAll(['L1', 'L1.L2', 'L1.L2.L3']));
@@ -164,43 +163,51 @@ void main() {
 
   group('RpcFileDescriptorBuilder — registry integration', () {
     test('builder output is accepted by registry for all symbol types', () {
-      final bytes = RpcFileDescriptorBuilder(
-        name: 'full.proto',
-        package: 'full.v1',
-      )
-          .addMessage(const RpcMessageDescriptor(
-            name: 'Request',
-            nestedTypes: [RpcMessageDescriptor(name: 'Header')],
-            enumTypes: [
-              RpcEnumDescriptor(
-                name: 'Priority',
-                values: [RpcEnumValueDescriptor(name: 'LOW', number: 0)],
-              ),
-            ],
-          ))
-          .addEnum(const RpcEnumDescriptor(
-            name: 'GlobalStatus',
-            values: [RpcEnumValueDescriptor(name: 'UNKNOWN', number: 0)],
-          ))
-          .addService(
-            name: 'FullService',
-            methods: [
-              const RpcMethodDescriptor(
-                name: 'Do',
-                inputType: '.full.v1.Request',
-                outputType: '.full.v1.Request',
-              ),
-            ],
-          )
-          .build();
+      final bytes =
+          RpcFileDescriptorBuilder(name: 'full.proto', package: 'full.v1')
+              .addMessage(
+                const RpcMessageDescriptor(
+                  name: 'Request',
+                  nestedTypes: [RpcMessageDescriptor(name: 'Header')],
+                  enumTypes: [
+                    RpcEnumDescriptor(
+                      name: 'Priority',
+                      values: [RpcEnumValueDescriptor(name: 'LOW', number: 0)],
+                    ),
+                  ],
+                ),
+              )
+              .addEnum(
+                const RpcEnumDescriptor(
+                  name: 'GlobalStatus',
+                  values: [RpcEnumValueDescriptor(name: 'UNKNOWN', number: 0)],
+                ),
+              )
+              .addService(
+                name: 'FullService',
+                methods: [
+                  const RpcMethodDescriptor(
+                    name: 'Do',
+                    inputType: '.full.v1.Request',
+                    outputType: '.full.v1.Request',
+                  ),
+                ],
+              )
+              .build();
 
       final registry = RpcReflectionRegistry();
       registry.addFileDescriptor(bytes);
 
       expect(registry.fileContainingSymbol('full.v1.FullService'), isNotNull);
       expect(registry.fileContainingSymbol('full.v1.Request'), isNotNull);
-      expect(registry.fileContainingSymbol('full.v1.Request.Header'), isNotNull);
-      expect(registry.fileContainingSymbol('full.v1.Request.Priority'), isNotNull);
+      expect(
+        registry.fileContainingSymbol('full.v1.Request.Header'),
+        isNotNull,
+      );
+      expect(
+        registry.fileContainingSymbol('full.v1.Request.Priority'),
+        isNotNull,
+      );
       expect(registry.fileContainingSymbol('full.v1.GlobalStatus'), isNotNull);
     });
   });
@@ -345,10 +352,18 @@ List<int> _str(int field, String v) {
 }
 
 /// Wraps raw DescriptorProto bytes into a minimal FileDescriptorProto.
-Uint8List _wrapInFileDescriptor(String name, String package, Uint8List msgBytes) {
+Uint8List _wrapInFileDescriptor(
+  String name,
+  String package,
+  Uint8List msgBytes,
+) {
   final buf = <int>[];
   buf.addAll(_str(1, name));
   buf.addAll(_str(2, package));
-  buf.addAll([..._varint((4 << 3) | 2), ..._varint(msgBytes.length), ...msgBytes]);
+  buf.addAll([
+    ..._varint((4 << 3) | 2),
+    ..._varint(msgBytes.length),
+    ...msgBytes,
+  ]);
   return Uint8List.fromList(buf);
 }

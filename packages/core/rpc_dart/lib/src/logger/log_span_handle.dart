@@ -56,21 +56,23 @@ class LogSpanHandle {
     this.traceId,
     Map<String, Object>? data,
     DateTime Function()? clock,
-  })  : spanId = _generateSpanId(),
-        _clock = clock ?? DateTime.now,
-        _startTime = (clock ?? DateTime.now)(),
-        _onComplete = onComplete,
-        _onEvent = onEvent,
-        _onStart = onStart,
-        _data = data {
-    onStart(LogSpanStart(
-      spanId: spanId,
-      scope: scope,
-      name: name,
-      parentSpanId: parentSpanId,
-      traceId: traceId,
-      timestamp: _startTime,
-    ));
+  }) : spanId = _generateSpanId(),
+       _clock = clock ?? DateTime.now,
+       _startTime = (clock ?? DateTime.now)(),
+       _onComplete = onComplete,
+       _onEvent = onEvent,
+       _onStart = onStart,
+       _data = data {
+    onStart(
+      LogSpanStart(
+        spanId: spanId,
+        scope: scope,
+        name: name,
+        parentSpanId: parentSpanId,
+        traceId: traceId,
+        timestamp: _startTime,
+      ),
+    );
   }
 
   /// Whether this span has been ended.
@@ -118,10 +120,11 @@ class LogSpanHandle {
   }
 
   /// End the span. Emits [LogSpan] to the pipeline.
-  void end(
-      {SpanStatus status = SpanStatus.ok,
-      Object? error,
-      StackTrace? stackTrace}) {
+  void end({
+    SpanStatus status = SpanStatus.ok,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
     if (_ended) return;
     _ended = true;
 

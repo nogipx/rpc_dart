@@ -6,8 +6,11 @@
 part of '../_index.dart';
 
 /// Bidirectional stream responder: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Handles incoming requests and sends responses independently.
-final class BidirectionalStreamResponder<TRequest extends Object,
-    TResponse extends Object> implements IRpcResponder {
+final class BidirectionalStreamResponder<
+  TRequest extends Object,
+  TResponse extends Object
+>
+    implements IRpcResponder {
   late final LogScope _logger;
 
   @override

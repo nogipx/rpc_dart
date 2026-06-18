@@ -27,17 +27,18 @@ void main() {
         'user': 'alice',
         'password': 'super-secret',
       };
-      final data = <String, Object>{
-        'event': 'login',
-        'payload': nested,
-      };
+      final data = <String, Object>{'event': 'login', 'payload': nested};
 
       final result = redactor.redact(data);
       final redactedPayload = result['payload'] as Map;
 
-      expect(redactedPayload['password'], '[REDACTED]',
-          reason: 'nested sensitive key must be redacted regardless of map '
-              'generic type');
+      expect(
+        redactedPayload['password'],
+        '[REDACTED]',
+        reason:
+            'nested sensitive key must be redacted regardless of map '
+            'generic type',
+      );
       expect(redactedPayload['user'], 'alice');
     });
 
@@ -54,16 +55,16 @@ void main() {
       final a = result['a'] as Map;
       final b = a['b'] as Map;
 
-      expect(b['TOKEN'], '[REDACTED]',
-          reason: 'case-insensitive match must apply to deeply nested maps');
+      expect(
+        b['TOKEN'],
+        '[REDACTED]',
+        reason: 'case-insensitive match must apply to deeply nested maps',
+      );
     });
 
     test('null values inside nested maps do not crash redaction', () {
       final data = <String, Object>{
-        'meta': <String, dynamic>{
-          'password': 'x',
-          'optional': null,
-        },
+        'meta': <String, dynamic>{'password': 'x', 'optional': null},
       };
 
       final result = redactor.redact(data);

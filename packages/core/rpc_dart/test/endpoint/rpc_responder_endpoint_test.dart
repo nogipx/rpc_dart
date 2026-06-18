@@ -183,14 +183,14 @@ void main() {
       responderEndpoint.start();
 
       // Отправляем запрос через caller
-      final response =
-          await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-        serviceName: 'TestService',
-        methodName: 'UnaryMethod',
-        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-        request: TestRequest('Test request'),
-      );
+      final response = await callerEndpoint
+          .unaryRequest<TestRequest, TestResponse>(
+            serviceName: 'TestService',
+            methodName: 'UnaryMethod',
+            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+            request: TestRequest('Test request'),
+          );
 
       // Проверяем ответ и вызов обработчика
       expect(response.message, equals('Reply to: Test request'));
@@ -269,14 +269,14 @@ void main() {
         responderEndpoint.start();
 
         // Отправляем запрос к методу SubService
-        final response =
-            await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-          serviceName: 'SubService',
-          methodName: 'SubUnaryMethod',
-          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-          request: TestRequest('SubService test'),
-        );
+        final response = await callerEndpoint
+            .unaryRequest<TestRequest, TestResponse>(
+              serviceName: 'SubService',
+              methodName: 'SubUnaryMethod',
+              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+              request: TestRequest('SubService test'),
+            );
 
         // Проверяем ответ и вызов обработчика
         expect(
@@ -430,14 +430,14 @@ void main() {
           responderEndpoint.unregisterServiceContract('TestService');
 
           // Проверяем что оставшийся сервис все еще работает
-          final response =
-              await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-            serviceName: 'ParentService',
-            methodName: 'ParentMethod',
-            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-            request: TestRequest('After unregister test'),
-          );
+          final response = await callerEndpoint
+              .unaryRequest<TestRequest, TestResponse>(
+                serviceName: 'ParentService',
+                methodName: 'ParentMethod',
+                requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+                responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+                request: TestRequest('After unregister test'),
+              );
 
           expect(
             response.message,
@@ -483,14 +483,14 @@ void main() {
         // Проверяем что сервис зарегистрирован и работает
         expect(responderEndpoint.registeredContracts, contains('TestService'));
 
-        final response =
-            await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-          serviceName: 'TestService',
-          methodName: 'UnaryMethod',
-          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-          request: TestRequest('After start test'),
-        );
+        final response = await callerEndpoint
+            .unaryRequest<TestRequest, TestResponse>(
+              serviceName: 'TestService',
+              methodName: 'UnaryMethod',
+              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+              request: TestRequest('After start test'),
+            );
 
         expect(response.message, equals('Reply to: After start test'));
         expect(testService.callLog, contains('UnaryMethod: After start test'));
@@ -509,14 +509,14 @@ void main() {
         responderEndpoint.registerServiceContract(newService);
 
         // Проверяем что новый сервис работает
-        final newResponse =
-            await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-          serviceName: 'TestService',
-          methodName: 'UnaryMethod',
-          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-          request: TestRequest('New service test'),
-        );
+        final newResponse = await callerEndpoint
+            .unaryRequest<TestRequest, TestResponse>(
+              serviceName: 'TestService',
+              methodName: 'UnaryMethod',
+              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+              request: TestRequest('New service test'),
+            );
 
         expect(newResponse.message, equals('Reply to: New service test'));
         expect(newService.callLog, contains('UnaryMethod: New service test'));
@@ -540,14 +540,14 @@ void main() {
         );
 
         // Вызываем метод который может создать ресурсы
-        final response =
-            await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-          serviceName: 'ResourceHeavyService',
-          methodName: 'CreateResourceIntensiveOperation',
-          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-          request: TestRequest('setup resources'),
-        );
+        final response = await callerEndpoint
+            .unaryRequest<TestRequest, TestResponse>(
+              serviceName: 'ResourceHeavyService',
+              methodName: 'CreateResourceIntensiveOperation',
+              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+              request: TestRequest('setup resources'),
+            );
 
         expect(response.message, contains('resources created'));
         expect(resourceService.isResourcesActive(), isTrue);
@@ -569,14 +569,14 @@ void main() {
           responderEndpoint.start();
 
           // Создаем ресурсы
-          final response =
-              await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-            serviceName: 'ResourceHeavyService',
-            methodName: 'CreateResourceIntensiveOperation',
-            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-            request: TestRequest('setup resources'),
-          );
+          final response = await callerEndpoint
+              .unaryRequest<TestRequest, TestResponse>(
+                serviceName: 'ResourceHeavyService',
+                methodName: 'CreateResourceIntensiveOperation',
+                requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+                responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+                request: TestRequest('setup resources'),
+              );
 
           expect(response.message, contains('resources created'));
           expect(resourceService.isResourcesActive(), isTrue);
@@ -590,8 +590,7 @@ void main() {
         },
       );
 
-      test('dispose() автоматически вызывается при close() эндпоинта',
-          () async {
+      test('dispose() автоматически вызывается при close() эндпоинта', () async {
         // Создаем новый эндпоинт для этого теста
         final (newCallerTransport, newResponderTransport) =
             RpcInMemoryTransport.pair();

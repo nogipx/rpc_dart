@@ -101,10 +101,10 @@ class LogCollectorOutput extends LogOutput {
     this.maxInFlight = 32,
     this.scopeFilter,
     Future<WebSocketChannel> Function(Uri uri)? channelFactory,
-  })  : _uri = uri,
-        _device = device,
-        _channelFactory = channelFactory ?? _defaultChannelFactory,
-        sessionId = _generateSessionId() {
+  }) : _uri = uri,
+       _device = device,
+       _channelFactory = channelFactory ?? _defaultChannelFactory,
+       sessionId = _generateSessionId() {
     _connection = RpcClientConnection(
       transportFactory: () async {
         final ch = await _channelFactory(_uri);
@@ -212,12 +212,14 @@ class LogCollectorOutput extends LogOutput {
     () async {
       try {
         final label = '${_device.name}/$sessionId';
-        await _caller.handshake(LogCollectorHandshake(
-          deviceName: label,
-          app: _device.app,
-          os: _device.os,
-          appVersion: _device.appVersion,
-        ));
+        await _caller.handshake(
+          LogCollectorHandshake(
+            deviceName: label,
+            app: _device.app,
+            os: _device.os,
+            appVersion: _device.appVersion,
+          ),
+        );
         _handshaking = false;
         if (_disposed) return;
         // Records still marked in-flight from a previous socket were never
@@ -271,10 +273,12 @@ class LogCollectorOutput extends LogOutput {
           _inFlight.length < maxInFlight) {
         final record = _buffer.removeFirst();
         _inFlight.addLast(record);
-        _caller.send(record).then(
-          (_) => _onAck(record),
-          onError: (Object _) => _onSendError(record),
-        );
+        _caller
+            .send(record)
+            .then(
+              (_) => _onAck(record),
+              onError: (Object _) => _onSendError(record),
+            );
       }
     } finally {
       _pumping = false;
