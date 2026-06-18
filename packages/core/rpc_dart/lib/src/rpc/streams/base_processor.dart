@@ -88,7 +88,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       }
       _parser = RpcMessageParser(
         logger: _logger,
-        decompressor: (payload) {
+        decompressor: (payload, {int? maxOutputBytes}) {
           final encoding =
               _requestEncoding ?? _context?.getHeader(RpcHeaders.grpcEncoding);
           if (encoding == null || encoding == RpcGrpcCompression.identity) {
@@ -96,7 +96,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
               'Compressed gRPC payload received without grpc-encoding',
             );
           }
-          return RpcGrpcCompression.decompress(payload, encoding: encoding);
+          return RpcGrpcCompression.decompress(
+            payload,
+            encoding: encoding,
+            maxOutputBytes: maxOutputBytes,
+          );
         },
       );
     } else {
@@ -683,14 +687,18 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       }
       _parser = RpcMessageParser(
         logger: _logger,
-        decompressor: (payload) {
+        decompressor: (payload, {int? maxOutputBytes}) {
           final encoding = _peerGrpcEncoding;
           if (encoding == null || encoding == RpcGrpcCompression.identity) {
             throw RpcException(
               'Compressed gRPC payload received without grpc-encoding',
             );
           }
-          return RpcGrpcCompression.decompress(payload, encoding: encoding);
+          return RpcGrpcCompression.decompress(
+            payload,
+            encoding: encoding,
+            maxOutputBytes: maxOutputBytes,
+          );
         },
       );
     } else {

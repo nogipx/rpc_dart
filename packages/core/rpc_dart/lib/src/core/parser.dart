@@ -91,15 +91,20 @@ final class RpcMessageParser {
   final LogScope _logger;
   final int _maxMessageLength;
   final int _maxBufferedBytes;
-  final Uint8List Function(Uint8List payload)? _decompressor;
+  final Uint8List Function(Uint8List payload, {int? maxOutputBytes})?
+      _decompressor;
   final int _maxMessagesPerChunk;
 
   /// Creates an [RpcMessageParser] with the given configuration.
+  ///
+  /// The [decompressor], when provided, receives a `maxOutputBytes` hint equal
+  /// to [maxMessageLength] so it can bound decompression and reject
+  /// decompression bombs before fully materializing the output.
   RpcMessageParser({
     LogScope? logger,
     int maxMessageLength = 64 * 1024 * 1024,
     int? maxBufferedBytes,
-    Uint8List Function(Uint8List payload)? decompressor,
+    Uint8List Function(Uint8List payload, {int? maxOutputBytes})? decompressor,
     int maxMessagesPerChunk = 1024,
   })  : _logger = logger ?? LogScope.noop,
         _maxMessageLength = maxMessageLength,
@@ -204,7 +209,10 @@ final class RpcMessageParser {
           // application layer can decompress it.
           payload = RpcMessageFrame.encode(payload, compressed: true);
         } else {
-          payload = decompressor(payload);
+          // Pass the message-size limit so the decompressor can abort a
+          // decompression bomb before fully expanding it. The post-check below
+          // remains as a backstop for decompressors that ignore the hint.
+          payload = decompressor(payload, maxOutputBytes: _maxMessageLength);
           if (payload.length > _maxMessageLength) {
             final length = payload.length;
             _state.clear();

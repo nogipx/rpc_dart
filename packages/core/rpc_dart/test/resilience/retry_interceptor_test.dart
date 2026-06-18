@@ -37,7 +37,7 @@ void main() {
       expect(callCount, 1);
     });
 
-    test('retries on failure up to maxAttempts', () async {
+    test('retries a transient status up to maxAttempts', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
         backoff: FixedBackoff(Duration(milliseconds: 10)),
@@ -50,12 +50,85 @@ void main() {
           'request',
           (ctx, req) async {
             callCount++;
-            throw RpcException('fail');
+            throw RpcStatusException(RpcStatus.unavailable, 'fail');
           },
         );
         fail('Should have thrown');
-      } on RpcException catch (e) {
+      } on RpcStatusException catch (e) {
         expect(e.message, 'fail');
+      }
+
+      expect(callCount, 3);
+    });
+
+    test('default does NOT retry a generic application error', () async {
+      final interceptor = RpcRetryInterceptor(
+        maxAttempts: 3,
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
+      );
+      var callCount = 0;
+
+      try {
+        await interceptor.interceptUnary<String, String>(
+          callContext,
+          'request',
+          (ctx, req) async {
+            callCount++;
+            throw RpcException('app error');
+          },
+        );
+        fail('Should have thrown');
+      } on RpcException {
+        // expected
+      }
+
+      // Conservative default: a non-transient app error is not retried.
+      expect(callCount, 1);
+    });
+
+    test('default does NOT retry a non-transient status code', () async {
+      final interceptor = RpcRetryInterceptor(
+        maxAttempts: 3,
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
+      );
+      var callCount = 0;
+
+      try {
+        await interceptor.interceptUnary<String, String>(
+          callContext,
+          'request',
+          (ctx, req) async {
+            callCount++;
+            throw RpcStatusException(RpcStatus.internal, 'boom');
+          },
+        );
+        fail('Should have thrown');
+      } on RpcStatusException {
+        // expected
+      }
+
+      expect(callCount, 1);
+    });
+
+    test('default retries RESOURCE_EXHAUSTED', () async {
+      final interceptor = RpcRetryInterceptor(
+        maxAttempts: 3,
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
+      );
+      var callCount = 0;
+
+      try {
+        await interceptor.interceptUnary<String, String>(
+          callContext,
+          'request',
+          (ctx, req) async {
+            callCount++;
+            throw RpcStatusException(RpcStatus.resourceExhausted, 'slow down');
+          },
+        );
+        fail('Should have thrown');
+      } on RpcStatusException {
+        // expected
       }
 
       expect(callCount, 3);
@@ -73,7 +146,9 @@ void main() {
         'request',
         (ctx, req) async {
           callCount++;
-          if (callCount < 3) throw RpcException('transient');
+          if (callCount < 3) {
+            throw RpcStatusException(RpcStatus.unavailable, 'transient');
+          }
           return 'recovered';
         },
       );
@@ -310,7 +385,7 @@ final class _FailThenSucceedContract extends RpcResponderContract {
     onCall();
     _callCount++;
     if (_callCount <= failCount) {
-      throw RpcException('transient failure');
+      throw RpcStatusException(RpcStatus.unavailable, 'transient failure');
     }
     return _TestResponse(request.value);
   }

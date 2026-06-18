@@ -27,7 +27,13 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   final BackoffPolicy backoff;
 
   /// Predicate to decide if an error is retryable.
-  /// Defaults to retrying all errors except cancellation and deadline exceeded.
+  ///
+  /// When null, the conservative gRPC-aligned default [_isTransient] is used:
+  /// it retries ONLY clearly-transient errors (UNAVAILABLE,
+  /// RESOURCE_EXHAUSTED, and connection/transport-closed errors). This avoids
+  /// re-issuing non-idempotent calls (e.g. a write that committed server-side
+  /// but lost its response) on arbitrary application errors. Provide an
+  /// explicit predicate to customise; it fully replaces the default.
   final RpcRetryPredicate? retryOn;
 
   /// Creates a retry interceptor.
@@ -81,10 +87,31 @@ class RpcRetryInterceptor extends IRpcInterceptor {
       if (remaining == null || remaining <= Duration.zero) return false;
     }
 
-    // Custom predicate.
+    // Custom predicate fully replaces the default.
     if (retryOn != null) return retryOn!(error);
 
-    // Default: retry everything else.
-    return true;
+    // Conservative default: only clearly-transient errors.
+    return _isTransient(error);
+  }
+
+  /// Default transient-only predicate (gRPC-aligned).
+  ///
+  /// Retries only:
+  /// - [RpcStatusException] with status UNAVAILABLE (14) or
+  ///   RESOURCE_EXHAUSTED (8) — the connection/transport-closed and
+  ///   server-overload signals the framework surfaces on the wire (e.g. a lost
+  ///   connection becomes UNAVAILABLE "No response received");
+  /// - [RpcRateLimitException] — a local RESOURCE_EXHAUSTED rejection.
+  ///
+  /// Arbitrary application errors (generic [RpcException], INTERNAL/INVALID_*
+  /// status codes, and non-RPC exceptions) are NOT retried, so a
+  /// non-idempotent call is not duplicated after a server-side commit.
+  static bool _isTransient(Object error) {
+    if (error is RpcRateLimitException) return true;
+    if (error is RpcStatusException) {
+      return error.statusCode == RpcStatus.unavailable ||
+          error.statusCode == RpcStatus.resourceExhausted;
+    }
+    return false;
   }
 }

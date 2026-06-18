@@ -19,6 +19,8 @@
 // Run VM:   fvm dart test test/serializers/cbor_parity_test.dart
 // Run node: fvm dart test -p node test/serializers/cbor_parity_test.dart
 
+import 'dart:typed_data';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
@@ -276,6 +278,68 @@ void main() {
       0x82, 0xc2, 0x18, 0x2a, 0xf7, // [tag(2) 42, undefined]
     ], {
       'n': [42, null]
+    });
+  });
+
+  group('CBOR recursion-depth guard (untrusted input)', () {
+    // 0x81 = definite-length array with one element. A chain of these encodes
+    // an arbitrarily deep nesting that would overflow the native stack.
+    Uint8List nestedArrays(int depth) {
+      final bytes = Uint8List(depth + 1);
+      for (var i = 0; i < depth; i++) {
+        bytes[i] = 0x81; // array(1)
+      }
+      bytes[depth] = 0x00; // innermost value: 0
+      return bytes;
+    }
+
+    // 0xa1 0x61 0x6e = map(1) with key "n"; value is the next nested map.
+    Uint8List nestedMaps(int depth) {
+      final builder = BytesBuilder();
+      for (var i = 0; i < depth; i++) {
+        builder.add([0xa1, 0x61, 0x6e]); // map(1), "n"
+      }
+      builder.addByte(0x00); // innermost value
+      return builder.toBytes();
+    }
+
+    test('rejects deeply-nested arrays with FormatException', () {
+      // Shallow nesting still decodes fine.
+      expect(CborCodec.decodeUnsafe(nestedArrays(10)), isA<List>());
+      // A pathological depth throws instead of crashing the isolate.
+      expect(
+        () => CborCodec.decodeUnsafe(nestedArrays(5000)),
+        throwsA(isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('nesting too deep'),
+        )),
+      );
+    });
+
+    test('rejects deeply-nested maps with FormatException', () {
+      expect(CborCodec.decode(nestedMaps(10)), isA<Map>());
+      expect(
+        () => CborCodec.decode(nestedMaps(5000)),
+        throwsA(isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('nesting too deep'),
+        )),
+      );
+    });
+
+    test('rejects deeply-nested tags with FormatException', () {
+      // 0xc2 = tag(2). A long tag chain also recurses through _readValueFast.
+      final builder = BytesBuilder();
+      for (var i = 0; i < 5000; i++) {
+        builder.addByte(0xc2);
+      }
+      builder.addByte(0x00);
+      expect(
+        () => CborCodec.decodeUnsafe(builder.toBytes()),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 }

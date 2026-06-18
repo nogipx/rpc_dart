@@ -146,6 +146,13 @@ abstract interface class CborCodec {
 /// value to dynamic). Decoding correctness is guarded by
 /// test/serializers/cbor_parity_test.dart.
 class _FastCborReader {
+  /// Maximum container nesting depth accepted by the decoder.
+  ///
+  /// Untrusted bytes can encode arbitrarily deep arrays/maps; without a bound
+  /// the recursive decode overflows the native stack (DoS). 256 is well above
+  /// any realistic message structure and far below the overflow threshold.
+  static const int _maxDepth = 256;
+
   final Uint8List _bytes;
   int _offset = 0;
 
@@ -160,7 +167,7 @@ class _FastCborReader {
     if (_offset >= _bytes.length) {
       throw FormatException('Unexpected end of CBOR data');
     }
-    return _readValueFast();
+    return _readValueFast(0);
   }
 
   /// Reads Map(String, dynamic) directly without extra conversions.
@@ -177,18 +184,26 @@ class _FastCborReader {
       throw FormatException('Expected map, got major type: $majorType');
     }
 
-    return _readMapFast(additionalInfo);
+    return _readMapFast(additionalInfo, 0);
+  }
+
+  /// Throws if container nesting exceeds [_maxDepth] (untrusted-input guard).
+  void _checkDepth(int depth) {
+    if (depth > _maxDepth) {
+      throw FormatException('CBOR nesting too deep');
+    }
   }
 
   /// Fast map reading with minimal overhead.
-  Map<String, dynamic> _readMapFast(int additionalInfo) {
+  Map<String, dynamic> _readMapFast(int additionalInfo, int depth) {
+    _checkDepth(depth);
     final result = <String, dynamic>{};
 
     if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
       // Indefinite-length map: read key/value pairs until a break marker.
       while (!_consumeBreakMarker('indefinite-length map')) {
         final key = _readStringFast();
-        final value = _readValueFast();
+        final value = _readValueFast(depth + 1);
         result[key] = value;
       }
       return result;
@@ -200,7 +215,7 @@ class _FastCborReader {
       // Keys are always strings.
       final key = _readStringFast();
       // Then read the value.
-      final value = _readValueFast();
+      final value = _readValueFast(depth + 1);
       result[key] = value;
     }
 
@@ -249,7 +264,10 @@ class _FastCborReader {
   }
 
   /// Fast value read optimized for hot paths.
-  dynamic _readValueFast() {
+  ///
+  /// [depth] is the current container nesting level; it is checked against
+  /// [_maxDepth] in the array/map readers to bound recursion on untrusted input.
+  dynamic _readValueFast(int depth) {
     if (_offset >= _bytes.length) {
       throw FormatException('Unexpected end of CBOR data');
     }
@@ -271,13 +289,16 @@ class _FastCborReader {
       case CborCodec._majorTypeByteString:
         return _readByteStringFast(additionalInfo);
       case CborCodec._majorTypeArray:
-        return _readArrayFast(additionalInfo);
+        return _readArrayFast(additionalInfo, depth);
       case CborCodec._majorTypeMap:
-        return _readMapFast(additionalInfo);
+        return _readMapFast(additionalInfo, depth);
       case CborCodec._majorTypeTag:
         // Skip the tag and read the tagged value (mirrors the slow reader).
+        // A tag chains into another value without a container, so it counts
+        // toward depth to bound a tag-only nesting attack.
+        _checkDepth(depth);
         _readUnsignedIntFast(additionalInfo);
-        return _readValueFast();
+        return _readValueFast(depth + 1);
       case CborCodec._majorTypeSimple:
         return _readSimpleValueFast(additionalInfo);
       default:
@@ -349,13 +370,14 @@ class _FastCborReader {
   }
 
   /// Fast array read.
-  List<dynamic> _readArrayFast(int additionalInfo) {
+  List<dynamic> _readArrayFast(int additionalInfo, int depth) {
+    _checkDepth(depth);
     final result = <dynamic>[];
 
     if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
       // Indefinite-length array: elements until a break marker.
       while (!_consumeBreakMarker('indefinite-length array')) {
-        result.add(_readValueFast());
+        result.add(_readValueFast(depth + 1));
       }
       return result;
     }
@@ -363,7 +385,7 @@ class _FastCborReader {
     final length = _readLength(additionalInfo);
 
     for (int i = 0; i < length; i++) {
-      result.add(_readValueFast());
+      result.add(_readValueFast(depth + 1));
     }
 
     return result;

@@ -339,7 +339,7 @@ void main() {
     test('декомпрессор вызывается для сжатого фрейма', () {
       var decompressorCalled = false;
       final parser = RpcMessageParser(
-        decompressor: (data) {
+        decompressor: (data, {int? maxOutputBytes}) {
           decompressorCalled = true;
           return data; // identity
         },
@@ -354,7 +354,7 @@ void main() {
     test('декомпрессор не вызывается для несжатого фрейма', () {
       var decompressorCalled = false;
       final parser = RpcMessageParser(
-        decompressor: (data) {
+        decompressor: (data, {int? maxOutputBytes}) {
           decompressorCalled = true;
           return data;
         },
@@ -368,7 +368,8 @@ void main() {
     test('результат декомпрессии превышает maxMessageLength — бросает', () {
       final parser = RpcMessageParser(
         maxMessageLength: 5,
-        decompressor: (data) => Uint8List(10), // раздувает до 10 байт
+        decompressor: (data, {int? maxOutputBytes}) =>
+            Uint8List(10), // раздувает до 10 байт
       );
       final compressedFrame = _frame([1, 2, 3], compressed: true);
 

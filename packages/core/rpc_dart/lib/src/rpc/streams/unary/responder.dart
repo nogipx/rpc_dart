@@ -89,7 +89,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     _logger = logger?.child('UnaryResponder') ?? LogScope.noop;
     _parser = RpcMessageParser(
       logger: _logger,
-      decompressor: (payload) {
+      decompressor: (payload, {int? maxOutputBytes}) {
         final encoding = _activeRequestEncoding ??
             _context?.getHeader(RpcHeaders.grpcEncoding);
         if (encoding == null || encoding == RpcGrpcCompression.identity) {
@@ -97,7 +97,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
             'Compressed gRPC payload received without grpc-encoding',
           );
         }
-        return RpcGrpcCompression.decompress(payload, encoding: encoding);
+        return RpcGrpcCompression.decompress(
+          payload,
+          encoding: encoding,
+          maxOutputBytes: maxOutputBytes,
+        );
       },
     );
     _methodPath = '/$_serviceName/$_methodName';

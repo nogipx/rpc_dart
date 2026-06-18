@@ -24,7 +24,12 @@ abstract class RpcCompressionCodec {
   Uint8List compress(Uint8List data);
 
   /// Decompresses [data] and returns the original bytes.
-  Uint8List decompress(Uint8List data);
+  ///
+  /// When [maxOutputBytes] is non-null, implementations should bound the
+  /// decompressed output and throw (e.g. [FormatException]) before
+  /// materializing output larger than the limit, as a guard against
+  /// decompression bombs. Codecs that cannot bound output may ignore the hint.
+  Uint8List decompress(Uint8List data, {int? maxOutputBytes});
 }
 
 /// Built-in codec backed by the dart:io gzip stub/io conditional import.
@@ -35,7 +40,8 @@ final class _BuiltinGzipCodec implements RpcCompressionCodec {
   Uint8List compress(Uint8List data) => gzip_impl.rpcGzipCompress(data);
 
   @override
-  Uint8List decompress(Uint8List data) => gzip_impl.rpcGzipDecompress(data);
+  Uint8List decompress(Uint8List data, {int? maxOutputBytes}) =>
+      gzip_impl.rpcGzipDecompress(data, maxOutputBytes: maxOutputBytes);
 }
 
 /// Minimal gRPC message compression helpers.
@@ -102,13 +108,21 @@ abstract final class RpcGrpcCompression {
   }
 
   /// Decompresses [data] using the specified [encoding].
-  static Uint8List decompress(Uint8List data, {required String encoding}) {
+  ///
+  /// When [maxOutputBytes] is non-null, the decompressed output is bounded and
+  /// the call throws before fully materializing output larger than the limit,
+  /// guarding against decompression bombs from untrusted peers.
+  static Uint8List decompress(
+    Uint8List data, {
+    required String encoding,
+    int? maxOutputBytes,
+  }) {
     if (encoding == identity) return data;
     final codec = _codecs[encoding];
     if (codec == null) {
       throw UnsupportedError(_unsupportedMessage(encoding));
     }
-    return codec.decompress(data);
+    return codec.decompress(data, maxOutputBytes: maxOutputBytes);
   }
 
   /// Picks the best encoding the peer advertised it can decompress.

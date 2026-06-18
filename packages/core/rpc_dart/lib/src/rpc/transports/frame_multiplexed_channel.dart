@@ -16,6 +16,7 @@ import '../../core/_index.dart';
 /// Use [pair] for testing without a real byte transport.
 class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
   final IRpcChannel _channel;
+  final RpcSecurityPolicy _policy;
   final StreamController<RpcTransportMessage> _incomingCtl =
       StreamController<RpcTransportMessage>.broadcast();
   StreamSubscription<Uint8List>? _channelSub;
@@ -23,8 +24,16 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
   bool _closed = false;
 
   /// Creates a multiplexed channel that encodes/decodes frames over [channel].
-  RpcFrameMultiplexedChannel({required IRpcChannel channel})
-      : _channel = channel {
+  ///
+  /// [policy] bounds the RECEIVE path: a declared frame payload larger than
+  /// [RpcSecurityPolicy.maxMessageLengthBytes] is rejected from the header
+  /// without buffering, and the reassembly buffer is capped at
+  /// [RpcSecurityPolicy.effectiveMaxBufferedBytes].
+  RpcFrameMultiplexedChannel({
+    required IRpcChannel channel,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  })  : _channel = channel,
+        _policy = policy {
     _channelSub = _channel.incoming.listen(
       _onData,
       onError: (Object e) {
@@ -92,6 +101,8 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
   // -- Internal ---------------------------------------------------------------
 
   void _onData(Uint8List chunk) {
+    if (_closed) return;
+
     if (_readBuffer.isEmpty) {
       _readBuffer = chunk;
     } else {
@@ -101,7 +112,33 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
       _readBuffer = combined;
     }
 
-    final (frames, consumed) = RpcChannelFrame.decodeAll(_readBuffer);
+    // Receive-path cap: never let the reassembly buffer grow past the policy
+    // limit. A peer dribbling bytes toward a huge declared frame is stopped
+    // here even before the per-frame length check fires.
+    if (_readBuffer.length > _policy.effectiveMaxBufferedBytes) {
+      final buffered = _readBuffer.length;
+      _failChannel(RpcFrameException(
+        'Incoming frame buffer overflow: $buffered bytes '
+        '(max: ${_policy.effectiveMaxBufferedBytes})',
+      ));
+      return;
+    }
+
+    final List<RpcDecodedFrame> frames;
+    final int consumed;
+    try {
+      (frames, consumed) = RpcChannelFrame.decodeAll(
+        _readBuffer,
+        maxPayloadLen: _policy.maxMessageLengthBytes,
+      );
+    } on RpcFrameException catch (error) {
+      // A rejected frame (oversized declared payload or malformed metadata) is
+      // a protocol violation: surface a typed, handled error and tear down the
+      // channel rather than buffering or throwing into the receive loop's zone.
+      _failChannel(error);
+      return;
+    }
+
     if (consumed > 0) {
       _readBuffer = consumed == _readBuffer.length
           ? Uint8List(0)
@@ -120,8 +157,18 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
     }
   }
 
+  /// Surfaces a typed receive-path error and closes the channel.
+  void _failChannel(RpcFrameException error) {
+    if (!_incomingCtl.isClosed) _incomingCtl.addError(error);
+    // Drop any partially buffered bytes immediately; do not keep allocating.
+    _readBuffer = Uint8List(0);
+    unawaited(close());
+  }
+
   /// Creates a paired client/server frame channel over in-memory byte streams.
-  static (RpcFrameMultiplexedChannel, RpcFrameMultiplexedChannel) pair() {
+  static (RpcFrameMultiplexedChannel, RpcFrameMultiplexedChannel) pair({
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  }) {
     final c2s = StreamController<Uint8List>();
     final s2c = StreamController<Uint8List>();
 
@@ -129,8 +176,8 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
     final serverChannel = _PairedByteChannel(output: s2c, input: c2s.stream);
 
     return (
-      RpcFrameMultiplexedChannel(channel: clientChannel),
-      RpcFrameMultiplexedChannel(channel: serverChannel),
+      RpcFrameMultiplexedChannel(channel: clientChannel, policy: policy),
+      RpcFrameMultiplexedChannel(channel: serverChannel, policy: policy),
     );
   }
 }

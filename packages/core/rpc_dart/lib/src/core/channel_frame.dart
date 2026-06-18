@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'errors.dart';
 import 'metadata.dart';
 
 /// Multiplexed frame format for [IRpcChannel]-based transports.
@@ -58,12 +59,27 @@ abstract final class RpcChannelFrame {
   /// Decode a frame from raw bytes.
   ///
   /// Returns null if [data] is too short (less than [headerSize] bytes).
-  static RpcDecodedFrame? decode(Uint8List data) {
+  ///
+  /// When [maxPayloadLen] is non-null, a declared payload length exceeding it
+  /// throws [RpcFrameException] instead of allocating, guarding against a peer
+  /// claiming a huge frame to force unbounded buffering.
+  ///
+  /// Malformed metadata (bad JSON, wrong shape, invalid UTF-8, non-string
+  /// header values) throws [RpcFrameException] rather than letting a raw
+  /// [TypeError]/[FormatException] escape into the receive loop.
+  static RpcDecodedFrame? decode(Uint8List data, {int? maxPayloadLen}) {
     if (data.length < headerSize) return null;
     final view = ByteData.sublistView(data);
     final streamId = view.getUint32(0);
     final flags = view.getUint8(4);
     final payloadLen = view.getUint32(5);
+
+    if (maxPayloadLen != null && payloadLen > maxPayloadLen) {
+      throw RpcFrameException(
+        'Incoming frame payload too large: $payloadLen bytes '
+        '(max: $maxPayloadLen)',
+      );
+    }
 
     if (data.length < headerSize + payloadLen) return null;
 
@@ -93,19 +109,39 @@ abstract final class RpcChannelFrame {
   /// Read multiple frames from a buffer.
   ///
   /// Returns the decoded frames and the number of bytes consumed.
-  static (List<RpcDecodedFrame>, int) decodeAll(Uint8List data) {
+  ///
+  /// When [maxPayloadLen] is non-null, a frame declaring a larger payload is
+  /// rejected from the header alone — the oversized payload is never sliced or
+  /// buffered — by throwing [RpcFrameException]. Malformed metadata in an
+  /// otherwise well-sized frame likewise throws [RpcFrameException]. Frames
+  /// decoded before the offending one are not returned on throw; the caller is
+  /// expected to treat the error as a protocol violation and tear down.
+  static (List<RpcDecodedFrame>, int) decodeAll(
+    Uint8List data, {
+    int? maxPayloadLen,
+  }) {
     final frames = <RpcDecodedFrame>[];
     var offset = 0;
 
     while (offset + headerSize <= data.length) {
       final view = ByteData.sublistView(data, offset);
       final payloadLen = view.getUint32(5);
+
+      // Fail fast on an oversized declared length before touching the payload,
+      // so a peer cannot force buffering toward a huge frame.
+      if (maxPayloadLen != null && payloadLen > maxPayloadLen) {
+        throw RpcFrameException(
+          'Incoming frame payload too large: $payloadLen bytes '
+          '(max: $maxPayloadLen)',
+        );
+      }
+
       final frameSize = headerSize + payloadLen;
       if (offset + frameSize > data.length) break;
 
       final frameBytes =
           Uint8List.sublistView(data, offset, offset + frameSize);
-      final frame = decode(frameBytes);
+      final frame = decode(frameBytes, maxPayloadLen: maxPayloadLen);
       if (frame == null) break;
       frames.add(frame);
       offset += frameSize;
@@ -141,17 +177,74 @@ abstract final class RpcChannelFrame {
   }
 
   static (RpcMetadata, String?) _decodeMetadataPayload(Uint8List payload) {
-    final map = json.decode(utf8.decode(payload)) as Map<String, dynamic>;
-    final methodPath = map['p'] as String?;
-    final headersList = map['h'] as List<dynamic>? ?? [];
-    final headers = <RpcHeader>[
-      for (final h in headersList) RpcHeader(h[0] as String, h[1] as String),
-    ];
+    // Defensive decode: a peer-supplied metadata payload is fully untrusted.
+    // Validate UTF-8, JSON shape, and every cast so malformed input yields a
+    // typed RpcFrameException (handled by the caller) instead of letting a raw
+    // TypeError/FormatException escape into the receive loop.
+    final String text;
+    try {
+      text = utf8.decode(payload);
+    } on FormatException catch (e) {
+      throw RpcFrameException('Invalid UTF-8 in metadata frame: ${e.message}');
+    }
+
+    final Object? decoded;
+    try {
+      decoded = json.decode(text);
+    } on FormatException catch (e) {
+      throw RpcFrameException('Malformed JSON in metadata frame: ${e.message}');
+    }
+
+    if (decoded is! Map) {
+      throw RpcFrameException(
+        'Metadata frame is not a JSON object: ${decoded.runtimeType}',
+      );
+    }
+
+    final rawPath = decoded['p'];
+    if (rawPath != null && rawPath is! String) {
+      throw RpcFrameException(
+        'Metadata frame methodPath is not a string: ${rawPath.runtimeType}',
+      );
+    }
+    final methodPath = rawPath as String?;
+
+    final rawHeaders = decoded['h'];
+    final headers = <RpcHeader>[];
+    if (rawHeaders != null) {
+      if (rawHeaders is! List) {
+        throw RpcFrameException(
+          'Metadata frame headers is not a list: ${rawHeaders.runtimeType}',
+        );
+      }
+      for (final entry in rawHeaders) {
+        if (entry is! List ||
+            entry.length != 2 ||
+            entry[0] is! String ||
+            entry[1] is! String) {
+          throw RpcFrameException(
+            'Malformed metadata header entry: expected [name, value] strings',
+          );
+        }
+        headers.add(RpcHeader(entry[0] as String, entry[1] as String));
+      }
+    }
+
     return (
       RpcMetadata(headers, methodPath: methodPath),
       methodPath,
     );
   }
+}
+
+/// Thrown when an incoming multiplexed frame violates protocol limits or is
+/// malformed (oversized declared payload, bad metadata encoding/shape).
+///
+/// Surfaced as a handled, typed error on the incoming stream rather than an
+/// uncaught throw into the receive loop's zone.
+class RpcFrameException extends RpcException {
+  /// Creates an [RpcFrameException] with [message].
+  RpcFrameException(super.message);
 }
 
 /// A decoded multiplexed frame.

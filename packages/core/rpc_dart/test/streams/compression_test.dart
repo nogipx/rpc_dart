@@ -17,7 +17,7 @@ class _XorCodec implements RpcCompressionCodec {
   Uint8List compress(Uint8List data) => _xor(data);
 
   @override
-  Uint8List decompress(Uint8List data) => _xor(data);
+  Uint8List decompress(Uint8List data, {int? maxOutputBytes}) => _xor(data);
 
   static Uint8List _xor(Uint8List data) {
     final out = Uint8List(data.length);

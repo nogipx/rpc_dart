@@ -63,7 +63,13 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
 
   CircuitBreakerState _state = CircuitBreakerState.closed;
   int _failureCount = 0;
-  DateTime? _lastFailureTime;
+
+  /// Monotonic stopwatch measuring elapsed time since the last recorded
+  /// failure. A [Stopwatch] is immune to wall-clock jumps (NTP corrections,
+  /// manual clock changes) that would make a `DateTime.now()` subtraction go
+  /// negative or huge and either pin the breaker open forever or half-open it
+  /// instantly. Null while no failure has been recorded yet.
+  Stopwatch? _sinceLastFailure;
 
   /// Whether a half-open probe is currently in flight. Only one probe is
   /// admitted in [CircuitBreakerState.halfOpen]; further calls are rejected
@@ -194,9 +200,9 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
         return; // Allow through.
 
       case CircuitBreakerState.open:
-        // Check if reset timeout has elapsed.
-        if (_lastFailureTime != null) {
-          final elapsed = DateTime.now().difference(_lastFailureTime!);
+        // Check if reset timeout has elapsed (monotonic, clock-jump immune).
+        if (_sinceLastFailure != null) {
+          final elapsed = _sinceLastFailure!.elapsed;
           if (elapsed >= resetTimeout) {
             // Transition to half-open and admit exactly this one probe.
             _state = CircuitBreakerState.halfOpen;
@@ -232,7 +238,10 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     if (failureOn != null && !failureOn!(error)) return;
 
     _failureCount++;
-    _lastFailureTime = DateTime.now();
+    // Restart the monotonic timer from this failure.
+    (_sinceLastFailure ??= Stopwatch())
+      ..reset()
+      ..start();
 
     if (_state == CircuitBreakerState.halfOpen) {
       // Probe failed — reopen and release the probe gate.
@@ -247,7 +256,8 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   void reset() {
     _state = CircuitBreakerState.closed;
     _failureCount = 0;
-    _lastFailureTime = null;
+    _sinceLastFailure?.stop();
+    _sinceLastFailure = null;
     _probeInFlight = false;
   }
 }

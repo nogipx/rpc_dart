@@ -54,14 +54,18 @@ final class UnaryCaller<TRequest, TResponse> {
     _logger = logger?.child('UnaryCaller') ?? LogScope.noop;
     _parser = RpcMessageParser(
       logger: _logger,
-      decompressor: (payload) {
+      decompressor: (payload, {int? maxOutputBytes}) {
         final encoding = _peerGrpcEncoding;
         if (encoding == null || encoding == RpcGrpcCompression.identity) {
           throw RpcException(
             'Compressed gRPC payload received without grpc-encoding',
           );
         }
-        return RpcGrpcCompression.decompress(payload, encoding: encoding);
+        return RpcGrpcCompression.decompress(
+          payload,
+          encoding: encoding,
+          maxOutputBytes: maxOutputBytes,
+        );
       },
     );
     _methodPath = '/$_serviceName/$_methodName';

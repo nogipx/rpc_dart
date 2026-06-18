@@ -657,6 +657,16 @@ void main() {
         // Когда traceId не передан, он генерируется но заголовок не устанавливается
         expect(sut.getHeader('x-trace-id'), isNull);
       });
+
+      test('generateTraceId уникален в пределах одной миллисекунды', () {
+        // Tight loop -> many ids share the same millisecond timestamp.
+        final ids = <String>{};
+        for (var i = 0; i < 10000; i++) {
+          ids.add(RpcContextUtils.generateTraceId());
+        }
+        expect(ids.length, 10000, reason: 'all trace ids must be unique');
+        expect(ids.every((id) => id.startsWith('trace_')), isTrue);
+      });
     });
 
     group('объединение_контекстов', () {

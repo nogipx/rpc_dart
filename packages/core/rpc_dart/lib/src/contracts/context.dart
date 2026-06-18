@@ -224,24 +224,34 @@ final class RpcContext {
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
-  /// Генерирует уникальный ID запроса
-  static String _generateRequestId() {
-    final bytes = Uint8List(16);
-    try {
-      final secure = Random.secure();
-      for (var i = 0; i < bytes.length; i++) {
-        bytes[i] = secure.nextInt(256);
-      }
-    } catch (_) {
-      final fallback = Random(DateTime.now().microsecondsSinceEpoch);
-      for (var i = 0; i < bytes.length; i++) {
-        bytes[i] = fallback.nextInt(256);
-      }
-    }
+  static int _idCounter = 0;
 
-    final token = base64UrlEncode(bytes).replaceAll('=', '');
-    return 'req_$token';
+  /// Generates a 16-byte url-safe token that is unique even on platforms where
+  /// [Random.secure] is unavailable (e.g. the bare node test runtime) and a
+  /// default [Random] may repeat within the same millisecond. The first 12
+  /// bytes are random (unpredictability where a strong RNG exists); the last 4
+  /// carry a process-wide monotonic counter so two tokens never collide.
+  static String _uniqueToken() {
+    final bytes = Uint8List(16);
+    Random rng;
+    try {
+      rng = Random.secure();
+    } catch (_) {
+      rng = Random();
+    }
+    for (var i = 0; i < 12; i++) {
+      bytes[i] = rng.nextInt(256);
+    }
+    final c = _idCounter = (_idCounter + 1) & 0xFFFFFFFF;
+    bytes[12] = (c >> 24) & 0xFF;
+    bytes[13] = (c >> 16) & 0xFF;
+    bytes[14] = (c >> 8) & 0xFF;
+    bytes[15] = c & 0xFF;
+    return base64UrlEncode(bytes).replaceAll('=', '');
   }
+
+  /// Генерирует уникальный ID запроса
+  static String _generateRequestId() => 'req_${_uniqueToken()}';
 
   @override
   String toString() {
@@ -382,12 +392,14 @@ abstract final class RpcContextUtils {
     ).withTraceId(traceId ?? generateTraceId());
   }
 
-  /// Generates a new trace ID.
-  static String generateTraceId() {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final random = (timestamp * 31 + 17) % 100000;
-    return 'trace_${timestamp}_$random';
-  }
+  /// Generates a new, unique trace ID.
+  ///
+  /// Uses cryptographically strong randomness (with a seeded fallback for
+  /// platforms where [Random.secure] is unavailable) so that ids generated
+  /// within the same millisecond are still unique. The previous deterministic
+  /// `timestamp * 31 + 17` derivation produced identical ids under concurrency,
+  /// corrupting distributed-trace correlation.
+  static String generateTraceId() => 'trace_${RpcContext._uniqueToken()}';
 
   /// Объединяет несколько контекстов (правый имеет приоритет)
   static RpcContext merge(RpcContext left, RpcContext right) {
