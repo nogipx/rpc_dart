@@ -9,65 +9,78 @@ import 'dart:math' as math;
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-/// 🚀 PROFESSIONAL RPC PERFORMANCE BENCHMARK
+/// RPC stack performance benchmark.
 ///
-/// Comprehensive performance testing suite for the entire RPC stack:
-/// • Full end-to-end RPC calls (not just serialization)
-/// • All RPC method types (Unary, Client/Server/Bidirectional Streaming)
-/// • Transport overhead analysis
-/// • Endpoint processing performance
-/// • Real-world contract scenarios
-/// • Scalability and concurrency testing
+/// Two honest transport configurations are measured:
+///   - zero-copy  : memoryPair, objects passed by reference, NO serialization.
+///   - serialized : framed pair, JSON serialize + 5-byte frame mux (the path a
+///                  real network transport takes, minus the socket).
+///
+/// Note: there is no "in-memory + serialize" middle config, because the
+/// zero-copy transport ALWAYS passes objects by reference regardless of whether
+/// codecs are supplied (`UnaryCaller` checks `transport.supportsZeroCopy`). So
+/// the only way to actually exercise serialization is the framed transport.
+///
+/// Two distinct things are reported, never conflated:
+///   - Sequential latency: time for one call with one in flight (mean/p50/p95/
+///     p99). The derived "1/latency ops/sec" is NOT throughput.
+///   - Saturation throughput: real ops/sec with a bounded number of calls in
+///     flight, ramped until it stops improving.
+///
+/// Handlers do NO artificial work (no Future.delayed), and request data is
+/// generated OUTSIDE the timed region.
 void main(List<String> args) async {
-  // Logging disabled for benchmarks
-
   final cli = BenchmarkCLI();
   final config = cli.parseArguments(args);
+  if (config == null) return; // Help was shown or error occurred.
 
-  if (config == null) return; // Help was shown or error occurred
-
-  final benchmark = ProfessionalRpcBenchmark(config);
+  final benchmark = RpcBenchmark(config);
   await benchmark.execute();
 }
 
-/// Command-line interface for the benchmark
+/// Transport/codec configuration under test.
+enum BenchMode {
+  zeroCopy('zero-copy', 'memoryPair, objects by reference, no serialization'),
+  serialized('serialized', 'framed pair, JSON serialize + frame mux');
+
+  const BenchMode(this.label, this.description);
+
+  final String label;
+  final String description;
+
+  bool get useCodecs => this == BenchMode.serialized;
+}
+
+/// Command-line interface.
 class BenchmarkCLI {
   void _showHelp() {
     print('''
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    RPC DART PERFORMANCE BENCHMARK SUITE                     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+RPC DART PERFORMANCE BENCHMARK
 
 USAGE:
   dart run benchmark/benchmark.dart [OPTIONS]
 
 OPTIONS:
-  --output=PATH         Save results to specific JSON file
-  --iterations=N        Number of measurement iterations (default: 500)
-  --warmup=N           Number of warmup iterations (default: 100)
-  --concurrent=N       Max concurrent operations to test (default: 20)
-  --verbose            Enable detailed logging
-  --help, -h           Show this help message
-
-EXAMPLES:
-  dart run benchmark/benchmark.dart
-  dart run benchmark/benchmark.dart --output=results.json --iterations=1000
-  dart run benchmark/benchmark.dart --verbose --concurrent=50
-
-OUTPUTS:
-  • Console report with detailed statistics
-  • JSON results file for further analysis
-  • Bencher.dev compatible format for CI/CD integration
+  --output=PATH      Save results to a specific JSON file
+  --iterations=N     Latency-measurement iterations per scenario (default: 2000)
+  --warmup=N         Warmup iterations (default: 1000)
+  --runs=N           Repeat the whole suite N times for run-to-run spread
+                     (default: 3)
+  --mode=MODE        Restrict to one mode: zerocopy | serialized
+                     (default: both)
+  --verbose          Enable detailed logging
+  --help, -h         Show this help message
 ''');
   }
 
   BenchmarkConfiguration? parseArguments(List<String> args) {
     String? outputPath;
-    int iterations = 500;
-    int warmup = 100;
-    int maxConcurrent = 20;
+    int iterations = 2000;
+    int warmup = 1000;
+    int runs = 3;
     bool verbose = false;
     bool showHelp = false;
+    List<BenchMode>? modes;
 
     try {
       for (final arg in args) {
@@ -77,19 +90,32 @@ OUTPUTS:
           iterations = int.parse(arg.substring('--iterations='.length));
         } else if (arg.startsWith('--warmup=')) {
           warmup = int.parse(arg.substring('--warmup='.length));
-        } else if (arg.startsWith('--concurrent=')) {
-          maxConcurrent = int.parse(arg.substring('--concurrent='.length));
+        } else if (arg.startsWith('--runs=')) {
+          runs = int.parse(arg.substring('--runs='.length));
+        } else if (arg.startsWith('--mode=')) {
+          final name = arg.substring('--mode='.length).toLowerCase();
+          final mode = switch (name) {
+            'zerocopy' || 'zero-copy' => BenchMode.zeroCopy,
+            'serialized' || 'framed' => BenchMode.serialized,
+            _ => null,
+          };
+          if (mode == null) {
+            print('Unknown mode: $name (use zerocopy | serialized)');
+            showHelp = true;
+          } else {
+            modes = [mode];
+          }
         } else if (arg == '--verbose') {
           verbose = true;
         } else if (arg == '--help' || arg == '-h') {
           showHelp = true;
         } else {
-          print('⚠️  Unknown argument: $arg');
+          print('Unknown argument: $arg');
           showHelp = true;
         }
       }
     } catch (e) {
-      print('❌ Error parsing arguments: $e');
+      print('Error parsing arguments: $e');
       showHelp = true;
     }
 
@@ -97,1123 +123,653 @@ OUTPUTS:
       _showHelp();
       return null;
     }
-
-    // Validate configuration
-    if (iterations < 10) {
-      print('❌ Iterations must be at least 10');
-      return null;
-    }
-    if (warmup < 10) {
-      print('❌ Warmup iterations must be at least 10');
-      return null;
-    }
-    if (maxConcurrent < 1 || maxConcurrent > 100) {
-      print('❌ Concurrent operations must be between 1 and 100');
+    if (iterations < 10 || warmup < 10 || runs < 1) {
+      print('iterations>=10, warmup>=10, runs>=1 required');
       return null;
     }
 
     return BenchmarkConfiguration(
       outputPath: outputPath,
-      measurementIterations: iterations,
-      warmupIterations: warmup,
-      maxConcurrentOps: maxConcurrent,
-      enableVerboseLogging: verbose,
+      iterations: iterations,
+      warmup: warmup,
+      runs: runs,
+      verbose: verbose,
+      modes: modes ?? BenchMode.values,
     );
   }
 }
 
-/// Professional benchmark configuration with validation
 class BenchmarkConfiguration {
   final String? outputPath;
-  final int measurementIterations;
-  final int warmupIterations;
-  final int maxConcurrentOps;
-  final bool enableVerboseLogging;
+  final int iterations;
+  final int warmup;
+  final int runs;
+  final bool verbose;
+  final List<BenchMode> modes;
   final String outputDirectory;
 
   BenchmarkConfiguration({
     this.outputPath,
-    this.measurementIterations = 500,
-    this.warmupIterations = 100,
-    this.maxConcurrentOps = 20,
-    this.enableVerboseLogging = false,
+    this.iterations = 2000,
+    this.warmup = 1000,
+    this.runs = 3,
+    this.verbose = false,
+    this.modes = BenchMode.values,
   }) : outputDirectory = outputPath?.contains('/') == true
            ? outputPath!.substring(0, outputPath.lastIndexOf('/'))
            : 'benchmark_results';
 
   void printSummary() {
-    print('📋 BENCHMARK CONFIGURATION');
-    print('   🔥 Warmup iterations: $warmupIterations');
-    print('   📊 Measurement iterations: $measurementIterations');
-    print('   ⚡ Max concurrent operations: $maxConcurrentOps');
-    print('   📝 Verbose logging: $enableVerboseLogging');
-    print('   📁 Output directory: $outputDirectory');
-    if (outputPath != null) {
-      print('   📄 Output file: $outputPath');
-    }
+    print('CONFIGURATION');
+    print('  Warmup: $warmup | Iterations: $iterations | Runs: $runs');
+    print('  Modes: ${modes.map((m) => m.label).join(', ')}');
+    if (outputPath != null) print('  Output: $outputPath');
     print('');
   }
 }
 
-/// Professional progress indicator for benchmark operations
-class ProgressIndicator {
-  final String operation;
-  final int total;
-  int _current = 0;
-  final Stopwatch _stopwatch = Stopwatch();
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
 
-  ProgressIndicator(this.operation, this.total) {
-    _stopwatch.start();
-  }
-
-  void update(int current) {
-    _current = current;
-    final percentage = (_current / total * 100).round();
-    final elapsed = _stopwatch.elapsedMilliseconds;
-    final rate = _current / (elapsed / 1000);
-    final eta = (total - _current) / rate;
-
-    // Create progress bar
-    const barWidth = 30;
-    final filled = (percentage * barWidth / 100).round();
-    final bar = '█' * filled + '░' * (barWidth - filled);
-
-    stdout.write(
-      '\r   [$bar] $percentage% | '
-      '$_current/$total | '
-      '${rate.toStringAsFixed(1)} ops/s | '
-      'ETA: ${eta.toStringAsFixed(1)}s     ',
-    );
-  }
-
-  void complete() {
-    _stopwatch.stop();
-    final rate = total / (_stopwatch.elapsedMilliseconds / 1000);
-    stdout.write(
-      '\r   ✅ $operation completed: $total operations in '
-      '${_stopwatch.elapsedMilliseconds / 1000}s '
-      '(${rate.toStringAsFixed(1)} ops/s)\n',
-    );
-  }
-}
-
-/// Тестовые модели для RPC
 class TestRequest implements IRpcSerializable {
   final String id;
   final String message;
   final Map<String, dynamic> data;
-  final DateTime timestamp;
 
-  TestRequest({
-    required this.id,
-    required this.message,
-    required this.data,
-    required this.timestamp,
-  });
+  TestRequest({required this.id, required this.message, required this.data});
 
   factory TestRequest.fromJson(Map<String, dynamic> json) => TestRequest(
     id: json['id'] as String,
     message: json['message'] as String,
     data: Map<String, dynamic>.from(json['data'] as Map),
-    timestamp: DateTime.parse(json['timestamp'] as String),
   );
 
   @override
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'message': message,
-    'data': data,
-    'timestamp': timestamp.toIso8601String(),
-  };
+  Map<String, dynamic> toJson() => {'id': id, 'message': message, 'data': data};
 }
 
 class TestResponse implements IRpcSerializable {
   final String requestId;
   final String result;
-  final int processingTimeMs;
-  final Map<String, dynamic> metadata;
 
-  TestResponse({
-    required this.requestId,
-    required this.result,
-    required this.processingTimeMs,
-    required this.metadata,
-  });
+  TestResponse({required this.requestId, required this.result});
 
   factory TestResponse.fromJson(Map<String, dynamic> json) => TestResponse(
     requestId: json['requestId'] as String,
     result: json['result'] as String,
-    processingTimeMs: json['processingTimeMs'] as int,
-    metadata: Map<String, dynamic>.from(json['metadata'] as Map),
   );
 
   @override
-  Map<String, dynamic> toJson() => {
-    'requestId': requestId,
-    'result': result,
-    'processingTimeMs': processingTimeMs,
-    'metadata': metadata,
-  };
+  Map<String, dynamic> toJson() => {'requestId': requestId, 'result': result};
 }
 
-/// Генератор тестовых данных разной сложности
-class TestDataGenerator {
-  static final _random = math.Random(42); // Fixed seed для воспроизводимости
+class TestData {
+  static final _random = math.Random(42);
 
-  /// Простые данные
-  static TestRequest generateSimple() => TestRequest(
+  static TestRequest simple() => TestRequest(
     id: 'simple_${_random.nextInt(1000)}',
     message: 'Simple test message',
     data: {'value': _random.nextInt(100)},
-    timestamp: DateTime.now(),
   );
 
-  /// Средние данные (реалистичные)
-  static TestRequest generateMedium() => TestRequest(
+  static TestRequest medium() => TestRequest(
     id: 'medium_${_random.nextInt(1000)}',
-    message:
-        'Medium complexity message with more text data that represents typical usage',
+    message: 'Medium complexity message representing typical usage',
     data: {
       'user_id': _random.nextInt(10000),
       'session': 'session_${_random.nextInt(1000)}',
-      'preferences': {
-        'language': 'en',
-        'theme': 'dark',
-        'notifications': _random.nextBool(),
-      },
+      'preferences': {'language': 'en', 'theme': 'dark'},
       'tags': List.generate(5, (i) => 'tag_$i'),
       'metrics': List.generate(10, (i) => _random.nextDouble() * 100),
     },
-    timestamp: DateTime.now(),
   );
 
-  /// Сложные данные (enterprise level)
-  static TestRequest generateComplex() => TestRequest(
+  static TestRequest complex() => TestRequest(
     id: 'complex_${_random.nextInt(1000)}',
-    message:
-        'Complex enterprise-level message with extensive metadata, multiple nested structures, and comprehensive data payload that simulates real-world enterprise applications with rich data models',
+    message: 'Complex enterprise message with extensive nested metadata',
     data: {
-      'entity': {
-        'id': _random.nextInt(100000),
-        'type': 'enterprise_entity',
-        'attributes': Map.fromEntries(
-          List.generate(
-            20,
-            (i) => MapEntry('attr_$i', _random.nextDouble() * 1000),
-          ),
-        ),
-        'relations': List.generate(
-          10,
-          (i) => {
-            'id': _random.nextInt(1000),
-            'type': 'relation_$i',
-            'weight': _random.nextDouble(),
-          },
-        ),
-      },
-      'analytics': {
-        'metrics': Map.fromEntries(
-          List.generate(
-            50,
-            (i) => MapEntry('metric_$i', _random.nextDouble() * 10000),
-          ),
-        ),
-        'trends': List.generate(100, (i) => _random.nextDouble() * 100),
-        'segments': List.generate(
-          20,
-          (i) => {
-            'name': 'segment_$i',
-            'size': _random.nextInt(10000),
-            'conversion': _random.nextDouble(),
-          },
-        ),
-      },
-      'metadata': {
-        'version': '1.0.0',
-        'source': 'benchmark_generator',
-        'generated_at': DateTime.now().toIso8601String(),
-        'features': List.generate(30, (i) => 'feature_$i'),
-      },
+      'attributes': Map.fromEntries(
+        List.generate(20, (i) => MapEntry('attr_$i', _random.nextDouble())),
+      ),
+      'metrics': Map.fromEntries(
+        List.generate(50, (i) => MapEntry('metric_$i', _random.nextDouble())),
+      ),
+      'trends': List.generate(100, (i) => _random.nextDouble()),
+      'features': List.generate(30, (i) => 'feature_$i'),
     },
-    timestamp: DateTime.now(),
   );
 }
 
-/// Серверный контракт для тестирования
-final class TestRpcContract extends RpcResponderContract {
-  TestRpcContract()
-    : super('TestService', dataTransferMode: RpcDataTransferMode.codec);
+// ---------------------------------------------------------------------------
+// Contracts
+// ---------------------------------------------------------------------------
 
-  static final _requestCodec = RpcCodec.withDecoder(TestRequest.fromJson);
-  static final _responseCodec = RpcCodec.withDecoder(TestResponse.fromJson);
+final class TestRpcContract extends RpcResponderContract {
+  final bool useCodecs;
+  TestRpcContract({required this.useCodecs}) : super('TestService');
+
+  static final _req = RpcCodec.withDecoder(TestRequest.fromJson);
+  static final _res = RpcCodec.withDecoder(TestResponse.fromJson);
+
+  IRpcCodec<TestRequest>? get _rc => useCodecs ? _req : null;
+  IRpcCodec<TestResponse>? get _sc => useCodecs ? _res : null;
 
   @override
   void setup() {
     addUnaryMethod<TestRequest, TestResponse>(
-      methodName: 'processRequest',
-      handler: _processRequest,
-      requestCodec: _requestCodec,
-      responseCodec: _responseCodec,
+      methodName: 'unary',
+      handler: _unary,
+      requestCodec: _rc,
+      responseCodec: _sc,
     );
-
     addServerStreamMethod<TestRequest, TestResponse>(
-      methodName: 'streamResponses',
-      handler: _streamResponses,
-      requestCodec: _requestCodec,
-      responseCodec: _responseCodec,
+      methodName: 'serverStream',
+      handler: _serverStream,
+      requestCodec: _rc,
+      responseCodec: _sc,
     );
-
     addClientStreamMethod<TestRequest, TestResponse>(
-      methodName: 'collectRequests',
-      handler: _collectRequests,
-      requestCodec: _requestCodec,
-      responseCodec: _responseCodec,
+      methodName: 'clientStream',
+      handler: _clientStream,
+      requestCodec: _rc,
+      responseCodec: _sc,
     );
-
     addBidirectionalMethod<TestRequest, TestResponse>(
-      methodName: 'processStream',
-      handler: _processStream,
-      requestCodec: _requestCodec,
-      responseCodec: _responseCodec,
+      methodName: 'bidi',
+      handler: _bidi,
+      requestCodec: _rc,
+      responseCodec: _sc,
     );
   }
 
-  Future<TestResponse> _processRequest(
-    TestRequest request, {
-    RpcContext? context,
-  }) async {
-    final start = DateTime.now();
+  Future<TestResponse> _unary(TestRequest r, {RpcContext? context}) async =>
+      TestResponse(requestId: r.id, result: r.message);
 
-    // Симулируем обработку
-    await Future.delayed(Duration(microseconds: 100));
-
-    final end = DateTime.now();
-    final processingTime = end.difference(start).inMicroseconds;
-
-    return TestResponse(
-      requestId: request.id,
-      result: 'Processed: ${request.message}',
-      processingTimeMs: processingTime,
-      metadata: {
-        'server_time': end.toIso8601String(),
-        'context_headers': (context?.headers.length ?? 0),
-      },
-    );
-  }
-
-  Stream<TestResponse> _streamResponses(
-    TestRequest request, {
+  Stream<TestResponse> _serverStream(
+    TestRequest r, {
     RpcContext? context,
   }) async* {
     for (int i = 0; i < 5; i++) {
-      yield TestResponse(
-        requestId: request.id,
-        result: 'Stream response #$i for: ${request.message}',
-        processingTimeMs: 0,
-        metadata: {'stream_index': i},
-      );
+      yield TestResponse(requestId: r.id, result: 'resp_$i');
     }
   }
 
-  Future<TestResponse> _collectRequests(
+  Future<TestResponse> _clientStream(
     Stream<TestRequest> requests, {
     RpcContext? context,
   }) async {
-    final start = DateTime.now();
-    final collected = <String>[];
-
-    await for (final request in requests) {
-      collected.add(request.id);
+    var count = 0;
+    await for (final _ in requests) {
+      count++;
     }
-
-    final end = DateTime.now();
-    final processingTime = end.difference(start).inMicroseconds;
-
-    return TestResponse(
-      requestId: 'batch_${collected.length}',
-      result: 'Collected ${collected.length} requests',
-      processingTimeMs: processingTime,
-      metadata: {'collected_ids': collected},
-    );
+    return TestResponse(requestId: 'batch', result: 'collected_$count');
   }
 
-  Stream<TestResponse> _processStream(
+  Stream<TestResponse> _bidi(
     Stream<TestRequest> requests, {
     RpcContext? context,
   }) async* {
-    await for (final request in requests) {
-      await Future.delayed(Duration(microseconds: 25));
-
-      yield TestResponse(
-        requestId: request.id,
-        result: 'Bidirectional processed: ${request.message}',
-        processingTimeMs: 25,
-        metadata: {'bidirectional': true},
-      );
+    await for (final r in requests) {
+      yield TestResponse(requestId: r.id, result: r.message);
     }
   }
 }
 
-/// Клиентский контракт
-final class TestRpcCallerContract extends RpcCallerContract {
-  static final _requestCodec = RpcCodec.withDecoder(TestRequest.fromJson);
-  static final _responseCodec = RpcCodec.withDecoder(TestResponse.fromJson);
+final class TestRpcCaller extends RpcCallerContract {
+  final bool useCodecs;
 
-  TestRpcCallerContract(RpcCallerEndpoint endpoint)
-    : super(
-        'TestService',
-        endpoint,
-        dataTransferMode: RpcDataTransferMode.codec,
+  static final _req = RpcCodec.withDecoder(TestRequest.fromJson);
+  static final _res = RpcCodec.withDecoder(TestResponse.fromJson);
+
+  TestRpcCaller(RpcCallerEndpoint endpoint, {required this.useCodecs})
+    : super('TestService', endpoint);
+
+  IRpcCodec<TestRequest>? get _rc => useCodecs ? _req : null;
+  IRpcCodec<TestResponse>? get _sc => useCodecs ? _res : null;
+
+  Future<TestResponse> unary(TestRequest r) =>
+      callUnary<TestRequest, TestResponse>(
+        methodName: 'unary',
+        request: r,
+        requestCodec: _rc,
+        responseCodec: _sc,
       );
 
-  Future<TestResponse> processRequest(
-    TestRequest request, {
-    RpcContext? context,
-  }) => callUnary<TestRequest, TestResponse>(
-    methodName: 'processRequest',
-    request: request,
-    requestCodec: _requestCodec,
-    responseCodec: _responseCodec,
-    context: context,
-  );
+  Stream<TestResponse> serverStream(TestRequest r) =>
+      callServerStream<TestRequest, TestResponse>(
+        methodName: 'serverStream',
+        request: r,
+        requestCodec: _rc,
+        responseCodec: _sc,
+      );
 
-  Stream<TestResponse> streamResponses(
-    TestRequest request, {
-    RpcContext? context,
-  }) => callServerStream<TestRequest, TestResponse>(
-    methodName: 'streamResponses',
-    request: request,
-    requestCodec: _requestCodec,
-    responseCodec: _responseCodec,
-    context: context,
-  );
+  Future<TestResponse> clientStream(Stream<TestRequest> rs) =>
+      callClientStream<TestRequest, TestResponse>(
+        methodName: 'clientStream',
+        requests: rs,
+        requestCodec: _rc,
+        responseCodec: _sc,
+      );
 
-  Future<TestResponse> collectRequests(
-    Stream<TestRequest> requests, {
-    RpcContext? context,
-  }) => callClientStream<TestRequest, TestResponse>(
-    methodName: 'collectRequests',
-    requests: requests,
-    requestCodec: _requestCodec,
-    responseCodec: _responseCodec,
-    context: context,
-  );
-
-  Stream<TestResponse> processStream(
-    Stream<TestRequest> requests, {
-    RpcContext? context,
-  }) => callBidirectionalStream<TestRequest, TestResponse>(
-    methodName: 'processStream',
-    requests: requests,
-    requestCodec: _requestCodec,
-    responseCodec: _responseCodec,
-    context: context,
-  );
+  Stream<TestResponse> bidi(Stream<TestRequest> rs) =>
+      callBidirectionalStream<TestRequest, TestResponse>(
+        methodName: 'bidi',
+        requests: rs,
+        requestCodec: _rc,
+        responseCodec: _sc,
+      );
 }
 
-/// Enhanced statistics with professional metrics and analysis
-class ProfessionalBenchmarkStats {
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+
+/// Latency distribution for one scenario, pooled across all runs, plus the
+/// per-run medians used to report run-to-run spread.
+class LatencyStats {
+  final String mode;
   final String name;
-  final String category;
-  final List<double> latencies;
-  final String unit;
-  final Map<String, dynamic> metadata;
-  final DateTime timestamp;
 
-  ProfessionalBenchmarkStats({
+  /// All per-call latencies in microseconds, pooled across runs.
+  final List<double> samples;
+
+  /// Median latency of each individual run (length == runs).
+  final List<double> perRunMedians;
+
+  LatencyStats({
+    required this.mode,
     required this.name,
-    required this.category,
-    required this.latencies,
-    required this.unit,
-    this.metadata = const {},
-  }) : timestamp = DateTime.now();
+    required this.samples,
+    required this.perRunMedians,
+  });
 
-  // Core Statistics
-  double get mean => latencies.reduce((a, b) => a + b) / latencies.length;
-  double get median => _percentile(50);
-  double get min => latencies.reduce((a, b) => math.min(a, b));
-  double get max => latencies.reduce((a, b) => math.max(a, b));
+  double get mean => samples.reduce((a, b) => a + b) / samples.length;
+  double get median => _pct(samples, 50);
+  double get p95 => _pct(samples, 95);
+  double get p99 => _pct(samples, 99);
 
-  // Distribution Analysis
-  double get p90 => _percentile(90);
-  double get p95 => _percentile(95);
-  double get p99 => _percentile(99);
-  double get p999 => _percentile(99.9);
-
-  double get standardDeviation {
+  double get stdDev {
     final m = mean;
-    final variance =
-        latencies.map((v) => math.pow(v - m, 2)).reduce((a, b) => a + b) /
-        latencies.length;
-    return math.sqrt(variance);
+    final v =
+        samples.map((x) => math.pow(x - m, 2)).reduce((a, b) => a + b) /
+        samples.length;
+    return math.sqrt(v);
   }
 
-  double get coefficientOfVariation => standardDeviation / mean;
+  double get cv => stdDev / mean;
 
-  // Performance Metrics
-  double get throughputPerSecond => unit == 'μs' ? 1000000 / mean : 1000 / mean;
-
-  // Quality Metrics
-  OutlierAnalysis get outlierAnalysis {
-    final q75 = _percentile(75);
-    final q25 = _percentile(25);
-    final iqr = q75 - q25;
-    final lowerBound = q25 - 1.5 * iqr;
-    final upperBound = q75 + 1.5 * iqr;
-
-    final outliers = latencies
-        .where((v) => v < lowerBound || v > upperBound)
-        .length;
-    final extremeOutliers = latencies.where((v) => v > p99 + 3 * iqr).length;
-
-    return OutlierAnalysis(
-      total: outliers,
-      extreme: extremeOutliers,
-      percentage: outliers / latencies.length * 100,
-    );
+  /// Spread of the per-run medians as a fraction of their median.
+  double get runSpread {
+    if (perRunMedians.length < 2) return 0;
+    final lo = perRunMedians.reduce(math.min);
+    final hi = perRunMedians.reduce(math.max);
+    final mid = _pct(perRunMedians, 50);
+    return mid == 0 ? 0 : (hi - lo) / mid;
   }
 
-  double _percentile(double p) {
-    final sorted = List<double>.from(latencies)..sort();
-    final index = (p / 100 * (sorted.length - 1));
-    final lowerIndex = index.floor();
-    final upperIndex = index.ceil();
+  /// Sequential ops/sec = 1 / median latency. NOT throughput; just the inverse
+  /// of single-in-flight latency.
+  double get seqOpsPerSec => 1000000 / median;
 
-    if (lowerIndex == upperIndex) return sorted[lowerIndex];
-
-    final weight = index - lowerIndex;
-    return sorted[lowerIndex] * (1 - weight) + sorted[upperIndex] * weight;
+  static double _pct(List<double> data, double p) {
+    final sorted = List<double>.from(data)..sort();
+    final idx = p / 100 * (sorted.length - 1);
+    final lo = idx.floor();
+    final hi = idx.ceil();
+    if (lo == hi) return sorted[lo];
+    return sorted[lo] * (hi - idx) + sorted[hi] * (idx - lo);
   }
 
-  void printProfessionalReport() {
-    print('');
-    print('📊 === $category: $name ===');
-    print('   Sample: ${latencies.length} measurements');
+  void printReport() {
+    print('  [$mode] $name');
     print(
-      '   Mean: ${_formatMetric(mean, unit)} | Median: ${_formatMetric(median, unit)}',
+      '    p50: ${_us(median)}  p95: ${_us(p95)}  p99: ${_us(p99)}  '
+      'mean: ${_us(mean)}',
     );
     print(
-      '   Min/Max: ${_formatMetric(min, unit)} / ${_formatMetric(max, unit)}',
+      '    seq: ${seqOpsPerSec.toStringAsFixed(0)} ops/s (1/latency)  '
+      'CV: ${(cv * 100).toStringAsFixed(1)}%  '
+      'run-to-run: ${(runSpread * 100).toStringAsFixed(1)}%',
     );
-    print(
-      '   P95/P99: ${_formatMetric(p95, unit)} / ${_formatMetric(p99, unit)}',
-    );
-    print('   Throughput: ${throughputPerSecond.toStringAsFixed(0)} ops/sec');
-    print(
-      '   Std Dev: ${_formatMetric(standardDeviation, unit)} (CV: ${(coefficientOfVariation * 100).toStringAsFixed(1)}%)',
-    );
-
-    // Quality check
-    final outliers = outlierAnalysis;
-    if (outliers.total > 0) {
-      print(
-        '   ⚠️  Outliers: ${outliers.total} (${outliers.percentage.toStringAsFixed(1)}%)',
-      );
-    }
-
-    // Metadata
-    if (metadata.isNotEmpty) {
-      final metaItems = metadata.entries
-          .map((e) => '${e.key}=${e.value}')
-          .join(', ');
-      print('   Meta: $metaItems');
-    }
-
-    print('');
   }
 
-  String _formatMetric(double value, String unit) {
-    if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M$unit';
-    } else if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(1)}K$unit';
-    } else {
-      return '${value.toStringAsFixed(1)}$unit';
-    }
-  }
+  static String _us(double v) => v >= 1000
+      ? '${(v / 1000).toStringAsFixed(2)}ms'
+      : '${v.toStringAsFixed(1)}us';
 
   Map<String, dynamic> toJson() => {
+    'mode': mode,
     'name': name,
-    'category': category,
-    'timestamp': timestamp.toIso8601String(),
-    'sample_size': latencies.length,
-    'latency_distribution': {
-      'mean': mean,
-      'median': median,
-      'min': min,
-      'max': max,
-      'std_dev': standardDeviation,
-      'coefficient_of_variation': coefficientOfVariation,
-    },
-    'percentiles': {'p90': p90, 'p95': p95, 'p99': p99, 'p999': p999},
-    'performance': {'throughput_ops_per_sec': throughputPerSecond},
-    'quality': {
-      'outliers_count': outlierAnalysis.total,
-      'outliers_percentage': outlierAnalysis.percentage,
-      'extreme_outliers': outlierAnalysis.extreme,
-    },
-    'metadata': metadata,
-    'unit': unit,
+    'sample_size': samples.length,
+    'latency_us': {'p50': median, 'p95': p95, 'p99': p99, 'mean': mean},
+    'seq_ops_per_sec': seqOpsPerSec,
+    'cv': cv,
+    'run_to_run_spread': runSpread,
   };
 }
 
-class OutlierAnalysis {
-  final int total;
-  final int extreme;
-  final double percentage;
+class ThroughputResult {
+  final String mode;
+  final int inFlight;
+  final double opsPerSec;
+  ThroughputResult(this.mode, this.inFlight, this.opsPerSec);
 
-  OutlierAnalysis({
-    required this.total,
-    required this.extreme,
-    required this.percentage,
-  });
+  Map<String, dynamic> toJson() => {
+    'mode': mode,
+    'in_flight': inFlight,
+    'throughput_ops_per_sec': opsPerSec,
+  };
 }
 
-/// Professional RPC benchmark suite with comprehensive analysis
-class ProfessionalRpcBenchmark {
-  final BenchmarkConfiguration config;
-  final List<ProfessionalBenchmarkStats> results = [];
-  final Stopwatch _totalStopwatch = Stopwatch();
+// ---------------------------------------------------------------------------
+// Benchmark runner
+// ---------------------------------------------------------------------------
 
-  ProfessionalRpcBenchmark(this.config);
+class RpcBenchmark {
+  final BenchmarkConfiguration config;
+  final List<LatencyStats> latencyResults = [];
+  final List<ThroughputResult> throughputResults = [];
+  final Stopwatch _total = Stopwatch();
+
+  RpcBenchmark(this.config);
 
   Future<void> execute() async {
-    _printHeader();
+    print('RPC DART PERFORMANCE BENCHMARK');
+    print('');
     config.printSummary();
-
-    if (config.enableVerboseLogging) {
-      // Verbose logging enabled via LogController
-    }
-
-    _totalStopwatch.start();
-
+    _total.start();
     try {
-      final (serverEndpoint, clientEndpoint, contract) =
-          await _setupInfrastructure();
-
-      await _executeWarmup(contract);
-      await _executeBenchmarks(contract);
-      await _generateComprehensiveReport();
-
-      await serverEndpoint.close();
-      await clientEndpoint.close();
-
-      // Handle output file copying if specified
-      await _handleOutputFile();
-    } catch (e, stackTrace) {
-      print('❌ BENCHMARK FAILED: $e');
-      if (config.enableVerboseLogging) {
-        print('Stack trace: $stackTrace');
+      for (final mode in config.modes) {
+        await _runMode(mode);
       }
+      await _report();
+    } catch (e, st) {
+      print('FAILED: $e');
+      if (config.verbose) print(st);
       exit(1);
     } finally {
-      _totalStopwatch.stop();
+      _total.stop();
     }
   }
 
-  void _printHeader() {
-    print('');
-    print(
-      '╔══════════════════════════════════════════════════════════════════════════════╗',
-    );
-    print(
-      '║                                                                              ║',
-    );
-    print(
-      '║    🚀 PROFESSIONAL RPC DART PERFORMANCE BENCHMARK SUITE 🚀                 ║',
-    );
-    print(
-      '║                                                                              ║',
-    );
-    print(
-      '║    Comprehensive end-to-end RPC stack performance analysis                  ║',
-    );
-    print(
-      '║    • Full RPC call lifecycle testing                                        ║',
-    );
-    print(
-      '║    • Transport overhead analysis                                            ║',
-    );
-    print(
-      '║    • Scalability and concurrency assessment                                 ║',
-    );
-    print(
-      '║    • Statistical analysis with outlier detection                            ║',
-    );
-    print(
-      '║                                                                              ║',
-    );
-    print(
-      '╚══════════════════════════════════════════════════════════════════════════════╝',
-    );
-    print('');
+  ({
+    RpcResponderEndpoint server,
+    RpcCallerEndpoint client,
+    TestRpcCaller caller,
+  })
+  _setup(BenchMode mode) {
+    final (clientT, serverT) = mode == BenchMode.serialized
+        ? RpcChannelTransport.pair()
+        : RpcChannelTransport.memoryPair();
+    final server = RpcResponderEndpoint(transport: serverT)
+      ..registerServiceContract(TestRpcContract(useCodecs: mode.useCodecs))
+      ..start();
+    final client = RpcCallerEndpoint(transport: clientT);
+    final caller = TestRpcCaller(client, useCodecs: mode.useCodecs);
+    return (server: server, client: client, caller: caller);
   }
 
-  /// Setup comprehensive RPC infrastructure
-  Future<(RpcResponderEndpoint, RpcCallerEndpoint, TestRpcCallerContract)>
-  _setupInfrastructure() async {
-    print('⚙️  Setting up RPC infrastructure...');
+  Future<void> _runMode(BenchMode mode) async {
+    print('=== MODE: ${mode.label} (${mode.description}) ===');
+    final ctx = _setup(mode);
+    final caller = ctx.caller;
 
-    // Create transport pair with frame codec (realistic path)
-    final (clientTransport, serverTransport) = RpcChannelTransport.pair();
+    await _warmup(caller);
 
-    // Create endpoints
-    final serverEndpoint = RpcResponderEndpoint(transport: serverTransport);
-    final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
+    // Pre-generate all request data OUTSIDE the timed region.
+    final simple = TestData.simple();
+    final medium = TestData.medium();
+    final complex = TestData.complex();
+    final clientBatches = List.generate(
+      config.iterations ~/ 10,
+      (_) => List.generate(10, (_) => TestData.simple()),
+    );
+    final bidiBatches = List.generate(
+      config.iterations ~/ 10,
+      (_) => List.generate(5, (_) => TestData.simple()),
+    );
 
-    // Register server contract
-    final serverContract = TestRpcContract();
-    serverEndpoint.registerServiceContract(serverContract);
+    // Per-scenario pooled samples + per-run medians.
+    final pools = <String, List<double>>{};
+    final runMedians = <String, List<double>>{};
 
-    // Start server
-    serverEndpoint.start();
-
-    // Create client contract
-    final clientContract = TestRpcCallerContract(clientEndpoint);
-
-    print('✅ RPC infrastructure ready');
-    return (serverEndpoint, clientEndpoint, clientContract);
-  }
-
-  /// Execute JIT warmup with progress tracking
-  Future<void> _executeWarmup(TestRpcCallerContract contract) async {
-    print('🔥 === JIT COMPILER WARMUP ===');
-
-    final progress = ProgressIndicator('JIT Warmup', config.warmupIterations);
-
-    for (int i = 0; i < config.warmupIterations; i++) {
-      final dataType = i % 3;
-      final testData = switch (dataType) {
-        0 => TestDataGenerator.generateSimple(),
-        1 => TestDataGenerator.generateMedium(),
-        _ => TestDataGenerator.generateComplex(),
-      };
-
-      try {
-        await contract.processRequest(testData);
-      } catch (e) {
-        // Ignore warmup errors
-      }
-
-      // Warmup stream operations periodically
-      if (i % 10 == 0) {
-        try {
-          await contract
-              .streamResponses(TestDataGenerator.generateSimple())
-              .take(2)
-              .toList();
-
-          // ignore: unused_local_variable
-          final collected = await contract.collectRequests(
-            Stream.fromIterable([TestDataGenerator.generateSimple()]),
-          );
-        } catch (e) {
-          // Ignore warmup errors
-        }
-      }
-
-      progress.update(i + 1);
+    void collect(String name, List<double> runLatencies) {
+      pools.putIfAbsent(name, () => []).addAll(runLatencies);
+      runMedians
+          .putIfAbsent(name, () => [])
+          .add(LatencyStats._pct(runLatencies, 50));
     }
 
-    progress.complete();
+    for (int run = 0; run < config.runs; run++) {
+      collect(
+        'unary/simple',
+        await _measure(config.iterations, () => caller.unary(simple)),
+      );
+      collect(
+        'unary/medium',
+        await _measure(config.iterations, () => caller.unary(medium)),
+      );
+      collect(
+        'unary/complex',
+        await _measure(config.iterations, () => caller.unary(complex)),
+      );
+      collect(
+        'serverStream/5',
+        await _measure(
+          config.iterations ~/ 5,
+          () => caller.serverStream(medium).toList(),
+        ),
+      );
+      collect(
+        'clientStream/10',
+        await _measureIndexed(
+          clientBatches.length,
+          (i) => caller.clientStream(Stream.fromIterable(clientBatches[i])),
+        ),
+      );
+      collect(
+        'bidi/5',
+        await _measureIndexed(
+          bidiBatches.length,
+          (i) => caller.bidi(Stream.fromIterable(bidiBatches[i])).toList(),
+        ),
+      );
+    }
 
-    // GC stabilization pause
-    await Future.delayed(Duration(milliseconds: 100));
+    for (final name in pools.keys) {
+      final stats = LatencyStats(
+        mode: mode.label,
+        name: name,
+        samples: pools[name]!,
+        perRunMedians: runMedians[name]!,
+      );
+      stats.printReport();
+      latencyResults.add(stats);
+    }
+
+    // Saturation throughput: ramp the number of in-flight calls.
+    print('  -- saturation throughput (unary/medium) --');
+    for (final inFlight in const [1, 4, 16, 64]) {
+      final ops = await _saturation(caller, medium, inFlight: inFlight);
+      print('    in-flight=$inFlight: ${ops.toStringAsFixed(0)} ops/s');
+      throughputResults.add(ThroughputResult(mode.label, inFlight, ops));
+    }
     print('');
+
+    await ctx.client.close();
+    await ctx.server.close();
   }
 
-  /// Execute all benchmark tests
-  Future<void> _executeBenchmarks(TestRpcCallerContract contract) async {
-    print('📊 === PERFORMANCE MEASUREMENTS ===');
-
-    // Core RPC benchmarks
-    await _benchmarkUnaryRpc(
-      contract,
-      'Simple Data',
-      TestDataGenerator.generateSimple,
-    );
-    await _benchmarkUnaryRpc(
-      contract,
-      'Medium Data',
-      TestDataGenerator.generateMedium,
-    );
-    await _benchmarkUnaryRpc(
-      contract,
-      'Complex Data',
-      TestDataGenerator.generateComplex,
-    );
-
-    // Streaming benchmarks
-    await _benchmarkServerStream(contract);
-    await _benchmarkClientStream(contract);
-    await _benchmarkBidirectionalStream(contract);
-
-    // Scalability tests
-    await _benchmarkScalability(contract);
+  Future<void> _warmup(TestRpcCaller caller) async {
+    final s = TestData.simple();
+    for (int i = 0; i < config.warmup; i++) {
+      await caller.unary(s);
+      if (i % 25 == 0) {
+        await caller.serverStream(s).toList();
+        await caller.clientStream(Stream.fromIterable([s]));
+        await caller.bidi(Stream.fromIterable([s])).toList();
+      }
+    }
+    await _settle();
   }
 
-  /// Benchmark unary RPC calls with progress tracking
-  Future<void> _benchmarkUnaryRpc(
-    TestRpcCallerContract contract,
-    String dataType,
-    TestRequest Function() dataGenerator,
+  /// Runs [body] [n] times, recording per-call wall time in microseconds.
+  Future<List<double>> _measure(int n, Future<void> Function() body) async {
+    final lat = <double>[];
+    await _settle();
+    for (int i = 0; i < n; i++) {
+      final sw = Stopwatch()..start();
+      await body();
+      sw.stop();
+      lat.add(sw.elapsedMicroseconds.toDouble());
+      if (i % 200 == 199) await _settle();
+    }
+    return lat;
+  }
+
+  Future<List<double>> _measureIndexed(
+    int n,
+    Future<void> Function(int) body,
   ) async {
-    print('   🎯 Testing Unary RPC: $dataType');
-
-    final testData = dataGenerator();
-    final latencies = <double>[];
-    final progress = ProgressIndicator(
-      'Unary RPC - $dataType',
-      config.measurementIterations,
-    );
-
-    await _forceGc();
-
-    for (int i = 0; i < config.measurementIterations; i++) {
-      final stopwatch = Stopwatch()..start();
-      final response = await contract.processRequest(testData);
-      stopwatch.stop();
-
-      latencies.add(stopwatch.elapsedMicroseconds.toDouble());
-
-      // Validate response
-      assert(response.requestId == testData.id);
-
-      if (i % 100 == 99) {
-        await _forceGc();
-      }
-
-      progress.update(i + 1);
+    final lat = <double>[];
+    await _settle();
+    for (int i = 0; i < n; i++) {
+      final sw = Stopwatch()..start();
+      await body(i);
+      sw.stop();
+      lat.add(sw.elapsedMicroseconds.toDouble());
+      if (i % 200 == 199) await _settle();
     }
-
-    progress.complete();
-
-    final stats = ProfessionalBenchmarkStats(
-      name: dataType,
-      category: 'Unary RPC',
-      latencies: latencies,
-      unit: 'μs',
-      metadata: {'data_type': dataType},
-    );
-
-    stats.printProfessionalReport();
-    results.add(stats);
+    return lat;
   }
 
-  /// Force garbage collection for measurement stability
-  Future<void> _forceGc() async {
+  /// Real throughput: keep [inFlight] unary calls in flight until [total]
+  /// complete, then report total/elapsed.
+  Future<double> _saturation(
+    TestRpcCaller caller,
+    TestRequest req, {
+    required int inFlight,
+    int total = 4000,
+  }) async {
+    await _settle();
+    final done = Completer<void>();
+    var launched = 0;
+    var completed = 0;
+
+    void pump() {
+      while (launched - completed < inFlight && launched < total) {
+        launched++;
+        caller.unary(req).then((_) {
+          completed++;
+          if (completed >= total) {
+            if (!done.isCompleted) done.complete();
+          } else {
+            pump();
+          }
+        });
+      }
+    }
+
+    final sw = Stopwatch()..start();
+    pump();
+    await done.future;
+    sw.stop();
+    return total / (sw.elapsedMicroseconds / 1000000);
+  }
+
+  /// Yields a couple of event-loop turns to let pending microtasks/GC settle.
+  Future<void> _settle() async {
     for (int i = 0; i < 2; i++) {
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(const Duration(milliseconds: 1));
     }
   }
 
-  /// Benchmark server streaming
-  Future<void> _benchmarkServerStream(TestRpcCallerContract contract) async {
-    print('   🌊 Testing Server Stream RPC');
-
-    final latencies = <double>[];
-    final testData = TestDataGenerator.generateMedium();
-    final iterations = config.measurementIterations ~/ 5;
-    final progress = ProgressIndicator('Server Stream RPC', iterations);
-
-    for (int i = 0; i < iterations; i++) {
-      final stopwatch = Stopwatch()..start();
-      final responses = await contract.streamResponses(testData).toList();
-      stopwatch.stop();
-
-      latencies.add(stopwatch.elapsedMicroseconds.toDouble());
-
-      assert(responses.length == 5);
-      assert(responses.every((r) => r.requestId == testData.id));
-
-      progress.update(i + 1);
-    }
-
-    progress.complete();
-
-    final stats = ProfessionalBenchmarkStats(
-      name: 'Multi-Response Stream',
-      category: 'Server Stream RPC',
-      latencies: latencies,
-      unit: 'μs',
-      metadata: {'responses_per_call': 5},
-    );
-
-    stats.printProfessionalReport();
-    results.add(stats);
-  }
-
-  /// Benchmark client streaming
-  Future<void> _benchmarkClientStream(TestRpcCallerContract contract) async {
-    print('   📤 Testing Client Stream RPC');
-
-    final latencies = <double>[];
-    const requestCount = 10;
-    final iterations = config.measurementIterations ~/ 10;
-    final progress = ProgressIndicator('Client Stream RPC', iterations);
-
-    for (int i = 0; i < iterations; i++) {
-      final requests = List.generate(
-        requestCount,
-        (_) => TestDataGenerator.generateSimple(),
-      );
-
-      final stopwatch = Stopwatch()..start();
-      final response = await contract.collectRequests(
-        Stream.fromIterable(requests),
-      );
-      stopwatch.stop();
-
-      latencies.add(stopwatch.elapsedMicroseconds.toDouble());
-
-      assert(response.result.contains(requestCount.toString()));
-
-      progress.update(i + 1);
-    }
-
-    progress.complete();
-
-    final stats = ProfessionalBenchmarkStats(
-      name: 'Multi-Request Collection',
-      category: 'Client Stream RPC',
-      latencies: latencies,
-      unit: 'μs',
-      metadata: {'requests_per_call': requestCount},
-    );
-
-    stats.printProfessionalReport();
-    results.add(stats);
-  }
-
-  /// Benchmark bidirectional streaming
-  Future<void> _benchmarkBidirectionalStream(
-    TestRpcCallerContract contract,
-  ) async {
-    print('   🔄 Testing Bidirectional Stream RPC');
-
-    final latencies = <double>[];
-    const requestCount = 5;
-    final iterations = config.measurementIterations ~/ 10;
-    final progress = ProgressIndicator('Bidirectional Stream RPC', iterations);
-
-    for (int i = 0; i < iterations; i++) {
-      final requests = Stream.periodic(
-        Duration(microseconds: 100),
-        (index) => TestDataGenerator.generateSimple(),
-      ).take(requestCount);
-
-      final stopwatch = Stopwatch()..start();
-      final responses = await contract.processStream(requests).toList();
-      stopwatch.stop();
-
-      latencies.add(stopwatch.elapsedMicroseconds.toDouble());
-
-      assert(responses.length == requestCount);
-
-      progress.update(i + 1);
-    }
-
-    progress.complete();
-
-    final stats = ProfessionalBenchmarkStats(
-      name: 'Bidirectional Processing',
-      category: 'Bidirectional Stream RPC',
-      latencies: latencies,
-      unit: 'μs',
-      metadata: {'requests_per_call': requestCount},
-    );
-
-    stats.printProfessionalReport();
-    results.add(stats);
-  }
-
-  /// Test RPC scalability under load
-  Future<void> _benchmarkScalability(TestRpcCallerContract contract) async {
-    print('📏 === SCALABILITY ASSESSMENT ===');
-
-    final concurrencyLevels = [1, 5, 10, config.maxConcurrentOps];
-
-    for (final concurrency in concurrencyLevels) {
-      print('   ⚡ Concurrent operations: $concurrency');
-
-      final latencies = <double>[];
-      const iterationsPerConcurrency = 50;
-      final progress = ProgressIndicator(
-        'Scalability $concurrency',
-        iterationsPerConcurrency,
-      );
-
-      for (int i = 0; i < iterationsPerConcurrency; i++) {
-        final stopwatch = Stopwatch()..start();
-
-        final futures = List.generate(
-          concurrency,
-          (_) => contract.processRequest(TestDataGenerator.generateMedium()),
-        );
-
-        final responses = await Future.wait(futures);
-        stopwatch.stop();
-
-        latencies.add(stopwatch.elapsedMicroseconds.toDouble());
-
-        assert(responses.length == concurrency);
-        assert(responses.every((r) => r.result.isNotEmpty));
-
-        progress.update(i + 1);
-      }
-
-      progress.complete();
-
-      final stats = ProfessionalBenchmarkStats(
-        name: '$concurrency Concurrent Operations',
-        category: 'Scalability',
-        latencies: latencies,
-        unit: 'μs',
-        metadata: {'concurrency': concurrency},
-      );
-
-      stats.printProfessionalReport();
-      results.add(stats);
-    }
-  }
-
-  /// Generate comprehensive final report
-  Future<void> _generateComprehensiveReport() async {
-    _totalStopwatch.stop();
-
-    print(
-      '╔══════════════════════════════════════════════════════════════════════════════╗',
-    );
-    print(
-      '║                           COMPREHENSIVE BENCHMARK REPORT                    ║',
-    );
-    print(
-      '╚══════════════════════════════════════════════════════════════════════════════╝',
-    );
-
-    // Summary statistics
-    final groups = <String, List<ProfessionalBenchmarkStats>>{};
-    for (final result in results) {
-      groups.putIfAbsent(result.category, () => []).add(result);
-    }
-
-    print('📊 PERFORMANCE SUMMARY:');
-    groups.forEach((category, stats) {
-      final avgThroughput =
-          stats.map((s) => s.throughputPerSecond).reduce((a, b) => a + b) /
-          stats.length;
-      final avgLatency =
-          stats.map((s) => s.mean).reduce((a, b) => a + b) / stats.length;
-
-      print('   $category:');
-      print('     • ${stats.length} test scenarios');
+  Future<void> _report() async {
+    print('=== SUMMARY ===');
+    print('  Latency (p50, pooled across ${config.runs} runs):');
+    for (final s in latencyResults) {
       print(
-        '     • Average throughput: ${avgThroughput.toStringAsFixed(0)} ops/sec',
+        '    [${s.mode}] ${s.name}: ${LatencyStats._us(s.median)} '
+        '(run-to-run ${(s.runSpread * 100).toStringAsFixed(1)}%)',
       );
-      print('     • Average latency: ${avgLatency.toStringAsFixed(1)} μs');
+    }
+    print('  Peak saturation throughput:');
+    final byMode = <String, double>{};
+    for (final t in throughputResults) {
+      byMode[t.mode] = math.max(byMode[t.mode] ?? 0, t.opsPerSec);
+    }
+    byMode.forEach((mode, ops) {
+      print('    [$mode]: ${ops.toStringAsFixed(0)} ops/s');
     });
-
     print('');
-    print('⏱️  EXECUTION SUMMARY:');
     print(
-      '   • Total execution time: ${(_totalStopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)}s',
+      '  Total: ${(_total.elapsedMilliseconds / 1000).toStringAsFixed(1)}s',
     );
-    print('   • Tests completed: ${results.length}');
-    print(
-      '   • Total measurements: ${results.map((r) => r.latencies.length).reduce((a, b) => a + b)}',
-    );
-
-    await _exportResults();
-
-    print('');
-    print('✅ PROFESSIONAL RPC BENCHMARK COMPLETED SUCCESSFULLY!');
+    await _export();
+    print('BENCHMARK COMPLETED');
   }
 
-  Future<void> _exportResults() async {
+  Future<void> _export() async {
     try {
-      final outputDir = Directory(config.outputDirectory);
-      if (!outputDir.existsSync()) {
-        await outputDir.create(recursive: true);
-      }
+      final dir = Directory(config.outputDirectory);
+      if (!dir.existsSync()) await dir.create(recursive: true);
 
-      // Professional results format
-      final exportData = {
+      final data = {
         'benchmark_info': {
-          'suite': ' RPC Dart Performance Benchmark',
-          'version': '2.0.0',
-          'timestamp': DateTime.now().toIso8601String(),
-          'execution_time_seconds': _totalStopwatch.elapsedMilliseconds / 1000,
+          'suite': 'RPC Dart Performance Benchmark',
+          'version': '3.0.0',
         },
         'configuration': {
-          'warmup_iterations': config.warmupIterations,
-          'measurement_iterations': config.measurementIterations,
-          'max_concurrent_operations': config.maxConcurrentOps,
-          'verbose_logging': config.enableVerboseLogging,
+          'warmup': config.warmup,
+          'iterations': config.iterations,
+          'runs': config.runs,
+          'modes': config.modes.map((m) => m.label).toList(),
         },
-        'test_results': results.map((stat) => stat.toJson()).toList(),
-        'summary': {
-          'total_tests': results.length,
-          'total_measurements': results
-              .map((r) => r.latencies.length)
-              .reduce((a, b) => a + b),
-          'categories': results.map((r) => r.category).toSet().toList(),
-        },
+        'latency': latencyResults.map((s) => s.toJson()).toList(),
+        'throughput': throughputResults.map((t) => t.toJson()).toList(),
       };
-
-      final resultsFile = File(
+      await File(
         '${config.outputDirectory}/rpc_benchmark_results.json',
-      );
-      await resultsFile.writeAsString(
-        JsonEncoder.withIndent('  ').convert(exportData),
-      );
+      ).writeAsString(const JsonEncoder.withIndent('  ').convert(data));
 
-      // Bencher.dev compatible format
-      final bencherResults = <String, dynamic>{};
-      for (final stat in results) {
-        final benchmarkName = '${stat.category}_${stat.name}'
-            .replaceAll(' ', '_')
-            .replaceAll('-', '_')
+      // Bencher.dev format: latency p50/p95/p99 per scenario + peak throughput.
+      final bencher = <String, dynamic>{};
+      for (final s in latencyResults) {
+        final key = '${s.mode}_${s.name}'
+            .replaceAll(RegExp(r'[ /\-]'), '_')
             .toLowerCase();
-
-        bencherResults[benchmarkName] = {
-          'throughput_ops_per_sec': {'value': stat.throughputPerSecond},
-          'latency_mean_microseconds': {'value': stat.mean},
-          'latency_p95_microseconds': {'value': stat.p95},
-          'latency_p99_microseconds': {'value': stat.p99},
+        bencher[key] = {
+          'latency_p50_us': {'value': s.median},
+          'latency_p95_us': {'value': s.p95},
+          'latency_p99_us': {'value': s.p99},
         };
       }
-
-      final bencherFile = File(
+      final byMode = <String, double>{};
+      for (final t in throughputResults) {
+        byMode[t.mode] = math.max(byMode[t.mode] ?? 0, t.opsPerSec);
+      }
+      byMode.forEach((mode, ops) {
+        final key = 'throughput_$mode'.replaceAll('-', '_').toLowerCase();
+        bencher[key] = {
+          'throughput_ops_per_sec': {'value': ops},
+        };
+      });
+      await File(
         '${config.outputDirectory}/bencher_results.json',
-      );
-      await bencherFile.writeAsString(
-        JsonEncoder.withIndent('  ').convert(bencherResults),
-      );
+      ).writeAsString(const JsonEncoder.withIndent('  ').convert(bencher));
 
-      print('   📄 Professional results: ${resultsFile.path}');
-      print('   📊 Bencher.dev format: ${bencherFile.path}');
-    } catch (e) {
-      print('   ⚠️  Export error: $e');
-    }
-  }
-
-  /// Handle output file copying if specified
-  Future<void> _handleOutputFile() async {
-    if (config.outputPath != null && config.outputPath!.endsWith('.json')) {
-      try {
-        final sourceFile = File(
+      if (config.outputPath != null && config.outputPath!.endsWith('.json')) {
+        final src = File(
           '${config.outputDirectory}/rpc_benchmark_results.json',
         );
-        final targetFile = File(config.outputPath!);
-
-        if (sourceFile.existsSync()) {
-          await targetFile.parent.create(recursive: true);
-          await sourceFile.copy(config.outputPath!);
-          print('📄 Results copied to: ${config.outputPath}');
+        if (src.existsSync()) {
+          await File(config.outputPath!).parent.create(recursive: true);
+          await src.copy(config.outputPath!);
         }
-      } catch (e) {
-        print('⚠️  Copy error: $e');
       }
+    } catch (e) {
+      print('  Export error: $e');
     }
   }
 }
