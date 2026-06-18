@@ -6,15 +6,13 @@ publish_to: none
 environment:
   sdk: ">=3.10.0 <4.0.0"
 
+resolution: workspace
+
 dependencies:
   rpc_dart: ^3.3.0
   rpc_dart_isolate:
     path: ../../transport/rpc_dart_isolate
 
-dependency_overrides:
-  rpc_dart:
-    path: ../rpc_dart
-
 dev_dependencies:
-  lints: ^3.0.0
+  lints: ^6.0.0
   test: ^1.25.5

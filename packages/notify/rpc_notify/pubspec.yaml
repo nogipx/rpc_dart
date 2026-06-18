@@ -8,6 +8,8 @@ issue_tracker: https://github.com/nogipx/rpc_dart/issues
 environment:
   sdk: '>=3.10.0 <4.0.0'
 
+resolution: workspace
+
 dependencies:
   rpc_dart: ^3.3.0
   meta: ^1.17.0

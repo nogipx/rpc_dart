@@ -5,12 +5,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart'
-    hide
-        RpcTransportRouter,
-        RpcTransportRouterBuilder,
-        RpcRoutingCondition,
-        PrioritizedRoutingRule;
+import 'package:rpc_dart/rpc_dart.dart';
 
 /// Predicate used to decide whether a routing rule applies.
 typedef RpcRoutingCondition = bool Function(

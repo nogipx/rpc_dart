@@ -1,0 +1,43 @@
+name: _rpc_dart_workspace
+publish_to: none
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+workspace:
+  - packages/blob/rpc_blob
+  - packages/blob/rpc_blob_minio
+  - packages/blob/rpc_blob_sqlite
+  - packages/core/rpc_dart
+  - packages/core/rpc_dart_compression
+  - packages/core/rpc_dart_framework
+  - packages/core/rpc_dart_generator
+  - packages/core/rpc_dart_grpc_reflection
+  - packages/core/rpc_dart_log
+  - packages/core/rpc_dart_opentelemetry
+  - packages/data/rpc_data
+  - packages/data/rpc_data_postgres
+  - packages/data/rpc_data_sqlite
+  - packages/notify/rpc_notify
+  - packages/notify/rpc_notify_postgres
+  - packages/transport/rpc_dart_http
+  - packages/transport/rpc_dart_http2
+  - packages/transport/rpc_dart_isolate
+  - packages/transport/rpc_dart_websocket
+  # rpc_dart_wasm is intentionally NOT a workspace member: it is the only Flutter
+  # package, and including it forces the whole workspace into a single lockfile
+  # pinned to the Flutter SDK's transitive deps (e.g. meta 1.17.0), which
+  # conflicts with paseto_dart 2.1.0 used by the sqlite packages. It resolves
+  # standalone instead.
+dev_dependencies:
+  melos: ^7.8.2
+
+melos:
+  name: rpc_dart
+  scripts:
+    analyze:
+      description: Run dart analyze across all workspace packages.
+      exec: dart analyze .
+    test:
+      description: Run dart test across all workspace packages that have tests.
+      exec: dart test
+      packageFilters:
+        dirExists: test

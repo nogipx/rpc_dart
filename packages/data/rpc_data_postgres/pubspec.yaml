@@ -8,11 +8,13 @@ issue_tracker: https://github.com/nogipx/rpc_dart/issues
 environment:
   sdk: '>=3.10.0 <4.0.0'
 
+resolution: workspace
+
 dependencies:
   rpc_data:
     path: ../rpc_data
   postgres: ^3.5.9
 
 dev_dependencies:
-  lints: ^5.1.1
+  lints: ^6.0.0
   test: ^1.26.3

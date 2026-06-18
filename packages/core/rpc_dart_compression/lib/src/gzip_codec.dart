@@ -100,7 +100,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   }
 
   @override
-  Uint8List decompress(Uint8List data) {
+  Uint8List decompress(Uint8List data, {int? maxOutputBytes}) {
     // The archive web decoder has its signature checks commented out and the
     // VM decoder defaults to verify:false, so corrupted / non-gzip / truncated
     // input can be silently accepted (garbage or empty) and behaviour diverges
@@ -110,16 +110,29 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // Decompression-bomb guard: gzip stores the uncompressed size (mod 2^32) in
     // the ISIZE trailer, so we can reject oversized declared output before
     // allocating anything. Cheap and never triggers for in-limit payloads.
-    if (maxDecompressedSize != _unlimited) {
+    // Effective limit = the tighter of the codec's configured cap and the
+    // per-call hint from RpcCompressionCodec.decompress(maxOutputBytes:).
+    final int effectiveLimit;
+    if (maxOutputBytes == null) {
+      effectiveLimit = maxDecompressedSize;
+    } else if (maxDecompressedSize == _unlimited) {
+      effectiveLimit = maxOutputBytes;
+    } else {
+      effectiveLimit = maxOutputBytes < maxDecompressedSize
+          ? maxOutputBytes
+          : maxDecompressedSize;
+    }
+
+    if (effectiveLimit != _unlimited) {
       final n = data.length;
       final declaredSize = data[n - 4] |
           (data[n - 3] << 8) |
           (data[n - 2] << 16) |
           (data[n - 1] << 24);
-      if (declaredSize > maxDecompressedSize) {
+      if (declaredSize > effectiveLimit) {
         throw FormatException(
           'Invalid gzip data: declared size $declaredSize exceeds '
-          'maxDecompressedSize $maxDecompressedSize',
+          'limit $effectiveLimit',
         );
       }
     }
@@ -139,6 +152,16 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // garbage without throwing. Re-check the gzip trailer ourselves so the
     // behaviour matches the VM on every platform.
     _verifyTrailer(data, result);
+
+    // ISIZE is only the size mod 2^32, so a crafted trailer can understate the
+    // real output and slip past the pre-allocation guard above. The bytes are
+    // now materialized, so enforce the limit on the actual length too.
+    if (effectiveLimit != _unlimited && result.length > effectiveLimit) {
+      throw FormatException(
+        'Invalid gzip data: decompressed ${result.length} bytes exceeds '
+        'limit $effectiveLimit',
+      );
+    }
 
     // decodeBytes returns a Uint8List on every platform, so avoid the extra
     // Uint8List.fromList copy. Cast defensively in case a future archive
