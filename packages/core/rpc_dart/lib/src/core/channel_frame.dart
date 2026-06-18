@@ -69,10 +69,29 @@ abstract final class RpcChannelFrame {
   /// [TypeError]/[FormatException] escape into the receive loop.
   static RpcDecodedFrame? decode(Uint8List data, {int? maxPayloadLen}) {
     if (data.length < headerSize) return null;
-    final view = ByteData.sublistView(data);
-    final streamId = view.getUint32(0);
-    final flags = view.getUint8(4);
-    final payloadLen = view.getUint32(5);
+    return _decodeAt(
+      data,
+      ByteData.sublistView(data),
+      0,
+      maxPayloadLen: maxPayloadLen,
+    );
+  }
+
+  /// Decodes a single frame starting at [offset] using an existing [view] over
+  /// [data], reading the 9-byte header once and slicing the payload directly.
+  ///
+  /// The caller must ensure `offset + headerSize <= data.length`. Returns null
+  /// when the declared payload is not yet fully present. Behaves identically to
+  /// [decode] for the bytes at [offset].
+  static RpcDecodedFrame? _decodeAt(
+    Uint8List data,
+    ByteData view,
+    int offset, {
+    int? maxPayloadLen,
+  }) {
+    final streamId = view.getUint32(offset);
+    final flags = view.getUint8(offset + 4);
+    final payloadLen = view.getUint32(offset + 5);
 
     if (maxPayloadLen != null && payloadLen > maxPayloadLen) {
       throw RpcFrameException(
@@ -81,12 +100,13 @@ abstract final class RpcChannelFrame {
       );
     }
 
-    if (data.length < headerSize + payloadLen) return null;
+    final payloadStart = offset + headerSize;
+    if (data.length < payloadStart + payloadLen) return null;
 
     final payload = Uint8List.sublistView(
       data,
-      headerSize,
-      headerSize + payloadLen,
+      payloadStart,
+      payloadStart + payloadLen,
     );
     final endOfStream = (flags & _flagEndOfStream) != 0;
     final isMetadata = (flags & _flagMetadata) != 0;
@@ -126,31 +146,21 @@ abstract final class RpcChannelFrame {
     final frames = <RpcDecodedFrame>[];
     var offset = 0;
 
+    if (data.length < headerSize) return (frames, offset);
+
+    // One view over the whole buffer; the header is read once per frame inside
+    // _decodeAt (no second view, no intermediate frame slice).
+    final view = ByteData.sublistView(data);
+
     while (offset + headerSize <= data.length) {
-      final view = ByteData.sublistView(data, offset);
-      final payloadLen = view.getUint32(5);
-
-      // Fail fast on an oversized declared length before touching the payload,
-      // so a peer cannot force buffering toward a huge frame.
-      if (maxPayloadLen != null && payloadLen > maxPayloadLen) {
-        throw RpcFrameException(
-          'Incoming frame payload too large: $payloadLen bytes '
-          '(max: $maxPayloadLen)',
-        );
-      }
-
-      final frameSize = headerSize + payloadLen;
-      if (offset + frameSize > data.length) break;
-
-      final frameBytes = Uint8List.sublistView(
-        data,
-        offset,
-        offset + frameSize,
-      );
-      final frame = decode(frameBytes, maxPayloadLen: maxPayloadLen);
+      // _decodeAt re-reads the declared length to enforce maxPayloadLen and to
+      // detect a not-yet-complete payload; on incompleteness it returns null.
+      final frame = _decodeAt(data, view, offset, maxPayloadLen: maxPayloadLen);
       if (frame == null) break;
+
+      final payloadLen = view.getUint32(offset + 5);
+      offset += headerSize + payloadLen;
       frames.add(frame);
-      offset += frameSize;
     }
 
     return (frames, offset);

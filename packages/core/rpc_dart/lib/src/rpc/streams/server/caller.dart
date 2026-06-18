@@ -63,7 +63,11 @@ final class ServerStreamCaller<
   }
 
   /// Response stream (completes when server finishes or on error).
-  Stream<RpcMessage<TResponse>> get responses => _processor.responses;
+  ///
+  /// Forwards processor messages, but a non-OK grpc-status trailer surfaces as
+  /// an [RpcStatusException] error on the stream instead of completing silently.
+  Stream<RpcMessage<TResponse>> get responses =>
+      _processor.responses.transform(_grpcStatusErrorTransformer(_logger));
 
   /// Sends the single request; may be called only once.
   Future<void> send(TRequest request) async {
@@ -73,7 +77,9 @@ final class ServerStreamCaller<
       );
     }
 
-    _logger.internal('Sending single request to server stream: $request');
+    if (_logger.isInternal) {
+      _logger.internal('Sending single request to server stream: $request');
+    }
 
     try {
       _requestSent = true; // Set flag immediately to block duplicates.
@@ -107,7 +113,8 @@ final class ServerStreamCaller<
       // Process response stream.
       await for (final response in responses) {
         if (response.payload != null) {
-          _logger.internal('Received response from server');
+          if (_logger.isInternal)
+            _logger.internal('Received response from server');
           yield response.payload!;
         }
 
@@ -139,7 +146,7 @@ final class ServerStreamCaller<
       _logger.internal('Server stream completed');
     } catch (e) {
       _logger.error('Server stream call failed', error: e);
-      if (e is! RpcCancelledException) rethrow;
+      rethrow;
     } finally {
       await close();
     }
@@ -150,4 +157,44 @@ final class ServerStreamCaller<
     _logger.internal('Closing ServerStreamCaller');
     await _processor.close();
   }
+}
+
+/// Builds a transformer that forwards every [RpcMessage] but, when a message
+/// carries a non-OK grpc-status trailer, surfaces an [RpcStatusException] error
+/// on the stream instead of letting it complete silently.
+///
+/// Implemented with [StreamTransformer.fromHandlers] (not an `async*` wrapper)
+/// to preserve correct pause/resume/cancel semantics over the single-
+/// subscription processor stream — an `async*` blocked in `await for` can
+/// deadlock when a downstream `take(n)` cancels mid-stream.
+StreamTransformer<RpcMessage<T>, RpcMessage<T>>
+_grpcStatusErrorTransformer<T extends Object>(LogScope logger) {
+  return StreamTransformer<RpcMessage<T>, RpcMessage<T>>.fromHandlers(
+    handleData: (response, sink) {
+      sink.add(response);
+
+      final metadata = response.metadata;
+      if (metadata == null) return;
+      final statusStr = metadata.getHeaderValue(RpcHeaders.grpcStatus);
+      if (statusStr == null) return;
+      final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
+      if (status == RpcStatus.ok) return;
+
+      final message =
+          metadata.getHeaderValue(RpcHeaders.grpcMessage) ?? 'Unknown error';
+      final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
+      if (logger.isInternal) {
+        logger.internal(
+          'Raw responses saw error trailer: $status - $decodedMessage',
+        );
+      }
+      sink.addError(
+        RpcStatusException.fromTrailer(
+          status,
+          decodedMessage,
+          detailsBin: metadata.statusDetailsBin,
+        ),
+      );
+    },
+  );
 }

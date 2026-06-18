@@ -529,10 +529,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             error: error,
             stackTrace: stackTrace,
           );
-          final errorMessage = error is RpcException
-              ? error.message
-              : error.toString();
-          await processor.sendError(RpcStatus.internal, errorMessage);
+          await processor.sendError(
+            error is RpcStatusException ? error.statusCode : RpcStatus.internal,
+            error is RpcStatusException ? error.message : error.toString(),
+            statusDetailsBin: error is RpcStatusException
+                ? error.statusDetailsBin
+                : null,
+          );
           await _cleanupStream(streamId);
         }
       });
@@ -784,7 +787,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             error: error,
             stackTrace: stackTrace,
           );
-          await responder.sendError(RpcStatus.internal, error.toString());
+          await responder.sendError(
+            error is RpcStatusException ? error.statusCode : RpcStatus.internal,
+            error is RpcStatusException ? error.message : error.toString(),
+          );
         }
       }());
       return;
@@ -836,7 +842,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           error: error,
           stackTrace: stackTrace,
         );
-        await responder.sendError(RpcStatus.internal, error.toString());
+        await responder.sendError(
+          error is RpcStatusException ? error.statusCode : RpcStatus.internal,
+          error is RpcStatusException ? error.message : error.toString(),
+        );
       }
     }());
   }

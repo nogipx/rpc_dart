@@ -106,10 +106,9 @@ abstract interface class RpcMessageFrame {
   /// [compressed] Whether the payload is compressed.
   /// Returns the fully framed message.
   static Uint8List encode(Uint8List messageBytes, {bool compressed = false}) {
-    final result = List<int>.filled(
-      RpcConstants.messagePrefixSize + messageBytes.length,
-      0,
-    );
+    final length = messageBytes.length;
+    // Single allocation, no boxing or intermediate copy.
+    final result = Uint8List(RpcConstants.messagePrefixSize + length);
 
     // Write compression flag.
     result[RpcConstants.compressionFlagIndex] = compressed
@@ -117,18 +116,19 @@ abstract interface class RpcMessageFrame {
         : RpcConstants.noCompression;
 
     // Write message length (big-endian).
-    final length = messageBytes.length;
     result[RpcConstants.messageLengthIndex] = (length >> 24) & 0xFF;
     result[RpcConstants.messageLengthIndex + 1] = (length >> 16) & 0xFF;
     result[RpcConstants.messageLengthIndex + 2] = (length >> 8) & 0xFF;
     result[RpcConstants.messageLengthIndex + 3] = length & 0xFF;
 
-    // Copy payload bytes.
-    for (int i = 0; i < messageBytes.length; i++) {
-      result[RpcConstants.messagePrefixSize + i] = messageBytes[i];
-    }
+    // Copy payload bytes in one bulk operation.
+    result.setRange(
+      RpcConstants.messagePrefixSize,
+      result.length,
+      messageBytes,
+    );
 
-    return Uint8List.fromList(result);
+    return result;
   }
 
   /// Parses the message header extracting compression and length info.

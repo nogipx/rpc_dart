@@ -85,11 +85,13 @@ abstract final class RpcGrpcCompression {
   /// ```
   static void register(String encoding, RpcCompressionCodec codec) {
     _codecs[encoding] = codec;
+    _cachedAcceptEncoding = null;
   }
 
   /// Removes the codec registered for [encoding].
   static void unregister(String encoding) {
     _codecs.remove(encoding);
+    _cachedAcceptEncoding = null;
   }
 
   /// Returns true if [encoding] is supported.
@@ -144,6 +146,21 @@ abstract final class RpcGrpcCompression {
   /// Returns all encodings that are currently registered, including `identity`.
   static List<String> supportedEncodings() {
     return [identity, ..._codecs.keys];
+  }
+
+  /// Cached comma-joined `grpc-accept-encoding` value.
+  ///
+  /// Invalidated on [register]/[unregister]. Built lazily by
+  /// [acceptEncodingHeader].
+  static String? _cachedAcceptEncoding;
+
+  /// Returns the `grpc-accept-encoding` header value (e.g. `"identity,gzip"`),
+  /// caching the joined string across requests.
+  ///
+  /// Byte-identical to `supportedEncodings().join(',')`; recomputed only when
+  /// the codec registry changes.
+  static String acceptEncodingHeader() {
+    return _cachedAcceptEncoding ??= supportedEncodings().join(',');
   }
 
   static String _unsupportedMessage(String encoding) =>

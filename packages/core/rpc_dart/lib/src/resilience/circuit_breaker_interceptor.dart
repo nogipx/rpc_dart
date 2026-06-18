@@ -76,11 +76,17 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   /// until the in-flight probe resolves (success -> close, failure -> reopen).
   bool _probeInFlight = false;
 
+  /// Safety window after which an admitted half-open probe whose wrapped stream
+  /// is never listened (the caller abandoned it) is force-released so the
+  /// breaker does not stay stuck in half-open forever.
+  final Duration probeAbandonTimeout;
+
   /// Creates a circuit breaker interceptor.
   RpcCircuitBreakerInterceptor({
     this.failureThreshold = 5,
     this.resetTimeout = const Duration(seconds: 30),
     this.failureOn,
+    this.probeAbandonTimeout = const Duration(seconds: 30),
   });
 
   /// Current state of the circuit breaker.
@@ -174,22 +180,84 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   ///
   /// Since [next] returns the stream synchronously (before any item flows),
   /// recording success eagerly would let stream errors bypass the breaker.
+  ///
+  /// The source is subscribed to EAGERLY (independent of whether the returned
+  /// stream is ever listened) so the half-open probe gate is always released:
+  /// `_onSuccess`/`_onFailure` fire when the source terminates even if the
+  /// caller obtains the wrapped stream but abandons it. Without this, an
+  /// abandoned probe would pin `_probeInFlight = true` and the breaker would
+  /// reject every subsequent call forever. A safety timer additionally releases
+  /// the probe if the source never terminates and the stream is never listened.
   Stream<TResponse> _wrapStream<TResponse>(Stream<TResponse> source) {
     var failed = false;
-    return source.transform(
-      StreamTransformer<TResponse, TResponse>.fromHandlers(
-        handleData: (data, sink) => sink.add(data),
-        handleError: (error, stackTrace, sink) {
-          failed = true;
-          _onFailure(error);
-          sink.addError(error, stackTrace);
-        },
-        handleDone: (sink) {
-          if (!failed) _onSuccess();
-          sink.close();
-        },
-      ),
+    var resolved = false;
+    var listened = false;
+    Timer? abandonTimer;
+    late StreamSubscription<TResponse> sub;
+    late StreamController<TResponse> controller;
+
+    void cancelAbandonTimer() {
+      abandonTimer?.cancel();
+      abandonTimer = null;
+    }
+
+    // Records the breaker outcome at most once for this stream's lifetime.
+    void resolve({required bool success}) {
+      if (resolved) return;
+      resolved = true;
+      cancelAbandonTimer();
+      if (success) {
+        _onSuccess();
+      }
+      // Failures are recorded as they arrive (see handleError below) so the
+      // count is exact; here we only release a pending success.
+    }
+
+    controller = StreamController<TResponse>(
+      onListen: () {
+        listened = true;
+        // Stream is being consumed; the abandon safety net is no longer needed.
+        cancelAbandonTimer();
+      },
+      onPause: () => sub.pause(),
+      onResume: () => sub.resume(),
+      onCancel: () async {
+        // Downstream cancelled: stop pulling from the source. The probe gate
+        // is released by source termination or the abandon timer, not here.
+        await sub.cancel();
+      },
     );
+
+    sub = source.listen(
+      (data) {
+        if (!controller.isClosed) controller.add(data);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        failed = true;
+        // Count the failure immediately so the breaker reopens even if the
+        // wrapped stream is never listened.
+        _onFailure(error);
+        resolve(success: false);
+        if (!controller.isClosed) controller.addError(error, stackTrace);
+      },
+      onDone: () {
+        if (!failed) resolve(success: true);
+        if (!controller.isClosed) controller.close();
+      },
+    );
+
+    // If the stream is never listened and the source never completes, release
+    // the probe after a safety window so the breaker cannot stay stuck.
+    abandonTimer = Timer(probeAbandonTimeout, () {
+      if (resolved || listened) return;
+      // Treat an abandoned, never-completing probe as a success so the breaker
+      // can recover (close) rather than remaining wedged in half-open.
+      resolve(success: true);
+      // Drop the dangling source subscription; nothing consumes it.
+      sub.cancel();
+    });
+
+    return controller.stream;
   }
 
   /// Checks whether a request is allowed based on the current state.

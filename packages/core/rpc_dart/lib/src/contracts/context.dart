@@ -437,15 +437,19 @@ class RpcContextBuilder {
   /// Создает builder с auto-наследованием trace ID от родительского контекста
   /// Если parent == null или traceId == null, генерирует новый trace ID
   factory RpcContextBuilder.inheritFrom(RpcContext? parent) {
-    if (parent?.traceId != null) {
-      // Наследуем trace ID и базовые заголовки
-      return RpcContextBuilder.from(
-        parent!,
-      ).withGeneratedRequestId(); // Генерируем новый request ID для нового вызова
+    // No parent: brand-new context with fresh trace + request IDs.
+    if (parent == null) {
+      return RpcContextBuilder()
+          .withGeneratedTraceId()
+          .withGeneratedRequestId();
     }
 
-    // Создаем новый контекст с новым trace ID
-    return RpcContextBuilder().withGeneratedTraceId().withGeneratedRequestId();
+    // Inherit the parent's state (cancellation token, deadline, headers,
+    // values) regardless of whether it carries a trace ID. Always generate a
+    // new request ID for the new call; only generate a trace ID when the parent
+    // lacks one.
+    final builder = RpcContextBuilder.from(parent).withGeneratedRequestId();
+    return parent.traceId != null ? builder : builder.withGeneratedTraceId();
   }
 
   /// Устанавливает заголовки

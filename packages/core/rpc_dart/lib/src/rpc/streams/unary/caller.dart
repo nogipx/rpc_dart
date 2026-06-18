@@ -57,7 +57,8 @@ final class UnaryCaller<TRequest, TResponse> {
       decompressor: (payload, {int? maxOutputBytes}) {
         final encoding = _peerGrpcEncoding;
         if (encoding == null || encoding == RpcGrpcCompression.identity) {
-          throw RpcException(
+          throw RpcStatusException(
+            RpcStatus.internal,
             'Compressed gRPC payload received without grpc-encoding',
           );
         }
@@ -150,20 +151,26 @@ final class UnaryCaller<TRequest, TResponse> {
                 }
               } else if (!message.isMetadataOnly && message.payload != null) {
                 // Received response data (serialized).
-                _logger.internal(
-                  'Received transport message of ${message.payload!.length} bytes [streamId: $streamId]',
-                );
+                if (_logger.isInternal) {
+                  _logger.internal(
+                    'Received transport message of ${message.payload!.length} bytes [streamId: $streamId]',
+                  );
+                }
                 try {
                   // Use parser to extract messages from framed payload.
                   final messages = _parser(message.payload!);
-                  _logger.internal(
-                    'Parser extracted ${messages.length} messages from frame [streamId: $streamId]',
-                  );
+                  if (_logger.isInternal) {
+                    _logger.internal(
+                      'Parser extracted ${messages.length} messages from frame [streamId: $streamId]',
+                    );
+                  }
 
                   for (final msgBytes in messages) {
-                    _logger.internal(
-                      'Deserializing response of ${msgBytes.length} bytes [streamId: $streamId]',
-                    );
+                    if (_logger.isInternal) {
+                      _logger.internal(
+                        'Deserializing response of ${msgBytes.length} bytes [streamId: $streamId]',
+                      );
+                    }
                     final response = _responseSerializer.deserialize(msgBytes);
                     if (!completer.isCompleted) {
                       _logger.internal(

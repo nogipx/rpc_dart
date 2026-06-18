@@ -63,7 +63,7 @@ final class RpcMetadata {
       const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
       RpcHeader(
         RpcHeaders.grpcAcceptEncoding,
-        RpcGrpcCompression.supportedEncodings().join(','),
+        RpcGrpcCompression.acceptEncodingHeader(),
       ),
     ], methodPath: '/$serviceName/$methodName');
   }
@@ -83,7 +83,7 @@ final class RpcMetadata {
       const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
       RpcHeader(
         RpcHeaders.grpcAcceptEncoding,
-        RpcGrpcCompression.supportedEncodings().join(','),
+        RpcGrpcCompression.acceptEncodingHeader(),
       ),
     ], methodPath: methodPath);
   }
@@ -235,26 +235,42 @@ final class RpcMetadata {
   ///
   /// Parses `/ServiceName/MethodName` and returns `ServiceName`, or null if the
   /// path is missing or malformed.
-  String? get serviceName {
-    final path = methodPath;
-    if (path == null || !path.startsWith('/')) return null;
-
-    final parts = path.substring(1).split('/');
-    if (parts.isEmpty || parts[0].isEmpty) return null;
-    return parts[0];
-  }
+  String? get serviceName => _parsedPath.$1;
 
   /// Extracts the method name from the method path.
   ///
   /// Parses `/ServiceName/MethodName` and returns `MethodName`, or null if the
   /// path is missing or malformed.
-  String? get methodName {
-    final path = methodPath;
-    if (path == null || !path.startsWith('/')) return null;
+  String? get methodName => _parsedPath.$2;
 
-    final parts = path.substring(1).split('/');
-    if (parts.length < 2 || parts[1].isEmpty) return null;
-    return parts[1];
+  /// Cache holder for the parsed (serviceName, methodName) record.
+  ///
+  /// Stored off-instance (keyed by identity) so the const constructor and the
+  /// final `headers`/`_explicitMethodPath` fields are preserved while still
+  /// computing the `methodPath` split exactly once per metadata object.
+  static final Expando<(String?, String?)> _parsedPathCache =
+      Expando<(String?, String?)>('rpcMetadataParsedPath');
+
+  (String?, String?) get _parsedPath {
+    final cached = _parsedPathCache[this];
+    if (cached != null) return cached;
+
+    final path = methodPath;
+    (String?, String?) result;
+    if (path == null || !path.startsWith('/')) {
+      result = (null, null);
+    } else {
+      final parts = path.substring(1).split('/');
+      final service = (parts.isNotEmpty && parts[0].isNotEmpty)
+          ? parts[0]
+          : null;
+      final method = (parts.length >= 2 && parts[1].isNotEmpty)
+          ? parts[1]
+          : null;
+      result = (service, method);
+    }
+    _parsedPathCache[this] = result;
+    return result;
   }
 
   /// Percent-encode `grpc-message` per gRPC HTTP/2 spec (RFC 3986).

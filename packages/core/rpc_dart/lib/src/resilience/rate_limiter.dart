@@ -446,12 +446,18 @@ class RpcRateLimiter extends IRpcInterceptor {
   /// [RpcRateLimitException] error (RESOURCE_EXHAUSTED) and stops forwarding,
   /// consistent with the unary rejection path.
   Stream<T> _meterStream<T>(RpcMiddlewareContext call, Stream<T> source) {
-    final counter = _resolveCounter(call);
-    if (counter == null) return source;
+    // Probe once up front: if no limit applies to this call at all, forward the
+    // source unchanged. The per-element path re-resolves the counter on every
+    // message so it always rebinds to the canonical map entry — a long-idle
+    // live stream whose counter was evicted by _cleanup then recreated by a
+    // concurrent stream stays bound to the single shared counter instead of a
+    // stale captured instance (which would double the effective limit).
+    if (_resolveCounter(call) == null) return source;
     return source.transform(
       StreamTransformer<T, T>.fromHandlers(
         handleData: (data, sink) {
-          if (counter.tryAcquire()) {
+          final counter = _resolveCounter(call);
+          if (counter == null || counter.tryAcquire()) {
             sink.add(data);
           } else {
             sink.addError(_exceededException(call), StackTrace.current);

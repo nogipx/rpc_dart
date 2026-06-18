@@ -15,8 +15,11 @@ final class BidirectionalStreamCaller<
   /// Stream processor.
   late final CallProcessor<TRequest, TResponse> _processor;
 
-  /// Incoming responses from the server (payload or metadata); completes on end-of-stream or error.
-  Stream<RpcMessage<TResponse>> get responses => _processor.responses;
+  /// Incoming responses from the server (payload or metadata); completes on
+  /// end-of-stream, and surfaces a non-OK grpc-status trailer as an
+  /// [RpcStatusException] error rather than completing silently.
+  Stream<RpcMessage<TResponse>> get responses =>
+      _processor.responses.transform(_grpcStatusErrorTransformer(_logger));
 
   /// Creates a bidirectional stream caller.
   BidirectionalStreamCaller({
@@ -64,7 +67,9 @@ final class BidirectionalStreamCaller<
 
   /// Sends a request to the server (can be called multiple times).
   Future<void> send(TRequest request) async {
-    _logger.internal('Sending request to bidirectional stream: $request');
+    if (_logger.isInternal) {
+      _logger.internal('Sending request to bidirectional stream: $request');
+    }
     await _processor.send(request);
   }
 
@@ -77,7 +82,9 @@ final class BidirectionalStreamCaller<
   Stream<TResponse> get payloadResponses async* {
     await for (final response in responses) {
       if (response.payload != null) {
-        _logger.internal('Received response in bidirectional stream');
+        if (_logger.isInternal) {
+          _logger.internal('Received response in bidirectional stream');
+        }
         yield response.payload!;
       }
 
@@ -116,7 +123,11 @@ final class BidirectionalStreamCaller<
       final controller = StreamController<TRequest>();
       controller.stream.listen(
         (request) async {
-          _logger.internal('Sending request in bidirectional stream: $request');
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Sending request in bidirectional stream: $request',
+            );
+          }
           await send(request);
         },
         onDone: () async {

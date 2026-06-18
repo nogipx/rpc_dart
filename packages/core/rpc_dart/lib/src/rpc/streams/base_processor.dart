@@ -102,7 +102,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           final encoding =
               _requestEncoding ?? _context?.getHeader(RpcHeaders.grpcEncoding);
           if (encoding == null || encoding == RpcGrpcCompression.identity) {
-            throw RpcException(
+            throw RpcStatusException(
+              RpcStatus.internal,
               'Compressed gRPC payload received without grpc-encoding',
             );
           }
@@ -159,80 +160,20 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   bool get isZeroCopy => _isZeroCopy;
 
   /// Configures outgoing response handling.
+  ///
+  /// The actual transmission is queued synchronously by [send] onto
+  /// [_sendSequence]; this listener exists only so that the response
+  /// controller's stream is consumed (and any errors pushed onto it, e.g.
+  /// cancellation, are observed and logged). Data events are intentionally
+  /// ignored here: queuing them asynchronously would race with
+  /// [sendError]/[finishSending], which await [_sendSequence] and could
+  /// otherwise close the controller before a just-sent message was queued,
+  /// dropping the last message.
   void _setupResponseHandler() {
     _scope.listen<TResponse>(
       _responseController.stream,
       (response) {
-        _sendSequence = _sendSequence.then((_) async {
-          if (!_isActive) return;
-
-          _logger.internal(
-            'Sending response for $_methodPath [streamId: $_streamId]',
-          );
-          try {
-            if (_isZeroCopy) {
-              // Zero-copy path
-              _logger.internal('Zero-copy send [streamId: $_streamId]');
-              await _transport.sendDirectObject(_streamId, response);
-              _logger.internal(
-                'Zero-copy response sent for $_methodPath [streamId: $_streamId]',
-              );
-            } else {
-              // Send initial metadata before the first response frame only when
-              // we need to advertise compression. Without compression the
-              // existing behaviour (no initial metadata for streaming) is kept
-              // so existing tests and in-memory transports are not affected.
-              if (_responseEncoding != null && !_initialMetadataSent) {
-                await _transport.sendMetadata(
-                  _streamId,
-                  RpcMetadata.forServerInitialResponse(
-                    encoding: _responseEncoding,
-                  ),
-                );
-                _initialMetadataSent = true;
-              }
-
-              // Serialization for network transports
-              final serialized = _responseCodec!.serialize(response);
-              _logger.internal(
-                'Response serialized (${serialized.length} bytes) [streamId: $_streamId]',
-              );
-
-              final useCompression = _responseEncoding != null;
-              final payload = useCompression
-                  ? RpcGrpcCompression.compress(
-                      serialized,
-                      encoding: _responseEncoding!,
-                    )
-                  : serialized;
-              final framedMessage = RpcMessageFrame.encode(
-                payload,
-                compressed: useCompression,
-              );
-              await _transport.sendMessage(_streamId, framedMessage);
-
-              _logger.internal(
-                'Response sent for $_methodPath [streamId: $_streamId]',
-              );
-            }
-          } catch (e, stackTrace) {
-            // Skip only when the transport itself is closed. Network transports
-            // signal this with StateError('Transport is closed'); match the
-            // exact type+message instead of a broad substring search so we do
-            // not swallow unrelated errors that merely mention "closed".
-            if (_isTransportClosed(e)) {
-              _logger.debug(
-                'Transport closed, skipping response send [streamId: $_streamId]',
-              );
-              return;
-            }
-            _logger.error(
-              'Failed to send response [streamId: $_streamId]',
-              error: e,
-              stackTrace: stackTrace,
-            );
-          }
-        });
+        // No-op: transmission is queued synchronously in send().
       },
       onError: (error, stackTrace) {
         _logger.error(
@@ -242,6 +183,92 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         );
       },
     );
+  }
+
+  /// Queues the transmission of [response] onto [_sendSequence].
+  ///
+  /// Called synchronously from [send] so that a subsequent
+  /// [sendError]/[finishSending] awaiting [_sendSequence] always observes the
+  /// queued write and never drops the last message.
+  void _transmitResponse(TResponse response) {
+    _sendSequence = _sendSequence.then((_) async {
+      if (!_isActive) return;
+
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Sending response for $_methodPath [streamId: $_streamId]',
+        );
+      }
+      try {
+        if (_isZeroCopy) {
+          // Zero-copy path
+          if (_logger.isInternal) {
+            _logger.internal('Zero-copy send [streamId: $_streamId]');
+          }
+          await _transport.sendDirectObject(_streamId, response);
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Zero-copy response sent for $_methodPath [streamId: $_streamId]',
+            );
+          }
+        } else {
+          // Send initial metadata before the first response frame only when
+          // we need to advertise compression. Without compression the
+          // existing behaviour (no initial metadata for streaming) is kept
+          // so existing tests and in-memory transports are not affected.
+          if (_responseEncoding != null && !_initialMetadataSent) {
+            await _transport.sendMetadata(
+              _streamId,
+              RpcMetadata.forServerInitialResponse(encoding: _responseEncoding),
+            );
+            _initialMetadataSent = true;
+          }
+
+          // Serialization for network transports
+          final serialized = _responseCodec!.serialize(response);
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Response serialized (${serialized.length} bytes) [streamId: $_streamId]',
+            );
+          }
+
+          final useCompression = _responseEncoding != null;
+          final payload = useCompression
+              ? RpcGrpcCompression.compress(
+                  serialized,
+                  encoding: _responseEncoding!,
+                )
+              : serialized;
+          final framedMessage = RpcMessageFrame.encode(
+            payload,
+            compressed: useCompression,
+          );
+          await _transport.sendMessage(_streamId, framedMessage);
+
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Response sent for $_methodPath [streamId: $_streamId]',
+            );
+          }
+        }
+      } catch (e, stackTrace) {
+        // Skip only when the transport itself is closed. Network transports
+        // signal this with StateError('Transport is closed'); match the
+        // exact type+message instead of a broad substring search so we do
+        // not swallow unrelated errors that merely mention "closed".
+        if (_isTransportClosed(e)) {
+          _logger.debug(
+            'Transport closed, skipping response send [streamId: $_streamId]',
+          );
+          return;
+        }
+        _logger.error(
+          'Failed to send response [streamId: $_streamId]',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      }
+    });
   }
 
   Future<void> _sendOkTrailerIfNeeded() async {
@@ -479,6 +506,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     if (!_responseController.isClosed) {
+      // Queue the transmission synchronously so a subsequent
+      // sendError()/finishSending() that awaits _sendSequence always observes
+      // this write. Also forward to the controller so its stream keeps
+      // draining (and errors pushed onto it are observed).
+      _transmitResponse(response);
       _responseController.add(response);
     } else {
       _logger.warning('Attempted to send response to closed controller');
@@ -677,6 +709,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   final StreamController<RpcMessage<TResponse>> _responseController =
       StreamController<RpcMessage<TResponse>>();
 
+  /// Send sequence to preserve order and await completion before finishing.
+  Future<void> _sendSequence = Future<void>.value();
+
   /// Processor active flag.
   bool _isActive = true;
 
@@ -718,7 +753,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         decompressor: (payload, {int? maxOutputBytes}) {
           final encoding = _peerGrpcEncoding;
           if (encoding == null || encoding == RpcGrpcCompression.identity) {
-            throw RpcException(
+            throw RpcStatusException(
+              RpcStatus.internal,
               'Compressed gRPC payload received without grpc-encoding',
             );
           }
@@ -775,100 +811,24 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   bool get isZeroCopy => _isZeroCopy;
 
   /// Configures outgoing request handling.
+  ///
+  /// The actual transmission is queued synchronously by [send] onto
+  /// [_sendSequence]; this listener only consumes the controller stream. When
+  /// the controller is closed via [finishSending], `onDone` awaits
+  /// [_sendSequence] before calling the transport's finishSending, guaranteeing
+  /// every queued request was sent first (the last request is never dropped).
   void _setupRequestHandler() {
-    // Track the last pending send so onDone waits for it before finishing.
-    Future<void> pendingSend = Future<void>.value();
-
     _scope.listen<TRequest>(
       _requestController.stream,
-      (request) async {
-        if (!_isActive) return;
-
-        final future = () async {
-          try {
-            // Send initial metadata with the first request.
-            if (!_initialMetadataSent) {
-              await _sendInitialMetadata();
-              _initialMetadataSent = true;
-            }
-
-            _logger.internal(
-              'Sending request for $_methodPath [streamId: $_streamId]',
-            );
-
-            if (_isZeroCopy) {
-              // Zero-copy path.
-              _logger.internal('Zero-copy request send [streamId: $_streamId]');
-              await _transport.sendDirectObject(_streamId, request);
-              _logger.internal(
-                'Zero-copy request sent for $_methodPath [streamId: $_streamId]',
-              );
-            } else {
-              // Serialization for network transports.
-              final serialized = _requestCodec!.serialize(request);
-              _logger.internal(
-                'Request serialized (${serialized.length} bytes) [streamId: $_streamId]',
-              );
-
-              final requestEncoding = _context?.getHeader(
-                RpcHeaders.grpcEncoding,
-              );
-              if (requestEncoding != null &&
-                  requestEncoding != RpcGrpcCompression.identity &&
-                  !RpcGrpcCompression.isSupported(requestEncoding)) {
-                throw RpcException(
-                  'Unsupported grpc-encoding: $requestEncoding. '
-                  'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}. '
-                  'On web/dart2js the built-in gzip is unavailable; register a '
-                  'cross-platform codec (e.g. RpcGzipCodec.register() from '
-                  'package:rpc_dart_compression).',
-                );
-              }
-              final useCompression =
-                  requestEncoding != null &&
-                  requestEncoding != RpcGrpcCompression.identity;
-              final payload = useCompression
-                  ? RpcGrpcCompression.compress(
-                      serialized,
-                      encoding: requestEncoding,
-                    )
-                  : serialized;
-
-              final framedMessage = RpcMessageFrame.encode(
-                payload,
-                compressed: useCompression,
-              );
-              await _transport.sendMessage(_streamId, framedMessage);
-
-              _logger.internal(
-                'Request sent for $_methodPath [streamId: $_streamId]',
-              );
-            }
-          } catch (e, stackTrace) {
-            _logger.error(
-              'Failed to send request [streamId: $_streamId]',
-              error: e,
-              stackTrace: stackTrace,
-            );
-            if (!_responseController.isClosed) {
-              _responseController.addError(e, stackTrace);
-            }
-
-            // Critical: on routing error stop immediately to prevent further sends.
-            if (!_requestController.isClosed) {
-              _requestController.close();
-            }
-          }
-        }();
-        pendingSend = future;
-        await future;
+      (request) {
+        // No-op: transmission is queued synchronously in send().
       },
       onDone: () async {
         if (!_isActive) return;
 
         try {
-          // Wait for any pending request send to complete before finishing.
-          await pendingSend;
+          // Wait for any pending request sends to complete before finishing.
+          await _sendSequence;
           await _transport.finishSending(_streamId);
           _logger.internal(
             'finishSending completed for $_methodPath [streamId: $_streamId]',
@@ -892,6 +852,96 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       },
     );
+  }
+
+  /// Queues the transmission of [request] onto [_sendSequence].
+  ///
+  /// Called synchronously from [send] so that a subsequent [finishSending]
+  /// (which closes the request controller; its `onDone` awaits [_sendSequence])
+  /// always observes the queued write and never drops the last request.
+  void _transmitRequest(TRequest request) {
+    _sendSequence = _sendSequence.then((_) async {
+      if (!_isActive) return;
+
+      try {
+        // Send initial metadata with the first request.
+        if (!_initialMetadataSent) {
+          await _sendInitialMetadata();
+          _initialMetadataSent = true;
+        }
+
+        _logger.internal(
+          'Sending request for $_methodPath [streamId: $_streamId]',
+        );
+
+        if (_isZeroCopy) {
+          // Zero-copy path.
+          if (_logger.isInternal) {
+            _logger.internal('Zero-copy request send [streamId: $_streamId]');
+          }
+          await _transport.sendDirectObject(_streamId, request);
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Zero-copy request sent for $_methodPath [streamId: $_streamId]',
+            );
+          }
+        } else {
+          // Serialization for network transports.
+          final serialized = _requestCodec!.serialize(request);
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Request serialized (${serialized.length} bytes) [streamId: $_streamId]',
+            );
+          }
+
+          final requestEncoding = _context?.getHeader(RpcHeaders.grpcEncoding);
+          if (requestEncoding != null &&
+              requestEncoding != RpcGrpcCompression.identity &&
+              !RpcGrpcCompression.isSupported(requestEncoding)) {
+            throw RpcException(
+              'Unsupported grpc-encoding: $requestEncoding. '
+              'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}. '
+              'On web/dart2js the built-in gzip is unavailable; register a '
+              'cross-platform codec (e.g. RpcGzipCodec.register() from '
+              'package:rpc_dart_compression).',
+            );
+          }
+          final useCompression =
+              requestEncoding != null &&
+              requestEncoding != RpcGrpcCompression.identity;
+          final payload = useCompression
+              ? RpcGrpcCompression.compress(
+                  serialized,
+                  encoding: requestEncoding,
+                )
+              : serialized;
+
+          final framedMessage = RpcMessageFrame.encode(
+            payload,
+            compressed: useCompression,
+          );
+          await _transport.sendMessage(_streamId, framedMessage);
+
+          _logger.internal(
+            'Request sent for $_methodPath [streamId: $_streamId]',
+          );
+        }
+      } catch (e, stackTrace) {
+        _logger.error(
+          'Failed to send request [streamId: $_streamId]',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        if (!_responseController.isClosed) {
+          _responseController.addError(e, stackTrace);
+        }
+
+        // Critical: on routing error stop immediately to prevent further sends.
+        if (!_requestController.isClosed) {
+          _requestController.close();
+        }
+      }
+    });
   }
 
   /// Configures incoming response handling.
@@ -1097,9 +1147,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   void _handleResponse(RpcTransportMessage message) {
     if (!_isActive) return;
 
-    _logger.internal(
-      'Handling response [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}, isDirect: ${message.isDirect}]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Handling response [streamId: ${message.streamId}, isMetadataOnly: ${message.isMetadataOnly}, hasPayload: ${message.payload != null}, isDirect: ${message.isDirect}]',
+      );
+    }
 
     try {
       // Handle metadata.
@@ -1156,9 +1208,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Zero-copy: handles a direct response object without serialization.
   void _processDirectResponse(Object directPayload) {
-    _logger.internal(
-      'Zero-copy response handling [streamId: $_streamId, type: ${directPayload.runtimeType}]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Zero-copy response handling [streamId: $_streamId, type: ${directPayload.runtimeType}]',
+      );
+    }
 
     try {
       final response = directPayload as TResponse;
@@ -1195,9 +1249,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       return;
     }
 
-    _logger.internal(
-      'Received response payload: ${messageBytes.length} bytes [streamId: $_streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Received response payload: ${messageBytes.length} bytes [streamId: $_streamId]',
+      );
+    }
 
     try {
       final uint8Message = messageBytes is Uint8List
@@ -1205,15 +1261,19 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           : Uint8List.fromList(messageBytes);
 
       final messages = _parser!(uint8Message);
-      _logger.internal(
-        'Parser extracted ${messages.length} messages from frame [streamId: $_streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Parser extracted ${messages.length} messages from frame [streamId: $_streamId]',
+        );
+      }
 
       for (var msgBytes in messages) {
         try {
-          _logger.internal(
-            'Deserializing response of ${msgBytes.length} bytes [streamId: $_streamId]',
-          );
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Deserializing response of ${msgBytes.length} bytes [streamId: $_streamId]',
+            );
+          }
           final response = _responseCodec!.deserialize(msgBytes);
 
           final rpcMessage = RpcMessage.withPayload<TResponse>(response);
@@ -1259,6 +1319,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     if (!_requestController.isClosed) {
+      // Queue the transmission synchronously so a subsequent finishSending()
+      // (which closes the controller; its onDone awaits _sendSequence) always
+      // observes this write. Also forward to the controller so its stream keeps
+      // draining and onDone fires after the queued send.
+      _transmitRequest(request);
       _requestController.add(request);
     } else {
       _logger.warning('Attempted to send request to closed controller');

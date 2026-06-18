@@ -478,6 +478,29 @@ class _FastCborReader {
   }
 }
 
+/// A map key paired with its precomputed UTF-8 bytes for canonical sorting.
+///
+/// Encoding the key once here avoids re-encoding it inside the sort comparator
+/// (O(log n) times) and again when writing the key.
+class _CborSortKey {
+  final List<int> keyBytes;
+  final dynamic key;
+  const _CborSortKey(this.keyBytes, this.key);
+}
+
+/// Lexicographic byte comparison of two cached key byte sequences.
+int _compareSortKeys(_CborSortKey a, _CborSortKey b) {
+  final aBytes = a.keyBytes;
+  final bBytes = b.keyBytes;
+  final minLen = aBytes.length < bBytes.length ? aBytes.length : bBytes.length;
+  for (int i = 0; i < minLen; i++) {
+    if (aBytes[i] != bBytes[i]) {
+      return aBytes[i] - bBytes[i];
+    }
+  }
+  return aBytes.length - bBytes.length;
+}
+
 /// OPTIMIZED: Fast CBOR writer for Map(String, dynamic).
 /// Avoids redundant checks and type conversions.
 class _FastCborWriter {
@@ -491,26 +514,16 @@ class _FastCborWriter {
     _writeLength(CborCodec._majorTypeMap, value.length);
 
     // RFC 7049 recommends sorting keys for deterministic encoding.
-    final keys = value.keys.toList()
-      ..sort((a, b) {
-        // Convert to strings first, then compare.
-        final aString = a.toString();
-        final bString = b.toString();
-        // Byte-by-byte comparison.
-        final aBytes = utf8.encode(aString);
-        final bBytes = utf8.encode(bString);
-        for (int i = 0; i < aBytes.length && i < bBytes.length; i++) {
-          if (aBytes[i] != bBytes[i]) {
-            return aBytes[i] - bBytes[i];
-          }
-        }
-        return aBytes.length - bBytes.length;
-      });
+    // Encode each key's UTF-8 bytes exactly once, sort by the cached bytes,
+    // then write using those same bytes (no re-encoding).
+    final entries = <_CborSortKey>[
+      for (final key in value.keys)
+        _CborSortKey(utf8.encode(key.toString()), key),
+    ]..sort(_compareSortKeys);
 
-    for (final key in keys) {
-      // Encode keys as strings for compatibility.
-      _writeString(key.toString());
-      _writeValue(value[key]);
+    for (final entry in entries) {
+      _writeStringBytes(entry.keyBytes);
+      _writeValue(value[entry.key]);
     }
   }
 
@@ -716,7 +729,15 @@ class _FastCborWriter {
   void _writeString(String value) {
     // Encode the string as UTF-8 bytes.
     final utf8Bytes = utf8.encode(value);
+    _writeStringBytes(utf8Bytes);
+  }
 
+  /// Encodes a text string from already-computed UTF-8 [utf8Bytes].
+  ///
+  /// Lets callers (map key writers) avoid re-encoding a key that was already
+  /// UTF-8 encoded for sorting. Produces byte-identical output to
+  /// [_writeString] for the same source string.
+  void _writeStringBytes(List<int> utf8Bytes) {
     // Standard string encoding per RFC 7049.
     _writeLength(CborCodec._majorTypeTextString, utf8Bytes.length);
     _builder.add(utf8Bytes);
@@ -741,26 +762,16 @@ class _FastCborWriter {
     _writeLength(CborCodec._majorTypeMap, map.length);
 
     // RFC 7049 recommends sorting keys for deterministic encoding.
-    final keys = map.keys.toList()
-      ..sort((a, b) {
-        // Convert to strings first, then compare.
-        final aString = a.toString();
-        final bString = b.toString();
-        // Byte-by-byte comparison.
-        final aBytes = utf8.encode(aString);
-        final bBytes = utf8.encode(bString);
-        for (int i = 0; i < aBytes.length && i < bBytes.length; i++) {
-          if (aBytes[i] != bBytes[i]) {
-            return aBytes[i] - bBytes[i];
-          }
-        }
-        return aBytes.length - bBytes.length;
-      });
+    // Encode each key's UTF-8 bytes exactly once, sort by the cached bytes,
+    // then write using those same bytes (no re-encoding).
+    final entries = <_CborSortKey>[
+      for (final key in map.keys)
+        _CborSortKey(utf8.encode(key.toString()), key),
+    ]..sort(_compareSortKeys);
 
-    for (final key in keys) {
-      // Encode keys as strings for compatibility.
-      _writeString(key.toString());
-      _writeValue(map[key]);
+    for (final entry in entries) {
+      _writeStringBytes(entry.keyBytes);
+      _writeValue(map[entry.key]);
     }
   }
 

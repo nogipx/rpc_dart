@@ -463,27 +463,32 @@ void main() {
         // Act & Assert
         await client.send('test request'.rpc);
 
-        // Получаем все ответы до закрытия стрима (initial metadata + data + error trailer)
-        final responses = await client.responses.toList().timeout(
-          Duration(seconds: 5),
-        );
+        // The raw `responses` stream forwards the data message(s) but surfaces
+        // a non-OK grpc-status trailer as an RpcStatusException error rather
+        // than completing silently. Collect forwarded messages and capture the
+        // terminal error.
+        final received = <RpcMessage<RpcString>>[];
+        Object? caught;
+        try {
+          await for (final r in client.responses.timeout(
+            Duration(seconds: 5),
+          )) {
+            received.add(r);
+          }
+        } catch (e) {
+          caught = e;
+        }
 
-        // Должен быть хотя бы один ответ с данными и один с метаданными ошибки
-        expect(responses.length, greaterThanOrEqualTo(1));
+        // At least the data message must have been forwarded before the error.
+        expect(received.length, greaterThanOrEqualTo(1));
 
-        // Ищем ответ с ошибкой (метаданные с gRPC статусом != "0")
-        final errorResponse = responses.firstWhere(
-          (r) =>
-              r.isMetadataOnly &&
-              r.metadata?.getHeaderValue(RpcHeaders.grpcStatus) != null &&
-              r.metadata!.getHeaderValue(RpcHeaders.grpcStatus) != '0',
-          orElse: () => throw AssertionError('Не найден ответ с gRPC ошибкой'),
-        );
-
+        // The non-OK trailer must surface as an RpcStatusException error.
         expect(
-          errorResponse.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
-          isNot(equals('0')),
-          reason: 'gRPC статус должен указывать на ошибку',
+          caught,
+          isA<RpcStatusException>(),
+          reason:
+              'gRPC статус ошибки должен всплывать как ошибка стрима, '
+              'а не как обычное завершение',
         );
 
         // Cleanup
