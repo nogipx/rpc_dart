@@ -173,10 +173,41 @@ melos:
       description: Run the rpc_dart_wasm Flutter tests (outside the workspace).
       run: cd packages/transport/rpc_dart_wasm && fvm flutter pub get && fvm flutter test
 
-    # Cross-platform (dart2js/node + chrome) web regression guard.
+    # Cross-platform (dart2js/node + chrome) web regression guard. Web-relevant
+    # packages MUST stay green on `node`; default VM runs miss dart2js bugs.
     test:web:
-      description: Web (dart2js) smoke regression guard. Mirrors `just test_web`.
-      run: just test_web
+      description: Web (dart2js/node + chrome) smoke regression guard.
+      run: |
+        set -e
+        web() { (cd "$1" && fvm dart test -p node ${2:-}); }
+        web packages/core/rpc_dart
+        web packages/core/rpc_dart_compression
+        web packages/core/rpc_dart_grpc_reflection
+        web packages/core/rpc_dart_opentelemetry test/web_smoke_test.dart
+        web packages/transport/rpc_dart_websocket test/websocket_web_smoke_test.dart
+        web packages/transport/rpc_dart_http test/web_smoke_test.dart
+        web packages/core/rpc_dart_log test/client_web_smoke_test.dart
+        web packages/data/rpc_data test/web_smoke_test.dart
+        web packages/blob/rpc_blob test/web_smoke_test.dart
+        web packages/data/rpc_data_sqlite test/web_smoke_test.dart
+        web packages/blob/rpc_blob_sqlite test/web_smoke_test.dart
+        (cd packages/transport/rpc_dart_isolate \
+          && fvm dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js \
+          && fvm dart test -p chrome test/web_smoke_test.dart test/web_worker/echo_worker_test.dart)
+
+    # --- Code generation (build_runner) ---
+    gen:
+      description: Run build_runner in packages that depend on it.
+      run: fvm dart run build_runner build --delete-conflicting-outputs
+      exec:
+        concurrency: 1
+      packageFilters:
+        dependsOn: build_runner
+
+    # --- Docs ---
+    docs:
+      description: Serve the docs site locally (mkdocs).
+      run: mkdocs serve --strict
 
     # --- Formatting ---
     format:

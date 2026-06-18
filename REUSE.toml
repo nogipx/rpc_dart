@@ -7,8 +7,6 @@ version = 1
 [[annotations]]
 path = [
   ".fvmrc",
-  "justfile",
-  "**/justfile",
   "**/.pubignore",
   "**/*.podspec",
   "docs/**",

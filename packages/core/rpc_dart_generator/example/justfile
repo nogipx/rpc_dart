@@ -1,8 +1,0 @@
-#!/usr/bin/env just --justfile
-recipe := just_executable() + " --justfile=" + justfile()
-br dir: # Build runner
-    cd {{dir}} && fvm dart pub get
-    cd {{dir}} && fvm dart run build_runner build --delete-conflicting-outputs
-
-gen:
-    {{recipe}} br .

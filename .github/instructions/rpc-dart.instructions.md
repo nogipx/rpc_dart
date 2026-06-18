@@ -53,10 +53,11 @@ addUnaryMethod<Request, Response>(
 ## Essential Development Workflows
 
 ### Building and Testing
-Use `justfile` commands (requires `just` CLI):
-- `just test` - Run tests with single concurrency
-- `just prepare` - Full validation pipeline (format, lint, test, coverage)
-- `just get` - Package management via packo
+Use melos scripts (one-time: `dart pub global activate melos`):
+- `melos run test` - Run tests across packages
+- `melos run prepare` - Pre-publish pipeline (license sync/annotate, format, analyze, reuse lint, tests)
+- `melos run coverage` - Coverage for the package(s) you pick (opens HTML)
+- `fvm dart pub get` (at repo root) - Resolve the whole workspace
 
 ### Project Structure Knowledge
 - `lib/src/` - Core implementation organized by domain
