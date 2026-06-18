@@ -19,6 +19,12 @@ abstract final class RpcHeaders {
   /// Content-type value for gRPC.
   static const contentTypeGrpc = 'application/grpc';
 
+  /// HTTP/2 `te` header; gRPC requires the value `trailers`.
+  static const te = 'te';
+
+  /// Client library identifier (set by the HTTP/2 transport).
+  static const userAgent = 'user-agent';
+
   /// Compression algorithm used to encode the request/response body.
   /// Example values: `identity`, `gzip`.
   static const grpcEncoding = 'grpc-encoding';
@@ -57,4 +63,28 @@ abstract final class RpcHeaders {
 
   /// Human-readable reason accompanying a client cancellation.
   static const xCancellationReason = 'x-cancellation-reason';
+
+  // ---------------------------------------------------------------------------
+  // Reserved (protocol-controlled) headers
+  // ---------------------------------------------------------------------------
+
+  /// Headers the protocol controls; user-supplied metadata must not override
+  /// them, or it would corrupt framing/status negotiation. The framework sets
+  /// these itself ([contentType], [grpcTimeout] in core; [te], [userAgent] in
+  /// the HTTP/2 transport).
+  ///
+  /// Note: [grpcEncoding] and [grpcAcceptEncoding] are intentionally NOT here.
+  /// Unlike gRPC, rpc_dart negotiates compression by carrying those headers
+  /// through the call context, so they are framework-controlled signals that
+  /// must pass through, not user headers to strip.
+  static const reserved = <String>{
+    contentType,
+    te,
+    userAgent,
+    grpcTimeout,
+  };
+
+  /// Whether [name] (case-insensitive) is a protocol-reserved header that user
+  /// metadata is not allowed to set.
+  static bool isReserved(String name) => reserved.contains(name.toLowerCase());
 }

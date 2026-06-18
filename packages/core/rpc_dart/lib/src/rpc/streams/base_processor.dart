@@ -988,8 +988,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     };
 
     if (_context != null) {
-      // Context headers override base — handles grpc-accept-encoding dedup.
-      headerMap.addAll(_context.headers);
+      // User metadata must not clobber protocol-reserved headers.
+      for (final entry in _context.headers.entries) {
+        if (RpcHeaders.isReserved(entry.key)) continue;
+        headerMap[entry.key] = entry.value;
+      }
 
       if (_context.traceId != null) {
         headerMap[RpcHeaders.xTraceId] = _context.traceId!;

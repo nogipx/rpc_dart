@@ -261,7 +261,11 @@ final class UnaryCaller<TRequest, TResponse> {
       };
 
       if (_context != null) {
-        headerMap.addAll(_context.headers);
+        // User metadata must not clobber protocol-reserved headers.
+        for (final entry in _context.headers.entries) {
+          if (RpcHeaders.isReserved(entry.key)) continue;
+          headerMap[entry.key] = entry.value;
+        }
 
         if (_context.traceId != null) {
           headerMap[RpcHeaders.xTraceId] = _context.traceId!;
