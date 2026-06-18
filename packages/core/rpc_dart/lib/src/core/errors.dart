@@ -94,6 +94,7 @@ class RpcStatusException extends RpcException {
         details: status.details,
       );
     } catch (_) {
+      // Undecodable status-details payload: keep the plain code + message.
       return RpcStatusException(statusCode, message);
     }
   }

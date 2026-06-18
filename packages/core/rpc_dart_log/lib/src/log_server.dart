@@ -103,7 +103,12 @@ class LogCollectorServer {
             final channel = _WebSocketAdapter(socket);
             _wsController!.add(channel);
           },
-          onError: (_) {},
+          // A failed client upgrade is noteworthy but not fatal: log it and
+          // keep serving. Logged to stderr rather than `controller` because the
+          // controller is the collected-records pipeline, not a server diagnostic.
+          onError: (Object error) {
+            stderr.writeln('LogCollectorServer: WebSocket upgrade failed: $error');
+          },
         );
       } else {
         request.response

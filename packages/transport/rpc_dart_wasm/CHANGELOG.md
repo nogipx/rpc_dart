@@ -1,3 +1,7 @@
+## 0.1.2
+
+- fix: align `RpcWasm.run` stub signature with the real implementation. The VM/host stub (`rpc_wasm_stub.dart`) was missing the `LogController? logController` named parameter, so code calling `RpcWasm.run(logController: ...)` compiled on the WASM/JS target but failed to compile on the host/VM stub target. The stub now matches the real implementation parameter-for-parameter.
+
 ## 0.1.1
 
 - Test coverage: added transport-contract tests against an in-memory mock bridge that loops byte frames between a host and a sandbox endpoint (the same byte loop the JS/WASM bridge performs in production).

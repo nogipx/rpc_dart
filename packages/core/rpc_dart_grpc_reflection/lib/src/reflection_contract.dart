@@ -85,6 +85,7 @@ class ServerReflectionContract extends RpcResponderContract {
     try {
       return _parseAndDispatch(bytes);
     } catch (_) {
+      // Any parse/dispatch failure maps to a gRPC error response, not a crash.
       return _buildErrorResponse(bytes, 2, 'Malformed request');
     }
   }

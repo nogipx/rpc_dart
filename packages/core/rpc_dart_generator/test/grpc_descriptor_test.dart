@@ -151,6 +151,86 @@ class Ack implements IRpcSerializable {
     });
   });
 
+  group('grpc descriptor — fully-qualified type names', () {
+    test(
+      'message field type names are package-qualified like service refs',
+      () async {
+        final packageConfig = await _loadPackageConfig();
+        final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
+        await readerWriter.testing.loadIsolateSources();
+
+        // The service name carries the proto package `shop.v1`. A field that
+        // references another message type must be emitted as
+        // `.shop.v1.Item`, byte-identical to the service input/output refs,
+        // otherwise the descriptor pool cannot resolve the cross-reference.
+        const source = r'''
+import 'dart:async';
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_generator/rpc_dart_generator.dart';
+part 'qualified.g.dart';
+
+@RpcService(name: 'shop.v1.Catalog', grpcDescriptor: true)
+abstract class ICatalog {
+  @RpcMethod(name: 'get')
+  Future<Order> get(Query request);
+}
+
+class Query implements IRpcSerializable {
+  @RpcProtoField(1)
+  final String term;
+  const Query({required this.term});
+  @override Map<String, dynamic> toJson() => {'term': term};
+}
+
+class Item implements IRpcSerializable {
+  @RpcProtoField(1)
+  final String name;
+  const Item({required this.name});
+  @override Map<String, dynamic> toJson() => {'name': name};
+}
+
+class Order implements IRpcSerializable {
+  @RpcProtoField(1)
+  final Item item;
+  const Order({required this.item});
+  @override Map<String, dynamic> toJson() => {};
+}
+''';
+
+        String? output;
+        await testBuilder(
+          rpcDartBuilder(BuilderOptions({})),
+          {'rpc_dart_generator|lib/qualified.dart': source},
+          rootPackage: 'rpc_dart_generator',
+          packageConfig: packageConfig,
+          readerWriter: readerWriter,
+          outputs: {
+            'rpc_dart_generator|lib/qualified.rpc_dart.g.part':
+                decodedMatches(predicate<String>((s) {
+              output = s;
+              return true;
+            })),
+          },
+        );
+
+        final descriptor = _extractDescriptorBytes(output!);
+
+        // The field Order.item references Item -> must be fully-qualified.
+        final fieldTypeName =
+            _messageFieldTypeName(descriptor, 'Order', 'item');
+        expect(
+          fieldTypeName,
+          '.shop.v1.Item',
+          reason: 'field type refs must carry the proto package prefix',
+        );
+
+        // And it must match the service input/output ref naming convention.
+        final inputTypeName = _serviceMethodTypeName(descriptor, 'get', 2);
+        expect(inputTypeName, '.shop.v1.Query');
+      },
+    );
+  });
+
   group('proto writer parity (generator <-> reflection)', () {
     // The generator uses a byte-identical private copy of reflection's
     // ProtoWriter. We cannot import the private copy, but we can assert that
@@ -231,6 +311,51 @@ bool _scanMessageField(
     }
   }
   return false;
+}
+
+/// Returns the proto `type_name` (field tag 6) of the field named [fieldName]
+/// inside the message named [messageName], or null if not found.
+String? _messageFieldTypeName(
+  Uint8List fileBytes,
+  String messageName,
+  String fieldName,
+) {
+  for (final msg in _collectLenDelimited(fileBytes, 4)) {
+    if (_readName(msg) != messageName) continue;
+    for (final field in _collectLenDelimited(msg, 2)) {
+      if (_readName(field) != fieldName) continue;
+      return _readStringSubField(field, 6);
+    }
+  }
+  return null;
+}
+
+/// Returns the input (tag 2) or output (tag 3) type name of the service method
+/// named [methodName]. [typeTag] is 2 for input, 3 for output.
+String? _serviceMethodTypeName(
+  Uint8List fileBytes,
+  String methodName,
+  int typeTag,
+) {
+  for (final service in _collectLenDelimited(fileBytes, 6)) {
+    for (final method in _collectLenDelimited(service, 2)) {
+      if (_readName(method) != methodName) continue;
+      return _readStringSubField(method, typeTag);
+    }
+  }
+  return null;
+}
+
+String? _readStringSubField(Uint8List bytes, int fieldNumber) {
+  final r = _Reader(bytes);
+  while (r.hasMore) {
+    final tag = r.varint();
+    if (tag >> 3 == fieldNumber && tag & 7 == 2) {
+      return String.fromCharCodes(r.lenDelimited());
+    }
+    r.skip(tag & 7);
+  }
+  return null;
 }
 
 String _readName(Uint8List bytes) {

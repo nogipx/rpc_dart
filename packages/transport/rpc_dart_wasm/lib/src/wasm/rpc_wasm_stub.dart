@@ -15,6 +15,7 @@ abstract final class RpcWasm {
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     String? debugLabel,
     bool compressionEnabled = false,
+    LogController? logController,
   }) {
     throw UnsupportedError(
       'RpcWasm.run is only available from WASM/JS interop code',

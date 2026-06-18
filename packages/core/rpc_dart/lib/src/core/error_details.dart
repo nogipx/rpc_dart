@@ -527,24 +527,72 @@ class RpcRawErrorDetail extends RpcErrorDetail {
 
 // -- Protobuf varint helpers --
 
+/// Encodes a signed integer as a protobuf base-128 varint.
+///
+/// Per the protobuf spec, signed `int32`/`int64` fields encode negative values
+/// as their unsigned 64-bit two's-complement representation, which always
+/// occupies the full 10 bytes. Both reachable numeric fields here are signed:
+/// the gRPC status `code` (int32) and the `RetryInfo` Duration `seconds`
+/// (int64). A negative [Duration] yields a negative `seconds`, and a long
+/// retry delay can push `seconds` above 2^32.
+///
+/// dart2js-safe: it never relies on `>>`/`<<` past 32 bits (undefined in
+/// JavaScript, where ints are doubles). Non-negative values are peeled with
+/// integer division (`~/ 0x80`); negatives are streamed from their two's
+/// complement split into 32-bit hi/lo halves, mirroring the uint64 technique in
+/// `special_cbor.dart` (`value ~/ 0x100000000`).
 void _writeVarint(BytesBuilder buf, int value) {
-  var v = value;
-  while (v > 0x7F) {
-    buf.addByte((v & 0x7F) | 0x80);
-    v >>= 7;
+  if (value >= 0) {
+    var v = value;
+    while (v >= 0x80) {
+      buf.addByte((v & 0x7F) | 0x80);
+      v = v ~/ 0x80;
+    }
+    buf.addByte(v & 0x7F);
+    return;
   }
-  buf.addByte(v & 0x7F);
+  // Build the unsigned 64-bit two's complement as 32-bit hi/lo halves.
+  final magnitude = -value;
+  final magLo = magnitude & 0xFFFFFFFF;
+  final magHi = (magnitude ~/ 0x100000000) & 0xFFFFFFFF;
+  final invLo = (~magLo) & 0xFFFFFFFF;
+  final invHi = (~magHi) & 0xFFFFFFFF;
+  var lo = (invLo + 1) & 0xFFFFFFFF;
+  final carry = (invLo + 1) > 0xFFFFFFFF ? 1 : 0;
+  var hi = (invHi + carry) & 0xFFFFFFFF;
+  // Stream the first 9 of 10 groups, shifting the 64-bit value right by 7 each
+  // step using division on each half (carry the low 7 bits of hi into lo).
+  for (var i = 0; i < 9; i++) {
+    buf.addByte((lo & 0x7F) | 0x80);
+    final carryBits = (hi & 0x7F) * 0x2000000; // hi[0..6] -> lo[25..31]
+    lo = ((lo ~/ 0x80) + carryBits) & 0xFFFFFFFF;
+    hi = hi ~/ 0x80;
+  }
+  buf.addByte(lo & 0x7F);
 }
 
 (int value, int newOffset) _readVarint(Uint8List data, int offset) {
-  int result = 0;
-  int shift = 0;
+  // Accumulate into 32-bit lo/hi halves instead of `result |= byte << shift`:
+  // on dart2js a shift of 32+ silently overflows, corrupting large (> 2^32) and
+  // negative (10-byte two's-complement) varints. Shifts here never exceed 31
+  // bits; halves combine as `hi * 2^32 + lo`, the boundary-safe technique used
+  // for uint64 in `special_cbor.dart`.
+  var lo = 0; // bits 0..31
+  var hi = 0; // bits 32..63
+  var shift = 0;
   var terminated = false;
   // A 64-bit varint is at most 10 bytes; bound the loop to reject runaway/
   // unterminated varints in hostile or truncated frames.
   while (offset < data.length && shift < 64) {
     final byte = data[offset++];
-    result |= (byte & 0x7F) << shift;
+    final bits = byte & 0x7F;
+    if (shift < 32) {
+      lo |= (bits << shift) & 0xFFFFFFFF;
+      // A group straddling bit 32 spills its top bits into the high half.
+      if (shift > 25) hi |= bits >> (32 - shift);
+    } else {
+      hi |= (bits << (shift - 32)) & 0xFFFFFFFF;
+    }
     if ((byte & 0x80) == 0) {
       terminated = true;
       break;
@@ -556,7 +604,19 @@ void _writeVarint(BytesBuilder buf, int value) {
       'Malformed protobuf: unterminated or truncated varint',
     );
   }
-  return (result, offset);
+  lo &= 0xFFFFFFFF;
+  hi &= 0xFFFFFFFF;
+  // Sign bit (bit 63) set => reproduce the signed (two's-complement) value so
+  // negative int32/int64 fields round-trip.
+  if ((hi & 0x80000000) != 0) {
+    final invLo = (~lo) & 0xFFFFFFFF;
+    final invHi = (~hi) & 0xFFFFFFFF;
+    final magLo = (invLo + 1) & 0xFFFFFFFF;
+    final carry = (invLo + 1) > 0xFFFFFFFF ? 1 : 0;
+    final magnitude = ((invHi + carry) & 0xFFFFFFFF) * 0x100000000 + magLo;
+    return (-magnitude, offset);
+  }
+  return (hi * 0x100000000 + lo, offset);
 }
 
 /// Returns a view of [len] bytes starting at [offset], validating bounds.

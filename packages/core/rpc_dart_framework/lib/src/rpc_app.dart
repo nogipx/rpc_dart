@@ -49,6 +49,7 @@ class RpcApp {
   IRpcServer? _server;
 
   bool _started = false;
+  bool _startAttempted = false;
   final Completer<void> _stopCompleter = Completer<void>();
 
   RpcApp._({
@@ -102,6 +103,16 @@ class RpcApp {
 
   Future<void> start() async {
     if (_started) return;
+    // start() is single-shot: the heavy state below is assigned into `late final`
+    // fields, so a second attempt (after success OR failure) cannot safely
+    // re-enter without throwing LateInitializationError and masking the real
+    // failure. Fail loudly instead. To restart, create a new RpcApp.
+    if (_startAttempted) {
+      throw StateError(
+        'RpcApp.start() can only be called once; create a new RpcApp to restart.',
+      );
+    }
+    _startAttempted = true;
     _started = true;
 
     _autoInterceptors = [
@@ -362,11 +373,16 @@ class RpcApp {
           endpoint.registerServiceContract(contract);
         }
       } catch (e, st) {
+        // Do NOT swallow: a failed buildContracts would leave a live endpoint
+        // missing services, so clients get "method not found" instead of a
+        // startup failure. Log with context, then rethrow so start() aborts and
+        // the normal rollback runs. endpoint.start() below is never reached.
         _log?.error(
           'Failed to build contracts for module ${module.name}',
           error: e,
           stackTrace: st,
         );
+        rethrow;
       }
     }
     endpoint.start();

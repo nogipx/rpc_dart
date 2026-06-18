@@ -1,3 +1,17 @@
+## 0.2.2
+
+- Stop silently swallowing two error sites:
+  - `LogCollectorServer` (`log_server.dart`): a failed WebSocket upgrade was
+    dropped via `onError: (_) {}`, making failed client connections invisible.
+    Now logged to `stderr` at a non-fatal severity; server control flow is
+    unchanged.
+  - `LogCollectorOutput` (`log_output.dart`): a handshake failure dropped the
+    connection and retried but never logged why, making connection problems
+    undebuggable. Now logs the caught error via `dart:developer.log`, a
+    low-level diagnostic that does NOT re-enter the `LogController`/`LogOutput`
+    pipeline this class feeds (avoiding a logging-recursion loop). Existing
+    retry/reconnect behavior is unchanged.
+
 ## 0.2.1
 
 **Client (`LogCollectorOutput`):**

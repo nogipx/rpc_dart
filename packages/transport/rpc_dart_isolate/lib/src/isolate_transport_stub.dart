@@ -17,6 +17,7 @@ abstract interface class RpcIsolateTransport {
     String? debugName,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Uri? workerUri,
+    Duration startupTimeout = const Duration(seconds: 30),
   }) {
     throw UnsupportedError(
       'RpcIsolateTransport is not available on this platform. '

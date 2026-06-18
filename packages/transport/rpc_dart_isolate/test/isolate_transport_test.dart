@@ -181,20 +181,20 @@ void main() {
       });
 
       test('обрабатывает_ошибки_создания_изолята', () async {
-        // Arrange & Act
-        final result = await RpcIsolateTransport.spawn(
-          entrypoint: _faultyServer,
-          customParams: {},
-          isolateId: 'faulty-isolate',
+        // A worker that throws during startup must make spawn() fail fast
+        // (surfacing the cause) instead of returning a silently-dead transport
+        // or hanging forever.
+        await expectLater(
+          RpcIsolateTransport.spawn(
+            entrypoint: _faultyServer,
+            customParams: {},
+            isolateId: 'faulty-isolate',
+            startupTimeout: const Duration(seconds: 5),
+          ),
+          throwsA(
+            predicate((e) => e.toString().contains('Intentional server error')),
+          ),
         );
-
-        // Assert
-        // Изолят создается успешно, но содержит ошибочный код
-        expect(result.transport, isA<IRpcTransport>());
-        expect(result.kill, isA<Function>());
-
-        // Cleanup
-        result.kill();
       });
     });
 

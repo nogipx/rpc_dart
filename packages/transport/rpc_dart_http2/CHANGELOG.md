@@ -1,3 +1,30 @@
+## 0.2.4
+
+- BUG (`-bin` header wire format was double-encoded and corrupted true binary):
+  the metadata layer already stores `-bin` values base64-encoded (e.g.
+  `base64Encode(statusDetailsBin)`), but the HTTP/2 transport base64-encoded
+  them AGAIN on send (`_headerValue`) and base64+utf8-decoded them on receive
+  (`http2HeadersToRpcMetadata`). This double-processing was only self-consistent
+  rpc_dart<->rpc_dart and broke interop with real gRPC peers in both directions;
+  it also corrupted inbound binary that was valid UTF-8. `-bin` values are now
+  passed through verbatim on both send and receive (they are already the base64
+  string gRPC expects on the wire; the metadata getters decode on read).
+  NOTE: this is a wire-format change for `grpc-status-details-bin` over HTTP/2 —
+  a rpc_dart peer on <=0.2.3 will not interop with >=0.2.4 for status details.
+  Regression tests in `test/grpc_wire_compliance_test.dart` (round-trips
+  non-UTF8 binary).
+
+- BUG (END_STREAM landed on the wrong message of a batch): when a single DATA
+  frame parsed into multiple messages, both `RpcHttp2ResponderTransport`
+  (`_handleIncomingData`) and `RpcHttp2CallerTransport` (`_handleDataMessage`)
+  detected the last message via `msgData == messages.last`. `messages` is a
+  `List<Uint8List>` and `==` on `Uint8List` is identity-based, so the
+  end-of-stream flag could land on an earlier element (e.g. when an earlier
+  element shared the same object reference as the last). END_STREAM is now
+  selected positionally — only the genuinely last element of the batch
+  (`i == messages.length - 1`) is marked end-of-stream. Regression test:
+  `test/audit/end_of_stream_batch_test.dart`.
+
 ## 0.2.3
 
 - BUG (silent data loss on server-initiated streams): `RpcHttp2ResponderTransport`

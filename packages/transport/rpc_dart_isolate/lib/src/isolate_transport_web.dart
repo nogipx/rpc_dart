@@ -221,6 +221,7 @@ abstract interface class RpcIsolateTransport {
     String? debugName,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Uri? workerUri,
+    Duration startupTimeout = const Duration(seconds: 30),
   }) async {
     // On web we cannot transfer the entrypoint function; user must expose it
     // in a worker. Keeping the parameter for API parity.

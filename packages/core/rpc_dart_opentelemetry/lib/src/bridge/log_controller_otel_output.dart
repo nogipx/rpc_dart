@@ -101,6 +101,10 @@ class LogControllerOtelOutput extends LogOutput {
     _sweepTimer?.cancel();
     _sweepTimer = null;
     for (final entry in _open.values) {
+      // Best-effort span flush on dispose. Intentionally not logged: this class
+      // IS a LogOutput, so logging an OTel export failure would re-enter the
+      // same LogController that feeds this output and recurse. An export error
+      // here must not break disposal of the remaining spans.
       try {
         entry.span.end();
       } catch (_) {}
@@ -123,6 +127,9 @@ class LogControllerOtelOutput extends LogOutput {
     }
     for (final key in expired) {
       final entry = _open.remove(key);
+      // Best-effort TTL flush. See dispose(): not logged because this class is
+      // a LogOutput and logging an export failure would recurse back into the
+      // feeding LogController. The failure must not abort the sweep.
       try {
         entry?.span.end();
       } catch (_) {}
@@ -135,6 +142,9 @@ class LogControllerOtelOutput extends LogOutput {
     while (_open.length > _maxOpenSpans) {
       final oldestKey = _open.keys.first;
       final entry = _open.remove(oldestKey);
+      // Best-effort LRU-overflow flush. See dispose(): not logged because this
+      // class is a LogOutput and logging an export failure would recurse back
+      // into the feeding LogController. The failure must not abort eviction.
       try {
         entry?.span.end();
       } catch (_) {}

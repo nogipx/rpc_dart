@@ -1318,6 +1318,22 @@ class _GrpcDescriptorBuilder {
 
   _GrpcDescriptorBuilder(this.service, this.methods);
 
+  /// Proto package for this service, or empty when none is set. Derived from
+  /// the dotted service name (everything before the last dot).
+  String get _package {
+    final lastDot = service.name.lastIndexOf('.');
+    return lastDot >= 0 ? service.name.substring(0, lastDot) : '';
+  }
+
+  /// Fully-qualified type-name prefix: `.<package>.<simpleName>` when a package
+  /// is set, `.<simpleName>` otherwise. Used for both field references and
+  /// service input/output references so the descriptor pool can resolve
+  /// cross-references between them.
+  String _qualifiedTypeName(String simpleName) {
+    final prefix = _package.isEmpty ? '' : '$_package.';
+    return '.$prefix$simpleName';
+  }
+
   String? buildLiteral() {
     final bytes = _buildBytes();
     if (bytes == null) return null;
@@ -1326,7 +1342,7 @@ class _GrpcDescriptorBuilder {
 
   Uint8List? _buildBytes() {
     final lastDot = service.name.lastIndexOf('.');
-    final package = lastDot >= 0 ? service.name.substring(0, lastDot) : '';
+    final package = _package;
     final serviceName =
         lastDot >= 0 ? service.name.substring(lastDot + 1) : service.name;
 
@@ -1350,7 +1366,7 @@ class _GrpcDescriptorBuilder {
       messageBytesList.add(bytes);
     }
 
-    final serviceBytes = _buildServiceDescriptor(serviceName, package);
+    final serviceBytes = _buildServiceDescriptor(serviceName);
 
     final w = _ProtoWriter();
     w.writeString(1, '${service.name.replaceAll('.', '_')}.proto');
@@ -1430,6 +1446,21 @@ class _GrpcDescriptorBuilder {
       label = 3; // LABEL_REPEATED
       actual =
           actual.typeArguments.isNotEmpty ? actual.typeArguments.first : actual;
+    } else if (actual is InterfaceType &&
+        (actual.isDartCoreMap ||
+            actual.isDartCoreSet ||
+            actual.isDartCoreIterable)) {
+      // Map/Set/Iterable cannot be represented as a plain proto field here:
+      // a Map needs a synthetic map-entry nested message and Set/Iterable have
+      // no direct proto equivalent. Reject rather than emit a garbage typeName
+      // like `.Map` that would never resolve in the descriptor pool.
+      log.warning(
+        'gRPC descriptor: field "$name" has unsupported collection type '
+        '"${_typeName(type)}". Map, Set and Iterable are not representable as '
+        'proto fields; use a List or a dedicated message type. Descriptor '
+        'generation skipped for this service.',
+      );
+      return null;
     }
 
     int fieldType;
@@ -1448,10 +1479,10 @@ class _GrpcDescriptorBuilder {
     } else if (actual is InterfaceType && actual.element is EnumElement) {
       // A Dart enum maps to proto TYPE_ENUM (14), not TYPE_MESSAGE.
       fieldType = 14;
-      typeName = '.${actual.element.name ?? ''}';
+      typeName = _qualifiedTypeName(_typeName(actual));
     } else if (actual is InterfaceType) {
       fieldType = 11; // TYPE_MESSAGE
-      typeName = '.${actual.element.name ?? ''}';
+      typeName = _qualifiedTypeName(_typeName(actual));
     } else {
       return null;
     }
@@ -1466,15 +1497,16 @@ class _GrpcDescriptorBuilder {
     return w.toBytes();
   }
 
-  Uint8List _buildServiceDescriptor(String serviceName, String package) {
-    final prefix = package.isEmpty ? '' : '$package.';
+  Uint8List _buildServiceDescriptor(String serviceName) {
     final w = _ProtoWriter();
     w.writeString(1, serviceName);
     for (final method in methods) {
       final mw = _ProtoWriter();
       mw.writeString(1, method.methodName);
-      mw.writeString(2, '.$prefix${_typeName(method.signature.requestType)}');
-      mw.writeString(3, '.$prefix${_typeName(method.signature.responseType)}');
+      mw.writeString(
+          2, _qualifiedTypeName(_typeName(method.signature.requestType)));
+      mw.writeString(
+          3, _qualifiedTypeName(_typeName(method.signature.responseType)));
       if (method.signature.isRequestStream) mw.writeBool(5, true);
       if (method.signature.isResponseStream) mw.writeBool(6, true);
       w.writeBytes(2, mw.toBytes());

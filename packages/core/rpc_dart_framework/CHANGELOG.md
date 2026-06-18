@@ -1,3 +1,9 @@
+## 0.3.3
+
+**Fixes (audit):**
+- `RpcApp._setupEndpoint` no longer swallows a `buildContracts()` failure. Previously a throwing `buildContracts` was logged and ignored, then `endpoint.start()` ran anyway, leaving a live endpoint missing its services (clients got "method not found" instead of a startup failure). The error is now logged with context and rethrown, so `start()` aborts and the normal rollback runs; `endpoint.start()` is not reached.
+- `RpcApp.start()` is now single-shot. Previously, after a failed start, calling `start()` again re-entered and reassigned the `late final` lifecycle fields (`_modules`, `_container`, `_env`, `_autoInterceptors`), throwing `LateInitializationError` and masking the original failure. A failed start now surfaces the ORIGINAL exception, and any later `start()` (after success or failure) throws a clear `StateError` ("RpcApp.start() can only be called once; create a new RpcApp to restart."). Note: true restart of an `RpcApp` instance was never supported (the lifecycle fields are `late final`); create a new instance to restart.
+
 ## 0.3.2
 
 - Fixed `RpcAppConfig.logController` not being wired to endpoints -- `context.log` now works in responder handlers when `logController` is set in config.

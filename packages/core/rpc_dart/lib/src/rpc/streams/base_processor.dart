@@ -5,6 +5,16 @@
 
 part of '_index.dart';
 
+/// Returns true if [error] indicates the underlying transport is closed.
+///
+/// Network transports (HTTP/1.1, HTTP/2, ...) signal a closed transport with
+/// `StateError('Transport is closed')`. We match the exact type and message
+/// instead of a broad `toString().contains('closed')`, which would otherwise
+/// swallow unrelated errors whose text merely contains "closed".
+bool _isTransportClosed(Object error) {
+  return error is StateError && error.message == 'Transport is closed';
+}
+
 /// Shared stream processor: zero-copy when no codecs (zero-copy transport required), otherwise serialized.
 final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final LogScope _logger;
@@ -208,10 +218,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
               );
             }
           } catch (e, stackTrace) {
-            // Skip if transport closed
-            if (e.toString().contains('Transport is closed') ||
-                e.toString().contains('closed')) {
-              _logger.internal(
+            // Skip only when the transport itself is closed. Network transports
+            // signal this with StateError('Transport is closed'); match the
+            // exact type+message instead of a broad substring search so we do
+            // not swallow unrelated errors that merely mention "closed".
+            if (_isTransportClosed(e)) {
+              _logger.debug(
                 'Transport closed, skipping response send [streamId: $_streamId]',
               );
               return;
@@ -245,9 +257,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         'Trailer sent for $_methodPath [streamId: $_streamId]',
       );
     } catch (e, stackTrace) {
-      if (e.toString().contains('Transport is closed') ||
-          e.toString().contains('closed')) {
-        _logger.internal(
+      if (_isTransportClosed(e)) {
+        _logger.debug(
           'Transport closed, skipping trailer send [streamId: $_streamId]',
         );
         return;
@@ -514,10 +525,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       _logger.internal('Error sent to client [streamId: $_streamId]');
       _trailerSent = true;
     } catch (e, stackTrace) {
-      // Skip if transport is closed.
-      if (e.toString().contains('Transport is closed') ||
-          e.toString().contains('closed')) {
-        _logger.internal(
+      // Skip only when the transport is closed (see _isTransportClosed).
+      if (_isTransportClosed(e)) {
+        _logger.debug(
           'Transport closed, skipping error send [streamId: $_streamId]',
         );
         return;
@@ -583,16 +593,31 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         final cancelledException = RpcCancelledException(reason);
 
         try {
-          if (!_requestController.isClosed && _requestController.hasListener) {
+          // Single-subscription controller: addError buffers the error for a
+          // late subscriber. Do NOT gate on hasListener — that would drop the
+          // cancellation if it fires before the consumer subscribes.
+          if (!_requestController.isClosed) {
             _requestController.addError(cancelledException);
           }
-        } catch (_) {}
+        } catch (e) {
+          _logger.warning(
+            'Failed to deliver cancellation to request stream [streamId: $_streamId]',
+            error: e,
+          );
+        }
         try {
-          if (!_responseController.isClosed &&
-              _responseController.hasListener) {
+          // Single-subscription controller: addError buffers the error for a
+          // late subscriber. Do NOT gate on hasListener — that would drop the
+          // cancellation if it fires before the consumer subscribes.
+          if (!_responseController.isClosed) {
             _responseController.addError(cancelledException);
           }
-        } catch (_) {}
+        } catch (e) {
+          _logger.warning(
+            'Failed to deliver cancellation to response stream [streamId: $_streamId]',
+            error: e,
+          );
+        }
       },
       onError: (error, stackTrace) {
         _logger.error(
@@ -975,16 +1000,31 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         );
 
         try {
-          if (!_requestController.isClosed && _requestController.hasListener) {
+          // Single-subscription controller: addError buffers the error for a
+          // late subscriber. Do NOT gate on hasListener — that would drop the
+          // cancellation if it fires before the consumer subscribes.
+          if (!_requestController.isClosed) {
             _requestController.addError(cancelledException);
           }
-        } catch (_) {}
+        } catch (e) {
+          _logger.warning(
+            'Failed to deliver cancellation to request stream [streamId: $_streamId]',
+            error: e,
+          );
+        }
         try {
-          if (!_responseController.isClosed &&
-              _responseController.hasListener) {
+          // Single-subscription controller: addError buffers the error for a
+          // late subscriber. Do NOT gate on hasListener — that would drop the
+          // cancellation if it fires before the consumer subscribes.
+          if (!_responseController.isClosed) {
             _responseController.addError(cancelledException);
           }
-        } catch (_) {}
+        } catch (e) {
+          _logger.warning(
+            'Failed to deliver cancellation to response stream [streamId: $_streamId]',
+            error: e,
+          );
+        }
       },
       onError: (error, stackTrace) {
         _logger.error(

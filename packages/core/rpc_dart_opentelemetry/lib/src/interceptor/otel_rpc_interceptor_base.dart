@@ -26,6 +26,11 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     this.metrics,
   });
 
+  /// Which side this interceptor sits on. Determines the metric namespace
+  /// (`rpc.server.*` vs `rpc.client.*`) used by [recordCall]. Mirrors the
+  /// [SpanKind] each subclass uses in [startSpan].
+  RpcMetricSide get metricSide;
+
   /// Starts a new span for [call] of the given [callType], applies whatever
   /// W3C context propagation the side requires, stores the span in the
   /// [RpcContext] values for downstream access, and returns the span together
@@ -156,8 +161,14 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
         call,
         statusCode: statusCode,
         duration: stopwatch.elapsed,
+        side: metricSide,
       );
-    } catch (_) {}
+    } catch (e, st) {
+      // Best-effort: a misconfigured meter must not break the wrapped RPC call.
+      // No logger is reachable here, so surface the failure on the span (which
+      // is the diagnostic facility this class owns) instead of dropping it.
+      _recordMetricsFailure(span, e, st);
+    }
     span.end();
   }
 
@@ -181,9 +192,28 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
         call,
         statusCode: statusCode,
         duration: stopwatch.elapsed,
+        side: metricSide,
       );
-    } catch (_) {}
+    } catch (e, st) {
+      // Best-effort: a misconfigured meter must not break the wrapped RPC call.
+      _recordMetricsFailure(span, e, st);
+    }
     span.end();
+  }
+
+  /// Surfaces a best-effort `metrics.recordCall` failure on the active [span]
+  /// as a debug-level event so a misconfigured meter is visible instead of
+  /// being swallowed silently. The exception is deliberately NOT rethrown:
+  /// telemetry must never break the wrapped RPC call.
+  void _recordMetricsFailure(Span span, Object error, StackTrace stackTrace) {
+    span.addEvent(
+      'rpc.metrics.record_failed',
+      attributes: [
+        Attribute.fromString('log.level', 'debug'),
+        Attribute.fromString('exception.message', error.toString()),
+        Attribute.fromString('exception.stacktrace', stackTrace.toString()),
+      ],
+    );
   }
 
   /// Wraps a response stream in a span: ends the span when the stream

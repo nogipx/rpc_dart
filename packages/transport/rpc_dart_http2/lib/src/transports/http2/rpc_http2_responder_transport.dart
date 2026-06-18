@@ -214,13 +214,16 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
           : Uint8List.fromList(message.bytes);
       final messages = parser(bytes);
 
-      // Отправляем каждое сообщение отдельно
-      for (final msgData in messages) {
-        final framedMessage = ensureGrpcFrame(msgData);
+      // Отправляем каждое сообщение отдельно.
+      // END_STREAM применяется только к действительно последнему сообщению
+      // батча — сравнение по индексу, а не по значению (Uint8List сравнивается
+      // по идентичности, что ломается при повторе одной и той же ссылки).
+      for (var i = 0; i < messages.length; i++) {
+        final framedMessage = ensureGrpcFrame(messages[i]);
         final transportMessage = RpcTransportMessage(
           streamId: streamId,
           payload: framedMessage,
-          isEndOfStream: message.endStream && msgData == messages.last,
+          isEndOfStream: message.endStream && i == messages.length - 1,
         );
 
         if (!_messageController.isClosed) {

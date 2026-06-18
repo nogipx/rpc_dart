@@ -237,6 +237,8 @@ final class RpcContext {
     try {
       rng = Random.secure();
     } catch (_) {
+      // No strong RNG on this platform: fall back to the default Random
+      // (the monotonic counter below still guarantees uniqueness).
       rng = Random();
     }
     for (var i = 0; i < 12; i++) {

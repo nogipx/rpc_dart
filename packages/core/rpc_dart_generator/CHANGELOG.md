@@ -1,3 +1,9 @@
+## 0.4.4
+
+**gRPC descriptor — fully-qualified type names:**
+- Message/enum **field** type references are now emitted with the same fully-qualified naming (`.<package>.TypeName` when a proto package is set, `.TypeName` otherwise) as service input/output references. Previously fields used a bare `.TypeName` while service refs used the package prefix, so with a package set the two never matched and cross-references were unresolvable in the descriptor pool. Both paths now share a single `_qualifiedTypeName` helper.
+- `Map`/`Set`/`Iterable` fields no longer emit a garbage `type_name` (e.g. `.Map`): they are detected and rejected with a `log.warning`, skipping descriptor generation for the service rather than emitting an unresolvable reference. Only `List` is still treated as a repeated field.
+
 ## 0.4.3
 
 **gRPC descriptor — proto-wire stability (protobuf-wire fixes E/F/G):**

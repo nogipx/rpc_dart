@@ -218,6 +218,7 @@ final class RpcMetadata {
     try {
       return base64Decode(raw);
     } catch (_) {
+      // Malformed base64 in the status-details header: treat as absent.
       return null;
     }
   }
@@ -331,6 +332,7 @@ final class RpcMetadata {
     try {
       return utf8.decode(bytes, allowMalformed: true);
     } catch (_) {
+      // Undecodable percent-encoded bytes: fall back to the raw input string.
       return input;
     }
   }

@@ -186,8 +186,11 @@ List<http2.Header> rpcMetadataToHttp2TrailersOnly(RpcMetadata metadata) {
 /// value is extracted separately and passed as [methodPath] so that
 /// [RpcMetadata.methodPath] works correctly without storing a pseudo-header.
 ///
-/// Binary headers (names ending in `-bin`) have their values base64-decoded
-/// per the gRPC specification. Regular headers are kept as ASCII strings.
+/// Binary headers (names ending in `-bin`) carry base64-encoded binary on the
+/// wire, which is exactly how the metadata layer stores them (see
+/// [RpcMetadata.statusDetailsBin], which base64-decodes on read). Their value
+/// is therefore kept verbatim — decoding here would double-process and corrupt
+/// true binary that is not valid UTF-8. Regular headers are kept as-is.
 ///
 /// Pass the `:path` value extracted from the raw headers as [methodPath].
 RpcMetadata http2HeadersToRpcMetadata(
@@ -201,16 +204,10 @@ RpcMetadata http2HeadersToRpcMetadata(
     // Skip pseudo-headers — they belong to the HTTP/2 transport layer.
     if (name.startsWith(':')) continue;
 
-    var value = String.fromCharCodes(header.value);
-
-    // Per gRPC spec, headers ending in `-bin` carry base64-encoded binary.
-    if (name.endsWith('-bin')) {
-      try {
-        value = utf8.decode(base64Decode(value));
-      } on Object {
-        // Malformed base64 — keep raw value.
-      }
-    }
+    // Keep the wire value verbatim. For `-bin` headers this is the base64
+    // string the metadata layer expects; base64-decoding it here would
+    // double-process it and break interop with real gRPC peers.
+    final value = String.fromCharCodes(header.value);
 
     rpcHeaders.add(RpcHeader(name, value));
   }
@@ -275,24 +272,28 @@ bool isGrpcFrame(Uint8List data) {
         RpcConstants.messagePrefixSize + header.messageLength;
     return expectedLength == data.length;
   } catch (_) {
+    // Unparseable prefix means it is not a valid gRPC frame.
     return false;
   }
 }
 
 /// Encodes a header value for HTTP/2 transport.
 ///
-/// For binary headers (name ending in `-bin`), the value is always
-/// base64-encoded per the gRPC specification. For regular headers, the
-/// value is returned as-is if it is valid ASCII; otherwise it is
-/// base64url-encoded as a fallback.
+/// For binary headers (name ending in `-bin`), the value is already the
+/// base64 string produced by the metadata layer (e.g.
+/// `base64Encode(statusDetailsBin)`), which is exactly what gRPC puts on the
+/// wire — so it is passed through verbatim. Re-encoding it here would
+/// double-encode the value. For regular headers, the value is returned as-is
+/// if it is valid ASCII; otherwise it is base64url-encoded as a fallback.
 String _headerValue(String name, String value) {
   if (name.endsWith('-bin')) {
-    return base64Encode(utf8.encode(value));
+    return value;
   }
   try {
     ascii.encode(value);
     return value;
   } on Object catch (_) {
+    // Non-ASCII header value: HTTP/2 requires ASCII, so base64url-encode it.
     return base64UrlEncode(utf8.encode(value));
   }
 }

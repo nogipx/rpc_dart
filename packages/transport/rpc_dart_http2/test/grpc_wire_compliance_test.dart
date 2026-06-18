@@ -111,27 +111,33 @@ void main() {
   });
 
   group('gRPC wire compliance — binary headers', () {
-    test('outgoing -bin header values are base64-encoded', () {
+    test('outgoing -bin header values are passed through verbatim', () {
+      // The metadata layer stores -bin values already base64-encoded
+      // (e.g. base64Encode(statusDetailsBin)). The transport must put that
+      // base64 string on the wire as-is; re-encoding would double-encode it.
+      final wireValue = base64Encode(Uint8List.fromList([0, 255, 1, 254]));
       final metadata = RpcMetadata([
-        RpcHeader('grpc-status-details-bin', 'some binary data'),
+        RpcHeader('grpc-status-details-bin', wireValue),
         RpcHeader('x-custom', 'plain ascii'),
       ]);
       final headers = rpcMetadataToHttp2Trailers(metadata);
 
       final headerMap = _toMap(headers);
 
-      // -bin header should be base64 encoded
-      final binValue = headerMap['grpc-status-details-bin']!;
-      expect(binValue, isNot(equals('some binary data')),
-          reason: '-bin header values must be base64-encoded');
+      // -bin header goes on the wire exactly as stored (single base64).
+      expect(headerMap['grpc-status-details-bin'], equals(wireValue),
+          reason: '-bin values are already base64; must not be re-encoded');
 
       // Regular header should be as-is
       expect(headerMap['x-custom'], equals('plain ascii'));
     });
 
-    test('incoming -bin header values are base64-decoded', () {
-      // Simulate incoming HTTP/2 headers with a base64-encoded -bin value
-      final encoded = base64Encode(utf8.encode('decoded value'));
+    test('incoming -bin header values are kept as base64 (not decoded)', () {
+      // A real gRPC peer sends true binary as base64. The transport keeps the
+      // base64 string; the metadata layer decodes it on read. This must work
+      // even when the underlying bytes are not valid UTF-8.
+      final bytes = Uint8List.fromList([0, 255, 1, 254, 0x80]);
+      final encoded = base64Encode(bytes);
       final headers = [
         http2.Header.ascii(':status', '200'),
         http2.Header.ascii('grpc-status-details-bin', encoded),
@@ -140,11 +146,25 @@ void main() {
 
       final metadata = http2HeadersToRpcMetadata(headers);
 
+      // Header value stays base64; the binary getter recovers the raw bytes.
       expect(
         metadata.getHeaderValue('grpc-status-details-bin'),
-        equals('decoded value'),
+        equals(encoded),
       );
+      expect(metadata.statusDetailsBin, equals(bytes));
       expect(metadata.getHeaderValue('x-plain'), equals('hello'));
+    });
+
+    test('-bin round-trips non-UTF8 binary through encode + decode', () {
+      final bytes = Uint8List.fromList([0, 1, 2, 250, 251, 252, 253, 254, 255]);
+      final metadata = RpcMetadata([
+        RpcHeader('grpc-status-details-bin', base64Encode(bytes)),
+      ]);
+
+      final wire = rpcMetadataToHttp2Trailers(metadata);
+      final back = http2HeadersToRpcMetadata(wire);
+
+      expect(back.statusDetailsBin, equals(bytes));
     });
 
     test('incoming regular headers are NOT base64-decoded', () {

@@ -1,3 +1,15 @@
+## 0.2.3
+
+**Startup robustness (IO isolates):**
+- Fixed `RpcIsolateTransport.spawn` hanging forever (or returning a silently-dead transport) when the worker isolate crashed or exited before completing the handshake. The host previously did `await initPort.first` with no error/exit/timeout handling, and the `onError`/`onExit` ports only closed a still-null channel, so a worker that threw during startup left `spawn()` stuck. `spawn()` now:
+  - races the worker SendPort handshake against the isolate's `onError`/`onExit` ports and surfaces the isolate's error message and stack trace as a thrown exception (instead of hanging);
+  - waits for an explicit worker `ready` ack (sent after the user entrypoint runs without throwing), so a throwing/crashing entrypoint makes `spawn()` throw rather than return a dead transport;
+  - enforces a configurable `startupTimeout` (default 30s); on timeout it kills the isolate, closes all ports, and throws a `TimeoutException` with context;
+  - cleans up all ports and subscriptions on every exit path (success, error, timeout) via a `Completer` + try/finally pattern.
+- The worker wrapper no longer silently swallows user-entrypoint startup exceptions; it rethrows them so the host observes the real cause via the `onError` port.
+- Added `startupTimeout` parameter to `spawn` across all variants (IO, web, stub) for API parity.
+- Regression test: `test/audit/spawn_handshake_failure_test.dart` (entrypoint throwing before handshake makes `spawn()` throw, not hang; plus a successful-spawn guard).
+
 ## 0.2.2
 
 **Web (Web Worker) fixes:**

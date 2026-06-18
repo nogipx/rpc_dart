@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:collection';
+import 'dart:developer' as developer;
 import 'dart:math';
 
 import 'package:rpc_dart/rpc_dart.dart';
@@ -225,9 +226,20 @@ class LogCollectorOutput extends LogOutput {
         _requeueInFlight();
         _connected = true;
         _pump();
-      } catch (_) {
+      } catch (error, stackTrace) {
         _handshaking = false;
         if (_disposed) return;
+        // Log the failure cause so connection problems are debuggable. We MUST
+        // NOT route this through a LogController/LogOutput: this class IS a
+        // LogOutput, so emitting a record would re-enter the same pipeline and
+        // loop. dart:developer.log is a low-level diagnostic sink (VM + dart2js)
+        // that does not touch the controller, so it is recursion-safe.
+        developer.log(
+          'LogCollectorOutput: handshake failed, reconnecting: $error',
+          name: 'rpc_dart_log',
+          error: error,
+          stackTrace: stackTrace,
+        );
         // Handshake failed on this connection; drop it and let the connection
         // rebuild the transport via the factory and retry.
         _connection.forceReconnect();

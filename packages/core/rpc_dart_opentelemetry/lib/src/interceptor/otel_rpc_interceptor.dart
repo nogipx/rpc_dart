@@ -5,6 +5,7 @@
 import 'package:opentelemetry/api.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
+import '../metrics/rpc_otel_metrics.dart';
 import '../propagation/rpc_otel_propagator.dart';
 import 'otel_rpc_interceptor_base.dart';
 
@@ -45,6 +46,9 @@ class OtelRpcInterceptor extends OtelRpcInterceptorBase {
     required super.tracer,
     super.metrics,
   });
+
+  @override
+  RpcMetricSide get metricSide => RpcMetricSide.server;
 
   /// Starts a new span, extracts W3C parent context from [RpcContext] headers,
   /// and stores the span in [RpcContext] values for downstream access.

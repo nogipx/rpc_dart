@@ -26,10 +26,33 @@ class LogRedactor {
     for (final entry in data.entries) {
       if (_fields.contains(entry.key.toLowerCase())) {
         result[entry.key] = replacement;
-      } else if (entry.value is Map<String, Object>) {
-        result[entry.key] = redact(entry.value as Map<String, Object>);
+      } else if (entry.value is Map) {
+        // Recurse into ANY map regardless of its generic type arguments
+        // (JSON-decoded maps are typically Map<String, dynamic> / untyped),
+        // otherwise nested sensitive fields would leak.
+        result[entry.key] = _redactDynamic(entry.value as Map);
       } else {
         result[entry.key] = entry.value;
+      }
+    }
+    return result;
+  }
+
+  /// Redacts a map of arbitrary generic type (e.g. JSON-decoded maps).
+  ///
+  /// Keys are compared case-insensitively (after stringification); nested maps
+  /// are recursed into regardless of their generic type arguments.
+  Map<String, Object> _redactDynamic(Map data) {
+    final result = <String, Object>{};
+    for (final entry in data.entries) {
+      final key = entry.key.toString();
+      final value = entry.value;
+      if (_fields.contains(key.toLowerCase())) {
+        result[key] = replacement;
+      } else if (value is Map) {
+        result[key] = _redactDynamic(value);
+      } else if (value != null) {
+        result[key] = value;
       }
     }
     return result;

@@ -125,6 +125,16 @@ final class RpcTransportRouter implements IRpcTransport {
       },
     );
 
+    // Stream IDs are reused over the router's lifetime. If a stale subscription
+    // is still registered for this client stream, cancel it before overwriting
+    // so it does not leak and keep forwarding responses to the new stream.
+    final previous = _responseSubscriptions[clientStreamId];
+    if (previous != null) {
+      _logger.internal(
+        'Cancelling stale response subscription for client[$clientStreamId] before reuse',
+      );
+      previous.cancel();
+    }
     _responseSubscriptions[clientStreamId] = subscription;
 
     _logger.internal(

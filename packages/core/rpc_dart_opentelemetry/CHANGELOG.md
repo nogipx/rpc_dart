@@ -1,3 +1,15 @@
+## 0.3.6
+
+**Observability (best-effort error sites):**
+- `OtelRpcInterceptorBase._finish` / `_finishWithError`: the two `metrics?.recordCall(...)` calls were wrapped in empty `catch (_) {}`, so a misconfigured meter failed silently. The exception is still swallowed (telemetry must never break the wrapped RPC call), but it is now surfaced on the active span via a new `_recordMetricsFailure` helper that adds a `rpc.metrics.record_failed` span event (`log.level=debug`, `exception.message`, `exception.stacktrace`). No logger is injected into this class, so the span — the diagnostic facility it owns — is the cleanest sink.
+- `LogControllerOtelOutput` (`dispose`, `_sweepExpired`, `_evictOverflow`): the three best-effort `span.end()` calls keep their empty `catch (_) {}` but now carry explicit comments documenting WHY the failure is intentionally not logged: this class IS a `LogOutput`, so routing an OTel export failure into a logger would re-enter the same `LogController` that feeds this output and recurse. Each comment also notes the failure must not abort the surrounding flush/sweep/eviction.
+- No control-flow change; observability only.
+
+## 0.3.5
+
+**Fixes (audit):**
+- `RpcOtelMetrics`: a single instance is shared by both the server interceptor (`OtelRpcInterceptor`) and the client interceptor (`OtelRpcClientInterceptor`) through the common `OtelRpcInterceptorBase.recordCall` flow. The instrument names were hardcoded to `rpc.server.requests` / `rpc.server.duration`, so client-side calls were recorded under the server namespace — a violation of the OTel RPC semantic conventions (client metrics must be `rpc.client.*`). `RpcOtelMetrics` now creates both instrument sets (`rpc.server.requests`/`rpc.server.duration` and `rpc.client.requests`/`rpc.client.duration`); `recordCall` takes a new `RpcMetricSide side` parameter (default `RpcMetricSide.server`, backward compatible) and routes the measurement to the matching instruments. Each interceptor reports its own side via a new `OtelRpcInterceptorBase.metricSide` getter (server -> `RpcMetricSide.server`, client -> `RpcMetricSide.client`), mirroring the `SpanKind` it already uses. Added a regression test (`a6_client_server_metric_namespace_test.dart`) asserting a server call lands only in `rpc.server.*`, a client call only in `rpc.client.*`, and a shared instance keeps the two sides separate.
+
 ## 0.3.4
 
 **Refactor (no behavior change):**

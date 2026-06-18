@@ -1,6 +1,6 @@
 name: rpc_dart_framework
 description: Client and server framework for rpc_dart — modules, DI, lifecycle, graceful shutdown, rate limiting, isolate workers, and test harness.
-version: 0.3.2
+version: 0.3.3
 publish_to: none
 
 environment:

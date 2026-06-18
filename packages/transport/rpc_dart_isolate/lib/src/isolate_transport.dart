@@ -10,7 +10,15 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 // -- Internal message format --------------------------------------------------
 
-enum _IsolateMessageType { init, metadata, data, directObject, finish, close }
+enum _IsolateMessageType {
+  init,
+  ready,
+  metadata,
+  data,
+  directObject,
+  finish,
+  close,
+}
 
 class _IsolateMessage {
   final _IsolateMessageType type;
@@ -153,7 +161,9 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
         ));
       case _IsolateMessageType.close:
         close();
-      default:
+      case _IsolateMessageType.init:
+      case _IsolateMessageType.ready:
+        // Handshake-level control messages: consumed during spawn(), not data.
         break;
     }
   }
@@ -177,6 +187,7 @@ abstract interface class RpcIsolateTransport {
     String? debugName,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Uri? workerUri,
+    Duration startupTimeout = const Duration(seconds: 30),
   }) async {
     final name = debugName ?? 'rpc-isolate-$isolateId';
 
@@ -238,11 +249,23 @@ abstract interface class RpcIsolateTransport {
           );
 
           userEntrypoint(transport, customParams);
-        } catch (_) {
+
+          // Signal that the worker started successfully. The host blocks its
+          // spawn() return on this ack, so a worker that crashes during
+          // startup makes spawn() throw (via onError/onExit) instead of
+          // returning a silently-dead transport.
+          mainHostSendPort.send(
+            _IsolateMessage(type: _IsolateMessageType.ready, streamId: 0),
+          );
+        } catch (error, stack) {
+          // Do not swallow worker-startup failures: rethrow so the isolate
+          // terminates with an uncaught error, which the host observes via its
+          // onError port (surfacing the real cause instead of a hang).
           if (!messageController.isClosed) {
             await messageController.close();
           }
           receivePort.close();
+          Error.throwWithStackTrace(error, stack);
         }
       }();
     }
@@ -268,20 +291,112 @@ abstract interface class RpcIsolateTransport {
     _IsolateMultiplexedChannel? hostChannel;
     RpcChannelTransport? hostTransport;
 
+    late final StreamSubscription initSub;
     late final StreamSubscription errorSub;
     late final StreamSubscription exitSub;
 
+    // Race the handshake (worker's SendPort) against an isolate error/exit
+    // before handshake and a startup timeout, so spawn() fails fast and
+    // informatively instead of hanging forever.
+    final handshake = Completer<SendPort>();
+
+    void completeError(Object error, [StackTrace? stack]) {
+      if (!handshake.isCompleted) {
+        handshake.completeError(error, stack ?? StackTrace.current);
+      }
+    }
+
+    initSub = initPort.listen((message) {
+      if (message is SendPort && !handshake.isCompleted) {
+        handshake.complete(message);
+      }
+    });
+
+    // Completed once the worker acks readiness (or fails) during startup.
+    // Until completed, an isolate error/exit aborts spawn() with the cause.
+    final ready = Completer<void>();
+
+    void abortStartup(Object error, [StackTrace? stack]) {
+      if (!handshake.isCompleted) {
+        completeError(error, stack);
+      } else if (!ready.isCompleted) {
+        ready.completeError(error, stack ?? StackTrace.current);
+      }
+    }
+
+    String describeError(Object? errorData) {
+      if (errorData is List && errorData.isNotEmpty) {
+        return errorData[0]?.toString() ?? 'unknown error';
+      }
+      return 'unknown error';
+    }
+
+    StackTrace? stackFromError(Object? errorData) {
+      if (errorData is List && errorData.length > 1 && errorData[1] != null) {
+        return StackTrace.fromString(errorData[1].toString());
+      }
+      return null;
+    }
+
     errorSub = errorPort.listen((errorData) {
-      // Remote isolate crashed -- close the channel.
+      // The onError port delivers [errorString, stackTraceString].
+      if (!ready.isCompleted) {
+        abortStartup(
+          StateError(
+            'RpcIsolateTransport.spawn: isolate "$name" threw before it was '
+            'ready: ${describeError(errorData)}',
+          ),
+          stackFromError(errorData),
+        );
+        return;
+      }
+      // Remote isolate crashed after startup -- close the channel.
       unawaited(hostChannel?.close());
     });
 
     exitSub = exitPort.listen((_) {
-      // Remote isolate exited -- close the channel.
+      if (!ready.isCompleted) {
+        abortStartup(
+          StateError(
+            'RpcIsolateTransport.spawn: isolate "$name" exited before it was '
+            'ready.',
+          ),
+        );
+        return;
+      }
+      // Remote isolate exited after startup -- close the channel.
       unawaited(hostChannel?.close());
     });
 
-    final workerSendPort = await initPort.first as SendPort;
+    Future<void> teardownStartup() async {
+      isolate.kill(priority: Isolate.immediate);
+      await initSub.cancel();
+      await errorSub.cancel();
+      await exitSub.cancel();
+      initPort.close();
+      errorPort.close();
+      exitPort.close();
+    }
+
+    final SendPort workerSendPort;
+    try {
+      workerSendPort = await handshake.future.timeout(
+        startupTimeout,
+        onTimeout: () => throw TimeoutException(
+          'RpcIsolateTransport.spawn: isolate "$name" did not complete the '
+          'handshake within $startupTimeout.',
+          startupTimeout,
+        ),
+      );
+    } catch (_) {
+      // First handshake failed (error / exit / timeout). Tear everything down
+      // so a stuck or crashed isolate and its ports/subscriptions do not leak.
+      await teardownStartup();
+      rethrow;
+    }
+
+    // First handshake done: the init port has served its purpose.
+    await initSub.cancel();
     initPort.close();
 
     final hostReceivePort = ReceivePort();
@@ -297,6 +412,13 @@ abstract interface class RpcIsolateTransport {
     final messageController = StreamController<dynamic>.broadcast();
     hostReceivePort.listen(
       (message) {
+        if (message is _IsolateMessage &&
+            message.type == _IsolateMessageType.ready &&
+            message.streamId == 0) {
+          if (!ready.isCompleted) ready.complete();
+          return;
+        }
+
         if (messageController.isClosed) return;
 
         if (message is _IsolateMessage &&
@@ -315,6 +437,25 @@ abstract interface class RpcIsolateTransport {
       },
     );
 
+    // Wait for the worker to confirm it started (its entrypoint ran without
+    // throwing). A crash/exit before this resolves makes spawn() throw rather
+    // than return a silently-dead transport.
+    try {
+      await ready.future.timeout(
+        startupTimeout,
+        onTimeout: () => throw TimeoutException(
+          'RpcIsolateTransport.spawn: isolate "$name" did not become ready '
+          'within $startupTimeout.',
+          startupTimeout,
+        ),
+      );
+    } catch (_) {
+      hostReceivePort.close();
+      if (!messageController.isClosed) await messageController.close();
+      await teardownStartup();
+      rethrow;
+    }
+
     hostChannel = _IsolateMultiplexedChannel(
       sendPort: workerSendPort,
       messageStream: messageController.stream,
@@ -332,7 +473,7 @@ abstract interface class RpcIsolateTransport {
     void killIsolate() {
       hostTransport?.close();
       isolate.kill(priority: Isolate.immediate);
-      initPort.close();
+      // initPort / initSub already closed after a successful handshake.
       errorPort.close();
       exitPort.close();
       errorSub.cancel();
