@@ -1,3 +1,8 @@
+## 0.3.4
+
+**Refactor (no behavior change):**
+- `OtelRpcInterceptor` (server) and `OtelRpcClientInterceptor` (client) were ~95% identical. Extracted the shared flow into a new `OtelRpcInterceptorBase` (`lib/src/interceptor/otel_rpc_interceptor_base.dart`): it holds the `tracer`/`metrics` fields, the four `intercept*` methods, and the span finishing/stream-wrapping helpers (`_finish`, `_finishWithError`, `_wrapWithSpan`). Each subclass now implements only `startSpan` — the single point of difference (server extracts the W3C parent context, uses `SpanKind.server`, and adds `rpc.trace_id`; client injects the context, uses `SpanKind.client`, and calls `updateContext`). Public API, const constructors, and barrel exports are unchanged. Future fixes to the shared flow now apply once instead of twice.
+
 ## 0.3.3
 
 **Fixes (audit):**
