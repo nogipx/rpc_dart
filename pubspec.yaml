@@ -128,12 +128,13 @@ melos:
     coverage:
       description: Coverage for the package(s) you pick; opens the HTML report.
       run: >
+        rm -rf coverage &&
         fvm dart test --coverage=coverage &&
         fvm dart pub global run coverage:format_coverage
         --lcov --in=coverage --out=coverage/lcov.info
         --report-on=lib --base-directory="$MELOS_PACKAGE_PATH"
         --packages="$MELOS_ROOT_PATH/.dart_tool/package_config.json" &&
-        genhtml coverage/lcov.info -o coverage/html --quiet &&
+        genhtml coverage/lcov.info -o coverage/html --quiet --ignore-errors range &&
         open coverage/html/index.html
       exec:
         concurrency: 1
@@ -145,6 +146,7 @@ melos:
     coverage:collect:
       description: Run tests with coverage; write coverage/lcov.info per package.
       run: >
+        rm -rf coverage &&
         fvm dart test --coverage=coverage &&
         fvm dart pub global run coverage:format_coverage
         --lcov --in=coverage --out=coverage/lcov.info
