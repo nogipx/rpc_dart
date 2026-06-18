@@ -187,14 +187,14 @@ final class ClientStreamCaller<
 
       // Await single response with timeout.
       return await _responseCompleter.future.timeout(
-        Duration(seconds: 30),
+        const Duration(seconds: 60),
         onTimeout: () {
           _logger.error('Response wait timed out');
           // Free resources on timeout.
           unawaited(close());
           throw TimeoutException(
             'Response wait timeout from server',
-            Duration(seconds: 30),
+            const Duration(seconds: 60),
           );
         },
       );

@@ -83,7 +83,7 @@ final class UnaryCaller<TRequest, TResponse> {
     // Determine timeout: parameter, context, or default.
     final remainingTime = _context?.remainingTime;
     final effectiveTimeout =
-        timeout ?? remainingTime ?? const Duration(seconds: 30);
+        timeout ?? remainingTime ?? const Duration(seconds: 60);
 
     // Create a new stream for this call.
     final streamId = _transport.createStream();
