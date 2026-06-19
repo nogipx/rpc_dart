@@ -429,9 +429,32 @@ class S3BlobRepository implements IBlobRepository {
   }
 
   /// Ensures the bucket exists, creating it if necessary.
+  ///
+  /// `bucketExists` then `makeBucket` is check-then-act: concurrent uploads to a
+  /// new bucket (e.g. parallel startup uploads) all see it missing and all call
+  /// `makeBucket`; the losers get BucketAlreadyOwnedByYou / BucketAlreadyExists.
+  /// That means the bucket is there — treat it as idempotent success.
   Future<void> _ensureBucket(String bucketName) async {
-    final exists = await _client.bucketExists(bucketName);
-    if (!exists) await _client.makeBucket(bucketName);
+    if (await _client.bucketExists(bucketName)) return;
+    try {
+      await _client.makeBucket(bucketName);
+    } on MinioError catch (e) {
+      if (_isBucketAlreadyOwned(e)) return;
+      rethrow;
+    }
+  }
+
+  static bool _isBucketAlreadyOwned(MinioError error) {
+    if (error is MinioS3Error) {
+      final code = error.error?.code?.toLowerCase();
+      if (code == 'bucketalreadyownedbyyou' || code == 'bucketalreadyexists') {
+        return true;
+      }
+    }
+    final message = (error.message ?? error.toString()).toLowerCase();
+    return message.contains('already own') ||
+        message.contains('bucketalreadyownedbyyou') ||
+        message.contains('bucketalreadyexists');
   }
 
   /// Checks whether a bucket exists.
