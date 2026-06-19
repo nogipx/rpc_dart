@@ -127,15 +127,15 @@ package.
 1. **Manual versioning — do NOT use `melos version`.** For each changed public
    package: bump its `version:` in the pubspec (patch/minor/major per the commit
    types since the last release) and write the CHANGELOG entry by hand (newest
-   section on top, terse, why-focused). Then tag manually:
-   `git tag -a <package>-<version> -m <package>-<version>` (no `v` prefix).
-2. Commit the release, push commits + tags: `git push --follow-tags`.
+   section on top, terse, why-focused). Do NOT tag here — `publish:release` tags.
+2. Commit the release (just commits; tags are created at publish): `git push`.
 3. `melos run publish:dry` — must validate with 0 warnings (a dirty git tree
    shows up as a warning here, so commit first).
-4. Publish: `fvm dart pub login` then `melos run publish:release`, or pub.dev
-   "Automated publishing" triggered by the pushed git tag (preferred). Publishing
-   is irreversible — confirm the version (esp. major bumps for breaking changes)
-   before this step.
+4. Publish: `fvm dart pub login` then `melos run publish:release`. This publishes
+   the public packages to pub.dev, then **auto-tags** each at its current
+   pubspec version (`<pkg>-<version>`, idempotent) and pushes commits + tags.
+   pub.dev tag-triggered "Automated publishing" is NOT used. Publishing is
+   irreversible — confirm the version (esp. major bumps) before this step.
 
 ## Known caveats
 
