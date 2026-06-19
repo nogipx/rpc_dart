@@ -67,11 +67,13 @@ Before committing: `melos run analyze` and the relevant `melos run test` must be
 green. Do not edit generated files (`*.g.dart`, `*.freezed.dart`) by hand — run
 the generator.
 
-## Commit conventions (REQUIRED — drives melos changelogs)
+## Commit conventions (REQUIRED)
 
-`melos version` generates each package's CHANGELOG and version bump from
-**Conventional Commits**. A malformed commit produces a wrong/missing changelog
-entry. Format:
+Conventional Commits are the convention — they keep history readable and signal
+the version bump (see types below). The CHANGELOG and version are **hand-written
+at release time** (versioning is manual; there is no `melos version` — see
+"Release flow"), so the commit type/scope is guidance for the human, not an
+automation input. Format:
 
 ```
 type(scope): short imperative subject
@@ -81,19 +83,18 @@ optional body explaining the why.
 BREAKING CHANGE: describe the break (or use the `!` form below).
 ```
 
-- **type** drives the version bump:
+- **type** signals which version bump to make by hand at release:
   - `feat` → minor (new capability)
   - `fix` / `perf` → patch
   - breaking → **major**: either `feat(scope)!: ...` / `fix(scope)!: ...`, or a
     `BREAKING CHANGE:` footer.
   - `refactor`, `docs`, `test`, `build`, `ci`, `chore` → no version bump (still
-    shown in changelog where relevant).
+    worth a changelog line where relevant).
 - **scope** = the affected package name, e.g. `rpc_dart`, `rpc_dart_http2`,
   `rpc_dart_generator`. Use the bare core name `rpc_dart` for core changes.
-- **Attribution is by changed files**, not by the scope text: melos assigns a
-  commit to whichever package directories it touches. So **keep a commit to one
-  package** when possible; a commit that edits several packages bumps all of
-  them. Split unrelated cross-package changes into separate commits.
+- **Keep a commit to one package** when possible (one changed package =
+  unambiguous changelog/version). Split unrelated cross-package changes into
+  separate commits.
 - Subject: imperative, lower-case, no trailing period, <= ~72 chars.
 
 Examples:
@@ -123,11 +124,11 @@ package.
    that breaks a transport's tests). If it finds anything: fix, commit, re-run.
    Do NOT proceed to publish until `prepare` exits 0. (Skipping this once shipped
    a `curly_braces` lint into a published rpc_dart.)
-1. Bump the version + write the CHANGELOG entry. `melos version` does this from
-   Conventional Commits + creates tags, BUT its interactive prompt is not
-   skippable in non-TTY (CI/automation); in that case bump the pubspec +
-   CHANGELOG by hand and tag manually — same result. Tag format is
-   `<package>-<version>` (no `v`; the `melos version` post-hook strips it).
+1. **Manual versioning — do NOT use `melos version`.** For each changed public
+   package: bump its `version:` in the pubspec (patch/minor/major per the commit
+   types since the last release) and write the CHANGELOG entry by hand (newest
+   section on top, terse, why-focused). Then tag manually:
+   `git tag -a <package>-<version> -m <package>-<version>` (no `v` prefix).
 2. Commit the release, push commits + tags: `git push --follow-tags`.
 3. `melos run publish:dry` — must validate with 0 warnings (a dirty git tree
    shows up as a warning here, so commit first).

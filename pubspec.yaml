@@ -46,37 +46,8 @@ melos:
     notify: [packages/notify/**]
     blob: [packages/blob/**]
 
-  command:
-    version:
-      # Conventional-Commits driven. Commit format: `type(scope): subject`
-      # where scope is the package name (see CLAUDE.md). Breaking: `type(scope)!:`
-      # or a `BREAKING CHANGE:` footer.
-      branch: main
-      linkToCommits: true
-      workspaceChangelog: true
-      message: |
-        chore(release): publish packages
-
-        {new_package_versions}
-      hooks:
-        # melos hardcodes tags as `<pkg>-v<X.Y.Z>` (no config to drop the `v`).
-        # This repo's convention is `<pkg>-<X.Y.Z>` (no `v`), so rename the tags
-        # melos just created, preserving the changelog annotation. Safe here:
-        # publishing is via pub.dev automated-publishing on tag (not `melos
-        # publish`), and no package uses git-ref dependencies.
-        post: |
-          set -e
-          for t in $(git tag --points-at HEAD); do
-            case "$t" in
-              *-v[0-9]*)
-                new=$(printf '%s' "$t" | sed -E 's/-v([0-9])/-\1/')
-                msg=$(git for-each-ref --format='%(contents)' "refs/tags/$t")
-                git tag -a "$new" -m "$msg" "$t^{}"
-                git tag -d "$t"
-                echo "retagged $t -> $new"
-                ;;
-            esac
-          done
+  # Versioning is MANUAL (no `melos version`): the changelog is hand-written and
+  # the version is bumped by hand per package. See CLAUDE.md "Release flow".
 
   # Scripts use `fvm dart`/`fvm flutter` so a local run uses the pinned SDK with
   # no PATH hacking: `fvm dart run melos run analyze`. CI installs fvm too, so
