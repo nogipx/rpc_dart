@@ -4,6 +4,13 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.2.1
+
+- `RpcRateLimiter` rejections now carry gRPC status RESOURCE_EXHAUSTED (8)
+  instead of being mapped to INTERNAL (13) on the wire. `RpcRateLimitException`
+  is now an `RpcStatusException`, so clients recognise rate-limit rejections as
+  retryable and `RpcRetryInterceptor` backs off and retries instead of failing.
+
 ## 4.2.0
 
 Deadline handling, a wire-format bug fix, and header hardening — adopted from a

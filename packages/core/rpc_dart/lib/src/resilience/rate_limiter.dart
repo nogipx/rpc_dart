@@ -524,5 +524,5 @@ class RpcRateLimiter extends IRpcInterceptor {
 class RpcRateLimitException extends RpcStatusException {
   /// Creates an [RpcRateLimitException].
   RpcRateLimitException(String message)
-      : super(_statusResourceExhausted, message);
+    : super(_statusResourceExhausted, message);
 }
