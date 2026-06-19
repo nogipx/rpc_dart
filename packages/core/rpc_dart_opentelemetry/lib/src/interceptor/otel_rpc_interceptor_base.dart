@@ -50,9 +50,10 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     final (span, context, otelContext) = startSpan(call, 'unary');
     final stopwatch = Stopwatch()..start();
     try {
-      final response = await zone(
+      final response = await _runInContext(
         otelContext,
-      ).run(() async => await next(context, request));
+        () => next(context, request),
+      );
       _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
       return response;
     } catch (e, st) {
@@ -74,9 +75,10 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     final (span, context, otelContext) = startSpan(call, 'server_stream');
     final stopwatch = Stopwatch()..start();
     try {
-      final stream = await zone(
+      final stream = await _runInContext(
         otelContext,
-      ).run(() async => await next(context, request));
+        () async => await next(context, request),
+      );
       return _wrapWithSpan(stream, span, call, stopwatch);
     } catch (e, st) {
       _finishWithError(span, call, stopwatch, e, st);
@@ -97,9 +99,10 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     final (span, context, otelContext) = startSpan(call, 'client_stream');
     final stopwatch = Stopwatch()..start();
     try {
-      final response = await zone(
+      final response = await _runInContext(
         otelContext,
-      ).run(() async => await next(context, requests));
+        () => next(context, requests),
+      );
       _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
       return response;
     } catch (e, st) {
@@ -124,9 +127,10 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     );
     final stopwatch = Stopwatch()..start();
     try {
-      final stream = await zone(
+      final stream = await _runInContext(
         otelContext,
-      ).run(() async => await next(context, requests));
+        () async => await next(context, requests),
+      );
       return _wrapWithSpan(stream, span, call, stopwatch);
     } catch (e, st) {
       _finishWithError(span, call, stopwatch, e, st);
@@ -137,6 +141,32 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /// Runs [body] with [otelContext] attached as the ambient OTel context, then
+  /// returns its value (or rethrows its error preserving the stack trace).
+  ///
+  /// The opentelemetry `zone()` helper attaches a `whenComplete` callback to the
+  /// run'd future and DISCARDS the derived future; when that future completes
+  /// with an error, the error is delivered to the zone unhandled — in a server
+  /// it reaches the root zone and kills the isolate, while the awaiting caller
+  /// ALSO receives it (double delivery). A thrown [RpcStatusException] is the
+  /// normal way a handler returns an error status, so this would crash the
+  /// server on every expected error. We therefore catch inside the zone so the
+  /// run'd future always completes *successfully* with an [_Outcome], and
+  /// re-surface the error outside the zone where it propagates normally.
+  Future<T> _runInContext<T>(
+    Context otelContext,
+    FutureOr<T> Function() body,
+  ) async {
+    final outcome = await zone(otelContext).run<Future<_Outcome<T>>>(() async {
+      try {
+        return _Outcome.value(await body());
+      } catch (e, st) {
+        return _Outcome.error(e, st);
+      }
+    });
+    return outcome.unwrap();
+  }
 
   void _finish(
     Span span,
@@ -291,5 +321,26 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     );
 
     return controller.stream;
+  }
+}
+
+/// Result of running a body inside the OTel ambient context: either a [value]
+/// or an [error] with its [stackTrace]. Lets [OtelRpcInterceptorBase._runInContext]
+/// carry an error out of the zone as a normal value (see that method for why).
+class _Outcome<T> {
+  _Outcome.value(this._value) : _error = null, _stackTrace = null;
+  _Outcome.error(Object error, StackTrace stackTrace)
+    : _value = null,
+      _error = error,
+      _stackTrace = stackTrace;
+
+  final T? _value;
+  final Object? _error;
+  final StackTrace? _stackTrace;
+
+  T unwrap() {
+    final error = _error;
+    if (error != null) Error.throwWithStackTrace(error, _stackTrace!);
+    return _value as T;
   }
 }
