@@ -4,6 +4,17 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.2.2
+
+- Responder no longer drops a stream's payload frames that arrive before its
+  metadata (headers) frame. On a broadcast transport (no replay) the first
+  data frame can be observed before the headers right after a connection
+  opens; the pipeline used to discard any payload whose method was not yet
+  known, losing the leading frame (e.g. a client-stream upload whose first
+  chunk carries routing metadata). Such frames — and an early end-of-stream —
+  are now buffered and replayed in arrival order once the metadata resolves
+  the method.
+
 ## 4.2.1
 
 - `RpcRateLimiter` rejections now carry gRPC status RESOURCE_EXHAUSTED (8)

@@ -74,10 +74,18 @@ final class _ControllableTransport extends IRpcTransport {
 
   // Responder sends its reply/trailers here — irrelevant to the test.
   @override
-  Future<void> sendMetadata(int s, RpcMetadata m, {bool endStream = false}) async {}
+  Future<void> sendMetadata(
+    int s,
+    RpcMetadata m, {
+    bool endStream = false,
+  }) async {}
 
   @override
-  Future<void> sendMessage(int s, Uint8List d, {bool endStream = false}) async {}
+  Future<void> sendMessage(
+    int s,
+    Uint8List d, {
+    bool endStream = false,
+  }) async {}
 
   @override
   Future<void> finishSending(int streamId) async {}
@@ -127,10 +135,10 @@ void main() {
         );
 
     RpcTransportMessage meta(int sid) => RpcTransportMessage.withMetadata(
-          metadata: RpcMetadata(const [], methodPath: '/CollectService/Collect'),
-          methodPath: '/CollectService/Collect',
-          streamId: sid,
-        );
+      metadata: RpcMetadata(const [], methodPath: '/CollectService/Collect'),
+      methodPath: '/CollectService/Collect',
+      streamId: sid,
+    );
 
     test('payload arriving before metadata is buffered, not dropped', () async {
       const sid = 2;
