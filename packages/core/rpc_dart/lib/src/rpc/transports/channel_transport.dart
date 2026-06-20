@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:typed_data';
 
 import '../../core/_index.dart';
@@ -35,8 +36,7 @@ class RpcChannelTransport implements IRpcTransport {
 
   final Set<int> _activeStreams = {};
   final Set<int> _finishedStreams = {};
-  final StreamController<RpcTransportMessage> _incomingCtl =
-      StreamController<RpcTransportMessage>.broadcast();
+  late final StreamController<RpcTransportMessage> _incomingCtl;
 
   /// Per-stream dedicated controllers for [getMessagesForStream].
   ///
@@ -47,6 +47,18 @@ class RpcChannelTransport implements IRpcTransport {
   /// consumers that need every message (the responder's new-stream dispatch).
   final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
   StreamSubscription<RpcTransportMessage>? _channelSub;
+
+  /// Global-dispatch messages observed while [incomingMessages] has no listener.
+  ///
+  /// The transport starts consuming the channel as soon as the connection is up,
+  /// but the endpoint pipeline subscribes a little later; a broadcast stream
+  /// drops events delivered with no listener, so a frame arriving in that window
+  /// (e.g. a client-stream's first chunk right after connect) would be lost.
+  /// We queue such frames and dispatch them once a listener attaches, in arrival
+  /// order — mirroring the buffering core of http2's `StreamMessageQueueIn`
+  /// (hold until `hasListener`, flush on `onListen`). Per-stream delivery uses
+  /// the single-subscription [_streamControllers], which buffer on their own.
+  final Queue<RpcTransportMessage> _pendingGlobal = Queue();
   bool _closed = false;
 
   /// Creates a transport that wraps a [IRpcMultiplexedChannel].
@@ -59,6 +71,9 @@ class RpcChannelTransport implements IRpcTransport {
   }) : _channel = channel,
        _idManager = RpcStreamIdManager(isClient: isClient),
        _policy = policy {
+    _incomingCtl = StreamController<RpcTransportMessage>.broadcast(
+      onListen: _dispatchPendingGlobal,
+    );
     _channelSub = _channel.incoming.listen(
       _onMessage,
       onError: (Object e) {
@@ -68,6 +83,16 @@ class RpcChannelTransport implements IRpcTransport {
         if (!_closed) close();
       },
     );
+  }
+
+  /// Dispatch buffered global-dispatch messages while a listener is attached,
+  /// preserving arrival order. Called on [onListen] and after each enqueue.
+  void _dispatchPendingGlobal() {
+    while (_pendingGlobal.isNotEmpty &&
+        !_incomingCtl.isClosed &&
+        _incomingCtl.hasListener) {
+      _incomingCtl.add(_pendingGlobal.removeFirst());
+    }
   }
 
   /// Creates a transport from a raw [IRpcChannel] by wrapping it in a
@@ -242,6 +267,7 @@ class RpcChannelTransport implements IRpcTransport {
     _channelSub = null;
     _activeStreams.clear();
     _finishedStreams.clear();
+    _pendingGlobal.clear();
     _idManager.reset();
 
     try {
@@ -312,9 +338,15 @@ class RpcChannelTransport implements IRpcTransport {
   }
 
   void _onMessage(RpcTransportMessage message) {
-    if (!_incomingCtl.isClosed) _incomingCtl.add(message);
+    // Per-stream controllers are single-subscription and buffer until their
+    // consumer binds, so route there directly.
     final ctl = _streamControllers[message.streamId];
     if (ctl != null && !ctl.isClosed) ctl.add(message);
+    // Global dispatch (new-stream routing): enqueue, then dispatch while a
+    // listener is attached. Frames observed before the pipeline subscribes wait
+    // in the queue instead of being dropped by the broadcast.
+    _pendingGlobal.add(message);
+    _dispatchPendingGlobal();
     if (message.isEndOfStream) {
       _releaseStream(message.streamId);
       _finishedStreams.remove(message.streamId);
