@@ -9,6 +9,9 @@
 __pycache__/
 site/
 
+# Melos-generated IDE module files (per-package + workspace).
+*.iml
+
 # Test coverage artifacts (matches any depth: root + every package).
 coverage/
 *.lcov
