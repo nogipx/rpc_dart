@@ -37,8 +37,8 @@ final class _PendingResponse {
 /// final server = await shelf_io.serve(transport.handler, '127.0.0.1', 8080);
 /// ```
 class RpcHttpResponderTransport implements IRpcTransport {
-  final StreamController<RpcTransportMessage> _incoming =
-      StreamController<RpcTransportMessage>.broadcast();
+  final BufferedBroadcastController<RpcTransportMessage> _incoming =
+      BufferedBroadcastController<RpcTransportMessage>();
 
   /// Per-stream dedicated controllers for [getMessagesForStream]; the broadcast
   /// above is still fed for the responder pipeline's new-stream dispatch.

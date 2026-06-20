@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+export 'buffered_broadcast.dart';
 export 'channel.dart';
 export 'channel_frame.dart';
 export 'compression.dart';

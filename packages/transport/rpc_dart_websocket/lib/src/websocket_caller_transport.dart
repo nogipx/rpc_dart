@@ -20,8 +20,8 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
   final Future<WebSocketChannel> Function()? _reconnectFactory;
   final RpcSecurityPolicy _policy;
 
-  final StreamController<RpcTransportMessage> _incomingCtl =
-      StreamController<RpcTransportMessage>.broadcast(sync: true);
+  final BufferedBroadcastController<RpcTransportMessage> _incomingCtl =
+      BufferedBroadcastController<RpcTransportMessage>();
   StreamSubscription<RpcTransportMessage>? _fwdSub;
 
   late RpcChannelTransport _inner;

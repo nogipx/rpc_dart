@@ -21,8 +21,8 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
   final http2.ServerTransportConnection _connection;
 
   /// Контроллер для входящих сообщений
-  final StreamController<RpcTransportMessage> _messageController =
-      StreamController<RpcTransportMessage>.broadcast();
+  final BufferedBroadcastController<RpcTransportMessage> _messageController =
+      BufferedBroadcastController<RpcTransportMessage>();
 
   /// Per-stream dedicated controllers for [getMessagesForStream]. See the
   /// caller transport for the rationale; the broadcast above is still fed so
