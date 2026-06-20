@@ -4,6 +4,23 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.2.3
+
+- Transports no longer drop inbound frames received before the RPC pipeline
+  subscribes. A transport starts consuming the connection as soon as it is up,
+  but the pipeline listens to `incomingMessages` slightly later; a plain
+  broadcast controller drops events delivered with no listener, so the first
+  frames on a cold connection (e.g. a client-stream's leading chunk) were lost,
+  surfacing as "First chunk must carry blobId and vaultId".
+- New `BufferedBroadcastController<T>` (implements `StreamSink<T>`): a broadcast
+  controller that queues events while unlistened and flushes them in arrival
+  order on the first listen, then forwards live. It is the buffering core of
+  HTTP/2's `StreamMessageQueueIn`. Leak-safe: the queue is cleared on close and
+  bounded by `maxPendingEvents`.
+- Applied uniformly to all transports: `RpcChannelTransport` (WebSocket /
+  isolate / WASM), the HTTP/2 caller + responder, the HTTP caller + responder,
+  and the WebSocket caller's reconnect-stable forward controller.
+
 ## 4.2.2
 
 - Responder no longer drops a stream's payload frames that arrive before its

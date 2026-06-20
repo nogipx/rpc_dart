@@ -42,10 +42,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   ///
   /// [maxPendingEvents] bounds how many events are retained while no listener
   /// is attached; [onOverflow] fires once if that bound is exceeded.
-  BufferedBroadcastController({
-    this.maxPendingEvents = 4096,
-    this.onOverflow,
-  }) {
+  BufferedBroadcastController({this.maxPendingEvents = 4096, this.onOverflow}) {
     _controller = StreamController<T>.broadcast(onListen: _flush);
   }
 
@@ -153,12 +150,12 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
 
 class _BufferedItem<T> {
   _BufferedItem.data(this.data)
-      : isError = false,
-        error = null,
-        stackTrace = null;
+    : isError = false,
+      error = null,
+      stackTrace = null;
   _BufferedItem.error(this.error, this.stackTrace)
-      : isError = true,
-        data = null;
+    : isError = true,
+      data = null;
 
   final bool isError;
   final T? data;
