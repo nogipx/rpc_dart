@@ -499,7 +499,7 @@ class LogCollectorMcpBuffer {
     ).firstMatch(since.trim());
     if (abs != null) {
       final now = DateTime.now();
-      return DateTime(
+      final candidate = DateTime(
         now.year,
         now.month,
         now.day,
@@ -507,6 +507,12 @@ class LogCollectorMcpBuffer {
         int.parse(abs.group(2)!),
         abs.group(3) != null ? int.parse(abs.group(3)!) : 0,
       );
+      // Interpret HH:MM as the most recent occurrence of that time of day.
+      // If today's instance is still in the future (e.g. shortly after
+      // midnight), roll back one day so the cutoff stays in the past.
+      return candidate.isAfter(now)
+          ? candidate.subtract(const Duration(days: 1))
+          : candidate;
     }
 
     return null;
