@@ -23,7 +23,12 @@ final class RpcResponderStreamState {
   RpcTransportMessage? lastPayloadMessage;
   final List<RpcTransportMessage> _preBindBufferedMessages = [];
   final List<RpcTransportMessage> _clientBufferedMessages = [];
+  final List<RpcTransportMessage> _preMethodBufferedMessages = [];
   RpcContext? _cachedContext;
+
+  /// True when an end-of-stream frame arrived before the method was known and
+  /// was deferred until the metadata frame resolves the method.
+  bool endOfStreamPending = false;
 
   /// The responder bound to this pending stream.
   IRpcResponder? responder;
@@ -57,6 +62,10 @@ final class RpcResponderStreamState {
 
   /// True when there are buffered client-stream messages pending dispatch.
   bool get hasBufferedClientMessages => _clientBufferedMessages.isNotEmpty;
+
+  /// True when payload frames arrived before the method was resolved and are
+  /// waiting to be replayed once the metadata frame is processed.
+  bool get hasPreMethodBuffered => _preMethodBufferedMessages.isNotEmpty;
 
   /// True when a responder has been bound to this stream.
   bool get hasResponder => responder != null;
@@ -101,6 +110,28 @@ final class RpcResponderStreamState {
     if (bufferForClientStream) {
       _clientBufferedMessages.add(message);
     }
+  }
+
+  /// Buffers a payload frame that arrived before the method was resolved.
+  ///
+  /// On a broadcast transport (no replay), the first data frame of a stream can
+  /// be processed before its metadata (headers) frame right after a connection
+  /// opens. Without buffering, that frame — which for the blob upload carries
+  /// the leading blobId/vaultId — would be dropped, surfacing later as a
+  /// "first chunk missing metadata" error. These are replayed in arrival order
+  /// once [methodKey] is set.
+  void bufferPreMethod(RpcTransportMessage message) {
+    _preMethodBufferedMessages.add(message);
+  }
+
+  /// Returns and clears the payload frames buffered before the method resolved.
+  List<RpcTransportMessage> takePreMethodBufferedMessages() {
+    if (_preMethodBufferedMessages.isEmpty) {
+      return const [];
+    }
+    final messages = List<RpcTransportMessage>.from(_preMethodBufferedMessages);
+    _preMethodBufferedMessages.clear();
+    return messages;
   }
 
   /// Returns and clears all messages buffered before the responder was bound.

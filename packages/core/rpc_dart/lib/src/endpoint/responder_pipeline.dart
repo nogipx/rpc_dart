@@ -361,6 +361,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     _log.internal(
       'Metadata received [method: $methodKey] [streamId: ${state.id}]',
     );
+
+    // Replay any payload / end-of-stream frames that were observed before this
+    // metadata frame (broadcast-transport reordering right after a connection
+    // opens). Now that the method is resolved they route normally.
+    if (state.hasPreMethodBuffered || state.endOfStreamPending) {
+      for (final buffered in state.takePreMethodBufferedMessages()) {
+        _handleDataMessage(state, buffered);
+      }
+      if (state.endOfStreamPending) {
+        state.endOfStreamPending = false;
+        _handleEndOfStream(state);
+      }
+    }
   }
 
   void _handleDataMessage(
@@ -384,7 +397,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
 
     final methodKey = state.methodKey;
-    if (methodKey == null || _isPingMethodKey(methodKey)) return;
+    if (methodKey == null) {
+      // Payload arrived before the metadata (headers) frame was processed.
+      // On a broadcast transport (no replay) the first data frame of a stream
+      // can be observed before its headers right after a connection opens.
+      // Buffer instead of dropping — otherwise the leading frame (for the blob
+      // upload, the one carrying blobId/vaultId) is lost and the handler sees a
+      // metadata-less first chunk. Replayed once metadata resolves the method.
+      state.bufferPreMethod(message);
+      return;
+    }
+    if (_isPingMethodKey(methodKey)) return;
 
     final binding = _respRegistry.lookup(methodKey);
     if (binding == null) {
@@ -411,6 +434,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   void _handleEndOfStream(RpcResponderStreamState state) {
     final methodKey = state.methodKey;
     if (methodKey == null) {
+      // EOS arrived before metadata. If payload frames are buffered awaiting
+      // the method, defer the EOS too so both replay once metadata resolves;
+      // otherwise there is nothing to keep, so clean up.
+      if (state.hasPreMethodBuffered) {
+        state.endOfStreamPending = true;
+        return;
+      }
       unawaited(_cleanupStream(state.id));
       return;
     }
