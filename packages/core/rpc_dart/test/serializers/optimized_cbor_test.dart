@@ -379,18 +379,14 @@ void main() {
         expect(decoded['nested']['inner_int'], equals(456));
       });
 
-      test('Non-string keys conversion', () {
-        // Тестируем как наш кодек обрабатывает не-строковые ключи
+      test('Non-string keys are rejected', () {
+        // Non-string keys cannot round-trip (decoding always yields string
+        // keys), so the encoder rejects them instead of coercing via toString.
         final testDataWithIntKeys = {1: 'one', 2: 'two', 3: 'three'};
-
-        final encoded = CborCodec.encodeUnsafe(testDataWithIntKeys);
-        final decoded = CborCodec.decode(encoded);
-
-        // Проверяем, что integer ключи преобразуются в строки
-        expect(decoded, isA<Map<String, dynamic>>());
-        expect(decoded['1'], equals('one'));
-        expect(decoded['2'], equals('two'));
-        expect(decoded['3'], equals('three'));
+        expect(
+          () => CborCodec.encodeUnsafe(testDataWithIntKeys),
+          throwsArgumentError,
+        );
       });
     });
 

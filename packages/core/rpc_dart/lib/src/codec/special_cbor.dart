@@ -557,18 +557,24 @@ class _FastCborWriter {
       // For IRpcSerializable use toJson(), which returns Map(String, dynamic).
       _writeMap(value.toJson());
     } else {
+      // Unknown type. Try toJson(): a value that simply HAS no toJson()
+      // (DateTime, enums, ...) falls back to a string representation. But if
+      // toJson() EXISTS and throws, that is a real serialization bug — let it
+      // propagate instead of masking the object's toString() onto the wire as
+      // if it were the payload (silent data corruption).
+      Object? json;
       try {
-        final json = value.toJson();
-        if (json is Map) {
-          _writeMap(json);
-        } else if (json is List) {
-          _writeList(json);
-        } else {
-          _writeString(json.toString());
-        }
-      } catch (e) {
-        // Fallback to string for unknown types.
+        json = (value as dynamic).toJson();
+      } on NoSuchMethodError {
         _writeString(value.toString());
+        return;
+      }
+      if (json is Map) {
+        _writeMap(json);
+      } else if (json is List) {
+        _writeList(json);
+      } else {
+        _writeString(json.toString());
       }
     }
   }
@@ -757,22 +763,37 @@ class _FastCborWriter {
     }
   }
 
-  /// Encodes a map.
+  /// Encodes a map. Keys MUST be strings.
+  ///
+  /// CBOR maps here use text-string keys and the decoder always yields `String`
+  /// keys, so a non-string key cannot round-trip. The old code coerced any key
+  /// via `key.toString()`, which loses the key's type and silently collapses
+  /// distinct keys that share a string form (e.g. int `1` and String `'1'`).
+  /// A non-string key is now rejected instead of corrupting data.
   void _writeMap(Map<dynamic, dynamic> map) {
-    _writeLength(CborCodec._majorTypeMap, map.length);
-
     // RFC 7049 recommends sorting keys for deterministic encoding.
     // Encode each key's UTF-8 bytes exactly once, sort by the cached bytes,
     // then write using those same bytes (no re-encoding).
     final entries = <_CborSortKey>[
       for (final key in map.keys)
-        _CborSortKey(utf8.encode(key.toString()), key),
+        _CborSortKey(utf8.encode(_requireStringKey(key)), key),
     ]..sort(_compareSortKeys);
 
+    _writeLength(CborCodec._majorTypeMap, map.length);
     for (final entry in entries) {
       _writeStringBytes(entry.keyBytes);
       _writeValue(map[entry.key]);
     }
+  }
+
+  /// Returns [key] as a String or throws — CBOR map keys must be strings.
+  static String _requireStringKey(Object? key) {
+    if (key is String) return key;
+    throw ArgumentError(
+      'CBOR map keys must be String; got key "$key" of type '
+      '${key.runtimeType}. Non-string keys cannot round-trip (decoding always '
+      'yields string keys).',
+    );
   }
 
   /// Encodes the length prefix.

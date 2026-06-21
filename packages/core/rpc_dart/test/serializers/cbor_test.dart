@@ -234,12 +234,13 @@ void main() {
         expect(decoded['c']['d'], equals(4));
       });
 
-      test('Maps with non-string keys', () {
-        final encoded = CborCodec.encodeUnsafe({1: 'a', 2: 'b', 3: 'c'});
-        final decoded = CborCodec.decodeUnsafe(encoded);
-        expect(decoded['1'], equals('a'));
-        expect(decoded['2'], equals('b'));
-        expect(decoded['3'], equals('c'));
+      test('Maps with non-string keys are rejected', () {
+        // Non-string keys cannot round-trip (decoding always yields string
+        // keys), so encoding rejects them instead of silently coercing.
+        expect(
+          () => CborCodec.encodeUnsafe({1: 'a', 2: 'b', 3: 'c'}),
+          throwsArgumentError,
+        );
       });
     });
 
