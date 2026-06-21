@@ -293,9 +293,22 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   }
 
   void _onSuccess() {
-    _failureCount = 0;
-    _probeInFlight = false;
-    _state = CircuitBreakerState.closed;
+    switch (_state) {
+      case CircuitBreakerState.halfOpen:
+        // The admitted probe succeeded — close the circuit and clear the gate.
+        _failureCount = 0;
+        _probeInFlight = false;
+        _state = CircuitBreakerState.closed;
+      case CircuitBreakerState.closed:
+        // Normal success breaks the consecutive-failure streak.
+        _failureCount = 0;
+      case CircuitBreakerState.open:
+        // Stale success: this call began (and passed _checkState) while the
+        // breaker was still closed, then completed after other concurrent
+        // failures opened it. It proves nothing about recovery, so it must NOT
+        // re-close the breaker — only a half-open probe may do that.
+        break;
+    }
   }
 
   void _onFailure(Object error) {
