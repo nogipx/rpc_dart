@@ -277,12 +277,15 @@ class RpcRateLimiter extends IRpcInterceptor {
     RateLimit? perKeyFallback,
     String? Function(RpcMiddlewareContext)? keyExtractor,
     Duration cleanupInterval = const Duration(minutes: 5),
+    int maxTrackedKeys = 100000,
     int Function()? nowMicros,
-  }) : _globalSpec = global,
+  }) : assert(maxTrackedKeys > 0, 'maxTrackedKeys must be positive'),
+       _globalSpec = global,
        _perServiceSpec = Map.unmodifiable(perService),
        _perMethodSpec = Map.unmodifiable(perMethod),
        _perKeyFallbackSpec = perKeyFallback,
        _keyExtractor = keyExtractor,
+       _maxTrackedKeys = maxTrackedKeys,
        _nowMicros = nowMicros ?? _defaultMonotonicMicros {
     _globalCounter = global?._createCounter(_nowMicros);
 
@@ -312,6 +315,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   final Map<String, RateLimit> _perMethodSpec;
   final RateLimit? _perKeyFallbackSpec;
   final String? Function(RpcMiddlewareContext)? _keyExtractor;
+  final int _maxTrackedKeys;
   final int Function() _nowMicros;
   bool _disposed = false;
 
@@ -380,9 +384,25 @@ class RpcRateLimiter extends IRpcInterceptor {
     RateLimit? spec,
   ) {
     if (spec == null) return null;
-    return store
-        .putIfAbsent(userKey, () => {})
-        .putIfAbsent(slotKey, () => spec._createCounter(_nowMicros));
+    // Bound cardinality: the key is attacker-controlled (it comes from
+    // _keyExtractor, e.g. a client-supplied userId), so without a cap a client
+    // rotating keys would grow this map without limit between cleanup ticks —
+    // a memory-exhaustion DoS on the very component meant to prevent it. Evict
+    // the least-recently-used key when the cap is reached, and keep access
+    // order so hot keys survive (the map is insertion-ordered).
+    var slots = store[userKey];
+    if (slots == null) {
+      if (store.length >= _maxTrackedKeys) {
+        store.remove(store.keys.first); // least-recently-used
+      }
+      slots = <String, _RateLimitCounter>{};
+      store[userKey] = slots;
+    } else {
+      // Touch: move to the most-recently-used position.
+      store.remove(userKey);
+      store[userKey] = slots;
+    }
+    return slots.putIfAbsent(slotKey, () => spec._createCounter(_nowMicros));
   }
 
   /// Resolves the counter that applies to [call] (or null if no limit applies
