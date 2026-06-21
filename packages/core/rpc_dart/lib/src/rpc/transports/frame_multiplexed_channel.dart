@@ -20,7 +20,13 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
   final StreamController<RpcTransportMessage> _incomingCtl =
       StreamController<RpcTransportMessage>.broadcast();
   StreamSubscription<Uint8List>? _channelSub;
-  Uint8List _readBuffer = Uint8List(0);
+
+  /// Growable reassembly buffer. Valid data is `_buf[0.._bufLen)`; capacity may
+  /// exceed [_bufLen]. Appends grow capacity geometrically, so a peer dribbling
+  /// one frame across many tiny chunks costs O(n) total instead of O(n^2)
+  /// (the old code reallocated and recopied the whole buffer on every chunk).
+  Uint8List _buf = Uint8List(0);
+  int _bufLen = 0;
   bool _closed = false;
 
   /// Creates a multiplexed channel that encodes/decodes frames over [channel].
@@ -87,7 +93,8 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
 
     await _channelSub?.cancel();
     _channelSub = null;
-    _readBuffer = Uint8List(0);
+    _buf = Uint8List(0);
+    _bufLen = 0;
 
     try {
       await _channel.close();
@@ -100,23 +107,36 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
 
   // -- Internal ---------------------------------------------------------------
 
-  void _onData(Uint8List chunk) {
-    if (_closed) return;
-
-    if (_readBuffer.isEmpty) {
-      _readBuffer = chunk;
-    } else {
-      final combined = Uint8List(_readBuffer.length + chunk.length);
-      combined.setRange(0, _readBuffer.length, _readBuffer);
-      combined.setRange(_readBuffer.length, combined.length, chunk);
-      _readBuffer = combined;
+  /// Grows [_buf] so it can hold at least [needed] bytes, copying the existing
+  /// (not-yet-emitted) bytes. Capacity doubles, so total copy cost across a
+  /// stream is O(n), not O(n^2).
+  void _ensureCapacity(int needed) {
+    if (needed <= _buf.length) return;
+    var cap = _buf.isEmpty ? 64 : _buf.length;
+    while (cap < needed) {
+      cap *= 2;
     }
+    final grown = Uint8List(cap);
+    grown.setRange(0, _bufLen, _buf);
+    _buf = grown;
+  }
+
+  void _appendToBuffer(Uint8List chunk) {
+    _ensureCapacity(_bufLen + chunk.length);
+    _buf.setRange(_bufLen, _bufLen + chunk.length, chunk);
+    _bufLen += chunk.length;
+  }
+
+  void _onData(Uint8List chunk) {
+    if (_closed || chunk.isEmpty) return;
+
+    _appendToBuffer(chunk);
 
     // Receive-path cap: never let the reassembly buffer grow past the policy
     // limit. A peer dribbling bytes toward a huge declared frame is stopped
     // here even before the per-frame length check fires.
-    if (_readBuffer.length > _policy.effectiveMaxBufferedBytes) {
-      final buffered = _readBuffer.length;
+    if (_bufLen > _policy.effectiveMaxBufferedBytes) {
+      final buffered = _bufLen;
       _failChannel(
         RpcFrameException(
           'Incoming frame buffer overflow: $buffered bytes '
@@ -126,11 +146,16 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
       return;
     }
 
+    // Decode against a view of the valid region. decodeAll is O(1) when no
+    // frame is complete (it reads the 9-byte header and bails), so calling it
+    // on every chunk is cheap; the cost that used to be quadratic was the
+    // per-chunk buffer reallocation, now amortized O(1) via _appendToBuffer.
+    final data = Uint8List.sublistView(_buf, 0, _bufLen);
     final List<RpcDecodedFrame> frames;
     final int consumed;
     try {
       (frames, consumed) = RpcChannelFrame.decodeAll(
-        _readBuffer,
+        data,
         maxPayloadLen: _policy.maxMessageLengthBytes,
       );
     } on RpcFrameException catch (error) {
@@ -142,9 +167,20 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
     }
 
     if (consumed > 0) {
-      _readBuffer = consumed == _readBuffer.length
-          ? Uint8List(0)
-          : Uint8List.sublistView(_readBuffer, consumed);
+      // Compact the unconsumed tail into a FRESH buffer. The decoded data
+      // frames' payloads are sublistViews into the current `_buf`; copying the
+      // tail out and rebinding `_buf` leaves the old buffer untouched, so those
+      // emitted views stay valid even after we move on.
+      if (consumed >= _bufLen) {
+        _buf = Uint8List(0);
+        _bufLen = 0;
+      } else {
+        final tailLen = _bufLen - consumed;
+        final tail = Uint8List(tailLen);
+        tail.setRange(0, tailLen, _buf, consumed);
+        _buf = tail;
+        _bufLen = tailLen;
+      }
     }
 
     for (final frame in frames) {
@@ -163,7 +199,8 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
   void _failChannel(RpcFrameException error) {
     if (!_incomingCtl.isClosed) _incomingCtl.addError(error);
     // Drop any partially buffered bytes immediately; do not keep allocating.
-    _readBuffer = Uint8List(0);
+    _buf = Uint8List(0);
+    _bufLen = 0;
     unawaited(close());
   }
 
