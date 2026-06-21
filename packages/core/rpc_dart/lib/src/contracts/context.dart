@@ -36,6 +36,11 @@ final class RpcContext {
   /// Additional context values (analogous to gRPC Context.Value).
   final Map<Object, Object> _values;
 
+  /// Clock used for deadline/timeout computations. Defaults to [DateTime.now];
+  /// inject a fake clock (via [withClock]) to make `isExpired`, `remainingTime`,
+  /// and `withTimeout` testable without real time. Mirrors the logger's clock.
+  final DateTime Function() clock;
+
   RpcContext._({
     Map<String, String>? headers,
     this.deadline,
@@ -44,10 +49,12 @@ final class RpcContext {
     String? requestId,
     LogScope? log,
     Map<Object, Object>? values,
+    DateTime Function()? clock,
   }) : _headers = Map.from(headers ?? {}),
        requestId = requestId ?? _generateRequestId(),
        log = log ?? LogScope.noop,
-       _values = Map.from(values ?? {});
+       _values = Map.from(values ?? {}),
+       clock = clock ?? DateTime.now;
 
   /// Creates a new empty context.
   factory RpcContext.empty() => RpcContext._();
@@ -85,6 +92,7 @@ final class RpcContext {
       requestId: requestId,
       log: log,
       values: _values,
+      clock: clock,
     );
   }
 
@@ -97,11 +105,12 @@ final class RpcContext {
     requestId: requestId,
     log: log,
     values: _values,
+    clock: clock,
   );
 
   /// Creates a copy of the context with a new timeout.
   RpcContext withTimeout(Duration timeout) =>
-      withDeadline(DateTime.now().add(timeout));
+      withDeadline(clock().add(timeout));
 
   /// Creates a copy of the context with a cancellation token.
   RpcContext withCancellation(RpcCancellationToken token) => RpcContext._(
@@ -112,6 +121,7 @@ final class RpcContext {
     requestId: requestId,
     log: log,
     values: _values,
+    clock: clock,
   );
 
   /// Creates a copy of the context with a trace ID.
@@ -123,6 +133,7 @@ final class RpcContext {
     requestId: requestId,
     log: log,
     values: _values,
+    clock: clock,
   );
 
   /// Creates a copy of the context with an additional value.
@@ -138,6 +149,7 @@ final class RpcContext {
       requestId: requestId,
       log: log,
       values: newValues,
+      clock: clock,
     );
   }
 
@@ -150,6 +162,19 @@ final class RpcContext {
     requestId: requestId,
     log: log,
     values: _values,
+    clock: clock,
+  );
+
+  /// Creates a copy of the context with a custom [clock] (mainly for tests).
+  RpcContext withClock(DateTime Function() clock) => RpcContext._(
+    headers: _headers,
+    deadline: deadline,
+    cancellationToken: cancellationToken,
+    traceId: traceId,
+    requestId: requestId,
+    log: log,
+    values: _values,
+    clock: clock,
   );
 
   /// Returns the value of a header.
@@ -211,7 +236,7 @@ final class RpcContext {
   /// Returns true if the deadline has expired.
   bool get isExpired {
     if (deadline == null) return false;
-    return DateTime.now().isAfter(deadline!);
+    return clock().isAfter(deadline!);
   }
 
   /// Returns true if the request has been cancelled.
@@ -220,7 +245,7 @@ final class RpcContext {
   /// Returns the time remaining until the deadline.
   Duration? get remainingTime {
     if (deadline == null) return null;
-    final remaining = deadline!.difference(DateTime.now());
+    final remaining = deadline!.difference(clock());
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
@@ -419,6 +444,7 @@ abstract final class RpcContextUtils {
       requestId: right.requestId,
       log: right.log,
       values: mergedValues,
+      clock: right.clock,
     );
   }
 }
@@ -486,6 +512,7 @@ class RpcContextBuilder {
       requestId: null,
       log: _context.log,
       values: _context._values,
+      clock: _context.clock,
     );
     return this;
   }
@@ -505,6 +532,12 @@ class RpcContextBuilder {
   /// Sets the cancellation token.
   RpcContextBuilder withCancellation(RpcCancellationToken token) {
     _context = _context.withCancellation(token);
+    return this;
+  }
+
+  /// Sets a custom clock for deadline/timeout computations (mainly for tests).
+  RpcContextBuilder withClock(DateTime Function() clock) {
+    _context = _context.withClock(clock);
     return this;
   }
 

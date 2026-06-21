@@ -1029,7 +1029,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final deadline = context.deadline;
     if (deadline != null) {
       state.armDeadline(
-        deadline.difference(DateTime.now()),
+        deadline.difference(context.clock()),
         () => _onDeadlineExceeded(state),
       );
     }
@@ -1082,7 +1082,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (timeoutHeader != null) {
       final timeout = RpcMetadata.parseGrpcTimeout(timeoutHeader);
       if (timeout != null) {
-        context = context.withDeadline(DateTime.now().add(timeout));
+        context = context.withDeadline(context.clock().add(timeout));
       }
     }
 

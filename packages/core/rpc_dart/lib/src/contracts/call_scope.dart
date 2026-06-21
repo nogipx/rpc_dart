@@ -151,7 +151,8 @@ final class RpcCallScope {
     final deadline = _context?.deadline;
     if (deadline == null) return;
 
-    final remaining = deadline.difference(DateTime.now());
+    // deadline != null implies _context != null; use its (injectable) clock.
+    final remaining = deadline.difference(_context!.clock());
     if (remaining.isNegative || remaining == Duration.zero) {
       // Already expired — close on next microtask.
       Future.microtask(close);
