@@ -471,7 +471,7 @@ abstract class RpcCallerContract implements IRpcContract {
     }
   }
 
-  /// 🚀 Unified unary call with centralized mode control.
+  /// Unified unary call with centralized mode control.
   ///
   /// Mode derives from [dataTransferMode]:
   /// - zeroCopy → forced zero-copy (only InMemoryTransport)
@@ -504,7 +504,7 @@ abstract class RpcCallerContract implements IRpcContract {
     );
   }
 
-  /// 🚀 Unified server-stream call with centralized mode control.
+  /// Unified server-stream call with centralized mode control.
   ///
   /// Mode derives from [dataTransferMode].
   Stream<TResponse>
@@ -534,7 +534,7 @@ abstract class RpcCallerContract implements IRpcContract {
     );
   }
 
-  /// 🚀 Unified client-stream call with centralized mode control.
+  /// Unified client-stream call with centralized mode control.
   ///
   /// Mode derives from [dataTransferMode].
   Future<TResponse>
@@ -564,7 +564,7 @@ abstract class RpcCallerContract implements IRpcContract {
     return builder(requests);
   }
 
-  /// 🚀 Unified bidirectional-stream call with centralized mode control.
+  /// Unified bidirectional-stream call with centralized mode control.
   ///
   /// Mode derives from [dataTransferMode].
   Stream<TResponse>

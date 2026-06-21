@@ -6,21 +6,16 @@ part of '_index.dart';
 
 /// Structured concurrency scope for an RPC call.
 ///
-/// Tracks resources (stream subscriptions, cleanup callbacks) and
-/// automatically disposes them when the call ends — whether by
-/// success, error, cancellation, or deadline.
+/// Tracks resources (stream subscriptions, cleanup callbacks) and automatically
+/// disposes them when the call ends — by success, error, cancellation, or
+/// deadline.
 ///
-/// Usage in handlers:
-/// ```dart
-/// Future<Response> myHandler(Request req, {RpcContext? context}) async {
-///   final scope = context?.getValue<RpcCallScope>(RpcCallScope);
-///   if (scope != null) {
-///     final sub = scope.listen(someExternalStream, (event) { ... });
-///     scope.onDispose(() => cleanupResource());
-///   }
-///   return Response(...);
-/// }
-/// ```
+/// This is currently an INTERNAL lifecycle primitive: each call processor
+/// ([StreamProcessor] / [CallProcessor]) owns one scope and uses it to tear
+/// down its own subscriptions and controllers. It is NOT injected into the
+/// [RpcContext] handed to handlers, so `context.getValue<RpcCallScope>(...)`
+/// returns null inside a handler — do not rely on it. (Exposing a per-call
+/// scope to handler code is a planned enhancement, not a shipped API.)
 final class RpcCallScope {
   final List<FutureOr<void> Function()> _disposers = [];
   final Completer<void> _done = Completer<void>();

@@ -214,20 +214,20 @@ final class GrpcHealthCheckContract extends RpcResponderContract {
   }) {
     final service = request.service;
 
-    // ВАЖНО: не используем `async*` с `yield` перед `await for` --
-    // на dart2js такой генератор не подписывается на поток после первого
-    // yield, и события молча теряются. Используем StreamController.
+    // IMPORTANT: do not use `async*` with a `yield` before `await for` --
+    // on dart2js such a generator does not subscribe to the stream after the
+    // first yield, and events are silently lost. Use a StreamController.
     late final StreamController<GrpcHealthCheckResponse> controller;
     StreamSubscription<(String, GrpcServingStatus)>? sub;
 
     controller = StreamController<GrpcHealthCheckResponse>(
       onListen: () {
-        // Сразу отдаём текущий статус.
+        // Emit the current status immediately.
         final current = _status.getStatus(service);
         var lastStatus = current ?? GrpcServingStatus.serviceUnknown;
         controller.add(GrpcHealthCheckResponse(status: lastStatus));
 
-        // Стримим последующие изменения.
+        // Stream subsequent changes.
         sub = _status.changes.listen(
           (change) {
             final (changedService, newStatus) = change;

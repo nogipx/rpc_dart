@@ -7,20 +7,21 @@ import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-/// Интерфейс для RPC серверов
+/// Interface for RPC servers.
 ///
-/// Определяет общий контракт для всех типов RPC серверов (HTTP/2, WebSocket, gRPC, etc.)
-/// Используется в [RpcServerBootstrap] для абстракции от конкретной реализации транспорта.
+/// Defines a common contract for all kinds of RPC servers (HTTP/2, WebSocket,
+/// gRPC, etc.). Used in [RpcServerBootstrap] to abstract over the concrete
+/// transport implementation.
 abstract interface class IRpcServer {
-  /// Запущен ли сервер
+  /// Whether the server is running.
   bool get isRunning;
 
-  /// Активные RPC endpoints
+  /// Active RPC endpoints.
   List<RpcResponderEndpoint> get endpoints;
 
-  /// Запускает сервер
+  /// Starts the server.
   Future<void> start();
 
-  /// Останавливает сервер
+  /// Stops the server.
   Future<void> stop();
 }

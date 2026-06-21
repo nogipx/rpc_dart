@@ -90,11 +90,11 @@ final class RpcResponderMethodRegistry {
 
     if (_contracts.containsKey(serviceName)) {
       throw RpcException(
-        'Контракт для сервиса $serviceName уже зарегистрирован',
+        'Contract for service $serviceName is already registered',
       );
     }
 
-    _log.internal('Регистрируем контракт сервиса: $serviceName');
+    _log.internal('Registering service contract: $serviceName');
     _contracts[serviceName] = contract;
 
     contract.setup();
@@ -105,11 +105,11 @@ final class RpcResponderMethodRegistry {
       final methodKey = '$serviceName.$methodName';
 
       if (_methods.containsKey(methodKey)) {
-        throw RpcException('Метод $methodKey уже зарегистрирован');
+        throw RpcException('Method $methodKey is already registered');
       }
 
       _log.internal(
-        'Регистрируем метод: $methodKey (${registration.type.name})',
+        'Registering method: $methodKey (${registration.type.name})',
       );
 
       _methods[methodKey] = RpcResponderMethodBinding(
@@ -127,12 +127,12 @@ final class RpcResponderMethodRegistry {
 
       if (_methods.containsKey(methodKey)) {
         throw RpcException(
-          'Метод $methodKey уже зарегистрирован (конфликт с zero-copy)',
+          'Method $methodKey is already registered (zero-copy conflict)',
         );
       }
 
       _log.internal(
-        'Регистрируем zero-copy метод: '
+        'Registering zero-copy method: '
         '$methodKey (${zeroCopyRegistration.type.name}) [ZERO-COPY]',
       );
 
@@ -145,9 +145,9 @@ final class RpcResponderMethodRegistry {
     }
 
     _log.internal(
-      'Контракт $serviceName зарегистрирован с '
-      '${contract.methods.length} методами и '
-      '${contract.zeroCopyMethods.length} zero-copy методами',
+      'Contract $serviceName registered with '
+      '${contract.methods.length} methods and '
+      '${contract.zeroCopyMethods.length} zero-copy methods',
     );
   }
 
@@ -158,11 +158,11 @@ final class RpcResponderMethodRegistry {
 
     if (contract == null) {
       throw RpcException(
-        'Контракт для сервиса $serviceName не зарегистрирован',
+        'Contract for service $serviceName is not registered',
       );
     }
 
-    _log.internal('Разрегистрируем контракт сервиса: $serviceName');
+    _log.internal('Unregistering service contract: $serviceName');
 
     final methodKeys = _methods.keys
         .where((key) => key.startsWith('$serviceName.'))
@@ -172,17 +172,17 @@ final class RpcResponderMethodRegistry {
       final binding = _methods.remove(methodKey);
       if (binding != null) {
         _log.internal(
-          'Разрегистрируем метод: $methodKey (${binding.type.name})',
+          'Unregistering method: $methodKey (${binding.type.name})',
         );
       }
     }
 
     try {
       contract.dispose();
-      _log.internal('Ресурсы контракта $serviceName освобождены');
+      _log.internal('Contract $serviceName resources released');
     } catch (error, stackTrace) {
       _log.error(
-        'Ошибка при освобождении ресурсов контракта $serviceName: $error',
+        'Error releasing resources of contract $serviceName: $error',
         error: error,
         stackTrace: stackTrace,
       );
@@ -199,11 +199,11 @@ final class RpcResponderMethodRegistry {
       try {
         contract.dispose();
         _log.internal(
-          'Ресурсы контракта $serviceName освобождены при закрытии endpoint',
+          'Contract $serviceName resources released on endpoint close',
         );
       } catch (error, stackTrace) {
         _log.error(
-          'Ошибка при освобождении ресурсов контракта $serviceName: $error',
+          'Error releasing resources of contract $serviceName: $error',
           error: error,
           stackTrace: stackTrace,
         );
@@ -280,11 +280,11 @@ final class _ZeroCopyDummyCodec<T extends IRpcSerializable>
     implements IRpcCodec<T> {
   @override
   T deserialize(Uint8List data) {
-    throw UnsupportedError('Zero-copy методы не используют сериализацию');
+    throw UnsupportedError('Zero-copy methods do not use serialization');
   }
 
   @override
   Uint8List serialize(T object) {
-    throw UnsupportedError('Zero-copy методы не используют сериализацию');
+    throw UnsupportedError('Zero-copy methods do not use serialization');
   }
 }

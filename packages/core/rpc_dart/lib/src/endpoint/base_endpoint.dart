@@ -164,13 +164,13 @@ abstract base class RpcEndpointBase {
   /// Adds [middleware] to the processing chain.
   void addMiddleware(IRpcMiddleware middleware) {
     _middlewares.add(middleware);
-    _log.internal('Добавлен middleware: ${middleware.toString()}');
+    _log.internal('Middleware added: ${middleware.toString()}');
   }
 
   /// Adds [interceptor] to the processing chain.
   void addInterceptor(IRpcInterceptor interceptor) {
     _interceptors.add(interceptor);
-    _log.internal('Добавлен interceptor: ${interceptor.toString()}');
+    _log.internal('Interceptor added: ${interceptor.toString()}');
   }
 
   /// Returns true while the endpoint has not been closed.
@@ -181,41 +181,40 @@ abstract base class RpcEndpointBase {
 
   /// Starts the endpoint.
   void start() {
-    _log.internal('Запуск RPC эндпоинта');
+    _log.internal('Starting RPC endpoint');
   }
 
   /// Stops the endpoint.
   void stop() {
-    _log.internal('Остановка RPC эндпоинта');
+    _log.internal('Stopping RPC endpoint');
   }
 
   /// Closes the endpoint and releases all resources.
   Future<void> close() async {
     if (!_isActive) return;
 
-    _log.internal('Закрытие RpcEndpoint');
+    _log.internal('Closing RpcEndpoint');
     _isActive = false;
     _middlewares.clear();
     _interceptors.clear();
 
     try {
-      // Закрываем транспорт и ожидаем завершения с таймаутом
+      // Close the transport and wait for completion with a timeout.
       await _transport.close().timeout(
         Duration(seconds: 5),
         onTimeout: () {
-          _log.warning('Таймаут при закрытии транспорта');
-          // Не выбрасываем исключение, просто логируем предупреждение
+          _log.warning('Timeout while closing the transport');
+          // Do not throw; just log a warning.
           return;
         },
       );
     } catch (e) {
-      _log.warning('Ошибка при закрытии транспорта: $e');
-      // Не пробрасываем ошибку дальше, чтобы гарантировать, что метод close()
-      // всегда завершается успешно
+      _log.warning('Error while closing the transport: $e');
+      // Do not rethrow, so that close() always completes successfully.
     } finally {
-      // Гарантируем, что эндпоинт помечен как неактивный
+      // Ensure the endpoint is marked as inactive.
       _isActive = false;
-      _log.internal('RpcEndpoint закрыт');
+      _log.internal('RpcEndpoint closed');
     }
   }
 

@@ -23,8 +23,8 @@ final class RpcTransportMessage {
   final Uint8List? payload;
 
   /// ZERO-COPY: Direct reference to an object (for in-memory transport).
-  /// ⚠️ Use only inside a single process.
-  /// ⚠️ Object must be immutable or cloned.
+  /// Use only inside a single process.
+  /// Object must be immutable or cloned.
   final Object? directPayload;
 
   /// Associated metadata.
@@ -158,7 +158,7 @@ abstract class IRpcTransport {
 
   /// ZERO-COPY: Sends an object directly without serialization (optional).
   ///
-  /// ⚠️ Not supported by default. Only transports with `supportsZeroCopy = true`
+  /// Not supported by default. Only transports with `supportsZeroCopy = true`
   /// override this to truly pass objects by reference. Check
   /// `transport.supportsZeroCopy` before calling.
   Future<void> sendDirectObject(

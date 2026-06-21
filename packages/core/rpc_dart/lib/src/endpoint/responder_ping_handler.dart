@@ -64,10 +64,10 @@ final class RpcResponderPingHandler {
         endStream: true,
       );
 
-      _log.internal('Ping обработан успешно [streamId: $streamId]');
+      _log.internal('Ping handled successfully [streamId: $streamId]');
     } catch (error, stackTrace) {
       _log.error(
-        'Ошибка при обработке ping [streamId: $streamId]',
+        'Error handling ping [streamId: $streamId]',
         error: error,
         stackTrace: stackTrace,
       );
@@ -86,7 +86,7 @@ final class RpcResponderPingHandler {
         );
       } catch (sendError, sendStackTrace) {
         _log.error(
-          'Не удалось отправить ошибку ping [streamId: $streamId]',
+          'Failed to send ping error [streamId: $streamId]',
           error: sendError,
           stackTrace: sendStackTrace,
         );

@@ -131,14 +131,14 @@ final class RpcEndpointPingExchange {
               if (message.isEndOfStream) {
                 completeError(
                   StateError(
-                    'Ping stream завершен без трейлеров [streamId: $streamId]',
+                    'Ping stream ended without trailers [streamId: $streamId]',
                   ),
                 );
                 return;
               }
 
               _log.internal(
-                'Получены начальные метаданные ответа ping [streamId: $streamId]',
+                'Received initial ping response metadata [streamId: $streamId]',
               );
               return;
             }
@@ -156,7 +156,7 @@ final class RpcEndpointPingExchange {
                 statusMessage,
               );
               _log.warning(
-                'Ping завершился с ошибкой: status=$statusCode, message=$decodedMessage [streamId: $streamId]',
+                'Ping failed: status=$statusCode, message=$decodedMessage [streamId: $streamId]',
               );
               completeError(
                 RpcException(
@@ -186,14 +186,14 @@ final class RpcEndpointPingExchange {
             );
 
             _log.internal(
-              'Ping успешно завершен, RTT=${result.roundTrip.inMilliseconds}мс [streamId: $streamId]',
+              'Ping completed successfully, RTT=${result.roundTrip.inMilliseconds}ms [streamId: $streamId]',
             );
 
             completeSuccess(result);
           },
           onError: (error, stackTrace) {
             _log.error(
-              'Ошибка при получении ответа ping [streamId: $streamId]',
+              'Error receiving ping response [streamId: $streamId]',
               error: error,
               stackTrace: stackTrace,
             );
@@ -203,7 +203,7 @@ final class RpcEndpointPingExchange {
             if (!completer.isCompleted) {
               completeError(
                 StateError(
-                  'Ping stream завершен без трейлеров [streamId: $streamId]',
+                  'Ping stream ended without trailers [streamId: $streamId]',
                 ),
               );
             }
@@ -211,12 +211,12 @@ final class RpcEndpointPingExchange {
         );
 
     try {
-      _log.internal('Отправка ping запроса [streamId: $streamId]');
+      _log.internal('Sending ping request [streamId: $streamId]');
       await transport.sendMetadata(streamId, metadata, endStream: true);
     } catch (error, stackTrace) {
       await subscription.cancel();
       _log.error(
-        'Ошибка при отправке ping [streamId: $streamId]',
+        'Error sending ping [streamId: $streamId]',
         error: error,
         stackTrace: stackTrace,
       );
@@ -230,10 +230,10 @@ final class RpcEndpointPingExchange {
         timeout,
         onTimeout: () {
           _log.warning(
-            'Ping превысил время ожидания ${timeout.inMilliseconds}мс [streamId: $streamId]',
+            'Ping exceeded the timeout of ${timeout.inMilliseconds}ms [streamId: $streamId]',
           );
           throw TimeoutException(
-            'Ping не завершился за ${timeout.inMilliseconds}мс',
+            'Ping did not complete within ${timeout.inMilliseconds}ms',
           );
         },
       );

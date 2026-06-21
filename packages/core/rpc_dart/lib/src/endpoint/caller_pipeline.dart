@@ -326,15 +326,16 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       },
     );
 
-    // Мост через StreamController вместо `() async* { yield* stream }`.
+    // Bridge through a StreamController instead of `() async* { yield* stream }`.
     //
-    // На dart2js отмена подписки на цепочку приостановленных `async*`/`await for`
-    // генераторов (handleServerStream -> middleware -> ServerStreamCaller.call)
-    // зависала навсегда для долгоживущего server-stream: возвращённый
-    // `sub.cancel()` Future не завершался. Явный StreamController с onCancel
-    // делает отмену детерминированной и одинаковой на VM и dart2js: мы
-    // отписываемся от внутреннего потока, но НЕ ждём завершения этой отмены
-    // (она может зависнуть на dart2js), а сразу освобождаем трекинг запроса.
+    // On dart2js, cancelling a subscription to a chain of suspended `async*`/
+    // `await for` generators (handleServerStream -> middleware ->
+    // ServerStreamCaller.call) hung forever for a long-lived server-stream: the
+    // returned `sub.cancel()` Future never completed. An explicit
+    // StreamController with onCancel makes cancellation deterministic and
+    // identical on the VM and dart2js: we unsubscribe from the inner stream but
+    // do NOT wait for that cancellation to complete (it may hang on dart2js),
+    // and immediately release the request tracking.
     late final StreamController<TResponse> controller;
     StreamSubscription<TResponse>? sub;
     var finished = false;
@@ -363,9 +364,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       },
       onCancel: () {
         finish();
-        // Намеренно НЕ ждём sub.cancel(): на dart2js отмена внутренней
-        // цепочки async*-генераторов может не завершиться, что заблокировало
-        // бы отмену со стороны клиента. Запускаем отмену «вдогонку».
+        // Intentionally do NOT wait for sub.cancel(): on dart2js, cancelling the
+        // inner chain of async* generators may never complete, which would block
+        // cancellation on the client side. Fire the cancellation and move on.
         final inner = sub;
         sub = null;
         unawaited(inner?.cancel().catchError((_) {}));

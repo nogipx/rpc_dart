@@ -5,8 +5,8 @@
 
 part of '_index.dart';
 
-/// RPC Context в стиле gRPC - содержит метаданные вызова,
-/// таймауты, токены отмены и другую контекстную информацию
+/// gRPC-style RPC context - holds call metadata, timeouts, cancellation
+/// tokens, and other contextual information.
 final class RpcContext {
   static const int _maxHeaderCount = 128;
   static const int _maxHeaderNameLength = 128;
@@ -15,25 +15,25 @@ final class RpcContext {
 
   static final RegExp _headerNamePattern = RegExp(r'^[0-9a-z_.-]+$');
 
-  /// Заголовки/метаданные запроса
+  /// Request headers/metadata.
   final Map<String, String> _headers;
 
-  /// Deadline для операции (абсолютное время)
+  /// Deadline for the operation (absolute time).
   final DateTime? deadline;
 
-  /// Токен отмены
+  /// Cancellation token.
   final RpcCancellationToken? cancellationToken;
 
-  /// Trace ID для распределенной трассировки
+  /// Trace ID for distributed tracing.
   final String? traceId;
 
-  /// Уникальный ID запроса
+  /// Unique request ID.
   final String requestId;
 
   /// Logger scope for this request context.
   final LogScope log;
 
-  /// Дополнительные значения контекста (аналог gRPC Context.Value)
+  /// Additional context values (analogous to gRPC Context.Value).
   final Map<Object, Object> _values;
 
   RpcContext._({
@@ -49,30 +49,30 @@ final class RpcContext {
        log = log ?? LogScope.noop,
        _values = Map.from(values ?? {});
 
-  /// Создает новый пустой контекст
+  /// Creates a new empty context.
   factory RpcContext.empty() => RpcContext._();
 
-  /// Создает контекст с заголовками
+  /// Creates a context with headers.
   factory RpcContext.withHeaders(Map<String, String> headers) =>
       RpcContext._(headers: _sanitizeHeaders(headers));
 
-  /// Создает контекст с deadline
+  /// Creates a context with a deadline.
   factory RpcContext.withDeadline(DateTime deadline) =>
       RpcContext._(deadline: deadline);
 
-  /// Создает контекст с timeout
+  /// Creates a context with a timeout.
   factory RpcContext.withTimeout(Duration timeout) =>
       RpcContext._(deadline: DateTime.now().add(timeout));
 
-  /// Создает контекст с токеном отмены
+  /// Creates a context with a cancellation token.
   factory RpcContext.withCancellation(RpcCancellationToken token) =>
       RpcContext._(cancellationToken: token);
 
-  /// Создает контекст с trace ID
+  /// Creates a context with a trace ID.
   factory RpcContext.withTraceId(String traceId) =>
       RpcContext._(traceId: traceId);
 
-  /// Создает копию контекста с дополнительными заголовками
+  /// Creates a copy of the context with additional headers.
   RpcContext withAdditionalHeaders(Map<String, String> additionalHeaders) {
     final newHeaders = Map<String, String>.from(_headers);
     newHeaders.addAll(_sanitizeHeaders(additionalHeaders));
@@ -88,7 +88,7 @@ final class RpcContext {
     );
   }
 
-  /// Создает копию контекста с новым deadline
+  /// Creates a copy of the context with a new deadline.
   RpcContext withDeadline(DateTime newDeadline) => RpcContext._(
     headers: _headers,
     deadline: newDeadline,
@@ -99,11 +99,11 @@ final class RpcContext {
     values: _values,
   );
 
-  /// Создает копию контекста с новым timeout
+  /// Creates a copy of the context with a new timeout.
   RpcContext withTimeout(Duration timeout) =>
       withDeadline(DateTime.now().add(timeout));
 
-  /// Создает копию контекста с токеном отмены
+  /// Creates a copy of the context with a cancellation token.
   RpcContext withCancellation(RpcCancellationToken token) => RpcContext._(
     headers: _headers,
     deadline: deadline,
@@ -114,7 +114,7 @@ final class RpcContext {
     values: _values,
   );
 
-  /// Создает копию контекста с trace ID
+  /// Creates a copy of the context with a trace ID.
   RpcContext withTraceId(String newTraceId) => RpcContext._(
     headers: _headers,
     deadline: deadline,
@@ -125,7 +125,7 @@ final class RpcContext {
     values: _values,
   );
 
-  /// Создает копию контекста с дополнительным значением
+  /// Creates a copy of the context with an additional value.
   RpcContext withValue(Object key, Object value) {
     final newValues = Map<Object, Object>.from(_values);
     newValues[key] = value;
@@ -141,7 +141,7 @@ final class RpcContext {
     );
   }
 
-  /// Создает копию контекста с указанным логгером.
+  /// Creates a copy of the context with the given logger.
   RpcContext withLog(LogScope log) => RpcContext._(
     headers: _headers,
     deadline: deadline,
@@ -152,10 +152,10 @@ final class RpcContext {
     values: _values,
   );
 
-  /// Получает значение заголовка
+  /// Returns the value of a header.
   String? getHeader(String key) => _headers[_normalizeHeaderName(key)];
 
-  /// Получает все заголовки (только для чтения)
+  /// Returns all headers (read-only).
   Map<String, String> get headers => Map.unmodifiable(_headers);
 
   static bool _containsInvalidHeaderChars(String value) {
@@ -202,22 +202,22 @@ final class RpcContext {
     return sanitized;
   }
 
-  /// Получает значение из контекста
+  /// Returns a value from the context.
   T? getValue<T>(Object key) => _values[key] as T?;
 
-  /// Получает все значения контекста (только для чтения)
+  /// Returns all context values (read-only).
   Map<Object, Object> get values => Map.unmodifiable(_values);
 
-  /// Проверяет, истек ли deadline
+  /// Returns true if the deadline has expired.
   bool get isExpired {
     if (deadline == null) return false;
     return DateTime.now().isAfter(deadline!);
   }
 
-  /// Проверяет, был ли запрос отменен
+  /// Returns true if the request has been cancelled.
   bool get isCancelled => cancellationToken?.isCancelled ?? false;
 
-  /// Получает оставшееся время до deadline
+  /// Returns the time remaining until the deadline.
   Duration? get remainingTime {
     if (deadline == null) return null;
     final remaining = deadline!.difference(DateTime.now());
@@ -252,7 +252,7 @@ final class RpcContext {
     return base64UrlEncode(bytes).replaceAll('=', '');
   }
 
-  /// Генерирует уникальный ID запроса
+  /// Generates a unique request ID.
   static String _generateRequestId() => 'req_${_uniqueToken()}';
 
   @override
@@ -270,17 +270,17 @@ final class RpcContext {
     return 'RpcContext(${parts.join(', ')})';
   }
 
-  /// Проверяет, является ли контекст истекшим или отмененным
+  /// Returns true if the context is neither expired nor cancelled.
   static bool isContextValid(RpcContext? context) {
     if (context == null) return false;
     return !context.isExpired && !context.isCancelled;
   }
 
-  /// Создает "безопасную" копию контекста без чувствительных данных
+  /// Creates a "safe" copy of the context without sensitive data.
   static RpcContext sanitize(RpcContext context) {
     final sanitizedHeaders = Map<String, String>.from(context.headers);
 
-    // Удаляем чувствительные заголовки
+    // Remove sensitive headers.
     sanitizedHeaders.remove('authorization');
     sanitizedHeaders.remove('x-api-key');
     sanitizedHeaders.remove('cookie');
@@ -292,15 +292,15 @@ final class RpcContext {
   }
 }
 
-/// Токен отмены операции (аналог context.CancelFunc в Go)
+/// Operation cancellation token (analogous to context.CancelFunc in Go).
 final class RpcCancellationToken {
   final Completer<void> _completer = Completer<void>();
   String? _reason;
 
-  /// Создает новый токен отмены
+  /// Creates a new cancellation token.
   RpcCancellationToken();
 
-  /// Создает уже отмененный токен
+  /// Creates an already-cancelled token.
   RpcCancellationToken.cancelled([String? reason]) {
     _reason = reason;
     if (!_completer.isCompleted) {
@@ -308,16 +308,16 @@ final class RpcCancellationToken {
     }
   }
 
-  /// Проверяет, был ли токен отменен
+  /// Returns true if the token has been cancelled.
   bool get isCancelled => _completer.isCompleted;
 
-  /// Причина отмены (если указана)
+  /// Cancellation reason, if provided.
   String? get reason => _reason;
 
-  /// Future, который завершается при отмене
+  /// Future that completes when cancellation occurs.
   Future<void> get cancelled => _completer.future;
 
-  /// Отменяет операцию
+  /// Cancels the operation.
   void cancel([String? reason]) {
     if (!_completer.isCompleted) {
       _reason = reason;
@@ -325,7 +325,7 @@ final class RpcCancellationToken {
     }
   }
 
-  /// Проверяет отмену и выбрасывает исключение если отменено
+  /// Checks for cancellation and throws an exception if cancelled.
   void throwIfCancelled() {
     if (isCancelled) {
       throw RpcCancelledException(reason ?? 'Operation was cancelled');
@@ -333,7 +333,7 @@ final class RpcCancellationToken {
   }
 }
 
-/// Исключение отмены операции
+/// Operation cancellation exception.
 final class RpcCancelledException implements Exception {
   /// Reason the operation was cancelled.
   final String message;
@@ -345,7 +345,7 @@ final class RpcCancelledException implements Exception {
   String toString() => 'RpcCancelledException: $message';
 }
 
-/// Исключение превышения deadline
+/// Deadline-exceeded exception.
 final class RpcDeadlineExceededException implements Exception {
   /// The deadline that was exceeded.
   final DateTime deadline;
@@ -361,23 +361,23 @@ final class RpcDeadlineExceededException implements Exception {
       'RpcDeadlineExceededException: Deadline $deadline exceeded (timeout: $timeout)';
 }
 
-/// Утилиты для работы с контекстом
+/// Utilities for working with the context.
 abstract final class RpcContextUtils {
-  /// Создает контекст с базовой аутентификацией
+  /// Creates a context with basic authentication.
   static RpcContext withBasicAuth(String username, String password) {
     final credentials = base64Encode(utf8.encode('$username:$password'));
     return RpcContext.withHeaders({'authorization': 'Basic $credentials'});
   }
 
-  /// Создает контекст с Bearer токеном
+  /// Creates a context with a Bearer token.
   static RpcContext withBearerToken(String token) =>
       RpcContext.withHeaders({'authorization': 'Bearer $token'});
 
-  /// Создает контекст с API ключом
+  /// Creates a context with an API key.
   static RpcContext withApiKey(String key, {String headerName = 'x-api-key'}) =>
       RpcContext.withHeaders({headerName: key});
 
-  /// Создает контекст для трассировки
+  /// Creates a context for tracing.
   static RpcContext withTracing({
     String? traceId,
     String? spanId,
@@ -403,7 +403,7 @@ abstract final class RpcContextUtils {
   /// corrupting distributed-trace correlation.
   static String generateTraceId() => 'trace_${RpcContext._uniqueToken()}';
 
-  /// Объединяет несколько контекстов (правый имеет приоритет)
+  /// Merges several contexts (the right one takes precedence).
   static RpcContext merge(RpcContext left, RpcContext right) {
     final mergedHeaders = Map<String, String>.from(left._headers);
     mergedHeaders.addAll(right._headers);
@@ -423,19 +423,19 @@ abstract final class RpcContextUtils {
   }
 }
 
-/// Builder для explicit создания и propagation RPC контекстов
-/// Убирает boilerplate при создании сложных контекстов с наследованием
+/// Builder for explicit creation and propagation of RPC contexts.
+/// Removes boilerplate when building complex contexts with inheritance.
 class RpcContextBuilder {
   RpcContext _context;
 
-  /// Создает builder с пустым контекстом
+  /// Creates a builder with an empty context.
   RpcContextBuilder() : _context = RpcContext.empty();
 
-  /// Создает builder на основе существующего контекста (для propagation)
+  /// Creates a builder from an existing context (for propagation).
   RpcContextBuilder.from(RpcContext context) : _context = context;
 
-  /// Создает builder с auto-наследованием trace ID от родительского контекста
-  /// Если parent == null или traceId == null, генерирует новый trace ID
+  /// Creates a builder with automatic trace ID inheritance from the parent
+  /// context. If parent == null or traceId == null, generates a new trace ID.
   factory RpcContextBuilder.inheritFrom(RpcContext? parent) {
     // No parent: brand-new context with fresh trace + request IDs.
     if (parent == null) {
@@ -452,31 +452,31 @@ class RpcContextBuilder {
     return parent.traceId != null ? builder : builder.withGeneratedTraceId();
   }
 
-  /// Устанавливает заголовки
+  /// Sets the headers.
   RpcContextBuilder withHeaders(Map<String, String> headers) {
     _context = _context.withAdditionalHeaders(headers);
     return this;
   }
 
-  /// Добавляет один заголовок
+  /// Adds a single header.
   RpcContextBuilder withHeader(String key, String value) {
     _context = _context.withAdditionalHeaders({key: value});
     return this;
   }
 
-  /// Устанавливает trace ID
+  /// Sets the trace ID.
   RpcContextBuilder withTraceId(String traceId) {
     _context = _context.withTraceId(traceId);
     return this;
   }
 
-  /// Генерирует новый trace ID
+  /// Generates a new trace ID.
   RpcContextBuilder withGeneratedTraceId() {
     _context = _context.withTraceId(RpcContextUtils.generateTraceId());
     return this;
   }
 
-  /// Генерирует новый request ID (для chain вызовов)
+  /// Generates a new request ID (for chained calls).
   RpcContextBuilder withGeneratedRequestId() {
     _context = RpcContext._(
       headers: _context._headers,
@@ -490,58 +490,58 @@ class RpcContextBuilder {
     return this;
   }
 
-  /// Устанавливает deadline
+  /// Sets the deadline.
   RpcContextBuilder withDeadline(DateTime deadline) {
     _context = _context.withDeadline(deadline);
     return this;
   }
 
-  /// Устанавливает timeout
+  /// Sets the timeout.
   RpcContextBuilder withTimeout(Duration timeout) {
     _context = _context.withTimeout(timeout);
     return this;
   }
 
-  /// Устанавливает cancellation token
+  /// Sets the cancellation token.
   RpcContextBuilder withCancellation(RpcCancellationToken token) {
     _context = _context.withCancellation(token);
     return this;
   }
 
-  /// Добавляет значение в контекст
+  /// Adds a value to the context.
   RpcContextBuilder withValue(Object key, Object value) {
     _context = _context.withValue(key, value);
     return this;
   }
 
-  /// Устанавливает Bearer аутентификацию
+  /// Sets Bearer authentication.
   RpcContextBuilder withBearerAuth(String token) {
     return withHeader('authorization', 'Bearer $token');
   }
 
-  /// Устанавливает Basic аутентификацию
+  /// Sets Basic authentication.
   RpcContextBuilder withBasicAuth(String username, String password) {
     final credentials = base64Encode(utf8.encode('$username:$password'));
     return withHeader('authorization', 'Basic $credentials');
   }
 
-  /// Устанавливает API ключ
+  /// Sets the API key.
   RpcContextBuilder withApiKey(String key, {String headerName = 'x-api-key'}) {
     return withHeader(headerName, key);
   }
 
-  /// Возвращает готовый контекст
+  /// Returns the built context.
   RpcContext build() => _context;
 }
 
-/// Extension для удобной работы с propagation
+/// Extension for convenient propagation handling.
 extension RpcContextExtensions on RpcContext {
-  /// Создает дочерний контекст для нового вызова (наследует trace ID, новый request ID)
+  /// Creates a child context for a new call (inherits trace ID, new request ID).
   RpcContext createChild() {
     return RpcContextBuilder.inheritFrom(this).build();
   }
 
-  /// Создает дочерний контекст с дополнительными заголовками
+  /// Creates a child context with additional headers.
   RpcContext createChildWith({
     Map<String, String>? headers,
     Duration? timeout,
