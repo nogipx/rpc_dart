@@ -215,6 +215,23 @@ melos:
         --copyright 'Karim "nogipx" Mamatkazin <nogipx@gmail.com>'
         --merge-copyrights --skip-existing --skip-unrecognised --recursive .
 
+    # --- Maintenance: raise an in-repo dependency floor across packages ---
+    # Only needed when a sibling starts using a new API of the bumped package
+    # (rpc_dart's floor is a wide `>=X <5.0.0` range, so a normal release needs
+    # no bump). Defaults to the bumped package's current pubspec version; pass an
+    # explicit version or --dry-run via `tool/bump_dep.dart`. `pub get` after.
+    #   melos run bump:rpc_dart
+    #   melos run bump:rpc_dart_generator
+    #   fvm dart run tool/bump_dep.dart rpc_dart 4.3.0
+    #   fvm dart run tool/bump_dep.dart rpc_dart --dry-run
+    bump:rpc_dart:
+      description: Raise the rpc_dart dependency floor across all packages.
+      run: fvm dart run tool/bump_dep.dart rpc_dart
+
+    bump:rpc_dart_generator:
+      description: Raise the rpc_dart_generator dependency floor across all packages.
+      run: fvm dart run tool/bump_dep.dart rpc_dart_generator
+
     # --- Pre-publish: one command that fixes + verifies everything ---
     # Run before publishing. It applies fixes (format, license headers, LICENSE
     # sync), then gates (analyze, reuse lint, tests, publish dry-run). Review the
