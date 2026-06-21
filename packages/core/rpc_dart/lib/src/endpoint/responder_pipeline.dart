@@ -949,6 +949,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final responder = state.responder;
     if (responder != null) await _closeResponder(responder);
 
+    // Dispose the per-call scope: runs any handler-registered cleanup. Idempotent
+    // (it may have already self-closed on cancellation/deadline).
+    final callScope = state.cachedContext?.getValue<RpcCallScope>(RpcCallScope);
+    if (callScope != null) await callScope.close();
+
     try {
       transport.releaseStreamId(streamId);
     } catch (error) {
@@ -1019,6 +1024,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         .child(scopeName)
         .withContext(requestId: context.requestId, traceId: context.traceId);
     context = context.withLog(logScope);
+
+    // Provide a per-call RpcCallScope so handlers can register cleanup that
+    // auto-disposes when the call ends (success, error, cancellation, deadline).
+    // Keyed by the RpcCallScope type to match the documented access pattern
+    // `context.getValue<RpcCallScope>(RpcCallScope)`. Closed in _cleanupStream;
+    // it also self-closes on the context's cancellation token / deadline.
+    final callScope = RpcCallScope(context: context);
+    context = context.withValue(RpcCallScope, callScope);
     state.cacheContext(context);
 
     // Enforce the client deadline (grpc-timeout) on the server: arm a timer

@@ -230,8 +230,38 @@ final class RpcContext {
   /// Returns a value from the context.
   T? getValue<T>(Object key) => _values[key] as T?;
 
-  /// Returns all context values (read-only).
-  Map<Object, Object> get values => Map.unmodifiable(_values);
+  /// Returns all user context values (read-only).
+  ///
+  /// The framework's per-call [RpcCallScope] (injected server-side, keyed by its
+  /// type) is internal plumbing rather than user data, so it is excluded here;
+  /// retrieve it with `getValue<RpcCallScope>(RpcCallScope)`.
+  Map<Object, Object> get values {
+    if (!_values.containsKey(RpcCallScope)) return Map.unmodifiable(_values);
+    return Map.unmodifiable({
+      for (final e in _values.entries)
+        if (e.key != RpcCallScope) e.key: e.value,
+    });
+  }
+
+  /// The per-call [RpcCallScope] for handler resource cleanup.
+  ///
+  /// Non-null inside a responder handler (the server injects one scope per
+  /// incoming call); null for a client/caller context or a manually-built one.
+  /// Use it to register cleanup that runs when the call ends:
+  /// `context.callScope?.onDispose(() => release());`
+  RpcCallScope? get callScope => getValue<RpcCallScope>(RpcCallScope);
+
+  /// The per-call [RpcCallScope], or throws if there is none.
+  ///
+  /// Convenience for responder handlers, where a scope is always present, so you
+  /// can skip the null-check: `context!.requireCallScope().onDispose(...)`.
+  /// Throws [StateError] on a client/caller or manually-built context.
+  RpcCallScope requireCallScope() =>
+      callScope ??
+      (throw StateError(
+        'requireCallScope: no RpcCallScope on this context. A scope is injected '
+        'only for incoming server (responder) calls.',
+      ));
 
   /// Returns true if the deadline has expired.
   bool get isExpired {

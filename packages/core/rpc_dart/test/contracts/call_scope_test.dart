@@ -275,15 +275,49 @@ void main() {
       });
     });
 
+    group('dx helpers', () {
+      test('use registers a disposer and returns the resource', () async {
+        final scope = RpcCallScope(context: RpcContext.empty());
+        final disposed = <String>[];
+
+        final resource = scope.use('conn', (c) => disposed.add(c));
+        expect(resource, 'conn');
+        expect(disposed, isEmpty);
+
+        await scope.close();
+        expect(disposed, ['conn']);
+      });
+
+      test('requireCallScope returns the scope when present', () {
+        final scope = RpcCallScope(context: RpcContext.empty());
+        final ctx = RpcContext.empty().withValue(RpcCallScope, scope);
+        expect(ctx.requireCallScope(), same(scope));
+      });
+
+      test('requireCallScope throws when no scope is present', () {
+        expect(RpcContext.empty().requireCallScope, throwsStateError);
+      });
+    });
+
     group('integration with endpoint', () {
-      test('scope cleanup tracks through full RPC call', () async {
+      test('scope is exposed to the handler and disposed after the call',
+          () async {
         final (clientTransport, serverTransport) =
             RpcChannelTransport.memoryPair();
 
         final caller = RpcCallerEndpoint(transport: clientTransport);
         final responder = RpcResponderEndpoint(transport: serverTransport);
 
-        responder.registerServiceContract(_ScopeTestContract(onScope: (_) {}));
+        RpcCallScope? captured;
+        var disposed = false;
+        responder.registerServiceContract(
+          _ScopeTestContract(
+            onScope: (scope) {
+              captured = scope;
+              scope?.onDispose(() => disposed = true);
+            },
+          ),
+        );
         responder.start();
 
         final response = await caller.unaryRequest<_TestRequest, _TestResponse>(
@@ -295,8 +329,13 @@ void main() {
         );
 
         expect(response.value, 'hello');
-        // Scope is internal to processor, not exposed to handler via context yet.
-        // This test validates the full RPC flow works after refactoring.
+        // The handler now receives a real per-call scope (was null before).
+        expect(captured, isNotNull);
+
+        // When the server finishes the call it cleans up the stream and closes
+        // the scope, running the handler-registered disposer.
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(disposed, isTrue);
 
         await caller.close();
         await responder.close();
@@ -354,7 +393,7 @@ final class _ScopeTestContract extends RpcResponderContract {
     _TestRequest request, {
     RpcContext? context,
   }) async {
-    onScope(context?.getValue<RpcCallScope>(RpcCallScope));
+    onScope(context?.callScope);
     return _TestResponse(request.value);
   }
 }

@@ -10,12 +10,19 @@ part of '_index.dart';
 /// disposes them when the call ends — by success, error, cancellation, or
 /// deadline.
 ///
-/// This is currently an INTERNAL lifecycle primitive: each call processor
-/// ([StreamProcessor] / [CallProcessor]) owns one scope and uses it to tear
-/// down its own subscriptions and controllers. It is NOT injected into the
-/// [RpcContext] handed to handlers, so `context.getValue<RpcCallScope>(...)`
-/// returns null inside a handler — do not rely on it. (Exposing a per-call
-/// scope to handler code is a planned enhancement, not a shipped API.)
+/// The server injects one scope per incoming call into the handler's context
+/// and closes it when the call ends, running registered disposers in LIFO
+/// order. Retrieve it inside a responder handler:
+/// ```dart
+/// Future<Response> myHandler(Request req, {RpcContext? context}) async {
+///   final scope = context?.callScope;
+///   scope?.onDispose(() => releaseResource());
+///   scope?.listen(externalStream, (event) { ... }); // auto-cancelled
+///   return Response(...);
+/// }
+/// ```
+/// (Each call processor also owns a separate internal scope for its own
+/// transport-level subscriptions.)
 final class RpcCallScope {
   final List<FutureOr<void> Function()> _disposers = [];
   final Completer<void> _done = Completer<void>();
@@ -62,6 +69,18 @@ final class RpcCallScope {
       return;
     }
     _disposers.add(callback);
+  }
+
+  /// Registers [dispose] for [resource] and returns the resource — acquire and
+  /// clean-up in one expression, like a scoped `using`/`with`:
+  /// ```dart
+  /// final tx = scope.use(await db.begin(), (t) => t.rollbackIfOpen());
+  /// ```
+  /// [dispose] runs (LIFO) when the scope closes (success, error, cancellation,
+  /// or deadline).
+  T use<T>(T resource, FutureOr<void> Function(T resource) dispose) {
+    onDispose(() => dispose(resource));
+    return resource;
   }
 
   /// Wraps [stream] so it auto-cancels when the scope closes.
