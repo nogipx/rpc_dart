@@ -30,45 +30,50 @@ void main() {
       );
     });
 
-    test('a stale success must not re-close a breaker opened by other calls',
-        () async {
-      final cb = RpcCircuitBreakerInterceptor(failureThreshold: 3);
+    test(
+      'a stale success must not re-close a breaker opened by other calls',
+      () async {
+        final cb = RpcCircuitBreakerInterceptor(failureThreshold: 3);
 
-      // 1. A slow call passes _checkState() while CLOSED, then parks on a gate.
-      final slowGate = Completer<String>();
-      final slow = cb.interceptUnary<String, String>(
-        ctx,
-        'req',
-        (c, r) => slowGate.future,
-      );
+        // 1. A slow call passes _checkState() while CLOSED, then parks on a gate.
+        final slowGate = Completer<String>();
+        final slow = cb.interceptUnary<String, String>(
+          ctx,
+          'req',
+          (c, r) => slowGate.future,
+        );
 
-      // 2. Three failing calls (all start while closed) trip the breaker.
-      for (var i = 0; i < 3; i++) {
-        try {
-          await cb.interceptUnary<String, String>(
-            ctx,
-            'req',
-            (c, r) async => throw RpcException('fail'),
-          );
-        } on RpcException {
-          // expected
+        // 2. Three failing calls (all start while closed) trip the breaker.
+        for (var i = 0; i < 3; i++) {
+          try {
+            await cb.interceptUnary<String, String>(
+              ctx,
+              'req',
+              (c, r) async => throw RpcException('fail'),
+            );
+          } on RpcException {
+            // expected
+          }
         }
-      }
-      expect(cb.state, CircuitBreakerState.open,
-          reason: 'breaker should be open after 3 failures');
+        expect(
+          cb.state,
+          CircuitBreakerState.open,
+          reason: 'breaker should be open after 3 failures',
+        );
 
-      // 3. The stale success now resolves.
-      slowGate.complete('ok');
-      expect(await slow, 'ok');
+        // 3. The stale success now resolves.
+        slowGate.complete('ok');
+        expect(await slow, 'ok');
 
-      // CORRECT behavior: the breaker stays OPEN — a success from a call that
-      // began before the breaker opened proves nothing about recovery.
-      // If R1 is real, the breaker is wrongly back to CLOSED here.
-      expect(
-        cb.state,
-        CircuitBreakerState.open,
-        reason: 'a stale success must not re-close an open breaker',
-      );
-    });
+        // CORRECT behavior: the breaker stays OPEN — a success from a call that
+        // began before the breaker opened proves nothing about recovery.
+        // If R1 is real, the breaker is wrongly back to CLOSED here.
+        expect(
+          cb.state,
+          CircuitBreakerState.open,
+          reason: 'a stale success must not re-close an open breaker',
+        );
+      },
+    );
   });
 }

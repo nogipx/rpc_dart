@@ -4,6 +4,57 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.3.0
+
+### Features
+
+- `RpcContext` now carries an injectable `clock` (defaults to `DateTime.now`),
+  so deadline logic (`isExpired`, `remainingTime`, `withTimeout`) is testable
+  without real time. Inject one with `context.withClock(...)`.
+- Responder handlers can use a per-call `RpcCallScope` for automatic resource
+  cleanup. It was documented but never wired (always returned null); the server
+  now injects one scope per incoming call and closes it when the call ends — by
+  success, error, cancellation, or deadline — running registered disposers in
+  LIFO order. Reach it via `context.callScope` (nullable) or
+  `context.requireCallScope()`; register cleanup with `scope.onDispose(...)`,
+  auto-cancel subscriptions with `scope.listen(...)`, or acquire-and-clean-up in
+  one expression with `scope.use(resource, dispose)`.
+
+### Fixes
+
+- Circuit breaker: a success from a call that began while the breaker was
+  closed no longer re-closes a breaker that other concurrent calls have since
+  opened. `_onSuccess` is state-aware — only a half-open probe closes the
+  circuit.
+- Rate limiter: the per-key dynamic counter maps are bounded by `maxTrackedKeys`
+  (default 100000) with LRU eviction. The key comes from a caller-supplied
+  `keyExtractor`, so an unbounded map was a memory-exhaustion vector — a client
+  rotating keys can no longer grow it without limit.
+- Frame reassembly is O(n) instead of O(n^2): a peer dribbling one frame across
+  many tiny chunks forced a full buffer recopy per chunk (a cheap CPU
+  amplification). The receive buffer now grows geometrically (amortized O(1)
+  append).
+- CBOR: a `toJson()` that throws now propagates the error instead of silently
+  encoding the object's `toString()` onto the wire as if it were the payload.
+
+### Behavior changes (technically breaking; minimal real-world impact)
+
+- CBOR encoding now throws `ArgumentError` on a non-string map key instead of
+  silently coercing it via `toString()`. Such keys never round-tripped (decoding
+  always yields string keys) and could collapse distinct keys (`1` and `'1'`).
+- `BufferedBroadcastController` overflow is now fatal: on exceeding
+  `maxPendingEvents` it delivers the surviving prefix, surfaces a `StateError`
+  with the dropped count, and closes the stream, rather than silently dropping
+  events and continuing with a gap. Overflow only happens when no consumer ever
+  drained the buffer (an effectively dead connection).
+
+### Internal
+
+- De-duplicated the contract codec-mode resolution (responder/caller/peer) and
+  the request/response frame-send path.
+- All comments, log messages, and exception text are now English; emoji removed
+  from doc comments.
+
 ## 4.2.3
 
 - Transports no longer drop inbound frames received before the RPC pipeline

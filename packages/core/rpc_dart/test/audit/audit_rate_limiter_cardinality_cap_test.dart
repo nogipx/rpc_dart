@@ -16,7 +16,10 @@ void main() {
     const fixedNow = 1000000;
     final limiter = RpcRateLimiter(
       perMethod: {
-        'S.M': RateLimit.slidingWindow(max: 1, window: const Duration(minutes: 1)),
+        'S.M': RateLimit.slidingWindow(
+          max: 1,
+          window: const Duration(minutes: 1),
+        ),
       },
       keyExtractor: (c) => c.context.getValue<String>('userId'),
       nowMicros: () => fixedNow,
@@ -34,7 +37,11 @@ void main() {
         methodName: 'M',
         context: RpcContext.empty().withValue('userId', key),
       );
-      return limiter.interceptUnary<String, String>(c, 'req', (ctx, r) async => 'ok');
+      return limiter.interceptUnary<String, String>(
+        c,
+        'req',
+        (ctx, r) async => 'ok',
+      );
     }
 
     // user-0 is the oldest. Then 1999 more distinct keys (total 2000 > cap 1000).

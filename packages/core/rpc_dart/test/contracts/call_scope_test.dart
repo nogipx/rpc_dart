@@ -300,46 +300,49 @@ void main() {
     });
 
     group('integration with endpoint', () {
-      test('scope is exposed to the handler and disposed after the call',
-          () async {
-        final (clientTransport, serverTransport) =
-            RpcChannelTransport.memoryPair();
+      test(
+        'scope is exposed to the handler and disposed after the call',
+        () async {
+          final (clientTransport, serverTransport) =
+              RpcChannelTransport.memoryPair();
 
-        final caller = RpcCallerEndpoint(transport: clientTransport);
-        final responder = RpcResponderEndpoint(transport: serverTransport);
+          final caller = RpcCallerEndpoint(transport: clientTransport);
+          final responder = RpcResponderEndpoint(transport: serverTransport);
 
-        RpcCallScope? captured;
-        var disposed = false;
-        responder.registerServiceContract(
-          _ScopeTestContract(
-            onScope: (scope) {
-              captured = scope;
-              scope?.onDispose(() => disposed = true);
-            },
-          ),
-        );
-        responder.start();
+          RpcCallScope? captured;
+          var disposed = false;
+          responder.registerServiceContract(
+            _ScopeTestContract(
+              onScope: (scope) {
+                captured = scope;
+                scope?.onDispose(() => disposed = true);
+              },
+            ),
+          );
+          responder.start();
 
-        final response = await caller.unaryRequest<_TestRequest, _TestResponse>(
-          serviceName: 'TestService',
-          methodName: 'Echo',
-          requestCodec: _TestRequest.codec,
-          responseCodec: _TestResponse.codec,
-          request: _TestRequest('hello'),
-        );
+          final response = await caller
+              .unaryRequest<_TestRequest, _TestResponse>(
+                serviceName: 'TestService',
+                methodName: 'Echo',
+                requestCodec: _TestRequest.codec,
+                responseCodec: _TestResponse.codec,
+                request: _TestRequest('hello'),
+              );
 
-        expect(response.value, 'hello');
-        // The handler now receives a real per-call scope (was null before).
-        expect(captured, isNotNull);
+          expect(response.value, 'hello');
+          // The handler now receives a real per-call scope (was null before).
+          expect(captured, isNotNull);
 
-        // When the server finishes the call it cleans up the stream and closes
-        // the scope, running the handler-registered disposer.
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        expect(disposed, isTrue);
+          // When the server finishes the call it cleans up the stream and closes
+          // the scope, running the handler-registered disposer.
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          expect(disposed, isTrue);
 
-        await caller.close();
-        await responder.close();
-      });
+          await caller.close();
+          await responder.close();
+        },
+      );
     });
   });
 }

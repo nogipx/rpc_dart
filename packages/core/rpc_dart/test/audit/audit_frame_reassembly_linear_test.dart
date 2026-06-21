@@ -15,7 +15,9 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 class _FakeChannel implements IRpcChannel {
-  final StreamController<Uint8List> _ctl = StreamController<Uint8List>(sync: true);
+  final StreamController<Uint8List> _ctl = StreamController<Uint8List>(
+    sync: true,
+  );
   bool _closed = false;
   @override
   bool get isClosed => _closed;
@@ -28,6 +30,7 @@ class _FakeChannel implements IRpcChannel {
     _closed = true;
     await _ctl.close();
   }
+
   void feed(Uint8List bytes) => _ctl.add(bytes);
 }
 
@@ -53,25 +56,32 @@ Future<(int micros, int count)> dribble(int payloadSize) async {
 }
 
 void main() {
-  test('R5: dribbled frame reassembly scales linearly, not quadratically',
-      () async {
-    const n = 80000;
+  test(
+    'R5: dribbled frame reassembly scales linearly, not quadratically',
+    () async {
+      const n = 80000;
 
-    // Warm up to stabilize timing, then measure N and 2N.
-    await dribble(n);
-    final (usN, countN) = await dribble(n);
-    final (us2N, count2N) = await dribble(2 * n);
-    expect(countN, 1);
-    expect(count2N, 1);
+      // Warm up to stabilize timing, then measure N and 2N.
+      await dribble(n);
+      final (usN, countN) = await dribble(n);
+      final (us2N, count2N) = await dribble(2 * n);
+      expect(countN, 1);
+      expect(count2N, 1);
 
-    final ratio = us2N / (usN == 0 ? 1 : usN);
-    // ignore: avoid_print
-    print('R5 scaling: dribble(N)=${usN}us dribble(2N)=${us2N}us '
-        'ratio=${ratio.toStringAsFixed(2)} (≈2 linear, ≈4 quadratic)');
+      final ratio = us2N / (usN == 0 ? 1 : usN);
+      // ignore: avoid_print
+      print(
+        'R5 scaling: dribble(N)=${usN}us dribble(2N)=${us2N}us '
+        'ratio=${ratio.toStringAsFixed(2)} (≈2 linear, ≈4 quadratic)',
+      );
 
-    // Linear (≈2). Allow generous headroom for timing noise but well below the
-    // quadratic ≈4. Before the fix this ratio was ~4.
-    expect(ratio < 3.0, isTrue,
-        reason: 'reassembly must be ~linear (ratio≈2), got ${ratio}x');
-  });
+      // Linear (≈2). Allow generous headroom for timing noise but well below the
+      // quadratic ≈4. Before the fix this ratio was ~4.
+      expect(
+        ratio < 3.0,
+        isTrue,
+        reason: 'reassembly must be ~linear (ratio≈2), got ${ratio}x',
+      );
+    },
+  );
 }

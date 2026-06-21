@@ -920,7 +920,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
               'package:rpc_dart_compression).',
             );
           }
-          await _frameAndSend(_transport, _streamId, serialized, requestEncoding);
+          await _frameAndSend(
+            _transport,
+            _streamId,
+            serialized,
+            requestEncoding,
+          );
 
           _logger.internal(
             'Request sent for $_methodPath [streamId: $_streamId]',

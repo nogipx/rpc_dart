@@ -157,9 +157,7 @@ final class RpcResponderMethodRegistry {
     final contract = _contracts.remove(serviceName);
 
     if (contract == null) {
-      throw RpcException(
-        'Contract for service $serviceName is not registered',
-      );
+      throw RpcException('Contract for service $serviceName is not registered');
     }
 
     _log.internal('Unregistering service contract: $serviceName');
