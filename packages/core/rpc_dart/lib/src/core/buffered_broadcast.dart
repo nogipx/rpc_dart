@@ -57,6 +57,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   final Completer<void> _doneCompleter = Completer<void>();
   bool _closed = false;
   bool _overflowed = false;
+  int _droppedCount = 0;
 
   /// The broadcast stream consumers listen to.
   Stream<T> get stream => _controller.stream;
@@ -112,6 +113,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
 
   void _enqueue(_BufferedItem<T> item) {
     if (_pending.length >= maxPendingEvents) {
+      _droppedCount++;
       if (!_overflowed) {
         _overflowed = true;
         onOverflow?.call();
@@ -132,7 +134,28 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
         _controller.add(item.data as T);
       }
     }
-    _overflowed = false;
+    // Overflow is FATAL. Reaching maxPendingEvents means no consumer ever
+    // drained the buffer (a buffer with a listener passes events straight
+    // through and never grows) — the connection is effectively dead and the
+    // retained prefix is now followed by a hole. Deliver the survivors, then
+    // surface the loss as an error and CLOSE, so the consumer terminates and
+    // re-establishes the connection instead of silently processing a gappy
+    // stream. Continuing would just propagate corruption.
+    if (_droppedCount > 0 && _controller.hasListener && !_controller.isClosed) {
+      final dropped = _droppedCount;
+      _droppedCount = 0;
+      _overflowed = false;
+      _controller.addError(
+        StateError(
+          'BufferedBroadcastController dropped $dropped event(s): more than '
+          'maxPendingEvents ($maxPendingEvents) buffered before any listener '
+          'attached. The stream is closed; re-establish the connection.',
+        ),
+      );
+      unawaited(close());
+    } else {
+      _overflowed = false;
+    }
   }
 
   /// Clears the buffer and closes the underlying controller.
