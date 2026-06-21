@@ -5,6 +5,62 @@
 
 part of '_index.dart';
 
+/// Shared resolution of the codec/zero-copy mode for a contract method.
+///
+/// The same rules apply to responder, caller, and peer contracts; this holds
+/// the single implementation so the three contract types delegate to it instead
+/// of each copy-pasting the logic (which had already drifted).
+abstract final class _RpcCodecMode {
+  /// Whether zero-copy applies given the transfer [mode] and provided codecs.
+  static bool isZeroCopyAllowed(
+    RpcDataTransferMode mode,
+    Object? requestCodec,
+    Object? responseCodec,
+  ) {
+    switch (mode) {
+      case RpcDataTransferMode.zeroCopy:
+        // Force zero-copy even when codecs are provided.
+        return true;
+      case RpcDataTransferMode.codec:
+        return false;
+      case RpcDataTransferMode.auto:
+        // Auto: no codecs -> zero-copy.
+        return requestCodec == null && responseCodec == null;
+    }
+  }
+
+  /// Returns the codecs that actually apply: null in zero-copy mode, otherwise
+  /// the provided codecs.
+  static (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?)
+  effectiveCodecs<TRequest, TResponse>(
+    RpcDataTransferMode mode,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    return isZeroCopyAllowed(mode, requestCodec, responseCodec)
+        ? (null, null)
+        : (requestCodec, responseCodec);
+  }
+
+  /// Throws [ArgumentError] when serialization is required but a codec is
+  /// missing.
+  static void validate<TRequest, TResponse>(
+    RpcDataTransferMode mode,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    if (isZeroCopyAllowed(mode, requestCodec, responseCodec)) return;
+    if (requestCodec == null || responseCodec == null) {
+      throw ArgumentError(
+        'Serialization mode requires both codecs (requestCodec and '
+        'responseCodec). Current mode: $mode. '
+        'Provided: requestCodec=${requestCodec != null ? 'set' : 'null'}, '
+        'responseCodec=${responseCodec != null ? 'set' : 'null'}',
+      );
+    }
+  }
+}
+
 /// Base interface for all contracts.
 abstract interface class IRpcContract {
   /// Service name.
@@ -37,69 +93,22 @@ abstract class RpcResponderContract implements IRpcContract {
   /// Declarative method registration hook.
   void setup() {}
 
-  /// Returns true when zero-copy mode is allowed.
-  bool _isZeroCopyAllowed<TRequest, TResponse>(
-    IRpcCodec<TRequest>? requestCodec,
-    IRpcCodec<TResponse>? responseCodec,
-  ) {
-    switch (dataTransferMode) {
-      case RpcDataTransferMode.zeroCopy:
-        // Force zero-copy even when codecs are provided.
-        return true;
-      case RpcDataTransferMode.codec:
-        return false;
-      case RpcDataTransferMode.auto:
-        // Auto: no codecs → zero-copy.
-        return requestCodec == null && responseCodec == null;
-    }
-  }
-
   /// Returns effective codecs based on the configured transfer mode.
   (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?) _getEffectiveCodecs<
     TRequest,
     TResponse
-  >(IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) {
-    final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
-
-    if (isZeroCopy) {
-      // Ignore provided codecs in zero-copy mode.
-      return (null, null);
-    } else {
-      // Use provided codecs in codec mode.
-      return (requestCodec, responseCodec);
-    }
-  }
+  >(IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) =>
+      _RpcCodecMode.effectiveCodecs(
+        dataTransferMode,
+        requestCodec,
+        responseCodec,
+      );
 
   /// Ensures codecs are supplied when serialization is required.
   void _validateCodecsForCodecMode<TRequest, TResponse>(
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
-  ) {
-    final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
-
-    if (!isZeroCopy) {
-      // Both codecs are required for serialization mode.
-      if (requestCodec == null || responseCodec == null) {
-        throw ArgumentError(
-          'Serialization mode requires both codecs (requestCodec and responseCodec). '
-          'Current mode: $dataTransferMode. '
-          'Provided: requestCodec=${requestCodec != null ? 'set' : 'null'}, '
-          'responseCodec=${responseCodec != null ? 'set' : 'null'}',
-        );
-      }
-    }
-
-    // In zero-copy, codecs may be present but are ignored.
-    if (dataTransferMode == RpcDataTransferMode.auto && !isZeroCopy) {
-      if ((requestCodec == null) != (responseCodec == null)) {
-        throw ArgumentError(
-          'Auto mode requires both codecs when serialization is used. '
-          'Provided: requestCodec=${requestCodec != null ? 'set' : 'null'}, '
-          'responseCodec=${responseCodec != null ? 'set' : 'null'}',
-        );
-      }
-    }
-  }
+  ) => _RpcCodecMode.validate(dataTransferMode, requestCodec, responseCodec);
 
   /// Registers a unary method with automatic mode selection.
   ///
@@ -407,69 +416,22 @@ abstract class RpcCallerContract implements IRpcContract {
     return getCancellationTokensForMethod(methodName).length;
   }
 
-  /// Determines whether zero-copy is allowed based on transfer mode and codecs.
-  bool _isZeroCopyAllowed<TRequest, TResponse>(
-    IRpcCodec<TRequest>? requestCodec,
-    IRpcCodec<TResponse>? responseCodec,
-  ) {
-    switch (dataTransferMode) {
-      case RpcDataTransferMode.zeroCopy:
-        // Force zero-copy even when codecs are provided.
-        return true;
-      case RpcDataTransferMode.codec:
-        return false;
-      case RpcDataTransferMode.auto:
-        // Auto: no codecs → zero-copy.
-        return requestCodec == null && responseCodec == null;
-    }
-  }
-
   /// Returns effective codecs based on the transfer mode.
   (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?) _getEffectiveCodecs<
     TRequest,
     TResponse
-  >(IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) {
-    final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
-
-    if (isZeroCopy) {
-      // Ignore provided codecs in zero-copy mode.
-      return (null, null);
-    } else {
-      // Use provided codecs in codec mode.
-      return (requestCodec, responseCodec);
-    }
-  }
+  >(IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) =>
+      _RpcCodecMode.effectiveCodecs(
+        dataTransferMode,
+        requestCodec,
+        responseCodec,
+      );
 
   /// Ensures codecs are supplied when serialization is required.
   void _validateCodecsForCodecMode<TRequest, TResponse>(
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
-  ) {
-    final isZeroCopy = _isZeroCopyAllowed(requestCodec, responseCodec);
-
-    if (!isZeroCopy) {
-      // Both codecs are required for serialization mode.
-      if (requestCodec == null || responseCodec == null) {
-        throw ArgumentError(
-          'Serialization mode requires both codecs (requestCodec and responseCodec). '
-          'Current mode: $dataTransferMode. '
-          'Provided: requestCodec=${requestCodec != null ? 'set' : 'null'}, '
-          'responseCodec=${responseCodec != null ? 'set' : 'null'}',
-        );
-      }
-    }
-
-    // In zero-copy, codecs may be present but are ignored.
-    if (dataTransferMode == RpcDataTransferMode.auto && !isZeroCopy) {
-      if ((requestCodec == null) != (responseCodec == null)) {
-        throw ArgumentError(
-          'Auto mode requires both codecs when serialization is used. '
-          'Provided: requestCodec=${requestCodec != null ? 'set' : 'null'}, '
-          'responseCodec=${responseCodec != null ? 'set' : 'null'}',
-        );
-      }
-    }
-  }
+  ) => _RpcCodecMode.validate(dataTransferMode, requestCodec, responseCodec);
 
   /// Unified unary call with centralized mode control.
   ///
@@ -623,42 +585,24 @@ abstract class RpcPeerContract extends RpcResponderContract {
   /// The peer endpoint this contract is bound to.
   RpcPeerEndpoint get endpoint => _peerEndpoint;
 
-  bool _isCallerZeroCopyAllowed<TRequest, TResponse>(
-    IRpcCodec<TRequest>? requestCodec,
-    IRpcCodec<TResponse>? responseCodec,
-  ) {
-    switch (callerDataTransferMode) {
-      case RpcDataTransferMode.zeroCopy:
-        return true;
-      case RpcDataTransferMode.codec:
-        return false;
-      case RpcDataTransferMode.auto:
-        return requestCodec == null && responseCodec == null;
-    }
-  }
-
   (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?) _getCallerEffectiveCodecs<
     TRequest,
     TResponse
-  >(IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) {
-    return _isCallerZeroCopyAllowed(requestCodec, responseCodec)
-        ? (null, null)
-        : (requestCodec, responseCodec);
-  }
+  >(IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec) =>
+      _RpcCodecMode.effectiveCodecs(
+        callerDataTransferMode,
+        requestCodec,
+        responseCodec,
+      );
 
   void _validateCallerCodecs<TRequest, TResponse>(
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
-  ) {
-    if (!_isCallerZeroCopyAllowed(requestCodec, responseCodec)) {
-      if (requestCodec == null || responseCodec == null) {
-        throw ArgumentError(
-          'Serialization mode requires both codecs. '
-          'Current mode: $callerDataTransferMode.',
-        );
-      }
-    }
-  }
+  ) => _RpcCodecMode.validate(
+    callerDataTransferMode,
+    requestCodec,
+    responseCodec,
+  );
 
   /// Sends a unary request to the remote peer.
   Future<TResponse>

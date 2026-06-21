@@ -15,6 +15,27 @@ bool _isTransportClosed(Object error) {
   return error is StateError && error.message == 'Transport is closed';
 }
 
+/// Compresses [serialized] with [encoding] (null or `identity` = no
+/// compression), wraps it in the gRPC 5-byte frame, and sends it on [streamId].
+///
+/// Shared by the request (client) and response (server) send paths, which were
+/// byte-for-byte identical here. [encoding] must already be resolved/validated
+/// by the caller.
+Future<void> _frameAndSend(
+  IRpcTransport transport,
+  int streamId,
+  Uint8List serialized,
+  String? encoding,
+) {
+  final useCompression =
+      encoding != null && encoding != RpcGrpcCompression.identity;
+  final payload = useCompression
+      ? RpcGrpcCompression.compress(serialized, encoding: encoding)
+      : serialized;
+  final framed = RpcMessageFrame.encode(payload, compressed: useCompression);
+  return transport.sendMessage(streamId, framed);
+}
+
 /// Shared stream processor: zero-copy when no codecs (zero-copy transport required), otherwise serialized.
 final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final LogScope _logger;
@@ -231,19 +252,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
               'Response serialized (${serialized.length} bytes) [streamId: $_streamId]',
             );
           }
-
-          final useCompression = _responseEncoding != null;
-          final payload = useCompression
-              ? RpcGrpcCompression.compress(
-                  serialized,
-                  encoding: _responseEncoding!,
-                )
-              : serialized;
-          final framedMessage = RpcMessageFrame.encode(
-            payload,
-            compressed: useCompression,
+          await _frameAndSend(
+            _transport,
+            _streamId,
+            serialized,
+            _responseEncoding,
           );
-          await _transport.sendMessage(_streamId, framedMessage);
 
           if (_logger.isInternal) {
             _logger.internal(
@@ -906,21 +920,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
               'package:rpc_dart_compression).',
             );
           }
-          final useCompression =
-              requestEncoding != null &&
-              requestEncoding != RpcGrpcCompression.identity;
-          final payload = useCompression
-              ? RpcGrpcCompression.compress(
-                  serialized,
-                  encoding: requestEncoding,
-                )
-              : serialized;
-
-          final framedMessage = RpcMessageFrame.encode(
-            payload,
-            compressed: useCompression,
-          );
-          await _transport.sendMessage(_streamId, framedMessage);
+          await _frameAndSend(_transport, _streamId, serialized, requestEncoding);
 
           _logger.internal(
             'Request sent for $_methodPath [streamId: $_streamId]',
