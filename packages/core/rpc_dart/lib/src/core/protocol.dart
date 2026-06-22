@@ -152,11 +152,13 @@ abstract interface class RpcMessageFrame {
 
     final isCompressed = compressionFlag == RpcConstants.compressed;
 
-    final length =
-        (headerBytes[RpcConstants.messageLengthIndex] << 24) |
-        (headerBytes[RpcConstants.messageLengthIndex + 1] << 16) |
-        (headerBytes[RpcConstants.messageLengthIndex + 2] << 8) |
-        headerBytes[RpcConstants.messageLengthIndex + 3];
+    // Read as an unsigned big-endian 32-bit value. A manual `<< 24` is a signed
+    // 32-bit shift on dart2js, so a length whose top byte has its high bit set
+    // would wrap negative; ByteData.getUint32 is always unsigned and matches the
+    // sibling reader in channel_frame.dart.
+    final length = ByteData.sublistView(
+      headerBytes,
+    ).getUint32(RpcConstants.messageLengthIndex);
 
     return RpcMessageHeader(isCompressed, length);
   }

@@ -153,6 +153,11 @@ class _FastCborReader {
   /// any realistic message structure and far below the overflow threshold.
   static const int _maxDepth = 256;
 
+  /// Largest integer representable exactly on both the VM (signed 64-bit) and
+  /// dart2js (IEEE-754 double): 2^53 - 1. Decoded integers above this are
+  /// rejected so the result never silently differs between platforms.
+  static const int _maxSafeInteger = 0x1FFFFFFFFFFFFF;
+
   final Uint8List _bytes;
   int _offset = 0;
 
@@ -224,7 +229,10 @@ class _FastCborReader {
 
   /// Fast string read without caching.
   String _readStringFast() {
-    final byte = _bytes[_offset++];
+    // Bounds-checked read: a truncated map (a declared entry whose key bytes are
+    // missing) reaches here, and a raw _bytes[_offset++] would throw RangeError
+    // instead of the FormatException callers expect for malformed input.
+    final byte = _readByteFast();
     final majorType = byte >> 5;
     final additionalInfo = byte & 0x1F;
 
@@ -334,7 +342,18 @@ class _FastCborReader {
             (_readByteFast() << 16) +
             (_readByteFast() << 8) +
             _readByteFast();
-        return hi * 0x100000000 + lo;
+        final value = hi * 0x100000000 + lo;
+        // A uint64 in [2^63, 2^64) wraps negative on the VM's signed 64-bit int
+        // and loses precision past 2^53 on dart2js. The encoder promotes such
+        // values to doubles, so an integer this large here is either malformed
+        // or unrepresentable; reject it consistently instead of returning a
+        // silently corrupted number.
+        if (value < 0 || value > _maxSafeInteger) {
+          throw FormatException(
+            'CBOR integer exceeds the supported 53-bit safe range',
+          );
+        }
+        return value;
       case CborCodec._additionalInfoIndefiniteLength:
         // Mirrors the slow reader's message for malformed indefinite ints/tags.
         throw FormatException('Indefinite length not implemented');
