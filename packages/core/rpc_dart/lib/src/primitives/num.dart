@@ -63,12 +63,14 @@ class RpcNum extends RpcPrimitiveMessage<num> {
     if (_isDoubleTyped(this) || _isDoubleTyped(other)) {
       throw _comparisonException(type: 'RpcNum', op: '~/');
     }
+    // Both operands are known not to be double-typed (the subtype guard above
+    // rejected RpcDouble / raw double). A raw `is int` check here is unreliable
+    // on dart2js (`7.0 is int` is true), which made `RpcNum(7.0) ~/ ...` throw
+    // on the VM but return a value on dart2js. `~/` is well-defined and
+    // platform-stable for any num, so compute it directly.
     final a = value;
     final b = _extractNum(other);
-    if (a is int && b is int) {
-      return RpcNum(a ~/ b);
-    }
-    throw _comparisonException(type: 'RpcNum', op: '~/');
+    return RpcNum(a ~/ b);
   }
 
   /// Returns true when [o] is known to carry a double value via its runtime

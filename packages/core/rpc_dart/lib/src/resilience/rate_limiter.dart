@@ -66,7 +66,13 @@ class _SlidingWindowSpec extends RateLimit {
   final Duration _window;
 
   const _SlidingWindowSpec({required this.max, required Duration window})
-    : _window = window;
+    : assert(max > 0, 'RateLimit.slidingWindow max must be > 0'),
+      assert(
+        window > Duration.zero,
+        'RateLimit.slidingWindow window must be > 0 (a zero window divides by '
+        'zero in the counter)',
+      ),
+      _window = window;
 
   @override
   _RateLimitCounter _createCounter(int Function() nowMicros) =>
@@ -83,7 +89,17 @@ class _TokenBucketSpec extends RateLimit {
     required this.max,
     required Duration window,
     this.burst,
-  }) : _window = window;
+  }) : assert(max > 0, 'RateLimit.tokenBucket max must be > 0'),
+       assert(
+         window > Duration.zero,
+         'RateLimit.tokenBucket window must be > 0 (a zero window divides by '
+         'zero in the counter)',
+       ),
+       assert(
+         burst == null || burst > 0,
+         'RateLimit.tokenBucket burst must be > 0 when provided',
+       ),
+       _window = window;
 
   @override
   _RateLimitCounter _createCounter(int Function() nowMicros) =>
