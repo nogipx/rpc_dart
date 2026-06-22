@@ -363,6 +363,12 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         );
       },
       onCancel: () {
+        // Propagate the cancellation to the server. The cancellation token is
+        // the only thing that triggers CallProcessor._sendCancellationToServer
+        // (the grpc-status=CANCELLED trailer); without firing it the server
+        // keeps producing responses for an abandoned stream. finish() untracks
+        // the token, so cancel it first.
+        ctx.cancellationToken?.cancel('server-stream subscription cancelled');
         finish();
         // Intentionally do NOT wait for sub.cancel(): on dart2js, cancelling the
         // inner chain of async* generators may never complete, which would block
