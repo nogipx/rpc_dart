@@ -4,6 +4,38 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.3.1
+
+### Fixes
+
+- Client stream IDs no longer leak. A `CallProcessor`/`UnaryCaller` call that
+  ends without a clean `finishSending` (cancellation, deadline, error) — or
+  whose constructor throws after allocating the id (e.g. an already-expired
+  deadline) — now releases its transport stream id. Previously a long-lived
+  client eventually failed with "Too many active streams".
+- Server-stream cancellation propagates to the server. Cancelling the
+  consumer's subscription to a `serverStream` now fires the call's cancellation
+  token (sending the `grpc-status=CANCELLED` trailer), so the server stops
+  producing for an abandoned stream instead of streaming to nobody.
+- CBOR decode is robust to malformed input: a truncated map key throws
+  `FormatException` instead of an uncaught `RangeError`, and an 8-byte unsigned
+  integer outside the 53-bit safe range is rejected rather than silently
+  wrapping (negative on the VM, lossy on dart2js).
+- gRPC frame length is read as an unsigned 32-bit value; a length with the high
+  bit set no longer wraps negative on dart2js.
+- `RpcNum operator ~/` is platform-stable. It no longer threw on the VM while
+  returning a value on dart2js for a whole-valued operand.
+- `RateLimit.slidingWindow` / `RateLimit.tokenBucket` assert `max > 0`,
+  `window > 0`, and `burst > 0` instead of dividing by zero / producing NaN at
+  runtime.
+- Error-detail (`google.rpc.Status`) decoders skip unknown protobuf wire types
+  instead of aborting, so an unrecognized field before `details` no longer
+  drops the entire details list.
+- Logger: redaction recurses into lists (sensitive fields nested in a list
+  element were leaking); `redactString` matches on word boundaries and tolerates
+  spaces around `=`/`:`; and a throwing log output is isolated so it neither
+  breaks the caller nor starves the other outputs.
+
 ## 4.3.0
 
 ### Features
