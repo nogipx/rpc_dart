@@ -55,16 +55,33 @@ Future<(int micros, int count)> dribble(int payloadSize) async {
   return (sw.elapsedMicroseconds, count);
 }
 
+/// Measures [dribble] for [payloadSize] [reps] times and returns the FASTEST
+/// run. A single timed run is sensitive to GC pauses and scheduler jitter,
+/// which only ever ADD time; the minimum is therefore the most stable estimate
+/// of the true (interference-free) cost and keeps the N-vs-2N ratio meaningful.
+Future<(int micros, int count)> dribbleMin(int payloadSize, int reps) async {
+  var best = -1;
+  var count = 0;
+  for (var i = 0; i < reps; i++) {
+    final (us, c) = await dribble(payloadSize);
+    count = c;
+    if (best < 0 || us < best) best = us;
+  }
+  return (best, count);
+}
+
 void main() {
   test(
     'R5: dribbled frame reassembly scales linearly, not quadratically',
     () async {
       const n = 80000;
+      const reps = 5;
 
-      // Warm up to stabilize timing, then measure N and 2N.
+      // Warm up to stabilize timing (JIT), then take the fastest of several
+      // runs at N and 2N to suppress one-off GC/scheduler noise.
       await dribble(n);
-      final (usN, countN) = await dribble(n);
-      final (us2N, count2N) = await dribble(2 * n);
+      final (usN, countN) = await dribbleMin(n, reps);
+      final (us2N, count2N) = await dribbleMin(2 * n, reps);
       expect(countN, 1);
       expect(count2N, 1);
 
