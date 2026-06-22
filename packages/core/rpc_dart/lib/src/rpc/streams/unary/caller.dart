@@ -367,6 +367,10 @@ final class UnaryCaller<TRequest, TResponse> {
       );
       await subscription?.cancel();
       await cancellationSubscription?.cancel();
+      // Release the transport stream id; the unary path never calls
+      // finishSending(), so without this the id leaks against maxActiveStreams
+      // and a long-lived client eventually fails with "Too many active streams".
+      _transport.releaseStreamId(streamId);
     }
   }
 

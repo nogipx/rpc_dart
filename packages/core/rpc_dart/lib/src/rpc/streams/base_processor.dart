@@ -754,59 +754,73 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
        _context = context,
        _scope = RpcCallScope(context: context),
        _logger = logger?.child('CallProcessor') ?? LogScope.noop {
-    // Validation: codecs are required for serialization mode.
-    if (!_isZeroCopy) {
-      if (_requestCodec == null || _responseCodec == null) {
-        throw ArgumentError(
-          'Codecs are required for serialization mode. '
-          'For zero-copy leave codecs null.',
-        );
-      }
-      _parser = RpcMessageParser(
-        logger: _logger,
-        decompressor: (payload, {int? maxOutputBytes}) {
-          final encoding = _peerGrpcEncoding;
-          if (encoding == null || encoding == RpcGrpcCompression.identity) {
-            throw RpcStatusException(
-              RpcStatus.internal,
-              'Compressed gRPC payload received without grpc-encoding',
-            );
-          }
-          return RpcGrpcCompression.decompress(
-            payload,
-            encoding: encoding,
-            maxOutputBytes: maxOutputBytes,
+    try {
+      // Validation: codecs are required for serialization mode.
+      if (!_isZeroCopy) {
+        if (_requestCodec == null || _responseCodec == null) {
+          throw ArgumentError(
+            'Codecs are required for serialization mode. '
+            'For zero-copy leave codecs null.',
           );
-        },
-      );
-    } else {
-      // Zero-copy mode requires transport support.
-      if (!transport.supportsZeroCopy) {
-        throw ArgumentError(
-          'Zero-copy mode requires a transport with zero-copy support. '
-          'Provide codecs for network transports.',
+        }
+        _parser = RpcMessageParser(
+          logger: _logger,
+          decompressor: (payload, {int? maxOutputBytes}) {
+            final encoding = _peerGrpcEncoding;
+            if (encoding == null || encoding == RpcGrpcCompression.identity) {
+              throw RpcStatusException(
+                RpcStatus.internal,
+                'Compressed gRPC payload received without grpc-encoding',
+              );
+            }
+            return RpcGrpcCompression.decompress(
+              payload,
+              encoding: encoding,
+              maxOutputBytes: maxOutputBytes,
+            );
+          },
         );
+      } else {
+        // Zero-copy mode requires transport support.
+        if (!transport.supportsZeroCopy) {
+          throw ArgumentError(
+            'Zero-copy mode requires a transport with zero-copy support. '
+            'Provide codecs for network transports.',
+          );
+        }
       }
+
+      _methodPath = '/$_serviceName/$_methodName';
+
+      _logger.internal(
+        'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
+      );
+
+      // Register controller cleanup and stream-id release with scope.
+      _scope.onDispose(() {
+        // Free the transport stream id so a closed/aborted call (cancellation,
+        // deadline, error) releases its slot. The normal finishSending path
+        // releases it too, and releaseStreamId is idempotent, so a double
+        // release is harmless.
+        _transport.releaseStreamId(_streamId);
+        if (!_requestController.isClosed) _requestController.close();
+        if (!_responseController.isClosed) _responseController.close();
+      });
+
+      // Validate context before starting.
+      _checkContextBeforeCall();
+
+      _setupCancellationMonitoring();
+      _setupRequestHandler();
+      _setupResponseHandler();
+    } catch (_) {
+      // createStream() ran in the initializer list, so a throw in the body
+      // (invalid codecs, or an already-expired deadline tripping
+      // _checkContextBeforeCall) would leak the allocated stream id: the caller
+      // never receives an instance, so close() never runs. Release it here.
+      _transport.releaseStreamId(_streamId);
+      rethrow;
     }
-
-    _methodPath = '/$_serviceName/$_methodName';
-
-    _logger.internal(
-      'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
-    );
-
-    // Register controller cleanup with scope.
-    _scope.onDispose(() {
-      if (!_requestController.isClosed) _requestController.close();
-      if (!_responseController.isClosed) _responseController.close();
-    });
-
-    // Validate context before starting.
-    _checkContextBeforeCall();
-
-    _setupCancellationMonitoring();
-    _setupRequestHandler();
-    _setupResponseHandler();
   }
 
   /// The call scope managing this processor's resources.
