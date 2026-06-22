@@ -60,7 +60,7 @@ abstract class RpcErrorDetail {
         final (_, newOffset) = _readVarint(data, offset);
         offset = newOffset;
       } else {
-        break; // unsupported wire type
+        offset = _skipField(data, offset, wireType);
       }
     }
 
@@ -142,7 +142,7 @@ Uint8List encodeRpcStatus(
         details.add(RpcErrorDetail.decodeAny(bytes));
       }
     } else {
-      break;
+      offset = _skipField(data, offset, wireType);
     }
   }
 
@@ -206,7 +206,7 @@ class RpcBadRequest extends RpcErrorDetail {
         offset += len;
         violations.add(_decodeFieldViolation(bytes));
       } else {
-        break;
+        offset = _skipField(data, offset, wireType);
       }
     }
     return RpcBadRequest(violations);
@@ -228,7 +228,7 @@ class RpcBadRequest extends RpcErrorDetail {
         if (fieldNumber == 1) field = utf8.decode(bytes);
         if (fieldNumber == 2) description = utf8.decode(bytes);
       } else {
-        break;
+        offset = _skipField(data, offset, wireType);
       }
     }
     return RpcFieldViolation(field: field, description: description);
@@ -318,7 +318,7 @@ class RpcRetryInfo extends RpcErrorDetail {
         final (_, newOffset) = _readVarint(data, offset);
         offset = newOffset;
       } else {
-        break;
+        offset = _skipField(data, offset, wireType);
       }
     }
     return RpcRetryInfo(
@@ -383,7 +383,7 @@ class RpcDebugInfo extends RpcErrorDetail {
         if (fieldNumber == 1) entries.add(utf8.decode(bytes));
         if (fieldNumber == 2) detail = utf8.decode(bytes);
       } else {
-        break;
+        offset = _skipField(data, offset, wireType);
       }
     }
     return RpcDebugInfo(stackEntries: entries, detail: detail);
@@ -479,7 +479,7 @@ class RpcErrorInfo extends RpcErrorDetail {
         final (_, newOffset) = _readVarint(data, offset);
         offset = newOffset;
       } else {
-        break;
+        offset = _skipField(data, offset, wireType);
       }
     }
     return RpcErrorInfo(reason: reason, domain: domain, metadata: metadata);
@@ -501,7 +501,7 @@ class RpcErrorInfo extends RpcErrorDetail {
         if (fieldNumber == 1) key = utf8.decode(bytes);
         if (fieldNumber == 2) value = utf8.decode(bytes);
       } else {
-        break;
+        offset = _skipField(data, offset, wireType);
       }
     }
     return (key, value);
@@ -573,6 +573,44 @@ void _writeVarint(BytesBuilder buf, int value) {
     hi = hi ~/ 0x80;
   }
   buf.addByte(lo & 0x7F);
+}
+
+/// Advances [offset] past one field of the given [wireType] without decoding
+/// it, returning the new offset.
+///
+/// Protobuf's forward-compatibility rule requires unknown fields to be SKIPPED
+/// rather than treated as fatal: a peer (or a future revision of the message)
+/// may add a field of any wire type before one we care about, and aborting on
+/// it would silently drop every field that follows. Throws [FormatException]
+/// for the deprecated group wire types (3/4), which this decoder does not
+/// support.
+int _skipField(Uint8List data, int offset, int wireType) {
+  switch (wireType) {
+    case 0: // varint
+      final (_, newOffset) = _readVarint(data, offset);
+      return newOffset;
+    case 1: // 64-bit fixed
+      if (offset + 8 > data.length) {
+        throw const FormatException(
+          'Malformed protobuf: truncated 64-bit field',
+        );
+      }
+      return offset + 8;
+    case 2: // length-delimited
+      final (len, newOffset) = _readVarint(data, offset);
+      // Validate bounds the same way _readLengthDelimited does.
+      _readLengthDelimited(data, newOffset, len);
+      return newOffset + len;
+    case 5: // 32-bit fixed
+      if (offset + 4 > data.length) {
+        throw const FormatException(
+          'Malformed protobuf: truncated 32-bit field',
+        );
+      }
+      return offset + 4;
+    default: // 3/4 = groups (deprecated), or invalid
+      throw FormatException('Unsupported protobuf wire type: $wireType');
+  }
 }
 
 (int value, int newOffset) _readVarint(Uint8List data, int offset) {
