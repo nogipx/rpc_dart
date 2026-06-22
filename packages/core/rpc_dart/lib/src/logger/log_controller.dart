@@ -152,14 +152,29 @@ class LogController {
       enrichedRecord = _redact(enrichedRecord);
     }
 
-    // Step 5: Route to outputs
-    for (final output in _outputs) {
+    // Step 5: Route to outputs.
+    //
+    // Iterate a snapshot so an output/enricher callback that mutates _outputs
+    // (addOutput/removeOutput are documented runtime mutators) cannot trigger a
+    // ConcurrentModificationError mid-dispatch. Each write is isolated: a
+    // throwing output must neither abort delivery to the other outputs nor
+    // propagate out of the logging call into the caller's business code.
+    for (final output in List.of(_outputs)) {
       final filter = output.scopeFilter;
       if (filter != null && !enrichedRecord.scope.startsWith(filter)) continue;
-      if (output.isAsync) {
-        unawaited(output.writeAsync(enrichedRecord));
-      } else {
-        output.write(enrichedRecord);
+      try {
+        if (output.isAsync) {
+          unawaited(
+            Future<void>.sync(
+              () => output.writeAsync(enrichedRecord),
+            ).catchError((_) {}),
+          );
+        } else {
+          output.write(enrichedRecord);
+        }
+      } catch (_) {
+        // A logging sink must never break the caller; drop this record for the
+        // failing output and continue with the rest.
       }
     }
 

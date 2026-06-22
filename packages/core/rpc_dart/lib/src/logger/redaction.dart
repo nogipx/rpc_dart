@@ -24,13 +24,8 @@ class LogRedactor {
     for (final entry in data.entries) {
       if (_fields.contains(entry.key.toLowerCase())) {
         result[entry.key] = replacement;
-      } else if (entry.value is Map) {
-        // Recurse into ANY map regardless of its generic type arguments
-        // (JSON-decoded maps are typically Map<String, dynamic> / untyped),
-        // otherwise nested sensitive fields would leak.
-        result[entry.key] = _redactDynamic(entry.value as Map);
       } else {
-        result[entry.key] = entry.value;
+        result[entry.key] = _redactValue(entry.value);
       }
     }
     return result;
@@ -39,7 +34,7 @@ class LogRedactor {
   /// Redacts a map of arbitrary generic type (e.g. JSON-decoded maps).
   ///
   /// Keys are compared case-insensitively (after stringification); nested maps
-  /// are recursed into regardless of their generic type arguments.
+  /// and lists are recursed into regardless of their generic type arguments.
   Map<String, Object> _redactDynamic(Map data) {
     final result = <String, Object>{};
     for (final entry in data.entries) {
@@ -47,13 +42,25 @@ class LogRedactor {
       final value = entry.value;
       if (_fields.contains(key.toLowerCase())) {
         result[key] = replacement;
-      } else if (value is Map) {
-        result[key] = _redactDynamic(value);
       } else if (value != null) {
-        result[key] = value;
+        result[key] = _redactValue(value);
       }
     }
     return result;
+  }
+
+  /// Recurses into nested maps and lists so sensitive fields buried inside a
+  /// list element (e.g. a list of objects) are still masked; scalars pass
+  /// through unchanged.
+  Object _redactValue(Object value) {
+    if (value is Map) return _redactDynamic(value);
+    if (value is List) {
+      return [
+        for (final element in value)
+          element == null ? element : _redactValue(element),
+      ];
+    }
+    return value;
   }
 
   /// Redacts sensitive patterns in a free-text string.
@@ -62,7 +69,13 @@ class LogRedactor {
   /// of the configured sensitive field names (case-insensitive).
   String redactString(String input) {
     if (_pattern == null) return input;
-    return input.replaceAllMapped(_pattern, (m) => '${m[1]}$replacement');
+    // Groups: 1 = leading boundary (start-of-string or a separator char,
+    // re-emitted verbatim), 2 = field name, 3 = the `=`/`:` separator with any
+    // surrounding whitespace. Only the value that follows is masked.
+    return input.replaceAllMapped(
+      _pattern,
+      (m) => '${m[1]}${m[2]}${m[3]}$replacement',
+    );
   }
 
   late final RegExp? _pattern = _buildPattern();
@@ -70,7 +83,15 @@ class LogRedactor {
   RegExp? _buildPattern() {
     if (_fields.isEmpty) return null;
     final escaped = _fields.map(RegExp.escape).join('|');
-    // Matches: field=value or field: value (up to whitespace, comma, or end)
-    return RegExp('($escaped[=:]\\s?)[^\\s,;]+', caseSensitive: false);
+    // Matches: <boundary>field=value or field: value (value runs up to the next
+    // whitespace, comma, semicolon, or end). The leading boundary (start or a
+    // separator char) prevents matching a field name as a substring of a longer
+    // identifier (e.g. `mytoken=`), and `\s*` around the separator handles
+    // `password = value`. A captured boundary is used instead of a lookbehind
+    // so the behavior is identical on the VM and dart2js.
+    return RegExp(
+      '(^|[\\s,;])($escaped)(\\s*[=:]\\s*)[^\\s,;]+',
+      caseSensitive: false,
+    );
   }
 }

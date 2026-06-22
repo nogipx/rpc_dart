@@ -15,11 +15,16 @@ void main() {
     late RpcCallerEndpoint callerEndpoint;
     late StreamController<Uint8List> serverRequestPayloads;
 
-    setUpAll(() async {
+    // Per-test isolation: each test gets its own server + connection. A single
+    // long-lived HTTP/2 connection shared across the suite is fragile — once any
+    // test leaves the connection in a bad state, every later test fails with
+    // "connection no longer active". Port 0 binds an ephemeral port to avoid
+    // collisions under parallel `melos test`.
+    setUp(() async {
       serverRequestPayloads = StreamController<Uint8List>.broadcast();
 
       testServer = RpcHttp2Server(
-        port: 10101,
+        port: 0,
         onEndpointCreated: (endpoint) {
           endpoint.transport.incomingMessages.listen((message) {
             if (!message.isMetadataOnly && message.payload != null) {
@@ -32,7 +37,6 @@ void main() {
       );
       await testServer.start();
 
-      // Создаем одно долгоживущее соединение для всех тестов
       clientTransport = await RpcHttp2CallerTransport.connect(
         host: 'localhost',
         port: testServer.port,
@@ -40,15 +44,12 @@ void main() {
       );
 
       callerEndpoint = RpcCallerEndpoint(transport: clientTransport);
-
-      print('🔗 Установлено долгоживущее RPC соединение');
     });
 
-    tearDownAll(() async {
+    tearDown(() async {
       await callerEndpoint.close();
       await testServer.stop();
       await serverRequestPayloads.close();
-      print('🔒 Долгоживущее RPC соединение закрыто');
     });
 
     test('http2_unary_payload_has_single_grpc_prefix', () async {
@@ -113,21 +114,20 @@ void main() {
         request: RpcString('Generate messages'),
       );
 
-      // Слушаем ответы
-      responseStream.listen(
+      // Слушаем ответы. Guard every completion: a late stream error (e.g. the
+      // connection closing during tearDown) must not complete the future twice.
+      final sub = responseStream.listen(
         (rpcString) {
           responses.add(rpcString.value);
-          print('📨 Получен server streaming ответ: ${rpcString.value}');
-
-          if (responses.length >= 3) {
+          if (responses.length >= 3 && !completer.isCompleted) {
             completer.complete();
           }
         },
-        onError: (error) => completer.completeError(error),
+        onError: (Object error) {
+          if (!completer.isCompleted) completer.completeError(error);
+        },
         onDone: () {
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
+          if (!completer.isCompleted) completer.complete();
         },
       );
 
@@ -137,13 +137,13 @@ void main() {
         onTimeout: () =>
             throw TimeoutException('Timeout waiting for server streaming'),
       );
+      // Detach before tearDown closes the connection under us.
+      await sub.cancel();
 
       expect(responses.length, equals(3));
       expect(responses[0], contains('Stream message #1'));
       expect(responses[1], contains('Stream message #2'));
       expect(responses[2], contains('Stream message #3'));
-
-      print('✅ Server Streaming RPC через Caller/Responder работает отлично!');
     });
 
     test('client_streaming_rpc_через_caller_и_responder', () async {
@@ -219,26 +219,20 @@ void main() {
             requests: requestStream,
           );
 
-      // Слушаем ответы
-      responseStream.listen(
+      // Слушаем ответы. A late stream error (e.g. the connection closing during
+      // tearDown) must not complete the future twice.
+      final sub = responseStream.listen(
         (rpcString) {
           responses.add(rpcString.value);
-          print('🔄 Получен bidirectional ответ: ${rpcString.value}');
-
-          if (responses.length >= 3) {
+          if (responses.length >= 3 && !completer.isCompleted) {
             completer.complete();
           }
         },
-        onError: (error) {
-          // A late stream error can arrive after the 3 expected responses have
-          // already completed the future; don't double-complete.
+        onError: (Object error) {
           if (!completer.isCompleted) completer.completeError(error);
         },
         onDone: () {
-          print('🏁 Bidirectional response stream завершен');
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
+          if (!completer.isCompleted) completer.complete();
         },
       );
 
@@ -249,6 +243,8 @@ void main() {
           'Timeout waiting for bidirectional responses',
         ),
       );
+      // Detach before tearDown closes the connection under us.
+      await sub.cancel();
 
       expect(responses.length, equals(3));
       expect(responses[0], equals('Echo: Bidirectional message #1'));
