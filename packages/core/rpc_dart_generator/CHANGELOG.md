@@ -4,6 +4,9 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.4.5
+- analyzer: '>=9.0.0 <11.0.0'
+
 ## 0.4.4
 
 **gRPC descriptor — fully-qualified type names:**
