@@ -18,3 +18,4 @@ export 'src/log_server.dart'
         DeviceDisconnected;
 export 'src/log_console.dart' show LogCollectorConsole;
 export 'src/log_mcp.dart' show LogCollectorMcpServer;
+export 'src/mcp_buffer.dart' show LogCollectorMcpBuffer;
