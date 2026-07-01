@@ -4,6 +4,19 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.3.2
+
+### Fixes
+
+- Server-stream completion no longer poisons a reused context. The caller
+  pipeline fired the context cancellation token unconditionally from the
+  bridge's `onCancel`, which also runs on normal completion — so a
+  successfully-finished server stream cancelled its own `RpcContext`. When one
+  context is shared across calls (e.g. a blob download that fetches a manifest
+  then its chunks and calls `throwIfCancelled` between), the next call threw
+  `RpcCancelledException` even though the previous one succeeded. Propagation is
+  now guarded on `!finished`; real mid-stream cancellation is unaffected.
+
 ## 4.3.1
 
 ### Fixes

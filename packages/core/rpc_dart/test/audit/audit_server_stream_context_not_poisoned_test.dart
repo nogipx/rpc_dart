@@ -113,8 +113,10 @@ void main() {
             .withCancellation(token)
             .build();
 
-        final first =
-            await finite(_Req('a'), context: context).map((r) => r.value).toList();
+        final first = await finite(
+          _Req('a'),
+          context: context,
+        ).map((r) => r.value).toList();
         expect(first, equals(['a:1', 'a:2']));
 
         // The regression: a normally-completed stream must leave the token
@@ -128,9 +130,10 @@ void main() {
 
         // And the reused context must still work for a second call — this is
         // the blob manifest->chunks sequence that originally broke.
-        final second = await finite(_Req('b'), context: context)
-            .map((r) => r.value)
-            .toList();
+        final second = await finite(
+          _Req('b'),
+          context: context,
+        ).map((r) => r.value).toList();
         expect(second, equals(['b:1', 'b:2']));
       },
     );
