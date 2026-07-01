@@ -368,7 +368,18 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         // (the grpc-status=CANCELLED trailer); without firing it the server
         // keeps producing responses for an abandoned stream. finish() untracks
         // the token, so cancel it first.
-        ctx.cancellationToken?.cancel('server-stream subscription cancelled');
+        //
+        // Only when the stream did NOT already complete normally. On normal
+        // completion onDone runs finish() (finished=true) and closes the
+        // controller; `await for` then tears down its subscription, which
+        // triggers this onCancel. Firing the token here would poison a
+        // shared/reused RpcContext cancellation token, making the NEXT call on
+        // that context throw RpcCancelledException even though this stream
+        // succeeded (observed as failed blob downloads on the manifest→chunks
+        // sequence, which reuses one RpcContext).
+        if (!finished) {
+          ctx.cancellationToken?.cancel('server-stream subscription cancelled');
+        }
         finish();
         // Intentionally do NOT wait for sub.cancel(): on dart2js, cancelling the
         // inner chain of async* generators may never complete, which would block
