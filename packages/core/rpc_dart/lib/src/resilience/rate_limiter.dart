@@ -266,6 +266,22 @@ class _TokenBucketCounter extends _RateLimitCounter {
 /// If [keyExtractor] returns `null` for a call, dynamic limits are skipped and
 /// only [global] applies.
 ///
+/// ## Streaming calls
+///
+/// Metering follows the direction of client-driven load:
+///
+/// - **Unary** — one token per call.
+/// - **Client-stream / bidirectional** — one token per **inbound request**
+///   message. This is genuine client-driven load, so per-message accounting is
+///   the default and cannot be disabled.
+/// - **Server-stream** — one token at **establishment** (per stream open),
+///   like a unary call. The response messages are server-paced output, not
+///   client load, so they are not metered. This keeps a burst of pushes from
+///   tripping the limit and tearing down a long-lived subscription. Set
+///   [meterServerStreamMessages] to `true` to instead charge one token per
+///   emitted response (e.g. to cap a client-attributable firehose); when the
+///   limit is hit the stream emits a RESOURCE_EXHAUSTED error and stops.
+///
 /// Call [dispose] when the endpoint shuts down to cancel the cleanup timer.
 ///
 /// ## Priority
@@ -294,6 +310,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     String? Function(RpcMiddlewareContext)? keyExtractor,
     Duration cleanupInterval = const Duration(minutes: 5),
     int maxTrackedKeys = 100000,
+    bool meterServerStreamMessages = false,
     int Function()? nowMicros,
   }) : assert(maxTrackedKeys > 0, 'maxTrackedKeys must be positive'),
        _globalSpec = global,
@@ -302,6 +319,7 @@ class RpcRateLimiter extends IRpcInterceptor {
        _perKeyFallbackSpec = perKeyFallback,
        _keyExtractor = keyExtractor,
        _maxTrackedKeys = maxTrackedKeys,
+       _meterServerStreamMessages = meterServerStreamMessages,
        _nowMicros = nowMicros ?? _defaultMonotonicMicros {
     _globalCounter = global?._createCounter(_nowMicros);
 
@@ -332,6 +350,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   final RateLimit? _perKeyFallbackSpec;
   final String? Function(RpcMiddlewareContext)? _keyExtractor;
   final int _maxTrackedKeys;
+  final bool _meterServerStreamMessages;
   final int Function() _nowMicros;
   bool _disposed = false;
 
@@ -522,7 +541,18 @@ class RpcRateLimiter extends IRpcInterceptor {
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
-    // Default: every produced response message counts against the limit.
+    // A server-stream is server-paced: the client's only load-bearing action is
+    // OPENING it, so by default we meter establishment (one token, like a unary
+    // call) and let every response through. Metering each emitted response would
+    // make the limiter throttle the server's OWN push delivery and inject a
+    // RESOURCE_EXHAUSTED that tears down long-lived subscriptions (notify feeds,
+    // tailing, large chunked downloads) on a burst — almost never the intent.
+    // Opt into per-response accounting with meterServerStreamMessages: true for
+    // the rare case of capping client-attributable firehose output.
+    if (!_meterServerStreamMessages) {
+      _check(call);
+      return next(call.context, request);
+    }
     final stream = await next(call.context, request);
     return _meterStream(call, stream);
   }

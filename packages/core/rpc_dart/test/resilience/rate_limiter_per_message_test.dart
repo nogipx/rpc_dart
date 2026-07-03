@@ -2,12 +2,15 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Feature #1: per-message accounting for streaming RPCs.
+// Per-message accounting for streaming RPCs, split by load direction.
 //
-// Default changed: every message on a rate-limited streaming method counts
-// against the limit (previously one token per stream open). When the limit is
-// exceeded mid-stream the wrapped stream emits an RpcRateLimitException error
-// (RESOURCE_EXHAUSTED), consistent with the unary path.
+// Inbound streams (client-stream / bidirectional requests) count one token per
+// message — genuine client-driven load. Server-streams meter establishment (one
+// token per open, like unary) by default, because the responses are server-paced
+// output; opt into per-response accounting with meterServerStreamMessages: true.
+// When a metered limit is exceeded mid-stream the wrapped stream emits an
+// RpcRateLimitException error (RESOURCE_EXHAUSTED), consistent with the unary
+// path.
 
 import 'dart:async';
 
@@ -32,13 +35,62 @@ void main() {
     // Fixed clock so the sliding window never advances during the test.
     int frozenClock() => 0;
 
-    test('server-stream: each response message consumes a token and then '
-        'emits RESOURCE_EXHAUSTED after limit', () async {
+    test('server-stream (default): establishment metered once, every response '
+        'passes through regardless of count', () async {
+      // Limit of 3, but a single stream open costs ONE token — so all five
+      // responses must be delivered even though 5 > 3.
       final limiter = RpcRateLimiter(
         global: RateLimit.slidingWindow(
           max: 3,
           window: const Duration(hours: 1),
         ),
+        nowMicros: frozenClock,
+      );
+
+      final out = await limiter.interceptServerStream<String, String>(
+        callContext,
+        'req',
+        (ctx, req) => Stream<String>.fromIterable(['a', 'b', 'c', 'd', 'e']),
+      );
+
+      expect(await out.toList(), ['a', 'b', 'c', 'd', 'e']);
+      limiter.dispose();
+    });
+
+    test('server-stream (default): the Nth+1 stream OPEN is rejected', () async {
+      // Establishment metering: 3 opens allowed per window, the 4th throws.
+      final limiter = RpcRateLimiter(
+        global: RateLimit.slidingWindow(
+          max: 3,
+          window: const Duration(hours: 1),
+        ),
+        nowMicros: frozenClock,
+      );
+
+      Future<Stream<String>> open() => Future.value(
+        limiter.interceptServerStream<String, String>(
+          callContext,
+          'req',
+          (ctx, req) => Stream<String>.fromIterable(['x']),
+        ),
+      );
+
+      await open();
+      await open();
+      await open();
+      await expectLater(open(), throwsA(isA<RpcRateLimitException>()));
+      limiter.dispose();
+    });
+
+    test('server-stream (meterServerStreamMessages: true): each response '
+        'consumes a token and then emits RESOURCE_EXHAUSTED after limit',
+        () async {
+      final limiter = RpcRateLimiter(
+        global: RateLimit.slidingWindow(
+          max: 3,
+          window: const Duration(hours: 1),
+        ),
+        meterServerStreamMessages: true,
         nowMicros: frozenClock,
       );
 

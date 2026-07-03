@@ -51,6 +51,10 @@ void main() {
             'SyncService.push': RateLimit.slidingWindow(max: 4, window: window),
           },
           keyExtractor: (ctx) => ctx.context.getValue<String>('userId'),
+          // This test drives per-element metering through a server-stream to
+          // exercise the counter re-resolution path, so opt into per-response
+          // accounting (default meters establishment only).
+          meterServerStreamMessages: true,
           // Tiny interval so the real periodic cleanup runs during the test.
           cleanupInterval: const Duration(milliseconds: 5),
           nowMicros: () => nowUs,
