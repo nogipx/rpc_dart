@@ -23,6 +23,7 @@ workspace:
   - packages/data/rpc_data_sqlite
   - packages/notify/rpc_notify
   - packages/notify/rpc_notify_postgres
+  - packages/notify/rpc_notify_redis
   - packages/transport/rpc_dart_http
   - packages/transport/rpc_dart_http2
   - packages/transport/rpc_dart_isolate
@@ -85,6 +86,7 @@ melos:
         ignore:
           - rpc_dart_generator
           - "*_postgres"
+          - "*_redis"
           - "*_minio"
           - rpc_data_sqlite
           - rpc_blob_sqlite
@@ -131,6 +133,7 @@ melos:
         ignore:
           - rpc_dart_generator
           - "*_postgres"
+          - "*_redis"
           - "*_minio"
           - rpc_data_sqlite
           - rpc_blob_sqlite
