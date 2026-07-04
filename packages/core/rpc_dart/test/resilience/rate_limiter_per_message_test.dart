@@ -57,70 +57,75 @@ void main() {
       limiter.dispose();
     });
 
-    test('server-stream (default): the Nth+1 stream OPEN is rejected', () async {
-      // Establishment metering: 3 opens allowed per window, the 4th throws.
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
-          max: 3,
-          window: const Duration(hours: 1),
-        ),
-        nowMicros: frozenClock,
-      );
+    test(
+      'server-stream (default): the Nth+1 stream OPEN is rejected',
+      () async {
+        // Establishment metering: 3 opens allowed per window, the 4th throws.
+        final limiter = RpcRateLimiter(
+          global: RateLimit.slidingWindow(
+            max: 3,
+            window: const Duration(hours: 1),
+          ),
+          nowMicros: frozenClock,
+        );
 
-      Future<Stream<String>> open() => Future.value(
-        limiter.interceptServerStream<String, String>(
+        Future<Stream<String>> open() => Future.value(
+          limiter.interceptServerStream<String, String>(
+            callContext,
+            'req',
+            (ctx, req) => Stream<String>.fromIterable(['x']),
+          ),
+        );
+
+        await open();
+        await open();
+        await open();
+        await expectLater(open(), throwsA(isA<RpcRateLimitException>()));
+        limiter.dispose();
+      },
+    );
+
+    test(
+      'server-stream (meterServerStreamMessages: true): each response '
+      'consumes a token and then emits RESOURCE_EXHAUSTED after limit',
+      () async {
+        final limiter = RpcRateLimiter(
+          global: RateLimit.slidingWindow(
+            max: 3,
+            window: const Duration(hours: 1),
+          ),
+          meterServerStreamMessages: true,
+          nowMicros: frozenClock,
+        );
+
+        final out = await limiter.interceptServerStream<String, String>(
           callContext,
           'req',
-          (ctx, req) => Stream<String>.fromIterable(['x']),
-        ),
-      );
+          (ctx, req) => Stream<String>.fromIterable(['a', 'b', 'c', 'd', 'e']),
+        );
 
-      await open();
-      await open();
-      await open();
-      await expectLater(open(), throwsA(isA<RpcRateLimitException>()));
-      limiter.dispose();
-    });
+        final received = <String>[];
+        Object? error;
+        final done = Completer<void>();
+        out.listen(
+          received.add,
+          onError: (Object e) {
+            error = e;
+            if (!done.isCompleted) done.complete();
+          },
+          onDone: () {
+            if (!done.isCompleted) done.complete();
+          },
+          cancelOnError: true,
+        );
+        await done.future;
 
-    test('server-stream (meterServerStreamMessages: true): each response '
-        'consumes a token and then emits RESOURCE_EXHAUSTED after limit',
-        () async {
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
-          max: 3,
-          window: const Duration(hours: 1),
-        ),
-        meterServerStreamMessages: true,
-        nowMicros: frozenClock,
-      );
-
-      final out = await limiter.interceptServerStream<String, String>(
-        callContext,
-        'req',
-        (ctx, req) => Stream<String>.fromIterable(['a', 'b', 'c', 'd', 'e']),
-      );
-
-      final received = <String>[];
-      Object? error;
-      final done = Completer<void>();
-      out.listen(
-        received.add,
-        onError: (Object e) {
-          error = e;
-          if (!done.isCompleted) done.complete();
-        },
-        onDone: () {
-          if (!done.isCompleted) done.complete();
-        },
-        cancelOnError: true,
-      );
-      await done.future;
-
-      expect(received, ['a', 'b', 'c']);
-      expect(error, isA<RpcRateLimitException>());
-      expect(error.toString(), contains('RESOURCE_EXHAUSTED'));
-      limiter.dispose();
-    });
+        expect(received, ['a', 'b', 'c']);
+        expect(error, isA<RpcRateLimitException>());
+        expect(error.toString(), contains('RESOURCE_EXHAUSTED'));
+        limiter.dispose();
+      },
+    );
 
     test('client-stream: each request message consumes a token', () async {
       final limiter = RpcRateLimiter(

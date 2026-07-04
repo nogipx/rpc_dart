@@ -4,6 +4,19 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 4.3.3
+
+### Fixes
+
+- Server streams are metered at establishment, not per response. Charging a
+  token for every emitted response let a server-paced burst trip the per-key
+  rate limit and inject `RESOURCE_EXHAUSTED` into a healthy long-lived
+  subscription (notify feeds, tailing, large chunked downloads), tearing it
+  down until the client re-subscribed. A server stream now costs one token at
+  open (like a unary call). Opt back into per-response accounting with
+  `meterServerStreamMessages: true`. Inbound metering (unary, client-stream,
+  and bidi requests) is unchanged.
+
 ## 4.3.2
 
 ### Fixes
