@@ -11,6 +11,7 @@ workspace:
   - packages/blob/rpc_blob
   - packages/blob/rpc_blob_minio
   - packages/blob/rpc_blob_sqlite
+  - packages/blob/rpc_blob_webdav
   - packages/core/rpc_dart
   - packages/core/rpc_dart_compression
   - packages/core/rpc_dart_framework
@@ -165,6 +166,7 @@ melos:
         web packages/core/rpc_dart_log test/client_web_smoke_test.dart
         web packages/data/rpc_data test/web_smoke_test.dart
         web packages/blob/rpc_blob test/web_smoke_test.dart
+        web packages/blob/rpc_blob_webdav test/web_smoke_test.dart
         web packages/data/rpc_data_sqlite test/web_smoke_test.dart
         web packages/blob/rpc_blob_sqlite test/web_smoke_test.dart
         (cd packages/transport/rpc_dart_isolate \

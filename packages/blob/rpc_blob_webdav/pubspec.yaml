@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+name: rpc_blob_webdav
+description: WebDAV storage adapter for rpc_blob. dart2js/VM/Flutter compatible.
+version: 1.0.0
+publish_to: none
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+environment:
+  sdk: '>=3.10.0 <4.0.0'
+
+resolution: workspace
+
+dependencies:
+  rpc_blob:
+    path: ../rpc_blob
+  rpc_dart: '>=3.3.0 <5.0.0'
+  crypto: ^3.0.7
+  http: ^1.0.0
+  xml: ^6.4.2
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.29.0
