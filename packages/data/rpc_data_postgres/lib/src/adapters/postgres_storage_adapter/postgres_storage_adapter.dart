@@ -277,19 +277,47 @@ CREATE TABLE IF NOT EXISTS $table (
     await _registerTable(collection, table);
   }
 
+  /// Name of the companion index covering the jsonb form of a path.
+  ///
+  /// Derived, not stored: the registry keeps one row per requested path, and
+  /// both physical indexes follow from its name.
+  static String _jsonIndexName(String baseName) => '${baseName}_json';
+
+  /// Indexes a JSON path for both shapes a filter can take.
+  ///
+  /// `equals` on a payload field compiles to `payload #> '{path}' = $1::jsonb`
+  /// while `range` (and sorting) go through `payload #>> '{path}'`. Indexing
+  /// only one of them leaves the other on a sequential scan — and since
+  /// `equals` is the common filter, indexing only the text form (as this did
+  /// originally) meant a path someone explicitly asked to index still scanned.
+  Future<void> _createPathIndexes(
+    String table,
+    String path,
+    String indexName,
+  ) async {
+    await _executor.execute(
+      'CREATE INDEX IF NOT EXISTS ${_names._q(indexName)} '
+      'ON $table ( (${_jsonTextSelector(path)}) )',
+    );
+    await _executor.execute(
+      'CREATE INDEX IF NOT EXISTS ${_names._q(_jsonIndexName(indexName))} '
+      'ON $table ( (${_payloadJsonSelector(path)}) )',
+    );
+  }
+
   Future<void> _ensureIndexExists(
     String table,
     _PgIndexMetadata metadata,
   ) async {
-    if (await _indexExists(metadata.indexName)) {
+    // Both names, not just the base: a database indexed before the jsonb
+    // companion existed has only the text one, and skipping on the base alone
+    // would leave `equals` scanning forever after an upgrade.
+    if (await _indexExists(metadata.indexName) &&
+        await _indexExists(_jsonIndexName(metadata.indexName))) {
       return;
     }
     try {
-      final selector = _jsonTextSelector(metadata.path);
-      await _executor.execute(
-        'CREATE INDEX IF NOT EXISTS ${_names._q(metadata.indexName)} '
-        'ON $table ( ($selector) )',
-      );
+      await _createPathIndexes(table, metadata.path, metadata.indexName);
       _knownIndexes.add(metadata.indexName);
     } catch (error) {
       throw RpcDataError.internal(
@@ -965,11 +993,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         indexName: indexName,
       );
     }
-    final selector = _jsonTextSelector(path);
-    await _executor.execute(
-      'CREATE INDEX IF NOT EXISTS ${_names._q(indexName)} '
-      'ON $table ( ($selector) )',
-    );
+    await _createPathIndexes(table, path, indexName);
     await _executor.execute(
       Sql.named(
         'INSERT INTO ${_names.indexRegistry}(collection, path, index_name) '
@@ -1010,6 +1034,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       return false;
     }
     await _dropIndex(indexName);
+    await _dropIndex(_jsonIndexName(indexName));
     final result = await _executor.execute(
       Sql.named(
         'DELETE FROM ${_names.indexRegistry} '
