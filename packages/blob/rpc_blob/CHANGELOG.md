@@ -4,6 +4,15 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.1.0
+
+- `applyBulkDelete` returns results positionally aligned with the request, the
+  same as `applyBulkHead`. It used to emit version-checked ids first and the
+  batched ones after, grouped by collection — one result per request, but not
+  in request order, so a caller pairing the two by index read another id's
+  verdict. Grouping is how the work is issued, not how it is reported.
+
+
 ## 2.0.0
 
 Prepares the blob layer for a hosted S3, where a round trip is billed and a

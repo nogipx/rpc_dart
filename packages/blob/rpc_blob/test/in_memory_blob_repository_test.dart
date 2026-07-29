@@ -394,28 +394,40 @@ void main() {
 
     group('deleteMany', () {
       Future<void> put(String id) => repository.writeBlob(
-            BlobWriteRequest(
-              collection: 'test',
-              id: id,
-              bytes: Stream.value(Uint8List.fromList(utf8.encode(id))),
-            ),
+        BlobWriteRequest(
+          collection: 'test',
+          id: id,
+          bytes: Stream.value(Uint8List.fromList(utf8.encode(id))),
+        ),
+      );
+
+      test(
+        'removes the ids it was given and reports which were there',
+        () async {
+          await put('a');
+          await put('b');
+          await put('c');
+
+          final removed = await repository.deleteMany('test', [
+            'a',
+            'c',
+            'gone',
+          ]);
+
+          expect(
+            removed,
+            unorderedEquals(['a', 'c']),
+            reason: 'an id that was never stored is not reported removed',
           );
-
-      test('removes the ids it was given and reports which were there',
-          () async {
-        await put('a');
-        await put('b');
-        await put('c');
-
-        final removed = await repository.deleteMany('test', ['a', 'c', 'gone']);
-
-        expect(removed, unorderedEquals(['a', 'c']),
-            reason: 'an id that was never stored is not reported removed');
-        expect(await repository.headBlob('test', 'a'), isNull);
-        expect(await repository.headBlob('test', 'c'), isNull);
-        expect(await repository.headBlob('test', 'b'), isNotNull,
-            reason: 'untouched ids stay');
-      });
+          expect(await repository.headBlob('test', 'a'), isNull);
+          expect(await repository.headBlob('test', 'c'), isNull);
+          expect(
+            await repository.headBlob('test', 'b'),
+            isNotNull,
+            reason: 'untouched ids stay',
+          );
+        },
+      );
 
       test('an empty list and an unknown collection are no-ops', () async {
         expect(await repository.deleteMany('test', []), isEmpty);
@@ -425,24 +437,26 @@ void main() {
 
     group('headMany', () {
       Future<void> put(String id) => repository.writeBlob(
-            BlobWriteRequest(
-              collection: 'test',
-              id: id,
-              bytes: Stream.value(Uint8List.fromList(utf8.encode(id))),
-            ),
-          );
+        BlobWriteRequest(
+          collection: 'test',
+          id: id,
+          bytes: Stream.value(Uint8List.fromList(utf8.encode(id))),
+        ),
+      );
 
-      test('returns what is there, keyed by id, and omits what is not',
-          () async {
-        await put('a');
-        await put('bb');
+      test(
+        'returns what is there, keyed by id, and omits what is not',
+        () async {
+          await put('a');
+          await put('bb');
 
-        final found = await repository.headMany('test', ['a', 'bb', 'gone']);
+          final found = await repository.headMany('test', ['a', 'bb', 'gone']);
 
-        expect(found.keys, unorderedEquals(['a', 'bb']));
-        expect(found['a']!.length, 1);
-        expect(found['bb']!.length, 2);
-      });
+          expect(found.keys, unorderedEquals(['a', 'bb']));
+          expect(found['a']!.length, 1);
+          expect(found['bb']!.length, 2);
+        },
+      );
 
       test('an empty list and an unknown collection are no-ops', () async {
         expect(await repository.headMany('test', []), isEmpty);
@@ -457,6 +471,65 @@ void main() {
         () => repository.headBlob('test', 'blob'),
         throwsA(isA<StateError>()),
       );
+    });
+  });
+
+  /// Grouping is how a bulk delete is issued; it must not be how it is
+  /// reported. Version-checked ids go one at a time and the rest are batched
+  /// per collection, and results used to come back in that internal order —
+  /// so a caller pairing request with response by index read someone else's
+  /// verdict.
+  group('bulk delete result alignment', () {
+    late InMemoryBlobRepository repository;
+    late BlobRepositoryClient client;
+
+    Future<void> put(String collection, String id) async {
+      final data = Uint8List.fromList(utf8.encode(id));
+      await repository.writeBlob(
+        BlobWriteRequest(
+          collection: collection,
+          id: id,
+          bytes: Stream.value(data),
+          checksum: sha256.convert(data).toString(),
+          checksumAlgorithm: ChecksumAlgorithm.sha256,
+        ),
+      );
+    }
+
+    setUp(() async {
+      repository = InMemoryBlobRepository();
+      client = BlobRepositoryClient(repository: repository);
+      await put('a', 'batched-1');
+      await put('b', 'versioned');
+      await put('a', 'batched-2');
+    });
+
+    tearDown(() async {
+      await client.close();
+      await repository.dispose();
+    });
+
+    test('results line up with the requested items', () async {
+      const items = [
+        DeleteBlobRequest(collection: 'a', id: 'batched-1'),
+        // Middle item takes the one-at-a-time path, so a grouped result order
+        // would surface here.
+        DeleteBlobRequest(collection: 'b', id: 'versioned', expectedVersion: 1),
+        DeleteBlobRequest(collection: 'a', id: 'batched-2'),
+        DeleteBlobRequest(collection: 'a', id: 'never-existed'),
+      ];
+
+      final response = await client.bulkDeleteBlob(
+        const BulkDeleteBlobRequest(items: items),
+      );
+
+      expect(response.items.map((r) => '${r.collection}/${r.id}'), [
+        'a/batched-1',
+        'b/versioned',
+        'a/batched-2',
+        'a/never-existed',
+      ]);
+      expect(response.items.map((r) => r.deleted), [true, true, true, false]);
     });
   });
 }

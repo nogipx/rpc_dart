@@ -46,46 +46,48 @@ Future<List<BulkHeadBlobResult>> applyBulkHead(
 ///
 /// Version-checked ids stay one at a time: that check is per id, while a batch
 /// delete is unconditional. Everything else is grouped by collection.
+///
+/// Results come back positionally aligned with [items], the same as
+/// [applyBulkHead]. Grouping is how the work is issued, not how it is
+/// reported — a caller pairing request with response by index is doing the
+/// obvious thing and must not get someone else's verdict.
 Future<List<BulkDeleteBlobResult>> applyBulkDelete(
   IBlobRepository storage,
   List<DeleteBlobRequest> items,
 ) async {
-  final results = <BulkDeleteBlobResult>[];
-  final batched = <String, List<String>>{};
+  final verdicts = List<bool?>.filled(items.length, null);
+  final batched = <String, List<int>>{};
 
-  for (final item in items) {
+  for (var i = 0; i < items.length; i++) {
+    final item = items[i];
     if (item.expectedVersion != null) {
-      final deleted = await storage.deleteBlob(
+      verdicts[i] = await storage.deleteBlob(
         item.collection,
         item.id,
         expectedVersion: item.expectedVersion,
       );
-      results.add(
-        BulkDeleteBlobResult(
-          collection: item.collection,
-          id: item.id,
-          deleted: deleted,
-        ),
-      );
     } else {
-      (batched[item.collection] ??= <String>[]).add(item.id);
+      (batched[item.collection] ??= <int>[]).add(i);
     }
   }
 
   for (final entry in batched.entries) {
     final collection = entry.key;
-    final ids = entry.value;
-    final removed = await storage.deleteMany(collection, ids);
-    for (final id in ids) {
-      results.add(
-        BulkDeleteBlobResult(
-          collection: collection,
-          id: id,
-          deleted: removed.contains(id),
-        ),
-      );
+    final positions = entry.value;
+    final removed = await storage.deleteMany(collection, [
+      for (final position in positions) items[position].id,
+    ]);
+    for (final position in positions) {
+      verdicts[position] = removed.contains(items[position].id);
     }
   }
 
-  return results;
+  return [
+    for (var i = 0; i < items.length; i++)
+      BulkDeleteBlobResult(
+        collection: items[i].collection,
+        id: items[i].id,
+        deleted: verdicts[i] ?? false,
+      ),
+  ];
 }
