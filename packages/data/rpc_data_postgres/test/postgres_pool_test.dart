@@ -2,13 +2,18 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:io';
+
 import 'package:postgres/postgres.dart';
 import 'package:rpc_data_postgres/rpc_data_postgres.dart';
 import 'package:test/test.dart';
 
 import 'nanoid.dart';
 
-const _url =
+/// Override with RPC_PG_URL to point at a throwaway instance; the default
+/// is the local dev database these tests were written against.
+final _url =
+    Platform.environment['RPC_PG_URL'] ??
     'postgresql://postgres:00000000@localhost:5434/postgres?sslmode=disable';
 const _schema = 'public';
 // Изолированный префикс, чтобы не пересекаться с другими тестами

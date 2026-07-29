@@ -59,24 +59,80 @@ class PgTableNames {
   }
 }
 
+/// Where the previous page stopped, carried inside the cursor itself.
+///
+/// The cursor used to be the last record's id, re-read on the next page to
+/// recover the boundary. That made pagination depend on a row surviving
+/// unchanged between pages: deleting it failed the next page outright, and
+/// updating it moved the boundary, silently skipping or repeating rows. It
+/// also cost two extra queries per page.
+///
+/// So the boundary travels in the token. The tiebreaker is `id` — a stable
+/// primary key — rather than `ctid`, which Postgres rewrites on every UPDATE
+/// and on `VACUUM FULL`.
 class _PgCursorBoundary {
-  _PgCursorBoundary({
-    required this.boundary,
-    required this.updatedAt,
-    required this.ctid,
-  });
+  _PgCursorBoundary({required this.sortValue, required this.id});
 
-  final Object? boundary;
-  final DateTime updatedAt;
-  final String ctid;
+  /// Decodes a token produced by [encode]; null when it is not one.
+  static _PgCursorBoundary? decode(String cursor) {
+    try {
+      final decoded = jsonDecode(utf8.decode(base64Url.decode(cursor)));
+      if (decoded is! Map) return null;
+      final id = decoded['i'];
+      if (id is! String) return null;
+      return _PgCursorBoundary(sortValue: _valueOf(decoded), id: id);
+    } catch (_) {
+      // A malformed cursor is a caller error, reported by the caller as an
+      // invalid argument; it must not surface as a decoding crash.
+      return null;
+    }
+  }
+
+  /// The sort column's value at the boundary row, in its Dart type.
+  ///
+  /// Typed rather than stringified because the value is bound straight back
+  /// into the comparison: `version` is a bigint (where text ordering would put
+  /// 10 before 9) and the timestamps are `timestamptz`.
+  final Object? sortValue;
+  final String id;
+
+  String encode() {
+    final value = sortValue;
+    final Map<String, Object?> tagged = switch (value) {
+      null => {'t': 'n'},
+      DateTime() => {'t': 'd', 'v': value.toUtc().toIso8601String()},
+      int() => {'t': 'i', 'v': value},
+      double() => {'t': 'f', 'v': value},
+      _ => {'t': 's', 'v': '$value'},
+    };
+    return base64Url.encode(utf8.encode(jsonEncode({...tagged, 'i': id})));
+  }
+
+  /// Alias the sort expression is selected under, so a page can build its own
+  /// next cursor.
+  static const _column = '__rpc_sort_value';
+
+  static Object? _valueOf(Map<Object?, Object?> decoded) =>
+      switch (decoded['t']) {
+        'n' => null,
+        'd' => DateTime.parse(decoded['v']! as String),
+        'i' => decoded['v']! as int,
+        'f' => (decoded['v']! as num).toDouble(),
+        _ => decoded['v'] as String?,
+      };
 }
 
 /// PostgreSQL-backed implementation of [IDataStorageAdapter].
 ///
-/// Query and search methods reuse the in-memory filtering helpers for now, so
-/// large collections will still be materialised in Dart. The storage layer is
-/// backed by PostgreSQL tables and preserves optimistic concurrency via
-/// version-aware upserts.
+/// Filters, sorting and pagination compile to SQL; a filter this adapter
+/// cannot express is rejected as an invalid argument rather than quietly
+/// falling back to filtering in Dart. The one exception is
+/// [RecordFilter.containsTerms], which becomes
+/// `LOWER(payload::text) LIKE '%term%'` — a full scan with a JSONB-to-text
+/// cast per row that no index can serve. Use [searchCollection] (FTS) when the
+/// collection is large enough for that to matter.
+///
+/// Optimistic concurrency is preserved via version-aware upserts.
 class PostgresDataStorageAdapter
     implements IDataStorageAdapter, ICollectionIndexStorageAdapter {
   PostgresDataStorageAdapter._(
@@ -574,34 +630,42 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     final cursor = request.options.cursor;
     final useKeyset = cursor != null;
     if (cursor != null) {
-      final exists = await _cursorExists(table, cursor);
-      if (!exists) {
-        throw RpcDataError.invalidArgument(
-          'Cursor $cursor is not valid for ${request.collection}',
-        );
-      }
-      final boundary = await _readCursorBoundary(table, cursor, sortExpression);
+      final boundary = _PgCursorBoundary.decode(cursor);
       if (boundary == null) {
         throw RpcDataError.invalidArgument(
           'Cursor $cursor is not valid for ${request.collection}',
         );
       }
-      final boundaryParam = _addParam(params, boundary.boundary);
-      final boundaryUpdatedParam = _addParam(params, boundary.updatedAt);
-      final boundaryCtidParam = _addParam(params, boundary.ctid);
-      final primaryComparator = descending ? '<' : '>';
-      final secondaryComparator = descending ? '<' : '>';
-      where.add(
-        '($sortExpression $primaryComparator $boundaryParam '
-        'OR ($sortExpression = $boundaryParam AND '
-        '(updated_at $secondaryComparator $boundaryUpdatedParam OR '
-        '(updated_at = $boundaryUpdatedParam AND '
-        'ctid $secondaryComparator CAST($boundaryCtidParam AS tid)))))',
-      );
+      // Postgres orders NULLs last ascending and first descending, and a
+      // comparison against NULL is never true — so the null rows have to be
+      // named explicitly on whichever side of the boundary they belong.
+      final comparator = descending ? '<' : '>';
+      final idParam = _addParam(params, boundary.id);
+      if (boundary.sortValue == null) {
+        where.add(
+          descending
+              ? '(($sortExpression IS NULL AND id $comparator $idParam) '
+                    'OR $sortExpression IS NOT NULL)'
+              : '($sortExpression IS NULL AND id $comparator $idParam)',
+        );
+      } else {
+        final boundaryParam = _addParam(params, boundary.sortValue);
+        final sameValue =
+            '($sortExpression = $boundaryParam AND id $comparator $idParam)';
+        where.add(
+          descending
+              ? '($sortExpression $comparator $boundaryParam OR $sameValue)'
+              : '($sortExpression $comparator $boundaryParam OR $sameValue '
+                    'OR $sortExpression IS NULL)',
+        );
+      }
     }
 
+    // The sort value rides along so the next cursor can be built from this
+    // page instead of re-reading the boundary row on the next call.
     final querySql = StringBuffer(
-      'SELECT id, payload, version, created_at, updated_at '
+      'SELECT id, payload, version, created_at, updated_at, '
+      '$sortExpression AS ${_PgCursorBoundary._column} '
       'FROM $table ',
     );
     if (where.isNotEmpty) {
@@ -609,13 +673,13 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         ..write('WHERE ')
         ..write(where.join(' AND '));
     }
+    // (sort field, id) is a total order because id is the primary key, so one
+    // tiebreaker is enough and it is one that never moves.
     querySql
       ..write(' ORDER BY ')
       ..write(sortExpression)
       ..write(descending ? ' DESC' : ' ASC')
-      ..write(', updated_at ')
-      ..write(descending ? 'DESC' : 'ASC')
-      ..write(', ctid ')
+      ..write(', id ')
       ..write(descending ? 'DESC' : 'ASC');
 
     final useOffset = !useKeyset && request.options.offset > 0;
@@ -640,8 +704,12 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         .toList(growable: false);
 
     String? nextCursor;
-    if (records.length == request.options.limit) {
-      nextCursor = records.last.id;
+    if (records.length == request.options.limit && result.isNotEmpty) {
+      final lastRow = result.last.toColumnMap();
+      nextCursor = _PgCursorBoundary(
+        sortValue: lastRow[_PgCursorBoundary._column],
+        id: lastRow['id'] as String,
+      ).encode();
     }
 
     int? totalCount;
@@ -722,49 +790,21 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
 
     final cursor = request.options.cursor;
     if (cursor != null) {
-      final cursorRank = await _readSearchCursorRank(
-        table,
-        cursor,
-        rankExpression,
-        baseWhere,
-        baseParams,
-      );
-      if (cursorRank == null) {
+      // Same self-contained token as [queryCollection], carrying the rank
+      // instead of a sort column. Re-deriving it from the boundary row cost
+      // two queries and broke as soon as that row was deleted or reindexed.
+      final boundary = _PgCursorBoundary.decode(cursor);
+      final boundaryRank = boundary?.sortValue;
+      if (boundary == null || boundaryRank is! num) {
         throw RpcDataError.invalidArgument(
           'Cursor $cursor is not valid for ${request.collection}',
         );
       }
-      final boundaryRow = await _executor.execute(
-        Sql.named(
-          'SELECT created_at, updated_at, ctid::text AS boundary_ctid FROM $table '
-          'WHERE id = @id LIMIT 1',
-        ),
-        parameters: {'id': cursor},
-      );
-      if (boundaryRow.isEmpty) {
-        throw RpcDataError.invalidArgument(
-          'Cursor $cursor is not valid for ${request.collection}',
-        );
-      }
-      final boundary = boundaryRow.first.toColumnMap();
-      final rankParam = _addParam(params, cursorRank);
-      final createdParam = _addParam(
-        params,
-        boundary['created_at'] as DateTime,
-      );
-      final updatedParam = _addParam(
-        params,
-        boundary['updated_at'] as DateTime,
-      );
-      final ctidParam = _addParam(params, boundary['boundary_ctid'] as String);
+      final rankParam = _addParam(params, boundaryRank.toDouble());
+      final idParam = _addParam(params, boundary.id);
       where.add(
         '($rankExpression < $rankParam OR '
-        '($rankExpression = $rankParam AND '
-        '(created_at > $createdParam OR '
-        '(created_at = $createdParam AND '
-        '(updated_at > $updatedParam OR '
-        '(updated_at = $updatedParam AND '
-        'ctid > CAST($ctidParam AS tid)))))))',
+        '($rankExpression = $rankParam AND id > $idParam))',
       );
     }
 
@@ -782,7 +822,7 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         ..write(where.join(' AND '));
     }
     querySql
-      ..write(' ORDER BY rank DESC, created_at ASC, updated_at ASC, ctid ASC ')
+      ..write(' ORDER BY rank DESC, id ASC ')
       ..write('LIMIT ')
       ..write(limitParam)
       ..write(' OFFSET ')
@@ -807,8 +847,12 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         .toInt();
 
     String? nextCursor;
-    if (records.length == request.options.limit) {
-      nextCursor = records.last.id;
+    if (records.length == request.options.limit && result.isNotEmpty) {
+      final lastRow = result.last.toColumnMap();
+      nextCursor = _PgCursorBoundary(
+        sortValue: (lastRow['rank'] as num).toDouble(),
+        id: lastRow['id'] as String,
+      ).encode();
     }
 
     return SearchRecordsResponse(
@@ -821,8 +865,8 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
   @override
   Future<void> writeRecord(DataRecord record) async {
     final table = await _ensureTableForWrite(record.collection);
-    final affected = await _upsertRecords(table, [record]);
-    if (affected == 0) {
+    final applied = await _upsertRecords(table, [record]);
+    if (applied.isEmpty) {
       final versions = await _fetchVersions(table, [record.id]);
       final existingVersion = versions[record.id];
       if (existingVersion != null && existingVersion >= record.version) {
@@ -851,20 +895,28 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     }
     for (final entry in byCollection.entries) {
       final table = await _ensureTableForWrite(entry.key);
-      final ids = entry.value.map((r) => r.id).toList(growable: false);
-      final existingVersions = ids.isEmpty
-          ? const <String, int>{}
-          : await _fetchVersions(table, ids);
-      final affected = await _upsertRecords(table, entry.value);
-      if (affected < entry.value.length) {
-        for (final record in entry.value) {
-          final existing = existingVersions[record.id];
-          if (existing != null && existing >= record.version) {
-            throw RpcDataError.conflict(
-              'Record ${record.id} in ${record.collection} is at version '
-              '$existing; incoming ${record.version} is not newer.',
-            );
-          }
+      final applied = await _upsertRecords(table, entry.value);
+      if (applied.length == entry.value.length) {
+        continue;
+      }
+      // Only the ids the upsert refused are in question, and their versions
+      // are read after the fact — so what is compared is what the guard
+      // actually saw, not a snapshot that may have aged in between.
+      final refused = [
+        for (final record in entry.value)
+          if (!applied.contains(record.id)) record,
+      ];
+      final current = await _fetchVersions(
+        table,
+        refused.map((r) => r.id).toList(growable: false),
+      );
+      for (final record in refused) {
+        final existing = current[record.id];
+        if (existing != null && existing >= record.version) {
+          throw RpcDataError.conflict(
+            'Record ${record.id} in ${record.collection} is at version '
+            '$existing; incoming ${record.version} is not newer.',
+          );
         }
       }
     }
@@ -1053,12 +1105,22 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     await _ownedConnection?.close();
   }
 
-  Future<int> _upsertRecords(String table, Iterable<DataRecord> records) async {
+  /// Upserts and reports which ids actually landed.
+  ///
+  /// `RETURNING id` rather than a row count: the count says how many writes
+  /// the version guard let through, not which ones, and the caller needs to
+  /// know exactly whom to raise a conflict for. Reading versions separately to
+  /// work that out is a race — a concurrent writer between the read and the
+  /// upsert makes a refused row look like it applied.
+  Future<Set<String>> _upsertRecords(
+    String table,
+    Iterable<DataRecord> records,
+  ) async {
     final list = records is List<DataRecord>
         ? records
         : records.toList(growable: false);
     if (list.isEmpty) {
-      return 0;
+      return const {};
     }
     final buffer = StringBuffer(
       'INSERT INTO $table '
@@ -1083,14 +1145,14 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       'version = excluded.version, '
       'created_at = $table.created_at, '
       'updated_at = excluded.updated_at '
-      'WHERE excluded.version > $table.version',
+      'WHERE excluded.version > $table.version'
+      ' RETURNING id',
     );
     final result = await _executor.execute(
       Sql.named(buffer.toString()),
       parameters: params,
-      ignoreRows: true,
     );
-    return result.affectedRows;
+    return {for (final row in result) row.toColumnMap()['id'] as String};
   }
 
   Map<String, int> _mapVersions(Result result) {
@@ -1397,76 +1459,6 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       return true;
     }
     return _fieldExpression(sort.field) != null;
-  }
-
-  Future<bool> _cursorExists(String table, String cursor) async {
-    final result = await _executor.execute(
-      Sql.named(
-        'SELECT 1 FROM $table '
-        'WHERE id = @id LIMIT 1',
-      ),
-      parameters: {'id': cursor},
-    );
-    return result.isNotEmpty;
-  }
-
-  Future<_PgCursorBoundary?> _readCursorBoundary(
-    String table,
-    String cursor,
-    String sortExpression,
-  ) async {
-    final result = await _executor.execute(
-      Sql.named(
-        'SELECT $sortExpression AS boundary, updated_at, ctid::text AS boundary_ctid '
-        'FROM $table '
-        'WHERE id = @id LIMIT 1',
-      ),
-      parameters: {'id': cursor},
-    );
-    if (result.isEmpty) {
-      return null;
-    }
-    final map = result.first.toColumnMap();
-    return _PgCursorBoundary(
-      boundary: map['boundary'],
-      updatedAt: map['updated_at'] as DateTime,
-      ctid: map['boundary_ctid'] as String,
-    );
-  }
-
-  Future<double?> _readSearchCursorRank(
-    String table,
-    String cursor,
-    String rankExpression,
-    List<String> where,
-    Map<String, Object?> params,
-  ) async {
-    final cursorParams = Map<String, Object?>.from(params);
-    final cursorWhere = List<String>.from(where);
-    cursorWhere.add('id = @cursorId');
-    cursorParams['cursorId'] = cursor;
-
-    final sql = StringBuffer('SELECT $rankExpression AS rank FROM $table ');
-    sql
-      ..write('WHERE ')
-      ..write(cursorWhere.join(' AND '))
-      ..write(' LIMIT 1');
-
-    final result = await _executor.execute(
-      Sql.named(sql.toString()),
-      parameters: cursorParams,
-    );
-    if (result.isEmpty) {
-      return null;
-    }
-    final value = result.first.toColumnMap()['rank'];
-    if (value is num) {
-      return value.toDouble();
-    }
-    if (value is String) {
-      return double.tryParse(value);
-    }
-    return null;
   }
 
   Future<List<_PgIndexMetadata>> _loadCollectionIndexes(

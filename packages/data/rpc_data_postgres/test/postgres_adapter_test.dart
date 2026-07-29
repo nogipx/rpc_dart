@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:io';
+
 import 'package:postgres/postgres.dart';
 import 'package:rpc_data_postgres/rpc_data_postgres.dart';
 import 'package:test/test.dart';
@@ -14,7 +16,10 @@ class _Item {
   final int value;
 }
 
-const _url =
+/// Override with RPC_PG_URL to point at a throwaway instance; the default
+/// is the local dev database these tests were written against.
+final _url =
+    Platform.environment['RPC_PG_URL'] ??
     'postgresql://postgres:00000000@localhost:5434/postgres?sslmode=disable';
 const _schema = 'public';
 const _tablePrefix = '';
@@ -281,6 +286,135 @@ void main() {
       expect(updated.createdAt.isUtc, isTrue);
       expect(updated.updatedAt.isUtc, isTrue);
       expect(updated.updatedAt.isAfter(created.updatedAt), isTrue);
+    });
+
+    /// The cursor used to be the boundary record's id, re-read on the next
+    /// page. Deleting that record failed the page outright and updating it
+    /// moved the boundary, so rows were silently skipped or repeated.
+    group('pagination survives writes to the boundary row', () {
+      Future<List<String>> pageThrough(
+        String collection, {
+        String sortField = 'createdAt',
+        Future<void> Function(String cursorRecordId)? between,
+      }) async {
+        final titles = <String>[];
+        String? cursor;
+        var guard = 0;
+        do {
+          final page = await storage.queryCollection(
+            ListRecordsRequest(
+              collection: collection,
+              sort: SortOrder(field: sortField),
+              options: QueryOptions(limit: 2, cursor: cursor),
+            ),
+          );
+          titles.addAll(page.records.map((r) => r.payload['title'] as String));
+          cursor = page.nextCursor;
+          if (cursor != null && between != null) {
+            await between(page.records.last.id);
+          }
+          if (++guard > 20) fail('pagination did not terminate');
+        } while (cursor != null);
+        return titles;
+      }
+
+      Future<List<DataRecord>> seed() async {
+        final created = <DataRecord>[];
+        for (var i = 0; i < 6; i++) {
+          created.add(
+            await repo.create(
+              CreateRecordRequest(
+                collection: 'notes',
+                payload: {'title': 'n$i'},
+              ),
+            ),
+          );
+        }
+        return created;
+      }
+
+      test('deleting the boundary row does not fail the next page', () async {
+        await seed();
+        var deleted = 0;
+        final titles = await pageThrough(
+          'notes',
+          between: (boundaryId) async {
+            if (deleted++ > 0) return;
+            await storage.deleteRecord('notes', boundaryId);
+          },
+        );
+        // The deleted row may or may not have been emitted already; what must
+        // hold is that paging completed and never repeated a row.
+        expect(titles.toSet().length, titles.length);
+        expect(titles, contains('n5'));
+      });
+
+      test('updating the boundary row skips no other row', () async {
+        final seeded = await seed();
+        var bumped = false;
+        // Sorted by the very column the update moves: the old cursor re-read
+        // the boundary AFTER the write, so it resumed from the row's new
+        // position at the end of the ordering and dropped everything between.
+        final titles = await pageThrough(
+          'notes',
+          sortField: 'updatedAt',
+          between: (boundaryId) async {
+            if (bumped) return;
+            bumped = true;
+            final row = seeded.firstWhere((r) => r.id == boundaryId);
+            await repo.update(
+              UpdateRecordRequest(
+                collection: 'notes',
+                id: row.id,
+                expectedVersion: row.version,
+                payload: {'title': row.payload['title']},
+              ),
+            );
+          },
+        );
+        expect(bumped, isTrue);
+        // The moved row may legitimately be seen twice — it really did change
+        // position. Nothing may be missing.
+        expect(titles.toSet(), {for (var i = 0; i < 6; i++) 'n$i'});
+      });
+    });
+
+    /// The batch used to read versions before the upsert and compare against
+    /// that snapshot, so a concurrent writer landing in between turned a
+    /// refused write into a silent success.
+    test('writeRecords reports a refused record as a conflict', () async {
+      final now = DateTime.now().toUtc();
+      DataRecord record(String id, int version) => DataRecord(
+        id: id,
+        collection: 'docs',
+        payload: {'v': version},
+        version: version,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await storage.writeRecords([record('a', 5), record('b', 1)]);
+
+      // 'a' goes backwards and must be refused; 'b' moves forward.
+      await expectLater(
+        storage.writeRecords([record('a', 4), record('b', 2)]),
+        throwsA(isA<RpcDataError>()),
+      );
+
+      final after = await storage.readRecords('docs', ['a', 'b']);
+      expect(after['a']!.version, 5, reason: 'the refused write must not land');
+      expect(after['b']!.version, 2);
+    });
+
+    test('readRecords returns only the ids that exist', () async {
+      final created = await repo.create(
+        const CreateRecordRequest(collection: 'docs', payload: {'title': 'x'}),
+      );
+      final found = await storage.readRecords('docs', [
+        created.id,
+        'absent-id',
+      ]);
+      expect(found.keys, [created.id]);
     });
   });
 }
