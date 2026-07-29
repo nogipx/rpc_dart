@@ -256,27 +256,29 @@ void main() {
   });
 
   group('headMany', () {
-    test('reads a batch in one statement, chunking past the bind limit',
-        () async {
-      for (final id in ['a', 'b']) {
-        await adapter.writeBlob(
-          BlobWriteRequest(
-            collection: 'docs',
-            id: id,
-            bytes: Stream.value(Uint8List.fromList([1, 2, 3])),
-          ),
-        );
-      }
+    test(
+      'reads a batch in one statement, chunking past the bind limit',
+      () async {
+        for (final id in ['a', 'b']) {
+          await adapter.writeBlob(
+            BlobWriteRequest(
+              collection: 'docs',
+              id: id,
+              bytes: Stream.value(Uint8List.fromList([1, 2, 3])),
+            ),
+          );
+        }
 
-      final found = await adapter.headMany('docs', ['a', 'b', 'missing']);
-      expect(found.keys, unorderedEquals(['a', 'b']));
-      expect(found['a']!.length, 3);
+        final found = await adapter.headMany('docs', ['a', 'b', 'missing']);
+        expect(found.keys, unorderedEquals(['a', 'b']));
+        expect(found['a']!.length, 3);
 
-      // More ids than one statement can bind — must still come back whole.
-      final many = [for (var i = 0; i < 1200; i++) 'id$i']..addAll(['a', 'b']);
-      final chunked = await adapter.headMany('docs', many);
-      expect(chunked.keys, unorderedEquals(['a', 'b']));
-    });
+        // More ids than one statement can bind — must still come back whole.
+        final many = [for (var i = 0; i < 1200; i++) 'id$i', 'a', 'b'];
+        final chunked = await adapter.headMany('docs', many);
+        expect(chunked.keys, unorderedEquals(['a', 'b']));
+      },
+    );
 
     test('an empty list and an unknown collection are no-ops', () async {
       expect(await adapter.headMany('docs', []), isEmpty);
@@ -286,25 +288,27 @@ void main() {
 
   group('deleteMany', () {
     Future<void> put(String id) => adapter.writeBlob(
-          BlobWriteRequest(
-            collection: 'docs',
-            id: id,
-            bytes: Stream.value(Uint8List.fromList([1, 2, 3])),
-          ),
-        );
+      BlobWriteRequest(
+        collection: 'docs',
+        id: id,
+        bytes: Stream.value(Uint8List.fromList([1, 2, 3])),
+      ),
+    );
 
-    test('removes a batch in one statement and reports what was there',
-        () async {
-      await put('a');
-      await put('b');
-      await put('c');
+    test(
+      'removes a batch in one statement and reports what was there',
+      () async {
+        await put('a');
+        await put('b');
+        await put('c');
 
-      final removed = await adapter.deleteMany('docs', ['a', 'c', 'gone']);
+        final removed = await adapter.deleteMany('docs', ['a', 'c', 'gone']);
 
-      expect(removed, unorderedEquals(['a', 'c']));
-      expect(await adapter.headBlob('docs', 'b'), isNotNull);
-      expect(await adapter.collectionSize('docs'), 3, reason: 'only b left');
-    });
+        expect(removed, unorderedEquals(['a', 'c']));
+        expect(await adapter.headBlob('docs', 'b'), isNotNull);
+        expect(await adapter.collectionSize('docs'), 3, reason: 'only b left');
+      },
+    );
 
     test('handles more ids than one statement can bind', () async {
       // Chunking guard: SQLite caps bound variables well below this.
