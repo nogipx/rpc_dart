@@ -5,6 +5,37 @@
 import 'adapters/_index.dart';
 import 'models.dart';
 
+/// Groups a bulk head by collection so each one is a single [IBlobRepository.headMany],
+/// and reports one result per requested id.
+///
+/// Shared by the RPC responder and the in-process repository client, for the
+/// same reason [applyBulkDelete] is: the in-process one is what a server
+/// holding a repository directly calls, and both used to walk the ids one
+/// request at a time.
+Future<List<BulkHeadBlobResult>> applyBulkHead(
+  IBlobRepository storage,
+  List<HeadBlobRequest> items,
+) async {
+  final byCollection = <String, List<String>>{};
+  for (final item in items) {
+    (byCollection[item.collection] ??= <String>[]).add(item.id);
+  }
+
+  final found = <String, Map<String, BlobDescriptor>>{};
+  for (final entry in byCollection.entries) {
+    found[entry.key] = await storage.headMany(entry.key, entry.value);
+  }
+
+  return [
+    for (final item in items)
+      BulkHeadBlobResult(
+        collection: item.collection,
+        id: item.id,
+        descriptor: found[item.collection]?[item.id],
+      ),
+  ];
+}
+
 /// Runs a bulk delete against a repository in as few round trips as the store
 /// allows, and reports one result per requested id.
 ///

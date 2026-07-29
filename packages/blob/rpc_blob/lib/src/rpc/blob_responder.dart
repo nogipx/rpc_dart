@@ -10,7 +10,7 @@ import 'package:crypto/crypto.dart';
 import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
-import '../bulk_delete.dart';
+import '../bulk_ops.dart';
 import 'blob_contract.dart';
 
 class BlobServiceResponder extends BlobServiceContractResponder {
@@ -220,18 +220,9 @@ class BlobServiceResponder extends BlobServiceContractResponder {
     BulkHeadBlobRequest request, {
     RpcContext? context,
   }) async {
-    final results = <BulkHeadBlobResult>[];
-    for (final item in request.items) {
-      final descriptor = await _storage.headBlob(item.collection, item.id);
-      results.add(
-        BulkHeadBlobResult(
-          collection: item.collection,
-          id: item.id,
-          descriptor: descriptor,
-        ),
-      );
-    }
-    return BulkHeadBlobResponse(items: results);
+    return BulkHeadBlobResponse(
+      items: await applyBulkHead(_storage, request.items),
+    );
   }
 
   @override

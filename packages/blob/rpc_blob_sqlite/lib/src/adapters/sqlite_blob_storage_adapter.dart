@@ -398,6 +398,39 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   }
 
   @override
+  Future<Map<String, BlobDescriptor>> headMany(
+    String collection,
+    List<String> ids,
+  ) async {
+    _ensureOpen();
+    if (ids.isEmpty) return const {};
+    final table = _tableForCollection(collection, createIfMissing: false);
+    if (table == null) return const {};
+
+    final found = <String, BlobDescriptor>{};
+    // One statement per chunk rather than one per id — the same bound-variable
+    // ceiling deleteMany works around.
+    for (var i = 0; i < ids.length; i += _deleteChunkSize) {
+      final end = i + _deleteChunkSize;
+      final chunk = ids.sublist(i, end < ids.length ? end : ids.length);
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+      final rows = _database.select(
+        'SELECT id, collection, version, length, content_type, checksum, '
+        'metadata, created_at, updated_at '
+        'FROM ${_quoteIdentifier(table)} '
+        'WHERE collection = ? AND id IN ($placeholders) '
+        'AND deleted_at IS NULL',
+        <Object?>[collection, ...chunk],
+      );
+      for (final row in rows) {
+        final descriptor = _mapDescriptor(row, includeMetadata: true);
+        found[descriptor.id] = descriptor;
+      }
+    }
+    return found;
+  }
+
+  @override
   Future<void> ensureCollection(String collection) async {
     _ensureOpen();
     _tableForCollection(collection, createIfMissing: true);

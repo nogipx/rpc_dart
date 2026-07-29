@@ -28,6 +28,7 @@ const int kDefaultPresignTtlSeconds = 3600;
 class S3BlobStorageOptions {
   const S3BlobStorageOptions({
     this.bucket = 'blobs',
+    this.fetchObjectTags = false,
     this.immutableObjects = false,
     this.createCollectionOnWrite = true,
     this.publicRead,
@@ -42,6 +43,15 @@ class S3BlobStorageOptions {
 
   /// The single bucket every collection lives in, as a key prefix.
   final String bucket;
+
+  /// Read S3 object tags when building a descriptor, merging them into
+  /// `metadata`.
+  ///
+  /// Off by default because this adapter never writes tags: paying a
+  /// `GET ?tagging` on every head for something only an outside tool could
+  /// have set is a poor trade. Turn it on if something else tags these
+  /// objects and you need to see it.
+  final bool fetchObjectTags;
 
   /// Declares that objects are never rewritten under the same id — the case
   /// for any content-addressed store, where the id *is* the hash.
@@ -110,6 +120,7 @@ class S3BlobRepository implements IBlobRepository {
   }) : _client = client,
        _presignClient = _buildPresignClient(client, options),
        _bucket = options.bucket,
+       _fetchObjectTags = options.fetchObjectTags,
        _immutableObjects = options.immutableObjects,
        _createCollectionOnWrite = options.createCollectionOnWrite,
        _publicRead = options.publicRead,
@@ -145,6 +156,7 @@ class S3BlobRepository implements IBlobRepository {
   final Minio _client;
   final Minio _presignClient;
   final String _bucket;
+  final bool _fetchObjectTags;
   final bool _immutableObjects;
   final bool _createCollectionOnWrite;
   final bool? _publicRead;
@@ -175,7 +187,9 @@ class S3BlobRepository implements IBlobRepository {
     final key = _keyFor(collection, id);
     try {
       final stat = await _client.statObject(_bucket, key);
-      final tags = await _getObjectTags(_bucket, key);
+      final tags = _fetchObjectTags
+          ? await _getObjectTags(_bucket, key)
+          : const <String, String>{};
       final url = await _downloadUrl(_bucket, key);
       return _descriptorFromStat(
         collection,
@@ -189,6 +203,34 @@ class S3BlobRepository implements IBlobRepository {
       rethrow;
     }
   }
+
+  @override
+  Future<Map<String, BlobDescriptor>> headMany(
+    String collection,
+    List<String> ids,
+  ) async {
+    if (ids.isEmpty) return const {};
+    // S3 has no batch metadata call, so this stays one request per id — but
+    // in flights of [_headConcurrency] rather than strictly one after another,
+    // which is what made a batch of N cost N round trips end to end.
+    final found = <String, BlobDescriptor>{};
+    for (var i = 0; i < ids.length; i += _headConcurrency) {
+      final end = i + _headConcurrency;
+      final chunk = ids.sublist(i, end < ids.length ? end : ids.length);
+      final descriptors = await Future.wait(
+        chunk.map((id) => headBlob(collection, id)),
+      );
+      for (var j = 0; j < chunk.length; j++) {
+        final descriptor = descriptors[j];
+        if (descriptor != null) found[chunk[j]] = descriptor;
+      }
+    }
+    return found;
+  }
+
+  /// In-flight HEADs per batch. High enough to hide the round trip, low enough
+  /// not to look like a burst to a provider that rate-limits.
+  static const _headConcurrency = 16;
 
   @override
   Future<BlobReadResult?> readBlob(BlobReadRequest request) async {

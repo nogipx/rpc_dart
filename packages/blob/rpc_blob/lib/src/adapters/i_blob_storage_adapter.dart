@@ -21,6 +21,18 @@ abstract interface class IBlobRepository {
   /// Fetch blob metadata; return null when missing.
   Future<BlobDescriptor?> headBlob(String collection, String id);
 
+  /// Metadata for several blobs of one collection, keyed by id. Ids that are
+  /// not there are simply absent from the result.
+  ///
+  /// Exists because "do you hold these?" is asked about batches, and answering
+  /// it one id at a time is a round trip each. What that buys depends on the
+  /// backend: a single query on a database, bounded parallelism on a store
+  /// with no batch metadata call (S3 among them).
+  Future<Map<String, BlobDescriptor>> headMany(
+    String collection,
+    List<String> ids,
+  );
+
   /// Stream blob bytes; return null when missing.
   Future<BlobReadResult?> readBlob(BlobReadRequest request);
 

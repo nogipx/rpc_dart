@@ -255,6 +255,35 @@ void main() {
     expect(collections, containsAll(<String>['a', 'b']));
   });
 
+  group('headMany', () {
+    test('reads a batch in one statement, chunking past the bind limit',
+        () async {
+      for (final id in ['a', 'b']) {
+        await adapter.writeBlob(
+          BlobWriteRequest(
+            collection: 'docs',
+            id: id,
+            bytes: Stream.value(Uint8List.fromList([1, 2, 3])),
+          ),
+        );
+      }
+
+      final found = await adapter.headMany('docs', ['a', 'b', 'missing']);
+      expect(found.keys, unorderedEquals(['a', 'b']));
+      expect(found['a']!.length, 3);
+
+      // More ids than one statement can bind — must still come back whole.
+      final many = [for (var i = 0; i < 1200; i++) 'id$i']..addAll(['a', 'b']);
+      final chunked = await adapter.headMany('docs', many);
+      expect(chunked.keys, unorderedEquals(['a', 'b']));
+    });
+
+    test('an empty list and an unknown collection are no-ops', () async {
+      expect(await adapter.headMany('docs', []), isEmpty);
+      expect(await adapter.headMany('nope', ['a']), isEmpty);
+    });
+  });
+
   group('deleteMany', () {
     Future<void> put(String id) => adapter.writeBlob(
           BlobWriteRequest(

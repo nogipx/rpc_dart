@@ -10,7 +10,7 @@ import 'package:crypto/crypto.dart';
 import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
-import '../bulk_delete.dart';
+import '../bulk_ops.dart';
 
 /// IBlobClient реализация, работающая напрямую с IBlobRepository без RPC.
 class BlobRepositoryClient implements IBlobClient {
@@ -278,18 +278,9 @@ class BlobRepositoryClient implements IBlobClient {
     RpcContext? context,
   }) async {
     _ensureContext(context);
-    final results = <BulkHeadBlobResult>[];
-    for (final item in request.items) {
-      final descriptor = await _repository.headBlob(item.collection, item.id);
-      results.add(
-        BulkHeadBlobResult(
-          collection: item.collection,
-          id: item.id,
-          descriptor: descriptor,
-        ),
-      );
-    }
-    return BulkHeadBlobResponse(items: results);
+    return BulkHeadBlobResponse(
+      items: await applyBulkHead(_repository, request.items),
+    );
   }
 
   @override

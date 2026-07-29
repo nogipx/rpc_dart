@@ -260,6 +260,20 @@ class WebDavBlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<Map<String, BlobDescriptor>> headMany(
+    String collection,
+    List<String> ids,
+  ) async {
+    // WebDAV has no batch PROPFIND across arbitrary names; the loop is it.
+    final found = <String, BlobDescriptor>{};
+    for (final id in ids) {
+      final descriptor = await headBlob(collection, id);
+      if (descriptor != null) found[id] = descriptor;
+    }
+    return found;
+  }
+
+  @override
   Future<void> ensureCollection(String collection) => _ensureCollection(collection);
 
   @override

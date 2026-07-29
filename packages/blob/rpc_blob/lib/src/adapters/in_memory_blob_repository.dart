@@ -220,6 +220,20 @@ class InMemoryBlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<Map<String, BlobDescriptor>> headMany(
+    String collection,
+    List<String> ids,
+  ) async {
+    _ensureOpen();
+    final collectionMap = _storage[collection];
+    if (collectionMap == null) return const {};
+    return {
+      for (final id in ids)
+        if (collectionMap[id] != null) id: collectionMap[id]!.descriptor,
+    };
+  }
+
+  @override
   Future<void> ensureCollection(String collection) async {
     _ensureOpen();
     _storage.putIfAbsent(collection, () => <String, _BlobEntry>{});

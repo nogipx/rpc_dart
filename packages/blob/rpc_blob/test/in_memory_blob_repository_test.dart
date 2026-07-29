@@ -423,6 +423,33 @@ void main() {
       });
     });
 
+    group('headMany', () {
+      Future<void> put(String id) => repository.writeBlob(
+            BlobWriteRequest(
+              collection: 'test',
+              id: id,
+              bytes: Stream.value(Uint8List.fromList(utf8.encode(id))),
+            ),
+          );
+
+      test('returns what is there, keyed by id, and omits what is not',
+          () async {
+        await put('a');
+        await put('bb');
+
+        final found = await repository.headMany('test', ['a', 'bb', 'gone']);
+
+        expect(found.keys, unorderedEquals(['a', 'bb']));
+        expect(found['a']!.length, 1);
+        expect(found['bb']!.length, 2);
+      });
+
+      test('an empty list and an unknown collection are no-ops', () async {
+        expect(await repository.headMany('test', []), isEmpty);
+        expect(await repository.headMany('nope', ['a']), isEmpty);
+      });
+    });
+
     test('throws when closed', () async {
       await repository.dispose();
 
