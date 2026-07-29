@@ -248,7 +248,13 @@ class S3BlobRepository implements IBlobRepository {
 
   /// Throttling and transient server faults are worth another attempt; a
   /// missing key or a bad signature is not, and retrying those just turns one
-  /// error into four.
+  /// error into four. `RequestTimeTooSkewed` belongs with the latter for the
+  /// same reason: nothing here corrects the clock between attempts.
+  ///
+  /// A retry after a timeout does not cancel the attempt that timed out — the
+  /// underlying client offers no cancellation — so both can be in flight. The
+  /// wrapped operations are idempotent, which makes that safe rather than
+  /// merely tolerable, but it does mean a long stall costs sockets.
   static bool _isRetryable(Object error) {
     if (error is TimeoutException) return true;
     if (error is MinioS3Error) {
@@ -268,7 +274,6 @@ class S3BlobRepository implements IBlobRepository {
             'throttlingexception',
             'requestthrottled',
             'requestthrottledexception',
-            'requesttimetooskewed',
           }.contains(code)) {
         return true;
       }
@@ -384,10 +389,10 @@ class S3BlobRepository implements IBlobRepository {
     // carry forward. For a content-addressed store neither applies, and this
     // was a round trip — three, in fact, since headBlob also fetches tags and
     // the bucket policy — on every chunk.
-    final needsExisting =
-        request.expectedVersion != null || !_immutableObjects;
-    final existing =
-        needsExisting ? await headBlob(request.collection, id) : null;
+    final needsExisting = request.expectedVersion != null || !_immutableObjects;
+    final existing = needsExisting
+        ? await headBlob(request.collection, id)
+        : null;
     if (existing == null && request.expectedVersion != null) {
       throw StateError(
         'Expected version ${request.expectedVersion} for $id but blob is missing.',
@@ -460,14 +465,14 @@ class S3BlobRepository implements IBlobRepository {
     // Re-sending needs the bytes again, which is exactly why writeBlob buffers
     // them: a retry rebuilds the stream from the same buffer.
     Future<void> put() => _request(
-          () => _client.putObject(
-            bucketName,
-            id,
-            Stream.value(bytes),
-            size: bytes.length,
-            metadata: metadata,
-          ),
-        );
+      () => _client.putObject(
+        bucketName,
+        id,
+        Stream.value(bytes),
+        size: bytes.length,
+        metadata: metadata,
+      ),
+    );
     try {
       await put();
     } on MinioError catch (e) {
@@ -500,7 +505,9 @@ class S3BlobRepository implements IBlobRepository {
         'Version mismatch for $id: expected $expectedVersion, actual ${existing.version}.',
       );
     }
-    await _request(() => _client.removeObject(_bucket, _keyFor(collection, id)));
+    await _request(
+      () => _client.removeObject(_bucket, _keyFor(collection, id)),
+    );
     return true;
   }
 
@@ -635,7 +642,6 @@ class S3BlobRepository implements IBlobRepository {
     _prefixFor(collection); // validates the name
     return null;
   }
-
 
   @override
   Future<void> dispose() async {

@@ -10,10 +10,7 @@ import 'package:test/test.dart';
 /// Retry behaviour that needs no server: a port nothing listens on fails as a
 /// transport error, which is the class of failure retrying exists for.
 void main() {
-  S3BlobRepository deadRepo({
-    required int maxRetries,
-    Duration? timeout,
-  }) =>
+  S3BlobRepository deadRepo({required int maxRetries, Duration? timeout}) =>
       S3BlobRepository.connect(
         // Reserved-for-documentation address: connections here go nowhere
         // rather than reaching something unexpected on this machine.
@@ -31,18 +28,20 @@ void main() {
         ),
       );
 
-  test('a transport failure is retried, and still surfaces in the end',
-      () async {
-    final repo = deadRepo(maxRetries: 2);
-    final started = DateTime.now();
+  test(
+    'a transport failure is retried, and still surfaces in the end',
+    () async {
+      final repo = deadRepo(maxRetries: 2);
+      final started = DateTime.now();
 
-    await expectLater(repo.headBlob('c', 'id'), throwsA(anything));
+      await expectLater(repo.headBlob('c', 'id'), throwsA(anything));
 
-    // Three attempts with a 1ms base and jitter: the point is that it tried
-    // more than once and then gave up rather than hanging or looping.
-    expect(DateTime.now().difference(started).inSeconds, lessThan(10));
-    await repo.dispose();
-  });
+      // Three attempts with a 1ms base and jitter: the point is that it tried
+      // more than once and then gave up rather than hanging or looping.
+      expect(DateTime.now().difference(started).inSeconds, lessThan(10));
+      await repo.dispose();
+    },
+  );
 
   test('maxRetries: 0 fails on the first attempt', () async {
     final repo = deadRepo(maxRetries: 0);
@@ -52,7 +51,10 @@ void main() {
   });
 
   test('requestTimeout bounds a call that never answers', () async {
-    final repo = deadRepo(maxRetries: 0, timeout: const Duration(milliseconds: 80));
+    final repo = deadRepo(
+      maxRetries: 0,
+      timeout: const Duration(milliseconds: 80),
+    );
     final started = DateTime.now();
 
     await expectLater(

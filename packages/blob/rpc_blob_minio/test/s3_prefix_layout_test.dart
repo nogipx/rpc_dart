@@ -64,21 +64,20 @@ void main() {
     bool immutableObjects = false,
     bool createCollectionOnWrite = true,
     bool? publicRead,
-  }) =>
-      S3BlobRepository.connect(
-        endPoint: endPoint,
-        port: port,
-        accessKey: accessKey,
-        secretKey: secretKey,
-        useSSL: useSSL,
-        pathStyle: pathStyle,
-        options: S3BlobStorageOptions(
-          bucket: testBucket,
-          immutableObjects: immutableObjects,
-          createCollectionOnWrite: createCollectionOnWrite,
-          publicRead: publicRead,
-        ),
-      );
+  }) => S3BlobRepository.connect(
+    endPoint: endPoint,
+    port: port,
+    accessKey: accessKey,
+    secretKey: secretKey,
+    useSSL: useSSL,
+    pathStyle: pathStyle,
+    options: S3BlobStorageOptions(
+      bucket: testBucket,
+      immutableObjects: immutableObjects,
+      createCollectionOnWrite: createCollectionOnWrite,
+      publicRead: publicRead,
+    ),
+  );
 
   setUp(() async {
     if (skipReason != null) return;
@@ -95,14 +94,13 @@ void main() {
     String collection,
     String id, [
     String body = 'x',
-  ]) =>
-      repo.writeBlob(
-        BlobWriteRequest(
-          collection: collection,
-          id: id,
-          bytes: Stream.value(Uint8List.fromList(body.codeUnits)),
-        ),
-      );
+  ]) => repo.writeBlob(
+    BlobWriteRequest(
+      collection: collection,
+      id: id,
+      bytes: Stream.value(Uint8List.fromList(body.codeUnits)),
+    ),
+  );
 
   // ---------------------------------------------------------------------------
 
@@ -130,18 +128,18 @@ void main() {
 
       await repo.deleteBlob('left', 'same');
       expect(await repo.headBlob('left', 'same'), isNull);
-      expect(await repo.headBlob('right', 'same'), isNotNull,
-          reason: 'deleting one collection\'s copy must not touch the other');
+      expect(
+        await repo.headBlob('right', 'same'),
+        isNotNull,
+        reason: 'deleting one collection\'s copy must not touch the other',
+      );
     }, skip: skipReason);
 
     test('a collection containing the separator is refused', () async {
       if (skipReason != null) return;
       final repo = makeRepo();
 
-      await expectLater(
-        write(repo, 'a/b', 'x'),
-        throwsA(isA<ArgumentError>()),
-      );
+      await expectLater(write(repo, 'a/b', 'x'), throwsA(isA<ArgumentError>()));
     }, skip: skipReason);
   });
 
@@ -155,25 +153,31 @@ void main() {
       expect(await rawClient.bucketExists(testBucket), isTrue);
     }, skip: skipReason);
 
-    test('a write to a missing bucket lands by repairing on the error',
-        () async {
-      if (skipReason != null) return;
-      final repo = makeRepo();
+    test(
+      'a write to a missing bucket lands by repairing on the error',
+      () async {
+        if (skipReason != null) return;
+        final repo = makeRepo();
 
-      final result = await write(repo, 'repaired', 'a', 'hello');
+        final result = await write(repo, 'repaired', 'a', 'hello');
 
-      expect(result.descriptor.length, 5);
-      expect(await repo.headBlob('repaired', 'a'), isNotNull);
-    }, skip: skipReason);
+        expect(result.descriptor.length, 5);
+        expect(await repo.headBlob('repaired', 'a'), isNotNull);
+      },
+      skip: skipReason,
+    );
 
-    test('createCollectionOnWrite: false refuses instead of creating',
-        () async {
-      if (skipReason != null) return;
-      final repo = makeRepo(createCollectionOnWrite: false);
+    test(
+      'createCollectionOnWrite: false refuses instead of creating',
+      () async {
+        if (skipReason != null) return;
+        final repo = makeRepo(createCollectionOnWrite: false);
 
-      await expectLater(write(repo, 'undeclared', 'a'), throwsA(anything));
-      expect(await rawClient.bucketExists(testBucket), isFalse);
-    }, skip: skipReason);
+        await expectLater(write(repo, 'undeclared', 'a'), throwsA(anything));
+        expect(await rawClient.bucketExists(testBucket), isFalse);
+      },
+      skip: skipReason,
+    );
 
     test('listCollections reports the prefixes in use', () async {
       if (skipReason != null) return;
@@ -197,8 +201,11 @@ void main() {
       expect(await repo.headBlob('doomed', 'a'), isNull);
       expect(await repo.headBlob('kept', 'c'), isNotNull);
       expect(await repo.listCollections(), ['kept']);
-      expect(await rawClient.bucketExists(testBucket), isTrue,
-          reason: 'the bucket is shared — it must survive');
+      expect(
+        await rawClient.bucketExists(testBucket),
+        isTrue,
+        reason: 'the bucket is shared — it must survive',
+      );
     }, skip: skipReason);
 
     test('deleteCollection on an unknown collection is false', () async {
@@ -225,35 +232,38 @@ void main() {
       expect(listed.items.map((d) => d.id), ['a', 'b']);
     }, skip: skipReason);
 
-    test('builds descriptors from the listing, HEADs only on request',
-        () async {
-      if (skipReason != null) return;
-      final repo = makeRepo();
-      await repo.writeBlob(
-        BlobWriteRequest(
-          collection: 'listing',
-          id: 'one.txt',
-          bytes: Stream.value(Uint8List.fromList('abcdef'.codeUnits)),
-          contentType: 'text/plain',
-          metadata: const {'tag': 'v1'},
-        ),
-      );
+    test(
+      'builds descriptors from the listing, HEADs only on request',
+      () async {
+        if (skipReason != null) return;
+        final repo = makeRepo();
+        await repo.writeBlob(
+          BlobWriteRequest(
+            collection: 'listing',
+            id: 'one.txt',
+            bytes: Stream.value(Uint8List.fromList('abcdef'.codeUnits)),
+            contentType: 'text/plain',
+            metadata: const {'tag': 'v1'},
+          ),
+        );
 
-      final cheap = await repo.listBlobs(
-        const ListBlobsRequest(collection: 'listing'),
-      );
-      final listed = cheap.items.single;
-      expect(listed.id, 'one.txt', reason: 'the prefix is stripped');
-      expect(listed.length, 6, reason: 'size comes from the listing');
-      expect(listed.contentType, isNull);
-      expect(listed.metadata, isEmpty);
+        final cheap = await repo.listBlobs(
+          const ListBlobsRequest(collection: 'listing'),
+        );
+        final listed = cheap.items.single;
+        expect(listed.id, 'one.txt', reason: 'the prefix is stripped');
+        expect(listed.length, 6, reason: 'size comes from the listing');
+        expect(listed.contentType, isNull);
+        expect(listed.metadata, isEmpty);
 
-      final full = await repo.listBlobs(
-        const ListBlobsRequest(collection: 'listing', includeMetadata: true),
-      );
-      expect(full.items.single.contentType, 'text/plain');
-      expect(full.items.single.metadata['tag'], 'v1');
-    }, skip: skipReason);
+        final full = await repo.listBlobs(
+          const ListBlobsRequest(collection: 'listing', includeMetadata: true),
+        );
+        expect(full.items.single.contentType, 'text/plain');
+        expect(full.items.single.metadata['tag'], 'v1');
+      },
+      skip: skipReason,
+    );
 
     test('paginates by id within the collection', () async {
       if (skipReason != null) return;
@@ -309,64 +319,81 @@ void main() {
   });
 
   group('collectionSize', () {
-    test('is null — a prefix cannot be sized without enumerating it', () async {
-      if (skipReason != null) return;
-      final repo = makeRepo();
-      await write(repo, 'sized', 'a', 'hello');
+    test(
+      'is null — a prefix cannot be sized without enumerating it',
+      () async {
+        if (skipReason != null) return;
+        final repo = makeRepo();
+        await write(repo, 'sized', 'a', 'hello');
 
-      expect(await repo.collectionSize('sized'), isNull);
+        expect(await repo.collectionSize('sized'), isNull);
 
-      // The documented replacement: sum the listing, in the open.
-      final listed = await repo.listBlobs(
-        const ListBlobsRequest(collection: 'sized', limit: 1000),
-      );
-      expect(listed.items.fold<int>(0, (sum, d) => sum + d.length), 5);
-    }, skip: skipReason);
+        // The documented replacement: sum the listing, in the open.
+        final listed = await repo.listBlobs(
+          const ListBlobsRequest(collection: 'sized', limit: 1000),
+        );
+        expect(listed.items.fold<int>(0, (sum, d) => sum + d.length), 5);
+      },
+      skip: skipReason,
+    );
   });
 
   group('write path', () {
-    test('immutableObjects skips the read that carried the version forward',
-        () async {
-      if (skipReason != null) return;
-      final mutable = makeRepo();
-      await write(mutable, 'versions', 'a', 'one');
-      expect((await write(mutable, 'versions', 'a', 'two')).descriptor.version,
-          2);
+    test(
+      'immutableObjects skips the read that carried the version forward',
+      () async {
+        if (skipReason != null) return;
+        final mutable = makeRepo();
+        await write(mutable, 'versions', 'a', 'one');
+        expect(
+          (await write(mutable, 'versions', 'a', 'two')).descriptor.version,
+          2,
+        );
 
-      final immutable = makeRepo(immutableObjects: true);
-      await write(immutable, 'hashed', 'a', 'one');
-      expect((await write(immutable, 'hashed', 'a', 'one')).descriptor.version,
+        final immutable = makeRepo(immutableObjects: true);
+        await write(immutable, 'hashed', 'a', 'one');
+        expect(
+          (await write(immutable, 'hashed', 'a', 'one')).descriptor.version,
           1,
-          reason: 'no read, so nothing to increment — the id is the content');
-    }, skip: skipReason);
+          reason: 'no read, so nothing to increment — the id is the content',
+        );
+      },
+      skip: skipReason,
+    );
 
-    test('an explicit expectedVersion still reads, even when immutable',
-        () async {
-      if (skipReason != null) return;
-      final repo = makeRepo(immutableObjects: true);
-      await write(repo, 'guarded', 'a', 'one');
+    test(
+      'an explicit expectedVersion still reads, even when immutable',
+      () async {
+        if (skipReason != null) return;
+        final repo = makeRepo(immutableObjects: true);
+        await write(repo, 'guarded', 'a', 'one');
 
-      await expectLater(
-        repo.writeBlob(
-          BlobWriteRequest(
-            collection: 'guarded',
-            id: 'a',
-            bytes: Stream.value(Uint8List.fromList('two'.codeUnits)),
-            expectedVersion: 99,
+        await expectLater(
+          repo.writeBlob(
+            BlobWriteRequest(
+              collection: 'guarded',
+              id: 'a',
+              bytes: Stream.value(Uint8List.fromList('two'.codeUnits)),
+              expectedVersion: 99,
+            ),
           ),
-        ),
-        throwsA(isA<StateError>()),
-      );
-    }, skip: skipReason);
+          throwsA(isA<StateError>()),
+        );
+      },
+      skip: skipReason,
+    );
 
-    test('publicRead: false presigns without asking for the bucket policy',
-        () async {
-      if (skipReason != null) return;
-      final repo = makeRepo(publicRead: false);
+    test(
+      'publicRead: false presigns without asking for the bucket policy',
+      () async {
+        if (skipReason != null) return;
+        final repo = makeRepo(publicRead: false);
 
-      final result = await write(repo, 'urls', 'a', 'hello');
+        final result = await write(repo, 'urls', 'a', 'hello');
 
-      expect(result.descriptor.downloadUrl, contains('X-Amz-Signature'));
-    }, skip: skipReason);
+        expect(result.descriptor.downloadUrl, contains('X-Amz-Signature'));
+      },
+      skip: skipReason,
+    );
   });
 }

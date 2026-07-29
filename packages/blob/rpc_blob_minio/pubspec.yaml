@@ -4,7 +4,7 @@
 
 name: rpc_blob_minio
 description: S3/MinIO storage adapter for rpc_blob with presigned download URLs.
-version: 2.0.0
+version: 2.0.1
 publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev

@@ -4,6 +4,15 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.0.1
+
+- `RequestTimeTooSkewed` is no longer retried. Nothing between attempts
+  corrects the clock, so retrying only turned one error into four.
+- Documented that a retry after a timeout does not cancel the attempt that
+  timed out — the client offers no cancellation — so both can be in flight.
+  The wrapped operations are idempotent, which is what makes that safe.
+
+
 ## 2.0.0
 
 **Breaking — one bucket, a prefix per collection:**
