@@ -13,9 +13,8 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:minio/minio.dart';
-import 'package:minio/models.dart';
-// Prefixed too: the listing entry type is named `Object`, which is not a name
-// worth introducing unprefixed into a file that also uses dart:core's.
+// Prefixed, always: this library exports a class named `Object`, and importing
+// it plainly shadows dart:core's in every signature in this file.
 import 'package:minio/models.dart' as minio;
 import 'package:minio/src/minio_client.dart' as minio_internal;
 import 'package:rpc_blob/rpc_blob.dart';
@@ -28,6 +27,9 @@ const int kDefaultPresignTtlSeconds = 3600;
 class S3BlobStorageOptions {
   const S3BlobStorageOptions({
     this.bucket = 'blobs',
+    this.maxRetries = 3,
+    this.retryBaseDelay = const Duration(milliseconds: 200),
+    this.requestTimeout,
     this.fetchObjectTags = false,
     this.immutableObjects = false,
     this.createCollectionOnWrite = true,
@@ -43,6 +45,26 @@ class S3BlobStorageOptions {
 
   /// The single bucket every collection lives in, as a key prefix.
   final String bucket;
+
+  /// How many times a request is retried after a throttling or transient
+  /// failure. 0 disables retrying.
+  ///
+  /// A hosted S3 answers `503 SlowDown` when a prefix is being written to
+  /// harder than it has scaled for, and expects the client to back off. A
+  /// local MinIO effectively never does, which is why this was easy to not
+  /// notice until it mattered.
+  final int maxRetries;
+
+  /// First backoff step. Each attempt doubles it, with jitter so a fleet
+  /// backing off together does not resynchronise into the same burst.
+  final Duration retryBaseDelay;
+
+  /// Ceiling on a single request.
+  ///
+  /// Applies to the call, not to draining a download stream: a large but
+  /// healthy transfer is not a stuck one. Null leaves it to the socket, which
+  /// can mean waiting on a dead connection for a very long time.
+  final Duration? requestTimeout;
 
   /// Read S3 object tags when building a descriptor, merging them into
   /// `metadata`.
@@ -120,6 +142,9 @@ class S3BlobRepository implements IBlobRepository {
   }) : _client = client,
        _presignClient = _buildPresignClient(client, options),
        _bucket = options.bucket,
+       _maxRetries = options.maxRetries,
+       _retryBaseDelay = options.retryBaseDelay,
+       _requestTimeout = options.requestTimeout,
        _fetchObjectTags = options.fetchObjectTags,
        _immutableObjects = options.immutableObjects,
        _createCollectionOnWrite = options.createCollectionOnWrite,
@@ -131,6 +156,11 @@ class S3BlobRepository implements IBlobRepository {
   }
 
   /// Convenience factory to create a MinIO/S3 client.
+  ///
+  /// [pathStyle] false is virtual-host addressing, which hosted S3 expects;
+  /// MinIO usually wants it true. Give [region] for a hosted bucket: without
+  /// it the client looks the region up on first use, which is a request that
+  /// can also fail on a locked-down credential.
   factory S3BlobRepository.connect({
     String endPoint = 'localhost',
     int? port,
@@ -139,6 +169,7 @@ class S3BlobRepository implements IBlobRepository {
     String? sessionToken,
     bool useSSL = true,
     bool pathStyle = false,
+    String? region,
     S3BlobStorageOptions options = const S3BlobStorageOptions(),
   }) {
     final client = Minio(
@@ -149,6 +180,7 @@ class S3BlobRepository implements IBlobRepository {
       sessionToken: sessionToken,
       useSSL: useSSL,
       pathStyle: pathStyle,
+      region: region,
     );
     return S3BlobRepository(client: client, options: options);
   }
@@ -156,6 +188,9 @@ class S3BlobRepository implements IBlobRepository {
   final Minio _client;
   final Minio _presignClient;
   final String _bucket;
+  final int _maxRetries;
+  final Duration _retryBaseDelay;
+  final Duration? _requestTimeout;
   final bool _fetchObjectTags;
   final bool _immutableObjects;
   final bool _createCollectionOnWrite;
@@ -174,6 +209,77 @@ class S3BlobRepository implements IBlobRepository {
   // IBlobRepository
   // ---------------------------------------------------------------------------
 
+  static final _random = Random();
+
+  /// Runs one S3 request, retrying what is worth retrying.
+  ///
+  /// Only discrete calls go through here. Listings are streams whose paging
+  /// state lives inside the client, so restarting one mid-flight would replay
+  /// objects rather than resume; a caller that needs a listing to survive a
+  /// blip re-runs the listing.
+  ///
+  /// Every operation this wraps is idempotent — reads, deletes, and writes of
+  /// content-addressed objects — so a retry after an ambiguous failure cannot
+  /// produce a second effect.
+  Future<T> _request<T>(Future<T> Function() send) async {
+    var attempt = 0;
+    while (true) {
+      try {
+        final pending = send();
+        final timeout = _requestTimeout;
+        return timeout == null ? await pending : await pending.timeout(timeout);
+      } catch (error) {
+        attempt++;
+        if (attempt > _maxRetries || !_isRetryable(error)) rethrow;
+        await Future<void>.delayed(_backoffFor(attempt));
+      }
+    }
+  }
+
+  /// Exponential with jitter, capped at 16x the base step. The jitter matters
+  /// more than the curve: without it every client that failed together retries
+  /// together.
+  Duration _backoffFor(int attempt) {
+    final factor = attempt >= 5 ? 16 : 1 << (attempt - 1);
+    final base = _retryBaseDelay.inMicroseconds * factor;
+    final jitter = (base * 0.25 * _random.nextDouble()).round();
+    return Duration(microseconds: base + jitter);
+  }
+
+  /// Throttling and transient server faults are worth another attempt; a
+  /// missing key or a bad signature is not, and retrying those just turns one
+  /// error into four.
+  static bool _isRetryable(Object error) {
+    if (error is TimeoutException) return true;
+    if (error is MinioS3Error) {
+      final status = error.response?.statusCode;
+      if (status != null &&
+          (status == 429 || (status >= 500 && status <= 599))) {
+        return true;
+      }
+      final code = error.error?.code?.toLowerCase();
+      if (code != null &&
+          const {
+            'slowdown',
+            'requesttimeout',
+            'internalerror',
+            'serviceunavailable',
+            'throttling',
+            'throttlingexception',
+            'requestthrottled',
+            'requestthrottledexception',
+            'requesttimetooskewed',
+          }.contains(code)) {
+        return true;
+      }
+      return false;
+    }
+    // Anything that is not an S3 answer at all — a dropped socket, a DNS
+    // hiccup, a TLS reset — reached us as a raw transport error, and those are
+    // the failures a retry exists for.
+    return error is! MinioError;
+  }
+
   @override
   Future<void> ensureCollection(String collection) async {
     // A prefix is not a thing that exists — ensuring a collection means
@@ -186,7 +292,7 @@ class S3BlobRepository implements IBlobRepository {
   Future<BlobDescriptor?> headBlob(String collection, String id) async {
     final key = _keyFor(collection, id);
     try {
-      final stat = await _client.statObject(_bucket, key);
+      final stat = await _request(() => _client.statObject(_bucket, key));
       final tags = _fetchObjectTags
           ? await _getObjectTags(_bucket, key)
           : const <String, String>{};
@@ -245,11 +351,11 @@ class S3BlobRepository implements IBlobRepository {
       length = request.rangeEnd! - offset;
     }
 
-    final stream = await _client.getPartialObject(
-      _bucket,
-      key,
-      offset,
-      length,
+    // The call is retried, not the draining of the stream it returns: a slow
+    // but healthy transfer is not a failure, and restarting mid-body would
+    // hand the caller overlapping bytes.
+    final stream = await _request(
+      () => _client.getPartialObject(_bucket, key, offset, length),
     );
 
     return BlobReadResult(
@@ -260,6 +366,14 @@ class S3BlobRepository implements IBlobRepository {
     );
   }
 
+  /// Buffers the whole object in memory before sending it.
+  ///
+  /// The interface asks implementations to stream, and this one does not: the
+  /// checksum is verified over the bytes actually stored, and a retry has to
+  /// be able to send them again. The ceiling that follows is
+  /// `memory / concurrent writes`, which suits the megabyte-scale chunks this
+  /// is used for and rules out very large single objects — those want
+  /// multipart, which this adapter does not do yet.
   @override
   Future<BlobWriteResult> writeBlob(BlobWriteRequest request) async {
     final id = request.id ?? _generateId();
@@ -343,24 +457,23 @@ class S3BlobRepository implements IBlobRepository {
     Uint8List bytes,
     Map<String, String> metadata,
   ) async {
+    // Re-sending needs the bytes again, which is exactly why writeBlob buffers
+    // them: a retry rebuilds the stream from the same buffer.
+    Future<void> put() => _request(
+          () => _client.putObject(
+            bucketName,
+            id,
+            Stream.value(bytes),
+            size: bytes.length,
+            metadata: metadata,
+          ),
+        );
     try {
-      await _client.putObject(
-        bucketName,
-        id,
-        Stream.value(bytes),
-        size: bytes.length,
-        metadata: metadata,
-      );
+      await put();
     } on MinioError catch (e) {
       if (!_createCollectionOnWrite || !_isNoSuchBucket(e)) rethrow;
       await _ensureBucket(bucketName);
-      await _client.putObject(
-        bucketName,
-        id,
-        Stream.value(bytes),
-        size: bytes.length,
-        metadata: metadata,
-      );
+      await put();
     }
   }
 
@@ -387,7 +500,7 @@ class S3BlobRepository implements IBlobRepository {
         'Version mismatch for $id: expected $expectedVersion, actual ${existing.version}.',
       );
     }
-    await _client.removeObject(_bucket, _keyFor(collection, id));
+    await _request(() => _client.removeObject(_bucket, _keyFor(collection, id)));
     return true;
   }
 
@@ -400,10 +513,8 @@ class S3BlobRepository implements IBlobRepository {
     // of N chunks was N round trips, and in a cloud S3 N billed requests.
     for (var i = 0; i < keys.length; i += _deleteBatchSize) {
       final end = i + _deleteBatchSize;
-      await _client.removeObjects(
-        _bucket,
-        keys.sublist(i, end < keys.length ? end : keys.length),
-      );
+      final batch = keys.sublist(i, end < keys.length ? end : keys.length);
+      await _request(() => _client.removeObjects(_bucket, batch));
     }
     // S3 reports no per-key existence for a batch delete, so the honest answer
     // is "all of them are gone now" rather than a subset we cannot determine.
@@ -490,10 +601,8 @@ class S3BlobRepository implements IBlobRepository {
       if (batch.isEmpty) return;
       for (var i = 0; i < batch.length; i += _deleteBatchSize) {
         final end = i + _deleteBatchSize;
-        await _client.removeObjects(
-          _bucket,
-          batch.sublist(i, end < batch.length ? end : batch.length),
-        );
+        final slice = batch.sublist(i, end < batch.length ? end : batch.length);
+        await _request(() => _client.removeObjects(_bucket, slice));
       }
       removed = true;
       batch = <String>[];
@@ -569,9 +678,9 @@ class S3BlobRepository implements IBlobRepository {
   /// `makeBucket`; the losers get BucketAlreadyOwnedByYou / BucketAlreadyExists.
   /// That means the bucket is there — treat it as idempotent success.
   Future<void> _ensureBucket(String bucketName) async {
-    if (await _client.bucketExists(bucketName)) return;
+    if (await _request(() => _client.bucketExists(bucketName))) return;
     try {
-      await _client.makeBucket(bucketName);
+      await _request(() => _client.makeBucket(bucketName));
     } on MinioError catch (e) {
       if (_isBucketAlreadyOwned(e)) return;
       rethrow;
@@ -593,7 +702,7 @@ class S3BlobRepository implements IBlobRepository {
 
   /// Checks whether a bucket exists.
   Future<bool> _bucketExists(String bucketName) =>
-      _client.bucketExists(bucketName);
+      _request(() => _client.bucketExists(bucketName));
 
   // ---------------------------------------------------------------------------
   // Descriptor / metadata helpers
@@ -625,7 +734,7 @@ class S3BlobRepository implements IBlobRepository {
   BlobDescriptor _descriptorFromStat(
     String collection,
     String id,
-    StatObjectResult stat, {
+    minio.StatObjectResult stat, {
     String? downloadUrl,
     Map<String, String> tags = const {},
   }) {

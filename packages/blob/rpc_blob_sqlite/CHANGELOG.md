@@ -4,6 +4,16 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.0.0
+
+- Implements `ensureCollection`, `deleteMany` and `headMany` from the
+  `rpc_blob` 2.0.0 interface. Both batch operations run one statement per
+  chunk, sized under SQLite's bound-variable ceiling, instead of one statement
+  per id; `deleteMany` uses `RETURNING` so callers get per-id truth rather
+  than a count they would have to guess against.
+- `collectionSize` returns `Future<int?>`; this backend still answers a number.
+
+
 ## 1.0.1
 
 - Web (dart2js / Wasm) path correctness. Verified the injected-`CommonDatabase`

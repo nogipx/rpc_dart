@@ -4,6 +4,39 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.0.0
+
+Prepares the blob layer for a hosted S3, where a round trip is billed and a
+bucket is a scarce resource. The interface changes are breaking.
+
+**Breaking:**
+- `IBlobRepository.collectionSize` returns `Future<int?>`. Null means the
+  backend cannot answer without walking the whole store; 0 still means empty.
+  The cost of this call ranges from an indexed query to a full enumeration
+  depending on the backend, and a plain `int` hid that well enough for it to
+  end up on a request path. Callers that need the number regardless sum
+  `listBlobs` themselves, where the cost is visible.
+- `CollectionSizeResponse.sizeBytes` is nullable to match.
+- Three methods join `IBlobRepository`, so any implementation outside this
+  repository must add them: `ensureCollection`, `deleteMany`, `headMany`.
+
+**Batching:**
+- `deleteMany` and `headMany` let a backend answer a batch the way it can —
+  one statement on SQLite, `DeleteObjects` on S3, bounded parallel HEADs where
+  there is no batch metadata call.
+- `bulkDeleteBlob` and `bulkHeadBlob` were loops over single-blob calls in both
+  the RPC responder and the in-process repository client; both now share
+  `applyBulkDelete` / `applyBulkHead`. Fixing only the responder would have
+  left the in-process path — the one a server holding a repository directly
+  uses — still walking ids one round trip at a time.
+- Version-checked deletes stay one at a time: that check is per id, while a
+  batch delete is unconditional.
+
+**Lifecycle:**
+- `ensureCollection` makes setting a collection up an explicit act, so stores
+  no longer have to re-discover its absence on every write.
+
+
 ## 1.2.2
 
 **Web/dart2js correctness (verified on node):**

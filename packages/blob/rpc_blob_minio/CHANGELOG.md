@@ -4,6 +4,48 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.0.0
+
+**Breaking — one bucket, a prefix per collection:**
+- Objects live at `<collection>/<id>` in the single bucket named by
+  `S3BlobStorageOptions.bucket`; `bucketPrefix` is gone. A bucket per
+  collection does not survive a hosted S3, where accounts are capped on bucket
+  count and creating one is heavyweight. Existing data must be copied under
+  its prefixes before this version reads it.
+- `collectionSize` returns null: S3 cannot size a prefix, and the MinIO admin
+  API that used to answer this reports per bucket, which no longer corresponds
+  to anything. `useAdminApi` is gone with it, along with the SigV4 signing it
+  needed and the `http.Client` it leaked per call — the adapter now needs
+  plain S3 permissions rather than admin ones.
+- `deleteCollection` walks the prefix and deletes in batches instead of
+  dropping a bucket; `listCollections` reads common prefixes.
+
+**Requests per operation:**
+- A write was six round trips (`bucketExists`, then `headBlob` which is itself
+  `statObject` + `getObjectTags` + `getBucketPolicy`, then `putObject`, then
+  `getBucketPolicy` again for the URL). It is one. `ensureCollection` replaces
+  the per-write bucket check, a missing bucket is repaired from the error
+  instead of polled for, `immutableObjects` skips the read-before-write for
+  content-addressed stores, and `publicRead` states what the bucket is instead
+  of asking it per descriptor.
+- `listBlobs` built each descriptor with a HEAD, making a page of N cost N+1
+  requests. It reads size and mtime from the listing; `includeMetadata` — which
+  already existed and promised exactly this — opts back into the HEADs.
+- `fetchObjectTags` (default off) stops paying a `GET ?tagging` per head for
+  tags this adapter never writes.
+
+**Hosted S3 readiness:**
+- Throttling and transient faults are retried with exponential backoff and
+  jitter (`maxRetries`, `retryBaseDelay`), and `requestTimeout` bounds a call
+  that never answers. Listings are deliberately not retried: their paging
+  state lives in the client, so a restart would replay rather than resume.
+- `connect` takes `region`, so a hosted bucket does not need a lookup on first
+  use.
+- `writeBlob` documents that it buffers the object in memory — the checksum is
+  verified over what is stored and a retry has to be able to resend it, which
+  caps object size at `memory / concurrent writes` until multipart exists.
+
+
 ## 1.0.5
 
 - Allow to pass raw sqlite db connection to adapter
