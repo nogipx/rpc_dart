@@ -10,6 +10,7 @@ import 'package:crypto/crypto.dart';
 import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
+import '../bulk_delete.dart';
 import 'blob_contract.dart';
 
 class BlobServiceResponder extends BlobServiceContractResponder {
@@ -238,22 +239,9 @@ class BlobServiceResponder extends BlobServiceContractResponder {
     BulkDeleteBlobRequest request, {
     RpcContext? context,
   }) async {
-    final results = <BulkDeleteBlobResult>[];
-    for (final item in request.items) {
-      final deleted = await _storage.deleteBlob(
-        item.collection,
-        item.id,
-        expectedVersion: item.expectedVersion,
-      );
-      results.add(
-        BulkDeleteBlobResult(
-          collection: item.collection,
-          id: item.id,
-          deleted: deleted,
-        ),
-      );
-    }
-    return BulkDeleteBlobResponse(items: results);
+    return BulkDeleteBlobResponse(
+      items: await applyBulkDelete(_storage, request.items),
+    );
   }
 
   @override

@@ -260,6 +260,16 @@ class WebDavBlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<Set<String>> deleteMany(String collection, List<String> ids) async {
+    // WebDAV deletes one resource per request; the loop is the batch.
+    final removed = <String>{};
+    for (final id in ids) {
+      if (await deleteBlob(collection, id)) removed.add(id);
+    }
+    return removed;
+  }
+
+  @override
   Future<ListBlobsResponse> listBlobs(ListBlobsRequest request) async {
     final entries = await _propfindChildren(_dirUri(request.collection));
     if (entries == null) return const ListBlobsResponse(items: []);

@@ -255,6 +255,47 @@ void main() {
     expect(collections, containsAll(<String>['a', 'b']));
   });
 
+  group('deleteMany', () {
+    Future<void> put(String id) => adapter.writeBlob(
+          BlobWriteRequest(
+            collection: 'docs',
+            id: id,
+            bytes: Stream.value(Uint8List.fromList([1, 2, 3])),
+          ),
+        );
+
+    test('removes a batch in one statement and reports what was there',
+        () async {
+      await put('a');
+      await put('b');
+      await put('c');
+
+      final removed = await adapter.deleteMany('docs', ['a', 'c', 'gone']);
+
+      expect(removed, unorderedEquals(['a', 'c']));
+      expect(await adapter.headBlob('docs', 'b'), isNotNull);
+      expect(await adapter.collectionSize('docs'), 3, reason: 'only b left');
+    });
+
+    test('handles more ids than one statement can bind', () async {
+      // Chunking guard: SQLite caps bound variables well below this.
+      final ids = [for (var i = 0; i < 1200; i++) 'id$i'];
+      for (final id in ids.take(3)) {
+        await put(id);
+      }
+
+      final removed = await adapter.deleteMany('docs', ids);
+
+      expect(removed, unorderedEquals(ids.take(3)));
+      expect(await adapter.collectionSize('docs'), 0);
+    });
+
+    test('an empty list and an unknown collection are no-ops', () async {
+      expect(await adapter.deleteMany('docs', []), isEmpty);
+      expect(await adapter.deleteMany('nope', ['a']), isEmpty);
+    });
+  });
+
   group('collectionSize', () {
     test('returns 0 for non-existent collection', () async {
       final size = await adapter.collectionSize('no_such_collection');

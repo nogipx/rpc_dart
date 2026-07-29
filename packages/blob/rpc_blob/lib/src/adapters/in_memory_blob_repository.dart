@@ -220,6 +220,17 @@ class InMemoryBlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<Set<String>> deleteMany(String collection, List<String> ids) async {
+    _ensureOpen();
+    final collectionMap = _storage[collection];
+    if (collectionMap == null || ids.isEmpty) return const {};
+    return {
+      for (final id in ids)
+        if (collectionMap.remove(id) != null) id,
+    };
+  }
+
+  @override
   Future<ListBlobsResponse> listBlobs(ListBlobsRequest request) async {
     _ensureOpen();
     final collectionMap = _storage[request.collection];

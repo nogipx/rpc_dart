@@ -398,6 +398,38 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   }
 
   @override
+  Future<Set<String>> deleteMany(String collection, List<String> ids) async {
+    _ensureOpen();
+    if (ids.isEmpty) return const {};
+    final table = _tableForCollection(collection, createIfMissing: false);
+    if (table == null) return const {};
+    return _transaction<Set<String>>(() {
+      final removed = <String>{};
+      // Chunked to stay clear of SQLite's bound-variable limit on a large
+      // reclaim; one statement per chunk instead of one per id.
+      for (var i = 0; i < ids.length; i += _deleteChunkSize) {
+        final end = i + _deleteChunkSize;
+        final chunk = ids.sublist(i, end < ids.length ? end : ids.length);
+        final placeholders = List.filled(chunk.length, '?').join(', ');
+        // RETURNING gives the ids that were actually there, so the caller gets
+        // per-id truth instead of a bare count it would have to guess against.
+        final gone = _database.select(
+          'DELETE FROM ${_quoteIdentifier(table)} '
+          'WHERE collection = ? AND id IN ($placeholders) RETURNING id',
+          <Object?>[collection, ...chunk],
+        );
+        for (final row in gone) {
+          removed.add(row['id'] as String);
+        }
+      }
+      return removed;
+    });
+  }
+
+  /// SQLite's default parameter ceiling is 999; stay well under it.
+  static const _deleteChunkSize = 500;
+
+  @override
   Future<ListBlobsResponse> listBlobs(ListBlobsRequest request) async {
     _ensureOpen();
     final table = _tableForCollection(

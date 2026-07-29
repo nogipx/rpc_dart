@@ -268,6 +268,28 @@ class S3BlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<Set<String>> deleteMany(String collection, List<String> ids) async {
+    if (ids.isEmpty) return const {};
+    final bucketName = _bucketForCollection(collection);
+    if (!await _bucketExists(bucketName)) return const {};
+    // DeleteObjects takes up to 1000 keys per request; without this a reclaim
+    // of N chunks was N round trips, and in a cloud S3 N billed requests.
+    for (var i = 0; i < ids.length; i += _deleteBatchSize) {
+      final end = i + _deleteBatchSize;
+      await _client.removeObjects(
+        bucketName,
+        ids.sublist(i, end < ids.length ? end : ids.length),
+      );
+    }
+    // S3 reports no per-key existence for a batch delete, so the honest answer
+    // is "all of them are gone now" rather than a subset we cannot determine.
+    return ids.toSet();
+  }
+
+  /// S3's documented ceiling for one DeleteObjects request.
+  static const _deleteBatchSize = 1000;
+
+  @override
   Future<ListBlobsResponse> listBlobs(ListBlobsRequest request) async {
     final bucketName = _bucketForCollection(request.collection);
     final exists = await _bucketExists(bucketName);

@@ -23,6 +23,19 @@ abstract interface class IBlobRepository {
   /// Delete a blob; returns `true` when something was removed.
   Future<bool> deleteBlob(String collection, String id, {int? expectedVersion});
 
+  /// Remove several blobs from one collection in as few round trips as the
+  /// backend allows.
+  ///
+  /// Returns the ids the backend confirmed gone. Stores that cannot report
+  /// per-key existence in a batch — S3's `DeleteObjects` among them — return
+  /// the whole request: the ids are gone either way, the answer is just less
+  /// specific about which ones had been there.
+  ///
+  /// Deliberately has no `expectedVersion`: a batch delete is unconditional.
+  /// Callers that need a version check delete one id at a time via
+  /// [deleteBlob].
+  Future<Set<String>> deleteMany(String collection, List<String> ids);
+
   /// List blob descriptors with pagination.
   Future<ListBlobsResponse> listBlobs(ListBlobsRequest request);
 

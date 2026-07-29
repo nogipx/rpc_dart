@@ -392,6 +392,37 @@ void main() {
       expect(result.descriptor.id.length, 16);
     });
 
+    group('deleteMany', () {
+      Future<void> put(String id) => repository.writeBlob(
+            BlobWriteRequest(
+              collection: 'test',
+              id: id,
+              bytes: Stream.value(Uint8List.fromList(utf8.encode(id))),
+            ),
+          );
+
+      test('removes the ids it was given and reports which were there',
+          () async {
+        await put('a');
+        await put('b');
+        await put('c');
+
+        final removed = await repository.deleteMany('test', ['a', 'c', 'gone']);
+
+        expect(removed, unorderedEquals(['a', 'c']),
+            reason: 'an id that was never stored is not reported removed');
+        expect(await repository.headBlob('test', 'a'), isNull);
+        expect(await repository.headBlob('test', 'c'), isNull);
+        expect(await repository.headBlob('test', 'b'), isNotNull,
+            reason: 'untouched ids stay');
+      });
+
+      test('an empty list and an unknown collection are no-ops', () async {
+        expect(await repository.deleteMany('test', []), isEmpty);
+        expect(await repository.deleteMany('nope', ['a']), isEmpty);
+      });
+    });
+
     test('throws when closed', () async {
       await repository.dispose();
 
