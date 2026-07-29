@@ -267,7 +267,7 @@ class BlobRepositoryClient implements IBlobClient {
   }
 
   @override
-  Future<int> collectionSize(String collection, {RpcContext? context}) {
+  Future<int?> collectionSize(String collection, {RpcContext? context}) {
     _ensureContext(context);
     return _repository.collectionSize(collection);
   }

@@ -334,7 +334,7 @@ class WebDavBlobRepository implements IBlobRepository {
   }
 
   @override
-  Future<int> collectionSize(String collection) async {
+  Future<int?> collectionSize(String collection) async {
     final entries = await _propfindChildren(_dirUri(collection));
     if (entries == null) return 0;
     var total = 0;

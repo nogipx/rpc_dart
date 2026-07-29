@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-// The minio package does not export its signing/client helpers from a public
-// library, so the S3 presign/sign implementation has to reach into its `src/`.
+// The minio package keeps its raw client out of its public library, and the
+// tagging/presign paths need it.
 // ignore_for_file: implementation_imports
 
 import 'dart:async';
@@ -12,16 +12,12 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:http/http.dart' as http;
 import 'package:minio/minio.dart';
 import 'package:minio/models.dart';
 // Prefixed too: the listing entry type is named `Object`, which is not a name
 // worth introducing unprefixed into a file that also uses dart:core's.
 import 'package:minio/models.dart' as minio;
 import 'package:minio/src/minio_client.dart' as minio_internal;
-import 'package:minio/src/minio_helpers.dart' as minio_helpers;
-import 'package:minio/src/minio_sign.dart' as minio_sign;
-import 'package:minio/src/utils.dart' as minio_utils;
 import 'package:rpc_blob/rpc_blob.dart';
 import 'package:xml/xml.dart' as xml;
 
@@ -31,8 +27,7 @@ const int kDefaultPresignTtlSeconds = 3600;
 
 class S3BlobStorageOptions {
   const S3BlobStorageOptions({
-    this.bucketPrefix,
-    this.useAdminApi = true,
+    this.bucket = 'blobs',
     this.immutableObjects = false,
     this.createCollectionOnWrite = true,
     this.publicRead,
@@ -45,13 +40,8 @@ class S3BlobStorageOptions {
     this.presignRegion = 'us-east-1',
   });
 
-  /// Optional prefix applied to all bucket names (e.g., "myapp-" makes
-  /// collection "photos" map to bucket "myapp-photos").
-  final String? bucketPrefix;
-
-  /// Whether to use MinIO Admin API for [collectionSize] instead of listing
-  /// all objects. Requires admin credentials. Defaults to true.
-  final bool useAdminApi;
+  /// The single bucket every collection lives in, as a key prefix.
+  final String bucket;
 
   /// Declares that objects are never rewritten under the same id — the case
   /// for any content-addressed store, where the id *is* the hash.
@@ -102,20 +92,24 @@ class S3BlobStorageOptions {
 
 /// S3-compatible adapter (works with AWS S3, MinIO, Ceph, etc).
 ///
-/// Each collection maps to its own S3 bucket. The bucket is created
-/// automatically on first write, mirroring the SQLite adapter's behaviour
-/// of creating a table on demand.
+/// Every collection lives in ONE bucket as a key prefix: an object is stored
+/// at `<collection>/<id>`.
 ///
-/// Bucket name = [S3BlobStorageOptions.bucketPrefix] + normalised collection
-/// name (lowercase alphanumeric + hyphens, 3–63 chars).
+/// A bucket per collection does not survive a move to a hosted S3 — providers
+/// cap how many buckets an account may have, and creating one is a heavyweight
+/// operation with its own rate limits. Prefixes have neither limit, and cost
+/// nothing to "create".
+///
+/// The trade is that a collection is no longer a thing the store knows about:
+/// [collectionSize] cannot be answered cheaply (it returns null) and
+/// [deleteCollection] is a prefix walk rather than a bucket drop.
 class S3BlobRepository implements IBlobRepository {
   S3BlobRepository({
     required Minio client,
     S3BlobStorageOptions options = const S3BlobStorageOptions(),
   }) : _client = client,
        _presignClient = _buildPresignClient(client, options),
-       _bucketPrefix = _normalizeBucketPrefix(options.bucketPrefix),
-       _useAdminApi = options.useAdminApi,
+       _bucket = options.bucket,
        _immutableObjects = options.immutableObjects,
        _createCollectionOnWrite = options.createCollectionOnWrite,
        _publicRead = options.publicRead,
@@ -150,8 +144,7 @@ class S3BlobRepository implements IBlobRepository {
 
   final Minio _client;
   final Minio _presignClient;
-  final String _bucketPrefix;
-  final bool _useAdminApi;
+  final String _bucket;
   final bool _immutableObjects;
   final bool _createCollectionOnWrite;
   final bool? _publicRead;
@@ -171,16 +164,19 @@ class S3BlobRepository implements IBlobRepository {
 
   @override
   Future<void> ensureCollection(String collection) async {
-    await _ensureBucket(_bucketForCollection(collection));
+    // A prefix is not a thing that exists — ensuring a collection means
+    // ensuring the one bucket everything lives in.
+    _prefixFor(collection); // validates the name
+    await _ensureBucket(_bucket);
   }
 
   @override
   Future<BlobDescriptor?> headBlob(String collection, String id) async {
-    final bucketName = _bucketForCollection(collection);
+    final key = _keyFor(collection, id);
     try {
-      final stat = await _client.statObject(bucketName, id);
-      final tags = await _getObjectTags(bucketName, id);
-      final url = await _downloadUrl(bucketName, id);
+      final stat = await _client.statObject(_bucket, key);
+      final tags = await _getObjectTags(_bucket, key);
+      final url = await _downloadUrl(_bucket, key);
       return _descriptorFromStat(
         collection,
         id,
@@ -196,7 +192,7 @@ class S3BlobRepository implements IBlobRepository {
 
   @override
   Future<BlobReadResult?> readBlob(BlobReadRequest request) async {
-    final bucketName = _bucketForCollection(request.collection);
+    final key = _keyFor(request.collection, request.id);
     final stat = await headBlob(request.collection, request.id);
     if (stat == null) return null;
 
@@ -208,8 +204,8 @@ class S3BlobRepository implements IBlobRepository {
     }
 
     final stream = await _client.getPartialObject(
-      bucketName,
-      request.id,
+      _bucket,
+      key,
       offset,
       length,
     );
@@ -225,7 +221,7 @@ class S3BlobRepository implements IBlobRepository {
   @override
   Future<BlobWriteResult> writeBlob(BlobWriteRequest request) async {
     final id = request.id ?? _generateId();
-    final bucketName = _bucketForCollection(request.collection);
+    final key = _keyFor(request.collection, id);
 
     // Read-before-write only when someone can act on the result: a version
     // check to enforce, or mutable objects whose version and createdAt have to
@@ -273,7 +269,7 @@ class S3BlobRepository implements IBlobRepository {
       if (request.metadata.isNotEmpty) ...request.metadata,
     };
 
-    await _putObject(bucketName, id, collected, metadata);
+    await _putObject(_bucket, key, collected, metadata);
 
     return BlobWriteResult(
       descriptor: BlobDescriptor(
@@ -286,7 +282,7 @@ class S3BlobRepository implements IBlobRepository {
         contentType: request.contentType,
         checksum: _etagLikeChecksum(collected),
         metadata: request.metadata,
-        downloadUrl: await _downloadUrl(bucketName, id),
+        downloadUrl: await _downloadUrl(_bucket, key),
       ),
     );
   }
@@ -349,23 +345,22 @@ class S3BlobRepository implements IBlobRepository {
         'Version mismatch for $id: expected $expectedVersion, actual ${existing.version}.',
       );
     }
-    final bucketName = _bucketForCollection(collection);
-    await _client.removeObject(bucketName, id);
+    await _client.removeObject(_bucket, _keyFor(collection, id));
     return true;
   }
 
   @override
   Future<Set<String>> deleteMany(String collection, List<String> ids) async {
     if (ids.isEmpty) return const {};
-    final bucketName = _bucketForCollection(collection);
-    if (!await _bucketExists(bucketName)) return const {};
+    if (!await _bucketExists(_bucket)) return const {};
+    final keys = [for (final id in ids) _keyFor(collection, id)];
     // DeleteObjects takes up to 1000 keys per request; without this a reclaim
     // of N chunks was N round trips, and in a cloud S3 N billed requests.
-    for (var i = 0; i < ids.length; i += _deleteBatchSize) {
+    for (var i = 0; i < keys.length; i += _deleteBatchSize) {
       final end = i + _deleteBatchSize;
       await _client.removeObjects(
-        bucketName,
-        ids.sublist(i, end < ids.length ? end : ids.length),
+        _bucket,
+        keys.sublist(i, end < keys.length ? end : keys.length),
       );
     }
     // S3 reports no per-key existence for a batch delete, so the honest answer
@@ -378,9 +373,9 @@ class S3BlobRepository implements IBlobRepository {
 
   @override
   Future<ListBlobsResponse> listBlobs(ListBlobsRequest request) async {
-    final bucketName = _bucketForCollection(request.collection);
-    final exists = await _bucketExists(bucketName);
-    if (!exists) return const ListBlobsResponse(items: []);
+    if (!await _bucketExists(_bucket)) {
+      return const ListBlobsResponse(items: []);
+    }
 
     final cursor = request.cursor == null || request.cursor!.isEmpty
         ? null
@@ -388,19 +383,21 @@ class S3BlobRepository implements IBlobRepository {
     final items = <BlobDescriptor>[];
     String? nextCursor;
 
+    // The collection's prefix goes to S3, so the server skips other
+    // collections instead of this loop filtering them out.
+    final prefix = _prefixFor(request.collection) + (request.prefix ?? '');
+
     await for (final chunk in _client.listObjects(
-      bucketName,
+      _bucket,
+      prefix: prefix,
       recursive: true,
     )) {
       for (final object in chunk.objects) {
-        final id = object.key ?? '';
-        if (id.isEmpty) continue;
+        final key = object.key ?? '';
+        final id = key.isEmpty ? null : _idFromKey(request.collection, key);
+        if (id == null) continue;
         if (cursor != null && id.compareTo(cursor) <= 0) continue;
-        if (request.prefix != null &&
-            request.prefix!.isNotEmpty &&
-            !id.startsWith(request.prefix!)) {
-          continue;
-        }
+
         // The listing already carries size and mtime. Only a caller that asked
         // for metadata pays a HEAD per object — everything else was turning a
         // page of N into N+1 requests, which on a cloud S3 is N+1 billed ones.
@@ -408,7 +405,7 @@ class S3BlobRepository implements IBlobRepository {
         if (request.includeMetadata) {
           descriptor = await headBlob(request.collection, id);
         } else {
-          descriptor = _descriptorFromListing(request.collection, object);
+          descriptor = _descriptorFromListing(request.collection, id, object);
         }
         if (descriptor == null) continue;
         items.add(descriptor);
@@ -424,112 +421,70 @@ class S3BlobRepository implements IBlobRepository {
 
   @override
   Future<List<String>> listCollections() async {
-    final buckets = await _client.listBuckets();
-    final collections = <String>[];
-    for (final bucket in buckets) {
-      final name = bucket.name;
-      if (name.isEmpty) continue;
-      if (_bucketPrefix.isNotEmpty && !name.startsWith(_bucketPrefix)) continue;
-      collections.add(name.substring(_bucketPrefix.length));
+    if (!await _bucketExists(_bucket)) return const [];
+    // Non-recursive listing returns the common prefixes, which is exactly the
+    // set of collections — no per-object walk.
+    final collections = <String>{};
+    await for (final chunk in _client.listObjects(_bucket, recursive: false)) {
+      for (final prefix in chunk.prefixes) {
+        final name = prefix.endsWith('/')
+            ? prefix.substring(0, prefix.length - 1)
+            : prefix;
+        if (name.isNotEmpty) collections.add(name);
+      }
     }
-    return collections..sort();
+    return collections.toList()..sort();
   }
 
   @override
   Future<bool> deleteCollection(String collection) async {
-    final bucketName = _bucketForCollection(collection);
-    final exists = await _bucketExists(bucketName);
-    if (!exists) return false;
+    if (!await _bucketExists(_bucket)) return false;
+    // The bucket is shared now, so dropping a collection means deleting its
+    // keys — in batches, not one request per object.
+    final prefix = _prefixFor(collection);
+    var removed = false;
+    var batch = <String>[];
+    Future<void> flush() async {
+      if (batch.isEmpty) return;
+      for (var i = 0; i < batch.length; i += _deleteBatchSize) {
+        final end = i + _deleteBatchSize;
+        await _client.removeObjects(
+          _bucket,
+          batch.sublist(i, end < batch.length ? end : batch.length),
+        );
+      }
+      removed = true;
+      batch = <String>[];
+    }
 
-    // Remove all objects first (S3 requires empty bucket before deletion).
     await for (final chunk in _client.listObjects(
-      bucketName,
+      _bucket,
+      prefix: prefix,
       recursive: true,
     )) {
       for (final object in chunk.objects) {
         final key = object.key;
-        if (key == null) continue;
-        await _client.removeObject(bucketName, key);
+        if (key == null || !key.startsWith(prefix)) continue;
+        batch.add(key);
+        if (batch.length >= _deleteBatchSize) await flush();
       }
     }
-    await _client.removeBucket(bucketName);
-    return true;
+    await flush();
+    return removed;
   }
 
   @override
-  Future<int> collectionSize(String collection) async {
-    final bucketName = _bucketForCollection(collection);
-    final exists = await _bucketExists(bucketName);
-    if (!exists) return 0;
-
-    if (_useAdminApi) {
-      final size = await _collectionSizeViaAdminApi(bucketName);
-      if (size != null) return size;
-    }
-
-    // Fallback: list objects and sum sizes.
-    var total = 0;
-    await for (final chunk in _client.listObjects(
-      bucketName,
-      recursive: true,
-    )) {
-      for (final object in chunk.objects) {
-        total += object.size ?? 0;
-      }
-    }
-    return total;
+  Future<int?> collectionSize(String collection) async {
+    // Null, not a number: a collection is a key prefix here, and S3 offers no
+    // way to size one without enumerating it. The MinIO admin API that used to
+    // answer this reports per BUCKET, which no longer corresponds to anything.
+    //
+    // A caller that needs the number sums [listBlobs] and pays for it in the
+    // open. One that needs it often should keep its own count.
+    _prefixFor(collection); // validates the name
+    return null;
   }
 
-  /// Calls [GET /minio/admin/v3/storageinfo] and extracts the size of
-  /// [bucketName]. Returns null if the call fails or the bucket is not found.
-  Future<int?> _collectionSizeViaAdminApi(String bucketName) async {
-    try {
-      final minio = _client;
-      final scheme = minio.useSSL ? 'https' : 'http';
-      final uri = Uri(
-        scheme: scheme,
-        host: minio.endPoint,
-        port: minio.port,
-        path: '/minio/admin/v3/storageinfo',
-      );
-
-      final request = minio_internal.MinioRequest('GET', uri);
-      final date = DateTime.now().toUtc();
-      final region = minio.region ?? 'us-east-1';
-      final payloadHash = minio_utils.sha256Hex('');
-
-      request.headers.addAll({
-        'host': uri.authority,
-        'x-amz-date': minio_helpers.makeDateLong(date),
-        'x-amz-content-sha256': payloadHash,
-      });
-
-      final authorization = minio_sign.signV4(minio, request, date, region);
-      request.headers['authorization'] = authorization;
-
-      final streamedResponse = await http.Client().send(request);
-      if (streamedResponse.statusCode != 200) return null;
-
-      final body = await streamedResponse.stream.bytesToString();
-      final json = jsonDecode(body) as Map<String, dynamic>;
-
-      // Try bucketsUsage first, then bucketsSizes.
-      final bucketsUsage = json['bucketsUsage'] as Map<String, dynamic>?;
-      if (bucketsUsage != null) {
-        final usage = bucketsUsage[bucketName] as Map<String, dynamic>?;
-        if (usage != null) return usage['size'] as int? ?? 0;
-      }
-
-      final bucketsSizes = json['bucketsSizes'] as Map<String, dynamic>?;
-      if (bucketsSizes != null) {
-        return bucketsSizes[bucketName] as int? ?? 0;
-      }
-
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
 
   @override
   Future<void> dispose() async {
@@ -540,9 +495,29 @@ class S3BlobRepository implements IBlobRepository {
   // Bucket helpers
   // ---------------------------------------------------------------------------
 
-  /// Returns the bucket name for a given collection.
-  String _bucketForCollection(String collection) {
-    return '$_bucketPrefix${_normalizeBucketName(collection)}';
+  /// Key under which a blob lives: `<collection>/<id>`.
+  String _keyFor(String collection, String id) =>
+      '${_prefixFor(collection)}$id';
+
+  /// Key prefix owned by a collection. The separator is what makes the reverse
+  /// mapping unambiguous, so a collection may not contain one itself.
+  String _prefixFor(String collection) {
+    if (collection.contains('/')) {
+      throw ArgumentError.value(
+        collection,
+        'collection',
+        'must not contain "/" — it separates the collection from the blob id',
+      );
+    }
+    return '$collection/';
+  }
+
+  /// Blob id from a full key, or null when the key is not this collection's.
+  String? _idFromKey(String collection, String key) {
+    final prefix = _prefixFor(collection);
+    if (!key.startsWith(prefix)) return null;
+    final id = key.substring(prefix.length);
+    return id.isEmpty ? null : id;
   }
 
   /// Ensures the bucket exists, creating it if necessary.
@@ -588,10 +563,14 @@ class S3BlobRepository implements IBlobRepository {
   /// user metadata and the stored version live in object metadata and stay
   /// absent here; a caller that needs them sets
   /// [ListBlobsRequest.includeMetadata], which is what that flag is for.
-  BlobDescriptor _descriptorFromListing(String collection, minio.Object object) {
+  BlobDescriptor _descriptorFromListing(
+    String collection,
+    String id,
+    minio.Object object,
+  ) {
     final lastModified = (object.lastModified ?? _clock()).toUtc();
     return BlobDescriptor(
-      id: object.key ?? '',
+      id: id,
       collection: collection,
       length: object.size ?? 0,
       version: 1,
@@ -769,26 +748,6 @@ class S3BlobRepository implements IBlobRepository {
   // ---------------------------------------------------------------------------
   // Static helpers
   // ---------------------------------------------------------------------------
-
-  /// Normalises a collection name to a valid S3 bucket name segment:
-  /// lowercase, only alphanumeric and hyphens, 3–63 chars.
-  static String _normalizeBucketName(String collection) {
-    var name = collection
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9-]'), '-')
-        .replaceAll(RegExp(r'-{2,}'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
-    if (name.length < 3) name = name.padRight(3, '0');
-    if (name.length > 63) name = name.substring(0, 63);
-    return name;
-  }
-
-  static String _normalizeBucketPrefix(String? prefix) {
-    if (prefix == null || prefix.isEmpty) return '';
-    var value = prefix.toLowerCase().replaceAll(RegExp(r'[^a-z0-9-]'), '-');
-    if (!value.endsWith('-')) value = '$value-';
-    return value;
-  }
 
   static Future<Uint8List> _collectBytes(
     Stream<Uint8List> stream, {

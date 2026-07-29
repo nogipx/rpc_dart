@@ -55,9 +55,18 @@ abstract interface class IBlobRepository {
   /// Returns true if the collection existed and was removed.
   Future<bool> deleteCollection(String collection);
 
-  /// Returns the total size in bytes of all blobs in the collection.
-  /// Returns 0 if the collection does not exist.
-  Future<int> collectionSize(String collection);
+  /// Total size in bytes of every blob in the collection, or null when this
+  /// backend cannot answer without walking the whole store.
+  ///
+  /// A maintenance and reconciliation operation, not something to call on a
+  /// request path. The nullable result is the point: the cost varies from a
+  /// single indexed query to a full enumeration depending on the backend, and
+  /// a plain `int` hid that well enough to get this called per upload. A
+  /// caller that needs a number regardless sums [listBlobs] itself, and then
+  /// the cost is written where it is paid.
+  ///
+  /// 0 means an empty (or absent) collection; null means "ask another way".
+  Future<int?> collectionSize(String collection);
 
   Future<void> dispose();
 }

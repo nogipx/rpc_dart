@@ -549,7 +549,7 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   }
 
   @override
-  Future<int> collectionSize(String collection) async {
+  Future<int?> collectionSize(String collection) async {
     _ensureOpen();
     final table = _tableForCollection(collection, createIfMissing: false);
     if (table == null) return 0;

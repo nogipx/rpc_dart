@@ -347,7 +347,7 @@ class InMemoryBlobRepository implements IBlobRepository {
   }
 
   @override
-  Future<int> collectionSize(String collection) async {
+  Future<int?> collectionSize(String collection) async {
     _ensureOpen();
     final entries = _storage[collection];
     if (entries == null) return 0;

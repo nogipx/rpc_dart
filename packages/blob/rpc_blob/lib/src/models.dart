@@ -684,12 +684,14 @@ class CollectionSizeRequest extends Equatable implements IRpcSerializable {
 
 @immutable
 class CollectionSizeResponse extends Equatable implements IRpcSerializable {
-  const CollectionSizeResponse({required this.sizeBytes});
+  const CollectionSizeResponse({this.sizeBytes});
 
   factory CollectionSizeResponse.fromJson(Map<String, dynamic> json) =>
-      CollectionSizeResponse(sizeBytes: json['size_bytes'] as int? ?? 0);
+      CollectionSizeResponse(sizeBytes: json['size_bytes'] as int?);
 
-  final int sizeBytes;
+  /// Null when the backend cannot answer cheaply — see
+  /// [IBlobRepository.collectionSize]. Distinct from 0, which means empty.
+  final int? sizeBytes;
 
   @override
   List<Object?> get props => [sizeBytes];
