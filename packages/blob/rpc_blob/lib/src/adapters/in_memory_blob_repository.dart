@@ -220,6 +220,12 @@ class InMemoryBlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<void> ensureCollection(String collection) async {
+    _ensureOpen();
+    _storage.putIfAbsent(collection, () => <String, _BlobEntry>{});
+  }
+
+  @override
   Future<Set<String>> deleteMany(String collection, List<String> ids) async {
     _ensureOpen();
     final collectionMap = _storage[collection];

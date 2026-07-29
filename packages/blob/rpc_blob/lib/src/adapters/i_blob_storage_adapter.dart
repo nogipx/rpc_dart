@@ -10,6 +10,14 @@ import '../models.dart';
 /// Storage adapter for blobs (files, images, binaries).
 /// Implementations should stream data and avoid buffering whole payloads.
 abstract interface class IBlobRepository {
+  /// Create the collection if it does not exist yet.
+  ///
+  /// Idempotent, and meant to be called once when a collection is first set
+  /// up. Without it a store has to discover the collection's absence on every
+  /// write — for S3 that was a bucket check per object, to learn something
+  /// that is true for all but the first write.
+  Future<void> ensureCollection(String collection);
+
   /// Fetch blob metadata; return null when missing.
   Future<BlobDescriptor?> headBlob(String collection, String id);
 

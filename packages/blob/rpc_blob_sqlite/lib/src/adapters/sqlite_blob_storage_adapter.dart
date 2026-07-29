@@ -398,6 +398,12 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   }
 
   @override
+  Future<void> ensureCollection(String collection) async {
+    _ensureOpen();
+    _tableForCollection(collection, createIfMissing: true);
+  }
+
+  @override
   Future<Set<String>> deleteMany(String collection, List<String> ids) async {
     _ensureOpen();
     if (ids.isEmpty) return const {};

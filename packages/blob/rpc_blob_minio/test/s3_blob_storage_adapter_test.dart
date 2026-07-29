@@ -7,13 +7,16 @@ import 'dart:typed_data';
 import 'package:rpc_blob_minio/rpc_blob_minio.dart';
 import 'package:test/test.dart';
 
-/// Integration test against local MinIO on localhost:9000 (http, path-style).
+/// Integration test against local MinIO on localhost:9010 (http, path-style).
 /// Requires existing bucket `blobs` with accessKey=minio / secretKey=minio123.
 void main() {
   const endPoint = 'localhost';
   const accessKey = 'minioadmin';
   const secretKey = 'minioadmin';
-  const port = 9000;
+  // 9010, not the MinIO default: these tests create and drop buckets, and 9000
+  // is commonly a port-forward to a real deployment. Run a throwaway server
+  // there, e.g. `docker run --rm -p 9010:9000 quay.io/minio/minio server /data`.
+  const port = 9010;
   const useSSL = false;
   const pathStyle = true;
 

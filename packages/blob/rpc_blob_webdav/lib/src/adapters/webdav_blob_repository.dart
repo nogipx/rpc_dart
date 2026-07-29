@@ -260,6 +260,9 @@ class WebDavBlobRepository implements IBlobRepository {
   }
 
   @override
+  Future<void> ensureCollection(String collection) => _ensureCollection(collection);
+
+  @override
   Future<Set<String>> deleteMany(String collection, List<String> ids) async {
     // WebDAV deletes one resource per request; the loop is the batch.
     final removed = <String>{};

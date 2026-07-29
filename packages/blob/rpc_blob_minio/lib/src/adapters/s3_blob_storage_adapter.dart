@@ -33,6 +33,9 @@ class S3BlobStorageOptions {
   const S3BlobStorageOptions({
     this.bucketPrefix,
     this.useAdminApi = true,
+    this.immutableObjects = false,
+    this.createCollectionOnWrite = true,
+    this.publicRead,
     this.clock,
     this.presignTtlSeconds,
     this.presignEndpoint,
@@ -49,6 +52,30 @@ class S3BlobStorageOptions {
   /// Whether to use MinIO Admin API for [collectionSize] instead of listing
   /// all objects. Requires admin credentials. Defaults to true.
   final bool useAdminApi;
+
+  /// Declares that objects are never rewritten under the same id — the case
+  /// for any content-addressed store, where the id *is* the hash.
+  ///
+  /// Writes then skip the read that only existed to carry `version` and
+  /// `createdAt` forward, which is one round trip per object. Version checks
+  /// still work: an explicit `expectedVersion` takes the reading path.
+  final bool immutableObjects;
+
+  /// Create the bucket when a write lands on a missing one.
+  ///
+  /// The check itself is gone — writes no longer ask whether the bucket is
+  /// there, they write and repair on the error. Turn this off to require
+  /// [IBlobRepository.ensureCollection] up front.
+  final bool createCollectionOnWrite;
+
+  /// Whether objects are world-readable, deciding between a plain URL and a
+  /// presigned one.
+  ///
+  /// Null keeps the old behaviour of asking the bucket for its policy — one
+  /// request per descriptor built, so set this explicitly in anything that
+  /// serves traffic. The deployment knows the answer; the adapter shouldn't
+  /// have to discover it over the network.
+  final bool? publicRead;
 
   /// Override the clock used for timestamps (primarily for tests).
   final S3Clock? clock;
@@ -89,6 +116,9 @@ class S3BlobRepository implements IBlobRepository {
        _presignClient = _buildPresignClient(client, options),
        _bucketPrefix = _normalizeBucketPrefix(options.bucketPrefix),
        _useAdminApi = options.useAdminApi,
+       _immutableObjects = options.immutableObjects,
+       _createCollectionOnWrite = options.createCollectionOnWrite,
+       _publicRead = options.publicRead,
        _clock = options.clock ?? DateTime.now,
        _presignTtlSeconds =
            options.presignTtlSeconds ?? kDefaultPresignTtlSeconds {
@@ -122,6 +152,9 @@ class S3BlobRepository implements IBlobRepository {
   final Minio _presignClient;
   final String _bucketPrefix;
   final bool _useAdminApi;
+  final bool _immutableObjects;
+  final bool _createCollectionOnWrite;
+  final bool? _publicRead;
   final S3Clock _clock;
   final int _presignTtlSeconds;
 
@@ -135,6 +168,11 @@ class S3BlobRepository implements IBlobRepository {
   // ---------------------------------------------------------------------------
   // IBlobRepository
   // ---------------------------------------------------------------------------
+
+  @override
+  Future<void> ensureCollection(String collection) async {
+    await _ensureBucket(_bucketForCollection(collection));
+  }
 
   @override
   Future<BlobDescriptor?> headBlob(String collection, String id) async {
@@ -188,9 +226,16 @@ class S3BlobRepository implements IBlobRepository {
   Future<BlobWriteResult> writeBlob(BlobWriteRequest request) async {
     final id = request.id ?? _generateId();
     final bucketName = _bucketForCollection(request.collection);
-    await _ensureBucket(bucketName);
 
-    final existing = await headBlob(request.collection, id);
+    // Read-before-write only when someone can act on the result: a version
+    // check to enforce, or mutable objects whose version and createdAt have to
+    // carry forward. For a content-addressed store neither applies, and this
+    // was a round trip — three, in fact, since headBlob also fetches tags and
+    // the bucket policy — on every chunk.
+    final needsExisting =
+        request.expectedVersion != null || !_immutableObjects;
+    final existing =
+        needsExisting ? await headBlob(request.collection, id) : null;
     if (existing == null && request.expectedVersion != null) {
       throw StateError(
         'Expected version ${request.expectedVersion} for $id but blob is missing.',
@@ -228,13 +273,7 @@ class S3BlobRepository implements IBlobRepository {
       if (request.metadata.isNotEmpty) ...request.metadata,
     };
 
-    await _client.putObject(
-      bucketName,
-      id,
-      Stream.value(collected),
-      size: collected.length,
-      metadata: metadata,
-    );
+    await _putObject(bucketName, id, collected, metadata);
 
     return BlobWriteResult(
       descriptor: BlobDescriptor(
@@ -250,6 +289,51 @@ class S3BlobRepository implements IBlobRepository {
         downloadUrl: await _downloadUrl(bucketName, id),
       ),
     );
+  }
+
+  /// Writes the object, creating the bucket only if the write says it is
+  /// missing.
+  ///
+  /// The old shape asked `bucketExists` before every write — a round trip to
+  /// learn something that is true for all but the first write of a
+  /// collection's life, and a check-then-act race besides. Repairing on the
+  /// error is both cheaper and correct under concurrency: parallel writers
+  /// that all see NoSuchBucket land on an idempotent create.
+  Future<void> _putObject(
+    String bucketName,
+    String id,
+    Uint8List bytes,
+    Map<String, String> metadata,
+  ) async {
+    try {
+      await _client.putObject(
+        bucketName,
+        id,
+        Stream.value(bytes),
+        size: bytes.length,
+        metadata: metadata,
+      );
+    } on MinioError catch (e) {
+      if (!_createCollectionOnWrite || !_isNoSuchBucket(e)) rethrow;
+      await _ensureBucket(bucketName);
+      await _client.putObject(
+        bucketName,
+        id,
+        Stream.value(bytes),
+        size: bytes.length,
+        metadata: metadata,
+      );
+    }
+  }
+
+  static bool _isNoSuchBucket(MinioError error) {
+    if (error is MinioS3Error) {
+      final code = error.error?.code?.toLowerCase();
+      if (code == 'nosuchbucket') return true;
+    }
+    final message = (error.message ?? error.toString()).toLowerCase();
+    return message.contains('nosuchbucket') ||
+        message.contains('does not exist');
   }
 
   @override
@@ -572,6 +656,14 @@ class S3BlobRepository implements IBlobRepository {
   // ---------------------------------------------------------------------------
 
   Future<String?> _downloadUrl(String bucketName, String key) async {
+    final configured = _publicRead;
+    if (configured != null) {
+      return configured
+          ? _publicUrl(bucketName, key)
+          : _presignedUrl(bucketName, key);
+    }
+    // Unconfigured: ask the bucket. Costs a request per descriptor, which is
+    // why S3BlobStorageOptions.publicRead exists.
     final isPublic = await _isBucketPublic(bucketName);
     return isPublic
         ? _publicUrl(bucketName, key)

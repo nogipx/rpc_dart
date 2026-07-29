@@ -10,7 +10,7 @@ import 'package:test/test.dart';
 
 /// Integration tests for the bucket-per-collection model.
 ///
-/// Requires local MinIO on localhost:9000 (http, path-style)
+/// Requires local MinIO on localhost:9010 (http, path-style)
 /// with admin credentials minioadmin/minioadmin.
 ///
 /// Run: fvm dart test test/s3_bucket_per_collection_test.dart
@@ -18,7 +18,10 @@ void main() {
   const endPoint = 'localhost';
   const accessKey = 'minioadmin';
   const secretKey = 'minioadmin';
-  const port = 9000;
+  // 9010, not the MinIO default: these tests create and drop buckets, and 9000
+  // is commonly a port-forward to a real deployment. Run a throwaway server
+  // there, e.g. `docker run --rm -p 9010:9000 quay.io/minio/minio server /data`.
+  const port = 9010;
   const useSSL = false;
   const pathStyle = true;
 
@@ -63,7 +66,12 @@ void main() {
     }
   }
 
-  S3BlobRepository makeRepo({bool useAdminApi = true}) =>
+  S3BlobRepository makeRepo({
+    bool useAdminApi = true,
+    bool immutableObjects = false,
+    bool createCollectionOnWrite = true,
+    bool? publicRead,
+  }) =>
       S3BlobRepository.connect(
         endPoint: endPoint,
         port: port,
@@ -74,6 +82,9 @@ void main() {
         options: S3BlobStorageOptions(
           bucketPrefix: testBucketPrefix,
           useAdminApi: useAdminApi,
+          immutableObjects: immutableObjects,
+          createCollectionOnWrite: createCollectionOnWrite,
+          publicRead: publicRead,
         ),
       );
 
@@ -306,6 +317,105 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
+
+  group('write path', () {
+    Future<BlobWriteResult> write(
+      S3BlobRepository repo,
+      String collection,
+      String id,
+      String body,
+    ) =>
+        repo.writeBlob(
+          BlobWriteRequest(
+            collection: collection,
+            id: id,
+            bytes: Stream.value(Uint8List.fromList(body.codeUnits)),
+          ),
+        );
+
+    test('ensureCollection creates the bucket up front', () async {
+      if (skipReason != null) return;
+      final repo = makeRepo();
+
+      await repo.ensureCollection('declared');
+
+      expect(
+        await rawClient.bucketExists('${testBucketPrefix}declared'),
+        isTrue,
+      );
+    }, skip: skipReason);
+
+    test('a write to a missing bucket still lands, by repairing on the error',
+        () async {
+      if (skipReason != null) return;
+      final repo = makeRepo();
+
+      final result = await write(repo, 'repaired', 'a', 'hello');
+
+      expect(result.descriptor.length, 5);
+      expect(await repo.headBlob('repaired', 'a'), isNotNull);
+    }, skip: skipReason);
+
+    test('createCollectionOnWrite: false refuses instead of creating',
+        () async {
+      if (skipReason != null) return;
+      final repo = makeRepo(createCollectionOnWrite: false);
+
+      await expectLater(
+        write(repo, 'undeclared', 'a', 'hello'),
+        throwsA(anything),
+      );
+      expect(
+        await rawClient.bucketExists('${testBucketPrefix}undeclared'),
+        isFalse,
+      );
+    }, skip: skipReason);
+
+    test('immutableObjects skips the read that carried the version forward',
+        () async {
+      if (skipReason != null) return;
+      final mutable = makeRepo();
+      await write(mutable, 'versions', 'a', 'one');
+      final second = await write(mutable, 'versions', 'a', 'two');
+      expect(second.descriptor.version, 2,
+          reason: 'default behaviour still reads and increments');
+
+      final immutable = makeRepo(immutableObjects: true);
+      await write(immutable, 'hashed', 'a', 'one');
+      final rewrite = await write(immutable, 'hashed', 'a', 'one');
+      expect(rewrite.descriptor.version, 1,
+          reason: 'no read, so nothing to increment — the id is the content');
+    }, skip: skipReason);
+
+    test('an explicit expectedVersion still reads, even when immutable',
+        () async {
+      if (skipReason != null) return;
+      final repo = makeRepo(immutableObjects: true);
+      await write(repo, 'guarded', 'a', 'one');
+
+      await expectLater(
+        repo.writeBlob(
+          BlobWriteRequest(
+            collection: 'guarded',
+            id: 'a',
+            bytes: Stream.value(Uint8List.fromList('two'.codeUnits)),
+            expectedVersion: 99,
+          ),
+        ),
+        throwsA(isA<StateError>()),
+      );
+    }, skip: skipReason);
+
+    test('publicRead: false presigns without asking for the bucket policy',
+        () async {
+      if (skipReason != null) return;
+      final repo = makeRepo(publicRead: false);
+
+      final result = await write(repo, 'urls', 'a', 'hello');
+
+      expect(result.descriptor.downloadUrl, contains('X-Amz-Signature'));
+    }, skip: skipReason);
+  });
 
   group('listBlobs', () {
     test('lists from the listing itself, and only fetches metadata on request',

@@ -8,14 +8,17 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 /// RPC-level integration over S3/MinIO backend.
-/// Requires local MinIO on localhost:9000 (http, path-style) with bucket `blobs`
+/// Requires local MinIO on localhost:9010 (http, path-style) with bucket `blobs`
 /// and credentials minio/minio123 already present.
 void main() {
   const endPoint = 'localhost';
   const bucket = 'blobs';
   const accessKey = 'minioadmin';
   const secretKey = 'minioadmin';
-  const port = 9000;
+  // 9010, not the MinIO default: these tests create and drop buckets, and 9000
+  // is commonly a port-forward to a real deployment. Run a throwaway server
+  // there, e.g. `docker run --rm -p 9010:9000 quay.io/minio/minio server /data`.
+  const port = 9010;
   const useSSL = false;
   const pathStyle = true;
 
