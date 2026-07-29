@@ -274,7 +274,8 @@ class WebDavBlobRepository implements IBlobRepository {
   }
 
   @override
-  Future<void> ensureCollection(String collection) => _ensureCollection(collection);
+  Future<void> ensureCollection(String collection) =>
+      _ensureCollection(collection);
 
   @override
   Future<Set<String>> deleteMany(String collection, List<String> ids) async {
