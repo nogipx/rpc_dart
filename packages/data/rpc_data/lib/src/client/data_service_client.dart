@@ -43,6 +43,22 @@ class DataServiceClient implements IDataClient {
   }
 
   @override
+  Future<List<DataRecord>> getMany({
+    required String collection,
+    required List<String> ids,
+    RpcContext? context,
+  }) async {
+    if (ids.isEmpty) {
+      return const [];
+    }
+    final response = await _caller.getRecords(
+      GetRecordsRequest(collection: collection, ids: ids),
+      context: context,
+    );
+    return response.records;
+  }
+
+  @override
   Future<ListRecordsResponse> list({
     required String collection,
     RecordFilter? filter,

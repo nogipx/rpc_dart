@@ -496,6 +496,15 @@ abstract class BaseDataRepository implements IDataRepository {
   }
 
   @override
+  Future<List<DataRecord>> getMany(GetRecordsRequest request) async {
+    if (request.ids.isEmpty) {
+      return const [];
+    }
+    final found = await storage.readRecords(request.collection, request.ids);
+    return found.values.toList(growable: false);
+  }
+
+  @override
   Future<ListRecordsResponse> list(ListRecordsRequest request) async {
     return _delegateToAdapter(
       () => storage.queryCollection(request),

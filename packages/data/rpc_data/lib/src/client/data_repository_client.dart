@@ -50,6 +50,23 @@ class DataRepositoryClient implements IDataClient {
   }
 
   @override
+  Future<List<DataRecord>> getMany({
+    required String collection,
+    required List<String> ids,
+    RpcContext? context,
+  }) {
+    if (ids.isEmpty) {
+      return Future.value(const []);
+    }
+    return _runSafely(
+      context,
+      () => _repository.getMany(
+        GetRecordsRequest(collection: collection, ids: ids),
+      ),
+    );
+  }
+
+  @override
   Future<ListRecordsResponse> list({
     required String collection,
     RecordFilter? filter,

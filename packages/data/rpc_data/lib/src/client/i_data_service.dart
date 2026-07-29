@@ -61,6 +61,19 @@ abstract interface class IDataClient {
     RpcContext? context,
   });
 
+  /// Returns those of [ids] that exist, in one round trip, in no guaranteed
+  /// order.
+  ///
+  /// Use this instead of `listAllRecords` with a filter whenever the exact ids
+  /// are known: every adapter serves this from the primary key, so the cost
+  /// follows the number of ids asked for rather than the size of the
+  /// collection. Missing ids are absent from the result.
+  Future<List<DataRecord>> getMany({
+    required String collection,
+    required List<String> ids,
+    RpcContext? context,
+  });
+
   /// Returns a page of records with filtering, sorting, and pagination applied.
   ///
   /// `options.limit`/`options.cursor` control pagination. Provide `sort` to get a

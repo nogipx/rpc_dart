@@ -11,6 +11,8 @@ abstract interface class IDataRepository {
 
   Future<DataRecord?> get(GetRecordRequest request);
 
+  Future<List<DataRecord>> getMany(GetRecordsRequest request);
+
   Future<ListRecordsResponse> list(ListRecordsRequest request);
 
   Future<DataRecord> update(UpdateRecordRequest request);

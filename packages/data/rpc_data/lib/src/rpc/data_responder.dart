@@ -56,6 +56,18 @@ class DataServiceResponder extends DataServiceContractResponder {
   }
 
   @override
+  Future<GetRecordsResponse> getRecords(
+    GetRecordsRequest request, {
+    RpcContext? context,
+  }) async {
+    final records = await _runSafely(
+      context,
+      () => _repository.getMany(request),
+    );
+    return GetRecordsResponse(records: records);
+  }
+
+  @override
   Future<ListRecordsResponse> listRecords(
     ListRecordsRequest request, {
     RpcContext? context,

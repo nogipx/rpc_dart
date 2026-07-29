@@ -210,6 +210,10 @@ class _ThrowingRepository implements IDataRepository {
       throw UnimplementedError();
 
   @override
+  Future<List<DataRecord>> getMany(GetRecordsRequest request) =>
+      throw UnimplementedError();
+
+  @override
   Future<ListRecordsResponse> list(ListRecordsRequest request) =>
       throw UnimplementedError();
 

@@ -15,9 +15,10 @@ part of 'data_contract.dart';
 class DataServiceContractNames {
   const DataServiceContractNames._();
   static const service = 'DataService';
-  static String instance(String suffix) => '\$service\_$suffix';
+  static String instance(String suffix) => '$service\_$suffix';
   static const createRecord = 'createRecord';
   static const getRecord = 'getRecord';
+  static const getRecords = 'getRecords';
   static const listRecords = 'listRecords';
   static const listCollections = 'listCollections';
   static const updateRecord = 'updateRecord';
@@ -36,6 +37,130 @@ class DataServiceContractNames {
   static const listSchemas = 'listSchemas';
   static const getSchema = 'getSchema';
   static const setSchemaPolicy = 'setSchemaPolicy';
+}
+
+class DataServiceContractCodecs {
+  const DataServiceContractCodecs._();
+  static const codecBulkDeleteRequest = RpcCodec<BulkDeleteRequest>.withDecoder(
+    BulkDeleteRequest.fromJson,
+  );
+  static const codecBulkDeleteResponse =
+      RpcCodec<BulkDeleteResponse>.withDecoder(BulkDeleteResponse.fromJson);
+  static const codecBulkUpsertResponse =
+      RpcCodec<BulkUpsertResponse>.withDecoder(BulkUpsertResponse.fromJson);
+  static const codecCreateCollectionIndexRequest =
+      RpcCodec<CreateCollectionIndexRequest>.withDecoder(
+        CreateCollectionIndexRequest.fromJson,
+      );
+  static const codecCreateCollectionIndexResponse =
+      RpcCodec<CreateCollectionIndexResponse>.withDecoder(
+        CreateCollectionIndexResponse.fromJson,
+      );
+  static const codecCreateRecordRequest =
+      RpcCodec<CreateRecordRequest>.withDecoder(CreateRecordRequest.fromJson);
+  static const codecCreateRecordResponse =
+      RpcCodec<CreateRecordResponse>.withDecoder(CreateRecordResponse.fromJson);
+  static const codecDataChangeEvent = RpcCodec<DataChangeEvent>.withDecoder(
+    DataChangeEvent.fromJson,
+  );
+  static const codecDataRecord = RpcCodec<DataRecord>.withDecoder(
+    DataRecord.fromJson,
+  );
+  static const codecDatabaseChunk = RpcCodec<DatabaseChunk>.withDecoder(
+    DatabaseChunk.fromJson,
+  );
+  static const codecDeleteCollectionIndexRequest =
+      RpcCodec<DeleteCollectionIndexRequest>.withDecoder(
+        DeleteCollectionIndexRequest.fromJson,
+      );
+  static const codecDeleteCollectionIndexResponse =
+      RpcCodec<DeleteCollectionIndexResponse>.withDecoder(
+        DeleteCollectionIndexResponse.fromJson,
+      );
+  static const codecDeleteCollectionRequest =
+      RpcCodec<DeleteCollectionRequest>.withDecoder(
+        DeleteCollectionRequest.fromJson,
+      );
+  static const codecDeleteCollectionResponse =
+      RpcCodec<DeleteCollectionResponse>.withDecoder(
+        DeleteCollectionResponse.fromJson,
+      );
+  static const codecDeleteRecordRequest =
+      RpcCodec<DeleteRecordRequest>.withDecoder(DeleteRecordRequest.fromJson);
+  static const codecDeleteRecordResponse =
+      RpcCodec<DeleteRecordResponse>.withDecoder(DeleteRecordResponse.fromJson);
+  static const codecExportDatabaseRequest =
+      RpcCodec<ExportDatabaseRequest>.withDecoder(
+        ExportDatabaseRequest.fromJson,
+      );
+  static const codecExportSnapshotRequest =
+      RpcCodec<ExportSnapshotRequest>.withDecoder(
+        ExportSnapshotRequest.fromJson,
+      );
+  static const codecExportSnapshotResponse =
+      RpcCodec<ExportSnapshotResponse>.withDecoder(
+        ExportSnapshotResponse.fromJson,
+      );
+  static const codecGetRecordRequest = RpcCodec<GetRecordRequest>.withDecoder(
+    GetRecordRequest.fromJson,
+  );
+  static const codecGetRecordResponse = RpcCodec<GetRecordResponse>.withDecoder(
+    GetRecordResponse.fromJson,
+  );
+  static const codecGetRecordsRequest = RpcCodec<GetRecordsRequest>.withDecoder(
+    GetRecordsRequest.fromJson,
+  );
+  static const codecGetRecordsResponse =
+      RpcCodec<GetRecordsResponse>.withDecoder(GetRecordsResponse.fromJson);
+  static const codecGetSchemaRequest = RpcCodec<GetSchemaRequest>.withDecoder(
+    GetSchemaRequest.fromJson,
+  );
+  static const codecGetSchemaResponse = RpcCodec<GetSchemaResponse>.withDecoder(
+    GetSchemaResponse.fromJson,
+  );
+  static const codecImportProgress = RpcCodec<ImportProgress>.withDecoder(
+    ImportProgress.fromJson,
+  );
+  static const codecListCollectionsRequest =
+      RpcCodec<ListCollectionsRequest>.withDecoder(
+        ListCollectionsRequest.fromJson,
+      );
+  static const codecListCollectionsResponse =
+      RpcCodec<ListCollectionsResponse>.withDecoder(
+        ListCollectionsResponse.fromJson,
+      );
+  static const codecListRecordsRequest =
+      RpcCodec<ListRecordsRequest>.withDecoder(ListRecordsRequest.fromJson);
+  static const codecListRecordsResponse =
+      RpcCodec<ListRecordsResponse>.withDecoder(ListRecordsResponse.fromJson);
+  static const codecListSchemasRequest =
+      RpcCodec<ListSchemasRequest>.withDecoder(ListSchemasRequest.fromJson);
+  static const codecListSchemasResponse =
+      RpcCodec<ListSchemasResponse>.withDecoder(ListSchemasResponse.fromJson);
+  static const codecPatchRecordRequest =
+      RpcCodec<PatchRecordRequest>.withDecoder(PatchRecordRequest.fromJson);
+  static const codecPatchRecordResponse =
+      RpcCodec<PatchRecordResponse>.withDecoder(PatchRecordResponse.fromJson);
+  static const codecSearchRecordsRequest =
+      RpcCodec<SearchRecordsRequest>.withDecoder(SearchRecordsRequest.fromJson);
+  static const codecSearchRecordsResponse =
+      RpcCodec<SearchRecordsResponse>.withDecoder(
+        SearchRecordsResponse.fromJson,
+      );
+  static const codecSetSchemaPolicyRequest =
+      RpcCodec<SetSchemaPolicyRequest>.withDecoder(
+        SetSchemaPolicyRequest.fromJson,
+      );
+  static const codecSetSchemaPolicyResponse =
+      RpcCodec<SetSchemaPolicyResponse>.withDecoder(
+        SetSchemaPolicyResponse.fromJson,
+      );
+  static const codecUpdateRecordRequest =
+      RpcCodec<UpdateRecordRequest>.withDecoder(UpdateRecordRequest.fromJson);
+  static const codecUpdateRecordResponse =
+      RpcCodec<UpdateRecordResponse>.withDecoder(UpdateRecordResponse.fromJson);
+  static const codecWatchChangesRequest =
+      RpcCodec<WatchChangesRequest>.withDecoder(WatchChangesRequest.fromJson);
 }
 
 class DataServiceContractCaller extends RpcCallerContract
@@ -57,12 +182,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<CreateRecordRequest, CreateRecordResponse>(
       methodName: DataServiceContractNames.createRecord,
-      requestCodec: const RpcCodec<CreateRecordRequest>.withDecoder(
-        CreateRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<CreateRecordResponse>.withDecoder(
-        CreateRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecCreateRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecCreateRecordResponse,
       request: request,
       context: context,
     );
@@ -75,12 +196,22 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<GetRecordRequest, GetRecordResponse>(
       methodName: DataServiceContractNames.getRecord,
-      requestCodec: const RpcCodec<GetRecordRequest>.withDecoder(
-        GetRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<GetRecordResponse>.withDecoder(
-        GetRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecGetRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecGetRecordResponse,
+      request: request,
+      context: context,
+    );
+  }
+
+  @override
+  Future<GetRecordsResponse> getRecords(
+    GetRecordsRequest request, {
+    RpcContext? context,
+  }) {
+    return callUnary<GetRecordsRequest, GetRecordsResponse>(
+      methodName: DataServiceContractNames.getRecords,
+      requestCodec: DataServiceContractCodecs.codecGetRecordsRequest,
+      responseCodec: DataServiceContractCodecs.codecGetRecordsResponse,
       request: request,
       context: context,
     );
@@ -93,12 +224,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<ListRecordsRequest, ListRecordsResponse>(
       methodName: DataServiceContractNames.listRecords,
-      requestCodec: const RpcCodec<ListRecordsRequest>.withDecoder(
-        ListRecordsRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<ListRecordsResponse>.withDecoder(
-        ListRecordsResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecListRecordsRequest,
+      responseCodec: DataServiceContractCodecs.codecListRecordsResponse,
       request: request,
       context: context,
     );
@@ -111,12 +238,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<ListCollectionsRequest, ListCollectionsResponse>(
       methodName: DataServiceContractNames.listCollections,
-      requestCodec: const RpcCodec<ListCollectionsRequest>.withDecoder(
-        ListCollectionsRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<ListCollectionsResponse>.withDecoder(
-        ListCollectionsResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecListCollectionsRequest,
+      responseCodec: DataServiceContractCodecs.codecListCollectionsResponse,
       request: request,
       context: context,
     );
@@ -129,12 +252,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<UpdateRecordRequest, UpdateRecordResponse>(
       methodName: DataServiceContractNames.updateRecord,
-      requestCodec: const RpcCodec<UpdateRecordRequest>.withDecoder(
-        UpdateRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<UpdateRecordResponse>.withDecoder(
-        UpdateRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecUpdateRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecUpdateRecordResponse,
       request: request,
       context: context,
     );
@@ -147,12 +266,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<PatchRecordRequest, PatchRecordResponse>(
       methodName: DataServiceContractNames.patchRecord,
-      requestCodec: const RpcCodec<PatchRecordRequest>.withDecoder(
-        PatchRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<PatchRecordResponse>.withDecoder(
-        PatchRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecPatchRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecPatchRecordResponse,
       request: request,
       context: context,
     );
@@ -165,12 +280,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<DeleteRecordRequest, DeleteRecordResponse>(
       methodName: DataServiceContractNames.deleteRecord,
-      requestCodec: const RpcCodec<DeleteRecordRequest>.withDecoder(
-        DeleteRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DeleteRecordResponse>.withDecoder(
-        DeleteRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDeleteRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecDeleteRecordResponse,
       request: request,
       context: context,
     );
@@ -183,12 +294,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<DeleteCollectionRequest, DeleteCollectionResponse>(
       methodName: DataServiceContractNames.deleteCollection,
-      requestCodec: const RpcCodec<DeleteCollectionRequest>.withDecoder(
-        DeleteCollectionRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DeleteCollectionResponse>.withDecoder(
-        DeleteCollectionResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDeleteCollectionRequest,
+      responseCodec: DataServiceContractCodecs.codecDeleteCollectionResponse,
       request: request,
       context: context,
     );
@@ -201,10 +308,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callClientStream<DataRecord, BulkUpsertResponse>(
       methodName: DataServiceContractNames.bulkUpsert,
-      requestCodec: const RpcCodec<DataRecord>.withDecoder(DataRecord.fromJson),
-      responseCodec: const RpcCodec<BulkUpsertResponse>.withDecoder(
-        BulkUpsertResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDataRecord,
+      responseCodec: DataServiceContractCodecs.codecBulkUpsertResponse,
       requests: requests,
       context: context,
     );
@@ -217,12 +322,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<BulkDeleteRequest, BulkDeleteResponse>(
       methodName: DataServiceContractNames.bulkDelete,
-      requestCodec: const RpcCodec<BulkDeleteRequest>.withDecoder(
-        BulkDeleteRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<BulkDeleteResponse>.withDecoder(
-        BulkDeleteResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecBulkDeleteRequest,
+      responseCodec: DataServiceContractCodecs.codecBulkDeleteResponse,
       request: request,
       context: context,
     );
@@ -235,12 +336,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<ExportSnapshotRequest, ExportSnapshotResponse>(
       methodName: DataServiceContractNames.exportSnapshot,
-      requestCodec: const RpcCodec<ExportSnapshotRequest>.withDecoder(
-        ExportSnapshotRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<ExportSnapshotResponse>.withDecoder(
-        ExportSnapshotResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecExportSnapshotRequest,
+      responseCodec: DataServiceContractCodecs.codecExportSnapshotResponse,
       request: request,
       context: context,
     );
@@ -253,12 +350,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callServerStream<ExportDatabaseRequest, DatabaseChunk>(
       methodName: DataServiceContractNames.exportDatabase,
-      requestCodec: const RpcCodec<ExportDatabaseRequest>.withDecoder(
-        ExportDatabaseRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DatabaseChunk>.withDecoder(
-        DatabaseChunk.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecExportDatabaseRequest,
+      responseCodec: DataServiceContractCodecs.codecDatabaseChunk,
       request: request,
       context: context,
     );
@@ -271,12 +364,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callBidirectionalStream<DatabaseChunk, ImportProgress>(
       methodName: DataServiceContractNames.importDatabase,
-      requestCodec: const RpcCodec<DatabaseChunk>.withDecoder(
-        DatabaseChunk.fromJson,
-      ),
-      responseCodec: const RpcCodec<ImportProgress>.withDecoder(
-        ImportProgress.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDatabaseChunk,
+      responseCodec: DataServiceContractCodecs.codecImportProgress,
       requests: requests,
       context: context,
     );
@@ -289,12 +378,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<SearchRecordsRequest, SearchRecordsResponse>(
       methodName: DataServiceContractNames.searchRecords,
-      requestCodec: const RpcCodec<SearchRecordsRequest>.withDecoder(
-        SearchRecordsRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<SearchRecordsResponse>.withDecoder(
-        SearchRecordsResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecSearchRecordsRequest,
+      responseCodec: DataServiceContractCodecs.codecSearchRecordsResponse,
       request: request,
       context: context,
     );
@@ -310,12 +395,9 @@ class DataServiceContractCaller extends RpcCallerContract
       CreateCollectionIndexResponse
     >(
       methodName: DataServiceContractNames.createCollectionIndex,
-      requestCodec: const RpcCodec<CreateCollectionIndexRequest>.withDecoder(
-        CreateCollectionIndexRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<CreateCollectionIndexResponse>.withDecoder(
-        CreateCollectionIndexResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecCreateCollectionIndexRequest,
+      responseCodec:
+          DataServiceContractCodecs.codecCreateCollectionIndexResponse,
       request: request,
       context: context,
     );
@@ -331,12 +413,9 @@ class DataServiceContractCaller extends RpcCallerContract
       DeleteCollectionIndexResponse
     >(
       methodName: DataServiceContractNames.deleteCollectionIndex,
-      requestCodec: const RpcCodec<DeleteCollectionIndexRequest>.withDecoder(
-        DeleteCollectionIndexRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DeleteCollectionIndexResponse>.withDecoder(
-        DeleteCollectionIndexResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDeleteCollectionIndexRequest,
+      responseCodec:
+          DataServiceContractCodecs.codecDeleteCollectionIndexResponse,
       request: request,
       context: context,
     );
@@ -349,12 +428,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callServerStream<WatchChangesRequest, DataChangeEvent>(
       methodName: DataServiceContractNames.watchChanges,
-      requestCodec: const RpcCodec<WatchChangesRequest>.withDecoder(
-        WatchChangesRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DataChangeEvent>.withDecoder(
-        DataChangeEvent.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecWatchChangesRequest,
+      responseCodec: DataServiceContractCodecs.codecDataChangeEvent,
       request: request,
       context: context,
     );
@@ -367,12 +442,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<ListSchemasRequest, ListSchemasResponse>(
       methodName: DataServiceContractNames.listSchemas,
-      requestCodec: const RpcCodec<ListSchemasRequest>.withDecoder(
-        ListSchemasRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<ListSchemasResponse>.withDecoder(
-        ListSchemasResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecListSchemasRequest,
+      responseCodec: DataServiceContractCodecs.codecListSchemasResponse,
       request: request,
       context: context,
     );
@@ -385,12 +456,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<GetSchemaRequest, GetSchemaResponse>(
       methodName: DataServiceContractNames.getSchema,
-      requestCodec: const RpcCodec<GetSchemaRequest>.withDecoder(
-        GetSchemaRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<GetSchemaResponse>.withDecoder(
-        GetSchemaResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecGetSchemaRequest,
+      responseCodec: DataServiceContractCodecs.codecGetSchemaResponse,
       request: request,
       context: context,
     );
@@ -403,12 +470,8 @@ class DataServiceContractCaller extends RpcCallerContract
   }) {
     return callUnary<SetSchemaPolicyRequest, SetSchemaPolicyResponse>(
       methodName: DataServiceContractNames.setSchemaPolicy,
-      requestCodec: const RpcCodec<SetSchemaPolicyRequest>.withDecoder(
-        SetSchemaPolicyRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<SetSchemaPolicyResponse>.withDecoder(
-        SetSchemaPolicyResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecSetSchemaPolicyRequest,
+      responseCodec: DataServiceContractCodecs.codecSetSchemaPolicyResponse,
       request: request,
       context: context,
     );
@@ -431,220 +494,151 @@ abstract class DataServiceContractResponder extends RpcResponderContract
       methodName: DataServiceContractNames.createRecord,
       handler: createRecord,
       description: 'Создание новой записи с проверкой прав и дедлайна',
-      requestCodec: const RpcCodec<CreateRecordRequest>.withDecoder(
-        CreateRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<CreateRecordResponse>.withDecoder(
-        CreateRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecCreateRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecCreateRecordResponse,
     );
     addUnaryMethod<GetRecordRequest, GetRecordResponse>(
       methodName: DataServiceContractNames.getRecord,
       handler: getRecord,
       description: 'Получение записи по идентификатору',
-      requestCodec: const RpcCodec<GetRecordRequest>.withDecoder(
-        GetRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<GetRecordResponse>.withDecoder(
-        GetRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecGetRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecGetRecordResponse,
+    );
+    addUnaryMethod<GetRecordsRequest, GetRecordsResponse>(
+      methodName: DataServiceContractNames.getRecords,
+      handler: getRecords,
+      description: 'Пакетное чтение записей коллекции по идентификаторам',
+      requestCodec: DataServiceContractCodecs.codecGetRecordsRequest,
+      responseCodec: DataServiceContractCodecs.codecGetRecordsResponse,
     );
     addUnaryMethod<ListRecordsRequest, ListRecordsResponse>(
       methodName: DataServiceContractNames.listRecords,
       handler: listRecords,
       description: 'Постраничный список с фильтрацией и сортировкой',
-      requestCodec: const RpcCodec<ListRecordsRequest>.withDecoder(
-        ListRecordsRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<ListRecordsResponse>.withDecoder(
-        ListRecordsResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecListRecordsRequest,
+      responseCodec: DataServiceContractCodecs.codecListRecordsResponse,
     );
     addUnaryMethod<ListCollectionsRequest, ListCollectionsResponse>(
       methodName: DataServiceContractNames.listCollections,
       handler: listCollections,
       description: 'Список существующих коллекций',
-      requestCodec: const RpcCodec<ListCollectionsRequest>.withDecoder(
-        ListCollectionsRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<ListCollectionsResponse>.withDecoder(
-        ListCollectionsResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecListCollectionsRequest,
+      responseCodec: DataServiceContractCodecs.codecListCollectionsResponse,
     );
     addUnaryMethod<UpdateRecordRequest, UpdateRecordResponse>(
       methodName: DataServiceContractNames.updateRecord,
       handler: updateRecord,
       description: 'Полное обновление записи c оптимистической конкуренцией',
-      requestCodec: const RpcCodec<UpdateRecordRequest>.withDecoder(
-        UpdateRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<UpdateRecordResponse>.withDecoder(
-        UpdateRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecUpdateRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecUpdateRecordResponse,
     );
     addUnaryMethod<PatchRecordRequest, PatchRecordResponse>(
       methodName: DataServiceContractNames.patchRecord,
       handler: patchRecord,
       description: 'Частичное обновление через RecordPatch',
-      requestCodec: const RpcCodec<PatchRecordRequest>.withDecoder(
-        PatchRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<PatchRecordResponse>.withDecoder(
-        PatchRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecPatchRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecPatchRecordResponse,
     );
     addUnaryMethod<DeleteRecordRequest, DeleteRecordResponse>(
       methodName: DataServiceContractNames.deleteRecord,
       handler: deleteRecord,
       description: 'Удаление с проверкой версии',
-      requestCodec: const RpcCodec<DeleteRecordRequest>.withDecoder(
-        DeleteRecordRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DeleteRecordResponse>.withDecoder(
-        DeleteRecordResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDeleteRecordRequest,
+      responseCodec: DataServiceContractCodecs.codecDeleteRecordResponse,
     );
     addUnaryMethod<DeleteCollectionRequest, DeleteCollectionResponse>(
       methodName: DataServiceContractNames.deleteCollection,
       handler: deleteCollection,
       description: 'Удаление коллекции и всех записей',
-      requestCodec: const RpcCodec<DeleteCollectionRequest>.withDecoder(
-        DeleteCollectionRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DeleteCollectionResponse>.withDecoder(
-        DeleteCollectionResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDeleteCollectionRequest,
+      responseCodec: DataServiceContractCodecs.codecDeleteCollectionResponse,
     );
     addClientStreamMethod<DataRecord, BulkUpsertResponse>(
       methodName: DataServiceContractNames.bulkUpsert,
       handler: bulkUpsert,
       description: 'Пакетный upsert через клиентский стрим',
-      requestCodec: const RpcCodec<DataRecord>.withDecoder(DataRecord.fromJson),
-      responseCodec: const RpcCodec<BulkUpsertResponse>.withDecoder(
-        BulkUpsertResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDataRecord,
+      responseCodec: DataServiceContractCodecs.codecBulkUpsertResponse,
     );
     addUnaryMethod<BulkDeleteRequest, BulkDeleteResponse>(
       methodName: DataServiceContractNames.bulkDelete,
       handler: bulkDelete,
       description: 'Массовое удаление записей',
-      requestCodec: const RpcCodec<BulkDeleteRequest>.withDecoder(
-        BulkDeleteRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<BulkDeleteResponse>.withDecoder(
-        BulkDeleteResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecBulkDeleteRequest,
+      responseCodec: DataServiceContractCodecs.codecBulkDeleteResponse,
     );
     addUnaryMethod<ExportSnapshotRequest, ExportSnapshotResponse>(
       methodName: DataServiceContractNames.exportSnapshot,
       handler: exportSnapshot,
       description: 'Экспорт моментального снимка коллекции',
-      requestCodec: const RpcCodec<ExportSnapshotRequest>.withDecoder(
-        ExportSnapshotRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<ExportSnapshotResponse>.withDecoder(
-        ExportSnapshotResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecExportSnapshotRequest,
+      responseCodec: DataServiceContractCodecs.codecExportSnapshotResponse,
     );
     addServerStreamMethod<ExportDatabaseRequest, DatabaseChunk>(
       methodName: DataServiceContractNames.exportDatabase,
       handler: exportDatabase,
       description: 'Полный экспорт базы данных (стрим NDJSON чанков)',
-      requestCodec: const RpcCodec<ExportDatabaseRequest>.withDecoder(
-        ExportDatabaseRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DatabaseChunk>.withDecoder(
-        DatabaseChunk.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecExportDatabaseRequest,
+      responseCodec: DataServiceContractCodecs.codecDatabaseChunk,
     );
     addBidirectionalMethod<DatabaseChunk, ImportProgress>(
       methodName: DataServiceContractNames.importDatabase,
       handler: importDatabase,
       description:
           'Импорт полной базы данных из NDJSON чанков с ACK прогрессом',
-      requestCodec: const RpcCodec<DatabaseChunk>.withDecoder(
-        DatabaseChunk.fromJson,
-      ),
-      responseCodec: const RpcCodec<ImportProgress>.withDecoder(
-        ImportProgress.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDatabaseChunk,
+      responseCodec: DataServiceContractCodecs.codecImportProgress,
     );
     addUnaryMethod<SearchRecordsRequest, SearchRecordsResponse>(
       methodName: DataServiceContractNames.searchRecords,
       handler: searchRecords,
       description: 'Полнотекстовый поиск по коллекции',
-      requestCodec: const RpcCodec<SearchRecordsRequest>.withDecoder(
-        SearchRecordsRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<SearchRecordsResponse>.withDecoder(
-        SearchRecordsResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecSearchRecordsRequest,
+      responseCodec: DataServiceContractCodecs.codecSearchRecordsResponse,
     );
     addUnaryMethod<CreateCollectionIndexRequest, CreateCollectionIndexResponse>(
       methodName: DataServiceContractNames.createCollectionIndex,
       handler: createCollectionIndex,
       description: 'Создание индексированного выражения для JSON-поля',
-      requestCodec: const RpcCodec<CreateCollectionIndexRequest>.withDecoder(
-        CreateCollectionIndexRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<CreateCollectionIndexResponse>.withDecoder(
-        CreateCollectionIndexResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecCreateCollectionIndexRequest,
+      responseCodec:
+          DataServiceContractCodecs.codecCreateCollectionIndexResponse,
     );
     addUnaryMethod<DeleteCollectionIndexRequest, DeleteCollectionIndexResponse>(
       methodName: DataServiceContractNames.deleteCollectionIndex,
       handler: deleteCollectionIndex,
       description: 'Удаление индексированного выражения коллекции',
-      requestCodec: const RpcCodec<DeleteCollectionIndexRequest>.withDecoder(
-        DeleteCollectionIndexRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DeleteCollectionIndexResponse>.withDecoder(
-        DeleteCollectionIndexResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecDeleteCollectionIndexRequest,
+      responseCodec:
+          DataServiceContractCodecs.codecDeleteCollectionIndexResponse,
     );
     addServerStreamMethod<WatchChangesRequest, DataChangeEvent>(
       methodName: DataServiceContractNames.watchChanges,
       handler: watchChanges,
       description: 'Стрим изменений коллекции с курсором',
-      requestCodec: const RpcCodec<WatchChangesRequest>.withDecoder(
-        WatchChangesRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<DataChangeEvent>.withDecoder(
-        DataChangeEvent.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecWatchChangesRequest,
+      responseCodec: DataServiceContractCodecs.codecDataChangeEvent,
     );
     addUnaryMethod<ListSchemasRequest, ListSchemasResponse>(
       methodName: DataServiceContractNames.listSchemas,
       handler: listSchemas,
       description: 'Список активных схем коллекций',
-      requestCodec: const RpcCodec<ListSchemasRequest>.withDecoder(
-        ListSchemasRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<ListSchemasResponse>.withDecoder(
-        ListSchemasResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecListSchemasRequest,
+      responseCodec: DataServiceContractCodecs.codecListSchemasResponse,
     );
     addUnaryMethod<GetSchemaRequest, GetSchemaResponse>(
       methodName: DataServiceContractNames.getSchema,
       handler: getSchema,
       description: 'Получение схемы коллекции',
-      requestCodec: const RpcCodec<GetSchemaRequest>.withDecoder(
-        GetSchemaRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<GetSchemaResponse>.withDecoder(
-        GetSchemaResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecGetSchemaRequest,
+      responseCodec: DataServiceContractCodecs.codecGetSchemaResponse,
     );
     addUnaryMethod<SetSchemaPolicyRequest, SetSchemaPolicyResponse>(
       methodName: DataServiceContractNames.setSchemaPolicy,
       handler: setSchemaPolicy,
       description: 'Установка политики схемы коллекции',
-      requestCodec: const RpcCodec<SetSchemaPolicyRequest>.withDecoder(
-        SetSchemaPolicyRequest.fromJson,
-      ),
-      responseCodec: const RpcCodec<SetSchemaPolicyResponse>.withDecoder(
-        SetSchemaPolicyResponse.fromJson,
-      ),
+      requestCodec: DataServiceContractCodecs.codecSetSchemaPolicyRequest,
+      responseCodec: DataServiceContractCodecs.codecSetSchemaPolicyResponse,
     );
   }
 }

@@ -610,6 +610,62 @@ class GetRecordResponse extends Equatable implements IRpcSerializable {
   Map<String, dynamic> toJson() => {'record': record?.toJson()};
 }
 
+/// Reads several records of one collection by id.
+///
+/// Exists because the alternative callers were left with — listing the
+/// collection and filtering in Dart — costs a page walk proportional to the
+/// collection, not to how many ids were asked for. Every adapter already
+/// answers this in one statement (`WHERE id IN (...)`); this is the surface
+/// that lets a caller reach it.
+@immutable
+class GetRecordsRequest extends Equatable implements IRpcSerializable {
+  const GetRecordsRequest({required this.collection, required this.ids});
+
+  factory GetRecordsRequest.fromJson(Map<String, dynamic> json) =>
+      GetRecordsRequest(
+        collection: json['collection'] as String,
+        ids: (json['ids'] as List<dynamic>).map((e) => e as String).toList(),
+      );
+
+  final String collection;
+  final List<String> ids;
+
+  @override
+  List<Object?> get props => [collection, ids];
+
+  @override
+  Map<String, dynamic> toJson() => {'collection': collection, 'ids': ids};
+}
+
+/// Records that were found, in no guaranteed order.
+///
+/// Missing ids are simply absent rather than present-as-null: the caller asked
+/// which of these exist, and a list of what does answers that without a
+/// second convention to read.
+@immutable
+class GetRecordsResponse extends Equatable implements IRpcSerializable {
+  const GetRecordsResponse({required this.records});
+
+  factory GetRecordsResponse.fromJson(Map<String, dynamic> json) =>
+      GetRecordsResponse(
+        records: (json['records'] as List<dynamic>)
+            .map(
+              (e) => DataRecord.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
+            .toList(),
+      );
+
+  final List<DataRecord> records;
+
+  @override
+  List<Object?> get props => [records];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'records': [for (final record in records) record.toJson()],
+  };
+}
+
 @immutable
 class ListRecordsRequest extends Equatable implements IRpcSerializable {
   const ListRecordsRequest({

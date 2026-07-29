@@ -37,6 +37,15 @@ abstract interface class IDataServiceContract implements IRpcContract {
   });
 
   @RpcMethod.unary(
+    name: 'getRecords',
+    description: 'Пакетное чтение записей коллекции по идентификаторам',
+  )
+  Future<GetRecordsResponse> getRecords(
+    GetRecordsRequest request, {
+    RpcContext? context,
+  });
+
+  @RpcMethod.unary(
     name: 'listRecords',
     description: 'Постраничный список с фильтрацией и сортировкой',
   )

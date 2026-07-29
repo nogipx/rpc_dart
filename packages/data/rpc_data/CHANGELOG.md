@@ -4,6 +4,19 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 5.0.0
+
+**Breaking — one method joins the read interfaces:**
+- `IDataClient.getMany` / `IDataRepository.getMany` read several records of one
+  collection by id in a single round trip. Any implementation outside this
+  package must add it; the storage adapters already answered this shape
+  (`IDataStorageAdapter.readRecords`), it simply had no surface above them.
+- Without it the only way to check a known set of ids was `listAllRecords` with
+  a filter, whose cost follows the size of the collection rather than the
+  number of ids asked for. On a hot path — "which of these chunks do you
+  already have" — that is a page walk per call.
+
+
 ## 4.0.1
 
 - Web/dart2js correctness for the client surfaces (now verified on node):
