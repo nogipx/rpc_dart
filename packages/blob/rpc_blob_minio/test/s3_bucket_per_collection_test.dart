@@ -307,6 +307,75 @@ void main() {
 
   // ---------------------------------------------------------------------------
 
+  group('listBlobs', () {
+    test('lists from the listing itself, and only fetches metadata on request',
+        () async {
+      if (skipReason != null) return;
+      final repo = makeRepo();
+      final data = Uint8List.fromList('abcdef'.codeUnits);
+      await repo.writeBlob(
+        BlobWriteRequest(
+          collection: 'listing',
+          id: 'one.txt',
+          bytes: Stream.value(data),
+          contentType: 'text/plain',
+          metadata: const {'tag': 'v1'},
+        ),
+      );
+
+      // Cheap path: whatever S3 returns for a listing — no HEAD per object.
+      final cheap = await repo.listBlobs(
+        const ListBlobsRequest(collection: 'listing'),
+      );
+      expect(cheap.items, hasLength(1));
+      final listed = cheap.items.single;
+      expect(listed.id, 'one.txt');
+      expect(listed.length, data.length, reason: 'size comes from the listing');
+      expect(listed.updatedAt, isNotNull);
+      expect(listed.contentType, isNull,
+          reason: 'content type lives in object metadata, which was not read');
+      expect(listed.metadata, isEmpty);
+
+      // Explicit ask: the caller pays a HEAD per object and gets everything.
+      final full = await repo.listBlobs(
+        const ListBlobsRequest(collection: 'listing', includeMetadata: true),
+      );
+      final detailed = full.items.single;
+      expect(detailed.length, data.length);
+      expect(detailed.contentType, 'text/plain');
+      expect(detailed.metadata['tag'], 'v1');
+    }, skip: skipReason);
+
+    test('paginates without metadata', () async {
+      if (skipReason != null) return;
+      final repo = makeRepo();
+      for (final id in ['a', 'b', 'c']) {
+        await repo.writeBlob(
+          BlobWriteRequest(
+            collection: 'paging',
+            id: id,
+            bytes: Stream.value(Uint8List.fromList([1])),
+          ),
+        );
+      }
+
+      final first = await repo.listBlobs(
+        const ListBlobsRequest(collection: 'paging', limit: 2),
+      );
+      expect(first.items.map((d) => d.id), ['a', 'b']);
+      expect(first.nextCursor, isNotNull);
+
+      final second = await repo.listBlobs(
+        ListBlobsRequest(
+          collection: 'paging',
+          limit: 2,
+          cursor: first.nextCursor,
+        ),
+      );
+      expect(second.items.map((d) => d.id), ['c']);
+    }, skip: skipReason);
+  });
+
   group('collectionSize', () {
     /// Prints the size of every test bucket visible to [rawClient].
     Future<void> printAllBucketSizes(S3BlobRepository repo) async {

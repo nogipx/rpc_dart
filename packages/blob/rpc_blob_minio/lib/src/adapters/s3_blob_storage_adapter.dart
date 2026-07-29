@@ -15,6 +15,9 @@ import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:minio/minio.dart';
 import 'package:minio/models.dart';
+// Prefixed too: the listing entry type is named `Object`, which is not a name
+// worth introducing unprefixed into a file that also uses dart:core's.
+import 'package:minio/models.dart' as minio;
 import 'package:minio/src/minio_client.dart' as minio_internal;
 import 'package:minio/src/minio_helpers.dart' as minio_helpers;
 import 'package:minio/src/minio_sign.dart' as minio_sign;
@@ -314,9 +317,17 @@ class S3BlobRepository implements IBlobRepository {
             !id.startsWith(request.prefix!)) {
           continue;
         }
-        final head = await headBlob(request.collection, id);
-        if (head == null) continue;
-        items.add(head);
+        // The listing already carries size and mtime. Only a caller that asked
+        // for metadata pays a HEAD per object — everything else was turning a
+        // page of N into N+1 requests, which on a cloud S3 is N+1 billed ones.
+        final BlobDescriptor? descriptor;
+        if (request.includeMetadata) {
+          descriptor = await headBlob(request.collection, id);
+        } else {
+          descriptor = _descriptorFromListing(request.collection, object);
+        }
+        if (descriptor == null) continue;
+        items.add(descriptor);
         if (items.length == request.limit) {
           nextCursor = base64Url.encode(utf8.encode(id));
           break;
@@ -486,6 +497,25 @@ class S3BlobRepository implements IBlobRepository {
   // ---------------------------------------------------------------------------
   // Descriptor / metadata helpers
   // ---------------------------------------------------------------------------
+
+  /// Builds a descriptor from a list entry, without a HEAD.
+  ///
+  /// Carries what S3 returns for a listing — size, mtime, ETag. `contentType`,
+  /// user metadata and the stored version live in object metadata and stay
+  /// absent here; a caller that needs them sets
+  /// [ListBlobsRequest.includeMetadata], which is what that flag is for.
+  BlobDescriptor _descriptorFromListing(String collection, minio.Object object) {
+    final lastModified = (object.lastModified ?? _clock()).toUtc();
+    return BlobDescriptor(
+      id: object.key ?? '',
+      collection: collection,
+      length: object.size ?? 0,
+      version: 1,
+      createdAt: lastModified,
+      updatedAt: lastModified,
+      checksum: object.eTag?.replaceAll('"', ''),
+    );
+  }
 
   BlobDescriptor _descriptorFromStat(
     String collection,
