@@ -7,6 +7,17 @@ publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 environment:
   sdk: ">=3.10.0 <4.0.0"
+
+# rpc_data_sqlite needs the MultipleCiphers build to offer encrypted databases
+# at all, and its own pubspec says so — but user_defines are read from the
+# WORKSPACE ROOT only, so that declaration has no effect and the hook quietly
+# builds plain sqlite3 instead. The cipher support then just isn't there, which
+# surfaces as sql_cipher_integration_test failing on `PRAGMA cipher`.
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc
+
 workspace:
   - packages/blob/rpc_blob
   - packages/blob/rpc_blob_minio
