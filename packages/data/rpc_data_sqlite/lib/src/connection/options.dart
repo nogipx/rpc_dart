@@ -9,6 +9,31 @@ import 'package:sqlite3/common.dart' as sqlite;
 /// VFS mode used by the web connection.
 enum WebVfsMode { opfs, inMemory, custom }
 
+/// Thrown when [SqliteConnectionOptions.webRequireDurableStorage] is set and
+/// neither OPFS nor IndexedDB could be opened.
+///
+/// Exists because the alternative — the default in-memory fallback — is
+/// indistinguishable at runtime from a working database that happens to be
+/// empty. An app that syncs, caches or checkpoints against such a database
+/// silently redoes all of that work on every launch. Opting in converts that
+/// silence into this exception, which the caller can report, or catch and then
+/// reopen without the flag to run degraded but knowingly.
+class DurableWebStorageUnavailable implements Exception {
+  const DurableWebStorageUnavailable(this.opfsError, this.indexedDbError);
+
+  /// Why OPFS was rejected (missing File System Access API, no worker, …).
+  final Object? opfsError;
+
+  /// Why IndexedDB was rejected (disabled, quota, private-mode restriction, …).
+  final Object? indexedDbError;
+
+  @override
+  String toString() =>
+      'DurableWebStorageUnavailable: no durable web VFS could be opened '
+      '(OPFS: $opfsError; IndexedDB: $indexedDbError). '
+      'Data would live in memory only and be lost on reload.';
+}
+
 /// Cross-platform configuration for opening SQLite databases.
 @immutable
 class SqliteConnectionOptions {
@@ -22,6 +47,7 @@ class SqliteConnectionOptions {
     this.webVfsMode = WebVfsMode.opfs,
     this.webFileName = 'app.db',
     this.webCustomVfs,
+    this.webRequireDurableStorage = false,
   });
 
   /// Absolute or relative path to the persistent database file on IO platforms.
@@ -62,6 +88,19 @@ class SqliteConnectionOptions {
 
   /// Custom VFS to register when [webVfsMode] is [WebVfsMode.custom].
   final sqlite.VirtualFileSystem? webCustomVfs;
+
+  /// Fail instead of silently falling back to an in-memory VFS on web.
+  ///
+  /// Off by default: the fallback keeps an app running on a browser with no
+  /// durable storage, which is the right trade for a cache. It is the wrong
+  /// trade for anything that treats the database as the record of what it has
+  /// already done — that app cannot tell "nothing stored yet" from "storage is
+  /// gone", and quietly repeats its work forever. Set this and get a
+  /// [DurableWebStorageUnavailable] instead.
+  ///
+  /// Applies only to the OPFS-with-fallback path. [WebVfsMode.inMemory] and
+  /// [WebVfsMode.custom] are explicit choices and are never second-guessed.
+  final bool webRequireDurableStorage;
 
   /// Default configuration shared across helper APIs.
   static final SqliteConnectionOptions defaults = SqliteConnectionOptions();

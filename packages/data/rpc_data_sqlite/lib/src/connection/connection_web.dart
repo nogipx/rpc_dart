@@ -49,18 +49,26 @@ Future<sqlite.VirtualFileSystem> _tryOpfsThenIndexedDb(
     return sanitized.isEmpty ? 'app.db' : sanitized;
   }();
 
+  Object? opfsError;
   try {
     return await sqlite_wasm.SimpleOpfsFileSystem.loadFromStorage(opfsPath);
-  } catch (_) {
+  } catch (e) {
     // Fall back to IndexedDB like drift when OPFS isn't available (e.g. no
     // worker or missing File System Access API).
+    opfsError = e;
   }
 
   try {
     return await sqlite_wasm.IndexedDbFileSystem.open(
       dbName: options.webDatabaseName,
     );
-  } catch (_) {
+  } catch (e) {
+    // Last resort. In-memory means every write is lost on reload, and nothing
+    // downstream can detect that — so callers that cannot survive it opt out
+    // of this fallback and handle the failure themselves.
+    if (options.webRequireDurableStorage) {
+      throw DurableWebStorageUnavailable(opfsError, e);
+    }
     return sqlite.InMemoryFileSystem();
   }
 }
