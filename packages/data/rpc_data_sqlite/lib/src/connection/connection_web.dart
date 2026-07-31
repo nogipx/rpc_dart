@@ -150,7 +150,21 @@ Future<DatabaseConnection> _openDatabase(
     }
   }
 
-  return DatabaseConnection(database, closeHook: closeHook);
+  // Durability barrier for the IndexedDB VFS, whose writes are acknowledged
+  // synchronously and performed later (see [DatabaseConnection.flush]). OPFS
+  // holds sync access handles and writes through, so it has nothing to await.
+  Future<void> flushHook() async {
+    final vfs = _cachedVfs;
+    if (vfs is sqlite_wasm.IndexedDbFileSystem && !vfs.isClosed) {
+      await vfs.flush();
+    }
+  }
+
+  return DatabaseConnection(
+    database,
+    closeHook: closeHook,
+    flushHook: flushHook,
+  );
 }
 
 /// Открывает файл на веб-платформе (по умолчанию OPFS с fallback на IndexedDB/in-memory).
