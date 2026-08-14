@@ -24,6 +24,10 @@ void main() {
       serverRequestPayloads = StreamController<Uint8List>.broadcast();
 
       testServer = RpcHttp2Server(
+        // Pin to IPv4: 'localhost' (the default) resolves IPv6-first on some
+        // hosts and ServerSocket.bind picks a single family, so the client can
+        // end up on a stack the server never bound.
+        host: '127.0.0.1',
         port: 0,
         onEndpointCreated: (endpoint) {
           endpoint.transport.incomingMessages.listen((message) {
@@ -38,7 +42,7 @@ void main() {
       await testServer.start();
 
       clientTransport = await RpcHttp2CallerTransport.connect(
-        host: 'localhost',
+        host: '127.0.0.1',
         port: testServer.port,
         logger: LogScope.noop,
       );

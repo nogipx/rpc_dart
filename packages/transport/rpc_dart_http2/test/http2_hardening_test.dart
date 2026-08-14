@@ -95,6 +95,10 @@ void main() {
   group('BUG A: server forwards security policy', () {
     test('oversized_message_is_rejected_by_server_policy', () async {
       final server = RpcHttp2Server(
+        // Pin to IPv4: 'localhost' (the default) resolves IPv6-first on some
+        // hosts and ServerSocket.bind picks a single family, so the client can
+        // end up on a stack the server never bound.
+        host: '127.0.0.1',
         port: 0,
         securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 16),
         onEndpointCreated: (endpoint) {
@@ -105,7 +109,7 @@ void main() {
       addTearDown(server.stop);
 
       final client = await RpcHttp2CallerTransport.connect(
-        host: 'localhost',
+        host: '127.0.0.1',
         port: server.port,
         logger: LogScope.noop,
       );
@@ -130,6 +134,7 @@ void main() {
 
     test('within_limit_message_succeeds', () async {
       final server = RpcHttp2Server(
+        host: '127.0.0.1',
         port: 0,
         securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
         onEndpointCreated: (endpoint) {
@@ -140,7 +145,7 @@ void main() {
       addTearDown(server.stop);
 
       final client = await RpcHttp2CallerTransport.connect(
-        host: 'localhost',
+        host: '127.0.0.1',
         port: server.port,
         logger: LogScope.noop,
       );
