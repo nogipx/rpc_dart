@@ -5,10 +5,15 @@
 name: rpc_dart_opentelemetry
 description: OpenTelemetry tracing, metrics, and logging integration for rpc_dart.
 version: 0.3.6
-publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+topics:
+  - rpc
+  - opentelemetry
+  - tracing
+  - observability
 
 environment:
   sdk: '>=3.10.0 <4.0.0'

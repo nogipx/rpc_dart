@@ -3,12 +3,16 @@
 # SPDX-License-Identifier: MIT
 
 name: rpc_notify_postgres
-description: PostgreSQL LISTEN/NOTIFY backed repository for rpc_notify.
+description: PostgreSQL LISTEN/NOTIFY backed repository for rpc_notify, delivering topic subscriptions as change streams.
 version: 1.0.0
-publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+topics:
+  - rpc
+  - notifications
+  - postgresql
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
@@ -16,8 +20,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  rpc_notify:
-    path: ../rpc_notify
+  rpc_notify: ^1.1.0
   postgres: ^3.5.9
 
 dev_dependencies:

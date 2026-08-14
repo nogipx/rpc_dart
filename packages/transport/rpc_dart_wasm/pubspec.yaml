@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: MIT
 
 name: rpc_dart_wasm
-description: WASM runtime bridge transport for rpc_dart.
+description: Runtime-agnostic WASM bridge transport for rpc_dart — turns any byte-level wasm bridge into an IRpcTransport.
 version: 0.1.1
-publish_to: none
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
 
 environment:
   sdk: ^3.10.1

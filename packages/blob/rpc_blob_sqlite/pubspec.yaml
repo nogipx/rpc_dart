@@ -3,12 +3,17 @@
 # SPDX-License-Identifier: MIT
 
 name: rpc_blob_sqlite
-description: SQLite/SQLCipher storage adapter for rpc_blob.
+description: SQLite/SQLCipher storage adapter for rpc_blob, with optionally encrypted databases on VM and Flutter.
 version: 2.0.0
-publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+topics:
+  - rpc
+  - storage
+  - blob
+  - sqlite
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
@@ -16,8 +21,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  rpc_blob:
-    path: ../rpc_blob
+  rpc_blob: ^2.1.0
   rpc_dart: '>=3.3.0 <5.0.0'
   sqlite3: ^3.1.4
   crypto: ^3.0.7

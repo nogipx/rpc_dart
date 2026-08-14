@@ -3,11 +3,16 @@
 # SPDX-License-Identifier: MIT
 
 name: rpc_dart_generator
-description: Code generator for rpc_dart callers and responders.
+description: Code generator for rpc_dart — builds type-safe caller and responder wrappers from annotated contracts.
 version: 0.4.5
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+topics:
+  - rpc
+  - codegen
+  - build-runner
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
@@ -33,5 +38,4 @@ dev_dependencies:
   # Test-only: validates that the descriptor bytes emitted by this generator
   # are parseable by the reflection server that serves them, and that the two
   # byte-identical proto writers agree. Not a runtime dependency.
-  rpc_dart_grpc_reflection:
-    path: ../rpc_dart_grpc_reflection
+  rpc_dart_grpc_reflection: ^0.2.3

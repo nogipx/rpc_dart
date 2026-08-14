@@ -3,12 +3,16 @@
 # SPDX-License-Identifier: MIT
 
 name: rpc_notify
-description: Topic-based async push notifications built on rpc_dart.
+description: Topic-based async push notifications built on rpc_dart, with pluggable repository backends.
 version: 1.1.0
-publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+topics:
+  - rpc
+  - notifications
+  - pubsub
 
 environment:
   sdk: '>=3.10.0 <4.0.0'

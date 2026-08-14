@@ -5,7 +5,9 @@
 name: rpc_dart_compression
 description: Cross-platform compression codecs for rpc_dart (web/JS/Wasm compatible).
 version: 0.1.3
-publish_to: none
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
 
 environment:
   sdk: ^3.10.1

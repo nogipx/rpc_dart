@@ -5,7 +5,9 @@
 name: rpc_dart_websocket
 description: Web-safe subset of rpc_dart_transports providing WebSocket caller/responder transports (caller + server) for Dart2JS/WASM builds.
 version: 0.2.3
-publish_to: none
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
 
 environment:
   sdk: ^3.10.1

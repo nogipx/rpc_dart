@@ -5,10 +5,14 @@
 name: rpc_data_sqlite
 description: SQLite/SQLCipher adapter and repository for rpc_data (IO + WebAssembly).
 version: 1.0.1
-publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+topics:
+  - rpc
+  - database
+  - sqlite
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
@@ -21,8 +25,7 @@ hooks:
       source: sqlite3mc
 
 dependencies:
-  rpc_data:
-    path: ../rpc_data
+  rpc_data: ^5.0.0
   rpc_dart: '>=3.3.0 <5.0.0'
   paseto_dart: ^2.1.0
   sqlite3: ^3.1.4

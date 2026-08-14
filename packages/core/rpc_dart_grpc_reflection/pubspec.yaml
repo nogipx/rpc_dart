@@ -8,7 +8,14 @@ description: >
   Allows grpcurl, Postman, and other gRPC tools to discover services
   registered on any rpc_dart endpoint.
 version: 0.2.3
-publish_to: none
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+topics:
+  - rpc
+  - grpc
+  - reflection
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
@@ -22,5 +29,4 @@ dev_dependencies:
   lints: ^6.0.0
   test: ^1.25.5
   protobuf: ^6.0.0
-  rpc_dart_http2:
-    path: ../../transport/rpc_dart_http2
+  rpc_dart_http2: ^0.2.4

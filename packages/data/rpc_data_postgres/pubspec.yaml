@@ -3,12 +3,16 @@
 # SPDX-License-Identifier: MIT
 
 name: rpc_data_postgres
-description: PostgreSQL adapter and repository for rpc_data.
+description: PostgreSQL adapter and repository for rpc_data — CRUD, querying and change streams over a Postgres database.
 version: 2.0.0
-publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
+
+topics:
+  - rpc
+  - database
+  - postgresql
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
@@ -16,8 +20,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  rpc_data:
-    path: ../rpc_data
+  rpc_data: ^5.0.0
   postgres: ^3.5.9
 
 dev_dependencies:

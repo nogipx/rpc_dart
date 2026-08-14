@@ -5,7 +5,6 @@
 name: rpc_dart_isolate
 description: Isolate-based caller/responder transports for rpc_dart (IO + web/wasm via isolate_manager).
 version: 0.2.3
-publish_to: none
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

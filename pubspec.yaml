@@ -266,15 +266,24 @@ melos:
         melos run license:check &&
         melos run test:unit
 
-    # --- Publishing (only rpc_dart + rpc_dart_generator are public) ---
+    # --- Publishing (every package under packages/ is public) ---
+    # rpc_dart_wasm is NOT a pub-workspace member (it is the only Flutter
+    # package), so melos cannot see it. Both scripts below handle it explicitly
+    # right after the melos step, which keeps "publish everything" a single
+    # command.
     publish:dry:
       description: >
         Validate publishable packages without publishing, and preview the tags
         publish:release would create (read-only — no publish, no tags).
       run: |
         fvm dart run melos publish --dry-run --yes
+        echo "--- rpc_dart_wasm (outside the workspace) ---"
+        (cd packages/transport/rpc_dart_wasm && fvm flutter pub publish --dry-run)
         echo "--- tags publish:release would create ---"
-        fvm dart run melos list --no-private -l | while read -r name ver _; do
+        {
+          fvm dart run melos list --no-private -l
+          echo "rpc_dart_wasm $(awk '/^version:/{print $2; exit}' packages/transport/rpc_dart_wasm/pubspec.yaml)"
+        } | while read -r name ver _; do
           tag="$name-$ver"
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
             echo "  skip (exists): $tag"
@@ -292,9 +301,16 @@ melos:
       run: |
         set -e
         fvm dart run melos publish --no-dry-run --yes
+        # rpc_dart_wasm is outside the pub workspace (Flutter-only), so melos
+        # does not publish it — do it here so one command covers everything.
+        (cd packages/transport/rpc_dart_wasm && fvm flutter pub publish --force)
         # Public packages (publish_to != none) come from `melos list --no-private`;
-        # `-l` prints `name version path`, so no hardcoded list.
-        fvm dart run melos list --no-private -l | while read -r name ver _; do
+        # `-l` prints `name version path`, so no hardcoded list. rpc_dart_wasm is
+        # appended by hand for the same workspace reason.
+        {
+          fvm dart run melos list --no-private -l
+          echo "rpc_dart_wasm $(awk '/^version:/{print $2; exit}' packages/transport/rpc_dart_wasm/pubspec.yaml)"
+        } | while read -r name ver _; do
           tag="$name-$ver"
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
             echo "tag $tag already exists, skipping"
