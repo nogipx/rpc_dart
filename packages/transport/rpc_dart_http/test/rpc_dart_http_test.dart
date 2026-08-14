@@ -422,10 +422,20 @@ void main() {
       );
       await Future.delayed(const Duration(milliseconds: 50));
       await socket.close();
-      await Future.delayed(const Duration(milliseconds: 100));
 
-      final health = await serverTransport.health();
-      expect((health.details as Map)['pendingRequests'], 0);
+      // dart:io surfaces "Connection closed while receiving data" only once it
+      // notices the peer is gone, which takes a second or two — poll instead of
+      // asserting after a fixed sleep, which races that detection.
+      Future<int> pendingCount() async =>
+          ((await serverTransport.health()).details as Map)['pendingRequests']
+              as int;
+
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (await pendingCount() != 0 && DateTime.now().isBefore(deadline)) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      expect(await pendingCount(), 0);
 
       await serverTransport.close();
       await server.close(force: true);

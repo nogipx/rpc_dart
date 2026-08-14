@@ -144,15 +144,30 @@ class RpcHttpResponderTransport implements IRpcTransport {
       );
 
       // Read request body.
+      //
+      // On overflow we stop buffering but keep consuming the stream to its end,
+      // discarding the rest. Bailing out mid-body instead leaves unread bytes
+      // on the socket, and dart:io then tears the connection down before the
+      // 400 is flushed — the client sees "Connection closed before full header
+      // was received" rather than the status. Memory stays bounded because the
+      // buffer is dropped and later chunks are discarded; wall-clock is bounded
+      // by [bodyReadTimeout] when it is set.
       Future<Uint8List> readBody() async {
         final bytes = <int>[];
+        var exceeded = false;
         await for (final chunk in request.read()) {
+          if (exceeded) continue;
           bytes.addAll(chunk);
           if (policy != null && bytes.length > policy.maxMessageLengthBytes) {
-            throw StateError(
-              'Request body exceeds limit of ${policy.maxMessageLengthBytes} bytes',
-            );
+            exceeded = true;
+            bytes.clear();
           }
+        }
+        if (exceeded) {
+          throw StateError(
+            'Request body exceeds limit of '
+            '${policy!.maxMessageLengthBytes} bytes',
+          );
         }
         return Uint8List.fromList(bytes);
       }

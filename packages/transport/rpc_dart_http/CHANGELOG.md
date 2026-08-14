@@ -6,6 +6,13 @@ SPDX-License-Identifier: MIT
 
 ## 0.2.4
 
+- Deliver the `400` when a request body exceeds
+  `RpcSecurityPolicy.maxMessageLengthBytes`. The responder used to stop reading
+  the moment the limit was passed, which left unread bytes on the socket;
+  dart:io then tore the connection down before the response was flushed and the
+  client saw "Connection closed before full header was received" instead of the
+  status. The body is now drained to its end (buffer dropped, later chunks
+  discarded, so memory stays bounded) before the `400` is returned.
 - Validate outgoing metadata on send. Both the caller (`sendMetadata`) and the
   responder (`sendMetadata`) now run `RpcSecurityPolicy.validateMetadata` before
   writing headers, closing the gap where HTTP/1.1 sent metadata without the
