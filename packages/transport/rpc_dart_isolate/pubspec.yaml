@@ -20,10 +20,12 @@ topics:
 
 dependencies:
   rpc_dart: '>=3.3.0 <5.0.0'
-  # Pinned exactly: the web transport (isolate_transport_web.dart) imports
+  # Patch range only: the web transport (isolate_transport_web.dart) imports
   # isolate_manager's private `src/` (implementation_imports), so a minor bump
-  # can silently break it. Bump deliberately and re-run the web tests.
-  isolate_manager: 6.3.2
+  # can silently break it. Raise the ceiling deliberately and re-run the web
+  # tests. (An exact pin would say the same thing, but pub.dev rejects it as
+  # unusable alongside other packages that depend on isolate_manager.)
+  isolate_manager: '>=6.3.2 <6.4.0'
   web: ^1.1.1
 
 dev_dependencies:
