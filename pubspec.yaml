@@ -167,6 +167,11 @@ melos:
       description: Web (dart2js/node + chrome) smoke regression guard.
       run: |
         set -e
+        # node 17+ honours the resolver's order, so 'localhost' goes to ::1
+        # first. Where the IPv6 loopback is unavailable the worker dies with
+        # ENETDOWN before it reaches the test channel, which reads as a
+        # compile/load failure. Force IPv4 so the guard is deterministic.
+        export NODE_OPTIONS=--dns-result-order=ipv4first
         web() { (cd "$1" && fvm dart test -p node ${2:-}); }
         web packages/core/rpc_dart
         web packages/core/rpc_dart_compression
