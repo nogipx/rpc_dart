@@ -109,10 +109,15 @@ use a -bin key for binary data.
 
 ## Publishing
 
-Only **`rpc_dart`** and **`rpc_dart_generator`** are public (`publish_to:
-pub.dev`). Every other package is `publish_to: none`. Do not flip a package to
-public without checking it has no `path:` deps and no dependency on a private
-package.
+**Every package under `packages/` is public** — all 22 are on pub.dev, and none
+sets `publish_to:` (the default is pub.dev). Only the root `pubspec.yaml` is
+`publish_to: none`. A new package is therefore public by default: before adding
+one, make sure it has no `path:` deps on siblings (the pub workspace already
+links them — see "Workspace resolution") and no dependency on anything unpublished.
+
+`rpc_dart_wasm` is not a pub-workspace member, so `melos publish` cannot see it;
+both `publish:dry` and `publish:release` run `flutter pub publish` for it
+explicitly right after the melos step, so one command still covers everything.
 
 ### Release flow (do this EVERY release, in order)
 
