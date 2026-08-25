@@ -4,6 +4,21 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.1.0
+
+- Collection teardown is one transaction. `deleteCollection` dropped the table
+  and cleared the registry as separate statements — behind a `Pool`, on
+  separate connections — so an interruption between them left a registration
+  pointing at a table that no longer existed.
+- `ensureReady` no longer throws on such a registration. It could only be
+  raised at startup, which scoped the damage backwards: one dropped table
+  failed every boot from then on, taking down every other collection with it.
+  The registration is now reported through the new `onIntegrityIssue` callback
+  and skipped — the collection reads as empty, and the next write recreates its
+  table.
+- A read on a collection whose table is gone returns nothing instead of failing
+  on a name that resolves to no relation.
+
 ## 2.0.0
 
 **Breaking — cursors issued by 1.x are rejected by this version.** They are

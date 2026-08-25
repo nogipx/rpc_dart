@@ -59,6 +59,14 @@ class PgTableNames {
   }
 }
 
+/// Reports an inconsistency [PostgresDataStorageAdapter.ensureReady] found in
+/// the metadata tables and worked around.
+///
+/// Wire it to the host's logger. The adapter refuses to fail a whole process
+/// over one damaged collection, so this callback is the only place the damage
+/// becomes visible.
+typedef PostgresIntegrityReporter = void Function(String message);
+
 /// Where the previous page stopped, carried inside the cursor itself.
 ///
 /// The cursor used to be the last record's id, re-read on the next page to
@@ -142,7 +150,9 @@ class PostgresDataStorageAdapter
     Connection? ownedConnection,
     bool enableFts = false,
     this.enableChangeJournal = true,
+    PostgresIntegrityReporter? onIntegrityIssue,
   }) : _executor = executor,
+       _onIntegrityIssue = onIntegrityIssue,
        _ownedConnection = ownedConnection,
        _names = PgTableNames(schema: schema, prefix: tablePrefix),
        _ftsEnabled = enableFts,
@@ -158,6 +168,7 @@ class PostgresDataStorageAdapter
     String tablePrefix = '',
     bool enableFts = false,
     bool enableChangeJournal = true,
+    PostgresIntegrityReporter? onIntegrityIssue,
   }) async {
     final connection = await Connection.open(endpoint, settings: settings);
     final adapter = PostgresDataStorageAdapter._(
@@ -167,6 +178,7 @@ class PostgresDataStorageAdapter
       ownedConnection: connection,
       enableFts: enableFts,
       enableChangeJournal: enableChangeJournal,
+      onIntegrityIssue: onIntegrityIssue,
     );
     await adapter.ensureReady();
     return adapter;
@@ -178,6 +190,7 @@ class PostgresDataStorageAdapter
     String tablePrefix = '',
     bool enableFts = false,
     bool enableChangeJournal = true,
+    PostgresIntegrityReporter? onIntegrityIssue,
   }) async {
     final adapter = PostgresDataStorageAdapter._(
       pool,
@@ -185,12 +198,14 @@ class PostgresDataStorageAdapter
       tablePrefix: tablePrefix,
       enableFts: enableFts,
       enableChangeJournal: enableChangeJournal,
+      onIntegrityIssue: onIntegrityIssue,
     );
     await adapter.ensureReady();
     return adapter;
   }
 
   final Session _executor;
+  final PostgresIntegrityReporter? _onIntegrityIssue;
   final Connection? _ownedConnection;
   final PgTableNames _names;
   final Map<String, String> _tableCache = <String, String>{};
@@ -242,6 +257,12 @@ class PostgresDataStorageAdapter
     if (!exists) {
       final registered = await _lookupTable(collection);
       if (registered == null) {
+        return null;
+      }
+      // The registration can outlive its table (a torn teardown, a partial
+      // restore). Reading from a name that resolves to nothing is a SQL error,
+      // and "no table" means "no rows" — so report it as absent instead.
+      if (!await _tableExists(registered)) {
         return null;
       }
       _knownTables.add(registered);
@@ -450,9 +471,17 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
       final table = data['table_name'] as String;
       final exists = await _tableExists(table);
       if (!exists) {
-        throw RpcDataError.internal(
-          'Registered collection "$collection" is missing table "$table".',
+        // A registration whose table is gone describes data that is already
+        // lost — there is nothing left for a refusal to protect. Throwing here
+        // used to scope the damage wrongly: one dropped table made every boot
+        // fail, so a single deleted collection took the whole process down
+        // while every other collection was intact. Report it and carry on; the
+        // collection reads as empty and the next write recreates its table.
+        _onIntegrityIssue?.call(
+          'Registered collection "$collection" is missing table "$table"; '
+          'treating it as empty until it is written to again.',
         );
+        continue;
       }
       _knownTables.add(table);
       await _dropFtsIndexIfDisabled(table);
@@ -969,49 +998,73 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
   @override
   Future<bool> deleteCollection(String collection) async {
     await ensureReady();
-    final table = await _ensureTableForRead(collection);
+    // `_ensureTableForRead` reports a collection whose table is already gone as
+    // absent, so fall back to the registration to finish cleaning up after a
+    // teardown that was cut short.
+    final live = await _ensureTableForRead(collection);
+    final table = live ?? await _lookupTable(collection);
     if (table == null) {
       return false;
     }
     final indexes = await _loadCollectionIndexes(collection);
-    for (final index in indexes) {
-      await _dropIndex(index.indexName);
-    }
-    await _executor.execute(
-      Sql.named('DELETE FROM ${_names.indexRegistry} WHERE collection = @c'),
-      parameters: {'c': collection},
-      ignoreRows: true,
-    );
-    await _executor.execute('DROP TABLE IF EXISTS $table');
+
+    // One transaction, because a half-applied teardown is not a smaller
+    // version of this one — it is a different, broken state. Every statement
+    // here used to run on its own implicit transaction (and, behind a Pool, on
+    // its own connection), so an interruption after the DROP left the registry
+    // pointing at a table that no longer existed.
+    await _runAtomically((session) async {
+      for (final index in indexes) {
+        if (index.indexName.isEmpty) {
+          continue;
+        }
+        await session.execute(
+          'DROP INDEX IF EXISTS ${_names._q(index.indexName)}',
+        );
+      }
+      for (final metaTable in [
+        _names.indexRegistry,
+        _names.schemaTable,
+        _names.schemaHistory,
+        _names.schemaCheckpoint,
+        _names.schemaLog,
+        _names.collectionRegistry,
+      ]) {
+        await session.execute(
+          Sql.named('DELETE FROM $metaTable WHERE collection = @c'),
+          parameters: {'c': collection},
+          ignoreRows: true,
+        );
+      }
+      // Last, so the ACCESS EXCLUSIVE lock it takes is held for as short a
+      // stretch of the transaction as possible.
+      await session.execute('DROP TABLE IF EXISTS $table');
+    });
+
+    // Caches follow the commit, never precede it: a rolled-back teardown must
+    // leave the adapter describing what the database actually holds.
     _knownTables.remove(table);
-    await _executor.execute(
-      Sql.named('DELETE FROM ${_names.schemaTable} WHERE collection = @c'),
-      parameters: {'c': collection},
-      ignoreRows: true,
-    );
-    await _executor.execute(
-      Sql.named('DELETE FROM ${_names.schemaHistory} WHERE collection = @c'),
-      parameters: {'c': collection},
-      ignoreRows: true,
-    );
-    await _executor.execute(
-      Sql.named('DELETE FROM ${_names.schemaCheckpoint} WHERE collection = @c'),
-      parameters: {'c': collection},
-      ignoreRows: true,
-    );
-    await _executor.execute(
-      Sql.named('DELETE FROM ${_names.schemaLog} WHERE collection = @c'),
-      parameters: {'c': collection},
-      ignoreRows: true,
-    );
-    await _executor.execute(
-      Sql.named(
-        'DELETE FROM ${_names.collectionRegistry} WHERE collection = @c',
-      ),
-      parameters: {'c': collection},
-      ignoreRows: true,
-    );
+    _indexCache.remove(collection);
+    for (final index in indexes) {
+      _knownIndexes.remove(index.indexName);
+    }
     return true;
+  }
+
+  /// Runs [body] as one all-or-nothing unit.
+  ///
+  /// [Connection] and [Pool] can both open a transaction. A [TxSession] cannot
+  /// nest one, but it is already inside a transaction, so running the body
+  /// inline there is atomic all the same.
+  Future<void> _runAtomically(
+    Future<void> Function(Session session) body,
+  ) async {
+    final executor = _executor;
+    if (executor is SessionExecutor) {
+      await (executor as SessionExecutor).runTx(body);
+      return;
+    }
+    await body(executor);
   }
 
   @override
