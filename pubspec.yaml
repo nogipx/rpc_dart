@@ -276,14 +276,37 @@ melos:
     # package), so melos cannot see it. Both scripts below handle it explicitly
     # right after the melos step, which keeps "publish everything" a single
     # command.
+    #
+    # `melos publish` skips packages whose version is already on pub.dev; the
+    # hand-written wasm step has to do that check itself, or it fails every
+    # release that does not bump wasm (`pub publish` rejects an existing
+    # version, and wasm changes far less often than the rest of the repo).
+    # pub.dev answers 200/404 for a version, so the check is exact — anything
+    # else is treated as "unknown" and stops the script rather than guessing.
     publish:dry:
       description: >
         Validate publishable packages without publishing, and preview the tags
         publish:release would create (read-only — no publish, no tags).
       run: |
+        set -e
         fvm dart run melos publish --dry-run --yes
         echo "--- rpc_dart_wasm (outside the workspace) ---"
-        (cd packages/transport/rpc_dart_wasm && fvm flutter pub publish --dry-run)
+        wasm_ver=$(awk '/^version:/{print $2; exit}' packages/transport/rpc_dart_wasm/pubspec.yaml)
+        # `pub publish --dry-run` does NOT check for a version collision, so
+        # without this the dry run reports rpc_dart_wasm green and the real
+        # publish then rejects it. Mirror the release-side check to keep the
+        # preview honest.
+        # curl itself prints 000 when the request never completed; ${:-000}
+        # only covers curl being absent entirely.
+        wasm_code=$(curl -s -o /dev/null -w '%{http_code}' \
+          "https://pub.dev/api/packages/rpc_dart_wasm/versions/$wasm_ver" || true)
+        wasm_code=${wasm_code:-000}
+        case "$wasm_code" in
+          200) echo "  skip: rpc_dart_wasm $wasm_ver is already on pub.dev" ;;
+          404) (cd packages/transport/rpc_dart_wasm && fvm flutter pub publish --dry-run) ;;
+          *)   echo "  ERROR: cannot tell whether rpc_dart_wasm $wasm_ver is published (HTTP $wasm_code)" >&2
+               exit 1 ;;
+        esac
         echo "--- tags publish:release would create ---"
         {
           fvm dart run melos list --no-private -l
@@ -299,16 +322,45 @@ melos:
 
     publish:release:
       description: >
-        Publish public packages to pub.dev (real, requires auth), then tag each
-        public package at its current pubspec version (`<pkg>-<version>`) and
-        push commits + tags. Tagging is idempotent (existing tags are skipped),
-        and runs only after a successful publish (`set -e`).
+        Publish public packages to pub.dev (real, requires auth), then hand off
+        to tag:release for tagging and pushing. Tagging runs only after a
+        successful publish (`set -e`); if this aborts partway, finish with
+        `melos run tag:release`.
       run: |
         set -e
         fvm dart run melos publish --no-dry-run --yes
         # rpc_dart_wasm is outside the pub workspace (Flutter-only), so melos
         # does not publish it — do it here so one command covers everything.
-        (cd packages/transport/rpc_dart_wasm && fvm flutter pub publish --force)
+        # It also misses melos' already-published filter, hence the explicit
+        # check (see the note above publish:dry). Do NOT soften this to
+        # `|| true`: that would swallow real validation failures too.
+        wasm_ver=$(awk '/^version:/{print $2; exit}' packages/transport/rpc_dart_wasm/pubspec.yaml)
+        wasm_code=$(curl -s -o /dev/null -w '%{http_code}' \
+          "https://pub.dev/api/packages/rpc_dart_wasm/versions/$wasm_ver" || true)
+        wasm_code=${wasm_code:-000}
+        case "$wasm_code" in
+          200) echo "rpc_dart_wasm $wasm_ver is already on pub.dev, skipping" ;;
+          404) (cd packages/transport/rpc_dart_wasm && fvm flutter pub publish --force) ;;
+          *)   echo "ERROR: cannot tell whether rpc_dart_wasm $wasm_ver is published (HTTP $wasm_code)" >&2
+               exit 1 ;;
+        esac
+        melos run tag:release
+
+    # Split out of publish:release so an aborted release can be finished without
+    # hand-crafted git: the upload is irreversible, but everything after it is
+    # idempotent and safe to re-run. Tags name where a version LIVES (they are
+    # derived from the pubspec, not from what uploaded in this run), so running
+    # this standalone is well-defined. It is a separate call rather than an
+    # unconditional trap on purpose: if a publish fails for a real reason and
+    # the version then changes, an auto-created tag would strand on the wrong
+    # commit.
+    tag:release:
+      description: >
+        Tag every public package at its current pubspec version
+        (`<pkg>-<version>`) and push commits + tags. Idempotent — existing tags
+        are skipped. Run standalone to finish a release that aborted midway.
+      run: |
+        set -e
         # Public packages (publish_to != none) come from `melos list --no-private`;
         # `-l` prints `name version path`, so no hardcoded list. rpc_dart_wasm is
         # appended by hand for the same workspace reason.

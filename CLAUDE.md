@@ -118,6 +118,10 @@ links them — see "Workspace resolution") and no dependency on anything unpubli
 `rpc_dart_wasm` is not a pub-workspace member, so `melos publish` cannot see it;
 both `publish:dry` and `publish:release` run `flutter pub publish` for it
 explicitly right after the melos step, so one command still covers everything.
+Because that step sits outside melos it also misses melos' skip-if-already-
+published filter, so both scripts ask pub.dev whether the current wasm version
+exists and skip it if so — otherwise every release that does not bump wasm dies
+on `Version X already exists`, after the other packages have gone out.
 
 ### Release flow (do this EVERY release, in order)
 
@@ -137,10 +141,16 @@ explicitly right after the melos step, so one command still covers everything.
 3. `melos run publish:dry` — must validate with 0 warnings (a dirty git tree
    shows up as a warning here, so commit first).
 4. Publish: `fvm dart pub login` then `melos run publish:release`. This publishes
-   the public packages to pub.dev, then **auto-tags** each at its current
-   pubspec version (`<pkg>-<version>`, idempotent) and pushes commits + tags.
-   pub.dev tag-triggered "Automated publishing" is NOT used. Publishing is
+   the public packages to pub.dev, then hands off to `tag:release`, which
+   **auto-tags** each public package at its current pubspec version
+   (`<pkg>-<version>`, idempotent) and pushes commits + tags. pub.dev
+   tag-triggered "Automated publishing" is NOT used. Publishing is
    irreversible — confirm the version (esp. major bumps) before this step.
+5. If `publish:release` aborts partway, run **`melos run tag:release`** to
+   finish. The upload is irreversible but everything after it is idempotent, so
+   re-running the whole release is wrong — it would try to re-publish what
+   already landed. Tags name where a version lives, so tagging separately is
+   well-defined. (Do not hand-craft the tags: the format has to match.)
 
 ## Known caveats
 
