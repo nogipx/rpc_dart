@@ -12,9 +12,17 @@ runs:
   using: composite
   steps:
     # Bootstrap Dart only to activate the fvm + melos CLIs from pub.
+    #
+    # problem-matcher is off because this runs inside a COMPOSITE action:
+    # setup-dart's `::add-matcher::` resolves dart-analyzer.json relative to the
+    # calling action's directory (.github/actions/setup/) rather than its own,
+    # the file is not there, and newer runners treat that as a step failure
+    # instead of a warning — taking the whole job with it. The matcher only adds
+    # inline annotations on analyzer output, which nothing here depends on.
     - uses: dart-lang/setup-dart@v1
       with:
         sdk: stable
+        problem-matcher: false
 
     # fvm keeps its managed SDKs under ~/fvm — cache them so `fvm install` only
     # downloads on the first run / when .fvmrc changes.
