@@ -4,7 +4,7 @@
 
 name: rpc_data_sqlite
 description: SQLite/SQLCipher adapter and repository for rpc_data (IO + WebAssembly).
-version: 1.0.1
+version: 1.0.2
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

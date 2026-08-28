@@ -39,18 +39,53 @@ class SqliteDataDatabase {
     });
   }
 
+  /// Tail of the transaction queue. A connection has ONE transaction and
+  /// SQLite has no nested ones, so overlapping callers queue instead of
+  /// colliding on `BEGIN`.
+  Future<void> _transactionTail = Future<void>.value();
+
+  /// Runs [action] between `BEGIN` and `COMMIT`, serialized against every
+  /// other [transaction] on this connection.
+  ///
+  /// [action] is now awaited. It previously was not: with the async body every
+  /// caller passes, `COMMIT` ran at the body's first `await`, the writes landed
+  /// afterwards outside the transaction, and nothing here was ever atomic — a
+  /// body that failed part-way left its earlier writes committed.
+  ///
+  /// NOTE: sqlite3 is synchronous throughout, so the futures in this class are
+  /// a leftover from the Drift-shaped shim this used to be. A synchronous
+  /// executor would make atomicity hold by construction and delete both the
+  /// queue and this comment — see the package CHANGELOG.
   Future<T> transaction<T>(FutureOr<T> Function() action) {
-    return Future.sync(() {
-      database.execute('BEGIN');
-      try {
-        final result = action();
-        database.execute('COMMIT');
-        return result;
-      } catch (error) {
-        database.execute('ROLLBACK');
-        rethrow;
+    final done = Completer<void>();
+    final previous = _transactionTail;
+    _transactionTail = done.future;
+    return previous
+        .then((_) => _runTransaction(action))
+        .whenComplete(done.complete);
+  }
+
+  Future<T> _runTransaction<T>(FutureOr<T> Function() action) async {
+    database.execute('BEGIN');
+    try {
+      final result = await action();
+      database.execute('COMMIT');
+      return result;
+    } catch (_) {
+      // ONLY when a transaction is still open. SQLite aborts the transaction
+      // itself for a whole class of errors (SQLITE_FULL, SQLITE_IOERR,
+      // SQLITE_BUSY...), and a bare ROLLBACK then threw "cannot rollback - no
+      // transaction is active" straight over the top of the real failure — so
+      // the disk-full or IO error the user needed to see never reached them.
+      if (!database.autocommit) {
+        try {
+          database.execute('ROLLBACK');
+        } catch (_) {
+          // Best-effort cleanup; never let it bury the original error.
+        }
       }
-    });
+      rethrow;
+    }
   }
 
   Future<void> close() {
