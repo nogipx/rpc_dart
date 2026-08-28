@@ -53,9 +53,12 @@ class SqliteDataDatabase {
   /// body that failed part-way left its earlier writes committed.
   ///
   /// NOTE: sqlite3 is synchronous throughout, so the futures in this class are
-  /// a leftover from the Drift-shaped shim this used to be. A synchronous
-  /// executor would make atomicity hold by construction and delete both the
-  /// queue and this comment — see the package CHANGELOG.
+  /// a leftover from the Drift-shaped shim this used to be, and a synchronous
+  /// executor would give atomicity by construction and make this queue
+  /// unnecessary. That conversion was tried and DECIDED AGAINST — it surfaces a
+  /// latent nested transaction (`upsertSchema` -> `getActiveSchema` ->
+  /// `ensureReady`, which opens its own) that needs a design change rather than
+  /// a mechanical rewrite. Treat the async surface as settled.
   Future<T> transaction<T>(FutureOr<T> Function() action) {
     final done = Completer<void>();
     final previous = _transactionTail;

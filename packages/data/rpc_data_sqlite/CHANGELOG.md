@@ -21,13 +21,13 @@ SPDX-License-Identifier: MIT
   transaction spans its awaits, and a connection has exactly one transaction with
   no nesting — overlapping callers queue instead of colliding on `BEGIN`.
 
-Known, deliberately not addressed here: sqlite3 is synchronous throughout, so
-the futures in `SqliteDataDatabase` are a leftover from the Drift-shaped shim it
-used to be. A synchronous executor would make atomicity hold by construction and
-delete the queue above. It is a larger change than a fix belongs in: making the
-transaction bodies synchronous surfaces a latent nested transaction
-(`upsertSchema` -> `getActiveSchema` -> `ensureReady`, which opens its own),
-which needs restructuring rather than a mechanical rewrite.
+Note on the shape: sqlite3 is synchronous throughout, so the futures in
+`SqliteDataDatabase` are a leftover from the Drift-shaped shim it used to be, and
+a synchronous executor would give atomicity by construction and make the queue
+above unnecessary. That conversion was tried and decided against — it surfaces a
+latent nested transaction (`upsertSchema` -> `getActiveSchema` -> `ensureReady`,
+which opens its own) that needs a design change rather than a mechanical
+rewrite. The async surface is settled, not pending.
 
 ## 1.0.1
 
