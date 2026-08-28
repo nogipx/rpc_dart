@@ -34,8 +34,11 @@ void main() {
         insideTransaction = !raw.autocommit;
         raw.execute("INSERT INTO t (v) VALUES ('a')");
       });
-      expect(insideTransaction, isTrue,
-          reason: 'the body resumed outside the transaction');
+      expect(
+        insideTransaction,
+        isTrue,
+        reason: 'the body resumed outside the transaction',
+      );
       expect(rows(), ['a']);
       expect(raw.autocommit, isTrue, reason: 'transaction left open');
     });
