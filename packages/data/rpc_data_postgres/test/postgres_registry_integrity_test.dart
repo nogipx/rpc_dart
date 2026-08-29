@@ -197,5 +197,71 @@ void main() {
       await next.dispose();
       await adapter.dispose();
     });
+
+    test(
+      'a second adapter reads and writes after the first dropped the table',
+      () async {
+        // _knownTables caches a fact about the DATABASE inside one PROCESS, and
+        // deleteCollection can only evict it where it ran. Two sync replicas,
+        // a vault re-upload dropping the state table on one of them, and every
+        // request routed to the other failed on a name resolving to nothing —
+        // "relation ... does not exist" surfacing as a bare "Unhandled
+        // repository error". Half of every re-upload, depending on routing.
+        final collection = freshCollection('stale_cache');
+        final owner = await makeAdapter();
+        final other = await makeAdapter();
+        addTearDown(() async {
+          await owner.dispose();
+          await other.dispose();
+        });
+
+        await owner.writeRecord(
+          DataRecord(
+            collection: collection,
+            id: 'a',
+            payload: const {'v': 1},
+            version: 1,
+            createdAt: DateTime.now().toUtc(),
+            updatedAt: DateTime.now().toUtc(),
+          ),
+        );
+        // The second adapter learns the table exists, and caches that.
+        expect(await other.readRecord(collection, 'a'), isNotNull);
+
+        // The first drops it. Nothing tells the second.
+        await owner.deleteCollection(collection);
+
+        // A read must report "no rows", not fail on the stale cache.
+        final listed = await other.queryCollection(
+          ListRecordsRequest(collection: collection),
+        );
+        expect(
+          listed.records,
+          isEmpty,
+          reason:
+              'a table that is not there has no rows; a stale cache is '
+              'not the caller problem',
+        );
+
+        // And a write must recreate it rather than insert into nothing.
+        await other.writeRecord(
+          DataRecord(
+            collection: collection,
+            id: 'b',
+            payload: const {'v': 2},
+            version: 1,
+            createdAt: DateTime.now().toUtc(),
+            updatedAt: DateTime.now().toUtc(),
+          ),
+        );
+        expect(
+          await other.readRecord(collection, 'b'),
+          isNotNull,
+          reason:
+              'the write path has the same stale cache and must recover '
+              'the same way',
+        );
+      },
+    );
   });
 }

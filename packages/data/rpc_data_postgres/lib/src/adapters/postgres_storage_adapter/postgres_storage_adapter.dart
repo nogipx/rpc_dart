@@ -233,6 +233,50 @@ class PostgresDataStorageAdapter
     return table;
   }
 
+  /// Postgres SQLSTATE for "relation does not exist".
+  static const String _undefinedTable = '42P01';
+
+  /// Whether [error] is Postgres saying the table this operation named is not
+  /// there.
+  ///
+  /// [_knownTables] caches a fact about the DATABASE in a single PROCESS, and
+  /// [deleteCollection] can only evict it where it ran. With more than one
+  /// replica the others keep answering "that table exists" about a table that
+  /// was dropped, and the next statement fails on a name that resolves to
+  /// nothing. Observed in production: two sync replicas, a vault re-upload
+  /// dropped the state table on one, and every request routed to the other
+  /// failed until it restarted.
+  ///
+  /// So the cache is an optimisation, never proof. This is how a statement
+  /// tells us the optimisation was wrong.
+  static bool _tableVanished(Object error) =>
+      error is ServerException && error.code == _undefinedTable;
+
+  /// Drops everything cached about a table whose absence Postgres just
+  /// reported, so the retry rebuilds it from what the database actually holds.
+  void _forgetTable(String table, String collection) {
+    _knownTables.remove(table);
+    _indexCache.remove(collection);
+  }
+
+  /// Runs [body]; if the table turns out not to exist, corrects the cache and
+  /// hands over to [ifVanished] — create-and-retry for a write, "no rows" for
+  /// a read.
+  Future<T> _guardingTable<T>(
+    String collection,
+    String table,
+    Future<T> Function() body,
+    Future<T> Function() ifVanished,
+  ) async {
+    try {
+      return await body();
+    } catch (error) {
+      if (!_tableVanished(error)) rethrow;
+      _forgetTable(table, collection);
+      return ifVanished();
+    }
+  }
+
   Future<String> _ensureTableForWrite(String collection) async {
     await ensureReady();
     final table = _tableNameForCollection(collection);
@@ -724,9 +768,17 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
         ..write(offsetParam);
     }
 
-    final result = await _executor.execute(
-      Sql.named(querySql.toString()),
-      parameters: params,
+    final result = await _guardingTable(
+      request.collection,
+      table,
+      () =>
+          _executor.execute(Sql.named(querySql.toString()), parameters: params),
+      // Dropped between the cache check and the statement: no table, no rows.
+      () async => Result(
+        rows: const [],
+        affectedRows: 0,
+        schema: ResultSchema(const []),
+      ),
     );
     final records = result
         .map((row) => _mapRow(row, collectionOverride: request.collection))
@@ -894,7 +946,15 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
   @override
   Future<void> writeRecord(DataRecord record) async {
     final table = await _ensureTableForWrite(record.collection);
-    final applied = await _upsertRecords(table, [record]);
+    final applied = await _guardingTable(
+      record.collection,
+      table,
+      () => _upsertRecords(table, [record]),
+      () async => _upsertRecords(
+        await _ensureTableForWrite(record.collection),
+        [record],
+      ),
+    );
     if (applied.isEmpty) {
       final versions = await _fetchVersions(table, [record.id]);
       final existingVersion = versions[record.id];
@@ -924,7 +984,13 @@ CREATE TABLE IF NOT EXISTS ${_names.indexRegistry} (
     }
     for (final entry in byCollection.entries) {
       final table = await _ensureTableForWrite(entry.key);
-      final applied = await _upsertRecords(table, entry.value);
+      final applied = await _guardingTable(
+        entry.key,
+        table,
+        () => _upsertRecords(table, entry.value),
+        () async =>
+            _upsertRecords(await _ensureTableForWrite(entry.key), entry.value),
+      );
       if (applied.length == entry.value.length) {
         continue;
       }

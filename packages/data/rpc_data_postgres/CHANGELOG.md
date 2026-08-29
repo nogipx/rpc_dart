@@ -4,6 +4,18 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.1.1
+
+- A dropped table no longer fails the OTHER processes that had cached it.
+  `_knownTables` records a fact about the database inside one process, and
+  `deleteCollection` can only evict it where it ran — so with more than one
+  replica the rest keep answering "that table exists" about a table that is
+  gone, and the next statement fails on a name resolving to no relation. 2.1.0
+  covered the collection that was never cached; this covers the one that was.
+  The cache stays an optimisation but is no longer treated as proof: a
+  statement reporting `42P01` corrects it and the operation recovers — a read
+  returns no rows, a write recreates the table and retries once.
+
 ## 2.1.0
 
 - Collection teardown is one transaction. `deleteCollection` dropped the table
