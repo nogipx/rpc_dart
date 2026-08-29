@@ -4,6 +4,18 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.0.1
+
+- The transaction helper no longer buries the error it was called to report.
+  SQLite aborts the transaction itself for a whole class of failures
+  (`SQLITE_FULL`, `SQLITE_IOERR`, `SQLITE_BUSY`), and the unconditional
+  `ROLLBACK` in the error path then threw "cannot rollback - no transaction
+  is active" over the top of the disk-full or IO error underneath — which is
+  what reached the user instead of the cause. Rolled back only while a
+  transaction is actually open, and the cleanup can no longer throw over the
+  original. Same defect `rpc_data_sqlite` fixed in its own helper; this second
+  copy was missed, and it sits on every blob write, delete and cache sweep.
+
 ## 2.0.0
 
 - Implements `ensureCollection`, `deleteMany` and `headMany` from the

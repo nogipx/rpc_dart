@@ -4,7 +4,7 @@
 
 name: rpc_blob_sqlite
 description: SQLite/SQLCipher storage adapter for rpc_blob, with optionally encrypted databases on VM and Flutter.
-version: 2.0.0
+version: 2.0.1
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues

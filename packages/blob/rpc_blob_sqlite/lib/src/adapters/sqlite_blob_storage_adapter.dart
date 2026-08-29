@@ -696,7 +696,23 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       _database.execute('COMMIT');
       return result;
     } catch (_) {
-      _database.execute('ROLLBACK');
+      // ONLY when a transaction is still open. SQLite aborts the transaction
+      // itself for a whole class of errors (SQLITE_FULL, SQLITE_IOERR,
+      // SQLITE_BUSY...), and a bare ROLLBACK then throws "cannot rollback - no
+      // transaction is active" straight over the top of the real failure — so
+      // the disk-full or IO error the user needed to see never reaches them.
+      //
+      // The same defect was fixed in rpc_data_sqlite; this second copy was
+      // missed, and it sits on the hottest path there is — every blob write
+      // and every cache sweep. A user on a plugin that already had that fix
+      // still saw the meaningless message, from here.
+      if (!_database.autocommit) {
+        try {
+          _database.execute('ROLLBACK');
+        } catch (_) {
+          // Best-effort cleanup; never let it bury the original error.
+        }
+      }
       rethrow;
     }
   }
