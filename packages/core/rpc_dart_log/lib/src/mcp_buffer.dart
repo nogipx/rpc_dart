@@ -25,6 +25,7 @@ class LogCollectorMcpBuffer {
 
   // Incremental stats
   final Map<String, _ScopeStats> _scopeStats = {};
+  final List<String> _scopeOrder = []; // capped at _maxScopes
   final Map<String, int> _traceErrorCounts = {};
   final List<String> _traceIdOrder = []; // capped at _maxTraceIds
   int _totalErrors = 0;
@@ -35,6 +36,18 @@ class LogCollectorMcpBuffer {
   final List<String> _uniqueErrorKeys = []; // insertion order, max 5
 
   static const _maxTraceIds = 500;
+
+  /// Cap on tracked scopes.
+  ///
+  /// Every other collection here is bounded -- records by [maxRecords], trace
+  /// ids by [_maxTraceIds], unique errors at 5 -- and _scopeStats was the one
+  /// that was not. Scope names come from the connected devices, and
+  /// applications routinely build them per request or per entity
+  /// (`LogScope.child(...)`), so cardinality is caller-controlled. Because the
+  /// stats are cumulative they also outlived the records they summarise: with
+  /// maxRecords = 100 and 5000 rotating scopes, the buffer held 100 records
+  /// and 5000 scope entries.
+  static const _maxScopes = 500;
 
   LogCollectorMcpBuffer({this.maxRecords = 5000});
 
@@ -53,6 +66,14 @@ class LogCollectorMcpBuffer {
     }
 
     final r = tagged.record;
+    // Same insertion-order FIFO the trace-id index uses below, so a device
+    // with rotating scope names cannot grow this without bound.
+    if (!_scopeStats.containsKey(r.scope)) {
+      if (_scopeOrder.length >= _maxScopes) {
+        _scopeStats.remove(_scopeOrder.removeAt(0));
+      }
+      _scopeOrder.add(r.scope);
+    }
     _scopeStats.putIfAbsent(r.scope, _ScopeStats.new).add(r);
 
     String? tid;
