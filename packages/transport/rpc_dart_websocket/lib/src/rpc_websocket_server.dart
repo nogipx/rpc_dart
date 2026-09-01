@@ -29,7 +29,16 @@ class RpcWebSocketServer implements IRpcServer {
 
   StreamSubscription<WebSocketChannel>? _connectionsSub;
   bool _isRunning = false;
-  final List<RpcResponderEndpoint> _endpoints = [];
+  /// Every endpoint this server created, peer-mode included.
+  ///
+  /// This used to be a `List<RpcResponderEndpoint>`, which a [RpcPeerEndpoint]
+  /// structurally cannot join — they are sibling subclasses of
+  /// [RpcEndpointBase]. So peer-mode endpoints were never tracked, and [stop]
+  /// (which closes what it finds here) never closed them: their transports
+  /// stayed open and their contracts never had `dispose()` called, so whatever
+  /// a contract holds — database handles, files, subscriptions — was never
+  /// released.
+  final List<RpcEndpointBase> _endpoints = [];
   int _connCounter = 0;
 
   RpcWebSocketServer({
@@ -78,7 +87,8 @@ class RpcWebSocketServer implements IRpcServer {
   }
 
   @override
-  List<RpcResponderEndpoint> get endpoints => List.unmodifiable(_endpoints);
+  List<RpcResponderEndpoint> get endpoints =>
+      List.unmodifiable(_endpoints.whereType<RpcResponderEndpoint>());
 
   @override
   bool get isRunning => _isRunning;
@@ -123,6 +133,26 @@ class RpcWebSocketServer implements IRpcServer {
     }
   }
 
+  /// Drops a disconnected connection's endpoint and closes it.
+  ///
+  /// Closing is the part that used to be missing on BOTH branches: the
+  /// responder branch merely removed the endpoint from the list, and the peer
+  /// branch did nothing at all. An endpoint that is dropped without
+  /// [RpcEndpointBase.close] never cancels its transport subscription, never
+  /// tears down its still-open responder streams, and — the part no garbage
+  /// collector can make up for — never calls `dispose()` on its registered
+  /// contracts, so anything a contract holds stays held for the life of the
+  /// process. On a server, one leak per client disconnect.
+  void _releaseEndpoint(RpcEndpointBase endpoint, WebSocketChannel channel) {
+    _endpoints.remove(endpoint);
+    unawaited(
+      endpoint.close().catchError((Object error) {
+        _logger?.warning('Error closing endpoint on disconnect: $error');
+      }),
+    );
+    _onConnectionClosed?.call(channel);
+  }
+
   void _handleConnection(WebSocketChannel channel, String clientLabel) {
     _onConnectionOpened?.call(channel);
     try {
@@ -137,12 +167,13 @@ class RpcWebSocketServer implements IRpcServer {
           debugLabel: 'WebSocketEndpoint-$clientLabel',
           logger: _logController,
         );
+        _endpoints.add(endpoint);
         _onPeerEndpointCreated(endpoint);
         endpoint.start();
 
         channel.sink.done
-            .then((_) => _onConnectionClosed?.call(channel))
-            .catchError((Object error) => _onConnectionClosed?.call(channel));
+            .then((_) => _releaseEndpoint(endpoint, channel))
+            .catchError((Object _) => _releaseEndpoint(endpoint, channel));
       } else {
         final endpoint = RpcResponderEndpoint(
           transport: transport,
@@ -154,14 +185,8 @@ class RpcWebSocketServer implements IRpcServer {
         endpoint.start();
 
         channel.sink.done
-            .then((_) {
-              _endpoints.remove(endpoint);
-              _onConnectionClosed?.call(channel);
-            })
-            .catchError((Object error) {
-              _endpoints.remove(endpoint);
-              _onConnectionClosed?.call(channel);
-            });
+            .then((_) => _releaseEndpoint(endpoint, channel))
+            .catchError((Object _) => _releaseEndpoint(endpoint, channel));
       }
     } catch (e, st) {
       _logger?.error(
