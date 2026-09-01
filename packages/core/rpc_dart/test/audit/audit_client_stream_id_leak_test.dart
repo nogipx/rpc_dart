@@ -14,6 +14,16 @@
 //    exists, leaking the id with no close() to ever run;
 //  - UnaryCaller never released the id at all.
 //
+// Follow-up: the endpoint's ping() had the same hole on its failure paths. A
+// ping that reaches the wire frees its id implicitly, because it sends its
+// metadata with endStream: true and the transport releases finished streams.
+// But ping() allocates the id BEFORE it validates the context, so a cancelled
+// token or an already-expired deadline threw straight past that release with
+// nothing to free the id. Ping is the keepalive/health check, so those are the
+// failure modes it actually hits — a health-check loop against a stalled
+// connection burns one id per attempt until the cap is reached, and from then
+// on every call on that transport fails.
+//
 // With the default maxActiveStreams the leak eventually throws
 // "Too many active streams". These tests use a cap of 1 so a single leak is
 // observable immediately.
@@ -127,6 +137,68 @@ void main() {
         throwsA(anything),
       );
 
+      await client.close();
+      await server.close();
+    });
+
+    test('ping() frees the id when the token is already cancelled', () async {
+      final (client, server) = RpcChannelTransport.pair(
+        policy: const RpcSecurityPolicy(maxActiveStreams: 1),
+      );
+
+      final caller = RpcCallerEndpoint(transport: client);
+      final responder = RpcResponderEndpoint(transport: server);
+      responder.start();
+
+      final token = RpcCancellationToken();
+      token.cancel('stop');
+
+      // Throws after createStream() but before anything is sent, so the
+      // transport never sees the endStream that would free the id.
+      await expectLater(
+        caller.ping(context: RpcContext.withCancellation(token)),
+        throwsA(isA<RpcCancelledException>()),
+      );
+
+      // The failed ping must not have consumed the only available id.
+      await expectLater(
+        caller.ping(timeout: const Duration(seconds: 5)),
+        completes,
+      );
+
+      await caller.close();
+      await responder.close();
+      await client.close();
+      await server.close();
+    });
+
+    test('ping() frees the id when the deadline is already expired', () async {
+      final (client, server) = RpcChannelTransport.pair(
+        policy: const RpcSecurityPolicy(maxActiveStreams: 1),
+      );
+
+      final caller = RpcCallerEndpoint(transport: client);
+      final responder = RpcResponderEndpoint(transport: server);
+      responder.start();
+
+      // Throws after createStream() but before anything is sent.
+      await expectLater(
+        caller.ping(
+          context: RpcContext.withDeadline(
+            DateTime.fromMillisecondsSinceEpoch(0),
+          ),
+        ),
+        throwsA(isA<RpcDeadlineExceededException>()),
+      );
+
+      // The failed ping must not have consumed the only available id.
+      await expectLater(
+        caller.ping(timeout: const Duration(seconds: 5)),
+        completes,
+      );
+
+      await caller.close();
+      await responder.close();
       await client.close();
       await server.close();
     });

@@ -171,55 +171,69 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     if (transport.isClosed) throw StateError('Transport is closed');
 
     final streamId = transport.createStream();
-    final sentAt = DateTime.now().toUtc();
+    try {
+      final sentAt = DateTime.now().toUtc();
 
-    final baseContext = _ensureCallerContext(context);
-    final routingContext = baseContext.withAdditionalHeaders({
-      'x-route-service': RpcEndpointPingProtocol.serviceName,
-    });
+      final baseContext = _ensureCallerContext(context);
+      final routingContext = baseContext.withAdditionalHeaders({
+        'x-route-service': RpcEndpointPingProtocol.serviceName,
+      });
 
-    routingContext.cancellationToken?.throwIfCancelled();
-    if (routingContext.isExpired) {
-      throw RpcDeadlineExceededException(
-        routingContext.deadline!,
-        Duration.zero,
-      );
-    }
-
-    final baseMetadata = RpcMetadata.forClientRequest(
-      RpcEndpointPingProtocol.serviceName,
-      RpcEndpointPingProtocol.methodName,
-    );
-
-    final headerMap = <String, String>{
-      for (final h in baseMetadata.headers) h.name: h.value,
-    };
-    headerMap.addAll(routingContext.headers);
-    if (routingContext.traceId != null) {
-      headerMap[RpcHeaders.xTraceId] = routingContext.traceId!;
-    }
-    headerMap[RpcHeaders.xRequestId] = routingContext.requestId;
-    if (routingContext.deadline != null) {
-      final remaining = routingContext.remainingTime;
-      if (remaining != null) {
-        headerMap[RpcHeaders.grpcTimeout] = RpcMetadata.encodeGrpcTimeout(
-          remaining,
+      routingContext.cancellationToken?.throwIfCancelled();
+      if (routingContext.isExpired) {
+        throw RpcDeadlineExceededException(
+          routingContext.deadline!,
+          Duration.zero,
         );
       }
+
+      final baseMetadata = RpcMetadata.forClientRequest(
+        RpcEndpointPingProtocol.serviceName,
+        RpcEndpointPingProtocol.methodName,
+      );
+
+      final headerMap = <String, String>{
+        for (final h in baseMetadata.headers) h.name: h.value,
+      };
+      headerMap.addAll(routingContext.headers);
+      if (routingContext.traceId != null) {
+        headerMap[RpcHeaders.xTraceId] = routingContext.traceId!;
+      }
+      headerMap[RpcHeaders.xRequestId] = routingContext.requestId;
+      if (routingContext.deadline != null) {
+        final remaining = routingContext.remainingTime;
+        if (remaining != null) {
+          headerMap[RpcHeaders.grpcTimeout] = RpcMetadata.encodeGrpcTimeout(
+            remaining,
+          );
+        }
+      }
+      headerMap[RpcEndpointPingProtocol.requestTimestampHeader] = sentAt
+          .toIso8601String();
+
+      final metadata = RpcMetadata([
+        for (final e in headerMap.entries) RpcHeader(e.key, e.value),
+      ], methodPath: baseMetadata.methodPath);
+
+      return await RpcEndpointPingExchange(
+        transport: transport,
+        logger: _log,
+        streamId: streamId,
+        sentAt: sentAt,
+      ).execute(metadata: metadata, timeout: timeout);
+    } finally {
+      // A ping that reaches the wire frees its id implicitly — it sends with
+      // endStream: true and the transport releases finished streams — but the
+      // id is allocated BEFORE the context is validated, so a cancelled token
+      // or an expired deadline threw straight past that with nothing to free
+      // it. Ping is the keepalive/health check, so those are the failures it
+      // actually hits: a health-check loop against a stalled connection leaks
+      // one id per attempt until maxActiveStreams is reached, and from then on
+      // every call on the transport fails. Hence the finally around the whole
+      // body. releaseStreamId is idempotent, so the double release on the
+      // success path is harmless.
+      transport.releaseStreamId(streamId);
     }
-    headerMap[RpcEndpointPingProtocol.requestTimestampHeader] = sentAt
-        .toIso8601String();
-
-    final metadata = RpcMetadata([
-      for (final e in headerMap.entries) RpcHeader(e.key, e.value),
-    ], methodPath: baseMetadata.methodPath);
-
-    return RpcEndpointPingExchange(
-      transport: transport,
-      logger: _log,
-      streamId: streamId,
-      sentAt: sentAt,
-    ).execute(metadata: metadata, timeout: timeout);
   }
 
   // ---------------------------------------------------------------------------
