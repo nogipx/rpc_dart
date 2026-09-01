@@ -63,24 +63,33 @@ class RpcNum extends RpcPrimitiveMessage<num> {
     if (_isDoubleTyped(this) || _isDoubleTyped(other)) {
       throw _comparisonException(type: 'RpcNum', op: '~/');
     }
-    // Both operands are known not to be double-typed (the subtype guard above
-    // rejected RpcDouble / raw double). A raw `is int` check here is unreliable
-    // on dart2js (`7.0 is int` is true), which made `RpcNum(7.0) ~/ ...` throw
-    // on the VM but return a value on dart2js. `~/` is well-defined and
-    // platform-stable for any num, so compute it directly.
+    // Neither operand is an RpcDouble. A raw `is int` / `is double` check here
+    // would NOT be platform-stable -- see [_isDoubleTyped] for the truth table
+    // -- and `~/` is well-defined for any num, so compute it directly.
     final a = value;
     final b = _extractNum(other);
     return RpcNum(a ~/ b);
   }
 
-  /// Returns true when [o] is known to carry a double value via its runtime
-  /// type (RpcDouble or a raw double). For a type-erased plain RpcNum/num
-  /// this cannot be determined reliably on dart2js, so it returns false.
-  static bool _isDoubleTyped(Object o) {
-    if (o is RpcDouble) return true;
-    if (o is RpcInt) return false;
-    return false;
-  }
+  /// Returns true only for an [RpcDouble].
+  ///
+  /// It deliberately does NOT test `o is double`, however tempting that looks:
+  /// Dart's numeric type predicates disagree across platforms, because dart2js
+  /// has a single JS number type.
+  ///
+  /// ```text
+  ///        VM: is int / is double     dart2js: is int / is double
+  ///   7        true   / false                  true   / true
+  ///   7.0      false  / true                   true   / true
+  ///   2.5      false  / true                   false  / true
+  /// ```
+  ///
+  /// So `7 is double` is false on the VM and true on dart2js. Adding that
+  /// check would make `RpcNum(10) ~/ 7` succeed on the VM and throw on the
+  /// web — reintroducing exactly the platform split this guard exists to
+  /// remove. The Rpc* SUBTYPE is the only signal that means the same thing
+  /// everywhere, so it is the only one used.
+  static bool _isDoubleTyped(Object o) => o is RpcDouble;
 
   /// Returns the remainder of dividing this value by [other].
   RpcNum operator %(Object other) => RpcNum(value % _extractNum(other));

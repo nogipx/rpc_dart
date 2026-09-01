@@ -92,6 +92,24 @@ void main() {
       );
     });
 
+    test('~/ with a RAW operand computes rather than throwing', () {
+      // Pins the platform-stable choice. A raw operand is deliberately NOT
+      // rejected, because Dart's numeric predicates disagree across platforms:
+      //
+      //        VM: is int / is double     dart2js: is int / is double
+      //   7        true   / false                  true   / true
+      //   7.0      false  / true                   true   / true
+      //
+      // An `is double` guard would therefore let `RpcNum(10) ~/ 7` succeed on
+      // the VM and throw on the web. Only the Rpc* subtype means the same
+      // thing everywhere, so only RpcDouble is rejected (asserted above).
+      //
+      // Run on both: fvm dart test [-p node] test/primitives/primitives_test.dart
+      expect(const RpcNum(10) ~/ 7, const RpcNum(1));
+      expect(const RpcNum(10) ~/ 2.5, const RpcNum(4));
+      expect(const RpcNum(10) ~/ const RpcInt(4), const RpcNum(2));
+    });
+
     test('ordering comparisons with raw num throw RpcException', () {
       expect(() => const RpcInt(1) < 2, throwsA(isA<RpcException>()));
       expect(() => const RpcDouble(1.0) > 2.0, throwsA(isA<RpcException>()));
