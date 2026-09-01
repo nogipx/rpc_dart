@@ -134,6 +134,26 @@ class RpcHttp2Server implements IRpcServer {
   @override
   List<RpcResponderEndpoint> get endpoints => List.unmodifiable(_endpoints);
 
+  /// Drops a disconnected connection's endpoint and closes it.
+  ///
+  /// Closing is what used to be missing: the disconnect handler only removed
+  /// the endpoint from [_endpoints]. An endpoint dropped without close() never
+  /// cancels its transport subscription, never tears down its still-open
+  /// responder streams, and never calls `dispose()` on its registered
+  /// contracts -- so whatever a contract holds (database handles, files,
+  /// subscriptions) stays held for the life of the process. One leak per
+  /// client disconnect. [stop] closed endpoints correctly; only this path did
+  /// not.
+  void _releaseEndpoint(RpcResponderEndpoint endpoint, Socket socket) {
+    _endpoints.remove(endpoint);
+    unawaited(
+      endpoint.close().catchError((Object error) {
+        _logger?.warning('Ошибка при закрытии endpoint: $error');
+      }),
+    );
+    _onConnectionClosed?.call(socket);
+  }
+
   /// Запущен ли сервер
   @override
   bool get isRunning => _isRunning;
@@ -286,15 +306,13 @@ class RpcHttp2Server implements IRpcServer {
       socket.done
           .then((_) {
             _logger?.debug('HTTP/2 соединение $clientAddress закрыто');
-            _endpoints.remove(endpoint);
-            _onConnectionClosed?.call(socket);
+            _releaseEndpoint(endpoint, socket);
           })
           .catchError((error) {
             _logger?.warning(
               'Ошибка при закрытии соединения $clientAddress: $error',
             );
-            _endpoints.remove(endpoint);
-            _onConnectionClosed?.call(socket);
+            _releaseEndpoint(endpoint, socket);
           });
     } catch (e, stackTrace) {
       _logger?.error(

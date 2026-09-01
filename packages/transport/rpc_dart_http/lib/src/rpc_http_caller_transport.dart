@@ -334,7 +334,14 @@ class RpcHttpCallerTransport implements IRpcTransport {
     return RpcHealthStatus.healthy(
       component: runtimeType.toString(),
       message: 'HTTP caller transport ready',
-      details: {'baseUrl': _baseUrl},
+      details: {
+        'baseUrl': _baseUrl,
+        // Per-call bookkeeping, exposed so growth is observable from outside:
+        // all three must return to a baseline once calls finish.
+        'pendingCalls': _pending.length,
+        'inFlight': _inFlight.length,
+        'streamControllers': _streamControllers.length,
+      },
     );
   }
 
