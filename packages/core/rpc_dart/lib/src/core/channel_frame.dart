@@ -88,6 +88,7 @@ abstract final class RpcChannelFrame {
     ByteData view,
     int offset, {
     int? maxPayloadLen,
+    int? maxMetadataLen,
   }) {
     final streamId = view.getUint32(offset);
     final flags = view.getUint8(offset + 4);
@@ -110,6 +111,17 @@ abstract final class RpcChannelFrame {
     );
     final endOfStream = (flags & _flagEndOfStream) != 0;
     final isMetadata = (flags & _flagMetadata) != 0;
+
+    // A metadata frame carries the encoded header blob, which
+    // RpcSecurityPolicy bounds separately (and far more tightly) than a data
+    // payload: 64KB against 16MB by default. Checked before decoding, so a
+    // huge header blob is rejected without being parsed.
+    if (isMetadata && maxMetadataLen != null && payloadLen > maxMetadataLen) {
+      throw RpcFrameException(
+        'Incoming metadata frame too large: $payloadLen bytes '
+        '(max: $maxMetadataLen)',
+      );
+    }
 
     RpcMetadata? metadata;
     String? methodPath;
@@ -142,6 +154,7 @@ abstract final class RpcChannelFrame {
   static (List<RpcDecodedFrame>, int) decodeAll(
     Uint8List data, {
     int? maxPayloadLen,
+    int? maxMetadataLen,
   }) {
     final frames = <RpcDecodedFrame>[];
     var offset = 0;
@@ -155,7 +168,13 @@ abstract final class RpcChannelFrame {
     while (offset + headerSize <= data.length) {
       // _decodeAt re-reads the declared length to enforce maxPayloadLen and to
       // detect a not-yet-complete payload; on incompleteness it returns null.
-      final frame = _decodeAt(data, view, offset, maxPayloadLen: maxPayloadLen);
+      final frame = _decodeAt(
+        data,
+        view,
+        offset,
+        maxPayloadLen: maxPayloadLen,
+        maxMetadataLen: maxMetadataLen,
+      );
       if (frame == null) break;
 
       final payloadLen = view.getUint32(offset + 5);

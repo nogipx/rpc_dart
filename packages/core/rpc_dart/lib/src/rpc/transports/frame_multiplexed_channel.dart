@@ -157,6 +157,7 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
       (frames, consumed) = RpcChannelFrame.decodeAll(
         data,
         maxPayloadLen: _policy.maxMessageLengthBytes,
+        maxMetadataLen: _policy.maxMetadataBytes,
       );
     } on RpcFrameException catch (error) {
       // A rejected frame (oversized declared payload or malformed metadata) is

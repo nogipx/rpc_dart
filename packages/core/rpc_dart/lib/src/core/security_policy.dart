@@ -30,12 +30,25 @@ final class RpcSecurityPolicy {
   final int maxActiveStreams;
 
   /// Max size of a single WebSocket message (including custom headers).
+  ///
+  /// NOT CURRENTLY ENFORCED. No transport reads this field. A WebSocket
+  /// message is bounded in practice by [maxBufferedBytes] during frame
+  /// reassembly (16MB + prefix by default), which is tighter than this field's
+  /// 64MB default, so raising it does not widen anything and lowering it does
+  /// not narrow anything. Wire it into `RpcWebSocketChannel` before relying
+  /// on it.
   final int maxWebSocketMessageBytes;
 
   /// Max total bytes allowed while assembling a chunked message.
+  ///
+  /// NOT CURRENTLY ENFORCED. Nothing in this package chunks; the only chunking
+  /// implementation lives in `rpc_blob`, which applies its own limits and does
+  /// not consult this policy.
   final int maxChunkedMessageBytes;
 
   /// Max number of chunks for a single chunked message.
+  ///
+  /// NOT CURRENTLY ENFORCED — see [maxChunkedMessageBytes].
   final int maxChunkCount;
 
   /// Max encoded metadata payload size for transports that serialize metadata

@@ -315,6 +315,31 @@ class RpcChannelTransport implements IRpcTransport {
 
   // -- Internal ---------------------------------------------------------------
 
+  /// Checks peer-supplied [metadata] against the policy.
+  ///
+  /// Returns false when the frame must be dropped. The violation is surfaced
+  /// as a typed [RpcFrameException] on the stream's own controller (and the
+  /// broadcast) so the waiting caller fails fast instead of hanging, and when
+  /// [RpcSecurityPolicy.closeOnProtocolError] is set the transport is torn
+  /// down as well -- which is what that flag has always promised and, until
+  /// now, never did anywhere in the codebase.
+  bool _validateInbound(RpcMetadata metadata, int streamId) {
+    try {
+      _policy.validateMetadata(metadata);
+      return true;
+    } on ArgumentError catch (error) {
+      final violation = RpcFrameException(
+        'Inbound metadata violates the security policy on stream '
+        '$streamId: ${error.message}',
+      );
+      final ctl = _streamControllers[streamId];
+      if (ctl != null && !ctl.isClosed) ctl.addError(violation);
+      if (!_incoming.isClosed) _incoming.addError(violation);
+      if (_policy.closeOnProtocolError) unawaited(close());
+      return false;
+    }
+  }
+
   void _markFinished(int streamId) {
     _finishedStreams.add(streamId);
     _releaseStream(streamId);
@@ -326,6 +351,19 @@ class RpcChannelTransport implements IRpcTransport {
   }
 
   void _onMessage(RpcTransportMessage message) {
+    // Apply the security policy to INBOUND metadata.
+    //
+    // validateMetadata used to run only in sendMetadata, i.e. on the outbound
+    // path, so the limits constrained this side's own honest sender and not
+    // the untrusted peer -- backwards for a security control. Measured with
+    // maxHeaders: 4 / maxHeaderValueBytes: 16, a peer frame carrying 200
+    // headers of 500 bytes was delivered intact. The frame layer bounds
+    // payload length, so this closes header cardinality/size abuse.
+    final metadata = message.metadata;
+    if (metadata != null && !_validateInbound(metadata, message.streamId)) {
+      return;
+    }
+
     // Per-stream controllers are single-subscription and buffer until their
     // consumer binds, so route there directly.
     final ctl = _streamControllers[message.streamId];
