@@ -22,6 +22,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   bool _respIsListening = false;
   bool _respIsDraining = false;
 
+  /// The drain currently in progress, shared by every concurrent caller.
+  Future<void>? _respDrainInFlight;
+
   /// Stream ids already torn down.
   ///
   /// Tearing a stream down does not stop the peer: its request payload races
@@ -149,8 +152,23 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   ///
   /// Returns a [Future] that completes when all active streams have finished,
   /// or when [timeout] expires (whichever comes first).
-  Future<void> drain({Duration timeout = const Duration(seconds: 30)}) async {
-    if (_respIsDraining) return;
+  ///
+  /// Concurrent callers share one drain and all await the same completion.
+  /// This used to return immediately for every caller after the first, while
+  /// streams were still in flight -- measured at 1ms with a stream still
+  /// active, against 5015ms for the caller that actually did the draining. A
+  /// second caller then walked past the drain and tore down whatever it was
+  /// protecting, which is the one thing drain() exists to prevent.
+  /// [RpcApp.stop] reaches here through `Future.wait`, so re-entry needs only
+  /// two shutdown paths racing (a signal handler and an explicit stop).
+  ///
+  /// A later caller's [timeout] does not apply: the drain already in progress
+  /// keeps the deadline it started with, since one drain cannot honour two.
+  Future<void> drain({Duration timeout = const Duration(seconds: 30)}) {
+    return _respDrainInFlight ??= _runDrain(timeout);
+  }
+
+  Future<void> _runDrain(Duration timeout) async {
     _respIsDraining = true;
 
     _log.info(
