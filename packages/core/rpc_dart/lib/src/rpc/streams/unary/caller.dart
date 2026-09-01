@@ -31,11 +31,6 @@ final class UnaryCaller<TRequest, TResponse> {
   /// Logger.
   late final LogScope _logger;
 
-  /// Frame parser.
-  late final RpcMessageParser _parser;
-
-  String? _peerGrpcEncoding;
-
   /// Creates a unary client.
   UnaryCaller({
     required IRpcTransport transport,
@@ -52,23 +47,6 @@ final class UnaryCaller<TRequest, TResponse> {
        _responseSerializer = responseCodec,
        _context = context {
     _logger = logger?.child('UnaryCaller') ?? LogScope.noop;
-    _parser = RpcMessageParser(
-      logger: _logger,
-      decompressor: (payload, {int? maxOutputBytes}) {
-        final encoding = _peerGrpcEncoding;
-        if (encoding == null || encoding == RpcGrpcCompression.identity) {
-          throw RpcStatusException(
-            RpcStatus.internal,
-            'Compressed gRPC payload received without grpc-encoding',
-          );
-        }
-        return RpcGrpcCompression.decompress(
-          payload,
-          encoding: encoding,
-          maxOutputBytes: maxOutputBytes,
-        );
-      },
-    );
     _methodPath = '/$_serviceName/$_methodName';
     _logger.internal(
       'Created unary client for $_methodPath${_context != null ? ' with context' : ''}',
@@ -89,6 +67,31 @@ final class UnaryCaller<TRequest, TResponse> {
     final streamId = _transport.createStream();
 
     _logger.internal('Unary call $_methodPath started [streamId: $streamId]');
+
+    // Parser and peer encoding are per call, not per caller. RpcMessageParser
+    // keeps a reassembly buffer, so a shared instance would carry the leftover
+    // bytes of a truncated response — or of a concurrent call on the same
+    // caller — into the next call's frame and decode garbage. This object is
+    // reusable (call() takes no identity of its own), so the state that a call
+    // mutates has to live inside call().
+    String? peerGrpcEncoding;
+    final parser = RpcMessageParser(
+      logger: _logger,
+      decompressor: (payload, {int? maxOutputBytes}) {
+        final encoding = peerGrpcEncoding;
+        if (encoding == null || encoding == RpcGrpcCompression.identity) {
+          throw RpcStatusException(
+            RpcStatus.internal,
+            'Compressed gRPC payload received without grpc-encoding',
+          );
+        }
+        return RpcGrpcCompression.decompress(
+          payload,
+          encoding: encoding,
+          maxOutputBytes: maxOutputBytes,
+        );
+      },
+    );
 
     final completer = Completer<TResponse>();
     StreamSubscription? subscription;
@@ -158,7 +161,7 @@ final class UnaryCaller<TRequest, TResponse> {
                 }
                 try {
                   // Use parser to extract messages from framed payload.
-                  final messages = _parser(message.payload!);
+                  final messages = parser(message.payload!);
                   if (_logger.isInternal) {
                     _logger.internal(
                       'Parser extracted ${messages.length} messages from frame [streamId: $streamId]',
@@ -201,7 +204,7 @@ final class UnaryCaller<TRequest, TResponse> {
                   RpcHeaders.grpcEncoding,
                 );
                 if (encoding != null) {
-                  _peerGrpcEncoding = encoding;
+                  peerGrpcEncoding = encoding;
                 }
                 final statusCode = message.metadata!.getHeaderValue(
                   RpcHeaders.grpcStatus,
