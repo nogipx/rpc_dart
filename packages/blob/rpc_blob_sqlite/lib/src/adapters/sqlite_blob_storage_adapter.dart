@@ -690,6 +690,18 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
   }
 
   T _transaction<T>(T Function() action) {
+    // BEGIN stays OUTSIDE the try, and that placement is load-bearing.
+    //
+    // A connection has one transaction slot and this adapter is often not its
+    // only user — a host may share the handle with a data layer that holds
+    // transactions across awaits. Then BEGIN fails with "cannot start a
+    // transaction within a transaction", and the cleanup below would ask the
+    // CONNECTION whether a transaction is open rather than whether THIS call
+    // opened one. Inside the try, that ROLLBACK discards the other party's
+    // uncommitted work, silently, with nothing raised on the side that lost it.
+    //
+    // Outside, a failed BEGIN simply propagates and the foreign transaction is
+    // untouched. `test/foreign_transaction_test.dart` fails if this moves.
     _database.execute('BEGIN');
     try {
       final result = action();
