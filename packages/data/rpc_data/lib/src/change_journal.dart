@@ -64,10 +64,17 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
   final Map<String, Map<String, int>> _cursorIndex;
   int _cursorSequence = 0;
 
+  /// Backlog for [collection], creating it. Write paths only.
   List<DataChangeEvent> _history(String collection) {
     _cursorIndex.putIfAbsent(collection, () => <String, int>{});
     return _events.putIfAbsent(collection, () => <DataChangeEvent>[]);
   }
+
+  /// Number of collections holding backlog state.
+  ///
+  /// Diagnostic: the maps are otherwise unobservable, so growth in them cannot
+  /// be seen from outside.
+  int get trackedCollectionCount => _events.length;
 
   String _nextCursor() {
     _cursorSequence += 1;
@@ -155,7 +162,18 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
     String collection, {
     String? afterCursor,
   }) async {
-    final history = _history(collection);
+    // Read-only: must not materialise state for a collection that was never
+    // written to. _history() creates on both maps, so replaying an unknown
+    // name left an empty entry behind -- and collection names come from the
+    // caller, so repeated replays of unknown names grew the maps without
+    // bound.
+    final history = _events[collection];
+    if (history == null) {
+      if (afterCursor == null) return const <DataChangeEvent>[];
+      throw RpcDataError.invalidArgument(
+        'Cursor $afterCursor is not known for $collection',
+      );
+    }
     if (afterCursor == null) {
       return List<DataChangeEvent>.from(history);
     }
@@ -180,8 +198,10 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
     int? maxEvents,
     DateTime? retainAfter,
   }) async {
-    final history = _history(collection);
-    if (history.isEmpty) {
+    // Read-only for an unknown collection: nothing to prune, and creating an
+    // entry to discover that is the leak described on replayCollection.
+    final history = _events[collection];
+    if (history == null || history.isEmpty) {
       return;
     }
     if (retainAfter != null) {
