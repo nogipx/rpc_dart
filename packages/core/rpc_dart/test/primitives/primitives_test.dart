@@ -110,6 +110,22 @@ void main() {
       expect(const RpcNum(10) ~/ const RpcInt(4), const RpcNum(2));
     });
 
+    test('RpcList.filled supports the whole wrapper API', () {
+      // filled() used to build a fixed-length backing list, so most of the
+      // mutators this class exposes threw UnsupportedError on the result.
+      final list = RpcList<RpcString>.filled(2, const RpcString('x'));
+      expect(list.length, 2);
+
+      list.add(const RpcString('y'));
+      list.addAll([const RpcString('z')]);
+      expect(list.length, 4);
+
+      expect(list.remove(const RpcString('y')), isTrue);
+      expect(list.removeAt(0), const RpcString('x'));
+      list.clear();
+      expect(list.isEmpty, isTrue);
+    });
+
     test('RpcList decoding never silently loses elements', () {
       final decode = RpcList.fromJson<RpcString>(RpcString.fromJson);
 

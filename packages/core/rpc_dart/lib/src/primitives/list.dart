@@ -19,8 +19,15 @@ class RpcList<T extends IRpcSerializable> implements IRpcSerializable {
   /// Creates a list from an existing collection.
   RpcList.from(List<T> items) : _items = List<T>.from(items);
 
-  /// Creates a fixed-length list filled with [fill].
-  RpcList.filled(int length, T fill) : _items = List<T>.filled(length, fill);
+  /// Creates a list of [length] elements, each set to [fill].
+  ///
+  /// Growable, like every other constructor here. It used to build a
+  /// fixed-length list, so [add], [addAll], [remove], [removeAt] and [clear]
+  /// — most of this wrapper's own API — threw `UnsupportedError` on the
+  /// result. Nothing about serialising a list needs a fixed length, and a
+  /// constructor that quietly returns a crippled instance is a trap.
+  RpcList.filled(int length, T fill)
+    : _items = List<T>.filled(length, fill, growable: true);
 
   /// Creates an empty growable list with optional capacity hint.
   RpcList.empty({int capacity = 0}) : _items = List<T>.empty(growable: true);
