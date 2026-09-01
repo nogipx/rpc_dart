@@ -32,6 +32,23 @@ final class ServerStreamResponder<
   /// Incoming request subscription.
   StreamSubscription? _subscription;
 
+  /// Our subscription to the user handler's response stream, and the relay it
+  /// feeds.
+  ///
+  /// The handler stream used to be consumed with a bare `await for`, whose
+  /// implicit subscription nothing could reach. [close] therefore had no way to
+  /// stop it, and `_processor.send()` returns silently once the processor is
+  /// inactive rather than throwing, so the loop's error `break` never fired
+  /// either. A long-lived handler kept producing forever after the client
+  /// vanished — burning CPU and pinning everything the generator captured, for
+  /// the life of the server process. Owning the subscription lets [close] tear
+  /// it down and end the generator at its next suspension point.
+  StreamSubscription<TResponse>? _handlerSubscription;
+  StreamController<TResponse>? _handlerRelay;
+
+  /// True until [close] runs; guards the response pump.
+  bool _isActive = true;
+
   /// True after the first request is handled.
   bool _requestHandled = false;
 
@@ -119,8 +136,21 @@ final class ServerStreamResponder<
               'Processing response stream from handler [id: $id]',
             );
 
+            // Relay the handler stream through a controller we own, so close()
+            // can cancel the upstream subscription and end the `await for`.
+            final relay = StreamController<TResponse>();
+            _handlerRelay = relay;
+            _handlerSubscription = handlerStream.listen(
+              relay.add,
+              onError: relay.addError,
+              onDone: () {
+                if (!relay.isClosed) relay.close();
+              },
+            );
+
             int responseCount = 0;
-            await for (var response in handlerStream) {
+            await for (var response in relay.stream) {
+              if (!_isActive) break;
               responseCount++;
               _logger.internal(
                 'Received response #$responseCount from handler: $response [id: $id]',
@@ -194,7 +224,21 @@ final class ServerStreamResponder<
   /// Closes the stream and releases resources.
   @override
   Future<void> close() async {
+    _isActive = false;
     await _subscription?.cancel();
+
+    // Stop pulling from the user's handler. Cancelling ends its generator at
+    // the next suspension point; closing the relay unblocks the `await for`
+    // that is waiting on it. Not awaited: a handler stuck in cancel must not
+    // block teardown of the rest of the call.
+    final handlerSub = _handlerSubscription;
+    _handlerSubscription = null;
+    if (handlerSub != null) unawaited(handlerSub.cancel().catchError((_) {}));
+
+    final relay = _handlerRelay;
+    _handlerRelay = null;
+    if (relay != null && !relay.isClosed) unawaited(relay.close());
+
     await _processor.close();
     _completeDone();
   }
