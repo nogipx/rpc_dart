@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:rpc_dart/rpc_dart.dart';
 
 import '../models/notify_event.dart';
@@ -22,18 +24,33 @@ class InMemoryNotifyRepository implements INotifyRepository {
   StreamDistributor<NotifyEvent> _distributorFor(String topic) =>
       _distributors.putIfAbsent(topic, StreamDistributor.new);
 
+  /// Topics holding a live distributor, subscribers or not.
+  ///
+  /// Diagnostic counterpart to [activeTopics], which counts only topics that
+  /// currently have subscribers and therefore cannot reveal retained state.
+  int get trackedTopicCount => _distributors.length;
+
   @override
   void publish(String topic, Map<String, dynamic> payload) {
     _log.debug('publish topic=$topic');
-    final event = NotifyEvent(topic: topic, payload: payload);
-    _distributorFor(topic).publish(event);
+    // Do not create a distributor here. Publishing to a topic nobody is
+    // subscribed to delivers the event to no one, so the only lasting effect
+    // of creating one would be a retained distributor -- and topic names come
+    // from clients, so that is unbounded growth for free.
+    final distributor = _distributors[topic];
+    if (distributor == null) return;
+    distributor.publish(NotifyEvent(topic: topic, payload: payload));
   }
 
   @override
   void publishTo(String clientId, String topic, Map<String, dynamic> payload) {
     _log.debug('publishTo clientId=$clientId topic=$topic');
-    final event = NotifyEvent(topic: topic, payload: payload);
-    _distributorFor(topic).publishToClient(clientId, event);
+    final distributor = _distributors[topic];
+    if (distributor == null) return;
+    distributor.publishToClient(
+      clientId,
+      NotifyEvent(topic: topic, payload: payload),
+    );
   }
 
   @override
@@ -45,7 +62,21 @@ class InMemoryNotifyRepository implements INotifyRepository {
   @override
   void unsubscribe(String clientId, String topic) {
     _log.debug('unsubscribe clientId=$clientId topic=$topic');
-    _distributors[topic]?.closeClientStream(clientId);
+    final distributor = _distributors[topic];
+    if (distributor == null) return;
+    distributor.closeClientStream(clientId);
+
+    // Release the distributor once its last subscriber leaves, which is what
+    // this class always claimed to do but never did: unsubscribe only closed
+    // the client's stream, so every topic ever subscribed to kept a
+    // distributor (and its open broadcast controller) for the repository's
+    // lifetime. Topic names come from clients, so that grew without bound and
+    // was invisible through activeTopics(), which only counts topics that
+    // still have subscribers.
+    if (distributor.activeClientCount == 0) {
+      _distributors.remove(topic);
+      unawaited(distributor.dispose());
+    }
   }
 
   @override
