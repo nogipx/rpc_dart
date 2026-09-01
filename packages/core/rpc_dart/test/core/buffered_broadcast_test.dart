@@ -89,6 +89,43 @@ void main() {
       await c.close();
     });
 
+    test('addStream completes when the source finishes', () async {
+      final c = BufferedBroadcastController<int>();
+      final seen = <int>[];
+      c.stream.listen(seen.add);
+
+      await c
+          .addStream(Stream<int>.fromIterable([1, 2, 3]))
+          .timeout(const Duration(seconds: 5));
+
+      expect(seen, [1, 2, 3]);
+      await c.close();
+    });
+
+    test('addStream completes on error when cancelOnError is set', () async {
+      // cancelOnError tears the subscription down at the first error, so the
+      // source's onDone never fires; the returned future used to hang forever.
+      final c = BufferedBroadcastController<int>();
+      final seen = <int>[];
+      final errors = <Object>[];
+      c.stream.listen(seen.add, onError: errors.add);
+
+      final source = Stream<int>.multi((controller) {
+        controller.add(1);
+        controller.addError(StateError('boom'));
+        controller.add(2);
+        controller.close();
+      });
+
+      await c
+          .addStream(source, cancelOnError: true)
+          .timeout(const Duration(seconds: 5));
+
+      expect(seen, [1]);
+      expect(errors.single, isA<StateError>());
+      await c.close();
+    });
+
     test('close clears the buffer', () async {
       final c = BufferedBroadcastController<int>();
       c.add(1);

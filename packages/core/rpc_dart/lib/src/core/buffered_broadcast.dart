@@ -101,12 +101,23 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   /// source is done. Same buffering semantics as [add]/[addError].
   @override
   Future<void> addStream(Stream<T> source, {bool? cancelOnError}) {
+    final stopOnError = cancelOnError ?? false;
     final completer = Completer<void>();
+    void finish() {
+      if (!completer.isCompleted) completer.complete();
+    }
+
     source.listen(
       add,
-      onError: addError,
-      onDone: completer.complete,
-      cancelOnError: cancelOnError ?? false,
+      onError: (Object error, StackTrace stackTrace) {
+        addError(error, stackTrace);
+        // cancelOnError tears the subscription down on the first error, so
+        // onDone never fires. Without this the returned future would hang
+        // forever and any `await sink.addStream(...)` would never return.
+        if (stopOnError) finish();
+      },
+      onDone: finish,
+      cancelOnError: stopOnError,
     );
     return completer.future;
   }
