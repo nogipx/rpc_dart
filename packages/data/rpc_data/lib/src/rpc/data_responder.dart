@@ -17,6 +17,7 @@ class DataServiceResponder extends DataServiceContractResponder {
     Iterable<String> allowedBearerTokens = const [],
     required RpcDataTransferMode transferMode,
     int importAckEveryChunks = 32,
+    void Function(RpcDataError error)? onInternalError,
   }) : _repository = repository,
        _disposeRepositoryOnClose = disposeRepositoryOnClose,
        _allowedBearerTokens = {
@@ -24,12 +25,18 @@ class DataServiceResponder extends DataServiceContractResponder {
            if (token.trim().isNotEmpty) token.trim(),
        },
        _importAckEveryChunks = importAckEveryChunks,
+       _onInternalError = onInternalError,
        assert(importAckEveryChunks > 0, 'importAckEveryChunks must be > 0'),
        super(dataTransferMode: transferMode);
 
   final IDataRepository _repository;
   final Set<String> _allowedBearerTokens;
   final int _importAckEveryChunks;
+
+  /// Куда отдать внутреннюю ошибку целиком, прежде чем она обезличится для
+  /// провода. Пакет не выбирает за хост, куда тот пишет логи; без хука
+  /// поведение ровно прежнее, только теперь его выбрали, а не получили.
+  final void Function(RpcDataError error)? _onInternalError;
 
   /// Управляет тем, должен ли [dispose] закрывать репозиторий.
   ///
@@ -178,10 +185,12 @@ class DataServiceResponder extends DataServiceContractResponder {
       }
     } catch (error, stackTrace) {
       if (error is RpcDataError) {
-        Error.throwWithStackTrace(error, stackTrace);
+        Error.throwWithStackTrace(_reportInternal(error), stackTrace);
       }
       Error.throwWithStackTrace(
-        RpcDataError.internal('Failed to export database', error: error),
+        _reportInternal(
+          RpcDataError.internal('Failed to export database', error: error),
+        ),
         stackTrace,
       );
     }
@@ -365,9 +374,11 @@ class DataServiceResponder extends DataServiceContractResponder {
     _ensureAuthorized(context);
     return _repository.watch(request).handleError((error, stackTrace) {
       if (error is RpcDataError) {
-        throw error;
+        throw _reportInternal(error);
       }
-      throw RpcDataError.internal('Failed to stream changes', error: error);
+      throw _reportInternal(
+        RpcDataError.internal('Failed to stream changes', error: error),
+      );
     });
   }
 
@@ -416,11 +427,28 @@ class DataServiceResponder extends DataServiceContractResponder {
       throw RpcDataError.deadlineExceeded(
         'Deadline exceeded for request ${context?.requestId}',
       );
-    } on RpcDataError {
-      rethrow;
+    } on RpcDataError catch (error) {
+      throw _reportInternal(error);
     } catch (error) {
-      throw RpcDataError.internal('Unhandled repository error', error: error);
+      throw _reportInternal(
+        RpcDataError.internal('Unhandled repository error', error: error),
+      );
     }
+  }
+
+  /// Отдаёт причину хосту и возвращает то, что можно положить в провод.
+  ///
+  /// Это граница процесса, и она у ошибки одна. Внутренние ошибки уходят
+  /// удалённому вызывающему обезличенными — имена таблиц, тексты SQL и пути в
+  /// файловой системе не его дело, — но пропадать они при этом не должны:
+  /// раньше `internal` просто выбрасывалась, и причина не попадала ни в
+  /// провод, ни в лог, то есть исчезала совсем. Всё, что не `internal`,
+  /// проходит как есть: `notFound`, `conflict` и остальные адресованы именно
+  /// вызывающему и ничего не разглашают.
+  RpcDataError _reportInternal(RpcDataError error) {
+    if (error.status != RpcStatus.internal) return error;
+    _onInternalError?.call(error);
+    return error.withoutCause();
   }
 
   @override
