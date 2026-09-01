@@ -160,6 +160,13 @@ class RpcChannelTransport implements IRpcTransport {
   @override
   bool releaseStreamId(int streamId) {
     _activeStreams.remove(streamId);
+    // _finishedStreams only exists to keep finishSending() idempotent, and it
+    // was otherwise pruned ONLY when a terminal inbound frame arrived for the
+    // id. A call that never gets one -- timed out, cancelled, or cut off by a
+    // dropped connection -- left its entry behind forever, so the set grew
+    // without bound on a long-lived connection. Explicit teardown (which every
+    // caller performs) is the right moment to drop it.
+    _finishedStreams.remove(streamId);
     return _idManager.releaseId(streamId);
   }
 
@@ -282,6 +289,9 @@ class RpcChannelTransport implements IRpcTransport {
       details: {
         'activeStreams': _activeStreams.length,
         'streamControllers': _streamControllers.length,
+        // Exposed so per-stream bookkeeping growth is observable from outside
+        // (all three should return to a baseline once calls finish).
+        'finishedStreams': _finishedStreams.length,
         'zeroCopy': _channel.supportsZeroCopy,
       },
     );
