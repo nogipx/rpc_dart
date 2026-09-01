@@ -801,6 +801,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       // Validate context before starting.
       _checkContextBeforeCall();
 
+      _setupDeadlineMonitoring();
       _setupCancellationMonitoring();
       _setupRequestHandler();
       _setupResponseHandler();
@@ -1037,6 +1038,38 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     _logger.internal(
       'Initial metadata sent for $_methodPath [streamId: $_streamId]',
     );
+  }
+
+  /// Surfaces deadline expiry as an error on the response stream.
+  ///
+  /// [RpcCallScope] already closes itself when the context deadline fires, and
+  /// that closes the response controller — but a bare close is indistinguishable
+  /// from the server having finished. A server-stream call therefore ended
+  /// *normally* on deadline expiry, handing the consumer a silently truncated
+  /// stream, and a client-stream call reported UNAVAILABLE ("Stream closed
+  /// without receiving response") rather than the deadline it actually hit.
+  ///
+  /// This disposer is registered AFTER the one that closes the controllers, so
+  /// LIFO ordering runs it FIRST — the error reaches the stream while it is
+  /// still open. It fires only when the scope closed on its own (`_isActive`
+  /// still true, so not an explicit [close]) and the deadline really has
+  /// passed, which excludes cancellation and normal completion.
+  void _setupDeadlineMonitoring() {
+    final context = _context;
+    final deadline = context?.deadline;
+    if (deadline == null) return;
+
+    _scope.onDispose(() {
+      if (!_isActive) return;
+      if (!context!.isExpired) return;
+
+      _logger.internal('Deadline exceeded [streamId: $_streamId]');
+      final error = RpcDeadlineExceededException(deadline, Duration.zero);
+      // Single-subscription controllers buffer the error for a late
+      // subscriber, so do not gate on hasListener.
+      if (!_responseController.isClosed) _responseController.addError(error);
+      if (!_requestController.isClosed) _requestController.addError(error);
+    });
   }
 
   /// Sets up cancellation monitoring via the call scope.

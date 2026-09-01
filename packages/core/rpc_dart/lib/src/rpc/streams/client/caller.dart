@@ -172,7 +172,10 @@ final class ClientStreamCaller<
 
   /// Completes sending requests and waits for a single response.
   ///
-  /// Returns the single server response; times out after 30s.
+  /// Returns the single server response. The wait is bounded by the context
+  /// deadline when one is set (the call scope trips first and surfaces
+  /// [RpcDeadlineExceededException]); the 60s below is only the fallback for a
+  /// call with no deadline at all.
   Future<TResponse> finishSending() async {
     if (_sendingFinished) {
       throw StateError('Sending was already completed earlier.');
