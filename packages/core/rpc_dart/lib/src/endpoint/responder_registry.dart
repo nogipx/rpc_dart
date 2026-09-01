@@ -162,8 +162,16 @@ final class RpcResponderMethodRegistry {
 
     _log.internal('Unregistering service contract: $serviceName');
 
-    final methodKeys = _methods.keys
-        .where((key) => key.startsWith('$serviceName.'))
+    // Match on the binding's own serviceName, not on a '$serviceName.' key
+    // prefix. Service names may legitimately contain dots -- gRPC names are
+    // conventionally package-qualified (`my.pkg.v1.UserService`), and the
+    // metadata validator allows them -- so the prefix form also matched every
+    // method of every service nested under this one. Unregistering `Foo` tore
+    // the methods out of `Foo.Bar` while leaving its contract registered: its
+    // calls started failing UNIMPLEMENTED and it could not be re-registered.
+    final methodKeys = _methods.entries
+        .where((entry) => entry.value.serviceName == serviceName)
+        .map((entry) => entry.key)
         .toList();
 
     for (final methodKey in methodKeys) {
