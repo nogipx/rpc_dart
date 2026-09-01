@@ -102,6 +102,24 @@ abstract interface class CborCodec {
   /// reports `is int`, so the integer encoders fall back to a double for it.
   static const double _cborIntDoubleThreshold = 18446744073709551616.0;
 
+  /// Inclusive bounds of the integer range that survives a round trip between
+  /// every platform this package targets: exactly representable both on the VM
+  /// (signed 64-bit) and on dart2js (IEEE-754 double).
+  ///
+  /// Both halves of the codec are pinned to this range. The reader rejects
+  /// anything outside it, and the writer refuses to emit it — a payload that
+  /// only one side can read is not a wire format, and silently rounding a
+  /// 64-bit id to the nearest double on the way to a web peer would be worse
+  /// than failing.
+  static const int _maxSafeInteger = 0x1FFFFFFFFFFFFF; // 2^53 - 1
+  static const int _minSafeInteger = -0x20000000000000; // -2^53
+
+  /// True on platforms with a single numeric type (dart2js), where an integral
+  /// double is indistinguishable from an int at runtime. The same const the
+  /// Flutter SDK uses for `kIsWeb`; false on the VM and on dart2wasm, both of
+  /// which have a real int type.
+  static const bool _singleNumericType = identical(0, 0.0);
+
   /// Encodes Map(String, dynamic) into CBOR bytes.
   static Uint8List encode(Map<String, dynamic> value) {
     final writer = _FastCborWriter();
@@ -154,9 +172,10 @@ class _FastCborReader {
   static const int _maxDepth = 256;
 
   /// Largest integer representable exactly on both the VM (signed 64-bit) and
-  /// dart2js (IEEE-754 double): 2^53 - 1. Decoded integers above this are
-  /// rejected so the result never silently differs between platforms.
-  static const int _maxSafeInteger = 0x1FFFFFFFFFFFFF;
+  /// dart2js (IEEE-754 double). Decoded integers above this are rejected so the
+  /// result never silently differs between platforms. The writer is pinned to
+  /// the same bound, so this only ever fires on bytes from a foreign encoder.
+  static const int _maxSafeInteger = CborCodec._maxSafeInteger;
 
   final Uint8List _bytes;
   int _offset = 0;
@@ -651,6 +670,28 @@ class _FastCborWriter {
         asNum < -CborCodec._cborIntDoubleThreshold) {
       _writeDouble(asNum.toDouble());
       return;
+    }
+    // CBOR can hold the full uint64 range, but this codec deliberately cannot:
+    // anything outside the 53-bit range is not exactly representable on
+    // dart2js, so putting it on the wire would make the payload readable by a
+    // VM peer and not by a web one. Keep both directions honest.
+    if (asNum > CborCodec._maxSafeInteger ||
+        asNum < CborCodec._minSafeInteger) {
+      if (CborCodec._singleNumericType) {
+        // dart2js: `value is int` is true for an integral double, and this one
+        // is past the int range, so it IS a double. The double encoder is
+        // lossless for it and a VM peer decodes the same value.
+        _writeDouble(asNum.toDouble());
+        return;
+      }
+      throw ArgumentError.value(
+        value,
+        'value',
+        'Integer is outside the range this codec can carry across platforms '
+            '(${CborCodec._minSafeInteger}..${CborCodec._maxSafeInteger}). '
+            'A web (dart2js) peer stores it as a double and cannot decode it '
+            'exactly. Send it as a String, or split it into two 32-bit halves.',
+      );
     }
     if (value >= 0) {
       _writePositiveInt(value);

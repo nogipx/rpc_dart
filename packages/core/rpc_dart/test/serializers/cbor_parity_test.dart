@@ -304,6 +304,66 @@ void main() {
     );
   });
 
+  group('CBOR cross-platform integer range', () {
+    // The reader has always rejected integers outside the 53-bit range, but
+    // the writer used to emit them (its threshold was 2^64), so a VM peer could
+    // encode a snowflake/bigint id that neither a web peer nor its own decoder
+    // could read back. Both halves are now pinned to the same range so a
+    // payload is either readable everywhere or refused at the source.
+    // 2^60. Deliberately a power of two: dart2js rejects an int literal it
+    // cannot represent exactly (2^53 + 1 is a compile error there), so the
+    // out-of-range probe has to be a value both platforms can hold — the point
+    // is that it is outside the codec's range, not that it is inexpressible.
+    const beyond = 1152921504606846976;
+    const negativeBeyond = -1152921504606846976;
+
+    // dart2js has one numeric type, so `beyond` is an integral double there.
+    final singleNumericType = identical(0, 0.0);
+
+    test('values inside the safe range round-trip', () {
+      for (final v in <int>[0, 1, -1, 9007199254740991, -9007199254740992]) {
+        expect(CborCodec.decode(CborCodec.encode({'v': v}))['v'], v);
+      }
+    });
+
+    test('anything encode() emits, decode() accepts', () {
+      // The invariant that was broken: never write bytes our own reader
+      // refuses.
+      for (final v in <int>[beyond, negativeBeyond]) {
+        Uint8List bytes;
+        try {
+          bytes = CborCodec.encode({'v': v});
+        } on ArgumentError {
+          continue; // refused at the source — also fine, and what the VM does.
+        }
+        expect(
+          () => CborCodec.decode(bytes),
+          returnsNormally,
+          reason: 'encode() produced bytes decode() rejects for $v',
+        );
+      }
+    });
+
+    test('out-of-range integers are handled per platform', () {
+      if (singleNumericType) {
+        // Web: the value is really a double, so it is written as one and comes
+        // back exactly — a VM peer reads the same number.
+        expect(CborCodec.decode(CborCodec.encode({'v': beyond}))['v'], beyond);
+      } else {
+        // VM: a genuine 64-bit int. Emitting it would hand a web peer bytes it
+        // cannot decode exactly, so it is refused at the call site instead.
+        expect(
+          () => CborCodec.encode({'v': beyond}),
+          throwsA(isA<ArgumentError>()),
+        );
+        expect(
+          () => CborCodec.encode({'v': negativeBeyond}),
+          throwsA(isA<ArgumentError>()),
+        );
+      }
+    });
+  });
+
   group('CBOR recursion-depth guard (untrusted input)', () {
     // 0x81 = definite-length array with one element. A chain of these encodes
     // an arbitrarily deep nesting that would overflow the native stack.
