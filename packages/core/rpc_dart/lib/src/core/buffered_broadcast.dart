@@ -54,6 +54,12 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
 
   late final StreamController<T> _controller;
   final Queue<_BufferedItem<T>> _pending = Queue<_BufferedItem<T>>();
+
+  /// In-flight [addStream] pipes, so [close] can cancel them and settle their
+  /// futures. Without this the subscription was dropped on the floor: the
+  /// caller had no handle to it, so a pipe outlived the sink and kept draining
+  /// its source forever into a closed (no-op) controller.
+  final List<({StreamSubscription<T> sub, void Function() finish})> _pipes = [];
   final Completer<void> _doneCompleter = Completer<void>();
   bool _closed = false;
   bool _overflowed = false;
@@ -99,15 +105,25 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
 
   /// Pipes [source] into this sink (events and errors), completing when the
   /// source is done. Same buffering semantics as [add]/[addError].
+  ///
+  /// The subscription is owned by this controller and cancelled by [close], so
+  /// a pipe left in flight at shutdown does not keep draining its source. The
+  /// returned future completes on close as well as on source completion.
   @override
   Future<void> addStream(Stream<T> source, {bool? cancelOnError}) {
+    if (isClosed) return Future<void>.value();
+
     final stopOnError = cancelOnError ?? false;
     final completer = Completer<void>();
+    StreamSubscription<T>? sub;
+
     void finish() {
+      final current = sub;
+      if (current != null) _pipes.removeWhere((p) => identical(p.sub, current));
       if (!completer.isCompleted) completer.complete();
     }
 
-    source.listen(
+    final subscription = source.listen(
       add,
       onError: (Object error, StackTrace stackTrace) {
         addError(error, stackTrace);
@@ -119,6 +135,14 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
       onDone: finish,
       cancelOnError: stopOnError,
     );
+    sub = subscription;
+
+    // A sync source can finish inside listen(), before `sub` was assigned.
+    if (completer.isCompleted) {
+      unawaited(subscription.cancel());
+    } else {
+      _pipes.add((sub: subscription, finish: finish));
+    }
     return completer.future;
   }
 
@@ -177,6 +201,17 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
     }
     _closed = true;
     _pending.clear();
+
+    // Cancel any in-flight addStream pipes and settle their futures, so an
+    // `await sink.addStream(...)` that was still running returns instead of
+    // hanging on a source nobody is consuming any more.
+    final pipes = List.of(_pipes);
+    _pipes.clear();
+    for (final pipe in pipes) {
+      await pipe.sub.cancel();
+      pipe.finish();
+    }
+
     if (!_controller.isClosed) await _controller.close();
     if (!_doneCompleter.isCompleted) _doneCompleter.complete();
   }

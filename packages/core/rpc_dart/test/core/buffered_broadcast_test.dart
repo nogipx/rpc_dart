@@ -126,6 +126,49 @@ void main() {
       await c.close();
     });
 
+    test('close cancels an in-flight addStream and settles it', () async {
+      // The pipe's subscription used to be dropped on the floor: the caller
+      // had no handle to it, so it outlived the sink and kept draining the
+      // source forever into a closed (no-op) controller.
+      final c = BufferedBroadcastController<int>();
+      c.stream.listen((_) {});
+
+      var cancelled = false;
+      var emitted = 0;
+      final source = StreamController<int>(onCancel: () => cancelled = true);
+
+      final piped = c.addStream(source.stream);
+      source.add(1);
+      await Future<void>.delayed(Duration.zero);
+
+      await c.close();
+      // The future returned by addStream must not hang past close.
+      await piped.timeout(const Duration(seconds: 5));
+      expect(cancelled, isTrue);
+
+      // The source is no longer being drained.
+      source.onListen = () => emitted++;
+      expect(source.hasListener, isFalse);
+      await source.close();
+      expect(emitted, 0);
+    });
+
+    test('addStream on an already-closed sink returns immediately', () async {
+      final c = BufferedBroadcastController<int>();
+      await c.close();
+
+      var listened = false;
+      final source = StreamController<int>(onListen: () => listened = true);
+
+      await c.addStream(source.stream).timeout(const Duration(seconds: 5));
+
+      // Nothing was subscribed, so there is nothing to leak. (Deliberately not
+      // awaiting source.close(): an unlistened single-subscription controller
+      // never completes its close future.)
+      expect(listened, isFalse);
+      expect(source.hasListener, isFalse);
+    });
+
     test('close clears the buffer', () async {
       final c = BufferedBroadcastController<int>();
       c.add(1);
