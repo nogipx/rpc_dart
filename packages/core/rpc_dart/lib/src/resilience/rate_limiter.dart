@@ -320,8 +320,10 @@ class RpcRateLimiter extends IRpcInterceptor {
        _keyExtractor = keyExtractor,
        _maxTrackedKeys = maxTrackedKeys,
        _meterServerStreamMessages = meterServerStreamMessages,
+       _cleanupIntervalUs = cleanupInterval.inMicroseconds,
        _nowMicros = nowMicros ?? _defaultMonotonicMicros {
     _globalCounter = global?._createCounter(_nowMicros);
+    _lastCleanupUs = _nowMicros();
 
     if (keyExtractor == null) {
       // Static mode: create one counter per slot up front.
@@ -336,7 +338,6 @@ class RpcRateLimiter extends IRpcInterceptor {
     } else {
       _staticServiceCounters = const {};
       _staticMethodCounters = const {};
-      _cleanupTimer = Timer.periodic(cleanupInterval, (_) => _cleanup());
     }
   }
 
@@ -365,20 +366,39 @@ class RpcRateLimiter extends IRpcInterceptor {
   final Map<String, Map<String, _RateLimitCounter>> _dynamicFallbackCounters =
       {};
 
-  Timer? _cleanupTimer;
-
-  /// Cancels the cleanup timer and releases dynamic counter state.
+  /// How often stale per-key counters are swept, and when that last happened.
   ///
-  /// After disposal the limiter no longer enforces or creates counters; calls
-  /// to [_check] become no-ops so the cleared maps cannot be repopulated while
-  /// the cleanup timer is cancelled (which would otherwise grow unbounded).
+  /// The sweep is opportunistic — it runs from [_resolveCounter], on the calls
+  /// that would grow the maps in the first place — rather than from a
+  /// `Timer.periodic`. A periodic timer keeps the isolate alive on its own and
+  /// holds the limiter (with every counter it tracks) reachable for as long as
+  /// it runs, so a limiter whose owner forgot [dispose] leaked permanently and
+  /// the process could never exit. Sweeping on use removes the leak by
+  /// construction: an idle limiter does not grow, so it does not need sweeping.
+  final int _cleanupIntervalUs;
+  late int _lastCleanupUs;
+
+  /// Releases dynamic counter state and stops enforcing.
+  ///
+  /// Optional: the limiter holds no timer, so forgetting to call this no
+  /// longer leaks anything — an unreferenced limiter is simply collected.
+  /// Calling it still frees the counter maps eagerly and turns [_check] into a
+  /// no-op, which is worth doing when a limiter is retired while its endpoint
+  /// keeps running.
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    _cleanupTimer?.cancel();
     _dynamicServiceCounters.clear();
     _dynamicMethodCounters.clear();
     _dynamicFallbackCounters.clear();
+  }
+
+  /// Runs [_cleanup] if at least one cleanup interval has passed.
+  void _cleanupIfDue() {
+    final nowUs = _nowMicros();
+    if (nowUs - _lastCleanupUs < _cleanupIntervalUs) return;
+    _lastCleanupUs = nowUs;
+    _cleanup();
   }
 
   void _cleanup() {
@@ -452,6 +472,10 @@ class RpcRateLimiter extends IRpcInterceptor {
     final userKey = _keyExtractor?.call(call);
 
     if (userKey != null) {
+      // Sweep here rather than from a background timer: this is the path that
+      // grows the per-key maps, so it is also the only path that needs to
+      // shrink them.
+      _cleanupIfDue();
       return _getDynamic(
             _dynamicMethodCounters,
             userKey,
