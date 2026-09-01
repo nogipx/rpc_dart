@@ -356,6 +356,56 @@ void main() {
       );
     });
 
+    // The array/map/tag readers are bounded by _maxDepth, but the two
+    // indefinite-length STRING readers recursed without any bound: each nested
+    // 0x7f / 0x5f chunk header consumed one byte and added a stack frame, so a
+    // run of them died with StackOverflowError instead of FormatException.
+    // RFC 7049 2.2 requires the chunks of an indefinite-length string to be
+    // definite-length, so a nested one is malformed and is now rejected.
+    test('rejects nested indefinite-length text-string chunks', () {
+      // Well-formed indefinite text string still decodes: "he" + "llo".
+      expect(
+        CborCodec.decodeUnsafe(
+          Uint8List.fromList([
+            0x7f,
+            0x62, 0x68, 0x65, //
+            0x63, 0x6c, 0x6c, 0x6f,
+            0xff,
+          ]),
+        ),
+        'hello',
+      );
+
+      expect(
+        () => CborCodec.decodeUnsafe(
+          Uint8List.fromList(List<int>.filled(200000, 0x7f)),
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects nested indefinite-length byte-string chunks', () {
+      // Well-formed indefinite byte string still decodes: 0x0102 + 0x03.
+      expect(
+        CborCodec.decodeUnsafe(
+          Uint8List.fromList([
+            0x5f,
+            0x42, 0x01, 0x02, //
+            0x41, 0x03,
+            0xff,
+          ]),
+        ),
+        Uint8List.fromList([1, 2, 3]),
+      );
+
+      expect(
+        () => CborCodec.decodeUnsafe(
+          Uint8List.fromList(List<int>.filled(200000, 0x5f)),
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
     test('rejects deeply-nested tags with FormatException', () {
       // 0xc2 = tag(2). A long tag chain also recurses through _readValueFast.
       final builder = BytesBuilder();

@@ -250,6 +250,17 @@ class _FastCborReader {
             'Indefinite-length text string contains a non-text-string chunk',
           );
         }
+        // RFC 7049 2.2: the chunks MUST be definite-length. Rejecting a nested
+        // indefinite chunk is not just spec compliance — it is what bounds
+        // this recursion. Each nested 0x7F consumes one byte and adds a frame,
+        // so a run of them used to blow the native stack (StackOverflowError,
+        // not the FormatException callers handle) on attacker-supplied bytes.
+        if ((chunkByte & 0x1F) == CborCodec._additionalInfoIndefiniteLength) {
+          throw FormatException(
+            'Indefinite-length text string contains a nested '
+            'indefinite-length chunk',
+          );
+        }
         buffer.write(_readStringFast());
       }
       return buffer.toString();
@@ -374,7 +385,17 @@ class _FastCborReader {
             'Indefinite-length byte string contains a non-byte-string chunk',
           );
         }
-        builder.add(_readByteStringFast(chunkByte & 0x1F));
+        // Same bound as the text-string reader: RFC 7049 2.2 requires
+        // definite-length chunks, and rejecting nested indefinite ones is what
+        // keeps a run of 0x5F from recursing the stack to death.
+        final chunkInfo = chunkByte & 0x1F;
+        if (chunkInfo == CborCodec._additionalInfoIndefiniteLength) {
+          throw FormatException(
+            'Indefinite-length byte string contains a nested '
+            'indefinite-length chunk',
+          );
+        }
+        builder.add(_readByteStringFast(chunkInfo));
       }
       return builder.toBytes();
     }
