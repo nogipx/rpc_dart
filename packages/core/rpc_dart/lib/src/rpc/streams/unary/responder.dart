@@ -14,6 +14,17 @@ final class _UnaryStreamState {
   bool belongsToThisMethod = false;
   String? clientAcceptEncoding;
   String? clientRequestEncoding;
+
+  /// Reassembly parser for THIS stream's request frames.
+  ///
+  /// [RpcMessageParser] carries a buffer between invocations, so it belongs
+  /// here with the rest of the per-stream state: one responder can serve
+  /// several streams at once (`id == 0` accepts every stream, and this whole
+  /// map is keyed by stream id), and a parser shared across them would splice
+  /// one stream's leftover bytes onto the front of another stream's frame.
+  /// Created lazily — a stream that only ever carries zero-copy payloads or
+  /// metadata never needs one.
+  RpcMessageParser? parser;
 }
 
 /// Unary responder with Stream ID support: handles one request, sends one response.
@@ -48,9 +59,6 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Cancellation subscription.
   StreamSubscription? _cancellationSubscription;
 
-  /// Frame parser.
-  late final RpcMessageParser _parser;
-
   /// Incoming messages subscription.
   StreamSubscription? _subscription;
 
@@ -63,10 +71,30 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   _UnaryStreamState _stateFor(int streamId) =>
       _streamStates.putIfAbsent(streamId, _UnaryStreamState.new);
 
-  /// Encoding of the stream currently being parsed (set before calling _parser).
-  /// Safe to use as a field because Dart is single-threaded and the decompressor
-  /// is called synchronously within the parser.
-  String? _activeRequestEncoding;
+  /// Returns [state]'s parser, creating it on first use.
+  ///
+  /// The decompressor closes over [state], so it always reads the
+  /// `grpc-encoding` its own client advertised (falling back to the server
+  /// context) instead of whatever stream happened to be parsed last.
+  RpcMessageParser _parserFor(_UnaryStreamState state) =>
+      state.parser ??= RpcMessageParser(
+        logger: _logger,
+        decompressor: (payload, {int? maxOutputBytes}) {
+          final encoding =
+              state.clientRequestEncoding ??
+              _context?.getHeader(RpcHeaders.grpcEncoding);
+          if (encoding == null || encoding == RpcGrpcCompression.identity) {
+            throw RpcException(
+              'Compressed gRPC payload received without grpc-encoding',
+            );
+          }
+          return RpcGrpcCompression.decompress(
+            payload,
+            encoding: encoding,
+            maxOutputBytes: maxOutputBytes,
+          );
+        },
+      );
 
   /// Creates a unary responder.
   UnaryResponder({
@@ -87,24 +115,6 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
        _context = context {
     _handler = handler;
     _logger = logger?.child('UnaryResponder') ?? LogScope.noop;
-    _parser = RpcMessageParser(
-      logger: _logger,
-      decompressor: (payload, {int? maxOutputBytes}) {
-        final encoding =
-            _activeRequestEncoding ??
-            _context?.getHeader(RpcHeaders.grpcEncoding);
-        if (encoding == null || encoding == RpcGrpcCompression.identity) {
-          throw RpcException(
-            'Compressed gRPC payload received without grpc-encoding',
-          );
-        }
-        return RpcGrpcCompression.decompress(
-          payload,
-          encoding: encoding,
-          maxOutputBytes: maxOutputBytes,
-        );
-      },
-    );
     _methodPath = '/$_serviceName/$_methodName';
     _logger.internal(
       'Created unary server for $_methodPath${_context?.cancellationToken != null ? " with cancellation token" : ""}',
@@ -305,9 +315,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       _logger.internal(
         'Parsing request frame of ${message.payload!.length} bytes [streamId: $streamId]',
       );
-      _activeRequestEncoding = state.clientRequestEncoding;
-      final messages = _parser(message.payload!);
-      _activeRequestEncoding = null;
+      final messages = _parserFor(state)(message.payload!);
       if (messages.isEmpty) {
         _logger.error(
           'Failed to extract message from payload [streamId: $streamId]',
