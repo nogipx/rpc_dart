@@ -312,9 +312,23 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   }
 
   void _onFailure(Object error) {
-    // Don't count cancellations as failures.
-    if (error is RpcCancelledException) return;
-    if (failureOn != null && !failureOn!(error)) return;
+    // Don't count cancellations as failures, nor anything failureOn rejects.
+    final counts =
+        error is! RpcCancelledException &&
+        (failureOn == null || failureOn!(error));
+
+    if (!counts) {
+      // The outcome is inconclusive — it says nothing about whether the
+      // service recovered. But if this call was the admitted half-open probe,
+      // the gate MUST still be released: returning early left _probeInFlight
+      // pinned true with the state stuck at halfOpen, so every later call was
+      // rejected with CircuitBreakerOpenException forever, with nothing but a
+      // manual reset() to clear it. A cancelled probe is ordinary (deadline,
+      // caller navigated away), so this wedged real clients. Stay half-open
+      // and let the next call take its turn as the probe.
+      if (_state == CircuitBreakerState.halfOpen) _probeInFlight = false;
+      return;
+    }
 
     _failureCount++;
     // Restart the monotonic timer from this failure.
