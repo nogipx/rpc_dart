@@ -12,6 +12,11 @@ typedef RpcRetryPredicate = bool Function(Object error);
 /// Only retries unary calls. Streaming calls pass through unchanged
 /// because replaying a stream is not generally safe.
 ///
+/// The backoff never outlives the call's deadline: when the next delay would
+/// not fit in [RpcContext.remainingTime], the retry is abandoned and the last
+/// error is rethrown immediately rather than after a sleep the caller did not
+/// budget for.
+///
 /// Usage:
 /// ```dart
 /// caller.addInterceptor(RpcRetryInterceptor(
@@ -69,7 +74,18 @@ class RpcRetryInterceptor extends IRpcInterceptor {
           break;
         }
 
-        await Future<void>.delayed(backoff.delayFor(attempt));
+        final delay = backoff.delayFor(attempt);
+        final remaining = call.context.remainingTime;
+        if (remaining != null && delay >= remaining) {
+          // Sleeping the whole backoff would push us past the caller's
+          // deadline, and the attempt that follows would only fail with
+          // DEADLINE_EXCEEDED. Give up now and surface the real transient
+          // error instead of blocking the caller for up to `maxDelay` beyond
+          // the deadline they asked for.
+          break;
+        }
+
+        await Future<void>.delayed(delay);
       }
     }
 

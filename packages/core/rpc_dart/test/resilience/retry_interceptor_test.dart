@@ -276,6 +276,75 @@ void main() {
       expect(callCount, 1);
     });
 
+    test('does not sleep past the deadline before retrying', () async {
+      // Frozen clock: 50ms of budget left, backoff wants 5s. Retrying would
+      // park the caller for 5s past a deadline they set at 50ms, and the
+      // attempt after the sleep could only fail with DEADLINE_EXCEEDED.
+      final now = DateTime.utc(2026, 1, 1, 12);
+      callContext.updateContext(
+        RpcContext.empty()
+            .withClock(() => now)
+            .withTimeout(const Duration(milliseconds: 50)),
+      );
+
+      final interceptor = RpcRetryInterceptor(
+        maxAttempts: 3,
+        backoff: const FixedBackoff(Duration(seconds: 5)),
+      );
+      var callCount = 0;
+      final stopwatch = Stopwatch()..start();
+
+      try {
+        await interceptor.interceptUnary<String, String>(
+          callContext,
+          'request',
+          (ctx, req) async {
+            callCount++;
+            throw RpcStatusException(RpcStatus.unavailable, 'transient');
+          },
+        );
+        fail('Should have thrown');
+      } on RpcStatusException catch (e) {
+        // The real transient error surfaces, not a synthesized deadline error.
+        expect(e.message, 'transient');
+      }
+      stopwatch.stop();
+
+      expect(callCount, 1);
+      expect(stopwatch.elapsed, lessThan(const Duration(seconds: 1)));
+    });
+
+    test('still retries when the backoff fits inside the deadline', () async {
+      final now = DateTime.utc(2026, 1, 1, 12);
+      callContext.updateContext(
+        RpcContext.empty()
+            .withClock(() => now)
+            .withTimeout(const Duration(seconds: 30)),
+      );
+
+      final interceptor = RpcRetryInterceptor(
+        maxAttempts: 3,
+        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+      );
+      var callCount = 0;
+
+      try {
+        await interceptor.interceptUnary<String, String>(
+          callContext,
+          'request',
+          (ctx, req) async {
+            callCount++;
+            throw RpcStatusException(RpcStatus.unavailable, 'transient');
+          },
+        );
+        fail('Should have thrown');
+      } on RpcStatusException {
+        // expected
+      }
+
+      expect(callCount, 3);
+    });
+
     test('maxAttempts 1 means no retries', () async {
       final interceptor = RpcRetryInterceptor(maxAttempts: 1);
       var callCount = 0;
