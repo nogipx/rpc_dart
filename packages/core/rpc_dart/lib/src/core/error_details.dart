@@ -309,6 +309,16 @@ class RpcRetryInfo extends RpcErrorDetail {
         while (dOffset < durationBytes.length) {
           final dTag = durationBytes[dOffset++];
           final dField = dTag >> 3;
+          final dWireType = dTag & 0x07;
+          // Dispatch on the wire type like every other decoder here. Reading a
+          // varint unconditionally (the old behaviour) desynchronised the
+          // cursor the moment a field arrived with any other wire type — a
+          // later revision of google.protobuf.Duration, or a hostile peer —
+          // and every field after it decoded as garbage.
+          if (dWireType != 0) {
+            dOffset = _skipField(durationBytes, dOffset, dWireType);
+            continue;
+          }
           final (val, dNewOffset) = _readVarint(durationBytes, dOffset);
           dOffset = dNewOffset;
           if (dField == 1) seconds = val;

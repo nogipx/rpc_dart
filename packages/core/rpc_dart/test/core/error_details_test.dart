@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:convert';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
@@ -222,6 +224,32 @@ void main() {
       final decoded =
           RpcErrorDetail.decodeAny(original.encodeAsAny()) as RpcRetryInfo;
       expect(decoded.retryDelay, Duration.zero);
+    });
+
+    test('skips an unknown non-varint field inside the Duration', () {
+      // Every other decoder in error_details.dart dispatches on the wire type
+      // and skips what it does not know -- protobuf's forward-compatibility
+      // rule. The nested Duration reader instead read a varint unconditionally,
+      // so the first field with any other wire type desynchronised the cursor
+      // and every field after it decoded as garbage (here: a FormatException
+      // that discarded the whole detail).
+      final typeUrl = utf8.encode(RpcRetryInfo.type);
+
+      // google.protobuf.Duration carrying an unknown 32-bit field (number 3,
+      // wire type 5) ahead of seconds (number 1, varint).
+      final duration = <int>[
+        0x1d, 0x01, 0x08, 0x63, 0x00, // field 3, wire type 5 + 4 payload bytes
+        0x08, 0x05, // field 1 (seconds) = 5
+      ];
+      final retryInfo = <int>[0x0a, duration.length, ...duration];
+      final any = <int>[
+        0x0a, typeUrl.length, ...typeUrl, // field 1: type_url
+        0x12, retryInfo.length, ...retryInfo, // field 2: value
+      ];
+
+      final decoded =
+          RpcErrorDetail.decodeAny(Uint8List.fromList(any)) as RpcRetryInfo;
+      expect(decoded.retryDelay, const Duration(seconds: 5));
     });
   });
 
