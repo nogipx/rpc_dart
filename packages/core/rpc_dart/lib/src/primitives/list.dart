@@ -26,28 +26,53 @@ class RpcList<T extends IRpcSerializable> implements IRpcSerializable {
   RpcList.empty({int capacity = 0}) : _items = List<T>.empty(growable: true);
 
   /// Creates a list from a JSON representation.
+  ///
+  /// Every element must be a JSON object. An element that is not one is a
+  /// [FormatException] rather than a silent omission: this used to skip such
+  /// entries, so a decode could hand back a SHORTER list than was sent, with
+  /// nothing anywhere to say so.
   static RpcList<T> fromJsonRaw<T extends IRpcSerializable>(
     List<dynamic> json,
     T Function(Map<String, dynamic>) fromJson,
   ) {
     final list = RpcList<T>();
-    for (final item in json) {
+    for (var i = 0; i < json.length; i++) {
+      final item = json[i];
       if (item is Map<String, dynamic>) {
         list.add(fromJson(item));
+        continue;
       }
+      // Decoders other than this package's CBOR reader -- a custom IRpcCodec,
+      // a protobuf bridge, anything building maps dynamically -- routinely
+      // produce Map<dynamic, dynamic>. That failed the check above, so EVERY
+      // element was dropped and a full list decoded to an empty one. Coerce
+      // the keys instead; they are strings by construction on this path.
+      if (item is Map) {
+        list.add(fromJson(item.map((k, v) => MapEntry(k.toString(), v))));
+        continue;
+      }
+      throw FormatException(
+        'RpcList.fromJson: element $i is ${item.runtimeType}, expected a JSON '
+        'object',
+      );
     }
     return list;
   }
 
   /// Returns a decoder function that builds an [RpcList] from JSON.
+  ///
+  /// A missing `items` key yields an empty list (an absent field is not an
+  /// error); an `items` that is present but not a list throws, rather than
+  /// quietly decoding to empty.
   static RpcList<T> Function(Map<String, dynamic>) fromJson<
     T extends IRpcSerializable
   >(T Function(Map<String, dynamic>) fromJson) => (Map<String, dynamic> json) {
     final items = json['items'];
-    if (items is List<dynamic>) {
-      return fromJsonRaw<T>(items, fromJson);
-    }
-    return RpcList<T>();
+    if (items == null) return RpcList<T>();
+    if (items is List) return fromJsonRaw<T>(items, fromJson);
+    throw FormatException(
+      'RpcList.fromJson: "items" is ${items.runtimeType}, expected a list',
+    );
   };
 
   @override

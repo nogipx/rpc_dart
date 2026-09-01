@@ -110,6 +110,40 @@ void main() {
       expect(const RpcNum(10) ~/ const RpcInt(4), const RpcNum(2));
     });
 
+    test('RpcList decoding never silently loses elements', () {
+      final decode = RpcList.fromJson<RpcString>(RpcString.fromJson);
+
+      // Entries typed Map<dynamic, dynamic> -- what a custom IRpcCodec or a
+      // protobuf bridge produces -- failed the Map<String, dynamic> check, so
+      // EVERY element was dropped and a full list decoded to an empty one.
+      final dynamicallyTyped = <dynamic>[
+        <dynamic, dynamic>{'v': 'a'},
+        <dynamic, dynamic>{'v': 'b'},
+      ];
+      final coerced = decode({'items': dynamicallyTyped});
+      expect(coerced.length, 2, reason: 'decoded to an EMPTY list before');
+      expect(coerced.toList(), [const RpcString('a'), const RpcString('b')]);
+
+      // A non-object element used to be skipped, handing back a short list
+      // with nothing to signal the loss.
+      expect(
+        () => decode({
+          'items': [
+            {'v': 'a'},
+            42,
+            {'v': 'b'},
+          ],
+        }),
+        throwsFormatException,
+      );
+
+      // 'items' present but not a list used to decode to empty.
+      expect(() => decode({'items': 'oops'}), throwsFormatException);
+
+      // An absent field stays an empty list -- that is not a malformed payload.
+      expect(decode(<String, dynamic>{}).isEmpty, isTrue);
+    });
+
     test('ordering comparisons with raw num throw RpcException', () {
       expect(() => const RpcInt(1) < 2, throwsA(isA<RpcException>()));
       expect(() => const RpcDouble(1.0) > 2.0, throwsA(isA<RpcException>()));
