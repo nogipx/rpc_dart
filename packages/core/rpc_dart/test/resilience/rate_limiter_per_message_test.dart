@@ -167,6 +167,48 @@ void main() {
       limiter.dispose();
     });
 
+    test('an exceeded stream emits ONE error and terminates', () async {
+      // The limit trips on the 3rd message. Every element after it used to be
+      // metered again and push its own error, so a client that kept sending
+      // got a storm of RESOURCE_EXHAUSTED instead of a terminated call.
+      final limiter = RpcRateLimiter(
+        global: RateLimit.slidingWindow(
+          max: 2,
+          window: const Duration(hours: 1),
+        ),
+        nowMicros: frozenClock,
+      );
+
+      late Stream<String> seenRequests;
+      await limiter.interceptClientStream<String, String>(
+        callContext,
+        Stream<String>.fromIterable(['1', '2', '3', '4', '5']),
+        (ctx, reqs) async {
+          seenRequests = reqs;
+          return 'ok';
+        },
+      );
+
+      final received = <String>[];
+      final errors = <Object>[];
+      final done = Completer<void>();
+      // Deliberately NOT cancelOnError: we want to see everything the stream
+      // emits once the limit trips.
+      seenRequests.listen(
+        received.add,
+        onError: errors.add,
+        onDone: () {
+          if (!done.isCompleted) done.complete();
+        },
+      );
+      await done.future;
+
+      expect(received, ['1', '2']);
+      expect(errors, hasLength(1));
+      expect(errors.single, isA<RpcRateLimitException>());
+      limiter.dispose();
+    });
+
     test('no limit configured: stream passes through unchanged', () async {
       final limiter = RpcRateLimiter(nowMicros: frozenClock);
 

@@ -508,19 +508,34 @@ class RpcRateLimiter extends IRpcInterceptor {
     // concurrent stream stays bound to the single shared counter instead of a
     // stale captured instance (which would double the effective limit).
     if (_resolveCounter(call) == null) return source;
+    // Once the limit trips the stream is done: emit ONE error and close.
+    // Without this latch every remaining element was metered again and pushed
+    // its own error, so a client that kept sending got an unbounded storm of
+    // RESOURCE_EXHAUSTED instead of a terminated call -- and the limiter did
+    // per-element work (counter resolution, LRU touch, an exception plus
+    // StackTrace.current) for exactly the load it exists to shed.
+    var rejected = false;
     return source.transform(
       StreamTransformer<T, T>.fromHandlers(
         handleData: (data, sink) {
+          if (rejected) return;
           final counter = _resolveCounter(call);
           if (counter == null || counter.tryAcquire()) {
             sink.add(data);
-          } else {
-            sink.addError(_exceededException(call), StackTrace.current);
+            return;
           }
+          rejected = true;
+          sink.addError(_exceededException(call), StackTrace.current);
+          sink.close();
         },
-        handleError: (error, stackTrace, sink) =>
-            sink.addError(error, stackTrace),
-        handleDone: (sink) => sink.close(),
+        handleError: (error, stackTrace, sink) {
+          if (rejected) return;
+          sink.addError(error, stackTrace);
+        },
+        handleDone: (sink) {
+          if (rejected) return;
+          sink.close();
+        },
       ),
     );
   }
