@@ -56,6 +56,13 @@ class RpcSpyEntry {
 /// Attach to [RpcTestApp] or [RpcApp] to capture calls during tests, then
 /// assert on [entries], [callsTo], [callCount], etc.
 ///
+/// **Retention.** By default every call is kept forever, which is what a test
+/// wants and what a long-running server cannot afford: each [RpcSpyEntry]
+/// holds the call's [RpcContext], so an unbounded spy on a live server pins
+/// one context graph per call for the life of the process. Pass [maxEntries]
+/// to keep only the most recent N (older entries are dropped as new ones
+/// arrive), or call [reset] periodically.
+///
 /// ```dart
 /// final spy = RpcCallSpy();
 /// final app = await RpcTestApp.start(
@@ -73,6 +80,21 @@ class RpcSpyEntry {
 /// expect(spy.wasCalled('EchoService', 'ping'), isTrue);
 /// ```
 class RpcCallSpy extends IRpcInterceptor {
+  /// Creates a spy.
+  ///
+  /// [maxEntries] caps retention: once that many entries are held, recording a
+  /// new one drops the oldest. `null` (the default) keeps everything, which
+  /// preserves the record-it-all behaviour tests rely on. Must be positive
+  /// when provided.
+  RpcCallSpy({this.maxEntries})
+    : assert(
+        maxEntries == null || maxEntries > 0,
+        'maxEntries must be positive',
+      );
+
+  /// Maximum entries retained, or null for unbounded.
+  final int? maxEntries;
+
   final List<RpcSpyEntry> _entries = [];
 
   /// All recorded entries in call order.
@@ -118,6 +140,14 @@ class RpcCallSpy extends IRpcInterceptor {
         context: call.context,
       ),
     );
+
+    // Drop the oldest once the cap is reached. Each entry pins the call's
+    // RpcContext, so an uncapped spy on a live server retains one context
+    // graph per call for the life of the process.
+    final cap = maxEntries;
+    if (cap != null && _entries.length > cap) {
+      _entries.removeRange(0, _entries.length - cap);
+    }
   }
 
   @override
