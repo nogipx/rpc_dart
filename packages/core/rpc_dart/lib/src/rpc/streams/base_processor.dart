@@ -389,18 +389,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       }
 
       // grpc-accept-encoding: what the peer can decompress → use for responses.
-      if (_responseEncoding == null) {
-        final accept = meta.getHeaderValue(RpcHeaders.grpcAcceptEncoding);
-        if (accept != null) {
-          for (final enc in accept.split(',').map((e) => e.trim())) {
-            if (enc != RpcGrpcCompression.identity &&
-                RpcGrpcCompression.isSupported(enc)) {
-              _responseEncoding = enc;
-              break;
-            }
-          }
-        }
-      }
+      _responseEncoding ??= RpcGrpcCompression.selectResponseEncoding(
+        meta.getHeaderValue(RpcHeaders.grpcAcceptEncoding),
+      );
     }
 
     // Zero-copy: direct object.
