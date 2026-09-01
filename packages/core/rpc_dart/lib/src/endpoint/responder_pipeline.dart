@@ -22,6 +22,31 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   bool _respIsListening = false;
   bool _respIsDraining = false;
 
+  /// Stream ids already torn down.
+  ///
+  /// Tearing a stream down does not stop the peer: its request payload races
+  /// our error trailer, and a cancelled or completed call can be followed by
+  /// trailing frames. Those frames reached `_respStreams.obtain()` and
+  /// RESURRECTED state for a stream nothing would ever clean up again — the
+  /// revived entry has no method, so it just buffers the frame and sits there
+  /// forever. Calling an unregistered method leaked one such entry per call,
+  /// which any client (or a version-skewed one) could drive without bound.
+  ///
+  /// Insertion-ordered, so evicting `first` drops the oldest; bounded so this
+  /// guard cannot become a leak of its own.
+  final Set<int> _respClosedStreams = <int>{};
+
+  /// How many torn-down stream ids to remember. Late frames arrive right after
+  /// the teardown, so a modest window covers the race.
+  static const int _maxRememberedClosedStreams = 1024;
+
+  void _rememberClosedStream(int streamId) {
+    if (!_respClosedStreams.add(streamId)) return;
+    if (_respClosedStreams.length > _maxRememberedClosedStreams) {
+      _respClosedStreams.remove(_respClosedStreams.first);
+    }
+  }
+
   /// Whether the responder pipeline is currently listening.
   bool get responderIsListening => _respIsListening;
 
@@ -205,6 +230,21 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         'Ignoring no-op frame for unknown stream ${message.streamId}',
       );
       return;
+    }
+
+    // Trailing frames for a stream we already tore down must not resurrect it
+    // (see _respClosedStreams). A genuinely new call always opens with a
+    // metadata frame carrying methodPath, so that — and only that — clears the
+    // id for reuse.
+    if (_respStreams[message.streamId] == null &&
+        _respClosedStreams.contains(message.streamId)) {
+      if (message.methodPath == null) {
+        _log.internal(
+          'Ignoring trailing frame for closed stream ${message.streamId}',
+        );
+        return;
+      }
+      _respClosedStreams.remove(message.streamId);
     }
 
     final state = _respStreams.obtain(message.streamId);
@@ -807,9 +847,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             handler: (ctx, reqs) => binding.zeroCopyMethod
                 .callBidirectionalStreamHandler(ctx, reqs),
           );
-          await for (final response in responseStream) {
-            await responder.send(response);
-          }
+          await _pumpBidirectionalResponses(responder, responseStream);
           await responder.finishReceiving();
         } catch (error, stackTrace) {
           contextLogger.error(
@@ -862,9 +900,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
                     .map(method.castResponse);
               },
             );
-        await for (final response in responseStream) {
-          await responder.send(response);
-        }
+        await _pumpBidirectionalResponses(responder, responseStream);
         await responder.finishReceiving();
       } catch (error, stackTrace) {
         contextLogger.error(
@@ -878,6 +914,46 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         );
       }
     }());
+  }
+
+  /// Forwards [responses] to [responder], owning the subscription so the pump
+  /// stops as soon as the call ends.
+  ///
+  /// A bare `await for` over the handler's stream keeps an implicit
+  /// subscription that nothing can reach, and `responder.send()` returns
+  /// silently once the responder is inactive rather than throwing. A
+  /// long-lived handler therefore kept producing forever after the client
+  /// cancelled, burning CPU and pinning whatever the generator captured.
+  /// Relaying through a controller we own lets [IRpcResponder.done] tear the
+  /// upstream down.
+  Future<void> _pumpBidirectionalResponses<T extends Object>(
+    BidirectionalStreamResponder<T, T> responder,
+    Stream<T> responses,
+  ) async {
+    final relay = StreamController<T>();
+    final handlerSub = responses.listen(
+      relay.add,
+      onError: relay.addError,
+      onDone: () {
+        if (!relay.isClosed) relay.close();
+      },
+    );
+
+    unawaited(
+      responder.done.whenComplete(() {
+        unawaited(handlerSub.cancel().catchError((_) {}));
+        if (!relay.isClosed) relay.close();
+      }),
+    );
+
+    try {
+      await for (final response in relay.stream) {
+        await responder.send(response);
+      }
+    } finally {
+      unawaited(handlerSub.cancel().catchError((_) {}));
+      if (!relay.isClosed) unawaited(relay.close());
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -942,6 +1018,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   // ---------------------------------------------------------------------------
 
   Future<void> _cleanupStream(int streamId) async {
+    // Remember the id even when there was no state: the rejection path can run
+    // before the peer's payload frame arrives, and that frame must not open a
+    // fresh, never-cleaned entry.
+    _rememberClosedStream(streamId);
+
     final state = _respStreams.take(streamId);
     if (state == null) return;
     state.cancelDeadline();

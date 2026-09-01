@@ -40,6 +40,19 @@ final class _InfiniteContract extends RpcResponderContract {
       requestCodec: _codec,
       responseCodec: _codec,
     );
+
+    addBidirectionalMethod<RpcString, RpcString>(
+      methodName: 'infBidi',
+      handler: (requests, {RpcContext? context}) async* {
+        while (true) {
+          _ticks++;
+          yield 'v'.rpc;
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+      },
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
   }
 }
 
@@ -88,4 +101,60 @@ void main() {
     await client.close();
     await server.close();
   });
+
+  test(
+    'cancelling a bidirectional stream returns and stops the handler',
+    () async {
+      _ticks = 0;
+      final (client, server) = RpcChannelTransport.pair();
+      final caller = RpcCallerEndpoint(transport: client);
+      final responder = RpcResponderEndpoint(transport: server);
+      responder.registerServiceContract(_InfiniteContract());
+      responder.start();
+
+      // A request stream the caller deliberately leaves OPEN -- the realistic
+      // bidi shape, and the one that used to deadlock cancel(): `requests` is a
+      // suspended async* middleware chain whose cancellation cannot complete
+      // until the upstream produces again.
+      final requests = StreamController<RpcString>();
+      requests.add('a'.rpc);
+
+      var received = 0;
+      final sub = caller
+          .bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'infBidi',
+            requests: requests.stream,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .listen((_) => received++);
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(received, greaterThan(0));
+
+      // Must not deadlock: this used to hang forever.
+      await sub.cancel().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => fail('bidirectional cancel() deadlocked'),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      final settled = _ticks;
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      expect(
+        _ticks,
+        settled,
+        reason:
+            'bidi handler kept producing after the client cancelled '
+            '(was $settled, now $_ticks)',
+      );
+
+      await requests.close();
+      await caller.close();
+      await responder.close();
+      await client.close();
+      await server.close();
+    },
+  );
 }

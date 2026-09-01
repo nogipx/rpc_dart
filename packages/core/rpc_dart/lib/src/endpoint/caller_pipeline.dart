@@ -503,12 +503,51 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       });
     }
 
-    Future<void> cleanup() async {
+    // Set once the call ended on its own (server finished, or errored), as
+    // opposed to the consumer walking away. Mirrors the server-stream bridge:
+    // firing the cancellation token after a normal finish would poison a
+    // shared/reused RpcContext and break the NEXT call on it.
+    var finishedNaturally = false;
+
+    Future<void> cleanup({bool fromCancel = false}) async {
       if (isCleaned) return;
       isCleaned = true;
+
+      // Tell the server the consumer is gone. The cancellation token is the
+      // only thing that triggers CallProcessor._sendCancellationToServer, and
+      // without it the responder never learns: its handler keeps producing
+      // into a stream nobody reads, forever. Untracking clears the token, so
+      // fire it first.
+      if (fromCancel && !finishedNaturally) {
+        context.cancellationToken?.cancel(
+          'bidirectional subscription cancelled',
+        );
+      }
+
       _untrackCallerRequest(serviceName, methodName, requestId);
-      await responseSub?.cancel();
-      await requestSub?.cancel();
+
+      final response = responseSub;
+      final request = requestSub;
+      responseSub = null;
+      requestSub = null;
+
+      if (fromCancel) {
+        // sub.cancel() on the consumer side awaits this handler, so nothing
+        // here may block. `requests` is typically a suspended async*
+        // middleware chain (_applyRequestMiddlewaresToStream), and cancelling
+        // a generator parked in `await for` does not complete until its
+        // upstream produces again -- which, for a bidi request stream the
+        // caller keeps open, is never. Awaiting it deadlocked cancel(). Fire
+        // the teardown and return, exactly as the server-stream bridge does.
+        // The controller is already being torn down, so it needs no close.
+        unawaited(response?.cancel().catchError((_) {}));
+        unawaited(request?.cancel().catchError((_) {}));
+        unawaited(caller.close().catchError((_) {}));
+        return;
+      }
+
+      await response?.cancel();
+      await request?.cancel();
       await caller.close();
       if (!controller.isClosed) await controller.close();
     }
@@ -523,7 +562,10 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         controller.addError(e, st);
         unawaited(cleanup());
       },
-      onDone: () => unawaited(cleanup()),
+      onDone: () {
+        finishedNaturally = true;
+        unawaited(cleanup());
+      },
     );
 
     requestSub = requests.listen(
@@ -553,10 +595,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       },
     );
 
-    controller.onCancel = cleanup;
+    controller.onCancel = () => cleanup(fromCancel: true);
     return controller.stream.transform(
       StreamTransformer.fromHandlers(
         handleDone: (sink) {
+          finishedNaturally = true;
           unawaited(cleanup());
           sink.close();
         },
