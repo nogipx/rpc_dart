@@ -503,24 +503,28 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       });
     }
 
-    // NOTE: cancelling a bidirectional stream does NOT notify the server.
-    //
-    // The obvious move -- firing context.cancellationToken, as the
-    // server-stream bridge does -- makes CallProcessor send a cancellation
-    // notice, and that notice rides on a metadata frame with endStream: true.
-    // By the time a bidi consumer cancels, this side has usually already
-    // half-closed (its own finishSending, or the teardown below), and a second
-    // end-of-stream is a protocol violation: HTTP/2 rejects it with "Open
-    // state expected (was: HalfClosedLocal)", thrown asynchronously out of the
-    // stream handler where no caller can catch it, poisoning the connection.
-    //
-    // Signalling this properly needs a stream-reset primitive (HTTP/2
-    // RST_STREAM) that IRpcTransport does not expose. Until it does, the
-    // server-side handler of an abandoned bidi stream keeps running until the
-    // stream ends for another reason. Breaking the connection would be worse.
+    // Set once the call ended on its own (server finished, or errored), as
+    // opposed to the consumer walking away. Mirrors the server-stream bridge:
+    // firing the cancellation token after a natural finish would poison a
+    // shared/reused RpcContext and break the NEXT call on it.
+    var finishedNaturally = false;
+
     Future<void> cleanup({bool fromCancel = false}) async {
       if (isCleaned) return;
       isCleaned = true;
+
+      // Tell the server the consumer is gone. The cancellation token is the
+      // only thing that triggers CallProcessor._sendCancellationToServer, and
+      // without it the responder never learns: its handler keeps producing
+      // into a stream nobody reads, forever. That notice now goes out as a
+      // transport-level reset (RST_STREAM on HTTP/2) when the transport
+      // supports one, so it is legal even though this side has half-closed.
+      // Untracking clears the token, so fire it first.
+      if (fromCancel && !finishedNaturally) {
+        context.cancellationToken?.cancel(
+          'bidirectional subscription cancelled',
+        );
+      }
 
       _untrackCallerRequest(serviceName, methodName, requestId);
 
@@ -561,6 +565,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         unawaited(cleanup());
       },
       onDone: () {
+        finishedNaturally = true;
         unawaited(cleanup());
       },
     );
@@ -598,6 +603,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     return controller.stream.transform(
       StreamTransformer.fromHandlers(
         handleDone: (sink) {
+          finishedNaturally = true;
           unawaited(cleanup());
           sink.close();
         },

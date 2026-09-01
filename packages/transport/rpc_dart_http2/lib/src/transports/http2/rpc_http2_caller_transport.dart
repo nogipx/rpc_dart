@@ -15,7 +15,7 @@ import 'rpc_http2_common.dart';
 ///
 /// Реализует IRpcTransport поверх HTTP/2 протокола для исходящих вызовов.
 /// Поддерживает мультиплексирование потоков и gRPC-совместимый протокол.
-class RpcHttp2CallerTransport implements IRpcTransport {
+class RpcHttp2CallerTransport implements IRpcTransport, IRpcStreamReset {
   @override
   bool get isClient => true;
 
@@ -53,6 +53,15 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   /// Tracks streams where initial response headers have been received.
   /// Used to distinguish trailers from initial response headers on incoming.
   final Set<int> _initialHeadersReceived = {};
+
+  /// Streams we aborted ourselves via [resetStream].
+  ///
+  /// http2 reports the abort back to us as a stream error; without this we
+  /// would hand a consumer that deliberately cancelled an RpcHttp2StreamError
+  /// describing its own cancellation. Insertion-ordered and bounded so it
+  /// cannot grow without limit on a long-lived connection.
+  final Set<int> _resetStreams = {};
+  static const int _maxRememberedResetStreams = 1024;
 
   /// Целевой хост
   final String _host;
@@ -406,6 +415,40 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   }
 
   @override
+  Future<bool> resetStream(int streamId, {String? reason}) async {
+    final stream = _activeStreams.remove(streamId);
+    if (stream == null) return false;
+
+    // RST_STREAM is the only legal way to abort a stream we have already
+    // half-closed, which is exactly when cancellation arrives. Sending the
+    // cancellation metadata frame instead throws "Open state expected (was:
+    // HalfClosedLocal)" asynchronously out of the http2 stream handler.
+    _logger?.internal(
+      'Сброс stream $streamId через RST_STREAM${reason != null ? ': $reason' : ''}',
+    );
+
+    // Tear the local side down FIRST. Terminating makes http2 surface the
+    // reset back to us as a stream error, and _emitStreamError would then
+    // push an RpcHttp2StreamError at a consumer that deliberately cancelled --
+    // reporting its own cancellation to it as a transport failure.
+    if (_resetStreams.add(streamId) &&
+        _resetStreams.length > _maxRememberedResetStreams) {
+      _resetStreams.remove(_resetStreams.first);
+    }
+
+    await _streamSubscriptions.remove(streamId)?.cancel();
+    _streamParsers.remove(streamId);
+    _initialHeadersReceived.remove(streamId);
+    final controller = _streamControllers.remove(streamId);
+    if (controller != null && !controller.isClosed) {
+      unawaited(controller.close());
+    }
+
+    stream.terminate();
+    return true;
+  }
+
+  @override
   Future<void> sendMessage(
     int streamId,
     Uint8List data, {
@@ -665,6 +708,15 @@ class RpcHttp2CallerTransport implements IRpcTransport {
   /// Routes a stream-scoped error: raw on the dedicated controller, enveloped
   /// on the broadcast (so it does not leak onto unrelated streams there).
   void _emitStreamError(int streamId, Object error, [StackTrace? stackTrace]) {
+    // A stream we reset on purpose reports the abort back to us. Surfacing it
+    // would tell a consumer that deliberately cancelled that its own
+    // cancellation was a transport failure.
+    if (_resetStreams.contains(streamId)) {
+      _logger?.internal(
+        'Подавлена ошибка для сброшенного stream $streamId: $error',
+      );
+      return;
+    }
     final ctl = _streamControllers[streamId];
     if (ctl != null && !ctl.isClosed) ctl.addError(error, stackTrace);
     if (!_messageController.isClosed) {

@@ -143,12 +143,20 @@ void main() {
         onTimeout: () => fail('bidirectional cancel() deadlocked'),
       );
 
-      // NOTE: the server-side handler is deliberately NOT asserted to stop
-      // here. Telling the server would mean sending a cancellation notice on
-      // an already half-closed stream, which HTTP/2 rejects outright; see the
-      // comment on cleanup() in caller_pipeline.dart. Until IRpcTransport
-      // exposes a stream-reset primitive, an abandoned bidi handler keeps
-      // running -- a known, documented gap rather than a silent one.
+      // The server must also be told, or its handler keeps producing into a
+      // stream nobody reads. The notice goes out as a transport-level reset
+      // where one exists (RST_STREAM on HTTP/2), so it is legal even after
+      // this side half-closes.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      final settled = _ticks;
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      expect(
+        _ticks,
+        settled,
+        reason:
+            'bidi handler kept producing after the client cancelled '
+            '(was $settled, now $_ticks)',
+      );
 
       await requests.close();
       await caller.close();

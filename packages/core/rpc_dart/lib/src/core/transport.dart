@@ -107,6 +107,32 @@ final class RpcTransportMessage {
   );
 }
 
+/// Capability for transports that can abort a single stream out-of-band.
+///
+/// The ordinary way to tell a peer "stop, I am gone" is a metadata frame
+/// carrying `grpc-status: CANCELLED` with `endStream: true` — but that is only
+/// legal while this side is still open, and by cancellation time it usually is
+/// not. A server-stream half-closes right after its single request, and a bidi
+/// caller half-closes on teardown; sending anything more is then a protocol
+/// violation. HTTP/2 rejects it with "Open state expected (was:
+/// HalfClosedLocal)", thrown asynchronously out of its stream handler where no
+/// caller can catch it, corrupting the connection. Yet with no signal at all
+/// the peer keeps producing into a stream nobody reads, leaving a server
+/// handler running forever.
+///
+/// Transports with a real abort primitive (HTTP/2 RST_STREAM) implement this
+/// alongside [IRpcTransport]. Callers check with `is IRpcStreamReset` and fall
+/// back to the cancellation metadata frame, which is safe on transports that
+/// do not track stream state. Kept separate from [IRpcTransport] so adding it
+/// does not break third-party transports that `implements IRpcTransport`.
+abstract interface class IRpcStreamReset {
+  /// Aborts [streamId], returning true when the reset was delivered.
+  ///
+  /// Returning false means "not resettable" (e.g. the stream is unknown) and
+  /// the caller should fall back to the metadata notice.
+  Future<bool> resetStream(int streamId, {String? reason});
+}
+
 /// Transport interface with Stream ID multiplexing.
 ///
 /// Contract for transports over different protocols (HTTP/2, WebSockets,

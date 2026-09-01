@@ -107,6 +107,18 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
         _handleIncomingMessage(streamId, message);
       },
       onError: (error, stackTrace) {
+        // A peer RST_STREAM is a cancellation, not a transport fault: the
+        // client walked away (a cancelled subscription, a deadline). Reporting
+        // it as a stream error pushes an RpcHttp2StreamError at every
+        // incomingMessages consumer for what is a routine event. Surface it as
+        // a clean end-of-stream instead, which is also what lets the responder
+        // tear the call down and stop the handler.
+        if (error is http2.StreamTransportException) {
+          _logger?.internal('Stream $streamId сброшен пиром: ${error.message}');
+          _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
+          return;
+        }
+
         _logger?.error(
           'Ошибка в stream $streamId',
           error: error,

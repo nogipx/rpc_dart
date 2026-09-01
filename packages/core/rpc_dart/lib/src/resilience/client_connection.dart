@@ -69,7 +69,8 @@ typedef RpcConnectionLogger = void Function(String level, String message);
 ///
 /// The [RpcCallerEndpoint] is created once with this proxy and survives
 /// across reconnects transparently.
-final class _ReconnectingTransportProxy implements IRpcTransport {
+final class _ReconnectingTransportProxy
+    implements IRpcTransport, IRpcStreamReset {
   _ReconnectingTransportProxy();
 
   IRpcTransport? _inner;
@@ -147,6 +148,13 @@ final class _ReconnectingTransportProxy implements IRpcTransport {
   @override
   bool releaseStreamId(int streamId) =>
       _inner?.releaseStreamId(streamId) ?? false;
+
+  @override
+  Future<bool> resetStream(int streamId, {String? reason}) async {
+    final inner = _inner;
+    if (inner is! IRpcStreamReset) return false;
+    return (inner as IRpcStreamReset).resetStream(streamId, reason: reason);
+  }
 
   @override
   Future<void> sendMetadata(

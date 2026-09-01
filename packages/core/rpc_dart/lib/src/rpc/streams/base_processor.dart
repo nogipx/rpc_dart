@@ -1139,7 +1139,37 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   }
 
   /// Sends a cancellation notice to the server.
+  ///
+  /// Prefers a transport-level reset. The notice below rides on a metadata
+  /// frame with `endStream: true`, which is only legal while this side is
+  /// still open — and by cancellation time it usually is not (a server-stream
+  /// half-closes right after its single request). Sending it anyway is a
+  /// protocol violation that HTTP/2 throws asynchronously out of its stream
+  /// handler, corrupting the connection.
   Future<void> _sendCancellationToServer(String reason) async {
+    final transport = _transport;
+    if (transport is IRpcStreamReset) {
+      try {
+        final reset = await (transport as IRpcStreamReset).resetStream(
+          _streamId,
+          reason: reason,
+        );
+        if (reset) {
+          _logger.internal(
+            'Cancellation delivered via stream reset [streamId: $_streamId]',
+          );
+          return;
+        }
+      } catch (error, stackTrace) {
+        _logger.warning(
+          'Stream reset failed, falling back to cancellation metadata '
+          '[streamId: $_streamId]',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
     try {
       // Build metadata with cancellation details.
       final cancellationHeaders = [
