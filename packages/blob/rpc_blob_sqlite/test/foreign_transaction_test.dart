@@ -4,7 +4,6 @@
 
 import 'dart:typed_data';
 
-import 'package:rpc_blob/rpc_blob.dart';
 import 'package:rpc_blob_sqlite/rpc_blob_sqlite.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:test/test.dart';
@@ -36,7 +35,7 @@ void main() {
     db.execute('CREATE TABLE outsider (id INTEGER PRIMARY KEY, v TEXT)');
   });
 
-  tearDown(() => db.dispose());
+  tearDown(() => db.close());
 
   Future<void> write(String id) => blobs.writeBlob(
     BlobWriteRequest(
