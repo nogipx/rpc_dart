@@ -527,29 +527,86 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   }) {
     final ctx = _prepareCallerContext(context, serviceName, methodName);
 
-    return handleBidirectionalStream<C, R>(
+    final stream = handleBidirectionalStream<C, R>(
       serviceName: serviceName,
       methodName: methodName,
       context: ctx,
       requests: requests,
-      handler: (c, reqs) {
-        // handleBidirectionalStream is an async*, so this handler runs on first
-        // listen -- which is when the call actually starts. _buildBidirectional
-        // Stream's cleanup() is the matching untrack, and it likewise only runs
-        // once that body has executed. Tracking in bidirectionalStream() itself
-        // leaked a token for every stream that was built and then dropped.
+      handler: (c, reqs) => _buildBidirectionalStream<C, R>(
+        serviceName: serviceName,
+        methodName: methodName,
+        requestCodec: requestCodec,
+        responseCodec: responseCodec,
+        context: c,
+        requests: reqs,
+        requestId: ctx.requestId,
+      ),
+    );
+
+    // Bridge through a StreamController instead of returning the async* chain
+    // (handleBidirectionalStream -> middleware -> _buildBidirectionalStream).
+    //
+    // [serverStream] has bridged for this reason since the dart2js hang;
+    // bidirectional never did, and had the same defect on the VM too.
+    // Cancelling a subscription to a chain of suspended `async*`/`await for`
+    // generators does not complete until the upstream produces again, so
+    // `sub.cancel()` only returned while the server happened to be emitting.
+    // Measured with the request stream left open:
+    //
+    //   always-emitting handler, 1 request -> cancel returned (received=19)
+    //   always-emitting handler, no request -> CANCEL DEADLOCKED
+    //   echo handler,            1 request -> CANCEL DEADLOCKED (received=1)
+    //
+    // An idle bidi stream -- a subscription waiting for the next server push,
+    // which is the normal state of one -- could not be cancelled at all.
+    late final StreamController<R> controller;
+    StreamSubscription<R>? sub;
+    var finished = false;
+
+    void finish() {
+      if (finished) return;
+      finished = true;
+      _untrackCallerRequest(serviceName, methodName, ctx.requestId);
+    }
+
+    controller = StreamController<R>(
+      onListen: () {
+        // The call starts on first listen, not when this cold stream was
+        // handed out; finish() is the matching untrack.
         _trackCallerRequest(serviceName, methodName, ctx);
-        return _buildBidirectionalStream<C, R>(
-          serviceName: serviceName,
-          methodName: methodName,
-          requestCodec: requestCodec,
-          responseCodec: responseCodec,
-          context: c,
-          requests: reqs,
-          requestId: ctx.requestId,
+        sub = stream.listen(
+          (event) {
+            if (!controller.isClosed) controller.add(event);
+          },
+          onError: (Object error, StackTrace trace) {
+            if (!controller.isClosed) controller.addError(error, trace);
+          },
+          onDone: () {
+            finish();
+            if (!controller.isClosed) controller.close();
+          },
+          cancelOnError: false,
         );
       },
+      onCancel: () {
+        // Tell the server, or its handler keeps producing into a stream nobody
+        // reads. Fired here as well as in _buildBidirectionalStream's cleanup
+        // because the inner chain may not unwind promptly; cancel() is
+        // idempotent. Only when the stream did NOT finish on its own -- firing
+        // afterwards would poison a shared RpcContext's token and break the
+        // NEXT call made with it.
+        if (!finished) {
+          ctx.cancellationToken?.cancel('bidirectional subscription cancelled');
+        }
+        finish();
+        // Deliberately not awaited: this is the cancel that may never complete.
+        final inner = sub;
+        sub = null;
+        unawaited(inner?.cancel().catchError((_) {}));
+      },
     );
+
+    return controller.stream;
   }
 
   /// Wires up a [BidirectionalStreamCaller] to a request stream, producing
