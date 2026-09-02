@@ -100,6 +100,73 @@ final class RpcResponderStreamState {
   /// True when a responder has been bound to this stream.
   bool get hasResponder => responder != null;
 
+  /// Live request feed for a bound client-stream responder.
+  ///
+  /// The other shapes take their post-bind frames from
+  /// `transport.getMessagesForStream`, which only carries what the transport
+  /// dispatches AFTER the subscription exists. That is safe for them because
+  /// they bind while handling the stream's first frame. A client-stream
+  /// responder consumes for the whole call, and the default
+  /// [IRpcTransport.getMessagesForStream] is a plain `where` over the
+  /// (non-replaying) broadcast, so on any transport that does not override it
+  /// with per-stream buffering every frame the transport had already dispatched
+  /// would be dropped. The pipeline sees all of them regardless, so it feeds
+  /// this sink directly instead.
+  StreamController<RpcTransportMessage>? _requestSink;
+  bool _requestSinkEnded = false;
+
+  /// True when a bound responder is being fed by the pipeline.
+  bool get hasRequestSink => _requestSink != null;
+
+  /// Attaches [sink] as the live request feed and marks the stream bound.
+  void attachRequestSink(StreamController<RpcTransportMessage> sink) {
+    _requestSink = sink;
+    _requestSinkEnded = false;
+    _boundToMessageStream = true;
+  }
+
+  /// Forwards a request [message] to the bound responder.
+  void pushRequest(RpcTransportMessage message) {
+    final sink = _requestSink;
+    if (sink == null || sink.isClosed) return;
+    sink.add(message);
+    // A frame may carry both the last payload and the half-close.
+    if (message.isEndOfStream) {
+      _requestSinkEnded = true;
+      unawaited(sink.close());
+    }
+  }
+
+  /// Signals the peer's half-close to the bound responder.
+  ///
+  /// Emits a synthetic end-of-stream frame first when none was delivered:
+  /// closing the controller alone ends the Dart stream, but the responder
+  /// reads the half-close off the frame's own flag.
+  void endRequests() {
+    final sink = _requestSink;
+    if (sink == null || sink.isClosed) return;
+    if (!_requestSinkEnded) {
+      _requestSinkEnded = true;
+      sink.add(RpcTransportMessage(streamId: id, isEndOfStream: true));
+    }
+    unawaited(sink.close());
+  }
+
+  /// Detaches the request feed without closing it.
+  ///
+  /// Used from the controller's own `onCancel`, where closing would re-enter a
+  /// controller that is already tearing its subscription down.
+  void detachRequestSink() {
+    _requestSink = null;
+  }
+
+  /// Detaches and closes the request feed, if any.
+  void closeRequestSink() {
+    final sink = _requestSink;
+    _requestSink = null;
+    if (sink != null && !sink.isClosed) unawaited(sink.close());
+  }
+
   /// True when the responder is bound to the per-stream message broadcast.
   bool get isBoundToMessageStream => _boundToMessageStream;
 
@@ -137,7 +204,14 @@ final class RpcResponderStreamState {
       _preBindBufferedMessages.add(message);
     }
 
-    if (bufferForClientStream) {
+    // Same pre-bind condition for the client-stream buffer. It used to append
+    // unconditionally, which was harmless only because nothing bound a
+    // client-stream responder until the peer half-closed. Now that one is bound
+    // on the first request frame, every later message already reaches the
+    // handler through the per-stream subscription -- appending here too would
+    // retain a second copy of the whole request for the life of the call, and
+    // nothing would ever take it.
+    if (bufferForClientStream && !_boundToMessageStream) {
       _clientBufferedMessages.add(message);
     }
   }

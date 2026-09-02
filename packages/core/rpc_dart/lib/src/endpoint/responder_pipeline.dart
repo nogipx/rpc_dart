@@ -539,9 +539,29 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       bufferForClientStream: binding.type == RpcMethodType.clientStream,
     );
 
-    if (binding.type != RpcMethodType.clientStream) {
-      unawaited(_ensureResponder(state, binding));
+    // Every shape starts its responder on the first request frame, INCLUDING
+    // client-stream. That case used to be excluded, so the only thing that
+    // started a client-streaming handler was the peer's half-close: every
+    // request message piled up in `_clientBufferedMessages` until then and the
+    // handler received the whole call at once.
+    //
+    // Two problems, one cause. A client-streaming handler is supposed to
+    // consume incrementally -- that is the shape's entire purpose, and what an
+    // upload writing chunks as they arrive depends on. Measured with five
+    // chunks sent 120ms apart, the handler started at 698ms (6ms after the
+    // half-close) and saw all five within 4ms of each other. And because the
+    // pile-up is an unbounded List, a peer that opens a client-stream and never
+    // half-closes makes the server buffer the entire request in memory, with
+    // maxMessageSize bounding each frame and nothing bounding the count.
+    //
+    // _ensureResponder is idempotent (it returns early once state.responder is
+    // set) and reaches that assignment with no await, so the half-close path
+    // below still creates the responder for a call that carried no messages.
+    if (state.hasRequestSink) {
+      state.pushRequest(message);
+      return;
     }
+    unawaited(_ensureResponder(state, binding));
   }
 
   void _handleEndOfStream(RpcResponderStreamState state) {
@@ -581,6 +601,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // messages, so end-of-stream is what starts them, not an error.
     if (binding.type == RpcMethodType.clientStream ||
         binding.type == RpcMethodType.bidirectionalStream) {
+      // A client-stream responder bound earlier is fed by the pipeline, so the
+      // half-close has to be handed to it here; _ensureResponder would return
+      // early and the handler would wait forever on a peer that had finished.
+      if (state.hasRequestSink) {
+        state.endRequests();
+        return;
+      }
       unawaited(_ensureResponder(state, binding));
       return;
     }
@@ -796,9 +823,16 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       state.responder = responder;
       unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
 
-      final saved = state.takeClientBufferedMessages(markEndOfStream: true);
+      // NOT markEndOfStream: the responder now starts on the first request
+      // frame, so the buffer holds a mid-call prefix and stamping its last
+      // message as end-of-stream would close the handler's request stream
+      // after one chunk. _pipelineFedRequestStream replays the half-close when
+      // the peer has already sent one, which covers the zero-message call.
       responder.bindToMessageStream(
-        _stateBoundStream(state, streamId, initialMessages: saved),
+        _pipelineFedRequestStream(
+          state,
+          initialMessages: state.takeClientBufferedMessages(),
+        ),
       );
       return;
     }
@@ -835,9 +869,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     state.responder = responder;
     unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
 
-    final saved = state.takeClientBufferedMessages(markEndOfStream: true);
+    // See the zero-copy branch above: the buffer is a mid-call prefix now, and
+    // _pipelineFedRequestStream supplies the half-close when there is one.
     responder.bindToMessageStream(
-      _stateBoundStream(state, streamId, initialMessages: saved),
+      _pipelineFedRequestStream(
+        state,
+        initialMessages: state.takeClientBufferedMessages(),
+      ),
     );
   }
 
@@ -1135,6 +1173,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final state = _respStreams.take(streamId);
     if (state == null) return;
     state.cancelDeadline();
+    // End the client-stream request feed first: a handler parked in
+    // `await for (requests)` has to be released before its responder is closed.
+    state.closeRequestSink();
 
     final responder = state.responder;
     if (responder != null) await _closeResponder(responder);
@@ -1161,6 +1202,35 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  /// Request stream for a client-stream responder, fed by this pipeline.
+  ///
+  /// Unlike [_stateBoundStream] this does NOT subscribe to
+  /// `transport.getMessagesForStream`. A client-stream responder is bound on
+  /// the call's first request frame and then consumes for the rest of the call,
+  /// so it would depend on that per-stream view carrying every LATER frame --
+  /// and the default implementation in [IRpcTransport] is a plain `where` over
+  /// the non-replaying broadcast, which drops whatever the transport dispatched
+  /// before the subscription existed. `RpcChannelTransport` overrides it with
+  /// per-stream buffering, but a transport is a public extension point and the
+  /// pipeline already observes every frame, so it forwards them itself.
+  Stream<RpcTransportMessage> _pipelineFedRequestStream(
+    RpcResponderStreamState state, {
+    required Iterable<RpcTransportMessage> initialMessages,
+  }) {
+    final controller = StreamController<RpcTransportMessage>();
+    state.attachRequestSink(controller);
+
+    for (final message in initialMessages) {
+      state.pushRequest(message);
+    }
+    // The peer may have half-closed before the responder was bound -- always
+    // the case for a call that carried no messages at all, which is legal.
+    if (state.clientEnded) state.endRequests();
+
+    controller.onCancel = () => state.detachRequestSink();
+    return controller.stream;
   }
 
   Stream<RpcTransportMessage> _stateBoundStream(
