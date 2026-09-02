@@ -1058,6 +1058,26 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             _responseController.addError(
               RpcDeadlineExceededException(deadline, Duration.zero),
             );
+          } else {
+            // Reaching here with the controller still OPEN means the stream
+            // ended without an end-of-stream message: a normal finish, an
+            // error trailer, a cancellation and a deadline all close it before
+            // now (see _handleResponse and the scope disposers). So the RPC is
+            // incomplete — the transport went away mid-call — and gRPC calls a
+            // stream that ends without a trailer UNAVAILABLE.
+            //
+            // This used to close silently, so a server-stream or bidi consumer
+            // whose connection died mid-stream saw a clean end and could not
+            // tell a truncated result from a complete one. Measured by tearing
+            // the transport down under four in-flight calls: unary and
+            // client-stream reported an error, while server and bidi reported
+            // `ok`.
+            _responseController.addError(
+              RpcStatusException(
+                RpcStatus.unavailable,
+                'Stream closed before the server completed the call',
+              ),
+            );
           }
           _responseController.close();
         }
