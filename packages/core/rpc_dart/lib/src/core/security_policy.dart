@@ -79,16 +79,30 @@ final class RpcSecurityPolicy {
   /// `grpc-timeout` is the only other thing that bounds a stream's life, and it
   /// is supplied by the peer, so an attacker simply omits it.
   ///
-  /// That made [maxActiveStreams] the exact size of a permanent wedge. Measured
-  /// against a server configured with `maxActiveStreams: 8`, eight metadata-only
-  /// frames left `openStreams: 8` indefinitely and every subsequent call --
-  /// from any client -- failed with RESOURCE_EXHAUSTED. At the 4096 default
-  /// that is 4096 tiny frames, unauthenticated, to take a server offline for
-  /// good.
+  /// Measured against a server configured with `maxActiveStreams: 8`, eight
+  /// metadata-only frames left `openStreams: 8` indefinitely and every
+  /// subsequent call ON THAT CONNECTION failed with RESOURCE_EXHAUSTED.
+  ///
+  /// Scope, stated precisely because an earlier version of this comment
+  /// overstated it: a responder endpoint is created per connection, so
+  /// [maxActiveStreams] and the stream table are per connection too. Wedging
+  /// one connection does not touch another -- verified with two connections,
+  /// where the untouched one kept serving. The cost that does cross
+  /// connections is memory: 2000 parked streams held 68.2 MB, about 33 KiB
+  /// each, so a peer can pin roughly [maxActiveStreams] x 33 KiB per
+  /// connection it opens.
   ///
   /// The window only covers dispatch, so it never applies to a running handler:
   /// a long call, a slow client-stream, or an idle server-push subscription are
   /// all unaffected once their handler has started. Set to null to disable.
+  ///
+  /// LIMITATION: because it covers dispatch only, one request frame buys a peer
+  /// the same parked stream at the cost of ~30 extra bytes -- the handler is
+  /// then dispatched and waits forever on a request stream that never
+  /// half-closes. Measured, that restores `openStreams: 8` exactly as before.
+  /// Bounding that needs an idle-stream timeout, which cannot be safe by
+  /// default: a stream idle in BOTH directions is also what a legitimate
+  /// rare-event subscription looks like.
   final Duration? halfOpenStreamTimeout;
 
   /// Per-stream flow-control window in bytes, or null to disable.

@@ -91,11 +91,20 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// that window, so a peer that sent one opening frame and stopped parked
   /// responder state permanently. Measured against `maxActiveStreams: 8`, eight
   /// metadata-only frames left openStreams at 8 indefinitely and every later
-  /// call, from any client, failed RESOURCE_EXHAUSTED -- so the concurrency
-  /// ceiling was also the exact size of a permanent, unauthenticated wedge.
+  /// call ON THAT CONNECTION failed RESOURCE_EXHAUSTED.
+  ///
+  /// The stream table is per connection, so this does not reach other clients
+  /// -- verified with two connections, where the untouched one kept serving.
+  /// The cost that does cross connections is memory: about 33 KiB per parked
+  /// stream, so roughly maxActiveStreams x 33 KiB per connection a peer opens.
   ///
   /// Armed once per stream and cancelled at dispatch, so a running handler is
   /// never affected however long it lives.
+  ///
+  /// That is also its limit: a peer that sends one request frame gets the same
+  /// parked stream for ~30 extra bytes, since the handler is then dispatched
+  /// and waits forever on a request stream that never half-closes. See
+  /// [RpcSecurityPolicy.halfOpenStreamTimeout].
   void _armHalfOpenReclaim(RpcResponderStreamState state) {
     if (state.responder != null) return;
     final timeout = _respHalfOpenTimeout;
