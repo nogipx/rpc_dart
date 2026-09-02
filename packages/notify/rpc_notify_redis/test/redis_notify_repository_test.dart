@@ -231,5 +231,57 @@ void main() {
       },
       timeout: const Timeout(Duration(seconds: 10)),
     );
+
+    test(
+      'recovers from a SECOND drop, so the reconnect latch is never stranded',
+      () async {
+        // Repeated recovery, which one drop does not show.
+        //
+        // Honest about what this does NOT cover: the stranding that took a
+        // managed deployment down for 22 hours needed `_closeConnections` to
+        // throw synchronously, and that path is now unreachable — the close is
+        // guarded, and the latch is released in a `finally` besides. So this
+        // test passes against the broken version too. It is here because
+        // recovering twice is worth pinning, not because it guards that bug;
+        // guarding it would need a seam whose only purpose is to re-open the
+        // hole the fix closed.
+        const topic = 'reconnect-twice';
+        final received = <String>[];
+
+        repo
+            .subscribe('client-1', topic)
+            .listen((e) => received.add(e.payload['v'] as String));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        Future<void> killPubsub() async {
+          final admin = await RedisConnection().connect(_host, _port);
+          try {
+            await admin.send_object(['CLIENT', 'KILL', 'TYPE', 'pubsub']);
+          } finally {
+            await admin.get_connection().close();
+          }
+          // onDone is immediate, then the first backoff (1s).
+          await Future<void>.delayed(const Duration(milliseconds: 1500));
+        }
+
+        await killPubsub();
+        await killPubsub();
+
+        final publisher = await _connect();
+        try {
+          publisher.publish(topic, {'v': 'after-two-drops'});
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          expect(
+            received,
+            ['after-two-drops'],
+            reason: 'a latch released only on the happy path leaves the '
+                'repository dead from the second drop onward',
+          );
+        } finally {
+          await publisher.dispose();
+        }
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
   });
 }

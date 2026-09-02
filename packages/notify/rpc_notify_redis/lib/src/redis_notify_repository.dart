@@ -44,13 +44,15 @@ class RedisNotifyRepository implements INotifyRepository {
     bool useTls = false,
     String keyPrefix = 'rpc_notify:',
     Duration healthCheckInterval = const Duration(seconds: 10),
+    void Function(String message)? onLog,
   }) : _host = host,
        _port = port,
        _username = username,
        _password = password,
        _useTls = useTls,
        _keyPrefix = keyPrefix,
-       _healthCheckInterval = healthCheckInterval;
+       _healthCheckInterval = healthCheckInterval,
+       _onLog = onLog;
 
   static Future<RedisNotifyRepository> connect({
     String host = 'localhost',
@@ -60,6 +62,13 @@ class RedisNotifyRepository implements INotifyRepository {
     bool useTls = false,
     String keyPrefix = 'rpc_notify:',
     Duration healthCheckInterval = const Duration(seconds: 10),
+
+    /// Where a connection loss and its recovery are reported.
+    ///
+    /// Optional, but its absence is how a dead repository stayed invisible for
+    /// 22 hours: nothing here ever spoke, so "connected and idle" and "gone
+    /// and not coming back" produced the same empty log.
+    void Function(String message)? onLog,
   }) async {
     final repo = RedisNotifyRepository._(
       host: host,
@@ -69,6 +78,7 @@ class RedisNotifyRepository implements INotifyRepository {
       useTls: useTls,
       keyPrefix: keyPrefix,
       healthCheckInterval: healthCheckInterval,
+      onLog: onLog,
     );
     await repo._openConnections();
     repo._startHealthCheck();
@@ -89,6 +99,7 @@ class RedisNotifyRepository implements INotifyRepository {
   final bool _useTls;
   final String _keyPrefix;
   final Duration _healthCheckInterval;
+  final void Function(String message)? _onLog;
 
   // Publisher connection: PUBLISH + PING. Never enters subscribe mode.
   Command? _pubCmd;
@@ -170,31 +181,69 @@ class RedisNotifyRepository implements INotifyRepository {
   }
 
   Future<void> _handleReconnect() async {
-    await _closeConnections();
-    var attempt = 0;
-    while (!_disposed) {
-      final delaySecs =
-          _reconnectDelays[attempt.clamp(0, _reconnectDelays.length - 1)];
-      await Future<void>.delayed(Duration(seconds: delaySecs));
-      if (_disposed) return;
-      try {
-        await _openConnections();
-        _reconnecting = false;
-        _startHealthCheck();
-        return;
-      } catch (_) {
-        attempt++;
+    // `_reconnecting` is a latch that gates BOTH this method and the health
+    // check's ping. Anything that leaves it set strands the repository: every
+    // later `_onConnectionLost` and every ping returns on its first line, so
+    // it never reconnects and never says why.
+    //
+    // It could be stranded, and was. `_closeConnections` ran outside the try;
+    // its `.catchError` handles a rejected future but not a SYNCHRONOUS throw
+    // from `get_connection()`, and this whole method is started with
+    // `unawaited`, so such a throw had nowhere to go. A managed deployment
+    // sat 22 hours with no Redis connection at all, no reconnect attempts and
+    // not one line in the log — publishes went nowhere and no client received
+    // a notification in that time.
+    //
+    // The latch is now released in a `finally` no matter how the body ends.
+    try {
+      await _closeConnections();
+      var attempt = 0;
+      while (!_disposed) {
+        final delaySecs =
+            _reconnectDelays[attempt.clamp(0, _reconnectDelays.length - 1)];
+        await Future<void>.delayed(Duration(seconds: delaySecs));
+        if (_disposed) return;
+        try {
+          await _openConnections();
+          _startHealthCheck();
+          _onLog?.call('redis notify: reconnected after ${attempt + 1} '
+              'attempt(s)');
+          return;
+        } catch (e) {
+          attempt++;
+          // Said out loud, and only while it is still news: a permanent
+          // failure that logs nothing is indistinguishable from a healthy
+          // idle system, which is exactly how 22 hours passed.
+          if (attempt <= _reconnectDelays.length) {
+            _onLog?.call('redis notify: reconnect attempt $attempt failed: $e');
+          }
+        }
       }
+    } finally {
+      _reconnecting = false;
     }
   }
 
   Future<void> _closeConnections() async {
-    await _pubsubStreamSub?.cancel().catchError((_) {});
+    // Every step guarded, including against a SYNCHRONOUS throw. `catchError`
+    // covers a rejected future; `get_connection()` on a half-dead client can
+    // throw before one exists, and that escaped — which is what stranded the
+    // reconnect latch. Closing is best-effort by nature: the connection we are
+    // trying to close is already gone.
+    Future<void> quietly(FutureOr<void> Function() step) async {
+      try {
+        await step();
+      } catch (_) {
+        // Nothing to do about a connection that will not close.
+      }
+    }
+
+    await quietly(() => _pubsubStreamSub?.cancel());
     _pubsubStreamSub = null;
     _pubsub = null;
-    await _subCmd?.get_connection().close().catchError((_) {});
+    await quietly(() => _subCmd?.get_connection().close());
     _subCmd = null;
-    await _pubCmd?.get_connection().close().catchError((_) {});
+    await quietly(() => _pubCmd?.get_connection().close());
     _pubCmd = null;
   }
 
