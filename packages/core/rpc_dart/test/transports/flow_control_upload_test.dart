@@ -145,6 +145,19 @@ Future<void> _teardown(_Rig r) async {
   await r.server.close();
 }
 
+/// Polls until [condition] holds, up to [timeout]. The unbounded witnesses need
+/// this: asserting "the producer got far ahead" after a fixed sleep measures
+/// CPU speed, which collapses on a loaded test runner.
+Future<void> _waitUntil(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 15),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!condition() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
 /// Requests supplied by a generator, so [pulled] counts what the library took
 /// rather than what a StreamController accepted.
 Stream<RpcString> _gen(int n, void Function() onPull) async* {
@@ -216,7 +229,7 @@ void main() {
             .drain<void>()
             .catchError((Object _) {}),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await _waitUntil(() => pulled > 1000);
       expect(
         pulled,
         greaterThan(1000),
@@ -266,7 +279,7 @@ void main() {
             )(_gen(2000, () => pulled++))
             .catchError((Object _) => ''.rpc),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await _waitUntil(() => pulled > 1000);
       expect(pulled, greaterThan(1000));
       _hold.complete();
       await _teardown(rig);

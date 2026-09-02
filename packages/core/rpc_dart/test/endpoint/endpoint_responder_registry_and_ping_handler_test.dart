@@ -107,6 +107,11 @@ void main() {
         context: RpcContext.withHeaders({'x': 'y'}),
         onComplete: () async {},
       );
+      // respond() returning does not mean the frames have reached this
+      // listener: stream delivery is asynchronous, so the trailer lands a
+      // microtask later. Asserting immediately happened to work only while
+      // nothing else was queued ahead of it on the channel.
+      await Future<void>.delayed(Duration.zero);
 
       final trailer = metadata
           .map((m) => m.getHeaderValue(RpcHeaders.grpcStatus))

@@ -137,9 +137,23 @@ Future<void> _teardown(_Rig r) async {
   await r.server.close();
 }
 
+/// Polls until [condition] holds, up to [timeout]. Used by the unbounded
+/// witnesses: asserting "the producer got far ahead" after a fixed sleep
+/// measures CPU speed, which collapses under a loaded test runner.
+Future<void> _waitUntil(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 15),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!condition() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
 /// Runs the firehose with the consumer paused, returning messages produced
-/// after the pause.
-Future<int> _overrunAfterPause(_Rig rig) async {
+/// after the pause. When [until] is given, waits for it instead of a fixed
+/// window.
+Future<int> _overrunAfterPause(_Rig rig, {bool Function(int)? until}) async {
   final sub = rig.caller
       .serverStream<RpcString, RpcString>(
         serviceName: 'Svc',
@@ -153,7 +167,11 @@ Future<int> _overrunAfterPause(_Rig rig) async {
   await Future<void>.delayed(const Duration(milliseconds: 150));
   sub.pause();
   final atPause = _produced;
-  await Future<void>.delayed(const Duration(milliseconds: 900));
+  if (until == null) {
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+  } else {
+    await _waitUntil(() => until(_produced - atPause));
+  }
   final overrun = _produced - atPause;
 
   _stop.complete();
@@ -199,7 +217,7 @@ void main() {
       // The witness for what this fixes: without a window the same handler
       // runs thousands of messages ahead.
       final rig = _connect(window: null);
-      final overrun = await _overrunAfterPause(rig);
+      final overrun = await _overrunAfterPause(rig, until: (n) => n > 2000);
       expect(
         overrun,
         greaterThan(2000),

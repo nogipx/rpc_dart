@@ -108,6 +108,19 @@ final class RpcSecurityPolicy {
   /// than run two windows over each other.
   final int? flowControlWindowBytes;
 
+  /// Connection-wide flow-control window in bytes, or null to disable.
+  ///
+  /// [flowControlWindowBytes] bounds one stream; this bounds their sum. Without
+  /// it a peer simply opens more streams: measured with 100 concurrent server
+  /// streams whose consumers all paused, each holding a 1 MB window, 361 MB was
+  /// retained, and the default ceiling of 4096 streams at 4 MB each puts the
+  /// reachable total near 17 GB.
+  ///
+  /// Sharing one pool means a stream whose consumer has stalled can hold credit
+  /// other streams need -- the same head-of-line coupling HTTP/2's connection
+  /// window has, and the price of bounding the total.
+  final int? flowControlConnectionWindowBytes;
+
   /// Creates an [RpcSecurityPolicy] with the given limits.
   const RpcSecurityPolicy({
     this.maxMessageLengthBytes = 16 * 1024 * 1024,
@@ -125,6 +138,7 @@ final class RpcSecurityPolicy {
     this.closeOnProtocolError = true,
     this.halfOpenStreamTimeout = const Duration(seconds: 60),
     this.flowControlWindowBytes = 4 * 1024 * 1024,
+    this.flowControlConnectionWindowBytes = 64 * 1024 * 1024,
   });
 
   /// Serializes this policy to a plain map.
@@ -148,6 +162,7 @@ final class RpcSecurityPolicy {
     'halfOpenStreamTimeoutMs': halfOpenStreamTimeout?.inMilliseconds ?? 0,
     // Explicit 0 for disabled, same reason as above.
     'flowControlWindowBytes': flowControlWindowBytes ?? 0,
+    'flowControlConnectionWindowBytes': flowControlConnectionWindowBytes ?? 0,
   };
 
   /// Creates an [RpcSecurityPolicy] from a plain map, using defaults for missing keys.
@@ -196,6 +211,12 @@ final class RpcSecurityPolicy {
         final int _ => null,
         _ => 4 * 1024 * 1024,
       },
+      flowControlConnectionWindowBytes:
+          switch (map['flowControlConnectionWindowBytes']) {
+            final int bytes when bytes > 0 => bytes,
+            final int _ => null,
+            _ => 64 * 1024 * 1024,
+          },
     );
   }
 

@@ -75,6 +75,18 @@ abstract final class RpcHeaders {
   /// handshake.
   static const xWindowUpdate = 'x-rpc-window-update';
 
+  /// Connection-level flow-control credit, in bytes, granted to the peer.
+  ///
+  /// Per-stream windows bound one call; nothing bounded their sum. Measured
+  /// with 100 concurrent server streams whose consumers all paused, each with
+  /// a 1 MB window: 361 MB retained. At the default ceiling of 4096 streams
+  /// and a 4 MB window the aggregate a peer can pin is ~17 GB.
+  ///
+  /// Carried on stream 0, which is never a call, and consumed by the transport
+  /// before any routing -- so a peer that predates it ignores the frame just as
+  /// it ignores a per-stream grant.
+  static const xConnWindowUpdate = 'x-rpc-conn-window-update';
+
   // ---------------------------------------------------------------------------
   // Reserved (protocol-controlled) headers
   // ---------------------------------------------------------------------------
@@ -112,6 +124,7 @@ abstract final class RpcHeaders {
     // carrying the key would let a caller lift its own peer's flow-control
     // limit, which is the one thing the limit exists to prevent.
     xWindowUpdate,
+    xConnWindowUpdate,
   };
 
   /// Whether [name] (case-insensitive) is a protocol-reserved header that user

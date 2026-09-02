@@ -125,6 +125,18 @@ Future<List<int>> _openHalfOpen(_Rig rig, int n) async {
 int _open(_Rig rig) =>
     rig.responder.collectEndpointMetrics()['openStreams']! as int;
 
+/// Polls until [condition] holds. A fixed sleep is measuring the scheduler:
+/// under a loaded test runner a 300ms timer can fire well past 700ms.
+Future<void> _waitUntil(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 15),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!condition() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
 void main() {
   setUp(() {
     _hold = Completer<void>();
@@ -138,10 +150,13 @@ void main() {
     test('the slots come back and the server keeps serving', () async {
       final rig = _connect();
       final ids = await _openHalfOpen(rig, 8);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      // Wait for them to REGISTER before waiting for them to go: the server
+      // processes the frames asynchronously, so polling straight for zero
+      // succeeds instantly on a count that has not been reached yet.
+      await _waitUntil(() => _open(rig) == 8);
       expect(_open(rig), 8, reason: 'all eight should be parked at first');
 
-      await Future<void>.delayed(const Duration(milliseconds: 700));
+      await _waitUntil(() => _open(rig) == 0);
       expect(
         _open(rig),
         0,
@@ -170,7 +185,8 @@ void main() {
       final rig = _connect();
       for (var wave = 0; wave < 3; wave++) {
         final ids = await _openHalfOpen(rig, 4);
-        await Future<void>.delayed(const Duration(milliseconds: 700));
+        await _waitUntil(() => _open(rig) == 4);
+        await _waitUntil(() => _open(rig) == 0);
         expect(_open(rig), 0, reason: 'wave $wave should be fully reclaimed');
         for (final id in ids) {
           rig.client.releaseStreamId(id);
@@ -183,6 +199,8 @@ void main() {
       // Opt-out has to actually opt out.
       final rig = _connect(halfOpen: null);
       await _openHalfOpen(rig, 4);
+      await _waitUntil(() => _open(rig) == 4);
+      // Then give reclamation every chance to happen, and assert it did not.
       await Future<void>.delayed(const Duration(milliseconds: 700));
       expect(_open(rig), 4);
       await _teardown(rig);

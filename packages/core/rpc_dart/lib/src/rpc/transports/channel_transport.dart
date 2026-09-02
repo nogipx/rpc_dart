@@ -83,6 +83,24 @@ class RpcChannelTransport
   final Set<int> _fcDeferred = {};
 
   int? get _fcWindow => _policy.flowControlWindowBytes;
+
+  // Connection-wide pool, shared by every stream. Per-stream windows bound one
+  // call; without this a peer just opens more of them -- 100 paused streams at
+  // 1 MB each retained 361 MB, and the default ceiling puts the reachable
+  // total near 17 GB.
+  int? get _fcConnWindow => _policy.flowControlConnectionWindowBytes;
+
+  /// Connection-wide send credit, in bytes. Null until the peer advertises,
+  /// which is what keeps a peer that predates this from being throttled.
+  int? _fcConnCredit;
+
+  /// Bytes consumed but not yet granted back at connection level.
+  int _fcConnPending = 0;
+
+  bool _fcConnAdvertised = false;
+
+  /// Stream id reserved for connection-level control frames; never a call.
+  static const int _fcConnStreamId = 0;
   StreamSubscription<RpcTransportMessage>? _channelSub;
   bool _closed = false;
 
@@ -96,6 +114,12 @@ class RpcChannelTransport
   }) : _channel = channel,
        _idManager = RpcStreamIdManager(isClient: isClient),
        _policy = policy {
+    // Advertise the connection window immediately rather than on the first
+    // inbound frame. Waiting cost a full round trip during which the peer was
+    // unbounded, and with many streams opening at once that startup burst was
+    // most of the traffic: 100 streams put ~64 MB in flight against a 2 MB
+    // window.
+    _fcAdvertiseConnection();
     _channelSub = _channel.incoming.listen(
       _onMessage,
       onError: (Object e) => _incoming.addError(e),
@@ -319,9 +343,12 @@ class RpcChannelTransport
     for (final streamId in _fcSendWaiters.keys.toList(growable: false)) {
       _fcWake(streamId);
     }
+    _fcWakeConnection();
     _fcSendCredit.clear();
     _fcPendingGrant.clear();
     _fcAdvertised.clear();
+    _fcConnCredit = null;
+    _fcConnPending = 0;
     _idManager.reset();
 
     try {
@@ -417,15 +444,17 @@ class RpcChannelTransport
   /// synchronous: no window configured, or a peer that has never granted (and
   /// so is not participating), both take credit immediately.
   bool _fcTryConsume(int streamId, int bytes) {
-    if (_fcWindow == null) return true;
-    final credit = _fcSendCredit[streamId];
-    // No entry means the peer has not advertised: stay unbounded.
-    if (credit == null) return true;
-    if (credit > 0) {
-      _fcSendCredit[streamId] = credit - bytes;
-      return true;
-    }
-    return false;
+    // Both windows must admit the message, and neither is charged unless both
+    // do -- charging one and parking on the other would leak credit on every
+    // blocked send.
+    final streamCredit = _fcWindow == null ? null : _fcSendCredit[streamId];
+    final connCredit = _fcConnWindow == null ? null : _fcConnCredit;
+    // Null means the peer has not advertised that level: stay unbounded there.
+    if (streamCredit != null && streamCredit <= 0) return false;
+    if (connCredit != null && connCredit <= 0) return false;
+    if (streamCredit != null) _fcSendCredit[streamId] = streamCredit - bytes;
+    if (connCredit != null) _fcConnCredit = connCredit - bytes;
+    return true;
   }
 
   /// Parks the caller until [bytes] of send credit are available.
@@ -435,6 +464,24 @@ class RpcChannelTransport
       final waiter = Completer<void>();
       (_fcSendWaiters[streamId] ??= []).add(waiter);
       await waiter.future;
+    }
+  }
+
+  /// Wakes every parked sender, whichever stream it is on.
+  ///
+  /// Connection credit is shared, so a grant can unblock a sender on any
+  /// stream. Waking through the per-stream lists keeps each waiter in exactly
+  /// one place: registering it in a second, connection-level list leaked one
+  /// completer per blocked send, since waking through either list left the
+  /// stale entry in the other. It showed up as RSS growing as the window
+  /// SHRANK -- 2 MB kept 168 MB against 32 MB keeping 24 MB -- because a
+  /// smaller window parks more often.
+  ///
+  /// The wait loop re-checks both levels, so a spurious wake is harmless.
+  void _fcWakeConnection() {
+    if (_fcSendWaiters.isEmpty) return;
+    for (final streamId in _fcSendWaiters.keys.toList(growable: false)) {
+      _fcWake(streamId);
     }
   }
 
@@ -464,7 +511,11 @@ class RpcChannelTransport
   }
 
   /// Accumulates [bytes] of returned credit and grants at half the window.
+  ///
+  /// Consumption frees BOTH levels: the message left the connection pool as
+  /// well as its own stream.
   void _fcCredit(int streamId, int bytes) {
+    _fcCreditConnection(bytes);
     final window = _fcWindow;
     if (window == null) return;
     final pending = (_fcPendingGrant[streamId] ?? 0) + bytes;
@@ -474,6 +525,40 @@ class RpcChannelTransport
     }
     _fcPendingGrant[streamId] = 0;
     unawaited(_fcSendGrant(streamId, pending));
+  }
+
+  void _fcCreditConnection(int bytes) {
+    final window = _fcConnWindow;
+    if (window == null) return;
+    _fcConnPending += bytes;
+    if (_fcConnPending < (window ~/ 2).clamp(1, window)) return;
+    final granted = _fcConnPending;
+    _fcConnPending = 0;
+    unawaited(_fcSendConnGrant(granted));
+  }
+
+  Future<void> _fcSendConnGrant(int bytes) async {
+    if (_closed) return;
+    try {
+      await _channel.send(
+        RpcTransportMessage.withMetadata(
+          metadata: RpcMetadata([
+            RpcHeader(RpcHeaders.xConnWindowUpdate, bytes.toString()),
+          ]),
+          streamId: _fcConnStreamId,
+        ),
+      );
+    } catch (_) {
+      // See _fcSendGrant.
+    }
+  }
+
+  /// Advertises the connection window once per connection.
+  void _fcAdvertiseConnection() {
+    final window = _fcConnWindow;
+    if (window == null || _fcConnAdvertised) return;
+    _fcConnAdvertised = true;
+    unawaited(_fcSendConnGrant(window));
   }
 
   /// Advertises the initial window the first time a stream is seen. This is
@@ -504,10 +589,19 @@ class RpcChannelTransport
 
   /// Consumes an inbound grant, returning true when [message] was one.
   bool _fcHandleInbound(RpcTransportMessage message) {
-    if (_fcWindow == null) return false;
+    if (_fcWindow == null && _fcConnWindow == null) return false;
     final metadata = message.metadata;
     if (metadata == null || !message.isMetadataOnly) return false;
     if (message.methodPath != null) return false;
+    final connRaw = metadata.getHeaderValue(RpcHeaders.xConnWindowUpdate);
+    if (connRaw != null) {
+      final granted = int.tryParse(connRaw);
+      if (granted != null && granted > 0) {
+        _fcConnCredit = (_fcConnCredit ?? 0) + granted;
+        _fcWakeConnection();
+      }
+      return true;
+    }
     final raw = metadata.getHeaderValue(RpcHeaders.xWindowUpdate);
     if (raw == null) return false;
     final granted = int.tryParse(raw);
@@ -568,6 +662,7 @@ class RpcChannelTransport
 
     // Tell the peer our window as soon as it opens a stream. Until this lands
     // the peer sends unbounded, which is what keeps an unaware peer working.
+    _fcAdvertiseConnection();
     _fcAdvertise(message.streamId);
 
     // Per-stream controllers are single-subscription and buffer until their
