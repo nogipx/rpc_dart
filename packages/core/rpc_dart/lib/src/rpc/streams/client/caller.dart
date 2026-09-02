@@ -149,11 +149,20 @@ final class ClientStreamCaller<
         if (!_responseCompleter.isCompleted) {
           // Might be transport close; surface error if still pending.
           try {
+            // Our own deadline takes precedence over whatever the transport
+            // reports as it collapses. The server tears its stream down when
+            // the same deadline passes, which closes this stream at almost the
+            // same instant -- and reporting UNAVAILABLE for that is a race:
+            // whichever landed first decided the caller's exception type.
+            // If the deadline has passed, the deadline is why the call failed.
+            final deadline = _context?.deadline;
             _responseCompleter.completeError(
-              RpcStatusException(
-                RpcStatus.unavailable,
-                'Stream closed without receiving response',
-              ),
+              deadline != null && (_context?.isExpired ?? false)
+                  ? RpcDeadlineExceededException(deadline, Duration.zero)
+                  : RpcStatusException(
+                      RpcStatus.unavailable,
+                      'Stream closed without receiving response',
+                    ),
             );
           } catch (e) {
             // If completer already finished, ignore.

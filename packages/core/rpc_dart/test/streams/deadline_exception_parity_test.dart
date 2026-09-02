@@ -34,10 +34,17 @@ final _codec = RpcCodec(RpcString.fromJson);
 /// Set when a handler's cancellation token fires.
 final Map<String, bool> _tokenFired = {};
 
+/// Set when a handler actually starts. A deadline can expire before the
+/// responder dispatches, in which case the call is correctly abandoned and the
+/// handler never runs at all -- so "the token fired" is only assertable when
+/// there was a handler to observe it.
+final Map<String, bool> _started = {};
+
 final class _Contract extends RpcResponderContract {
   _Contract() : super('Svc');
 
   void _watch(String name, RpcContext? ctx) {
+    _started[name] = true;
     ctx?.cancellationToken?.cancelled.then((_) => _tokenFired[name] = true);
   }
 
@@ -176,7 +183,10 @@ Future<Object?> _drive(_Rig rig, String shape, RpcContext? ctx) async {
 }
 
 void main() {
-  setUp(_tokenFired.clear);
+  setUp(() {
+    _tokenFired.clear();
+    _started.clear();
+  });
 
   group('every shape reports an expired deadline the same way', () {
     for (final shape in ['unary', 'server', 'client', 'bidi']) {
@@ -208,13 +218,20 @@ void main() {
           reason: '$shape ran well past its 500ms deadline',
         );
 
-        // Parity that already held, pinned so it keeps holding.
+        // Parity that already held, pinned so it keeps holding -- but only
+        // meaningful if the handler ever started. A deadline can expire before
+        // the responder dispatches (this suite runs ~1000 tests in parallel),
+        // and such a call is now correctly abandoned rather than dispatched
+        // late, so the handler legitimately never runs and never sees a token.
+        // Asserting unconditionally made this flake roughly 1 run in 10.
         await Future<void>.delayed(const Duration(milliseconds: 250));
-        expect(
-          _tokenFired[shape],
-          isTrue,
-          reason: '$shape did not tell the server to stop',
-        );
+        if (_started[shape] == true) {
+          expect(
+            _tokenFired[shape],
+            isTrue,
+            reason: '$shape started its handler but never told it to stop',
+          );
+        }
 
         await _teardown(rig);
       });

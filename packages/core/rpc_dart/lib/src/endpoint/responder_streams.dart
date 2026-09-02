@@ -57,10 +57,31 @@ final class RpcResponderStreamState {
     _deadlineTimer = Timer(remaining, onExceeded);
   }
 
-  /// Cancels the deadline timer, if any.
+  Timer? _reclaimTimer;
+
+  /// Arms the resource-reclamation backstop, [after] the deadline has passed.
+  ///
+  /// Separate from [armDeadline] because the two jobs have different timing
+  /// requirements. Cancelling the handler must happen AT the deadline, so a
+  /// cooperative handler unwinds promptly. Reclaiming the stream must happen
+  /// LATER: the peer reaches the same deadline at roughly the same moment and
+  /// reports it locally, and tearing the stream down in that window ends the
+  /// peer's stream with a bare close instead — indistinguishable from the
+  /// server having finished, so the caller sees a silently truncated stream
+  /// rather than a deadline. The server's own deadline is derived from
+  /// `grpc-timeout` and so fires slightly EARLIER than the caller's, which is
+  /// what makes simultaneous teardown lose that race rather than win it.
+  void armReclaim(Duration after, void Function() onReclaim) {
+    _reclaimTimer?.cancel();
+    _reclaimTimer = Timer(after, onReclaim);
+  }
+
+  /// Cancels the deadline and reclamation timers, if any.
   void cancelDeadline() {
     _deadlineTimer?.cancel();
     _deadlineTimer = null;
+    _reclaimTimer?.cancel();
+    _reclaimTimer = null;
   }
 
   /// True when a method key has been assigned.

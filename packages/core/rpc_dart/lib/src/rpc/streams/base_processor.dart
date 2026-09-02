@@ -1039,6 +1039,19 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           'Response stream completed for $_methodPath [streamId: $_streamId]',
         );
         if (!_responseController.isClosed) {
+          // Our own deadline is authoritative over a bare close. The peer ends
+          // its stream when the same deadline passes, which closes this one at
+          // almost the same instant -- and as _setupDeadlineMonitoring already
+          // notes, a bare close is indistinguishable from the server having
+          // finished, so the consumer would get a silently truncated stream
+          // instead of DEADLINE_EXCEEDED. Which happened depended on who won
+          // the race.
+          final deadline = _context?.deadline;
+          if (deadline != null && (_context?.isExpired ?? false)) {
+            _responseController.addError(
+              RpcDeadlineExceededException(deadline, Duration.zero),
+            );
+          }
           _responseController.close();
         }
       },

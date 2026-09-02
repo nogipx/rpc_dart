@@ -1251,14 +1251,55 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   }
 
   /// Called when a stream's deadline elapses: cancels the handler via its
-  /// cancellation token (same path drain() uses) with a deadline reason.
+  /// cancellation token (same path [drain] uses), then ENDS the stream.
+  ///
+  /// Cancelling the token is only a request to stop, and Dart cannot preempt a
+  /// handler that ignores it. This used to be the whole of the deadline
+  /// response, so a handler still running when its deadline passed pinned its
+  /// stream state and its responder forever: 30 such calls left `openStreams:
+  /// 30, activeResponders: 30` on every call shape, and the counters never came
+  /// back down. With [RpcSecurityPolicy.maxActiveStreams] enforced, that turns
+  /// a slow handler into a hard outage once the leak reaches the ceiling.
+  ///
+  /// Reclamation is DEFERRED by this much past the deadline. See [_reclaimGrace]
+  /// and [RpcResponderStreamState.armReclaim] for why it cannot be immediate.
+  static const Duration _reclaimGrace = Duration(seconds: 2);
+
+  /// Tearing the stream down releases the bookkeeping whether the handler
+  /// cooperates or not, but only after [_reclaimGrace]. A cooperative handler
+  /// normally unwinds long before that and cleans up through the usual path,
+  /// so this is a backstop, not the mechanism.
+  ///
+  /// Deliberately does NOT answer with a DEADLINE_EXCEEDED trailer, though
+  /// gRPC would. The peer that set the deadline reaches it at the same moment
+  /// and reports [RpcDeadlineExceededException] locally; a trailer sent here
+  /// races that, and whichever landed first decided the exception type the
+  /// caller saw — observed as RpcStatusException(4) in place of the deadline
+  /// type every other shape reports. The peer is no worse off than before: it
+  /// received nothing then either, while the server also leaked.
   void _onDeadlineExceeded(RpcResponderStreamState state) {
     final token = state.cachedContext?.cancellationToken;
-    if (token == null || token.isCancelled) return;
+    if (token != null && !token.isCancelled) {
+      token.cancel('deadline exceeded');
+    }
     _log.internal(
       'Stream ${state.id} exceeded its deadline — cancelling handler',
     );
-    token.cancel('deadline exceeded');
+
+    // Cancelling the token is only a REQUEST to stop, and Dart cannot preempt
+    // a handler that ignores it. Without this backstop such a handler pinned
+    // its stream state and responder forever: 30 calls whose deadline passed
+    // mid-handler left `openStreams: 30, activeResponders: 30` on every call
+    // shape, and the counters never came back down. With maxActiveStreams
+    // enforced, that leak becomes a hard outage at the ceiling.
+    state.armReclaim(_reclaimGrace, () {
+      if (_respStreams[state.id] == null) return;
+      _log.warning(
+        'Stream ${state.id} still open ${_reclaimGrace.inSeconds}s after its '
+        'deadline — reclaiming',
+      );
+      unawaited(_cleanupStream(state.id));
+    });
   }
 
   RpcContext _ensureResponderContext(RpcResponderStreamState state) {
