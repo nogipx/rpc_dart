@@ -219,15 +219,47 @@ final class ClientStreamCaller<
   }
 
   /// Convenience: send a request stream and return the single response (auto-closes).
+  ///
+  /// Aborts as soon as EITHER the request stream is drained or the call itself
+  /// fails. That second half used to be missing: the body was
+  /// `await for (final r in requests) { await send(r); }`, and a deadline or a
+  /// cancellation is delivered on the RESPONSE path, which that loop never
+  /// reached. A client stream whose producer stalled therefore ignored both
+  /// entirely -- measured with the request stream left open, a 1s deadline and
+  /// a cancellation at 500ms each hung past 4s, while the same call with the
+  /// stream closed returned in 37ms.
   Future<TResponse> call(Stream<TRequest> requests) async {
     _logger.internal('Executing client stream call');
 
-    try {
-      // Send the request stream.
-      await for (final request in requests) {
+    final drained = Completer<void>();
+    // Listening rather than `await for` gives us a subscription to cancel when
+    // the call ends early. Ordering is unaffected: send() queues the write
+    // synchronously onto the processor's send sequence, so it is only the
+    // queueing that is asynchronous.
+    final requestSub = requests.listen(
+      (request) {
+        if (_sendingFinished) return;
         _logger.internal('Sending request: $request');
-        await send(request);
-      }
+        unawaited(
+          send(request).catchError((Object e, StackTrace st) {
+            if (!drained.isCompleted) drained.completeError(e, st);
+          }),
+        );
+      },
+      onError: (Object e, StackTrace st) {
+        if (!drained.isCompleted) drained.completeError(e, st);
+      },
+      onDone: () {
+        if (!drained.isCompleted) drained.complete();
+      },
+    );
+
+    try {
+      // Whichever settles first wins: the request stream draining, or the call
+      // failing. _responseCompleter carries the deadline and cancellation
+      // errors that the request side cannot observe. Future.any consumes the
+      // loser's result, so a late error on the other future is not unhandled.
+      await Future.any<void>([drained.future, _responseCompleter.future]);
 
       _logger.internal('Request stream finished, awaiting response');
 
@@ -237,6 +269,9 @@ final class ClientStreamCaller<
       _logger.error('Client stream call failed', error: e);
       rethrow;
     } finally {
+      // Not awaited: cancelling a stalled producer can block indefinitely, and
+      // the call is already over.
+      unawaited(requestSub.cancel().catchError((_) {}));
       await close();
     }
   }
