@@ -97,6 +97,10 @@ final class UnaryCaller<TRequest, TResponse> {
     StreamSubscription? subscription;
     StreamSubscription? cancellationSubscription;
 
+    /// In-flight "the caller is gone" notice, awaited before the stream id is
+    /// released so the frame goes out on a live id.
+    Future<void>? cancellationNotice;
+
     try {
       // Subscribe to cancellation token if present.
       if (_context?.cancellationToken != null) {
@@ -107,12 +111,24 @@ final class UnaryCaller<TRequest, TResponse> {
                 _logger.warning(
                   'Operation cancelled via cancellation token [streamId: $streamId]',
                 );
-                completer.completeError(
-                  RpcCancelledException(
+                final reason =
                     _context.cancellationToken!.reason ??
-                        'Operation was cancelled',
-                  ),
+                    'Operation was cancelled';
+                // Tell the server. Unary used to cancel purely locally: the
+                // future got RpcCancelledException, the subscription was
+                // dropped, the stream id released — and nothing was ever sent,
+                // so the handler ran to completion for a caller that was
+                // already gone (measured: a 3s job cancelled after 100ms spent
+                // 295 of its 300 work units post-cancellation). The streaming
+                // callers already did this; unary, the most common shape, did
+                // not, on every transport including HTTP/2.
+                cancellationNotice = _notifyPeerOfCancellation(
+                  _transport,
+                  streamId,
+                  reason,
+                  _logger,
                 );
+                completer.completeError(RpcCancelledException(reason));
               }
             });
       }
@@ -370,6 +386,10 @@ final class UnaryCaller<TRequest, TResponse> {
       );
       await subscription?.cancel();
       await cancellationSubscription?.cancel();
+      // Let the cancellation notice finish before the id is released, so the
+      // frame is not sent against an id the transport has already reclaimed.
+      // _notifyPeerOfCancellation never throws.
+      await cancellationNotice;
       // Release the transport stream id; the unary path never calls
       // finishSending(), so without this the id leaks against maxActiveStreams
       // and a long-lived client eventually fails with "Too many active streams".

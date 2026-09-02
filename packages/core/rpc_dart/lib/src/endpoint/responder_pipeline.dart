@@ -534,10 +534,27 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
   }
 
+  /// Handles the peer's `x-client-cancelled` notice for [state].
+  ///
+  /// Trips the handler's cancellation token FIRST, with the client's [reason].
+  /// That token is the server's cooperative-cancellation signal — the one
+  /// [drain] and [_onDeadlineExceeded] both fire — and this path used to be the
+  /// only one that skipped it, ignoring the `reason` it was handed. Tearing the
+  /// responder down stops a `Stream` handler at its next suspension point, but
+  /// says nothing to a handler that polls `context.cancellationToken` or awaits
+  /// `cancelled`, which is the documented way to abandon long work. A 3s unary
+  /// job cancelled by its caller after 100ms ran all 3s to completion (295 of
+  /// 300 work units after the client was already gone).
+  ///
+  /// Cancelling before teardown also means a handler observing the token sees
+  /// the client's reason rather than a bare close.
   Future<void> _handleClientCancellation(
     RpcResponderStreamState state,
     String reason,
   ) async {
+    final token = state.cachedContext?.cancellationToken;
+    if (token != null && !token.isCancelled) token.cancel(reason);
+
     final responder = state.responder;
     if (responder != null) await _closeResponder(responder);
     await _cleanupStream(state.id);

@@ -36,6 +36,70 @@ Future<void> _frameAndSend(
   return transport.sendMessage(streamId, framed);
 }
 
+/// Tells the peer that [streamId] was cancelled, so its handler can stop.
+///
+/// Prefers a transport-level reset. The metadata notice below rides on a frame
+/// with `endStream: true`, which is only legal while this side is still open —
+/// and by cancellation time it usually is not (every caller here half-closes
+/// once its request is sent). Sending it anyway is a protocol violation that
+/// HTTP/2 throws asynchronously out of its stream handler, corrupting the
+/// connection; transports without stream state accept it fine.
+///
+/// Never throws: a best-effort courtesy to the peer must not turn a cancelled
+/// call into a failed teardown.
+Future<void> _notifyPeerOfCancellation(
+  IRpcTransport transport,
+  int streamId,
+  String reason,
+  LogScope logger,
+) async {
+  if (transport is IRpcStreamReset) {
+    try {
+      final reset = await (transport as IRpcStreamReset).resetStream(
+        streamId,
+        reason: reason,
+      );
+      if (reset) {
+        logger.internal(
+          'Cancellation delivered via stream reset [streamId: $streamId]',
+        );
+        return;
+      }
+    } catch (error, stackTrace) {
+      logger.warning(
+        'Stream reset failed, falling back to cancellation metadata '
+        '[streamId: $streamId]',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  try {
+    final cancellationMetadata = RpcMetadata([
+      RpcHeader(RpcHeaders.xClientCancelled, 'true'),
+      RpcHeader(RpcHeaders.xCancellationReason, reason),
+      RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
+    ]);
+
+    logger.internal(
+      'Sending cancellation notice to server [streamId: $streamId]',
+    );
+    await transport.sendMetadata(
+      streamId,
+      cancellationMetadata,
+      endStream: true,
+    );
+    logger.internal('Cancellation notice sent to server [streamId: $streamId]');
+  } catch (e, stackTrace) {
+    logger.error(
+      'Failed to send cancellation metadata [streamId: $streamId]',
+      error: e,
+      stackTrace: stackTrace,
+    );
+  }
+}
+
 /// Shared stream processor: zero-copy when no codecs (zero-copy transport required), otherwise serialized.
 final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final LogScope _logger;
@@ -1139,68 +1203,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   }
 
   /// Sends a cancellation notice to the server.
-  ///
-  /// Prefers a transport-level reset. The notice below rides on a metadata
-  /// frame with `endStream: true`, which is only legal while this side is
-  /// still open — and by cancellation time it usually is not (a server-stream
-  /// half-closes right after its single request). Sending it anyway is a
-  /// protocol violation that HTTP/2 throws asynchronously out of its stream
-  /// handler, corrupting the connection.
-  Future<void> _sendCancellationToServer(String reason) async {
-    final transport = _transport;
-    if (transport is IRpcStreamReset) {
-      try {
-        final reset = await (transport as IRpcStreamReset).resetStream(
-          _streamId,
-          reason: reason,
-        );
-        if (reset) {
-          _logger.internal(
-            'Cancellation delivered via stream reset [streamId: $_streamId]',
-          );
-          return;
-        }
-      } catch (error, stackTrace) {
-        _logger.warning(
-          'Stream reset failed, falling back to cancellation metadata '
-          '[streamId: $_streamId]',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-    }
-
-    try {
-      // Build metadata with cancellation details.
-      final cancellationHeaders = [
-        RpcHeader('x-client-cancelled', 'true'),
-        RpcHeader('x-cancellation-reason', reason),
-        RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
-      ];
-
-      final cancellationMetadata = RpcMetadata(cancellationHeaders);
-
-      _logger.internal(
-        'Sending cancellation notice to server [streamId: $_streamId]',
-      );
-
-      await _transport.sendMetadata(
-        _streamId,
-        cancellationMetadata,
-        endStream: true,
-      );
-
-      _logger.internal(
-        'Cancellation notice sent to server [streamId: $_streamId]',
-      );
-    } catch (e, stackTrace) {
-      _logger.error(
-        'Failed to send cancellation metadata [streamId: $_streamId]',
-        error: e,
-        stackTrace: stackTrace,
-      );
-    }
-  }
+  Future<void> _sendCancellationToServer(String reason) =>
+      _notifyPeerOfCancellation(_transport, _streamId, reason, _logger);
 
   /// Validates context before making the call.
   void _checkContextBeforeCall() {
