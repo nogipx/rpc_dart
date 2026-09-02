@@ -70,6 +70,27 @@ final class RpcSecurityPolicy {
   /// If true, transports should close the connection on protocol violations.
   final bool closeOnProtocolError;
 
+  /// How long a peer-opened stream may sit half-open before it is reclaimed.
+  ///
+  /// A stream is half-open from the moment its opening metadata frame arrives
+  /// until a handler is dispatched, which needs a request message (or, for the
+  /// two streaming-request shapes, a half-close). A peer that sends only the
+  /// opening frame therefore parks responder state that nothing ever reclaimed:
+  /// `grpc-timeout` is the only other thing that bounds a stream's life, and it
+  /// is supplied by the peer, so an attacker simply omits it.
+  ///
+  /// That made [maxActiveStreams] the exact size of a permanent wedge. Measured
+  /// against a server configured with `maxActiveStreams: 8`, eight metadata-only
+  /// frames left `openStreams: 8` indefinitely and every subsequent call --
+  /// from any client -- failed with RESOURCE_EXHAUSTED. At the 4096 default
+  /// that is 4096 tiny frames, unauthenticated, to take a server offline for
+  /// good.
+  ///
+  /// The window only covers dispatch, so it never applies to a running handler:
+  /// a long call, a slow client-stream, or an idle server-push subscription are
+  /// all unaffected once their handler has started. Set to null to disable.
+  final Duration? halfOpenStreamTimeout;
+
   /// Creates an [RpcSecurityPolicy] with the given limits.
   const RpcSecurityPolicy({
     this.maxMessageLengthBytes = 16 * 1024 * 1024,
@@ -85,6 +106,7 @@ final class RpcSecurityPolicy {
     this.maxHeaderValueBytes = 8 * 1024,
     this.maxMethodPathLength = 1024,
     this.closeOnProtocolError = true,
+    this.halfOpenStreamTimeout = const Duration(seconds: 60),
   });
 
   /// Serializes this policy to a plain map.
@@ -102,6 +124,10 @@ final class RpcSecurityPolicy {
     'maxHeaderValueBytes': maxHeaderValueBytes,
     'maxMethodPathLength': maxMethodPathLength,
     'closeOnProtocolError': closeOnProtocolError,
+    // Explicit 0 rather than an omitted key: absent means "use the default",
+    // so omitting it for a disabled window would round-trip back to the
+    // 60s default and silently re-enable reclamation.
+    'halfOpenStreamTimeoutMs': halfOpenStreamTimeout?.inMilliseconds ?? 0,
   };
 
   /// Creates an [RpcSecurityPolicy] from a plain map, using defaults for missing keys.
@@ -139,6 +165,12 @@ final class RpcSecurityPolicy {
       maxHeaderValueBytes: readInt('maxHeaderValueBytes', 8 * 1024),
       maxMethodPathLength: readInt('maxMethodPathLength', 1024),
       closeOnProtocolError: readBool('closeOnProtocolError', true),
+      // Absent means the default; an explicit non-positive value disables it.
+      halfOpenStreamTimeout: switch (map['halfOpenStreamTimeoutMs']) {
+        final int ms when ms > 0 => Duration(milliseconds: ms),
+        final int _ => null,
+        _ => const Duration(seconds: 60),
+      },
     );
   }
 

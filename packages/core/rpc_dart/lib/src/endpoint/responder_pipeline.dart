@@ -68,6 +68,59 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         : const RpcSecurityPolicy().maxActiveStreams;
   }
 
+  /// Cached half-open reclamation window, read from the transport's policy.
+  Duration? _respHalfOpenCache;
+  bool _respHalfOpenResolved = false;
+
+  Duration? get _respHalfOpenTimeout {
+    if (_respHalfOpenResolved) return _respHalfOpenCache;
+    _respHalfOpenResolved = true;
+    final transport = this.transport;
+    _respHalfOpenCache = transport is IRpcSecurityPolicyAware
+        ? (transport as IRpcSecurityPolicyAware)
+              .securityPolicy
+              .halfOpenStreamTimeout
+        : const RpcSecurityPolicy().halfOpenStreamTimeout;
+    return _respHalfOpenCache;
+  }
+
+  /// Bounds how long [state] may sit half-open before its slot is reclaimed.
+  ///
+  /// A stream is half-open until a handler is dispatched, which needs a request
+  /// message or a half-close. Only the peer's optional `grpc-timeout` bounded
+  /// that window, so a peer that sent one opening frame and stopped parked
+  /// responder state permanently. Measured against `maxActiveStreams: 8`, eight
+  /// metadata-only frames left openStreams at 8 indefinitely and every later
+  /// call, from any client, failed RESOURCE_EXHAUSTED -- so the concurrency
+  /// ceiling was also the exact size of a permanent, unauthenticated wedge.
+  ///
+  /// Armed once per stream and cancelled at dispatch, so a running handler is
+  /// never affected however long it lives.
+  void _armHalfOpenReclaim(RpcResponderStreamState state) {
+    if (state.responder != null) return;
+    final timeout = _respHalfOpenTimeout;
+    if (timeout == null) return;
+    state.armHalfOpen(timeout, () {
+      // Dispatched in the meantime: nothing to reclaim.
+      if (state.responder != null) return;
+      if (_respStreams[state.id] == null) return;
+      _log.warning(
+        'Reclaiming stream ${state.id}: half-open for '
+        '${timeout.inMilliseconds}ms without a request message',
+      );
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.deadlineExceeded,
+          message:
+              'Stream was half-open for ${timeout.inMilliseconds}ms without '
+              'a request message',
+          context: state.cachedContext,
+        ),
+      );
+    });
+  }
+
   void _rememberClosedStream(int streamId) {
     if (!_respClosedStreams.add(streamId)) return;
     if (_respClosedStreams.length > _maxRememberedClosedStreams) {
@@ -352,6 +405,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
 
     final state = _respStreams.obtain(message.streamId);
+    _armHalfOpenReclaim(state);
 
     // A cancellation notice never opens a call: _notifyPeerOfCancellation
     // sends bare headers with no methodPath. Requiring that here means a
@@ -714,6 +768,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       case RpcMethodType.bidirectionalStream:
         await _ensureBidirectionalResponder(state, binding);
     }
+
+    // Dispatched: the half-open window is over and a running handler must never
+    // be reclaimed by it. Only on success -- a branch that bailed without
+    // binding (e.g. zero-copy on a transport that cannot do it) leaves the
+    // timer armed so its state still cannot be parked forever.
+    if (state.responder != null) state.cancelHalfOpen();
   }
 
   Future<void> _ensureUnaryResponder(

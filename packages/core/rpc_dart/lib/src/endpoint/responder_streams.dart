@@ -76,12 +76,34 @@ final class RpcResponderStreamState {
     _reclaimTimer = Timer(after, onReclaim);
   }
 
+  Timer? _halfOpenTimer;
+
+  /// Arms the half-open reclamation timer, unless one is already armed.
+  ///
+  /// Covers the window from the opening metadata frame to handler dispatch,
+  /// which is the only stretch nothing else bounds: `grpc-timeout` is optional
+  /// and peer-supplied, so a peer that sends one frame and stops used to park
+  /// this state forever. Armed once rather than re-armed per frame -- the
+  /// window is a single step for every shape, so re-arming would add timer
+  /// churn to the hot path for no coverage.
+  void armHalfOpen(Duration after, void Function() onExpired) {
+    if (_halfOpenTimer != null) return;
+    _halfOpenTimer = Timer(after, onExpired);
+  }
+
+  /// Cancels the half-open timer; called once a handler is dispatched.
+  void cancelHalfOpen() {
+    _halfOpenTimer?.cancel();
+    _halfOpenTimer = null;
+  }
+
   /// Cancels the deadline and reclamation timers, if any.
   void cancelDeadline() {
     _deadlineTimer?.cancel();
     _deadlineTimer = null;
     _reclaimTimer?.cancel();
     _reclaimTimer = null;
+    cancelHalfOpen();
   }
 
   /// True when a method key has been assigned.
