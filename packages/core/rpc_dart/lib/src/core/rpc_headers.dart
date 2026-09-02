@@ -77,7 +77,27 @@ abstract final class RpcHeaders {
   /// Unlike gRPC, rpc_dart negotiates compression by carrying those headers
   /// through the call context, so they are framework-controlled signals that
   /// must pass through, not user headers to strip.
-  static const reserved = <String>{contentType, te, userAgent, grpcTimeout};
+  ///
+  /// [xClientCancelled] and [xCancellationReason] are here because the
+  /// responder ACTS on them: a metadata frame carrying `x-client-cancelled:
+  /// true` tears the stream down. Left settable as ordinary user metadata, a
+  /// context that happened to carry the key — one built from a forwarded header
+  /// map, say — killed its own call at the door, before the handler ran, and
+  /// the caller got no status back at all: it hung until its own timeout.
+  ///
+  /// These two are rpc_dart's own control keys, not gRPC's. gRPC cancels with
+  /// HTTP/2 RST_STREAM (which this package uses via [IRpcStreamReset] wherever
+  /// the transport offers it); the metadata notice is only the fallback for
+  /// transports with no reset primitive. Reserving them therefore sends FEWER
+  /// non-standard headers on the wire, so gRPC interop can only improve.
+  static const reserved = <String>{
+    contentType,
+    te,
+    userAgent,
+    grpcTimeout,
+    xClientCancelled,
+    xCancellationReason,
+  };
 
   /// Whether [name] (case-insensitive) is a protocol-reserved header that user
   /// metadata is not allowed to set.

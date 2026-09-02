@@ -314,13 +314,20 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final state = _respStreams.obtain(message.streamId);
 
-    if (message.isMetadataOnly && message.metadata != null) {
+    // A cancellation notice never opens a call: _notifyPeerOfCancellation
+    // sends bare headers with no methodPath. Requiring that here means a
+    // call-OPENING frame can no longer cancel itself before dispatch -- which
+    // is not a coherent request in the first place, and which used to leave the
+    // caller with no status at all, hanging until its own timeout.
+    if (message.isMetadataOnly &&
+        message.metadata != null &&
+        message.methodPath == null) {
       final isCancelled = message.metadata!.getHeaderValue(
-        'x-client-cancelled',
+        RpcHeaders.xClientCancelled,
       );
       if (isCancelled == 'true') {
         final reason =
-            message.metadata!.getHeaderValue('x-cancellation-reason') ??
+            message.metadata!.getHeaderValue(RpcHeaders.xCancellationReason) ??
             'Cancelled by client';
         unawaited(_handleClientCancellation(state, reason));
         return;
@@ -361,7 +368,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (hasPayload) return true;
 
     if (message.isMetadataOnly && message.metadata != null) {
-      if (message.metadata!.getHeaderValue('x-client-cancelled') == 'true') {
+      if (message.metadata!.getHeaderValue(RpcHeaders.xClientCancelled) ==
+          'true') {
         return true;
       }
     }
