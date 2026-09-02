@@ -29,6 +29,7 @@ class RpcWebSocketServer implements IRpcServer {
 
   StreamSubscription<WebSocketChannel>? _connectionsSub;
   bool _isRunning = false;
+
   /// Every endpoint this server created, peer-mode included.
   ///
   /// This used to be a `List<RpcResponderEndpoint>`, which a [RpcPeerEndpoint]
