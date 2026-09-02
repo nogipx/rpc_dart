@@ -14,6 +14,7 @@ import 'package:rpc_dart/rpc_dart.dart'
         IRpcSerializable,
         RpcCallerEndpoint,
         RpcPeerEndpoint,
+        RpcException,
         LogScope;
 
 export 'dart:typed_data';

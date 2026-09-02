@@ -93,6 +93,30 @@ abstract class RpcResponderContract implements IRpcContract {
   /// Declarative method registration hook.
   void setup() {}
 
+  /// Rejects a second registration of [methodName] on this contract.
+  ///
+  /// Both maps were plain assignments, so a repeated name silently replaced the
+  /// earlier entry and the LAST one won. Same shape twice is merely confusing;
+  /// different shapes is dangerous, because the shape changes with it -- a
+  /// contract declaring `m` as unary and then as a server stream answered a
+  /// unary call from the streaming handler, with nothing logged.
+  ///
+  /// The registry already throws for the codec/zero-copy version of this
+  /// collision ("zero-copy conflict"), so refusing the same-map case is the
+  /// consistent behaviour rather than a new one. It is a construction-time
+  /// programming error, raised where the duplicate is written and never
+  /// reachable from peer input.
+  void _rejectDuplicate(String methodName) {
+    if (_methods.containsKey(methodName) ||
+        _zeroCopyMethods.containsKey(methodName)) {
+      throw RpcException(
+        'Method $_baseServiceName.$methodName is already registered on this '
+        'contract. Each method name may be registered once; a second '
+        'registration used to silently replace the first.',
+      );
+    }
+  }
+
   /// Returns effective codecs based on the configured transfer mode.
   (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?) _getEffectiveCodecs<
     TRequest,
@@ -135,6 +159,7 @@ abstract class RpcResponderContract implements IRpcContract {
 
     if (isZeroCopy) {
       // Zero-copy registration.
+      _rejectDuplicate(methodName);
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<TRequest, TResponse>(
             name: methodName,
@@ -153,6 +178,7 @@ abstract class RpcResponderContract implements IRpcContract {
         return _OpaqueValue.wrap(response);
       }
 
+      _rejectDuplicate(methodName);
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
             name: methodName,
@@ -191,6 +217,7 @@ abstract class RpcResponderContract implements IRpcContract {
 
     if (isZeroCopy) {
       // Zero-copy registration.
+      _rejectDuplicate(methodName);
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<TRequest, TResponse>(
             name: methodName,
@@ -211,6 +238,7 @@ abstract class RpcResponderContract implements IRpcContract {
         }
       }
 
+      _rejectDuplicate(methodName);
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
             name: methodName,
@@ -256,6 +284,7 @@ abstract class RpcResponderContract implements IRpcContract {
         return result as Object;
       }
 
+      _rejectDuplicate(methodName);
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<Object, Object>(
             name: methodName,
@@ -276,6 +305,7 @@ abstract class RpcResponderContract implements IRpcContract {
         return _OpaqueValue.wrap(response);
       }
 
+      _rejectDuplicate(methodName);
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
             name: methodName,
@@ -323,6 +353,7 @@ abstract class RpcResponderContract implements IRpcContract {
         }
       }
 
+      _rejectDuplicate(methodName);
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<Object, Object>(
             name: methodName,
@@ -345,6 +376,7 @@ abstract class RpcResponderContract implements IRpcContract {
         }
       }
 
+      _rejectDuplicate(methodName);
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
             name: methodName,

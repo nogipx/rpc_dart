@@ -107,7 +107,18 @@ final class RpcResponderMethodRegistry {
     _log.internal('Registering service contract: $serviceName');
     _contracts[serviceName] = contract;
 
-    contract.setup();
+    // Only if nothing has been declared yet. `setup()` is public and calling it
+    // before registering reads as the natural thing to do -- two transport
+    // packages' tests do exactly that -- and this used to run it a SECOND time,
+    // re-registering every method. That was harmless only because a repeated
+    // name silently replaced the earlier entry; now that a duplicate is
+    // refused, re-running it would throw on correct code.
+    //
+    // This also makes registering one contract instance on two endpoints work,
+    // which had the same double-setup problem.
+    if (contract.methods.isEmpty && contract.zeroCopyMethods.isEmpty) {
+      contract.setup();
+    }
 
     for (final entry in contract.methods.entries) {
       final methodName = entry.key;
