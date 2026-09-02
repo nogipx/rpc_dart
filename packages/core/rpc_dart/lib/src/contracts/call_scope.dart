@@ -164,6 +164,12 @@ final class RpcCallScope {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
+  /// How long a single disposer may take before it is abandoned.
+  ///
+  /// Generous: real cleanup (flushing a buffer, closing a handle) finishes in
+  /// microseconds, so this only ever fires on something genuinely stuck.
+  static Duration disposerTimeout = const Duration(seconds: 5);
+
   /// Closes the scope and runs all disposers in reverse order.
   ///
   /// Safe to call multiple times — subsequent calls are no-ops.
@@ -179,7 +185,27 @@ final class RpcCallScope {
     // Run disposers in reverse (LIFO) order.
     for (var i = _disposers.length - 1; i >= 0; i--) {
       try {
-        await _disposers[i]();
+        // Bounded. A disposer that never completes -- a flush to a dead socket,
+        // a lock nobody releases -- used to block this loop forever, and with
+        // it `_cleanupStream`, `closeResponderResources` and therefore
+        // `RpcResponderEndpoint.close()`. Measured: one handler registering a
+        // disposer that never returns left responder.close() unfinished after
+        // 4s and indefinitely thereafter, so a single misbehaving handler
+        // stopped the whole endpoint from shutting down.
+        //
+        // On timeout the disposer is abandoned, not cancelled -- there is no
+        // way to cancel an arbitrary Future -- so it may still be running. That
+        // is strictly better than never shutting down, and it is reported
+        // rather than hidden.
+        // Future.value handles the FutureOr: a synchronous disposer stays
+        // synchronous and simply cannot time out.
+        await Future<void>.value(_disposers[i]()).timeout(disposerTimeout);
+      } on TimeoutException {
+        _log.error(
+          'Call-scope disposer did not complete within '
+          '${disposerTimeout.inMilliseconds}ms; abandoning it so shutdown can '
+          'continue',
+        );
       } catch (error, stackTrace) {
         // Keep going so every disposer still runs -- one failing cleanup must
         // not strand the rest. But do not make it vanish: this swallowed
