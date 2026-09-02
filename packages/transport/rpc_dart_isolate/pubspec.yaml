@@ -4,7 +4,7 @@
 
 name: rpc_dart_isolate
 description: Isolate-based caller/responder transports for rpc_dart (IO + web/wasm via isolate_manager).
-version: 0.2.3
+version: 0.3.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -19,7 +19,7 @@ topics:
   - isolate
 
 dependencies:
-  rpc_dart: '>=3.3.0 <5.0.0'
+  rpc_dart: '>=5.0.0 <6.0.0'
   # Patch range only: the web transport (isolate_transport_web.dart) imports
   # isolate_manager's private `src/` (implementation_imports), so a minor bump
   # can silently break it. Raise the ceiling deliberately and re-run the web

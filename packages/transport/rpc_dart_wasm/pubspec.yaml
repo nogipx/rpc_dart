@@ -4,7 +4,7 @@
 
 name: rpc_dart_wasm
 description: Runtime-agnostic WASM bridge transport for rpc_dart — turns any byte-level wasm bridge into an IRpcTransport.
-version: 0.1.1
+version: 0.2.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -29,7 +29,7 @@ topics:
 dependencies:
   flutter:
     sdk: flutter
-  rpc_dart: '>=3.3.0 <5.0.0'
+  rpc_dart: '>=5.0.0 <6.0.0'
 
 dev_dependencies:
   lints: ^6.0.0

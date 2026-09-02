@@ -4,7 +4,7 @@
 
 name: rpc_blob
 description: Streamed blob storage contract and RPC wiring for rpc_dart (binary/object storage alongside rpc_data).
-version: 2.1.0
+version: 2.2.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -20,7 +20,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  rpc_dart: '>=3.3.0 <5.0.0'
+  rpc_dart: '>=5.0.0 <6.0.0'
   equatable: ^2.0.8
   meta: ^1.17.0
   async: ^2.13.0
@@ -30,4 +30,4 @@ dev_dependencies:
   lints: ^6.0.0
   test: ^1.29.0
   build_runner: ^2.10.5
-  rpc_dart_generator: ^0.4.2
+  rpc_dart_generator: ^0.5.0

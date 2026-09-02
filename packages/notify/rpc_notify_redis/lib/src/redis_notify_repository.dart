@@ -206,8 +206,10 @@ class RedisNotifyRepository implements INotifyRepository {
         try {
           await _openConnections();
           _startHealthCheck();
-          _onLog?.call('redis notify: reconnected after ${attempt + 1} '
-              'attempt(s)');
+          _onLog?.call(
+            'redis notify: reconnected after ${attempt + 1} '
+            'attempt(s)',
+          );
           return;
         } catch (e) {
           attempt++;

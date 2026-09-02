@@ -4,6 +4,14 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.2.0
+
+### Changed
+
+- Requires rpc_dart 5. See its changelog: flow control is on by default, an
+  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
+  stream that ends without a trailer raises `UNAVAILABLE`.
+
 ## 0.1.2
 
 - fix: align `RpcWasm.run` stub signature with the real implementation. The VM/host stub (`rpc_wasm_stub.dart`) was missing the `LogController? logController` named parameter, so code calling `RpcWasm.run(logController: ...)` compiled on the WASM/JS target but failed to compile on the host/VM stub target. The stub now matches the real implementation parameter-for-parameter.

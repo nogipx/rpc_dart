@@ -4,6 +4,122 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 5.0.0
+
+A hardening release. The theme is resources a peer can consume without
+authenticating, and calls that ended without telling anyone.
+
+### Breaking
+
+- **Flow control is on by default.** Streams now carry a per-stream window
+  (`flowControlWindowBytes`, 4MB) and a connection-wide one
+  (`flowControlConnectionWindowBytes`, 64MB). Credit rides on bare metadata
+  frames, which a peer that predates this ignores, so a mixed-version pair
+  degrades to the old behaviour rather than deadlocking — but every connection
+  now puts one advertisement frame on the wire, which matters if you assert on
+  exact frame counts. Set either to null to disable; transports with their own
+  flow control (HTTP/2) should.
+- **An expired deadline is reported as `RpcDeadlineExceededException` on every
+  call shape.** Unary previously surfaced a bare `TimeoutException`, and a
+  deadline landing exactly on the boundary could end a stream silently.
+- **A stream that ends without a trailer now raises `UNAVAILABLE`.** It used to
+  close cleanly, so a consumer whose connection died mid-stream could not tell a
+  truncated result from a complete one.
+- **An in-flight unary call whose stream ends now fails immediately** instead of
+  hanging until its deadline (or the 60s fallback).
+- **Registering the same method name twice on a contract throws.** It used to be
+  a silent overwrite where the last registration won — including across shapes,
+  so a unary call could be answered by a server-stream handler. Registration no
+  longer re-runs `setup()` when the caller has already called it.
+- **Inbound metadata is checked against the security policy.** A peer exceeding
+  `maxHeaders`, `maxHeaderNameBytes`, `maxHeaderValueBytes`,
+  `maxMethodPathLength` or `maxMetadataBytes` is rejected, and with
+  `closeOnProtocolError` (default) the transport closes. Defaults are generous;
+  conforming traffic is unaffected.
+- **`RpcList` decoding throws `FormatException`** on non-object elements or a
+  non-list `items` field, instead of returning a partial or empty list.
+- **The CBOR writer refuses ints outside ±2^53**, the range its own reader
+  supports on every platform, instead of emitting bytes it cannot decode. Carry
+  larger values as a String or two 32-bit halves.
+
+### Security
+
+Each of these is reachable by an unauthenticated peer on an open connection.
+
+- `maxActiveStreams` is enforced on streams the PEER opens. It was only ever
+  checked for locally-initiated calls, so the one limit that mattered for a
+  server bounded nothing: against a limit of 3, a peer opened 500 concurrent
+  streams and all 500 were accepted.
+- Half-open streams are reclaimed (`halfOpenStreamTimeout`, 60s). A stream sits
+  half-open from its metadata frame until a handler is dispatched, and only the
+  peer's optional `grpc-timeout` bounded that, so metadata-only frames parked
+  responder state indefinitely — about 33 KiB each, per connection.
+- Flow control bounds what an unread stream can pin. With a paused consumer, a
+  server-stream handler ran 19,000 messages (311 MB) ahead; a 1MB window holds
+  it to 0.7 MB. Both directions of every shape are covered.
+- Flow-control grants are clamped to the window this side configured. The grant
+  value is peer-controlled and was taken at face value, so two frames granting
+  1 TB lifted a paused stream from 0.8 MB in flight to 300.6 MB.
+- Flow-control bookkeeping is capped at `maxActiveStreams`. The maps are keyed by
+  peer-chosen stream ids, so 50,000 frames naming ids that never became streams
+  left 50,000 permanent entries — and, for data frames, 50,000 window-update
+  frames sent back.
+- Frame overhead counts against `maxMessageLengthBytes`, and the context header
+  caps apply to the merged result rather than only the incoming map.
+- The cancellation control headers are reserved, so user metadata can no longer
+  cancel its own call at the door.
+- The rate limiter's bounds and the config guards survive release builds; they
+  were `assert`s, which Dart strips.
+- The CBOR decoder's indefinite-length string readers are bounded.
+
+### Fixed
+
+- **Connection loss now stops work.** In-flight handlers were left running with
+  nowhere to send, their cancellation tokens never fired, and their stream state
+  was never reclaimed — one abandoned handler and one leaked stream per dropped
+  connection, on both sides.
+- **Client-streaming handlers receive messages as they arrive.** Nothing started
+  one until the peer half-closed, so the whole request was buffered first: an
+  upload that never half-closed pinned 494 MB while the handler had consumed
+  nothing. This is what the shape is for.
+- **Consumer demand reaches the producer.** `pause()` on a returned stream
+  stopped delivery to the listener and nothing else; every stage above the
+  transport kept decoding messages nobody had asked for.
+- **Cancellation and deadlines are honoured on every shape**: a stalled client
+  stream, an idle bidirectional stream (which could not be cancelled at all), a
+  bidirectional stream whose server finishes first, a client stream whose
+  deadline was silently capped at 60s, and a handler that outlives its deadline.
+  Cancelled streams now abort via the transport's reset primitive (RST_STREAM)
+  where one exists.
+- **A bidirectional call that sends no request, and a client stream that carries
+  no messages, both work.** The first was rejected outright; the second never
+  reached the server, which then waited out the caller's timeout.
+- **Structured error details survive on every shape**, including bidirectional
+  and zero-copy unary, where they were silently dropped while status and message
+  came through.
+- **Leaks:** the reconnect proxy orphaning transports, a caller endpoint never
+  draining the transport's global stream (900 messages retained after 300 calls),
+  streaming calls tracked from hand-out rather than first listen, the rate
+  limiter's background timer, finished-stream bookkeeping, `addStream`'s source
+  subscription, and the ping stream id on pre-send failures.
+- **A call-scope disposer can no longer block shutdown.** One that never
+  completes used to hold `close()` open forever; disposers are now bounded
+  (`RpcCallScope.disposerTimeout`) and cleanup failures are neither swallowed nor
+  allowed to strand the rest.
+- **Decoding:** protobuf field tags are read as varints, unknown wire types
+  inside `RetryInfo` are skipped, and `RpcList.filled` is growable like every
+  other constructor.
+- The retry backoff no longer sleeps past the call deadline; a rate-limited
+  stream stops at the first rejection; concurrent drains await the same
+  completion; a contract unregisters by service name rather than key prefix; the
+  circuit breaker releases its half-open gate on an inconclusive probe; unary
+  parser state is per call.
+
+### Performance
+
+- Per-stream routing restored in the reconnect proxy, replacing a broadcast
+  filter evaluated once per active stream per message.
+
 ## 4.3.3
 
 ### Fixes

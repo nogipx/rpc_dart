@@ -4,6 +4,19 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.3.0
+
+### Fixed
+
+- The MCP buffer's per-scope statistics are bounded; scope names are
+  effectively unbounded in cardinality, so the map grew without limit.
+
+### Changed
+
+- Requires rpc_dart 5. See its changelog: flow control is on by default, an
+  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
+  stream that ends without a trailer raises `UNAVAILABLE`.
+
 ## 0.2.2
 
 - Stop silently swallowing two error sites:

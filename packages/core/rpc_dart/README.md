@@ -35,6 +35,8 @@ Transport-agnostic RPC framework for Dart. Implements the gRPC wire protocol —
 - Zero-copy in-process transport (`RpcInMemoryTransport`).
 - 3-layer transport architecture: `IRpcChannel` → `IRpcMultiplexedChannel` → `IRpcTransport`.
 - Resilience: retry, circuit breaker, rate limiter, reconnect state machine.
+- Per-stream and connection-wide flow control, on by default.
+- Security policy: bounds on metadata, message size and concurrent streams.
 - gRPC Health Checking Protocol (`grpc.health.v1`).
 - `RpcBinaryCodec` for protobuf and other binary formats.
 - `RpcContext` with trace id, headers, deadline, cancellation.
@@ -197,7 +199,7 @@ final status = await client.check('MyService');
 
 ## Transport architecture
 
-Version 3.0 introduces a 3-layer architecture:
+A 3-layer architecture:
 
 ```
 IRpcChannel              — raw byte pipe (WebSocket, TCP, etc.)
@@ -217,6 +219,56 @@ final (t1, t2) = RpcChannelTransport.pair();
 // Wrap any IRpcChannel (WebSocket, TCP):
 final transport = RpcChannelTransport.fromChannel(myChannel);
 ```
+
+---
+
+## Flow control and resource limits
+
+Both are configured through `RpcSecurityPolicy`, which any
+`RpcChannelTransport` accepts. The defaults are safe for a server exposed to
+untrusted peers; you only need to touch them to relax or tighten.
+
+### Flow control
+
+A slow or absent consumer must not let a producer pin memory. Each stream has a
+window, and all streams on a connection share a second one:
+
+```dart
+final (client, server) = RpcChannelTransport.pair(
+  policy: RpcSecurityPolicy(
+    flowControlWindowBytes: 4 * 1024 * 1024,            // per stream
+    flowControlConnectionWindowBytes: 64 * 1024 * 1024, // whole connection
+  ),
+);
+```
+
+The sender blocks once its window is used up and resumes as the receiving
+application consumes. Credit travels on bare metadata frames, which a peer that
+predates this ignores — a mixed-version pair simply falls back to the old
+unbounded behaviour rather than deadlocking.
+
+Set either to `null` to disable. **HTTP/2 has its own flow control**, so
+`rpc_dart_http2` should disable these rather than run two windows over each
+other.
+
+### Resource limits
+
+```dart
+const policy = RpcSecurityPolicy(
+  maxActiveStreams: 4096,          // concurrent streams, per connection
+  maxMessageLengthBytes: 16 << 20, // single message, framing included
+  maxMetadataBytes: 64 * 1024,
+  maxHeaders: 128,
+  halfOpenStreamTimeout: Duration(seconds: 60),
+  closeOnProtocolError: true,
+);
+```
+
+`maxActiveStreams` applies to streams the peer opens, not just your own calls.
+`halfOpenStreamTimeout` reclaims a stream that was opened but never carried a
+request — set it to `null` to disable. Note it covers dispatch only: a stream
+that has reached a handler and then goes idle is deliberately not reclaimed,
+because that is also what a legitimate long-lived subscription looks like.
 
 ---
 

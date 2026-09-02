@@ -4,6 +4,13 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.2.0
+
+### Changed
+
+- Requires rpc_data 5.1.0, which stops read-only journal calls materialising
+  collection state and keeps the cause on an internal error.
+
 ## 2.1.1
 
 - A dropped table no longer fails the OTHER processes that had cached it.

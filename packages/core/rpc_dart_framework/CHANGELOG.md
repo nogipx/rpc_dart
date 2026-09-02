@@ -4,6 +4,19 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.4.0
+
+### Fixed
+
+- `RpcCallSpy` bounds what it retains. It kept every observed call forever,
+  so leaving it enabled on a long-lived server was an unbounded leak.
+
+### Changed
+
+- Requires rpc_dart 5. See its changelog: flow control is on by default, an
+  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
+  stream that ends without a trailer raises `UNAVAILABLE`.
+
 ## 0.3.3
 
 **Fixes (audit):**

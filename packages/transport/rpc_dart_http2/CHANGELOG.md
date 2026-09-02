@@ -4,6 +4,23 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.3.0
+
+### Fixed
+
+- Per-connection endpoints are closed when their connection ends. One
+  `RpcResponderEndpoint` is created per socket and they were never released,
+  so every connection leaked its endpoint and everything it held.
+- Cancelled streams are aborted with RST_STREAM, the primitive HTTP/2 has for
+  it, instead of a metadata frame that is illegal once this side has
+  half-closed.
+
+### Changed
+
+- Requires rpc_dart 5. See its changelog: flow control is on by default, an
+  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
+  stream that ends without a trailer raises `UNAVAILABLE`.
+
 ## 0.2.4
 
 - BUG (non-ASCII regular header values were silently corrupted): `_headerValue`

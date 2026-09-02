@@ -4,6 +4,14 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.1.0
+
+### Changed
+
+- Requires rpc_dart 5. See its changelog: flow control is on by default, an
+  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
+  stream that ends without a trailer raises `UNAVAILABLE`.
+
 ## 2.0.1
 
 - The transaction helper no longer buries the error it was called to report.

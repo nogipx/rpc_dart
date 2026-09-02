@@ -4,6 +4,19 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.3.0
+
+### Fixed
+
+- Per-connection endpoints are closed when their connection ends; they were
+  never released, so every connection leaked one.
+
+### Changed
+
+- Requires rpc_dart 5. See its changelog: flow control is on by default, an
+  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
+  stream that ends without a trailer raises `UNAVAILABLE`.
+
 ## 0.2.3
 
 - Fixed: `RpcWebSocketCallerTransport` no longer permanently closes itself when the underlying socket drops gracefully (server-side FIN) *and* a `reconnectFactory` is configured. Previously the `onDone` cascade flipped the transport to closed, so a later `reconnect()` returned "Transport closed" — defeating reconnect after a server-initiated drop. The stable `incomingMessages` stream now survives the drop so subscribers persist and `reconnect()` can re-attach. This is the recovery path the `rpc_dart_log` client relies on. Without a `reconnectFactory` the transport still closes fully on drop (unchanged).

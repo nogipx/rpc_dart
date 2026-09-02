@@ -4,7 +4,7 @@
 
 name: rpc_dart_http
 description: HTTP/1.1 caller/responder transports for rpc_dart (unary only).
-version: 0.2.4
+version: 0.3.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -19,7 +19,7 @@ topics:
   - http
 
 dependencies:
-  rpc_dart: '>=3.3.0 <5.0.0'
+  rpc_dart: '>=5.0.0 <6.0.0'
   http: ^1.6.0
   shelf: ^1.4.2
 

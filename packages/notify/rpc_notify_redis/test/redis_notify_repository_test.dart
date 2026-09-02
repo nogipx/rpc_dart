@@ -274,7 +274,8 @@ void main() {
           expect(
             received,
             ['after-two-drops'],
-            reason: 'a latch released only on the happy path leaves the '
+            reason:
+                'a latch released only on the happy path leaves the '
                 'repository dead from the second drop onward',
           );
         } finally {

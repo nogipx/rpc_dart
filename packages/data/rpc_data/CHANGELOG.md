@@ -4,6 +4,20 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 5.1.0
+
+### Fixed
+
+- Read-only journal calls no longer materialise collection state, which made
+  a read allocate as if it were a write.
+- An internal error keeps the cause it captured instead of discarding it.
+
+### Changed
+
+- Requires rpc_dart 5. See its changelog: flow control is on by default, an
+  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
+  stream that ends without a trailer raises `UNAVAILABLE`.
+
 ## 5.0.0
 
 **Breaking — one method joins the read interfaces:**
