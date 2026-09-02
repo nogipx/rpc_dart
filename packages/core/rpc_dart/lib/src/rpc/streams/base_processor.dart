@@ -1128,9 +1128,23 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   ///
   /// This disposer is registered AFTER the one that closes the controllers, so
   /// LIFO ordering runs it FIRST — the error reaches the stream while it is
-  /// still open. It fires only when the scope closed on its own (`_isActive`
-  /// still true, so not an explicit [close]) and the deadline really has
-  /// passed, which excludes cancellation and normal completion.
+  /// still open.
+  ///
+  /// It fires only when the scope closed ON ITS OWN, which [RpcCallScope] does
+  /// for exactly two reasons: the deadline timer, or the cancellation token.
+  /// `_isActive` still being true rules out an explicit [close], and a
+  /// cancelled token is surfaced by [_setupCancellationMonitoring] instead. So
+  /// reaching here means the deadline timer fired.
+  ///
+  /// It deliberately does NOT re-derive that from the clock. It used to check
+  /// `context.isExpired`, which is `clock().isAfter(deadline)` — STRICT — while
+  /// the scope's timer is armed for `deadline.difference(clock())`. When that
+  /// timer fires, `now` can be exactly the deadline, or a hair short of it:
+  /// Timer and DateTime do not share a clock source. `isExpired` was then
+  /// false, this disposer returned, and the controllers closed with no error at
+  /// all — handing the consumer a silently truncated stream, which is the exact
+  /// failure this disposer exists to prevent. It surfaced as a ~1-in-20
+  /// flake under load, always as `null after 500ms` for a 500ms deadline.
   void _setupDeadlineMonitoring() {
     final context = _context;
     final deadline = context?.deadline;
@@ -1138,7 +1152,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
     _scope.onDispose(() {
       if (!_isActive) return;
-      if (!context!.isExpired) return;
+      if (context!.isCancelled) return;
 
       _logger.internal('Deadline exceeded [streamId: $_streamId]');
       final error = RpcDeadlineExceededException(deadline, Duration.zero);
