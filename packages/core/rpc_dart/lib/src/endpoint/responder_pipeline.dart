@@ -559,6 +559,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
     if (_isPingMethodKey(methodKey)) return;
 
+    // Remember that the peer half-closed. A responder bound AFTER this point
+    // subscribes to the transport too late to see the frame, so
+    // [_stateBoundStream] replays it (see there).
+    state.clientEnded = true;
+
     final binding = _respRegistry.lookup(methodKey);
     if (binding == null) {
       unawaited(
@@ -572,11 +577,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
-    if (binding.type == RpcMethodType.clientStream) {
+    // Both shapes whose request side is a STREAM may legitimately carry zero
+    // messages, so end-of-stream is what starts them, not an error.
+    if (binding.type == RpcMethodType.clientStream ||
+        binding.type == RpcMethodType.bidirectionalStream) {
       unawaited(_ensureResponder(state, binding));
       return;
     }
 
+    // Unary and server-stream require exactly one request message, so a stream
+    // that closed without one is a malformed call. Bidirectional used to fall
+    // in here too: a client that opened a bidi call and listened without
+    // sending anything first -- legal gRPC, and the natural shape for a
+    // server-push subscription -- was rejected with INVALID_ARGUMENT.
     if (state.responder == null && state.lastPayloadMessage == null) {
       unawaited(
         _sendGrpcErrorAndCleanup(
@@ -1169,6 +1182,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       if (consumePreBindBuffer) ...state.takePreBindBufferedMessages(),
       ...initialMessages,
     ];
+
+    // Replay the peer's half-close when it happened BEFORE this bind. The
+    // transport subscription above only carries frames from now on, so a
+    // responder created at end-of-stream -- which is exactly when a stream
+    // that carried zero request messages starts -- would never learn the peer
+    // had finished, and the handler's `await for (requests)` would wait
+    // forever on a client that was already done.
+    if (state.clientEnded && !merged.any((m) => m.isEndOfStream)) {
+      merged.add(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
+    }
+
     for (final message in merged) {
       controller.add(message);
     }

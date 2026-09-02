@@ -30,6 +30,15 @@ final class RpcResponderStreamState {
   /// was deferred until the metadata frame resolves the method.
   bool endOfStreamPending = false;
 
+  /// True once the peer has half-closed its request side.
+  ///
+  /// A responder bound after that point subscribes to the transport too late
+  /// to see the frame, so the bound stream has to replay it — otherwise the
+  /// handler's `await for (requests)` waits on a peer that has already
+  /// finished. Only reachable for the two shapes whose request side is a
+  /// stream and which may legitimately carry zero messages.
+  bool clientEnded = false;
+
   /// The responder bound to this pending stream.
   IRpcResponder? responder;
   bool _boundToMessageStream = false;

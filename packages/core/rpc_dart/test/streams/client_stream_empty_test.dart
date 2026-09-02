@@ -12,12 +12,8 @@
 // waited out its own timeout against a server that had no idea the call
 // existed.
 //
-// NOT covered here: a BIDIRECTIONAL call that sends nothing. That fails for a
-// different reason -- the responder's _handleEndOfStream explicitly rejects a
-// stream that closed without a payload ('Request stream closed without payload
-// for ...', INVALID_ARGUMENT). Correct for unary and server-stream, which
-// require exactly one request message; wrong for bidi, where zero is legal.
-// Untangling that guard is a separate change.
+// The bidirectional equivalent lives in bidi_empty_request_stream_test.dart:
+// it failed for a different reason and needed its own fix.
 
 import 'dart:async';
 
