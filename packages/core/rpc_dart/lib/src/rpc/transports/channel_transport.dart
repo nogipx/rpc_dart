@@ -79,10 +79,46 @@ class RpcChannelTransport
   /// Streams this side has already advertised an initial window for.
   final Set<int> _fcAdvertised = {};
 
+  /// Ceiling on flow-control bookkeeping, per map.
+  ///
+  /// These maps are keyed by stream id and the PEER chooses stream ids, while
+  /// the transport does its bookkeeping before the responder pipeline decides
+  /// whether an id is a legitimate stream at all. So ids that never become
+  /// streams still allocated: 50,000 grant frames for never-opened ids left
+  /// 50,000 send-credit entries, and 50,000 data frames left 50,000 pending
+  /// and 50,000 advertised entries -- plus 50,000 window-update frames sent
+  /// back, one per ghost id.
+  ///
+  /// A connection cannot have more live streams than [maxActiveStreams], so
+  /// that is the natural ceiling. New ids are REFUSED at the cap rather than
+  /// evicting existing ones: evicting would drop a live stream's credit, and a
+  /// flood of ghost ids could then push a real stream out of its own window.
+  /// A stream that arrives while the cap is full simply gets no flow-control
+  /// state, which leaves it unbounded rather than stalled -- failing open on
+  /// liveness, and bounded overall by the cap.
+  int get _fcTrackCap => _policy.maxActiveStreams;
+
+  bool _fcCanTrack(Map<int, Object?> map, int streamId) =>
+      map.containsKey(streamId) || map.length < _fcTrackCap;
+
   /// Streams whose credit a higher layer returns (see [IRpcFlowControlled]).
   final Set<int> _fcDeferred = {};
 
   int? get _fcWindow => _policy.flowControlWindowBytes;
+
+  /// Sizes of the per-stream flow-control maps, for diagnostics and tests.
+  ///
+  /// Exposed because these are keyed by PEER-CHOSEN stream ids, so their growth
+  /// is the observable symptom of a peer naming ids that never become streams.
+  /// Each is capped at [RpcSecurityPolicy.maxActiveStreams]; a connection with
+  /// healthy traffic sits far below that and returns to near zero when idle.
+  Map<String, int> get flowControlStateSizes => {
+    'sendCredit': _fcSendCredit.length,
+    'pendingGrant': _fcPendingGrant.length,
+    'advertised': _fcAdvertised.length,
+    'waiters': _fcSendWaiters.length,
+    'deferred': _fcDeferred.length,
+  };
 
   // Connection-wide pool, shared by every stream. Per-stream windows bound one
   // call; without this a peer just opens more of them -- 100 paused streams at
@@ -504,6 +540,7 @@ class RpcChannelTransport
   void _fcOnGrant(int streamId, int bytes) {
     final window = _fcWindow;
     if (window == null) return;
+    if (!_fcCanTrack(_fcSendCredit, streamId)) return;
     final granted = bytes > window ? window : bytes;
     final next = (_fcSendCredit[streamId] ?? 0) + granted;
     _fcSendCredit[streamId] = next > window ? window : next;
@@ -538,6 +575,7 @@ class RpcChannelTransport
     _fcCreditConnection(bytes);
     final window = _fcWindow;
     if (window == null) return;
+    if (!_fcCanTrack(_fcPendingGrant, streamId)) return;
     final pending = (_fcPendingGrant[streamId] ?? 0) + bytes;
     if (pending < (window ~/ 2).clamp(1, window)) {
       _fcPendingGrant[streamId] = pending;
@@ -586,6 +624,7 @@ class RpcChannelTransport
   void _fcAdvertise(int streamId) {
     final window = _fcWindow;
     if (window == null) return;
+    if (_fcAdvertised.length >= _fcTrackCap) return;
     if (!_fcAdvertised.add(streamId)) return;
     unawaited(_fcSendGrant(streamId, window));
   }
