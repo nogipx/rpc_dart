@@ -19,8 +19,58 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// Key: "serviceName/methodName", Value: map of requestId -> token.
   final Map<String, Map<String, RpcCancellationToken>> _callerTokens = {};
 
+  /// Subscription to the transport's global inbound stream. See
+  /// [startCallerListening].
+  StreamSubscription<RpcTransportMessage>? _callerIncomingSub;
+
   /// Whether to compress outgoing requests with gzip by default.
   bool get compressionEnabled;
+
+  /// Attaches the caller's observer to the transport's global inbound stream.
+  ///
+  /// A caller consumes its responses through `getMessagesForStream`, so it has
+  /// no use for the per-message events here — but leaving the stream
+  /// unsubscribed had two costs.
+  ///
+  /// It RETAINED them. The transport routes every inbound frame to both the
+  /// per-stream controller and the global [BufferedBroadcastController], which
+  /// buffers while it has no listener so the responder pipeline does not miss
+  /// frames that arrive before it subscribes. A caller-only endpoint never
+  /// subscribes at all, so nothing ever drained it: measured at 900 messages
+  /// held after 300 unary calls (three frames each), climbing to the 4096-event
+  /// cap and staying there for the life of the connection, each one pinning its
+  /// payload.
+  ///
+  /// And it SWALLOWED transport-level errors. A channel failure, or a frame
+  /// that violates the security policy without belonging to a known stream,
+  /// is reported only here. With no listener a pure client saw none of it; the
+  /// in-flight call simply hung until its own timeout.
+  ///
+  /// Not wired into [RpcPeerEndpoint]: its responder half already subscribes
+  /// (its parity filter drops locally-initiated frames, but the subscription
+  /// exists, so the buffer stays drained and errors are logged once).
+  void startCallerListening() {
+    if (_callerIncomingSub != null) return;
+    _callerIncomingSub = transport.incomingMessages.listen(
+      (_) {
+        // Responses are delivered per-stream; this subscription exists to keep
+        // the buffer drained and to observe the errors below.
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        _log.error(
+          'Transport incoming error',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      },
+    );
+  }
+
+  /// Detaches the observer attached by [startCallerListening].
+  Future<void> closeCallerResources() async {
+    await _callerIncomingSub?.cancel();
+    _callerIncomingSub = null;
+  }
 
   // ---------------------------------------------------------------------------
   // Cancellation management

@@ -22,6 +22,10 @@ final class RpcCallerEndpoint extends RpcEndpointBase
     this.compressionEnabled = false,
   }) : _log = logger?.scope('rpc.caller') ?? LogScope.noop {
     _validateClientTransport();
+    // Attached in the constructor rather than start(): a caller is usable
+    // without ever calling start(), and an unsubscribed global stream both
+    // retains frames and hides transport errors. See startCallerListening.
+    startCallerListening();
   }
 
   @override
@@ -43,6 +47,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase
   Future<void> close() async {
     if (!isActive) return;
     cancelAllMethods('Endpoint closed');
+    await closeCallerResources();
     await super.close();
   }
 
