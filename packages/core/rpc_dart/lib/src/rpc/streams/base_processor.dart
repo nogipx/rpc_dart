@@ -388,7 +388,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       'Stream bound [methodPath: $_methodPath, streamId: $_streamId]',
     );
 
-    _scope.listen<RpcTransportMessage>(
+    final subscription = _scope.listen<RpcTransportMessage>(
       messageStream,
       _handleMessage,
       onError: (error, stackTrace) {
@@ -410,6 +410,19 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         }
       },
     );
+
+    // Responder half of the demand chain, mirroring the caller-side hook in
+    // CallProcessor. The handler consumes _requestController; without this the
+    // bound message stream was drained at full speed regardless, so a slow
+    // handler never reached the peer. Measured with a bidi handler that
+    // consumed one message and stalled, against a 1 MB window: the client
+    // queued 2000 messages (32.8 MB) while the handler had consumed 1.
+    //
+    // Only a handler that actually listens can pause: one that ignores its
+    // request stream has no subscriber here, so nothing pauses and the peer
+    // stays unthrottled rather than deadlocking.
+    _requestController.onPause = () => subscription.pause();
+    _requestController.onResume = () => subscription.resume();
 
     // Initial metadata is not sent on bind; it is sent with the first response
     // or skipped when sending an immediate error.
@@ -1479,6 +1492,14 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       // draining and onDone fires after the queued send.
       _transmitRequest(request);
       _requestController.add(request);
+      // Then WAIT for it to leave, exactly as the response side does. Queueing
+      // alone made _sendSequence an unbounded buffer between the request pump
+      // and the transport: the pump does `await caller.send(req)` so a blocked
+      // transport throttles the producer, and this returned as soon as the
+      // write was enqueued. Measured with a bidi handler that consumed one
+      // message and stalled, against a 1 MB window, the caller pulled all 2000
+      // messages (32.8 MB) from its request stream.
+      await _sendSequence;
     } else {
       _logger.warning('Attempted to send request to closed controller');
     }

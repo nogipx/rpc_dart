@@ -1374,6 +1374,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     subscription.resume();
     controller.onCancel = () async => subscription.cancel();
+    // Pass the responder's demand down to the transport, so a handler that
+    // stops consuming stops the metered per-stream stream being drained --
+    // which is what withholds flow-control credit from the peer.
+    controller.onPause = () => subscription.pause();
+    controller.onResume = () => subscription.resume();
 
     return controller.stream;
   }

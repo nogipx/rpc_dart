@@ -752,12 +752,23 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
     requestSub = requests.listen(
       (req) {
+        // Pause while this request is in flight. `enqueue` chains onto a
+        // future sequence, so the listener returned immediately and the
+        // request stream was drained at full speed however long the send took:
+        // an unbounded queue between the application and the transport, and
+        // the reason flow control could not throttle this direction. Measured
+        // with a bidi handler that consumed one message and stalled, against a
+        // 1 MB window, the caller pulled all 2000 messages (32.8 MB).
+        requestSub?.pause();
         enqueue(() async {
           try {
             await caller.send(req);
           } catch (e, st) {
             controller.addError(e, st);
             await cleanup();
+          } finally {
+            // Not after cleanup: the subscription is cancelled by then.
+            if (!isCleaned) requestSub?.resume();
           }
         });
       },

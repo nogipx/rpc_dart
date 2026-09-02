@@ -271,17 +271,29 @@ final class ClientStreamCaller<
 
     final drained = Completer<void>();
     // Listening rather than `await for` gives us a subscription to cancel when
-    // the call ends early. Ordering is unaffected: send() queues the write
-    // synchronously onto the processor's send sequence, so it is only the
-    // queueing that is asynchronous.
-    final requestSub = requests.listen(
+    // the call ends early. Ordering is preserved by the processor's send
+    // sequence, so pausing here only bounds how far ahead the producer runs.
+    //
+    // It has to pause: the listener returns immediately, so without this the
+    // request stream was drained at full speed however long a send took -- an
+    // unbounded queue between the application and the transport, and the
+    // reason flow control could not throttle an upload. Measured with a
+    // handler that consumed one message and stalled, against a 1 MB window,
+    // the caller pulled all 2000 messages (32.8 MB) from its request stream.
+    late final StreamSubscription<TRequest> requestSub;
+    requestSub = requests.listen(
       (request) {
         if (_sendingFinished) return;
         _logger.internal('Sending request: $request');
+        requestSub.pause();
         unawaited(
-          send(request).catchError((Object e, StackTrace st) {
-            if (!drained.isCompleted) drained.completeError(e, st);
-          }),
+          send(request)
+              .catchError((Object e, StackTrace st) {
+                if (!drained.isCompleted) drained.completeError(e, st);
+              })
+              .whenComplete(() {
+                if (!_sendingFinished) requestSub.resume();
+              }),
         );
       },
       onError: (Object e, StackTrace st) {
