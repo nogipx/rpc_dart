@@ -1046,8 +1046,15 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           // finished, so the consumer would get a silently truncated stream
           // instead of DEADLINE_EXCEEDED. Which happened depended on who won
           // the race.
+          // Tested with remainingTime, not isExpired. isExpired is
+          // `clock().isAfter(deadline)` — strict — so it is FALSE at the
+          // instant the deadline lands, while remainingTime is already
+          // Duration.zero. The two contradict each other on the boundary, and
+          // that is exactly where a peer closing on its own copy of the same
+          // deadline lands. See _setupDeadlineMonitoring for the flake this
+          // cost when the same strict test guarded it.
           final deadline = _context?.deadline;
-          if (deadline != null && (_context?.isExpired ?? false)) {
+          if (deadline != null && _context?.remainingTime == Duration.zero) {
             _responseController.addError(
               RpcDeadlineExceededException(deadline, Duration.zero),
             );

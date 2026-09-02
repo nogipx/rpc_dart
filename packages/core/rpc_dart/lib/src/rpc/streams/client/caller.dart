@@ -155,9 +155,14 @@ final class ClientStreamCaller<
             // same instant -- and reporting UNAVAILABLE for that is a race:
             // whichever landed first decided the caller's exception type.
             // If the deadline has passed, the deadline is why the call failed.
+            // Tested with remainingTime, not isExpired: isExpired is strict
+            // (`clock().isAfter(deadline)`) and so is FALSE at the instant the
+            // deadline lands, while remainingTime is already Duration.zero.
+            // The boundary is exactly where a peer closing on its own copy of
+            // the same deadline arrives.
             final deadline = _context?.deadline;
             _responseCompleter.completeError(
-              deadline != null && (_context?.isExpired ?? false)
+              deadline != null && _context?.remainingTime == Duration.zero
                   ? RpcDeadlineExceededException(deadline, Duration.zero)
                   : RpcStatusException(
                       RpcStatus.unavailable,
