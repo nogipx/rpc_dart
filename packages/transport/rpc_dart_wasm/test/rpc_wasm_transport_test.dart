@@ -204,6 +204,12 @@ void main() {
         isClient: true,
       );
 
+      // Measured from AFTER construction: the transport may put connection-level
+      // control frames on the wire when it comes up (rpc_dart advertises its
+      // flow-control window there), and this test is about call frames, not
+      // about how many frames a connection costs to open.
+      final baseline = pair.client.sent.length;
+
       final streamId = client.createStream();
       await client.sendMetadata(
         streamId,
@@ -216,7 +222,7 @@ void main() {
       );
 
       // Metadata frame + message frame -> two byte frames on the wire.
-      expect(pair.client.sent, hasLength(2));
+      expect(pair.client.sent.length - baseline, 2);
       expect(pair.client.sent.every((f) => f.isNotEmpty), isTrue);
 
       await client.close();
