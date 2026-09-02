@@ -80,12 +80,21 @@ final class RpcContext {
       RpcContext._(traceId: traceId);
 
   /// Creates a copy of the context with additional headers.
+  ///
+  /// The count and total-size caps apply to the MERGED result, not to
+  /// [additionalHeaders] alone. Sanitising only the additions restarted both
+  /// counters at zero on every call, so the caps bounded a single call rather
+  /// than the context: one `withHeaders` of 500 headers correctly yielded 128,
+  /// but 500 `withHeader` calls — what [RpcContextBuilder] does, one header at
+  /// a time — yielded all 500, and 100 headers of 8KB reached 800KB against a
+  /// 64KB budget. Existing headers are merged first, so an over-cap addition is
+  /// dropped rather than displacing a header already in the context.
   RpcContext withAdditionalHeaders(Map<String, String> additionalHeaders) {
-    final newHeaders = Map<String, String>.from(_headers);
-    newHeaders.addAll(_sanitizeHeaders(additionalHeaders));
+    final merged = Map<String, String>.from(_headers)
+      ..addAll(additionalHeaders);
 
     return RpcContext._(
-      headers: newHeaders,
+      headers: _sanitizeHeaders(merged),
       deadline: deadline,
       cancellationToken: cancellationToken,
       traceId: traceId,
@@ -467,7 +476,9 @@ abstract final class RpcContextUtils {
     mergedValues.addAll(right._values);
 
     return RpcContext._(
-      headers: mergedHeaders,
+      // Re-cap the union: both sides are individually within the header count
+      // and byte budgets, but their merge is not bounded by either.
+      headers: RpcContext._sanitizeHeaders(mergedHeaders),
       deadline: right.deadline ?? left.deadline,
       cancellationToken: right.cancellationToken ?? left.cancellationToken,
       traceId: right.traceId ?? left.traceId,
@@ -508,7 +519,9 @@ class RpcContextBuilder {
     return parent.traceId != null ? builder : builder.withGeneratedTraceId();
   }
 
-  /// Sets the headers.
+  /// Adds [headers] to the context, overriding any that already exist.
+  ///
+  /// Merges rather than replaces, despite the name.
   RpcContextBuilder withHeaders(Map<String, String> headers) {
     _context = _context.withAdditionalHeaders(headers);
     return this;
