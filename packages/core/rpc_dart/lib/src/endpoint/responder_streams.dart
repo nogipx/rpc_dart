@@ -153,11 +153,22 @@ final class RpcResponderStreamState {
   }
 
   /// Returns and clears all client-stream buffered messages.
+  /// Returns and clears the buffered client-stream messages.
+  ///
+  /// With [markEndOfStream], the LAST message is re-stamped as end-of-stream —
+  /// and when there are none, a bare end-of-stream message is synthesised. A
+  /// client-streaming RPC may legitimately carry zero messages, and the empty
+  /// list this used to return dropped the marker entirely: the responder's
+  /// request stream never closed, so the handler stayed parked in
+  /// `await for (requests)`, never returned, and the caller waited out its own
+  /// timeout against a handler that HAD started.
   List<RpcTransportMessage> takeClientBufferedMessages({
     bool markEndOfStream = false,
   }) {
     if (_clientBufferedMessages.isEmpty) {
-      return const [];
+      return markEndOfStream
+          ? [RpcTransportMessage(streamId: id, isEndOfStream: true)]
+          : const [];
     }
 
     final messages = List<RpcTransportMessage>.from(_clientBufferedMessages);

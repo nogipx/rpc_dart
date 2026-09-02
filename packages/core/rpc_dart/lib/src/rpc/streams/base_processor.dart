@@ -1418,9 +1418,43 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       'Finishing request send for $_methodPath [streamId: $_streamId]',
     );
 
+    // A client stream may legitimately carry ZERO messages, and gRPC expects
+    // that to open the call anyway: HEADERS, then end-of-stream. The initial
+    // metadata was only ever sent by _transmitRequest, so a call that sent no
+    // request never announced itself at all -- no method path reached the
+    // responder, no handler ran, and the caller waited out its own timeout on
+    // a server that had no idea the call existed.
+    _queueInitialMetadataIfUnsent();
+
     if (!_requestController.isClosed) {
       await _requestController.close();
     }
+  }
+
+  /// Queues the initial metadata onto [_sendSequence] if it has not gone out.
+  ///
+  /// Queued rather than sent directly so it keeps its place ahead of anything
+  /// already pending, and so the request handler's `onDone` (which awaits
+  /// [_sendSequence] before calling the transport's finishSending) observes it.
+  void _queueInitialMetadataIfUnsent() {
+    if (_initialMetadataSent) return;
+    _sendSequence = _sendSequence.then((_) async {
+      if (!_isActive || _initialMetadataSent) return;
+      try {
+        await _sendInitialMetadata();
+        _initialMetadataSent = true;
+      } catch (e, stackTrace) {
+        if (_isTransportClosed(e)) return;
+        _logger.error(
+          'Failed to send initial metadata [streamId: $_streamId]',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        if (!_responseController.isClosed) {
+          _responseController.addError(e, stackTrace);
+        }
+      }
+    });
   }
 
   /// Closes the processor and releases resources.
