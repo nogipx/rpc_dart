@@ -32,9 +32,8 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
   /// Creates a multiplexed channel that encodes/decodes frames over [channel].
   ///
   /// [policy] bounds the RECEIVE path: a declared frame payload larger than
-  /// [RpcSecurityPolicy.maxMessageLengthBytes] is rejected from the header
-  /// without buffering, and the reassembly buffer is capped at
-  /// [RpcSecurityPolicy.effectiveMaxBufferedBytes].
+  /// [_maxFramePayloadBytes] is rejected from the header without buffering, and
+  /// the reassembly buffer is capped at [_maxBufferedFrameBytes].
   RpcFrameMultiplexedChannel({
     required IRpcChannel channel,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
@@ -107,6 +106,28 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
 
   // -- Internal ---------------------------------------------------------------
 
+  /// Largest legal channel-frame payload, in bytes.
+  ///
+  /// A channel frame's payload is not the application message: it is the
+  /// gRPC-framed message, so it carries a [RpcConstants.messagePrefixSize]
+  /// prefix that [RpcSecurityPolicy.maxMessageLengthBytes] — "max payload size
+  /// of a single decoded gRPC message" — does not count. Bounding the frame
+  /// payload by the policy value directly made the real ceiling
+  /// `maxMessageLengthBytes - 5`, so a message at exactly the configured limit
+  /// was rejected as oversized.
+  int get _maxFramePayloadBytes =>
+      _policy.maxMessageLengthBytes + RpcConstants.messagePrefixSize;
+
+  /// Reassembly-buffer cap, in bytes.
+  ///
+  /// One maximal frame must fit, and a frame is [RpcChannelFrame.headerSize]
+  /// bytes of header plus [_maxFramePayloadBytes] of payload. The policy's
+  /// buffer budget describes gRPC reassembly and knows nothing of this
+  /// channel's own header, so the header is added here rather than stolen from
+  /// the message budget.
+  int get _maxBufferedFrameBytes =>
+      _policy.effectiveMaxBufferedBytes + RpcChannelFrame.headerSize;
+
   /// Grows [_buf] so it can hold at least [needed] bytes, copying the existing
   /// (not-yet-emitted) bytes. Capacity doubles, so total copy cost across a
   /// stream is O(n), not O(n^2).
@@ -135,12 +156,12 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
     // Receive-path cap: never let the reassembly buffer grow past the policy
     // limit. A peer dribbling bytes toward a huge declared frame is stopped
     // here even before the per-frame length check fires.
-    if (_bufLen > _policy.effectiveMaxBufferedBytes) {
+    if (_bufLen > _maxBufferedFrameBytes) {
       final buffered = _bufLen;
       _failChannel(
         RpcFrameException(
           'Incoming frame buffer overflow: $buffered bytes '
-          '(max: ${_policy.effectiveMaxBufferedBytes})',
+          '(max: $_maxBufferedFrameBytes)',
         ),
       );
       return;
@@ -156,7 +177,7 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
     try {
       (frames, consumed) = RpcChannelFrame.decodeAll(
         data,
-        maxPayloadLen: _policy.maxMessageLengthBytes,
+        maxPayloadLen: _maxFramePayloadBytes,
         maxMetadataLen: _policy.maxMetadataBytes,
       );
     } on RpcFrameException catch (error) {
@@ -197,6 +218,13 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
   }
 
   /// Surfaces a typed receive-path error and closes the channel.
+  ///
+  /// Closes regardless of [RpcSecurityPolicy.closeOnProtocolError], unlike the
+  /// per-message violations the transport layer reports. Every error routed
+  /// here is a FRAMING error: the buffer overflowed, or a header declared a
+  /// payload we refuse to read. Either way the position of the next frame
+  /// boundary is unknown, so there is nothing to resynchronise to and carrying
+  /// on would decode the remaining bytes as garbage.
   void _failChannel(RpcFrameException error) {
     if (!_incomingCtl.isClosed) _incomingCtl.addError(error);
     // Drop any partially buffered bytes immediately; do not keep allocating.
