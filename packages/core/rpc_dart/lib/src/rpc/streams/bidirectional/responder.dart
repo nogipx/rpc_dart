@@ -148,11 +148,27 @@ final class BidirectionalStreamResponder<
   }
 
   /// Sends an error to the client.
-  Future<void> sendError(int statusCode, String message) async {
+  ///
+  /// [statusDetailsBin] carries the encoded `google.rpc.Status` for an
+  /// [RpcStatusException]'s structured `details`. This parameter did not exist,
+  /// so a bidirectional handler's details were dropped on the floor while the
+  /// other three call shapes delivered them: measured with a handler throwing
+  /// NOT_FOUND plus an RpcErrorInfo and an RpcBadRequest, unary, server-stream
+  /// and client-stream all reported 2 details and bidirectional reported 0.
+  /// Status code and message came through, so the loss was silent.
+  Future<void> sendError(
+    int statusCode,
+    String message, {
+    Uint8List? statusDetailsBin,
+  }) async {
     if (!_isActive) return;
 
     try {
-      await _processor.sendError(statusCode, message);
+      await _processor.sendError(
+        statusCode,
+        message,
+        statusDetailsBin: statusDetailsBin,
+      );
     } finally {
       _completeDone();
     }

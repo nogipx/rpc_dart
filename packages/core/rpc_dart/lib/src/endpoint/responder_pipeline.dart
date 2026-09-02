@@ -961,6 +961,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           await responder.sendError(
             error is RpcStatusException ? error.statusCode : RpcStatus.internal,
             error is RpcStatusException ? error.message : error.toString(),
+            statusDetailsBin: error is RpcStatusException
+                ? error.statusDetailsBin
+                : null,
           );
         }
       }());
@@ -1014,6 +1017,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         await responder.sendError(
           error is RpcStatusException ? error.statusCode : RpcStatus.internal,
           error is RpcStatusException ? error.message : error.toString(),
+          statusDetailsBin: error is RpcStatusException
+              ? error.statusDetailsBin
+              : null,
         );
       }
     }());
