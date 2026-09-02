@@ -81,23 +81,61 @@ final class _ReconnectingTransportProxy
   /// Called by [RpcClientConnection] when the inner transport closes.
   void Function(Object? error)? onDropped;
 
+  /// Installs [inner] as the live transport, retiring whatever was attached.
+  ///
+  /// Retiring means CLOSING the previous transport, not merely dropping its
+  /// subscription. Replacing `_inner` without closing it orphaned the whole
+  /// transport -- socket still open, and no longer reachable, so even
+  /// [RpcClientConnection.dispose] could not clean it up. Calling `connect()`
+  /// while already online is the ordinary way to reach this (an app doing it on
+  /// resume, or behind a retry button): three calls left three live transports,
+  /// two of which outlived dispose().
   void attach(IRpcTransport inner) {
-    _innerSub?.cancel();
+    final previousSub = _innerSub;
+    final previous = _inner;
+    _innerSub = null;
     _inner = inner;
+
+    // Cancel before closing, so the old transport's terminal event cannot be
+    // mistaken for a drop of the new one. The identity guards below make that
+    // safe even if a queued event slips through the async cancel.
+    if (previousSub != null) unawaited(previousSub.cancel().catchError((_) {}));
+    if (previous != null && !identical(previous, inner)) {
+      unawaited(previous.close().catchError((_) {}));
+    }
+
     _innerSub = inner.incomingMessages.listen(
       (msg) {
         if (!_msgCtl.isClosed) _msgCtl.add(msg);
       },
       onDone: () {
-        _inner = null;
+        // A superseded transport finishing must not look like the live one
+        // dropping, or retiring it would kick off a spurious reconnect.
+        if (!identical(_inner, inner)) return;
+        _retire(inner);
         onDropped?.call(null);
       },
       onError: (Object e) {
-        _inner = null;
+        if (!identical(_inner, inner)) return;
+        _retire(inner);
         onDropped?.call(e);
       },
       cancelOnError: true,
     );
+  }
+
+  /// Drops [inner] as the live transport and closes it.
+  ///
+  /// The drop path used to only null out `_inner`, leaving the transport to
+  /// close itself when its incoming stream ended. Every transport in this repo
+  /// does, but that is unspecified behaviour to depend on: a transport that
+  /// ends its read side without closing (a half-close, or any third-party
+  /// implementation) was orphaned exactly as a superseded one was. Since the
+  /// proxy takes ownership at [attach], it closes here too. Closing an
+  /// already-closed transport is a no-op.
+  void _retire(IRpcTransport inner) {
+    _inner = null;
+    unawaited(inner.close().catchError((_) {}));
   }
 
   Future<void> detach() async {
