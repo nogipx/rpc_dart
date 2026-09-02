@@ -33,6 +33,27 @@ final class RpcCallScope {
   /// The context this scope is bound to (if any).
   final RpcContext? _context;
 
+  /// Where cleanup failures are reported.
+  ///
+  /// The server injects a context carrying a per-call logger, so a handler's
+  /// cleanup failure lands in that call's log. A scope built without a context
+  /// has nowhere to report and stays silent.
+  LogScope get _log => _context?.log ?? LogScope.noop;
+
+  /// Reports a cancel that rejected, without letting it escape.
+  ///
+  /// Cancelling a stream runs user code, which may throw. Dropping that future
+  /// made it an unhandled async error, and an unhandled async error in the
+  /// root zone terminates the isolate -- fatal for a server, from nothing more
+  /// than a tracked stream whose cleanup failed.
+  void _cancelFailed(Object error, StackTrace stackTrace) {
+    _log.error(
+      'Tracked stream failed to cancel',
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
   /// Creates a scope optionally bound to an [RpcContext].
   ///
   /// If the context has a deadline, a Timer auto-closes the scope when it
@@ -98,7 +119,9 @@ final class RpcCallScope {
     late StreamSubscription<T> sub;
     late StreamController<T> controller;
 
-    controller = StreamController<T>(onCancel: () => sub.cancel());
+    controller = StreamController<T>(
+      onCancel: () => sub.cancel().catchError(_cancelFailed),
+    );
 
     sub = stream.listen(
       controller.add,
@@ -107,7 +130,11 @@ final class RpcCallScope {
     );
 
     onDispose(() {
-      sub.cancel();
+      // Not awaited: cancelling a suspended generator can block indefinitely
+      // and the scope has to finish closing. Both this and the onCancel above
+      // dropped the returned future outright, so a rejected cancel became TWO
+      // unhandled async errors -- measured, and enough to kill the isolate.
+      unawaited(sub.cancel().catchError(_cancelFailed));
       if (!controller.isClosed) controller.close();
     });
 
@@ -153,8 +180,17 @@ final class RpcCallScope {
     for (var i = _disposers.length - 1; i >= 0; i--) {
       try {
         await _disposers[i]();
-      } catch (_) {
-        // Swallow errors in disposers to ensure all run.
+      } catch (error, stackTrace) {
+        // Keep going so every disposer still runs -- one failing cleanup must
+        // not strand the rest. But do not make it vanish: this swallowed
+        // silently, so a handler's own cleanup failing (a database handle that
+        // would not release, a file that would not close) left no trace
+        // anywhere at all -- no log, no error, nothing to notice.
+        _log.error(
+          'Call-scope disposer failed',
+          error: error,
+          stackTrace: stackTrace,
+        );
       }
     }
     _disposers.clear();
