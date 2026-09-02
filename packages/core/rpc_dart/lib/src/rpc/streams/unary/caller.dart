@@ -273,6 +273,33 @@ final class UnaryCaller<TRequest, TResponse> {
                 completer.completeError(error);
               }
             },
+            onDone: () {
+              // The stream ended without a response. There was no handler here
+              // at all, so a transport or responder dying mid-call left the
+              // caller waiting on a completer nothing would ever complete --
+              // until the 60s fallback, or forever if the call had a longer
+              // deadline. Measured by tearing each layer down under four
+              // in-flight calls: the other three shapes settled and unary hung
+              // every time. ClientStreamCaller has always had this handler;
+              // unary simply lacked it.
+              if (completer.isCompleted) return;
+              _logger.internal(
+                'Response stream closed without a response '
+                '[streamId: $streamId]',
+              );
+              // remainingTime, not isExpired: isExpired is strict and so is
+              // false at the instant the deadline lands, where a peer closing
+              // on its own copy of the same deadline arrives.
+              final deadline = _context?.deadline;
+              completer.completeError(
+                deadline != null && _context?.remainingTime == Duration.zero
+                    ? RpcDeadlineExceededException(deadline, Duration.zero)
+                    : RpcStatusException(
+                        RpcStatus.unavailable,
+                        'Stream closed without receiving response',
+                      ),
+              );
+            },
           );
 
       // Send initial metadata with context headers.
