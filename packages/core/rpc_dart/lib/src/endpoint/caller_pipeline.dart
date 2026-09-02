@@ -114,18 +114,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     return result;
   }
 
-  /// Adds routing headers and cancellation token to context.
-  RpcContext _enhanceCallerContext(
-    RpcContext context,
-    String serviceName,
-    String methodName,
-  ) {
-    final key = _callerMethodKey(serviceName, methodName);
+  /// Adds routing headers and a cancellation token to the context.
+  RpcContext _enhanceCallerContext(RpcContext context, String serviceName) {
     final token = context.cancellationToken ?? RpcCancellationToken();
-    final requestId = context.requestId;
-
-    _callerTokens[key] ??= {};
-    _callerTokens[key]![requestId] = token;
 
     return context.withCancellation(token).withAdditionalHeaders({
       'x-route-service': serviceName,
@@ -133,15 +124,40 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   }
 
   /// Fully prepares context for an outgoing call.
+  ///
+  /// Building the context does NOT start tracking it — see
+  /// [_trackCallerRequest]. The two were fused, so the streaming entry points
+  /// registered a token the moment they were CALLED, while they only untrack
+  /// once the returned stream is done or cancelled. A stream that is never
+  /// listened to therefore leaked its token forever.
   RpcContext _prepareCallerContext(
     RpcContext? context,
     String serviceName,
     String methodName,
-  ) => _enhanceCallerContext(
-    _ensureCallerContext(context),
-    serviceName,
-    methodName,
-  );
+  ) => _enhanceCallerContext(_ensureCallerContext(context), serviceName);
+
+  /// Registers [ctx]'s call so [cancelRequest]/`cancelMethod` can reach it.
+  ///
+  /// Call this when the request actually STARTS, and pair every call with
+  /// [_untrackCallerRequest]. For the lazily-evaluated streaming entry points
+  /// that means on first listen, not when the `Stream` object is handed out:
+  /// `serverStream()` and `bidirectionalStream()` return cold streams, so until
+  /// something subscribes there is no call on the wire to cancel.
+  ///
+  /// Tracking at hand-out time leaked one token per unlistened stream (measured
+  /// 10 leaked from 10 dropped `serverStream` calls, 10 more from bidi) and made
+  /// `isMethodActive`/`getActiveCallsCount`/`pendingRequests` report a call that
+  /// never happened, permanently.
+  void _trackCallerRequest(
+    String serviceName,
+    String methodName,
+    RpcContext ctx,
+  ) {
+    final token = ctx.cancellationToken;
+    if (token == null) return;
+    final key = _callerMethodKey(serviceName, methodName);
+    (_callerTokens[key] ??= {})[ctx.requestId] = token;
+  }
 
   String _callerMethodKey(String serviceName, String methodName) =>
       '$serviceName/$methodName';
@@ -263,6 +279,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     }
 
     final ctx = _prepareCallerContext(context, serviceName, methodName);
+    // Unary starts immediately, so tracking starts here.
+    _trackCallerRequest(serviceName, methodName, ctx);
 
     return () async {
       try {
@@ -362,6 +380,10 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
     controller = StreamController<TResponse>(
       onListen: () {
+        // The call starts here, not when serverStream() returned this cold
+        // stream. finish() is the matching untrack, and it only runs from
+        // onDone/onCancel -- which never fire for a stream nobody listened to.
+        _trackCallerRequest(serviceName, methodName, ctx);
         sub = stream.listen(
           (event) {
             if (!controller.isClosed) controller.add(event);
@@ -418,6 +440,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   }) {
     return (Stream<C> requests) async {
       final ctx = _prepareCallerContext(context, serviceName, methodName);
+      // The builder is already lazy: this runs when the call is invoked.
+      _trackCallerRequest(serviceName, methodName, ctx);
       try {
         return await handleClientStream<C, R>(
           serviceName: serviceName,
@@ -458,15 +482,23 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       methodName: methodName,
       context: ctx,
       requests: requests,
-      handler: (c, reqs) => _buildBidirectionalStream<C, R>(
-        serviceName: serviceName,
-        methodName: methodName,
-        requestCodec: requestCodec,
-        responseCodec: responseCodec,
-        context: c,
-        requests: reqs,
-        requestId: ctx.requestId,
-      ),
+      handler: (c, reqs) {
+        // handleBidirectionalStream is an async*, so this handler runs on first
+        // listen -- which is when the call actually starts. _buildBidirectional
+        // Stream's cleanup() is the matching untrack, and it likewise only runs
+        // once that body has executed. Tracking in bidirectionalStream() itself
+        // leaked a token for every stream that was built and then dropped.
+        _trackCallerRequest(serviceName, methodName, ctx);
+        return _buildBidirectionalStream<C, R>(
+          serviceName: serviceName,
+          methodName: methodName,
+          requestCodec: requestCodec,
+          responseCodec: responseCodec,
+          context: c,
+          requests: reqs,
+          requestId: ctx.requestId,
+        );
+      },
     );
   }
 
