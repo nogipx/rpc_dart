@@ -44,6 +44,14 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   /// Creates a retry interceptor.
   ///
   /// [maxAttempts] must be >= 1 (1 means no retries, just the initial call).
+  /// Throws [ArgumentError] otherwise.
+  ///
+  /// This was an `assert`, which Dart strips in release builds. With
+  /// `maxAttempts: 0` the attempt loop never runs, so `interceptUnary` falls
+  /// straight through to `Error.throwWithStackTrace(lastError!, lastStack!)`
+  /// on two nulls: every call through the interceptor died with `Null check
+  /// operator used on a null value`, having never reached the transport. A
+  /// real throw names the actual mistake, at construction, in every build mode.
   RpcRetryInterceptor({
     this.maxAttempts = 3,
     this.backoff = const ExponentialBackoff(
@@ -51,7 +59,15 @@ class RpcRetryInterceptor extends IRpcInterceptor {
       maxDelay: Duration(seconds: 5),
     ),
     this.retryOn,
-  }) : assert(maxAttempts >= 1, 'maxAttempts must be >= 1');
+  }) {
+    if (maxAttempts < 1) {
+      throw ArgumentError.value(
+        maxAttempts,
+        'maxAttempts',
+        'must be >= 1 (1 means no retries, just the initial call)',
+      );
+    }
+  }
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(

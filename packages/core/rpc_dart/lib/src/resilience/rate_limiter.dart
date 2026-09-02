@@ -361,8 +361,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     int maxTrackedKeys = 100000,
     bool meterServerStreamMessages = false,
     int Function()? nowMicros,
-  }) : assert(maxTrackedKeys > 0, 'maxTrackedKeys must be positive'),
-       _globalSpec = global,
+  }) : _globalSpec = global,
        _perServiceSpec = Map.unmodifiable(perService),
        _perMethodSpec = Map.unmodifiable(perMethod),
        _perKeyFallbackSpec = perKeyFallback,
@@ -371,6 +370,18 @@ class RpcRateLimiter extends IRpcInterceptor {
        _meterServerStreamMessages = meterServerStreamMessages,
        _cleanupIntervalUs = cleanupInterval.inMicroseconds,
        _nowMicros = nowMicros ?? _defaultMonotonicMicros {
+    // Was an assert, so it vanished in release: _getDynamic evicts when
+    // `store.length >= _maxTrackedKeys`, which with 0 is true on an EMPTY map,
+    // and `store.keys.first` then throws 'Bad state: No element'. Every call
+    // reached the client as INTERNAL.
+    if (maxTrackedKeys <= 0) {
+      throw ArgumentError.value(
+        maxTrackedKeys,
+        'maxTrackedKeys',
+        'must be > 0',
+      );
+    }
+
     // Validate EVERY spec up front, in every build mode. A spec that cannot
     // enforce anything must fail loudly at construction rather than at first
     // use -- or, worse, never (see RateLimit._validate).

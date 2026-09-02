@@ -24,16 +24,26 @@ final class RpcResponderMethodBinding {
   final RpcZeroCopyMethodRegistration<Object, Object>? zeroCopyRegistration;
 
   /// Creates a method binding with at least one registration variant.
+  ///
+  /// Throws [ArgumentError] when both are null. This was an `assert`, which
+  /// Dart strips in release: a binding with neither variant then survived
+  /// construction and failed later at [codecMethod]/[zeroCopyMethod] with a
+  /// bare null-check error, pointing at the dispatch site rather than the
+  /// registration that was actually malformed.
   RpcResponderMethodBinding({
     required this.serviceName,
     required this.methodName,
     required this.type,
     this.codecRegistration,
     this.zeroCopyRegistration,
-  }) : assert(
-         codecRegistration != null || zeroCopyRegistration != null,
-         'Method binding requires either codec or zero-copy registration',
-       );
+  }) {
+    if (codecRegistration == null && zeroCopyRegistration == null) {
+      throw ArgumentError(
+        'Method binding for $serviceName.$methodName requires either a codec '
+        'or a zero-copy registration',
+      );
+    }
+  }
 
   /// Fully-qualified key `serviceName.methodName`.
   String get methodKey => '$serviceName.$methodName';
