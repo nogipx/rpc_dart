@@ -22,10 +22,12 @@
 //     speed however long a send took -- an unbounded queue between the
 //     application and the transport.
 //
-// The client-stream upload direction is still unbounded and asserted as such
-// below: that responder is fed by the pipeline rather than through
-// getMessagesForStream, so its frames are credited on arrival and there is
-// nothing to meter.
+// The client-stream upload direction needed one more piece. That responder is
+// fed by the pipeline rather than through getMessagesForStream, so the
+// transport had nothing to meter and credited on arrival, leaving it unbounded
+// at 2000 messages. The pipeline now claims metering for such a stream
+// (IRpcFlowControlled.deferFlowCredit) and credits on consumption, which brings
+// it to 66 as well.
 
 import 'dart:async';
 
@@ -86,6 +88,21 @@ final class _Contract extends RpcResponderContract {
           yield 'p$i'.rpc;
         }
       },
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+    addClientStreamMethod<RpcString, RpcString>(
+      methodName: 'ignoresUpload',
+      handler: (reqs, {RpcContext? context}) async {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        return 'ignored'.rpc;
+      },
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+    addClientStreamMethod<RpcString, RpcString>(
+      methodName: 'returnsEarly',
+      handler: (reqs, {RpcContext? context}) async => 'early'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
     );
@@ -209,10 +226,7 @@ void main() {
       await _teardown(rig);
     });
 
-    test('client-stream upload is NOT yet bounded', () async {
-      // Documented gap, asserted so a future fix has to update this. That
-      // responder is fed by the pipeline rather than through
-      // getMessagesForStream, so its frames are credited on arrival.
+    test('client-stream, against a stalled handler', () async {
       final rig = _connect(window: 1024 * 1024);
       var pulled = 0;
       unawaited(
@@ -226,7 +240,34 @@ void main() {
             .catchError((Object _) => ''.rpc),
       );
       await Future<void>.delayed(const Duration(milliseconds: 1200));
-      expect(pulled, greaterThan(500));
+      expect(_consumed, lessThan(5));
+      expect(
+        pulled,
+        lessThan(400),
+        reason:
+            'the caller pulled $pulled messages (~'
+            '${(pulled * 16384 / 1e6).toStringAsFixed(1)} MB) from its request '
+            'stream while the handler had consumed $_consumed',
+      );
+      _hold.complete();
+      await _teardown(rig);
+    });
+
+    test('client-stream is unbounded again with the window off', () async {
+      final rig = _connect(window: null);
+      var pulled = 0;
+      unawaited(
+        rig.caller
+            .clientStream<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'stallsUpload',
+              requestCodec: _codec,
+              responseCodec: _codec,
+            )(_gen(2000, () => pulled++))
+            .catchError((Object _) => ''.rpc),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      expect(pulled, greaterThan(1000));
       _hold.complete();
       await _teardown(rig);
     });
@@ -270,6 +311,49 @@ void main() {
           .timeout(const Duration(seconds: 20));
       expect(got, hasLength(300), reason: '4.9 MB through a 64 KiB window');
       expect(pulled, 300);
+      await _teardown(rig);
+    });
+
+    test('a handler that never reads its upload', () async {
+      // Nothing subscribes, so nothing pauses and no credit is withheld: the
+      // uploader must not park forever waiting on a handler that ignores it.
+      final rig = _connect(window: 64 * 1024);
+      var pulled = 0;
+      expect(
+        (await rig.caller
+                .clientStream<RpcString, RpcString>(
+                  serviceName: 'Svc',
+                  methodName: 'ignoresUpload',
+                  requestCodec: _codec,
+                  responseCodec: _codec,
+                )(_gen(300, () => pulled++))
+                .timeout(
+                  const Duration(seconds: 15),
+                  onTimeout: () => fail(
+                    'a handler that ignores its upload stalled the peer',
+                  ),
+                ))
+            .value,
+        'ignored',
+      );
+      await _teardown(rig);
+    });
+
+    test('a handler that returns without draining', () async {
+      final rig = _connect(window: 64 * 1024);
+      var pulled = 0;
+      expect(
+        (await rig.caller
+                .clientStream<RpcString, RpcString>(
+                  serviceName: 'Svc',
+                  methodName: 'returnsEarly',
+                  requestCodec: _codec,
+                  responseCodec: _codec,
+                )(_gen(300, () => pulled++))
+                .timeout(const Duration(seconds: 15)))
+            .value,
+        'early',
+      );
       await _teardown(rig);
     });
 

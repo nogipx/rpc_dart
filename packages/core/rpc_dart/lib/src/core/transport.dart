@@ -149,6 +149,28 @@ abstract interface class IRpcSecurityPolicyAware {
   RpcSecurityPolicy get securityPolicy;
 }
 
+/// Capability: a higher layer takes over flow-control metering for a stream.
+///
+/// The transport meters what it hands out through `getMessagesForStream`, which
+/// is lazy, so a consumer that stops reading stops credit reaching the peer.
+/// One responder shape is not fed that way: a client-stream handler is fed by
+/// the responder pipeline, so the transport sees nothing to meter and would
+/// otherwise have to credit on arrival -- leaving that direction unbounded.
+///
+/// [deferFlowCredit] says "stop crediting this stream on arrival, I will",
+/// after which [returnFlowCredit] must be called as the application consumes,
+/// or the peer stalls once the window is used up.
+///
+/// Kept separate from [IRpcTransport], like [IRpcStreamReset], so adding it
+/// does not break third-party transports that `implements IRpcTransport`.
+abstract interface class IRpcFlowControlled {
+  /// Hands metering of [streamId] to the caller.
+  void deferFlowCredit(int streamId);
+
+  /// Reports [bytes] consumed by the application on [streamId].
+  void returnFlowCredit(int streamId, int bytes);
+}
+
 /// Transport interface with Stream ID multiplexing.
 ///
 /// Contract for transports over different protocols (HTTP/2, WebSockets,

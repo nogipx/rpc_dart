@@ -28,7 +28,8 @@ import 'frame_multiplexed_channel.dart';
 ///   isClient: true,
 /// );
 /// ```
-class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
+class RpcChannelTransport
+    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
   final IRpcMultiplexedChannel _channel;
   final RpcStreamIdManager _idManager;
   final RpcSecurityPolicy _policy;
@@ -77,6 +78,9 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
 
   /// Streams this side has already advertised an initial window for.
   final Set<int> _fcAdvertised = {};
+
+  /// Streams whose credit a higher layer returns (see [IRpcFlowControlled]).
+  final Set<int> _fcDeferred = {};
 
   int? get _fcWindow => _policy.flowControlWindowBytes;
   StreamSubscription<RpcTransportMessage>? _channelSub;
@@ -309,6 +313,7 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
     _channelSub = null;
     _activeStreams.clear();
     _finishedStreams.clear();
+    _fcDeferred.clear();
     // Release every parked sender first: a send waiting on credit from a peer
     // that is now gone would otherwise never return, and close() would hang.
     for (final streamId in _fcSendWaiters.keys.toList(growable: false)) {
@@ -455,6 +460,13 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
     if (window == null) return;
     final bytes = message.payload?.length ?? 0;
     if (bytes == 0) return;
+    _fcCredit(streamId, bytes);
+  }
+
+  /// Accumulates [bytes] of returned credit and grants at half the window.
+  void _fcCredit(int streamId, int bytes) {
+    final window = _fcWindow;
+    if (window == null) return;
     final pending = (_fcPendingGrant[streamId] ?? 0) + bytes;
     if (pending < (window ~/ 2).clamp(1, window)) {
       _fcPendingGrant[streamId] = pending;
@@ -510,7 +522,20 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
     _fcSendCredit.remove(streamId);
     _fcPendingGrant.remove(streamId);
     _fcAdvertised.remove(streamId);
+    _fcDeferred.remove(streamId);
     _fcWake(streamId);
+  }
+
+  @override
+  void deferFlowCredit(int streamId) {
+    if (_fcWindow == null) return;
+    _fcDeferred.add(streamId);
+  }
+
+  @override
+  void returnFlowCredit(int streamId, int bytes) {
+    if (_fcWindow == null || bytes <= 0) return;
+    _fcCredit(streamId, bytes);
   }
 
   void _markFinished(int streamId) {
@@ -550,12 +575,11 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
     final ctl = _streamControllers[message.streamId];
     if (ctl != null && !ctl.isClosed) {
       ctl.add(message);
-    } else {
-      // Nothing meters this one -- it goes straight into the pipeline's own
-      // buffers (a client-stream responder is fed by the pipeline, not through
-      // getMessagesForStream), so it is consumed as soon as it is dispatched.
-      // Crediting here is what stops that direction from stalling at the
-      // window; it is unbounded exactly as before.
+    } else if (!_fcDeferred.contains(message.streamId)) {
+      // Nothing meters this one and no layer has claimed it, so it goes
+      // straight into the pipeline's own buffers and is consumed as soon as it
+      // is dispatched. Crediting on arrival keeps such a stream from stalling
+      // at the window, at the cost of not bounding it.
       _fcOnConsumed(message.streamId, message);
     }
     // Global dispatch (new-stream routing): the buffered controller retains the

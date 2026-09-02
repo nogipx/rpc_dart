@@ -1321,6 +1321,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final controller = StreamController<RpcTransportMessage>();
     state.attachRequestSink(controller);
 
+    // Take over flow-control metering for this stream. The transport meters
+    // what it hands out through getMessagesForStream, and this responder is fed
+    // by the pipeline instead, so the transport would otherwise have to credit
+    // on arrival -- which left the client-stream upload direction unbounded.
+    // Claiming it here obliges us to credit on consumption below.
+    final transport = this.transport;
+    final flowControlled = transport is IRpcFlowControlled
+        ? transport as IRpcFlowControlled
+        : null;
+    flowControlled?.deferFlowCredit(state.id);
+
     for (final message in initialMessages) {
       state.pushRequest(message);
     }
@@ -1329,7 +1340,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (state.clientEnded) state.endRequests();
 
     controller.onCancel = () => state.detachRequestSink();
-    return controller.stream;
+    if (flowControlled == null) return controller.stream;
+    // `map` is lazy, so a handler that stops consuming stops credit reaching
+    // the peer -- the same property the transport's own metering relies on.
+    return controller.stream.map((message) {
+      final bytes = message.payload?.length ?? 0;
+      if (bytes > 0) flowControlled.returnFlowCredit(state.id, bytes);
+      return message;
+    });
   }
 
   Stream<RpcTransportMessage> _stateBoundStream(
