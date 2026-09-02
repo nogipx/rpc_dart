@@ -43,9 +43,8 @@ abstract class RpcErrorDetail {
 
     var offset = 0;
     while (offset < data.length) {
-      final tag = data[offset++];
-      final fieldNumber = tag >> 3;
-      final wireType = tag & 0x07;
+      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
+      offset = tagEnd;
 
       if (wireType == 2) {
         // length-delimited
@@ -123,9 +122,8 @@ Uint8List encodeRpcStatus(
   var offset = 0;
   while (offset < data.length) {
     if (offset >= data.length) break;
-    final tag = data[offset++];
-    final fieldNumber = tag >> 3;
-    final wireType = tag & 0x07;
+    final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
+    offset = tagEnd;
 
     if (wireType == 0) {
       final (value, newOffset) = _readVarint(data, offset);
@@ -197,8 +195,8 @@ class RpcBadRequest extends RpcErrorDetail {
     final violations = <RpcFieldViolation>[];
     var offset = 0;
     while (offset < data.length) {
-      final tag = data[offset++];
-      final wireType = tag & 0x07;
+      final (_, wireType, tagEnd) = _readTag(data, offset);
+      offset = tagEnd;
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
@@ -217,9 +215,8 @@ class RpcBadRequest extends RpcErrorDetail {
     String description = '';
     var offset = 0;
     while (offset < data.length) {
-      final tag = data[offset++];
-      final fieldNumber = tag >> 3;
-      final wireType = tag & 0x07;
+      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
+      offset = tagEnd;
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
@@ -296,9 +293,8 @@ class RpcRetryInfo extends RpcErrorDetail {
     int seconds = 0;
     int nanos = 0;
     while (offset < data.length) {
-      final tag = data[offset++];
-      final fieldNumber = tag >> 3;
-      final wireType = tag & 0x07;
+      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
+      offset = tagEnd;
       if (wireType == 2 && fieldNumber == 1) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
@@ -307,9 +303,8 @@ class RpcRetryInfo extends RpcErrorDetail {
         // parse Duration
         var dOffset = 0;
         while (dOffset < durationBytes.length) {
-          final dTag = durationBytes[dOffset++];
-          final dField = dTag >> 3;
-          final dWireType = dTag & 0x07;
+          final (dField, dWireType, dTagEnd) = _readTag(durationBytes, dOffset);
+          dOffset = dTagEnd;
           // Dispatch on the wire type like every other decoder here. Reading a
           // varint unconditionally (the old behaviour) desynchronised the
           // cursor the moment a field arrived with any other wire type — a
@@ -382,9 +377,8 @@ class RpcDebugInfo extends RpcErrorDetail {
     String detail = '';
     var offset = 0;
     while (offset < data.length) {
-      final tag = data[offset++];
-      final fieldNumber = tag >> 3;
-      final wireType = tag & 0x07;
+      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
+      offset = tagEnd;
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
@@ -470,9 +464,8 @@ class RpcErrorInfo extends RpcErrorDetail {
     final metadata = <String, String>{};
     var offset = 0;
     while (offset < data.length) {
-      final tag = data[offset++];
-      final fieldNumber = tag >> 3;
-      final wireType = tag & 0x07;
+      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
+      offset = tagEnd;
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
@@ -500,9 +493,8 @@ class RpcErrorInfo extends RpcErrorDetail {
     String? value;
     var offset = 0;
     while (offset < data.length) {
-      final tag = data[offset++];
-      final fieldNumber = tag >> 3;
-      final wireType = tag & 0x07;
+      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
+      offset = tagEnd;
       if (wireType == 2) {
         final (len, newOffset) = _readVarint(data, offset);
         offset = newOffset;
@@ -540,6 +532,25 @@ class RpcRawErrorDetail extends RpcErrorDetail {
 }
 
 // -- Protobuf varint helpers --
+
+/// Reads a field tag, returning its field number, wire type and the new offset.
+///
+/// A protobuf tag is a VARINT, not a byte. Every decoder here used to read it
+/// with `data[offset++]`, which is only correct for field numbers 1..15 — the
+/// point at which the tag stops fitting in one byte. A field number of 16 or
+/// more (a later revision of one of these messages, or any peer that emits
+/// one) left the continuation byte in the stream, so `fieldNumber` came out
+/// with the 0x80 bit folded in, the wire type was read from the wrong bits,
+/// and the cursor desynchronised — decoding every remaining field of the
+/// message as garbage. That is precisely the forward-compatibility case
+/// [_skipField] exists to handle.
+(int fieldNumber, int wireType, int newOffset) _readTag(
+  Uint8List data,
+  int offset,
+) {
+  final (tag, newOffset) = _readVarint(data, offset);
+  return (tag ~/ 8, tag % 8, newOffset);
+}
 
 /// Encodes a signed integer as a protobuf base-128 varint.
 ///
