@@ -630,10 +630,31 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         return;
       }
 
-      await response?.cancel();
-      await request?.cancel();
-      await caller.close();
-      if (!controller.isClosed) await controller.close();
+      // Cancelling the REQUEST subscription is not awaited here either, for
+      // exactly the reason the branch above gives: `requests` is typically a
+      // suspended async* middleware chain, and cancelling a generator parked
+      // in `await for` does not complete until its upstream produces again --
+      // which, for a request stream the caller keeps open, is never.
+      //
+      // That reasoning was applied only to the consumer-cancelled path, but it
+      // holds just as well when the SERVER finishes first: this await never
+      // returned, so `controller.close()` below was unreachable and the
+      // consumer hung on a stream that had already delivered its last message.
+      // A bidi call whose server ends the conversation while the client still
+      // holds its request sink open -- an ordinary shape -- never terminated.
+      unawaited(request?.cancel().catchError((_) {}));
+
+      // Everything else is best-effort: the controller MUST close, or the
+      // consumer waits forever on a call that is already over.
+      try {
+        await response?.cancel();
+        await caller.close();
+      } catch (_) {
+        // Teardown failures are not the consumer's problem; the stream still
+        // has to end.
+      } finally {
+        if (!controller.isClosed) await controller.close();
+      }
     }
 
     responseSub = caller.responses.listen(
