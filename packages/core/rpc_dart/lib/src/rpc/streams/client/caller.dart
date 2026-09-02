@@ -203,6 +203,7 @@ final class ClientStreamCaller<
 
       // Computed here, not at construction: requests may have taken a while to
       // send, and remainingTime already accounts for that.
+      final deadline = _context?.deadline;
       final wait = _context?.remainingTime ?? _noDeadlineFallback;
 
       // Await single response with timeout.
@@ -212,6 +213,15 @@ final class ClientStreamCaller<
           _logger.error('Response wait timed out after $wait');
           // Free resources on timeout.
           unawaited(close());
+          // With a deadline set, two things race to end the call: the call
+          // scope pushes RpcDeadlineExceededException onto the response
+          // completer, and this timeout fires. Reporting a TimeoutException
+          // from here made the exception type depend on which won -- observed
+          // both ways for the same 500ms deadline across runs. Report the
+          // deadline as a deadline either way.
+          if (deadline != null) {
+            throw RpcDeadlineExceededException(deadline, wait);
+          }
           throw TimeoutException('Response wait timeout from server', wait);
         },
       );

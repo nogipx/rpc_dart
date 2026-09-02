@@ -63,6 +63,15 @@ final class UnaryCaller<TRequest, TResponse> {
     final effectiveTimeout =
         timeout ?? remainingTime ?? const Duration(seconds: 60);
 
+    // The call's own deadline, when that is what bounds the wait — an explicit
+    // [timeout] argument takes precedence and is not a deadline. Used below to
+    // report expiry as [RpcDeadlineExceededException] rather than a bare
+    // [TimeoutException]: the other three call shapes all report a deadline
+    // that way, and so does this method's own pre-flight check, so the type a
+    // caller had to catch depended on whether the deadline passed just before
+    // the call or just after it.
+    final boundingDeadline = timeout == null ? _context?.deadline : null;
+
     // Create a new stream for this call.
     final streamId = _transport.createStream();
 
@@ -366,6 +375,16 @@ final class UnaryCaller<TRequest, TResponse> {
           _logger.error(
             'Response timeout: $effectiveTimeout [streamId: $streamId]',
           );
+          // A deadline that expires mid-call is the same event as one that had
+          // already expired at _checkContextBeforeCall, so report it the same
+          // way. An explicit `timeout:` argument is not a deadline and keeps
+          // TimeoutException.
+          if (boundingDeadline != null) {
+            throw RpcDeadlineExceededException(
+              boundingDeadline,
+              effectiveTimeout,
+            );
+          }
           throw TimeoutException(
             'Call timeout: $effectiveTimeout',
             effectiveTimeout,
