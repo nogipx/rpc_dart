@@ -231,8 +231,10 @@ void main() {
 
   group('malformed grants cannot stall a call', () {
     test('a grant that would overflow the counter', () async {
-      // 2^63-1 twice wraps to -2 without the clamp.
-      const maxInt = 9223372036854775807;
+      // 2^63-1 twice wraps to -2 without the clamp. Parsed at runtime rather
+      // than written as a literal: dart2js cannot compile an int literal that
+      // large, and a compile failure takes the whole file out of the web suite.
+      final maxInt = int.parse('9223372036854775807');
       final rig = _connect();
       final done = rig.caller
           .serverStream<RpcString, RpcString>(

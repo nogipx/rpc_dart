@@ -734,6 +734,15 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       }
     }
 
+    // Hand this consumer's demand upstream. This controller is the inner half
+    // of the bidirectional bridge and had no pause forwarding, so the response
+    // chain was drained at full speed however slowly the caller read. The VM
+    // masked it -- the outer bridge's own hop was enough there within a test
+    // window -- and dart2js did not: with the consumer paused, 2600 further
+    // messages were still decoded (`consumer_demand_propagation_test`).
+    controller.onPause = () => responseSub?.pause();
+    controller.onResume = () => responseSub?.resume();
+
     responseSub = caller.responses.listen(
       (msg) {
         if (!msg.isMetadataOnly && msg.payload != null) {
