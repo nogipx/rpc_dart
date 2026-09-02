@@ -797,9 +797,18 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
               final message =
                   response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
                   'Unknown error';
-              throw RpcStatusException(
+              // fromTrailer, so grpc-status-details-bin is decoded. Building
+              // the exception directly dropped an RpcStatusException's
+              // structured `details` on the floor: the responder had already
+              // put them on the wire, and every other call shape reads them
+              // back, but this one -- the zero-copy unary path -- did not.
+              // Measured with a handler throwing NOT_FOUND plus one detail:
+              // server, client and bidi all reported details=1, zero-copy
+              // unary reported details=0.
+              throw RpcStatusException.fromTrailer(
                 status,
                 RpcMetadata.decodeGrpcMessage(message),
+                detailsBin: response.metadata!.statusDetailsBin,
               );
             }
           }
