@@ -24,6 +24,12 @@ final class ClientStreamCaller<
   /// Marks send completion.
   bool _sendingFinished = false;
 
+  /// Call context, kept so the response wait can honour its deadline.
+  ///
+  /// Final: a non-final private field of this name would block type promotion
+  /// for every other `_context` in the library, since they share it.
+  final RpcContext? _context;
+
   /// Creates a client-stream caller.
   ClientStreamCaller({
     required IRpcTransport transport,
@@ -33,7 +39,7 @@ final class ClientStreamCaller<
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     LogScope? logger,
-  }) {
+  }) : _context = context {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
     // Zero-copy requires transport support.
@@ -170,12 +176,19 @@ final class ClientStreamCaller<
     await _processor.send(request);
   }
 
+  /// Default bound on the response wait for a call with no deadline of its own.
+  static const Duration _noDeadlineFallback = Duration(seconds: 60);
+
   /// Completes sending requests and waits for a single response.
   ///
   /// Returns the single server response. The wait is bounded by the context
-  /// deadline when one is set (the call scope trips first and surfaces
-  /// [RpcDeadlineExceededException]); the 60s below is only the fallback for a
-  /// call with no deadline at all.
+  /// deadline when one is set, and by [_noDeadlineFallback] otherwise — the
+  /// same rule [UnaryCaller] applies.
+  ///
+  /// The fallback used to apply unconditionally, so a deadline LONGER than it
+  /// was silently truncated: measured against a server that never responds, a
+  /// 90s deadline ended the unary call at 90s and the client-stream call at
+  /// 60s. A streaming upload given ten minutes died after one.
   Future<TResponse> finishSending() async {
     if (_sendingFinished) {
       throw StateError('Sending was already completed earlier.');
@@ -188,17 +201,18 @@ final class ClientStreamCaller<
       await _processor.finishSending();
       _logger.internal('Send complete, waiting for response');
 
+      // Computed here, not at construction: requests may have taken a while to
+      // send, and remainingTime already accounts for that.
+      final wait = _context?.remainingTime ?? _noDeadlineFallback;
+
       // Await single response with timeout.
       return await _responseCompleter.future.timeout(
-        const Duration(seconds: 60),
+        wait,
         onTimeout: () {
-          _logger.error('Response wait timed out');
+          _logger.error('Response wait timed out after $wait');
           // Free resources on timeout.
           unawaited(close());
-          throw TimeoutException(
-            'Response wait timeout from server',
-            const Duration(seconds: 60),
-          );
+          throw TimeoutException('Response wait timeout from server', wait);
         },
       );
     } catch (e, stackTrace) {
