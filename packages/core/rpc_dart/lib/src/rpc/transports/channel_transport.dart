@@ -485,8 +485,28 @@ class RpcChannelTransport
     }
   }
 
+  /// Applies a peer grant, never letting it exceed our own window.
+  ///
+  /// The grant value is peer-controlled, and taking it at face value handed the
+  /// peer the ability to switch our limit off: two frames granting 1 TB lifted a
+  /// paused-consumer stream from 0.8 MB in flight to 300.6 MB, which is the one
+  /// thing the window exists to prevent. Clamping to the window we configured
+  /// means a peer can only ever slow us down, never speed us up.
+  ///
+  /// Clamping the grant BEFORE adding also keeps the sum from overflowing:
+  /// both terms are then bounded by the window. A peer sending 2^63-1 twice
+  /// wrapped the counter to -2.
+  ///
+  /// Only the upper bound is clamped. Credit legitimately goes slightly
+  /// negative -- a message is admitted whenever any credit remains, so it can
+  /// overdraw by up to one message -- and flooring at zero would hand that
+  /// overdraft back as free credit.
   void _fcOnGrant(int streamId, int bytes) {
-    _fcSendCredit[streamId] = (_fcSendCredit[streamId] ?? 0) + bytes;
+    final window = _fcWindow;
+    if (window == null) return;
+    final granted = bytes > window ? window : bytes;
+    final next = (_fcSendCredit[streamId] ?? 0) + granted;
+    _fcSendCredit[streamId] = next > window ? window : next;
     _fcWake(streamId);
   }
 
@@ -595,9 +615,15 @@ class RpcChannelTransport
     if (message.methodPath != null) return false;
     final connRaw = metadata.getHeaderValue(RpcHeaders.xConnWindowUpdate);
     if (connRaw != null) {
-      final granted = int.tryParse(connRaw);
-      if (granted != null && granted > 0) {
-        _fcConnCredit = (_fcConnCredit ?? 0) + granted;
+      final parsed = int.tryParse(connRaw);
+      final window = _fcConnWindow;
+      if (parsed != null && parsed > 0 && window != null) {
+        // Clamped for the same reasons as the per-stream grant: a peer must not
+        // be able to raise our ceiling, and clamping first keeps the sum from
+        // overflowing.
+        final granted = parsed > window ? window : parsed;
+        final next = (_fcConnCredit ?? 0) + granted;
+        _fcConnCredit = next > window ? window : next;
         _fcWakeConnection();
       }
       return true;
