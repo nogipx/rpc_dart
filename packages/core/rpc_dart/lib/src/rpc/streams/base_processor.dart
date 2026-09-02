@@ -1021,7 +1021,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Configures incoming response handling.
   void _setupResponseHandler() {
-    _scope.listen<RpcTransportMessage>(
+    final subscription = _scope.listen<RpcTransportMessage>(
       _transport.getMessagesForStream(_streamId),
       _handleResponse,
       onError: (error, stackTrace) {
@@ -1083,6 +1083,14 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       },
     );
+
+    // The caller-side half of the demand chain: without it the transport
+    // subscription kept feeding this controller at full speed even after every
+    // stage above it had stopped pulling, so a paused consumer still paid to
+    // decode every message. Pausing here stops the parse/decode work too, and
+    // leaves the frames undecoded in the transport's per-stream controller.
+    _responseController.onPause = () => subscription.pause();
+    _responseController.onResume = () => subscription.resume();
   }
 
   /// Sends initial metadata with context support.

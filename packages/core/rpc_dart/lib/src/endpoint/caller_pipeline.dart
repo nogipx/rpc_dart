@@ -448,6 +448,23 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           cancelOnError: false,
         );
       },
+      // Hand the consumer's demand upstream.
+      //
+      // This controller sat between the caller and the whole response chain and
+      // drained it at full speed whatever the consumer did, so `pause()` on the
+      // returned stream stopped delivery to the listener and NOTHING else.
+      // Measured with a paused consumer, counting events at every hop over 2s
+      // (user held at 1400):
+      //
+      //   transport route   +4600   processor recv +4600   processor emit +4601
+      //   transformer       +4600   caller yield   +4600   pipeline add   +4600
+      //
+      // Every stage kept decoding and materialising responses nobody had asked
+      // for. With this and the matching hook in CallProcessor, all of them stop
+      // (+0/+1) and buffering collapses back to the transport's own per-stream
+      // controller, which holds undecoded frames.
+      onPause: () => sub?.pause(),
+      onResume: () => sub?.resume(),
       onCancel: () {
         // Propagate the cancellation to the server. The cancellation token is
         // the only thing that triggers CallProcessor._sendCancellationToServer
@@ -588,6 +605,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           cancelOnError: false,
         );
       },
+      // Same demand hand-off as the server-stream controller above.
+      onPause: () => sub?.pause(),
+      onResume: () => sub?.resume(),
       onCancel: () {
         // Tell the server, or its handler keeps producing into a stream nobody
         // reads. Fired here as well as in _buildBidirectionalStream's cleanup
