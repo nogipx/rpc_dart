@@ -54,6 +54,24 @@ sealed class RateLimit {
 
   /// The window duration of this spec (used for stale-entry cleanup).
   Duration get _window;
+
+  /// Throws [ArgumentError] if this spec cannot enforce anything.
+  ///
+  /// These bounds used to be `assert`s in the constructors, which Dart STRIPS
+  /// in release builds -- so a misconfiguration a developer would trip over in
+  /// debug became a silently disabled rate limiter in production. A zero window
+  /// makes the token bucket's refill `(elapsed / 0) * max` evaluate to
+  /// Infinity, which clamps to a full bucket on every call: measured at 50/50
+  /// requests accepted against `max: 5`, versus 5/50 with a sane window. The
+  /// sliding-window variant instead throws IntegerDivisionByZeroException on
+  /// first use, failing every call.
+  ///
+  /// A real throw, checked by [RpcRateLimiter] for every spec it is given, is
+  /// the same guard in every build mode. Moving it out of the constructors also
+  /// makes the `const` factories usable: `Duration` supports neither comparison
+  /// nor property access in a constant expression, so an assert mentioning one
+  /// made `const RateLimit.slidingWindow(...)` a compile error.
+  void _validate();
 }
 
 // ---------------------------------------------------------------------------
@@ -66,13 +84,26 @@ class _SlidingWindowSpec extends RateLimit {
   final Duration _window;
 
   const _SlidingWindowSpec({required this.max, required Duration window})
-    : assert(max > 0, 'RateLimit.slidingWindow max must be > 0'),
-      assert(
-        window > Duration.zero,
+    : _window = window;
+
+  @override
+  void _validate() {
+    if (max <= 0) {
+      throw ArgumentError.value(
+        max,
+        'max',
+        'RateLimit.slidingWindow max must be > 0',
+      );
+    }
+    if (_window <= Duration.zero) {
+      throw ArgumentError.value(
+        _window,
+        'window',
         'RateLimit.slidingWindow window must be > 0 (a zero window divides by '
-        'zero in the counter)',
-      ),
-      _window = window;
+            'zero in the counter)',
+      );
+    }
+  }
 
   @override
   _RateLimitCounter _createCounter(int Function() nowMicros) =>
@@ -89,17 +120,35 @@ class _TokenBucketSpec extends RateLimit {
     required this.max,
     required Duration window,
     this.burst,
-  }) : assert(max > 0, 'RateLimit.tokenBucket max must be > 0'),
-       assert(
-         window > Duration.zero,
-         'RateLimit.tokenBucket window must be > 0 (a zero window divides by '
-         'zero in the counter)',
-       ),
-       assert(
-         burst == null || burst > 0,
-         'RateLimit.tokenBucket burst must be > 0 when provided',
-       ),
-       _window = window;
+  }) : _window = window;
+
+  @override
+  void _validate() {
+    if (max <= 0) {
+      throw ArgumentError.value(
+        max,
+        'max',
+        'RateLimit.tokenBucket max must be > 0',
+      );
+    }
+    if (_window <= Duration.zero) {
+      throw ArgumentError.value(
+        _window,
+        'window',
+        'RateLimit.tokenBucket window must be > 0 (a zero window makes the '
+            'refill Infinity, so the bucket is always full and the limiter '
+            'accepts everything)',
+      );
+    }
+    final b = burst;
+    if (b != null && b <= 0) {
+      throw ArgumentError.value(
+        b,
+        'burst',
+        'RateLimit.tokenBucket burst must be > 0 when provided',
+      );
+    }
+  }
 
   @override
   _RateLimitCounter _createCounter(int Function() nowMicros) =>
@@ -322,6 +371,18 @@ class RpcRateLimiter extends IRpcInterceptor {
        _meterServerStreamMessages = meterServerStreamMessages,
        _cleanupIntervalUs = cleanupInterval.inMicroseconds,
        _nowMicros = nowMicros ?? _defaultMonotonicMicros {
+    // Validate EVERY spec up front, in every build mode. A spec that cannot
+    // enforce anything must fail loudly at construction rather than at first
+    // use -- or, worse, never (see RateLimit._validate).
+    global?._validate();
+    _perKeyFallbackSpec?._validate();
+    for (final spec in perService.values) {
+      spec._validate();
+    }
+    for (final spec in perMethod.values) {
+      spec._validate();
+    }
+
     _globalCounter = global?._createCounter(_nowMicros);
     _lastCleanupUs = _nowMicros();
 

@@ -40,50 +40,71 @@ void main() {
     });
   });
 
+  // These bounds used to be asserts on the spec constructors, and this group
+  // asserted AssertionError. That expectation was the defect: Dart strips
+  // asserts in release, so the guard these tests were guarding did not exist in
+  // production -- a zero-window token bucket accepted 50/50 requests against
+  // `max: 5`. The bounds are now real throws checked by RpcRateLimiter, which
+  // hold in every build mode, so the checks moved from the spec constructor to
+  // the limiter that uses it. See rate_limit_spec_validation_test.dart.
   group('RateLimit specs validate their arguments', () {
     test('slidingWindow rejects max <= 0', () {
       expect(
-        () =>
-            RateLimit.slidingWindow(max: 0, window: const Duration(seconds: 1)),
-        throwsA(isA<AssertionError>()),
+        () => RpcRateLimiter(
+          global: RateLimit.slidingWindow(
+            max: 0,
+            window: const Duration(seconds: 1),
+          ),
+        ),
+        throwsArgumentError,
       );
     });
 
     test('slidingWindow rejects a zero window', () {
       expect(
-        () => RateLimit.slidingWindow(max: 10, window: Duration.zero),
-        throwsA(isA<AssertionError>()),
+        () => RpcRateLimiter(
+          global: RateLimit.slidingWindow(max: 10, window: Duration.zero),
+        ),
+        throwsArgumentError,
       );
     });
 
     test('tokenBucket rejects a zero window and a zero burst', () {
       expect(
-        () => RateLimit.tokenBucket(max: 10, window: Duration.zero),
-        throwsA(isA<AssertionError>()),
+        () => RpcRateLimiter(
+          global: RateLimit.tokenBucket(max: 10, window: Duration.zero),
+        ),
+        throwsArgumentError,
       );
       expect(
-        () => RateLimit.tokenBucket(
-          max: 10,
-          window: const Duration(seconds: 1),
-          burst: 0,
+        () => RpcRateLimiter(
+          global: RateLimit.tokenBucket(
+            max: 10,
+            window: const Duration(seconds: 1),
+            burst: 0,
+          ),
         ),
-        throwsA(isA<AssertionError>()),
+        throwsArgumentError,
       );
     });
 
     test('valid specs construct without error', () {
       expect(
-        () => RateLimit.slidingWindow(
-          max: 10,
-          window: const Duration(seconds: 1),
+        () => RpcRateLimiter(
+          global: RateLimit.slidingWindow(
+            max: 10,
+            window: const Duration(seconds: 1),
+          ),
         ),
         returnsNormally,
       );
       expect(
-        () => RateLimit.tokenBucket(
-          max: 10,
-          window: const Duration(seconds: 1),
-          burst: 5,
+        () => RpcRateLimiter(
+          global: RateLimit.tokenBucket(
+            max: 10,
+            window: const Duration(seconds: 1),
+            burst: 5,
+          ),
         ),
         returnsNormally,
       );
