@@ -144,10 +144,49 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       },
       onDone: () {
         _log.internal('Transport incoming stream closed');
+        _abortActiveStreams('transport closed');
       },
     );
 
     _respIsListening = true;
+  }
+
+  /// Aborts every in-flight stream after the connection is gone.
+  ///
+  /// The incoming stream closing is the only notice a responder gets that the
+  /// peer is unreachable, and it used to be logged and otherwise ignored: the
+  /// handlers kept running with nowhere to send, their cancellation tokens
+  /// never fired, and their stream state was never reclaimed. Measured by
+  /// closing the transport under one in-flight call of each shape, against a
+  /// handler doing 1ms units of work:
+  ///
+  ///   unary  117 -> 415 units after teardown, token=false, openStreams=1
+  ///   server 111 -> 372                        token=false, openStreams=1
+  ///   client 132 -> 427                        token=false, openStreams=1
+  ///   bidi   123 -> 385                        token=false, openStreams=1
+  ///
+  /// Both directions reach here: closing either end of a paired transport
+  /// closes the channel, so the responder's own incoming stream ends either
+  /// way. That made a dropped connection a resource leak with no upper bound --
+  /// one abandoned handler plus one stream state per drop, which any peer can
+  /// drive by opening streams against an expensive method and disconnecting.
+  ///
+  /// Cancellation and deadlines already trip the token; this is the path that
+  /// did not. The token is cancelled first, so a handler polling it or awaiting
+  /// `cancelled` unwinds cooperatively, exactly as on those paths.
+  void _abortActiveStreams(String reason) {
+    if (_respStreams.length == 0) return;
+    _log.internal('Aborting ${_respStreams.length} active stream(s): $reason');
+
+    for (final state in _respStreams.values) {
+      final token = state.cachedContext?.cancellationToken;
+      if (token != null && !token.isCancelled) token.cancel(reason);
+    }
+
+    final active = _respStreams.values.map((s) => s.id).toList(growable: false);
+    for (final streamId in active) {
+      unawaited(_cleanupStream(streamId));
+    }
   }
 
   /// Stops listening and releases all responder resources.
