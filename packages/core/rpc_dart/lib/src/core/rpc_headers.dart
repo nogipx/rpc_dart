@@ -64,6 +64,17 @@ abstract final class RpcHeaders {
   /// Human-readable reason accompanying a client cancellation.
   static const xCancellationReason = 'x-cancellation-reason';
 
+  /// Per-stream flow-control credit, in bytes, granted to the peer.
+  ///
+  /// Carried on a bare metadata frame, which is what makes flow control safe to
+  /// deploy against a peer that knows nothing about it: such a peer ignores the
+  /// frame entirely -- measured in both directions mid-call, with every message
+  /// still delivered and no stream state left behind. A sender stays unbounded
+  /// until the peer's first grant arrives, so an old peer is never starved and
+  /// a new one is bounded within a round trip. No wire-format change and no
+  /// handshake.
+  static const xWindowUpdate = 'x-rpc-window-update';
+
   // ---------------------------------------------------------------------------
   // Reserved (protocol-controlled) headers
   // ---------------------------------------------------------------------------
@@ -97,6 +108,10 @@ abstract final class RpcHeaders {
     grpcTimeout,
     xClientCancelled,
     xCancellationReason,
+    // The transport ACTS on this one too: it grants send credit. User metadata
+    // carrying the key would let a caller lift its own peer's flow-control
+    // limit, which is the one thing the limit exists to prevent.
+    xWindowUpdate,
   };
 
   /// Whether [name] (case-insensitive) is a protocol-reserved header that user

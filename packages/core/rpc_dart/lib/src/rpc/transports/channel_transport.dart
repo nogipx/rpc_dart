@@ -52,6 +52,33 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
   /// messages are routed to it directly. These are single-subscription, so they
   /// buffer until their consumer binds on their own.
   final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
+
+  // ── Per-stream flow control ────────────────────────────────────────────────
+  //
+  // Credit rides on bare metadata frames (see [RpcHeaders.xWindowUpdate]),
+  // which a peer that predates this ignores completely. No handshake and no
+  // wire-format change: this side stays UNBOUNDED until the peer's first grant
+  // proves it participates, so a version mismatch degrades to the old
+  // behaviour rather than deadlocking.
+  //
+  // This only bounds a producer because the stages above the transport now stop
+  // pulling for a consumer that has stopped reading; until that was fixed the
+  // metered stream below was drained regardless and credit flowed forever.
+
+  /// Send credit per stream, in bytes. A stream appears here only once the peer
+  /// has granted, which gates enforcement on the peer's support.
+  final Map<int, int> _fcSendCredit = {};
+
+  /// Senders parked waiting for credit, per stream.
+  final Map<int, List<Completer<void>>> _fcSendWaiters = {};
+
+  /// Bytes consumed locally but not yet granted back, per stream.
+  final Map<int, int> _fcPendingGrant = {};
+
+  /// Streams this side has already advertised an initial window for.
+  final Set<int> _fcAdvertised = {};
+
+  int? get _fcWindow => _policy.flowControlWindowBytes;
   StreamSubscription<RpcTransportMessage>? _channelSub;
   bool _closed = false;
 
@@ -139,12 +166,28 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
     if (_closed) return const Stream.empty();
     final existing = _streamControllers[streamId];
-    if (existing != null) return existing.stream;
+    if (existing != null) return _fcMetered(streamId, existing.stream);
     final ctl = StreamController<RpcTransportMessage>(
       onCancel: () => _streamControllers.remove(streamId),
     );
     _streamControllers[streamId] = ctl;
-    return ctl.stream;
+    return _fcMetered(streamId, ctl.stream);
+  }
+
+  /// Returns credit as each message is handed to the consumer.
+  ///
+  /// `map` is lazy: a paused consumer pauses this subscription too, so nothing
+  /// is credited while messages sit in the controller's buffer. That is what
+  /// carries the consumer's pause all the way to the remote producer.
+  Stream<RpcTransportMessage> _fcMetered(
+    int streamId,
+    Stream<RpcTransportMessage> source,
+  ) {
+    if (_fcWindow == null) return source;
+    return source.map((message) {
+      _fcOnConsumed(streamId, message);
+      return message;
+    });
   }
 
   @override
@@ -170,6 +213,7 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
     // without bound on a long-lived connection. Explicit teardown (which every
     // caller performs) is the right moment to drop it.
     _finishedStreams.remove(streamId);
+    _fcForget(streamId);
     return _idManager.releaseId(streamId);
   }
 
@@ -199,6 +243,15 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
     bool endStream = false,
   }) async {
     if (_closed) return;
+    // Fast path FIRST, synchronously: with flow control off, or with credit in
+    // hand, this must not introduce an `await`. Unconditionally awaiting here
+    // added a microtask hop to every send even when the window was disabled,
+    // which reordered frames on a path that had been synchronous and broke a
+    // responder bound directly to the transport's broadcast.
+    if (!_fcTryConsume(streamId, data.length)) {
+      await _fcAwaitCredit(streamId, data.length);
+      if (_closed) return;
+    }
     await _channel.send(
       RpcTransportMessage.withPayload(
         payload: data,
@@ -256,6 +309,14 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
     _channelSub = null;
     _activeStreams.clear();
     _finishedStreams.clear();
+    // Release every parked sender first: a send waiting on credit from a peer
+    // that is now gone would otherwise never return, and close() would hang.
+    for (final streamId in _fcSendWaiters.keys.toList(growable: false)) {
+      _fcWake(streamId);
+    }
+    _fcSendCredit.clear();
+    _fcPendingGrant.clear();
+    _fcAdvertised.clear();
     _idManager.reset();
 
     try {
@@ -343,6 +404,115 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
     }
   }
 
+  // ── Flow control ───────────────────────────────────────────────────────────
+
+  /// Consumes [bytes] of credit without suspending.
+  ///
+  /// Returns false only when the sender must park, so the hot path stays
+  /// synchronous: no window configured, or a peer that has never granted (and
+  /// so is not participating), both take credit immediately.
+  bool _fcTryConsume(int streamId, int bytes) {
+    if (_fcWindow == null) return true;
+    final credit = _fcSendCredit[streamId];
+    // No entry means the peer has not advertised: stay unbounded.
+    if (credit == null) return true;
+    if (credit > 0) {
+      _fcSendCredit[streamId] = credit - bytes;
+      return true;
+    }
+    return false;
+  }
+
+  /// Parks the caller until [bytes] of send credit are available.
+  Future<void> _fcAwaitCredit(int streamId, int bytes) async {
+    while (!_closed) {
+      if (_fcTryConsume(streamId, bytes)) return;
+      final waiter = Completer<void>();
+      (_fcSendWaiters[streamId] ??= []).add(waiter);
+      await waiter.future;
+    }
+  }
+
+  void _fcOnGrant(int streamId, int bytes) {
+    _fcSendCredit[streamId] = (_fcSendCredit[streamId] ?? 0) + bytes;
+    _fcWake(streamId);
+  }
+
+  void _fcWake(int streamId) {
+    final waiters = _fcSendWaiters.remove(streamId);
+    if (waiters == null) return;
+    for (final waiter in waiters) {
+      if (!waiter.isCompleted) waiter.complete();
+    }
+  }
+
+  /// Credits [message] back to the peer once it has been consumed locally.
+  ///
+  /// Batched at half the window, so a steady stream costs one extra frame per
+  /// half-window rather than one per message.
+  void _fcOnConsumed(int streamId, RpcTransportMessage message) {
+    final window = _fcWindow;
+    if (window == null) return;
+    final bytes = message.payload?.length ?? 0;
+    if (bytes == 0) return;
+    final pending = (_fcPendingGrant[streamId] ?? 0) + bytes;
+    if (pending < (window ~/ 2).clamp(1, window)) {
+      _fcPendingGrant[streamId] = pending;
+      return;
+    }
+    _fcPendingGrant[streamId] = 0;
+    unawaited(_fcSendGrant(streamId, pending));
+  }
+
+  /// Advertises the initial window the first time a stream is seen. This is
+  /// what tells the peer we participate.
+  void _fcAdvertise(int streamId) {
+    final window = _fcWindow;
+    if (window == null) return;
+    if (!_fcAdvertised.add(streamId)) return;
+    unawaited(_fcSendGrant(streamId, window));
+  }
+
+  Future<void> _fcSendGrant(int streamId, int bytes) async {
+    if (_closed) return;
+    try {
+      await _channel.send(
+        RpcTransportMessage.withMetadata(
+          metadata: RpcMetadata([
+            RpcHeader(RpcHeaders.xWindowUpdate, bytes.toString()),
+          ]),
+          streamId: streamId,
+        ),
+      );
+    } catch (_) {
+      // A lost grant only matters if the connection is still alive, and a throw
+      // here means it is not; the normal paths report that.
+    }
+  }
+
+  /// Consumes an inbound grant, returning true when [message] was one.
+  bool _fcHandleInbound(RpcTransportMessage message) {
+    if (_fcWindow == null) return false;
+    final metadata = message.metadata;
+    if (metadata == null || !message.isMetadataOnly) return false;
+    if (message.methodPath != null) return false;
+    final raw = metadata.getHeaderValue(RpcHeaders.xWindowUpdate);
+    if (raw == null) return false;
+    final granted = int.tryParse(raw);
+    // A peer sending garbage credit must not move our window.
+    if (granted != null && granted > 0) _fcOnGrant(message.streamId, granted);
+    return true;
+  }
+
+  /// Drops flow-control state for a finished stream, releasing any parked
+  /// sender so a torn-down call can never leave one waiting forever.
+  void _fcForget(int streamId) {
+    _fcSendCredit.remove(streamId);
+    _fcPendingGrant.remove(streamId);
+    _fcAdvertised.remove(streamId);
+    _fcWake(streamId);
+  }
+
   void _markFinished(int streamId) {
     _finishedStreams.add(streamId);
     _releaseStream(streamId);
@@ -367,16 +537,34 @@ class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
       return;
     }
 
+    // A grant is transport bookkeeping, not part of the call: consume it here
+    // so no upper layer ever sees it.
+    if (_fcHandleInbound(message)) return;
+
+    // Tell the peer our window as soon as it opens a stream. Until this lands
+    // the peer sends unbounded, which is what keeps an unaware peer working.
+    _fcAdvertise(message.streamId);
+
     // Per-stream controllers are single-subscription and buffer until their
     // consumer binds, so route there directly.
     final ctl = _streamControllers[message.streamId];
-    if (ctl != null && !ctl.isClosed) ctl.add(message);
+    if (ctl != null && !ctl.isClosed) {
+      ctl.add(message);
+    } else {
+      // Nothing meters this one -- it goes straight into the pipeline's own
+      // buffers (a client-stream responder is fed by the pipeline, not through
+      // getMessagesForStream), so it is consumed as soon as it is dispatched.
+      // Crediting here is what stops that direction from stalling at the
+      // window; it is unbounded exactly as before.
+      _fcOnConsumed(message.streamId, message);
+    }
     // Global dispatch (new-stream routing): the buffered controller retains the
     // message if the pipeline hasn't subscribed yet, instead of dropping it.
     _incoming.add(message);
     if (message.isEndOfStream) {
       _releaseStream(message.streamId);
       _finishedStreams.remove(message.streamId);
+      _fcForget(message.streamId);
       // Close the per-stream controller after the end message is enqueued, so
       // the subscriber sees the final message followed by done.
       final ended = _streamControllers.remove(message.streamId);

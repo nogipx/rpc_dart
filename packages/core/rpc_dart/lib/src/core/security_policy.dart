@@ -91,6 +91,23 @@ final class RpcSecurityPolicy {
   /// all unaffected once their handler has started. Set to null to disable.
   final Duration? halfOpenStreamTimeout;
 
+  /// Per-stream flow-control window in bytes, or null to disable.
+  ///
+  /// Bounds how many bytes a peer may have unconsumed on one stream before it
+  /// must wait. Without it a producer is throttled only by a consumer that
+  /// never pauses: measured on a server stream, a handler produced 202,600
+  /// messages while the consumer had processed 483, queueing 527MB in 2s.
+  ///
+  /// Credit is returned as the receiving side actually consumes, and granted
+  /// with [RpcHeaders.xWindowUpdate] on bare metadata frames, which a peer that
+  /// predates flow control ignores. A sender stays unbounded until it receives
+  /// its first grant, so mixing versions degrades to the old behaviour instead
+  /// of deadlocking.
+  ///
+  /// Transports with their own flow control (HTTP/2) should disable this rather
+  /// than run two windows over each other.
+  final int? flowControlWindowBytes;
+
   /// Creates an [RpcSecurityPolicy] with the given limits.
   const RpcSecurityPolicy({
     this.maxMessageLengthBytes = 16 * 1024 * 1024,
@@ -107,6 +124,7 @@ final class RpcSecurityPolicy {
     this.maxMethodPathLength = 1024,
     this.closeOnProtocolError = true,
     this.halfOpenStreamTimeout = const Duration(seconds: 60),
+    this.flowControlWindowBytes = 4 * 1024 * 1024,
   });
 
   /// Serializes this policy to a plain map.
@@ -128,6 +146,8 @@ final class RpcSecurityPolicy {
     // so omitting it for a disabled window would round-trip back to the
     // 60s default and silently re-enable reclamation.
     'halfOpenStreamTimeoutMs': halfOpenStreamTimeout?.inMilliseconds ?? 0,
+    // Explicit 0 for disabled, same reason as above.
+    'flowControlWindowBytes': flowControlWindowBytes ?? 0,
   };
 
   /// Creates an [RpcSecurityPolicy] from a plain map, using defaults for missing keys.
@@ -170,6 +190,11 @@ final class RpcSecurityPolicy {
         final int ms when ms > 0 => Duration(milliseconds: ms),
         final int _ => null,
         _ => const Duration(seconds: 60),
+      },
+      flowControlWindowBytes: switch (map['flowControlWindowBytes']) {
+        final int bytes when bytes > 0 => bytes,
+        final int _ => null,
+        _ => 4 * 1024 * 1024,
       },
     );
   }

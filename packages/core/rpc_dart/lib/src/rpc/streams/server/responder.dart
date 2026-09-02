@@ -148,6 +148,16 @@ final class ServerStreamResponder<
               },
             );
 
+            // Backpressure from the transport to the handler -- the responder
+            // half of the demand chain. The relay exists so cancellation can
+            // drop the upstream subscription, but nothing passed its pause
+            // along, so it was an unbounded buffer between the two: the
+            // `await for` below pauses the relay while a send is in flight and
+            // an `async*` handler kept allocating regardless. Pausing that same
+            // subscription turns the relay into a conduit.
+            relay.onPause = () => _handlerSubscription?.pause();
+            relay.onResume = () => _handlerSubscription?.resume();
+
             int responseCount = 0;
             await for (var response in relay.stream) {
               if (!_isActive) break;

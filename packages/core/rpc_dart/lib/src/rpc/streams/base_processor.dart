@@ -581,6 +581,18 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // draining (and errors pushed onto it are observed).
       _transmitResponse(response);
       _responseController.add(response);
+      // Then WAIT for it to leave. Queueing alone made _sendSequence an
+      // unbounded buffer between the handler and the transport: the
+      // server-stream pump does `await _processor.send(...)` precisely so a
+      // slow transport throttles the handler, and this returned as soon as the
+      // write was enqueued, so an `async*` handler ran as fast as it could
+      // allocate. Measured with a paused consumer and a 1MB window, the
+      // transport parked on flow-control credit after ~2200 messages while the
+      // handler still reached 20,000.
+      //
+      // The queue is what preserves ordering; awaiting it here is what makes
+      // the queue depth one.
+      await _sendSequence;
     } else {
       _logger.warning('Attempted to send response to closed controller');
     }
