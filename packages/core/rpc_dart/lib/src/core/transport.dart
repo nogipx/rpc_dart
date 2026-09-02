@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'errors.dart';
 import 'health.dart';
 import 'metadata.dart';
+import 'security_policy.dart';
 
 /// Transport-layer message with Stream ID support.
 ///
@@ -131,6 +132,21 @@ abstract interface class IRpcStreamReset {
   /// Returning false means "not resettable" (e.g. the stream is unknown) and
   /// the caller should fall back to the metadata notice.
   Future<bool> resetStream(int streamId, {String? reason});
+}
+
+/// Capability for transports that carry an [RpcSecurityPolicy].
+///
+/// Lets layers above the transport — the responder pipeline in particular —
+/// honour the limits the application already configured, instead of needing a
+/// second knob for the same concept. Callers check with
+/// `is IRpcSecurityPolicyAware` and fall back to `const RpcSecurityPolicy()`,
+/// so a transport that does not implement this still gets the safe defaults.
+///
+/// Kept separate from [IRpcTransport], like [IRpcStreamReset], so adding it
+/// does not break third-party transports that `implements IRpcTransport`.
+abstract interface class IRpcSecurityPolicyAware {
+  /// The policy this transport was configured with.
+  RpcSecurityPolicy get securityPolicy;
 }
 
 /// Transport interface with Stream ID multiplexing.

@@ -28,7 +28,7 @@ import 'frame_multiplexed_channel.dart';
 ///   isClient: true,
 /// );
 /// ```
-class RpcChannelTransport implements IRpcTransport {
+class RpcChannelTransport implements IRpcTransport, IRpcSecurityPolicyAware {
   final IRpcMultiplexedChannel _channel;
   final RpcStreamIdManager _idManager;
   final RpcSecurityPolicy _policy;
@@ -119,6 +119,9 @@ class RpcChannelTransport implements IRpcTransport {
   }
 
   // -- IRpcTransport ----------------------------------------------------------
+
+  @override
+  RpcSecurityPolicy get securityPolicy => _policy;
 
   @override
   bool get isClient => _idManager.isClient;

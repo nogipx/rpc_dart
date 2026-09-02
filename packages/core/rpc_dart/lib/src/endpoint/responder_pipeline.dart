@@ -43,6 +43,31 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// the teardown, so a modest window covers the race.
   static const int _maxRememberedClosedStreams = 1024;
 
+  /// Cached concurrent-stream ceiling for streams the PEER opens.
+  ///
+  /// [RpcSecurityPolicy.maxActiveStreams] is documented as the max number of
+  /// simultaneously active streams, but it was only ever checked in
+  /// `createStream()` — which runs for LOCALLY-initiated calls. Inbound
+  /// streams, the only ones an untrusted peer controls, were never counted, so
+  /// the one limit that mattered for a server bounded nothing. Measured against
+  /// a server configured with `maxActiveStreams: 3`, a peer opened 500
+  /// concurrent streams and all 500 were accepted: 500 stream states, contexts,
+  /// call scopes and responders, each with its own controllers and reassembly
+  /// buffer. Unauthenticated memory exhaustion.
+  ///
+  /// Read through [IRpcSecurityPolicyAware] so the policy the application
+  /// already configured on its transport starts being honoured, rather than
+  /// adding a second knob for the same concept. A transport without the
+  /// capability gets the safe default.
+  int? _respMaxStreamsCache;
+
+  int get _respMaxStreams {
+    final transport = this.transport;
+    return _respMaxStreamsCache ??= transport is IRpcSecurityPolicyAware
+        ? (transport as IRpcSecurityPolicyAware).securityPolicy.maxActiveStreams
+        : const RpcSecurityPolicy().maxActiveStreams;
+  }
+
   void _rememberClosedStream(int streamId) {
     if (!_respClosedStreams.add(streamId)) return;
     if (_respClosedStreams.length > _maxRememberedClosedStreams) {
@@ -263,6 +288,28 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         return;
       }
       _respClosedStreams.remove(message.streamId);
+    }
+
+    // Refuse to open a NEW stream past the concurrency ceiling. Checked after
+    // the closed-stream guard, so a late frame for a torn-down id cannot burn
+    // a slot, and before obtain(), which is what materialises the state this
+    // limit exists to bound. RESOURCE_EXHAUSTED is the gRPC status for a
+    // server at capacity, and it is retryable, so a legitimate client backs
+    // off rather than failing outright.
+    if (_respStreams[message.streamId] == null &&
+        _respStreams.length >= _respMaxStreams) {
+      _log.warning(
+        'Refusing stream ${message.streamId}: at the concurrent-stream limit '
+        '($_respMaxStreams)',
+      );
+      unawaited(
+        _sendGrpcErrorAndCleanup(
+          streamId: message.streamId,
+          status: RpcStatus.resourceExhausted,
+          message: 'Too many concurrent streams (max: $_respMaxStreams)',
+        ),
+      );
+      return;
     }
 
     final state = _respStreams.obtain(message.streamId);
