@@ -12,6 +12,27 @@ typedef RpcRetryPredicate = bool Function(Object error);
 /// Only retries unary calls. Streaming calls pass through unchanged
 /// because replaying a stream is not generally safe.
 ///
+/// ## Retries require an IDEMPOTENT method
+///
+/// The default predicate retries `UNAVAILABLE`, which is also the status a
+/// call gets when the server processed it and the RESPONSE was lost. Those two
+/// are indistinguishable from the client, so a retry re-issues work that may
+/// already have committed. This is the standard gRPC retry trade-off, not a
+/// quirk of this implementation, but it is the caller's job to only enable it
+/// where re-execution is safe.
+///
+/// Measured with a handler that commits and then loses its response, for ONE
+/// logical call at `maxAttempts: 3`:
+///
+///   response lost once  -> 2 server-side commits, caller saw SUCCESS
+///   response lost twice -> 3 server-side commits, caller saw SUCCESS
+///   no loss (control)   -> 1 commit
+///
+/// The caller cannot tell: it is handed a successful result either way. Do not
+/// attach this to a non-idempotent method (a charge, an append, a "send
+/// email") unless the server deduplicates by request id -- [RpcContext] carries
+/// `requestId` for exactly that.
+///
 /// The backoff never outlives the call's deadline: when the next delay would
 /// not fit in [RpcContext.remainingTime], the retry is abandoned and the last
 /// error is rethrown immediately rather than after a sleep the caller did not
@@ -35,10 +56,30 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   ///
   /// When null, the conservative gRPC-aligned default [_isTransient] is used:
   /// it retries ONLY clearly-transient errors (UNAVAILABLE,
-  /// RESOURCE_EXHAUSTED, and connection/transport-closed errors). This avoids
-  /// re-issuing non-idempotent calls (e.g. a write that committed server-side
-  /// but lost its response) on arbitrary application errors. Provide an
-  /// explicit predicate to customise; it fully replaces the default.
+  /// RESOURCE_EXHAUSTED, and connection/transport-closed errors), so an
+  /// arbitrary application error -- a generic [RpcException], INTERNAL,
+  /// INVALID_ARGUMENT, a non-RPC throw -- never causes a second attempt.
+  ///
+  /// That is the whole of the guarantee. This doc used to add "(e.g. a write
+  /// that committed server-side but lost its response)" as an example of what
+  /// the default avoids re-issuing, which was backwards: a lost response IS
+  /// `UNAVAILABLE`, so it is exactly the case the default DOES retry. Measured
+  /// at `maxAttempts: 3`, a handler that commits and then loses its response
+  /// committed twice for one call and the caller was handed a success. See the
+  /// class doc.
+  ///
+  /// Provide an explicit predicate to customise; it fully replaces the default.
+  /// To retry only where re-execution is safe, gate on the method:
+  ///
+  /// ```dart
+  /// const idempotent = {'/Catalog/Get', '/Catalog/List'};
+  /// RpcRetryInterceptor(
+  ///   retryOn: (e) =>
+  ///       e is RpcStatusException && e.statusCode == RpcStatus.unavailable,
+  /// );
+  /// // ...and attach it only to an endpoint used for those methods, or
+  /// // deduplicate server-side on RpcContext.requestId.
+  /// ```
   final RpcRetryPredicate? retryOn;
 
   /// Creates a retry interceptor.
@@ -136,8 +177,12 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   /// - [RpcRateLimitException] — a local RESOURCE_EXHAUSTED rejection.
   ///
   /// Arbitrary application errors (generic [RpcException], INTERNAL/INVALID_*
-  /// status codes, and non-RPC exceptions) are NOT retried, so a
-  /// non-idempotent call is not duplicated after a server-side commit.
+  /// status codes, and non-RPC exceptions) are NOT retried.
+  ///
+  /// This does NOT make a non-idempotent call safe. UNAVAILABLE covers both
+  /// "the server never saw it" and "the server committed it and the response
+  /// was lost", and nothing on the wire distinguishes them -- see the class
+  /// doc for the measurement.
   static bool _isTransient(Object error) {
     if (error is RpcRateLimitException) return true;
     if (error is RpcStatusException) {
