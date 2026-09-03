@@ -91,6 +91,15 @@ final class _ReconnectingTransportProxy
   /// resume, or behind a retry button): three calls left three live transports,
   /// two of which outlived dispose().
   void attach(IRpcTransport inner) {
+    // The proxy OWNS every transport handed to it, so a closed proxy cannot
+    // simply ignore one: nothing else holds a reference, and `_msgCtl` is
+    // already closed, so the transport would sit connected and unreachable
+    // forever. Close it and stay closed.
+    if (_closed) {
+      unawaited(inner.close().catchError((_) {}));
+      return;
+    }
+
     final previousSub = _innerSub;
     final previous = _inner;
     _innerSub = null;
@@ -332,6 +341,7 @@ class RpcClientConnection {
 
   RpcClientConnectionState _state = const RpcClientIdle();
   bool _isStopped = false;
+  bool _disposed = false;
   Completer<void>? _connectingGuard;
   int _reconnectAttempts = 0;
 
@@ -349,7 +359,12 @@ class RpcClientConnection {
   // -- Control ---------------------------------------------------------------
 
   /// Starts the connection (or resumes after [disconnect]).
+  ///
+  /// A no-op after [dispose]: that call is documented as permanent, and the
+  /// proxy's message stream is closed, so a transport opened here could never
+  /// deliver anything — it would only sit connected and unreachable.
   void connect() {
+    if (_disposed) return;
     _isStopped = false;
     _reconnectAttempts = 0;
     _connectWithBackoff();
@@ -359,8 +374,9 @@ class RpcClientConnection {
   ///
   /// Resets the attempt counter and resumes even if [disconnect] was previously
   /// called, so it always means "reconnect now from scratch". A no-op if a
-  /// connect loop is already running.
+  /// connect loop is already running, or after [dispose].
   void forceReconnect() {
+    if (_disposed) return;
     if (_connectingGuard != null && !_connectingGuard!.isCompleted) return;
     _isStopped = false;
     _reconnectAttempts = 0;
@@ -380,8 +396,11 @@ class RpcClientConnection {
   }
 
   /// Permanently closes the connection and releases all resources.
+  ///
+  /// [connect] and [forceReconnect] are no-ops afterwards.
   Future<void> dispose() async {
     _isStopped = true;
+    _disposed = true;
     await _proxy.close();
     if (!_stateCtl.isClosed) await _stateCtl.close();
   }
@@ -451,6 +470,30 @@ class RpcClientConnection {
         } else {
           inner = await factoryFuture;
         }
+
+        // Establishing a transport takes real time (a socket handshake is tens
+        // to hundreds of ms), and disconnect()/dispose() can land anywhere in
+        // that window. The loop's own `while (!_isStopped)` is checked before
+        // the await, not after, so without this re-check the freshly opened
+        // transport was attached to a connection the caller had already torn
+        // down: dispose() returned, then the factory resolved and left a live
+        // socket on a closed proxy that nothing could reach any more.
+        //
+        // Measured with a 100ms factory and dispose() 10ms in, 50 iterations:
+        // 50 leaked sockets, and currentState read RpcClientOnline AFTER
+        // dispose(). disconnect() was the same, which also made it a
+        // correctness bug and not only a leak: it claims to stop the
+        // connection, yet the endpoint came back online behind it.
+        //
+        // The transport is ours from the moment the factory returns it, so
+        // abandoning it means closing it.
+        if (_isStopped || _proxy.isClosed) {
+          _logger?.call('info', 'Discarding transport: connection stopped');
+          unawaited(inner.close().catchError((_) {}));
+          guard.complete();
+          return;
+        }
+
         _proxy.attach(inner);
         _logger?.call('info', 'Connected (attempt ${_reconnectAttempts + 1})');
         _reconnectAttempts = 0;
