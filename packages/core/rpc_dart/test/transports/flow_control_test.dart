@@ -34,6 +34,14 @@ final _codec = RpcCodec(RpcString.fromJson);
 int _produced = 0;
 Completer<void> _stop = Completer<void>();
 
+/// Runaway guard for the firehose handler, clamped at the pause point rather
+/// than fixed on the total. Only what is produced *after* the consumer pauses
+/// queues up, so that is the part worth bounding -- and a total cap made the
+/// overrun budget depend on how fast the machine ran before the pause, which a
+/// fast runner spent entirely there (CI: 6104 of 8000 produced pre-pause, so
+/// the unbounded witness could never reach the 2000 it waits for).
+int _cap = 1 << 30;
+
 /// 16 KiB per message, so a 1 MB window is ~64 messages.
 final _chunk = ('y' * 16384).rpc;
 
@@ -49,7 +57,7 @@ final class _Contract extends RpcResponderContract {
           _produced++;
           yield _chunk;
           if (_produced % 50 == 0) await Future<void>.delayed(Duration.zero);
-          if (_produced >= 8000) break;
+          if (_produced >= _cap) break;
         }
       },
       requestCodec: _codec,
@@ -167,6 +175,10 @@ Future<int> _overrunAfterPause(_Rig rig, {bool Function(int)? until}) async {
   await Future<void>.delayed(const Duration(milliseconds: 150));
   sub.pause();
   final atPause = _produced;
+  // Everything from here on is queued, so bound it: comfortably above the 2000
+  // the unbounded witness waits for, and well under the 8000 total that used to
+  // have to cover the pre-pause run as well.
+  _cap = atPause + 2600;
   if (until == null) {
     await Future<void>.delayed(const Duration(milliseconds: 900));
   } else {
@@ -184,6 +196,7 @@ Future<int> _overrunAfterPause(_Rig rig, {bool Function(int)? until}) async {
 void main() {
   setUp(() {
     _produced = 0;
+    _cap = 1 << 30;
     _stop = Completer<void>();
   });
   tearDown(() {
