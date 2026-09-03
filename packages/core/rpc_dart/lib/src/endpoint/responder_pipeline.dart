@@ -11,6 +11,51 @@ part of '_index.dart';
 /// and stream lifecycle. Concrete endpoints control which messages enter
 /// the pipeline via [startResponderListening]'s optional [messageFilter].
 base mixin RpcResponderPipelineMixin on RpcEndpointBase {
+  /// Runs detached teardown work that must never take the process with it.
+  ///
+  /// Every path below is a cleanup: a cancellation, a drain, a rejected
+  /// stream. None of them has a caller left to report to, which is why they
+  /// are detached in the first place — and that is exactly what made them
+  /// lethal. A bare `unawaited` sends any throw to the zone, and a server with
+  /// no zone error handler dies on it.
+  ///
+  /// Observed in production: a client abandoning a coalesced blob download
+  /// cancels with its own reason, `_handleClientCancellation` cancels the
+  /// server-side token with that reason, the aborted handler raises
+  /// `RpcCancelledException` — and both replicas exited 255 within hours of
+  /// each other. A client must not be able to end a server by hanging up.
+  void _detached(Future<void> work, String what) {
+    unawaited(
+      work.catchError((Object e, StackTrace st) {
+        _log.warning('detached $what failed: $e');
+      }),
+    );
+  }
+
+  /// Dispatches a responder, turning a failure into an answer rather than a
+  /// dead process.
+  ///
+  /// Deliberately NOT [_detached]: this is the handler being bound, not a
+  /// teardown, and swallowing here would hide a real fault. The peer is still
+  /// waiting, so the failure is reported to it as INTERNAL and the stream is
+  /// cleaned up — which is what would have happened had the throw been
+  /// synchronous.
+  void _detachedDispatch(Future<void> work, RpcResponderStreamState state) {
+    unawaited(
+      work.catchError((Object e, StackTrace st) {
+        _log.warning("responder dispatch failed for stream ${state.id}: $e");
+        _detached(
+          _sendGrpcErrorAndCleanup(
+            streamId: state.id,
+            status: RpcStatus.internal,
+            message: 'Responder dispatch failed',
+            context: state.cachedContext,
+          ),
+          'dispatch failure report',
+        );
+      }),
+    );
+  }
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -117,7 +162,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         'Reclaiming stream ${state.id}: half-open for '
         '${timeout.inMilliseconds}ms without a request message',
       );
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.deadlineExceeded,
@@ -126,6 +171,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
               'a request message',
           context: state.cachedContext,
         ),
+        'grpc error cleanup',
       );
     });
   }
@@ -247,7 +293,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final active = _respStreams.values.map((s) => s.id).toList(growable: false);
     for (final streamId in active) {
-      unawaited(_cleanupStream(streamId));
+      _detached(_cleanupStream(streamId), 'stream cleanup');
     }
   }
 
@@ -353,12 +399,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     // During drain, reject new streams but allow messages for existing ones.
     if (_respIsDraining && _respStreams[message.streamId] == null) {
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: message.streamId,
           status: RpcStatus.unavailable,
           message: 'Server is shutting down',
         ),
+        'grpc error cleanup',
       );
       return;
     }
@@ -403,12 +450,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         'Refusing stream ${message.streamId}: at the concurrent-stream limit '
         '($_respMaxStreams)',
       );
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: message.streamId,
           status: RpcStatus.resourceExhausted,
           message: 'Too many concurrent streams (max: $_respMaxStreams)',
         ),
+        'grpc error cleanup',
       );
       return;
     }
@@ -431,7 +479,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         final reason =
             message.metadata!.getHeaderValue(RpcHeaders.xCancellationReason) ??
             'Cancelled by client';
-        unawaited(_handleClientCancellation(state, reason));
+        _detached(
+          _handleClientCancellation(state, reason),
+          'client cancellation',
+        );
         return;
       }
     }
@@ -488,12 +539,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   ) {
     final metadata = message.metadata;
     if (metadata == null) {
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.invalidArgument,
           message: 'Missing metadata',
         ),
+        'grpc error cleanup',
       );
       return;
     }
@@ -501,19 +553,20 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final contentType = metadata.getHeaderValue(RpcHeaders.contentType);
     if (contentType != null &&
         !contentType.toLowerCase().startsWith(RpcHeaders.contentTypeGrpc)) {
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.invalidArgument,
           message: 'Invalid content-type for gRPC',
         ),
+        'grpc error cleanup',
       );
       return;
     }
 
     final grpcEncoding = metadata.getHeaderValue(RpcHeaders.grpcEncoding);
     if (grpcEncoding != null && !RpcGrpcCompression.isSupported(grpcEncoding)) {
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.unimplemented,
@@ -523,6 +576,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
               'cross-platform codec (e.g. RpcGzipCodec.register() from '
               'package:rpc_dart_compression).',
         ),
+        'grpc error cleanup',
       );
       return;
     }
@@ -530,12 +584,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final methodPath = message.methodPath!;
     final parsed = _parseMethodPath(methodPath);
     if (parsed == null) {
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.invalidArgument,
           message: 'Invalid method path: $methodPath',
         ),
+        'grpc error cleanup',
       );
       return;
     }
@@ -550,25 +605,27 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final context = _cacheContext(state, message);
 
     if (_isPingMethodKey(methodKey)) {
-      unawaited(
+      _detached(
         _respPingHandler.respond(
           streamId: state.id,
           context: context,
           onComplete: () => _cleanupStream(state.id),
         ),
+        'ping response',
       );
       return;
     }
 
     final binding = _respRegistry.lookup(methodKey);
     if (binding == null) {
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.unimplemented,
           message: 'Method $methodKey is not registered',
           context: context,
         ),
+        'grpc error cleanup',
       );
       return;
     }
@@ -598,12 +655,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (!state.hasMethod && message.methodPath != null) {
       final parsed = _parseMethodPath(message.methodPath!);
       if (parsed == null) {
-        unawaited(
+        _detached(
           _sendGrpcErrorAndCleanup(
             streamId: state.id,
             status: RpcStatus.invalidArgument,
             message: 'Invalid method path: ${message.methodPath}',
           ),
+          'grpc error cleanup',
         );
         return;
       }
@@ -626,12 +684,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final binding = _respRegistry.lookup(methodKey);
     if (binding == null) {
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.unimplemented,
           message: 'Method $methodKey is not registered',
         ),
+        'grpc error cleanup',
       );
       return;
     }
@@ -663,7 +722,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       state.pushRequest(message);
       return;
     }
-    unawaited(_ensureResponder(state, binding));
+    _detachedDispatch(_ensureResponder(state, binding), state);
   }
 
   void _handleEndOfStream(RpcResponderStreamState state) {
@@ -676,7 +735,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         state.endOfStreamPending = true;
         return;
       }
-      unawaited(_cleanupStream(state.id));
+      _detached(_cleanupStream(state.id), 'stream cleanup');
       return;
     }
     if (_isPingMethodKey(methodKey)) return;
@@ -688,13 +747,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final binding = _respRegistry.lookup(methodKey);
     if (binding == null) {
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.unimplemented,
           message: 'Method $methodKey is not registered',
           context: state.cachedContext,
         ),
+        'grpc error cleanup',
       );
       return;
     }
@@ -710,7 +770,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         state.endRequests();
         return;
       }
-      unawaited(_ensureResponder(state, binding));
+      _detachedDispatch(_ensureResponder(state, binding), state);
       return;
     }
 
@@ -720,13 +780,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // sending anything first -- legal gRPC, and the natural shape for a
     // server-push subscription -- was rejected with INVALID_ARGUMENT.
     if (state.responder == null && state.lastPayloadMessage == null) {
-      unawaited(
+      _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.invalidArgument,
           message: 'Request stream closed without payload for $methodKey',
           context: state.cachedContext,
         ),
+        'grpc error cleanup',
       );
     }
   }
@@ -929,7 +990,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       );
 
       state.responder = responder;
-      unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+      _detached(
+        responder.done.whenComplete(() => _cleanupStream(streamId)),
+        'responder completion',
+      );
 
       // NOT markEndOfStream: the responder now starts on the first request
       // frame, so the buffer holds a mid-call prefix and stamping its last
@@ -975,7 +1039,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     );
 
     state.responder = responder;
-    unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+    _detached(
+      responder.done.whenComplete(() => _cleanupStream(streamId)),
+      'responder completion',
+    );
 
     // See the zero-copy branch above: the buffer is a mid-call prefix now, and
     // _pipelineFedRequestStream supplies the half-close when there is one.
@@ -1021,7 +1088,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       );
 
       state.responder = responder;
-      unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+      _detached(
+        responder.done.whenComplete(() => _cleanupStream(streamId)),
+        'responder completion',
+      );
       responder.bindToMessageStream(
         _stateBoundStream(state, streamId, consumePreBindBuffer: true),
       );
@@ -1051,7 +1121,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     );
 
     state.responder = responder;
-    unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+    _detached(
+      responder.done.whenComplete(() => _cleanupStream(streamId)),
+      'responder completion',
+    );
     responder.bindToMessageStream(
       _stateBoundStream(state, streamId, consumePreBindBuffer: true),
     );
@@ -1081,7 +1154,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       );
 
       state.responder = responder;
-      unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+      _detached(
+        responder.done.whenComplete(() => _cleanupStream(streamId)),
+        'responder completion',
+      );
       responder.bindToMessageStream(
         _stateBoundStream(state, streamId, consumePreBindBuffer: true),
       );
@@ -1130,7 +1206,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         );
 
     state.responder = responder;
-    unawaited(responder.done.whenComplete(() => _cleanupStream(streamId)));
+    _detached(
+      responder.done.whenComplete(() => _cleanupStream(streamId)),
+      'responder completion',
+    );
     responder.bindToMessageStream(
       _stateBoundStream(state, streamId, consumePreBindBuffer: true),
     );
@@ -1194,11 +1273,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       },
     );
 
-    unawaited(
+    _detached(
       responder.done.whenComplete(() {
         unawaited(handlerSub.cancel().catchError((_) {}));
         if (!relay.isClosed) relay.close();
       }),
+      'bidirectional teardown',
     );
 
     try {
@@ -1499,7 +1579,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         'Stream ${state.id} still open ${_reclaimGrace.inSeconds}s after its '
         'deadline — reclaiming',
       );
-      unawaited(_cleanupStream(state.id));
+      _detached(_cleanupStream(state.id), 'stream cleanup');
     });
   }
 
