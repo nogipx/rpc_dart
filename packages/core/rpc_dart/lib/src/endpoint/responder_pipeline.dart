@@ -246,6 +246,27 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       _log.warning('Already listening for incoming requests');
       return;
     }
+    // Claimed BEFORE the first await, not after the subscribe below.
+    //
+    // `start()` returns void and does not await this, so two synchronous
+    // start() calls both reached the guard while it was still false, both
+    // suspended on the cancel below, and both subscribed. The transport's
+    // incoming stream is a BROADCAST, so that is two live subscriptions
+    // delivering every frame twice -- and the first one is orphaned, since
+    // `_respIncomingSub` only remembers the second.
+    //
+    // Not hypothetical: RpcHttp2Server calls endpoint.start() itself right
+    // after onEndpointCreated, and both shipped reflection examples call
+    // start() inside that callback, so the framework's own documented wiring
+    // produced the double subscribe. Measured with grpcurl sending three
+    // client-stream messages, the handler received six:
+    //
+    //   before: cs:6:x|x|y|y|z|z
+    //   after : cs:3:x|y|z
+    //
+    // Unary and server-streaming hid it -- one request frame is deduplicated
+    // downstream -- so only a shape that ACCUMULATES requests exposed it.
+    _respIsListening = true;
 
     final oldSub = _respIncomingSub;
     _respIncomingSub = null;
@@ -268,8 +289,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         _abortActiveStreams('transport closed');
       },
     );
-
-    _respIsListening = true;
   }
 
   /// Aborts every in-flight stream after the connection is gone.
