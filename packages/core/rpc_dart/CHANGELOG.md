@@ -4,6 +4,23 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 5.0.1
+
+### Fixed
+
+- Detached teardown in the responder pipeline no longer raises into the zone.
+  Cancellations, stream teardown and error replies run when no caller is left
+  to report to, and a Dart server with no zone handler exits on an uncaught
+  error — a remote peer could end its host. Failures while binding a handler
+  are still reported to the waiting peer as INTERNAL rather than swallowed.
+
+### Changed
+
+- `registerServiceContract` documents the ownership rule. A server endpoint's
+  lifetime is one connection and closing it disposes the contracts registered
+  on it, so a contract owns what it built for that connection and borrows
+  everything shared with the rest of the process.
+
 ## 5.0.0
 
 A hardening release. The theme is resources a peer can consume without

@@ -4,7 +4,7 @@
 
 name: rpc_notify_redis
 description: Redis Pub/Sub backed repository for rpc_notify, delivering topic subscriptions as change streams.
-version: 1.1.0
+version: 1.2.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -20,7 +20,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  rpc_notify: ^1.2.0
+  rpc_notify: ^1.3.0
   redis: ^4.1.0
 
 dev_dependencies:
