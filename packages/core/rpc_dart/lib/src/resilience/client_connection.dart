@@ -464,8 +464,26 @@ class RpcClientConnection {
         if (_connectTimeout != null) {
           inner = await factoryFuture.timeout(
             _connectTimeout,
-            onTimeout: () =>
-                throw TimeoutException('Connect timed out', _connectTimeout),
+            onTimeout: () {
+              // Future.timeout abandons the AWAIT, not the WORK behind it. The
+              // factory keeps running, and a connect that is merely slow --
+              // the exact case connectTimeout exists for -- still completes
+              // and hands back a live transport that this iteration has
+              // already given up on. Nothing referenced it, so it stayed
+              // connected for the life of the process.
+              //
+              // Measured with a 60ms factory against a 15ms timeout and the
+              // default unlimited retries: 49 live transports after 1.2s,
+              // still climbing, and dispose() reclaimed none of them (52
+              // afterwards, as the in-flight factories kept landing). One
+              // leaked socket per retry, forever, on any client that sets
+              // connectTimeout and sits on a slow network.
+              //
+              // Adopt the abandoned attempt: whenever it settles, close what
+              // it produced.
+              _discardAbandonedAttempt(factoryFuture);
+              throw TimeoutException('Connect timed out', _connectTimeout);
+            },
           );
         } else {
           inner = await factoryFuture;
@@ -522,6 +540,26 @@ class RpcClientConnection {
   }
 
   bool _canReconnect(Object? error) => _shouldReconnect?.call(error) ?? true;
+
+  /// Closes whatever [pending] eventually produces.
+  ///
+  /// Used for an attempt this loop has stopped waiting on. There is no way to
+  /// cancel a `Future`, so the only way to avoid orphaning a transport that
+  /// arrives late is to take delivery of it and close it. A [pending] that
+  /// fails, or never settles at all, costs nothing here.
+  void _discardAbandonedAttempt(Future<IRpcTransport> pending) {
+    unawaited(
+      pending
+          .then((transport) async {
+            _logger?.call(
+              'info',
+              'Closing a transport that arrived after its attempt timed out',
+            );
+            await transport.close();
+          })
+          .catchError((Object _) {}),
+    );
+  }
 
   void _emit(RpcClientConnectionState s) {
     _state = s;
