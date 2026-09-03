@@ -11,6 +11,7 @@ export 'multiplexed_channel.dart';
 export 'error_details.dart';
 export 'errors.dart';
 export 'health.dart';
+export 'long_timer.dart';
 export 'metadata.dart';
 export 'message.dart';
 export 'parser.dart';

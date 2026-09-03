@@ -54,7 +54,10 @@ final class RpcResponderStreamState {
       Future<void>.microtask(onExceeded);
       return;
     }
-    _deadlineTimer = Timer(remaining, onExceeded);
+    // [remaining] comes from the peer's `grpc-timeout`, so it can exceed the
+    // web's ~24.86-day timer ceiling, where an ordinary Timer fires at once
+    // instead of never. See [RpcLongTimer].
+    _deadlineTimer = RpcLongTimer.create(remaining, onExceeded);
   }
 
   Timer? _reclaimTimer;
@@ -88,7 +91,8 @@ final class RpcResponderStreamState {
   /// churn to the hot path for no coverage.
   void armHalfOpen(Duration after, void Function() onExpired) {
     if (_halfOpenTimer != null) return;
-    _halfOpenTimer = Timer(after, onExpired);
+    // Policy-configurable, so it is not bounded by anything this side controls.
+    _halfOpenTimer = RpcLongTimer.create(after, onExpired);
   }
 
   /// Cancels the half-open timer; called once a handler is dispatched.

@@ -15,6 +15,7 @@ import 'package:rpc_dart/rpc_dart.dart'
         RpcCallerEndpoint,
         RpcPeerEndpoint,
         RpcException,
+        RpcLongTimer,
         LogScope;
 
 export 'dart:typed_data';

@@ -266,7 +266,10 @@ final class RpcCallScope {
       Future.microtask(close);
       return;
     }
-    _deadlineTimer = Timer(remaining, close);
+    // RpcLongTimer, not Timer: a deadline is application- or peer-chosen, and
+    // anything past ~24.86 days silently fires at once on the web. See
+    // [RpcLongTimer] for the measurement.
+    _deadlineTimer = RpcLongTimer.create(remaining, close);
   }
 
   void _wireCancellation() {
