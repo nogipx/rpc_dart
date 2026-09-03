@@ -35,7 +35,17 @@ class RpcChannelTransport
   final RpcSecurityPolicy _policy;
 
   final Set<int> _activeStreams = {};
+
+  /// Ids whose terminal frame has been sent, so [finishSending] stays
+  /// idempotent. Bounded — see [_rememberFinished]. Insertion-ordered, so
+  /// `first` is the oldest entry.
   final Set<int> _finishedStreams = {};
+
+  /// Upper bound on [_finishedStreams]. Matches the responder pipeline's
+  /// `_maxRememberedClosedStreams`, and is far above the default
+  /// `maxActiveStreams` of 4096 concurrent streams' worth of in-flight
+  /// finishes, so eviction only ever reaches entries no longer in play.
+  static const int _maxRememberedFinishedStreams = 1024;
 
   /// Global new-stream dispatch. The transport starts consuming the channel as
   /// soon as the connection is up, but the endpoint pipeline subscribes a little
@@ -352,8 +362,11 @@ class RpcChannelTransport
   @override
   Future<void> finishSending(int streamId) async {
     if (_closed) return;
+    // Not merely defensive: measured across the core suite, this suppresses a
+    // genuine duplicate end-of-stream 4 times. Emitting a second one is a
+    // protocol violation on a transport with real stream state (HTTP/2).
     if (_finishedStreams.contains(streamId)) return;
-    _finishedStreams.add(streamId);
+    _rememberFinished(streamId);
     await _channel.send(
       RpcTransportMessage(
         metadata: RpcMetadata([]),
@@ -421,8 +434,15 @@ class RpcChannelTransport
       details: {
         'activeStreams': _activeStreams.length,
         'streamControllers': _streamControllers.length,
-        // Exposed so per-stream bookkeeping growth is observable from outside
-        // (all three should return to a baseline once calls finish).
+        // Exposed so per-stream bookkeeping growth is observable from outside.
+        // The first two return to a baseline once calls finish.
+        // `finishedStreams` does NOT, and is not meant to: a call torn down
+        // before its terminal frame is sent -- a handler that outlives its
+        // deadline, then answers -- re-adds its id after teardown has already
+        // pruned it. That entry is never removed again, so the set is capped
+        // instead (see _rememberFinished). Read it as "bounded", not as
+        // "returns to zero"; a plateau at the cap is correct behaviour, and
+        // only unbounded growth would be a defect.
         'finishedStreams': _finishedStreams.length,
         'zeroCopy': _channel.supportsZeroCopy,
       },
@@ -698,8 +718,40 @@ class RpcChannelTransport
   }
 
   void _markFinished(int streamId) {
-    _finishedStreams.add(streamId);
+    _rememberFinished(streamId);
     _releaseStream(streamId);
+  }
+
+  /// Records [streamId] as finished, keeping [_finishedStreams] bounded.
+  ///
+  /// [_finishedStreams] exists only to make [finishSending] idempotent, and
+  /// [releaseStreamId] prunes it at teardown -- but teardown can happen BEFORE
+  /// the terminal frame is sent, and then nothing removes the entry again.
+  ///
+  /// A handler that outlives its deadline does exactly that. Measured with a
+  /// 4s handler against a 40ms client deadline, printing both sides:
+  ///
+  ///   normal call : ADD 1  then REMOVE 1        -> net empty
+  ///   aborted call: REMOVE 5 (at the 2s reclaim grace)
+  ///                 ADD 5    (at 4s, when the handler finally sends trailers)
+  ///                                              -> retained forever
+  ///
+  /// 15 deadline-aborted calls left `finishedStreams: 15` on both the frame and
+  /// the direct transport, growing one entry per call for the life of the
+  /// connection, and a peer chooses the deadline. Nothing distinguishes the two
+  /// cases at the moment of the add -- the stream is absent from
+  /// [_activeStreams] and [_streamControllers] either way -- so ordering cannot
+  /// be detected here; the set is bounded instead.
+  ///
+  /// The cap also limits how long a stale entry can shadow a REUSED id, where
+  /// it would make that stream's [finishSending] a silent no-op.
+  ///
+  /// Same shape as `_rememberClosedStream` in the responder pipeline.
+  void _rememberFinished(int streamId) {
+    if (!_finishedStreams.add(streamId)) return;
+    if (_finishedStreams.length > _maxRememberedFinishedStreams) {
+      _finishedStreams.remove(_finishedStreams.first);
+    }
   }
 
   void _releaseStream(int streamId) {
