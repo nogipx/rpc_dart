@@ -34,6 +34,32 @@ class RpcWebSocketChannel implements IRpcChannel {
           _incoming.add(data);
         } else if (data is List<int>) {
           _incoming.add(Uint8List.fromList(data));
+        } else {
+          // Anything that is not binary -- in practice a WebSocket TEXT frame,
+          // which arrives as a String. This protocol is binary-only, so a text
+          // frame is a peer error.
+          //
+          // It used to fall through both branches and vanish: measured against
+          // a real dart:io WebSocket server, sending a text frame left
+          // `connectionClosed=false error=none` and the peer got no signal at
+          // all, so a call made over that connection simply hung until its
+          // deadline. Silent loss is the worst of the options -- nothing to
+          // see in a log, nothing on the wire.
+          //
+          // Reported rather than fatal. The error travels
+          // RpcFrameMultiplexedChannel -> RpcChannelTransport -> the endpoint's
+          // incoming stream, where it is logged, and the connection stays
+          // usable for the binary frames around it. Closing instead would turn
+          // one stray frame -- an app-level keepalive from a proxy, say -- into
+          // a dropped connection, which is a bigger change than the defect
+          // being fixed here.
+          _incoming.addError(
+            RpcException(
+              'RpcWebSocketChannel: expected a binary WebSocket message, got '
+              '${data.runtimeType}. This transport is binary-only; a text '
+              'frame cannot carry an RPC frame and was discarded.',
+            ),
+          );
         }
       },
       onError: (Object e) {
