@@ -86,7 +86,34 @@ final class RpcCallScope {
   void onDispose(FutureOr<void> Function() callback) {
     if (_isClosed) {
       // Best-effort: run immediately, don't block.
-      Future.microtask(callback);
+      //
+      // The failure has to be caught HERE. [close] wraps every disposer in a
+      // try/catch and logs what throws, but a callback arriving after close
+      // never reaches that loop: it ran through a bare `Future.microtask` whose
+      // returned future was dropped, so a cleanup that failed became an
+      // unhandled async error -- fatal in the root zone, which is where a
+      // server's main() runs. Measured: the identical failing disposer escaped
+      // 0 times when registered before close and 1 time after, through
+      // onDispose, [use] and [listen] alike, and a root-zone reproduction
+      // terminated the process outright ("Unhandled exception: Bad state:
+      // rollback failed", never reaching the line after it).
+      //
+      // Reachable without any misuse: a deadline closes the scope while the
+      // handler is still running -- Dart cannot preempt a plain async function
+      // -- and the handler then registers its rollback in a `finally`, exactly
+      // as this class documents. One failing rollback took the server down.
+      unawaited(
+        Future.microtask(callback).catchError((
+          Object error,
+          StackTrace stackTrace,
+        ) {
+          _log.error(
+            'Call-scope disposer registered after close failed',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }),
+      );
       return;
     }
     _disposers.add(callback);
