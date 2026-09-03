@@ -240,6 +240,18 @@ class RpcReflectionRegistry {
       if (!_serviceNames.contains(fqn)) {
         _serviceNames.add(fqn);
       }
+
+      // Methods too. The reflection proto documents file_containing_symbol as
+      // taking `<package>.<service>[.<method>]`, and `grpcurl describe
+      // pkg.Service.Method` relies on it. Only services, messages and enums
+      // were indexed, so a real gRPC client got "Symbol not found" for every
+      // method while the enclosing service resolved fine -- verified against
+      // grpcurl 1.9.3, where `describe echo.v1.EchoService` and
+      // `describe echo.v1.EchoRequest` both worked and
+      // `describe echo.v1.EchoService.Echo` did not.
+      for (final method in proto.serviceMethods[svc] ?? const <String>[]) {
+        _symbolToFile['$fqn.$method'] = proto.name;
+      }
     }
 
     for (final msg in proto.messageTypes) {

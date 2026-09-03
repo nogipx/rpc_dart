@@ -40,6 +40,15 @@ class ParsedFileDescriptor {
 
   final List<String> services;
 
+  /// Method names per service, relative to the package —
+  /// e.g. `{'EchoService': ['Echo', 'EchoStream']}`.
+  ///
+  /// Carried so a fully-qualified METHOD can be indexed for
+  /// `file_containing_symbol`, which the reflection proto documents as
+  /// accepting `<package>.<service>[.<method>]`. Defaulted rather than
+  /// required, so adding it does not break an existing construction.
+  final Map<String, List<String>> serviceMethods;
+
   /// All message type names including nested, relative to package.
   /// e.g. `['Outer', 'Outer.Inner']` for package `foo.v1`.
   final List<String> messageTypes;
@@ -57,6 +66,7 @@ class ParsedFileDescriptor {
     required this.messageTypes,
     required this.enumTypes,
     required this.rawBytes,
+    this.serviceMethods = const {},
   });
 }
 
@@ -92,6 +102,7 @@ ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
   var package = '';
   final dependencies = <String>[];
   final services = <String>[];
+  final serviceMethods = <String, List<String>>{};
   final messageTypes = <String>[];
   final enumTypes = <String>[];
 
@@ -122,8 +133,13 @@ ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
         if (enumName.isNotEmpty) enumTypes.add(enumName);
       case 6 when wireType == _wireLen:
         // repeated ServiceDescriptorProto service
-        final svcName = _parseNameField(reader.readLenDelimited());
-        if (svcName.isNotEmpty) services.add(svcName);
+        final svcBytes = reader.readLenDelimited();
+        final svcName = _parseNameField(svcBytes);
+        if (svcName.isNotEmpty) {
+          services.add(svcName);
+          final methods = _parseServiceMethodNames(svcBytes);
+          if (methods.isNotEmpty) serviceMethods[svcName] = methods;
+        }
       default:
         reader.skipField(wireType);
     }
@@ -134,6 +150,7 @@ ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
     package: package,
     dependencies: dependencies,
     services: services,
+    serviceMethods: serviceMethods,
     messageTypes: messageTypes,
     enumTypes: enumTypes,
     rawBytes: bytes,
@@ -190,6 +207,33 @@ void _collectAllTypeNames(
 }
 
 /// Reads field 1 (string name) from a proto message.
+/// Extracts the method names from a serialized `ServiceDescriptorProto`.
+///
+/// `ServiceDescriptorProto.method` is field 2, and each `MethodDescriptorProto`
+/// carries its name in field 1.
+///
+/// Needed because `file_containing_symbol` accepts a fully-qualified METHOD
+/// name -- the reflection proto documents the symbol as
+/// `<package>.<service>[.<method>]` -- and that is how `grpcurl describe
+/// pkg.Service.Method` resolves. Without the method names there is nothing to
+/// index them under.
+List<String> _parseServiceMethodNames(Uint8List bytes) {
+  final methods = <String>[];
+  final reader = _ProtoReader(bytes);
+  while (reader.hasMore) {
+    final tag = reader.readTag();
+    final fieldNumber = tag >> 3;
+    final wireType = tag & 0x7;
+    if (fieldNumber == 2 && wireType == _wireLen) {
+      final name = _parseNameField(reader.readLenDelimited());
+      if (name.isNotEmpty) methods.add(name);
+      continue;
+    }
+    reader.skipField(wireType);
+  }
+  return methods;
+}
+
 String _parseNameField(Uint8List bytes) {
   final reader = _ProtoReader(bytes);
   while (reader.hasMore) {
