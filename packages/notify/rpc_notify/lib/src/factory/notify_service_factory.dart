@@ -22,6 +22,12 @@ class NotifyServiceFactory {
   /// [NotifyPublishResponder] (publish) on the same endpoint.
   ///
   /// If [repository] is omitted an [InMemoryNotifyRepository] is used.
+  ///
+  /// A repository passed in belongs to the caller and outlives this server:
+  /// [NotifyServiceServer.close] releases the subscriptions and leaves it
+  /// running. Only the one created here is disposed with the server — the
+  /// distinction matters because a server registers its contracts per
+  /// connection, so anything else would end the bus at the first disconnect.
   static NotifyServiceServer createServer({
     required IRpcTransport transport,
     INotifyRepository? repository,
@@ -34,7 +40,10 @@ class NotifyServiceFactory {
         debugLabel: debugLabel,
       ),
       subscribeResponder: NotifySubscribeResponder(
-        subscriber: INotifySubscriber.repository(repo),
+        subscriber: INotifySubscriber.repository(
+          repo,
+          ownsRepository: repository == null,
+        ),
         dataTransferMode: transport is RpcInMemoryTransport
             ? RpcDataTransferMode.zeroCopy
             : RpcDataTransferMode.auto,
