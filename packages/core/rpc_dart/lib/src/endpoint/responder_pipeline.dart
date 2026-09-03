@@ -1564,6 +1564,20 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// normally unwinds long before that and cleans up through the usual path,
   /// so this is a backstop, not the mechanism.
   ///
+  /// WHAT IT COSTS, measured: [_cleanupStream] frees two different resources at
+  /// once — the stream STATE, and the admission slot, via
+  /// `transport.releaseStreamId`. For an UNCOOPERATIVE handler the first is
+  /// correct and the second is not: the work is still running, but its slot is
+  /// back in the pool, so [RpcSecurityPolicy.maxActiveStreams] stops bounding
+  /// concurrent execution. Against a server set to 4, one call every 250ms with
+  /// a 40ms deadline reached 37 concurrent handlers in 20s and was still
+  /// climbing linearly, while `activeResponders` read 3-4 the whole time.
+  ///
+  /// That is the price of not leaking, not a free win, and it is recorded on
+  /// [RpcSecurityPolicy.maxActiveStreams] where someone configuring a server
+  /// will read it. Charging the slot until the handler's future completes would
+  /// close it, at the cost of turning a slow server into a rejecting one.
+  ///
   /// Deliberately does NOT answer with a DEADLINE_EXCEEDED trailer, though
   /// gRPC would. The peer that set the deadline reaches it at the same moment
   /// and reports [RpcDeadlineExceededException] locally; a trailer sent here

@@ -27,6 +27,42 @@ final class RpcSecurityPolicy {
   final int maxMessagesPerChunk;
 
   /// Max number of simultaneously active streams tracked by a transport.
+  ///
+  /// LIMITATION, measured: this bounds live STREAM STATE, not concurrent
+  /// HANDLER EXECUTION. The two coincide only while handlers cooperate.
+  ///
+  /// A handler that ignores its cancellation token cannot be preempted — Dart
+  /// has no way to interrupt a running `async` function — so when a stream is
+  /// reclaimed after its deadline (see `_reclaimGrace` in the responder
+  /// pipeline, 2s) the bookkeeping is freed and the admission slot returns to
+  /// the pool while the handler is still running. A peer that paces its calls
+  /// past that grace therefore accumulates handlers without any bound.
+  ///
+  /// Measured against a server configured `maxActiveStreams: 4`, one call every
+  /// 250ms with a 40ms deadline against a handler that ignores cancellation:
+  ///
+  ///   t= 2.0s  running=4   peak=4   activeResponders=4
+  ///   t= 6.2s  running=12  peak=12  activeResponders=4
+  ///   t=12.3s  running=24  peak=24  activeResponders=4
+  ///   t=20.2s  running=37  peak=37  activeResponders=3
+  ///
+  /// 37 concurrent handlers against a ceiling of 4, growing linearly for as
+  /// long as the peer keeps knocking — and INVISIBLE: `activeResponders` and
+  /// `activeStreams` both read at or below the limit throughout, because by
+  /// then the streams really are gone. Only the work remains.
+  ///
+  /// Saturating the connection does NOT show this: with the table permanently
+  /// full every later call is rejected before dispatch, and 43,908 calls in 14s
+  /// produced exactly 8 handlers against `maxActiveStreams: 8`. Pacing is what
+  /// defeats it, so a load test will report the ceiling holding.
+  ///
+  /// Bounding actual concurrency needs the admission slot to stay charged until
+  /// the handler's future completes, rather than being released with the stream
+  /// state. That is a deliberate policy change — it converts "the server runs
+  /// slowly" into "the server rejects calls" — so it is not applied by default.
+  /// Until then, treat this as a bound on stream state, and bound handler
+  /// concurrency in the application (or with `rpc_dart_framework`'s rate
+  /// limiter) when handlers can outlive their deadline.
   final int maxActiveStreams;
 
   /// Max size of a single WebSocket message (including custom headers).
