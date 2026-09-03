@@ -1293,6 +1293,26 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> _sendCancellationToServer(String reason) =>
       _notifyPeerOfCancellation(_transport, _streamId, reason, _logger);
 
+  /// Tells the peer this call is being abandoned locally, so its handler stops.
+  ///
+  /// [_sendCancellationToServer] is only reachable through a cancellation
+  /// token, so a call that ends because the local REQUEST STREAM failed had no
+  /// way to reach it: the caller tore itself down and the server was never
+  /// told. Its handler then sat in `await for (requests)` forever, holding a
+  /// responder-state entry and a transport stream controller.
+  ///
+  /// Measured over one connection, 50 calls whose request stream throws:
+  /// bidirectional left activeResponders=51 and streamControllers=51,
+  /// client-streaming left activeResponders=51. `activeStreams` stayed 0
+  /// throughout, so `maxActiveStreams` never noticed and the growth was
+  /// unbounded. The identical calls aborted through a cancellation token left
+  /// nothing behind, which is what isolated this to the notify step rather
+  /// than the responder's handling of it.
+  ///
+  /// Never throws (see [_notifyPeerOfCancellation]).
+  Future<void> notifyPeerOfAbort(String reason) =>
+      _sendCancellationToServer(reason);
+
   /// Validates context before making the call.
   void _checkContextBeforeCall() {
     if (_context == null) return;

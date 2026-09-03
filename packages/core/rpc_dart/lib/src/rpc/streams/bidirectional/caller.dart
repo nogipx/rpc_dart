@@ -78,6 +78,18 @@ final class BidirectionalStreamCaller<
     await _processor.finishSending();
   }
 
+  /// Tells the server this call is being abandoned locally, so its handler
+  /// stops waiting on a request stream that will never produce again.
+  ///
+  /// [finishSending] is the healthy counterpart: it half-closes, and the
+  /// handler's `await for` ends on its own. A request stream that ERRORS has no
+  /// such signal, and the bridge's cancellation-token notice is only wired to
+  /// consumer cancellation -- so that path told the server nothing and parked
+  /// its handler for good.
+  ///
+  /// Never throws.
+  Future<void> abort(String reason) => _processor.notifyPeerOfAbort(reason);
+
   /// Response stream yielding payloads (zero-copy friendly).
   Stream<TResponse> get payloadResponses async* {
     await for (final response in responses) {

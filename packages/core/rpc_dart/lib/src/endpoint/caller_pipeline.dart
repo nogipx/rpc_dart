@@ -668,9 +668,28 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // shared/reused RpcContext and break the NEXT call on it.
     var finishedNaturally = false;
 
-    Future<void> cleanup({bool fromCancel = false}) async {
+    Future<void> cleanup({
+      bool fromCancel = false,
+      bool abortPeer = false,
+    }) async {
       if (isCleaned) return;
       isCleaned = true;
+
+      // The request side failed on OUR end (the producer threw, or a send did).
+      // The server is mid-handler and has heard nothing: onDone half-closes via
+      // finishSending() and the handler ends by itself, but an errored request
+      // stream sends no such signal, and the token notice below only covers
+      // consumer cancellation. Measured over one connection, 50 bidi calls
+      // whose request stream throws left activeResponders=51 and
+      // streamControllers=51 on the responder, with activeStreams at 0
+      // throughout -- so maxActiveStreams never noticed. Sent before the
+      // teardown below, which closes the processor and with it the only route
+      // to the transport.
+      if (abortPeer && !finishedNaturally) {
+        await caller
+            .abort('bidirectional request stream failed')
+            .catchError((_) {});
+      }
 
       // Tell the server the consumer is gone. The cancellation token is the
       // only thing that triggers CallProcessor._sendCancellationToServer, and
@@ -774,7 +793,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
             await caller.send(req);
           } catch (e, st) {
             controller.addError(e, st);
-            await cleanup();
+            await cleanup(abortPeer: true);
           } finally {
             // Not after cleanup: the subscription is cancelled by then.
             if (!isCleaned) requestSub?.resume();
@@ -783,7 +802,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       },
       onError: (e, st) {
         controller.addError(e, st);
-        unawaited(cleanup());
+        unawaited(cleanup(abortPeer: true));
       },
       onDone: () {
         // Mark before the queued send runs: a cancel arriving in between must

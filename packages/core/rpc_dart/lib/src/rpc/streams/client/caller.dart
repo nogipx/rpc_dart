@@ -280,6 +280,12 @@ final class ClientStreamCaller<
     // reason flow control could not throttle an upload. Measured with a
     // handler that consumed one message and stalled, against a 1 MB window,
     // the caller pulled all 2000 messages (32.8 MB) from its request stream.
+    // Set when the call is abandoned from THIS side -- the request stream
+    // errored, or a send failed. The server is mid-handler and has heard
+    // nothing, so it has to be told; a failure that arrived from the server is
+    // not this and must not trigger a notice.
+    var abortedLocally = false;
+
     late final StreamSubscription<TRequest> requestSub;
     requestSub = requests.listen(
       (request) {
@@ -289,6 +295,7 @@ final class ClientStreamCaller<
         unawaited(
           send(request)
               .catchError((Object e, StackTrace st) {
+                abortedLocally = true;
                 if (!drained.isCompleted) drained.completeError(e, st);
               })
               .whenComplete(() {
@@ -297,6 +304,7 @@ final class ClientStreamCaller<
         );
       },
       onError: (Object e, StackTrace st) {
+        abortedLocally = true;
         if (!drained.isCompleted) drained.completeError(e, st);
       },
       onDone: () {
@@ -322,6 +330,13 @@ final class ClientStreamCaller<
       // Not awaited: cancelling a stalled producer can block indefinitely, and
       // the call is already over.
       unawaited(requestSub.cancel().catchError((_) {}));
+      // Before close(), which drops the processor and with it any way to reach
+      // the transport. onDone half-closes via finishSending() and the handler
+      // ends on its own; this path has no such signal, so without the notice
+      // the handler waits on a request stream that will never produce again.
+      if (abortedLocally) {
+        await _processor.notifyPeerOfAbort('client stream request failed');
+      }
       await close();
     }
   }
