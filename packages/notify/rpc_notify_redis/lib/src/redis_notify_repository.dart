@@ -122,17 +122,34 @@ class RedisNotifyRepository implements INotifyRepository {
       ? channel.substring(_keyPrefix.length)
       : null;
 
+  /// How long a connect or an AUTH may take before it counts as failed.
+  ///
+  /// Every network wait in here is bounded, and each unbounded one has cost a
+  /// production outage. The PING was the first. This is the second: a connect
+  /// that hangs strands `_reconnecting`, and because that latch gates both the
+  /// reconnect AND the health check, the repository then holds no connection,
+  /// retries nothing, and says nothing — publishes go nowhere for as long as
+  /// the process lives. A `finally` does not help, because it waits for a body
+  /// that never finishes.
+  static const _connectTimeout = Duration(seconds: 10);
+
   Future<Command> _open() async {
     final conn = RedisConnection();
-    final cmd = _useTls
-        ? await conn.connectSecure(_host, _port)
-        : await conn.connect(_host, _port);
+    final cmd =
+        await (_useTls
+                ? conn.connectSecure(_host, _port)
+                : conn.connect(_host, _port))
+            .timeout(_connectTimeout);
     final password = _password;
     if (password != null) {
       final username = _username;
-      await cmd.send_object(
-        username != null ? ['AUTH', username, password] : ['AUTH', password],
-      );
+      await cmd
+          .send_object(
+            username != null
+                ? ['AUTH', username, password]
+                : ['AUTH', password],
+          )
+          .timeout(_connectTimeout);
     }
     return cmd;
   }
@@ -163,13 +180,51 @@ class RedisNotifyRepository implements INotifyRepository {
     });
   }
 
+  /// Ticks since the last heartbeat line, so the state is reported on a
+  /// schedule rather than only when something happens.
+  int _ticksSinceHeartbeat = 0;
+
   Future<void> _healthPing() async {
+    // A heartbeat, because the failure this exists to catch produces NO
+    // events. An idle connection was observed dying inside five minutes with
+    // the subscriber stream signalling neither done nor error, no traffic to
+    // fail a publish, and therefore nothing in the log at all — Redis simply
+    // stopped listing the replica. Event-driven logging cannot see that; only
+    // asking on a timer can.
+    //
+    // Every sixth tick at a ten-second interval is one line a minute, which
+    // is affordable and is the granularity at which "it died some time in the
+    // last five minutes" becomes "it died at 12:47:31".
+    if (++_ticksSinceHeartbeat >= 6) {
+      _ticksSinceHeartbeat = 0;
+      _onLog?.call(
+        'redis notify: heartbeat [pub=${_pubCmd != null} '
+        'sub=${_subCmd != null} disposed=$_disposed '
+        'reconnecting=$_reconnecting topics=${_subscribers.length}]',
+      );
+    }
     if (_disposed || _reconnecting) return;
     final cmd = _pubCmd;
-    if (cmd == null) return;
+    if (cmd == null) {
+      // The timer is alive and there is nothing to ping. Nothing else reports
+      // this state, and it is the one the fanout dies in.
+      _onLog?.call('redis notify: no connection to ping — reconnecting');
+      _onConnectionLost();
+      return;
+    }
     try {
-      await cmd.send_object(['PING']);
+      // Bounded, because a hung PING is not a failed PING and this check
+      // exists to notice exactly that. A half-open socket accepts the write
+      // and never answers: without a timeout the await never returns, no
+      // exception is raised, and the repository goes on believing a dead
+      // connection is healthy — which is what it did, holding no connection at
+      // all while Redis showed none from that replica and nothing reconnected.
+      //
+      // One interval is the budget: a reply that has not arrived by the time
+      // the next check is due has already failed the question this one asks.
+      await cmd.send_object(['PING']).timeout(_healthCheckInterval);
     } catch (_) {
+      _onLog?.call('redis notify: health check failed — reconnecting');
       _onConnectionLost();
     }
   }
@@ -196,7 +251,9 @@ class RedisNotifyRepository implements INotifyRepository {
     //
     // The latch is now released in a `finally` no matter how the body ends.
     try {
+      _onLog?.call('redis notify: connection lost — reconnecting');
       await _closeConnections();
+      _onLog?.call('redis notify: old connections closed, retrying');
       var attempt = 0;
       while (!_disposed) {
         final delaySecs =
@@ -232,9 +289,13 @@ class RedisNotifyRepository implements INotifyRepository {
     // throw before one exists, and that escaped — which is what stranded the
     // reconnect latch. Closing is best-effort by nature: the connection we are
     // trying to close is already gone.
+    // Bounded as well as guarded. A close on a half-dead socket can hang, and
+    // a hang here is worse than a throw: it never reaches the `finally` that
+    // releases the reconnect latch, so the repository is stranded exactly as
+    // it was before that finally existed.
     Future<void> quietly(FutureOr<void> Function() step) async {
       try {
-        await step();
+        await Future.sync(step).timeout(_connectTimeout);
       } catch (_) {
         // Nothing to do about a connection that will not close.
       }
@@ -310,22 +371,85 @@ class RedisNotifyRepository implements INotifyRepository {
 
   @override
   void publish(String topic, Map<String, dynamic> payload) {
-    final cmd = _pubCmd;
-    if (cmd == null) return;
-    final envelope = _encodeEnvelope(payload);
-    cmd.send_object(['PUBLISH', _channelFor(topic), envelope]).ignore();
+    _send(topic, _encodeEnvelope(payload));
   }
 
   @override
   void publishTo(String clientId, String topic, Map<String, dynamic> payload) {
+    _send(topic, _encodeEnvelope(payload, targetClientId: clientId));
+  }
+
+  /// Publishes, and treats a failure as news rather than as nothing.
+  ///
+  /// Both halves of this were silent, and together they are how a replica
+  /// serves traffic while fanning out none of it. One was observed doing
+  /// exactly that: accepting writes for minutes with no Redis connection at
+  /// all, every publish returning at the null check, and nothing anywhere
+  /// saying so — the operator saw only "notifications stopped working".
+  ///
+  ///  * No connection was a bare `return`. A publish that reaches nobody IS
+  ///    the user-visible fault, so it is the last thing that should be quiet.
+  ///  * The send's result was `.ignore()`d, so a write onto a dead socket was
+  ///    discarded too, leaving the periodic PING as the only thing that could
+  ///    ever notice. The traffic is the better signal: more frequent than the
+  ///    check, and it is what actually matters.
+  ///
+  /// Rate limited, because a broken replica publishes constantly and a line
+  /// per event would bury the log this exists to make readable.
+  void _send(String topic, String envelope) {
     final cmd = _pubCmd;
-    if (cmd == null) return;
-    final envelope = _encodeEnvelope(payload, targetClientId: clientId);
-    cmd.send_object(['PUBLISH', _channelFor(topic), envelope]).ignore();
+    if (cmd == null) {
+      _reportPublishFailure('no connection');
+      return;
+    }
+    cmd.send_object(['PUBLISH', _channelFor(topic), envelope]).catchError((
+      Object e,
+    ) {
+      _reportPublishFailure('$e');
+      // The write failed, so this connection is carrying nothing. Heal from
+      // the traffic instead of waiting for the next health check.
+      _onConnectionLost();
+      return null;
+    });
+  }
+
+  DateTime? _lastPublishComplaint;
+
+  void _reportPublishFailure(String why) {
+    final now = DateTime.now();
+    final last = _lastPublishComplaint;
+    if (last != null && now.difference(last) < const Duration(seconds: 30)) {
+      return;
+    }
+    _lastPublishComplaint = now;
+    // The latch state is part of the message, because without it this line
+    // says only THAT the fanout is dead and never WHY — and the two possible
+    // reasons need opposite responses. `disposed` means something shut the
+    // repository down under a running server; `reconnecting` means a recovery
+    // went in and did not come out, which is the stranded-latch failure this
+    // has now had twice. Reading it off the outside was impossible, and two
+    // deploys were spent guessing between them.
+    _onLog?.call(
+      'redis notify: publish went nowhere ($why) '
+      '[disposed=$_disposed reconnecting=$_reconnecting '
+      'pub=${_pubCmd != null} sub=${_subCmd != null} '
+      'topics=${_subscribers.length}]',
+    );
   }
 
   @override
   Stream<NotifyEvent> subscribe(String clientId, String topic) {
+    if (_disposed) {
+      // A controller handed out here would look like a healthy subscription
+      // and never deliver anything: no Redis SUBSCRIBE is issued, because
+      // there is no connection to issue it on. That is how a replica came to
+      // report `topics=2` while holding nothing — the subscriptions were
+      // real, the bus behind them was gone. Refusing the call is the only
+      // answer the caller can act on.
+      throw StateError(
+        'RedisNotifyRepository is disposed — cannot subscribe to "$topic"',
+      );
+    }
     final isFirstForTopic = !_subscribers.containsKey(topic);
     final topicSubs = _subscribers.putIfAbsent(topic, () => {});
 
@@ -368,9 +492,22 @@ class RedisNotifyRepository implements INotifyRepository {
     return _subscribers[topic]?.length ?? 0;
   }
 
+  /// Shuts the bus down for everyone holding this repository.
+  ///
+  /// Said out loud, because nothing else could tell a deliberate shutdown from
+  /// the accident. A per-connection subscriber used to dispose this shared
+  /// repository when its client disconnected, and the result was a replica
+  /// serving traffic with no Redis connection, no reconnect attempt and not
+  /// one line in the log. One line here would have named the cause in
+  /// seconds instead of two days.
   @override
   Future<void> dispose() async {
+    if (_disposed) return;
     _disposed = true;
+    _onLog?.call(
+      'redis notify: disposed — the bus is closing '
+      '[topics=${_subscribers.length}]',
+    );
     _healthTimer?.cancel();
     _healthTimer = null;
 
