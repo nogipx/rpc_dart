@@ -200,6 +200,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   // ---------------------------------------------------------------------------
 
   /// Registers [contract] so its methods can handle incoming requests.
+  ///
+  /// A contract's lifetime is the endpoint's, and a server endpoint's lifetime
+  /// is ONE CONNECTION. Closing the endpoint calls `dispose()` on every
+  /// contract registered here, so a contract may own only what it created for
+  /// that connection. Anything shared — a database pool, a notify repository,
+  /// an application singleton from a container — is borrowed, and disposing it
+  /// from a contract takes the resource away from every other connection.
+  ///
+  /// This became load-bearing when the transport servers started closing a
+  /// dropped connection's endpoint instead of leaking it: `dispose()` went
+  /// from never running to running on every disconnect. The first contract
+  /// that was disposing a shared repository took a production notify bus down
+  /// with it, silently, on the first client that went away.
   void registerServiceContract(RpcResponderContract contract) {
     _respRegistry.registerContract(contract, _log);
   }
