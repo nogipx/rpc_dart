@@ -36,6 +36,55 @@ Future<void> _frameAndSend(
   return transport.sendMessage(streamId, framed);
 }
 
+/// The [RpcSecurityPolicy] [transport] was configured with, or the defaults.
+///
+/// Every parser in this library used to be built with none of these limits, so
+/// it fell back to [RpcMessageParser]'s own defaults -- a hard-coded 64MB
+/// message ceiling -- and the policy the operator configured was simply not
+/// enforced on this path. That is invisible while messages are uncompressed,
+/// because the channel bounds the frame payload by the same policy before the
+/// parser ever sees it. It is NOT invisible once a payload is compressed: the
+/// channel bounds the compressed bytes, and the expansion was bounded only by
+/// that 64MB default.
+///
+/// Measured against a server configured `maxMessageLengthBytes: 1MB`, sending
+/// the same highly compressible payload both ways:
+///
+///   32MB uncompressed -> rejected (the policy works)
+///   32MB compressed   -> ACCEPTED, 32x the configured limit
+///   60MB compressed   -> ACCEPTED, 60x the configured limit
+///   70MB compressed   -> rejected at "max: 67108864" -- the 64MB default,
+///                        not the 1MB the operator asked for
+///
+/// The limit was wrong in both directions: a policy TIGHTER than 64MB was not
+/// enforced, and a policy LOOSER than 64MB was silently capped at 64MB.
+///
+/// [IRpcSecurityPolicyAware] exists for exactly this and the responder pipeline
+/// already reads `maxActiveStreams` and `halfOpenStreamTimeout` through it;
+/// the parsers just never asked.
+RpcSecurityPolicy _policyOf(IRpcTransport transport) =>
+    transport is IRpcSecurityPolicyAware
+    ? (transport as IRpcSecurityPolicyAware).securityPolicy
+    : const RpcSecurityPolicy();
+
+/// Builds a parser bounded by [transport]'s policy rather than by
+/// [RpcMessageParser]'s defaults. See [_policyOf].
+RpcMessageParser _policyBoundParser({
+  required IRpcTransport transport,
+  required LogScope logger,
+  required Uint8List Function(Uint8List payload, {int? maxOutputBytes})
+  decompressor,
+}) {
+  final policy = _policyOf(transport);
+  return RpcMessageParser(
+    logger: logger,
+    maxMessageLength: policy.maxMessageLengthBytes,
+    maxBufferedBytes: policy.effectiveMaxBufferedBytes,
+    maxMessagesPerChunk: policy.maxMessagesPerChunk,
+    decompressor: decompressor,
+  );
+}
+
 /// Tells the peer that [streamId] was cancelled, so its handler can stop.
 ///
 /// Prefers a transport-level reset. The metadata notice below rides on a frame
@@ -181,7 +230,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           'For zero-copy leave codecs null.',
         );
       }
-      _parser = RpcMessageParser(
+      _parser = _policyBoundParser(
+        transport: transport,
         logger: _logger,
         decompressor: (payload, {int? maxOutputBytes}) {
           final encoding =
@@ -843,7 +893,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             'For zero-copy leave codecs null.',
           );
         }
-        _parser = RpcMessageParser(
+        _parser = _policyBoundParser(
+          transport: transport,
           logger: _logger,
           decompressor: (payload, {int? maxOutputBytes}) {
             final encoding = _peerGrpcEncoding;

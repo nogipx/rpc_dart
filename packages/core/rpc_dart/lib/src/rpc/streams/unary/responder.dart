@@ -77,7 +77,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// `grpc-encoding` its own client advertised (falling back to the server
   /// context) instead of whatever stream happened to be parsed last.
   RpcMessageParser _parserFor(_UnaryStreamState state) =>
-      state.parser ??= RpcMessageParser(
+      state.parser ??= _policyBoundParser(
+        transport: _transport,
         logger: _logger,
         decompressor: (payload, {int? maxOutputBytes}) {
           final encoding =

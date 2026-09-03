@@ -84,7 +84,8 @@ final class UnaryCaller<TRequest, TResponse> {
     // reusable (call() takes no identity of its own), so the state that a call
     // mutates has to live inside call().
     String? peerGrpcEncoding;
-    final parser = RpcMessageParser(
+    final parser = _policyBoundParser(
+      transport: _transport,
       logger: _logger,
       decompressor: (payload, {int? maxOutputBytes}) {
         final encoding = peerGrpcEncoding;
