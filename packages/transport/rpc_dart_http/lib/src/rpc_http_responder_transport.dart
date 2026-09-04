@@ -78,8 +78,30 @@ class RpcHttpResponderTransport implements IRpcTransport {
   /// were all invisible to a web client: the page saw an opaque CORS failure
   /// instead of the status the server actually chose, which is the difference
   /// between "your content-type is wrong" and no diagnosis at all.
-  Response _reject(int statusCode, Request request, {String? body}) {
-    final headers = <String, String>{};
+  /// The request body is DRAINED before answering.
+  ///
+  /// Rejecting without reading it leaves unread bytes on the socket, and
+  /// dart:io then tears the connection down before the status is flushed --
+  /// the same hazard [_handleRequest]'s body reader documents. Measured while
+  /// adding the 405 below: `PUT` came back as a SocketException instead of the
+  /// status, while GET and DELETE happened to survive, purely because of how
+  /// much was still buffered.
+  ///
+  /// Drained rather than bounded-and-abandoned for the same reason the body
+  /// reader keeps consuming after an overflow: memory is safe because nothing
+  /// is retained, and wall-clock is bounded by [bodyReadTimeout] when set.
+  Future<Response> _reject(
+    int statusCode,
+    Request request, {
+    String? body,
+    Map<String, String> extraHeaders = const {},
+  }) async {
+    try {
+      await request.read().drain<void>();
+    } catch (_) {
+      // The peer may have gone already; the status below is still worth trying.
+    }
+    final headers = <String, String>{...extraHeaders};
     corsPolicy?.applyTo(headers, request.headers['origin']);
     return Response(statusCode, body: body, headers: headers);
   }
@@ -92,6 +114,30 @@ class RpcHttpResponderTransport implements IRpcTransport {
     // Handle CORS preflight before any other processing.
     if (request.method == 'OPTIONS' && corsPolicy != null) {
       return corsPolicy!.handlePreflight(request);
+    }
+
+    // gRPC is POST-only, and nothing checked. Measured with a body on every
+    // method, counting handler executions: 6 of 6 ran -- POST, GET, HEAD, PUT,
+    // DELETE and PATCH -- all answering grpc-status=0.
+    //
+    // GET is the one that matters. A browser can be made to issue a
+    // cross-origin GET without a preflight, while a POST carrying
+    // `content-type: application/grpc` cannot leave the origin unprompted, so
+    // accepting GET turned every unary method into something an attacker's
+    // page could trigger.
+    //
+    // RpcHttpCallerTransport hard-codes POST, which is why no test reached
+    // this: only a foreign caller picks the method. Same defect and same blind
+    // spot as 555d6855 on the HTTP/2 server.
+    //
+    // Answered as HTTP 405 with `Allow`, rather than as a gRPC status: this
+    // transport already answers its pre-dispatch rejections with real HTTP
+    // statuses (415 for content-type, 400 for a bad path), whereas
+    // gRPC-over-HTTP/2 must always send 200 plus grpc-status. Each is
+    // consistent with its own protocol.
+    if (request.method != 'POST') {
+      _logger?.warning('Rejected request: method ${request.method}, not POST');
+      return _reject(405, request, extraHeaders: const {'allow': 'POST'});
     }
 
     // Enforce concurrent stream limit.
