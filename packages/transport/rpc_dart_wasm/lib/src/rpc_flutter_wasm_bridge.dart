@@ -43,6 +43,7 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   final BinaryMessenger _messenger;
   final String _incomingChannel;
   final String _outgoingChannel;
+  final String _consoleChannel;
   final StreamController<Uint8List> _incoming =
       StreamController<Uint8List>.broadcast(sync: true);
   bool _closed = false;
@@ -57,9 +58,10 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
 
   RpcFlutterWasmBridge._(this.runtimeId, this._messenger)
     : _incomingChannel = 'rpc_dart_wasm/$runtimeId/incoming',
-      _outgoingChannel = 'rpc_dart_wasm/$runtimeId/outgoing' {
+      _outgoingChannel = 'rpc_dart_wasm/$runtimeId/outgoing',
+      _consoleChannel = 'rpc_dart_wasm/$runtimeId/console' {
     // Console log channel from native.
-    final consoleChannel = 'rpc_dart_wasm/$runtimeId/console';
+    final consoleChannel = _consoleChannel;
     _messenger.setMessageHandler(consoleChannel, (ByteData? message) async {
       if (message == null || _closed) return null;
       final bytes = Uint8List.view(
@@ -159,8 +161,17 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+
+    // The constructor registers TWO message handlers and owns TWO controllers,
+    // so close() has to release both. A handler left registered is a closure
+    // holding this bridge, which pins it and its controllers for good; a
+    // controller left open never completes its stream, so anything awaiting
+    // `console` waits forever.
     _messenger.setMessageHandler(_incomingChannel, null);
+    _messenger.setMessageHandler(_consoleChannel, null);
     await _incoming.close();
+    if (!_console.isClosed) await _console.close();
+
     await _channel.invokeMethod<void>('closeRuntime', {'runtimeId': runtimeId});
   }
 }
