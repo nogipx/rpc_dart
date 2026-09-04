@@ -13,6 +13,15 @@ only** — HTTP/1.1 has no multiplexing and no way to stream frames in both
 directions. For streaming use [`rpc_dart_http2`], [`rpc_dart_websocket`] or
 [`rpc_dart_isolate`].
 
+> **Streaming methods do not fail here — they degrade quietly.** Measured on
+> this transport: a *finite* server stream of three items yielded 400 ms apart
+> arrived all at once at 1290 ms, i.e. only after the handler had finished.
+> Client-streaming and bidirectional round-trip for the same reason. An
+> *unbounded* stream is worse: it never returns, because the response cannot
+> start until the handler does — one produced 225 items in 5 s and kept running
+> after the caller gave up. Give any streaming method a deadline if it has to
+> run here, or use one of the transports above.
+
 Use this transport when the network path only tolerates plain HTTP: proxies and
 gateways that terminate HTTP/1.1, CDNs, or environments where an HTTP/2 or
 WebSocket upgrade is not available.

@@ -60,10 +60,31 @@ int _httpStatusToGrpcCode(int statusCode) {
 
 /// HTTP/1.1 caller transport for rpc_dart.
 ///
-/// Maps each RPC stream to one HTTP POST request.
-/// Only unary calls are supported — streaming methods will fail because
-/// HTTP/1.1 cannot multiplex messages in both directions within a single
-/// request/response cycle.
+/// Maps each RPC stream to one HTTP POST request. Use it for UNARY calls.
+///
+/// ## What streaming methods actually do here
+///
+/// This used to say streaming methods "will fail". They do not fail, and the
+/// difference matters. Measured against a real server on this transport:
+///
+///  * A FINITE stream SUCCEEDS, fully buffered. A server stream of three items
+///    yielded 400ms apart arrived as `[1290, 1290, 1290]`ms — nothing until the
+///    handler completed, then everything at once. Client-streaming and
+///    bidirectional round-trip too, for the same reason: the whole exchange
+///    fits in one request/response pair. Nothing warns that the streaming
+///    semantics are gone.
+///  * An UNBOUNDED stream HANGS, and leaks. A server stream that never
+///    completes produced no items in 5s while the handler kept running — 225
+///    yields by the time the client gave up, and still going afterwards. There
+///    is no response until the handler finishes, so a handler that never
+///    finishes hangs the caller and burns server resources with nothing to
+///    stop it.
+///
+/// So the practical rule is not "streaming fails" but "streaming silently
+/// degrades to buffering, and an unbounded stream is a hang". Prefer
+/// [`rpc_dart_http2`], [`rpc_dart_websocket`] or [`rpc_dart_isolate`] for any
+/// streaming method; if one must run here, give it a deadline so the hang is
+/// bounded.
 ///
 /// Uses [package:http](https://pub.dev/packages/http) and compiles to all
 /// platforms including JS/Wasm.
