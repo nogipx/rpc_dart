@@ -65,6 +65,25 @@ final class RpcHttpCorsPolicy {
   /// If null, the header is not sent.
   final Duration? preflightMaxAge;
 
+  /// Creates a CORS policy.
+  ///
+  /// Throws [ArgumentError] when [allowCredentials] is combined with a `'*'`
+  /// origin. This was an `assert`, which Dart strips in release builds — and
+  /// measured, it is weaker still: `dart run` does not enable asserts either,
+  /// so the guard only ever fired under `dart test`. Everywhere real code runs,
+  /// the invalid pair was accepted and went straight onto the wire:
+  ///
+  ///   access-control-allow-origin      = *
+  ///   access-control-allow-credentials = true
+  ///
+  /// Browsers reject that pairing outright, so the result is not a breach but
+  /// a server whose every cross-origin call fails, with nothing pointing at the
+  /// misconfiguration. A real throw names the mistake at construction, in every
+  /// build mode.
+  ///
+  /// Same reasoning, and the same fix, as the `assert` sweep recorded in
+  /// rpc_dart/test/audit/release_mode_config_guards_test.dart; that sweep
+  /// covered core and did not reach the transports.
   RpcHttpCorsPolicy({
     this.allowedOrigins = const [],
     this.allowedHeaders = const [
@@ -78,10 +97,17 @@ final class RpcHttpCorsPolicy {
     this.allowCredentials = false,
     this.preflightMaxAge,
     LogScope? logger,
-  }) : assert(
-         !(allowCredentials && allowedOrigins.contains('*')),
-         'allowCredentials=true requires specific origins, not ["*"]',
-       ) {
+  }) {
+    if (allowCredentials && allowedOrigins.contains('*')) {
+      throw ArgumentError.value(
+        allowedOrigins,
+        'allowedOrigins',
+        'allowCredentials: true cannot be combined with a "*" origin. '
+            'Browsers reject Access-Control-Allow-Origin: * together with '
+            'Access-Control-Allow-Credentials: true, so every cross-origin '
+            'call would fail. List explicit origins instead.',
+      );
+    }
     if (allowedOrigins.contains('*')) {
       _warnAllowAnyOrigin(logger);
     }
