@@ -178,6 +178,32 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
       await _fwdSub?.cancel();
       await _inner.close();
       final ws = await _reconnectFactory();
+
+      // Re-check AFTER the factory. The guard at the top of this method runs
+      // before these awaits, and opening a socket takes real time -- a
+      // handshake is tens to hundreds of ms -- so close() can land inside that
+      // window. Attaching anyway hands a live socket to a transport that is
+      // already closed: `_incomingCtl` is shut so nothing is delivered, and
+      // nothing holds the socket any more, so it can never be closed.
+      //
+      // Measured against a real WebSocket server counting live connections,
+      // with a 150ms factory and close() 30ms in:
+      //
+      //   control, plain connect + close : opened=1 closed=1  (released)
+      //   close during reconnect         : opened=3 closed=2  (1 left open)
+      //
+      // Same defect as RpcClientConnection in core (commit 334b3337), whose
+      // loop also checked "stopped" before the await and not after. The
+      // transport owns what the factory returns, so abandoning it means
+      // closing it.
+      if (_closed || _incomingCtl.isClosed) {
+        unawaited(Future<void>.sync(ws.sink.close).catchError((_) {}));
+        return RpcHealthStatus.closed(
+          component: 'RpcWebSocketCallerTransport',
+          message: 'Transport closed during reconnect',
+        );
+      }
+
       _attach(ws);
       return RpcHealthStatus.healthy(
         component: 'RpcWebSocketCallerTransport',
