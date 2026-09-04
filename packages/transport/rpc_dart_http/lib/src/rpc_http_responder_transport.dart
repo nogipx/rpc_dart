@@ -58,6 +58,34 @@ class RpcHttpResponderTransport implements IRpcTransport {
 
   /// Maximum time to wait for the full request body to arrive.
   /// If null, no timeout is applied.
+  ///
+  /// CAUTION — this rejects a client that sends `Expect: 100-continue`.
+  ///
+  /// dart:io never answers that header, so a client which sends it waits out
+  /// its own fallback before transmitting the body (curl: one second). The
+  /// budget here is already running during that wait, so a short timeout
+  /// expires before the first byte and the client gets a 408 saying it was too
+  /// slow — when in fact it was waiting for a `100 Continue` this server was
+  /// never going to send. Measured with curl, same server, same 4 KiB body,
+  /// the header the only variable:
+  ///
+  ///     bodyReadTimeout 500ms + Expect: 100-continue -> HTTP 408 in 0.54s
+  ///     bodyReadTimeout 500ms, no Expect             -> HTTP 200 in 0.02s
+  ///     no timeout       + Expect: 100-continue      -> HTTP 200 in 1.01s
+  ///
+  /// The missing `100 Continue` is the platform's, not this transport's:
+  /// a bare shelf handler and a bare `HttpServer` both take the same ~1.02s
+  /// (measured as controls), so nothing here can send it.
+  ///
+  /// Who actually sends the header: curl for bodies over 1 KiB, and some
+  /// proxies and load balancers. gRPC clients do not, so a pure gRPC
+  /// deployment is unaffected — but this handler mounts on any shelf server.
+  ///
+  /// If that combination matters to you, the choice is a policy one and is
+  /// deliberately left open: either leave [bodyReadTimeout] null on endpoints
+  /// such clients reach, or set it comfortably above the client's
+  /// continue-fallback (curl's is 1s). Shortening it tightens slowloris
+  /// mitigation and widens this rejection at the same time.
   final Duration? bodyReadTimeout;
 
   RpcHttpResponderTransport({

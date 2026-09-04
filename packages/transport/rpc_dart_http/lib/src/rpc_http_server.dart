@@ -83,7 +83,13 @@ class RpcHttpServer implements IRpcServer {
   ///
   /// [bodyReadTimeout] bounds how long the server waits for a full request
   /// body. When set, slow request bodies are rejected with `408` instead of
-  /// being buffered indefinitely (slowloris mitigation).
+  /// being buffered indefinitely (slowloris mitigation). It also rejects a
+  /// client that sends `Expect: 100-continue`, because dart:io never answers
+  /// that header and the client's own fallback wait (curl: 1s) runs inside
+  /// this budget — measured, 500ms + the header gives a 408 where the same
+  /// request without it succeeds in 0.02s. See
+  /// [RpcHttpResponderTransport.bodyReadTimeout] for the numbers and the
+  /// options.
   RpcHttpServer({
     required String host,
     required int port,
