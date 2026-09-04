@@ -66,6 +66,17 @@ class RpcHttp2CallerTransport
   /// the id here so no later path sends a second one.
   final Set<int> _halfClosedLocal = {};
 
+  /// Streams whose response carried a gRPC status (trailers, or a
+  /// Trailers-Only response).
+  ///
+  /// package:http2 completes a stream's `incomingMessages` NORMALLY when the
+  /// connection goes away mid-response, so `onDone` alone cannot tell a
+  /// finished call from a truncated one. Without this, a server stream cut off
+  /// by a dead peer was delivered to the consumer as a clean end -- partial
+  /// data reported as complete, with no error anywhere. The websocket and
+  /// isolate transports surface it as an error; only this one did not.
+  final Set<int> _statusReceived = {};
+
   /// Ids handed out by [createStream] that have not been retired yet.
   ///
   /// [_activeStreams] only gains an id once [sendMetadata] opens the HTTP/2
@@ -451,6 +462,7 @@ class RpcHttp2CallerTransport
     _initialHeadersReceived.remove(streamId);
     _halfClosedLocal.remove(streamId);
     _reservedStreams.remove(streamId);
+    _statusReceived.remove(streamId);
 
     return true;
   }
@@ -521,6 +533,7 @@ class RpcHttp2CallerTransport
     _initialHeadersReceived.remove(streamId);
     _halfClosedLocal.remove(streamId);
     _reservedStreams.remove(streamId);
+    _statusReceived.remove(streamId);
     final controller = _streamControllers.remove(streamId);
     if (controller != null && !controller.isClosed) {
       unawaited(controller.close());
@@ -628,8 +641,39 @@ class RpcHttp2CallerTransport
       onDone: () {
         _logger?.internal('Stream $streamId завершен');
 
-        // Отправляем сообщение о завершении потока
-        _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
+        if (_statusReceived.contains(streamId)) {
+          // Отправляем сообщение о завершении потока
+          _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
+        } else {
+          // No trailers and no Trailers-Only status: the response was cut off.
+          // Reporting a clean end here handed the consumer partial data as if
+          // it were complete -- a server stream truncated by a dead peer looked
+          // exactly like one that finished.
+          _logger?.warning(
+            'Stream $streamId ended without a gRPC status; reporting '
+            'UNAVAILABLE rather than a clean end',
+          );
+          _emit(
+            RpcTransportMessage(
+              streamId: streamId,
+              metadata: RpcMetadata([
+                RpcHeader(
+                  RpcHeaders.grpcStatus,
+                  RpcStatus.unavailable.toString(),
+                ),
+                RpcHeader(
+                  RpcHeaders.grpcMessage,
+                  RpcMetadata.encodeGrpcMessage(
+                    'Response ended without a gRPC status (connection lost '
+                    'or stream reset before trailers)',
+                  ),
+                ),
+              ]),
+              isEndOfStream: true,
+              methodPath: methodPath,
+            ),
+          );
+        }
 
         // Очищаем ресурсы
         _activeStreams.remove(streamId);
@@ -638,6 +682,7 @@ class RpcHttp2CallerTransport
         _initialHeadersReceived.remove(streamId);
         _halfClosedLocal.remove(streamId);
         _reservedStreams.remove(streamId);
+        _statusReceived.remove(streamId);
       },
     );
 
@@ -689,6 +734,7 @@ class RpcHttp2CallerTransport
       // limiting — produced a permanent failure where every other gRPC client
       // backs off and retries. See [grpcStatusFromHttpStatus].
       final grpcStatus = grpcStatusFromHttpStatus(httpStatus);
+      _statusReceived.add(streamId);
       _logger?.warning(
         'Non-200 HTTP status $httpStatus for stream $streamId '
         '-> gRPC status $grpcStatus',
@@ -721,6 +767,12 @@ class RpcHttp2CallerTransport
     final metadata = http2HeadersToRpcMetadata(message.headers);
     _policy.validateMetadata(metadata);
 
+    // Trailers-Only responses carry the status on the FIRST headers frame, so
+    // key on the header rather than on the frame's position.
+    if (metadata.getHeaderValue(RpcHeaders.grpcStatus) != null) {
+      _statusReceived.add(streamId);
+    }
+
     // A 200 whose content-type is not gRPC is not a gRPC response, and its body
     // is not gRPC frames. Without this check the parser met the raw bytes and
     // failed on whatever the first one happened to be: an HTML error page from
@@ -740,6 +792,7 @@ class RpcHttp2CallerTransport
         _logger?.warning(
           'Non-gRPC content-type "$contentType" for stream $streamId',
         );
+        _statusReceived.add(streamId);
         _emit(
           RpcTransportMessage(
             streamId: streamId,
@@ -974,6 +1027,7 @@ class RpcHttp2CallerTransport
     _initialHeadersReceived.clear();
     _halfClosedLocal.clear();
     _reservedStreams.clear();
+    _statusReceived.clear();
 
     try {
       final connection = await _connectionFactory();
@@ -1092,6 +1146,7 @@ class RpcHttp2CallerTransport
     _initialHeadersReceived.clear();
     _halfClosedLocal.clear();
     _reservedStreams.clear();
+    _statusReceived.clear();
 
     // Закрываем per-stream контроллеры
     for (final ctl in _streamControllers.values) {
