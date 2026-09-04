@@ -457,11 +457,36 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     // Trailing frames for a stream we already tore down must not resurrect it
     // (see _respClosedStreams). A genuinely new call always opens with a
-    // metadata frame carrying methodPath, so that — and only that — clears the
+    // METADATA frame carrying methodPath, so that — and only that — clears the
     // id for reuse.
+    //
+    // The metadata half is load-bearing and used to be missing: any frame with
+    // a methodPath cleared the guard, and some transports tag their DATA frames
+    // with the method path too. The HTTP/1.1 responder does
+    // (`_emit(RpcTransportMessage(streamId, payload: body, isEndOfStream: true,
+    // methodPath: methodPath))`), so a request refused at the metadata stage
+    // resurrected itself with its own body. Traced at the transport, for
+    // `grpc-encoding: snappy`:
+    //
+    //   sendMetadata(stream=4, endStream=true, grpc-status=12)  <- refused
+    //   releaseStreamId(4)                                       <- cleaned up
+    //   sendMetadata(stream=4, endStream=false)                  <- resurrected
+    //   >>> HANDLER RAN
+    //   sendMetadata(stream=4, endStream=true, grpc-status=0)    <- discarded
+    //
+    // So the peer was told UNIMPLEMENTED while the handler ran anyway: the
+    // caller sees a failed call, the server performed the work. Delaying the
+    // body by 300ms changed nothing, which is what ruled out a race and pointed
+    // here. The http2 sibling was correct all along -- it tags only its HEADERS
+    // frame -- and that asymmetry is what named the defect.
+    //
+    // Checking `metadata != null` rather than `isMetadataOnly` on purpose: a
+    // transport may legitimately open a call with metadata and payload in one
+    // frame, and that must still be able to reuse a released id. A frame with
+    // no metadata never opens a call on any transport.
     if (_respStreams[message.streamId] == null &&
         _respClosedStreams.contains(message.streamId)) {
-      if (message.methodPath == null) {
+      if (message.methodPath == null || message.metadata == null) {
         _log.internal(
           'Ignoring trailing frame for closed stream ${message.streamId}',
         );
