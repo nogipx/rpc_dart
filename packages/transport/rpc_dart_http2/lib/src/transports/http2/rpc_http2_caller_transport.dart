@@ -554,8 +554,55 @@ class RpcHttp2CallerTransport
       authority: _host,
     );
 
-    // Создаем HTTP/2 stream
-    final stream = _connection.makeRequest(headers, endStream: endStream);
+    // Создаем HTTP/2 stream.
+    //
+    // A connection that is gone must be reported as UNAVAILABLE, not as
+    // package:http2's raw StateError. GOAWAY is the routine case, not an
+    // exotic one: every load balancer drains with it, and every gRPC server
+    // with a max-connection-age sends it on a schedule.
+    //
+    // The bug this fixes is an inconsistency inside this one transport. The
+    // same underlying condition -- the peer's connection is gone -- produced
+    // two different answers:
+    //
+    //   connection dies MID-call  -> RpcStatusException(14) "No response
+    //                                received" (caller_pipeline), retryable
+    //   connection dead, NEW call -> StateError "The http/2 connection is no
+    //                                longer active", NOT retryable
+    //
+    // and only one of them is usable. RpcRetryInterceptor's default retries
+    // UNAVAILABLE and RESOURCE_EXHAUSTED, and its doc states the intent
+    // outright: "a lost connection becomes UNAVAILABLE". Measured against a
+    // raw package:http2 server that answered one call and then sent GOAWAY,
+    // with maxAttempts: 3 and attempts counted at the transport:
+    //
+    //   before: 1 attempt   (StateError is not a status, so not classifiable)
+    //   after : 3 attempts
+    //
+    // Same defect shape as e4756025, where non-200 statuses collapsing to
+    // INTERNAL made 502/503/504 permanently non-retryable.
+    //
+    // This makes the failure CLASSIFIABLE; it does not by itself make a retry
+    // succeed on a dead connection -- that needs reconnect(), exactly as it
+    // already does for the mid-call UNAVAILABLE above. Both checks are here
+    // because isOpen can go false between the test and the call.
+    if (!_connection.isOpen) {
+      throw RpcStatusException(
+        RpcStatus.unavailable,
+        'HTTP/2 connection to $_host:$_port is no longer active (the peer '
+        'closed it or sent GOAWAY); reconnect and retry',
+      );
+    }
+    final http2.ClientTransportStream stream;
+    try {
+      stream = _connection.makeRequest(headers, endStream: endStream);
+    } on StateError catch (error) {
+      throw RpcStatusException(
+        RpcStatus.unavailable,
+        'HTTP/2 connection to $_host:$_port refused a new stream: '
+        '${error.message}',
+      );
+    }
     _activeStreams[streamId] = stream;
     if (endStream) _halfClosedLocal.add(streamId);
 
