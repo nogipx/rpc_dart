@@ -35,6 +35,38 @@ class RpcWebSocketCallerTransport
   late RpcChannelTransport _inner;
   bool _closed = false;
 
+  /// No live socket, but recovery is expected.
+  ///
+  /// [reconnect] closes `_inner` BEFORE calling the factory, so a failed
+  /// attempt leaves this wrapper reporting `isClosed == false` over an inner
+  /// transport that is closed. Every call then delegated into it, and
+  /// RpcChannelTransport answers a closed transport by returning quietly:
+  /// `sendMetadata` is a no-op and `getMessagesForStream` hands back
+  /// `Stream.empty()`. The caller pipeline saw a stream end with no response
+  /// and raised RpcStatusException(14) from a detached subscription -- into the
+  /// ROOT zone, where it killed the isolate. No try/catch around the call could
+  /// stop it.
+  ///
+  /// Measured: peer dies, reconnect() fails, one call ->
+  ///   "Unhandled exception: RpcStatusException(14): Stream closed without
+  ///    receiving response" and the process ended.
+  /// Without the failed reconnect in between, the same sequence survives.
+  bool _disconnected = false;
+
+  /// Refuses work this transport cannot do, naming which state it is in.
+  ///
+  /// Closed is terminal; disconnected is not, and conflating them is what let a
+  /// call reach a closed inner transport in the first place.
+  void _ensureUsable() {
+    if (_closed) throw StateError('Transport is closed');
+    if (_disconnected) {
+      throw StateError(
+        'Transport is disconnected and has no socket; call reconnect(). '
+        'A failed reconnect leaves the transport recoverable, not closed.',
+      );
+    }
+  }
+
   RpcWebSocketCallerTransport(
     WebSocketChannel channel, {
     Future<WebSocketChannel> Function()? reconnectFactory,
@@ -122,16 +154,22 @@ class RpcWebSocketCallerTransport
   Stream<RpcTransportMessage> get incomingMessages => _incomingCtl.stream;
 
   @override
-  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
-      // Delegate to the inner transport's per-stream routing instead of
-      // re-filtering the outer broadcast (which exists only to keep
-      // [incomingMessages] stable across reconnects). A call's streamId is
-      // connection-scoped and never spans a reconnect, so this is safe and
-      // avoids the O(active-streams) broadcast+filter on the hot path.
-      _inner.getMessagesForStream(streamId);
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
+    _ensureUsable();
+    return
+    // Delegate to the inner transport's per-stream routing instead of
+    // re-filtering the outer broadcast (which exists only to keep
+    // [incomingMessages] stable across reconnects). A call's streamId is
+    // connection-scoped and never spans a reconnect, so this is safe and
+    // avoids the O(active-streams) broadcast+filter on the hot path.
+    _inner.getMessagesForStream(streamId);
+  }
 
   @override
-  int createStream() => _inner.createStream();
+  int createStream() {
+    _ensureUsable();
+    return _inner.createStream();
+  }
 
   @override
   bool releaseStreamId(int streamId) => _inner.releaseStreamId(streamId);
@@ -141,14 +179,20 @@ class RpcWebSocketCallerTransport
     int streamId,
     RpcMetadata metadata, {
     bool endStream = false,
-  }) => _inner.sendMetadata(streamId, metadata, endStream: endStream);
+  }) {
+    _ensureUsable();
+    return _inner.sendMetadata(streamId, metadata, endStream: endStream);
+  }
 
   @override
   Future<void> sendMessage(
     int streamId,
     Uint8List data, {
     bool endStream = false,
-  }) => _inner.sendMessage(streamId, data, endStream: endStream);
+  }) {
+    _ensureUsable();
+    return _inner.sendMessage(streamId, data, endStream: endStream);
+  }
 
   @override
   Future<void> sendDirectObject(
@@ -166,6 +210,16 @@ class RpcWebSocketCallerTransport
       return RpcHealthStatus.closed(
         component: 'RpcWebSocketCallerTransport',
         message: 'Transport closed',
+      );
+    }
+    // Not delegated while disconnected: `_inner` is a closed transport after a
+    // failed reconnect, so it answered "Transport is closed" while isClosed
+    // was false -- the wrapper contradicting itself.
+    if (_disconnected) {
+      return RpcHealthStatus.degraded(
+        component: 'RpcWebSocketCallerTransport',
+        message: 'WebSocket connection is down. Reconnect is required.',
+        details: const {'supported': true},
       );
     }
     return _inner.health();
@@ -225,12 +279,17 @@ class RpcWebSocketCallerTransport
       }
 
       _attach(ws);
+      _disconnected = false;
       return RpcHealthStatus.healthy(
         component: 'RpcWebSocketCallerTransport',
         message: 'Reconnected',
         details: {'supported': true},
       );
     } catch (e) {
+      // The factory failed, but `_inner` was already closed above, so this
+      // wrapper now has no socket. Say so, rather than leaving calls to fall
+      // into a closed inner transport.
+      _disconnected = true;
       return RpcHealthStatus.unhealthy(
         component: 'RpcWebSocketCallerTransport',
         message: 'Reconnect failed: $e',
