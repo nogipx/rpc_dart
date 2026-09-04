@@ -246,6 +246,55 @@ class RpcHttp2ResponderTransport implements IRpcTransport {
       );
 
       _emitStreamError(streamId, e, stackTrace);
+      _answerFramingViolation(streamId, e);
+    }
+  }
+
+  /// Answers a peer whose frame this transport refused to decode.
+  ///
+  /// [_emitStreamError] tells OUR side, and nothing else did: the offending
+  /// frame is dropped, so the stream reaches the responder pipeline carrying no
+  /// payload, and the peer eventually gets whatever the pipeline makes of an
+  /// empty request. Measured against grpcurl with
+  /// `maxMessageLengthBytes: 4096`, a 20KB request came back as:
+  ///
+  ///   Code: InvalidArgument
+  ///   Message: Request stream closed without payload for
+  ///            shapes.v1.ShapeService.Unary
+  ///
+  /// Both halves are wrong. gRPC answers an over-limit message with
+  /// RESOURCE_EXHAUSTED (grpc-go and grpc-java both do), and INVALID_ARGUMENT
+  /// tells the caller its *arguments* were malformed rather than too large --
+  /// which also inverts retry semantics, since rpc_dart's own
+  /// RpcRetryInterceptor treats RESOURCE_EXHAUSTED as transient and
+  /// INVALID_ARGUMENT as final. The message pointed at a symptom (no payload
+  /// arrived) instead of the cause.
+  ///
+  /// Best-effort: if the stream is already gone, or headers cannot be sent,
+  /// there is nothing further to do and the local error above still stands.
+  void _answerFramingViolation(int streamId, Object error) {
+    // Every RpcException RpcMessageParser raises is a RESOURCE LIMIT, and all
+    // four read as RESOURCE_EXHAUSTED to a gRPC peer:
+    //   'gRPC frame buffer overflow: N (max: M)'
+    //   'gRPC frame payload is too large: N (max: M)'
+    //   'Decompressed gRPC payload is too large: N (max: M)'
+    //   'Too many gRPC messages in a single chunk: N (max: M)'
+    // Anything else reaching here is malformed framing, which is INTERNAL.
+    //
+    // Matching on the type rather than on message text: the first attempt at
+    // this looked for 'too large' and missed the buffer-overflow wording, so a
+    // 20KB request against a 4KB limit still came back as Internal.
+    final status = error is RpcException
+        ? RpcStatus.resourceExhausted
+        : RpcStatus.internal;
+
+    try {
+      final trailers = RpcMetadata.forTrailer(status, message: '$error');
+      unawaited(
+        sendMetadata(streamId, trailers, endStream: true).catchError((_) {}),
+      );
+    } catch (_) {
+      // The stream may already be closed; the emitted error covers our side.
     }
   }
 
