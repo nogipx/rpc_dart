@@ -747,6 +747,45 @@ class RpcHttp2CallerTransport
           stackTrace: stackTrace,
         );
 
+        // A peer RESET is a gRPC status, not a package:http2 exception.
+        //
+        // RST_STREAM is how a real gRPC server aborts one call while the
+        // connection stays healthy: a server-side deadline, a server at
+        // capacity refusing the stream, a proxy dropping it. Measured against
+        // a raw package:http2 server that reset the stream, every shape came
+        // back as `StreamTransportException: HTTP/2 error: Stream error:
+        // Stream was terminated by peer (errorCode: 8)` -- before any
+        // response, after headers, and mid server-stream alike.
+        //
+        // Nothing above the transport can act on that: RpcRetryInterceptor,
+        // circuit breakers and failover all key off the gRPC status, so a
+        // REFUSED_STREAM from an overloaded server -- which is safe to retry,
+        // because the server never processed the request -- was as
+        // unclassifiable as a deliberate CANCEL. Same defect as the raw
+        // StateError on a drained connection (ff1f6337) and as non-200
+        // statuses collapsing to INTERNAL (e4756025).
+        //
+        // The code is mapped through the spec table rather than flattened to
+        // one status on purpose: CANCEL must NOT be retried and
+        // REFUSED_STREAM must be, so a blanket answer is wrong in one
+        // direction or the other.
+        if (error is http2.StreamTransportException) {
+          final code = http2ErrorCodeFromMessage(error.message);
+          final status = code == null
+              ? RpcStatus.internal
+              : grpcStatusFromHttp2ErrorCode(code);
+          _emitStreamError(
+            streamId,
+            RpcStatusException(
+              status,
+              'HTTP/2 stream $streamId was reset by the peer'
+              '${code == null ? '' : ' (errorCode: $code)'}',
+            ),
+            stackTrace,
+          );
+          return;
+        }
+
         _emitStreamError(streamId, error, stackTrace);
       },
       onDone: () {

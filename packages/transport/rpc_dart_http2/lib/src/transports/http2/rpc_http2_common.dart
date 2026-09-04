@@ -241,6 +241,52 @@ int grpcStatusFromHttpStatus(int httpStatus) => switch (httpStatus) {
   _ => RpcStatus.unknown,
 };
 
+/// gRPC status for an HTTP/2 stream that the peer RESET.
+///
+/// The table is the one in gRPC's PROTOCOL-HTTP2.md, and the distinctions in
+/// it are load-bearing:
+///
+/// - `REFUSED_STREAM` means the server never processed the request, so it is
+///   safe to retry even a non-idempotent call — hence `unavailable`, which is
+///   what [RpcRetryInterceptor] retries. A server at capacity refuses streams.
+/// - `CANCEL` is a deliberate abort, so it maps to `cancelled` and is NOT
+///   retried. Retrying a cancelled call would re-run side effects the peer
+///   asked to stop.
+/// - `ENHANCE_YOUR_CALM` is the flow-control "you are shouting" signal, which
+///   gRPC calls `resourceExhausted` — also retryable, with backoff.
+///
+/// Anything unrecognised is `internal`, deliberately: it is the spec's default
+/// for an unexpected stream termination AND the safe one, because it is not
+/// retried. Guessing `unavailable` here would retry aborts that must not be.
+int grpcStatusFromHttp2ErrorCode(int errorCode) => switch (errorCode) {
+  7 => RpcStatus.unavailable, // REFUSED_STREAM
+  8 => RpcStatus.cancelled, // CANCEL
+  11 => RpcStatus.resourceExhausted, // ENHANCE_YOUR_CALM
+  12 => RpcStatus.permissionDenied, // INADEQUATE_SECURITY
+  13 => RpcStatus.unknown, // HTTP_1_1_REQUIRED
+  _ => RpcStatus.internal,
+};
+
+/// Recovers the HTTP/2 error code from package:http2's stream-reset exception.
+///
+/// package:http2 does not expose the code as a field — `StreamTransportException`
+/// carries only a formatted message — so it has to be read back out of the
+/// text. That is grounded rather than guessed: the package has exactly ONE
+/// construction site for this exception, in `stream_handler.dart`, with one
+/// format:
+///
+///     'Stream was terminated by peer (errorCode: ${frame.errorCode}).'
+///
+/// A test pins that format, so a package:http2 change fails loudly in CI
+/// instead of silently degrading every reset to `internal`.
+///
+/// Returns null when no code can be read, and callers fall back to `internal`.
+int? http2ErrorCodeFromMessage(String message) {
+  final match = RegExp(r'errorCode:\s*(\d+)').firstMatch(message);
+  if (match == null) return null;
+  return int.tryParse(match.group(1)!);
+}
+
 /// Extracts the `:method` pseudo-header value from raw HTTP/2 headers.
 ///
 /// Returns null when absent, which for a request means the peer sent a
