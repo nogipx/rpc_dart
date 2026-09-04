@@ -151,7 +151,43 @@ class RpcHttp2Server implements IRpcServer {
         _logger?.warning('Ошибка при закрытии endpoint: $error');
       }),
     );
-    _onConnectionClosed?.call(socket);
+    _notify('onConnectionClosed', () => _onConnectionClosed?.call(socket));
+  }
+
+  /// Invokes an observability callback without letting it take the process out.
+  ///
+  /// These callbacks run on DETACHED paths -- [_handleConnection] off the
+  /// server socket's listen, [_releaseEndpoint] off `socket.done`'s
+  /// then/catchError -- so a throw has no handler above it and reaches the root
+  /// zone, where an unhandled async error kills the isolate.
+  ///
+  /// Measured: a callback that throws from `onConnectionOpened` ended the
+  /// process outright --
+  ///   Unhandled exception: Bad state: user callback failed on open
+  ///   #1 RpcHttp2Server._handleConnection (rpc_http2_server.dart:260)
+  ///   #2 _RootZone.runUnaryGuarded
+  /// -- because that call sits outside the try below. `onConnectionClosed` is
+  /// conditionally fatal: a throw on the graceful `.then` path is absorbed by
+  /// the `.catchError` that follows it, but a throw on the `.catchError` path
+  /// has nothing after it and escapes the same way.
+  ///
+  /// Reaching this needs no misuse. A callback that reads `socket.remotePort`
+  /// on close throws `OS Error 22` by itself, because the peer is already gone.
+  ///
+  /// Deliberately NOT applied to [_onEndpointCreated]: that one registers the
+  /// contracts, so if it fails the connection is useless. The surrounding
+  /// try/catch already reports it and destroys the socket, which is the right
+  /// outcome -- swallowing it would start an endpoint that serves nothing.
+  void _notify(String what, void Function() body) {
+    try {
+      body();
+    } catch (error, stackTrace) {
+      _logger?.error(
+        'Ошибка в пользовательском callback $what',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Запущен ли сервер
@@ -199,7 +235,10 @@ class RpcHttp2Server implements IRpcServer {
             error: error,
             stackTrace: stackTrace,
           );
-          _onConnectionError?.call(error, stackTrace);
+          _notify(
+            'onConnectionError',
+            () => _onConnectionError?.call(error, stackTrace),
+          );
         },
       );
 
@@ -257,7 +296,7 @@ class RpcHttp2Server implements IRpcServer {
     final clientAddress = '${socket.remoteAddress}:${socket.remotePort}';
     _logger?.debug('Новое HTTP/2 подключение от $clientAddress');
 
-    _onConnectionOpened?.call(socket);
+    _notify('onConnectionOpened', () => _onConnectionOpened?.call(socket));
 
     try {
       // Создаем HTTP/2 соединение
@@ -279,7 +318,10 @@ class RpcHttp2Server implements IRpcServer {
             error: error,
             stackTrace: stackTrace,
           );
-          _onConnectionError?.call(error, stackTrace);
+          _notify(
+            'onConnectionError',
+            () => _onConnectionError?.call(error, stackTrace),
+          );
           socket.destroy();
           return;
         }
@@ -320,7 +362,10 @@ class RpcHttp2Server implements IRpcServer {
         error: e,
         stackTrace: stackTrace,
       );
-      _onConnectionError?.call(e, stackTrace);
+      _notify(
+        'onConnectionError',
+        () => _onConnectionError?.call(e, stackTrace),
+      );
       socket.destroy();
     }
   }

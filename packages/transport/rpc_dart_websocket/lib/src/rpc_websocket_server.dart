@@ -106,7 +106,7 @@ class RpcWebSocketServer implements IRpcServer {
       },
       onError: (Object error, StackTrace st) {
         _logger?.error('Connection stream error', error: error, stackTrace: st);
-        _onConnectionError?.call(error, st);
+        _notify('onConnectionError', () => _onConnectionError?.call(error, st));
       },
       cancelOnError: false,
     );
@@ -151,11 +151,42 @@ class RpcWebSocketServer implements IRpcServer {
         _logger?.warning('Error closing endpoint on disconnect: $error');
       }),
     );
-    _onConnectionClosed?.call(channel);
+    _notify('onConnectionClosed', () => _onConnectionClosed?.call(channel));
+  }
+
+  /// Invokes an observability callback without letting it take the process out.
+  ///
+  /// These run on DETACHED paths -- [_handleConnection] off the connections
+  /// stream, [_releaseEndpoint] off `sink.done`'s then/catchError -- so a throw
+  /// has no handler above it and reaches the root zone, where an unhandled
+  /// async error kills the isolate.
+  ///
+  /// Measured on the sibling HTTP/2 server, which has the identical shape: a
+  /// callback throwing from `onConnectionOpened` ended the process --
+  ///   Unhandled exception: Bad state: user callback failed on open
+  ///   #1 RpcHttp2Server._handleConnection
+  ///   #2 _RootZone.runUnaryGuarded
+  /// -- because that call sits outside the try below.
+  ///
+  /// Deliberately NOT applied to [_onEndpointCreated] / [_onPeerEndpointCreated]:
+  /// those register the contracts, so if one fails the connection is useless.
+  /// The surrounding try/catch already reports it and closes the socket, which
+  /// is the right outcome -- swallowing it would start an endpoint that serves
+  /// nothing.
+  void _notify(String what, void Function() body) {
+    try {
+      body();
+    } catch (error, stackTrace) {
+      _logger?.error(
+        'User callback $what threw',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   void _handleConnection(WebSocketChannel channel, String clientLabel) {
-    _onConnectionOpened?.call(channel);
+    _notify('onConnectionOpened', () => _onConnectionOpened?.call(channel));
     try {
       final transport = RpcWebSocketResponderTransport(
         channel,
@@ -195,7 +226,7 @@ class RpcWebSocketServer implements IRpcServer {
         error: e,
         stackTrace: st,
       );
-      _onConnectionError?.call(e, st);
+      _notify('onConnectionError', () => _onConnectionError?.call(e, st));
       channel.sink.close();
     }
   }
