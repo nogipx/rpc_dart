@@ -58,6 +58,14 @@ class RpcHttp2CallerTransport
   /// Парсеры для каждого stream (для фрагментированных сообщений)
   final Map<int, RpcMessageParser> _streamParsers = {};
 
+  /// Streams this side has already half-closed by sending END_STREAM.
+  ///
+  /// HTTP/2 forbids a DATA frame on a stream that is half-closed (local), and
+  /// package:http2 answers that violation by tearing down the whole CONNECTION
+  /// -- not just the stream. Every path that ends the request direction records
+  /// the id here so no later path sends a second one.
+  final Set<int> _halfClosedLocal = {};
+
   /// Tracks streams where initial response headers have been received.
   /// Used to distinguish trailers from initial response headers on incoming.
   final Set<int> _initialHeadersReceived = {};
@@ -359,17 +367,29 @@ class RpcHttp2CallerTransport
 
     _logger?.internal('Освобождение stream: $streamId');
 
-    // Закрываем HTTP/2 stream мягко если он активен
+    // Release must not WRITE to the stream. This used to send
+    // `sendData(Uint8List(0), endStream: true)`, but by the time the pipeline
+    // releases an id the request direction is already finished -- every call
+    // ends with END_STREAM -- so that was a DATA frame on a half-closed
+    // (local) stream. package:http2 treats it as a connection error and
+    // terminates the CONNECTION, taking every other call on it down too, and
+    // the throw is asynchronous so the try/catch here never saw it.
+    //
+    // Measured on a default client/server pair, one connection:
+    //   before: 4 of 40 sequential unary calls, then "Connection error:
+    //           Connection is being forcefully terminated"
+    //   after : 40 of 40, and 8 of 8 concurrent rounds
+    //
+    // A stream that has NOT been half-closed yet is one the caller abandoned
+    // mid-request; RST_STREAM is the legal way to drop that, and terminate()
+    // is what resetStream already uses.
     final stream = _activeStreams.remove(streamId);
-    if (stream != null) {
+    if (stream != null && !_halfClosedLocal.contains(streamId)) {
       try {
-        stream.sendData(Uint8List(0), endStream: true);
-        _logger?.internal(
-          'Отправлен END_STREAM при освобождении stream $streamId',
-        );
-      } catch (e) {
-        _logger?.internal('Используем terminate для stream $streamId: $e');
         stream.terminate();
+        _logger?.internal('RST_STREAM для незавершённого stream $streamId');
+      } catch (e) {
+        _logger?.internal('Не удалось сбросить stream $streamId: $e');
       }
     }
 
@@ -380,6 +400,7 @@ class RpcHttp2CallerTransport
     // Удаляем парсер и tracking для этого stream
     _streamParsers.remove(streamId);
     _initialHeadersReceived.remove(streamId);
+    _halfClosedLocal.remove(streamId);
 
     return true;
   }
@@ -411,6 +432,7 @@ class RpcHttp2CallerTransport
     // Создаем HTTP/2 stream
     final stream = _connection.makeRequest(headers, endStream: endStream);
     _activeStreams[streamId] = stream;
+    if (endStream) _halfClosedLocal.add(streamId);
 
     _logger?.internal(
       'HTTP/2 stream создан: $streamId (активных: ${_activeStreams.length})',
@@ -447,6 +469,7 @@ class RpcHttp2CallerTransport
     await _streamSubscriptions.remove(streamId)?.cancel();
     _streamParsers.remove(streamId);
     _initialHeadersReceived.remove(streamId);
+    _halfClosedLocal.remove(streamId);
     final controller = _streamControllers.remove(streamId);
     if (controller != null && !controller.isClosed) {
       unawaited(controller.close());
@@ -478,8 +501,17 @@ class RpcHttp2CallerTransport
       'IRpcTransport.sendMessage ожидает gRPC frame с 5-байтовым префиксом',
     );
 
+    if (_halfClosedLocal.contains(streamId)) {
+      // Already half-closed: another DATA frame is a connection error.
+      _logger?.warning(
+        'Отброшена отправка на уже завершённый stream $streamId',
+      );
+      return;
+    }
+
     // Отправляем данные через HTTP/2 как уже сформированный gRPC frame
     stream.sendData(data, endStream: endStream);
+    if (endStream) _halfClosedLocal.add(streamId);
 
     _logger?.internal('Данные отправлены для stream $streamId');
   }
@@ -491,10 +523,20 @@ class RpcHttp2CallerTransport
     final stream = _activeStreams[streamId];
     if (stream == null) return;
 
+    // Idempotent, like RpcChannelTransport.finishSending: a caller that
+    // already passed `endStream: true` to sendMessage/sendMetadata has closed
+    // the request direction, and a second END_STREAM would be a DATA frame on
+    // a half-closed stream -- a CONNECTION error in HTTP/2.
+    if (_halfClosedLocal.contains(streamId)) {
+      _logger?.internal('Stream $streamId уже завершён, повтор не нужен');
+      return;
+    }
+
     _logger?.internal('Завершение отправки для stream $streamId');
 
     // Отправляем END_STREAM
     stream.sendData(Uint8List(0), endStream: true);
+    _halfClosedLocal.add(streamId);
 
     _logger?.internal('Отправка завершена для stream $streamId');
   }
@@ -542,6 +584,7 @@ class RpcHttp2CallerTransport
         _streamSubscriptions.remove(streamId);
         _streamParsers.remove(streamId);
         _initialHeadersReceived.remove(streamId);
+        _halfClosedLocal.remove(streamId);
       },
     );
 
@@ -854,6 +897,7 @@ class RpcHttp2CallerTransport
     _streamParsers.clear();
     _activeStreams.clear();
     _initialHeadersReceived.clear();
+    _halfClosedLocal.clear();
 
     try {
       final connection = await _connectionFactory();
@@ -929,19 +973,17 @@ class RpcHttp2CallerTransport
     }
 
     // Закрываем все активные streams осторожно
-    final streamsToClose = List.from(_activeStreams.values);
+    // Same rule as releaseStreamId: never send DATA on a stream whose request
+    // direction is already finished. Only a stream still open locally is
+    // aborted, and RST_STREAM is the legal way to do that.
+    final streamsToClose = _activeStreams.entries
+        .where((e) => !_halfClosedLocal.contains(e.key))
+        .map((e) => e.value)
+        .toList();
     for (final stream in streamsToClose) {
       try {
-        // Вместо terminate() используем более мягкое закрытие
-        // Отправляем END_STREAM если stream еще открыт
-        try {
-          stream.sendData(Uint8List(0), endStream: true);
-          _logger?.internal('Отправлен END_STREAM для stream ${stream.id}');
-        } catch (streamError) {
-          // Если не можем отправить END_STREAM, значит stream уже закрыт
-          _logger?.internal('Stream ${stream.id} уже закрыт: $streamError');
-        }
-        // Не используем terminate() чтобы избежать RST_STREAM
+        stream.terminate();
+        _logger?.internal('RST_STREAM для stream ${stream.id} при закрытии');
       } catch (e) {
         _logger?.warning('Ошибка при закрытии stream ${stream.id}: $e');
         // В крайнем случае используем terminate
@@ -968,6 +1010,7 @@ class RpcHttp2CallerTransport
     // Очищаем парсеры и tracking
     _streamParsers.clear();
     _initialHeadersReceived.clear();
+    _halfClosedLocal.clear();
 
     // Закрываем per-stream контроллеры
     for (final ctl in _streamControllers.values) {
