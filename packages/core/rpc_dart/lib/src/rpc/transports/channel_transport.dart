@@ -238,7 +238,54 @@ class RpcChannelTransport
 
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
-    if (_closed) return const Stream.empty();
+    // A closed transport hands back an ERROR, not an empty stream.
+    //
+    // `const Stream.empty()` is done the moment it is listened to, so the
+    // caller's "response stream closed without a response" ran before anything
+    // had awaited the call's future -- and `completer.completeError` on a
+    // future with no listener yet is an unhandled async error. Measured on
+    // rpc_dart_isolate, with the worker isolate dying mid-call and the host
+    // then making one more call:
+    //
+    //   before: Unhandled exception: RpcStatusException(14): Stream closed
+    //           without receiving response   (no stack frames at all)
+    //           -- the HOST process ended, even though isClosed and health()
+    //           had already reported the truth
+    //
+    // Deliberately NOT fixed by throwing from createStream()/sendMetadata():
+    // this transport is documented to stay lenient after close ("use after
+    // close fails cleanly (no throw, no delivery)" pins it, and two more tests
+    // besides), unlike the HTTP callers which do throw. Only the shape of the
+    // per-stream view changes here, so that contract is untouched.
+    //
+    // Delivered on a TIMER, not on the microtask queue. The caller creates its
+    // completer, subscribes here, and only then returns the future the
+    // application awaits -- all within one microtask chain. An error raised on
+    // a microtask therefore lands on a future nobody has attached to yet, and
+    // Dart reports THAT as unhandled at once; attaching later does not retract
+    // it. A timer callback runs only after the microtask queue drains, by
+    // which point the await is in place, so the same error arrives as an
+    // ordinary failed call.
+    //
+    // Delivered on a TIMER, not on the microtask queue. The caller creates its
+    // completer, subscribes here, and only then returns the future the
+    // application awaits -- all within one microtask chain. An error raised on
+    // a microtask therefore lands on a future nobody has attached to yet, and
+    // Dart reports THAT as unhandled at once; attaching later does not retract
+    // it. A timer callback runs only after the microtask queue drains, by
+    // which point the await is in place, so the same error arrives as an
+    // ordinary failed call.
+    if (_closed) {
+      return Stream<RpcTransportMessage>.fromFuture(
+        Future<RpcTransportMessage>.delayed(
+          Duration.zero,
+          () => throw RpcStatusException(
+            RpcStatus.unavailable,
+            'Transport is closed; stream $streamId cannot receive a response',
+          ),
+        ),
+      );
+    }
     final existing = _streamControllers[streamId];
     if (existing != null) return _fcMetered(streamId, existing.stream);
     final ctl = StreamController<RpcTransportMessage>(
