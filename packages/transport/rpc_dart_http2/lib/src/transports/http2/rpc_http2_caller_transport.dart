@@ -166,6 +166,7 @@ class RpcHttp2CallerTransport
     Uri? proxyUri,
     LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    Duration proxyHandshakeTimeout = _proxyHandshakeTimeout,
   }) async {
     logger?.internal('Создание защищенного HTTP/2 соединения с $host:$port');
 
@@ -176,6 +177,7 @@ class RpcHttp2CallerTransport
           targetHost: host,
           targetPort: port,
           secure: true,
+          handshakeTimeout: proxyHandshakeTimeout,
         );
       }
       final socket = await SecureSocket.connect(
@@ -242,6 +244,7 @@ class RpcHttp2CallerTransport
     Uri? proxyUri,
     LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    Duration proxyHandshakeTimeout = _proxyHandshakeTimeout,
   }) async {
     logger?.internal('Создание HTTP/2 соединения с $host:$port');
 
@@ -252,6 +255,7 @@ class RpcHttp2CallerTransport
           targetHost: host,
           targetPort: port,
           secure: false,
+          handshakeTimeout: proxyHandshakeTimeout,
         );
       }
       final socket = await Socket.connect(host, port);
@@ -278,11 +282,32 @@ class RpcHttp2CallerTransport
   /// subscription that is kept alive (non-TLS) or cancelled before TLS upgrade.
   /// This avoids re-subscribing to a single-subscription Socket stream, which
   /// would throw StateError when http2 tries to call socket.listen() again.
+  /// How long a proxy has to answer CONNECT before the attempt is abandoned.
+  ///
+  /// There was no timeout at all, and `connect()` is what an application
+  /// awaits at startup. Measured against a proxy that accepts the TCP
+  /// connection and then says nothing: connect() was still pending after 8s
+  /// and would never have settled.
+  static const Duration _proxyHandshakeTimeout = Duration(seconds: 30);
+
+  /// Ceiling on a proxy's CONNECT response headers.
+  ///
+  /// `headerBuf` grew until CRLFCRLF appeared, with no bound, so a proxy that
+  /// streams headers forever is an OOM on the client: measured at **268 MiB of
+  /// RSS in 6 seconds** and still climbing. A real CONNECT response is a status
+  /// line and a handful of headers; 64 KiB is already absurdly generous.
+  ///
+  /// A proxy is a machine on the path and often not the operator's, so
+  /// trusting it without bound is the wrong default -- the same reasoning that
+  /// bounds a response body in e8c5bc9f.
+  static const int _maxProxyHeaderBytes = 64 * 1024;
+
   static Future<http2.ClientTransportConnection> _connectH2ViaProxy({
     required Uri proxyUri,
     required String targetHost,
     required int targetPort,
     required bool secure,
+    Duration handshakeTimeout = _proxyHandshakeTimeout,
   }) async {
     final proxyHost = proxyUri.host;
     final proxyPort = proxyUri.hasPort ? proxyUri.port : 3128;
@@ -319,6 +344,18 @@ class RpcHttp2CallerTransport
           return;
         }
         headerBuf.addAll(chunk);
+        if (headerBuf.length > _maxProxyHeaderBytes) {
+          rawSocket.destroy();
+          if (!handshake.isCompleted) {
+            handshake.completeError(
+              SocketException(
+                'HTTP proxy sent more than $_maxProxyHeaderBytes bytes of '
+                'CONNECT response headers without terminating them',
+              ),
+            );
+          }
+          return;
+        }
         final endIdx = _indexOfEndOfHeaders(headerBuf);
         if (endIdx == -1) return;
 
@@ -359,12 +396,38 @@ class RpcHttp2CallerTransport
       },
     );
 
-    await handshake.future;
+    // Bounded, and the socket is released on the way out: abandoning the await
+    // without destroying the socket would leak it -- Future.timeout abandons
+    // the await, not the work.
+    try {
+      await handshake.future.timeout(handshakeTimeout);
+    } catch (error) {
+      await sub.cancel();
+      // NOT awaited. `forwardCtrl` is single-subscription and nothing has
+      // listened to it on this path, and closing a never-listened controller
+      // returns a future that does not complete until someone does. Awaiting
+      // it deadlocked the very timeout being added here: the 2s bound fired
+      // and then cleanup hung forever, which looked exactly like no timeout at
+      // all.
+      unawaited(forwardCtrl.close());
+      rawSocket.destroy();
+      if (error is TimeoutException) {
+        throw SocketException(
+          'HTTP proxy did not answer CONNECT within $handshakeTimeout',
+        );
+      }
+      rethrow;
+    }
 
     if (secure) {
       // Cancel our sub so SecureSocket.secure() (via _detachRaw) can attach.
       await sub.cancel();
-      await forwardCtrl.close();
+      // NOT awaited, for the same reason as the timeout path above: on the TLS
+      // branch nothing ever listens to `forwardCtrl` (http2 reads from the
+      // SecureSocket instead), so awaiting its close never returns and
+      // secureConnect through a proxy hung forever AFTER a successful CONNECT
+      // handshake -- TLS was never even attempted.
+      unawaited(forwardCtrl.close());
       final secureSocket = await SecureSocket.secure(
         rawSocket,
         host: targetHost,
