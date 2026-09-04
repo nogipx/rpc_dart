@@ -115,8 +115,22 @@ class RpcHttpServer implements IRpcServer {
       _endpoint != null ? [_endpoint!] : const [];
 
   /// Creates the transport. Port binding is deferred to [afterModulesStart].
+  ///
+  /// Calling this twice is a no-op, as it is on both sibling servers
+  /// ([RpcHttp2Server] and `RpcWebSocketServer` each open with
+  /// `if (_isRunning) return;`). Without the guard the second call overwrote
+  /// [_transport], and the first one — already handed to an endpoint if phase
+  /// two had run — became unreachable to [stop].
+  ///
+  /// The guard is on [_transport], not on [isRunning]: [isRunning] only goes
+  /// true at the END of [afterModulesStart], so between the two phases it
+  /// reports false while a transport very much exists.
   @override
   Future<void> start() async {
+    if (_transport != null) {
+      _logger?.warning('start() called again; the server is already set up');
+      return;
+    }
     _transport = RpcHttpResponderTransport(
       corsPolicy: _corsPolicy,
       securityPolicy: _securityPolicy,
@@ -138,12 +152,34 @@ class RpcHttpServer implements IRpcServer {
   /// handler via [Cascade]. Use it for webhook endpoints or other HTTP
   /// concerns that must be handled before RPC routing.
   Future<void> afterModulesStart({Handler? preamble}) async {
+    // Same reasoning as the guard in start(), with a much sharper consequence:
+    // a second call re-bound a second port and overwrote _httpServer, so the
+    // FIRST listener stayed open with nothing holding it. Measured, both ports
+    // probed with a real HTTP request after stop():
+    //
+    //   first  bind : 58355 -> HTTP 200  (before stop)
+    //   after stop(): 58355 -> HTTP 503, still listening, forever
+    //                 58357 -> no answer (correctly closed)
+    //   contracts disposed: [1]  -- endpoint #0 was never released
+    //
+    // A dead server squatting on a port and answering 503 to everything is
+    // worse than a closed one: a supervisor that rebinds cannot, and a health
+    // check that only looks for a live socket says the port is fine.
+    if (_httpServer != null) {
+      _logger?.warning(
+        'afterModulesStart() called again; already listening on '
+        'http://$_host:${_httpServer!.port}',
+      );
+      return;
+    }
+
     final transport = _transport!;
-    _endpoint = RpcResponderEndpoint(
+    final endpoint = RpcResponderEndpoint(
       transport: transport,
       logger: _logController,
     );
-    _onEndpointCreated(_endpoint!);
+    _endpoint = endpoint;
+    _onEndpointCreated(endpoint);
 
     // Start the endpoint here, as both sibling servers do
     // (RpcHttp2Server._handleConnection and RpcWebSocketServer
@@ -161,7 +197,7 @@ class RpcHttpServer implements IRpcServer {
     // Safe when the application starts it too: startResponderListening()
     // guards on `_respIsListening` precisely because the http2 server and the
     // shipped examples both do this.
-    _endpoint!.start();
+    endpoint.start();
 
     final Handler handler;
     if (preamble != null) {
@@ -170,17 +206,88 @@ class RpcHttpServer implements IRpcServer {
       handler = transport.handler;
     }
 
-    _httpServer = await shelf_io.serve(handler, _host, _port);
+    try {
+      _httpServer = await shelf_io.serve(handler, _host, _port);
+    } catch (_) {
+      // The bind is the one fallible step here, and it fails for the most
+      // ordinary reason there is: the port is taken. The endpoint above has
+      // already been created, handed to onEndpointCreated (so it holds the
+      // application's contracts) and started. Release it, because until this
+      // catch existed nothing could -- stop() gave up on `!_isRunning`, and
+      // _isRunning is set on the line after the bind. Measured, counting
+      // contract dispose() calls after a failed bind followed by stop():
+      //
+      //   disposed = []      endpoints = 1
+      //
+      // i.e. the app's contracts kept everything they held for the life of the
+      // process, and server.endpoints still handed out the dead endpoint.
+      _endpoint = null;
+      try {
+        await endpoint.close();
+      } catch (e) {
+        _logger?.warning('Error closing endpoint after a failed bind: $e');
+      }
+      // Put the server back exactly where start() left it, so the ordinary
+      // response to "address in use" -- wait and call afterModulesStart()
+      // again -- still works. RpcEndpointBase.close() closes the transport it
+      // was handed, so without this rebuild the retry bound successfully and
+      // then answered 503 to every request:
+      //
+      //   retry bound      : ok on 59296
+      //   call after retry : RpcStatusException(14): HTTP 503 from /Svc/echo
+      //
+      // which trades a leak for silent unavailability -- a worse bug than the
+      // one being fixed.
+      _transport = RpcHttpResponderTransport(
+        corsPolicy: _corsPolicy,
+        securityPolicy: _securityPolicy,
+        bodyReadTimeout: _bodyReadTimeout,
+        logger: _logger,
+      );
+      rethrow;
+    }
     _isRunning = true;
-    _logger?.info('Listening on http://$_host:$_port');
+    _logger?.info('Listening on http://$_host:${_httpServer!.port}');
   }
 
+  /// Releases everything this server owns, whichever phase it reached.
+  ///
+  /// Deliberately NOT guarded on [isRunning]. That flag means "phase two
+  /// finished", and it is set on the last line of [afterModulesStart] -- so
+  /// guarding on it made stop() a no-op for every state in which setup was
+  /// abandoned partway, which is exactly when cleanup matters. Each field is
+  /// taken and cleared before it is closed, so this stays idempotent and so a
+  /// later [start] begins from a clean slate.
   @override
   Future<void> stop() async {
-    if (!_isRunning) return;
     _isRunning = false;
-    await _httpServer?.close(force: true);
-    await _endpoint?.close();
+
+    final httpServer = _httpServer;
+    final endpoint = _endpoint;
+    final transport = _transport;
+    _httpServer = null;
+    _endpoint = null;
+    _transport = null;
+
+    // Listener first: no new request can arrive while the endpoint is closing.
+    try {
+      await httpServer?.close(force: true);
+    } catch (e) {
+      _logger?.warning('Error closing the HTTP server: $e');
+    }
+    try {
+      await endpoint?.close();
+    } catch (e) {
+      _logger?.warning('Error closing endpoint: $e');
+    }
+    // Closing the endpoint closes the transport it was given; this covers the
+    // case where start() ran and afterModulesStart() never did, so there is a
+    // transport but no endpoint to carry it.
+    try {
+      await transport?.close();
+    } catch (e) {
+      _logger?.warning('Error closing transport: $e');
+    }
     _logger?.debug('Stopped');
   }
 }
