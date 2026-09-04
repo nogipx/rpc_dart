@@ -123,7 +123,27 @@ class RpcWebSocketCallerTransport
         // transport in `RpcClientConnection` instead.
         // Without a factory there is nothing to recover to, so close fully.
         if (_closed) return;
-        if (_reconnectFactory != null) return;
+        if (_reconnectFactory != null) {
+          // Staying un-closed is right; staying SILENT about it was not. The
+          // inner transport has closed itself, and RpcChannelTransport answers
+          // a closed transport quietly -- sendMetadata is a no-op,
+          // getMessagesForStream returns Stream.empty() -- so a call made after
+          // the peer died reached it and the pipeline raised
+          // RpcStatusException(14) from a detached subscription, into the ROOT
+          // zone, killing the isolate.
+          //
+          // Measured: peer dies, one call ->
+          //   Unhandled exception: RpcStatusException(14): Stream closed
+          //   without receiving response
+          // while isClosed reported false and health(), delegating to the
+          // closed inner transport, reported "Transport is closed".
+          //
+          // Same fault 3bfa7715 fixed on the FAILED-RECONNECT path; this is the
+          // plain peer-death path, which needs no reconnect call at all and so
+          // is reached by any server restart or dropped network.
+          _disconnected = true;
+          return;
+        }
         close();
       },
     );

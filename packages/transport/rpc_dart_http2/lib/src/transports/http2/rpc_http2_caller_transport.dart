@@ -608,6 +608,7 @@ class RpcHttp2CallerTransport
   Map<String, Object?> _buildHealthDetails() => {
     'isClosed': _isClosed,
     'disconnected': _disconnected,
+    'connectionOpen': _connection.isOpen,
     'activeStreams': _activeStreams.length,
     'pendingSubscriptions': _streamSubscriptions.length,
     'pendingParsers': _streamParsers.length,
@@ -954,6 +955,24 @@ class RpcHttp2CallerTransport
     }
 
     if (_disconnected) {
+      return RpcHealthStatus.degraded(
+        component: runtimeType.toString(),
+        message: 'HTTP/2 connection is down. Reconnect is required.',
+        details: details,
+      );
+    }
+
+    // Ask the connection, do not assume. Nothing sets `_disconnected` when the
+    // PEER dies on its own -- that path runs no code here at all -- so health()
+    // reported "transport ready" with the server gone. A supervisor that polls
+    // health to decide whether to reconnect would never reconnect.
+    //
+    // Measured: server stopped, then
+    //   isClosed        : false
+    //   health          : HTTP/2 transport ready   <-- the peer was gone
+    //   call after death: caught StateError
+    // The call already failed honestly; only the report was wrong.
+    if (!_connection.isOpen) {
       return RpcHealthStatus.degraded(
         component: runtimeType.toString(),
         message: 'HTTP/2 connection is down. Reconnect is required.',
