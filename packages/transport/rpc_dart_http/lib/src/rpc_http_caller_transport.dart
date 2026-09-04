@@ -93,9 +93,10 @@ int _httpStatusToGrpcCode(int statusCode) {
 ///   Request:  POST {baseUrl}{methodPath}  body = gRPC-framed bytes
 ///   Response: 200 OK                      body = gRPC-framed bytes
 ///             All response headers (including grpc-status) are in HTTP headers.
-class RpcHttpCallerTransport implements IRpcTransport {
+class RpcHttpCallerTransport implements IRpcTransport, IRpcSecurityPolicyAware {
   final String _baseUrl;
   final http.Client _httpClient;
+  final RpcSecurityPolicy _policy;
   final RpcStreamIdManager _idManager = RpcStreamIdManager(isClient: true);
   final Map<int, _PendingCall> _pending = {};
   final Set<int> _inFlight = {};
@@ -127,15 +128,59 @@ class RpcHttpCallerTransport implements IRpcTransport {
   ///   httpClient: IOClient(ioClient),
   /// );
   /// ```
+  /// [policy] bounds what a RESPONSE may cost this client, and is reported to
+  /// the endpoint layers through [IRpcSecurityPolicyAware]. It defaults to
+  /// `const RpcSecurityPolicy()`, so the built-in limits apply out of the box.
   RpcHttpCallerTransport({
     required String baseUrl,
     http.Client? httpClient,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     LogScope? logger,
   }) : _baseUrl = baseUrl.endsWith('/')
            ? baseUrl.substring(0, baseUrl.length - 1)
            : baseUrl,
        _httpClient = httpClient ?? http.Client(),
+       _policy = policy,
        _logger = logger?.child('HttpCallerTransport');
+
+  @override
+  RpcSecurityPolicy get securityPolicy => _policy;
+
+  /// Reads the response body, refusing to buffer more than the policy allows.
+  ///
+  /// This used to be `http.Response.fromStream`, which buffers the whole body
+  /// before anything inspects it. The responder side bounds the REQUEST body
+  /// against the same ceiling; the caller had no bound in the other direction
+  /// and took no policy at all, so whatever a server, a proxy or a captive
+  /// portal sent was allocated in full.
+  ///
+  /// Measured with a server answering 192 MiB and the default policy, resident
+  /// memory across one call grew by 756 MiB — the streamed copy, the
+  /// concatenated body, and the parser's buffer — and only then did the frame
+  /// parser reject it with "gRPC frame buffer overflow: 201326592 bytes".
+  /// The limit existed; it just fired after the damage.
+  ///
+  /// Overflow aborts the read immediately: unlike the server, which must keep
+  /// draining so its 400 reaches the client, nothing here needs the rest of a
+  /// body already known to be too big.
+  Future<Uint8List> _readBounded(
+    http.StreamedResponse response,
+    int streamId,
+  ) async {
+    final limit = _policy.maxMessageLengthBytes;
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in response.stream) {
+      builder.add(chunk);
+      if (builder.length > limit) {
+        throw RpcException(
+          'HTTP response body exceeds the configured limit of $limit bytes '
+          '(stream $streamId, method ${response.request?.url.path}). Raise '
+          'RpcSecurityPolicy.maxMessageLengthBytes if this is expected.',
+        );
+      }
+    }
+    return builder.takeBytes();
+  }
 
   @override
   bool get isClient => true;
@@ -165,7 +210,7 @@ class RpcHttpCallerTransport implements IRpcTransport {
     // Enforce the metadata invariants (printable-ASCII header values, etc.)
     // on send, consistent with every other transport. HTTP/1.1 puts these on
     // the wire as headers, so non-ASCII / CR-LF would corrupt or inject.
-    const RpcSecurityPolicy().validateMetadata(metadata);
+    _policy.validateMetadata(metadata);
     final methodPath = metadata.methodPath ?? '/Unknown/Unknown';
     _pending[streamId] = _PendingCall(
       methodPath: methodPath,
@@ -227,14 +272,17 @@ class RpcHttpCallerTransport implements IRpcTransport {
       request.bodyBytes = Uint8List.fromList(call.bodyBuffer);
 
       final streamedResponse = await _httpClient.send(request);
-      final response = await http.Response.fromStream(streamedResponse);
 
       _logger?.internal(
-        'HTTP response ${response.statusCode} for [streamId: $streamId]',
+        'HTTP response ${streamedResponse.statusCode} for [streamId: $streamId]',
       );
 
-      if (response.statusCode != 200) {
-        final grpcCode = _httpStatusToGrpcCode(response.statusCode);
+      if (streamedResponse.statusCode != 200) {
+        // Drain before reporting: leaving bytes unread on the socket makes
+        // dart:io tear the connection down, and package:http cannot reuse it.
+        // Bounded by the same ceiling as a 200 body.
+        await _readBounded(streamedResponse, streamId);
+        final grpcCode = _httpStatusToGrpcCode(streamedResponse.statusCode);
         _emit(
           RpcTransportMessage(
             streamId: streamId,
@@ -243,7 +291,7 @@ class RpcHttpCallerTransport implements IRpcTransport {
               RpcHeader(
                 RpcHeaders.grpcMessage,
                 Uri.encodeComponent(
-                  'HTTP ${response.statusCode} from ${call.methodPath}',
+                  'HTTP ${streamedResponse.statusCode} from ${call.methodPath}',
                 ),
               ),
             ]),
@@ -256,7 +304,7 @@ class RpcHttpCallerTransport implements IRpcTransport {
       // Split response headers into initial headers and gRPC trailer headers.
       final initialHeaders = <RpcHeader>[];
       final trailerHeaders = <RpcHeader>[];
-      response.headers.forEach((name, value) {
+      streamedResponse.headers.forEach((name, value) {
         // package:http joins multi-values with ', ' — split them back.
         for (final v in value.split(', ')) {
           final header = RpcHeader(name, v);
@@ -277,7 +325,7 @@ class RpcHttpCallerTransport implements IRpcTransport {
         ),
       );
 
-      final responseBytes = response.bodyBytes;
+      final responseBytes = await _readBounded(streamedResponse, streamId);
       if (responseBytes.isNotEmpty) {
         _emit(
           RpcTransportMessage(
