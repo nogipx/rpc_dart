@@ -145,6 +145,24 @@ class RpcHttpServer implements IRpcServer {
     );
     _onEndpointCreated(_endpoint!);
 
+    // Start the endpoint here, as both sibling servers do
+    // (RpcHttp2Server._handleConnection and RpcWebSocketServer
+    // ._handleConnection each call endpoint.start() right after their own
+    // onEndpointCreated). This one did not, so an application written by
+    // analogy registered its contracts and got a server that accepted
+    // connections and answered nothing at all:
+    //
+    //   app calls endpoint.start()        : echo-ok
+    //   app does NOT call endpoint.start(): HUNG, the server answered nothing
+    //
+    // A silent hang, with no error on either side, for a callback the other
+    // two servers do not require.
+    //
+    // Safe when the application starts it too: startResponderListening()
+    // guards on `_respIsListening` precisely because the http2 server and the
+    // shipped examples both do this.
+    _endpoint!.start();
+
     final Handler handler;
     if (preamble != null) {
       handler = Cascade().add(preamble).add(transport.handler).handler;
