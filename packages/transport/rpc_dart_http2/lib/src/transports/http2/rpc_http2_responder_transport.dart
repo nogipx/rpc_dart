@@ -173,7 +173,57 @@ class RpcHttp2ResponderTransport
       );
 
       _emitStreamError(streamId, e, stackTrace);
+      _answerRejectedStream(streamId, e);
     }
+  }
+
+  /// Answers a request this transport refused before the pipeline ever saw it.
+  ///
+  /// A header frame that fails [RpcSecurityPolicy.validateMetadata] throws out
+  /// of [_handleIncomingHeaders] BEFORE [_emit], so the responder pipeline gets
+  /// no state for the stream and never replies. The peer was left waiting, and
+  /// the HTTP/2 stream stayed in [_incomingStreams] forever.
+  ///
+  /// Measured with a `:path` carrying no leading slash -- which the policy
+  /// rejects, and which only a foreign peer can send, since rpc_dart's own
+  /// caller always builds the path itself:
+  ///
+  ///   20 requests sent, 0 answered
+  ///   server transport : incomingStreams: 20
+  ///   responder        : openStreams: 20
+  ///
+  /// The peer chooses the path, so that is an unauthenticated way to pin
+  /// `maxActiveStreams` worth of slots with requests that can never complete.
+  /// [_emitStreamError] alone does not help: it reports inward, to a pipeline
+  /// with nothing to attach the error to.
+  ///
+  /// Sent as Trailers-Only (the stream has no initial headers yet), and
+  /// detached with its own guard, because this runs on the connection's listen
+  /// callback where a throw would reach the root zone.
+  void _answerRejectedStream(int streamId, Object error) {
+    if (_isClosed) return;
+    if (!_incomingStreams.containsKey(streamId)) return;
+
+    final status = error is ArgumentError
+        ? RpcStatus.invalidArgument
+        : RpcStatus.internal;
+    final message = error is ArgumentError
+        ? (error.message?.toString() ?? 'Invalid request metadata')
+        : 'Request rejected: $error';
+
+    unawaited(() async {
+      try {
+        await sendMetadata(
+          streamId,
+          RpcMetadata.forTrailer(status, message: message),
+          endStream: true,
+        );
+      } catch (e) {
+        _logger?.warning('Не удалось отклонить stream $streamId: $e');
+      } finally {
+        releaseStreamId(streamId);
+      }
+    }());
   }
 
   /// Обрабатывает входящие HTTP/2 headers от клиента
