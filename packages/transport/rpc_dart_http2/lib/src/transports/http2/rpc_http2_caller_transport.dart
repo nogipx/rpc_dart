@@ -97,8 +97,31 @@ class RpcHttp2CallerTransport
   /// Порт подключения
   final int _port;
 
-  /// Флаг закрытия
+  /// Флаг закрытия. Set ONLY by [close]; permanent.
   bool _isClosed = false;
+
+  /// No live connection, but recovery is expected.
+  ///
+  /// A failed [reconnect] used to set [_isClosed] instead, which conflated two
+  /// states that need opposite handling. [health] already read that flag as
+  /// "disconnected, reconnect required" and reported DEGRADED, while the send
+  /// paths read it as "closed" and the post-factory re-check in [reconnect]
+  /// read it as "the caller closed us" -- so the transport told you to
+  /// reconnect and then refused every attempt. One failed reconnect was
+  /// terminal, even when the connection had been perfectly healthy.
+  bool _disconnected = false;
+
+  /// Refuses work the transport genuinely cannot do, naming which state it is
+  /// in, because the two are not recoverable in the same way.
+  void _ensureUsable() {
+    if (_isClosed) throw StateError('Transport is closed');
+    if (_disconnected) {
+      throw StateError(
+        'Transport is disconnected and has no connection; call reconnect(). '
+        'A failed reconnect leaves the transport recoverable, not closed.',
+      );
+    }
+  }
 
   /// Логгер
   final LogScope? _logger;
@@ -361,7 +384,7 @@ class RpcHttp2CallerTransport
 
   @override
   int createStream() {
-    if (_isClosed) throw StateError('Transport is closed');
+    _ensureUsable();
 
     // Same ceiling, same message and same failure mode as
     // RpcChannelTransport.createStream(). Without it `maxActiveStreams` was
@@ -438,7 +461,7 @@ class RpcHttp2CallerTransport
     RpcMetadata metadata, {
     bool endStream = false,
   }) async {
-    if (_isClosed) throw StateError('Transport is closed');
+    _ensureUsable();
 
     // Получаем путь метода из метаданных
     final methodPath = metadata.methodPath ?? '/Unknown/Unknown';
@@ -513,7 +536,7 @@ class RpcHttp2CallerTransport
     Uint8List data, {
     bool endStream = false,
   }) async {
-    if (_isClosed) throw StateError('Transport is closed');
+    _ensureUsable();
 
     final stream = _activeStreams[streamId];
     if (stream == null) {
@@ -571,6 +594,7 @@ class RpcHttp2CallerTransport
 
   Map<String, Object?> _buildHealthDetails() => {
     'isClosed': _isClosed,
+    'disconnected': _disconnected,
     'activeStreams': _activeStreams.length,
     'pendingSubscriptions': _streamSubscriptions.length,
     'pendingParsers': _streamParsers.length,
@@ -866,10 +890,20 @@ class RpcHttp2CallerTransport
       );
     }
 
+    // close() is terminal; a failed reconnect is not. Reporting the second as
+    // "closed" was what made the advice below unfollowable.
     if (_isClosed) {
+      return RpcHealthStatus.closed(
+        component: runtimeType.toString(),
+        message: 'HTTP/2 transport closed',
+        details: details,
+      );
+    }
+
+    if (_disconnected) {
       return RpcHealthStatus.degraded(
         component: runtimeType.toString(),
-        message: 'HTTP/2 connection is closed. Reconnect is required.',
+        message: 'HTTP/2 connection is down. Reconnect is required.',
         details: details,
       );
     }
@@ -909,11 +943,23 @@ class RpcHttp2CallerTransport
 
     _logger?.info('Попытка переподключения HTTP/2 клиента к $_host:$_port');
 
-    try {
-      await _connection.finish();
-    } catch (e) {
-      _logger?.warning('Ошибка при завершении текущего соединения: $e');
-    }
+    // terminate(), not finish(). finish() writes a GOAWAY, and reconnect is
+    // called precisely when the connection is already gone -- either the peer
+    // died, or an earlier reconnect finished this very connection. Writing to a
+    // closed frame writer makes package:http2 throw
+    //
+    //   Bad state: Cannot add event after closing
+    //     package:http2 ... FrameWriter.writeGoawayFrame
+    //     asynchronous gap
+    //     package:http2/src/connection.dart  Connection._setupConnection
+    //
+    // ASYNCHRONOUSLY, from a subscription it created in the ROOT zone. The
+    // try/catch below never saw it, and an unhandled async error in the root
+    // zone kills the isolate. Reproduced by simply calling reconnect() twice.
+    //
+    // _discardConnection exists for exactly this and is already used on the
+    // abandon path; the prologue just never used it.
+    _discardConnection(_connection);
 
     for (final subscription in _streamSubscriptions.values) {
       try {
@@ -960,7 +1006,7 @@ class RpcHttp2CallerTransport
       }
 
       _connection = connection;
-      _isClosed = false;
+      _disconnected = false;
       _nextStreamId = 1;
       _logger?.info('HTTP/2 клиент успешно переподключен');
       return RpcHealthStatus.healthy(
@@ -969,7 +1015,11 @@ class RpcHttp2CallerTransport
         details: {..._buildHealthDetails(), 'supported': true},
       );
     } catch (error, stackTrace) {
-      _isClosed = true;
+      // NOT _isClosed: the caller did not close this transport, it merely has
+      // no connection right now. Marking it closed made the first failure
+      // terminal -- retry-with-backoff, the only way anyone drives reconnect,
+      // could never recover.
+      _disconnected = true;
       _logger?.error(
         'Не удалось переподключить HTTP/2 клиент',
         error: error,
