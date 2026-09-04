@@ -133,7 +133,16 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
 
     switch (message.type) {
       case _IsolateMessageType.metadata:
-        if (message.streamId == 0) return;
+        // Stream 0 is NOT filtered here, unlike the payload cases below.
+        //
+        // This transport reserves stream 0 for its own init/ready/close
+        // handshake, and those are distinct enum types -- so a `metadata` frame
+        // on stream 0 is never a handshake message. It is what
+        // RpcChannelTransport uses for CONNECTION-level flow control
+        // (x-rpc-conn-window-update), and dropping it here made the peer look
+        // like one that does not participate in flow control, leaving the
+        // connection window off in both directions. Neither of core's own
+        // channels filters stream 0; this one did.
         _incomingCtl.add(
           RpcTransportMessage(
             metadata: message.data as RpcMetadata,
@@ -446,25 +455,26 @@ abstract interface class RpcIsolateTransport {
       },
     );
 
-    // Wait for the worker to confirm it started (its entrypoint ran without
-    // throwing). A crash/exit before this resolves makes spawn() throw rather
-    // than return a silently-dead transport.
-    try {
-      await ready.future.timeout(
-        startupTimeout,
-        onTimeout: () => throw TimeoutException(
-          'RpcIsolateTransport.spawn: isolate "$name" did not become ready '
-          'within $startupTimeout.',
-          startupTimeout,
-        ),
-      );
-    } catch (_) {
-      hostReceivePort.close();
-      if (!messageController.isClosed) await messageController.close();
-      await teardownStartup();
-      rethrow;
-    }
-
+    // Attach the channel and the transport BEFORE waiting for `ready`.
+    //
+    // `messageController` is a plain broadcast controller, so anything added to
+    // it while nobody is listening is discarded -- and the worker starts
+    // sending well before it acks readiness. Its RpcChannelTransport advertises
+    // the connection window from its constructor, and the user entrypoint runs
+    // after that but still before the ack, so every frame either produces was
+    // dropped on the floor here.
+    //
+    // The window grant is the one that is always lost: without it the host's
+    // connection credit stays null, which reads as "the peer does not
+    // participate in flow control", so host -> worker sends were UNBOUNDED for
+    // the life of every isolate connection.
+    //
+    // Buffering the raw controller is not enough: it would flush synchronously
+    // inside `listen()`, i.e. from _IsolateMultiplexedChannel's constructor,
+    // into an _incomingCtl that RpcChannelTransport has not subscribed to yet.
+    // Subscribing early instead closes the window at both hops -- the two
+    // constructions below are synchronous and back to back, so no port message
+    // can land between them.
     hostChannel = _IsolateMultiplexedChannel(
       sendPort: workerSendPort,
       messageStream: messageController.stream,
@@ -478,6 +488,27 @@ abstract interface class RpcIsolateTransport {
       isClient: true,
       policy: policy,
     );
+
+    // Wait for the worker to confirm it started (its entrypoint ran without
+    // throwing). A crash/exit before this resolves makes spawn() throw rather
+    // than return a silently-dead transport.
+    try {
+      await ready.future.timeout(
+        startupTimeout,
+        onTimeout: () => throw TimeoutException(
+          'RpcIsolateTransport.spawn: isolate "$name" did not become ready '
+          'within $startupTimeout.',
+          startupTimeout,
+        ),
+      );
+    } catch (_) {
+      // Closing the transport closes the channel, whose onClose closes the
+      // receive port and the raw controller -- the cleanup this path used to
+      // do by hand, now that it owns both.
+      await hostTransport.close();
+      await teardownStartup();
+      rethrow;
+    }
 
     void killIsolate() {
       hostTransport?.close();
