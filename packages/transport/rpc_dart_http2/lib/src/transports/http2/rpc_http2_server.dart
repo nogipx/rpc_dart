@@ -208,9 +208,35 @@ class RpcHttp2Server implements IRpcServer {
     try {
       final Stream<Socket> connections;
       if (_securityContext != null) {
-        // TLS with ALPN: only negotiate HTTP/2 ('h2'). Clients that do not
-        // offer 'h2' will fail ALPN negotiation, which is the desired behavior
-        // for an h2-only server.
+        // Advertise 'h2' for ALPN. This is what the API asks for, but do NOT
+        // treat it as a filter: it is not one here.
+        //
+        // The previous comment claimed "clients that do not offer 'h2' will
+        // fail ALPN negotiation, which is the desired behavior for an h2-only
+        // server". Measured, that is false in both directions. openssl against
+        // this server, and against a BARE SecureServerSocket given the same
+        // `supportedProtocols: ['h2']` as a control:
+        //
+        //   client offers h2        -> CONNECTION ESTABLISHED (TLSv1.3),
+        //                              "No ALPN negotiated",
+        //                              server-side selectedProtocol = null
+        //   client offers http/1.1  -> CONNECTION ESTABLISHED, same
+        //   client offers no ALPN   -> CONNECTION ESTABLISHED, same
+        //
+        // The control matters: the bare socket behaves identically, so nothing
+        // here causes it -- it is the platform's TLS/ALPN behaviour (measured
+        // on macOS, Dart 3.10.1, OpenSSL 3.x; other platforms unverified).
+        //
+        // Two consequences worth knowing before relying on this:
+        //  - No client is rejected for its protocol list. A browser, a health
+        //    checker or a scanner completes the handshake and is then handed
+        //    to the h2 parser, which is where it fails instead. ALPN is not an
+        //    access control here.
+        //  - RFC 7540 requires ALPN for h2 over TLS, so a STRICT gRPC client
+        //    may refuse to proceed without a negotiated 'h2'. grpcurl (Go) is
+        //    lenient and interoperates fine over TLS -- verified, including
+        //    reflection, unary and server-streaming -- but that is the client
+        //    being forgiving, not a negotiated protocol.
         _secureServerSocket = await SecureServerSocket.bind(
           _host,
           _port,
