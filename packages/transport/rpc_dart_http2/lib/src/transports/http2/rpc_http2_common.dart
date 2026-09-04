@@ -241,6 +241,19 @@ int grpcStatusFromHttpStatus(int httpStatus) => switch (httpStatus) {
   _ => RpcStatus.unknown,
 };
 
+/// Extracts the `:method` pseudo-header value from raw HTTP/2 headers.
+///
+/// Returns null when absent, which for a request means the peer sent a
+/// malformed HTTP/2 frame; package:http2 rejects those before this is reached.
+String? extractRequestMethod(List<http2.Header> headers) {
+  for (final header in headers) {
+    if (String.fromCharCodes(header.name) == ':method') {
+      return String.fromCharCodes(header.value);
+    }
+  }
+  return null;
+}
+
 /// Extracts the `:status` pseudo-header value from raw HTTP/2 headers.
 ///
 /// Returns null if no `:status` header is present (e.g. in trailers).

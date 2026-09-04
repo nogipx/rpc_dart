@@ -231,6 +231,32 @@ class RpcHttp2ResponderTransport
     int streamId,
     http2.HeadersStreamMessage message,
   ) {
+    // gRPC is POST-only. Nothing checked, so EVERY method executed the
+    // handler -- measured 7 of 7, GET, HEAD, PUT, DELETE, OPTIONS and even
+    // BREW all returning grpc-status=0 with the handler run.
+    //
+    // GET is the one that matters. A browser can be made to issue a
+    // cross-origin GET without a preflight, while a POST carrying
+    // `content-type: application/grpc` cannot leave the origin unprompted --
+    // so accepting GET turned every unary method into something an attacker's
+    // page could trigger. HEAD and the rest are the same hole, less reachable.
+    //
+    // rpc_dart's own caller hard-codes POST in
+    // rpcMetadataToHttp2RequestHeaders, which is exactly why no existing test
+    // could reach this: only a foreign peer chooses the method.
+    //
+    // Absent is left alone rather than rejected, matching the content-type
+    // check next door: a request with no `:method` is malformed HTTP/2 and
+    // package:http2 refuses it before this point.
+    final requestMethod = extractRequestMethod(message.headers);
+    if (requestMethod != null && requestMethod.toUpperCase() != 'POST') {
+      throw ArgumentError.value(
+        requestMethod,
+        ':method',
+        'gRPC requires POST; this request used a different HTTP method',
+      );
+    }
+
     // Извлекаем путь метода из pseudo-headers
     final methodPath = extractMethodPath(message.headers);
 
