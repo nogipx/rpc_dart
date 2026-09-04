@@ -15,9 +15,17 @@ import 'rpc_http2_common.dart';
 ///
 /// Реализует IRpcTransport поверх HTTP/2 протокола для исходящих вызовов.
 /// Поддерживает мультиплексирование потоков и gRPC-совместимый протокол.
-class RpcHttp2CallerTransport implements IRpcTransport, IRpcStreamReset {
+///
+/// Реализует [IRpcSecurityPolicyAware]: слои эндпоинта определяют политику
+/// через `is`-проверку, поэтому транспорт, который её не объявляет, получает
+/// `const RpcSecurityPolicy()` вместо настроенной приложением.
+class RpcHttp2CallerTransport
+    implements IRpcTransport, IRpcStreamReset, IRpcSecurityPolicyAware {
   @override
   bool get isClient => true;
+
+  @override
+  RpcSecurityPolicy get securityPolicy => _policy;
 
   /// HTTP/2 соединение
   http2.ClientTransportConnection _connection;

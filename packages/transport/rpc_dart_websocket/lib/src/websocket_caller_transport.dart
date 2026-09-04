@@ -16,7 +16,15 @@ import 'rpc_websocket_channel.dart';
 /// [RpcWebSocketChannel] -> [RpcFrameMultiplexedChannel] -> [RpcChannelTransport].
 ///
 /// Maintains a stable [incomingMessages] stream across reconnects.
-class RpcWebSocketCallerTransport implements IRpcTransport {
+///
+/// Forwards the inner transport's [IRpcSecurityPolicyAware] and
+/// [IRpcFlowControlled] capabilities. Both are discovered by `is` checks in the
+/// endpoint layers, so a wrapper that only implements [IRpcTransport] hides
+/// them: the configured policy would be ignored in favour of
+/// `const RpcSecurityPolicy()`, and flow credit would be returned on arrival
+/// rather than on consumption.
+class RpcWebSocketCallerTransport
+    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
   final Future<WebSocketChannel> Function()? _reconnectFactory;
   final RpcSecurityPolicy _policy;
 
@@ -88,6 +96,18 @@ class RpcWebSocketCallerTransport implements IRpcTransport {
       },
     );
   }
+
+  /// Read from the field, not from `_inner`: reconnect() replaces `_inner`, and
+  /// the policy is a property of this transport, not of the socket underneath.
+  @override
+  RpcSecurityPolicy get securityPolicy => _policy;
+
+  @override
+  void deferFlowCredit(int streamId) => _inner.deferFlowCredit(streamId);
+
+  @override
+  void returnFlowCredit(int streamId, int bytes) =>
+      _inner.returnFlowCredit(streamId, bytes);
 
   @override
   bool get isClient => true;

@@ -15,7 +15,15 @@ import 'rpc_websocket_channel.dart';
 ///
 /// Convenience wrapper around [RpcChannelTransport.fromChannel] with
 /// `isClient: false`. Use for per-connection server transports.
-class RpcWebSocketResponderTransport implements IRpcTransport {
+///
+/// Forwards the inner transport's [IRpcSecurityPolicyAware] and
+/// [IRpcFlowControlled] capabilities. Both are discovered by `is` checks in the
+/// endpoint layers, so a wrapper that only implements [IRpcTransport] hides
+/// them: the policy this constructor was given would be ignored in favour of
+/// `const RpcSecurityPolicy()`, and client-stream uploads would be credited on
+/// arrival instead of on consumption.
+class RpcWebSocketResponderTransport
+    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
   final RpcChannelTransport _inner;
 
   RpcWebSocketResponderTransport(
@@ -26,6 +34,16 @@ class RpcWebSocketResponderTransport implements IRpcTransport {
          isClient: false,
          policy: policy,
        );
+
+  @override
+  RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;
+
+  @override
+  void deferFlowCredit(int streamId) => _inner.deferFlowCredit(streamId);
+
+  @override
+  void returnFlowCredit(int streamId, int bytes) =>
+      _inner.returnFlowCredit(streamId, bytes);
 
   @override
   bool get isClient => false;
