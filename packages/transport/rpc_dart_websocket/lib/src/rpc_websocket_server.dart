@@ -97,19 +97,55 @@ class RpcWebSocketServer implements IRpcServer {
   @override
   Future<void> start() async {
     if (_isRunning) return;
-    _isRunning = true;
 
-    _connectionsSub = _connections.listen(
-      (channel) {
-        final label = _nextPeerLabel();
-        _handleConnection(channel, label);
-      },
-      onError: (Object error, StackTrace st) {
-        _logger?.error('Connection stream error', error: error, stackTrace: st);
-        _notify('onConnectionError', () => _onConnectionError?.call(error, st));
-      },
-      cancelOnError: false,
-    );
+    // `_isRunning = true` used to run BEFORE the listen below, so a listen that
+    // threw left the server claiming to be running with no subscription at all.
+    // Measured on a restart over a single-subscription connections stream --
+    // which is what `HttpServer.transform(WebSocketTransformer())` gives you:
+    //
+    //   start / stop / start  ->  StateError: Stream has already been listened
+    //                             to, isRunning == TRUE, and the next client
+    //                             call hung until its own timeout instead of
+    //                             failing
+    //
+    // A server that reports running while accepting nothing is worse than one
+    // that failed: nothing upstream can tell there is anything to fix.
+    final StreamSubscription<WebSocketChannel> subscription;
+    try {
+      subscription = _connections.listen(
+        (channel) {
+          final label = _nextPeerLabel();
+          _handleConnection(channel, label);
+        },
+        onError: (Object error, StackTrace st) {
+          _logger?.error(
+            'Connection stream error',
+            error: error,
+            stackTrace: st,
+          );
+          _notify(
+            'onConnectionError',
+            () => _onConnectionError?.call(error, st),
+          );
+        },
+        cancelOnError: false,
+      );
+    } on StateError catch (error) {
+      // The bare message ("Stream has already been listened to") names a Dart
+      // rule rather than the mistake. This server does not own the connections
+      // stream, so unlike RpcHttp2Server -- which rebinds its own socket -- it
+      // cannot restart on a source that only allows one listener.
+      throw StateError(
+        'RpcWebSocketServer cannot be restarted: its `connections` stream has '
+        'already been listened to. stop() cancels the subscription, and a '
+        'single-subscription stream cannot be listened to again. Pass a '
+        'broadcast stream (Stream.asBroadcastStream()) if the server must '
+        'restart, or construct a new RpcWebSocketServer. Original: $error',
+      );
+    }
+
+    _connectionsSub = subscription;
+    _isRunning = true;
   }
 
   @override
