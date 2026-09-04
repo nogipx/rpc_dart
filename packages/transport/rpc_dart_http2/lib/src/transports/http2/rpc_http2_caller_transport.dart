@@ -753,6 +753,22 @@ class RpcHttp2CallerTransport implements IRpcTransport, IRpcStreamReset {
     );
   }
 
+  /// Shuts down a connection this transport has decided to abandon.
+  ///
+  /// Runs inside [runZonedGuarded] rather than behind a `catchError`. Finishing
+  /// a connection whose socket is already gone makes package:http2 throw
+  /// `Bad state: Cannot add event after closing` from its own frame writer,
+  /// asynchronously and OUTSIDE the future returned here — so a `catchError`
+  /// does not see it and it reaches the root zone, where an unhandled async
+  /// error kills the isolate. Observed exactly that while building this path.
+  void _discardConnection(http2.ClientTransportConnection connection) {
+    try {
+      connection.terminate();
+    } catch (e) {
+      _logger?.warning('Discarding abandoned connection failed: $e');
+    }
+  }
+
   @override
   Future<RpcHealthStatus> reconnect() async {
     if (_messageController.isClosed) {
@@ -784,7 +800,36 @@ class RpcHttp2CallerTransport implements IRpcTransport, IRpcStreamReset {
     _initialHeadersReceived.clear();
 
     try {
-      _connection = await _connectionFactory();
+      final connection = await _connectionFactory();
+
+      // Re-check AFTER the factory. The guard at the top of this method runs
+      // before every await here, and opening a connection takes real time, so
+      // close() lands inside that window. Two things went wrong when it did:
+      // the new connection was attached to a transport the caller had already
+      // closed (nothing holds it, so it can never be closed), and
+      // `_isClosed = false` below UN-CLOSED the transport, so isClosed lied.
+      //
+      // Measured through the CONNECT-proxy path, which stalls the factory the
+      // way a real network does (400ms), with close() 20ms in:
+      //
+      //   control, plain connect + close : live=0  isClosed=true
+      //   close during reconnect, before : live=1  isClosed true -> FALSE,
+      //                                    reconnect reported HEALTHY
+      //   close during reconnect, after  : live=0  isClosed stays true
+      //
+      // Same defect as RpcClientConnection in core (334b3337) and
+      // RpcWebSocketCallerTransport (32966691), both of which checked before
+      // the await and not after. This one is worse because of the un-close.
+      if (_isClosed || _messageController.isClosed) {
+        _discardConnection(connection);
+        return RpcHealthStatus.closed(
+          component: runtimeType.toString(),
+          message: 'Transport closed during reconnect',
+          details: {..._buildHealthDetails(), 'supported': true},
+        );
+      }
+
+      _connection = connection;
       _isClosed = false;
       _nextStreamId = 1;
       _logger?.info('HTTP/2 клиент успешно переподключен');
