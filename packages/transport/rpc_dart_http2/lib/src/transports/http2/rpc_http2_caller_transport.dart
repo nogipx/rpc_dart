@@ -625,6 +625,45 @@ class RpcHttp2CallerTransport
     final metadata = http2HeadersToRpcMetadata(message.headers);
     _policy.validateMetadata(metadata);
 
+    // A 200 whose content-type is not gRPC is not a gRPC response, and its body
+    // is not gRPC frames. Without this check the parser met the raw bytes and
+    // failed on whatever the first one happened to be: an HTML error page from
+    // a proxy surfaced as `RpcException: Invalid compression flag in gRPC
+    // message: 60` -- 60 being '<'. That is not an RpcStatusException at all,
+    // so it carries no status code, callers that catch RpcStatusException miss
+    // it entirely, and it names a framing detail instead of the problem.
+    //
+    // Checked only on the INITIAL headers: trailers legitimately carry no
+    // content-type. Absent is accepted rather than rejected, matching the check
+    // the responder pipeline already applies in the other direction -- being
+    // strict here would be a new policy, not a fix.
+    if (isInitialHeaders) {
+      final contentType = metadata.getHeaderValue(RpcHeaders.contentType);
+      if (contentType != null &&
+          !contentType.toLowerCase().startsWith(RpcHeaders.contentTypeGrpc)) {
+        _logger?.warning(
+          'Non-gRPC content-type "$contentType" for stream $streamId',
+        );
+        _emit(
+          RpcTransportMessage(
+            streamId: streamId,
+            metadata: RpcMetadata([
+              RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
+              RpcHeader(
+                RpcHeaders.grpcMessage,
+                RpcMetadata.encodeGrpcMessage(
+                  'Invalid content-type for gRPC: "$contentType"',
+                ),
+              ),
+            ]),
+            isEndOfStream: true,
+            methodPath: methodPath,
+          ),
+        );
+        return;
+      }
+    }
+
     // Создаем транспортное сообщение
     final transportMessage = RpcTransportMessage(
       streamId: streamId,
