@@ -607,6 +607,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
               'On web/dart2js the built-in gzip is unavailable; register a '
               'cross-platform codec (e.g. RpcGzipCodec.register() from '
               'package:rpc_dart_compression).',
+          // Required by the gRPC spec: a peer refused for its choice of
+          // algorithm must be told which ones would work, otherwise
+          // UNIMPLEMENTED is a dead end it cannot retry out of. Measured on the
+          // wire against this server, `grpc-encoding: br` came back
+          // `grpc-status=12` with `grpc-accept-encoding` ABSENT.
+          extraHeaders: [
+            RpcHeader(
+              RpcHeaders.grpcAcceptEncoding,
+              RpcGrpcCompression.acceptEncodingHeader(),
+            ),
+          ],
         ),
         'grpc error cleanup',
       );
@@ -1362,11 +1373,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     required int status,
     required String message,
     RpcContext? context,
+    List<RpcHeader> extraHeaders = const [],
   }) async {
     try {
+      final trailer = RpcMetadata.forTrailer(status, message: message);
       await transport.sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(status, message: message),
+        extraHeaders.isEmpty
+            ? trailer
+            : RpcMetadata([...trailer.headers, ...extraHeaders]),
         endStream: true,
       );
     } catch (error, stackTrace) {
