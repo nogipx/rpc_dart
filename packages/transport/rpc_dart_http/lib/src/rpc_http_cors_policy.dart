@@ -142,8 +142,45 @@ final class RpcHttpCorsPolicy {
     ...extraExposedHeaders,
   ];
 
+  /// Whether the response actually depends on the request's `Origin`.
+  ///
+  /// True only for a non-empty explicit allowlist, where the origin is
+  /// REFLECTED: an allowed caller gets a header naming itself and a denied one
+  /// gets none, so the response genuinely differs between callers — including
+  /// the denied response, which a cache must not hand to an allowed origin.
+  ///
+  /// Both other configurations are origin-INDEPENDENT and must not say
+  /// otherwise, because `Vary` only fragments caches: `'*'` answers every
+  /// caller with the same constant, and the closed default (`const []`) never
+  /// emits the header for anyone.
+  bool get _varies =>
+      allowedOrigins.isNotEmpty && !allowedOrigins.contains('*');
+
+  /// Adds `Origin` to `Vary`, preserving anything already listed.
+  ///
+  /// Without it a shared cache may hand a response minted for one origin to a
+  /// request from another. Required by Fetch whenever
+  /// `Access-Control-Allow-Origin` is not a constant.
+  static void _addVaryOrigin(Map<String, String> headers) {
+    final existing = headers['vary'];
+    if (existing == null || existing.isEmpty) {
+      headers['vary'] = 'Origin';
+      return;
+    }
+    final listed = existing
+        .split(',')
+        .map((part) => part.trim().toLowerCase())
+        .toSet();
+    if (listed.contains('origin') || listed.contains('*')) return;
+    headers['vary'] = '$existing, Origin';
+  }
+
   /// Applies CORS response headers into [headers] map for a regular request.
+  ///
+  /// Safe to call for a rejected origin and for error responses: it then adds
+  /// only `Vary`, which is exactly what a cache needs to know.
   void applyTo(Map<String, String> headers, String? requestOrigin) {
+    if (_varies) _addVaryOrigin(headers);
     final origin = _resolveOrigin(requestOrigin);
     if (origin == null) return;
     headers['access-control-allow-origin'] = origin;
@@ -159,7 +196,10 @@ final class RpcHttpCorsPolicy {
     final origin = _resolveOrigin(requestOrigin);
 
     if (origin == null) {
-      return Response.forbidden('');
+      return Response.forbidden(
+        '',
+        headers: _varies ? const {'vary': 'Origin'} : null,
+      );
     }
 
     final headers = <String, String>{
@@ -168,6 +208,7 @@ final class RpcHttpCorsPolicy {
       'access-control-allow-headers': _allAllowedHeaders.join(', '),
       'access-control-expose-headers': _allExposedHeaders.join(', '),
     };
+    if (_varies) _addVaryOrigin(headers);
     if (allowCredentials) {
       headers['access-control-allow-credentials'] = 'true';
     }

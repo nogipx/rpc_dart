@@ -112,7 +112,7 @@ void main() {
       );
     });
 
-    test('an unlisted origin gets nothing', () {
+    test('an unlisted origin gets no access, but is Vary-marked', () {
       final policy = RpcHttpCorsPolicy(
         allowedOrigins: ['https://app.example'],
         allowCredentials: true,
@@ -120,7 +120,16 @@ void main() {
       final headers = <String, String>{};
       policy.applyTo(headers, 'https://evil.example');
 
-      expect(headers, isEmpty);
+      expect(headers['access-control-allow-origin'], isNull);
+      expect(headers['access-control-allow-credentials'], isNull);
+      expect(headers['access-control-expose-headers'], isNull);
+      // This assertion used to be `isEmpty`, which said more than the test
+      // means. With a non-empty allowlist the response IS origin-dependent:
+      // app.example would have got a header and evil.example does not, so a
+      // shared cache must not hand this one to app.example. The closed default
+      // is the case that stays genuinely header-free, and the test above pins
+      // it.
+      expect(headers['vary'], 'Origin');
     });
   });
 }

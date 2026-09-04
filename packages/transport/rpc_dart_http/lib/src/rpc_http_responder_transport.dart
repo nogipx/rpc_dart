@@ -70,9 +70,23 @@ class RpcHttpResponderTransport implements IRpcTransport {
   /// shelf [Handler] to mount on a shelf server or router.
   Handler get handler => _handleRequest;
 
+  /// Builds a rejection carrying the CORS headers the policy promises.
+  ///
+  /// Only [_flushResponse] used to apply the policy, i.e. the SUCCESS path, so
+  /// every rejection went out bare. A browser cannot read a cross-origin
+  /// response without `Access-Control-Allow-Origin`, so 415, 400, 408 and 503
+  /// were all invisible to a web client: the page saw an opaque CORS failure
+  /// instead of the status the server actually chose, which is the difference
+  /// between "your content-type is wrong" and no diagnosis at all.
+  Response _reject(int statusCode, Request request, {String? body}) {
+    final headers = <String, String>{};
+    corsPolicy?.applyTo(headers, request.headers['origin']);
+    return Response(statusCode, body: body, headers: headers);
+  }
+
   Future<Response> _handleRequest(Request request) async {
     if (_isClosed) {
-      return Response(503, body: 'Transport closed');
+      return _reject(503, request, body: 'Transport closed');
     }
 
     // Handle CORS preflight before any other processing.
@@ -86,7 +100,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
       _logger?.warning(
         'Rejected request: too many active streams (${_pending.length})',
       );
-      return Response(503);
+      return _reject(503, request);
     }
 
     // Validate Content-Type: must be a gRPC content type (application/grpc*).
@@ -96,14 +110,14 @@ class RpcHttpResponderTransport implements IRpcTransport {
         'Rejected request: unsupported Content-Type '
         '"$contentTypeValue" — expected application/grpc[+subtype]',
       );
-      return Response(415);
+      return _reject(415, request);
     }
 
     // Validate method path length.
     final methodPath = request.requestedUri.path;
     if (policy != null && !policy.isValidMethodPath(methodPath)) {
       _logger?.warning('Rejected request: invalid method path "$methodPath"');
-      return Response(400);
+      return _reject(400, request);
     }
 
     final streamId = _idManager.generateId();
@@ -130,7 +144,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
           );
           _pending.remove(streamId);
           _idManager.releaseId(streamId);
-          return Response(400);
+          return _reject(400, request);
         }
       }
 
@@ -203,7 +217,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
       );
       final statusCode = e is TimeoutException ? 408 : 400;
       if (!pending.completer.isCompleted) {
-        pending.completer.complete(Response(statusCode));
+        pending.completer.complete(_reject(statusCode, request));
       }
     }
 
@@ -369,7 +383,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
     // Complete any pending responses with 503.
     for (final pending in _pending.values) {
       if (!pending.completer.isCompleted) {
-        pending.completer.complete(Response(503));
+        pending.completer.complete(_reject(503, pending.shelfRequest));
       }
     }
     _pending.clear();
