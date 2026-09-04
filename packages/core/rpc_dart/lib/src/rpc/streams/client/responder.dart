@@ -126,18 +126,11 @@ final class ClientStreamResponder<
             stackTrace: stackTrace,
           );
           try {
-            final errorStatus = error is RpcStatusException
-                ? error.statusCode
-                : RpcStatus.internal;
-            final errorMsg = error is RpcStatusException
-                ? error.message
-                : error.toString();
+            final wire = wireStatusFor(error);
             await _processor.sendError(
-              errorStatus,
-              errorMsg,
-              statusDetailsBin: error is RpcStatusException
-                  ? error.statusDetailsBin
-                  : null,
+              wire.status,
+              wire.message,
+              statusDetailsBin: wire.detailsBin,
             );
           } finally {
             _completeDone();

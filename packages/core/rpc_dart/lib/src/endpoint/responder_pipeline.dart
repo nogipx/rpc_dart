@@ -966,12 +966,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             error: error,
             stackTrace: stackTrace,
           );
+          final wire = wireStatusFor(error);
           await processor.sendError(
-            error is RpcStatusException ? error.statusCode : RpcStatus.internal,
-            error is RpcStatusException ? error.message : error.toString(),
-            statusDetailsBin: error is RpcStatusException
-                ? error.statusDetailsBin
-                : null,
+            wire.status,
+            wire.message,
+            statusDetailsBin: wire.detailsBin,
           );
           await _cleanupStream(streamId);
         }
@@ -1248,12 +1247,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             error: error,
             stackTrace: stackTrace,
           );
+          final wire = wireStatusFor(error);
           await responder.sendError(
-            error is RpcStatusException ? error.statusCode : RpcStatus.internal,
-            error is RpcStatusException ? error.message : error.toString(),
-            statusDetailsBin: error is RpcStatusException
-                ? error.statusDetailsBin
-                : null,
+            wire.status,
+            wire.message,
+            statusDetailsBin: wire.detailsBin,
           );
         }
       }());
@@ -1307,12 +1305,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           error: error,
           stackTrace: stackTrace,
         );
+        final wire = wireStatusFor(error);
         await responder.sendError(
-          error is RpcStatusException ? error.statusCode : RpcStatus.internal,
-          error is RpcStatusException ? error.message : error.toString(),
-          statusDetailsBin: error is RpcStatusException
-              ? error.statusDetailsBin
-              : null,
+          wire.status,
+          wire.message,
+          statusDetailsBin: wire.detailsBin,
         );
       }
     }());

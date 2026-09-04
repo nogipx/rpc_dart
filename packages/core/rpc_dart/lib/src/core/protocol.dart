@@ -177,3 +177,74 @@ final class RpcMessageHeader {
   /// Creates a header description.
   RpcMessageHeader(this.isCompressed, this.messageLength);
 }
+
+/// The grpc-message sent for an error the handler did NOT describe itself.
+///
+/// Deliberately says nothing about the cause. See [wireStatusFor].
+const String kInternalErrorWireMessage = 'Internal server error';
+
+/// Translates an error thrown by a handler into what may go on the wire.
+///
+/// Dart already separates "something went wrong that I am reporting" from
+/// "this code is broken", and this follows that line exactly:
+///
+/// - [RpcStatusException] — the handler SPEAKING to its caller. Code, message
+///   and details are all deliberate, so all three are forwarded intact.
+/// - Any other [Exception], including rpc_dart's own [RpcException] — a
+///   condition the thrower chose to signal. Message forwarded, status INTERNAL.
+///   This keeps framing and policy diagnostics such as "gRPC frame payload is
+///   too large: N (max: M)", which are library-authored, carry no user data,
+///   and are exactly what a peer needs in order to correct itself.
+/// - An [Error] — a BUG, in Dart's own sense of the word: `StateError`,
+///   `TypeError`, `RangeError`, `NoSuchMethodError`, a failed assertion. The
+///   caller gets INTERNAL and a fixed message; the cause stays on the server,
+///   where every call site already logs it with its stack trace.
+///
+/// The last case used to send `error.toString()`. Measured against
+/// `RpcHttp2Server` with a handler throwing a `StateError` whose text stood in
+/// for a secret, all four call shapes handed it to the caller:
+///
+///     unary        LEAKS  Request processing error: Bad state: <secret>
+///     serverStream LEAKS  Bad state: <secret>
+///     clientStream LEAKS  Bad state: <secret>
+///     bidi         LEAKS  Bad state: <secret>
+///     explicit     clean  you may not do that   (the handler's own words)
+///
+/// Confirmed from OUTSIDE the ecosystem, which is why it had gone unnoticed:
+/// `grpcurl` against the reflection example reported `Internal: Request
+/// processing error: Bad state: handler blew up: x` to an unauthenticated
+/// peer. An `Error`'s text is made of internal state — `NoSuchMethodError`
+/// prints the receiver, an assertion prints the expression — and none of it is
+/// anything the caller can act on.
+///
+/// KNOWN LIMIT, deliberately not closed here: an [Exception] carrying
+/// sensitive text still crosses the wire, and some common ones do
+/// (`FileSystemException` names paths, `SocketException` names hosts). Closing
+/// that means forwarding NOTHING but [RpcStatusException], which is what
+/// grpc-go does — but it would also silence deliberate reporting that works
+/// today (a handler throwing `Exception('... [trace=$traceId]')` so the caller
+/// can quote it back), so it is a policy call rather than a bug fix. To be
+/// certain nothing escapes, throw [RpcStatusException]: that is what it is for.
+({int status, String message, Uint8List? detailsBin}) wireStatusFor(
+  Object error,
+) {
+  if (error is RpcStatusException) {
+    return (
+      status: error.statusCode,
+      message: error.message,
+      detailsBin: error.statusDetailsBin,
+    );
+  }
+  if (error is Error) {
+    return (
+      status: RpcStatus.internal,
+      message: kInternalErrorWireMessage,
+      detailsBin: null,
+    );
+  }
+  return (
+    status: RpcStatus.internal,
+    message: error.toString(),
+    detailsBin: null,
+  );
+}
