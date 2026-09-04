@@ -185,9 +185,14 @@ melos:
         web packages/blob/rpc_blob_webdav test/web_smoke_test.dart
         web packages/data/rpc_data_sqlite test/web_smoke_test.dart
         web packages/blob/rpc_blob_sqlite test/web_smoke_test.dart
+        # -j 1: each browser file gets its own Chrome, and starting several
+        # cold instances at once makes them miss the connect deadline --
+        # "Timed out waiting for Chrome to connect" while the compile itself
+        # succeeded. Serialised, the same three files pass every time; a single
+        # cold start can still take ~70s here, hence --timeout 3x.
         (cd packages/transport/rpc_dart_isolate \
           && fvm dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js \
-          && fvm dart test -p chrome test/web_smoke_test.dart test/web_worker/echo_worker_test.dart)
+          && fvm dart test -p chrome -j 1 --timeout 3x test/web_smoke_test.dart test/web_worker/echo_worker_test.dart test/web_worker/worker_startup_failure_test.dart)
 
     # --- Code generation (build_runner) ---
     gen:

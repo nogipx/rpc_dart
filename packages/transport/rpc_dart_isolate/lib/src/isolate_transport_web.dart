@@ -19,6 +19,15 @@ typedef RpcIsolateEntrypoint =
 const bool _kIsWasm = bool.fromEnvironment('dart.tool.dart2wasm');
 const String _defaultWorkerName = 'rpcIsolateWorker';
 
+/// How long to wait for the worker's post-entrypoint `ready` ack before
+/// assuming it is a worker built before that ack existed and proceeding anyway.
+///
+/// Deliberately NOT `startupTimeout`: this bound is a compatibility fallback
+/// whose expiry is a SUCCESS path, whereas `startupTimeout` bounds failures.
+/// Tying them together would mean a generous startup budget also made every
+/// legacy worker wait that long before its first call.
+const Duration _readyGracePeriod = Duration(seconds: 5);
+
 @JS('self')
 external DedicatedWorkerGlobalScope get _workerSelf;
 
@@ -257,16 +266,88 @@ abstract interface class RpcIsolateTransport {
       policy: policy,
     );
 
+    // A worker that fails to LOAD -- a 404 on the script, or a parse error --
+    // fires an `error` event on the Worker object and then does nothing else.
+    // Nothing used to listen, so the two waits below simply expired and spawn()
+    // handed back a transport wired to a worker that does not exist. Measured
+    // in Chrome against a URI that 404s:
+    //
+    //   spawn() threw : NO -- returned a transport
+    //   spawn() took  : 10002ms   (the two swallowed 5s waits)
+    //   isClosed      : false
+    //   health        : healthy / Transport ready
+    //   a call on it  : HUNG, forever
+    //
+    // The VM sibling wires onError/onExit for exactly this reason, and its own
+    // comment says so: a worker that crashes during startup must make spawn()
+    // throw "instead of returning a silently-dead transport". This is that.
+    final workerFailed = Completer<Object>();
+    void reportWorkerError(String what) {
+      if (!workerFailed.isCompleted) workerFailed.complete(what);
+    }
+
+    final errorListener = (Event event) {
+      // `event is ErrorEvent` is meaningless across JS interop (it is always
+      // true and checks nothing), so ask the JS type system with isA. The
+      // message is empty for a cross-origin or 404 load failure anyway -- the
+      // event firing at all is the signal.
+      final reported = event.isA<ErrorEvent>()
+          ? (event as ErrorEvent).message
+          : '';
+      reportWorkerError(
+        reported.isNotEmpty
+            ? reported
+            : 'the worker script failed to load or threw during startup',
+      );
+    }.toJS;
+    worker.addEventListener('error', errorListener);
+    worker.addEventListener('messageerror', errorListener);
+
+    /// Races [future] against a worker error and the startup budget.
+    Future<void> awaitStartup(Future<void> future, String phase) async {
+      await Future.any([
+        future,
+        workerFailed.future.then(
+          (reason) => throw StateError(
+            'RpcIsolateTransport.spawn: worker "$uri" failed during $phase: '
+            '$reason',
+          ),
+        ),
+      ]).timeout(
+        startupTimeout,
+        onTimeout: () => throw TimeoutException(
+          'RpcIsolateTransport.spawn: worker "$uri" did not complete $phase '
+          'within $startupTimeout.',
+          startupTimeout,
+        ),
+      );
+    }
+
+    /// Releases everything spawn() built, so a failed startup leaves nothing
+    /// behind -- the worker itself included.
+    Future<void> abandon() async {
+      worker.removeEventListener('error', errorListener);
+      worker.removeEventListener('messageerror', errorListener);
+      await transport.close();
+      worker.terminate();
+    }
+
     // Wait for worker init acknowledgment (isolate_manager `initialized()`).
     // NOTE: this only confirms the worker scope is wired -- it does NOT confirm
     // the user `entrypoint` has run and subscribed its responder. We must wait
     // for the worker's own `ready` ack (sent after `entrypoint` returns) before
     // returning the transport, otherwise early RPC frames race ahead of the
     // responder subscription and are dropped (the bridge streams do not buffer).
-    await controller.ensureInitialized.future.timeout(
-      const Duration(seconds: 5),
-      onTimeout: () {},
-    );
+    //
+    // Failing here is FATAL, and deliberately so: not reaching this point means
+    // the worker scope never came up at all, which no worker build has ever
+    // done successfully. It is not the legacy-protocol case handled below.
+    try {
+      await awaitStartup(controller.ensureInitialized.future, 'initialization');
+    } catch (_) {
+      await abandon();
+      rethrow;
+    }
 
     // Listen for the worker's post-entrypoint readiness ack before any RPC
     // frames are allowed to flow.
@@ -287,13 +368,43 @@ abstract interface class RpcIsolateTransport {
       ).toMap(),
     );
 
-    // Wait for the worker responder to be ready. If the worker predates this
-    // protocol (no `ready` ack), fall back after a short grace period so we do
-    // not hang older worker builds.
-    await ready.future.timeout(const Duration(seconds: 5), onTimeout: () {});
+    // Wait for the worker responder to be ready. A MISSING ack stays tolerated
+    // on purpose -- a worker built before this protocol never sends one, and
+    // hanging those would be a worse regression than the wait. But a worker
+    // that ERRORS while we wait is not a legacy worker, and that case now
+    // fails instead of being swallowed along with it.
+    try {
+      await Future.any([
+        ready.future,
+        workerFailed.future.then(
+          (reason) => throw StateError(
+            'RpcIsolateTransport.spawn: worker "$uri" failed before it was '
+            'ready: $reason',
+          ),
+        ),
+      ]).timeout(_readyGracePeriod, onTimeout: () {});
+    } catch (_) {
+      await readySub.cancel();
+      await abandon();
+      rethrow;
+    }
     await readySub.cancel();
 
+    // Past startup the worker is the peer, and a peer that dies must not look
+    // healthy. The VM sibling closes its channel from onError/onExit; this is
+    // the same, and without it `health()` answered "healthy / Transport ready"
+    // for a worker that was gone and every call hung.
+    worker.removeEventListener('error', errorListener);
+    worker.removeEventListener('messageerror', errorListener);
+    final deathListener = (Event event) {
+      unawaited(transport.close());
+    }.toJS;
+    worker.addEventListener('error', deathListener);
+    worker.addEventListener('messageerror', deathListener);
+
     void kill() {
+      worker.removeEventListener('error', deathListener);
+      worker.removeEventListener('messageerror', deathListener);
       unawaited(transport.close());
       worker.terminate();
     }

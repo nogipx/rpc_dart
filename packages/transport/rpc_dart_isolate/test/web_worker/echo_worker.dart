@@ -15,6 +15,8 @@
 //     -o test/web_worker/echo_worker.dart.js
 library;
 
+import 'dart:async';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
 
@@ -45,6 +47,26 @@ final class _EchoContract extends RpcResponderContract {
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
     );
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'Die',
+      handler: _die,
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+    );
+  }
+
+  /// Kills the worker the way a real bug would: an uncaught async error in the
+  /// root zone. In a dedicated Web Worker that fires an `error` event on the
+  /// parent's Worker object, which is the only signal a host gets that its
+  /// worker has died -- there is no onExit port on the web.
+  ///
+  /// Used by worker_startup_failure_test.dart to check that the host notices.
+  Future<RpcString> _die(RpcString request, {RpcContext? context}) async {
+    Timer(const Duration(milliseconds: 50), () {
+      throw StateError('worker died on purpose');
+    });
+    await Future<void>.delayed(const Duration(seconds: 30));
+    return 'never'.rpc;
   }
 
   Future<RpcString> _echo(RpcString request, {RpcContext? context}) async {
