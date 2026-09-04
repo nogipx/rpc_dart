@@ -585,11 +585,20 @@ class RpcHttp2CallerTransport
     final httpStatus = extractHttpStatus(message.headers);
 
     if (httpStatus != null && httpStatus != 200) {
-      // Non-200 HTTP status — map to gRPC INTERNAL error.
-      // Per gRPC spec, any non-200 must be treated as a transport error.
-      _logger?.warning('Non-200 HTTP status $httpStatus for stream $streamId');
+      // Non-200 HTTP status — map through the gRPC status table.
+      //
+      // The mapping is not cosmetic: it decides whether the call is retryable.
+      // Everything used to collapse to INTERNAL, which RetryInterceptor does
+      // not retry, so a proxy answering 502/503/504 — or 429 while rate
+      // limiting — produced a permanent failure where every other gRPC client
+      // backs off and retries. See [grpcStatusFromHttpStatus].
+      final grpcStatus = grpcStatusFromHttpStatus(httpStatus);
+      _logger?.warning(
+        'Non-200 HTTP status $httpStatus for stream $streamId '
+        '-> gRPC status $grpcStatus',
+      );
       final errorMetadata = RpcMetadata([
-        RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
+        RpcHeader(RpcHeaders.grpcStatus, grpcStatus.toString()),
         RpcHeader(
           RpcHeaders.grpcMessage,
           RpcMetadata.encodeGrpcMessage('HTTP status $httpStatus'),
