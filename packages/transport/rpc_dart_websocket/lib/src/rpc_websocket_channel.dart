@@ -91,6 +91,24 @@ class RpcWebSocketChannel implements IRpcChannel {
     try {
       await _ws.sink.close();
     } catch (_) {}
-    if (!_incoming.isClosed) await _incoming.close();
+    // NOT awaited. `_incoming` is single-subscription, and closing one that
+    // was never listened to returns a future that does not complete until
+    // someone listens -- so `await` here deadlocked close() outright.
+    //
+    // The normal path is safe because RpcFrameMultiplexedChannel subscribes in
+    // its constructor. The path that is not is closing a channel that was
+    // built but never wrapped: an aborted setup, or an error between
+    // construction and use -- exactly when cleanup has to work. This class is
+    // public and documented for direct construction, so that is reachable.
+    //
+    // Measured, with a listener as the control:
+    //   no listener : close() still pending after 3s, forever
+    //   listener    : close() returns
+    //
+    // Same fault as the CONNECT-proxy deadlock in dcc14f8c. Broadcast would
+    // also "fix" it and must NOT be used: a broadcast controller DROPS events
+    // that arrive before the frame channel subscribes, where this one buffers
+    // them.
+    if (!_incoming.isClosed) unawaited(_incoming.close());
   }
 }
