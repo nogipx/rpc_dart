@@ -66,6 +66,15 @@ class RpcHttp2CallerTransport
   /// the id here so no later path sends a second one.
   final Set<int> _halfClosedLocal = {};
 
+  /// Ids handed out by [createStream] that have not been retired yet.
+  ///
+  /// [_activeStreams] only gains an id once [sendMetadata] opens the HTTP/2
+  /// stream, so counting it cannot bound stream CREATION: a burst of
+  /// createStream() calls all pass before the first reaches sendMetadata. This
+  /// is what [createStream] counts, and every path that retires an id drops it
+  /// here too.
+  final Set<int> _reservedStreams = {};
+
   /// Tracks streams where initial response headers have been received.
   /// Used to distinguish trailers from initial response headers on incoming.
   final Set<int> _initialHeadersReceived = {};
@@ -354,8 +363,25 @@ class RpcHttp2CallerTransport
   int createStream() {
     if (_isClosed) throw StateError('Transport is closed');
 
+    // Same ceiling, same message and same failure mode as
+    // RpcChannelTransport.createStream(). Without it `maxActiveStreams` was
+    // inert on this transport, silently: a client configured with 5 opened 500
+    // concurrent streams -- 500 HTTP/2 streams, 500 subscriptions, 500 stream
+    // controllers -- with nothing refused and no error anywhere. The same
+    // configuration threw on the 6th call over every other transport.
+    //
+    // HTTP/2's own SETTINGS_MAX_CONCURRENT_STREAMS does not cover for it
+    // either, because RpcHttp2Server never derives that from the policy.
+    if (_reservedStreams.length >= _policy.maxActiveStreams) {
+      throw StateError(
+        'Too many active streams: ${_reservedStreams.length} '
+        '(max: ${_policy.maxActiveStreams})',
+      );
+    }
+
     final streamId = _nextStreamId;
     _nextStreamId += 2; // Клиент использует нечетные ID (1, 3, 5, ...)
+    _reservedStreams.add(streamId);
 
     _logger?.internal('Создан stream: $streamId');
     return streamId;
@@ -401,6 +427,7 @@ class RpcHttp2CallerTransport
     _streamParsers.remove(streamId);
     _initialHeadersReceived.remove(streamId);
     _halfClosedLocal.remove(streamId);
+    _reservedStreams.remove(streamId);
 
     return true;
   }
@@ -470,6 +497,7 @@ class RpcHttp2CallerTransport
     _streamParsers.remove(streamId);
     _initialHeadersReceived.remove(streamId);
     _halfClosedLocal.remove(streamId);
+    _reservedStreams.remove(streamId);
     final controller = _streamControllers.remove(streamId);
     if (controller != null && !controller.isClosed) {
       unawaited(controller.close());
@@ -585,6 +613,7 @@ class RpcHttp2CallerTransport
         _streamParsers.remove(streamId);
         _initialHeadersReceived.remove(streamId);
         _halfClosedLocal.remove(streamId);
+        _reservedStreams.remove(streamId);
       },
     );
 
@@ -898,6 +927,7 @@ class RpcHttp2CallerTransport
     _activeStreams.clear();
     _initialHeadersReceived.clear();
     _halfClosedLocal.clear();
+    _reservedStreams.clear();
 
     try {
       final connection = await _connectionFactory();
@@ -1011,6 +1041,7 @@ class RpcHttp2CallerTransport
     _streamParsers.clear();
     _initialHeadersReceived.clear();
     _halfClosedLocal.clear();
+    _reservedStreams.clear();
 
     // Закрываем per-stream контроллеры
     for (final ctl in _streamControllers.values) {
