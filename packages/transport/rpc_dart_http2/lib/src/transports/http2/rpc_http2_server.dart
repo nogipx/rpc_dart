@@ -310,8 +310,12 @@ class RpcHttp2Server implements IRpcServer {
       );
 
       if (_transportWrapper != null) {
+        final inner = transport;
         try {
-          transport = _transportWrapper(transport, socket);
+          transport = _preserveCapabilities(
+            inner,
+            _transportWrapper(inner, socket),
+          );
         } catch (error, stackTrace) {
           _logger?.error(
             'Ошибка при обёртке транспорта',
@@ -369,4 +373,122 @@ class RpcHttp2Server implements IRpcServer {
       socket.destroy();
     }
   }
+}
+
+/// Keeps the capability interfaces the wrapper dropped.
+///
+/// The endpoint layers find optional transport capabilities with `is` checks
+/// and fall back to a default when the check fails -- silently. So the obvious
+/// decorator (implement [IRpcTransport], forward every method) removes them:
+/// the responder pipeline then reads `const RpcSecurityPolicy()` instead of the
+/// policy this server was configured with. Measured with a plain counting
+/// wrapper against `maxActiveStreams: 3`, a peer opening 60 concurrent streams
+/// went from 3 admitted to 60 -- the ceiling was simply gone, and nothing said
+/// so: the wrapper compiles and every call works.
+///
+/// A decorator that wants to CHANGE the policy declares
+/// [IRpcSecurityPolicyAware] itself and is left alone; there is no other way to
+/// express that intent, so a wrapper that declares nothing is an oversight
+/// rather than a choice. Restoring is therefore what the author meant.
+IRpcTransport _preserveCapabilities(
+  IRpcTransport inner,
+  IRpcTransport wrapped,
+) {
+  if (identical(inner, wrapped)) return wrapped;
+  final needsPolicy =
+      inner is IRpcSecurityPolicyAware && wrapped is! IRpcSecurityPolicyAware;
+  final needsFlow =
+      inner is IRpcFlowControlled && wrapped is! IRpcFlowControlled;
+  if (!needsPolicy && !needsFlow) return wrapped;
+  return _CapabilityPreservingTransport(inner: inner, wrapped: wrapped);
+}
+
+/// Delegates [IRpcTransport] to the user's wrapper and the capabilities to the
+/// transport it wrapped. See [_preserveCapabilities].
+class _CapabilityPreservingTransport
+    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
+  _CapabilityPreservingTransport({required this.inner, required this.wrapped});
+
+  /// The transport handed to the wrapper; the source of the capabilities.
+  final IRpcTransport inner;
+
+  /// What the wrapper returned; every call still goes through it.
+  final IRpcTransport wrapped;
+
+  // Explicit casts, not `is`-promotion: IRpcSecurityPolicyAware and
+  // IRpcFlowControlled are neither subtypes nor supertypes of IRpcTransport, so
+  // Dart forms no intersection type and an `is` test promotes nothing. Core
+  // reads the same capabilities the same way.
+  @override
+  RpcSecurityPolicy get securityPolicy {
+    final outer = wrapped;
+    if (outer is IRpcSecurityPolicyAware) {
+      return (outer as IRpcSecurityPolicyAware).securityPolicy;
+    }
+    final source = inner;
+    if (source is IRpcSecurityPolicyAware) {
+      return (source as IRpcSecurityPolicyAware).securityPolicy;
+    }
+    return const RpcSecurityPolicy();
+  }
+
+  /// Prefers the wrapper when it implements the capability, so a decorator that
+  /// meters flow control keeps control of it.
+  IRpcFlowControlled? get _flowControlled {
+    final outer = wrapped;
+    if (outer is IRpcFlowControlled) return outer as IRpcFlowControlled;
+    final source = inner;
+    if (source is IRpcFlowControlled) return source as IRpcFlowControlled;
+    return null;
+  }
+
+  @override
+  void deferFlowCredit(int streamId) =>
+      _flowControlled?.deferFlowCredit(streamId);
+
+  @override
+  void returnFlowCredit(int streamId, int bytes) =>
+      _flowControlled?.returnFlowCredit(streamId, bytes);
+
+  @override
+  bool get isClient => wrapped.isClient;
+  @override
+  bool get isClosed => wrapped.isClosed;
+  @override
+  bool get supportsZeroCopy => wrapped.supportsZeroCopy;
+  @override
+  Stream<RpcTransportMessage> get incomingMessages => wrapped.incomingMessages;
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
+      wrapped.getMessagesForStream(streamId);
+  @override
+  int createStream() => wrapped.createStream();
+  @override
+  bool releaseStreamId(int streamId) => wrapped.releaseStreamId(streamId);
+  @override
+  Future<void> sendMetadata(
+    int streamId,
+    RpcMetadata metadata, {
+    bool endStream = false,
+  }) => wrapped.sendMetadata(streamId, metadata, endStream: endStream);
+  @override
+  Future<void> sendMessage(
+    int streamId,
+    Uint8List data, {
+    bool endStream = false,
+  }) => wrapped.sendMessage(streamId, data, endStream: endStream);
+  @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) => wrapped.sendDirectObject(streamId, object, endStream: endStream);
+  @override
+  Future<void> finishSending(int streamId) => wrapped.finishSending(streamId);
+  @override
+  Future<RpcHealthStatus> health() => wrapped.health();
+  @override
+  Future<RpcHealthStatus> reconnect() => wrapped.reconnect();
+  @override
+  Future<void> close() => wrapped.close();
 }
