@@ -9,6 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'rpc_websocket_channel.dart';
+import 'ws_open_stub.dart' if (dart.library.io) 'ws_open_io.dart';
 
 /// Client-side WebSocket transport with optional reconnect support.
 ///
@@ -82,16 +83,42 @@ class RpcWebSocketCallerTransport
   /// rejects if the URL is invalid or the server is unreachable. This ensures
   /// connection errors are reported through the transport factory rather than
   /// leaking as unhandled stream errors.
+  ///
+  /// [pingInterval] enables WebSocket keepalive, and is the only way to detect
+  /// a HALF-OPEN connection: a NAT box, load balancer or mobile network that
+  /// silently stops forwarding, with no FIN and no RST, so both peers still
+  /// believe the socket is fine. On the VM, dart:io sends a ping every
+  /// interval and closes the connection if no pong returns within one.
+  ///
+  /// Measured through a TCP relay that keeps both sockets open and stops
+  /// copying bytes — exactly what a dead path looks like:
+  ///
+  ///     no keepalive      : the call HUNG past 12s, and health() still said
+  ///                         "healthy" while the path was dead
+  ///     pingInterval 2s   : RpcStatusException(14) after 4002ms,
+  ///                         health "closed"
+  ///     control, no freeze: returned in 5ms
+  ///
+  /// Defaults to null, i.e. OFF, so nothing changes for existing callers. It
+  /// is opt-in because the right interval is a deployment question: too short
+  /// wastes battery and wakes mobile radios, too long leaves calls hanging.
+  /// Pick it from the shortest idle timeout on the path (load balancers
+  /// commonly use 60s) and halve it.
+  ///
+  /// On the WEB it is accepted and ignored: browsers run ping/pong inside the
+  /// WebSocket implementation and expose no API for it. A web client is not
+  /// unprotected — the browser is doing it — but it cannot be tuned here.
   static Future<RpcWebSocketCallerTransport> connect(
     Uri uri, {
     Iterable<String>? protocols,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    Duration? pingInterval,
   }) async {
-    Future<WebSocketChannel> openChannel() async {
-      final ch = WebSocketChannel.connect(uri, protocols: protocols);
-      await ch.ready;
-      return ch;
-    }
+    // The reconnect factory carries the same keepalive, or a reconnected
+    // socket would come back without it and be blind again after the first
+    // drop -- which is precisely when a flaky path is most likely.
+    Future<WebSocketChannel> openChannel() =>
+        openWebSocket(uri, protocols: protocols, pingInterval: pingInterval);
 
     return RpcWebSocketCallerTransport(
       await openChannel(),
