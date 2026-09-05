@@ -39,16 +39,26 @@ import 'dart:typed_data';
 /// server (which sends frames immediately, no preface). Getting it backwards
 /// silently disables the guard in one direction and corrupts parsing in the
 /// other -- see [_HeaderBlockScanner._connectionPrefaceSize].
+/// [onGoaway], when given, fires the first time the peer sends a GOAWAY frame.
+///
+/// This scanner is the only place in the transport that sees raw frames, and
+/// package:http2 exposes no "the peer is draining" signal of its own —
+/// `ClientTransportConnection` offers a single `isOpen`, which folds GOAWAY
+/// together with "at MAX_CONCURRENT_STREAMS". Surfacing GOAWAY here is what
+/// lets the caller tell a DRAINING peer (reconnect elsewhere) from a merely
+/// SATURATED one (wait for a slot).
 Stream<List<int>> guardHttp2HeaderBlock(
   Stream<List<int>> incoming, {
   required int maxHeaderBlockBytes,
   required void Function(int observedBytes) onViolation,
   bool skipConnectionPreface = true,
+  void Function()? onGoaway,
 }) {
   final controller = StreamController<List<int>>();
   final scanner = _HeaderBlockScanner(
     maxHeaderBlockBytes,
     skipConnectionPreface: skipConnectionPreface,
+    onGoaway: onGoaway,
   );
   late StreamSubscription<List<int>> sub;
   var violated = false;
@@ -89,14 +99,24 @@ Stream<List<int>> guardHttp2HeaderBlock(
 /// assembles a 9-byte frame header or jumps over a payload span in O(1), so the
 /// scan costs O(frames), not O(bytes).
 class _HeaderBlockScanner {
-  _HeaderBlockScanner(this._max, {required bool skipConnectionPreface})
-    : _prefaceRemaining = skipConnectionPreface ? _connectionPrefaceSize : 0;
+  _HeaderBlockScanner(
+    this._max, {
+    required bool skipConnectionPreface,
+    void Function()? onGoaway,
+  }) : _prefaceRemaining = skipConnectionPreface ? _connectionPrefaceSize : 0,
+       _onGoaway = onGoaway;
 
   static const int _frameHeaderSize = 9;
   static const int _typeHeaders = 0x1;
   static const int _typePushPromise = 0x5;
   static const int _typeContinuation = 0x9;
   static const int _flagEndHeaders = 0x4;
+
+  /// GOAWAY, RFC 9113 s6.8. Always on stream 0.
+  static const int _typeGoaway = 0x7;
+
+  final void Function()? _onGoaway;
+  bool _goawaySeen = false;
 
   /// Length of the client connection preface, RFC 9113 s3.4: the 24-octet
   /// sequence "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" that opens every client-to-
@@ -165,6 +185,12 @@ class _HeaderBlockScanner {
           _blockBytes += length;
           if ((flags & _flagEndHeaders) != 0) _inBlock = false;
         }
+      } else if (type == _typeGoaway && !_goawaySeen) {
+        // Reported once. A peer may legitimately send a second GOAWAY with a
+        // lower last-stream-id while draining, and the transport only needs to
+        // learn "this connection is going away" a single time.
+        _goawaySeen = true;
+        _onGoaway?.call();
       }
 
       if ((type == _typeHeaders ||

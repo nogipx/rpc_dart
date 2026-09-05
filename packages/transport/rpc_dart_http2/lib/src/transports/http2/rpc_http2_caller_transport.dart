@@ -12,6 +12,16 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'http2_header_block_guard.dart';
 import 'rpc_http2_common.dart';
 
+/// Whether the peer has told us this connection is going away.
+///
+/// A mutable holder rather than a field because the connection is built by a
+/// static factory closure BEFORE the transport instance exists, and the same
+/// closure is re-run by [RpcHttp2CallerTransport.reconnect]. One holder per
+/// transport, shared with every connection it builds, reset on attach.
+class _DrainSignal {
+  bool goawayReceived = false;
+}
+
 /// HTTP/2 транспорт для клиентских RPC вызовов
 ///
 /// Реализует IRpcTransport поверх HTTP/2 протокола для исходящих вызовов.
@@ -192,6 +202,7 @@ class RpcHttp2CallerTransport
     LogScope? logger,
     Duration? pingInterval,
     Duration? pingTimeout,
+    _DrainSignal? drainSignal,
   }) : _connection = connection,
        _connectionFactory = connectionFactory,
        _host = host,
@@ -200,9 +211,20 @@ class RpcHttp2CallerTransport
        _logger = logger?.child('Http2ClientTransport'),
        _policy = policy,
        _pingInterval = pingInterval,
-       _pingTimeout = pingTimeout {
+       _pingTimeout = pingTimeout,
+       _drainSignal = drainSignal ?? _DrainSignal() {
     _startKeepalive();
   }
+
+  /// Set once the peer sends GOAWAY on the current connection.
+  ///
+  /// `ClientTransportConnection.isOpen` is
+  /// `!isFinishing && !isTerminated && canOpenStream`, so on its own it cannot
+  /// tell a DRAINING peer from one merely at MAX_CONCURRENT_STREAMS — and the
+  /// two need opposite responses: reconnect elsewhere versus wait for a slot.
+  /// The header-block guard already parses frame headers on this connection's
+  /// incoming bytes, so it reports GOAWAY (frame type 0x7) here.
+  final _DrainSignal _drainSignal;
 
   /// (Re)starts PING keepalive for the current connection.
   ///
@@ -270,6 +292,8 @@ class RpcHttp2CallerTransport
   }) async {
     logger?.internal('Создание защищенного HTTP/2 соединения с $host:$port');
 
+    final drainSignal = _DrainSignal();
+
     Future<http2.ClientTransportConnection> createConnection() async {
       if (proxyUri != null) {
         return _connectH2ViaProxy(
@@ -293,6 +317,7 @@ class RpcHttp2CallerTransport
         destroy: socket.destroy,
         policy: policy,
         logger: logger,
+        drainSignal: drainSignal,
       );
     }
 
@@ -309,6 +334,7 @@ class RpcHttp2CallerTransport
       logger: logger,
       pingInterval: pingInterval,
       pingTimeout: pingTimeout,
+      drainSignal: drainSignal,
     );
   }
 
@@ -331,12 +357,14 @@ class RpcHttp2CallerTransport
     Duration? pingInterval,
     Duration? pingTimeout,
   }) {
+    final drainSignal = _DrainSignal();
     final connection = _guardedConnection(
       incoming: socket,
       outgoing: socket,
       destroy: socket.destroy,
       policy: policy,
       logger: logger,
+      drainSignal: drainSignal,
     );
     return RpcHttp2CallerTransport._(
       connection: connection,
@@ -351,6 +379,7 @@ class RpcHttp2CallerTransport
       logger: logger,
       pingInterval: pingInterval,
       pingTimeout: pingTimeout,
+      drainSignal: drainSignal,
     );
   }
 
@@ -369,6 +398,8 @@ class RpcHttp2CallerTransport
     Duration? pingTimeout,
   }) async {
     logger?.internal('Создание HTTP/2 соединения с $host:$port');
+
+    final drainSignal = _DrainSignal();
 
     Future<http2.ClientTransportConnection> createConnection() async {
       if (proxyUri != null) {
@@ -389,6 +420,7 @@ class RpcHttp2CallerTransport
         destroy: socket.destroy,
         policy: policy,
         logger: logger,
+        drainSignal: drainSignal,
       );
     }
 
@@ -405,6 +437,7 @@ class RpcHttp2CallerTransport
       logger: logger,
       pingInterval: pingInterval,
       pingTimeout: pingTimeout,
+      drainSignal: drainSignal,
     );
   }
 
@@ -464,11 +497,18 @@ class RpcHttp2CallerTransport
     required void Function() destroy,
     required RpcSecurityPolicy policy,
     LogScope? logger,
+    _DrainSignal? drainSignal,
   }) {
     final guarded = guardHttp2HeaderBlock(
       incoming,
       maxHeaderBlockBytes: policy.maxMetadataBytes,
       skipConnectionPreface: false,
+      onGoaway: () {
+        logger?.internal(
+          'HTTP/2 peer sent GOAWAY: this connection is draining',
+        );
+        drainSignal?.goawayReceived = true;
+      },
       onViolation: (observedBytes) {
         logger?.warning(
           'HTTP/2 header-block cap exceeded by the peer: $observedBytes bytes '
@@ -793,6 +833,25 @@ class RpcHttp2CallerTransport
       // (activeStreams < limit, limit >= 1), so our own active-stream count
       // separates the cases: not-open WITH active streams is saturation,
       // not-open with none is a finishing/terminated connection.
+      // GOAWAY outranks the saturation heuristic below, and must: a draining
+      // connection ALSO has streams in flight, so without this it was reported
+      // as "at MAX_CONCURRENT_STREAMS; the connection is healthy" for the whole
+      // drain -- advice to wait for a slot on a connection that is shutting
+      // down. Round 76 called that case transient and self-correcting, which
+      // held for a connection that was DYING (it converges in ~200ms) but not
+      // for a graceful drain, which can last as long as the server's budget.
+      //
+      // Measured against this package's own drained shutdown:
+      //   before : RpcStatusException(8) "at the server's MAX_CONCURRENT_STREAMS
+      //            limit ... the connection is healthy"
+      //   after  : RpcStatusException(14) "sent GOAWAY ... reconnect"
+      if (_drainSignal.goawayReceived) {
+        throw RpcStatusException(
+          RpcStatus.unavailable,
+          'HTTP/2 connection to $_host:$_port is draining (the peer sent '
+          'GOAWAY); reconnect rather than retrying on this connection',
+        );
+      }
       if (_activeStreams.isNotEmpty) {
         throw RpcStatusException(
           RpcStatus.resourceExhausted,
@@ -1377,6 +1436,16 @@ class RpcHttp2CallerTransport
       // supervisor drop a healthy connection and every call on it. Only
       // not-open with no active streams is a finishing/terminated connection.
       // See the same split in sendMetadata().
+      // Draining is not capacity. See the same split in sendMetadata().
+      if (_drainSignal.goawayReceived) {
+        return RpcHealthStatus.degraded(
+          component: runtimeType.toString(),
+          message:
+              'HTTP/2 connection is draining (peer sent GOAWAY). Reconnect is '
+              'required; ${_activeStreams.length} call(s) still finishing.',
+          details: details,
+        );
+      }
       if (_activeStreams.isNotEmpty) {
         return RpcHealthStatus.healthy(
           component: runtimeType.toString(),
@@ -1524,6 +1593,11 @@ class RpcHttp2CallerTransport
       _connection = connection;
       _disconnected = false;
       _nextStreamId = 1;
+      // The signal is per-TRANSPORT but describes the CURRENT connection, and
+      // the factory closure reports every connection into the same holder. A
+      // stale flag here would make a freshly reconnected transport claim it was
+      // draining and refuse every call.
+      _drainSignal.goawayReceived = false;
       // Re-arm keepalive against the NEW connection. The old timer closed over
       // the old one, so without this a reconnected transport either pings a
       // corpse forever or (after a keepalive-triggered teardown, which cancels
