@@ -60,7 +60,7 @@ int grpcStatusFromWebSocketCloseCode(int? closeCode) => switch (closeCode) {
   _ => RpcStatus.unknown,
 };
 
-class RpcWebSocketChannel implements IRpcChannel {
+class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
   final WebSocketChannel _ws;
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
   late final StreamSubscription _sub;
@@ -168,6 +168,44 @@ class RpcWebSocketChannel implements IRpcChannel {
   Future<void> send(Uint8List data) async {
     if (_closed) return;
     _ws.sink.add(data);
+  }
+
+  /// Close code for a framing violation by the peer.
+  ///
+  /// 1002 "protocol error" is what this MEANS, and it cannot be used: an
+  /// application may only send 1000 or 3000-4999. Everything else, 1002/1008/
+  /// 1009/1011 included, is reserved for the WebSocket implementation itself,
+  /// and `package:web_socket` enforces it —
+  ///
+  ///     Invalid argument: 1002, close code must be 1000 or in the range
+  ///     3000-4999
+  ///
+  /// — which turned the first version of this into an unhandled exception on
+  /// the teardown path. So the private-use range is the only option.
+  ///
+  /// 4400 is chosen to echo HTTP 400: the peer's framing was bad. What matters
+  /// is that [grpcStatusFromWebSocketCloseCode] maps 3000-4999 to UNKNOWN,
+  /// which is NOT retried — so the peer stops resending the frame that got it
+  /// disconnected, which is the entire purpose. The reason string carries the
+  /// detail for a human; nothing keys off it.
+  static const int _protocolErrorCloseCode = 4400;
+
+  @override
+  Future<void> closeForProtocolError(String reason) async {
+    if (_closed) return;
+    _closed = true;
+    await _sub.cancel();
+    try {
+      // WebSocket caps the close reason at 123 BYTES, and dart:io throws if it
+      // is longer -- which would turn a tidy protocol close into an exception
+      // on the teardown path. Frame-exception messages carry byte counts and
+      // limits and run past that easily, so truncate.
+      final trimmed = reason.length > 100
+          ? '${reason.substring(0, 97)}...'
+          : reason;
+      await _ws.sink.close(_protocolErrorCloseCode, trimmed);
+    } catch (_) {}
+    if (!_incoming.isClosed) unawaited(_incoming.close());
   }
 
   @override

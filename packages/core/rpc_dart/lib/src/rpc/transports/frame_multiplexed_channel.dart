@@ -230,6 +230,28 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
     // Drop any partially buffered bytes immediately; do not keep allocating.
     _buf = Uint8List(0);
     _bufLen = 0;
+
+    // Tell the peer this was ITS fault, where the underlying protocol can say
+    // so. A framing violation is deterministic: the peer sent something
+    // malformed and will send it again if it believes the failure was
+    // transient. Closing silently is exactly that invitation -- a WebSocket
+    // peer then sees 1005 "no status received", which maps to UNAVAILABLE and
+    // is retried. Measured against an rpc_dart server:
+    //
+    //   server shutdown           : 1005 -> UNAVAILABLE (retryable)  correct
+    //   client protocol violation : 1005 -> UNAVAILABLE (retryable)  WRONG
+    //
+    // Channels without a close code on the wire fall through to the ordinary
+    // close, so this changes nothing for them.
+    final channel = _channel;
+    if (channel is IRpcChannelProtocolClose) {
+      unawaited(
+        (channel as IRpcChannelProtocolClose).closeForProtocolError(
+          error.message,
+        ),
+      );
+      return;
+    }
     unawaited(close());
   }
 

@@ -47,3 +47,31 @@ abstract class IRpcChannel {
   /// Close the channel and release all resources.
   Future<void> close();
 }
+
+/// Optional capability: a channel whose underlying protocol can say WHY it is
+/// hanging up.
+///
+/// Implemented by transports with a close code on the wire — WebSocket is the
+/// one that matters. A channel without it is closed the ordinary way, so this
+/// is opt-in and adding it breaks no existing implementer (every one of them
+/// uses `implements IRpcChannel`, so a new member on that interface would).
+///
+/// Why it exists: a frame-level protocol violation is DETERMINISTIC. The peer
+/// sent something malformed and will send it again if told to retry. When the
+/// channel is torn down without saying so, a WebSocket peer sees close code
+/// 1005 "no status received", which maps to UNAVAILABLE — retryable. Measured
+/// against an rpc_dart server, with a client whose frame declared a payload
+/// past the policy:
+///
+///     server shutdown           : closeCode=1005 -> UNAVAILABLE (retryable)  correct
+///     client protocol violation : closeCode=1005 -> UNAVAILABLE (retryable)  WRONG
+///
+/// The first is right — a client should reconnect past a restart. The second
+/// invites the client to repeat the frame that just got it disconnected.
+abstract class IRpcChannelProtocolClose {
+  /// Closes the channel, telling the peer this was a protocol violation.
+  ///
+  /// [reason] is for a human reading a log; it must not be relied on
+  /// programmatically, and WebSocket caps it at 123 bytes.
+  Future<void> closeForProtocolError(String reason);
+}
