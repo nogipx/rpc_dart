@@ -95,10 +95,50 @@ class RpcHttp2ResponderTransport
         }
       },
       onDone: () {
-        _logger?.internal('HTTP/2 соединение закрыто');
-        close();
+        // `incomingStreams` completing means NO MORE NEW STREAMS -- it does not
+        // mean the connection is closed, and treating it as such killed every
+        // call still running.
+        //
+        // package:http2 completes this stream from `onClosing()`, which fires
+        // on GOAWAY (its `_finishing`) as well as on a real teardown. GOAWAY is
+        // the ordinary graceful-shutdown signal: a peer draining, a proxy
+        // recycling a connection, or a load balancer rotating a backend all
+        // send it, and the whole point of GOAWAY is that streams already open
+        // are allowed to FINISH. Closing here answered "please stop starting
+        // new work" with "everything in flight dies now".
+        //
+        // Measured against this server's own graceful drain, one 3s call in
+        // flight when the peer was sent GOAWAY:
+        //
+        //   before : the in-flight call failed UNAVAILABLE and stop() returned
+        //            in 416ms -- the drain it was supposed to perform never
+        //            happened
+        //   after  : the in-flight call returns its real answer
+        //
+        // So: stop accepting, and close only once the last open stream is done.
+        // A genuinely dead connection still closes promptly, because its
+        // streams end too (and `socket.done` closes the endpoint regardless).
+        _logger?.internal(
+          'HTTP/2: no further incoming streams (GOAWAY or connection close)',
+        );
+        _acceptingStreams = false;
+        _closeIfDrained();
       },
     );
+  }
+
+  /// False once the peer will send no further streams (GOAWAY or teardown).
+  bool _acceptingStreams = true;
+
+  /// Closes the transport once no stream is left to serve.
+  ///
+  /// Only meaningful after [_acceptingStreams] goes false: before that, an
+  /// empty stream table is just an idle connection.
+  void _closeIfDrained() {
+    if (_acceptingStreams || _isClosed) return;
+    if (_incomingStreams.isNotEmpty) return;
+    _logger?.internal('HTTP/2: last stream drained, closing transport');
+    close();
   }
 
   /// Обрабатывает новый входящий stream от клиента
@@ -447,6 +487,10 @@ class RpcHttp2ResponderTransport
     // Удаляем парсер и tracking для этого stream
     _streamParsers.remove(streamId);
     _initialHeadersSent.remove(streamId);
+
+    // If the peer has already said it will send nothing further, this may have
+    // been the last call we owed it.
+    _closeIfDrained();
 
     return true;
   }

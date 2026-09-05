@@ -40,6 +40,16 @@ class RpcHttp2Server implements IRpcServer {
   final List<StreamSubscription> _subscriptions = [];
   final List<RpcResponderEndpoint> _endpoints = [];
 
+  /// The HTTP/2 connection behind each endpoint.
+  ///
+  /// Kept only so a graceful [stop] can send GOAWAY: the endpoint abstraction
+  /// has no notion of "stop accepting new streams on this connection", and that
+  /// signal is the difference between a drain that converges and one that runs
+  /// out its budget. Entries are removed in [_releaseEndpoint], so this tracks
+  /// [_endpoints] exactly and cannot outlive it.
+  final Map<RpcResponderEndpoint, http2.ServerTransportConnection>
+  _connections = {};
+
   /// Создает HTTP/2 RPC сервер
   ///
   /// [host] - хост для привязки (по умолчанию 'localhost')
@@ -201,15 +211,47 @@ class RpcHttp2Server implements IRpcServer {
   /// the client had no way to be told "finish what you started".
   ///
   /// Accepting has already stopped by the time this runs, but an EXISTING
-  /// connection can still open new streams, and this transport has no GOAWAY
-  /// equivalent to forbid that. So the budget is mandatory rather than optional:
-  /// a peer that keeps calling would otherwise hold shutdown open forever.
+  /// connection can still open new streams — so the drain begins by sending
+  /// GOAWAY on every live connection. That is the HTTP/2 signal for "no new
+  /// streams here", and it is what makes a gRPC graceful shutdown converge
+  /// rather than merely expire. Without it, measured with one slow call in
+  /// flight and a second issued 400ms AFTER shutdown began:
+  ///
+  ///     no GOAWAY : the late call was ACCEPTED and served in 6ms, so shutdown
+  ///                 was extended by work that arrived after it started
+  ///     GOAWAY    : the late call is refused UNAVAILABLE and shutdown
+  ///                 converges as soon as the in-flight call finishes
+  ///
+  /// GOAWAY does NOT cut the calls already running: it carries the last stream
+  /// id the peer may assume was processed, so streams below it finish normally.
+  /// That is exactly the drain semantics wanted here.
+  ///
+  /// The budget still applies. A peer can ignore GOAWAY, and a handler can
+  /// simply run long, so shutdown stays bounded either way.
   ///
   /// `activeResponders` counts live responder streams. A handler that outlives
   /// its stream is not counted — the same caveat gRPC's own drain carries, and
   /// the reason [maxActiveStreams] is documented as bounding stream state
   /// rather than handler execution.
   Future<void> _drain(Duration budget) async {
+    // Send GOAWAY first, even if nothing is in flight: a peer that is about to
+    // call deserves the signal, and finish() is what delivers it.
+    //
+    // Fired, not awaited, and individually guarded. `finish()` completes only
+    // once the peer's streams drain, so awaiting it here would reproduce the
+    // very hang the caller's close() was fixed for -- a dead peer never
+    // finishes. The poll below is what bounds this, and the forceful close
+    // after it is what releases anything still held.
+    for (final connection in List.of(_connections.values)) {
+      unawaited(
+        Future<void>.sync(connection.finish).catchError((Object error) {
+          _logger?.internal(
+            'GOAWAY on a connection that was already gone: $error',
+          );
+        }),
+      );
+    }
+
     final deadline = DateTime.now().add(budget);
     var remaining = _inFlightCalls();
     if (remaining == 0) return;
@@ -297,6 +339,7 @@ class RpcHttp2Server implements IRpcServer {
 
   void _releaseEndpoint(RpcResponderEndpoint endpoint, Socket socket) {
     _endpoints.remove(endpoint);
+    _connections.remove(endpoint);
     unawaited(
       endpoint.close().catchError((Object error) {
         _logger?.warning('Ошибка при закрытии endpoint: $error');
@@ -455,6 +498,9 @@ class RpcHttp2Server implements IRpcServer {
     // mid-iteration ("Concurrent modification during iteration").
     final endpointsToClose = List.of(_endpoints);
     _endpoints.clear();
+    // Cleared alongside _endpoints: this map is only ever a view onto them, and
+    // leaving entries here would pin dead connections for the server's lifetime.
+    _connections.clear();
     for (final endpoint in endpointsToClose) {
       try {
         await endpoint.close();
@@ -564,6 +610,7 @@ class RpcHttp2Server implements IRpcServer {
       );
 
       _endpoints.add(endpoint);
+      _connections[endpoint] = connection;
       // Remembered so the catch below can release it if the user callback
       // throws: the endpoint is registered here, BEFORE that callback, and the
       // `socket.done` release wiring is only installed after it.
