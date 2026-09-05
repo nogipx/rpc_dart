@@ -9,6 +9,7 @@ import 'package:universal_io/io.dart';
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
 
+import 'http2_header_block_guard.dart';
 import 'rpc_http2_common.dart';
 
 /// HTTP/2 транспорт для клиентских RPC вызовов
@@ -178,6 +179,8 @@ class RpcHttp2CallerTransport
           targetPort: port,
           secure: true,
           handshakeTimeout: proxyHandshakeTimeout,
+          policy: policy,
+          logger: logger,
         );
       }
       final socket = await SecureSocket.connect(
@@ -185,7 +188,13 @@ class RpcHttp2CallerTransport
         port,
         supportedProtocols: ['h2'],
       );
-      return http2.ClientTransportConnection.viaSocket(socket);
+      return _guardedConnection(
+        incoming: socket,
+        outgoing: socket,
+        destroy: socket.destroy,
+        policy: policy,
+        logger: logger,
+      );
     }
 
     final connection = await createConnection();
@@ -219,7 +228,13 @@ class RpcHttp2CallerTransport
     LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
-    final connection = http2.ClientTransportConnection.viaSocket(socket);
+    final connection = _guardedConnection(
+      incoming: socket,
+      outgoing: socket,
+      destroy: socket.destroy,
+      policy: policy,
+      logger: logger,
+    );
     return RpcHttp2CallerTransport._(
       connection: connection,
       connectionFactory: () => throw StateError(
@@ -256,10 +271,18 @@ class RpcHttp2CallerTransport
           targetPort: port,
           secure: false,
           handshakeTimeout: proxyHandshakeTimeout,
+          policy: policy,
+          logger: logger,
         );
       }
       final socket = await Socket.connect(host, port);
-      return http2.ClientTransportConnection.viaSocket(socket);
+      return _guardedConnection(
+        incoming: socket,
+        outgoing: socket,
+        destroy: socket.destroy,
+        policy: policy,
+        logger: logger,
+      );
     }
 
     final connection = await createConnection();
@@ -302,12 +325,60 @@ class RpcHttp2CallerTransport
   /// bounds a response body in e8c5bc9f.
   static const int _maxProxyHeaderBytes = 64 * 1024;
 
+  /// Builds the http2 connection with the peer's header blocks bounded.
+  ///
+  /// A CLIENT is exposed to the CONTINUATION flood exactly as the server was
+  /// (fixed for RpcHttp2Server in the previous round): package:http2
+  /// concatenates a HEADERS frame and its CONTINUATION frames into one
+  /// unbounded buffer, rebuilding it on every frame, and does so BEFORE any
+  /// stream-state handling -- so the stream need not even exist and nothing
+  /// above the transport can see it.
+  ///
+  /// Measured against a hostile server that answers with HEADERS lacking
+  /// END_HEADERS and then CONTINUATION frames forever:
+  ///
+  ///   64 MiB of frames -> client RSS +194.3 MiB, transport still reporting
+  ///                       open
+  ///
+  /// which is worse than the server side measured (+53.7 MiB) for the same
+  /// flood. "You dialed the server" is not a defence: a client gets pointed at
+  /// a compromised endpoint, and a proxy is a machine on the path that is often
+  /// not the operator's -- the same reasoning that bounds the CONNECT response
+  /// in [_maxProxyHeaderBytes] and the response body in e8c5bc9f.
+  ///
+  /// [skipConnectionPreface] is false here and must stay false: the 24-octet
+  /// preface travels client-to-server only, so a client that skipped 24 bytes
+  /// would misparse the server's first frames.
+  static http2.ClientTransportConnection _guardedConnection({
+    required Stream<List<int>> incoming,
+    required StreamSink<List<int>> outgoing,
+    required void Function() destroy,
+    required RpcSecurityPolicy policy,
+    LogScope? logger,
+  }) {
+    final guarded = guardHttp2HeaderBlock(
+      incoming,
+      maxHeaderBlockBytes: policy.maxMetadataBytes,
+      skipConnectionPreface: false,
+      onViolation: (observedBytes) {
+        logger?.warning(
+          'HTTP/2 header-block cap exceeded by the peer: $observedBytes bytes '
+          '(max: ${policy.maxMetadataBytes}); closing connection',
+        );
+        destroy();
+      },
+    );
+    return http2.ClientTransportConnection.viaStreams(guarded, outgoing);
+  }
+
   static Future<http2.ClientTransportConnection> _connectH2ViaProxy({
     required Uri proxyUri,
     required String targetHost,
     required int targetPort,
     required bool secure,
+    required RpcSecurityPolicy policy,
     Duration handshakeTimeout = _proxyHandshakeTimeout,
+    LogScope? logger,
   }) async {
     final proxyHost = proxyUri.host;
     final proxyPort = proxyUri.hasPort ? proxyUri.port : 3128;
@@ -433,13 +504,24 @@ class RpcHttp2CallerTransport
         host: targetHost,
         supportedProtocols: ['h2'],
       );
-      return http2.ClientTransportConnection.viaSocket(secureSocket);
+      return _guardedConnection(
+        incoming: secureSocket,
+        outgoing: secureSocket,
+        destroy: secureSocket.destroy,
+        policy: policy,
+        logger: logger,
+      );
     } else {
       // Keep sub alive — it feeds forwardCtrl.
       // http2 reads from forwardCtrl.stream; writes go directly to rawSocket.
-      return http2.ClientTransportConnection.viaStreams(
-        forwardCtrl.stream,
-        rawSocket,
+      // The guard sits on the forwarded stream, so it bounds what the TUNNELED
+      // peer sends as well as anything the proxy injects.
+      return _guardedConnection(
+        incoming: forwardCtrl.stream,
+        outgoing: rawSocket,
+        destroy: rawSocket.destroy,
+        policy: policy,
+        logger: logger,
       );
     }
   }

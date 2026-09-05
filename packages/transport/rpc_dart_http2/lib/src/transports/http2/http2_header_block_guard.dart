@@ -34,13 +34,22 @@ import 'dart:typed_data';
 /// block passes [maxHeaderBlockBytes]. A legitimate gRPC request's header block
 /// is well under a kilobyte, so the default bound (the policy's
 /// `maxMetadataBytes`, 64 KiB) never touches real traffic.
+/// [skipConnectionPreface] must be true for a SERVER reading from a client (the
+/// 24-octet preface opens that direction) and false for a CLIENT reading from a
+/// server (which sends frames immediately, no preface). Getting it backwards
+/// silently disables the guard in one direction and corrupts parsing in the
+/// other -- see [_HeaderBlockScanner._connectionPrefaceSize].
 Stream<List<int>> guardHttp2HeaderBlock(
   Stream<List<int>> incoming, {
   required int maxHeaderBlockBytes,
   required void Function(int observedBytes) onViolation,
+  bool skipConnectionPreface = true,
 }) {
   final controller = StreamController<List<int>>();
-  final scanner = _HeaderBlockScanner(maxHeaderBlockBytes);
+  final scanner = _HeaderBlockScanner(
+    maxHeaderBlockBytes,
+    skipConnectionPreface: skipConnectionPreface,
+  );
   late StreamSubscription<List<int>> sub;
   var violated = false;
 
@@ -80,7 +89,8 @@ Stream<List<int>> guardHttp2HeaderBlock(
 /// assembles a 9-byte frame header or jumps over a payload span in O(1), so the
 /// scan costs O(frames), not O(bytes).
 class _HeaderBlockScanner {
-  _HeaderBlockScanner(this._max);
+  _HeaderBlockScanner(this._max, {required bool skipConnectionPreface})
+    : _prefaceRemaining = skipConnectionPreface ? _connectionPrefaceSize : 0;
 
   static const int _frameHeaderSize = 9;
   static const int _typeHeaders = 0x1;
@@ -93,13 +103,16 @@ class _HeaderBlockScanner {
   /// server HTTP/2 connection, BEFORE any frame. It must be consumed before
   /// frame parsing starts, or its first nine bytes ("PRI * HT...") are read as
   /// a bogus frame header declaring a ~5 MiB payload -- which made the scanner
-  /// skip the real frames and never fire. This guard runs server-side only, so
-  /// the preface is always present.
+  /// skip the real frames and never fire.
+  ///
+  /// It is present ONLY in the client-to-server direction, so a server skips it
+  /// and a client must not: a client that skipped 24 bytes of the server's
+  /// first frames would misparse everything after them.
   static const int _connectionPrefaceSize = 24;
 
   final int _max;
 
-  int _prefaceRemaining = _connectionPrefaceSize;
+  int _prefaceRemaining;
   final Uint8List _hdr = Uint8List(_frameHeaderSize);
   int _hdrHave = 0;
   int _payloadRemaining = 0;
