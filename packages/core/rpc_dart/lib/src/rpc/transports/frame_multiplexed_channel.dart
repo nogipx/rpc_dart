@@ -151,21 +151,40 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
   void _onData(Uint8List chunk) {
     if (_closed || chunk.isEmpty) return;
 
-    _appendToBuffer(chunk);
-
     // Receive-path cap: never let the reassembly buffer grow past the policy
     // limit. A peer dribbling bytes toward a huge declared frame is stopped
     // here even before the per-frame length check fires.
-    if (_bufLen > _maxBufferedFrameBytes) {
-      final buffered = _bufLen;
+    //
+    // Checked BEFORE the append, which is the whole point. Appending first
+    // allocated the oversized chunk in full and copied it, and only then
+    // consulted the limit that exists to prevent exactly that -- so the cap
+    // bounded what was RETAINED and not what was ALLOCATED. Measured with a
+    // 16 MiB policy limit, feeding one 256 MiB chunk:
+    //
+    //   allocated by the channel : 256.2 MiB   (16x the configured cap)
+    //   after this check         : 0.0 MiB
+    //
+    // and the chunk size is entirely peer-controlled on the transport this
+    // matters most for: dart:io's WebSocket has no message-size limit and
+    // delivers one WS message as ONE chunk, measured at 96 MiB arriving whole.
+    // So any unauthenticated peer could make a server allocate an arbitrary
+    // multiple of its own configured ceiling, once per message, before being
+    // disconnected for it.
+    //
+    // The reported byte count is unchanged: the old text printed `_bufLen`
+    // after the append, which is this same sum.
+    final incoming = _bufLen + chunk.length;
+    if (incoming > _maxBufferedFrameBytes) {
       _failChannel(
         RpcFrameException(
-          'Incoming frame buffer overflow: $buffered bytes '
+          'Incoming frame buffer overflow: $incoming bytes '
           '(max: $_maxBufferedFrameBytes)',
         ),
       );
       return;
     }
+
+    _appendToBuffer(chunk);
 
     // Decode against a view of the valid region. decodeAll is O(1) when no
     // frame is complete (it reads the 9-byte header and bails), so calling it
