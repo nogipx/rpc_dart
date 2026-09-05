@@ -324,6 +324,18 @@ class RpcHttp2Server implements IRpcServer {
 
     _notify('onConnectionOpened', () => _onConnectionOpened?.call(socket));
 
+    // See the assignment below. Measured on this server with a callback that
+    // throws on every connection, three connections:
+    //
+    //   endpoints held     : 3   (want 0)
+    //   contracts disposed : 0   (want 3)
+    //
+    // one permanent leak per failed connection, holding the application's
+    // contracts. Same defect and same ordering as the websocket server; a
+    // throwing onEndpointCreated is ordinary, because that callback is where
+    // the application registers its contracts.
+    RpcResponderEndpoint? created;
+
     try {
       // Создаем HTTP/2 соединение
       final connection = http2.ServerTransportConnection.viaSocket(socket);
@@ -365,6 +377,10 @@ class RpcHttp2Server implements IRpcServer {
       );
 
       _endpoints.add(endpoint);
+      // Remembered so the catch below can release it if the user callback
+      // throws: the endpoint is registered here, BEFORE that callback, and the
+      // `socket.done` release wiring is only installed after it.
+      created = endpoint;
 
       // Уведомляем о создании endpoint'а
       _onEndpointCreated?.call(endpoint);
@@ -396,6 +412,12 @@ class RpcHttp2Server implements IRpcServer {
         'onConnectionError',
         () => _onConnectionError?.call(e, stackTrace),
       );
+      // Release what was already registered. _releaseEndpoint removes it,
+      // closes it -- which is what disposes the contracts -- and fires
+      // onConnectionClosed, balancing the onConnectionOpened above for a
+      // connection now being torn down.
+      final orphan = created;
+      if (orphan != null) _releaseEndpoint(orphan, socket);
       socket.destroy();
     }
   }
