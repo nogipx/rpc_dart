@@ -8,6 +8,7 @@ import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
+import 'http2_header_block_guard.dart';
 import 'rpc_http2_responder_transport.dart';
 
 /// Высокоуровневый HTTP/2 RPC сервер
@@ -337,8 +338,40 @@ class RpcHttp2Server implements IRpcServer {
     RpcResponderEndpoint? created;
 
     try {
-      // Создаем HTTP/2 соединение
-      final connection = http2.ServerTransportConnection.viaSocket(socket);
+      // Создаем HTTP/2 соединение.
+      //
+      // The incoming byte stream is passed through a header-block guard before
+      // package:http2 sees it: that library concatenates a HEADERS frame and
+      // its CONTINUATION frames with no bound (and O(N^2) recopy), so a peer
+      // that opens a header block and never ends it floods the server's event
+      // loop below every rpc_dart limit. See http2_header_block_guard.dart.
+      // Outbound is the raw socket; only the read side is guarded.
+      final guardedIncoming = guardHttp2HeaderBlock(
+        socket,
+        maxHeaderBlockBytes: _securityPolicy.maxMetadataBytes,
+        onViolation: (observedBytes) {
+          _logger?.warning(
+            'HTTP/2 header-block cap exceeded from $clientAddress: '
+            '$observedBytes bytes (max: ${_securityPolicy.maxMetadataBytes}); '
+            'closing connection',
+          );
+          _notify(
+            'onConnectionError',
+            () => _onConnectionError?.call(
+              StateError(
+                'HTTP/2 header block exceeded ${_securityPolicy.maxMetadataBytes} '
+                'bytes ($observedBytes observed): probable CONTINUATION flood',
+              ),
+              StackTrace.current,
+            ),
+          );
+          socket.destroy();
+        },
+      );
+      final connection = http2.ServerTransportConnection.viaStreams(
+        guardedIncoming,
+        socket,
+      );
 
       // Создаем серверный транспорт (правильный способ!)
       IRpcTransport transport = RpcHttp2ResponderTransport(
