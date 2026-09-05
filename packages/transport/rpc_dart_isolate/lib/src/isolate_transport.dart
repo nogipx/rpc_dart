@@ -475,12 +475,69 @@ abstract interface class RpcIsolateTransport {
     // Subscribing early instead closes the window at both hops -- the two
     // constructions below are synchronous and back to back, so no port message
     // can land between them.
+    // Everything spawn() acquired is released HERE, on the path the channel
+    // closes -- not only inside kill().
+    //
+    // The isolate, `errorPort` and `exitPort` used to be reclaimed by kill()
+    // alone. But the thing this function hands back is an IRpcTransport, and
+    // `RpcEndpointBase.close()` closes the transport it was given -- so an
+    // application that wires the spawned transport into an endpoint and closes
+    // the endpoint reaches close(), never kill(). Measured, with the worker
+    // beating on a port of ours so "still running" is observable:
+    //
+    //   teardown via transport.close() : beats after teardown 12, host process
+    //                                    NEVER EXITED (killed at 15s)
+    //   teardown via kill()            : beats after teardown 0, host process
+    //                                    exited in 809 ms
+    //
+    // i.e. a whole isolate -- thread and heap -- stayed alive per connection,
+    // and the two open ReceivePorts kept the host's event loop alive so the
+    // process could not end either. The suite never saw it because every test
+    // in the package tears down with kill(); nothing exercised the standard
+    // lifecycle call.
+    //
+    // The WEB sibling was the tell: its channel closes via
+    // `controller.close()`, and isolate_manager's controller terminates the
+    // Worker there. Same role, opposite behaviour -- the VM variant was the odd
+    // one out.
+    //
+    // Killing rather than waiting for a natural exit is deliberate: a worker
+    // holding a timer, a subscription or a socket never runs out of work, so
+    // "its ports are closed, it will wind down" is not true in general. This is
+    // what kill() already did; it is now also what close() does.
+    var connectionTornDown = false;
+    void teardownConnection() {
+      // Not while startup is still in flight. A worker that throws inside the
+      // user entrypoint closes its own channel on the way out, and that channel
+      // sends a `close` frame on stream 0 -- so the host channel closes BEFORE
+      // the isolate's uncaught error reaches `errorPort`. Tearing down here
+      // cancelled errorSub/exitSub first, and the real cause was lost:
+      //
+      //   expected : StateError: boom: worker failed during startup
+      //   got      : TimeoutException ... did not become ready within 0:00:05
+      //
+      // which is precisely the regression `spawn_handshake_failure_test` was
+      // written to catch. Startup has its own cleanup -- the catch below closes
+      // the transport and calls teardownStartup() -- and it needs these ports
+      // OPEN to report why the worker died.
+      if (!ready.isCompleted) return;
+      if (connectionTornDown) return;
+      connectionTornDown = true;
+      isolate.kill(priority: Isolate.immediate);
+      // initPort / initSub already closed after a successful handshake.
+      errorPort.close();
+      exitPort.close();
+      unawaited(errorSub.cancel());
+      unawaited(exitSub.cancel());
+    }
+
     hostChannel = _IsolateMultiplexedChannel(
       sendPort: workerSendPort,
       messageStream: messageController.stream,
       onClose: () {
         hostReceivePort.close();
         if (!messageController.isClosed) messageController.close();
+        teardownConnection();
       },
     );
     hostTransport = RpcChannelTransport(
@@ -510,14 +567,14 @@ abstract interface class RpcIsolateTransport {
       rethrow;
     }
 
+    // Unchanged in effect: close the transport (which sends the close frame to
+    // the worker), then tear down synchronously so the kill is still immediate.
+    // The channel's own onClose reaches teardownConnection() a few microtasks
+    // later and finds it already done -- the guard is what makes the two entry
+    // points idempotent with respect to each other.
     void killIsolate() {
       hostTransport?.close();
-      isolate.kill(priority: Isolate.immediate);
-      // initPort / initSub already closed after a successful handshake.
-      errorPort.close();
-      exitPort.close();
-      errorSub.cancel();
-      exitSub.cancel();
+      teardownConnection();
     }
 
     return (transport: hostTransport, kill: killIsolate);
