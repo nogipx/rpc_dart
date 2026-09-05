@@ -148,10 +148,42 @@ class RpcWebSocketServer implements IRpcServer {
     _isRunning = true;
   }
 
+  /// Stops the server, optionally letting in-flight calls finish first.
+  ///
+  /// With [drainTimeout] null (the default, and the behaviour before it
+  /// existed) every endpoint is closed at once, so a call running at that
+  /// moment dies. It dies CORRECTLY — measured with a 2s handler and stop()
+  /// 300ms in, the caller got a prompt, retryable `UNAVAILABLE` at 314ms — so
+  /// this is a missing capability rather than a broken one: a rolling deploy
+  /// had no way to say "finish what you started".
+  ///
+  /// With a budget, shutdown stops accepting, waits for in-flight calls to
+  /// drain, and only then closes. The budget is mandatory rather than optional
+  /// because an EXISTING connection can still open new streams and this
+  /// transport has no way to forbid that, so a peer that keeps calling would
+  /// otherwise hold shutdown open forever.
   @override
-  Future<void> stop() async {
+  Future<void> stop({Duration? drainTimeout}) async {
     if (!_isRunning) return;
     _isRunning = false;
+
+    // Stop ACCEPTING first.
+    //
+    // This used to run last, after the endpoints were closed and the list
+    // cleared. A connection arriving in that window was still handled: it built
+    // an endpoint and added it to `_endpoints` AFTER `_endpoints.clear()`, so
+    // nothing in this shutdown ever closed it and its contracts were never
+    // disposed. Narrow, but free to remove — and draining while still accepting
+    // would not be a shutdown at all.
+    try {
+      await _connectionsSub?.cancel();
+    } catch (e) {
+      _logger?.warning('Error cancelling connection subscription: $e');
+    } finally {
+      _connectionsSub = null;
+    }
+
+    if (drainTimeout != null) await _drain(drainTimeout);
 
     for (final endpoint in List.of(_endpoints)) {
       try {
@@ -161,13 +193,42 @@ class RpcWebSocketServer implements IRpcServer {
       }
     }
     _endpoints.clear();
-    try {
-      await _connectionsSub?.cancel();
-    } catch (e) {
-      _logger?.warning('Error cancelling connection subscription: $e');
-    } finally {
-      _connectionsSub = null;
+  }
+
+  /// Waits, up to [budget], for in-flight calls to finish.
+  ///
+  /// `activeResponders` counts live responder streams; a handler that outlives
+  /// its stream is not counted, the same caveat gRPC's own drain carries.
+  Future<void> _drain(Duration budget) async {
+    final deadline = DateTime.now().add(budget);
+    var remaining = _inFlightCalls();
+    if (remaining == 0) return;
+    _logger?.info('Draining $remaining in-flight call(s) before shutdown');
+
+    while (remaining > 0 && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      remaining = _inFlightCalls();
     }
+
+    if (remaining > 0) {
+      _logger?.warning(
+        'Drain budget $budget expired with $remaining call(s) still in '
+        'flight; closing anyway',
+      );
+    }
+  }
+
+  /// Live responder streams across every endpoint this server owns.
+  ///
+  /// Peer-mode endpoints are included: [RpcPeerEndpoint] serves calls too, and
+  /// counting only [RpcResponderEndpoint] would drain a peer server instantly.
+  int _inFlightCalls() {
+    var total = 0;
+    for (final endpoint in _endpoints) {
+      final metrics = endpoint.collectEndpointMetrics();
+      total += (metrics['activeResponders'] as int?) ?? 0;
+    }
+    return total;
   }
 
   /// Drops a disconnected connection's endpoint and closes it.
