@@ -1153,7 +1153,37 @@ class RpcHttp2CallerTransport
   }
 
   @override
-  Future<RpcHealthStatus> reconnect() async {
+  Future<RpcHealthStatus> reconnect() {
+    // SINGLE-FLIGHT, for the same reason as the websocket caller (473789b9).
+    // The check-after-await below handles close() landing mid-reconnect, but
+    // nothing stopped a SECOND reconnect interleaving: both discarded the
+    // connection, both awaited the factory, and both assigned `_connection`,
+    // so the second overwrote the first -- whose connection was live and no
+    // longer referenced by anything that could close it.
+    //
+    // Measured through the stalling CONNECT proxy (400ms), counting
+    // connections the server saw, after close():
+    //
+    //   one reconnect (control) : opened=2 closed=2 live=0
+    //   two concurrent          : opened=3 closed=2 live=1
+    //   three concurrent        : opened=4 closed=2 live=2
+    //
+    // One orphan per extra attempt, and on HTTP/2 each orphan is a whole
+    // connection with its own streams and subscriptions.
+    //
+    // Joining rather than refusing: every caller wants the same thing, so they
+    // all get the outcome of the attempt that ran.
+    final inFlight = _reconnecting;
+    if (inFlight != null) return inFlight;
+    final attempt = _reconnectOnce().whenComplete(() => _reconnecting = null);
+    _reconnecting = attempt;
+    return attempt;
+  }
+
+  /// The attempt currently in flight, so concurrent callers join it.
+  Future<RpcHealthStatus>? _reconnecting;
+
+  Future<RpcHealthStatus> _reconnectOnce() async {
     if (_messageController.isClosed) {
       return RpcHealthStatus.closed(
         component: runtimeType.toString(),
