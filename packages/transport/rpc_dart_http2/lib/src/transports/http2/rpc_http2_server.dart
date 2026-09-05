@@ -187,6 +187,59 @@ class RpcHttp2Server implements IRpcServer {
   /// subscriptions) stays held for the life of the process. One leak per
   /// client disconnect. [stop] closed endpoints correctly; only this path did
   /// not.
+  /// Waits, up to [budget], for in-flight calls to finish.
+  ///
+  /// Without this, [stop] closed every endpoint the instant it was called, so a
+  /// rolling deploy dropped every call that happened to be running. Measured
+  /// with a 2s handler and stop() 300ms in:
+  ///
+  ///     stop()                       : the call failed UNAVAILABLE after 326ms
+  ///     stop(drainTimeout: 5s)       : the call RETURNED its real answer
+  ///
+  /// The failure was already reported correctly — a prompt, retryable
+  /// UNAVAILABLE — so this is a missing capability rather than a broken one:
+  /// the client had no way to be told "finish what you started".
+  ///
+  /// Accepting has already stopped by the time this runs, but an EXISTING
+  /// connection can still open new streams, and this transport has no GOAWAY
+  /// equivalent to forbid that. So the budget is mandatory rather than optional:
+  /// a peer that keeps calling would otherwise hold shutdown open forever.
+  ///
+  /// `activeResponders` counts live responder streams. A handler that outlives
+  /// its stream is not counted — the same caveat gRPC's own drain carries, and
+  /// the reason [maxActiveStreams] is documented as bounding stream state
+  /// rather than handler execution.
+  Future<void> _drain(Duration budget) async {
+    final deadline = DateTime.now().add(budget);
+    var remaining = _inFlightCalls();
+    if (remaining == 0) return;
+    _logger?.info('Draining $remaining in-flight call(s) before shutdown');
+
+    while (remaining > 0 && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      remaining = _inFlightCalls();
+    }
+
+    if (remaining > 0) {
+      _logger?.warning(
+        'Drain budget $budget expired with $remaining call(s) still in '
+        'flight; closing anyway',
+      );
+    } else {
+      _logger?.info('Drain complete; no calls in flight');
+    }
+  }
+
+  /// Live responder streams across every endpoint this server owns.
+  int _inFlightCalls() {
+    var total = 0;
+    for (final endpoint in _endpoints) {
+      final metrics = endpoint.collectEndpointMetrics();
+      total += (metrics['activeResponders'] as int?) ?? 0;
+    }
+    return total;
+  }
+
   /// Starts PING keepalive for one connection, or returns null when disabled.
   ///
   /// A dead peer never answers, so `ping()` simply never completes — hence the
@@ -380,17 +433,21 @@ class RpcHttp2Server implements IRpcServer {
 
   /// Останавливает HTTP/2 сервер
   @override
-  Future<void> stop() async {
+  Future<void> stop({Duration? drainTimeout}) async {
     if (!_isRunning) return;
 
     _logger?.info('Остановка HTTP/2 сервера');
     _isRunning = false;
 
-    // Отменяем все подписки
+    // Отменяем все подписки.
+    // This is what stops ACCEPTING, and it must happen before any drain:
+    // draining while still accepting is not a shutdown.
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
     _subscriptions.clear();
+
+    if (drainTimeout != null) await _drain(drainTimeout);
 
     // Закрываем все endpoints.
     // Iterate over a snapshot: closing an endpoint can trigger socket.done,
