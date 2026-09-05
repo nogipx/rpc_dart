@@ -113,12 +113,26 @@ class RpcWebSocketCallerTransport
     Iterable<String>? protocols,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Duration? pingInterval,
+    bool enableCompression = false,
   }) async {
-    // The reconnect factory carries the same keepalive, or a reconnected
-    // socket would come back without it and be blind again after the first
-    // drop -- which is precisely when a flaky path is most likely.
-    Future<WebSocketChannel> openChannel() =>
-        openWebSocket(uri, protocols: protocols, pingInterval: pingInterval);
+    // The reconnect factory carries the same keepalive AND the same compression
+    // choice, or a reconnected socket would come back with different settings --
+    // for keepalive, blind again after the first drop; for compression, silently
+    // re-offering the extension and re-opening the bomb the default closes.
+    //
+    // enableCompression defaults to false: the client no longer OFFERS
+    // permessage-deflate, so a hostile or compromised server cannot negotiate it
+    // and flood the client. dart:io inflates an incoming message with no output
+    // bound before rpc_dart sees it, so a server that answered a 256 MiB payload
+    // of zeros made 0.25 MiB on the wire become 248 MiB of client RSS -- 995x.
+    // The mirror of the server default in rpcWebSocketConnections. Enable it only
+    // against servers you control.
+    Future<WebSocketChannel> openChannel() => openWebSocket(
+      uri,
+      protocols: protocols,
+      pingInterval: pingInterval,
+      enableCompression: enableCompression,
+    );
 
     return RpcWebSocketCallerTransport(
       await openChannel(),
