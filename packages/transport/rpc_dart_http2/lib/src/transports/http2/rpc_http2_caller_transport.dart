@@ -123,6 +123,47 @@ class RpcHttp2CallerTransport
   /// terminal, even when the connection had been perfectly healthy.
   bool _disconnected = false;
 
+  /// How often to PING an otherwise idle connection, and the ONLY way this
+  /// transport detects a HALF-OPEN path.
+  ///
+  /// A NAT box, load balancer or mobile network that silently stops forwarding
+  /// sends no FIN and no RST, so the socket still looks fine to both ends.
+  /// Measured through a TCP relay frozen mid-flight, which is exactly that:
+  ///
+  ///     no keepalive       : the call HUNG for the full 12s and died on the
+  ///                          caller's own timeout, while health() still
+  ///                          reported "HTTP/2 transport ready"
+  ///     pingInterval 2s    : the connection is torn down, the call fails
+  ///                          UNAVAILABLE, and health() reports it down
+  ///     control, no freeze : returned in 4ms
+  ///
+  /// The health() line is the one that matters operationally: a supervisor
+  /// polling health to decide whether to reconnect sees green and never
+  /// reconnects, so every call on that connection waits out its deadline.
+  ///
+  /// Defaults to null (OFF), so nothing changes for existing callers, and the
+  /// interval is left to the deployment for the same reason as everywhere else
+  /// here: too short wakes radios and wastes battery, too long leaves dead
+  /// connections resident. This is the client half of
+  /// `GRPC_ARG_KEEPALIVE_TIME_MS`.
+  final Duration? _pingInterval;
+
+  /// How long to wait for the PING ACK before declaring the path dead.
+  /// Defaults to [_pingInterval].
+  final Duration? _pingTimeout;
+
+  /// Keepalive timer for the CURRENT connection. Reconnect replaces the
+  /// connection, so it must also replace this.
+  Timer? _keepalive;
+
+  /// How long [close] lets the graceful HTTP/2 shutdown run before forcing it.
+  ///
+  /// Short on purpose: close() has already RST'd every stream still open
+  /// locally by the time it calls `finish()`, so a healthy connection finishes
+  /// in milliseconds (measured: 104 ms end to end). The budget exists only so a
+  /// peer that never answers cannot hold shutdown open forever.
+  static const Duration _gracefulCloseTimeout = Duration(seconds: 2);
+
   /// Refuses work the transport genuinely cannot do, naming which state it is
   /// in, because the two are not recoverable in the same way.
   void _ensureUsable() {
@@ -149,13 +190,69 @@ class RpcHttp2CallerTransport
     required String scheme,
     required RpcSecurityPolicy policy,
     LogScope? logger,
+    Duration? pingInterval,
+    Duration? pingTimeout,
   }) : _connection = connection,
        _connectionFactory = connectionFactory,
        _host = host,
        _port = port,
        _scheme = scheme,
        _logger = logger?.child('Http2ClientTransport'),
-       _policy = policy;
+       _policy = policy,
+       _pingInterval = pingInterval,
+       _pingTimeout = pingTimeout {
+    _startKeepalive();
+  }
+
+  /// (Re)starts PING keepalive for the current connection.
+  ///
+  /// Called from the constructor and again after [reconnect] swaps
+  /// `_connection`: a timer left pointing at the old connection would ping a
+  /// corpse forever and never probe the live one.
+  ///
+  /// A dead peer never answers, so `ping()` simply never completes — the
+  /// timeout is what actually detects the half-open path. On failure the
+  /// connection is TERMINATED, never finished: `finish()` on a connection whose
+  /// peer is gone throws from package:http2 into the root zone. Terminating
+  /// makes `isOpen` false, so pending calls fail UNAVAILABLE and health()
+  /// reports the connection down — which is what a supervisor needs in order to
+  /// reconnect.
+  ///
+  /// Every await is guarded: this runs on a detached timer callback, where an
+  /// unhandled async error reaches the root zone and kills the isolate.
+  void _startKeepalive() {
+    _keepalive?.cancel();
+    final interval = _pingInterval;
+    if (interval == null) return;
+    final timeout = _pingTimeout ?? interval;
+    final connection = _connection;
+
+    var inFlight = false;
+    _keepalive = Timer.periodic(interval, (timer) async {
+      // One probe at a time: a slow-but-alive peer must not accumulate pings,
+      // and a stalled one would otherwise start a new one every interval.
+      if (inFlight) return;
+      if (_isClosed) {
+        timer.cancel();
+        return;
+      }
+      inFlight = true;
+      try {
+        await connection.ping().timeout(timeout);
+      } catch (error) {
+        timer.cancel();
+        _logger?.warning(
+          'HTTP/2 keepalive failed for $_host:$_port ($error); the path is '
+          'half-open, tearing the connection down so calls fail fast',
+        );
+        _disconnected = true;
+        _discardConnection(connection);
+        return;
+      } finally {
+        inFlight = false;
+      }
+    });
+  }
 
   /// Создает клиентский HTTP/2 транспорт через защищенное соединение.
   ///
@@ -168,6 +265,8 @@ class RpcHttp2CallerTransport
     LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Duration proxyHandshakeTimeout = _proxyHandshakeTimeout,
+    Duration? pingInterval,
+    Duration? pingTimeout,
   }) async {
     logger?.internal('Создание защищенного HTTP/2 соединения с $host:$port');
 
@@ -208,6 +307,8 @@ class RpcHttp2CallerTransport
       scheme: 'https',
       policy: policy,
       logger: logger,
+      pingInterval: pingInterval,
+      pingTimeout: pingTimeout,
     );
   }
 
@@ -227,6 +328,8 @@ class RpcHttp2CallerTransport
     String scheme = 'https',
     LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    Duration? pingInterval,
+    Duration? pingTimeout,
   }) {
     final connection = _guardedConnection(
       incoming: socket,
@@ -246,6 +349,8 @@ class RpcHttp2CallerTransport
       scheme: scheme,
       policy: policy,
       logger: logger,
+      pingInterval: pingInterval,
+      pingTimeout: pingTimeout,
     );
   }
 
@@ -260,6 +365,8 @@ class RpcHttp2CallerTransport
     LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Duration proxyHandshakeTimeout = _proxyHandshakeTimeout,
+    Duration? pingInterval,
+    Duration? pingTimeout,
   }) async {
     logger?.internal('Создание HTTP/2 соединения с $host:$port');
 
@@ -296,6 +403,8 @@ class RpcHttp2CallerTransport
       scheme: 'http',
       policy: policy,
       logger: logger,
+      pingInterval: pingInterval,
+      pingTimeout: pingTimeout,
     );
   }
 
@@ -892,6 +1001,40 @@ class RpcHttp2CallerTransport
           return;
         }
 
+        // A CONNECTION-level failure is UNAVAILABLE, and must be a status for
+        // the same reason the stream reset above must: nothing over the
+        // transport can classify a raw package:http2 exception, so retry,
+        // circuit breakers and failover all sit it out.
+        //
+        // This is the connection-death sibling of the RST_STREAM mapping, and
+        // keepalive makes it ordinary rather than exotic: a half-open path is
+        // now deliberately torn down, and every call in flight on it lands
+        // here. Measured through a frozen relay with pingInterval 2s, before
+        // this mapping:
+        //
+        //   call over dead path = TransportConnectionException after 3962ms
+        //
+        // i.e. exactly the unclassifiable shape ff1f6337 (GOAWAY -> StateError)
+        // and 1cce29fa (RST_STREAM -> StreamTransportException) each fixed on
+        // their own path.
+        //
+        // UNAVAILABLE, not INTERNAL: the connection died, so the call may well
+        // succeed on a fresh one -- which is precisely what makes it retryable,
+        // and matches what a new call on an already-dead connection reports.
+        if (error is http2.TransportConnectionException) {
+          _emitStreamError(
+            streamId,
+            RpcStatusException(
+              RpcStatus.unavailable,
+              'HTTP/2 connection to $_host:$_port failed while stream '
+              '$streamId was in flight (errorCode: ${error.errorCode}); '
+              'reconnect and retry',
+            ),
+            stackTrace,
+          );
+          return;
+        }
+
         _emitStreamError(streamId, error, stackTrace);
       },
       onDone: () {
@@ -1381,6 +1524,12 @@ class RpcHttp2CallerTransport
       _connection = connection;
       _disconnected = false;
       _nextStreamId = 1;
+      // Re-arm keepalive against the NEW connection. The old timer closed over
+      // the old one, so without this a reconnected transport either pings a
+      // corpse forever or (after a keepalive-triggered teardown, which cancels
+      // the timer) is left with no keepalive at all — blind again after exactly
+      // the first drop, which is when a flaky path is most likely.
+      _startKeepalive();
       _logger?.info('HTTP/2 клиент успешно переподключен');
       return RpcHealthStatus.healthy(
         component: runtimeType.toString(),
@@ -1416,6 +1565,11 @@ class RpcHttp2CallerTransport
 
     _logger?.info('Закрытие HTTP/2 транспорта');
     _isClosed = true;
+    // Stop probing before anything is torn down: a ping issued against a
+    // connection this method is about to terminate would fail and re-run the
+    // keepalive's own teardown path on an already-closing transport.
+    _keepalive?.cancel();
+    _keepalive = null;
 
     // Даем серверу время на завершение обработки активных потоков
     if (_activeStreams.isNotEmpty) {
@@ -1482,11 +1636,36 @@ class RpcHttp2CallerTransport
       }
     }
 
-    // Закрываем HTTP/2 соединение
+    // Закрываем HTTP/2 соединение.
+    //
+    // BOUNDED, then forceful. `finish()` is the graceful HTTP/2 shutdown: it
+    // sends GOAWAY and waits for open streams to drain. Over a HALF-OPEN path
+    // the peer never drains anything, so that await never completes and
+    // close() hangs forever. Measured with one call in flight:
+    //
+    //   live path : close() returned in 104 ms
+    //   half-open : close() NEVER returned (still pending at 20.4 s)
+    //
+    // The in-flight stream is the load-bearing condition -- with none open,
+    // finish() returns promptly even on a dead path, which is why a first
+    // probe without one wrongly reported no hang.
+    //
+    // Timing out alone is not enough: Future.timeout abandons the await, not
+    // the work, so the connection would stay alive and unreferenced. terminate()
+    // is what actually releases it, and is the right primitive on a dead
+    // connection anyway -- finish() on one throws from package:http2 into the
+    // root zone.
     try {
-      await _connection.finish();
+      await _connection.finish().timeout(_gracefulCloseTimeout);
     } catch (e) {
-      _logger?.warning('Ошибка при закрытии HTTP/2 соединения: $e');
+      _logger?.warning(
+        'Graceful HTTP/2 shutdown did not complete ($e); terminating',
+      );
+      try {
+        _connection.terminate();
+      } catch (e2) {
+        _logger?.warning('Ошибка при закрытии HTTP/2 соединения: $e2');
+      }
     }
 
     _logger?.info('HTTP/2 транспорт закрыт');
