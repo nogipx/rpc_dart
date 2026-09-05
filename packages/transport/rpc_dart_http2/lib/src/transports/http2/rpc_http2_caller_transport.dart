@@ -669,6 +669,30 @@ class RpcHttp2CallerTransport
     // already does for the mid-call UNAVAILABLE above. Both checks are here
     // because isOpen can go false between the test and the call.
     if (!_connection.isOpen) {
+      // `ClientTransportConnection.isOpen` is
+      //   !isFinishing && !isTerminated && canOpenStream
+      // so it folds a HEALTHY connection that is merely at the peer's
+      // MAX_CONCURRENT_STREAMS (canOpenStream == false) together with a dead
+      // one. Reporting the first as "the peer closed it or sent GOAWAY;
+      // reconnect" is wrong three ways: the peer is alive, it sent no GOAWAY,
+      // and reconnecting drops every in-flight call instead of waiting for a
+      // slot. Measured against a raw server advertising concurrentStreamLimit=1
+      // and holding the one stream open, the second call got exactly that
+      // UNAVAILABLE-GOAWAY-reconnect message.
+      //
+      // canOpenStream can only be false while streams are in flight
+      // (activeStreams < limit, limit >= 1), so our own active-stream count
+      // separates the cases: not-open WITH active streams is saturation,
+      // not-open with none is a finishing/terminated connection.
+      if (_activeStreams.isNotEmpty) {
+        throw RpcStatusException(
+          RpcStatus.resourceExhausted,
+          'HTTP/2 connection to $_host:$_port is at the server\'s '
+          'MAX_CONCURRENT_STREAMS limit (${_activeStreams.length} in flight); '
+          'the connection is healthy, so retry when one completes rather than '
+          'reconnecting',
+        );
+      }
       throw RpcStatusException(
         RpcStatus.unavailable,
         'HTTP/2 connection to $_host:$_port is no longer active (the peer '
@@ -1204,6 +1228,21 @@ class RpcHttp2CallerTransport
     //   call after death: caught StateError
     // The call already failed honestly; only the report was wrong.
     if (!_connection.isOpen) {
+      // Not-open with streams in flight is SATURATION, not death: the
+      // connection is at the peer's MAX_CONCURRENT_STREAMS and is actively
+      // serving. Reporting it "down / reconnect required" would make a
+      // supervisor drop a healthy connection and every call on it. Only
+      // not-open with no active streams is a finishing/terminated connection.
+      // See the same split in sendMetadata().
+      if (_activeStreams.isNotEmpty) {
+        return RpcHealthStatus.healthy(
+          component: runtimeType.toString(),
+          message:
+              'HTTP/2 transport at capacity: ${_activeStreams.length} streams '
+              'in flight (server MAX_CONCURRENT_STREAMS reached)',
+          details: details,
+        );
+      }
       return RpcHealthStatus.degraded(
         component: runtimeType.toString(),
         message: 'HTTP/2 connection is down. Reconnect is required.',
