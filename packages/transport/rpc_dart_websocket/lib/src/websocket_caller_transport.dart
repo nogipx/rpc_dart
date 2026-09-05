@@ -280,8 +280,41 @@ class RpcWebSocketCallerTransport
   /// attempt limits and observable state, prefer wrapping a transport factory
   /// in `RpcClientConnection` (transport-agnostic) rather than driving this
   /// directly.
+  /// The attempt currently in flight, so concurrent callers join it instead of
+  /// starting their own. See [reconnect].
+  Future<RpcHealthStatus>? _reconnecting;
+
   @override
-  Future<RpcHealthStatus> reconnect() async {
+  Future<RpcHealthStatus> reconnect() {
+    // SINGLE-FLIGHT. Without this, two overlapping calls each closed `_inner`,
+    // each awaited the factory, and each called _attach -- so the second
+    // overwrote `_inner` and `_fwdSub` while the FIRST socket was already
+    // attached and live. Nothing referenced it afterwards, so nothing could
+    // ever close it.
+    //
+    // Measured against a real server counting connections, with a 150ms
+    // factory, after close():
+    //
+    //   one reconnect (control) : opened=2 closed=2 live=0
+    //   two concurrent          : opened=3 closed=2 live=1
+    //   three concurrent        : opened=4 closed=2 live=2
+    //
+    // i.e. one orphan per extra attempt. On a server each of those also pins
+    // an endpoint and the contracts on it.
+    //
+    // The trigger is ordinary: a supervisor polling health() and calling
+    // reconnect() on a timer, where one slow handshake outlives the tick.
+    // Joining the attempt is the right answer rather than refusing: every
+    // caller asked for the same thing -- a working connection -- and now they
+    // all learn the outcome of the one that actually ran.
+    final inFlight = _reconnecting;
+    if (inFlight != null) return inFlight;
+    final attempt = _reconnectOnce().whenComplete(() => _reconnecting = null);
+    _reconnecting = attempt;
+    return attempt;
+  }
+
+  Future<RpcHealthStatus> _reconnectOnce() async {
     if (_closed || _incomingCtl.isClosed) {
       return RpcHealthStatus.closed(
         component: 'RpcWebSocketCallerTransport',
