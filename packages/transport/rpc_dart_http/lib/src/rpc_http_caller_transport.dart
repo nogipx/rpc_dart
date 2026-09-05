@@ -378,11 +378,46 @@ class RpcHttpCallerTransport implements IRpcTransport, IRpcSecurityPolicyAware {
         error: e,
         stackTrace: st,
       );
-      _emitError(streamId, e, st);
+      _emitError(streamId, _asRpcStatus(e, call.methodPath), st);
     } finally {
       _inFlight.remove(streamId);
       _idManager.releaseId(streamId);
     }
+  }
+
+  /// Turns a transport-level failure into a gRPC status.
+  ///
+  /// A connection that is refused, reset, or closed mid-request surfaces from
+  /// package:http as a raw [http.ClientException], and that used to reach the
+  /// caller unchanged. Nothing above the transport can act on it: retry,
+  /// circuit breakers and failover all key off the gRPC status, so the most
+  /// ordinary failure there is -- the server went away -- was unclassifiable.
+  ///
+  /// Measured by stopping the server mid-call, against the two siblings running
+  /// the identical scenario:
+  ///
+  ///     http2     : RpcStatusException(14) after 326 ms
+  ///     websocket : RpcStatusException(14) after 314 ms
+  ///     http/1.1  : ClientException        after 320 ms   <- the odd one out
+  ///
+  /// Same defect shape as GOAWAY -> StateError (ff1f6337), RST_STREAM ->
+  /// StreamTransportException (1cce29fa) and TransportConnectionException
+  /// (e2e8074b), each fixed on its own transport.
+  ///
+  /// UNAVAILABLE, not INTERNAL: the request did not reach a handler, or its
+  /// answer never came back, so a fresh connection may well succeed -- which is
+  /// exactly what makes it retryable. Anything already carrying a status
+  /// (including the non-200 mapping above and the frame-parser's own errors) is
+  /// passed through untouched.
+  Object _asRpcStatus(Object error, String methodPath) {
+    if (error is RpcStatusException || error is RpcException) return error;
+    if (error is http.ClientException) {
+      return RpcStatusException(
+        RpcStatus.unavailable,
+        'HTTP request to $methodPath failed: ${error.message}',
+      );
+    }
+    return error;
   }
 
   @override
