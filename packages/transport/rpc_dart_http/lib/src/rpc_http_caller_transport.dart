@@ -306,6 +306,34 @@ class RpcHttpCallerTransport implements IRpcTransport, IRpcSecurityPolicyAware {
       final trailerHeaders = <RpcHeader>[];
       streamedResponse.headers.forEach((name, value) {
         // package:http joins multi-values with ', ' — split them back.
+        //
+        // KNOWN LIMITATION, and it is not fixable at this layer. HTTP/1.1
+        // permits a receiver to combine repeated field lines into one
+        // comma-separated value (RFC 9110 s5.3), and package:http always does:
+        // `BaseResponse.headers` is a `Map<String, String>`, so by the time the
+        // response reaches here "two headers" and "one header containing a
+        // comma-space" are already the same bytes. package:http's own
+        // `headersSplitValues` is the identical naive comma split, so it offers
+        // no more information.
+        //
+        // So both choices lose something, and this one splits. Measured against
+        // a server sending each shape:
+        //
+        //   x-note: "hello, world"  (one value)   -> arrives as 2 headers
+        //   x-list: "a, b"          (two values)  -> arrives as 2 headers  [ok]
+        //
+        // i.e. a single metadata value containing ", " is split, while genuine
+        // repeated keys survive. NOT splitting would invert that: repeated gRPC
+        // metadata keys — which the spec allows — would collapse into one
+        // joined string.
+        //
+        // grpc-status and grpc-message are unaffected either way: the status is
+        // numeric, and grpc-message is percent-encoded with an unreserved set of
+        // ALPHA/DIGIT/-/./_/~, so both ',' and ' ' are escaped and the literal
+        // ", " can never appear in it.
+        //
+        // Use rpc_dart_http2 (or websocket/isolate) if metadata values must
+        // round-trip byte-for-byte; HTTP/2 keeps header fields separate.
         for (final v in value.split(', ')) {
           final header = RpcHeader(name, v);
           if (name == RpcHeaders.grpcStatus || name == RpcHeaders.grpcMessage) {
