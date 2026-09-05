@@ -58,6 +58,10 @@ class RpcHttp2Server implements IRpcServer {
   ///   ([ServerSocket]) `h2c` socket. Provide a [SecurityContext] with a
   ///   certificate chain and private key to serve HTTP/2 over TLS. Defaults to
   ///   `null` (plaintext h2c) for backward compatibility.
+  /// [pingInterval] - see the field docs; enables HTTP/2 PING keepalive so
+  ///   half-open connections are reclaimed instead of held forever.
+  /// [pingTimeout] - how long to wait for the PING ACK before declaring the
+  ///   connection dead. Defaults to [pingInterval] when omitted.
   RpcHttp2Server({
     String host = 'localhost',
     required int port,
@@ -71,6 +75,8 @@ class RpcHttp2Server implements IRpcServer {
     void Function(Socket socket)? onConnectionClosed,
     IRpcTransport Function(IRpcTransport inner, Socket socket)?
     transportWrapper,
+    Duration? pingInterval,
+    Duration? pingTimeout,
   }) : _host = host,
        _port = port,
        _securityPolicy = securityPolicy,
@@ -81,7 +87,43 @@ class RpcHttp2Server implements IRpcServer {
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,
        _onConnectionClosed = onConnectionClosed,
-       _transportWrapper = transportWrapper;
+       _transportWrapper = transportWrapper,
+       _pingInterval = pingInterval,
+       _pingTimeout = pingTimeout;
+
+  /// How often to send an HTTP/2 PING on an otherwise idle connection, and the
+  /// only way this server detects a HALF-OPEN one.
+  ///
+  /// A NAT box, load balancer or mobile network that silently stops forwarding
+  /// sends no FIN and no RST, so the server's socket still looks fine and the
+  /// connection — with its endpoint, and the application's contracts on it —
+  /// is held forever. Measured with a TCP relay frozen mid-flight and five
+  /// clients abandoned without closing:
+  ///
+  ///     no keepalive     : endpoints 5, contracts disposed 0 — unchanged at
+  ///                        t+30s, and nothing would ever reclaim them
+  ///     pingInterval 2s  : endpoints 0, contracts disposed 5
+  ///
+  /// The second number is the one that matters: an endpoint holds the
+  /// application's contracts, and a contract that is never disposed keeps
+  /// whatever it owns — database handles, caches, subscriptions — for the life
+  /// of the process. A fleet of mobile clients on flaky networks accumulates
+  /// them.
+  ///
+  /// Defaults to `null`, i.e. OFF, so nothing changes for existing callers.
+  /// Left to the caller rather than defaulted for the same reason as the
+  /// WebSocket server's: too short wakes radios and wastes battery, too long
+  /// leaves dead connections resident. Take the shortest idle timeout on the
+  /// path — load balancers commonly use 60s — and halve it.
+  ///
+  /// This is the same mechanism gRPC servers use
+  /// (`GRPC_ARG_KEEPALIVE_TIME_MS`), so it is understood by foreign peers: a
+  /// PING must be answered by any conforming HTTP/2 implementation.
+  final Duration? _pingInterval;
+
+  /// How long to wait for a PING ACK before treating the connection as dead.
+  /// Defaults to [_pingInterval] when not given.
+  final Duration? _pingTimeout;
 
   /// Создает простой HTTP/2 сервер с автоматической регистрацией контрактов
   ///
@@ -145,6 +187,61 @@ class RpcHttp2Server implements IRpcServer {
   /// subscriptions) stays held for the life of the process. One leak per
   /// client disconnect. [stop] closed endpoints correctly; only this path did
   /// not.
+  /// Starts PING keepalive for one connection, or returns null when disabled.
+  ///
+  /// A dead peer never answers, so `ping()` simply never completes — hence the
+  /// timeout, which is what actually detects the half-open path. On failure the
+  /// socket is DESTROYED rather than finished: `finish()` on a connection whose
+  /// peer is gone throws from package:http2 into the root zone, and destroying
+  /// the socket is what fires `socket.done` and so runs the ordinary release
+  /// wiring (endpoint closed, contracts disposed, onConnectionClosed fired).
+  ///
+  /// Every await here is guarded. This runs on a detached timer callback, so an
+  /// unhandled async error would reach the root zone and kill the isolate —
+  /// the failure mode `_notify` exists for elsewhere in this class.
+  Timer? _startKeepalive(
+    http2.ServerTransportConnection connection,
+    Socket socket,
+    String clientAddress,
+  ) {
+    final interval = _pingInterval;
+    if (interval == null) return null;
+    final timeout = _pingTimeout ?? interval;
+
+    var inFlight = false;
+    return Timer.periodic(interval, (timer) async {
+      // One ping at a time: a slow-but-alive peer must not accumulate probes,
+      // and a stalled one would otherwise start a new ping every interval.
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        await connection.ping().timeout(timeout);
+      } catch (error) {
+        timer.cancel();
+        _logger?.warning(
+          'HTTP/2 keepalive failed for $clientAddress ($error); '
+          'closing a connection whose peer stopped answering',
+        );
+        _notify(
+          'onConnectionError',
+          () => _onConnectionError?.call(
+            StateError(
+              'HTTP/2 keepalive: no PING ACK from $clientAddress within '
+              '$timeout; the connection is half-open',
+            ),
+            StackTrace.current,
+          ),
+        );
+        // Destroy, not finish: this fires socket.done, which runs the release
+        // wiring that closes the endpoint and disposes its contracts.
+        socket.destroy();
+        return;
+      } finally {
+        inFlight = false;
+      }
+    });
+  }
+
   void _releaseEndpoint(RpcResponderEndpoint endpoint, Socket socket) {
     _endpoints.remove(endpoint);
     unawaited(
@@ -423,16 +520,23 @@ class RpcHttp2Server implements IRpcServer {
 
       _logger?.debug('RPC endpoint создан для $clientAddress');
 
+      // Keepalive: the only thing that reclaims a HALF-OPEN connection. See
+      // [_pingInterval]. Started only when configured, and always cancelled by
+      // the release wiring below, so a closed connection stops pinging.
+      final keepalive = _startKeepalive(connection, socket, clientAddress);
+
       // Обрабатываем закрытие соединения
       socket.done
           .then((_) {
             _logger?.debug('HTTP/2 соединение $clientAddress закрыто');
+            keepalive?.cancel();
             _releaseEndpoint(endpoint, socket);
           })
           .catchError((error) {
             _logger?.warning(
               'Ошибка при закрытии соединения $clientAddress: $error',
             );
+            keepalive?.cancel();
             _releaseEndpoint(endpoint, socket);
           });
     } catch (e, stackTrace) {
