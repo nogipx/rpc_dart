@@ -50,12 +50,56 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// ```
 ///
 /// [protocolSelector] is forwarded to [WebSocketTransformer] for subprotocol
-/// negotiation; [compression] likewise, defaulting to dart:io's default.
+/// negotiation.
+///
+/// [compression] controls permessage-deflate. It defaults to
+/// [CompressionOptions.compressionOff] — NOT dart:io's default, which is ON —
+/// because a server accepts connections from unauthenticated peers and
+/// permessage-deflate is an unbounded decompression bomb on that side. dart:io
+/// inflates each incoming message with `RawZLibFilter` and NO output limit
+/// (`processIncomingMessage` in `websocket_impl.dart` just accumulates into a
+/// `BytesBuilder`), and it does so BEFORE the message reaches rpc_dart, so the
+/// frame layer's [RpcSecurityPolicy.maxMessageLengthBytes] cannot bound it —
+/// the memory is already allocated by the time the cap would fire. Same
+/// "limit fires too late" class as the HTTP/1.1 body and the frame buffer.
+///
+/// Measured against this server with compression ON, one raw client:
+///
+///     a 256 MiB payload of zeros — a few hundred KiB on the wire once deflated
+///     — inflated to a 383.8 MiB RSS peak, against a 16 MiB message limit. The
+///     amplification (~1000:1 for repetitive data) is what makes it a cheap,
+///     unauthenticated DoS: a few MiB uploaded becomes GiB of server RAM.
+///
+/// dart:io exposes no way to bound the inflated size, so the only lever rpc_dart
+/// has is whether to negotiate the extension at all; the safe server default is
+/// therefore OFF. Turn it on ONLY between peers you control, where the bandwidth
+/// saving is worth it and neither side is hostile:
+///
+/// ```dart
+/// rpcWebSocketConnections(http,
+///     compression: CompressionOptions.compressionDefault);
+/// ```
+///
+/// This does not stop a peer from sending a large UNCOMPRESSED message, which
+/// dart:io also buffers whole before delivery — that costs the attacker
+/// bandwidth proportional to the damage and has no dart:io-level bound; put a
+/// reverse proxy or OS-level limit in front if that matters.
+///
+/// ```dart
+/// final http = await HttpServer.bind(host, port);
+/// final server = RpcWebSocketServer(
+///   connections: rpcWebSocketConnections(
+///     http,
+///     pingInterval: const Duration(seconds: 30),
+///   ),
+///   onEndpointCreated: ...,
+/// );
+/// ```
 Stream<WebSocketChannel> rpcWebSocketConnections(
   HttpServer server, {
   Duration? pingInterval,
   dynamic Function(List<String> protocols)? protocolSelector,
-  CompressionOptions compression = CompressionOptions.compressionDefault,
+  CompressionOptions compression = CompressionOptions.compressionOff,
 }) {
   return server
       .transform(
