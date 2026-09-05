@@ -168,7 +168,37 @@ class RpcChannelTransport
     _fcAdvertiseConnection();
     _channelSub = _channel.incoming.listen(
       _onMessage,
-      onError: (Object e) => _incoming.addError(e),
+      onError: (Object e) {
+        // A connection-level failure is the answer to every call in flight on
+        // that connection, so give it to them -- not only to the connection
+        // level observer.
+        //
+        // Per-stream views are dedicated controllers, and this error used to
+        // reach `_incoming` alone. A pending call therefore saw nothing but
+        // its own controller closing, and synthesized the generic "Stream
+        // closed without receiving response" UNAVAILABLE, discarding whatever
+        // the transport had just explained. Measured hop by hop over a
+        // WebSocket whose peer closed with 1008 (policy violation):
+        //
+        //   channel  .incoming          : RpcStatusException(7)
+        //   transport.incomingMessages  : RpcStatusException(7)
+        //   the pending call            : RpcStatusException(14) "Stream
+        //                                 closed without receiving response"
+        //
+        // The status was right there and got replaced one hop from the caller.
+        // UNAVAILABLE is also RETRYABLE, so the substitution made clients
+        // retry deterministic failures -- a policy rejection, a peer's
+        // internal error -- that can never succeed.
+        //
+        // Snapshot the values: addError can make a subscriber cancel, whose
+        // onCancel removes the entry, which would otherwise be a concurrent
+        // modification. Same reason RpcHttp2Server closes endpoints from a
+        // copy.
+        for (final ctl in List.of(_streamControllers.values)) {
+          if (!ctl.isClosed) ctl.addError(e);
+        }
+        _incoming.addError(e);
+      },
       onDone: () {
         if (!_closed) close();
       },
