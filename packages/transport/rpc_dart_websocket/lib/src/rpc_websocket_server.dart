@@ -223,6 +223,31 @@ class RpcWebSocketServer implements IRpcServer {
 
   void _handleConnection(WebSocketChannel channel, String clientLabel) {
     _notify('onConnectionOpened', () => _onConnectionOpened?.call(channel));
+
+    // Remembered so the catch below can release it. The endpoint is registered
+    // in `_endpoints` BEFORE the user callback that can throw, and the
+    // `sink.done` release wiring is only installed AFTER it -- so a throwing
+    // callback used to leave the endpoint registered, never started, and with
+    // nothing able to reclaim it. The catch closed the socket, but the socket
+    // closing could not help: the hook that reacts to it had not been attached
+    // yet.
+    //
+    // Measured with a callback that throws on every connection, three
+    // connections:
+    //
+    //   endpoints held      : 3   (want 0)
+    //   contracts disposed  : 0   (want 3)
+    //
+    // one permanent leak per failed connection, holding the application's
+    // contracts. The PEER branch leaked identically; it merely looked clean
+    // because `endpoints` filters to RpcResponderEndpoint, so the leaked
+    // RpcPeerEndpoints were invisible to the getter -- `disposed` is what
+    // exposed them.
+    //
+    // A throwing onEndpointCreated is ordinary rather than exotic: it is where
+    // the application registers its contracts, so a DI failure, a duplicate
+    // registration or a bad config lands exactly there.
+    RpcEndpointBase? created;
     try {
       final transport = RpcWebSocketResponderTransport(
         channel,
@@ -236,6 +261,7 @@ class RpcWebSocketServer implements IRpcServer {
           logger: _logController,
         );
         _endpoints.add(endpoint);
+        created = endpoint;
         _onPeerEndpointCreated(endpoint);
         endpoint.start();
 
@@ -249,6 +275,7 @@ class RpcWebSocketServer implements IRpcServer {
           logger: _logController,
         );
         _endpoints.add(endpoint);
+        created = endpoint;
         _onEndpointCreated?.call(endpoint);
         endpoint.start();
 
@@ -263,6 +290,12 @@ class RpcWebSocketServer implements IRpcServer {
         stackTrace: st,
       );
       _notify('onConnectionError', () => _onConnectionError?.call(e, st));
+      // Release what was already registered. _releaseEndpoint removes it,
+      // closes it -- which is what disposes the contracts -- and fires
+      // onConnectionClosed, balancing the onConnectionOpened that ran at the
+      // top of this method for a connection that is now being torn down.
+      final orphan = created;
+      if (orphan != null) _releaseEndpoint(orphan, channel);
       channel.sink.close();
     }
   }
