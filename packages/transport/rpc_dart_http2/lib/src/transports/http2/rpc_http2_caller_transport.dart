@@ -1653,14 +1653,32 @@ class RpcHttp2CallerTransport
       await Future.delayed(Duration(milliseconds: 50));
     }
 
-    // Закрываем все активные streams осторожно
-    // Same rule as releaseStreamId: never send DATA on a stream whose request
-    // direction is already finished. Only a stream still open locally is
-    // aborted, and RST_STREAM is the legal way to do that.
-    final streamsToClose = _activeStreams.entries
-        .where((e) => !_halfClosedLocal.contains(e.key))
-        .map((e) => e.value)
-        .toList();
+    // Abort EVERY remaining stream, half-closed ones included.
+    //
+    // This used to skip streams already half-closed locally, which is every
+    // ordinary unary call (they send endStream: true with the request). Those
+    // streams were left open on the wire -- and then, a few lines below, their
+    // subscriptions were cancelled and their controllers closed, so no response
+    // could ever reach the caller. `finish()` at the end of this method then
+    // waited for exactly those streams to complete.
+    //
+    // So close() blocked for up to the graceful budget on work whose answer it
+    // had already made undeliverable. Measured against the websocket sibling
+    // running the identical scenario (2s handler, close() 300ms in):
+    //
+    //     websocket : close() 5 ms,    call UNAVAILABLE at 314 ms
+    //     http2     : close() 1734 ms, call UNAVAILABLE at 2043 ms
+    //
+    // and decisively, with a 600ms handler so the response lands well INSIDE
+    // the wait: close() took 339ms, the response arrived -- and the call still
+    // failed UNAVAILABLE at 648ms. The wait cannot rescue a call; it only
+    // delays shutdown.
+    //
+    // RST_STREAM is legal on a half-closed stream (it is how `resetStream`
+    // cancels one, and the only legal way to abort after END_STREAM). The rule
+    // the old filter came from is about DATA, not RST: never send DATA on a
+    // stream whose request direction is finished.
+    final streamsToClose = _activeStreams.values.toList();
     for (final stream in streamsToClose) {
       try {
         stream.terminate();
