@@ -106,27 +106,20 @@ final class RpcSecurityPolicy {
   /// per connection.
   final int? maxConcurrentHandlers;
 
-  /// Max size of a single WebSocket message (including custom headers).
-  ///
-  /// NOT CURRENTLY ENFORCED. No transport reads this field. A WebSocket
-  /// message is bounded in practice by [maxBufferedBytes] during frame
-  /// reassembly (16MB + prefix by default), which is tighter than this field's
-  /// 64MB default, so raising it does not widen anything and lowering it does
-  /// not narrow anything. Wire it into `RpcWebSocketChannel` before relying
-  /// on it.
-  final int maxWebSocketMessageBytes;
-
-  /// Max total bytes allowed while assembling a chunked message.
-  ///
-  /// NOT CURRENTLY ENFORCED. Nothing in this package chunks; the only chunking
-  /// implementation lives in `rpc_blob`, which applies its own limits and does
-  /// not consult this policy.
-  final int maxChunkedMessageBytes;
-
-  /// Max number of chunks for a single chunked message.
-  ///
-  /// NOT CURRENTLY ENFORCED — see [maxChunkedMessageBytes].
-  final int maxChunkCount;
+  // REMOVED, deliberately: maxWebSocketMessageBytes, maxChunkedMessageBytes and
+  // maxChunkCount. All three were documented "NOT CURRENTLY ENFORCED" and
+  // nothing outside this file ever read them, so setting one bought a belief
+  // and no behaviour. Measured with maxWebSocketMessageBytes: 1 MiB, a
+  // WebSocket server accepted four 15 MiB messages without complaint -- a 15x
+  // gap between the configured limit and the real one.
+  //
+  // A limit that does nothing is worse than an absent one: an operator
+  // hardening a deployment stops looking once the knob is set, and a map-driven
+  // config never shows the doc comment that admitted the truth. What actually
+  // bounds a WebSocket message is [maxMessageLengthBytes] via
+  // [effectiveMaxBufferedBytes] during frame reassembly -- a 64 MiB message
+  // closes the connection with 4400, and that is now pinned by a test in
+  // rpc_dart_websocket. Chunking is rpc_blob's, and it applies its own limits.
 
   /// Max encoded metadata payload size for transports that serialize metadata
   /// (for example, JSON over WebSocket).
@@ -269,9 +262,6 @@ final class RpcSecurityPolicy {
     this.maxMessagesPerChunk = 1024,
     this.maxActiveStreams = 4096,
     this.maxConcurrentHandlers,
-    this.maxWebSocketMessageBytes = 64 * 1024 * 1024,
-    this.maxChunkedMessageBytes = 64 * 1024 * 1024,
-    this.maxChunkCount = 1024,
     this.maxMetadataBytes = 64 * 1024,
     this.maxHeaders = 128,
     this.maxHeaderNameBytes = 128,
@@ -294,9 +284,6 @@ final class RpcSecurityPolicy {
     // Omitted when unset: absent already means "no limit" here, unlike the
     // windows above whose absence means a non-null default.
     'maxConcurrentHandlers': ?maxConcurrentHandlers,
-    'maxWebSocketMessageBytes': maxWebSocketMessageBytes,
-    'maxChunkedMessageBytes': maxChunkedMessageBytes,
-    'maxChunkCount': maxChunkCount,
     'maxMetadataBytes': maxMetadataBytes,
     'maxHeaders': maxHeaders,
     'maxHeaderNameBytes': maxHeaderNameBytes,
@@ -339,15 +326,8 @@ final class RpcSecurityPolicy {
         final int limit when limit > 0 => limit,
         _ => null,
       },
-      maxWebSocketMessageBytes: readInt(
-        'maxWebSocketMessageBytes',
-        64 * 1024 * 1024,
-      ),
-      maxChunkedMessageBytes: readInt(
-        'maxChunkedMessageBytes',
-        64 * 1024 * 1024,
-      ),
-      maxChunkCount: readInt('maxChunkCount', 1024),
+      // The three removed keys are simply ignored if an old stored config still
+      // carries them, which is what should happen: they never did anything.
       maxMetadataBytes: readInt('maxMetadataBytes', 64 * 1024),
       maxHeaders: readInt('maxHeaders', 128),
       maxHeaderNameBytes: readInt('maxHeaderNameBytes', 128),
