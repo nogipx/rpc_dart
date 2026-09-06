@@ -256,6 +256,41 @@ class RpcHttpServer implements IRpcServer {
     _logger?.info('Listening on http://$_host:${_httpServer!.port}');
   }
 
+  /// Waits, up to [budget], for the transport to finish its pending requests.
+  ///
+  /// `pendingRequests` is the responder transport's own count of shelf requests
+  /// it has accepted and not yet answered, reported through [health]. A request
+  /// whose handler outlives its response is not counted -- the same caveat the
+  /// sibling servers' drains carry.
+  Future<void> _drainRequests(
+    RpcHttpResponderTransport? transport,
+    Duration budget,
+  ) async {
+    if (transport == null) return;
+
+    Future<int> pending() async {
+      final health = await transport.health();
+      return (health.details['pendingRequests'] as int?) ?? 0;
+    }
+
+    final deadline = DateTime.now().add(budget);
+    var remaining = await pending();
+    if (remaining == 0) return;
+    _logger?.debug('Draining $remaining in-flight request(s) before shutdown');
+
+    while (remaining > 0 && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      remaining = await pending();
+    }
+
+    if (remaining > 0) {
+      _logger?.warning(
+        'Drain budget $budget expired with $remaining request(s) still in '
+        'flight; closing anyway',
+      );
+    }
+  }
+
   /// Releases everything this server owns, whichever phase it reached.
   ///
   /// Deliberately NOT guarded on [isRunning]. That flag means "phase two
@@ -264,8 +299,30 @@ class RpcHttpServer implements IRpcServer {
   /// abandoned partway, which is exactly when cleanup matters. Each field is
   /// taken and cleared before it is closed, so this stays idempotent and so a
   /// later [start] begins from a clean slate.
+  /// [drainTimeout], when given, lets in-flight requests finish first.
+  ///
+  /// Without it every request running at that moment dies, so a rolling deploy
+  /// drops them. It dies CORRECTLY -- measured with a 2s handler and stop()
+  /// 300ms in, the caller gets `UNAVAILABLE` at 325ms -- so this is a missing
+  /// capability rather than a broken one, and it completes the parity with
+  /// `RpcHttp2Server` and `RpcWebSocketServer`, which gained the same option.
+  ///
+  ///     stop()                 : the request failed UNAVAILABLE at 325 ms
+  ///     stop(drainTimeout: 5s) : the request RETURNED its real answer
+  ///
+  /// `HttpServer.close(force: false)` is NOT a drain, which is worth stating
+  /// because it reads like one. It stops the server listening and completes as
+  /// soon as the port is released -- measured at 4ms with a 2s request still
+  /// running -- it merely declines to kill active connections. Closing the
+  /// endpoint straight afterwards then killed the handler anyway and the caller
+  /// HUNG for the full 20s test budget, because the connection stayed open with
+  /// no answer ever coming.
+  ///
+  /// So the wait is explicit, exactly as on the other two servers: stop
+  /// accepting, poll until the transport reports no pending requests, and only
+  /// then close the endpoint that has to answer them.
   @override
-  Future<void> stop() async {
+  Future<void> stop({Duration? drainTimeout}) async {
     _isRunning = false;
 
     final httpServer = _httpServer;
@@ -276,8 +333,22 @@ class RpcHttpServer implements IRpcServer {
     _transport = null;
 
     // Listener first: no new request can arrive while the endpoint is closing.
+    //
+    // With a drain this ordering does double duty -- `close(force: false)`
+    // stops accepting AND waits for what is already running, and the endpoint
+    // below stays alive meanwhile, which is what lets those requests be
+    // answered at all.
     try {
-      await httpServer?.close(force: true);
+      if (drainTimeout != null && httpServer != null) {
+        // Stop accepting without killing what is running...
+        await httpServer.close();
+        // ...then actually wait for it.
+        await _drainRequests(transport, drainTimeout);
+        // Anything still going when the budget expires is cut here.
+        await httpServer.close(force: true);
+      } else {
+        await httpServer?.close(force: true);
+      }
     } catch (e) {
       _logger?.warning('Error closing the HTTP server: $e');
     }
