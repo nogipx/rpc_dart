@@ -56,14 +56,50 @@ final class RpcSecurityPolicy {
   /// produced exactly 8 handlers against `maxActiveStreams: 8`. Pacing is what
   /// defeats it, so a load test will report the ceiling holding.
   ///
-  /// Bounding actual concurrency needs the admission slot to stay charged until
-  /// the handler's future completes, rather than being released with the stream
-  /// state. That is a deliberate policy change — it converts "the server runs
-  /// slowly" into "the server rejects calls" — so it is not applied by default.
-  /// Until then, treat this as a bound on stream state, and bound handler
-  /// concurrency in the application (or with `rpc_dart_framework`'s rate
-  /// limiter) when handlers can outlive their deadline.
+  /// Use [maxConcurrentHandlers] to bound the work rather than the state. This
+  /// field stays a bound on stream STATE, because the two want different
+  /// numbers: stream state is cheap and short-lived, a running handler is
+  /// neither.
   final int maxActiveStreams;
+
+  /// Max handlers allowed to be RUNNING at once, or null for no limit.
+  ///
+  /// [maxActiveStreams] bounds live stream state, and a handler that ignores
+  /// its cancellation token outlives that state: the stream is reclaimed after
+  /// its deadline, the admission slot returns to the pool, and the work carries
+  /// on. A peer pacing its calls past the reclaim grace therefore accumulates
+  /// handlers without any bound. Measured against `maxActiveStreams: 4`, one
+  /// call every 250ms with a 40ms deadline into a handler that ignores
+  /// cancellation:
+  ///
+  ///     unset : 37 concurrent handlers after 20s, still growing linearly
+  ///     4     :  4
+  ///
+  /// and INVISIBLE while it happens: `activeResponders` read 3 and
+  /// `activeStreams` 0 at the moment 37 handlers were running, because by then
+  /// the streams really are gone and only the work remains.
+  ///
+  /// A slot is charged when the call is ADMITTED and released when its handler
+  /// finishes — not when the stream is torn down — so a call that outlives its
+  /// deadline does not hand its slot back to a handler that is still running.
+  /// At the ceiling a new call is refused before dispatch with
+  /// RESOURCE_EXHAUSTED, which is retryable, so a legitimate client backs off.
+  ///
+  /// Charging at admission rather than on handler entry is load-bearing: with
+  /// the charge on entry, a simultaneous burst is admitted before any handler
+  /// has started and the ceiling never sees it — 30 concurrent HTTP/2 calls all
+  /// got in against a limit of 3. A stream that never reaches a handler at all
+  /// (half-open, unknown method) returns its slot at teardown.
+  ///
+  /// Default null, because turning it on converts "the server runs slowly" into
+  /// "the server rejects calls" and the right number is a capacity decision. A
+  /// streaming call holds its slot for the whole call, so size this above the
+  /// number of long-lived streams the service expects, not just its unary
+  /// concurrency.
+  ///
+  /// Per CONNECTION, like [maxActiveStreams] — a responder endpoint is created
+  /// per connection.
+  final int? maxConcurrentHandlers;
 
   /// Max size of a single WebSocket message (including custom headers).
   ///
@@ -227,6 +263,7 @@ final class RpcSecurityPolicy {
     this.maxBufferedBytes,
     this.maxMessagesPerChunk = 1024,
     this.maxActiveStreams = 4096,
+    this.maxConcurrentHandlers,
     this.maxWebSocketMessageBytes = 64 * 1024 * 1024,
     this.maxChunkedMessageBytes = 64 * 1024 * 1024,
     this.maxChunkCount = 1024,
@@ -249,6 +286,9 @@ final class RpcSecurityPolicy {
     'maxBufferedBytes': ?maxBufferedBytes,
     'maxMessagesPerChunk': maxMessagesPerChunk,
     'maxActiveStreams': maxActiveStreams,
+    // Omitted when unset: absent already means "no limit" here, unlike the
+    // windows above whose absence means a non-null default.
+    'maxConcurrentHandlers': ?maxConcurrentHandlers,
     'maxWebSocketMessageBytes': maxWebSocketMessageBytes,
     'maxChunkedMessageBytes': maxChunkedMessageBytes,
     'maxChunkCount': maxChunkCount,
@@ -290,6 +330,10 @@ final class RpcSecurityPolicy {
           : null,
       maxMessagesPerChunk: readInt('maxMessagesPerChunk', 1024),
       maxActiveStreams: readInt('maxActiveStreams', 4096),
+      maxConcurrentHandlers: switch (map['maxConcurrentHandlers']) {
+        final int limit when limit > 0 => limit,
+        _ => null,
+      },
       maxWebSocketMessageBytes: readInt(
         'maxWebSocketMessageBytes',
         64 * 1024 * 1024,

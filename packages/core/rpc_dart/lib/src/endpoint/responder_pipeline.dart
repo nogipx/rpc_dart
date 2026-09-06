@@ -113,6 +113,79 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         : const RpcSecurityPolicy().maxActiveStreams;
   }
 
+  /// Streams holding a handler-concurrency slot: admitted, work not finished.
+  ///
+  /// Deliberately NOT [_respStreams], which is the thing that goes away too
+  /// early. A handler that ignores its cancellation token cannot be preempted,
+  /// so when a stream is reclaimed after its deadline the state goes and the
+  /// work stays; counting streams reported 3 while 37 handlers ran. See
+  /// [RpcSecurityPolicy.maxConcurrentHandlers].
+  final Set<int> _respSlotHeld = {};
+
+  /// Streams whose handler is executing right now. A slot outlives this set
+  /// only in the other direction: charged at admission, held until the handler
+  /// finishes even if the stream died first.
+  final Set<int> _respHandlerLive = {};
+
+  int? _respMaxHandlersCache;
+  bool _respMaxHandlersResolved = false;
+
+  int? get _respMaxHandlers {
+    if (_respMaxHandlersResolved) return _respMaxHandlersCache;
+    _respMaxHandlersResolved = true;
+    final transport = this.transport;
+    return _respMaxHandlersCache = transport is IRpcSecurityPolicyAware
+        ? (transport as IRpcSecurityPolicyAware)
+              .securityPolicy
+              .maxConcurrentHandlers
+        : const RpcSecurityPolicy().maxConcurrentHandlers;
+  }
+
+  /// Releases [streamId]'s slot once nothing is left to wait for.
+  ///
+  /// Called from both ends of the call's life -- stream teardown and handler
+  /// completion -- because either can come first, and the slot must survive
+  /// until the LATER of the two. Idempotent: whichever arrives second finds the
+  /// id already gone.
+  void _releaseHandlerSlot(int streamId) {
+    if (_respHandlerLive.contains(streamId)) return;
+    _respSlotHeld.remove(streamId);
+  }
+
+  /// Runs [work] as [streamId]'s handler, keeping its slot charged throughout.
+  ///
+  /// The slot is charged at ADMISSION, not here: charging on handler entry lets
+  /// a simultaneous burst through, because nothing is running yet when the
+  /// whole batch is admitted (30 concurrent http2 calls all got in against a
+  /// ceiling of 3). What this adds is the other end -- the slot is not returned
+  /// when the stream is torn down, only when the work is actually over.
+  Future<T> _withHandlerSlot<T>(int streamId, Future<T> Function() work) async {
+    if (_respMaxHandlers == null) return work();
+    _respHandlerLive.add(streamId);
+    try {
+      return await work();
+    } finally {
+      _respHandlerLive.remove(streamId);
+      _releaseHandlerSlot(streamId);
+    }
+  }
+
+  /// Same, for a handler whose work is a response stream: the slot is held
+  /// until that stream completes, errors, or its consumer cancels.
+  Stream<T> _withHandlerSlotStream<T>(int streamId, Stream<T> Function() work) {
+    if (_respMaxHandlers == null) return work();
+    // A generator, so its finally runs on cancellation as well as completion.
+    return () async* {
+      _respHandlerLive.add(streamId);
+      try {
+        yield* work();
+      } finally {
+        _respHandlerLive.remove(streamId);
+        _releaseHandlerSlot(streamId);
+      }
+    }();
+  }
+
   /// Payload bytes parked across every stream whose method is still unknown.
   ///
   /// A frame with no resolved method is buffered rather than dropped, because
@@ -578,6 +651,30 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
+    // And refuse past the handler ceiling, which counts a different thing: the
+    // check above frees its slot when the stream is torn down, so a handler
+    // that outlives its deadline is invisible to it. Same status and same
+    // placement, before obtain().
+    final maxHandlers = _respMaxHandlers;
+    if (maxHandlers != null && _respStreams[message.streamId] == null) {
+      if (_respSlotHeld.length >= maxHandlers) {
+        _log.warning(
+          'Refusing stream ${message.streamId}: at the concurrent-handler '
+          'limit ($maxHandlers)',
+        );
+        _detached(
+          _sendGrpcErrorAndCleanup(
+            streamId: message.streamId,
+            status: RpcStatus.resourceExhausted,
+            message: 'Too many concurrent handlers (max: $maxHandlers)',
+          ),
+          'grpc error cleanup',
+        );
+        return;
+      }
+      _respSlotHeld.add(message.streamId);
+    }
+
     final state = _respStreams.obtain(message.streamId);
     _armHalfOpenReclaim(state);
 
@@ -1039,8 +1136,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             methodName: binding.methodName,
             context: context,
             request: request,
-            handler: (ctx, req) =>
-                binding.zeroCopyMethod.callUnaryHandler(ctx, req),
+            handler: (ctx, req) => _withHandlerSlot(
+              streamId,
+              () => binding.zeroCopyMethod.callUnaryHandler(ctx, req),
+            ),
           );
           await processor.send(response);
           await processor.finishSending();
@@ -1081,10 +1180,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           methodName: binding.methodName,
           context: context,
           request: request,
-          handler: (ctx, req) async {
+          handler: (ctx, req) => _withHandlerSlot(streamId, () async {
             final response = await method.callUnaryHandler(ctx, req);
             return method.castResponse(response);
-          },
+          }),
         );
       },
       context: context,
@@ -1133,8 +1232,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             methodName: binding.methodName,
             context: context,
             requests: requests,
-            handler: (ctx, reqs) =>
-                binding.zeroCopyMethod.callClientStreamHandler(ctx, reqs),
+            handler: (ctx, reqs) => _withHandlerSlot(
+              streamId,
+              () => binding.zeroCopyMethod.callClientStreamHandler(ctx, reqs),
+            ),
           );
         },
         context: context,
@@ -1176,13 +1277,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
               methodName: binding.methodName,
               context: context,
               requests: requests,
-              handler: (ctx, reqs) async {
+              handler: (ctx, reqs) => _withHandlerSlot(streamId, () async {
                 final result = await method.callClientStreamHandler(
                   ctx,
                   method.castRequestStream(reqs),
                 );
                 return method.castResponse(result);
-              },
+              }),
             );
         return response;
       },
@@ -1231,8 +1332,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             methodName: binding.methodName,
             context: context,
             request: request,
-            handler: (ctx, req) =>
-                binding.zeroCopyMethod.callServerStreamHandler(ctx, req),
+            handler: (ctx, req) => _withHandlerSlotStream(
+              streamId,
+              () => binding.zeroCopyMethod.callServerStreamHandler(ctx, req),
+            ),
           );
         },
         context: context,
@@ -1264,8 +1367,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           methodName: binding.methodName,
           context: context,
           request: request,
-          handler: (ctx, req) =>
-              method.callServerStreamHandler(ctx, req).map(method.castResponse),
+          handler: (ctx, req) => _withHandlerSlotStream(
+            streamId,
+            () => method
+                .callServerStreamHandler(ctx, req)
+                .map(method.castResponse),
+          ),
         );
       },
       context: context,
@@ -1321,8 +1428,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             methodName: binding.methodName,
             context: context,
             requests: responder.requests,
-            handler: (ctx, reqs) => binding.zeroCopyMethod
-                .callBidirectionalStreamHandler(ctx, reqs),
+            handler: (ctx, reqs) => _withHandlerSlotStream(
+              streamId,
+              () => binding.zeroCopyMethod.callBidirectionalStreamHandler(
+                ctx,
+                reqs,
+              ),
+            ),
           );
           await _pumpBidirectionalResponses(responder, responseStream);
           await responder.finishReceiving();
@@ -1373,14 +1485,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
               methodName: binding.methodName,
               context: context,
               requests: responder.requests,
-              handler: (ctx, reqs) {
-                return method
+              handler: (ctx, reqs) => _withHandlerSlotStream(
+                streamId,
+                () => method
                     .callBidirectionalStreamHandler(
                       ctx,
                       method.castRequestStream(reqs),
                     )
-                    .map(method.castResponse);
-              },
+                    .map(method.castResponse),
+              ),
             );
         await _pumpBidirectionalResponses(responder, responseStream);
         await responder.finishReceiving();
@@ -1511,6 +1624,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // before the peer's payload frame arrives, and that frame must not open a
     // fresh, never-cleaned entry.
     _rememberClosedStream(streamId);
+
+    // Before the early return below: a stream that never got as far as running
+    // a handler -- half-open, unknown method, rejected -- still charged a slot
+    // at admission, and nothing else would ever give it back. A stream whose
+    // handler IS running keeps it; that handler releases it when it finishes.
+    _releaseHandlerSlot(streamId);
 
     final state = _respStreams.take(streamId);
     if (state == null) return;
