@@ -496,19 +496,51 @@ class RpcHttpCallerTransport implements IRpcTransport, IRpcSecurityPolicyAware {
       final ctl = entry.value;
       if (ctl.isClosed) continue;
       if (_inFlight.contains(entry.key)) {
-        ctl.addError(StateError('Transport was closed'));
+        ctl.addError(_closedDuringCall());
       }
       unawaited(ctl.close());
     }
     _streamControllers.clear();
     if (!_incoming.isClosed) {
       if (_inFlight.isNotEmpty) {
-        _incoming.addError(StateError('Transport was closed'));
+        _incoming.addError(_closedDuringCall());
       }
       _inFlight.clear();
       await _incoming.close();
     }
   }
+
+  /// What a call still in flight is told when the transport is closed under it.
+  ///
+  /// This used to be a bare `StateError`, which nothing above the transport can
+  /// classify -- and the code awaiting a call is very often NOT the code that
+  /// called close(), so it got something it could only string-match. Found by
+  /// running one scenario across every transport (2s handler, close() 300ms in)
+  /// and diffing:
+  ///
+  ///     websocket : close() 5 ms,  call RpcStatusException(14) at 314 ms
+  ///     isolate   : close() 8 ms,  call RpcStatusException(14) at 322 ms
+  ///     http2     : close() 62 ms, call RpcStatusException(14) at 372 ms
+  ///     http/1.1  : close() 11 ms, call StateError             at 322 ms
+  ///
+  /// UNAVAILABLE is chosen to MATCH those three rather than on its own merits.
+  /// A round-68 note recorded this StateError-vs-status split as an open policy
+  /// question for the maintainer, and recommended `CANCELLED` (gRPC's code for a
+  /// locally-aborted call, and non-retryable) for exactly this case. In the
+  /// meantime the other transports converged on UNAVAILABLE through unrelated
+  /// fixes, so matching them is the smaller, safer move: it removes the
+  /// unclassifiable error without inventing a fourth behaviour. Switching all
+  /// four to CANCELLED remains a one-line change per transport and is still the
+  /// maintainer's call.
+  ///
+  /// Deliberately NOT applied to a call made AFTER close: `createStream` keeps
+  /// throwing `StateError('Transport is closed')`, matching every sibling. That
+  /// is a programming error rather than a lifecycle event, and retrying it is
+  /// futile.
+  RpcStatusException _closedDuringCall() => RpcStatusException(
+    RpcStatus.unavailable,
+    'The transport was closed while this call was in flight',
+  );
 
   @override
   bool get supportsZeroCopy => false;
