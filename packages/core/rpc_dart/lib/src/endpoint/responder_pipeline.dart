@@ -1915,7 +1915,25 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       }
     }
 
-    var context = RpcContext.withHeaders(headers);
+    // Adopt the caller's request id, exactly as the trace id below is adopted,
+    // and adopt it AT CONSTRUCTION so no token is minted just to be replaced.
+    //
+    // The caller has been SENDING `x-request-id` all along and nothing read it,
+    // so the two sides logged different ids for one call and their logs could
+    // not be joined on it -- while `x-trace-id` could, which is the asymmetry
+    // that named this. Both are protocol-reserved, so an application cannot
+    // forge them through ordinary metadata, and both arrive already length- and
+    // charset-checked by validateMetadata.
+    //
+    // Used for correlation only; nothing keys state off it, so a peer repeating
+    // an id costs it nothing but confusing logs of its own.
+    final clientRequestId = headers[RpcHeaders.xRequestId];
+    var context = RpcContext.withHeaders(
+      headers,
+      requestId: (clientRequestId != null && clientRequestId.isNotEmpty)
+          ? clientRequestId
+          : null,
+    );
 
     final timeoutHeader = context.getHeader(RpcHeaders.grpcTimeout);
     if (timeoutHeader != null) {

@@ -28,6 +28,14 @@ final class RpcContext {
   final String? traceId;
 
   /// Unique request ID.
+  ///
+  /// Eager on purpose. Making it lazy looked like free savings — a token costs
+  /// three `Random.secure()` draws and the responder mints one only to replace
+  /// it — but a lazy field COPIES AS UNSET, so every `withX` copy would then
+  /// generate an id of its own and the caller's context would disagree with the
+  /// one actually sent. Caught by
+  /// `request_id_is_adopted_test`; the cheap version is to pass the id in at
+  /// construction instead, which [RpcContext.withHeaders] now allows.
   final String requestId;
 
   /// Logger scope for this request context.
@@ -60,8 +68,15 @@ final class RpcContext {
   factory RpcContext.empty() => RpcContext._();
 
   /// Creates a context with headers.
-  factory RpcContext.withHeaders(Map<String, String> headers) =>
-      RpcContext._(headers: _sanitizeHeaders(headers));
+  ///
+  /// [requestId] lets a responder adopt the id the caller sent WITHOUT minting
+  /// one first: a token is three `Random.secure()` draws (~38us measured), and
+  /// building one only to overwrite it was a third of the tokens a unary call
+  /// spent.
+  factory RpcContext.withHeaders(
+    Map<String, String> headers, {
+    String? requestId,
+  }) => RpcContext._(headers: _sanitizeHeaders(headers), requestId: requestId);
 
   /// Creates a context with a deadline.
   factory RpcContext.withDeadline(DateTime deadline) =>
@@ -140,6 +155,22 @@ final class RpcContext {
     cancellationToken: cancellationToken,
     traceId: newTraceId,
     requestId: requestId,
+    log: log,
+    values: _values,
+    clock: clock,
+  );
+
+  /// Creates a copy carrying [newRequestId].
+  ///
+  /// The mirror of [withTraceId], and it exists for the same reason: a
+  /// responder adopts the id the caller sent so both sides' logs name the same
+  /// call.
+  RpcContext withRequestId(String newRequestId) => RpcContext._(
+    headers: _headers,
+    deadline: deadline,
+    cancellationToken: cancellationToken,
+    traceId: traceId,
+    requestId: newRequestId,
     log: log,
     values: _values,
     clock: clock,
@@ -302,8 +333,22 @@ final class RpcContext {
   /// no reason to build one per call either, and it removes a `try` from the
   /// hot path.
   ///
-  /// Null when the platform has no strong RNG (the bare node test runtime),
-  /// where the monotonic counter below still guarantees uniqueness.
+  /// Null when the platform has no strong RNG, where the monotonic counter
+  /// below still guarantees uniqueness but NOT unpredictability.
+  ///
+  /// Measured, because "the bare node test runtime" understated it:
+  ///
+  ///     VM              : available
+  ///     Chrome (dart2js): available
+  ///     node  (dart2js) : THROWS UnknownJsTypeError
+  ///                       'Value of "this" must be of type nullish or must be
+  ///                        the global object'
+  ///
+  /// So on node — any node, not only the test runner — every token comes from a
+  /// non-cryptographic generator. That is acceptable for what these ids are
+  /// (correlation in logs and on the wire, never secrets or capability tokens),
+  /// and it is recorded here so nobody builds something that needs
+  /// unpredictability on top of them.
   static final Random? _strongRng = () {
     try {
       return Random.secure();
