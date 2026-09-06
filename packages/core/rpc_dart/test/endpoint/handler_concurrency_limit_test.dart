@@ -90,6 +90,39 @@ class _Svc extends RpcResponderContract {
   }
 }
 
+/// Parks the call inside the interceptor chain, on either side of `next()`.
+///
+/// Server-side work is not only the user handler: an auth lookup in an
+/// interceptor, or a response middleware, runs outside it and outlives a
+/// deadline exactly the same way.
+class _Blocker extends IRpcInterceptor {
+  _Blocker(this.gate, {required this.beforeNext});
+
+  final Completer<void> gate;
+  final bool beforeNext;
+  int running = 0;
+
+  @override
+  Future<TResponse> interceptUnary<TRequest, TResponse>(
+    RpcMiddlewareContext call,
+    TRequest request,
+    RpcUnaryNext<TRequest, TResponse> next,
+  ) async {
+    running++;
+    try {
+      if (beforeNext) {
+        await gate.future;
+        return next(call.context, request);
+      }
+      final response = await next(call.context, request);
+      await gate.future;
+      return response;
+    } finally {
+      running--;
+    }
+  }
+}
+
 typedef _Rig = ({
   RpcCallerEndpoint caller,
   RpcResponderEndpoint responder,
@@ -98,7 +131,7 @@ typedef _Rig = ({
   _Svc svc,
 });
 
-_Rig _connect({int? maxHandlers}) {
+_Rig _connect({int? maxHandlers, IRpcInterceptor? interceptor}) {
   // The client's ceiling must be the larger one, or ITS limit throws first and
   // the result says nothing about the server.
   final (clientCh, serverCh) = RpcFrameMultiplexedChannel.pair();
@@ -119,6 +152,7 @@ _Rig _connect({int? maxHandlers}) {
   final responder = RpcResponderEndpoint(transport: server);
   final svc = _Svc();
   responder.registerServiceContract(svc);
+  if (interceptor != null) responder.addInterceptor(interceptor);
   responder.start();
   return (
     caller: caller,
@@ -267,6 +301,60 @@ void main() {
     }
     expect(await _call(rig, method: 'quick'), isNull);
   });
+
+  for (final beforeNext in [true, false]) {
+    final side = beforeNext ? 'before' : 'after';
+    test('an interceptor parked $side next() holds the slot', () async {
+      // The slot covers the whole middleware+interceptor+handler chain, not the
+      // user handler alone. Wrapped around the handler only, work outside it
+      // was released with the stream: measured against a ceiling of 1, a second
+      // call was admitted while the first interceptor was still parked --
+      //
+      //   interceptors live: 2   against maxConcurrentHandlers: 1
+      //
+      // which is the very defect this limit exists for, one layer out.
+      final gate = Completer<void>();
+      final blocker = _Blocker(gate, beforeNext: beforeNext);
+      final rig = _connect(maxHandlers: 1, interceptor: blocker);
+      addTearDown(() async {
+        if (!gate.isCompleted) gate.complete();
+        await _teardown(rig);
+      });
+
+      // Abandoned by its deadline, then left past the reclaim grace so the
+      // stream state is really gone and only the interceptor remains.
+      //
+      // `quick` on purpose: with a handler that parks too, the chain could not
+      // unwind when the gate opens and the last assertion below would pass for
+      // the wrong reason.
+      await _call(
+        rig,
+        method: 'quick',
+        deadline: const Duration(milliseconds: 150),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 2500));
+      expect(blocker.running, 1, reason: 'the interceptor is still parked');
+
+      expect(
+        await _call(rig, method: 'quick'),
+        RpcStatus.resourceExhausted,
+        reason: 'the parked interceptor still holds the only slot',
+      );
+      expect(
+        blocker.running,
+        1,
+        reason: 'a refused call must not enter the chain at all',
+      );
+
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(
+        await _call(rig, method: 'quick'),
+        isNull,
+        reason: 'and the slot comes back once the chain unwinds',
+      );
+    });
+  }
 
   test('the slot is released when the handler finishes', () async {
     // The other half. A bound that is charged but never released still stops

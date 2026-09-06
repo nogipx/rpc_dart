@@ -155,13 +155,20 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     _respSlotHeld.remove(streamId);
   }
 
-  /// Runs [work] as [streamId]'s handler, keeping its slot charged throughout.
+  /// Runs [work] as [streamId]'s server-side work, keeping its slot charged
+  /// throughout.
   ///
   /// The slot is charged at DISPATCH, not here: charging on handler entry lets
   /// a simultaneous burst through, because nothing is running yet when the
   /// whole batch is admitted (30 concurrent http2 calls all got in against a
   /// ceiling of 3). What this adds is the other end -- the slot is not returned
   /// when the stream is torn down, only when the work is actually over.
+  ///
+  /// Wrapped around the WHOLE middleware+interceptor+handler chain, not the
+  /// user handler alone. With it on the handler only, work running outside the
+  /// handler was released with the stream: an interceptor parked on an auth
+  /// lookup, on either side of `next()`, left 2 calls live against a ceiling of
+  /// 1 -- the same defect this limit exists for, one layer out.
   Future<T> _withHandlerSlot<T>(int streamId, Future<T> Function() work) async {
     if (_respMaxHandlers == null) return work();
     _respHandlerLive.add(streamId);
@@ -1144,14 +1151,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         if (handled) return;
         handled = true;
         try {
-          final response = await handleUnary<Object, Object>(
-            serviceName: binding.serviceName,
-            methodName: binding.methodName,
-            context: context,
-            request: request,
-            handler: (ctx, req) => _withHandlerSlot(
-              streamId,
-              () => binding.zeroCopyMethod.callUnaryHandler(ctx, req),
+          final response = await _withHandlerSlot(
+            streamId,
+            () => handleUnary<Object, Object>(
+              serviceName: binding.serviceName,
+              methodName: binding.methodName,
+              context: context,
+              request: request,
+              handler: (ctx, req) =>
+                  binding.zeroCopyMethod.callUnaryHandler(ctx, req),
             ),
           );
           await processor.send(response);
@@ -1187,18 +1195,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       methodName: binding.methodName,
       requestCodec: method.requestCodec,
       responseCodec: method.responseCodec,
-      handler: (request) async {
-        return handleUnary<IRpcSerializable, IRpcSerializable>(
+      handler: (request) => _withHandlerSlot(
+        streamId,
+        () => handleUnary<IRpcSerializable, IRpcSerializable>(
           serviceName: binding.serviceName,
           methodName: binding.methodName,
           context: context,
           request: request,
-          handler: (ctx, req) => _withHandlerSlot(streamId, () async {
+          handler: (ctx, req) async {
             final response = await method.callUnaryHandler(ctx, req);
             return method.castResponse(response);
-          }),
-        );
-      },
+          },
+        ),
+      ),
       context: context,
       logger: contextLogger,
     );
@@ -1239,18 +1248,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         transport: transport,
         serviceName: binding.serviceName,
         methodName: binding.methodName,
-        handler: (requests) {
-          return handleClientStream<Object, Object>(
+        handler: (requests) => _withHandlerSlot(
+          streamId,
+          () => handleClientStream<Object, Object>(
             serviceName: binding.serviceName,
             methodName: binding.methodName,
             context: context,
             requests: requests,
-            handler: (ctx, reqs) => _withHandlerSlot(
-              streamId,
-              () => binding.zeroCopyMethod.callClientStreamHandler(ctx, reqs),
-            ),
-          );
-        },
+            handler: (ctx, reqs) =>
+                binding.zeroCopyMethod.callClientStreamHandler(ctx, reqs),
+          ),
+        ),
         context: context,
         logger: contextLogger,
       );
@@ -1283,23 +1291,22 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       methodName: binding.methodName,
       requestCodec: method.requestCodec,
       responseCodec: method.responseCodec,
-      handler: (requests) async {
-        final response =
-            await handleClientStream<IRpcSerializable, IRpcSerializable>(
-              serviceName: binding.serviceName,
-              methodName: binding.methodName,
-              context: context,
-              requests: requests,
-              handler: (ctx, reqs) => _withHandlerSlot(streamId, () async {
-                final result = await method.callClientStreamHandler(
-                  ctx,
-                  method.castRequestStream(reqs),
-                );
-                return method.castResponse(result);
-              }),
+      handler: (requests) => _withHandlerSlot(
+        streamId,
+        () => handleClientStream<IRpcSerializable, IRpcSerializable>(
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          context: context,
+          requests: requests,
+          handler: (ctx, reqs) async {
+            final result = await method.callClientStreamHandler(
+              ctx,
+              method.castRequestStream(reqs),
             );
-        return response;
-      },
+            return method.castResponse(result);
+          },
+        ),
+      ),
       context: context,
       logger: contextLogger,
     );
@@ -1339,18 +1346,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         transport: transport,
         serviceName: binding.serviceName,
         methodName: binding.methodName,
-        handler: (request) {
-          return handleServerStream<Object, Object>(
+        handler: (request) => _withHandlerSlotStream(
+          streamId,
+          () => handleServerStream<Object, Object>(
             serviceName: binding.serviceName,
             methodName: binding.methodName,
             context: context,
             request: request,
-            handler: (ctx, req) => _withHandlerSlotStream(
-              streamId,
-              () => binding.zeroCopyMethod.callServerStreamHandler(ctx, req),
-            ),
-          );
-        },
+            handler: (ctx, req) =>
+                binding.zeroCopyMethod.callServerStreamHandler(ctx, req),
+          ),
+        ),
         context: context,
         logger: contextLogger,
       );
@@ -1374,20 +1380,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       methodName: binding.methodName,
       requestCodec: method.requestCodec,
       responseCodec: method.responseCodec,
-      handler: (request) {
-        return handleServerStream<IRpcSerializable, IRpcSerializable>(
+      handler: (request) => _withHandlerSlotStream(
+        streamId,
+        () => handleServerStream<IRpcSerializable, IRpcSerializable>(
           serviceName: binding.serviceName,
           methodName: binding.methodName,
           context: context,
           request: request,
-          handler: (ctx, req) => _withHandlerSlotStream(
-            streamId,
-            () => method
-                .callServerStreamHandler(ctx, req)
-                .map(method.castResponse),
-          ),
-        );
-      },
+          handler: (ctx, req) =>
+              method.callServerStreamHandler(ctx, req).map(method.castResponse),
+        ),
+      ),
       context: context,
       logger: contextLogger,
     );
@@ -1436,17 +1439,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
       unawaited(() async {
         try {
-          final responseStream = handleBidirectionalStream<Object, Object>(
-            serviceName: binding.serviceName,
-            methodName: binding.methodName,
-            context: context,
-            requests: responder.requests,
-            handler: (ctx, reqs) => _withHandlerSlotStream(
-              streamId,
-              () => binding.zeroCopyMethod.callBidirectionalStreamHandler(
-                ctx,
-                reqs,
-              ),
+          final responseStream = _withHandlerSlotStream(
+            streamId,
+            () => handleBidirectionalStream<Object, Object>(
+              serviceName: binding.serviceName,
+              methodName: binding.methodName,
+              context: context,
+              requests: responder.requests,
+              handler: (ctx, reqs) => binding.zeroCopyMethod
+                  .callBidirectionalStreamHandler(ctx, reqs),
             ),
           );
           await _pumpBidirectionalResponses(responder, responseStream);
@@ -1492,22 +1493,21 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     unawaited(() async {
       try {
-        final responseStream =
-            handleBidirectionalStream<IRpcSerializable, IRpcSerializable>(
-              serviceName: binding.serviceName,
-              methodName: binding.methodName,
-              context: context,
-              requests: responder.requests,
-              handler: (ctx, reqs) => _withHandlerSlotStream(
-                streamId,
-                () => method
-                    .callBidirectionalStreamHandler(
-                      ctx,
-                      method.castRequestStream(reqs),
-                    )
-                    .map(method.castResponse),
-              ),
-            );
+        final responseStream = _withHandlerSlotStream(
+          streamId,
+          () => handleBidirectionalStream<IRpcSerializable, IRpcSerializable>(
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            requests: responder.requests,
+            handler: (ctx, reqs) => method
+                .callBidirectionalStreamHandler(
+                  ctx,
+                  method.castRequestStream(reqs),
+                )
+                .map(method.castResponse),
+          ),
+        );
         await _pumpBidirectionalResponses(responder, responseStream);
         await responder.finishReceiving();
       } catch (error, stackTrace) {
