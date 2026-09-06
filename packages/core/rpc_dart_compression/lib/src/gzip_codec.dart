@@ -5,6 +5,9 @@
 import 'package:archive/archive.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
+import 'bounded_inflate_stub.dart'
+    if (dart.library.io) 'bounded_inflate_io.dart';
+
 /// Cross-platform gzip [RpcCompressionCodec] backed by [package:archive].
 ///
 /// Works on all platforms: native, web, JS, Wasm.
@@ -135,12 +138,36 @@ final class RpcGzipCodec implements RpcCompressionCodec {
       }
     }
 
+    // Prefer an inflater that can be STOPPED. The pre-check above trusts ISIZE,
+    // and ISIZE is the size MOD 2^32: a payload that inflates to k*2^32 + small
+    // declares "small" and sails through it. `package:archive` cannot be
+    // stopped -- both of its paths materialise the whole output before any
+    // check can run -- so on such a payload the limit fired only after the
+    // damage. Measured with 4.0 MiB of compressed zeros declaring ISIZE 4096,
+    // against a 16 MiB limit: RSS +1873 MiB and 17.5s before the throw.
+    //
+    // On the VM `dart:io`'s decoder is a converter and aborts mid-stream, so
+    // the same payload now costs nothing. On web there is no incremental
+    // inflater available and [boundedInflate] returns null, leaving the
+    // whole-buffer path with its after-the-fact check -- documented, not fixed,
+    // because `Inflate.stream(input).getBytes()` gives nothing to interrupt.
     final List<int> result;
     try {
-      // verify:true enforces the CRC32 + ISIZE trailer check on the VM.
-      // decodeBytes already returns a Uint8List, but the trailer re-check below
-      // works on any List<int>, so keep the declared type loose.
-      result = GZipDecoder().decodeBytes(data, verify: true);
+      final bounded = effectiveLimit == _unlimited
+          ? null
+          : boundedInflate(data, effectiveLimit);
+      if (bounded != null) {
+        result = bounded;
+      } else {
+        // verify:true enforces the CRC32 + ISIZE trailer check on the VM.
+        // decodeBytes already returns a Uint8List, but the trailer re-check
+        // below works on any List<int>, so keep the declared type loose.
+        result = GZipDecoder().decodeBytes(data, verify: true);
+      }
+    } on InflateLimitExceeded {
+      throw FormatException(
+        'Invalid gzip data: decompressed output exceeds limit $effectiveLimit',
+      );
     } catch (e) {
       throw FormatException('Invalid gzip data: $e');
     }
