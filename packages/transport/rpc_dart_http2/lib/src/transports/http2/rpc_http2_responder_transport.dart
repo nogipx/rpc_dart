@@ -260,6 +260,41 @@ class RpcHttp2ResponderTransport
     );
 
     _streamSubscriptions[streamId] = subscription;
+
+    // RST_STREAM after the request side has finished has NOWHERE else to land.
+    //
+    // The onError branch above catches a reset only while `incomingMessages` is
+    // still live. For a server-stream or unary call the client half-closes as
+    // soon as its request is out, so `onDone` has already run and the
+    // subscription is gone by the time the client cancels -- and package:http2
+    // reports the reset only through `onTerminated`, which nothing registered.
+    // The call therefore ran to completion with no client: measured with a
+    // client that cancelled its subscription and left the connection up, the
+    // handler was still producing at +6s (404715 messages, openStreams stuck at
+    // 1) and nothing was ever going to stop it. The websocket sibling, whose
+    // cancellation travels as ordinary metadata the responder already
+    // understands, stopped after 1 further message.
+    //
+    // Synthesising the same `x-client-cancelled` frame reuses that tested
+    // teardown path rather than adding a second one.
+    stream.onTerminated = (errorCode) {
+      _logger?.internal(
+        'Stream $streamId reset by peer (errorCode: $errorCode), '
+        'cancelling the call',
+      );
+      _emit(
+        RpcTransportMessage.withMetadata(
+          streamId: streamId,
+          metadata: RpcMetadata([
+            RpcHeader(RpcHeaders.xClientCancelled, 'true'),
+            RpcHeader(
+              RpcHeaders.xCancellationReason,
+              'peer sent RST_STREAM (errorCode: $errorCode)',
+            ),
+          ]),
+        ),
+      );
+    };
   }
 
   /// Обрабатывает входящее сообщение от клиента
