@@ -217,6 +217,57 @@ void main() {
     await Future.wait(calls);
   });
 
+  test('a half-open stream does not hold a handler slot', () async {
+    // Charging the slot at stream ADMISSION rather than at dispatch was a cheap
+    // denial of service. A stream is half-open from its opening metadata frame
+    // until a handler is dispatched, which for unary needs the request payload,
+    // so metadata-only frames parked slots for handlers that would never run.
+    // Measured with maxConcurrentHandlers: 8 against maxActiveStreams: 4096:
+    //
+    //   8 metadata-only frames -> handlers served 0, an ordinary call refused
+    //                             RESOURCE_EXHAUSTED, and it would stay refused
+    //                             until halfOpenStreamTimeout (60s) expired
+    //
+    // An operator setting this knob to their real capacity would be handing out
+    // a kill switch of exactly that size.
+    final rig = _connect(maxHandlers: 4);
+    addTearDown(() => _teardown(rig));
+
+    for (var i = 0; i < 4; i++) {
+      final id = rig.client.createStream();
+      await rig.client.sendMetadata(
+        id,
+        RpcMetadata.forClientRequest('Svc', 'quick'),
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(
+      rig.responder.collectEndpointMetrics()['openStreams'],
+      4,
+      reason: 'the streams must really be parked, or this proves nothing',
+    );
+    expect(rig.svc.entered, 0, reason: 'no handler ran on any of them');
+
+    expect(
+      await _call(rig, method: 'quick'),
+      isNull,
+      reason: 'parked streams with no handler must not consume the ceiling',
+    );
+  });
+
+  test('an unknown method does not hold a handler slot', () async {
+    // The same shape one step further on: the call is well-formed and reaches
+    // the registry, which rejects it before any dispatch.
+    final rig = _connect(maxHandlers: 2);
+    addTearDown(() => _teardown(rig));
+
+    for (var i = 0; i < 4; i++) {
+      expect(await _call(rig, method: 'nope'), RpcStatus.unimplemented);
+    }
+    expect(await _call(rig, method: 'quick'), isNull);
+  });
+
   test('the slot is released when the handler finishes', () async {
     // The other half. A bound that is charged but never released still stops
     // the attack, so the witness above stays green while the ceiling ratchets

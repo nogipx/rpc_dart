@@ -79,17 +79,22 @@ final class RpcSecurityPolicy {
   /// `activeStreams` 0 at the moment 37 handlers were running, because by then
   /// the streams really are gone and only the work remains.
   ///
-  /// A slot is charged when the call is ADMITTED and released when its handler
-  /// finishes — not when the stream is torn down — so a call that outlives its
-  /// deadline does not hand its slot back to a handler that is still running.
-  /// At the ceiling a new call is refused before dispatch with
-  /// RESOURCE_EXHAUSTED, which is retryable, so a legitimate client backs off.
+  /// A slot is charged at DISPATCH — the moment a handler is about to be
+  /// created — and released when that handler finishes, not when the stream is
+  /// torn down, so a call that outlives its deadline does not hand its slot
+  /// back to a handler that is still running. At the ceiling a call is refused
+  /// with RESOURCE_EXHAUSTED, which is retryable, so a legitimate client backs
+  /// off.
   ///
-  /// Charging at admission rather than on handler entry is load-bearing: with
-  /// the charge on entry, a simultaneous burst is admitted before any handler
-  /// has started and the ceiling never sees it — 30 concurrent HTTP/2 calls all
-  /// got in against a limit of 3. A stream that never reaches a handler at all
-  /// (half-open, unknown method) returns its slot at teardown.
+  /// Dispatch is the only correct charge point, and both neighbours were
+  /// measured to be wrong. Charging on handler ENTRY is one `await` too late: a
+  /// simultaneous burst is admitted before anything is running and the ceiling
+  /// never sees it (30 concurrent HTTP/2 calls got in against a limit of 3).
+  /// Charging at stream ADMISSION is too early and is a denial of service: a
+  /// stream is half-open from its opening metadata frame until dispatch, so 8
+  /// metadata-only frames — no payload, no handler — refused every call for the
+  /// 60s [halfOpenStreamTimeout]. A stream that never reaches dispatch, or that
+  /// bails after it, returns its slot at teardown.
   ///
   /// Default null, because turning it on converts "the server runs slowly" into
   /// "the server rejects calls" and the right number is a capacity decision. A

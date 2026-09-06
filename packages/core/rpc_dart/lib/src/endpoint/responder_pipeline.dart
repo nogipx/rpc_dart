@@ -113,13 +113,16 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         : const RpcSecurityPolicy().maxActiveStreams;
   }
 
-  /// Streams holding a handler-concurrency slot: admitted, work not finished.
+  /// Streams holding a handler-concurrency slot: dispatched, work not finished.
   ///
   /// Deliberately NOT [_respStreams], which is the thing that goes away too
   /// early. A handler that ignores its cancellation token cannot be preempted,
   /// so when a stream is reclaimed after its deadline the state goes and the
   /// work stays; counting streams reported 3 while 37 handlers ran. See
   /// [RpcSecurityPolicy.maxConcurrentHandlers].
+  ///
+  /// Bounded by the ceiling itself: an id is only added after the length check
+  /// passes, and a Set makes a double charge for one stream impossible.
   final Set<int> _respSlotHeld = {};
 
   /// Streams whose handler is executing right now. A slot outlives this set
@@ -154,7 +157,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   /// Runs [work] as [streamId]'s handler, keeping its slot charged throughout.
   ///
-  /// The slot is charged at ADMISSION, not here: charging on handler entry lets
+  /// The slot is charged at DISPATCH, not here: charging on handler entry lets
   /// a simultaneous burst through, because nothing is running yet when the
   /// whole batch is admitted (30 concurrent http2 calls all got in against a
   /// ceiling of 3). What this adds is the other end -- the slot is not returned
@@ -651,30 +654,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
-    // And refuse past the handler ceiling, which counts a different thing: the
-    // check above frees its slot when the stream is torn down, so a handler
-    // that outlives its deadline is invisible to it. Same status and same
-    // placement, before obtain().
-    final maxHandlers = _respMaxHandlers;
-    if (maxHandlers != null && _respStreams[message.streamId] == null) {
-      if (_respSlotHeld.length >= maxHandlers) {
-        _log.warning(
-          'Refusing stream ${message.streamId}: at the concurrent-handler '
-          'limit ($maxHandlers)',
-        );
-        _detached(
-          _sendGrpcErrorAndCleanup(
-            streamId: message.streamId,
-            status: RpcStatus.resourceExhausted,
-            message: 'Too many concurrent handlers (max: $maxHandlers)',
-          ),
-          'grpc error cleanup',
-        );
-        return;
-      }
-      _respSlotHeld.add(message.streamId);
-    }
-
     final state = _respStreams.obtain(message.streamId);
     _armHalfOpenReclaim(state);
 
@@ -1077,6 +1056,40 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     RpcResponderMethodBinding binding,
   ) async {
     if (state.responder != null) return;
+
+    // Charge the handler slot HERE, where a handler is actually about to exist.
+    //
+    // Charging it at stream admission instead was a cheap denial of service: a
+    // stream is half-open from its opening metadata frame until dispatch, which
+    // for unary needs the request payload, so metadata-only frames parked slots
+    // for handlers that would never run. Measured with maxConcurrentHandlers: 8
+    // and maxActiveStreams: 4096, eight metadata-only frames -- no payload, no
+    // handler entered -- refused every subsequent call with RESOURCE_EXHAUSTED
+    // until halfOpenStreamTimeout (60s) expired. An operator setting this knob
+    // to their real capacity would be handing out a kill switch of that size.
+    //
+    // The burst case still holds because this runs with NO await before it and
+    // both dispatch sites are reached synchronously from _onMessage: a batch of
+    // calls is charged one frame at a time, so the ceiling sees each. Charging
+    // on handler ENTRY, which is one await further on, does not -- 30
+    // concurrent http2 calls all got in against a limit of 3.
+    final maxHandlers = _respMaxHandlers;
+    if (maxHandlers != null && !_respSlotHeld.contains(state.id)) {
+      if (_respSlotHeld.length >= maxHandlers) {
+        _log.warning(
+          'Refusing stream ${state.id}: at the concurrent-handler limit '
+          '($maxHandlers)',
+        );
+        await _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.resourceExhausted,
+          message: 'Too many concurrent handlers (max: $maxHandlers)',
+          context: state.cachedContext,
+        );
+        return;
+      }
+      _respSlotHeld.add(state.id);
+    }
 
     switch (binding.type) {
       case RpcMethodType.unaryRequest:
