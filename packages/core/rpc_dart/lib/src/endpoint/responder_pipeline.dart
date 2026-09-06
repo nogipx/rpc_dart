@@ -113,6 +113,62 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         : const RpcSecurityPolicy().maxActiveStreams;
   }
 
+  /// Payload bytes parked across every stream whose method is still unknown.
+  ///
+  /// A frame with no resolved method is buffered rather than dropped, because
+  /// on a broadcast transport the first DATA frame of a stream can be processed
+  /// before its metadata frame (see [RpcResponderStreamState.bufferPreMethod]).
+  /// That buffer had no size limit, and it sits in the one window where nothing
+  /// else bounds it either: until the responder is bound, no layer claims the
+  /// stream, so `RpcChannelTransport` credits flow control ON ARRIVAL and the
+  /// peer's window is replenished forever. `maxActiveStreams` does not apply
+  /// (one id is enough) and `maxMessageLengthBytes` does not either (every
+  /// frame is individually legal). Only [halfOpenStreamTimeout] bounded it, and
+  /// that bounds TIME, not VOLUME.
+  ///
+  /// Measured against a websocket server, a raw client pushing 4 KiB DATA
+  /// frames at a single stream id it never opened with metadata:
+  ///
+  ///   pushed 250.7 MiB  ->  server RSS +495.2 MiB   (8113 B per 4 KiB frame)
+  ///
+  /// versus 28.8 MiB for the same volume pushed at a stream the server had
+  /// already answered, which is the drop path. Confirmed as the mechanism by
+  /// re-running with `halfOpenStreamTimeout: 300ms`, which lets the reclaim
+  /// tear the stream down mid-flood: +56.2 MiB (921 B per frame). No rpc_dart
+  /// client is needed -- three hand-built frames on a plain WebSocket do it --
+  /// so this is unauthenticated remote memory exhaustion for the default 60s
+  /// window.
+  ///
+  /// Counted per connection rather than per stream so inventing more stream ids
+  /// does not buy more budget.
+  int _respPreMethodBytes = 0;
+
+  /// Ceiling for [_respPreMethodBytes].
+  ///
+  /// [RpcSecurityPolicy.maxMessageLengthBytes] rather than a new knob: the
+  /// buffer exists to cover a frame-REORDER window, so one maximum message's
+  /// worth across the whole connection is already orders of magnitude more than
+  /// the legitimate case (a single leading chunk that overtook its headers)
+  /// ever needs, and it is the limit an operator already tunes for "how big may
+  /// one thing be". A breach fails only the stream that overflowed the budget.
+  int? _respMaxPreMethodCache;
+
+  int get _respMaxPreMethodBytes {
+    final transport = this.transport;
+    return _respMaxPreMethodCache ??= transport is IRpcSecurityPolicyAware
+        ? (transport as IRpcSecurityPolicyAware)
+              .securityPolicy
+              .maxMessageLengthBytes
+        : const RpcSecurityPolicy().maxMessageLengthBytes;
+  }
+
+  void _releasePreMethodBytes(RpcResponderStreamState state) {
+    final parked = state.preMethodBufferedBytes;
+    if (parked <= 0) return;
+    _respPreMethodBytes -= parked;
+    if (_respPreMethodBytes < 0) _respPreMethodBytes = 0;
+  }
+
   /// Cached half-open reclamation window, read from the transport's policy.
   Duration? _respHalfOpenCache;
   bool _respHalfOpenResolved = false;
@@ -416,6 +472,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       'isListening': _respIsListening,
       'isDraining': _respIsDraining,
       'openStreams': _respStreams.length,
+      // Un-attributed payload parked on this connection. Should sit at 0
+      // between calls; a number that only ever climbs means the budget is not
+      // being released and legitimate calls will start being refused.
+      'preMethodBufferedBytes': _respPreMethodBytes,
     };
   }
 
@@ -706,6 +766,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // metadata frame (broadcast-transport reordering right after a connection
     // opens). Now that the method is resolved they route normally.
     if (state.hasPreMethodBuffered || state.endOfStreamPending) {
+      // These leave the pre-method buffer, so give the connection its budget
+      // back before replaying — the replay itself no longer buffers them.
+      _releasePreMethodBytes(state);
       for (final buffered in state.takePreMethodBufferedMessages()) {
         _handleDataMessage(state, buffered);
       }
@@ -745,6 +808,28 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       // Buffer instead of dropping — otherwise the leading frame (for the blob
       // upload, the one carrying blobId/vaultId) is lost and the handler sees a
       // metadata-less first chunk. Replayed once metadata resolves the method.
+      //
+      // Bounded: see [_respPreMethodBytes]. Nothing else limits this window.
+      final bytes = message.payload?.length ?? 0;
+      if (_respPreMethodBytes + bytes > _respMaxPreMethodBytes) {
+        _log.warning(
+          'Refusing stream ${state.id}: $_respPreMethodBytes bytes already '
+          'buffered on this connection for streams with no method '
+          '(max: $_respMaxPreMethodBytes)',
+        );
+        _detached(
+          _sendGrpcErrorAndCleanup(
+            streamId: state.id,
+            status: RpcStatus.resourceExhausted,
+            message:
+                'Too much payload buffered before the method was known '
+                '(max: $_respMaxPreMethodBytes bytes)',
+          ),
+          'grpc error cleanup',
+        );
+        return;
+      }
+      _respPreMethodBytes += bytes;
       state.bufferPreMethod(message);
       return;
     }
@@ -1429,6 +1514,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final state = _respStreams.take(streamId);
     if (state == null) return;
+    // A stream torn down while still holding pre-method frames must return its
+    // share of the connection budget, or the ceiling ratchets down over time.
+    _releasePreMethodBytes(state);
     state.cancelDeadline();
     // End the client-stream request feed first: a handler parked in
     // `await for (requests)` has to be released before its responder is closed.

@@ -24,6 +24,7 @@ final class RpcResponderStreamState {
   final List<RpcTransportMessage> _preBindBufferedMessages = [];
   final List<RpcTransportMessage> _clientBufferedMessages = [];
   final List<RpcTransportMessage> _preMethodBufferedMessages = [];
+  int _preMethodBufferedBytes = 0;
   RpcContext? _cachedContext;
 
   /// True when an end-of-stream frame arrived before the method was known and
@@ -252,7 +253,15 @@ final class RpcResponderStreamState {
   /// once [methodKey] is set.
   void bufferPreMethod(RpcTransportMessage message) {
     _preMethodBufferedMessages.add(message);
+    _preMethodBufferedBytes += message.payload?.length ?? 0;
   }
+
+  /// Payload bytes currently parked in the pre-method buffer.
+  ///
+  /// The responder pipeline keeps a connection-wide total of these and refuses
+  /// to park more than one maximum message's worth; see
+  /// `_respMaxPreMethodBytes`.
+  int get preMethodBufferedBytes => _preMethodBufferedBytes;
 
   /// Returns and clears the payload frames buffered before the method resolved.
   List<RpcTransportMessage> takePreMethodBufferedMessages() {
@@ -261,6 +270,7 @@ final class RpcResponderStreamState {
     }
     final messages = List<RpcTransportMessage>.from(_preMethodBufferedMessages);
     _preMethodBufferedMessages.clear();
+    _preMethodBufferedBytes = 0;
     return messages;
   }
 
