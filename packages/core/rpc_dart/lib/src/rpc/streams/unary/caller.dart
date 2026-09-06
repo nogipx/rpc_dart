@@ -143,6 +143,27 @@ final class UnaryCaller<TRequest, TResponse> {
             });
       }
 
+      // The decoded response, held until the call is known to have COMPLETED.
+      //
+      // gRPC requires every response to carry a grpc-status, in trailers or in
+      // a Trailers-Only response; a stream that ends on DATA is malformed. This
+      // used to complete the completer the instant a message was decoded, so a
+      // truncated response -- a proxy cutting the stream, a server dying
+      // mid-response -- was handed back as a successful value and the
+      // UNAVAILABLE that followed arrived after the call had already returned.
+      // Measured against a raw HTTP/2 server sending headers + one framed
+      // message + END_STREAM with no trailers:
+      //
+      //   before : RETURNED "answer"   -- indistinguishable from success
+      //   after  : UNAVAILABLE
+      //
+      // The streaming shapes were fixed for this in round 88; unary kept the
+      // early completion. Holding the value costs nothing on a conforming peer,
+      // where the trailers follow in the same flush, and `onDone` below still
+      // guarantees the call cannot hang if no status ever arrives.
+      TResponse? pendingResponse;
+      var hasPendingResponse = false;
+
       // Subscribe to responses for this stream.
       _logger.internal(
         'Configuring response subscription [streamId: $streamId]',
@@ -160,9 +181,11 @@ final class UnaryCaller<TRequest, TResponse> {
                   final response = message.directPayload as TResponse;
                   if (!completer.isCompleted) {
                     _logger.internal(
-                      'Zero-copy unary call $_methodPath completed [streamId: $streamId]',
+                      'Zero-copy unary response held pending status '
+                      '[streamId: $streamId]',
                     );
-                    completer.complete(response);
+                    pendingResponse = response;
+                    hasPendingResponse = true;
                   } else {
                     _logger.warning(
                       'Extra zero-copy response after call completion [streamId: $streamId]',
@@ -203,9 +226,11 @@ final class UnaryCaller<TRequest, TResponse> {
                     final response = _responseSerializer.deserialize(msgBytes);
                     if (!completer.isCompleted) {
                       _logger.internal(
-                        'Unary call $_methodPath completed [streamId: $streamId]',
+                        'Unary response held pending status '
+                        '[streamId: $streamId]',
                       );
-                      completer.complete(response);
+                      pendingResponse = response;
+                      hasPendingResponse = true;
                       break; // Only first response is needed for unary call.
                     } else {
                       _logger.warning(
@@ -236,12 +261,23 @@ final class UnaryCaller<TRequest, TResponse> {
                   RpcHeaders.grpcStatus,
                 );
 
-                if (statusCode != null && message.isEndOfStream) {
+                if (statusCode != null) {
                   final code = int.tryParse(statusCode) ?? RpcStatus.unknown;
                   _logger.internal(
                     'Completion status received: $code [streamId: $streamId]',
                   );
-                  if (code != RpcStatus.ok && !completer.isCompleted) {
+                  // The status is what completes the call. Deliberately NOT
+                  // gated on isEndOfStream: a peer that sends the status
+                  // without it would otherwise leave the held response stuck
+                  // until onDone turned a perfectly good answer into an error.
+                  if (code == RpcStatus.ok &&
+                      hasPendingResponse &&
+                      !completer.isCompleted) {
+                    _logger.internal(
+                      'Unary call $_methodPath completed [streamId: $streamId]',
+                    );
+                    completer.complete(pendingResponse as TResponse);
+                  } else if (code != RpcStatus.ok && !completer.isCompleted) {
                     final errorMessage =
                         message.metadata!.getHeaderValue(
                           RpcHeaders.grpcMessage,
