@@ -167,6 +167,18 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
   @override
   Future<void> send(Uint8List data) async {
     if (_closed) return;
+    // NOT batched, and that was measured rather than assumed. Each `sink.add`
+    // costs 80-125us of dart:io time and a unary call makes seven of them, so
+    // coalescing frames into one WebSocket message looked like half the call --
+    // and `RpcChannelFrame.decodeAll` already accepts several frames per
+    // buffer, so no protocol change was needed.
+    //
+    // Buffering behind a microtask changed NOTHING (3 sent / 4 received per
+    // call before and after, 1242us vs 1316us): the sender awaits between
+    // frames, so the microtask drains before the next one arrives and there is
+    // never anything to merge. Making it a timer instead would merge them, at
+    // the price of delaying every lone frame by a full event-loop turn -- which
+    // is the wrong trade for a latency-sensitive unary path.
     _ws.sink.add(data);
   }
 
