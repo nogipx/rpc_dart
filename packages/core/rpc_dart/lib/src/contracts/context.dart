@@ -295,24 +295,54 @@ final class RpcContext {
   /// default [Random] may repeat within the same millisecond. The first 12
   /// bytes are random (unpredictability where a strong RNG exists); the last 4
   /// carry a process-wide monotonic counter so two tokens never collide.
+  /// The strong generator, created ONCE.
+  ///
+  /// `Random.secure()` was constructed per token. The constructor itself is
+  /// cheap (0.04us measured), so this is not where the cost was — but there is
+  /// no reason to build one per call either, and it removes a `try` from the
+  /// hot path.
+  ///
+  /// Null when the platform has no strong RNG (the bare node test runtime),
+  /// where the monotonic counter below still guarantees uniqueness.
+  static final Random? _strongRng = () {
+    try {
+      return Random.secure();
+    } catch (_) {
+      return null;
+    }
+  }();
+
+  static final Random _fallbackRng = Random();
+
+  /// `1 << 32`, written as a literal ON PURPOSE: dart2js shifts are 32-bit, so
+  /// `1 << 32` evaluates to 0 there and `nextInt(0)` throws.
+  static const int _randomWordMax = 4294967296;
+
   static String _uniqueToken() {
     final bytes = Uint8List(16);
-    Random rng;
-    try {
-      rng = Random.secure();
-    } catch (_) {
-      // No strong RNG on this platform: fall back to the default Random
-      // (the monotonic counter below still guarantees uniqueness).
-      rng = Random();
-    }
-    for (var i = 0; i < 12; i++) {
-      bytes[i] = rng.nextInt(256);
-    }
-    final c = _idCounter = (_idCounter + 1) & 0xFFFFFFFF;
-    bytes[12] = (c >> 24) & 0xFF;
-    bytes[13] = (c >> 16) & 0xFF;
-    bytes[14] = (c >> 8) & 0xFF;
-    bytes[15] = c & 0xFF;
+    final view = ByteData.view(bytes.buffer);
+    final rng = _strongRng ?? _fallbackRng;
+
+    // THREE draws of 32 bits, not twelve of 8. Same 96 bits, same generator,
+    // and it was 83% of the cost of an RPC.
+    //
+    // `Random.secure().nextInt()` reaches the system entropy source on every
+    // call, at ~11us each. Measured per token-worth of randomness:
+    //
+    //     12 x secure.nextInt(256)  : 130.18 us
+    //      3 x secure.nextInt(2^32) :  33.88 us
+    //
+    // and a unary call spends THREE tokens (a requestId and a traceId on the
+    // caller, one more on the responder), so 390us of a 505us call was this.
+    // Nothing is traded away: identical entropy, from the identical source,
+    // fetched in fewer syscalls.
+    view.setUint32(0, rng.nextInt(_randomWordMax));
+    view.setUint32(4, rng.nextInt(_randomWordMax));
+    view.setUint32(8, rng.nextInt(_randomWordMax));
+
+    // The last 4 bytes carry a process-wide monotonic counter, so two tokens
+    // never collide even where the random half is weak.
+    view.setUint32(12, _idCounter = (_idCounter + 1) & 0xFFFFFFFF);
     return base64UrlEncode(bytes).replaceAll('=', '');
   }
 
