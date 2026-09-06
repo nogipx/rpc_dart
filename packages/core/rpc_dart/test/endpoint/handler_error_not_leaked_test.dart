@@ -20,23 +20,28 @@
 // `Internal: Request processing error: Bad state: handler blew up: x`. Any
 // unauthenticated peer could read it.
 //
-// The line now drawn is Dart's own: an Error is a BUG (StateError, TypeError,
-// NoSuchMethodError, a failed assertion) and its text is made of internal
-// state, so it is replaced; an Exception is a condition someone CHOSE to
-// signal, so its message still travels. That keeps two things the first,
-// broader version of this fix broke -- and the gate caught both:
+// The line was first drawn at Dart's own: an Error is a BUG, an Exception is a
+// condition someone CHOSE to signal, so Exceptions still travelled. That is no
+// longer the rule. It does not survive third-party libraries -- a database
+// driver throws with the failing query in it, an HTTP client with the URL and
+// sometimes a token -- and an allow-list of leaky types cannot be written,
+// because most belong to packages this library has never heard of.
 //
-//   rpc_context_integration_test  a handler throws `Exception('... [trace=$id]')`
-//                                 so the caller can quote the trace id back
+// `wireStatusFor` is now DEFAULT DENY: only an explicit RpcStatusException and
+// rpc_dart's own RpcException hierarchy travel. Everything else, Error or
+// Exception, gets kInternalErrorWireMessage.
+//
+// Two things had to keep working, and the gate caught both when they did not:
+//
+//   rpc_context_integration_test  a handler putting a trace id in front of the
+//                                 caller -- now via RpcStatusException, which
+//                                 is the supported way to say anything
 //   compressed_payload_honours_policy_test
 //                                 expects "max: 1048576" -- rpc_dart's own
 //                                 framing diagnostic, which is what tells a
-//                                 peer to send less
-//
-// KNOWN LIMIT, pinned below rather than hidden: a sensitive Exception subtype
-// still crosses the wire (FileSystemException names paths, SocketException
-// names hosts). Closing that means forwarding nothing but RpcStatusException,
-// as grpc-go does, which is a policy call and not this fix.
+//                                 peer to send less. A decompressor throws its
+//                                 OWN library's type, so the parser now rewraps
+//                                 that as an RpcException naming the limit.
 //
 // The cause is NOT lost either way: every one of these sites logs it with its
 // stack trace before answering.
@@ -236,30 +241,34 @@ void main() {
     },
   );
 
-  test(
-    'GUARD: a deliberate Exception message still reaches the caller',
-    () async {
-      // The line drawn here is Dart's own: an Error is a bug, an Exception is a
-      // condition someone chose to signal. Silencing Exceptions too would break
-      // deliberate reporting that works today -- rpc_context_integration_test
-      // pins a handler throwing `Exception('... [trace=$traceId]')` so the caller
-      // can quote the trace id back -- and would drop rpc_dart's own framing
-      // diagnostics ("gRPC frame payload is too large: N (max: M)"), which are
-      // library-authored and are exactly what a peer needs to correct itself.
-      //
-      // This is also the KNOWN LIMIT of the fix, recorded rather than hidden: a
-      // sensitive Exception subtype still crosses the wire. Closing that means
-      // forwarding nothing but RpcStatusException, which is a policy call.
-      final wire = wireStatusFor(Exception('deliberate [trace=abc123]'));
-      expect(wire.status, RpcStatus.internal);
-      expect(wire.message, contains('abc123'));
+  test('a bare Exception no longer reaches the caller', () async {
+    // The line used to be Dart's own -- an Error is a bug, an Exception is a
+    // condition someone chose to signal -- and this test pinned the second
+    // half of it. That reasoning does not survive third-party libraries: a
+    // database driver throws with the failing query in it, an HTTP client
+    // with the URL and sometimes a token, and neither was "chosen" in any
+    // sense the caller benefits from.
+    //
+    // `wireStatusFor` is now default-deny. The migration for a handler that
+    // wanted to say something is RpcStatusException, which is pinned by the
+    // guard above and by rpc_context_integration_test.
+    final wire = wireStatusFor(Exception('deliberate [trace=abc123]'));
+    expect(wire.status, RpcStatus.internal);
+    expect(wire.message, kInternalErrorWireMessage);
+    expect(wire.message, isNot(contains('abc123')));
+  });
 
-      final framing = wireStatusFor(
-        RpcException('gRPC frame payload is too large: 42 (max: 16)'),
-      );
-      expect(framing.message, contains('max: 16'));
-    },
-  );
+  test('GUARD: rpc_dart\'s own diagnostics still reach the caller', () async {
+    // The reason an exception type is allowed through at all. These are
+    // library-authored, carry no user data, and are exactly what a peer needs
+    // in order to correct itself -- redacting them would make an oversized
+    // message unexplainable.
+    final framing = wireStatusFor(
+      RpcException('gRPC frame payload is too large: 42 (max: 16)'),
+    );
+    expect(framing.status, RpcStatus.internal);
+    expect(framing.message, contains('max: 16'));
+  });
 
   test('GUARD: wireStatusFor forwards status details', () async {
     // Structured details ride grpc-status-details-bin and are also deliberate,

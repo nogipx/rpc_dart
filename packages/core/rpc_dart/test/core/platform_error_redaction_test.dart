@@ -2,77 +2,86 @@
 //
 // SPDX-License-Identifier: MIT
 
-// VM only: it constructs dart:io exceptions, which dart2js cannot compile. The
-// library code under test is platform-split for exactly that reason -- on web
-// `isPlatformInfrastructureError` is a constant false, since none of these
-// types can exist there.
+// `wireStatusFor` is DEFAULT DENY: nothing reaches the caller unless it is
+// provably safe to send.
+//
+// It used to forward any `Exception`, on the reasoning that an Exception is
+// something the thrower CHOSE to signal, and to redact only `Error`s as bugs.
+// That does not survive contact with third-party libraries -- a database driver
+// throws with the failing query, an HTTP client with the URL and sometimes a
+// token. Measured, identically on http2, websocket and isolate:
+//
+//   FileSystemException  ->  "boom, path = '/etc/private/key.pem'"
+//   SocketException      ->  "refused, address = 127.0.0.1, port = 5432"
+//   a custom exception   ->  "_SecretException: db-password-hunter2"
+//
+// An allow-list of leaky types was tried first and is the wrong shape: they
+// cannot be enumerated, because most belong to packages this library has never
+// heard of. Hence the inversion.
+//
+// VM only: it constructs dart:io exceptions, which dart2js cannot compile.
 @TestOn('vm')
 library;
-
-// A platform I/O exception that escapes a handler used to have its text sent to
-// the caller, because `wireStatusFor` forwards any Exception on the reasoning
-// that an Exception is something the thrower CHOSE to signal.
-//
-// That reasoning holds for an application's own exceptions and for rpc_dart's
-// library diagnostics. It does not hold for dart:io's, which nobody throws
-// deliberately at a caller and whose text describes the SERVER. Measured with a
-// handler letting each escape, identically on http2, websocket and isolate:
-//
-//   before : "FileSystemException: boom, path = '/etc/private/key.pem'"
-//            "SocketException: refused"
-//   after  : "Internal server error"
-//
-// a filesystem path and a hostname, to an unauthenticated peer.
-//
-// The BROADER question -- whether an application's own Exception should reach
-// the wire at all, which is what grpc-go refuses -- is deliberately untouched;
-// it trades against deliberate reporting that works today.
 
 import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+/// Stands in for a third-party library's exception -- the case an allow-list
+/// of dart:io types could never have covered.
+final class _DriverException implements Exception {
+  _DriverException(this.detail);
+  final String detail;
+  @override
+  String toString() => '_DriverException: $detail';
+}
+
 void main() {
-  group('platform I/O exceptions are redacted', () {
-    test('FileSystemException does not put its path on the wire', () {
-      const error = FileSystemException('boom', '/etc/private/key.pem');
-      final wire = wireStatusFor(error);
+  group('nothing unvetted reaches the caller', () {
+    test('a third-party exception is redacted', () {
+      final wire = wireStatusFor(
+        _DriverException('SELECT * FROM users WHERE token = hunter2'),
+      );
 
       expect(wire.status, RpcStatus.internal);
       expect(wire.message, kInternalErrorWireMessage);
+      expect(wire.message, isNot(contains('hunter2')));
+    });
+
+    test('a bare Exception is redacted', () {
       expect(
-        wire.message,
-        isNot(contains('/etc/private')),
-        reason: 'the server filesystem layout must not reach the caller',
+        wireStatusFor(Exception('trace=abc123')).message,
+        kInternalErrorWireMessage,
       );
     });
 
-    test('SocketException does not put its address on the wire', () {
-      final error = SocketException(
-        'refused',
-        address: InternetAddress('127.0.0.1'),
-        port: 5432,
-      );
-      final wire = wireStatusFor(error);
-
-      expect(wire.message, kInternalErrorWireMessage);
-      expect(wire.message, isNot(contains('127.0.0.1')));
-      expect(wire.message, isNot(contains('5432')));
-    });
-
-    test('TLS and HTTP exceptions are redacted too', () {
-      for (final error in <Object>[
+    test('platform I/O exceptions are redacted', () {
+      final cases = <Object>[
+        const FileSystemException('boom', '/etc/private/key.pem'),
+        SocketException(
+          'refused',
+          address: InternetAddress('127.0.0.1'),
+          port: 5432,
+        ),
         const HttpException('bad', uri: null),
         const TlsException('handshake failed'),
         const ProcessException('/usr/bin/secret-tool', ['--dump']),
-      ]) {
+      ];
+      for (final error in cases) {
         expect(
           wireStatusFor(error).message,
           kInternalErrorWireMessage,
           reason: '${error.runtimeType} leaked its text',
         );
       }
+    });
+
+    test('an Error is redacted', () {
+      expect(
+        wireStatusFor(StateError('secret')).message,
+        kInternalErrorWireMessage,
+      );
     });
   });
 
@@ -86,9 +95,10 @@ void main() {
     });
 
     test('a library diagnostic is still forwarded', () {
-      // The reason Exceptions are forwarded at all: these are library-authored,
-      // carry no user data, and are what a peer needs to correct itself.
-      // Redacting them would make an oversized message unexplainable.
+      // The whole reason an exception type is allowed through at all: these are
+      // library-authored, carry no user data, and are what a peer needs to
+      // correct itself. Redacting them makes an oversized message
+      // unexplainable.
       final wire = wireStatusFor(
         RpcException('gRPC frame payload is too large: 100 (max: 10)'),
       );
@@ -96,17 +106,10 @@ void main() {
       expect(wire.message, contains('too large'));
     });
 
-    test('an application exception is still forwarded', () {
-      // Deliberately unchanged: whether THIS should be redacted is the open
-      // policy question, and silencing it here would answer it by accident.
-      final wire = wireStatusFor(Exception('trace=abc123'));
-      expect(wire.message, contains('trace=abc123'));
-    });
-
-    test('an Error is still redacted', () {
+    test('a frame diagnostic is forwarded', () {
       expect(
-        wireStatusFor(StateError('secret')).message,
-        kInternalErrorWireMessage,
+        wireStatusFor(RpcFrameException('bad frame header')).message,
+        contains('bad frame header'),
       );
     });
   });

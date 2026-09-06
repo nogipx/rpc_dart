@@ -6,7 +6,6 @@
 import 'dart:typed_data';
 
 import 'errors.dart';
-import 'platform_error_stub.dart' if (dart.library.io) 'platform_error_io.dart';
 
 /// gRPC message framing constants.
 ///
@@ -186,24 +185,43 @@ const String kInternalErrorWireMessage = 'Internal server error';
 
 /// Translates an error thrown by a handler into what may go on the wire.
 ///
-/// Dart already separates "something went wrong that I am reporting" from
-/// "this code is broken", and this follows that line exactly:
+/// DEFAULT DENY: nothing reaches the caller unless it is provably safe to send.
+/// Only two kinds qualify, and everything else gets [kInternalErrorWireMessage]
+/// while the cause stays on the server, where every call site already logs it
+/// with its stack trace.
 ///
 /// - [RpcStatusException] — the handler SPEAKING to its caller. Code, message
-///   and details are all deliberate, so all three are forwarded intact.
-/// - Any other [Exception], including rpc_dart's own [RpcException] — a
-///   condition the thrower chose to signal. Message forwarded, status INTERNAL.
-///   This keeps framing and policy diagnostics such as "gRPC frame payload is
-///   too large: N (max: M)", which are library-authored, carry no user data,
-///   and are exactly what a peer needs in order to correct itself.
-/// - An [Error] — a BUG, in Dart's own sense of the word: `StateError`,
-///   `TypeError`, `RangeError`, `NoSuchMethodError`, a failed assertion. The
-///   caller gets INTERNAL and a fixed message; the cause stays on the server,
-///   where every call site already logs it with its stack trace.
+///   and details are all deliberate, so all three are forwarded intact. This is
+///   the supported way to say something to a peer.
+/// - rpc_dart's own [RpcException] hierarchy — library-authored diagnostics
+///   such as "gRPC frame payload is too large: N (max: M)", which carry no user
+///   data and are exactly what a peer needs in order to correct itself. Every
+///   subclass is ours ([RpcFrameException], [RpcStatusException],
+///   `RpcRateLimitException`), so this cannot pick up application data.
+/// Note that `RpcCancelledException` and `RpcDeadlineExceededException` are NOT
+/// special-cased here: they live in a `part` of the contracts library, which
+/// this file cannot import without a cycle. They do not reach this function in
+/// practice — cancellation and deadlines are answered with their own status by
+/// the responder pipeline, well before an error ever gets translated.
 ///
-/// The last case used to send `error.toString()`. Measured against
-/// `RpcHttp2Server` with a handler throwing a `StateError` whose text stood in
-/// for a secret, all four call shapes handed it to the caller:
+/// This used to forward ANY [Exception], on the reasoning that an Exception is
+/// something the thrower CHOSE to signal, and only redact [Error]s as bugs.
+/// That reasoning does not survive contact with third-party libraries: a
+/// database driver throws with the failing query in it, an HTTP client with the
+/// URL and sometimes a token, and `dart:io` with paths and hosts. Measured,
+/// identically on http2, websocket and isolate:
+///
+///     FileSystemException  ->  "boom, path = '/etc/private/key.pem'"
+///     SocketException      ->  "refused, address = 127.0.0.1, port = 5432"
+///     a custom exception   ->  "_SecretException: db-password-hunter2"
+///
+/// An allow-list of leaky types was tried first (`dart:io`'s, in the round that
+/// preceded this) and is the wrong shape: the types cannot be enumerated,
+/// because most of them belong to packages this library has never heard of.
+///
+/// The earlier measurement that motivated redacting [Error]s still stands. With
+/// a handler throwing a `StateError` whose text stood in for a secret, all four
+/// call shapes handed it to the caller:
 ///
 ///     unary        LEAKS  Request processing error: Bad state: <secret>
 ///     serverStream LEAKS  Bad state: <secret>
@@ -218,27 +236,10 @@ const String kInternalErrorWireMessage = 'Internal server error';
 /// prints the receiver, an assertion prints the expression — and none of it is
 /// anything the caller can act on.
 ///
-/// - A PLATFORM I/O exception — `FileSystemException`, `SocketException`,
-///   `TlsException` and friends. These are `Exception`s, so the rule above
-///   would forward them, but nobody throws them deliberately AT a caller: their
-///   text describes the server's environment. Measured with a handler letting
-///   each escape, identically on http2, websocket and isolate:
-///
-///       FileSystemException  ->  "...boom, path = '/etc/private/key.pem'"
-///       SocketException      ->  "SocketException: refused"
-///
-///   a path and a hostname, to an unauthenticated peer. Redacted like an
-///   [Error]. See `isPlatformInfrastructureError`; on web the check is a
-///   constant false, since `dart:io` cannot be imported there and none of those
-///   types can exist.
-///
-/// KNOWN LIMIT, still deliberately not closed here: an APPLICATION's own
-/// [Exception] carrying sensitive text still crosses the wire. Closing that
-/// means forwarding NOTHING but [RpcStatusException], which is what grpc-go
-/// does — but it would also silence deliberate reporting that works today (a
-/// handler throwing `Exception('... [trace=$traceId]')` so the caller can quote
-/// it back), so THAT remains a policy call rather than a bug fix. To be certain
-/// nothing escapes, throw [RpcStatusException]: that is what it is for.
+/// BREAKING for handlers that threw a bare `Exception('...')` expecting the
+/// text to arrive: it is now replaced. The migration is to throw
+/// [RpcStatusException], which is what it is for, and which also lets the
+/// handler pick a status instead of getting INTERNAL.
 ({int status, String message, Uint8List? detailsBin}) wireStatusFor(
   Object error,
 ) {
@@ -249,16 +250,24 @@ const String kInternalErrorWireMessage = 'Internal server error';
       detailsBin: error.statusDetailsBin,
     );
   }
-  if (error is Error || isPlatformInfrastructureError(error)) {
+  // rpc_dart's own diagnostics: library-authored, no user data, and exactly
+  // what a peer needs to correct itself ("gRPC frame payload is too large:
+  // N (max: M)"). The whole hierarchy is ours -- RpcException,
+  // RpcFrameException, RpcStatusException, RpcRateLimitException -- so this
+  // cannot pick up an application's data by accident.
+  if (error is RpcException) {
     return (
       status: RpcStatus.internal,
-      message: kInternalErrorWireMessage,
+      message: error.toString(),
       detailsBin: null,
     );
   }
+  // DEFAULT DENY. Anything else -- an `Error`, a `dart:io` exception, a
+  // third-party library's exception, a bare `Exception` -- says nothing the
+  // caller can act on and may say a great deal about the server.
   return (
     status: RpcStatus.internal,
-    message: error.toString(),
+    message: kInternalErrorWireMessage,
     detailsBin: null,
   );
 }

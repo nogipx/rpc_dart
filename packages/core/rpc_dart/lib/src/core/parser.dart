@@ -213,7 +213,27 @@ final class RpcMessageParser {
           // Pass the message-size limit so the decompressor can abort a
           // decompression bomb before fully expanding it. The post-check below
           // remains as a backstop for decompressors that ignore the hint.
-          payload = decompressor(payload, maxOutputBytes: _maxMessageLength);
+          // A decompressor that honours the hint aborts by throwing, and it
+          // throws whatever ITS library uses -- FormatException from the gzip
+          // codecs, anything at all from a third-party one. `wireStatusFor` is
+          // default-deny, so such a type is redacted and the peer is told only
+          // "Internal server error" for a message IT can fix by sending less.
+          //
+          // The limit is this layer's, so the diagnostic should be too: rewrap
+          // as an RpcException naming the configured maximum. That keeps the
+          // message library-authored (no user data, and provably ours) while
+          // staying independent of whatever the codec chose to throw.
+          try {
+            payload = decompressor(payload, maxOutputBytes: _maxMessageLength);
+          } catch (e) {
+            _state.clear();
+            _state.reset();
+            if (e is RpcException) rethrow;
+            throw RpcException(
+              'Decompressed gRPC payload exceeds the configured limit '
+              '(max: $_maxMessageLength)',
+            );
+          }
           if (payload.length > _maxMessageLength) {
             final length = payload.length;
             _state.clear();

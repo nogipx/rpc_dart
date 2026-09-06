@@ -643,7 +643,14 @@ final class _ErrorServiceContract extends RpcResponderContract {
     RpcContext? context,
   }) async {
     final traceId = context?.traceId;
-    throw Exception('Service error for ${request.value} [trace=$traceId]');
+    // RpcStatusException, not a bare Exception: `wireStatusFor` is default-deny,
+    // so only a deliberate status carries its text to the caller. That is the
+    // supported way to put a trace id in front of the caller, and it also lets
+    // this handler choose its status instead of getting INTERNAL.
+    throw RpcStatusException(
+      RpcStatus.internal,
+      'Service error for ${request.value} [trace=$traceId]',
+    );
   }
 }
 
