@@ -196,13 +196,30 @@ final class RpcMetadata {
   }
 
   /// Returns the binary status details from the `grpc-status-details-bin` header.
+  ///
+  /// Normalised before decoding, because a real gRPC peer sends this UNPADDED.
+  /// The spec requires implementations to accept `-bin` values both with and
+  /// without base64 padding, and grpc-go strips it: observed directly, a header
+  /// handed to grpcurl as `aGVsbG8gd29ybGQ=` arrived here as
+  /// `aGVsbG8gd29ybGQ`. Dart's `base64Decode` is strict about padding, so the
+  /// bare call threw and the `catch` below turned that into "absent" --
+  /// silently dropping the structured details of every error a grpc-go server
+  /// reports. Measured before the fix:
+  ///
+  ///     statusDetailsBin(padded)   -> hello world
+  ///     statusDetailsBin(unpadded) -> NULL, dropped
+  ///
+  /// `base64.normalize` restores the padding (and accepts the url-safe
+  /// alphabet, which is the same leniency the spec asks for). The catch stays
+  /// for input that is genuinely not base64.
   Uint8List? get statusDetailsBin {
     final raw = getHeaderValue(RpcHeaders.grpcStatusDetails);
     if (raw == null || raw.isEmpty) return null;
     try {
-      return base64Decode(raw);
+      return base64Decode(base64.normalize(raw));
     } catch (_) {
-      // Malformed base64 in the status-details header: treat as absent.
+      // Not base64 at all: treat as absent rather than failing the call, since
+      // the status itself is still usable.
       return null;
     }
   }
