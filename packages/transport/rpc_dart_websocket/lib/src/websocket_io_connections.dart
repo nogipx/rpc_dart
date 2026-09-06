@@ -116,7 +116,10 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// credentials it cannot read. An attacker calling the server directly has no
 /// victim's cookies to ride, and is a job for authentication, not for this. The
 /// literal origin `null`, which sandboxed iframes and `file://` pages send, is
-/// treated as a value like any other: allowed only if you list it.
+/// treated as a value like any other: allowed only if you list it. A request
+/// carrying MORE THAN ONE `Origin` header is refused outright — the Fetch
+/// standard sends exactly one, and accepting "any of them is allowed" would let
+/// a peer append a permitted origin to its own.
 ///
 /// [allowUpgrade] is the general form, run after [allowedOrigins] and only if
 /// that passed — both must accept. It sees the whole [HttpRequest], so it can
@@ -124,6 +127,11 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// on purpose: it runs in the accept path, where an await would serialize every
 /// handshake behind the slowest one. Do asynchronous authentication after the
 /// connection is up, where a slow answer costs one peer rather than all of them.
+///
+/// If it throws, the connection is refused and the server carries on. That is
+/// deliberate rather than lenient: the accept loop runs in the ROOT ZONE, so an
+/// escaping exception is an unhandled async error and kills the isolate — one
+/// bad predicate would take the whole server down instead of one connection.
 ///
 /// A refused request is answered `403` and never upgraded, so the peer gets a
 /// real HTTP error rather than a socket that closes for no stated reason.
@@ -153,9 +161,23 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
   final gated = allowedOrigins == null && allowUpgrade == null
       ? server
       : server.where((request) {
-          if (_upgradeAllowed(request, allowedOrigins, allowUpgrade)) {
-            return true;
+          // The guard runs inside the accept loop's event handler, which is
+          // the ROOT ZONE: anything it throws is an unhandled async error and
+          // kills the isolate. That is not hypothetical -- reading the origin
+          // with `headers.value()` threw on a request carrying two Origin
+          // headers, so six lines of raw HTTP took the whole server process
+          // down, unauthenticated, in one request.
+          //
+          // The read is safe now, but [allowUpgrade] is USER code and cannot
+          // be. Failing closed here keeps a throwing predicate to a refused
+          // connection instead of a dead server.
+          bool allowed;
+          try {
+            allowed = _upgradeAllowed(request, allowedOrigins, allowUpgrade);
+          } catch (_) {
+            allowed = false;
           }
+          if (allowed) return true;
           _refuse(request);
           return false;
         });
@@ -181,10 +203,19 @@ bool _upgradeAllowed(
   bool Function(HttpRequest request)? allowUpgrade,
 ) {
   if (allowedOrigins != null) {
-    final origin = request.headers.value('origin');
+    // `headers[...]`, not `headers.value(...)`: dart:io's `value()` THROWS
+    // HttpException when a header carries more than one value, and this runs
+    // in the root zone (see the caller).
+    final origins = request.headers['origin'];
+
     // Absent means a non-browser client; see the doc on [allowedOrigins].
-    if (origin != null) {
-      final normalized = origin.trim().toLowerCase();
+    if (origins != null && origins.isNotEmpty) {
+      // A request with two Origin headers is malformed -- the Fetch standard
+      // sends exactly one -- and it is refused rather than resolved. Matching
+      // "any of them is allowed" would let an attacker append a permitted
+      // origin to their own and walk straight through the check.
+      if (origins.length > 1) return false;
+      final normalized = origins.single.trim().toLowerCase();
       final permitted = allowedOrigins.any(
         (allowed) => allowed.trim().toLowerCase() == normalized,
       );

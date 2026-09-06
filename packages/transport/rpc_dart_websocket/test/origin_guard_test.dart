@@ -21,6 +21,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
@@ -97,6 +98,40 @@ Future<String> _call(_Rig rig, {String? origin}) async {
   }
 }
 
+/// Sends a raw upgrade request carrying [origins] as separate header lines and
+/// returns the status line, or 'NO ANSWER'.
+///
+/// Raw because no HTTP client will send a header twice on request.
+Future<String> _rawHandshake(_Rig rig, List<String> origins) async {
+  final socket = await Socket.connect('127.0.0.1', rig.http.port);
+  final buffer = StringBuffer()
+    ..write('GET / HTTP/1.1\r\n')
+    ..write('Host: 127.0.0.1:${rig.http.port}\r\n')
+    ..write('Upgrade: websocket\r\n')
+    ..write('Connection: Upgrade\r\n')
+    ..write('Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n')
+    ..write('Sec-WebSocket-Version: 13\r\n');
+  for (final origin in origins) {
+    buffer.write('Origin: $origin\r\n');
+  }
+  buffer.write('\r\n');
+  socket.write(buffer.toString());
+  await socket.flush();
+
+  final chunks = <int>[];
+  try {
+    await socket
+        .listen(chunks.addAll)
+        .asFuture<void>()
+        .timeout(const Duration(seconds: 3));
+  } on TimeoutException {
+    // The peer kept the connection open; what arrived is enough.
+  }
+  await socket.close();
+  if (chunks.isEmpty) return 'NO ANSWER';
+  return String.fromCharCodes(chunks).split('\r\n').first;
+}
+
 void _teardown(_Rig rig) {
   addTearDown(() async {
     await rig.server.stop();
@@ -164,6 +199,64 @@ void main() {
     _teardown(rig);
 
     expect(await _call(rig, origin: 'https://evil.example'), 'private');
+  });
+
+  group('the guard cannot take the process down', () {
+    // It runs inside the accept loop's event handler, which is the ROOT ZONE:
+    // anything it throws is an unhandled async error and kills the isolate.
+    // Reading the origin with `headers.value()` did exactly that on a request
+    // carrying two Origin headers -- six lines of raw HTTP, unauthenticated,
+    // one request, whole server process gone. Without the fix these tests do
+    // not fail, they CRASH the suite.
+
+    test('two Origin headers are refused, not fatal', () async {
+      final rig = await _serve(allowedOrigins: {'https://app.example.com'});
+      _teardown(rig);
+
+      expect(
+        await _rawHandshake(rig, [
+          'https://app.example.com',
+          'https://evil.example',
+        ]),
+        contains('403'),
+      );
+      expect(
+        await _call(rig, origin: 'https://app.example.com'),
+        'private',
+        reason: 'the accept loop must still be alive',
+      );
+    });
+
+    test('two copies of an ALLOWED origin are refused too', () async {
+      // Not "any of them matches": that would let an attacker append a
+      // permitted origin to their own and walk through. One Origin header is
+      // what the Fetch standard sends; more than one is malformed.
+      final rig = await _serve(allowedOrigins: {'https://app.example.com'});
+      _teardown(rig);
+
+      expect(
+        await _rawHandshake(rig, [
+          'https://app.example.com',
+          'https://app.example.com',
+        ]),
+        contains('403'),
+      );
+    });
+
+    test(
+      'a throwing allowUpgrade refuses instead of killing the loop',
+      () async {
+        // The predicate is user code, so it can always throw -- a DI lookup, a
+        // bad cast, a null. It must cost one connection, not the server.
+        final rig = await _serve(
+          allowUpgrade: (request) => throw StateError('boom'),
+        );
+        _teardown(rig);
+
+        expect(await _call(rig), 'REFUSED');
+        expect(await _rawHandshake(rig, const []), contains('403'));
+      },
+    );
   });
 
   group('allowUpgrade', () {
