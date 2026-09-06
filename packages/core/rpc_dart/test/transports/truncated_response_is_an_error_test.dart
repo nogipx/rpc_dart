@@ -96,6 +96,42 @@ void main() {
     expect(await drained, 'CLEAN END after 2');
   });
 
+  test('a status arriving AFTER the end flag does not undo it', () async {
+    // The boundary of this whole design, and the place someone will eventually
+    // want to be lenient. rpc_dart's own responder always puts the status and
+    // the end flag in ONE frame, but nothing in the frame codec forbids the
+    // split shape -- DATA carrying end, then trailers -- and a foreign peer can
+    // produce it. Measured over a real websocket against a raw peer:
+    //
+    //   trailers carry the end flag : OK "answer"
+    //   DATA carries it, status next: status 14 (truncated response)
+    //
+    // Reported as truncation ON PURPOSE, and this is deliberately pinned so it
+    // is not "fixed" later:
+    //  - gRPC agrees. Trailers carry END_STREAM; frames after it are a
+    //    connection error (RFC 9113 s5.1), so the split shape is malformed
+    //    rather than merely unusual.
+    //  - Being lenient means keeping the stream open past the end flag on the
+    //    chance a status follows -- which is exactly the ordering trap that
+    //    silently dropped data in round 88, where delivering the end flag
+    //    closed the consumer before the error could reach it.
+    // The cost is real and accepted: a peer using the split shape gets a
+    // retryable status on a call that did complete.
+    final (client, server) = RpcChannelTransport.memoryPair();
+    addTearDown(() async {
+      await client.close();
+      await server.close();
+    });
+
+    final id = client.createStream();
+    final drained = _drain(client, id);
+
+    await server.sendMessage(id, _message('one'), endStream: true);
+    await server.sendMetadata(id, RpcMetadata.forTrailer(RpcStatus.ok));
+
+    expect(await drained, 'status ${RpcStatus.unavailable} after 1');
+  });
+
   test(
     'GUARD: a non-OK status is reported as itself, not as truncation',
     () async {
