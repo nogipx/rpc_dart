@@ -493,8 +493,15 @@ class RpcChannelTransport
     // and on the VM a live timer also keeps the isolate from exiting.
     _fcGraceTimer?.cancel();
     _fcGraceTimer = null;
-    // Release every parked sender first: a send waiting on credit from a peer
-    // that is now gone would otherwise never return, and close() would hang.
+    // Release every parked sender: a send waiting on credit from a peer that is
+    // now gone would otherwise never return.
+    //
+    // Measured by removing this (see close_during_traffic_test in
+    // rpc_dart_websocket): the send loop stops for good, TimeoutException after
+    // 5s with nothing else wrong. close() itself is NOT what hangs -- it wakes
+    // and moves on either way, and returned in under 2s in both directions --
+    // so what this rescues is the caller's `sendMessage` future, not this
+    // method. The comment here used to claim both.
     for (final streamId in _fcSendWaiters.keys.toList(growable: false)) {
       _fcWake(streamId);
     }
