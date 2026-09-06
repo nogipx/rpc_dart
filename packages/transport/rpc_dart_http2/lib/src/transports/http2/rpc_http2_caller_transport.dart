@@ -1316,12 +1316,35 @@ class RpcHttp2CallerTransport
       // END_STREAM применяется только к действительно последнему сообщению
       // батча — сравнение по индексу, а не по значению (Uint8List сравнивается
       // по идентичности, что ломается при повторе одной и той же ссылки).
+      // A DATA frame carrying END_STREAM does NOT end the gRPC call unless a
+      // status has already arrived.
+      //
+      // In gRPC over HTTP/2 the status travels in trailers -- a HEADERS frame
+      // with END_STREAM -- so DATA never legitimately carries it. When a peer
+      // ends the stream on DATA instead, the response is malformed, and the
+      // `onDone` handler below synthesises the UNAVAILABLE that says so.
+      //
+      // Propagating END_STREAM here closed the consumer's stream FIRST, so that
+      // synthesised error arrived after the consumer had already seen a clean
+      // end and was discarded. Traced against a raw server sending two messages
+      // and then END_STREAM with no trailers:
+      //
+      //   [transport] payload=true  end=true  grpc-status=-    <- closes it
+      //   [transport] payload=false end=true  grpc-status=14   <- too late
+      //   consumer: CLEAN END after 2 item(s), no error raised
+      //
+      // which is silent data loss: a client paging results believes it has them
+      // all. This is the same failure 1a38a156 fixed for a connection that
+      // DIES; `_statusReceived` was added then, but the end-of-stream flag on
+      // the data path still short-circuited it for a peer that half-closes.
+      final statusKnown = _statusReceived.contains(streamId);
       for (var i = 0; i < messages.length; i++) {
         final framedMessage = ensureGrpcFrame(messages[i]);
         final transportMessage = RpcTransportMessage(
           streamId: streamId,
           payload: framedMessage,
-          isEndOfStream: message.endStream && i == messages.length - 1,
+          isEndOfStream:
+              message.endStream && i == messages.length - 1 && statusKnown,
           methodPath: methodPath,
         );
 
