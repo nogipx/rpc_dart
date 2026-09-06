@@ -63,6 +63,21 @@ class RpcHttp2CallerTransport
   /// Активные HTTP/2 streams
   final Map<int, http2.ClientTransportStream> _activeStreams = {};
 
+  /// Backpressured writers, one per request stream.
+  ///
+  /// `sendData` enqueues regardless of the server's window, so a server whose
+  /// handler stops consuming did not slow this client down at all: measured
+  /// against a deaf handler, the client pulled its entire 156.3 MiB request
+  /// while only 4.4 MiB was on the wire -- the remaining ~152 MiB sat in
+  /// package:http2's outgoing queue, in this process's memory.
+  ///
+  /// Unlike the responder there is no header/data ordering to preserve here:
+  /// HEADERS go out with `makeRequest`, so this sink only ever carries DATA.
+  final Map<int, RpcHttp2OutgoingPump> _outgoingPumps = {};
+
+  RpcHttp2OutgoingPump _pumpFor(int streamId, http2.TransportStream stream) =>
+      _outgoingPumps[streamId] ??= RpcHttp2OutgoingPump(stream);
+
   /// Подписки на входящие сообщения streams
   final Map<int, StreamSubscription> _streamSubscriptions = {};
 
@@ -747,6 +762,10 @@ class RpcHttp2CallerTransport
       }
     }
 
+    // Release anything parked on the server's window first, or a caller
+    // awaiting sendMessage never unwinds once its stream is gone.
+    _outgoingPumps.remove(streamId)?.dispose();
+
     // Отменяем подписку на сообщения
     final subscription = _streamSubscriptions.remove(streamId);
     subscription?.cancel();
@@ -957,8 +976,13 @@ class RpcHttp2CallerTransport
       return;
     }
 
-    // Отправляем данные через HTTP/2 как уже сформированный gRPC frame
-    stream.sendData(data, endStream: endStream);
+    // Отправляем данные через HTTP/2 как уже сформированный gRPC frame.
+    // Через pump: `sendData` не ждёт окно сервера, и запрос целиком оседал
+    // в исходящей очереди package:http2. См. [_outgoingPumps].
+    await _pumpFor(
+      streamId,
+      stream,
+    ).add(http2.DataStreamMessage(data, endStream: endStream));
     if (endStream) _halfClosedLocal.add(streamId);
 
     _logger?.internal('Данные отправлены для stream $streamId');
@@ -982,8 +1006,14 @@ class RpcHttp2CallerTransport
 
     _logger?.internal('Завершение отправки для stream $streamId');
 
-    // Отправляем END_STREAM
-    stream.sendData(Uint8List(0), endStream: true);
+    // Отправляем END_STREAM. Не ждём окно пира: половинное закрытие -- сигнал,
+    // а не полезная нагрузка, и оно не должно висеть на мёртвом пире.
+    final pump = _outgoingPumps[streamId];
+    if (pump != null) {
+      pump.endStreamNow();
+    } else {
+      stream.sendData(Uint8List(0), endStream: true);
+    }
     _halfClosedLocal.add(streamId);
 
     _logger?.internal('Отправка завершена для stream $streamId');
@@ -1586,6 +1616,11 @@ class RpcHttp2CallerTransport
       }
     }
     _streamSubscriptions.clear();
+    // Release every producer parked on a server window before the streams go.
+    for (final pump in _outgoingPumps.values) {
+      pump.dispose();
+    }
+    _outgoingPumps.clear();
     _streamParsers.clear();
     _activeStreams.clear();
     _initialHeadersReceived.clear();
@@ -1738,6 +1773,11 @@ class RpcHttp2CallerTransport
       }
     }
     _streamSubscriptions.clear();
+    // Release every producer parked on a server window before the streams go.
+    for (final pump in _outgoingPumps.values) {
+      pump.dispose();
+    }
+    _outgoingPumps.clear();
 
     // Очищаем парсеры и tracking
     _streamParsers.clear();

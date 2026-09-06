@@ -11,6 +11,115 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// gRPC User-Agent header value.
 const String kGrpcUserAgent = 'rpc-dart/1.0.0';
 
+/// Writes to an HTTP/2 stream's outgoing sink WITH backpressure.
+///
+/// `TransportStream.sendHeaders`/`sendData` are one-liners over
+/// `outgoingMessages.add(...)`, and a `StreamSink.add` never blocks.
+/// package:http2 does apply flow control -- `_handleNewOutgoingMessage` pauses
+/// the stream's outgoing subscription as soon as its queue `wouldBuffer` -- but
+/// an `add` into the controller BEHIND that subscription simply enqueues, so
+/// the pause never reaches the producer.
+///
+/// Measured, a peer that stops reading:
+///
+///   responder side (round 92): a client paused after 5 items of a server
+///     stream let the handler produce +33906 items (132.4 MiB) in 4s
+///   caller side (round 95): a server whose handler consumed nothing let the
+///     client pull its whole 156.3 MiB request while only 4.4 MiB was on the
+///     wire -- the rest sat in package:http2's outgoing queue, in client memory
+///
+/// Feeding the sink through `addStream` is what reconnects it: a
+/// StreamController pauses an active `addStream` source whenever its own
+/// consumer is paused, so [add] can wait on that and the producer blocks until
+/// the peer opens its window.
+///
+/// Used by both transports -- the responder writes responses through it, the
+/// caller writes request payloads through it.
+final class RpcHttp2OutgoingPump {
+  RpcHttp2OutgoingPump(this._stream) {
+    _controller = StreamController<http2.StreamMessage>(
+      onPause: () => _paused = true,
+      onResume: _wake,
+      onCancel: _wake,
+    );
+    _pumping = _stream.outgoingMessages.addStream(_controller.stream);
+  }
+
+  final http2.TransportStream _stream;
+  late final StreamController<http2.StreamMessage> _controller;
+  late final Future<void> _pumping;
+
+  bool _paused = false;
+  bool _disposed = false;
+  final List<Completer<void>> _waiters = [];
+
+  void _wake() {
+    _paused = false;
+    if (_waiters.isEmpty) return;
+    final waiting = List.of(_waiters);
+    _waiters.clear();
+    for (final w in waiting) {
+      if (!w.isCompleted) w.complete();
+    }
+  }
+
+  /// Enqueues [message], waiting while the peer's window is closed.
+  ///
+  /// An end-of-stream message also closes the sink, matching what
+  /// `sendData(..., endStream: true)` did.
+  Future<void> add(http2.StreamMessage message) async {
+    while (_paused && !_disposed) {
+      final waiter = Completer<void>();
+      _waiters.add(waiter);
+      await waiter.future;
+    }
+    if (_disposed || _controller.isClosed) return;
+    _controller.add(message);
+    if (message.endStream) await _finish();
+  }
+
+  Future<void> _finish() async {
+    if (_controller.isClosed) return;
+    await _controller.close();
+    // Deliberately NOT awaited: if the peer never opens its window the pump
+    // never drains, and teardown must not hang on a dead peer. Ordering is
+    // still correct because the sink is closed only once the pump completes.
+    unawaited(
+      _pumping
+          .then((_) async {
+            try {
+              await _stream.outgoingMessages.close();
+            } catch (_) {
+              // The stream may already be gone; nothing to close.
+            }
+          })
+          .catchError((Object _) {}),
+    );
+  }
+
+  /// Sends a final END_STREAM WITHOUT waiting on the peer's window.
+  ///
+  /// Teardown must not block on a peer that has stopped reading, and a
+  /// half-close is a signal rather than payload. This is also the only way a
+  /// teardown path may end a pumped stream: while an `addStream` is active on a
+  /// sink, calling `add`/`close` on that sink directly throws, so a
+  /// `stream.sendData(empty, endStream: true)` cannot be left alongside a pump.
+  void endStreamNow() {
+    if (_disposed || _controller.isClosed) return;
+    _controller.add(http2.DataStreamMessage(Uint8List(0), endStream: true));
+    unawaited(_finish());
+  }
+
+  /// Releases anything parked on the window without touching the h2 stream,
+  /// which the owner is about to close or terminate itself.
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _wake();
+    if (!_controller.isClosed) unawaited(_controller.close());
+  }
+}
+
 /// Wraps a stream-scoped error so it can travel through the shared broadcast
 /// [incomingMessages] controller without leaking onto unrelated streams.
 ///

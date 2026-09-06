@@ -131,6 +131,73 @@ void main() {
     if (!_run.gate.isCompleted) _run.gate.complete();
   });
 
+  test(
+    'the client does not buffer its request when the server stalls',
+    () async {
+      // The other half of the same stall: even once the SERVER is protected, the
+      // caller's `sendData` is fire-and-forget, so the client drained its whole
+      // request into package:http2's outgoing queue -- 156.3 MiB pulled while
+      // 4.4 MiB was on the wire, i.e. ~152 MiB held in client memory. Routing
+      // sends through RpcHttp2OutgoingPump makes the client park instead.
+      //
+      // Asserting on PULLED-vs-WIRE, since the gap between them IS the buffer.
+      final run = _run = _Run();
+      final server = RpcHttp2Server(
+        host: '127.0.0.1',
+        port: 0,
+        onEndpointCreated: (e) =>
+            e.registerServiceContract(_Contract(run, 'deaf')),
+      );
+      await server.start();
+      final relay = _Relay();
+      final port = await relay.start(server.port);
+      final transport = await RpcHttp2CallerTransport.connect(
+        host: '127.0.0.1',
+        port: port,
+      );
+      final caller = RpcCallerEndpoint(transport: transport);
+
+      final body = 'x' * _messageBytes;
+      var pulled = 0;
+      Stream<RpcString> requests() async* {
+        for (var i = 0; i < _target; i++) {
+          yield body.rpc;
+          pulled++;
+          if (i % 50 == 0) {
+            await Future<void>.delayed(const Duration(milliseconds: 1));
+          }
+        }
+      }
+
+      final call = caller.clientStream<RpcString, RpcString>(
+        serviceName: 'Svc',
+        methodName: 'Upload',
+        requestCodec: _codec,
+        responseCodec: _codec,
+      );
+      unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
+
+      await Future<void>.delayed(const Duration(seconds: 8));
+
+      final held = pulled * _messageBytes - relay.bytes;
+      expect(
+        held,
+        lessThan(8 * 1024 * 1024),
+        reason:
+            'client pulled ${(pulled * _messageBytes / 1024 / 1024).toStringAsFixed(1)} MiB '
+            'but only ${(relay.bytes / 1024 / 1024).toStringAsFixed(1)} MiB '
+            'reached the wire: ${(held / 1024 / 1024).toStringAsFixed(1)} MiB is '
+            'sitting in the client',
+      );
+
+      run.gate.complete();
+      await transport.close().catchError((Object _) {});
+      await server.stop();
+      await relay.stop();
+    },
+    timeout: const Timeout(Duration(seconds: 120)),
+  );
+
   for (final shape in const ['client', 'bidi']) {
     test(
       '$shape: an upload into a non-consuming handler is throttled',
