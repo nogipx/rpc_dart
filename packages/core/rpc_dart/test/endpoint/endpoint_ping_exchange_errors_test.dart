@@ -65,6 +65,11 @@ void main() {
         sentAt: DateTime.now().toUtc(),
       );
 
+      // UNAVAILABLE, not StateError. The server here ends the stream without a
+      // grpc-status, which is a truncated response, and the client transport
+      // now says so. Strictly better than what this used to pin: a StateError
+      // is unclassifiable, so retry and circuit-breaker logic -- which keys off
+      // gRPC status -- slid straight past it.
       await expectLater(
         () => exchange.execute(
           metadata: RpcMetadata.forClientRequest(
@@ -72,7 +77,13 @@ void main() {
             RpcEndpointPingProtocol.methodName,
           ),
         ),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unavailable,
+          ),
+        ),
       );
     });
 

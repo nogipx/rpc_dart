@@ -72,7 +72,13 @@ void main() {
       final (clientT, serverT) = RpcChannelTransport.memoryPair();
       final id = clientT.createStream();
       final done = Completer<void>();
-      clientT.getMessagesForStream(id).listen((_) {}, onDone: done.complete);
+      // onError is required, not decorative: the raw end-of-stream below
+      // carries no grpc-status, which a CLIENT transport now reports as a
+      // truncated response before closing. This test is about the controller
+      // being drained, not about that error, so it is swallowed here.
+      clientT
+          .getMessagesForStream(id)
+          .listen((_) {}, onError: (Object _) {}, onDone: done.complete);
       expect(await _controllerCount(clientT), 1);
 
       // Server sends an end-of-stream message on the same id.

@@ -114,6 +114,10 @@ class RpcChannelTransport
   /// Streams whose credit a higher layer returns (see [IRpcFlowControlled]).
   final Set<int> _fcDeferred = {};
 
+  /// Streams whose peer has sent a gRPC status. Used on the CLIENT side to tell
+  /// a completed response from a truncated one at end-of-stream; cleared there.
+  final Set<int> _statusSeen = {};
+
   int? get _fcWindow => _policy.flowControlWindowBytes;
 
   /// Sizes of the per-stream flow-control maps, for diagnostics and tests.
@@ -850,6 +854,13 @@ class RpcChannelTransport
       return;
     }
 
+    // Recorded BEFORE dispatch, because trailers arrive as a metadata frame
+    // that is itself the end of the stream.
+    if (metadata != null &&
+        metadata.getHeaderValue(RpcHeaders.grpcStatus) != null) {
+      _statusSeen.add(message.streamId);
+    }
+
     // A grant is transport bookkeeping, not part of the call: consume it here
     // so no upper layer ever sees it.
     if (_fcHandleInbound(message)) return;
@@ -859,16 +870,37 @@ class RpcChannelTransport
     _fcAdvertiseConnection();
     _fcAdvertise(message.streamId);
 
-    // Per-stream controllers are single-subscription and buffer until their
-    // consumer binds, so route there directly.
-    // An end-of-stream with no status is a TRUNCATED response. The end flag
-    // must not reach the consumer, or it closes the stream cleanly and the
-    // error raised below arrives too late to be seen -- the same ordering trap
+    // A response that ends with no grpc-status is TRUNCATED, and the end flag
+    // must not reach the consumer: it would close the stream cleanly and the
+    // error raised below would arrive too late to be seen -- the ordering trap
     // http2 hit in round 88. Any payload the frame carries is still delivered;
     // only the end marker is withheld.
+    //
+    // CLIENT SIDE ONLY. A grpc-status travels server -> client, so a client's
+    // ordinary half-close carries none and is not truncation; applying this on
+    // the responder made every request stream end look truncated.
+    final truncatedEnd =
+        isClient &&
+        message.isEndOfStream &&
+        !_statusSeen.contains(message.streamId);
+
+    // Per-stream controllers are single-subscription and buffer until their
+    // consumer binds, so route there directly.
     final ctl = _streamControllers[message.streamId];
     if (ctl != null && !ctl.isClosed) {
-      ctl.add(message);
+      if (!truncatedEnd) {
+        ctl.add(message);
+      } else if (message.payload != null || message.isDirect) {
+        ctl.add(
+          RpcTransportMessage(
+            streamId: message.streamId,
+            payload: message.payload,
+            directPayload: message.directPayload,
+            metadata: message.metadata,
+            methodPath: message.methodPath,
+          ),
+        );
+      }
     } else if (!_fcDeferred.contains(message.streamId)) {
       // Nothing meters this one and no layer has claimed it, so it goes
       // straight into the pipeline's own buffers and is consumed as soon as it
@@ -883,24 +915,33 @@ class RpcChannelTransport
       _releaseStream(message.streamId);
       _finishedStreams.remove(message.streamId);
       _fcForget(message.streamId);
-      // Close the per-stream controller after the end message is enqueued, so
-      // the subscriber sees the final message followed by done.
+      // A truncated response is an error, not a clean end: reporting a clean
+      // end hands the consumer partial data as if it were complete, and a
+      // client paging results believes it has all of them. http2 has reported
+      // this since round 88; measured with a foreign peer sending two messages
+      // then a bare end-of-stream, it said "status 14 after 2" while this said
+      // "CLEAN END after 2".
       //
-      // NOT an error when no grpc-status arrived, though a truncated response
-      // looks exactly like this. Attempted in rounds 89 and 102 and reverted
-      // both times: measured with a foreign peer sending two messages then a
-      // bare end-of-stream, http2 reports "status 14 after 2" while this
-      // reports "CLEAN END after 2", so the behaviours genuinely differ -- but
-      // on this protocol a status-less end is ALSO how an ordinary local
-      // teardown and a deadline abort look, and the frame carries nothing that
-      // separates them (18 failures in one zero-copy test from applying it to
-      // the responder, then endpoint_ping_exchange_errors,
-      // deadline_stream_cleanup and request_backpressure_without_subscriber
-      // from applying it client-side only). Telling "the peer truncated us"
-      // from "we ended this ourselves" needs a distinct frame or flag in the
-      // channel protocol -- a protocol change, and the owner's call.
+      // Attempted in rounds 89 and 102 and reverted both times, because a
+      // status-less end was ALSO how rpc_dart's own teardown and deadline paths
+      // ended a stream. Those now always send a status (see the ping handler
+      // and _cleanupStream), so a status-less end can only come from a peer
+      // that did not send one.
+      _statusSeen.remove(message.streamId);
       final ended = _streamControllers.remove(message.streamId);
-      if (ended != null && !ended.isClosed) unawaited(ended.close());
+      if (ended != null && !ended.isClosed) {
+        if (truncatedEnd) {
+          ended.addError(
+            RpcStatusException(
+              RpcStatus.unavailable,
+              'Stream ended without a gRPC status (truncated response)',
+            ),
+          );
+        }
+        // Closed after the error is enqueued, so the subscriber observes the
+        // final message, then the error, then done.
+        unawaited(ended.close());
+      }
     }
   }
 }
