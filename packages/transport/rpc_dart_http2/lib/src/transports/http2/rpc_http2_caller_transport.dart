@@ -1374,6 +1374,16 @@ class RpcHttp2CallerTransport
     if (existing != null) return existing.stream;
     final ctl = StreamController<RpcTransportMessage>(
       onCancel: () => _streamControllers.remove(streamId),
+      // Demand hop. RpcChannelTransport meters this stream and withholds
+      // credit when its consumer stops; on HTTP/2 the equivalent lever is the
+      // h2 window, which only closes if we stop READING. Without these two
+      // lines package:http2 kept draining the socket and issuing WINDOW_UPDATE
+      // no matter what the application did, so a paused client never slowed the
+      // server down: measured with a server-stream handler and a client that
+      // paused after 5 items, the handler produced 33906 more (132.4 MiB) in 4s
+      // and was still climbing, against 1023 (4.0 MiB, flat) over websocket.
+      onPause: () => _streamSubscriptions[streamId]?.pause(),
+      onResume: () => _streamSubscriptions[streamId]?.resume(),
     );
     _streamControllers[streamId] = ctl;
     return ctl.stream;

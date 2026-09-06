@@ -45,6 +45,9 @@ class RpcHttp2ResponderTransport
   /// Активные HTTP/2 streams (входящие от клиента)
   final Map<int, http2.ServerTransportStream> _incomingStreams = {};
 
+  /// Backpressured writers, one per outgoing stream. See [_OutgoingPump].
+  final Map<int, _OutgoingPump> _outgoingPumps = {};
+
   /// Подписки на входящие сообщения streams
   final Map<int, StreamSubscription> _streamSubscriptions = {};
 
@@ -439,6 +442,13 @@ class RpcHttp2ResponderTransport
     return streamId;
   }
 
+  /// Returns the backpressured outgoing pump for [streamId], creating it on
+  /// first use. Every outgoing frame for a stream MUST go through the same
+  /// pump: mixing `sendHeaders`/`sendData` with the pump would reorder headers
+  /// against data, which is a protocol error.
+  _OutgoingPump _pumpFor(int streamId, http2.TransportStream stream) =>
+      _outgoingPumps[streamId] ??= _OutgoingPump(stream);
+
   /// Resolves the http2 stream that a server-side send must target.
   ///
   /// Responder sends always reply on the client-initiated stream id (which is
@@ -466,9 +476,17 @@ class RpcHttp2ResponderTransport
 
     // Закрываем входящий stream мягко если он активен
     final incomingStream = _incomingStreams.remove(streamId);
+    final pump = _outgoingPumps.remove(streamId);
     if (incomingStream != null) {
       try {
-        incomingStream.sendData(Uint8List(0), endStream: true);
+        // Through the pump when there is one: its addStream owns the sink, so
+        // a direct sendData here would throw "cannot add while adding a
+        // stream" and the release would fall through to terminate().
+        if (pump != null) {
+          pump.endStreamNow();
+        } else {
+          incomingStream.sendData(Uint8List(0), endStream: true);
+        }
         _logger?.internal(
           'Отправлен END_STREAM при освобождении входящего stream $streamId',
         );
@@ -476,8 +494,11 @@ class RpcHttp2ResponderTransport
         _logger?.internal(
           'Используем terminate для входящего stream $streamId: $e',
         );
+        pump?.dispose();
         incomingStream.terminate();
       }
+    } else {
+      pump?.dispose();
     }
 
     // Отменяем подписку на сообщения
@@ -527,7 +548,10 @@ class RpcHttp2ResponderTransport
         headers = rpcMetadataToHttp2Trailers(metadata);
       }
 
-      incomingStream.sendHeaders(headers, endStream: endStream);
+      await _pumpFor(
+        streamId,
+        incomingStream,
+      ).add(http2.HeadersStreamMessage(headers, endStream: endStream));
 
       _logger?.internal(
         'Метаданные отправлены для stream $streamId '
@@ -559,8 +583,13 @@ class RpcHttp2ResponderTransport
         'IRpcTransport.sendMessage ожидает gRPC frame с 5-байтовым префиксом',
       );
 
-      // Отправляем данные через HTTP/2 как уже сформированный gRPC frame
-      incomingStream.sendData(data, endStream: endStream);
+      // Отправляем данные через HTTP/2 как уже сформированный gRPC frame.
+      // Through the pump, so a peer that stops reading stops the handler --
+      // `sendData` would enqueue regardless. See [_OutgoingPump].
+      await _pumpFor(
+        streamId,
+        incomingStream,
+      ).add(http2.DataStreamMessage(data, endStream: endStream));
 
       _logger?.internal('Ответные данные отправлены для stream $streamId');
     } catch (e) {
@@ -585,7 +614,10 @@ class RpcHttp2ResponderTransport
 
     try {
       // Отправляем END_STREAM с пустыми данными
-      incomingStream.sendData(Uint8List(0), endStream: true);
+      await _pumpFor(
+        streamId,
+        incomingStream,
+      ).add(http2.DataStreamMessage(Uint8List(0), endStream: true));
 
       _logger?.internal('Отправка ответа завершена для stream $streamId');
     } catch (e) {
@@ -694,8 +726,15 @@ class RpcHttp2ResponderTransport
     // Закрываем все входящие streams осторожно
     for (final stream in _incomingStreams.values) {
       try {
-        // Пытаемся закрыть stream мягко
-        stream.sendData(Uint8List(0), endStream: true);
+        // Пытаемся закрыть stream мягко. Via the pump where one exists: it
+        // owns the sink, and it also releases any handler parked on the
+        // peer's window so teardown does not wait on a dead reader.
+        final pump = _outgoingPumps[stream.id];
+        if (pump != null) {
+          pump.endStreamNow();
+        } else {
+          stream.sendData(Uint8List(0), endStream: true);
+        }
         _logger?.internal(
           'Отправлен END_STREAM для входящего stream ${stream.id}',
         );
@@ -714,6 +753,13 @@ class RpcHttp2ResponderTransport
       }
     }
     _incomingStreams.clear();
+
+    // Release anything still parked on a peer window, after the soft close
+    // above has had its chance to flush.
+    for (final pump in _outgoingPumps.values) {
+      pump.dispose();
+    }
+    _outgoingPumps.clear();
 
     // Отменяем все подписки
     for (final subscription in _streamSubscriptions.values) {
@@ -756,4 +802,114 @@ class RpcHttp2ResponderTransport
 
   @override
   bool get supportsZeroCopy => false;
+}
+
+/// Writes to an HTTP/2 stream's outgoing sink WITH backpressure.
+///
+/// `TransportStream.sendHeaders`/`sendData` are one-liners over
+/// `outgoingMessages.add(...)`, and a `StreamSink.add` never blocks.
+/// package:http2 does apply flow control -- `_handleNewOutgoingMessage` pauses
+/// the stream's outgoing subscription as soon as its queue `wouldBuffer` -- but
+/// an `add` into the controller BEHIND that subscription simply enqueues, so
+/// the pause never reaches the producer. The result is that a peer which stops
+/// reading does not slow the handler down at all.
+///
+/// Measured against a server-stream handler, client pausing after 5 items:
+///
+///   websocket : +1023 items (4.0 MiB), flat for 4s  <- the rpc-level window
+///   http2     : +33906 items (132.4 MiB) in 4s, still climbing linearly
+///
+/// http2 was the odd one out, and not because it lacks flow control: it has
+/// native windows and therefore sets the rpc-level one to null, so bypassing
+/// the native one left it with nothing. (The rpc-level window is not an option
+/// here -- it rides on `x-window-update` metadata frames, which a real gRPC
+/// client would read as trailers.)
+///
+/// Feeding the sink through `addStream` is what reconnects it: a
+/// StreamController pauses an active `addStream` source whenever its own
+/// consumer is paused, so [add] can wait on that and the handler's `yield`
+/// blocks until the peer opens its window.
+final class _OutgoingPump {
+  _OutgoingPump(this._stream) {
+    _controller = StreamController<http2.StreamMessage>(
+      onPause: () => _paused = true,
+      onResume: _wake,
+      onCancel: _wake,
+    );
+    _pumping = _stream.outgoingMessages.addStream(_controller.stream);
+  }
+
+  final http2.TransportStream _stream;
+  late final StreamController<http2.StreamMessage> _controller;
+  late final Future<void> _pumping;
+
+  bool _paused = false;
+  bool _disposed = false;
+  final List<Completer<void>> _waiters = [];
+
+  void _wake() {
+    _paused = false;
+    if (_waiters.isEmpty) return;
+    final waiting = List.of(_waiters);
+    _waiters.clear();
+    for (final w in waiting) {
+      if (!w.isCompleted) w.complete();
+    }
+  }
+
+  /// Enqueues [message], waiting while the peer's window is closed.
+  ///
+  /// An end-of-stream message also closes the sink, matching what
+  /// `sendData(..., endStream: true)` did.
+  Future<void> add(http2.StreamMessage message) async {
+    while (_paused && !_disposed) {
+      final waiter = Completer<void>();
+      _waiters.add(waiter);
+      await waiter.future;
+    }
+    if (_disposed || _controller.isClosed) return;
+    _controller.add(message);
+    if (message.endStream) await _finish();
+  }
+
+  Future<void> _finish() async {
+    if (_controller.isClosed) return;
+    await _controller.close();
+    // Deliberately NOT awaited: if the peer never opens its window the pump
+    // never drains, and teardown must not hang on a dead peer. Ordering is
+    // still correct because the sink is closed only once the pump completes.
+    unawaited(
+      _pumping
+          .then((_) async {
+            try {
+              await _stream.outgoingMessages.close();
+            } catch (_) {
+              // The stream may already be gone; nothing to close.
+            }
+          })
+          .catchError((Object _) {}),
+    );
+  }
+
+  /// Sends a final END_STREAM WITHOUT waiting on the peer's window.
+  ///
+  /// Teardown must not block on a peer that has stopped reading. This is also
+  /// the only way teardown may end a pumped stream: while an `addStream` is
+  /// active on a sink, calling `add`/`close` on that sink directly throws, so
+  /// the old `stream.sendData(empty, endStream: true)` in the release and close
+  /// paths cannot be left alongside a pump.
+  void endStreamNow() {
+    if (_disposed || _controller.isClosed) return;
+    _controller.add(http2.DataStreamMessage(Uint8List(0), endStream: true));
+    unawaited(_finish());
+  }
+
+  /// Releases anything parked on the window without touching the h2 stream,
+  /// which the caller is about to close or terminate itself.
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _wake();
+    if (!_controller.isClosed) unawaited(_controller.close());
+  }
 }
