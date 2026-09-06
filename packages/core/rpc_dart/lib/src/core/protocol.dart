@@ -6,6 +6,7 @@
 import 'dart:typed_data';
 
 import 'errors.dart';
+import 'platform_error_stub.dart' if (dart.library.io) 'platform_error_io.dart';
 
 /// gRPC message framing constants.
 ///
@@ -217,14 +218,27 @@ const String kInternalErrorWireMessage = 'Internal server error';
 /// prints the receiver, an assertion prints the expression — and none of it is
 /// anything the caller can act on.
 ///
-/// KNOWN LIMIT, deliberately not closed here: an [Exception] carrying
-/// sensitive text still crosses the wire, and some common ones do
-/// (`FileSystemException` names paths, `SocketException` names hosts). Closing
-/// that means forwarding NOTHING but [RpcStatusException], which is what
-/// grpc-go does — but it would also silence deliberate reporting that works
-/// today (a handler throwing `Exception('... [trace=$traceId]')` so the caller
-/// can quote it back), so it is a policy call rather than a bug fix. To be
-/// certain nothing escapes, throw [RpcStatusException]: that is what it is for.
+/// - A PLATFORM I/O exception — `FileSystemException`, `SocketException`,
+///   `TlsException` and friends. These are `Exception`s, so the rule above
+///   would forward them, but nobody throws them deliberately AT a caller: their
+///   text describes the server's environment. Measured with a handler letting
+///   each escape, identically on http2, websocket and isolate:
+///
+///       FileSystemException  ->  "...boom, path = '/etc/private/key.pem'"
+///       SocketException      ->  "SocketException: refused"
+///
+///   a path and a hostname, to an unauthenticated peer. Redacted like an
+///   [Error]. See `isPlatformInfrastructureError`; on web the check is a
+///   constant false, since `dart:io` cannot be imported there and none of those
+///   types can exist.
+///
+/// KNOWN LIMIT, still deliberately not closed here: an APPLICATION's own
+/// [Exception] carrying sensitive text still crosses the wire. Closing that
+/// means forwarding NOTHING but [RpcStatusException], which is what grpc-go
+/// does — but it would also silence deliberate reporting that works today (a
+/// handler throwing `Exception('... [trace=$traceId]')` so the caller can quote
+/// it back), so THAT remains a policy call rather than a bug fix. To be certain
+/// nothing escapes, throw [RpcStatusException]: that is what it is for.
 ({int status, String message, Uint8List? detailsBin}) wireStatusFor(
   Object error,
 ) {
@@ -235,7 +249,7 @@ const String kInternalErrorWireMessage = 'Internal server error';
       detailsBin: error.statusDetailsBin,
     );
   }
-  if (error is Error) {
+  if (error is Error || isPlatformInfrastructureError(error)) {
     return (
       status: RpcStatus.internal,
       message: kInternalErrorWireMessage,
