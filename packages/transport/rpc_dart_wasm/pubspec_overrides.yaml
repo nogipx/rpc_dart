@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# rpc_dart_wasm is deliberately NOT a pub-workspace member: it is the only
+# Flutter package, and including it would pin the whole lockfile to the Flutter
+# SDK's transitive deps. The cost of that is what this file pays back.
+#
+# Without it, `melos run test:wasm` resolves rpc_dart from PUB.DEV, so the suite
+# can be fully green while the core about to ship breaks it -- a release gate
+# that reports on a version nobody is releasing. Measured: pointing it at local
+# core by hand once failed a framing test immediately, because
+# RpcChannelTransport had started putting a flow-control advertisement frame on
+# the wire per connection.
+#
+# `pubspec_overrides.yaml` is pub's own mechanism for exactly this. It is read
+# on resolution and EXCLUDED from the published archive, so it links the local
+# core for development without touching what consumers get. This is not the
+# `dependency_overrides` that CLAUDE.md forbids between workspace members --
+# that rule is about members, and this package is not one.
+#
+# Committed rather than gitignored on purpose: gitignored, CI would silently
+# fall back to the published core and the gate would go blind again there.
+#
+# THE TRADE-OFF, stated because `pub publish --dry-run` states it back:
+#
+#     Package has 0 warnings and 1 hint.
+#     * Non-dev dependencies are overridden in pubspec_overrides.yaml.
+#       This indicates you are not testing your package against the same
+#       versions of its dependencies that users will have.
+#
+# That is exactly right, and it is the direction we want. This package ships
+# from the same monorepo and the same release as rpc_dart, so "the version users
+# will have" IS the local one at release time; what the old setup tested was a
+# core nobody was about to publish. The half we give up is wasm against an OLDER
+# published 5.x, which its `>=5.0.0 <6.0.0` constraint does allow. If that
+# combination ever matters, test it by REMOVING this file for a run -- do not
+# delete it, or the release gate goes blind again.
+#
+# It is a hint, not a warning, so `melos run publish:dry` still validates with
+# the 0 warnings the release flow requires.
+dependency_overrides:
+  rpc_dart:
+    path: ../../core/rpc_dart

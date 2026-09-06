@@ -158,6 +158,10 @@ melos:
 
     # Flutter (wasm) — NOT a workspace member, run separately.
     test:wasm:
+      # Resolves rpc_dart from the LOCAL core via the package's own
+      # pubspec_overrides.yaml. Without that file this target silently tests the
+      # PUBLISHED core, so it can be green while the core about to ship breaks
+      # it -- see the comments in that file before removing it.
       description: Run the rpc_dart_wasm Flutter tests (outside the workspace).
       run: cd packages/transport/rpc_dart_wasm && fvm flutter pub get && fvm flutter test
 
