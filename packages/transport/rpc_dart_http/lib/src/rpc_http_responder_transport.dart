@@ -36,7 +36,8 @@ final class _PendingResponse {
 /// final transport = RpcHttpResponderTransport();
 /// final server = await shelf_io.serve(transport.handler, '127.0.0.1', 8080);
 /// ```
-class RpcHttpResponderTransport implements IRpcTransport {
+class RpcHttpResponderTransport
+    implements IRpcTransport, IRpcSecurityPolicyAware {
   final BufferedBroadcastController<RpcTransportMessage> _incoming =
       BufferedBroadcastController<RpcTransportMessage>();
 
@@ -50,7 +51,35 @@ class RpcHttpResponderTransport implements IRpcTransport {
 
   /// Optional security policy: limits concurrent requests, body size, and
   /// header sizes.
-  final RpcSecurityPolicy? securityPolicy;
+  ///
+  /// Null means this transport applies none of its OWN checks, which is why it
+  /// is kept nullable here; the pipeline still gets defaults through
+  /// [securityPolicy].
+  final RpcSecurityPolicy? _securityPolicy;
+
+  /// The policy the responder PIPELINE reads, via [IRpcSecurityPolicyAware].
+  ///
+  /// This transport enforces `maxActiveStreams`, the method path, metadata and
+  /// the body size itself — but `maxConcurrentHandlers`, `halfOpenStreamTimeout`
+  /// and the pre-method buffer budget belong to the pipeline, which finds them
+  /// through an `is IRpcSecurityPolicyAware` check. Declaring only
+  /// [IRpcTransport] made every one of those silently inert: measured with
+  /// `maxConcurrentHandlers: 3` and 30 concurrent calls into a parked handler,
+  ///
+  ///     transport is IRpcSecurityPolicyAware : false
+  ///     handlers entered                     : 30 of 30
+  ///
+  /// against 3 once the capability is declared. Exactly the defect
+  /// `RpcHttp2ResponderTransport` had, and the sibling asymmetry is inside this
+  /// package: `RpcHttpCallerTransport` has reported its policy this way all
+  /// along.
+  ///
+  /// Falls back to the default policy when none was given, which is what the
+  /// pipeline already did for a transport without the capability — so a server
+  /// that passes no policy sees no change.
+  @override
+  RpcSecurityPolicy get securityPolicy =>
+      _securityPolicy ?? const RpcSecurityPolicy();
 
   /// Optional CORS policy. When set, handles `OPTIONS` preflight requests
   /// automatically and attaches CORS headers to all responses.
@@ -90,10 +119,11 @@ class RpcHttpResponderTransport implements IRpcTransport {
 
   RpcHttpResponderTransport({
     LogScope? logger,
-    this.securityPolicy,
+    RpcSecurityPolicy? securityPolicy,
     this.corsPolicy,
     this.bodyReadTimeout,
-  }) : _logger = logger?.child('HttpResponderTransport');
+  }) : _securityPolicy = securityPolicy,
+       _logger = logger?.child('HttpResponderTransport');
 
   /// shelf [Handler] to mount on a shelf server or router.
   Handler get handler => _handleRequest;
@@ -169,7 +199,13 @@ class RpcHttpResponderTransport implements IRpcTransport {
     }
 
     // Enforce concurrent stream limit.
-    final policy = securityPolicy;
+    //
+    // Reads the nullable FIELD, not the getter: null still means "this
+    // transport applies none of its own checks", and routing these through the
+    // default-backed getter would silently switch limits on for a server that
+    // passed no policy. That is a separate decision from making the pipeline
+    // able to see the policy, which is what the getter is for.
+    final policy = _securityPolicy;
     if (policy != null && _pending.length >= policy.maxActiveStreams) {
       _logger?.warning(
         'Rejected request: too many active streams (${_pending.length})',
@@ -334,7 +370,7 @@ class RpcHttpResponderTransport implements IRpcTransport {
     }
     // Enforce metadata invariants (printable-ASCII header values, etc.) on the
     // outgoing response, consistent with every other transport.
-    (securityPolicy ?? const RpcSecurityPolicy()).validateMetadata(metadata);
+    securityPolicy.validateMetadata(metadata);
     pending.responseHeaders.addAll(metadata.headers);
     if (endStream) {
       await _flushResponse(streamId);
