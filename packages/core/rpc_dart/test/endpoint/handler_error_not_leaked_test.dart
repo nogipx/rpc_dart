@@ -270,6 +270,31 @@ void main() {
     expect(framing.message, contains('max: 16'));
   });
 
+  test('a redacted error carries no status details either', () async {
+    // The message is only half of what reaches a peer: structured details ride
+    // grpc-status-details-bin as a separate field, and redacting the text while
+    // shipping the details would leak exactly what the redaction is for.
+    //
+    // Verified from the OUTSIDE with grpcurl against an http2 server whose
+    // handler throws each of these -- "Response trailers received: (empty)" for
+    // every redacted case -- and pinned here because that check cannot run in
+    // CI.
+    for (final error in <Object>[
+      StateError('shard=7 key=hunter2'),
+      Exception('connect failed: password=hunter2'),
+      ArgumentError('token=abc123'),
+    ]) {
+      final wire = wireStatusFor(error);
+      expect(wire.status, RpcStatus.internal);
+      expect(wire.message, kInternalErrorWireMessage);
+      expect(
+        wire.detailsBin,
+        isNull,
+        reason: 'details must not survive a redaction: ${error.runtimeType}',
+      );
+    }
+  });
+
   test('GUARD: wireStatusFor forwards status details', () async {
     // Structured details ride grpc-status-details-bin and are also deliberate,
     // so they must survive the same way the message does.
