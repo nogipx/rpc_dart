@@ -20,7 +20,7 @@ import 'rpc_http2_common.dart';
 /// значит, что `maxActiveStreams`, `halfOpenStreamTimeout` и лимит размера
 /// сообщения брались по умолчанию, а не из конфигурации.
 class RpcHttp2ResponderTransport
-    implements IRpcTransport, IRpcSecurityPolicyAware {
+    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
   @override
   bool get isClient => false;
 
@@ -47,6 +47,72 @@ class RpcHttp2ResponderTransport
 
   /// Backpressured writers, one per outgoing stream. See [_OutgoingPump].
   final Map<int, _OutgoingPump> _outgoingPumps = {};
+
+  /// Streams whose inbound crediting the responder pipeline has taken over.
+  ///
+  /// [IRpcFlowControlled] is how the pipeline says "I will report consumption
+  /// myself". This transport did not implement it, so `_flowControlled` in
+  /// [RpcHttp2Server] resolved to null and the `deferFlowCredit` /
+  /// `returnFlowCredit` calls that `_pipelineFedRequestStream` already makes
+  /// were silent no-ops: the demand signal existed and never reached HTTP/2.
+  ///
+  /// The consequence is the request-direction twin of the slow-reader defect.
+  /// A client-stream upload into a handler consuming nothing, paced 4 KiB
+  /// messages, measured 24.2 MiB after 12s and still climbing ~400 msg/s
+  /// (never plateauing), against 4.4 MiB flat over websocket.
+  ///
+  /// Note the shape that does NOT work here, since it is the obvious one:
+  /// putting `onPause`/`onResume` on [getMessagesForStream]'s controller does
+  /// nothing for uploads, because client-stream and bidi requests are fed by
+  /// `_pipelineFedRequestStream` from the BROADCAST, not from that per-stream
+  /// view. The pipeline's explicit credit calls are the only demand signal on
+  /// this path.
+  final Set<int> _fcDeferred = {};
+
+  /// Bytes handed to the pipeline but not yet reported consumed, per stream.
+  final Map<int, int> _fcOutstanding = {};
+
+  /// How much un-consumed request payload one stream may have in flight.
+  ///
+  /// `flowControlWindowBytes` is the operator's existing knob for exactly this
+  /// question. HTTP/2 carries its own windows, so this is not used to emit
+  /// rpc-level grants; it is the threshold at which we stop READING, which is
+  /// what makes the peer's own window close.
+  int get _fcWindow =>
+      _policy.flowControlWindowBytes ??
+      const RpcSecurityPolicy().flowControlWindowBytes ??
+      4 * 1024 * 1024;
+
+  @override
+  void deferFlowCredit(int streamId) => _fcDeferred.add(streamId);
+
+  @override
+  void returnFlowCredit(int streamId, int bytes) {
+    if (bytes <= 0 || !_fcDeferred.contains(streamId)) return;
+    final left = (_fcOutstanding[streamId] ?? 0) - bytes;
+    _fcOutstanding[streamId] = left < 0 ? 0 : left;
+    if (left <= _fcWindow) {
+      final sub = _streamSubscriptions[streamId];
+      if (sub != null && sub.isPaused) sub.resume();
+    }
+  }
+
+  /// Charges [bytes] against [streamId]'s budget and stops reading if it is
+  /// over. Only meaningful once the pipeline has claimed the stream.
+  void _fcOnDelivered(int streamId, int bytes) {
+    if (bytes <= 0 || !_fcDeferred.contains(streamId)) return;
+    final now = (_fcOutstanding[streamId] ?? 0) + bytes;
+    _fcOutstanding[streamId] = now;
+    if (now > _fcWindow) {
+      final sub = _streamSubscriptions[streamId];
+      if (sub != null && !sub.isPaused) sub.pause();
+    }
+  }
+
+  void _fcForget(int streamId) {
+    _fcDeferred.remove(streamId);
+    _fcOutstanding.remove(streamId);
+  }
 
   /// Подписки на входящие сообщения streams
   final Map<int, StreamSubscription> _streamSubscriptions = {};
@@ -508,6 +574,7 @@ class RpcHttp2ResponderTransport
     // Удаляем парсер и tracking для этого stream
     _streamParsers.remove(streamId);
     _initialHeadersSent.remove(streamId);
+    _fcForget(streamId);
 
     // If the peer has already said it will send nothing further, this may have
     // been the last call we owed it.
@@ -636,6 +703,15 @@ class RpcHttp2ResponderTransport
     if (existing != null) return existing.stream;
     final ctl = StreamController<RpcTransportMessage>(
       onCancel: () => _streamControllers.remove(streamId),
+      // The OTHER half of the request-direction demand chain. Client-stream
+      // requests are fed by `_pipelineFedRequestStream`, which reports demand
+      // through IRpcFlowControlled above; bidirectional and server-stream ones
+      // are fed by `_stateBoundStream`, which subscribes HERE and never calls
+      // deferFlowCredit. Without this hop the bidi upload direction stayed
+      // unbounded (13.7 MiB on the wire at 12s and climbing) while
+      // client-stream was already bounded at 4.4 MiB.
+      onPause: () => _streamSubscriptions[streamId]?.pause(),
+      onResume: () => _streamSubscriptions[streamId]?.resume(),
     );
     _streamControllers[streamId] = ctl;
     return ctl.stream;
@@ -644,6 +720,10 @@ class RpcHttp2ResponderTransport
   /// Routes an incoming message to the broadcast and to the stream's dedicated
   /// controller, closing the latter on end-of-stream.
   void _emit(RpcTransportMessage message) {
+    // Charge before delivering: the pipeline may consume synchronously and
+    // report the credit back, and crediting a charge that has not happened yet
+    // would leave the counter permanently negative-then-clamped at zero.
+    _fcOnDelivered(message.streamId, message.payload?.length ?? 0);
     if (!_messageController.isClosed) _messageController.add(message);
     final ctl = _streamControllers[message.streamId];
     if (ctl != null && !ctl.isClosed) ctl.add(message);
@@ -770,6 +850,8 @@ class RpcHttp2ResponderTransport
     // Очищаем парсеры и tracking
     _streamParsers.clear();
     _initialHeadersSent.clear();
+    _fcDeferred.clear();
+    _fcOutstanding.clear();
 
     // Закрываем per-stream контроллеры
     for (final ctl in _streamControllers.values) {
