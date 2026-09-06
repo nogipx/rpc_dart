@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:web_socket_channel/io.dart';
@@ -85,12 +86,55 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// bandwidth proportional to the damage and has no dart:io-level bound; put a
 /// reverse proxy or OS-level limit in front if that matters.
 ///
+/// [allowedOrigins] refuses cross-origin handshakes, and is the reason a server
+/// needs this seam a second time.
+///
+/// WebSocket is NOT subject to the same-origin policy. A browser will open a
+/// socket from any page to any server and attach the user's ambient
+/// credentials — cookies, HTTP auth — exactly as it would for an image tag. The
+/// only defence at the protocol level is for the server to check the `Origin`
+/// header during the handshake, which is why dart:io exposes it on the
+/// [HttpRequest]. Until now nothing here could: `server.transform(...)` consumes
+/// the request stream whole, so the application never saw a request and had no
+/// place to refuse one. Measured against this server before the check existed:
+///
+///     Origin: https://evil.example  ->  SERVED "the users private data"
+///
+/// The HTTP/1.1 transport has shipped a full CORS policy since round 44; this
+/// one had no equivalent, so an operator who had locked down one transport was
+/// wide open on the other.
+///
+/// Values are compared case-insensitively against the whole origin
+/// (`scheme://host[:port]`, no trailing slash), e.g.
+/// `{'https://app.example.com'}`.
+///
+/// A request with NO `Origin` header is ALLOWED even when this is set, and that
+/// is deliberate rather than an oversight: `Origin` is attached by browsers,
+/// and every non-browser client — Dart, Go, grpcurl, a mobile app — sends none.
+/// Refusing those would break the majority of rpc_dart's clients while stopping
+/// nobody, because the attack this defends against is a browser page riding
+/// credentials it cannot read. An attacker calling the server directly has no
+/// victim's cookies to ride, and is a job for authentication, not for this. The
+/// literal origin `null`, which sandboxed iframes and `file://` pages send, is
+/// treated as a value like any other: allowed only if you list it.
+///
+/// [allowUpgrade] is the general form, run after [allowedOrigins] and only if
+/// that passed — both must accept. It sees the whole [HttpRequest], so it can
+/// check a token in the query string, a header, or the path. It is synchronous
+/// on purpose: it runs in the accept path, where an await would serialize every
+/// handshake behind the slowest one. Do asynchronous authentication after the
+/// connection is up, where a slow answer costs one peer rather than all of them.
+///
+/// A refused request is answered `403` and never upgraded, so the peer gets a
+/// real HTTP error rather than a socket that closes for no stated reason.
+///
 /// ```dart
 /// final http = await HttpServer.bind(host, port);
 /// final server = RpcWebSocketServer(
 ///   connections: rpcWebSocketConnections(
 ///     http,
 ///     pingInterval: const Duration(seconds: 30),
+///     allowedOrigins: {'https://app.example.com'},
 ///   ),
 ///   onEndpointCreated: ...,
 /// );
@@ -100,8 +144,23 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
   Duration? pingInterval,
   dynamic Function(List<String> protocols)? protocolSelector,
   CompressionOptions compression = CompressionOptions.compressionOff,
+  Set<String>? allowedOrigins,
+  bool Function(HttpRequest request)? allowUpgrade,
 }) {
-  return server
+  // Filtered BEFORE the transformer rather than after: once WebSocketTransformer
+  // has upgraded the request the response is already committed, and the only
+  // thing left to do would be to close a socket the peer believes is open.
+  final gated = allowedOrigins == null && allowUpgrade == null
+      ? server
+      : server.where((request) {
+          if (_upgradeAllowed(request, allowedOrigins, allowUpgrade)) {
+            return true;
+          }
+          _refuse(request);
+          return false;
+        });
+
+  return gated
       .transform(
         WebSocketTransformer(
           protocolSelector: protocolSelector,
@@ -114,4 +173,46 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
         socket.pingInterval = pingInterval;
         return IOWebSocketChannel(socket);
       });
+}
+
+bool _upgradeAllowed(
+  HttpRequest request,
+  Set<String>? allowedOrigins,
+  bool Function(HttpRequest request)? allowUpgrade,
+) {
+  if (allowedOrigins != null) {
+    final origin = request.headers.value('origin');
+    // Absent means a non-browser client; see the doc on [allowedOrigins].
+    if (origin != null) {
+      final normalized = origin.trim().toLowerCase();
+      final permitted = allowedOrigins.any(
+        (allowed) => allowed.trim().toLowerCase() == normalized,
+      );
+      if (!permitted) return false;
+    }
+  }
+  if (allowUpgrade != null && !allowUpgrade(request)) return false;
+  return true;
+}
+
+void _refuse(HttpRequest request) {
+  // Drained before answering: dart:io tears the connection down before the
+  // status is flushed if the request body is left unread, which turns a clean
+  // 403 into a SocketException at the peer. The HTTP/1.1 transport's _reject
+  // learned this the same way.
+  unawaited(
+    request
+        .drain<void>()
+        .then((_) {
+          request.response.statusCode = HttpStatus.forbidden;
+          request.response.headers.contentType = ContentType.text;
+          request.response.write('WebSocket upgrade refused');
+          return request.response.close();
+        })
+        .catchError((Object _) {
+          // The peer is gone, or the response was already committed. Either way
+          // there is nobody left to tell, and throwing here would land in the
+          // root zone and kill the isolate.
+        }),
+  );
 }
