@@ -150,9 +150,8 @@ final class RpcSecurityPolicy {
   ///
   /// Credit is returned as the receiving side actually consumes, and granted
   /// with [RpcHeaders.xWindowUpdate] on bare metadata frames, which a peer that
-  /// predates flow control ignores. A sender stays unbounded until it receives
-  /// its first grant, so mixing versions degrades to the old behaviour instead
-  /// of deadlocking.
+  /// predates flow control ignores. What a sender may send BEFORE its first
+  /// grant arrives is [initialSendWindowBytes].
   ///
   /// Transports with their own flow control (HTTP/2) should disable this rather
   /// than run two windows over each other.
@@ -170,6 +169,57 @@ final class RpcSecurityPolicy {
   /// other streams need -- the same head-of-line coupling HTTP/2's connection
   /// window has, and the price of bounding the total.
   final int? flowControlConnectionWindowBytes;
+
+  /// What a sender may put in flight BEFORE the peer's first grant arrives, or
+  /// null to stay unbounded until then.
+  ///
+  /// Credit only exists once a grant has been received, so until then a sender
+  /// is limited by nothing at all. The gap is a LATENCY gap, so it is invisible
+  /// on a zero-latency in-memory pair and wide on a real link. Measured on a
+  /// 20ms one-way link, a client-stream upload of 40000 x 4KiB into a handler
+  /// that never reads:
+  ///
+  ///     without: 156.25 MiB pulled -- everything, before any grant arrived
+  ///     with   :   4.05 MiB
+  ///
+  /// So both windows above applied only once grants were already flowing, and a
+  /// burst that fits in one round trip was never throttled. This is the same
+  /// role HTTP/2's 65535-byte default initial window plays, and the default
+  /// here is the same order for the same reason: large enough that a small call
+  /// never waits, small enough that a flood cannot outrun the first grant.
+  ///
+  /// Grants CLAMP to [flowControlWindowBytes] rather than adding to it, so
+  /// seeding credit here cannot let a stream exceed its configured window.
+  ///
+  /// A peer that never grants -- one predating flow control -- would stall once
+  /// this is spent; [initialSendWindowGrace] is what keeps that from being a
+  /// deadlock.
+  final int? initialSendWindowBytes;
+
+  /// How long a sender blocked on [initialSendWindowBytes] waits for the peer's
+  /// first grant before concluding the peer does not do flow control at all, or
+  /// null to wait forever.
+  ///
+  /// [initialSendWindowBytes] applies before the peer has proven anything, so
+  /// it applies to a peer that predates flow control too -- and that peer never
+  /// grants, so the sender parks for good. Measured against a peer that drops
+  /// every grant, on the same upload as above:
+  ///
+  ///     no grace: 0.06 MiB then stalled forever (exactly the initial window)
+  ///     grace   : 156.25 MiB, transferred in full
+  ///
+  /// On expiry the initial window is dropped for the whole connection and the
+  /// pre-5.0.1 behaviour returns: unbounded until a grant arrives. That is
+  /// fail-open, which is the right direction here -- a peer that refuses to
+  /// grant is asking us for MORE data, and withholding grants was already
+  /// enough to go unbounded before this window existed.
+  ///
+  /// Only armed when a sender actually blocks, so a connection that never fills
+  /// its initial window never pays it, and cancelled by the first grant. Set
+  /// long enough to cover a slow link's first round trip: mistaking a
+  /// participating peer for a legacy one costs the window, and the peer
+  /// advertises unprompted at connection setup, so this is not a per-call wait.
+  final Duration? initialSendWindowGrace;
 
   /// Creates an [RpcSecurityPolicy] with the given limits.
   const RpcSecurityPolicy({
@@ -189,6 +239,8 @@ final class RpcSecurityPolicy {
     this.halfOpenStreamTimeout = const Duration(seconds: 60),
     this.flowControlWindowBytes = 4 * 1024 * 1024,
     this.flowControlConnectionWindowBytes = 64 * 1024 * 1024,
+    this.initialSendWindowBytes = 64 * 1024,
+    this.initialSendWindowGrace = const Duration(seconds: 5),
   });
 
   /// Serializes this policy to a plain map.
@@ -213,6 +265,9 @@ final class RpcSecurityPolicy {
     // Explicit 0 for disabled, same reason as above.
     'flowControlWindowBytes': flowControlWindowBytes ?? 0,
     'flowControlConnectionWindowBytes': flowControlConnectionWindowBytes ?? 0,
+    // Explicit 0 for disabled, same reason as above.
+    'initialSendWindowBytes': initialSendWindowBytes ?? 0,
+    'initialSendWindowGraceMs': initialSendWindowGrace?.inMilliseconds ?? 0,
   };
 
   /// Creates an [RpcSecurityPolicy] from a plain map, using defaults for missing keys.
@@ -267,6 +322,16 @@ final class RpcSecurityPolicy {
             final int _ => null,
             _ => 64 * 1024 * 1024,
           },
+      initialSendWindowBytes: switch (map['initialSendWindowBytes']) {
+        final int bytes when bytes > 0 => bytes,
+        final int _ => null,
+        _ => 64 * 1024,
+      },
+      initialSendWindowGrace: switch (map['initialSendWindowGraceMs']) {
+        final int ms when ms > 0 => Duration(milliseconds: ms),
+        final int _ => null,
+        _ => const Duration(seconds: 5),
+      },
     );
   }
 

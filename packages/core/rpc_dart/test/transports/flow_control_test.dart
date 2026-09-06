@@ -13,10 +13,12 @@
 // Credit rides on bare metadata frames (RpcHeaders.xWindowUpdate), which a peer
 // that predates this ignores entirely -- measured in both directions mid-call,
 // with every message still delivered and no stream state left behind. There is
-// no handshake and no wire-format change: a sender stays UNBOUNDED until the
-// peer's first grant proves it participates, so a version mismatch degrades to
-// the old behaviour rather than deadlocking. The mixed-policy test below is
-// that case.
+// no handshake and no wire-format change: before the peer's first grant proves
+// it participates a sender is held to initialSendWindowBytes, and if that is
+// spent with the peer still silent for initialSendWindowGrace the window is
+// dropped -- so a version mismatch degrades to the old unbounded behaviour
+// rather than deadlocking. The mixed-policy test below is that case, and it is
+// per LEVEL: that peer grants at connection level and never per stream.
 //
 // This only bounds anything because the stages above the transport now stop
 // pulling for a consumer that has stopped reading (see
@@ -336,11 +338,15 @@ void main() {
   });
 
   group('interop with a peer that does not participate', () {
-    test('a peer that never grants is never throttled', () async {
-      // Client has flow control off, so it never advertises a window. The
-      // server must stay unbounded rather than park forever after its first
-      // window's worth -- this is the whole reason grants ride on a frame an
-      // older peer ignores.
+    test('a peer that never grants is not starved', () async {
+      // Client has per-stream flow control off, so it never advertises a
+      // per-stream window. The server must not park forever after its initial
+      // send window -- this is the whole reason grants ride on a frame an older
+      // peer ignores. It pauses for initialSendWindowGrace and then runs
+      // unbounded, which is what the 20s budget below covers.
+      //
+      // Note the client still advertises the CONNECTION window, so this is also
+      // the per-level case: a grant at one level says nothing about the other.
       final rig = _connect(window: null, serverWindow: 1024 * 1024);
       final got = await rig.caller
           .serverStream<RpcString, RpcString>(

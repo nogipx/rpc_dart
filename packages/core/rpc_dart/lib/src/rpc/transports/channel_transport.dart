@@ -68,16 +68,19 @@ class RpcChannelTransport
   //
   // Credit rides on bare metadata frames (see [RpcHeaders.xWindowUpdate]),
   // which a peer that predates this ignores completely. No handshake and no
-  // wire-format change: this side stays UNBOUNDED until the peer's first grant
-  // proves it participates, so a version mismatch degrades to the old
-  // behaviour rather than deadlocking.
+  // wire-format change: before the peer's first grant proves it participates,
+  // this side is bounded only by
+  // [RpcSecurityPolicy.initialSendWindowBytes], and if that is spent with the
+  // peer still silent for [RpcSecurityPolicy.initialSendWindowGrace] the window
+  // is dropped -- so a version mismatch degrades to the old unbounded behaviour
+  // rather than deadlocking.
   //
   // This only bounds a producer because the stages above the transport now stop
   // pulling for a consumer that has stopped reading; until that was fixed the
   // metered stream below was drained regardless and credit flowed forever.
 
-  /// Send credit per stream, in bytes. A stream appears here only once the peer
-  /// has granted, which gates enforcement on the peer's support.
+  /// Send credit per stream, in bytes. A stream appears here once the peer has
+  /// granted, or once the initial send window has been seeded for it.
   final Map<int, int> _fcSendCredit = {};
 
   /// Senders parked waiting for credit, per stream.
@@ -140,9 +143,27 @@ class RpcChannelTransport
   // total near 17 GB.
   int? get _fcConnWindow => _policy.flowControlConnectionWindowBytes;
 
-  /// Connection-wide send credit, in bytes. Null until the peer advertises,
-  /// which is what keeps a peer that predates this from being throttled.
+  /// Connection-wide send credit, in bytes. Null until the peer advertises or
+  /// [RpcSecurityPolicy.initialSendWindowBytes] seeds it.
   int? _fcConnCredit;
+
+  /// Whether the peer has ever granted, per level.
+  ///
+  /// Tracked separately because a peer can participate at one level and not the
+  /// other: a peer with only the connection window configured advertises it and
+  /// never sends a per-stream grant. Treating one grant as proof for both
+  /// levels left such a peer's sender parked on the per-stream seed forever --
+  /// the mixed-policy case in flow_control_test.
+  bool _fcConnPeerGranted = false;
+  bool _fcStreamPeerGranted = false;
+
+  /// Set when [RpcSecurityPolicy.initialSendWindowGrace] expired with no grant
+  /// at that level: the peer is taken not to do flow control there, and the
+  /// initial send window is dropped so it cannot deadlock a sender.
+  bool _fcConnAssumedLegacy = false;
+  bool _fcStreamAssumedLegacy = false;
+
+  Timer? _fcGraceTimer;
 
   /// Bytes consumed but not yet granted back at connection level.
   int _fcConnPending = 0;
@@ -468,6 +489,10 @@ class RpcChannelTransport
     _activeStreams.clear();
     _finishedStreams.clear();
     _fcDeferred.clear();
+    // A pending grace timer holds this transport alive for its whole duration,
+    // and on the VM a live timer also keeps the isolate from exiting.
+    _fcGraceTimer?.cancel();
+    _fcGraceTimer = null;
     // Release every parked sender first: a send waiting on credit from a peer
     // that is now gone would otherwise never return, and close() would hang.
     for (final streamId in _fcSendWaiters.keys.toList(growable: false)) {
@@ -584,6 +609,31 @@ class RpcChannelTransport
     // Both windows must admit the message, and neither is charged unless both
     // do -- charging one and parking on the other would leak credit on every
     // blocked send.
+    // Seed credit for a level the peer has not granted on yet, so the gap
+    // before its first grant is bounded rather than free. Without this a sender
+    // is limited by nothing until a grant arrives, and that gap is a LATENCY
+    // gap -- invisible on a zero-latency memory pair, wide on a real link.
+    // Measured over a 20ms one-way link, uploading into a handler that never
+    // reads: 156.25 MiB pulled without this, 4.05 MiB with it. Every other
+    // bound in this file only applied once grants were already flowing.
+    //
+    // Grants CLAMP to the configured window rather than adding to it (see
+    // _fcOnGrant), so seeding here cannot lift a stream above its window.
+    final initial = _policy.initialSendWindowBytes;
+    if (initial != null) {
+      if (_fcWindow != null &&
+          !_fcStreamAssumedLegacy &&
+          _fcSendCredit[streamId] == null &&
+          _fcCanTrack(_fcSendCredit, streamId)) {
+        _fcSendCredit[streamId] = initial;
+      }
+      if (_fcConnWindow != null &&
+          !_fcConnAssumedLegacy &&
+          _fcConnCredit == null) {
+        _fcConnCredit = initial;
+      }
+    }
+
     final streamCredit = _fcWindow == null ? null : _fcSendCredit[streamId];
     final connCredit = _fcConnWindow == null ? null : _fcConnCredit;
     // Null means the peer has not advertised that level: stay unbounded there.
@@ -598,10 +648,69 @@ class RpcChannelTransport
   Future<void> _fcAwaitCredit(int streamId, int bytes) async {
     while (!_closed) {
       if (_fcTryConsume(streamId, bytes)) return;
+      _fcArmLegacyGrace();
       final waiter = Completer<void>();
       (_fcSendWaiters[streamId] ??= []).add(waiter);
       await waiter.future;
     }
+  }
+
+  /// Starts the countdown to giving up on the peer's first grant.
+  ///
+  /// The initial send window applies BEFORE the peer has proven anything, so it
+  /// applies to a peer that predates flow control too -- and that peer never
+  /// grants, so the sender would park for good. Measured against a peer that
+  /// drops every grant: 0.06 MiB sent (exactly the initial window) then stalled
+  /// forever, against 156.25 MiB transferred in full with this.
+  ///
+  /// Armed only when a sender actually blocks: a connection that never fills
+  /// its initial window never starts a timer.
+  void _fcArmLegacyGrace() {
+    if (_fcGraceTimer != null) return;
+    if (_fcLevelSettled(_fcConnPeerGranted, _fcConnAssumedLegacy) &&
+        _fcLevelSettled(_fcStreamPeerGranted, _fcStreamAssumedLegacy)) {
+      return;
+    }
+    final grace = _policy.initialSendWindowGrace;
+    if (grace == null || _policy.initialSendWindowBytes == null) return;
+    _fcGraceTimer = Timer(grace, () {
+      _fcGraceTimer = null;
+      if (_closed) return;
+      // Per level: nothing granted at a level means every entry there is seeded
+      // credit, so dropping it restores "unbounded until a grant arrives" for
+      // that level alone. A level the peer HAS granted on keeps its window.
+      if (!_fcConnPeerGranted) {
+        _fcConnAssumedLegacy = true;
+        _fcConnCredit = null;
+      }
+      if (!_fcStreamPeerGranted) {
+        _fcStreamAssumedLegacy = true;
+        _fcSendCredit.clear();
+      }
+      _fcWakeConnection();
+    });
+  }
+
+  static bool _fcLevelSettled(bool granted, bool legacy) => granted || legacy;
+
+  /// Records that the peer does flow control at a level, whatever the grant
+  /// turns out to be worth. A grant frame at all is the proof; its value is not.
+  void _fcNotePeerGranted({required bool connection}) {
+    if (connection) {
+      _fcConnAssumedLegacy = false;
+      if (_fcConnPeerGranted) return;
+      _fcConnPeerGranted = true;
+    } else {
+      _fcStreamAssumedLegacy = false;
+      if (_fcStreamPeerGranted) return;
+      _fcStreamPeerGranted = true;
+    }
+    // The other level may still be undecided; re-arm for it if a sender is
+    // already parked, since the wake below is what would otherwise be its only
+    // chance to start the clock.
+    _fcGraceTimer?.cancel();
+    _fcGraceTimer = null;
+    if (_fcSendWaiters.isNotEmpty) _fcArmLegacyGrace();
   }
 
   /// Wakes every parked sender, whichever stream it is on.
@@ -757,6 +866,9 @@ class RpcChannelTransport
     if (connRaw != null) {
       final parsed = int.tryParse(connRaw);
       final window = _fcConnWindow;
+      if (parsed != null && parsed > 0) {
+        _fcNotePeerGranted(connection: true);
+      }
       if (parsed != null && parsed > 0 && window != null) {
         // Clamped for the same reasons as the per-stream grant: a peer must not
         // be able to raise our ceiling, and clamping first keeps the sum from
@@ -772,7 +884,10 @@ class RpcChannelTransport
     if (raw == null) return false;
     final granted = int.tryParse(raw);
     // A peer sending garbage credit must not move our window.
-    if (granted != null && granted > 0) _fcOnGrant(message.streamId, granted);
+    if (granted != null && granted > 0) {
+      _fcNotePeerGranted(connection: false);
+      _fcOnGrant(message.streamId, granted);
+    }
     return true;
   }
 
