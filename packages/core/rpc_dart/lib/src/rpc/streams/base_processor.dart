@@ -468,11 +468,37 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     // consumed one message and stalled, against a 1 MB window: the client
     // queued 2000 messages (32.8 MB) while the handler had consumed 1.
     //
-    // Only a handler that actually listens can pause: one that ignores its
-    // request stream has no subscriber here, so nothing pauses and the peer
-    // stays unthrottled rather than deadlocking.
+    // NO SUBSCRIBER IS ALSO NO DEMAND. This used to resume unconditionally, on
+    // the reasoning that only a handler which actually listens can pause, so
+    // one that ignores its request stream should stay unthrottled rather than
+    // deadlock. But "ignores its request stream" is not the only way to have no
+    // subscriber -- EVERY handler has none during an async prelude, and
+    // `await auth(); await for (requests)` is ordinary code. Measured on a bare
+    // RpcChannelTransport pair, 4 KiB messages against the default 4 MiB
+    // window, handler consuming nothing yet:
+    //
+    //   handler awaits 500ms, then drains : 156.3 MiB admitted  (both shapes)
+    //   handler never subscribes          : 156.3 MiB admitted
+    //   handler subscribes, then pauses   :   4.0 MiB admitted  <- worked
+    //
+    // So the one case the demand chain handled was the one where a subscriber
+    // existed. Starting paused makes "not yet listening" behave like "listening
+    // and paused", which is what the window is for: the peer parks at 4 MiB
+    // instead of pushing its whole payload into server memory.
+    //
+    // This does not reintroduce the deadlock the old comment guarded against. A
+    // handler that never reads is still free to return a response at any time,
+    // which completes the call; only the peer's SENDING is throttled, and the
+    // alternative to throttling it is unbounded memory.
+    _requestController.onListen = () => subscription.resume();
     _requestController.onPause = () => subscription.pause();
     _requestController.onResume = () => subscription.resume();
+    if (_requestController.hasListener) {
+      // Already subscribed before the bind: onListen will not fire again.
+      subscription.resume();
+    } else {
+      subscription.pause();
+    }
 
     // Initial metadata is not sent on bind; it is sent with the first response
     // or skipped when sending an immediate error.
