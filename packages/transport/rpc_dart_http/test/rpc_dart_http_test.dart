@@ -588,7 +588,10 @@ void main() {
         body: bigBody,
       );
 
-      expect(response.statusCode, 400);
+      // 413, not 400: the caller maps 413 -> RESOURCE_EXHAUSTED and 400 ->
+      // INVALID_ARGUMENT, and a body over the ceiling is the former. See
+      // oversized_request_is_resource_exhausted_test.
+      expect(response.statusCode, 413);
 
       await transport.close();
       await server.close(force: true);
@@ -917,7 +920,8 @@ void main() {
         body: Uint8List(100),
       );
 
-      expect(response.statusCode, 400);
+      // 413 -> RESOURCE_EXHAUSTED at the caller; see the sibling above.
+      expect(response.statusCode, 413);
 
       await server.stop();
     });

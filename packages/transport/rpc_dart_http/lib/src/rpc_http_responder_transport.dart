@@ -9,6 +9,21 @@ import 'package:shelf/shelf.dart';
 
 import 'rpc_http_cors_policy.dart';
 
+/// A request body over [RpcSecurityPolicy.maxMessageLengthBytes].
+///
+/// A distinct type rather than a `StateError`, because the answer differs: this
+/// is 413 (RESOURCE_EXHAUSTED to the caller) while every other read failure is
+/// 400 (INVALID_ARGUMENT). Matching on text would have been the fragile version
+/// of the same thing -- rpc_dart_http2 tried that first and missed a wording.
+final class _BodyTooLarge implements Exception {
+  const _BodyTooLarge(this.limitBytes);
+
+  final int limitBytes;
+
+  @override
+  String toString() => 'Request body exceeds limit of $limitBytes bytes';
+}
+
 /// Pending outgoing HTTP response state.
 final class _PendingResponse {
   final Request shelfRequest;
@@ -328,10 +343,7 @@ class RpcHttpResponderTransport
           }
         }
         if (exceeded) {
-          throw StateError(
-            'Request body exceeds limit of '
-            '${policy!.maxMessageLengthBytes} bytes',
-          );
+          throw _BodyTooLarge(policy!.maxMessageLengthBytes);
         }
         return builder.takeBytes();
       }
@@ -365,9 +377,31 @@ class RpcHttpResponderTransport
         error: e,
         stackTrace: st,
       );
-      final statusCode = e is TimeoutException ? 408 : 400;
+      // 413, not 400, for a body over the ceiling. `_httpStatusToGrpcCode` in
+      // the caller already maps 413 -> RESOURCE_EXHAUSTED and 400 ->
+      // INVALID_ARGUMENT, so this side was the only reason a peer was told its
+      // ARGUMENTS were malformed rather than its message too large. That
+      // inverts retry semantics too: RpcRetryInterceptor treats
+      // RESOURCE_EXHAUSTED as transient and INVALID_ARGUMENT as final, so the
+      // one status a client could act on was the one it did not get.
+      //
+      // Measured, a 2 MiB request against a server capped at 256 KiB:
+      //
+      //   before : RpcStatusException(3)  "HTTP 400 from /Svc/sink"
+      //   after  : RpcStatusException(8)  "HTTP 413 from /Svc/sink"
+      //
+      // rpc_dart_http2 was given exactly this fix long ago -- see
+      // `_answerFramingViolation`, whose comment argues the same case -- and
+      // this sibling never got it.
+      final statusCode = switch (e) {
+        TimeoutException() => 408,
+        _BodyTooLarge() => 413,
+        _ => 400,
+      };
       if (!pending.completer.isCompleted) {
-        pending.completer.complete(_reject(statusCode, request));
+        pending.completer.complete(
+          _reject(statusCode, request, body: e is _BodyTooLarge ? '$e' : null),
+        );
       }
     }
 
