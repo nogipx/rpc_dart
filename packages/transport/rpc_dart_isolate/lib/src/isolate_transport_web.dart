@@ -448,26 +448,41 @@ void runRpcIsolateManagerWorker(
     );
   }
 
-  controller.onIsolateMessage.first.then((raw) {
+  // Wait for the INIT message specifically, not for the first message.
+  //
+  // `.first` used to be enough and is not: RpcChannelTransport advertises the
+  // connection flow-control window from its own constructor, synchronously, and
+  // spawn() builds the transport before it sends init. So message #1 is a
+  // metadata frame, the init branch never matched, and the fallback handed the
+  // entrypoint `const {}` — customParams silently dropped on every web spawn.
+  var started = false;
+  late final StreamSubscription<dynamic> initSub;
+
+  void start(Map<String, dynamic> params) {
+    if (started) return;
+    started = true;
+    unawaited(initSub.cancel());
     try {
-      final msg = _BridgeMessage.fromMap(raw);
-      if (msg != null && msg.type == _BridgeType.init && msg.payload is Map) {
-        final params = (msg.payload as Map).cast<String, dynamic>();
-        entrypoint(transport, Map<String, dynamic>.from(params));
-        // Ack readiness only AFTER the entrypoint has wired its responder, so
-        // the host does not race RPC frames ahead of the subscription.
-        signalReady();
-        return;
-      }
-    } catch (_) {}
-    try {
-      entrypoint(transport, const <String, dynamic>{});
+      entrypoint(transport, params);
+      // Ack readiness only AFTER the entrypoint has wired its responder, so
+      // the host does not race RPC frames ahead of the subscription.
       signalReady();
     } catch (error, stackTrace) {
       unawaited(transport.close());
       Zone.current.handleUncaughtError(error, stackTrace);
     }
-  });
+  }
+
+  initSub = controller.onIsolateMessage.listen(
+    (raw) {
+      final msg = _BridgeMessage.fromMap(raw);
+      if (msg != null && msg.type == _BridgeType.init && msg.payload is Map) {
+        start((msg.payload as Map).cast<String, dynamic>());
+      }
+    },
+    // A host that never sends init still has to get its entrypoint started.
+    onDone: () => start(const <String, dynamic>{}),
+  );
 }
 
 // -- Helpers ------------------------------------------------------------------

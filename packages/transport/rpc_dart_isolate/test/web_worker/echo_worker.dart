@@ -26,12 +26,18 @@ void main() {
 
 void _echoServer(IRpcTransport transport, Map<String, dynamic> params) {
   final responder = RpcResponderEndpoint(transport: transport);
-  responder.registerServiceContract(_EchoContract());
+  responder.registerServiceContract(_EchoContract(params));
   responder.start();
 }
 
 final class _EchoContract extends RpcResponderContract {
-  _EchoContract() : super('EchoService');
+  _EchoContract(this._params) : super('EchoService');
+
+  /// Whatever `spawn(customParams: ...)` actually delivered to the entrypoint.
+  ///
+  /// Reported over RPC because the host cannot otherwise see it, and the host
+  /// silently substituting an empty map is exactly the defect this exposes.
+  final Map<String, dynamic> _params;
 
   @override
   void setup() {
@@ -53,6 +59,12 @@ final class _EchoContract extends RpcResponderContract {
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
     );
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'Params',
+      handler: _reportParams,
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+    );
   }
 
   /// Kills the worker the way a real bug would: an uncaught async error in the
@@ -71,6 +83,15 @@ final class _EchoContract extends RpcResponderContract {
 
   Future<RpcString> _echo(RpcString request, {RpcContext? context}) async {
     return 'echo:${request.value}'.rpc;
+  }
+
+  /// Reports the customParams the entrypoint was handed, sorted for stability.
+  Future<RpcString> _reportParams(
+    RpcString request, {
+    RpcContext? context,
+  }) async {
+    final keys = _params.keys.toList()..sort();
+    return keys.map((k) => '$k=${_params[k]}').join(',').rpc;
   }
 
   Stream<RpcString> _echoStream(
