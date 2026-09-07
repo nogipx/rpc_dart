@@ -264,6 +264,18 @@ class RpcFrameMultiplexedChannel
           message:
               'Received message larger than max '
               '($payloadLen vs. $_maxFramePayloadBytes)',
+          // This trailer is emitted INBOUND, so RpcChannelTransport validates it
+          // like anything else the peer sent -- and a metadata violation is
+          // answered by closing the connection. Its own message is ~52
+          // characters, so a smaller `maxHeaderValueBytes` turned "refuse this
+          // call" back into "kill the connection", undoing round 161 by the
+          // length of its own diagnosis. Measured over websocket, one oversized
+          // response then a small call:
+          //
+          //   cap 8192 : status 8              next call ok
+          //   cap   64 : RpcFrameException     next call StateError (dead)
+          //   cap   32 : the same
+          maxMessageLength: _policy.maxHeaderValueBytes,
         ),
         isEndOfStream: true,
         streamId: streamId,

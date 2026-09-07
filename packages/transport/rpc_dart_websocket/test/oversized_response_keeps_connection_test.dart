@@ -232,6 +232,54 @@ void main() {
   );
 
   test(
+    'the refusal survives a header cap smaller than its own message',
+    () async {
+      // WITNESS. The channel answers an oversized frame with a synthetic
+      // RESOURCE_EXHAUSTED trailer whose message is ~52 characters -- and that
+      // trailer is INBOUND, so RpcChannelTransport validates it like anything
+      // the peer sent. A metadata violation is answered by closing the
+      // connection, so a smaller `maxHeaderValueBytes` turned "refuse this call"
+      // back into "kill the connection", undoing this file's whole subject by
+      // the length of its own diagnosis. Measured:
+      //
+      //   cap 8192 : status 8            next call ok
+      //   cap   64 : RpcFrameException   next call StateError (dead)
+      //   cap   32 : the same
+      final rig = await _connect(
+        policy: const RpcSecurityPolicy(
+          maxMessageLengthBytes: 256 * 1024,
+          maxHeaderValueBytes: 32,
+          maxHeaders: 256,
+          maxHeaderNameBytes: 128,
+          maxMetadataBytes: 1 << 20,
+        ),
+      );
+
+      await expectLater(
+        _unary(rig.caller, 'big').timeout(const Duration(seconds: 20)),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.resourceExhausted,
+          ),
+        ),
+      );
+
+      final after = await _unary(
+        rig.caller,
+        'small',
+      ).timeout(const Duration(seconds: 20));
+      expect(
+        after.value,
+        'ok',
+        reason: 'the connection must outlive a diagnosis that did not fit',
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
     'GUARD: a response inside the limit is unaffected',
     () async {
       // Without this the witnesses would pass on a channel that refused

@@ -359,7 +359,15 @@ class RpcHttp2ResponderTransport
       try {
         await sendMetadata(
           streamId,
-          RpcMetadata.forTrailer(status, message: message),
+          // Trimmed to the policy this trailer is validated against on the way
+          // out: `grpc-message` is a header value, so a rejection long enough to
+          // explain itself could fail the same check that produced it, and the
+          // catch below would swallow the whole answer.
+          RpcMetadata.forTrailer(
+            status,
+            message: message,
+            maxMessageLength: _policy.maxHeaderValueBytes,
+          ),
           endStream: true,
         );
       } catch (e) {
@@ -519,7 +527,16 @@ class RpcHttp2ResponderTransport
         : RpcStatus.internal;
 
     try {
-      final trailers = RpcMetadata.forTrailer(status, message: '$error');
+      // The parser messages carry byte counts and limits ("gRPC frame payload
+      // is too large: 2097160 bytes (max: 262144)"), so they run past a tight
+      // `maxHeaderValueBytes` easily -- and the `catchError` below would then
+      // swallow the answer entirely, leaving the peer with nothing for a
+      // failure it could have corrected. Trimmed rather than risked.
+      final trailers = RpcMetadata.forTrailer(
+        status,
+        message: '$error',
+        maxMessageLength: _policy.maxHeaderValueBytes,
+      );
       unawaited(
         sendMetadata(streamId, trailers, endStream: true).catchError((_) {}),
       );
