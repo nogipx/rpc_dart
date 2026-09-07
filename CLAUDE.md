@@ -54,6 +54,7 @@ melos run analyze        # analyze all packages (lib+test, strict)
 melos run test           # tests (excludes generator, see below)
 melos run test:unit      # tests, no service-dependent packages
 melos run test:wasm      # the Flutter wasm package (separate)
+melos run analyze:native # the wasm plugin's Swift + Kotlin (see below)
 melos run test:web       # dart2js/node web regression guard
 melos run format:check   # formatting gate
 melos run publish:dry    # validate publishable packages
@@ -177,6 +178,19 @@ on `Version X already exists`, after the other packages have gone out.
   `resolution: workspace` from the generator's pubspec AND its entry from the
   root `workspace:` list, `fvm dart pub get` in the package, run, then put both
   back. Its `lib/` is still covered by `melos run analyze`.
+- **native code is NOT covered by any test script.** `rpc_dart_wasm` ships a
+  Swift and a Kotlin plugin; `melos run test:wasm` exercises the Dart bridge and
+  nothing else, and the package has no example app, so `flutter build` cannot
+  compile them either. A native change therefore ships uncompiled unless you run
+  **`melos run analyze:native`**, which type-checks both against the real
+  frameworks (Flutter engine, WebKit, androidx.javascriptengine).
+  It needs Xcode for the Swift half, and for the Kotlin half a `kotlinc` (Android
+  Studio's counts), an Android SDK platform, and a gradle module cache warmed by
+  any previous Flutter Android build. Missing toolchains are reported as SKIP and
+  a run that checked NOTHING exits **2**, so it can never read as a pass. It is a
+  type check, not a test: it proves the code compiles and that every platform API
+  it calls exists — that is exactly the class of defect that shipped before it
+  existed (iOS reported a dead runtime through `finishBoot`, a no-op after boot).
 - **infra tests**: `*_postgres`, `*_minio`, and the SQLCipher test in the sqlite
   packages need running services / a cipher-enabled native lib. Use
   `melos run test:unit` to skip them.

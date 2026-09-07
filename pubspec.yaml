@@ -165,6 +165,15 @@ melos:
       description: Run the rpc_dart_wasm Flutter tests (outside the workspace).
       run: cd packages/transport/rpc_dart_wasm && fvm flutter pub get && fvm flutter test
 
+    # The wasm plugin's Swift and Kotlin. `flutter test` covers the Dart bridge
+    # and nothing else, and this package has no example app, so a native change
+    # otherwise ships uncompiled -- which is how iOS came to report a dead
+    # runtime through `finishBoot`, a no-op after boot. Exits 2 (not 0) when no
+    # native toolchain is present, so "nothing checked" never reads as a pass.
+    analyze:native:
+      description: Type-check the rpc_dart_wasm iOS/Android plugin sources.
+      run: packages/transport/rpc_dart_wasm/tool/check_native.sh
+
     # Cross-platform (dart2js/node + chrome) web regression guard. Web-relevant
     # packages MUST stay green on `node`; default VM runs miss dart2js bugs.
     test:web:
