@@ -181,32 +181,25 @@ void main() {
       expect(response.result, contains('Processed: Complex data processing'));
       expect(response.count, equals(5));
 
-      // A call that DECLARES codecs is serialized, on every transport.
+      // `unaryRequest` defaults to RpcDataTransferMode.auto, and on a transport
+      // that can pass objects `auto` means exactly that -- codecs present or
+      // not. That is the fast path this file has always asserted.
       //
-      // This used to assert the opposite -- "не должно быть сериализации для
-      // inmemory транспорта" -- and UnaryCaller obliged by branching on
-      // `transport.supportsZeroCopy` and ignoring the codecs it had been handed.
-      // The other three call shapes take their mode from the CONTRACT, so unary
-      // was the odd one out, and the cost was measured over the isolate
-      // transport with codecs on both ends and maxMessageLengthBytes: 256 KiB:
-      //
-      //   a 2 MiB response        DELIVERED  (no bytes exist, so no limit does)
-      //   a field toJson OMITS    ARRIVED    (`secret=hunter2` reached the other
-      //                                       side of a process boundary)
-      //
-      // The fast path is not gone, it is opt-in: declare the method with NO
-      // codecs and the pipelines route it to the zero-copy processor, which is
-      // what the transport-level test below exercises. What is gone is getting
-      // it while asking for something else.
-      expect(
-        serializedMessages,
-        greaterThan(0),
-        reason: 'codecs were declared, so the request goes as bytes',
-      );
+      // What changed underneath it: `UnaryCaller` used to branch on
+      // `transport.supportsZeroCopy` ALONE, so an explicit
+      // RpcDataTransferMode.codec was ignored too. Measured on isolate with
+      // codecs on both ends and maxMessageLengthBytes: 256 KiB, a 2 MiB response
+      // was DELIVERED and a field `toJson` omits ARRIVED. Now only `codec`
+      // forces serialization; see unary_transfer_mode_test.
       expect(
         directMessages,
+        greaterThan(0),
+        reason: 'auto on a zero-copy transport still passes the object',
+      );
+      expect(
+        serializedMessages,
         equals(0),
-        reason: 'a declared codec is not an optimisation to skip',
+        reason: 'nothing asked for serialization here',
       );
     });
 

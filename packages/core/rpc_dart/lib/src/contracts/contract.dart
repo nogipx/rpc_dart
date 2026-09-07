@@ -495,6 +495,7 @@ abstract class RpcCallerContract implements IRpcContract {
       responseCodec: effectiveResponseCodec,
       request: request,
       context: context,
+      transferMode: dataTransferMode,
     );
   }
 
@@ -654,6 +655,7 @@ abstract class RpcPeerContract extends RpcResponderContract {
       requestCodec: rq,
       responseCodec: rs,
       context: context,
+      transferMode: callerDataTransferMode,
     );
   }
 

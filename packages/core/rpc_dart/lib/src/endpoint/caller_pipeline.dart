@@ -320,6 +320,12 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
+
+    /// What the CONTRACT asked for. Only [RpcDataTransferMode.codec] forces
+    /// serialization; `auto` still takes the object path on a transport that
+    /// offers one. Defaulted rather than required so a direct caller of this
+    /// low-level API keeps the fast path it has always had.
+    RpcDataTransferMode transferMode = RpcDataTransferMode.auto,
   }) {
     if (!isActive) throw StateError('Endpoint is closed');
 
@@ -362,6 +368,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
               requestCodec: requestCodec!,
               responseCodec: responseCodec!,
               context: c,
+              transferMode: transferMode,
             ).call(req);
           },
         );

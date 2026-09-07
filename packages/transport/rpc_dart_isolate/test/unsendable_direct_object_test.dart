@@ -178,14 +178,18 @@ void main() {
   late ({IRpcTransport transport, void Function() kill}) spawned;
   late RpcCallerEndpoint caller;
 
-  Future<Res> unary(String method, Req request) =>
-      caller.unaryRequest<Req, Res>(
-        serviceName: _service,
-        methodName: method,
-        request: request,
-        requestCodec: _req,
-        responseCodec: _res,
-      );
+  Future<Res> unary(
+    String method,
+    Req request, {
+    RpcDataTransferMode mode = RpcDataTransferMode.auto,
+  }) => caller.unaryRequest<Req, Res>(
+    serviceName: _service,
+    methodName: method,
+    request: request,
+    requestCodec: _req,
+    responseCodec: _res,
+    transferMode: mode,
+  );
 
   /// No codecs: the object itself crosses, which is the only path left where an
   /// unsendable field can reach `SendPort.send`.
@@ -314,14 +318,16 @@ void main() {
   );
 
   test(
-    'GUARD: a codec-declared call carries no raw object at all',
+    'GUARD: an explicit codec mode carries no raw object at all',
     () async {
-      // The round-165 fix, from this file's angle: the same poison that fails a
-      // zero-copy call is simply not on the wire when the method declares
-      // codecs, because `toJson` never looks at it.
+      // The same poison that fails an object-path call is simply not on the
+      // wire when the caller asks for codecs, because `toJson` never looks at
+      // it. `auto` -- the default -- still takes the object path here, which is
+      // why the mode has to be spelled out.
       final response = await unary(
         'Unary',
         Req('codec', trap: Future<int>.value(1)),
+        mode: RpcDataTransferMode.codec,
       );
       expect(response.text, 'reply:codec');
     },
