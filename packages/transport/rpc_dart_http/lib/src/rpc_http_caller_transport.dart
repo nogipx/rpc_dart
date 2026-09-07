@@ -93,7 +93,8 @@ int _httpStatusToGrpcCode(int statusCode) {
 ///   Request:  POST {baseUrl}{methodPath}  body = gRPC-framed bytes
 ///   Response: 200 OK                      body = gRPC-framed bytes
 ///             All response headers (including grpc-status) are in HTTP headers.
-class RpcHttpCallerTransport implements IRpcTransport, IRpcSecurityPolicyAware {
+class RpcHttpCallerTransport
+    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcStreamIdSequence {
   final String _baseUrl;
   final http.Client _httpClient;
   final RpcSecurityPolicy _policy;
@@ -187,6 +188,31 @@ class RpcHttpCallerTransport implements IRpcTransport, IRpcSecurityPolicyAware {
 
   @override
   bool get isClosed => _isClosed;
+
+  /// See [IRpcStreamIdSequence].
+  ///
+  /// This transport has no `reconnect()` of its own, so the only thing that can
+  /// swap it is `RpcClientConnection`, which builds a NEW one per attempt — and
+  /// a new one restarts its ids at 1, handing the first call after the swap the
+  /// id a call from the previous transport still holds.
+  ///
+  /// The collision bites HARDER here than on the streaming transports, because
+  /// HTTP/1.1 buffers the whole request and `finishSending` is what SENDS it:
+  /// `_pending[id]` holds the body, `finishSending(id)` fires the POST, and
+  /// `releaseStreamId(id)` discards it. So a dead call's teardown either sends
+  /// a live call's request early — with whatever body had been buffered so far
+  /// — or throws it away so that call can never send at all. Measured through
+  /// RpcClientConnection with one forceReconnect between two calls:
+  ///
+  ///     before : A and B both get id 1; A's late finishSending(1) POSTed B's
+  ///              request, and the handler saw `call-B` while B's caller was
+  ///              still buffering
+  ///     after  : A keeps 1, B gets 3, and nothing is sent until B says so
+  @override
+  int get lastIssuedStreamId => _idManager.lastIssuedId;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) => _idManager.resumeAfter(streamId);
 
   @override
   int createStream() {
