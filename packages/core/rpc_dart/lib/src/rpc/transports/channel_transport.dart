@@ -178,12 +178,20 @@ class RpcChannelTransport
   /// Creates a transport that wraps a [IRpcMultiplexedChannel].
   ///
   /// [isClient] determines stream ID parity (odd for client, even for server).
+  ///
+  /// [resumeStreamIdsAfter] continues an earlier transport's id sequence rather
+  /// than starting over — pass the previous instance's [lastIssuedStreamId].
+  /// A reconnecting wrapper MUST do this: see [lastIssuedStreamId].
   RpcChannelTransport({
     required IRpcMultiplexedChannel channel,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    int? resumeStreamIdsAfter,
   }) : _channel = channel,
-       _idManager = RpcStreamIdManager(isClient: isClient),
+       _idManager = RpcStreamIdManager(
+         isClient: isClient,
+         resumeAfter: resumeStreamIdsAfter,
+       ),
        _policy = policy {
     // Advertise the connection window immediately rather than on the first
     // inbound frame. Waiting cost a full round trip during which the peer was
@@ -236,13 +244,34 @@ class RpcChannelTransport
     required IRpcChannel channel,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    int? resumeStreamIdsAfter,
   }) {
     return RpcChannelTransport(
       channel: RpcFrameMultiplexedChannel(channel: channel, policy: policy),
       isClient: isClient,
       policy: policy,
+      resumeStreamIdsAfter: resumeStreamIdsAfter,
     );
   }
+
+  /// The highest stream id this transport has handed out.
+  ///
+  /// Exists for RECONNECT. A wrapper that survives a dropped connection builds
+  /// a NEW transport for the new socket, and a new transport starts its ids at
+  /// 1 — so the first call after a reconnect gets the id a dead call still
+  /// holds. The dead call's teardown then acts on the live one, and the id is
+  /// the only thing that teardown has to present, so nothing downstream can
+  /// tell them apart. Measured over websocket, one reconnect between two calls
+  /// that both received id 1:
+  ///
+  ///     A's late releaseStreamId(1) : activeStreams 1 -> 0, B still open
+  ///     A's late finishSending(1)   : B's handler ENDED — the server saw B's
+  ///                                   request stream close and finished
+  ///                                   serving it
+  ///
+  /// Pass this into the replacement transport's [resumeStreamIdsAfter] and the
+  /// two id spaces become disjoint.
+  int get lastIssuedStreamId => _idManager.lastIssuedId;
 
   /// Creates a paired client/server transport over in-memory frame channels.
   ///

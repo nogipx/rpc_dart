@@ -295,13 +295,22 @@ final class RpcStreamIdManager {
   ///
   /// [isClient] True to generate client (odd) IDs; false for server (even).
   /// [customMaxId] Optional custom upper bound (tests, specialized transports).
-  RpcStreamIdManager({required this.isClient, int? customMaxId})
-    : _lastId = isClient ? -1 : 0,
-      _firstAssignableId = isClient ? 1 : 2,
-      _maxAssignableId = _computeMaxAssignableId(
-        isClient: isClient,
-        maxIdOverride: customMaxId,
-      );
+  /// [resumeAfter] Continue an existing sequence instead of starting over —
+  ///   pass a previous manager's [lastIssuedId]. Values below the natural start
+  ///   are ignored, so `resumeAfter: -1` and `resumeAfter: null` behave alike,
+  ///   and a value of the wrong parity cannot be produced by [lastIssuedId].
+  RpcStreamIdManager({
+    required this.isClient,
+    int? customMaxId,
+    int? resumeAfter,
+  }) : _lastId = (resumeAfter != null && resumeAfter > (isClient ? -1 : 0))
+           ? resumeAfter
+           : (isClient ? -1 : 0),
+       _firstAssignableId = isClient ? 1 : 2,
+       _maxAssignableId = _computeMaxAssignableId(
+         isClient: isClient,
+         maxIdOverride: customMaxId,
+       );
 
   /// Computes the upper ID bound respecting parity.
   static int _computeMaxAssignableId({
@@ -369,6 +378,23 @@ final class RpcStreamIdManager {
 
   /// Number of active IDs.
   int get activeCount => _activeIds.length;
+
+  /// The highest id handed out so far, for a transport that has to CONTINUE
+  /// this sequence on a fresh connection rather than restart it.
+  ///
+  /// A reconnecting transport builds a new manager, and a new manager starts
+  /// over at 1 — so the call that opens after a reconnect gets the id a dead
+  /// call held before it. The dead call's teardown then acts on the live one:
+  /// measured over websocket, a late `finishSending` for the old id
+  /// HALF-CLOSED the new call's request stream and the server finished serving
+  /// it. Seeding a new manager from this value makes the two id spaces
+  /// disjoint, which is the only thing that can distinguish them — the id is
+  /// all a teardown has to present.
+  ///
+  /// Reads as the manager's own "last generated" cursor, so
+  /// `RpcStreamIdManager(isClient: ..., resumeAfter: old.lastIssuedId)`
+  /// round-trips exactly.
+  int get lastIssuedId => _lastId;
 
   /// Resets manager state (clears active IDs and counters).
   void reset() {
