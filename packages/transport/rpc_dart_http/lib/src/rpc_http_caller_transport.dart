@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:rpc_dart/rpc_dart.dart';
@@ -14,6 +15,38 @@ final class _PendingCall {
   final List<int> bodyBuffer = [];
 
   _PendingCall({required this.methodPath, required this.requestHeaders});
+}
+
+/// Largest error body prefix carried into `grpc-message`.
+///
+/// The body of a non-200 is not necessarily ours: a proxy, a captive portal or
+/// a load balancer answers with HTML, and the whole page has no place in a
+/// status message. `_readBounded` already caps what is READ; this caps what is
+/// repeated.
+const int _maxReasonChars = 200;
+
+/// A single-line, bounded, printable rendering of an error [body], or null when
+/// there is nothing worth repeating.
+///
+/// Sanitised rather than trusted: `grpc-message` is percent-encoded on the wire
+/// but ends up in logs and exception text, so control characters and line
+/// breaks are collapsed rather than forwarded.
+String? _shortReason(Uint8List body) {
+  if (body.isEmpty) return null;
+  final String text;
+  try {
+    text = utf8.decode(body, allowMalformed: true);
+  } on FormatException {
+    return null;
+  }
+  final collapsed = text
+      .replaceAll(RegExp(r'[\x00-\x1f\x7f]+'), ' ')
+      .trim()
+      .replaceAll(RegExp(r'\s{2,}'), ' ');
+  if (collapsed.isEmpty) return null;
+  return collapsed.length > _maxReasonChars
+      ? '${collapsed.substring(0, _maxReasonChars - 3)}...'
+      : collapsed;
 }
 
 /// Maps an HTTP status code to a gRPC status int ([RpcStatus] constants).
@@ -307,8 +340,16 @@ class RpcHttpCallerTransport
         // Drain before reporting: leaving bytes unread on the socket makes
         // dart:io tear the connection down, and package:http cannot reuse it.
         // Bounded by the same ceiling as a 200 body.
-        await _readBounded(streamedResponse, streamId);
+        final errorBody = await _readBounded(streamedResponse, streamId);
         final grpcCode = _httpStatusToGrpcCode(streamedResponse.statusCode);
+        // The body was already being read and then DISCARDED, so a reason the
+        // responder had gone to the trouble of sending never reached anyone.
+        // Both of this transport's own rejections say something worth reading
+        // -- "Request body exceeds limit of N bytes" for a 413, the metadata
+        // violation for a 400 -- and the caller reported only
+        // "HTTP 400 from /Svc/echo", which does not say WHICH limit or even
+        // that a limit was involved.
+        final reason = _shortReason(errorBody);
         _emit(
           RpcTransportMessage(
             streamId: streamId,
@@ -317,7 +358,8 @@ class RpcHttpCallerTransport
               RpcHeader(
                 RpcHeaders.grpcMessage,
                 Uri.encodeComponent(
-                  'HTTP ${streamedResponse.statusCode} from ${call.methodPath}',
+                  'HTTP ${streamedResponse.statusCode} from ${call.methodPath}'
+                  '${reason == null ? '' : ': $reason'}',
                 ),
               ),
             ]),

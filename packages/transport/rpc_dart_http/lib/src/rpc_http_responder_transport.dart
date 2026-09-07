@@ -297,7 +297,14 @@ class RpcHttpResponderTransport
           );
           _pending.remove(streamId);
           _idManager.releaseId(streamId);
-          return _reject(400, request);
+          // The reason travels: the caller now repeats a bounded, single-line
+          // prefix of this body in `grpc-message`, so a peer learns WHICH limit
+          // it hit instead of only "HTTP 400 from /Svc/echo".
+          return _reject(
+            400,
+            request,
+            body: 'Metadata violation: ${e.message}',
+          );
         }
       }
 
