@@ -36,6 +36,37 @@ class RpcWebSocketCallerTransport
   late RpcChannelTransport _inner;
   bool _closed = false;
 
+  /// Stream ids minted on the CURRENT connection.
+  ///
+  /// [reconnect] builds a whole new [RpcChannelTransport], and with it a new
+  /// [RpcStreamIdManager] — so ids RESTART at 1. Every caller releases its id
+  /// in a `finally` and half-closes with [finishSending], and nothing made
+  /// those operations connection-scoped: they went straight to whatever
+  /// `_inner` is NOW. A teardown that lands after a reconnect therefore acts on
+  /// somebody else's live call.
+  ///
+  /// Measured against a real server, one reconnect between two calls that both
+  /// got id 1:
+  ///
+  ///     A's late releaseStreamId(1) : activeStreams 1 -> 0 with B still open
+  ///     A's late finishSending(1)   : B's handler ENDED -- the server saw B's
+  ///                                   request stream close and finished
+  ///                                   serving it
+  ///
+  /// The second is the bad one: a dead call put a real end-of-stream frame on
+  /// the wire for a live one. The first quietly frees B's `maxActiveStreams`
+  /// slot, drops its flow-control credit (`_fcForget` also WAKES its parked
+  /// senders, so it can then send past its window) and clears its `_statusSeen`
+  /// entry, which is what tells a truncated response from a complete one.
+  ///
+  /// Reachable without anything exotic: an application that reconnects on drop
+  /// and cancels its old subscriptions afterwards does exactly this ordering.
+  /// A stale id is DROPPED rather than raised on: every one of these call sites
+  /// is a teardown path, and a `finally` that throws masks the error that got
+  /// it there. The connection that call lived on is gone, so doing nothing is
+  /// also the honest answer.
+  final Set<int> _idsOnThisConnection = {};
+
   /// No live socket, but recovery is expected.
   ///
   /// [reconnect] closes `_inner` BEFORE calling the factory, so a failed
@@ -141,11 +172,30 @@ class RpcWebSocketCallerTransport
     );
   }
 
-  void _attach(WebSocketChannel ws) {
+  /// Attaches a fresh socket, CONTINUING the id sequence rather than restarting
+  /// it.
+  ///
+  /// [resumeStreamIdsAfter] must be read from the outgoing transport BEFORE it
+  /// is closed: `RpcChannelTransport.close()` calls `_idManager.reset()`, so
+  /// asking a closed transport for its cursor gives the pre-first-call value
+  /// and the sequence starts over anyway. That is how the first version of this
+  /// fix managed to change nothing at all.
+  ///
+  /// The obvious wrapper-level guard is NOT enough on its own, which the probe
+  /// established before this was written: tracking "ids minted on THIS
+  /// connection" in a Set cannot help when the numbers COLLIDE — B legitimately
+  /// holds id 1 on the new connection, so a stale teardown for A's id 1 passes
+  /// any check the id alone can support. Disjoint id spaces are the only thing
+  /// that can tell them apart.
+  void _attach(WebSocketChannel ws, {int? resumeStreamIdsAfter}) {
+    // Every id minted on the previous connection is stale, and with the resume
+    // above they can no longer be confused with new ones.
+    _idsOnThisConnection.clear();
     _inner = RpcChannelTransport.fromChannel(
       channel: RpcWebSocketChannel(ws),
       isClient: true,
       policy: _policy,
+      resumeStreamIdsAfter: resumeStreamIdsAfter,
     );
     _fwdSub = _inner.incomingMessages.listen(
       (m) {
@@ -229,19 +279,30 @@ class RpcWebSocketCallerTransport
   @override
   int createStream() {
     _ensureUsable();
-    return _inner.createStream();
+    final id = _inner.createStream();
+    _idsOnThisConnection.add(id);
+    return id;
   }
 
   @override
-  bool releaseStreamId(int streamId) => _inner.releaseStreamId(streamId);
+  bool releaseStreamId(int streamId) {
+    // See [_idsOnThisConnection]. Retiring the id here is what keeps the set
+    // tracking outstanding calls rather than every call ever made.
+    if (!_idsOnThisConnection.remove(streamId)) return false;
+    return _inner.releaseStreamId(streamId);
+  }
 
   @override
   Future<void> sendMetadata(
     int streamId,
     RpcMetadata metadata, {
     bool endStream = false,
-  }) {
+  }) async {
     _ensureUsable();
+    // Reached by teardown as well as by ordinary sends: the cancellation notice
+    // in base_processor is a sendMetadata with endStream, so a cancel racing a
+    // reconnect would otherwise cancel whichever call now holds this id.
+    if (!_idsOnThisConnection.contains(streamId)) return;
     return _inner.sendMetadata(streamId, metadata, endStream: endStream);
   }
 
@@ -250,8 +311,9 @@ class RpcWebSocketCallerTransport
     int streamId,
     Uint8List data, {
     bool endStream = false,
-  }) {
+  }) async {
     _ensureUsable();
+    if (!_idsOnThisConnection.contains(streamId)) return;
     return _inner.sendMessage(streamId, data, endStream: endStream);
   }
 
@@ -260,10 +322,19 @@ class RpcWebSocketCallerTransport
     int streamId,
     Object object, {
     bool endStream = false,
-  }) => _inner.sendDirectObject(streamId, object, endStream: endStream);
+  }) async {
+    if (!_idsOnThisConnection.contains(streamId)) return;
+    return _inner.sendDirectObject(streamId, object, endStream: endStream);
+  }
 
   @override
-  Future<void> finishSending(int streamId) => _inner.finishSending(streamId);
+  Future<void> finishSending(int streamId) async {
+    // The worst of the stale operations: this puts a real end-of-stream frame
+    // on the wire, so a dead call half-closed a live one's request stream and
+    // the server finished serving it.
+    if (!_idsOnThisConnection.contains(streamId)) return;
+    return _inner.finishSending(streamId);
+  }
 
   @override
   Future<RpcHealthStatus> health() async {
@@ -343,6 +414,9 @@ class RpcWebSocketCallerTransport
       );
     }
     try {
+      // Read BEFORE closing: close() resets the id manager, so afterwards this
+      // reads as "nothing issued yet" and the new connection restarts at 1.
+      final idCursor = _inner.lastIssuedStreamId;
       await _fwdSub?.cancel();
       await _inner.close();
       final ws = await _reconnectFactory();
@@ -372,7 +446,7 @@ class RpcWebSocketCallerTransport
         );
       }
 
-      _attach(ws);
+      _attach(ws, resumeStreamIdsAfter: idCursor);
       _disconnected = false;
       return RpcHealthStatus.healthy(
         component: 'RpcWebSocketCallerTransport',
