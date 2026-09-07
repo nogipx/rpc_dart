@@ -56,9 +56,35 @@ final class _Svc extends RpcResponderContract {
 
 /// A CONNECT proxy that stalls [delay] before answering 200, then pipes to
 /// [targetPort]. Only the stall matters: it widens the reconnect window.
-Future<ServerSocket> startStallingProxy(int targetPort, Duration delay) async {
-  final proxy = await ServerSocket.bind('127.0.0.1', 0);
-  proxy.listen((client) {
+///
+/// [stop] destroys every socket it is still holding. A stalled callback that
+/// outlives its test is not hypothetical: measured, one wakes after `tearDown`
+/// has closed the proxy and stopped the server, calls `Socket.connect` on a port
+/// that is gone, and the failure lands as an UNHANDLED async error --
+/// `OS Error: Network is down, errno = 50` out of `_NativeSocket.startConnect`,
+/// which killed the probe process outright. Everything after the stall is
+/// therefore guarded, and the sockets are tracked so a test cannot leave one
+/// running into the next.
+final class _StallingProxy {
+  _StallingProxy(this._socket, this._targetPort, this._delay) {
+    _socket.listen(_accept);
+  }
+
+  final ServerSocket _socket;
+  final int _targetPort;
+  final Duration _delay;
+  final _live = <Socket>{};
+  var _stopped = false;
+
+  int get port => _socket.port;
+
+  static Future<_StallingProxy> start(int targetPort, Duration delay) async {
+    final socket = await ServerSocket.bind('127.0.0.1', 0);
+    return _StallingProxy(socket, targetPort, delay);
+  }
+
+  void _accept(Socket client) {
+    _live.add(client);
     final headerBytes = <int>[];
     late StreamSubscription<List<int>> sub;
     var connected = false;
@@ -75,45 +101,76 @@ Future<ServerSocket> startStallingProxy(int targetPort, Duration delay) async {
 
         connected = true;
         sub.pause();
-        await Future<void>.delayed(delay);
-        upstream = await Socket.connect('127.0.0.1', targetPort);
-        upstream!.listen(
-          client.add,
-          onError: (Object _) {},
-          onDone: () => client.destroy(),
-        );
-        client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        await client.flush();
+        await Future<void>.delayed(_delay);
+        if (_stopped) return;
+        try {
+          upstream = await Socket.connect('127.0.0.1', _targetPort);
+          _live.add(upstream!);
+          upstream!.listen(
+            client.add,
+            onError: (Object _) {},
+            onDone: () => client.destroy(),
+          );
+          client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+          await client.flush();
+        } catch (_) {
+          // The client vanished during the stall, or the target is gone. Either
+          // way `resume()` below still has to run: it is what delivers onDone,
+          // and onDone is what destroys the upstream socket. Skipping it leaves
+          // a connection open on the server that nothing will ever close.
+          upstream?.destroy();
+        }
         sub.resume();
       },
       onError: (Object _) {},
       onDone: () => upstream?.destroy(),
     );
-  });
-  return proxy;
+  }
+
+  Future<void> stop() async {
+    _stopped = true;
+    for (final socket in _live) {
+      socket.destroy();
+    }
+    _live.clear();
+    await _socket.close();
+  }
+}
+
+/// Per-test connection counters.
+///
+/// An OBJECT rather than two variables `setUp` resets, because every server this
+/// file has ever built keeps a callback pointing at whatever it closes over. A
+/// late `onConnectionOpened` from a torn-down test would land in the CURRENT
+/// test's numbers and read as a connection that never closes -- which is exactly
+/// the shape this file fails with under a parallel run. With an instance per
+/// test, a stale callback writes to its own dead one.
+final class _Counters {
+  var opened = 0;
+  var closed = 0;
+  int get live => opened - closed;
 }
 
 void main() {
   late RpcHttp2Server server;
-  late ServerSocket proxy;
+  late _StallingProxy proxy;
   late Uri proxyUri;
-  var opened = 0;
-  var closed = 0;
+  late _Counters counters;
 
   setUp(() async {
-    opened = 0;
-    closed = 0;
+    final own = _Counters();
+    counters = own;
     server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
       // Do NOT read socket.remotePort in these callbacks: on close the peer is
       // gone and it throws OS Error 22.
-      onConnectionOpened: (_) => opened++,
-      onConnectionClosed: (_) => closed++,
+      onConnectionOpened: (_) => own.opened++,
+      onConnectionClosed: (_) => own.closed++,
       onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
     );
     await server.start();
-    proxy = await startStallingProxy(
+    proxy = await _StallingProxy.start(
       server.port,
       const Duration(milliseconds: 400),
     );
@@ -121,7 +178,7 @@ void main() {
   });
 
   tearDown(() async {
-    await proxy.close();
+    await proxy.stop();
     await server.stop();
   });
 
@@ -147,11 +204,12 @@ void main() {
   Future<int> settledLiveConnections({
     Duration budget = const Duration(seconds: 20),
   }) async {
+    final own = counters;
     final deadline = DateTime.now().add(budget);
-    while (opened - closed > 0 && DateTime.now().isBefore(deadline)) {
+    while (own.live > 0 && DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
-    return opened - closed;
+    return own.live;
   }
 
   group('close() during an in-flight reconnect', () {
@@ -202,7 +260,7 @@ void main() {
         await settledLiveConnections(),
         0,
         reason:
-            '${opened - closed} connection(s) still open on the server after '
+            '${counters.live} connection(s) still open on the server after '
             'close(): the transport attached one it no longer owned',
       );
     });
