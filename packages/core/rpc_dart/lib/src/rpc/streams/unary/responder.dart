@@ -242,6 +242,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
             RpcMetadata.forTrailer(
               RpcStatus.invalidArgument,
               message: 'Request not received: stream closed without data',
+              maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
             ),
             endStream: true,
           );
@@ -393,6 +394,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           wire.status,
           message: wire.message,
           statusDetailsBin: wire.detailsBin,
+          // The STATUS must survive a message longer than the header cap; see
+          // RpcMetadata.forTrailer. Without this the trailer failed validation,
+          // the throw escaped into _detachedDispatch, and a handler's chosen
+          // status became a generic INTERNAL "Responder dispatch failed".
+          maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
         ),
         endStream: true,
       );
@@ -517,6 +523,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           wire2.status,
           message: wire2.message,
           statusDetailsBin: wire2.detailsBin,
+          maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
         ),
         endStream: true,
       );

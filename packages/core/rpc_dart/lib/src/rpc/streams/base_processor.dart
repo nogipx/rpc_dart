@@ -782,10 +782,20 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // Both Trailers-Only and post-data trailers use the same format:
       // grpc-status + optional grpc-message. The transport distinguishes
       // between the two based on whether initial headers were sent.
+      // Trimmed to the policy the trailer will be validated against. A refusal's
+      // own answer must satisfy the rule that refused, and `grpc-message` is a
+      // header value like any other: measured over the isolate transport with
+      // `maxHeaderValueBytes: 64`, a handler's deliberate
+      // `RpcStatusException(7, '<70 chars>')` reached the peer as
+      // `status 13 "Responder dispatch failed"`, and round 171's mode-mismatch
+      // diagnosis (~200 chars) reached it as SILENCE.
+      //
+      // The STATUS is what must survive; the text is what gives way.
       final trailers = RpcMetadata.forTrailer(
         statusCode,
         message: message,
         statusDetailsBin: statusDetailsBin,
+        maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
       );
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
 

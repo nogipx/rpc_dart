@@ -1634,7 +1634,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     List<RpcHeader> extraHeaders = const [],
   }) async {
     try {
-      final trailer = RpcMetadata.forTrailer(status, message: message);
+      // Trimmed to the policy this trailer is about to be validated against;
+      // see RpcMetadata.forTrailer. The status is what must reach the peer.
+      final trailer = RpcMetadata.forTrailer(
+        status,
+        message: message,
+        maxMessageLength: transport is IRpcSecurityPolicyAware
+            ? (transport as IRpcSecurityPolicyAware)
+                  .securityPolicy
+                  .maxHeaderValueBytes
+            : const RpcSecurityPolicy().maxHeaderValueBytes,
+      );
       await transport.sendMetadata(
         streamId,
         extraHeaders.isEmpty

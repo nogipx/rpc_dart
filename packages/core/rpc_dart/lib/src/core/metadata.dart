@@ -105,18 +105,32 @@ final class RpcMetadata {
   /// Builds trailers sent at the end of the stream carrying the gRPC status.
   /// [statusCode] Completion code (see RpcStatus).
   /// [message] Optional message (usually on error).
+  /// [maxMessageLength] caps the ENCODED `grpc-message`, which is what
+  /// [RpcSecurityPolicy.isValidHeaderValue] measures.
+  ///
+  /// Passing it is how a long message stops costing the whole answer. A trailer
+  /// that fails validation is not sent, and the caller then sees whatever the
+  /// pipeline makes of a call with no status: measured over the isolate
+  /// transport with `maxHeaderValueBytes: 64`, a handler's deliberate
+  /// `RpcStatusException(7, '<70 chars>')` reached the peer as
+  /// `status 13 "Responder dispatch failed"` -- the code the service CHOSE,
+  /// destroyed by a length limit. Trimming the message keeps the code and as
+  /// much of the text as fits.
+  ///
   /// Returns trailer metadata for stream completion.
   static RpcMetadata forTrailer(
     int statusCode, {
     String message = '',
     Uint8List? statusDetailsBin,
+    int? maxMessageLength,
   }) {
     final headers = [RpcHeader(RpcHeaders.grpcStatus, statusCode.toString())];
 
     if (message.isNotEmpty) {
-      headers.add(
-        RpcHeader(RpcHeaders.grpcMessage, encodeGrpcMessage(message)),
-      );
+      final encoded = encodeGrpcMessage(message, maxLength: maxMessageLength);
+      if (encoded.isNotEmpty) {
+        headers.add(RpcHeader(RpcHeaders.grpcMessage, encoded));
+      }
     }
 
     if (statusDetailsBin != null && statusDetailsBin.isNotEmpty) {
@@ -289,9 +303,21 @@ final class RpcMetadata {
   ///
   /// Encodes the UTF-8 bytes of [message]. Unreserved bytes
   /// (`A-Z a-z 0-9 - . _ ~`) are left as-is; all other bytes are encoded as
-  /// `%HH` with uppercase hex. Result is truncated to [_maxGrpcMessageLength]
-  /// without cutting an incomplete `%HH` triplet.
-  static String encodeGrpcMessage(String message) {
+  /// `%HH` with uppercase hex. Result is truncated to [maxLength] (default
+  /// [_maxGrpcMessageLength]) without cutting an incomplete `%HH` triplet.
+  ///
+  /// [maxLength] exists because the ENCODED string is what
+  /// [RpcSecurityPolicy.isValidHeaderValue] measures, and a trailer that fails
+  /// that check is not sent at all. A message longer than the peer's
+  /// `maxHeaderValueBytes` therefore used to cost the whole answer -- see
+  /// [forTrailer].
+  static String encodeGrpcMessage(String message, {int? maxLength}) {
+    final limit = maxLength == null
+        ? _maxGrpcMessageLength
+        : (maxLength < _maxGrpcMessageLength
+              ? maxLength
+              : _maxGrpcMessageLength);
+    if (limit <= 0) return '';
     final bytes = Uint8List.fromList(utf8.encode(message));
     final out = StringBuffer();
 
@@ -303,14 +329,14 @@ final class RpcMetadata {
         out.write(_toUpperHex(b >> 4));
         out.write(_toUpperHex(b & 0x0F));
       }
-      if (out.length >= _maxGrpcMessageLength) {
+      if (out.length >= limit) {
         break;
       }
     }
 
     var encoded = out.toString();
-    if (encoded.length > _maxGrpcMessageLength) {
-      encoded = encoded.substring(0, _maxGrpcMessageLength);
+    if (encoded.length > limit) {
+      encoded = encoded.substring(0, limit);
     }
     return _trimIncompletePercentTriplet(encoded);
   }
