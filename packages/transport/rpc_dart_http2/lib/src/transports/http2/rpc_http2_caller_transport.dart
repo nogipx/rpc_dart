@@ -1669,7 +1669,27 @@ class RpcHttp2CallerTransport
 
       _connection = connection;
       _disconnected = false;
-      _nextStreamId = 1;
+      // `_nextStreamId` is deliberately NOT reset here.
+      //
+      // It used to be, and that handed the first call on the new connection the
+      // id a call from the old one still held. This id is rpc_dart's own handle
+      // — package:http2 assigns the real HTTP/2 stream ids itself in
+      // `makeRequest`, and `_activeStreams` is keyed by the handle — so nothing
+      // about the protocol requires it to restart, while everything about
+      // teardown requires it not to: a caller releases its id and half-closes
+      // by id, and the id is all it has to present.
+      //
+      // Measured, one reconnect between two calls, with the first still open:
+      //
+      //   before: A and B both get id 1, and B's `getMessagesForStream(1)`
+      //           throws "Bad state: Stream has already been listened to" —
+      //           A's controller is still registered under that id
+      //   after : A keeps 1, B gets 3, both served
+      //
+      // The websocket sibling had the same defect in quieter form (there the
+      // ids collide silently and a dead call's `finishSending` HALF-CLOSES the
+      // live one). Fixed there by continuing the id sequence across the swap;
+      // same principle, one line here.
       // The signal is per-TRANSPORT but describes the CURRENT connection, and
       // the factory closure reports every connection into the same holder. A
       // stale flag here would make a freshly reconnected transport claim it was
