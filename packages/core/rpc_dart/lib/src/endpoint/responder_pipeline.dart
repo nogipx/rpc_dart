@@ -1147,27 +1147,52 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       state.responder = responder;
 
       var handled = false;
-      processor.requests.listen((request) async {
-        if (handled) return;
-        handled = true;
-        try {
-          final response = await _withHandlerSlot(
-            streamId,
-            () => handleUnary<Object, Object>(
-              serviceName: binding.serviceName,
-              methodName: binding.methodName,
-              context: context,
-              request: request,
-              handler: (ctx, req) =>
-                  binding.zeroCopyMethod.callUnaryHandler(ctx, req),
-            ),
-          );
-          await processor.send(response);
-          await processor.finishSending();
-          await _cleanupStream(streamId);
-        } catch (error, stackTrace) {
+      processor.requests.listen(
+        (request) async {
+          if (handled) return;
+          handled = true;
+          try {
+            final response = await _withHandlerSlot(
+              streamId,
+              () => handleUnary<Object, Object>(
+                serviceName: binding.serviceName,
+                methodName: binding.methodName,
+                context: context,
+                request: request,
+                handler: (ctx, req) =>
+                    binding.zeroCopyMethod.callUnaryHandler(ctx, req),
+              ),
+            );
+            await processor.send(response);
+            await processor.finishSending();
+            await _cleanupStream(streamId);
+          } catch (error, stackTrace) {
+            contextLogger.error(
+              'Error in zero-copy unary handler',
+              error: error,
+              stackTrace: stackTrace,
+            );
+            final wire = wireStatusFor(error);
+            await processor.sendError(
+              wire.status,
+              wire.message,
+              statusDetailsBin: wire.detailsBin,
+            );
+            await _cleanupStream(streamId);
+          }
+        },
+        onError: (Object error, StackTrace stackTrace) async {
+          // The request stream can fail before a request exists -- a peer whose
+          // payload SHAPE does not match this method's mode reports it here. With
+          // no handler the error was a dropped future and the caller got
+          // UNAVAILABLE "Stream closed without receiving response", which says
+          // nothing about the cause. It also has to be answered: the three
+          // streaming shapes already route their request-stream errors, and this
+          // one did not.
+          if (handled) return;
+          handled = true;
           contextLogger.error(
-            'Error in zero-copy unary handler',
+            'Error on zero-copy unary request stream',
             error: error,
             stackTrace: stackTrace,
           );
@@ -1178,8 +1203,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             statusDetailsBin: wire.detailsBin,
           );
           await _cleanupStream(streamId);
-        }
-      });
+        },
+      );
 
       responder.bindToMessageStream(
         _stateBoundStream(state, streamId, consumePreBindBuffer: true),

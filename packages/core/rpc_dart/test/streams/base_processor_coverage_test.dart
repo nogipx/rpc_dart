@@ -192,7 +192,7 @@ void main() {
       );
 
       test(
-        'data message branches: zero-copy ignores serialized; parser and deserializer errors',
+        'data message branches: zero-copy REPORTS serialized; parser and deserializer errors',
         () async {
           final controller = StreamController<RpcTransportMessage>();
           final (client, server) = RpcInMemoryTransport.pair();
@@ -207,7 +207,11 @@ void main() {
           zeroCopyProcessor.bindToMessageStream(controller.stream);
 
           var gotAny = false;
-          final sub = zeroCopyProcessor.requests.listen((_) => gotAny = true);
+          final mismatch = <Object>[];
+          final sub = zeroCopyProcessor.requests.listen(
+            (_) => gotAny = true,
+            onError: mismatch.add,
+          );
 
           controller.add(
             RpcTransportMessage.withPayload(
@@ -218,6 +222,11 @@ void main() {
           );
           await Future<void>.delayed(const Duration(milliseconds: 10));
           expect(gotAny, isFalse);
+          // REPORTED, not ignored. It used to be logged and dropped, which left
+          // the peer with no answer at all -- see transfer_mode_mismatch_test.
+          expect(mismatch, hasLength(1));
+          expect(mismatch.single, isA<RpcException>());
+          expect('${mismatch.single}', contains('Transfer-mode mismatch'));
 
           await sub.cancel();
           await zeroCopyProcessor.close();

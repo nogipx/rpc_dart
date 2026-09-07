@@ -149,6 +149,39 @@ Future<void> _notifyPeerOfCancellation(
   }
 }
 
+/// Answers a peer whose payload SHAPE does not match this side's transfer mode.
+///
+/// The two ends pick their mode from their OWN contract, so they can disagree —
+/// a caller in [RpcDataTransferMode.codec] sends bytes to a method registered
+/// zero-copy, which reads `directPayload` and finds none. Both sites used to
+/// log a warning and `return`, which meant the message never reached the
+/// handler AND nothing ever answered: measured over the isolate transport, that
+/// call produced no reply in 6 s while every other mode combination answered in
+/// 9–21 ms.
+///
+/// An `RpcException` because it is a library diagnostic with no user data in
+/// it, so `wireStatusFor` forwards the text to the peer, which is the whole
+/// point — the peer is the side that can fix it.
+void _reportTransferModeMismatch(
+  StreamController<dynamic> controller,
+  LogScope logger,
+  String methodPath,
+  int streamId,
+  String direction,
+) {
+  final error = RpcException(
+    'Transfer-mode mismatch on $methodPath: a serialized $direction arrived '
+    'for a method registered as zero-copy. Both ends take the mode from their '
+    'own contract, so give them the same RpcDataTransferMode (or codecs on '
+    'both sides).',
+  );
+  logger.error(
+    'transfer_mode_mismatch [methodPath: $methodPath, streamId: $streamId]',
+    error: error,
+  );
+  if (!controller.isClosed) controller.addError(error, StackTrace.current);
+}
+
 /// Shared stream processor: zero-copy when no codecs (zero-copy transport required), otherwise serialized.
 final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final LogScope _logger;
@@ -608,8 +641,23 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Processes a serialized message (serialization mode only).
   void _processDataMessage(List<int> messageBytes) {
     if (_isZeroCopy) {
-      _logger.warning(
-        'Serialized message received in zero-copy mode, ignoring [methodPath: $_methodPath, streamId: $_streamId]',
+      // Answered, not dropped. `return` here meant the request never reached
+      // the handler AND nothing ever answered the peer -- no status, no error,
+      // just silence until the caller's own deadline. Measured over the isolate
+      // transport, a caller in RpcDataTransferMode.codec against a method
+      // registered zero-copy: "HANG, no answer in 6 s", where every other
+      // combination replied in 9-21 ms.
+      //
+      // The mirror direction has never had this problem: a direct object
+      // arriving at a serialized processor is cast to TRequest and delivered,
+      // which is how a zero-copy CALLER talks to a codec-declared responder.
+      // Only this side dropped it.
+      _reportTransferModeMismatch(
+        _requestController,
+        _logger,
+        _methodPath,
+        _streamId,
+        'request',
       );
       return;
     }
@@ -1544,8 +1592,14 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Processes response data (serialization mode only).
   void _processResponseData(List<int> messageBytes) {
     if (_isZeroCopy) {
-      _logger.warning(
-        'Serialized response received in zero-copy mode, ignoring [methodPath: $_methodPath, streamId: $_streamId]',
+      // See StreamProcessor._processDataMessage: dropping this left the call
+      // with no answer at all rather than a diagnosable one.
+      _reportTransferModeMismatch(
+        _responseController,
+        _logger,
+        _methodPath,
+        _streamId,
+        'response',
       );
       return;
     }
