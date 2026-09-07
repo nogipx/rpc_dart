@@ -517,6 +517,15 @@ abstract final class RpcContextUtils {
       RpcContext.withHeaders({headerName: key});
 
   /// Creates a context for tracing.
+  ///
+  /// ONE token for both ids. The request id and the trace id used to be two
+  /// independent [RpcContext._uniqueToken] draws, and a token is three
+  /// `Random.secure()` calls at ~34us -- 31% of an in-memory unary call went on
+  /// the pair. A call that starts its own trace has exactly one request in it,
+  /// so the two ids name the same thing; deriving both from one token keeps
+  /// every property that matters (same entropy, same source, still unique, still
+  /// unpredictable) and halves the cost. They are correlated, which costs
+  /// nothing: both travel in the SAME request metadata already.
   static RpcContext withTracing({
     String? traceId,
     String? spanId,
@@ -528,10 +537,22 @@ abstract final class RpcContextUtils {
     if (spanId != null) headers['x-span-id'] = spanId;
     if (parentSpanId != null) headers['x-parent-span-id'] = parentSpanId;
 
+    final token = RpcContext._uniqueToken();
     return RpcContext.withHeaders(
       headers,
-    ).withTraceId(traceId ?? generateTraceId());
+      requestId: 'req_$token',
+    ).withTraceId(traceId ?? 'trace_$token');
   }
+
+  /// A trace id for a call whose context already has a request id.
+  ///
+  /// The same reuse as [withTracing], for the branch where the caller supplied
+  /// a context (so its request id has already been paid for) but no trace id.
+  /// Falls back to a fresh token when the request id is not one of ours --
+  /// [RpcContext.withHeaders] lets an application pass any string.
+  static String traceIdFor(String requestId) => requestId.startsWith('req_')
+      ? 'trace_${requestId.substring(4)}'
+      : generateTraceId();
 
   /// Generates a new, unique trace ID.
   ///

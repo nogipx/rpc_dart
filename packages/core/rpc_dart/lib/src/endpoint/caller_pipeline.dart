@@ -138,7 +138,12 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     if (context?.traceId != null) {
       result = context!;
     } else if (context != null) {
-      result = context.withTraceId(RpcContextUtils.generateTraceId());
+      // Derived from the request id this context already carries, rather than
+      // minting a second token: see RpcContextUtils.withTracing for why one
+      // token can name both.
+      result = context.withTraceId(
+        RpcContextUtils.traceIdFor(context.requestId),
+      );
     } else {
       result = RpcContextUtils.withTracing();
     }
