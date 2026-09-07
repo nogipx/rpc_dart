@@ -139,11 +139,21 @@ void main() {
         streamId: 1,
       );
 
-      // The load-bearing witness: the guard must RESET the flood connection.
-      // Once the server destroys its socket, a subsequent client write fails.
-      // Without the guard every one of these 4096 frames (64 MiB) is buffered
-      // by package:http2 and accepted, so no write ever throws -- which is
-      // exactly what the canary confirms when the cap is lifted.
+      // The load-bearing witness: the guard must STOP the flood. Without it
+      // every one of these 4096 frames (64 MiB) is buffered by package:http2
+      // and accepted, so the loop runs to completion -- which is exactly what
+      // the canary shows when the cap is lifted.
+      //
+      // "Stopped" has TWO observable forms and the assertion below accepts
+      // either, because which one occurs is up to the OS. Once the server
+      // destroys its socket the next client write may throw (the RST got back
+      // in time) or may simply BLOCK forever (the server has stopped reading
+      // and the send buffer fills). This used to assert only the throw, and it
+      // failed under a full-suite run at frame 129 -- the loop was wedged on
+      // flush, not sailing through -- while reporting "all 129 frames were
+      // accepted and buffered", which is the opposite of what had happened.
+      // Standalone it passed 3/3 and the suite passed on a re-run, so the guard
+      // was never in question; the assertion was.
       var floodReset = false;
       var framesSent = 0;
       final flooding = () async {
@@ -179,12 +189,14 @@ void main() {
       socket.destroy();
 
       expect(
-        floodReset,
-        isTrue,
+        framesSent,
+        lessThan(4096),
         reason:
-            'the guard must reset the connection once its header block passes '
+            'the guard must cut the connection once its header block passes '
             'the cap; instead all $framesSent frames (up to 64 MiB) were '
-            'accepted and buffered',
+            'accepted and buffered '
+            '(write threw: $floodReset -- either that or a wedged write means '
+            'the server stopped reading, and both are the guard working)',
       );
     },
     timeout: const Timeout(Duration(seconds: 60)),
