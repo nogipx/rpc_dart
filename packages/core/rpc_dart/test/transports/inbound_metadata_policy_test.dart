@@ -123,6 +123,80 @@ void main() {
     await p.server.close();
   });
 
+  test('WITNESS: a lenient server still ANSWERS the refused stream', () async {
+    // Dropping the frame without closing left the peer waiting for a response
+    // that would never come: measured, the server sent nothing at all and the
+    // connection stayed healthy. gRPC's rule, and a70c4799's on the http2
+    // responder, is that every request gets a status.
+    final p = _pair(
+      const RpcSecurityPolicy(
+        maxHeaders: 4,
+        maxHeaderValueBytes: 16,
+        closeOnProtocolError: false,
+      ),
+    );
+    // Stream 0 carries connection-level flow control, which the transport
+    // advertises from its constructor; only call-scoped frames count here.
+    final answers = <RpcTransportMessage>[];
+    p.peer.incoming
+        .where((m) => m.streamId != 0)
+        .listen(answers.add, onError: (Object _) {});
+    p.server.incomingMessages.listen((_) {}, onError: (Object _) {});
+
+    await p.peer.send(
+      RpcTransportMessage.withMetadata(metadata: _hostile(), streamId: 1),
+    );
+    await _settle();
+
+    expect(
+      answers,
+      hasLength(1),
+      reason: 'the peer was told nothing and would wait for its deadline',
+    );
+    expect(
+      answers.single.metadata?.getHeaderValue(RpcHeaders.grpcStatus),
+      RpcStatus.invalidArgument.toString(),
+    );
+    expect(answers.single.streamId, 1);
+    expect(answers.single.isEndOfStream, isTrue);
+
+    await p.peer.close();
+    await p.server.close();
+  });
+
+  test('GUARD: a CLIENT does not answer with a status', () async {
+    // The status belongs to a responder. A client refusing a server's metadata
+    // reports it to its own caller and has nothing to send back.
+    final policy = const RpcSecurityPolicy(
+      maxHeaders: 4,
+      maxHeaderValueBytes: 16,
+      closeOnProtocolError: false,
+    );
+    final (peerChannel, clientChannel) = RpcFrameMultiplexedChannel.pair(
+      policy: policy,
+    );
+    final client = RpcChannelTransport(
+      channel: clientChannel,
+      isClient: true,
+      policy: policy,
+    );
+    final answers = <RpcTransportMessage>[];
+    peerChannel.incoming
+        .where((m) => m.streamId != 0)
+        .listen(answers.add, onError: (Object _) {});
+    client.incomingMessages.listen((_) {}, onError: (Object _) {});
+
+    await peerChannel.send(
+      RpcTransportMessage.withMetadata(metadata: _hostile(), streamId: 2),
+    );
+    await _settle();
+
+    expect(answers, isEmpty);
+
+    await peerChannel.close();
+    await client.close();
+  });
+
   test('conforming metadata still passes untouched', () async {
     final p = _pair(const RpcSecurityPolicy());
     final delivered = <RpcTransportMessage>[];

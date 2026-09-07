@@ -680,6 +680,30 @@ class RpcChannelTransport
           );
         }
         unawaited(close());
+      } else if (!isClient) {
+        // Lenient mode keeps the connection, so the offending STREAM still has
+        // to be answered — otherwise the peer waits for a response that will
+        // never come. Measured before this, with closeOnProtocolError: false:
+        // the server sent nothing at all, and the connection stayed healthy.
+        // Same rule as a70c4799 on the http2 responder: every request gets a
+        // status.
+        //
+        // Responder side only: a client refusing a server's metadata reports it
+        // to its own caller (above) and has no status to send.
+        // Status ONLY, no grpc-message. The trailer goes out through
+        // sendMetadata, which validates against the same policy that just
+        // refused the peer -- and a `maxHeaderValueBytes` tight enough to
+        // reject the peer also rejects any explanation of the rejection, so
+        // the answer failed its own outbound check and was swallowed, leaving
+        // the peer hanging exactly as before. A bare status always fits, and
+        // the detail is already on this side as an RpcFrameException.
+        unawaited(
+          sendMetadata(
+            streamId,
+            RpcMetadata.forTrailer(RpcStatus.invalidArgument),
+            endStream: true,
+          ).catchError((_) {}),
+        );
       }
       return false;
     }
