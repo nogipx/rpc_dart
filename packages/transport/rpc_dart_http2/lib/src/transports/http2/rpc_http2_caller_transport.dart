@@ -31,9 +31,31 @@ class _DrainSignal {
 /// через `is`-проверку, поэтому транспорт, который её не объявляет, получает
 /// `const RpcSecurityPolicy()` вместо настроенной приложением.
 class RpcHttp2CallerTransport
-    implements IRpcTransport, IRpcStreamReset, IRpcSecurityPolicyAware {
+    implements
+        IRpcTransport,
+        IRpcStreamReset,
+        IRpcSecurityPolicyAware,
+        IRpcStreamIdSequence {
   @override
   bool get isClient => true;
+
+  /// See [IRpcStreamIdSequence]. `_nextStreamId` is the id the NEXT call will
+  /// get, so the last issued one is two behind it — and -1 before any call,
+  /// which is exactly "nothing issued yet".
+  ///
+  /// This transport fixes its own `reconnect()` by simply not resetting the
+  /// counter; the capability is for `RpcClientConnection`, which does not
+  /// reconnect a transport but builds a NEW one and so cannot rely on that.
+  @override
+  int get lastIssuedStreamId => _nextStreamId - 2;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {
+    // Client ids are odd; a wrong-parity watermark rounds UP so the sequence
+    // stays odd. Forward only, so a stale watermark cannot rewind live ids.
+    final aligned = streamId.isOdd ? streamId : streamId + 1;
+    if (aligned + 2 > _nextStreamId) _nextStreamId = aligned + 2;
+  }
 
   @override
   RpcSecurityPolicy get securityPolicy => _policy;

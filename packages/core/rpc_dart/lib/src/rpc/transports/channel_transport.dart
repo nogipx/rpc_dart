@@ -29,7 +29,11 @@ import 'frame_multiplexed_channel.dart';
 /// );
 /// ```
 class RpcChannelTransport
-    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
+    implements
+        IRpcTransport,
+        IRpcSecurityPolicyAware,
+        IRpcFlowControlled,
+        IRpcStreamIdSequence {
   final IRpcMultiplexedChannel _channel;
   final RpcStreamIdManager _idManager;
   final RpcSecurityPolicy _policy;
@@ -271,7 +275,11 @@ class RpcChannelTransport
   ///
   /// Pass this into the replacement transport's [resumeStreamIdsAfter] and the
   /// two id spaces become disjoint.
+  @override
   int get lastIssuedStreamId => _idManager.lastIssuedId;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) => _idManager.resumeAfter(streamId);
 
   /// Creates a paired client/server transport over in-memory frame channels.
   ///

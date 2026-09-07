@@ -149,6 +149,42 @@ abstract interface class IRpcSecurityPolicyAware {
   RpcSecurityPolicy get securityPolicy;
 }
 
+/// Capability for transports whose stream-id sequence can be CONTINUED.
+///
+/// A wrapper that survives a dropped connection replaces the transport
+/// underneath it, and a fresh transport starts its ids at 1 — so the first call
+/// after a reconnect is handed the id a call from the old connection still
+/// holds. Every caller releases its id in a `finally` and half-closes by id,
+/// and the id is ALL those operations have to present, so nothing downstream
+/// can tell the two apart. Measured over websocket, one reconnect between two
+/// calls that both got id 1: a late `finishSending` for the dead call
+/// HALF-CLOSED the live one and the server finished serving it.
+///
+/// [RpcChannelTransport.reconnect] and `RpcHttp2CallerTransport.reconnect` fix
+/// this for themselves, but `RpcClientConnection` builds a WHOLE NEW transport
+/// from its factory — which is the path applications are pointed at for
+/// auto-reconnect — so it needs the transport's cooperation. It reads
+/// [lastIssuedStreamId] from the outgoing transport BEFORE closing it (closing
+/// resets the sequence) and calls [resumeStreamIdsAfter] on the incoming one
+/// before any call can be made.
+///
+/// Kept separate from [IRpcTransport], like [IRpcStreamReset], so adding it
+/// does not break third-party transports that `implements IRpcTransport`. A
+/// transport that does not implement it keeps the previous behaviour.
+abstract interface class IRpcStreamIdSequence {
+  /// The highest stream id handed out so far, or a value below the first
+  /// assignable id when none has been.
+  int get lastIssuedStreamId;
+
+  /// Continues the sequence after [streamId].
+  ///
+  /// Must only ever move the cursor FORWARD, and must leave parity intact:
+  /// a client transport still issues odd ids afterwards, a server even ones.
+  /// Safe to call with a value from a different transport instance; that is the
+  /// entire point.
+  void resumeStreamIdsAfter(int streamId);
+}
+
 /// Capability: a higher layer takes over flow-control metering for a stream.
 ///
 /// The transport meters what it hands out through `getMessagesForStream`, which
@@ -395,6 +431,19 @@ final class RpcStreamIdManager {
   /// `RpcStreamIdManager(isClient: ..., resumeAfter: old.lastIssuedId)`
   /// round-trips exactly.
   int get lastIssuedId => _lastId;
+
+  /// Moves the cursor forward so the next id follows [streamId].
+  ///
+  /// Only ever forward: a stale or lower value is ignored, so calling this with
+  /// a watermark collected from several previous connections is safe in any
+  /// order. Parity is preserved — a value of the wrong parity for this role is
+  /// rounded UP to the next valid one, so a client manager keeps issuing odd
+  /// ids whatever it is handed.
+  void resumeAfter(int streamId) {
+    if (streamId <= _lastId) return;
+    final aligned = streamId.isOdd == isClient ? streamId : streamId + 1;
+    _lastId = aligned > _maxAssignableId ? _maxAssignableId : aligned;
+  }
 
   /// Resets manager state (clears active IDs and counters).
   void reset() {

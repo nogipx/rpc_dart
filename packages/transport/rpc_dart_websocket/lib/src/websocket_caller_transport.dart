@@ -25,7 +25,11 @@ import 'ws_open_stub.dart' if (dart.library.io) 'ws_open_io.dart';
 /// `const RpcSecurityPolicy()`, and flow credit would be returned on arrival
 /// rather than on consumption.
 class RpcWebSocketCallerTransport
-    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
+    implements
+        IRpcTransport,
+        IRpcSecurityPolicyAware,
+        IRpcFlowControlled,
+        IRpcStreamIdSequence {
   final Future<WebSocketChannel> Function()? _reconnectFactory;
   final RpcSecurityPolicy _policy;
 
@@ -244,6 +248,18 @@ class RpcWebSocketCallerTransport
   /// the policy is a property of this transport, not of the socket underneath.
   @override
   RpcSecurityPolicy get securityPolicy => _policy;
+
+  /// Forwarded like the other capabilities, and for the same reason: the
+  /// endpoint layers and `RpcClientConnection` find these with `is` checks, so
+  /// a wrapper that only implements [IRpcTransport] hides them. Without this
+  /// the proxy in `RpcClientConnection` cannot carry the id watermark across a
+  /// swapped transport, which is the whole point of the capability.
+  @override
+  int get lastIssuedStreamId => _inner.lastIssuedStreamId;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) =>
+      _inner.resumeStreamIdsAfter(streamId);
 
   @override
   void deferFlowCredit(int streamId) => _inner.deferFlowCredit(streamId);

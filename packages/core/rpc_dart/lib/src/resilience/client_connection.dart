@@ -78,6 +78,34 @@ final class _ReconnectingTransportProxy
   final _msgCtl = StreamController<RpcTransportMessage>.broadcast();
   bool _closed = false;
 
+  /// Highest stream id any transport this proxy has owned handed out.
+  ///
+  /// Every transport the factory builds is FRESH, so it starts its ids at 1 —
+  /// and the first call after a reconnect is then handed the id a call from the
+  /// previous connection still holds. Callers release their id in a `finally`
+  /// and half-close by id, and the id is all those operations have to present,
+  /// so nothing downstream can tell the two apart. Measured through this proxy
+  /// over websocket, one forceReconnect between two calls:
+  ///
+  ///     A had id 1, B has id 1
+  ///     A's late finishSending(1) -> B's handler ENDED, the server saw B's
+  ///                                  request stream close and finished it
+  ///
+  /// The transports fix this for their OWN reconnect(); this path replaces the
+  /// transport wholesale instead, so it has to carry the watermark across.
+  int _idWatermark = -1;
+
+  /// Reads the cursor off [inner] before it is closed, and remembers the max.
+  ///
+  /// BEFORE is load-bearing: closing a transport resets its id manager, so a
+  /// cursor read afterwards reports "nothing issued yet" and the sequence
+  /// restarts anyway. That mistake cost a whole wrong fix in round 142.
+  void _noteIdWatermark(IRpcTransport? inner) {
+    if (inner is! IRpcStreamIdSequence) return;
+    final cursor = (inner as IRpcStreamIdSequence).lastIssuedStreamId;
+    if (cursor > _idWatermark) _idWatermark = cursor;
+  }
+
   /// Called by [RpcClientConnection] when the inner transport closes.
   void Function(Object? error)? onDropped;
 
@@ -102,6 +130,12 @@ final class _ReconnectingTransportProxy
 
     final previousSub = _innerSub;
     final previous = _inner;
+    // Read the outgoing transport's cursor while it is still open, then seed
+    // the incoming one before any call can reach it. See [_idWatermark].
+    _noteIdWatermark(previous);
+    if (inner is IRpcStreamIdSequence && _idWatermark >= 0) {
+      (inner as IRpcStreamIdSequence).resumeStreamIdsAfter(_idWatermark);
+    }
     _innerSub = null;
     _inner = inner;
 
@@ -143,11 +177,15 @@ final class _ReconnectingTransportProxy
   /// proxy takes ownership at [attach], it closes here too. Closing an
   /// already-closed transport is a no-op.
   void _retire(IRpcTransport inner) {
+    _noteIdWatermark(inner);
     _inner = null;
     unawaited(inner.close().catchError((_) {}));
   }
 
   Future<void> detach() async {
+    // forceReconnect() runs detach() and then reconnects, so this is the path
+    // the watermark is most often collected on.
+    _noteIdWatermark(_inner);
     await _innerSub?.cancel();
     _innerSub = null;
     try {
