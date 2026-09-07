@@ -5,6 +5,20 @@
 
 part of '_index.dart';
 
+/// The header-value cap a trailer about to leave through [transport] will be
+/// judged by.
+///
+/// Every outbound trailer needs it, because `grpc-message` is a header value:
+/// one longer than the cap fails validation and the whole answer is lost, so
+/// the peer gets silence or a generic fallback instead of the status. Round 175
+/// fixed the sites that call `RpcMetadata.forTrailer`, and the two that built
+/// the headers BY HAND were missed for exactly that reason -- they did not match
+/// the grep. This exists so there is one way to ask.
+int _trailerMessageCap(IRpcTransport transport) =>
+    transport is IRpcSecurityPolicyAware
+    ? (transport as IRpcSecurityPolicyAware).securityPolicy.maxHeaderValueBytes
+    : const RpcSecurityPolicy().maxHeaderValueBytes;
+
 /// Mixin providing the responder (incoming request handler) pipeline.
 ///
 /// Manages method registration, incoming message routing, responder creation,
@@ -1604,15 +1618,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     try {
       await transport.sendMetadata(
         state.id,
-        RpcMetadata([
-          RpcHeader(RpcHeaders.grpcStatus, RpcStatus.unimplemented.toString()),
-          RpcHeader(
-            RpcHeaders.grpcMessage,
-            RpcMetadata.encodeGrpcMessage(
-              'Zero-copy method $methodKey requires zero-copy transport',
-            ),
-          ),
-        ]),
+        // Through forTrailer, so the message is trimmed to the cap that will
+        // judge it. Built by hand it was invisible to round 175's sweep, and a
+        // long `methodKey` was enough to lose the whole answer.
+        RpcMetadata.forTrailer(
+          RpcStatus.unimplemented,
+          message: 'Zero-copy method $methodKey requires zero-copy transport',
+          maxMessageLength: _trailerMessageCap(transport),
+        ),
         endStream: true,
       );
     } catch (error, stackTrace) {
@@ -1639,11 +1652,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       final trailer = RpcMetadata.forTrailer(
         status,
         message: message,
-        maxMessageLength: transport is IRpcSecurityPolicyAware
-            ? (transport as IRpcSecurityPolicyAware)
-                  .securityPolicy
-                  .maxHeaderValueBytes
-            : const RpcSecurityPolicy().maxHeaderValueBytes,
+        maxMessageLength: _trailerMessageCap(transport),
       );
       await transport.sendMetadata(
         streamId,

@@ -54,6 +54,24 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
+/// Long enough that `Zero-copy method Zc.<name> requires zero-copy transport`
+/// passes the tight cap under test.
+const _longMethodName = 'ComputeDailyRollupWithBackfillAndReconciliation';
+
+/// Registered WITHOUT codecs, i.e. zero-copy, on a transport that reports no
+/// zero-copy support -- the `_handleUnsupportedZeroCopy` path.
+final class _ZcSvc extends RpcResponderContract {
+  _ZcSvc() : super('Zc', dataTransferMode: RpcDataTransferMode.zeroCopy);
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: _longMethodName,
+      handler: (r, {RpcContext? context}) async => 'never'.rpc,
+    );
+  }
+}
+
 RpcCallerEndpoint _rig(RpcSecurityPolicy policy) {
   final (clientChannel, serverChannel) = RpcFrameMultiplexedChannel.pair(
     policy: policy,
@@ -66,6 +84,7 @@ RpcCallerEndpoint _rig(RpcSecurityPolicy policy) {
     ),
   );
   responder.registerServiceContract(_Svc());
+  responder.registerServiceContract(_ZcSvc());
   responder.start();
   final caller = RpcCallerEndpoint(
     transport: RpcChannelTransport(
@@ -81,11 +100,15 @@ RpcCallerEndpoint _rig(RpcSecurityPolicy policy) {
   return caller;
 }
 
-Future<Object?> _errorOf(RpcCallerEndpoint caller, String method) async {
+Future<Object?> _errorOf(
+  RpcCallerEndpoint caller,
+  String method, {
+  String service = 'Svc',
+}) async {
   try {
     await caller
         .unaryRequest<RpcString, RpcString>(
-          serviceName: 'Svc',
+          serviceName: service,
           methodName: method,
           request: 'hi'.rpc,
           requestCodec: _codec,
@@ -153,6 +176,34 @@ void main() {
         RpcStatus.permissionDenied,
       );
       expect((error as RpcStatusException).message, _longMessage);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  test(
+    'the hand-built trailers are capped too',
+    () async {
+      // WITNESS for the sites round 175 MISSED, because they built the headers
+      // by hand and so did not match a grep for `forTrailer`.
+      // `_handleUnsupportedZeroCopy` answers "Zero-copy method $methodKey
+      // requires zero-copy transport", and `methodKey` is a name the service
+      // author chooses -- 133 characters here. Measured over websocket:
+      //
+      //   cap 8192 : status 12
+      //   cap   64 : SILENCE, no answer in 6 s
+      //
+      // The frame channel pair reports supportsZeroCopy == false, so a
+      // zero-copy method registered on it takes exactly that path.
+      final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
+
+      final error = await _errorOf(caller, _longMethodName, service: 'Zc');
+
+      expect(error, isA<RpcStatusException>());
+      expect(
+        (error! as RpcStatusException).statusCode,
+        RpcStatus.unimplemented,
+        reason: 'a method the server cannot serve must be refused, not ignored',
+      );
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );

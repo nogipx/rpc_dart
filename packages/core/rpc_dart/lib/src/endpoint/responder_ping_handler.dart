@@ -75,13 +75,15 @@ final class RpcResponderPingHandler {
       try {
         await transport.sendMetadata(
           streamId,
-          RpcMetadata([
-            RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
-            RpcHeader(
-              RpcHeaders.grpcMessage,
-              RpcMetadata.encodeGrpcMessage('Ping handling error: $error'),
-            ),
-          ]),
+          // Through forTrailer, so the message is trimmed to the cap that will
+          // judge it. `$error` is arbitrary length, and a trailer that fails
+          // validation is not sent -- the catch below would then log while the
+          // peer waited out its own deadline.
+          RpcMetadata.forTrailer(
+            RpcStatus.internal,
+            message: 'Ping handling error: $error',
+            maxMessageLength: _trailerMessageCap(transport),
+          ),
           endStream: true,
         );
       } catch (sendError, sendStackTrace) {
