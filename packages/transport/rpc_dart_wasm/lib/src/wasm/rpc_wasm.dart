@@ -84,8 +84,22 @@ abstract final class RpcWasm {
 }
 
 final class _RpcWasmBridge implements RpcWasmBridge {
-  final StreamController<Uint8List> _incoming =
-      StreamController<Uint8List>.broadcast(sync: true);
+  /// SINGLE-SUBSCRIPTION on purpose: it BUFFERS until the transport binds.
+  ///
+  /// Broadcast DROPS whatever arrives before someone listens, and the window is
+  /// wide open here: the constructor installs `rpcWasmReceiveBytes` on the JS
+  /// global, so the host can push bytes immediately, while the subscriber only
+  /// appears once [RpcWasm.run] builds the transport below.
+  ///
+  /// The host's `RpcChannelTransport` advertises the CONNECTION flow-control
+  /// window from its own constructor and is up first, so that grant lands in
+  /// this window. Measured over the bridge pair with 8 streams, a 64 KiB stream
+  /// window and a 128 KiB connection window: 512 KiB in flight instead of
+  /// 128 KiB — the connection bound gone entirely. See the host bridge for the
+  /// full note.
+  final StreamController<Uint8List> _incoming = StreamController<Uint8List>(
+    sync: true,
+  );
   bool _closed = false;
 
   _RpcWasmBridge() {
@@ -117,8 +131,11 @@ final class _RpcWasmBridge implements RpcWasmBridge {
     if (globalContext.has('rpcWasmReceiveBytes')) {
       globalContext.delete('rpcWasmReceiveBytes'.toJS);
     }
+    // NOT awaited: closing a never-listened single-subscription controller
+    // returns a future that only completes once someone listens, which would
+    // deadlock close() for a bridge that was built and then abandoned.
     if (!_incoming.isClosed) {
-      await _incoming.close();
+      unawaited(_incoming.close());
     }
   }
 }

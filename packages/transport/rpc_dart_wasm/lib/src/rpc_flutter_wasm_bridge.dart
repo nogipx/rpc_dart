@@ -44,8 +44,33 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   final String _incomingChannel;
   final String _outgoingChannel;
   final String _consoleChannel;
-  final StreamController<Uint8List> _incoming =
-      StreamController<Uint8List>.broadcast(sync: true);
+
+  /// SINGLE-SUBSCRIPTION on purpose: it BUFFERS until the transport binds.
+  ///
+  /// This was a broadcast controller, which DROPS whatever arrives before
+  /// someone listens — and there is always a window here, because the platform
+  /// message handler below is registered in this constructor while the
+  /// subscriber only appears later, when `RpcWasmTransport.fromBridge` builds
+  /// the frame channel.
+  ///
+  /// rpc_dart does send in that window: `RpcChannelTransport` advertises the
+  /// CONNECTION flow-control window from its own constructor, so whichever side
+  /// comes up first advertises into a bridge nobody is listening to yet. The
+  /// peer then never learns the connection window and is bounded only per
+  /// stream. Measured over the bridge pair, 8 streams with a 64 KiB stream
+  /// window and a 128 KiB connection window, sending into a peer that never
+  /// reads:
+  ///
+  ///     core channel pair : 128 KiB in flight   <- the connection window
+  ///     over this bridge  : 512 KiB in flight   <- 8 x the stream window
+  ///
+  /// Exactly the isolate transport's defect ("the window grant is the one that
+  /// is always lost"), and exactly what `RpcWebSocketChannel` warns against in
+  /// its own comment. One consumer is the contract here — the transport — so
+  /// single-subscription costs nothing and is what buffers.
+  final StreamController<Uint8List> _incoming = StreamController<Uint8List>(
+    sync: true,
+  );
   bool _closed = false;
 
   final StreamController<String> _console = StreamController<String>.broadcast(
@@ -169,7 +194,12 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
     // `console` waits forever.
     _messenger.setMessageHandler(_incomingChannel, null);
     _messenger.setMessageHandler(_consoleChannel, null);
-    await _incoming.close();
+    // NOT awaited, now that `_incoming` is single-subscription: closing one
+    // that was never listened to returns a future that does not complete until
+    // someone listens, so awaiting it deadlocks close() for a bridge that was
+    // built and then abandoned — an aborted setup, which is exactly when
+    // cleanup has to work. Same fault, same fix as RpcWebSocketChannel.close().
+    unawaited(_incoming.close());
     if (!_console.isClosed) await _console.close();
 
     await _channel.invokeMethod<void>('closeRuntime', {'runtimeId': runtimeId});

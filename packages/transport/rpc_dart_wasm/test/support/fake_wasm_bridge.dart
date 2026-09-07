@@ -13,8 +13,17 @@ import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 /// byte-only and forwards each [send] to the peer's [incoming] stream, exactly
 /// like the native host pipes bytes between the Dart side and the sandbox.
 final class FakeWasmBridge implements RpcWasmBridge {
-  final StreamController<Uint8List> _incoming =
-      StreamController<Uint8List>.broadcast(sync: true);
+  /// Mirrors the real bridges: SINGLE-SUBSCRIPTION, so it BUFFERS whatever
+  /// arrives before the transport binds.
+  ///
+  /// This was broadcast, like the real ones, and that is why no test could see
+  /// the defect: a broadcast controller drops frames sent before anyone
+  /// listens, and both real bridges start receiving in their constructor while
+  /// the subscriber appears only when the transport is built. A test double
+  /// that shares the production shape is what makes the difference visible.
+  final StreamController<Uint8List> _incoming = StreamController<Uint8List>(
+    sync: true,
+  );
   late final FakeWasmBridge _peer;
   bool _closed = false;
 
@@ -47,6 +56,9 @@ final class FakeWasmBridge implements RpcWasmBridge {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    if (!_incoming.isClosed) await _incoming.close();
+    // NOT awaited, for the same reason the real bridges do not: closing a
+    // never-listened single-subscription controller hangs until someone
+    // listens.
+    if (!_incoming.isClosed) unawaited(_incoming.close());
   }
 }
