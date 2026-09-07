@@ -39,10 +39,23 @@ final class _Svc extends RpcResponderContract {
       responseCodec: _codec,
       handler: (r, {RpcContext? context}) async => 'ok'.rpc,
     );
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'big',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (r, {RpcContext? context}) async => ('x' * 4096).rpc,
+    );
   }
 }
 
-Future<RpcCallerEndpoint> _serve(RpcSecurityPolicy policy) async {
+Future<RpcCallerEndpoint> _serve(
+  RpcSecurityPolicy policy, {
+
+  /// Generous by default, so the ceiling under test is the SERVER's.
+  RpcSecurityPolicy clientPolicy = const RpcSecurityPolicy(
+    maxMessageLengthBytes: 32 * 1024 * 1024,
+  ),
+}) async {
   final server = RpcHttpServer(
     host: '127.0.0.1',
     port: 0,
@@ -58,8 +71,7 @@ Future<RpcCallerEndpoint> _serve(RpcSecurityPolicy policy) async {
   final caller = RpcCallerEndpoint(
     transport: RpcHttpCallerTransport(
       baseUrl: 'http://127.0.0.1:${server.actualPort}',
-      // Generous, so the ceiling under test is the SERVER's.
-      policy: const RpcSecurityPolicy(maxMessageLengthBytes: 32 * 1024 * 1024),
+      policy: clientPolicy,
     ),
   );
   addTearDown(() async {
@@ -179,6 +191,83 @@ void main() {
         lessThan(400),
         reason: 'a whole page has no place in a status message',
       );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'a BIG error page does not destroy the status it carried',
+    () async {
+      // WITNESS. The non-200 body used to be read through the same bound as a
+      // real response, which THROWS past maxMessageLengthBytes -- so a peer's
+      // status was destroyed by the size of the page carrying it. Measured with
+      // a 64 KiB client limit against a 256 KiB page:
+      //
+      //   small 502 : RpcStatusException(14)
+      //   BIG 502   : RpcException "HTTP response body exceeds the configured
+      //               limit of 65536 bytes"
+      //   BIG 401   : the same
+      //
+      // Losing UNAVAILABLE costs more than the text: RpcRetryInterceptor
+      // retries it and does not retry a bare RpcException.
+      final http = await shelf_io.serve(
+        (shelf.Request _) =>
+            shelf.Response(502, body: 'gateway said no ${'x' * (256 * 1024)}'),
+        '127.0.0.1',
+        0,
+      );
+      addTearDown(() => http.close(force: true));
+
+      final caller = RpcCallerEndpoint(
+        transport: RpcHttpCallerTransport(
+          baseUrl: 'http://127.0.0.1:${http.port}',
+          policy: const RpcSecurityPolicy(maxMessageLengthBytes: 64 * 1024),
+        ),
+      );
+      addTearDown(caller.close);
+
+      final error = await _errorOf(
+        _echo(caller, 'hi').timeout(const Duration(seconds: 30)),
+      );
+
+      expect(error, isA<RpcStatusException>());
+      expect(
+        (error! as RpcStatusException).statusCode,
+        RpcStatus.unavailable,
+        reason: '502 is retryable; the page size must not change that',
+      );
+      expect(
+        (error as RpcStatusException).message,
+        contains('gateway said no'),
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'GUARD: a real response over the limit is still refused',
+    () async {
+      // The bound that DOES belong on a 200: the body is about to be decoded,
+      // so an oversized one has to fail rather than be truncated.
+      final caller = await _serve(
+        const RpcSecurityPolicy(),
+        clientPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 16),
+      );
+
+      final error = await _errorOf(
+        caller
+            .unaryRequest<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'big',
+              request: 'hi'.rpc,
+              requestCodec: _codec,
+              responseCodec: _codec,
+            )
+            .timeout(const Duration(seconds: 30)),
+      );
+
+      expect(error, isA<RpcException>());
+      expect('$error', contains('exceeds the configured limit'));
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );

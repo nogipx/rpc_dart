@@ -25,6 +25,12 @@ final class _PendingCall {
 /// repeated.
 const int _maxReasonChars = 200;
 
+/// Bytes read from a non-200 body before the read stops.
+///
+/// Generous against [_maxReasonChars] on purpose: the prefix may be multi-byte
+/// UTF-8, and an HTML page usually puts its interesting words after some markup.
+const int _maxReasonBytes = 8 * 1024;
+
 /// A single-line, bounded, printable rendering of an error [body], or null when
 /// there is nothing worth repeating.
 ///
@@ -197,6 +203,42 @@ class RpcHttpCallerTransport
   /// Overflow aborts the read immediately: unlike the server, which must keep
   /// draining so its 400 reaches the client, nothing here needs the rest of a
   /// body already known to be too big.
+  /// Reads at most [_maxReasonBytes] of a NON-200 body and stops.
+  ///
+  /// Never throws, and that is the point. This used to go through
+  /// [_readBounded], which raises when the body passes
+  /// `maxMessageLengthBytes` -- so a peer's status was destroyed by the size of
+  /// the page that carried it. Measured with a 64 KiB client limit against a
+  /// 256 KiB error page:
+  ///
+  ///   small 502 page : RpcStatusException(14) "HTTP 502 from ..."
+  ///   BIG 502 page   : RpcException "HTTP response body exceeds the
+  ///                    configured limit of 65536 bytes"
+  ///   BIG 401 page   : the same
+  ///
+  /// Both statuses were lost, and losing UNAVAILABLE costs more than the text:
+  /// `RpcRetryInterceptor` retries it and does not retry a bare `RpcException`.
+  /// A captive portal or a load-balancer HTML page is exactly this case.
+  ///
+  /// The status code is known BEFORE the body is read, so nothing here needs to
+  /// fail. Stops consuming past the cap rather than draining the rest, keeping
+  /// the previous refusal to read a body already known to be too big -- and
+  /// tighter than before, since this cap is bytes for a message rather than
+  /// the whole message ceiling.
+  Future<Uint8List> _readErrorBody(http.StreamedResponse response) async {
+    final builder = BytesBuilder(copy: false);
+    try {
+      await for (final chunk in response.stream) {
+        builder.add(chunk);
+        if (builder.length >= _maxReasonBytes) break;
+      }
+    } catch (_) {
+      // A body we could not finish reading is not worth failing the call over;
+      // the status is already in hand.
+    }
+    return builder.takeBytes();
+  }
+
   Future<Uint8List> _readBounded(
     http.StreamedResponse response,
     int streamId,
@@ -340,7 +382,7 @@ class RpcHttpCallerTransport
         // Drain before reporting: leaving bytes unread on the socket makes
         // dart:io tear the connection down, and package:http cannot reuse it.
         // Bounded by the same ceiling as a 200 body.
-        final errorBody = await _readBounded(streamedResponse, streamId);
+        final errorBody = await _readErrorBody(streamedResponse);
         final grpcCode = _httpStatusToGrpcCode(streamedResponse.statusCode);
         // The body was already being read and then DISCARDED, so a reason the
         // responder had gone to the trouble of sending never reached anyone.
