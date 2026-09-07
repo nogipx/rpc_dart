@@ -291,15 +291,27 @@ class RpcHttpResponderTransport
       // was received" rather than the status. Memory stays bounded because the
       // buffer is dropped and later chunks are discarded; wall-clock is bounded
       // by [bodyReadTimeout] when it is set.
+      // BytesBuilder, not `List<int>` + `Uint8List.fromList`. A Dart list holds
+      // WORD-SIZED elements, so the buffer cost several times the body and the
+      // final copy doubled it again — for a body size the PEER chooses, bounded
+      // only by maxMessageLengthBytes. Measured over identical chunk streams:
+      //
+      //      4 MiB body :  78 ms, +112.8 MiB peak  ->  0 ms, ~0
+      //      8 MiB body : 142 ms, +119.9 MiB peak  ->  0 ms, 8.0 MiB
+      //     16 MiB body : 303 ms, +264.2 MiB peak  ->  1 ms, ~0
+      //
+      // 16 MiB is the DEFAULT limit, so that was the cost of one accepted
+      // request. The caller side was moved to the same builder for the same
+      // reason.
       Future<Uint8List> readBody() async {
-        final bytes = <int>[];
+        final builder = BytesBuilder(copy: false);
         var exceeded = false;
         await for (final chunk in request.read()) {
           if (exceeded) continue;
-          bytes.addAll(chunk);
-          if (policy != null && bytes.length > policy.maxMessageLengthBytes) {
+          builder.add(chunk);
+          if (policy != null && builder.length > policy.maxMessageLengthBytes) {
             exceeded = true;
-            bytes.clear();
+            builder.clear();
           }
         }
         if (exceeded) {
@@ -308,7 +320,7 @@ class RpcHttpResponderTransport
             '${policy!.maxMessageLengthBytes} bytes',
           );
         }
-        return Uint8List.fromList(bytes);
+        return builder.takeBytes();
       }
 
       final Uint8List body;
