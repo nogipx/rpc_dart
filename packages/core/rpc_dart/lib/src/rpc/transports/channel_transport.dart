@@ -680,7 +680,7 @@ class RpcChannelTransport
           );
         }
         unawaited(close());
-      } else if (!isClient) {
+      } else if (!isClient && streamId != _fcConnStreamId) {
         // Lenient mode keeps the connection, so the offending STREAM still has
         // to be answered — otherwise the peer waits for a response that will
         // never come. Measured before this, with closeOnProtocolError: false:
@@ -689,7 +689,10 @@ class RpcChannelTransport
         // status.
         //
         // Responder side only: a client refusing a server's metadata reports it
-        // to its own caller (above) and has no status to send.
+        // to its own caller (above) and has no status to send. And never on
+        // [_fcConnStreamId], which carries connection control and is never a
+        // call -- a trailer there is a call-scoped frame on a reserved id.
+        //
         // Status ONLY, no grpc-message. The trailer goes out through
         // sendMetadata, which validates against the same policy that just
         // refused the peer -- and a `maxHeaderValueBytes` tight enough to

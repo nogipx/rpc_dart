@@ -164,6 +164,37 @@ void main() {
     await p.server.close();
   });
 
+  test('GUARD: the reserved connection stream is never answered', () async {
+    // Stream 0 carries connection-level flow control and is never a call, so a
+    // call-scoped trailer there would be a frame on a reserved id. Harmless to
+    // a peer of this implementation (measured: it materialises no state) but
+    // still wrong on the wire.
+    final p = _pair(
+      const RpcSecurityPolicy(
+        maxHeaders: 4,
+        maxHeaderValueBytes: 16,
+        closeOnProtocolError: false,
+      ),
+    );
+    final answers = <RpcTransportMessage>[];
+    p.peer.incoming.listen((m) {
+      if (m.metadata?.getHeaderValue(RpcHeaders.grpcStatus) != null) {
+        answers.add(m);
+      }
+    }, onError: (Object _) {});
+    p.server.incomingMessages.listen((_) {}, onError: (Object _) {});
+
+    await p.peer.send(
+      RpcTransportMessage.withMetadata(metadata: _hostile(), streamId: 0),
+    );
+    await _settle();
+
+    expect(answers, isEmpty);
+
+    await p.peer.close();
+    await p.server.close();
+  });
+
   test('GUARD: a CLIENT does not answer with a status', () async {
     // The status belongs to a responder. A client refusing a server's metadata
     // reports it to its own caller and has nothing to send back.
