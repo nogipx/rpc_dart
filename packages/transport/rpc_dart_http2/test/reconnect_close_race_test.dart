@@ -132,6 +132,28 @@ void main() {
     logger: LogScope.noop,
   );
 
+  /// Waits until the server has observed every connection close, or [budget].
+  ///
+  /// This used to be a flat `Future.delayed(4s)` on the assumption that a
+  /// GOAWAY travelling client -> proxy -> server always lands inside it. It
+  /// does on an idle machine and does NOT under a full `melos run test:unit`,
+  /// where this file competes with every other package: the assertion then read
+  /// "1 connection still open" for a connection that was closing.
+  ///
+  /// Polling keeps the witness exactly as sharp -- an ORPHANED connection is
+  /// never closed at all, so this drains the whole budget and still fails --
+  /// while removing the part that depended on how busy the machine was. It is
+  /// also faster: on an idle run it returns in well under the old 4s.
+  Future<int> settledLiveConnections({
+    Duration budget = const Duration(seconds: 20),
+  }) async {
+    final deadline = DateTime.now().add(budget);
+    while (opened - closed > 0 && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    return opened - closed;
+  }
+
   group('close() during an in-flight reconnect', () {
     // WITNESS: isClosed went true -> false, so the transport denied its own
     // close().
@@ -176,11 +198,8 @@ void main() {
       await t.close();
       await reconnecting;
 
-      // A GOAWAY travels client -> proxy -> server; give it room.
-      await Future<void>.delayed(const Duration(seconds: 4));
-
       expect(
-        opened - closed,
+        await settledLiveConnections(),
         0,
         reason:
             '${opened - closed} connection(s) still open on the server after '
@@ -196,9 +215,8 @@ void main() {
       final t = await connect();
       await Future<void>.delayed(const Duration(milliseconds: 400));
       await t.close();
-      await Future<void>.delayed(const Duration(seconds: 3));
 
-      expect(opened - closed, 0);
+      expect(await settledLiveConnections(), 0);
       expect(t.isClosed, isTrue);
     });
 
