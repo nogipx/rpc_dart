@@ -137,6 +137,17 @@ on `Version X already exists`, after the other packages have gone out.
    package: bump its `version:` in the pubspec (patch/minor/major per the commit
    types since the last release) and write the CHANGELOG entry by hand (newest
    section on top, terse, why-focused). Do NOT tag here — `publish:release` tags.
+1b. **Raise the `rpc_dart` floor in every package that started using a NEW core
+   API.** `melos run bump:rpc_dart` does it. This is invisible to every gate:
+   the pub workspace always resolves core from local source, so a transport that
+   calls an API added this cycle analyses and tests green while still declaring
+   `rpc_dart: '>=5.0.0 <6.0.0'` — and a user who resolves the old core gets a
+   compile error the moment they add the new transport.
+   Currently OUTSTANDING (core APIs added after 5.0.1, already used):
+   `IRpcStreamIdSequence` in `rpc_dart_websocket`, `rpc_dart_http2` and
+   `rpc_dart_http`; `RpcChannelTransport.resumeStreamIdsAfter` /
+   `lastIssuedStreamId` and `RpcStreamIdManager.resumeAfter` / `lastIssuedId` in
+   `rpc_dart_websocket` and `rpc_dart_http`.
 2. Commit the release (just commits; tags are created at publish): `git push`.
 3. `melos run publish:dry` — must validate with 0 warnings (a dirty git tree
    shows up as a warning here, so commit first).
