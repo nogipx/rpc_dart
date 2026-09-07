@@ -184,6 +184,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
   bool _trailerSent = false;
 
+  /// First response that could not be put on the wire, if any.
+  ///
+  /// A response the peer never received must not be reported as a successful
+  /// call: [finishSending] answers with this instead of grpc-status 0.
+  Object? _responseSendFailure;
+
   /// Processor active flag.
   bool _isActive = true;
 
@@ -395,6 +401,14 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           error: e,
           stackTrace: stackTrace,
         );
+        // Logging alone let the call finish with grpc-status 0, so a response
+        // that never left the process read to the peer as a stream that simply
+        // did not contain it. Measured over the isolate transport with one
+        // unsendable item of five: the client received [0, 1, 3, 4], onDone,
+        // and no error. Everything reaching here is a genuine delivery failure
+        // -- an unsendable object, a codec that threw, a compressor that threw
+        // -- so the call must not be reported as complete.
+        _responseSendFailure ??= e;
       }
     });
   }
@@ -757,6 +771,20 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
     if (!_responseController.isClosed) {
       await _responseController.close();
+    }
+
+    // A response that never reached the peer makes this call a failure, whatever
+    // the handler thinks. Routed through wireStatusFor so the cause stays on the
+    // server (it is already logged with its stack trace at the failure site).
+    final failure = _responseSendFailure;
+    if (failure != null) {
+      final wire = wireStatusFor(failure);
+      await sendError(
+        wire.status,
+        wire.message,
+        statusDetailsBin: wire.detailsBin,
+      );
+      return;
     }
 
     await _sendOkTrailerIfNeeded();
