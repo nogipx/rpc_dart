@@ -40,7 +40,13 @@ class _IsolateMessage {
 
 /// [IRpcMultiplexedChannel] backed by Dart isolate [SendPort]/[ReceivePort].
 ///
-/// Supports zero-copy object passing and [TransferableTypedData] for bytes.
+/// Bytes cross without a copy ([TransferableTypedData]); objects do not --
+/// `SendPort.send` deep-copies everything but deeply-immutable values (measured:
+/// a mutable instance arrives with a different identity, a const list with the
+/// same one). So `supportsZeroCopy` here means "sendDirectObject works", not
+/// "the peer sees the same instance", and every direct object must be SENDABLE.
+/// A message class annotated `@pragma('vm:deeply-immutable')` IS shared for
+/// real; the same class without it is copied.
 /// Used internally by [RpcIsolateTransport.spawn] -- not intended for direct use.
 class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
   final SendPort _sendPort;
@@ -106,8 +112,20 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
           methodPath: message.methodPath,
         ),
       );
-    } catch (_) {
-      await close();
+    } catch (error, stack) {
+      // SendPort.send throws for exactly one reason: the payload is unsendable.
+      // A dead peer is silent -- a closed ReceivePort and a killed isolate both
+      // accept the send and drop it. So this is ONE message's problem, and
+      // closing the channel here made it the whole connection's: every other
+      // in-flight call died, and `catch (_)` dropped the reason, so the caller
+      // was told UNAVAILABLE.
+      Error.throwWithStackTrace(
+        ArgumentError(
+          'Isolate transport: the message on stream ${message.streamId} cannot '
+          'cross an isolate boundary. $error',
+        ),
+        stack,
+      );
     }
   }
 
