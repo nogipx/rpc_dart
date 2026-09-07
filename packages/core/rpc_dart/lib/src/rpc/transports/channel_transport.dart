@@ -655,7 +655,24 @@ class RpcChannelTransport
       final ctl = _streamControllers[streamId];
       if (ctl != null && !ctl.isClosed) ctl.addError(violation);
       if (!_incoming.isClosed) _incoming.addError(violation);
-      if (_policy.closeOnProtocolError) unawaited(close());
+      if (_policy.closeOnProtocolError) {
+        // Tell the peer it was ITS fault, like the framing path does. A policy
+        // violation is deterministic, so a plain close invites the peer to
+        // retry it forever. Measured against a raw peer before this:
+        //
+        //   metadata policy violation : 1005 -> UNAVAILABLE, retried
+        //   framing violation         : 4400 -> UNKNOWN, not retried
+        final channel = _channel;
+        if (channel is IRpcChannelProtocolClose) {
+          unawaited(
+            (channel as IRpcChannelProtocolClose).closeForProtocolError(
+              violation.message,
+            ),
+          );
+        } else {
+          unawaited(close());
+        }
+      }
       return false;
     }
   }

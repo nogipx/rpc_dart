@@ -14,7 +14,8 @@ import '../../core/_index.dart';
 /// via an internal read buffer.
 ///
 /// Use [pair] for testing without a real byte transport.
-class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
+class RpcFrameMultiplexedChannel
+    implements IRpcMultiplexedChannel, IRpcChannelProtocolClose {
   final IRpcChannel _channel;
   final RpcSecurityPolicy _policy;
   final StreamController<RpcTransportMessage> _incomingCtl =
@@ -262,16 +263,29 @@ class RpcFrameMultiplexedChannel implements IRpcMultiplexedChannel {
     //
     // Channels without a close code on the wire fall through to the ordinary
     // close, so this changes nothing for them.
+    unawaited(closeForProtocolError(error.message));
+  }
+
+  /// Forwarded so layers ABOVE this channel can report a peer fault too.
+  ///
+  /// The transport validates inbound metadata against the security policy, and
+  /// that violation is as deterministic as a framing one — but it could only
+  /// reach `close()`, because this wrapper hid the capability. Measured against
+  /// a raw peer: a policy violation closed 1005 (UNAVAILABLE, retried) while a
+  /// framing violation closed 4400 (UNKNOWN, not retried).
+  @override
+  Future<void> closeForProtocolError(String reason) async {
     final channel = _channel;
     if (channel is IRpcChannelProtocolClose) {
-      unawaited(
-        (channel as IRpcChannelProtocolClose).closeForProtocolError(
-          error.message,
-        ),
-      );
+      await (channel as IRpcChannelProtocolClose).closeForProtocolError(reason);
+      // The byte channel is gone; take this layer down with it.
+      _closed = true;
+      await _channelSub?.cancel();
+      _channelSub = null;
+      if (!_incomingCtl.isClosed) await _incomingCtl.close();
       return;
     }
-    unawaited(close());
+    await close();
   }
 
   /// Creates a paired client/server frame channel over in-memory byte streams.
