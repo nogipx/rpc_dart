@@ -773,6 +773,15 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       await _responseController.close();
     }
 
+    // Whatever this method decides below, the call gets ONE terminal frame.
+    // `_sendOkTrailerIfNeeded` has always guarded on this; the failure branch
+    // calls `sendError` directly, which does not, so a stream that had already
+    // been answered got a second grpc-status -- a protocol violation on a
+    // transport with real stream state. Measured on the processor API,
+    // `send()` that fails -> `sendError()` -> `finishSending()`: trailers
+    // [5, 13], where every other ordering gives one.
+    if (_trailerSent) return;
+
     // A response that never reached the peer makes this call a failure, whatever
     // the handler thinks. Routed through wireStatusFor so the cause stays on the
     // server (it is already logged with its stack trace at the failure site).

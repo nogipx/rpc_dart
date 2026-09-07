@@ -290,4 +290,76 @@ void main() {
       ),
     );
   });
+
+  // -- exactly one terminal frame, whatever the ordering ---------------------
+  //
+  // The failure branch above calls sendError() directly, and sendError() has no
+  // `_trailerSent` guard of its own -- so a stream that had already been
+  // answered got a SECOND grpc-status. That is a protocol violation on any
+  // transport with real stream state, and StreamProcessor is public API, so the
+  // ordering is something callers can build.
+
+  group('exactly one terminal frame', () {
+    Future<List<String>> drive({
+      required bool failASend,
+      required bool sendErrorFirst,
+    }) async {
+      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final trailers = <String>[];
+      final tap = clientTransport.incomingMessages.listen((m) {
+        final status = m.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
+        if (status != null) trailers.add(status);
+      });
+
+      final processor = StreamProcessor<Msg, Msg>(
+        transport: serverTransport,
+        streamId: 1,
+        serviceName: 'Svc',
+        methodName: 'M',
+        requestCodec: _plain,
+        responseCodec: failASend ? const _PickyCodec(0) : _plain,
+      );
+
+      if (failASend) await processor.send(const Msg(0));
+      if (sendErrorFirst) {
+        await processor.sendError(RpcStatus.notFound, 'explicit');
+      }
+      await processor.finishSending();
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tap.cancel();
+      await processor.close();
+      await clientTransport.close();
+      await serverTransport.close();
+      return trailers;
+    }
+
+    test(
+      'WITNESS: a failed send after an explicit error adds nothing',
+      () async {
+        // Pre-fix this was ['5', '13'].
+        expect(await drive(failASend: true, sendErrorFirst: true), [
+          '${RpcStatus.notFound}',
+        ]);
+      },
+    );
+
+    test('GUARD: a clean finish sends OK once', () async {
+      expect(await drive(failASend: false, sendErrorFirst: false), [
+        '${RpcStatus.ok}',
+      ]);
+    });
+
+    test('GUARD: an explicit error alone is sent once', () async {
+      expect(await drive(failASend: false, sendErrorFirst: true), [
+        '${RpcStatus.notFound}',
+      ]);
+    });
+
+    test('GUARD: a failed send alone still reports INTERNAL', () async {
+      expect(await drive(failASend: true, sendErrorFirst: false), [
+        '${RpcStatus.internal}',
+      ]);
+    });
+  });
 }
