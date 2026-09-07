@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatus, RpcStatusException;
 import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 
 /// In-memory [RpcWasmBridge] that loops byte frames to a paired peer.
@@ -60,5 +61,24 @@ final class FakeWasmBridge implements RpcWasmBridge {
     // never-listened single-subscription controller hangs until someone
     // listens.
     if (!_incoming.isClosed) unawaited(_incoming.close());
+  }
+
+  /// The runtime went away on its own -- what [RpcFlutterWasmBridge] does when
+  /// native reports a jetsammed content process or a killed sandbox.
+  ///
+  /// Call it on the HOST side. A bridge's own `_incoming` is its RECEIVE queue
+  /// (`send` writes into the peer's), so the host's is what must fail: that is
+  /// the stream `RpcChannelTransport` listens to.
+  void killRuntime([String reason = 'runtime died']) {
+    if (_closed) return;
+    _closed = true;
+    _peer._closed = true;
+    if (!_incoming.isClosed) {
+      _incoming.addError(
+        RpcStatusException(RpcStatus.unavailable, 'WASM runtime died: $reason'),
+        StackTrace.current,
+      );
+      unawaited(_incoming.close());
+    }
   }
 }

@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatus, RpcStatusException;
 
 import 'rpc_wasm_bridge.dart';
 
@@ -44,6 +45,7 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   final String _incomingChannel;
   final String _outgoingChannel;
   final String _consoleChannel;
+  final String _diedChannel;
 
   /// SINGLE-SUBSCRIPTION on purpose: it BUFFERS until the transport binds.
   ///
@@ -73,6 +75,10 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   );
   bool _closed = false;
 
+  /// The runtime went away on its own. Distinct from [_closed] so a later
+  /// [close] still tells native to release the runtime's slot.
+  bool _dead = false;
+
   final StreamController<String> _console = StreamController<String>.broadcast(
     sync: true,
   );
@@ -84,7 +90,17 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   RpcFlutterWasmBridge._(this.runtimeId, this._messenger)
     : _incomingChannel = 'rpc_dart_wasm/$runtimeId/incoming',
       _outgoingChannel = 'rpc_dart_wasm/$runtimeId/outgoing',
-      _consoleChannel = 'rpc_dart_wasm/$runtimeId/console' {
+      _consoleChannel = 'rpc_dart_wasm/$runtimeId/console',
+      _diedChannel = 'rpc_dart_wasm/$runtimeId/died' {
+    // Native tells us the sandbox is gone. Without this the runtime's death is
+    // invisible to Dart: `incoming` only ended when the HOST closed it, so
+    // every in-flight call waited out a deadline that is optional on this
+    // transport.
+    _messenger.setMessageHandler(_diedChannel, (ByteData? message) async {
+      _reportDeath(_reasonOf(message));
+      return null;
+    });
+
     // Console log channel from native.
     final consoleChannel = _consoleChannel;
     _messenger.setMessageHandler(consoleChannel, (ByteData? message) async {
@@ -164,11 +180,49 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   Stream<Uint8List> get incoming => _incoming.stream;
 
   @override
-  bool get isClosed => _closed;
+  bool get isClosed => _closed || _dead;
+
+  /// Whether the runtime died on its own rather than being closed by the host.
+  bool get isDead => _dead;
+
+  static String _reasonOf(ByteData? message) {
+    if (message == null || message.lengthInBytes == 0) return 'runtime died';
+    return String.fromCharCodes(
+      Uint8List.view(
+        message.buffer,
+        message.offsetInBytes,
+        message.lengthInBytes,
+      ),
+    );
+  }
+
+  /// Fails `incoming` so every in-flight call is answered.
+  ///
+  /// UNAVAILABLE because that is what the death of a peer is in gRPC terms, and
+  /// because it is retryable: reloading the runtime and calling again is the
+  /// correct response, which a bare exception would not have expressed.
+  void _reportDeath(String reason) {
+    if (_dead || _closed) return;
+    _dead = true;
+    _messenger.setMessageHandler(_incomingChannel, null);
+    _messenger.setMessageHandler(_consoleChannel, null);
+    _messenger.setMessageHandler(_diedChannel, null);
+    if (!_incoming.isClosed) {
+      _incoming.addError(
+        RpcStatusException(
+          RpcStatus.unavailable,
+          'WASM runtime $runtimeId died: $reason',
+        ),
+        StackTrace.current,
+      );
+      unawaited(_incoming.close());
+    }
+    if (!_console.isClosed) unawaited(_console.close());
+  }
 
   @override
   Future<void> send(Uint8List data) async {
-    if (_closed) return;
+    if (_closed || _dead) return;
     assert(() {
       debugPrint('[RpcFlutterWasmBridge] sending ${data.length} bytes');
       return true;
@@ -187,19 +241,20 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
     if (_closed) return;
     _closed = true;
 
-    // The constructor registers TWO message handlers and owns TWO controllers,
-    // so close() has to release both. A handler left registered is a closure
-    // holding this bridge, which pins it and its controllers for good; a
-    // controller left open never completes its stream, so anything awaiting
-    // `console` waits forever.
+    // The constructor registers THREE message handlers and owns TWO
+    // controllers, so close() has to release all of them. A handler left
+    // registered is a closure holding this bridge, which pins it and its
+    // controllers for good; a controller left open never completes its stream,
+    // so anything awaiting `console` waits forever.
     _messenger.setMessageHandler(_incomingChannel, null);
     _messenger.setMessageHandler(_consoleChannel, null);
+    _messenger.setMessageHandler(_diedChannel, null);
     // NOT awaited, now that `_incoming` is single-subscription: closing one
     // that was never listened to returns a future that does not complete until
     // someone listens, so awaiting it deadlocks close() for a bridge that was
     // built and then abandoned — an aborted setup, which is exactly when
     // cleanup has to work. Same fault, same fix as RpcWebSocketChannel.close().
-    unawaited(_incoming.close());
+    if (!_incoming.isClosed) unawaited(_incoming.close());
     if (!_console.isClosed) await _console.close();
 
     await _channel.invokeMethod<void>('closeRuntime', {'runtimeId': runtimeId});

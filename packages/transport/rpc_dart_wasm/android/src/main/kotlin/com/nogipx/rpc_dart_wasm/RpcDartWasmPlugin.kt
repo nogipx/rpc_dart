@@ -362,11 +362,32 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     throw e
                 } catch (e: Exception) {
                     android.util.Log.w("RpcDartWasm", "Driver loop error for $runtimeId", e)
+                    // The driver used to log and break: the isolate stayed in
+                    // `runtimes`, nothing further was evaluated, and Dart was
+                    // never told -- so every in-flight call hung. A sandbox that
+                    // dies (IsolateTerminatedException, sandbox process killed)
+                    // arrives here and nowhere else.
+                    reportDeath(runtimeId, e.message ?: e.toString())
                     break
                 }
             }
             driverWakers.remove(runtimeId)
         }
+    }
+
+    /// Tells Dart the runtime is gone and releases its slot.
+    private fun reportDeath(runtimeId: String, reason: String) {
+        if (!runtimes.containsKey(runtimeId)) return
+        messenger.setMessageHandler(runtimeTxChannel(runtimeId), null)
+        try {
+            runtimes.remove(runtimeId)?.close()
+        } catch (e: Exception) {
+            android.util.Log.w("RpcDartWasm", "Isolate close for $runtimeId: ${e.message}")
+        }
+        val bytes = reason.toByteArray(Charsets.UTF_8)
+        val buffer = ByteBuffer.allocateDirect(bytes.size)
+        buffer.put(bytes)
+        messenger.send(runtimeDiedChannel(runtimeId), buffer)
     }
 
     private fun wakeDriver(runtimeId: String) {
@@ -468,6 +489,8 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private fun runtimeTxChannel(runtimeId: String) = "rpc_dart_wasm/$runtimeId/outgoing"
 
     private fun runtimeRxChannel(runtimeId: String) = "rpc_dart_wasm/$runtimeId/incoming"
+
+    private fun runtimeDiedChannel(runtimeId: String) = "rpc_dart_wasm/$runtimeId/died"
 
     private fun stripModuleSyntax(code: String): String = code
         .replace("export async function ", "async function ")

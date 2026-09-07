@@ -440,6 +440,8 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     private let schemeHandler: SchemeHandler
     private var bootCompletion: ((String?) -> Void)?
     private var bootTimeoutTimer: Timer?
+    private var booted = false
+    private var reportedDeath = false
 
     private static let bootTimeoutSeconds: TimeInterval = 30
 
@@ -481,6 +483,10 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     }
 
     func close() {
+        // A host-initiated close tears the web view down, and that can surface
+        // as didFail. Suppress the death report at the source rather than
+        // relying on Dart to ignore it.
+        reportedDeath = true
         bootTimeoutTimer?.invalidate()
         bootTimeoutTimer = nil
         schemeHandler.stop()
@@ -495,21 +501,40 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         bootTimeoutTimer = nil
         let cb = bootCompletion
         bootCompletion = nil
+        booted = true
         cb?(error)
+    }
+
+    /// Tells Dart the runtime is gone.
+    ///
+    /// Once boot has completed `bootCompletion` is nil, so routing a death
+    /// through `finishBoot` was a silent no-op -- and a WKWebView content
+    /// process is jetsammed under memory pressure long after boot. Nothing else
+    /// on this transport bounds a call, so an unreported death hung every one of
+    /// them for good.
+    private func reportDeath(_ reason: String) {
+        if reportedDeath { return }
+        reportedDeath = true
+        let channel = "rpc_dart_wasm/\(runtimeId)/died"
+        let data = reason.data(using: .utf8) ?? Data()
+        messenger.send(onChannel: channel, message: data)
     }
 
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        finishBoot("navigation_failed: \(error.localizedDescription)")
+        let reason = "navigation_failed: \(error.localizedDescription)"
+        if booted { reportDeath(reason) } else { finishBoot(reason) }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        finishBoot("navigation_failed: \(error.localizedDescription)")
+        let reason = "navigation_failed: \(error.localizedDescription)"
+        if booted { reportDeath(reason) } else { finishBoot(reason) }
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        finishBoot("content_process_terminated")
+        if booted { reportDeath("content_process_terminated") }
+        else { finishBoot("content_process_terminated") }
     }
 
     // MARK: - WKScriptMessageHandler

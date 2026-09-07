@@ -20,6 +20,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatusException;
 import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 
 const _channel = MethodChannel('rpc_dart_wasm');
@@ -134,6 +135,93 @@ void main() {
 
       expect(closeRuntimeCalls, [_runtimeId]);
       expect(bridge.isClosed, isTrue);
+    });
+  });
+
+  /// Native reporting the runtime gone, as iOS's
+  /// webViewWebContentProcessDidTerminate and Android's driver loop now do.
+  Future<void> pushDeath(String reason) async {
+    final bytes = Uint8List.fromList(reason.codeUnits);
+    await messenger.handlePlatformMessage(
+      'rpc_dart_wasm/$_runtimeId/died',
+      ByteData.view(bytes.buffer),
+      (_) {},
+    );
+  }
+
+  group('runtime death', () {
+    // WITNESS: there was no death channel at all, so this message went to an
+    // unregistered handler and `incoming` stayed open forever. Nothing else
+    // bounds a call on this transport -- no keepalive, and grpc-timeout is
+    // optional -- so every in-flight call hung. Measured over the bridge pair:
+    // "HANGS, no answer in 5 s" against "RpcStatusException" when the host
+    // closed the bridge itself.
+    test('fails incoming with UNAVAILABLE', () async {
+      final bridge = await load();
+      final error = Completer<Object>();
+      final sub = bridge.incoming.listen(
+        (_) {},
+        onError: (Object e) {
+          if (!error.isCompleted) error.complete(e);
+        },
+      );
+      addTearDown(sub.cancel);
+
+      await pushDeath('content_process_terminated');
+
+      final e = await error.future.timeout(const Duration(seconds: 2));
+      expect(e, isA<RpcStatusException>());
+      expect((e as RpcStatusException).statusCode, 14);
+      expect(e.message, contains('content_process_terminated'));
+    });
+
+    // WITNESS: `incoming` stayed open, so a consumer never saw the end either.
+    test('ends the incoming stream', () async {
+      final bridge = await load();
+      final done = Completer<void>();
+      final sub = bridge.incoming.listen(
+        (_) {},
+        onError: (Object _) {},
+        onDone: () {
+          if (!done.isCompleted) done.complete();
+        },
+      );
+      addTearDown(sub.cancel);
+
+      await pushDeath('sandbox_killed');
+
+      await expectLater(
+        done.future.timeout(const Duration(seconds: 2)),
+        completes,
+      );
+    });
+
+    test('reports itself closed', () async {
+      final bridge = await load();
+      expect(bridge.isClosed, isFalse);
+
+      await pushDeath('sandbox_killed');
+
+      expect(bridge.isClosed, isTrue);
+      expect(bridge.isDead, isTrue);
+    });
+
+    test('a later close() still releases the native runtime', () async {
+      // `_dead` is separate from `_closed` for exactly this: the sandbox is
+      // gone but the plugin still holds its slot.
+      final bridge = await load();
+      await pushDeath('sandbox_killed');
+
+      await bridge.close();
+
+      expect(closeRuntimeCalls, [_runtimeId]);
+    });
+
+    test('GUARD: an ordinary close does not look like a death', () async {
+      final bridge = await load();
+      await bridge.close();
+
+      expect(bridge.isDead, isFalse);
     });
   });
 
