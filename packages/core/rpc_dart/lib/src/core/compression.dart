@@ -83,27 +83,63 @@ abstract final class RpcGrpcCompression {
   /// ```dart
   /// RpcGrpcCompression.register('gzip', ArchiveGzipCodec());
   /// ```
+  /// Normalises a content-coding name for lookup.
+  ///
+  /// RFC 9110 s8.4.1: "All content-coding values are case-insensitive", and
+  /// gRPC defines `grpc-encoding` as a Content-Coding — so `GZIP`, `Gzip` and
+  /// `gzip` are the same coding, and a conforming peer may send any of them.
+  ///
+  /// The registry compared exactly, which refused legal spellings on BOTH
+  /// sides. Measured before the fix:
+  ///
+  ///     isSupported('gzip')     -> true      isSupported('GZIP')     -> false
+  ///     isSupported('identity') -> true      isSupported('IDENTITY') -> false
+  ///     a call sending grpc-encoding: IDENTITY -> RpcException, refused
+  ///                                               locally, never reaching the
+  ///                                               wire
+  ///
+  /// and a foreign client sending `GZIP` was answered UNIMPLEMENTED by our
+  /// responder for a request it should have served. Applied on registration too,
+  /// so `register('GZIP', ...)` and a peer's `gzip` find each other.
+  static String _normalize(String encoding) => encoding.trim().toLowerCase();
+
+  /// Registers [codec] for [encoding], replacing any existing one.
+  ///
+  /// Call this once at application startup before any RPC calls are made.
+  /// On web, register a gzip codec backed by `package:archive` (or similar)
+  /// to enable gzip compression:
+  ///
+  /// ```dart
+  /// RpcGrpcCompression.register('gzip', ArchiveGzipCodec());
+  /// ```
+  ///
+  /// [encoding] is normalised, so the name a peer sends finds this codec
+  /// whatever case either side used.
   static void register(String encoding, RpcCompressionCodec codec) {
-    _codecs[encoding] = codec;
+    _codecs[_normalize(encoding)] = codec;
     _cachedAcceptEncoding = null;
   }
 
   /// Removes the codec registered for [encoding].
   static void unregister(String encoding) {
-    _codecs.remove(encoding);
+    _codecs.remove(_normalize(encoding));
     _cachedAcceptEncoding = null;
   }
 
   /// Returns true if [encoding] is supported.
+  ///
+  /// Case-insensitive, per RFC 9110 — see [_normalize].
   static bool isSupported(String encoding) {
-    if (encoding == identity) return true;
-    return _codecs.containsKey(encoding);
+    final normalized = _normalize(encoding);
+    if (normalized == identity) return true;
+    return _codecs.containsKey(normalized);
   }
 
   /// Compresses [data] using the specified [encoding].
   static Uint8List compress(Uint8List data, {required String encoding}) {
-    if (encoding == identity) return data;
-    final codec = _codecs[encoding];
+    final normalized = _normalize(encoding);
+    if (normalized == identity) return data;
+    final codec = _codecs[normalized];
     if (codec == null) {
       throw UnsupportedError(_unsupportedMessage(encoding));
     }
@@ -120,8 +156,9 @@ abstract final class RpcGrpcCompression {
     required String encoding,
     int? maxOutputBytes,
   }) {
-    if (encoding == identity) return data;
-    final codec = _codecs[encoding];
+    final normalized = _normalize(encoding);
+    if (normalized == identity) return data;
+    final codec = _codecs[normalized];
     if (codec == null) {
       throw UnsupportedError(_unsupportedMessage(encoding));
     }
