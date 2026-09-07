@@ -571,6 +571,31 @@ class RpcHttp2Server implements IRpcServer {
       final connection = http2.ServerTransportConnection.viaStreams(
         guardedIncoming,
         socket,
+        // Tell the peer the limit we will actually enforce.
+        //
+        // No settings were passed at all, so every connection advertised
+        // package:http2's default MAX_CONCURRENT_STREAMS of 1000 regardless of
+        // the policy. Two things followed, both measured:
+        //
+        //   securityPolicy.maxActiveStreams : 7
+        //   advertised MAX_CONCURRENT_STREAMS: 1000   <- 143x what we honour
+        //
+        // A conforming client paces itself by the advertisement, so it opens
+        // streams it is then refused; RESOURCE_EXHAUSTED is retryable, so a
+        // retrying client re-sends and is refused again, against a server that
+        // told it there was room. Real gRPC clients (grpc-go, grpc-java) QUEUE
+        // above the advertised limit and would have succeeded.
+        //
+        // And above 1000 the knob was DEAD, because package:http2 enforces its
+        // own advertisement. With the default policy of 4096:
+        //
+        //   1100 concurrent calls -> 1000 dispatched, 100 refused status 8
+        //
+        // so `maxActiveStreams` meant 4096 on websocket and isolate and 1000
+        // here, silently. It now means the same thing on all of them.
+        settings: http2.ServerSettings(
+          concurrentStreamLimit: _securityPolicy.maxActiveStreams,
+        ),
       );
 
       // Создаем серверный транспорт (правильный способ!)
