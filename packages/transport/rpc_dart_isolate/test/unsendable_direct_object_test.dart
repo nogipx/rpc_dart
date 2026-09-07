@@ -63,6 +63,20 @@ class Res implements IRpcSerializable {
 const _req = RpcCodec<Req>(Req.fromJson);
 const _res = RpcCodec<Res>(Res.fromJson);
 
+/// Plain objects for the genuine zero-copy contract below (no codecs).
+class ZcReq {
+  const ZcReq(this.text);
+  final String text;
+}
+
+class ZcRes {
+  ZcRes(this.index, {this.trap});
+  final int index;
+  final Object? trap;
+}
+
+const _zcService = 'isolate.UnsendableZc';
+
 @pragma('vm:entry-point')
 void unsendableWorkerEntrypoint(
   IRpcTransport transport,
@@ -72,7 +86,27 @@ void unsendableWorkerEntrypoint(
   final contract = _Worker();
   contract.setup();
   endpoint.registerServiceContract(contract);
+  final zc = _ZcWorker();
+  zc.setup();
+  endpoint.registerServiceContract(zc);
   endpoint.start();
+}
+
+final class _ZcWorker extends RpcResponderContract {
+  _ZcWorker()
+    : super(_zcService, dataTransferMode: RpcDataTransferMode.zeroCopy);
+
+  @override
+  void setup() {
+    addServerStreamMethod<ZcReq, ZcRes>(
+      methodName: 'Stream',
+      handler: (r, {context}) async* {
+        for (var i = 0; i < 5; i++) {
+          yield i == 2 ? ZcRes(i, trap: Future<int>.value(1)) : ZcRes(i);
+        }
+      },
+    );
+  }
 }
 
 final class _Worker extends RpcResponderContract {
@@ -231,6 +265,48 @@ void main() {
       final request = Req('identity');
       final response = await unary('Identity', request);
       expect(response.index, isNot(identityHashCode(request)));
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'a stream item that cannot be sent fails the call, not just that item',
+    () async {
+      // Round 158 stopped one bad message from killing the connection. That left
+      // the response side reporting grpc-status 0 for a stream the peer never
+      // fully received -- silent data loss, fixed in StreamProcessor.
+      final items = <int>[];
+      Object? error;
+      final settled = Completer<void>();
+      final sub = caller
+          .serverStream<ZcReq, ZcRes>(
+            serviceName: _zcService,
+            methodName: 'Stream',
+            request: const ZcReq('go'),
+          )
+          .listen(
+            (r) => items.add(r.index),
+            onError: (Object e) {
+              error ??= e;
+              if (!settled.isCompleted) settled.complete();
+            },
+            onDone: () {
+              if (!settled.isCompleted) settled.complete();
+            },
+          );
+      addTearDown(sub.cancel);
+      await settled.future.timeout(const Duration(seconds: 20));
+
+      expect(
+        error,
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          RpcStatus.internal,
+        ),
+        reason: 'the peer must not be told a truncated stream succeeded',
+      );
+      expect(items, isNot(contains(2)));
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
