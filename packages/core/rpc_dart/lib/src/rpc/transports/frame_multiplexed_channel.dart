@@ -39,6 +39,10 @@ class RpcFrameMultiplexedChannel
   /// allocation bound [_onData] enforces is unchanged.
   int _skipRemaining = 0;
 
+  /// Stream the bytes being skipped belong to, so their credit is returned
+  /// against the right one.
+  int _skipStreamId = 0;
+
   /// Whether an oversized inbound frame kills the connection.
   ///
   /// The two sides of a connection want opposite answers, and both were
@@ -225,8 +229,7 @@ class RpcFrameMultiplexedChannel
     return (streamId: view.getUint32(0), payloadLen: payloadLen);
   }
 
-  /// Notified for every frame stepped over, with the payload bytes the peer
-  /// charged against its send window for it.
+  /// Notified as skipped bytes ARRIVE, never for bytes merely announced.
   ///
   /// The receiver returns flow-control credit only for messages it DELIVERS, so
   /// a skipped frame otherwise shrinks the peer's window for good. Measured with
@@ -234,7 +237,18 @@ class RpcFrameMultiplexedChannel
   /// wedged on the FOURTH refusal and every later call timed out at 6 s.
   /// Nothing before round 161 could hit this -- the connection used to die on
   /// the first oversized frame, so there was no "later".
+  ///
+  /// Crediting the DECLARED length instead was worse than the wedge it fixed: a
+  /// peer sending nothing but 9-byte headers had its own window topped up for
+  /// free, which is the one thing flow control exists to stop. Measured: 9 bytes
+  /// delivered, 1 048 576 bytes granted back.
   void Function(int streamId, int bytes)? onFrameDiscarded;
+
+  /// Returns credit for [bytes] of a refused frame that have actually arrived.
+  void _creditSkipped(int streamId, int bytes) {
+    if (bytes <= 0) return;
+    onFrameDiscarded?.call(streamId, bytes);
+  }
 
   /// Fails the call that frame belonged to, in the peer's own protocol terms.
   ///
@@ -242,9 +256,6 @@ class RpcFrameMultiplexedChannel
   /// RPC; this delivers exactly that to the stream, and everything else on the
   /// connection carries on.
   void _refuseFrame(int streamId, int payloadLen) {
-    // Before the delivery check: the bytes crossed the wire whether or not
-    // anyone is still listening, and the peer charged itself for them.
-    onFrameDiscarded?.call(streamId, payloadLen);
     if (_incomingCtl.isClosed) return;
     _incomingCtl.add(
       RpcTransportMessage(
@@ -270,6 +281,8 @@ class RpcFrameMultiplexedChannel
             ? _skipRemaining
             : data.length;
         _skipRemaining -= drop;
+        // Credited HERE, as the bytes land, not when the frame was announced.
+        _creditSkipped(_skipStreamId, drop);
         if (drop == data.length) return;
         data = Uint8List.sublistView(data, drop);
       }
@@ -280,12 +293,19 @@ class RpcFrameMultiplexedChannel
       final total = RpcChannelFrame.headerSize + refused.payloadLen;
       final have = _bufLen + data.length;
       final consumedFromData = total - _bufLen;
+      // Payload bytes of this frame that are already in hand. The 9-byte header
+      // is ours, not the peer's charge: a sender bills itself for the frame
+      // PAYLOAD only.
+      final payloadHere =
+          (have < total ? have : total) - RpcChannelFrame.headerSize;
       _buf = Uint8List(0);
       _bufLen = 0;
       _refuseFrame(refused.streamId, refused.payloadLen);
+      _creditSkipped(refused.streamId, payloadHere);
 
       if (have < total) {
         _skipRemaining = total - have;
+        _skipStreamId = refused.streamId;
         return;
       }
       if (consumedFromData >= data.length) return;

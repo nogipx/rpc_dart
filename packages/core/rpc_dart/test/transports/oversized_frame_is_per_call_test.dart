@@ -326,6 +326,49 @@ void main() {
     );
   });
 
+  test('a frame that is only ANNOUNCED credits nothing', () async {
+    // WITNESS. Crediting the declared length let a peer top up its own window
+    // with 9-byte headers -- the one thing flow control exists to stop.
+    // Measured through a real transport: 9 bytes delivered, 1 048 576 bytes
+    // granted back, 116 508x.
+    final rig = _rig();
+
+    rig.feed.feed(_header(41, 1024 * 1024));
+    await _settle();
+
+    expect(rig.messages, hasLength(1));
+    expect(_statusOf(rig.messages.single), RpcStatus.resourceExhausted);
+    expect(
+      rig.discarded,
+      isEmpty,
+      reason: 'no payload byte of that frame has arrived',
+    );
+  });
+
+  test('skipped bytes are credited as they arrive', () async {
+    // CONTROL for the witness above, and the property round 162 needs: what the
+    // peer really sent must come back in full, or the connection wedges again.
+    final rig = _rig();
+    const declared = 300 * 1024;
+
+    rig.feed.feed(_header(43, declared));
+    await _settle();
+    expect(rig.discarded, isEmpty);
+
+    rig.feed.feed(Uint8List(100 * 1024));
+    await _settle();
+    expect(
+      rig.discarded.fold<int>(0, (a, d) => a + d.bytes),
+      100 * 1024,
+      reason: 'exactly what arrived, no more',
+    );
+
+    rig.feed.feed(Uint8List(200 * 1024));
+    await _settle();
+    expect(rig.discarded.fold<int>(0, (a, d) => a + d.bytes), declared);
+    expect(rig.discarded.every((d) => d.streamId == 43), isTrue);
+  });
+
   test('GUARD: a SERVER still closes on an oversized frame', () async {
     // The other side of the split, and the reason it is a split at all. dart:io
     // hands a whole WebSocket message over before this class sees a byte, so the
