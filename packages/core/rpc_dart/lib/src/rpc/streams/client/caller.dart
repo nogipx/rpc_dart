@@ -40,6 +40,17 @@ final class ClientStreamCaller<
     RpcContext? context,
     LogScope? logger,
   }) : _context = context {
+    // Marked handled at construction, for the same reason as [UnaryCaller]:
+    // nothing awaits this future until `finishSending()` has finished SENDING,
+    // and an error before that is an unhandled async error, which is
+    // isolate-fatal in the root zone.
+    //
+    // More reachable here than there, because a server answering before the
+    // client half-closes is ordinary gRPC rather than a refusal. `ignore()`
+    // attaches a listener without consuming the result, so the awaits below
+    // still see it.
+    _responseCompleter.future.ignore();
+
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
     // Zero-copy requires transport support.

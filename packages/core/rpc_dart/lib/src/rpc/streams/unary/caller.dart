@@ -104,6 +104,26 @@ final class UnaryCaller<TRequest, TResponse> {
     );
 
     final completer = Completer<TResponse>();
+    // Marked handled IMMEDIATELY, because the peer can answer before the
+    // request has finished going out and nothing awaits this future until then.
+    //
+    // `call()` sends and only then reaches `await completer.future`. A server
+    // that REFUSES a large request does exactly the wrong thing for that order:
+    // it stops reading, so the send parks on the peer's flow-control window,
+    // while its RESOURCE_EXHAUSTED trailer arrives on the same stream. The
+    // response subscription then calls `completeError` on a future with no
+    // listener, and an unhandled async error in the root zone kills the
+    // ISOLATE. Measured, http2 client against a server with
+    // maxMessageLengthBytes: 256 KiB, one 2 MiB unary request:
+    //
+    //   Unhandled exception:
+    //   RpcStatusException(8): RpcException: gRPC frame payload is too large:
+    //   2097160 bytes (max: 262144)
+    //
+    // -- and the process was gone. The status itself was correct; only nobody
+    // was listening yet. `ignore()` attaches a listener without consuming the
+    // result, so the `await` below still receives the error.
+    completer.future.ignore();
     StreamSubscription? subscription;
     StreamSubscription? cancellationSubscription;
 
