@@ -69,6 +69,11 @@ void main() {
     test(
       'frame channel surfaces a typed error and does not buffer gigabytes',
       () async {
+        // Default construction is the SERVER side, which still closes: the peak
+        // is already resident when this class is handed the message, so refusing
+        // to let the peer repeat it is the only lever. A CLIENT answers the same
+        // frame with RESOURCE_EXHAUSTED and stays connected -- see
+        // transports/oversized_frame_is_per_call_test.dart.
         final channel = _ManualChannel();
         final mux = RpcFrameMultiplexedChannel(
           channel: channel,

@@ -30,6 +30,34 @@ class RpcFrameMultiplexedChannel
   int _bufLen = 0;
   bool _closed = false;
 
+  /// Bytes still to discard from a frame that is too big for us to buffer.
+  ///
+  /// A declared payload over the ceiling is the one framing fault whose next
+  /// frame boundary is known EXACTLY -- the header says where it is -- so it is
+  /// answered on its own stream and stepped over, instead of taking the
+  /// connection down with it. Nothing is buffered while skipping, so the
+  /// allocation bound [_onData] enforces is unchanged.
+  int _skipRemaining = 0;
+
+  /// Whether an oversized inbound frame kills the connection.
+  ///
+  /// The two sides of a connection want opposite answers, and both were
+  /// measured:
+  ///
+  /// - A SERVER (true, the default). dart:io buffers a whole WebSocket message
+  ///   before delivering it, so the peak is resident before this class sees a
+  ///   byte and cannot be avoided. Closing is then the only lever there is: a
+  ///   connection that survives lets one peer repeat that peak as often as it
+  ///   likes. See `oversized_message_is_refused_test` in rpc_dart_websocket.
+  /// - A CLIENT (false). The peer here is the server it chose, and killing the
+  ///   connection over one large response takes every other in-flight call with
+  ///   it. Measured against a server sending 2 MiB to a client capped at 256
+  ///   KiB: the call failed AND the next one got "Transport is disconnected and
+  ///   has no socket", where http2 -- same library, same scenario -- failed only
+  ///   the call. gRPC's answer is RESOURCE_EXHAUSTED on that RPC, which is what
+  ///   this produces.
+  final bool closeOnOversizedFrame;
+
   /// Creates a multiplexed channel that encodes/decodes frames over [channel].
   ///
   /// [policy] bounds the RECEIVE path: a declared frame payload larger than
@@ -38,6 +66,7 @@ class RpcFrameMultiplexedChannel
   RpcFrameMultiplexedChannel({
     required IRpcChannel channel,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    this.closeOnOversizedFrame = true,
   }) : _channel = channel,
        _policy = policy {
     _channelSub = _channel.incoming.listen(
@@ -149,8 +178,91 @@ class RpcFrameMultiplexedChannel
     _bufLen += chunk.length;
   }
 
+  /// Reads the 9-byte header at the front of `_buf ++ data` and reports the
+  /// frame when its declared payload is one we will never accept.
+  ///
+  /// Logical offset 0 is always a frame start: every complete frame is consumed
+  /// on the chunk it arrives in, so the buffer only ever holds an incomplete
+  /// prefix.
+  ({int streamId, int payloadLen})? _refusedFrameHeader(Uint8List data) {
+    const headerSize = RpcChannelFrame.headerSize;
+    if (closeOnOversizedFrame) return null;
+    if (_bufLen + data.length < headerSize) return null;
+
+    final header = Uint8List(headerSize);
+    var i = 0;
+    while (i < headerSize && i < _bufLen) {
+      header[i] = _buf[i];
+      i++;
+    }
+    var j = 0;
+    while (i < headerSize) {
+      header[i] = data[j];
+      i++;
+      j++;
+    }
+
+    final view = ByteData.sublistView(header);
+    final payloadLen = view.getUint32(5);
+    // Only the size ceiling. A frame that fits the ceiling but not a buffer the
+    // caller shrank below it is left to the overflow path, which is what used to
+    // handle it.
+    if (payloadLen <= _maxFramePayloadBytes) return null;
+    return (streamId: view.getUint32(0), payloadLen: payloadLen);
+  }
+
+  /// Fails the call that frame belonged to, in the peer's own protocol terms.
+  ///
+  /// gRPC answers a message it cannot accept with RESOURCE_EXHAUSTED on that
+  /// RPC; this delivers exactly that to the stream, and everything else on the
+  /// connection carries on.
+  void _refuseFrame(int streamId, int payloadLen) {
+    if (_incomingCtl.isClosed) return;
+    _incomingCtl.add(
+      RpcTransportMessage(
+        metadata: RpcMetadata.forTrailer(
+          RpcStatus.resourceExhausted,
+          message:
+              'Received message larger than max '
+              '($payloadLen vs. $_maxFramePayloadBytes)',
+        ),
+        isEndOfStream: true,
+        streamId: streamId,
+      ),
+    );
+  }
+
   void _onData(Uint8List chunk) {
     if (_closed || chunk.isEmpty) return;
+
+    var data = chunk;
+    while (true) {
+      if (_skipRemaining > 0) {
+        final drop = _skipRemaining < data.length
+            ? _skipRemaining
+            : data.length;
+        _skipRemaining -= drop;
+        if (drop == data.length) return;
+        data = Uint8List.sublistView(data, drop);
+      }
+
+      final refused = _refusedFrameHeader(data);
+      if (refused == null) break;
+
+      final total = RpcChannelFrame.headerSize + refused.payloadLen;
+      final have = _bufLen + data.length;
+      final consumedFromData = total - _bufLen;
+      _buf = Uint8List(0);
+      _bufLen = 0;
+      _refuseFrame(refused.streamId, refused.payloadLen);
+
+      if (have < total) {
+        _skipRemaining = total - have;
+        return;
+      }
+      if (consumedFromData >= data.length) return;
+      data = Uint8List.sublistView(data, consumedFromData);
+    }
 
     // Receive-path cap: never let the reassembly buffer grow past the policy
     // limit. A peer dribbling bytes toward a huge declared frame is stopped
@@ -174,7 +286,7 @@ class RpcFrameMultiplexedChannel
     //
     // The reported byte count is unchanged: the old text printed `_bufLen`
     // after the append, which is this same sum.
-    final incoming = _bufLen + chunk.length;
+    final incoming = _bufLen + data.length;
     if (incoming > _maxBufferedFrameBytes) {
       _failChannel(
         RpcFrameException(
@@ -185,18 +297,18 @@ class RpcFrameMultiplexedChannel
       return;
     }
 
-    _appendToBuffer(chunk);
+    _appendToBuffer(data);
 
     // Decode against a view of the valid region. decodeAll is O(1) when no
     // frame is complete (it reads the 9-byte header and bails), so calling it
     // on every chunk is cheap; the cost that used to be quadratic was the
     // per-chunk buffer reallocation, now amortized O(1) via _appendToBuffer.
-    final data = Uint8List.sublistView(_buf, 0, _bufLen);
+    final buffered = Uint8List.sublistView(_buf, 0, _bufLen);
     final List<RpcDecodedFrame> frames;
     final int consumed;
     try {
       (frames, consumed) = RpcChannelFrame.decodeAll(
-        data,
+        buffered,
         maxPayloadLen: _maxFramePayloadBytes,
         maxMetadataLen: _policy.maxMetadataBytes,
       );
@@ -240,11 +352,19 @@ class RpcFrameMultiplexedChannel
   /// Surfaces a typed receive-path error and closes the channel.
   ///
   /// Closes regardless of [RpcSecurityPolicy.closeOnProtocolError], unlike the
-  /// per-message violations the transport layer reports. Every error routed
-  /// here is a FRAMING error: the buffer overflowed, or a header declared a
-  /// payload we refuse to read. Either way the position of the next frame
-  /// boundary is unknown, so there is nothing to resynchronise to and carrying
-  /// on would decode the remaining bytes as garbage.
+  /// per-message violations the transport layer reports. What reaches here is a
+  /// framing error with no known next boundary -- a malformed metadata payload,
+  /// or bytes that overflowed the buffer without a header explaining them --
+  /// so there is nothing to resynchronise to and carrying on would decode the
+  /// rest as garbage.
+  ///
+  /// An oversized DECLARED payload used to come here too, and that was wrong on
+  /// its own terms: the header states the length, so the next boundary is known
+  /// exactly. [_onData] now steps over such a frame and answers its stream with
+  /// RESOURCE_EXHAUSTED. Measured against a server sending 2 MiB to a client
+  /// capped at 256 KiB: the call failed AND every later call on the connection
+  /// got "Transport is disconnected and has no socket", where http2 -- the same
+  /// library, the same scenario -- failed only the call.
   void _failChannel(RpcFrameException error) {
     if (!_incomingCtl.isClosed) _incomingCtl.addError(error);
     // Drop any partially buffered bytes immediately; do not keep allocating.
