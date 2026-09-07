@@ -389,6 +389,10 @@ class RpcChannelTransport
     // without bound on a long-lived connection. Explicit teardown (which every
     // caller performs) is the right moment to drop it.
     _finishedStreams.remove(streamId);
+    // Same argument, same fix: an entry in _statusSeen is otherwise pruned only
+    // when a terminal frame arrives for the id, so a call that never gets one
+    // keeps it for the life of the connection.
+    _statusSeen.remove(streamId);
     _fcForget(streamId);
     return _idManager.releaseId(streamId);
   }
@@ -557,6 +561,11 @@ class RpcChannelTransport
         // "returns to zero"; a plateau at the cap is correct behaviour, and
         // only unbounded growth would be a defect.
         'finishedStreams': _finishedStreams.length,
+        // Unlike `finishedStreams` this one DOES return to zero: an entry is
+        // added only for a stream this side opened and is dropped at its
+        // terminal frame or at teardown. A peer naming ids we never minted must
+        // not move it at all.
+        'statusSeen': _statusSeen.length,
         'zeroCopy': _channel.supportsZeroCopy,
       },
     );
@@ -978,7 +987,25 @@ class RpcChannelTransport
 
     // Recorded BEFORE dispatch, because trailers arrive as a metadata frame
     // that is itself the end of the stream.
+    //
+    // Only for a stream WE opened. This set is read at end-of-stream and only
+    // ever for an id that still has a per-stream controller (see `truncatedEnd`
+    // below), so an entry for anything else can never be read -- while the id
+    // is chosen by the PEER, exactly like the flow-control maps above, which
+    // are capped for that reason. This one was not, and it was the only
+    // peer-keyed structure here that was not. Measured with 400,000
+    // metadata-only frames carrying `grpc-status` on ids the victim never
+    // minted -- frames the responder pipeline deliberately IGNORES as no-ops,
+    // so nothing above the transport ever saw them:
+    //
+    //     flow-control maps : advertised 4096   <- at the cap
+    //     statusSeen        : 399997            <- unbounded
+    //
+    // on a connection that had never carried a single call. Controllers are
+    // created only on local initiative, so gating on one bounds this by our own
+    // traffic rather than by the peer's imagination.
     if (metadata != null &&
+        _streamControllers.containsKey(message.streamId) &&
         metadata.getHeaderValue(RpcHeaders.grpcStatus) != null) {
       _statusSeen.add(message.streamId);
     }
