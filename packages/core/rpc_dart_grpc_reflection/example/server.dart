@@ -4,17 +4,34 @@
 // Example: gRPC Server Reflection with rpc_dart
 //
 // Demonstrates all three registration tiers:
-//   Tier 1 — full schema via RpcFileDescriptorBuilder (grpcurl can call methods)
+//   Tier 1 — full schema via RpcFileDescriptorBuilder
 //   Tier 2 — full schema from codegen descriptor (shown as comment)
 //   Tier 3 — name-only registration
+//
+// DISCOVERY ONLY. This service is wired with `RpcCodec`, which is CBOR, so a
+// descriptor makes it DESCRIBABLE, not callable by a protobuf client. Reflection
+// and the wire format are independent: grpcurl reads the descriptor over
+// reflection just fine and then sends protobuf, which this codec cannot parse.
+//
+// This header used to say "grpcurl can call methods" and the server printed an
+// invoke command to match. Following it gives:
+//
+//     grpcurl -d '{"message":"hello","count":3}' ... EchoService/Echo
+//     ERROR: Code: Internal  Message: Internal server error
+//
+// -- and nothing more, because the codec's FormatException is redacted on the
+// way out (default-deny, round 111). So the instruction cost the reader a
+// debugging session and told them nothing. For a service a foreign gRPC client
+// can INVOKE, use example/server_protobuf.dart, which pairs the descriptor with
+// RpcBinaryCodec.
 //
 // Run:
 //   fvm dart run example/server.dart
 //
-// Test with grpcurl:
+// Test with grpcurl — reflection, which is what this example is about:
 //   grpcurl -plaintext localhost:50051 list
 //   grpcurl -plaintext localhost:50051 list echo.v1.EchoService
-//   grpcurl -plaintext -d '{"message":"hello","count":3}' localhost:50051 echo.v1.EchoService/Echo
+//   grpcurl -plaintext localhost:50051 describe echo.v1.EchoService
 
 import 'dart:async';
 import 'dart:io';
@@ -168,13 +185,16 @@ void main() async {
 
   await server.start();
   stderr.writeln('Server listening on :50051');
-  stderr.writeln('Try:');
+  stderr.writeln('Try (reflection — this service speaks CBOR, not protobuf):');
   stderr.writeln('  grpcurl -plaintext localhost:50051 list');
   stderr.writeln(
     '  grpcurl -plaintext localhost:50051 list echo.v1.EchoService',
   );
   stderr.writeln(
-    '  grpcurl -plaintext -d \'{"message":"hello","count":3}\' localhost:50051 echo.v1.EchoService/Echo',
+    '  grpcurl -plaintext localhost:50051 describe echo.v1.EchoService',
+  );
+  stderr.writeln(
+    'To INVOKE from grpcurl, run example/server_protobuf.dart instead.',
   );
 
   final done = Completer<void>();
