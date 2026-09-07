@@ -26,7 +26,11 @@ deep-copies everything that is not deeply immutable. Measured by comparing
 | ordinary class built at runtime | copied |
 | `const` instance | shared |
 | `@pragma('vm:deeply-immutable')` class | **shared**, also when built at runtime |
+| an annotated class held by an ordinary message | the message is copied, the annotated field is **shared** |
 | `Uint8List` payload (`TransferableTypedData`) | moved, not copied |
+
+Measured end to end through this transport, not just over a raw `SendPort`; see
+`test/deeply_immutable_is_shared_test.dart`.
 
 ### Real zero-copy for your messages
 
