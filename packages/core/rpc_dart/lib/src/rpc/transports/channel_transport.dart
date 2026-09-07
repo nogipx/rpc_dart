@@ -656,12 +656,21 @@ class RpcChannelTransport
       if (ctl != null && !ctl.isClosed) ctl.addError(violation);
       if (!_incoming.isClosed) _incoming.addError(violation);
       if (_policy.closeOnProtocolError) {
-        // Tell the peer it was ITS fault, like the framing path does. A policy
-        // violation is deterministic, so a plain close invites the peer to
-        // retry it forever. Measured against a raw peer before this:
+        // Two separate jobs, and doing only the first one was a regression.
         //
-        //   metadata policy violation : 1005 -> UNAVAILABLE, retried
-        //   framing violation         : 4400 -> UNKNOWN, not retried
+        // (1) Tell the PEER it was its fault, like the framing path does. A
+        //     policy violation is deterministic, so a plain close invites the
+        //     peer to retry it forever. Measured against a raw peer:
+        //     policy violation 1005 (UNAVAILABLE, retried) vs framing 4400
+        //     (UNKNOWN, not retried).
+        // (2) Tear THIS side down now. `close()` is what wakes parked senders,
+        //     clears the flow-control maps and sets isClosed; leaving it to the
+        //     channel's onDone made the transport report healthy for a further
+        //     event-loop turn after it had already refused the peer.
+        //
+        // Order matters: the protocol close runs first and marks the channel
+        // closed synchronously, so close()'s own `_channel.close()` is a no-op
+        // and cannot overwrite 4400 with an ordinary close code.
         final channel = _channel;
         if (channel is IRpcChannelProtocolClose) {
           unawaited(
@@ -669,9 +678,8 @@ class RpcChannelTransport
               violation.message,
             ),
           );
-        } else {
-          unawaited(close());
         }
+        unawaited(close());
       }
       return false;
     }

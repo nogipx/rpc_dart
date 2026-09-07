@@ -276,16 +276,18 @@ class RpcFrameMultiplexedChannel
   @override
   Future<void> closeForProtocolError(String reason) async {
     final channel = _channel;
-    if (channel is IRpcChannelProtocolClose) {
-      await (channel as IRpcChannelProtocolClose).closeForProtocolError(reason);
-      // The byte channel is gone; take this layer down with it.
-      _closed = true;
-      await _channelSub?.cancel();
-      _channelSub = null;
-      if (!_incomingCtl.isClosed) await _incomingCtl.close();
+    if (channel is! IRpcChannelProtocolClose) {
+      await close();
       return;
     }
-    await close();
+    if (_closed) return;
+    // Flagged BEFORE the await, so nothing can be sent or decoded in the gap
+    // while the byte channel is closing.
+    _closed = true;
+    await (channel as IRpcChannelProtocolClose).closeForProtocolError(reason);
+    await _channelSub?.cancel();
+    _channelSub = null;
+    if (!_incomingCtl.isClosed) await _incomingCtl.close();
   }
 
   /// Creates a paired client/server frame channel over in-memory byte streams.

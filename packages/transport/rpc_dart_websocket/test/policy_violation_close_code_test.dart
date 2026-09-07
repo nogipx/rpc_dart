@@ -32,6 +32,15 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
+/// A byte below 0x20, which `RpcSecurityPolicy.isValidHeaderValue` refuses.
+///
+/// Built with `fromCharCode`, never written out. A literal control byte is
+/// invisible in the source and an escape is easy to lose in an edit; either way
+/// the fixture silently becomes a VALID header, the server correctly does not
+/// refuse it, and the test asserts nothing. That is not hypothetical — it cost
+/// a full round to untangle.
+final _controlChar = String.fromCharCode(1);
+
 final class _Svc extends RpcResponderContract {
   _Svc() : super('Svc');
 
@@ -55,6 +64,20 @@ Uint8List _frame(int streamId, int flags, List<int> payload) {
   f.setRange(9, f.length, payload);
   return f;
 }
+
+/// Valid framing, valid JSON, refused by the security policy.
+Uint8List _policyViolatingFrame() => _frame(
+  1,
+  0x02,
+  utf8.encode(
+    json.encode({
+      'p': '/Svc/echo',
+      'h': [
+        ['x-bad', '${_controlChar}value'],
+      ],
+    }),
+  ),
+);
 
 Future<int> _startServer(StreamController<WebSocketChannel> connCtl) async {
   final http = await HttpServer.bind('127.0.0.1', 0);
@@ -101,23 +124,8 @@ void main() {
     () async {
       final port = await _startServer(StreamController<WebSocketChannel>());
 
-      // Valid framing, valid JSON, refused by isValidHeaderValue: a control
-      // character in the value.
-      final badValue = _frame(
-        1,
-        0x02,
-        utf8.encode(
-          json.encode({
-            'p': '/Svc/echo',
-            'h': [
-              ['x-bad', 'ctrlchar'],
-            ],
-          }),
-        ),
-      );
-
       expect(
-        await _closeCodeFor(port, badValue),
+        await _closeCodeFor(port, _policyViolatingFrame()),
         4400,
         reason:
             'the peer was told 1005, which maps to UNAVAILABLE and is retried, '
@@ -145,29 +153,77 @@ void main() {
   );
 
   test(
-    'GUARD: an ordinary call is unaffected',
+    'GUARD: the server keeps serving after refusing a peer',
     () async {
-      // Load-bearing: closing on a policy violation must not become closing on
-      // anything.
+      // Closing the offending connection must not take the server with it.
       final connCtl = StreamController<WebSocketChannel>();
       final port = await _startServer(connCtl);
+
+      expect(await _closeCodeFor(port, _policyViolatingFrame()), 4400);
 
       final client = await RpcWebSocketCallerTransport.connect(
         Uri.parse('ws://127.0.0.1:$port'),
       );
       final caller = RpcCallerEndpoint(transport: client);
       addTearDown(caller.close);
-
       final response = await caller
           .unaryRequest<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
-            request: 'hello'.rpc,
+            request: 'after'.rpc,
             requestCodec: _codec,
             responseCodec: _codec,
           )
           .timeout(const Duration(seconds: 10));
-      expect(response.value, 'hello');
+      expect(response.value, 'after');
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'GUARD: a VALID header is not treated as a violation',
+    () async {
+      // Load-bearing, and the reason the fixture above is built rather than
+      // typed: with a printable value the server must NOT close, so a witness
+      // written around a mistyped fixture would pass while proving nothing.
+      final port = await _startServer(StreamController<WebSocketChannel>());
+
+      final valid = _frame(
+        1,
+        0x02,
+        utf8.encode(
+          json.encode({
+            'p': '/Svc/echo',
+            'h': [
+              ['x-ok', 'printable-ascii'],
+            ],
+          }),
+        ),
+      );
+
+      final ws = await WebSocket.connect('ws://127.0.0.1:$port');
+      final closed = Completer<void>();
+      ws.listen(
+        (_) {},
+        onError: (Object _) {},
+        onDone: () {
+          if (!closed.isCompleted) closed.complete();
+        },
+      );
+      ws.add(valid);
+
+      var wasClosed = true;
+      await closed.future.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => wasClosed = false,
+      );
+      await ws.close();
+
+      expect(
+        wasClosed,
+        isFalse,
+        reason: 'a printable-ASCII header value must not close the connection',
+      );
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
