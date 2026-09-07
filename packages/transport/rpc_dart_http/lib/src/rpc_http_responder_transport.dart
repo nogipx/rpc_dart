@@ -214,8 +214,23 @@ class RpcHttpResponderTransport
     }
 
     // Validate Content-Type: must be a gRPC content type (application/grpc*).
+    //
+    // Lowercased first, because RFC 9110 s8.3.1 makes the type and subtype
+    // CASE-INSENSITIVE, and this compared the raw string. Measured against this
+    // server:
+    //
+    //     application/grpc        -> 200
+    //     application/grpc+proto  -> 200
+    //     Application/GRPC        -> 415   <- legal, and refused
+    //     APPLICATION/GRPC+PROTO  -> 415   <- legal, and refused
+    //     text/plain              -> 415   (correct)
+    //
+    // The HTTP/2 caller already lowercases before its equivalent check, so the
+    // two halves of this library disagreed about the same header.
     final contentTypeValue = request.headers[RpcHeaders.contentType] ?? '';
-    if (!contentTypeValue.startsWith('application/grpc')) {
+    if (!contentTypeValue.toLowerCase().startsWith(
+      RpcHeaders.contentTypeGrpc,
+    )) {
       _logger?.warning(
         'Rejected request: unsupported Content-Type '
         '"$contentTypeValue" — expected application/grpc[+subtype]',
