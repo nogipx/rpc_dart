@@ -884,6 +884,22 @@ class RpcChannelTransport
 
   /// Advertises the initial window the first time a stream is seen. This is
   /// what tells the peer we participate.
+  ///
+  /// Refusing at the cap was ATTACKED and holds (round 145). The worry was that
+  /// this set is pruned by [_fcForget], which runs on a TERMINAL frame that a
+  /// ghost id never sends — so a peer naming ids it never uses fills the set
+  /// permanently and no later stream is ever advertised a window. That much is
+  /// true; the harm is not. A sender that receives no grant is still bounded by
+  /// its own `initialSendWindowBytes`, so with the victim's set full a paused
+  /// consumer still saw only 64 KiB pushed against a 64 KiB window.
+  ///
+  /// **The number that said otherwise was measured on the wrong side.** A first
+  /// probe reported 88 KiB clean versus 16 364 KiB after a flood — 186x — with
+  /// ONE policy shared by both ends, so the flood had filled the SENDER's own
+  /// `_fcSendCredit` too and the unbounded send was self-inflicted. Split the
+  /// two ends onto separate policies (attacker uncapped, victim capped) and the
+  /// difference disappears. Do not re-derive this without checking which side
+  /// the ceiling is on.
   void _fcAdvertise(int streamId) {
     final window = _fcWindow;
     if (window == null) return;
