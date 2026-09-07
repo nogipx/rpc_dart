@@ -198,6 +198,59 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
+  group('the announcement stays honest at the edges of the field', () {
+    // SETTINGS_MAX_CONCURRENT_STREAMS is a uint32 and RpcSecurityPolicy has no
+    // assertions, so the policy field can hold anything an operator types. Once
+    // it started going on the wire, the out-of-range values stopped being
+    // merely odd. Read back at the byte level, before the clamp:
+    //
+    //   policy -1    -> advertised 4294967295  <- "unlimited", while the
+    //                                             pipeline refuses EVERY stream
+    //   policy 2^32  -> advertised 0           <- "open nothing", while the
+    //   policy 2^40  -> advertised 0              server would serve billions
+    //
+    // The first is the very defect the announcement was added to fix, back at
+    // the sign boundary. The second is what `1 << 32` in a config does.
+    Future<int?> advertisedFor(int limit) async {
+      var parked = 0;
+      final server = RpcHttp2Server(
+        host: '127.0.0.1',
+        port: 0,
+        securityPolicy: RpcSecurityPolicy(maxActiveStreams: limit),
+        onEndpointCreated: (e) =>
+            e.registerServiceContract(_Svc(() => parked++)),
+      );
+      await server.start();
+      addTearDown(server.stop);
+      final settings = await readServerSettings(server.port);
+      return settings[_maxConcurrentStreams];
+    }
+
+    test('a negative limit announces 0, not "unlimited"', () async {
+      expect(
+        await advertisedFor(-1),
+        0,
+        reason:
+            'a negative limit refuses every stream, so anything above 0 '
+            'announces room that does not exist',
+      );
+    });
+
+    test('a limit past the field announces the maximum, not 0', () async {
+      expect(await advertisedFor(4294967296), 4294967295);
+      expect(await advertisedFor(1 << 40), 4294967295);
+    });
+
+    test('GUARD: representable limits are untouched', () async {
+      // Load-bearing: a clamp that also moved ordinary values would break the
+      // witness above it, quietly.
+      expect(await advertisedFor(1), 1);
+      expect(await advertisedFor(0), 0);
+      expect(await advertisedFor(4096), 4096);
+      expect(await advertisedFor(4294967295), 4294967295);
+    });
+  });
+
   test(
     'WITNESS: maxActiveStreams above 1000 is no longer a dead knob',
     () async {

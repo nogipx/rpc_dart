@@ -519,6 +519,38 @@ class RpcHttp2Server implements IRpcServer {
     _logger?.info('HTTP/2 сервер остановлен');
   }
 
+  /// `maxActiveStreams` as an HTTP/2 SETTINGS value, clamped to what the field
+  /// can actually carry.
+  ///
+  /// SETTINGS_MAX_CONCURRENT_STREAMS is a uint32 and [RpcSecurityPolicy] has no
+  /// assertions, so the policy field can hold anything an operator types. Once
+  /// it started going ON THE WIRE the out-of-range values stopped being merely
+  /// odd and became wrong in the one direction this must never be wrong in.
+  /// Read back at the byte level:
+  ///
+  ///     policy  -1        -> advertised 4294967295   <- "unlimited", while the
+  ///                                                     pipeline refuses EVERY
+  ///                                                     stream ("max: -1")
+  ///     policy  2^32      -> advertised 0            <- "open nothing", while
+  ///     policy  2^40      -> advertised 0               the server would serve
+  ///                                                     billions
+  ///
+  /// The first is the exact defect the advertisement was added to fix, back
+  /// again at the sign boundary; the second is a config typo (`1 << 32`) that
+  /// silently becomes a server a conforming client cannot call at all.
+  ///
+  /// Clamping keeps the invariant that matters -- never announce MORE than will
+  /// be honoured -- at both ends. A non-positive limit announces 0, which is
+  /// exactly what "refuse everything" looks like on the wire; an over-large one
+  /// announces the maximum representable, which is HTTP/2's way of saying "no
+  /// limit" and is still less than what the pipeline would allow.
+  ///
+  /// Validating the field in `RpcSecurityPolicy` itself would be the other half
+  /// of this, and it is a core semantics decision (is `0` a legitimate way to
+  /// say "accept nothing"?), so it is left to the owner.
+  int get _advertisedStreamLimit =>
+      _securityPolicy.maxActiveStreams.clamp(0, 0xFFFFFFFF);
+
   /// Обрабатывает новое HTTP/2 соединение
   void _handleConnection(Socket socket) {
     final clientAddress = '${socket.remoteAddress}:${socket.remotePort}';
@@ -603,7 +635,7 @@ class RpcHttp2Server implements IRpcServer {
         // so `maxActiveStreams` meant 4096 on websocket and isolate and 1000
         // here, silently. It now means the same thing on all of them.
         settings: http2.ServerSettings(
-          concurrentStreamLimit: _securityPolicy.maxActiveStreams,
+          concurrentStreamLimit: _advertisedStreamLimit,
         ),
       );
 
