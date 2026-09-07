@@ -28,6 +28,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 /// The client half, run as a child process so its death is observable.
@@ -58,14 +59,15 @@ Future<void> main(List<String> args) async {
           responseCodec: _codec,
           context: RpcContext.withTimeout(const Duration(seconds: 5)),
         )
-        // Bounded HERE and not by the context deadline, which does not apply:
-        // call() is still inside `await sendMessage` when the answer arrives,
-        // and the deadline is only consulted after the send returns. See the
-        // follow-up noted in the test above.
+        // A backstop only. The call must settle on the SERVER's answer long
+        // before this; if it ever fires, the wait is gated on the send again.
         .timeout(const Duration(seconds: 20));
     stdout.writeln('RETURNED');
   } catch (e) {
-    stdout.writeln('CAUGHT ${e.runtimeType}');
+    stdout.writeln(
+      'CAUGHT ${e.runtimeType}'
+      '${e is RpcStatusException ? ' status=${e.statusCode}' : ''}',
+    );
   }
   await caller.close();
   stdout.writeln('SURVIVED');
@@ -153,6 +155,22 @@ void main() {
         reason: 'the client must reach the end of main()',
       );
       expect(client.exitCode, 0);
+
+      // The SERVER's answer, not a local deadline. Once the crash was gone the
+      // call still hung: `call()` was inside `await sendMessage` when the
+      // trailer arrived, so the wait was gated on a send the peer had stopped
+      // reading, and `RpcContext.withTimeout(5s)` never applied. Measured
+      // through the probe: still running at 15 s -> RpcStatusException(8) in
+      // 19 ms.
+      expect(
+        client.stdout.toString(),
+        contains(
+          'CAUGHT RpcStatusException status=${RpcStatus.resourceExhausted}',
+        ),
+        reason:
+            'the refusal is already on the stream; the call must read it '
+            'rather than wait for a send the peer will never drain',
+      );
     },
     timeout: const Timeout(Duration(minutes: 4)),
   );

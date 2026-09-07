@@ -454,7 +454,34 @@ final class UnaryCaller<TRequest, TResponse> {
       _logger.internal(
         'Sending request and closing request stream [streamId: $streamId]',
       );
-      await _transport.sendMessage(streamId, framedRequest, endStream: true);
+      // NOT awaited before the wait below, and that ordering is the whole point.
+      //
+      // A peer that REFUSES this request stops reading it, so the send parks on
+      // the peer's flow-control window and never returns -- while the answer it
+      // already sent sits on the same stream, unread, because `call()` has not
+      // reached `await completer.future` yet. The call then ignores its own
+      // deadline: `RpcContext.withTimeout(5s)` is only consulted AFTER the send
+      // returns. Measured, http2 client against a server with
+      // maxMessageLengthBytes: 256 KiB, one 2 MiB unary request:
+      //
+      //   before : still running at 15 s, deadline never applied
+      //   after  : RpcStatusException(8) in 32 ms
+      //
+      // A send failure still fails the call -- it is routed into the completer
+      // instead of being awaited -- so nothing that used to surface is lost. The
+      // stream id is released while a stuck send may still hold it, which is
+      // safe: RpcStreamIdManager hands out monotonically increasing ids and
+      // recycles only at 2^31 exhaustion, so no live call can be handed this one.
+      final sending = _transport.sendMessage(
+        streamId,
+        framedRequest,
+        endStream: true,
+      );
+      unawaited(
+        sending.catchError((Object error, StackTrace stack) {
+          if (!completer.isCompleted) completer.completeError(error, stack);
+        }),
+      );
 
       // Await response with timeout if provided.
       _logger.internal(
