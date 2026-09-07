@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// This transport passes request/response OBJECTS straight to `SendPort.send`,
-// so an object the codec is happy with can still be unsendable (a Future, Timer
-// or ReceivePort anywhere in its graph). The channel used to answer that with
+// A ZERO-COPY method on this transport passes request/response OBJECTS straight
+// to `SendPort.send`, so an object can be unsendable (a Future, Timer or
+// ReceivePort anywhere in its graph). The channel used to answer that with
 // `catch (_) { close(); }`, which is the wrong blast radius by two steps:
 //
 //   * `SendPort.send` throws for exactly ONE reason -- an unsendable payload.
@@ -20,6 +20,12 @@
 //                                                      unsendable field
 //   unrelated stream     stopped at 7 of 1000          still running (21)
 //   next call            "Transport is closed"         succeeded
+//
+// These witnesses were written against the CODEC service, because unary used to
+// send the raw object regardless of the codecs its method declared. Round 165
+// fixed that, so a codec-declared call can no longer carry an unsendable field
+// at all -- and the witnesses moved to the zero-copy service, which is now the
+// only place a raw object crosses.
 
 @TestOn('vm')
 library;
@@ -65,8 +71,12 @@ const _res = RpcCodec<Res>(Res.fromJson);
 
 /// Plain objects for the genuine zero-copy contract below (no codecs).
 class ZcReq {
-  const ZcReq(this.text);
+  const ZcReq(this.text, {this.trap});
   final String text;
+
+  /// Makes the object unsendable. With no codec in the picture this object IS
+  /// what crosses, so the whole graph has to be sendable.
+  final Object? trap;
 }
 
 class ZcRes {
@@ -103,6 +113,27 @@ final class _ZcWorker extends RpcResponderContract {
       handler: (r, {context}) async* {
         for (var i = 0; i < 5; i++) {
           yield i == 2 ? ZcRes(i, trap: Future<int>.value(1)) : ZcRes(i);
+        }
+      },
+    );
+
+    addUnaryMethod<ZcReq, ZcRes>(
+      methodName: 'Unary',
+      handler: (r, {context}) async => ZcRes(0),
+    );
+
+    // Reports whether the worker received the SAME instance the host sent.
+    addUnaryMethod<ZcReq, ZcRes>(
+      methodName: 'Identity',
+      handler: (r, {context}) async => ZcRes(identityHashCode(r)),
+    );
+
+    addServerStreamMethod<ZcReq, ZcRes>(
+      methodName: 'Ticks',
+      handler: (r, {context}) async* {
+        for (var i = 0; i < 2000; i++) {
+          yield ZcRes(i);
+          await Future<void>.delayed(const Duration(milliseconds: 20));
         }
       },
     );
@@ -156,6 +187,15 @@ void main() {
         responseCodec: _res,
       );
 
+  /// No codecs: the object itself crosses, which is the only path left where an
+  /// unsendable field can reach `SendPort.send`.
+  Future<ZcRes> zcUnary(String method, ZcReq request) =>
+      caller.unaryRequest<ZcReq, ZcRes>(
+        serviceName: _zcService,
+        methodName: method,
+        request: request,
+      );
+
   setUp(() async {
     spawned = await RpcIsolateTransport.spawn(
       entrypoint: unsendableWorkerEntrypoint,
@@ -177,7 +217,7 @@ void main() {
       // without receiving response" -- the connection dying, with the real
       // reason swallowed by `catch (_)`.
       await expectLater(
-        unary('Unary', Req('poison', trap: Future<int>.value(1))),
+        zcUnary('Unary', ZcReq('poison', trap: Future<int>.value(1))),
         throwsA(
           isA<ArgumentError>().having(
             (e) => e.toString(),
@@ -195,7 +235,7 @@ void main() {
     () async {
       // WITNESS. Pre-fix every later call failed with "Transport is closed".
       await expectLater(
-        unary('Unary', Req('poison', trap: Future<int>.value(1))),
+        zcUnary('Unary', ZcReq('poison', trap: Future<int>.value(1))),
         throwsA(isA<ArgumentError>()),
       );
 
@@ -234,7 +274,7 @@ void main() {
       final before = ticks;
 
       await expectLater(
-        unary('Unary', Req('poison', trap: Future<int>.value(1))),
+        zcUnary('Unary', ZcReq('poison', trap: Future<int>.value(1))),
         throwsA(isA<ArgumentError>()),
       );
 
@@ -262,9 +302,28 @@ void main() {
       // Pins the corrected doc claim. `supportsZeroCopy` on this transport means
       // "sendDirectObject works", not "the peer gets the same instance" --
       // SendPort.send deep-copies anything that is not deeply immutable.
-      final request = Req('identity');
-      final response = await unary('Identity', request);
+      //
+      // On the ZERO-COPY service: through a codec the identity differs for the
+      // trivial reason that `fromJson` built a new object, which would prove
+      // nothing about copying.
+      final request = ZcReq('identity');
+      final response = await zcUnary('Identity', request);
       expect(response.index, isNot(identityHashCode(request)));
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'GUARD: a codec-declared call carries no raw object at all',
+    () async {
+      // The round-165 fix, from this file's angle: the same poison that fails a
+      // zero-copy call is simply not on the wire when the method declares
+      // codecs, because `toJson` never looks at it.
+      final response = await unary(
+        'Unary',
+        Req('codec', trap: Future<int>.value(1)),
+      );
+      expect(response.text, 'reply:codec');
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );

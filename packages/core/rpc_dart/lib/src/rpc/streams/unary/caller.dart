@@ -383,51 +383,58 @@ final class UnaryCaller<TRequest, TResponse> {
       ], methodPath: baseMetadata.methodPath);
       await _transport.sendMetadata(streamId, metadata);
 
-      // Zero-copy optimization for supporting transports.
-      if (_transport.supportsZeroCopy) {
-        _logger.internal('Zero-copy request send [streamId: $streamId]');
-        await _transport.sendDirectObject(
-          streamId,
-          request as Object,
-          endStream: true,
+      // ALWAYS serialized. This class is reached only when the contract asked
+      // for codecs -- the pipelines route a zero-copy unary call to
+      // CallProcessor and never build a UnaryCaller for it -- so branching on
+      // `_transport.supportsZeroCopy` here sent the raw object for a method
+      // whose author had declared RpcDataTransferMode.codec.
+      //
+      // The other three call shapes take their mode from the CONTRACT; unary
+      // was the odd one out, and the cost was not only surprise. Measured over
+      // the isolate transport with codecs declared on both ends and
+      // maxMessageLengthBytes: 256 KiB:
+      //
+      //   a 2 MiB response       DELIVERED   (no bytes exist, so no limit does)
+      //   a field toJson OMITS   ARRIVED     (`secret=hunter2` crossed the
+      //                                       boundary the codec exists to
+      //                                       control)
+      //
+      // A codec is where a service decides what leaves the process; skipping it
+      // because the transport happens to pass objects is not an optimisation.
+      _logger.internal('Serializing request [streamId: $streamId]');
+      final serializedRequest = _requestSerializer.serialize(request);
+      final requestEncoding = _context?.getHeader(RpcHeaders.grpcEncoding);
+      if (requestEncoding != null &&
+          requestEncoding != RpcGrpcCompression.identity &&
+          !RpcGrpcCompression.isSupported(requestEncoding)) {
+        throw RpcException(
+          'Unsupported grpc-encoding: $requestEncoding. '
+          'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}. '
+          'On web/dart2js the built-in gzip is unavailable; register a '
+          'cross-platform codec (e.g. RpcGzipCodec.register() from '
+          'package:rpc_dart_compression).',
         );
-      } else {
-        // Standard serialization for other transports.
-        _logger.internal('Serializing request [streamId: $streamId]');
-        final serializedRequest = _requestSerializer.serialize(request);
-        final requestEncoding = _context?.getHeader(RpcHeaders.grpcEncoding);
-        if (requestEncoding != null &&
-            requestEncoding != RpcGrpcCompression.identity &&
-            !RpcGrpcCompression.isSupported(requestEncoding)) {
-          throw RpcException(
-            'Unsupported grpc-encoding: $requestEncoding. '
-            'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}. '
-            'On web/dart2js the built-in gzip is unavailable; register a '
-            'cross-platform codec (e.g. RpcGzipCodec.register() from '
-            'package:rpc_dart_compression).',
-          );
-        }
-        final useCompression =
-            requestEncoding != null &&
-            requestEncoding != RpcGrpcCompression.identity;
-        final payload = useCompression
-            ? RpcGrpcCompression.compress(
-                serializedRequest,
-                encoding: requestEncoding,
-              )
-            : serializedRequest;
-        _logger.internal(
-          'Request serialized, size: ${serializedRequest.length} bytes [streamId: $streamId]',
-        );
-        final framedRequest = RpcMessageFrame.encode(
-          payload,
-          compressed: useCompression,
-        );
-        _logger.internal(
-          'Sending request and closing request stream [streamId: $streamId]',
-        );
-        await _transport.sendMessage(streamId, framedRequest, endStream: true);
       }
+      final useCompression =
+          requestEncoding != null &&
+          requestEncoding != RpcGrpcCompression.identity;
+      final payload = useCompression
+          ? RpcGrpcCompression.compress(
+              serializedRequest,
+              encoding: requestEncoding,
+            )
+          : serializedRequest;
+      _logger.internal(
+        'Request serialized, size: ${serializedRequest.length} bytes [streamId: $streamId]',
+      );
+      final framedRequest = RpcMessageFrame.encode(
+        payload,
+        compressed: useCompression,
+      );
+      _logger.internal(
+        'Sending request and closing request stream [streamId: $streamId]',
+      );
+      await _transport.sendMessage(streamId, framedRequest, endStream: true);
 
       // Await response with timeout if provided.
       _logger.internal(
