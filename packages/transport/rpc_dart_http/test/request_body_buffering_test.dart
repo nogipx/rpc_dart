@@ -49,6 +49,26 @@ final class _Svc extends RpcResponderContract {
       requestCodec: _codec,
       responseCodec: _codec,
     );
+
+    // The RESPONSE buffer has the same shape and the same fix; these two
+    // exercise it.
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'big',
+      handler: (r, {RpcContext? context}) async =>
+          ('x' * (2 * 1024 * 1024)).rpc,
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+    addServerStreamMethod<RpcString, RpcString>(
+      methodName: 'stream',
+      handler: (r, {context}) async* {
+        yield 'a'.rpc;
+        yield 'b'.rpc;
+        yield 'c'.rpc;
+      },
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
   }
 }
 
@@ -122,6 +142,64 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
       expect(rig.seen, isEmpty, reason: 'the handler must never see it');
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'a large response body arrives whole',
+    () async {
+      // The response buffer got the same fix, and draining it with takeBytes()
+      // is destructive — this pins that the body still arrives, and once.
+      final rig = await _serve(limit: 8 * 1024 * 1024);
+      final caller = RpcCallerEndpoint(
+        transport: RpcHttpCallerTransport(
+          baseUrl: 'http://127.0.0.1:${rig.port}',
+        ),
+      );
+      addTearDown(caller.close);
+
+      final response = await caller
+          .unaryRequest<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'big',
+            request: 'go'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      expect(response.value.length, 2 * 1024 * 1024);
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'a multi-message response is concatenated in order',
+    () async {
+      // This transport buffers a whole server stream into one response body, so
+      // the buffer is appended to repeatedly. Order and completeness are what a
+      // buffering rewrite can break.
+      final rig = await _serve(limit: 8 * 1024 * 1024);
+      final caller = RpcCallerEndpoint(
+        transport: RpcHttpCallerTransport(
+          baseUrl: 'http://127.0.0.1:${rig.port}',
+        ),
+      );
+      addTearDown(caller.close);
+
+      final items = await caller
+          .serverStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'stream',
+            request: 'go'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .toList()
+          .timeout(const Duration(seconds: 30));
+
+      expect(items.map((i) => i.value).toList(), ['a', 'b', 'c']);
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
