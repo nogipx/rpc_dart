@@ -211,12 +211,34 @@ final class ServerStreamResponder<
           );
         }
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) async {
         _logger.error(
           'Error in request stream [id: $id]',
           error: error,
           stackTrace: stackTrace,
         );
+        // ANSWERED, not just logged. A server stream carries exactly one
+        // request, so an error here means none will ever arrive and the handler
+        // will never run -- yet this used to end in silence, and the caller
+        // waited out its own deadline with nothing to diagnose.
+        //
+        // Measured with a caller that has codecs against a method registered
+        // zero-copy, which is a mode mismatch the processors now report:
+        //
+        //   unary        status 13, 38 ms      clientStream status 13, 11 ms
+        //   bidi         status 13,  6 ms      serverStream SILENCE, 6 s
+        //
+        // The other three shapes route this already, one way or another; this
+        // was the only one that dropped it.
+        if (_requestHandled || !_isActive) return;
+        _requestHandled = true;
+        final wire = wireStatusFor(error);
+        await _processor.sendError(
+          wire.status,
+          wire.message,
+          statusDetailsBin: wire.detailsBin,
+        );
+        _completeDone();
       },
       onDone: () {
         _logger.internal('Request stream completed [id: $id]');
