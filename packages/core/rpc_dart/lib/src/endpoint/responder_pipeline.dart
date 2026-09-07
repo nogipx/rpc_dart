@@ -1904,13 +1904,35 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   }
 
   RpcContext _createContextFromMessage(RpcTransportMessage message) {
+    // Repeated keys are JOINED with a comma, not overwritten.
+    //
+    // gRPC allows Custom-Metadata keys to repeat, and HTTP semantics (RFC 9110
+    // s5.3) say repeated field lines are equivalent to one line carrying the
+    // values comma-separated. This map assignment kept only the LAST one, so a
+    // peer sending two values silently lost the first. Measured with grpcurl,
+    // `-H 'x-tag: first' -H 'x-tag: second'`:
+    //
+    //     handler saw : x-tag: second        <- 'first' gone
+    //
+    // and the two views of the same call disagreed, because RpcMetadata holds
+    // both and its getHeaderValue returns the FIRST while this returned the
+    // last.
+    //
+    // Joining keeps the data and lets an application split it back. A peer that
+    // duplicates a header rpc_dart parses as a single value -- grpc-timeout,
+    // grpc-encoding -- now yields something that fails to parse instead of one
+    // arbitrarily chosen value, which is the safer reading of malformed input:
+    // it is not for us to pick which deadline the peer meant.
     final headers = <String, String>{};
     if (message.metadata != null) {
       for (final header in message.metadata!.headers) {
         if (!header.name.startsWith(':') &&
             header.name != 'content-type' &&
             header.name != 'te') {
-          headers[header.name] = header.value;
+          final existing = headers[header.name];
+          headers[header.name] = existing == null
+              ? header.value
+              : '$existing,${header.value}';
         }
       }
     }
