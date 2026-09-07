@@ -46,9 +46,18 @@ class RpcChannelTransport
   final Set<int> _finishedStreams = {};
 
   /// Upper bound on [_finishedStreams]. Matches the responder pipeline's
-  /// `_maxRememberedClosedStreams`, and is far above the default
-  /// `maxActiveStreams` of 4096 concurrent streams' worth of in-flight
-  /// finishes, so eviction only ever reaches entries no longer in play.
+  /// `_maxRememberedClosedStreams`.
+  ///
+  /// The claim here used to be that this is "far above the default
+  /// `maxActiveStreams` of 4096". It is not — 1024 is a QUARTER of it, and the
+  /// arithmetic had simply never been re-derived. What makes the size safe is
+  /// not headroom over the stream ceiling but what an entry is FOR: it marks an
+  /// id whose terminal frame has already gone out, so [finishSending] does not
+  /// send a second one. Entries are added at the moment of that frame and
+  /// removed as soon as the call is torn down, so the set tracks finishes still
+  /// in flight, not live streams — and eviction (oldest first, insertion order)
+  /// reaches the longest-idle marker. Losing one costs at most a duplicate
+  /// end-of-stream on an id whose call has since ended.
   static const int _maxRememberedFinishedStreams = 1024;
 
   /// Global new-stream dispatch. The transport starts consuming the channel as

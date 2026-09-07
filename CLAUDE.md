@@ -154,9 +154,18 @@ on `Version X already exists`, after the other packages have gone out.
 
 ## Known caveats
 
-- **generator**: `rpc_dart_generator` build_test golden tests are incompatible
-  with pub-workspace layout (no per-member `package_config.json`). The `test`
-  script excludes it; run `melos run test:generator` standalone.
+- **generator**: `rpc_dart_generator`'s golden tests are `build_test`, which
+  needs a per-package `.dart_tool/package_config.json` — and a pub workspace
+  centralises that at the root. So they are incompatible with this layout and
+  every `test*` script excludes the package.
+  **There is NO `melos run test:generator`.** This guide used to say there was;
+  running it just prints the list of available scripts. Every one of the
+  generator's four test files imports `build_test`, so nothing there can be run
+  from inside the workspace at all. The only way is the manual one the root
+  `pubspec.yaml` documents next to the `test` script: temporarily remove
+  `resolution: workspace` from the generator's pubspec AND its entry from the
+  root `workspace:` list, `fvm dart pub get` in the package, run, then put both
+  back. Its `lib/` is still covered by `melos run analyze`.
 - **infra tests**: `*_postgres`, `*_minio`, and the SQLCipher test in the sqlite
   packages need running services / a cipher-enabled native lib. Use
   `melos run test:unit` to skip them.
