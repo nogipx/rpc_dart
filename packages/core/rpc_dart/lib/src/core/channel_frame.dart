@@ -26,7 +26,14 @@ abstract final class RpcChannelFrame {
   static const int headerSize = 9;
 
   static const int _flagEndOfStream = 1 << 0;
-  static const int _flagMetadata = 1 << 1;
+
+  /// Flag bit marking a metadata frame.
+  ///
+  /// Public because the receive path has to know a frame's KIND from its header
+  /// alone: a metadata payload is bounded by [RpcSecurityPolicy.maxMetadataBytes]
+  /// and a data payload by [RpcSecurityPolicy.maxMessageLengthBytes], two limits
+  /// that differ by 256x at the defaults.
+  static const int flagMetadata = 1 << 1;
 
   /// Encode a data frame (gRPC-framed payload bytes).
   static Uint8List encodeData({
@@ -45,7 +52,7 @@ abstract final class RpcChannelFrame {
     required RpcMetadata metadata,
     bool endOfStream = false,
   }) {
-    int flags = _flagMetadata;
+    int flags = flagMetadata;
     if (endOfStream) flags |= _flagEndOfStream;
     final payload = _encodeMetadataPayload(metadata);
     return _encode(streamId, flags, payload);
@@ -110,7 +117,7 @@ abstract final class RpcChannelFrame {
       payloadStart + payloadLen,
     );
     final endOfStream = (flags & _flagEndOfStream) != 0;
-    final isMetadata = (flags & _flagMetadata) != 0;
+    final isMetadata = (flags & flagMetadata) != 0;
 
     // A metadata frame carries the encoded header blob, which
     // RpcSecurityPolicy bounds separately (and far more tightly) than a data

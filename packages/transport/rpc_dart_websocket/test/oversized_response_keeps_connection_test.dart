@@ -38,6 +38,18 @@ const _clientPolicy = RpcSecurityPolicy(
   maxActiveStreams: 1024,
 );
 
+/// Same, with a small connection window so an unreturned one is exhausted in
+/// four refusals instead of thirty-two.
+const _tightWindowPolicy = RpcSecurityPolicy(
+  maxMessageLengthBytes: 256 * 1024,
+  flowControlConnectionWindowBytes: 8 * 1024 * 1024,
+  flowControlWindowBytes: 4 * 1024 * 1024,
+  maxMetadataBytes: 1 << 20,
+  maxHeaders: 1024,
+  maxHeaderValueBytes: 1 << 16,
+  maxActiveStreams: 1024,
+);
+
 const _serverPolicy = RpcSecurityPolicy(
   maxMessageLengthBytes: 8 * 1024 * 1024,
   maxMetadataBytes: 1 << 20,
@@ -79,7 +91,7 @@ final class _Svc extends RpcResponderContract {
 
 typedef _Rig = ({RpcCallerEndpoint caller});
 
-Future<_Rig> _connect() async {
+Future<_Rig> _connect({RpcSecurityPolicy policy = _clientPolicy}) async {
   final http = await HttpServer.bind('127.0.0.1', 0);
   final server = RpcWebSocketServer(
     connections: rpcWebSocketConnections(http),
@@ -90,7 +102,7 @@ Future<_Rig> _connect() async {
 
   final client = await RpcWebSocketCallerTransport.connect(
     Uri.parse('ws://127.0.0.1:${http.port}'),
-    policy: _clientPolicy,
+    policy: policy,
   );
   final caller = RpcCallerEndpoint(transport: client);
   addTearDown(() async {
@@ -189,6 +201,34 @@ void main() {
       );
     },
     timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'repeated refusals do not wedge the connection',
+    () async {
+      // The regression round 161 created by keeping the connection alive: a
+      // skipped frame never becomes a message, so the credit-on-consume path
+      // never runs for it and the peer's window shrinks by the size of every
+      // refusal. With an 8 MiB window and 2 MiB per refusal it wedged on the
+      // FOURTH -- `small` went from 2 ms to a 6 s timeout and stayed there.
+      //
+      // Eight rounds, i.e. twice the window, so a leak of any size shows.
+      final rig = await _connect(policy: _tightWindowPolicy);
+
+      for (var i = 1; i <= 8; i++) {
+        await expectLater(
+          _unary(rig.caller, 'big').timeout(const Duration(seconds: 20)),
+          throwsA(isA<RpcStatusException>()),
+          reason: 'refusal $i',
+        );
+        final small = await _unary(
+          rig.caller,
+          'small',
+        ).timeout(const Duration(seconds: 10));
+        expect(small.value, 'ok', reason: 'after refusal $i');
+      }
+    },
+    timeout: const Timeout(Duration(seconds: 120)),
   );
 
   test(

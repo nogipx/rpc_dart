@@ -212,6 +212,15 @@ class RpcChannelTransport
     // most of the traffic: 100 streams put ~64 MB in flight against a 2 MB
     // window.
     _fcAdvertiseConnection();
+    // A frame the channel steps over never becomes a message, so the ordinary
+    // credit-on-consume path never sees it -- and the peer charged those bytes
+    // when it sent them. Wired at construction rather than probed with an `is`
+    // check from somewhere else, so a wrapper cannot silently drop it; a channel
+    // this transport did not build keeps closeOnOversizedFrame's default and
+    // therefore never skips anything.
+    if (channel is RpcFrameMultiplexedChannel) {
+      channel.onFrameDiscarded = _fcCredit;
+    }
     _channelSub = _channel.incoming.listen(
       _onMessage,
       onError: (Object e) {

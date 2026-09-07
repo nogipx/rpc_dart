@@ -204,12 +204,37 @@ class RpcFrameMultiplexedChannel
 
     final view = ByteData.sublistView(header);
     final payloadLen = view.getUint32(5);
+
+    // A metadata frame is bounded by maxMetadataBytes, 256x tighter than the
+    // data ceiling at the defaults (64 KiB against 16 MiB). Checking only the
+    // data ceiling left every metadata frame between the two to be buffered and
+    // then rejected inside decodeAll, which reaches _failChannel -- so round
+    // 161's fix worked for a big RESPONSE and not for big TRAILERS, measured
+    // identically fatal on both sides.
+    final isMetadata = (view.getUint8(4) & RpcChannelFrame.flagMetadata) != 0;
+    final ceiling = isMetadata
+        ? (_policy.maxMetadataBytes < _maxFramePayloadBytes
+              ? _policy.maxMetadataBytes
+              : _maxFramePayloadBytes)
+        : _maxFramePayloadBytes;
+
     // Only the size ceiling. A frame that fits the ceiling but not a buffer the
     // caller shrank below it is left to the overflow path, which is what used to
     // handle it.
-    if (payloadLen <= _maxFramePayloadBytes) return null;
+    if (payloadLen <= ceiling) return null;
     return (streamId: view.getUint32(0), payloadLen: payloadLen);
   }
+
+  /// Notified for every frame stepped over, with the payload bytes the peer
+  /// charged against its send window for it.
+  ///
+  /// The receiver returns flow-control credit only for messages it DELIVERS, so
+  /// a skipped frame otherwise shrinks the peer's window for good. Measured with
+  /// an 8 MiB connection window and 2 MiB refused per call: the connection
+  /// wedged on the FOURTH refusal and every later call timed out at 6 s.
+  /// Nothing before round 161 could hit this -- the connection used to die on
+  /// the first oversized frame, so there was no "later".
+  void Function(int streamId, int bytes)? onFrameDiscarded;
 
   /// Fails the call that frame belonged to, in the peer's own protocol terms.
   ///
@@ -217,6 +242,9 @@ class RpcFrameMultiplexedChannel
   /// RPC; this delivers exactly that to the stream, and everything else on the
   /// connection carries on.
   void _refuseFrame(int streamId, int payloadLen) {
+    // Before the delivery check: the bytes crossed the wire whether or not
+    // anyone is still listening, and the peer charged itself for them.
+    onFrameDiscarded?.call(streamId, payloadLen);
     if (_incomingCtl.isClosed) return;
     _incomingCtl.add(
       RpcTransportMessage(

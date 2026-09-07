@@ -19,6 +19,7 @@
 // and keeps the connection, which is also what gRPC specifies.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
@@ -76,11 +77,32 @@ final class _FeedChannel implements IRpcChannel {
   }
 }
 
+/// A metadata frame carrying one header whose value is [valueBytes] long.
+Uint8List _metadataFrame(int streamId, int valueBytes) {
+  final payload = Uint8List.fromList(
+    utf8.encode(
+      json.encode({
+        'h': [
+          ['x-big', 'v' * valueBytes],
+        ],
+      }),
+    ),
+  );
+  final frame = Uint8List(RpcChannelFrame.headerSize + payload.length);
+  final view = ByteData.sublistView(frame);
+  view.setUint32(0, streamId);
+  view.setUint8(4, RpcChannelFrame.flagMetadata);
+  view.setUint32(5, payload.length);
+  frame.setRange(RpcChannelFrame.headerSize, frame.length, payload);
+  return frame;
+}
+
 typedef _Rig = ({
   _FeedChannel feed,
   RpcFrameMultiplexedChannel channel,
   List<RpcTransportMessage> messages,
   List<Object> errors,
+  List<({int streamId, int bytes})> discarded,
 });
 
 _Rig _rig() {
@@ -93,9 +115,18 @@ _Rig _rig() {
   );
   final messages = <RpcTransportMessage>[];
   final errors = <Object>[];
+  final discarded = <({int streamId, int bytes})>[];
+  channel.onFrameDiscarded = (id, bytes) =>
+      discarded.add((streamId: id, bytes: bytes));
   channel.incoming.listen(messages.add, onError: errors.add);
   addTearDown(channel.close);
-  return (feed: feed, channel: channel, messages: messages, errors: errors);
+  return (
+    feed: feed,
+    channel: channel,
+    messages: messages,
+    errors: errors,
+    discarded: discarded,
+  );
 }
 
 Future<void> _settle() =>
@@ -224,6 +255,75 @@ void main() {
     expect(rig.messages.single.streamId, 21);
     expect(rig.messages.single.payload, hasLength(_ceiling));
     expect(rig.channel.isClosed, isFalse);
+  });
+
+  test('an oversized METADATA frame is refused the same way', () async {
+    // WITNESS. maxMetadataBytes is 256x tighter than the data ceiling at the
+    // defaults, and that check lives inside decodeAll -- AFTER buffering -- so
+    // round 161 fixed a big RESPONSE and left big TRAILERS fatal.
+    //
+    // The size has to sit BETWEEN the two ceilings -- over maxMetadataBytes
+    // (16 KiB here) and under the data ceiling (64 KiB + 5) -- or the data check
+    // refuses it and this proves nothing. The first version used 256 KiB and
+    // passed with the metadata ceiling disabled.
+    final rig = _rig();
+
+    rig.feed.feed(_metadataFrame(3, 32 * 1024));
+    await _settle();
+    rig.feed.feed(
+      RpcChannelFrame.encodeData(streamId: 5, payload: Uint8List(8)),
+    );
+    await _settle();
+
+    expect(rig.messages, hasLength(2));
+    expect(rig.messages[0].streamId, 3);
+    expect(_statusOf(rig.messages[0]), RpcStatus.resourceExhausted);
+    expect(rig.messages[1].streamId, 5);
+    expect(rig.errors, isEmpty);
+    expect(rig.channel.isClosed, isFalse);
+  });
+
+  test(
+    'GUARD: a metadata frame inside maxMetadataBytes is delivered',
+    () async {
+      // Pairs with the witness above: the metadata ceiling is 64 KiB here, so a
+      // 1 KiB header must go through untouched.
+      final rig = _rig();
+
+      rig.feed.feed(_metadataFrame(15, 1024));
+      await _settle();
+
+      expect(rig.messages, hasLength(1));
+      expect(rig.messages.single.streamId, 15);
+      expect(rig.messages.single.metadata?.headers, hasLength(1));
+      expect(rig.discarded, isEmpty);
+      expect(rig.channel.isClosed, isFalse);
+    },
+  );
+
+  test('a refused frame reports the bytes the peer charged for it', () async {
+    // WITNESS for the OTHER half. The receiver returns flow-control credit only
+    // for messages it delivers, so without this hook a skipped frame shrinks the
+    // peer's window for good: measured end to end over websocket with an 8 MiB
+    // connection window and 2 MiB refused per call, the connection wedged on the
+    // fourth refusal.
+    final rig = _rig();
+    const oversized = 1024 * 1024;
+
+    rig.feed.feed(_concat([_header(31, oversized), Uint8List(oversized)]));
+    await _settle();
+    rig.feed.feed(_metadataFrame(33, 32 * 1024));
+    await _settle();
+
+    expect(rig.discarded, hasLength(2));
+    expect(rig.discarded[0].streamId, 31);
+    expect(rig.discarded[0].bytes, oversized);
+    expect(rig.discarded[1].streamId, 33);
+    expect(
+      rig.discarded[1].bytes,
+      greaterThan(32 * 1024),
+      reason: 'the whole frame payload, not just the header value',
+    );
   });
 
   test('GUARD: a SERVER still closes on an oversized frame', () async {
