@@ -326,6 +326,10 @@ class RpcHttp2CallerTransport
         port,
         supportedProtocols: ['h2'],
       );
+      // The proxy path below has always done this; the direct path had not, so
+      // the same class produced differently configured sockets. See
+      // disableNagle.
+      disableNagle(socket, logger: logger, what: 'h2 socket to $host:$port');
       return _guardedConnection(
         incoming: socket,
         outgoing: socket,
@@ -429,6 +433,8 @@ class RpcHttp2CallerTransport
         );
       }
       final socket = await Socket.connect(host, port);
+      // See disableNagle: same reason as the h2c/TLS and proxy paths.
+      disableNagle(socket, logger: logger, what: 'h2c socket to $host:$port');
       return _guardedConnection(
         incoming: socket,
         outgoing: socket,
@@ -548,7 +554,10 @@ class RpcHttp2CallerTransport
     final proxyPort = proxyUri.hasPort ? proxyUri.port : 3128;
 
     final rawSocket = await Socket.connect(proxyHost, proxyPort);
-    rawSocket.setOption(SocketOption.tcpNoDelay, true);
+    // This is the path that already did it, and the reason the other two
+    // stood out. Routed through the shared helper so a setOption that throws
+    // on a socket the proxy has already reset cannot take the isolate out.
+    disableNagle(rawSocket, logger: logger, what: 'proxy socket to $proxyHost');
 
     // Build CONNECT request.
     final reqBuf = StringBuffer()

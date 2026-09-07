@@ -9,6 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
 import 'http2_header_block_guard.dart';
+import 'rpc_http2_common.dart';
 import 'rpc_http2_responder_transport.dart';
 
 /// Высокоуровневый HTTP/2 RPC сервер
@@ -522,6 +523,14 @@ class RpcHttp2Server implements IRpcServer {
   void _handleConnection(Socket socket) {
     final clientAddress = '${socket.remoteAddress}:${socket.remotePort}';
     _logger?.debug('Новое HTTP/2 подключение от $clientAddress');
+
+    // See disableNagle: an RPC's write pattern is the one Nagle penalises, and
+    // every socket this server accepted had it enabled.
+    disableNagle(
+      socket,
+      logger: _logger,
+      what: 'connection from $clientAddress',
+    );
 
     _notify('onConnectionOpened', () => _onConnectionOpened?.call(socket));
 

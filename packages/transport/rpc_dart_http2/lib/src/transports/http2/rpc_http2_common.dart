@@ -5,11 +5,51 @@
 
 import 'dart:async';
 
+import 'package:universal_io/io.dart';
+
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
 
 /// gRPC User-Agent header value.
 const String kGrpcUserAgent = 'rpc-dart/1.0.0';
+
+/// Turns Nagle's algorithm off on [socket], as every gRPC stack does.
+///
+/// Nagle holds a small outbound segment while earlier data is still
+/// unacknowledged, so it batches writes into fewer packets at the cost of up to
+/// one round trip. That trade is right for a bulk stream and wrong for an RPC,
+/// whose shape is exactly the one it penalises: a call writes a HEADERS frame
+/// and then a small DATA frame and then waits for a reply, so the second write
+/// can sit until the peer's (often DELAYED) ack for the first arrives.
+///
+/// Read back with `getRawOption`, dart:io leaves it off everywhere:
+///
+///     bare Socket.connect (dart:io default) : TCP_NODELAY false
+///     socket accepted by RpcHttp2Server     : TCP_NODELAY false
+///
+/// and exactly one path in this package used to set it -- `_connectH2ViaProxy`,
+/// on the raw socket before the CONNECT handshake. Two paths through the same
+/// class produced differently configured sockets, with the COMMON one as the
+/// odd one out.
+///
+/// **The benefit is NOT measurable on this machine and is not claimed as a
+/// number.** Loopback acks immediately, so Nagle never engages: the classic
+/// two-writes-then-wait shape measured 50us with it on and 49us with it off,
+/// and round 129's single-write test likewise found 200 vs 190us. The cost
+/// appears on a real network, where the delayed ack it waits for is tens of
+/// milliseconds away. Reproducing that needs kernel-level delay injection,
+/// which needs privileges this environment does not have.
+///
+/// Never throws: `setOption` can fail on a socket the peer has already reset,
+/// and this runs in the accept path -- the ROOT ZONE, where an uncaught error
+/// kills the isolate.
+void disableNagle(Socket socket, {LogScope? logger, String? what}) {
+  try {
+    socket.setOption(SocketOption.tcpNoDelay, true);
+  } catch (error) {
+    logger?.warning('Could not disable Nagle on ${what ?? "socket"}: $error');
+  }
+}
 
 /// Writes to an HTTP/2 stream's outgoing sink WITH backpressure.
 ///
