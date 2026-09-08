@@ -1406,22 +1406,40 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           'Operation cancelled by client, notifying server [streamId: $_streamId]',
         );
 
-        try {
-          final reason =
-              _context.cancellationToken!.reason ??
-              'Operation cancelled by client';
-          await _sendCancellationToServer(reason);
-        } catch (e, stackTrace) {
-          _logger.error(
-            'Failed to send cancellation notice [streamId: $_streamId]',
-            error: e,
-            stackTrace: stackTrace,
-          );
-        }
-
         _isActive = false;
         final cancelledException = RpcCancelledException(
           _context.cancellationToken!.reason ?? 'Operation was cancelled',
+        );
+
+        // Telling the SERVER is best-effort and must not gate telling OUR OWN
+        // consumer: the cancellation is a local fact, the notice is a network
+        // round trip. This used to `await _sendCancellationToServer(...)` first
+        // and deliver the error afterwards, so a send that never completed took
+        // the local error with it -- and the `try` below catches a throw, not a
+        // hang.
+        //
+        // Only wasm could reach it, because only wasm's bridge send awaits a
+        // Flutter platform-channel reply, and `close()` tears the transport down
+        // underneath it. Measured, an unbounded server stream with
+        // caller.close() 400 ms in, watching every event for 4 s afterwards:
+        //
+        //   websocket / isolate : RpcCancelledException: Endpoint closed
+        //   wasm, before        : items=11 events=[DONE]   <- SILENT
+        //   wasm, after         : RpcCancelledException
+        //
+        // A stream that ends cleanly is indistinguishable from one that
+        // finished, so a consumer processed a truncated stream and moved on.
+        unawaited(
+          _sendCancellationToServer(
+            _context.cancellationToken!.reason ??
+                'Operation cancelled by client',
+          ).catchError((Object e, StackTrace stackTrace) {
+            _logger.error(
+              'Failed to send cancellation notice [streamId: $_streamId]',
+              error: e,
+              stackTrace: stackTrace,
+            );
+          }),
         );
 
         try {

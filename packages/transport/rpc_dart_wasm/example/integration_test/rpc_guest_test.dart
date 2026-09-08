@@ -47,6 +47,66 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
+    'closing during a stream RAISES, it does not end cleanly',
+    (_) async {
+      // WITNESS. Cancellation used to `await _sendCancellationToServer(...)`
+      // before delivering the error to its own consumer, so a send that never
+      // completed took the local error with it. Only wasm could reach it: only
+      // its bridge send awaits a Flutter platform-channel reply, and close()
+      // tears the transport down underneath that await.
+      //
+      //   websocket / isolate : RpcCancelledException
+      //   wasm, before        : items=11 events=[DONE]   <- silent truncation
+      //   wasm, after         : ERROR RpcCancelledException, then DONE
+      //
+      // A stream that ends cleanly is indistinguishable from one that
+      // finished, so the consumer processed a truncated stream and moved on.
+      final c = await _connect();
+      final events = <String>[];
+      var items = 0;
+      c.caller
+          .serverStream<RpcString, RpcString>(
+            serviceName: 'Echo',
+            methodName: 'Firehose',
+            request: ''.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .listen(
+            (_) => items++,
+            onError: (Object e) => events.add('ERROR ${e.runtimeType}'),
+            onDone: () => events.add('DONE'),
+            cancelOnError: false,
+          );
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      unawaited(c.caller.close());
+
+      // POLLED, not slept. The thing being waited for is the CONSUMER
+      // OBSERVING the cancellation, and load delays observation rather than
+      // production -- a flat 4 s false-failed twice at load average 16 while
+      // passing in isolation. The witness stays exactly as sharp: a genuinely
+      // silent truncation never produces an error at all, so it drains the
+      // whole budget and still fails.
+      final deadline = DateTime.now().add(const Duration(seconds: 30));
+      while (events.isEmpty || !events.first.startsWith('ERROR')) {
+        if (DateTime.now().isAfter(deadline)) break;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+
+      expect(items, greaterThan(0), reason: 'the stream must have been live');
+      expect(
+        events.first,
+        startsWith('ERROR'),
+        reason: 'ended as $events; a clean end cannot be told from completion',
+      );
+
+      await c.bridge.close();
+    },
+    timeout: const Timeout(Duration(minutes: 8)),
+  );
+
+  testWidgets(
     'a unary call reaches a real guest and comes back',
     (_) async {
       final c = await _connect();
