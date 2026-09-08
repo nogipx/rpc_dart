@@ -182,9 +182,22 @@ melos:
     test:wasm:device:
       description: Run the rpc_dart_wasm integration tests on a device.
       run: |
+        set -e
+        # The real dart2wasm guest is BUILT, never committed: a checked-in
+        # .wasm goes stale the moment core changes and rpc_guest_test would
+        # then report on a guest nobody is shipping.
+        packages/transport/rpc_dart_wasm/tool/build_guest.sh
         cd packages/transport/rpc_dart_wasm/example
         fvm flutter pub get
-        fvm flutter test integration_test
+        # RPC_WASM_DEVICE picks the target. Without it `flutter test` refuses
+        # when a simulator AND an emulator are both up, which is the normal
+        # state when checking both platforms -- and BOTH must be checked: the
+        # two boot scripts share no code.
+        if [ -n "${RPC_WASM_DEVICE:-}" ]; then
+          fvm flutter test integration_test -d "$RPC_WASM_DEVICE"
+        else
+          fvm flutter test integration_test
+        fi
 
     # Cross-platform (dart2js/node + chrome) web regression guard. Web-relevant
     # packages MUST stay green on `node`; default VM runs miss dart2js bugs.

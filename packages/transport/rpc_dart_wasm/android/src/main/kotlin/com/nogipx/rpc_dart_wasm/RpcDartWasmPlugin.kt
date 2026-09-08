@@ -521,6 +521,27 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     if (bytes != null) {
                         forwardBytesToRuntime(runtimeId, bytes)
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // KILLED THE APP before this catch existed. Closing the
+                    // isolate completes every in-flight evaluateJavaScriptAsync
+                    // with IsolateTerminatedException, and a forward started
+                    // just before close() resumes HERE -- a StandaloneCoroutine
+                    // on Dispatchers.Main with only a `finally`, so the throw
+                    // was uncaught:
+                    //
+                    //   FATAL EXCEPTION: main
+                    //   androidx.javascriptengine.IsolateTerminatedException:
+                    //     isolate closed
+                    //
+                    // An ordinary close with traffic in flight is the common
+                    // case, not an edge one: the last thing an endpoint does is
+                    // send, then close.
+                    android.util.Log.w(
+                        "RpcDartWasm",
+                        "Forward to $runtimeId dropped: ${e.message}",
+                    )
                 } finally {
                     reply.reply(null)
                 }

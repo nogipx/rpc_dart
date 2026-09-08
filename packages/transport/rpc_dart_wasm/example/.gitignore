@@ -47,3 +47,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Built by tool/build_guest.sh; never committed, or the device test would
+# report on a guest nobody is shipping.
+/assets/
