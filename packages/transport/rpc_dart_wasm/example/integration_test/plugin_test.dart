@@ -220,4 +220,108 @@ void main() {
           'whole watchdog, which also holds a WKWebView per attempt',
     );
   });
+
+  testWidgets('a boot failure names the actual reason', (_) async {
+    // WITNESS, Android. The failure is reported from `_rpcWasmBootError`, which
+    // is only ever set inside the boot IIFE's own catch -- so a script that
+    // dies BEFORE reaching it left every field null, and that JSON was still a
+    // non-null String, so it beat the real V8 message in `e.message`:
+    //
+    //   before : {"error":null,"trace":null,"phase":"init"}
+    //   after  : Uncaught ReferenceError: rpcWasmReceiveBytes is not defined
+    //
+    // A guest author got a placeholder instead of the one line that says what
+    // is wrong.
+    Object? error;
+    try {
+      await RpcFlutterWasmBridge.load(
+        wasmBytes: Uint8List.fromList([0, 1, 2, 3]),
+        mjsCode: 'throw new Error("glue exploded");',
+      ).timeout(const Duration(seconds: 45));
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error, isNotNull, reason: 'a guest that throws must not boot');
+    expect(
+      '$error',
+      contains('glue exploded'),
+      reason: 'the reported reason must be the guest\'s, not a placeholder',
+    );
+    expect('$error', isNot(contains('"error":null')));
+  });
+
+  testWidgets(
+    'bytes survive the round trip, across the size threshold',
+    (_) async {
+      // The plugin IS a byte pipe and no device test moved a byte through it
+      // until now. Android additionally splits host->guest at
+      // NAMED_DATA_THRESHOLD = 65536 -- base64 below, provideNamedData above --
+      // and neither branch had ever run. Both platforms are clean at every size;
+      // this is here to keep them that way.
+      final bridge = await RpcFlutterWasmBridge.load(
+        wasmBytes: Uint8List.fromList([0, 1, 2, 3]),
+        mjsCode: _echoGuest,
+      ).timeout(const Duration(seconds: 45));
+
+      final reader = _Inbox(bridge.incoming);
+
+      for (final n in [1, 1024, 65535, 65536, 65537, 262144]) {
+        final sent = Uint8List.fromList(
+          List<int>.generate(n, (i) => (i * 31 + 7) & 0xFF),
+        );
+        await bridge.send(sent);
+        final got = await reader.next.timeout(
+          const Duration(seconds: 20),
+          onTimeout: () => Uint8List(0),
+        );
+        expect(got, orderedEquals(sent), reason: 'round trip of $n bytes');
+      }
+
+      await reader.cancel();
+      await bridge.close();
+    },
+    timeout: const Timeout(Duration(minutes: 4)),
+  );
+}
+
+/// Boots without a real module and echoes every inbound frame straight back.
+///
+/// `globalThis.`, not a bare assignment: Android evaluates in strict mode, so a
+/// bare one is an Uncaught ReferenceError there while iOS accepts it.
+const _echoGuest = '''
+globalThis.rpcWasmReceiveBytes = function(b) { _rpcWasmSendBytes(b); };
+function compile(bytes) {
+  return Promise.resolve({
+    instantiate: function(imports) {
+      return Promise.resolve({ invokeMain: function() {} });
+    }
+  });
+}
+''';
+
+/// Pull-based reader over a stream; `package:async` is not a dependency here.
+class _Inbox {
+  _Inbox(Stream<Uint8List> source) {
+    _sub = source.listen((v) {
+      if (_waiting.isNotEmpty) {
+        _waiting.removeAt(0).complete(v);
+      } else {
+        _buffer.add(v);
+      }
+    });
+  }
+
+  late final StreamSubscription<Uint8List> _sub;
+  final _buffer = <Uint8List>[];
+  final _waiting = <Completer<Uint8List>>[];
+
+  Future<Uint8List> get next {
+    if (_buffer.isNotEmpty) return Future.value(_buffer.removeAt(0));
+    final c = Completer<Uint8List>();
+    _waiting.add(c);
+    return c.future;
+  }
+
+  Future<void> cancel() => _sub.cancel();
 }

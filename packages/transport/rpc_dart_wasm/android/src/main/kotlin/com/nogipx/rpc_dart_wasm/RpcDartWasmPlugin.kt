@@ -317,11 +317,21 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             startDriver(runtimeId)
             mapOf("runtimeId" to runtimeId, "error" to null)
         } catch (e: Exception) {
+            // `_rpcWasmBootError` is only ever set inside the boot IIFE's own
+            // catch, so a script that dies BEFORE reaching it -- a syntax error
+            // or a throw in the injected glue -- leaves every field null. That
+            // JSON is still a non-null String, so it used to win the `?:` below
+            // and the real V8 message in `e.message` was thrown away:
+            //
+            //   before : {"error":null,"trace":null,"phase":"init"}
+            //
+            // Ask for it only when there IS one, so the fallback can do its job.
             val jsError = runCatching {
                 isolate.evaluateJavaScriptAsync(
-                    "JSON.stringify({ error: _rpcWasmBootError, trace: _rpcWasmBootTrace, phase: _rpcWasmBootPhase })"
+                    "_rpcWasmBootError ? JSON.stringify({ error: _rpcWasmBootError," +
+                        " trace: _rpcWasmBootTrace, phase: _rpcWasmBootPhase }) : ''"
                 ).await()
-            }.getOrNull()
+            }.getOrNull()?.takeIf { it.isNotEmpty() }
             android.util.Log.e(
                 "RpcDartWasm",
                 "Runtime boot failed: $runtimeId jsError=$jsError",
