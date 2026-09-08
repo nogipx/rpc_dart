@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: rpc_dart_wasm_example
 description: "Demonstrates how to use the rpc_dart_wasm plugin."
 # The following line prevents the package from being accidentally published to

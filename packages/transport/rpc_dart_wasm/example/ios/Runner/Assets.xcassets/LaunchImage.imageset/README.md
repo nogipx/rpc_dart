@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Launch Screen Assets
 
 You can customize the launch screen with your own desired assets by replacing the image files in this directory.

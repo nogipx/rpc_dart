@@ -2,7 +2,7 @@ PODS:
   - Flutter (1.0.0)
   - integration_test (0.0.1):
     - Flutter
-  - rpc_dart_wasm (0.1.0):
+  - rpc_dart_wasm (0.2.0):
     - Flutter
 
 DEPENDENCIES:
@@ -21,7 +21,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
-  rpc_dart_wasm: 29d952cec296d75ce14cc04ef479d7c5eb8129de
+  rpc_dart_wasm: 3dc48ca20fe46f2bed4106bee4a27f33346dc84b
 
 PODFILE CHECKSUM: d26c6144652a46dc6df965dbf0dc268625270718
 

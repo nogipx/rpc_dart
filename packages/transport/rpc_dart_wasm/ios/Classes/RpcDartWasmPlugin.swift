@@ -120,11 +120,12 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         //
         // In its OWN tag on purpose: a SyntaxError in the glue kills the whole
         // tag it is in, taking this handler with it if they were together.
-        // Captured HERE, in the first tag, and this is load-bearing. The next
-        // tag DECLARES `function setTimeout`, and a function declaration is
-        // hoisted to the top of its script -- so the same two lines written
-        // there would have captured the polyfill, not the platform. Measured on
-        // an iOS 18.6 simulator before this moved:
+        //
+        // The timer capture below is here for a DIFFERENT reason, and it is
+        // load-bearing. The next tag DECLARES `function setTimeout`, and a
+        // function declaration is hoisted to the top of its script -- so the
+        // same two lines written there would have captured the polyfill, not
+        // the platform. Measured on an iOS 18.6 simulator before this moved:
         //
         //     nativeIsPolyfill=true  nativeIsWindow=true
         //     src=function setTimeout(fn, ms) {   var id =
@@ -140,10 +141,32 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
           _rpcBootReported = true;
           window.webkit.messageHandlers.rpcBoot.postMessage(msg);
         }
+        // Before boot this is the only thing that reports a top-level throw.
+        // AFTER boot nothing is waiting on rpcBoot, so the same error has to go
+        // somewhere the host can see -- and `return true` suppresses the
+        // platform's own reporting, so without the console hop it vanished
+        // entirely, swallowed by the hook added to surface it.
+        function _rpcOnFailure(text) {
+          if (_rpcBootReported) {
+            try { console.error('uncaught: ' + text); } catch (e) {}
+            return;
+          }
+          _rpcReportBoot('error:' + text);
+        }
         window.onerror = function(message, source, lineno, colno, error) {
-          _rpcReportBoot('error:' + message +
-            (error && error.stack ? '\\n' + error.stack : ''));
+          _rpcOnFailure(message + (error && error.stack ? '\\n' + error.stack : ''));
           return true;
+        };
+        // A Dart guest's unawaited failing Future arrives HERE, not in onerror:
+        // a rejected promise is not an error event. Same hole, same answer.
+        window.onunhandledrejection = function(event) {
+          // String(r) AND the stack: WebKit's Error.stack is the call stack
+          // only, with no message in it, so using the stack alone loses what
+          // actually went wrong.
+          var r = event ? event.reason : null;
+          _rpcOnFailure('unhandled rejection: ' + String(r) +
+            (r && r.stack ? '\\n' + r.stack : ''));
+          if (event && event.preventDefault) event.preventDefault();
         };
         </script>
         <script>

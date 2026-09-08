@@ -118,6 +118,57 @@ void main() {
     );
   });
 
+  /// Boots [invokeMainBody] and waits for a console line containing [needle].
+  Future<String> consoleAfterBoot(String invokeMainBody, String needle) async {
+    final seen = Completer<String>();
+    final all = <String>[];
+    final bridge = await _boot(invokeMainBody: invokeMainBody);
+    final sub = bridge.console.listen((line) {
+      all.add(line);
+      if (line.contains(needle) && !seen.isCompleted) seen.complete(line);
+    });
+    final outcome = await seen.future.timeout(
+      const Duration(seconds: 8),
+      onTimeout: () => 'NOTHING (saw: $all)',
+    );
+    await sub.cancel();
+    await bridge.close();
+    return outcome;
+  }
+
+  testWidgets('an uncaught error after boot reaches the host', (_) async {
+    // WITNESS. `window.onerror` was added to report a throw during BOOT and
+    // returns true, which suppresses the platform's own reporting -- but once
+    // boot is answered `_rpcReportBoot` is a no-op, so a later uncaught error
+    // was swallowed by the very hook meant to surface it.
+    //
+    // _nativeSetTimeout, not the polyfill: _runDueTimers wraps `t.fn()` in its
+    // own try/catch and already routes to console.error, so a throw there
+    // would prove nothing about this path.
+    final line = await consoleAfterBoot(
+      '_nativeSetTimeout(function() { '
+          'throw new Error("post-boot boom"); }, 200);',
+      'post-boot boom',
+    );
+
+    expect(line, startsWith('E:'), reason: 'it is an error, not info');
+    expect(line, contains('uncaught'));
+  });
+
+  testWidgets('an unhandled rejection after boot reaches the host', (_) async {
+    // WITNESS. A Dart guest's unawaited failing Future surfaces as a rejected
+    // promise, which is NOT an error event -- `window.onerror` never sees it,
+    // so this needed its own handler rather than being covered by the one
+    // above.
+    final line = await consoleAfterBoot(
+      'Promise.reject(new Error("unawaited boom"));',
+      'unawaited boom',
+    );
+
+    expect(line, startsWith('E:'));
+    expect(line, contains('unhandled rejection'));
+  });
+
   testWidgets('glue code that throws is reported, not waited out', (_) async {
     // WITNESS. The boot script injects the guest's .mjs at TOP LEVEL, outside
     // the try/catch that guards instantiation. A throw there aborts the
