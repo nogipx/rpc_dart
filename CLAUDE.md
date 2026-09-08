@@ -179,25 +179,27 @@ on `Version X already exists`, after the other packages have gone out.
   `resolution: workspace` from the generator's pubspec AND its entry from the
   root `workspace:` list, `fvm dart pub get` in the package, run, then put both
   back. Its `lib/` is still covered by `melos run analyze`.
-- **native code is NOT covered by any test script.** `rpc_dart_wasm` ships a
-  Swift and a Kotlin plugin; `melos run test:wasm` exercises the Dart bridge and
-  nothing else, and the package has no example app, so `flutter build` cannot
-  compile them either. A native change therefore ships uncompiled unless you run
-  **`melos run analyze:native`**, which type-checks both against the real
-  frameworks (Flutter engine, WebKit, androidx.javascriptengine).
-  It needs Xcode for the Swift half, and for the Kotlin half a `kotlinc` (Android
-  Studio's counts), an Android SDK platform, and a gradle module cache warmed by
-  any previous Flutter Android build. Missing toolchains are reported as SKIP and
-  a run that checked NOTHING exits **2**, so it can never read as a pass. It is a
-  type check, not a test: it proves the code compiles and that every platform API
-  it calls exists — that is exactly the class of defect that shipped before it
-  existed (iOS reported a dead runtime through `finishBoot`, a no-op after boot).
-  To actually EXECUTE the native code, `packages/transport/rpc_dart_wasm/example`
-  is a host app whose only purpose is to give `flutter build` something to
-  compile the plugin into. Boot a simulator/emulator, then
-  **`melos run test:wasm:device`** (~1 min, mostly the Xcode/gradle build; it is
-  deliberately NOT part of the ordinary gate). This is the only lens that sees
-  behaviour rather than types — it found a 30 s boot stall on its first run.
+- **native code needs its OWN two scripts — the ordinary gate never touches it.**
+  `rpc_dart_wasm` ships a Swift and a Kotlin plugin, and `melos run test:wasm`
+  exercises the Dart bridge alone. Neither `analyze` nor `test` compiles a line
+  of either, so a native change ships unverified unless you run:
+  - **`melos run analyze:native`** — type-checks both against the real frameworks
+    (Flutter engine, WebKit, androidx.javascriptengine). Needs Xcode for the
+    Swift half; for the Kotlin half a `kotlinc` (Android Studio's counts), an
+    Android SDK platform, and a gradle module cache warmed by any previous
+    Flutter Android build. Missing toolchains are SKIPs, and a run that checked
+    NOTHING exits **2** so it can never read as a pass.
+  - **`melos run test:wasm:device`** — actually RUNS it, via
+    `packages/transport/rpc_dart_wasm/example`, a host app whose only purpose is
+    to give `flutter build` something to compile the plugin into. Boot a
+    simulator/emulator first. ~1 min, mostly the build; deliberately NOT part of
+    the ordinary gate.
+
+  The levels find different things and the order is strict — reading <
+  compiling < running. Reading shipped a dead-runtime report through
+  `finishBoot`, a no-op after boot. Compiling would not have caught the 30 s
+  boot stall the first device run found, and running is what showed that on iOS
+  a page loaded with `baseURL: nil` cannot fetch its own module at all.
 - **infra tests**: `*_postgres`, `*_minio`, and the SQLCipher test in the sqlite
   packages need running services / a cipher-enabled native lib. Use
   `melos run test:unit` to skip them.

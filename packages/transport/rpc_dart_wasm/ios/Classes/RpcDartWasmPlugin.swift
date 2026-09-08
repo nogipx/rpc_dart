@@ -120,6 +120,20 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         //
         // In its OWN tag on purpose: a SyntaxError in the glue kills the whole
         // tag it is in, taking this handler with it if they were together.
+        // Captured HERE, in the first tag, and this is load-bearing. The next
+        // tag DECLARES `function setTimeout`, and a function declaration is
+        // hoisted to the top of its script -- so the same two lines written
+        // there would have captured the polyfill, not the platform. Measured on
+        // an iOS 18.6 simulator before this moved:
+        //
+        //     nativeIsPolyfill=true  nativeIsWindow=true
+        //     src=function setTimeout(fn, ms) {   var id =
+        //
+        // _scheduleNextTick then called itself through _nativeSetTimeout, so a
+        // single setTimeout from the guest recursed until the stack blew and no
+        // timer ever reached the event loop.
+        var _nativeSetTimeout = setTimeout;
+        var _nativeClearTimeout = clearTimeout;
         var _rpcBootReported = false;
         function _rpcReportBoot(msg) {
           if (_rpcBootReported) return;
@@ -133,8 +147,6 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         };
         </script>
         <script>
-        var _nativeSetTimeout = setTimeout;
-        var _nativeClearTimeout = clearTimeout;
         var _microtaskQueue = [];
         var _timerId = 0;
         var _timers = {};
@@ -492,7 +504,10 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
 
     func boot(html: String, completion: @escaping (String?) -> Void) {
         bootCompletion = completion
-        webView.loadHTMLString(html, baseURL: nil)
+        // baseURL is the page's ORIGIN, and every byte path here is a fetch of
+        // rpc-wasm:///. With nil the page is about:blank -- an opaque origin --
+        // so those fetches are cross-origin and WebKit blocks them outright.
+        webView.loadHTMLString(html, baseURL: URL(string: "rpc-wasm:///"))
 
         bootTimeoutTimer = Timer.scheduledTimer(withTimeInterval: Self.bootTimeoutSeconds, repeats: false) { [weak self] _ in
             guard let self = self, let cb = self.bootCompletion else { return }
