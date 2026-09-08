@@ -13,6 +13,8 @@
 // .wasm goes stale the moment core changes and the test would then report on a
 // guest nobody is shipping.
 
+import 'dart:async';
+
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -120,5 +122,169 @@ void main() {
       await c.bridge.close();
     },
     timeout: const Timeout(Duration(minutes: 8)),
+  );
+
+  testWidgets(
+    'all four call shapes work against a real guest',
+    (_) async {
+      // Only unary and serverStream had ever run over this transport with real
+      // contracts. Round 172 found a per-shape delivery matrix defect in core,
+      // so two shapes never exercised is a gap, not a formality.
+      final c = await _connect();
+
+      final say = await c.caller.unaryRequest<RpcString, RpcString>(
+        serviceName: 'Echo',
+        methodName: 'Say',
+        request: 'hi'.rpc,
+        requestCodec: _codec,
+        responseCodec: _codec,
+      );
+      expect(say.value, 'echo:hi');
+
+      final counted = await c.caller
+          .serverStream<RpcString, RpcString>(
+            serviceName: 'Echo',
+            methodName: 'Count',
+            request: '3'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .map((e) => e.value)
+          .toList();
+      expect(counted, ['item-0', 'item-1', 'item-2']);
+
+      final collected = await c.caller.clientStream<RpcString, RpcString>(
+        serviceName: 'Echo',
+        methodName: 'Collect',
+        requestCodec: _codec,
+        responseCodec: _codec,
+      )(Stream.fromIterable(['a'.rpc, 'b'.rpc, 'c'.rpc]));
+      expect(collected.value, '3:a,b,c');
+
+      final mirrored = await c.caller
+          .bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'Echo',
+            methodName: 'Mirror',
+            requests: Stream.fromIterable(['x'.rpc, 'y'.rpc]),
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .map((e) => e.value)
+          .toList();
+      expect(mirrored, ['back:x', 'back:y']);
+
+      await c.caller.close();
+      await c.bridge.close();
+    },
+    timeout: const Timeout(Duration(minutes: 8)),
+  );
+
+  testWidgets(
+    'cancelling a stream stops the handler inside the guest',
+    (_) async {
+      // Round 97's shape: on http2 the reset never reached the handler and it
+      // produced 404715 more messages. The guest counts what it yields and
+      // serves the count over RPC, so the host can ask whether it actually
+      // STOPPED -- the connection stays UP, since tearing it down would stop
+      // the handler for unrelated reasons.
+      final c = await _connect();
+
+      Future<int> produced() async {
+        final r = await c.caller
+            .unaryRequest<RpcString, RpcString>(
+              serviceName: 'Echo',
+              methodName: 'Produced',
+              request: ''.rpc,
+              requestCodec: _codec,
+              responseCodec: _codec,
+            )
+            .timeout(const Duration(seconds: 30));
+        return int.parse(r.value);
+      }
+
+      var received = 0;
+      final ready = Completer<void>();
+      final sub = c.caller
+          .serverStream<RpcString, RpcString>(
+            serviceName: 'Echo',
+            methodName: 'Firehose',
+            request: ''.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .listen(
+            (_) {
+              received++;
+              if (received == 5 && !ready.isCompleted) ready.complete();
+            },
+            onError: (Object _) {},
+            cancelOnError: false,
+          );
+
+      await ready.future.timeout(const Duration(seconds: 60));
+      await sub.cancel();
+
+      final atCancel = await produced();
+      await Future<void>.delayed(const Duration(seconds: 3));
+      final later = await produced();
+
+      // Without this the test passes vacuously on a guest whose handler never
+      // ran at all: 0 more than 0 is also "it stopped".
+      expect(
+        atCancel,
+        greaterThan(0),
+        reason: 'the handler must have produced something before the cancel',
+      );
+      expect(
+        later - atCancel,
+        lessThan(50),
+        reason:
+            'the guest produced ${later - atCancel} more items in 3 s after '
+            'the client cancelled; the stop never reached the handler',
+      );
+
+      await c.caller.close();
+      await c.bridge.close();
+    },
+    timeout: const Timeout(Duration(minutes: 8)),
+  );
+
+  testWidgets(
+    'closing while the guest is producing does not take the app down',
+    (_) async {
+      // Round 186 fixed a close with an INBOUND forward in flight, which
+      // crashed the Android process. This is the other direction: close
+      // straight through a live producer, with the outbound drain mid-evaluate.
+      // Repeated with a moving close point, because the race only sometimes
+      // lines up.
+      for (var i = 0; i < 4; i++) {
+        final c = await _connect();
+        var got = 0;
+        final ready = Completer<void>();
+        final sub = c.caller
+            .serverStream<RpcString, RpcString>(
+              serviceName: 'Echo',
+              methodName: 'Firehose',
+              request: ''.rpc,
+              requestCodec: _codec,
+              responseCodec: _codec,
+            )
+            .listen(
+              (_) {
+                got++;
+                if (got == 1 + i && !ready.isCompleted) ready.complete();
+              },
+              onError: (Object _) {},
+              cancelOnError: false,
+            );
+
+        await ready.future.timeout(const Duration(seconds: 60));
+        // No cancel first, on purpose.
+        await c.bridge.close().timeout(const Duration(seconds: 20));
+        await sub.cancel();
+        await c.caller.close().timeout(const Duration(seconds: 20));
+      }
+    },
+    timeout: const Timeout(Duration(minutes: 10)),
   );
 }

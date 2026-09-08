@@ -15,6 +15,9 @@ import 'package:rpc_dart_wasm/rpc_wasm.dart';
 
 const _codec = RpcCodec(RpcString.fromJson);
 
+/// Items the Firehose handler has yielded, readable over RPC.
+int _produced = 0;
+
 final class _EchoService extends RpcResponderContract {
   _EchoService() : super('Echo');
 
@@ -36,6 +39,54 @@ final class _EchoService extends RpcResponderContract {
       // across the host's transport ceilings from inside the guest.
       handler: (request, {RpcContext? context}) async =>
           ('x' * int.parse(request.value)).rpc,
+    );
+
+    // Unbounded, so a caller can cancel mid-flight. `_produced` is readable
+    // through Produced below, which is how the host asks whether the handler
+    // actually STOPPED rather than merely stopped being listened to.
+    addServerStreamMethod<RpcString, RpcString>(
+      methodName: 'Firehose',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (request, {RpcContext? context}) async* {
+        final body = 'y' * 1024;
+        while (true) {
+          yield body.rpc;
+          _produced++;
+          await Future<void>.delayed(Duration.zero);
+        }
+      },
+    );
+
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'Produced',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (request, {RpcContext? context}) async => '$_produced'.rpc,
+    );
+
+    addClientStreamMethod<RpcString, RpcString>(
+      methodName: 'Collect',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (requests, {RpcContext? context}) async {
+        final parts = <String>[];
+        await for (final r in requests) {
+          parts.add(r.value);
+        }
+        return '${parts.length}:${parts.join(",")}'.rpc;
+      },
+    );
+
+    addBidirectionalMethod<RpcString, RpcString>(
+      methodName: 'Mirror',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (requests, {RpcContext? context}) async* {
+        await for (final r in requests) {
+          yield 'back:${r.value}'.rpc;
+        }
+      },
     );
 
     addServerStreamMethod<RpcString, RpcString>(
