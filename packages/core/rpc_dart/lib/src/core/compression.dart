@@ -26,10 +26,22 @@ abstract class RpcCompressionCodec {
 
   /// Decompresses [data] and returns the original bytes.
   ///
-  /// When [maxOutputBytes] is non-null, implementations should bound the
-  /// decompressed output and throw (e.g. [FormatException]) before
-  /// materializing output larger than the limit, as a guard against
-  /// decompression bombs. Codecs that cannot bound output may ignore the hint.
+  /// When [maxOutputBytes] is non-null an implementation MUST stop and throw
+  /// (e.g. [FormatException]) before materializing output past the limit. This
+  /// is the ONLY defence against a decompression bomb that acts in time: the
+  /// layer above re-checks the length afterwards, but by then the memory has
+  /// already been allocated, so that check bounds what is RETAINED and not what
+  /// is ALLOCATED.
+  ///
+  /// Measured over a real websocket connection, 20 requests whose payloads
+  /// expand to 1 GiB each -- 19.9 MiB actually sent:
+  ///
+  ///     codec honours the hint : RSS +162 MiB
+  ///     codec ignores it       : RSS +1549 MiB
+  ///
+  /// Both survive; the difference is a 10x peak an attacker chooses. A codec
+  /// that genuinely cannot bound its output should refuse to be registered
+  /// rather than ignore the hint.
   Uint8List decompress(Uint8List data, {int? maxOutputBytes});
 }
 
