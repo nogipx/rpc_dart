@@ -149,6 +149,10 @@ final class RpcSecurityPolicy {
   /// layer already decided: [RpcFrameMultiplexedChannel] fails the call for a
   /// peer it must keep talking to and closes for one it need not. Setting this
   /// to true restores the old behaviour for a deployment that wants it.
+  ///
+  /// Honoured by the channel transports (websocket, isolate, wasm) and by the
+  /// HTTP/2 responder. NOT by `rpc_dart_http`: HTTP/1.1 there is
+  /// request-scoped, so there is no connection outliving the refusal to end.
   final bool closeOnProtocolError;
 
   /// How long a peer-opened stream may sit half-open before it is reclaimed.

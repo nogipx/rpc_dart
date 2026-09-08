@@ -374,8 +374,31 @@ class RpcHttp2ResponderTransport
         _logger?.warning('Не удалось отклонить stream $streamId: $e');
       } finally {
         releaseStreamId(streamId);
+        // `closeOnProtocolError` was read ONLY by RpcChannelTransport, so on
+        // HTTP/2 -- the transport a gRPC deployment actually exposes -- a
+        // deployment that set it got nothing: the peer was answered per stream
+        // and stayed connected to try again forever. A security knob that
+        // silently does nothing on two of five transports is worse than one
+        // that is absent.
+        //
+        // Answered FIRST, then closed: the peer has to learn it was its own
+        // fault, or a plain disconnect reads as UNAVAILABLE and is retried.
+        // Same order as the channel transport's protocol close.
+        if (error is ArgumentError && _policy.closeOnProtocolError) {
+          await _closeForProtocolError();
+        }
       }
     }());
+  }
+
+  /// Ends the connection after a policy violation, when the policy asks for it.
+  Future<void> _closeForProtocolError() async {
+    if (_isClosed) return;
+    try {
+      await _connection.terminate();
+    } catch (e) {
+      _logger?.warning('Protocol-error close failed: $e');
+    }
   }
 
   /// Обрабатывает входящие HTTP/2 headers от клиента
