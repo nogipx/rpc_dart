@@ -22,3 +22,28 @@ path = ["LICENSE", "**/LICENSE", "LICENSES/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
 SPDX-License-Identifier = "MIT"
+
+# Generated app-shell assets and project files for the rpc_dart_wasm example.
+#
+# Annotated HERE rather than with `.license` sidecars, and that is not a style
+# choice: Android's resource compiler rejects any file under `res/` that is not
+# .xml or .png, so a sidecar next to an icon fails the build outright --
+#
+#   ic_launcher.png.license: Error: The file name must end with .xml or .png
+#
+# which is how the example came to be unbuildable for Android while building
+# fine for iOS. Xcode asset catalogues tolerate the stray file but do not need
+# it either.
+[[annotations]]
+path = [
+  "packages/transport/rpc_dart_wasm/example/android/**",
+  "packages/transport/rpc_dart_wasm/example/ios/**",
+  "packages/transport/rpc_dart_wasm/example/.metadata",
+  "packages/transport/rpc_dart_wasm/example/analysis_options.yaml",
+  # The plugin's own privacy manifest, for the same reason: it is COPIED into
+  # rpc_dart_wasm_privacy.bundle, so a sidecar beside it would ship to users.
+  "packages/transport/rpc_dart_wasm/ios/Resources/PrivacyInfo.xcprivacy",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
+SPDX-License-Identifier = "MIT"

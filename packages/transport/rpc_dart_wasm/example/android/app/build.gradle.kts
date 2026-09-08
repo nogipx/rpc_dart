@@ -24,11 +24,12 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.nogipx.rpc_dart_wasm_example"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Must match the plugin's floor, which is 26 because
+        // androidx.javascriptengine needs it. Flutter's default is lower, and
+        // the build fails outright rather than degrading -- the Android mirror
+        // of the example Podfile having to state iOS 15.0.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

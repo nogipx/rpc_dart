@@ -193,7 +193,17 @@ on `Version X already exists`, after the other packages have gone out.
     `packages/transport/rpc_dart_wasm/example`, a host app whose only purpose is
     to give `flutter build` something to compile the plugin into. Boot a
     simulator/emulator first. ~1 min, mostly the build; deliberately NOT part of
-    the ordinary gate.
+    the ordinary gate. **Run it on BOTH platforms** — the two boot scripts are
+    separate strings in separate languages, so a fix to one is never a fix to
+    the other, and some cases only exist on one (`Platform.isIOS` skips are
+    explained in the test).
+
+  Two build constraints the example encodes, both of which fail the build
+  outright rather than degrading: `minSdk = 26` (androidx.javascriptengine's
+  floor) and `platform :ios, '15.0'` in the Podfile (the podspec's). And no
+  `.license` sidecar may exist under Android `res/` — the resource compiler
+  rejects any file there that is not `.xml` or `.png`, so those paths are
+  annotated in `REUSE.toml` instead.
 
   The levels find different things and the order is strict — reading <
   compiling < running. Reading shipped a dead-runtime report through
