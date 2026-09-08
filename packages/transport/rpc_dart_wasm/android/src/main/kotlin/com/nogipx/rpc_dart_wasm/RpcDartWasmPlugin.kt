@@ -263,11 +263,39 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             function _rpcWasmSendBytes(bytes) {
               _rpcWasmOutbox.push(_bytesToBase64(bytes));
             }
+            // BOUNDED per call. The outbox leaves as the return VALUE of
+            // evaluateJavaScriptAsync, and JavaScriptSandbox caps that at 20 MiB
+            // by default -- while rpc_dart's own default maxMessageLengthBytes
+            // is 16 MiB, which is 22.4 MB once base64'd. Draining everything at
+            // once therefore killed the whole runtime on a message the policy
+            // above it calls legal:
+            //
+            //   AssetFileDescriptor.getLength() should be <= 20971520
+            //
+            // Splitting is safe because this bridge is a byte STREAM, not a
+            // message boundary: RpcFrameMultiplexedChannel reassembles frames
+            // across chunks. A single over-budget entry is cut on a multiple of
+            // 4 so each half is independently decodable base64.
+            var _rpcOutboxBudget = 4194304;
             function _rpcWasmDrainOutbox() {
               if (_rpcWasmOutbox.length === 0) return '';
-              var out = _rpcWasmOutbox.join('\n');
-              _rpcWasmOutbox = [];
-              return out;
+              var out = [], used = 0;
+              while (_rpcWasmOutbox.length > 0) {
+                var head = _rpcWasmOutbox[0];
+                if (used + head.length <= _rpcOutboxBudget) {
+                  out.push(head);
+                  used += head.length;
+                  _rpcWasmOutbox.shift();
+                } else if (out.length === 0) {
+                  var take = _rpcOutboxBudget - (_rpcOutboxBudget % 4);
+                  out.push(head.slice(0, take));
+                  _rpcWasmOutbox[0] = head.slice(take);
+                  break;
+                } else {
+                  break;
+                }
+              }
+              return out.join('\n');
             }
             function _rpcWasmReceiveBytes(bytes) {
               if (typeof rpcWasmReceiveBytes === 'function') {
@@ -440,14 +468,24 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             sendConsoleLog(runtimeId, consoleLogs)
         }
 
-        val raw = isolate.evaluateJavaScriptAsync("_rpcWasmDrainOutbox()").await()
-        if (raw.isEmpty()) return
+        // Keep draining: the outbox now hands back a bounded slice per call, so
+        // one tick must not leave a partially drained frame sitting there --
+        // the peer would wait on bytes the guest has already produced. Bounded
+        // so a guest that produces during the drain cannot pin the loop here.
+        var rounds = 0
+        while (rounds++ < 64) {
+            val raw = isolate.evaluateJavaScriptAsync("_rpcWasmDrainOutbox()").await()
+            if (raw.isEmpty()) return
 
-        for (b64 in raw.split('\n')) {
-            if (b64.isEmpty()) continue
-            val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
-            sendRuntimeBytes(runtimeId, bytes)
+            for (b64 in raw.split('\n')) {
+                if (b64.isEmpty()) continue
+                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                sendRuntimeBytes(runtimeId, bytes)
+            }
         }
+        // Still more queued after the cap: come straight back rather than
+        // sleeping on the next timer deadline.
+        wakeDriver(runtimeId)
     }
 
     private fun sendConsoleLog(runtimeId: String, log: String) {

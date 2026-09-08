@@ -255,10 +255,21 @@ void main() {
     'bytes survive the round trip, across the size threshold',
     (_) async {
       // The plugin IS a byte pipe and no device test moved a byte through it
-      // until now. Android additionally splits host->guest at
-      // NAMED_DATA_THRESHOLD = 65536 -- base64 below, provideNamedData above --
-      // and neither branch had ever run. Both platforms are clean at every size;
-      // this is here to keep them that way.
+      // until now. Two ceilings are crossed here:
+      //
+      //  * Android splits host->guest at NAMED_DATA_THRESHOLD = 65536 --
+      //    base64 below, provideNamedData above -- and neither branch had ever
+      //    run.
+      //  * 16 MiB is rpc_dart's own default maxMessageLengthBytes, so a guest
+      //    may legally send one. WITNESS: guest->host leaves as the return
+      //    value of evaluateJavaScriptAsync, capped at 20 MiB, and 16 MiB of
+      //    base64 is 22.4 MB -- so it killed the whole runtime:
+      //
+      //      before : RpcStatusException(14) ... died: AssetFileDescriptor
+      //               .getLength() should be <= 20971520
+      //      after  : ok
+      //
+      //    iOS never had it: its byte path is raw, with no base64 expansion.
       final bridge = await RpcFlutterWasmBridge.load(
         wasmBytes: Uint8List.fromList([0, 1, 2, 3]),
         mjsCode: _echoGuest,
@@ -266,22 +277,32 @@ void main() {
 
       final reader = _Inbox(bridge.incoming);
 
-      for (final n in [1, 1024, 65535, 65536, 65537, 262144]) {
+      for (final n in [
+        1,
+        1024,
+        65535,
+        65536,
+        65537,
+        262144,
+        16 * 1024 * 1024,
+      ]) {
         final sent = Uint8List.fromList(
           List<int>.generate(n, (i) => (i * 31 + 7) & 0xFF),
         );
         await bridge.send(sent);
-        final got = await reader.next.timeout(
-          const Duration(seconds: 20),
-          onTimeout: () => Uint8List(0),
-        );
+        final got = await reader
+            .take(n)
+            .timeout(
+              const Duration(seconds: 60),
+              onTimeout: () => Uint8List(0),
+            );
         expect(got, orderedEquals(sent), reason: 'round trip of $n bytes');
       }
 
       await reader.cancel();
       await bridge.close();
     },
-    timeout: const Timeout(Duration(minutes: 4)),
+    timeout: const Timeout(Duration(minutes: 8)),
   );
 }
 
@@ -300,26 +321,39 @@ function compile(bytes) {
 }
 ''';
 
-/// Pull-based reader over a stream; `package:async` is not a dependency here.
+/// Accumulating reader; `package:async` is not a dependency here.
+///
+/// It ACCUMULATES on purpose. The bridge is a byte STREAM, not a message
+/// boundary -- `RpcFrameMultiplexedChannel` above it reassembles frames across
+/// chunks, and Android now hands the outbox back in bounded slices. Completing
+/// on the first event would measure the chunk size rather than the round trip.
 class _Inbox {
   _Inbox(Stream<Uint8List> source) {
     _sub = source.listen((v) {
-      if (_waiting.isNotEmpty) {
-        _waiting.removeAt(0).complete(v);
-      } else {
-        _buffer.add(v);
-      }
+      _buffer.add(v);
+      _pump();
     });
   }
 
   late final StreamSubscription<Uint8List> _sub;
-  final _buffer = <Uint8List>[];
-  final _waiting = <Completer<Uint8List>>[];
+  final _buffer = BytesBuilder();
+  int _want = 0;
+  Completer<Uint8List>? _waiting;
 
-  Future<Uint8List> get next {
-    if (_buffer.isNotEmpty) return Future.value(_buffer.removeAt(0));
+  void _pump() {
+    final c = _waiting;
+    if (c == null || _buffer.length < _want) return;
+    _waiting = null;
+    final all = _buffer.takeBytes();
+    c.complete(Uint8List.sublistView(all, 0, _want));
+    if (all.length > _want) _buffer.add(Uint8List.sublistView(all, _want));
+  }
+
+  Future<Uint8List> take(int n) {
     final c = Completer<Uint8List>();
-    _waiting.add(c);
+    _want = n;
+    _waiting = c;
+    _pump();
     return c.future;
   }
 
