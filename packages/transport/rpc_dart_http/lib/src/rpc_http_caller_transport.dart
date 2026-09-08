@@ -154,20 +154,27 @@ class RpcHttpCallerTransport
   /// Creates an HTTP caller transport.
   ///
   /// Pass a custom [httpClient] to configure TLS, proxies, or other
-  /// platform-specific settings. For example, on native platforms you can
-  /// wrap a `dart:io` `HttpClient` via `package:http`'s `IOClient`:
+  /// platform-specific settings. For example, to trust a private CA on native
+  /// platforms, wrap a `dart:io` `HttpClient` via `package:http`'s `IOClient`:
   ///
   /// ```dart
   /// import 'dart:io';
   /// import 'package:http/io_client.dart';
   ///
-  /// final ioClient = HttpClient()
-  ///   ..badCertificateCallback = (cert, host, port) => true; // dev only
+  /// final context = SecurityContext(withTrustedRoots: true)
+  ///   ..setTrustedCertificates('/etc/ssl/private-ca.pem');
   /// final transport = RpcHttpCallerTransport(
   ///   baseUrl: 'https://...',
-  ///   httpClient: IOClient(ioClient),
+  ///   httpClient: IOClient(HttpClient(context: context)),
   /// );
   /// ```
+  ///
+  /// Do NOT reach for `badCertificateCallback = (_, __, ___) => true`. It
+  /// accepts every certificate, including an attacker's, which is a
+  /// man-in-the-middle hole rather than a TLS configuration — and against a
+  /// self-signed or private-CA server the snippet above is what actually works.
+  /// This doc used to give that callback as its ONLY example of "configuring
+  /// TLS", which is the sort of thing that gets copied into production.
   /// [policy] bounds what a RESPONSE may cost this client, and is reported to
   /// the endpoint layers through [IRpcSecurityPolicyAware]. It defaults to
   /// `const RpcSecurityPolicy()`, so the built-in limits apply out of the box.

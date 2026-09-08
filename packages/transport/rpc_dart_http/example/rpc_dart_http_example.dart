@@ -151,20 +151,23 @@ Future<void> example3Cors() async {
 Future<void> example4CustomHttpClient() async {
   print('\n=== 4. Custom HTTP client ===');
 
-  // On native platforms, wrap dart:io HttpClient with IOClient for full
-  // TLS control (custom CA, self-signed cert acceptance, etc.):
+  // On native platforms, wrap dart:io HttpClient with IOClient to trust a
+  // private or self-signed CA -- WITHOUT turning verification off:
   //
   // import 'dart:io';
   // import 'package:http/io_client.dart';
   //
-  // final ioClient = HttpClient()
-  //   ..badCertificateCallback = (cert, host, port) => true; // dev only
-  // final client = IOClient(ioClient);
+  // final context = SecurityContext(withTrustedRoots: true)
+  //   ..setTrustedCertificates('/etc/ssl/private-ca.pem');
   //
   // final transport = RpcHttpCallerTransport(
   //   baseUrl: 'https://...',
-  //   httpClient: client,
+  //   httpClient: IOClient(HttpClient(context: context)),
   // );
+  //
+  // `badCertificateCallback = (_, __, ___) => true` is NOT the answer here: it
+  // accepts an attacker's certificate as readily as your own, and the snippet
+  // above is what actually works against a self-signed server.
 
   // For this example, just check health with a plain client.
   final clientTransport = RpcHttpCallerTransport(
