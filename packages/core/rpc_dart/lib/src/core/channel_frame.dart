@@ -154,14 +154,21 @@ abstract final class RpcChannelFrame {
   ///
   /// When [maxPayloadLen] is non-null, a frame declaring a larger payload is
   /// rejected from the header alone — the oversized payload is never sliced or
-  /// buffered — by throwing [RpcFrameException]. Malformed metadata in an
-  /// otherwise well-sized frame likewise throws [RpcFrameException]. Frames
-  /// decoded before the offending one are not returned on throw; the caller is
-  /// expected to treat the error as a protocol violation and tear down.
+  /// buffered — by throwing [RpcFrameException]. Frames decoded before the
+  /// offending one are not returned on throw; the caller is expected to treat
+  /// the error as a protocol violation and tear down.
+  ///
+  /// Malformed metadata in an otherwise well-sized frame is different, and
+  /// [onMalformedMetadata] is how a caller says so. The framing is INTACT there
+  /// — the declared length is known and the payload is fully present — so the
+  /// frame can be stepped over and decoding continues in sync. With the
+  /// callback the offending stream id is reported and the frame skipped;
+  /// without it the old throw is kept, which is what a server wants.
   static (List<RpcDecodedFrame>, int) decodeAll(
     Uint8List data, {
     int? maxPayloadLen,
     int? maxMetadataLen,
+    void Function(int streamId)? onMalformedMetadata,
   }) {
     final frames = <RpcDecodedFrame>[];
     var offset = 0;
@@ -175,13 +182,43 @@ abstract final class RpcChannelFrame {
     while (offset + headerSize <= data.length) {
       // _decodeAt re-reads the declared length to enforce maxPayloadLen and to
       // detect a not-yet-complete payload; on incompleteness it returns null.
-      final frame = _decodeAt(
-        data,
-        view,
-        offset,
-        maxPayloadLen: maxPayloadLen,
-        maxMetadataLen: maxMetadataLen,
-      );
+      final RpcDecodedFrame? frame;
+      if (onMalformedMetadata == null) {
+        frame = _decodeAt(
+          data,
+          view,
+          offset,
+          maxPayloadLen: maxPayloadLen,
+          maxMetadataLen: maxMetadataLen,
+        );
+      } else {
+        RpcDecodedFrame? decoded;
+        try {
+          decoded = _decodeAt(
+            data,
+            view,
+            offset,
+            maxPayloadLen: maxPayloadLen,
+            maxMetadataLen: maxMetadataLen,
+          );
+        } on RpcFrameException {
+          // Only a metadata payload that will not parse can be stepped over:
+          // the SIZE rejections above fire before the payload is known to be
+          // present, so re-check that this frame is complete and let a size
+          // violation keep throwing.
+          final len = view.getUint32(offset + 5);
+          final isMetadata = (view.getUint8(offset + 4) & flagMetadata) != 0;
+          final complete = data.length >= offset + headerSize + len;
+          final withinLimits =
+              (maxPayloadLen == null || len <= maxPayloadLen) &&
+              (!isMetadata || maxMetadataLen == null || len <= maxMetadataLen);
+          if (!isMetadata || !complete || !withinLimits) rethrow;
+          onMalformedMetadata(view.getUint32(offset));
+          offset += headerSize + len;
+          continue;
+        }
+        frame = decoded;
+      }
       if (frame == null) break;
 
       final payloadLen = view.getUint32(offset + 5);

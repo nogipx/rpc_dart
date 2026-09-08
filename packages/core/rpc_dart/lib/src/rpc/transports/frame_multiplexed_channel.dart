@@ -283,6 +283,29 @@ class RpcFrameMultiplexedChannel
     );
   }
 
+  /// Fails the call a frame with undecodable metadata belonged to.
+  ///
+  /// INTERNAL rather than RESOURCE_EXHAUSTED: nothing about this is a limit,
+  /// the peer simply sent headers that will not parse. Same
+  /// `maxHeaderValueBytes` cap as [_refuseFrame], and for the same reason --
+  /// this trailer is emitted INBOUND and validated like peer traffic, so a
+  /// message longer than the cap would turn the refusal back into a
+  /// connection kill.
+  void _refuseMetadata(int streamId) {
+    if (_incomingCtl.isClosed) return;
+    _incomingCtl.add(
+      RpcTransportMessage(
+        metadata: RpcMetadata.forTrailer(
+          RpcStatus.internal,
+          message: 'Undecodable metadata frame',
+          maxMessageLength: _policy.maxHeaderValueBytes,
+        ),
+        isEndOfStream: true,
+        streamId: streamId,
+      ),
+    );
+  }
+
   void _onData(Uint8List chunk) {
     if (_closed || chunk.isEmpty) return;
 
@@ -371,11 +394,18 @@ class RpcFrameMultiplexedChannel
         buffered,
         maxPayloadLen: _maxFramePayloadBytes,
         maxMetadataLen: _policy.maxMetadataBytes,
+        // Same split as closeOnOversizedFrame, for the same reason: a peer we
+        // must keep talking to gets the offending CALL failed, a peer we do not
+        // gets the connection closed. One undecodable metadata frame used to
+        // kill the whole connection either way -- measured against a hostile
+        // WASM guest, where a single 9-byte empty metadata frame took every
+        // in-flight call with it.
+        onMalformedMetadata: closeOnOversizedFrame ? null : _refuseMetadata,
       );
     } on RpcFrameException catch (error) {
-      // A rejected frame (oversized declared payload or malformed metadata) is
-      // a protocol violation: surface a typed, handled error and tear down the
-      // channel rather than buffering or throwing into the receive loop's zone.
+      // What still reaches here is a SIZE violation, or malformed metadata on
+      // a connection we have decided to close for. The framing is not
+      // trustworthy past that point, so tearing down is the only safe answer.
       _failChannel(error);
       return;
     }
