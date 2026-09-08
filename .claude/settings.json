@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(fvm dart:*)",
+      "Bash(fvm flutter:*)",
+      "Bash(melos run:*)",
+      "Bash(melos exec:*)",
+      "Bash(melos list:*)",
+      "Bash(reuse lint:*)",
+      "Bash(python3 /Users/nogipx/nogipx_vault/projects/libraries/rpc_dart/.claude/skills/improvement-loop/scripts/loop.py:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

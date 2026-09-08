@@ -1,3 +1,4 @@
 # Local, per-machine state: never committed.
 settings.local.json
 scheduled_tasks.lock
+.obsidian/

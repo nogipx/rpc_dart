@@ -12,5 +12,4 @@
 - **[B-07](B-07-decision-close-on-protocol-error.md)** решена владельцем (раунд 190) — `closeOnProtocolError` по умолчанию `false` плюс крышка на количество нарушений
 - **[B-08](B-08-decision-closed-transport-error-split.md)** закрыта (раунд 201) — расщепление типов ошибок на закрытом транспорте
 - **[B-09](B-09-unfiled-grpc-compat-items.md)** открыта — не сведённые пункты «documented, not fixed» из приватной памяти
-
-Следующий свободный номер: **B-10**.
+- **[B-10](B-10-layers-without-lenses.md)** открыта — data, notify и blob не покрыты ни одной линзой: 234 файла

@@ -60,10 +60,16 @@ ROUND_FILE_RE = re.compile(r"^(\d{3})-[^/]+\.md$")
 ROUND_H1_RE = re.compile(r"^# Раунд (\d{3}) — (\w+) — ")
 ANY_ID_RE = re.compile(r"\b([A-ZА-ЯЁ]+-\d{2,})\b")
 SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
+# `вне журнала` — раунд, который был, но его записи не существует: setup.md
+# разрешает начинать журнал не с первого раунда. Такая ссылка не проверяется на
+# наличие файла, зато обязана быть НИЖЕ первого раунда журнала, иначе пометкой
+# можно замести пропавшую свежую запись.
 LENS_STATUS_RE = re.compile(
-    r"^(выведена|подтверждена \(раунд \d{3}\)|"
-    r"исчерпана здесь \(раунд \d{3}, [0-9a-f]{7,40}(, свип [0-9a-f]{8})?\)|отозвана \(раунд \d{3}\))")
+    r"^(выведена|подтверждена \(раунд \d{3}(?:, вне журнала)?\)|"
+    r"исчерпана здесь \(раунд \d{3}, (?:[0-9a-f]{7,40}(?:, свип [0-9a-f]{8})?|вне журнала)\)|"
+    r"отозвана \(раунд \d{3}(?:, вне журнала)?\))")
 SWEPT_RE = re.compile(r"исчерпана здесь \(раунд (\d{3}), ([0-9a-f]{7,40})(?:, свип ([0-9a-f]{8}))?\)")
+SWEPT_OFF_RE = re.compile(r"исчерпана здесь \(раунд (\d{3}), вне журнала\)")
 SCRIPT_RE = re.compile(r"^script:\s*(\S+)(.*)$")
 BACKLOG_STATUS_RE = re.compile(
     r"^(открыта|ждёт владельца|закрыта \(раунд \d{3}\)|"
@@ -417,6 +423,18 @@ def cmd_lint(root: Path, loop: Path) -> int:
         sm_ = SCRIPT_RE.match(det)
         if sm_ and resolve_script(loop, packs, sm_.group(1)) is None:
             rep.error(f"lenses/{ent['path'].name}: скрипт детектора {sm_.group(1)} не найден")
+        first_round = min(data["rounds"], default=None)
+
+        def check_round(num: str, marked: bool, where: str) -> None:
+            if num in data["rounds"]:
+                return
+            if not marked:
+                rep.error(f"lenses/{ent['path'].name}: {where} ссылается на раунд {num}, файла нет "
+                          "— либо завести запись, либо пометить «вне журнала»")
+            elif first_round is not None and num >= first_round:
+                rep.error(f"lenses/{ent['path'].name}: {where} помечает раунд {num} как «вне журнала», "
+                          f"но журнал начинается с {first_round} — записи не хватает, а не истории")
+
         applied = set()
         for tok in split_list(f.get("Применена", "")):
             m = re.search(r"\d{3}", tok)
@@ -424,12 +442,11 @@ def cmd_lint(root: Path, loop: Path) -> int:
                 rep.error(f"lenses/{ent['path'].name}: в `Применена:` не номер раунда: «{tok}»")
                 continue
             applied.add(m.group(0))
-            if m.group(0) not in data["rounds"]:
-                rep.error(f"lenses/{ent['path'].name}: `Применена:` ссылается на раунд {m.group(0)}, файла нет")
+            check_round(m.group(0), "вне журнала" in tok, "`Применена:`")
         lens_rounds[lid] = applied
         m = re.search(r"раунд (\d{3})", st)
-        if m and m.group(1) not in data["rounds"]:
-            rep.error(f"lenses/{ent['path'].name}: статус ссылается на раунд {m.group(1)}, файла нет")
+        if m:
+            check_round(m.group(1), "вне журнала" in st, "статус")
         if st.startswith("подтверждена") and f.get("Улика", "").strip() in EMPTY:
             rep.error(f"lenses/{ent['path'].name}: подтверждена, а `Улика:` пуста")
 
@@ -833,6 +850,9 @@ def cmd_stale(root: Path, loop: Path) -> int:
         st = ent["fields"].get("Статус", "")
         m = SWEPT_RE.match(st)
         if not m:
+            if SWEPT_OFF_RE.match(st):
+                rows.append(("свип", lid, "—", None,
+                             "свип вне журнала: код на момент свипа неизвестен, перемерить"))
             continue
         paths = split_list(ent["fields"].get("Пути", ""))
         changed = changed_files(root, m.group(2), paths) if paths else []
@@ -869,7 +889,7 @@ def cmd_stale(root: Path, loop: Path) -> int:
     for label, iid, sha, changed, note in rows:
         suffix = f" — {note}" if note else ""
         if changed is None:
-            print(f"{label:8} {iid:10} sha {sha}: не найден или не задан — старение не посчитать")
+            print(f"{label:8} {iid:10} sha {sha}: не найден или не задан — старение не посчитать{suffix}")
         elif changed:
             stale_n += 1
             head = ", ".join(changed[:5]) + (" …" if len(changed) > 5 else "")

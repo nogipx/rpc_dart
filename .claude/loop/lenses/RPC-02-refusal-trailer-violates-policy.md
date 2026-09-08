@@ -1,5 +1,9 @@
 # RPC-02 — Трейлер, нарушающий политику, которой отказали
 
+Пути:       packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**
+Применима:  есть валидация исходящих метаданных той же политикой, что и входящих
+Применена:  —
+
 Уточняет:    U-09
 
 Форма:       синтетический трейлер с диагностикой уходит через `sendMetadata`,
@@ -15,4 +19,4 @@
              символов>)` в `status 13 "Responder dispatch failed"` — длина
              объяснения решала статус. Свип ядра (5 мест) читался как полный;
              в транспортах нашлось ещё два.
-Статус:      подтверждена (раунды 153, 175, 176)
+Статус:     подтверждена (раунд 153, вне журнала)
