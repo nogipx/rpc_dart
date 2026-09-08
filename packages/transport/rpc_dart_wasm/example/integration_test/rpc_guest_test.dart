@@ -125,6 +125,59 @@ void main() {
   );
 
   testWidgets(
+    'an orphaned guest failure is reported as an ERROR',
+    (_) async {
+      // WITNESS. An unawaited failing Future inside the guest -- the way
+      // ordinary code drops an error by accident -- already reached the host,
+      // but through dart2wasm's own uncaught handler, which PRINTS. Measured on
+      // both platforms before RpcWasm.run guarded its zone:
+      //
+      //   before : I:Bad state: orphaned guest failure     <- info
+      //   after  : E:Unhandled error in WASM guest: ...    <- error, with stack
+      //
+      // An operator filtering the console stream for errors saw nothing when a
+      // handler inside the sandbox failed.
+      final c = await _connect();
+      final seen = Completer<String>();
+      final all = <String>[];
+      final sub = c.bridge.console.listen((l) {
+        all.add(l);
+        if (l.contains('orphaned guest failure') && !seen.isCompleted) {
+          seen.complete(l);
+        }
+      });
+
+      // The call itself SUCCEEDS; the failure happens afterwards, detached.
+      final r = await c.caller
+          .unaryRequest<RpcString, RpcString>(
+            serviceName: 'Echo',
+            methodName: 'Orphan',
+            request: ''.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 30));
+      expect(r.value, 'scheduled');
+
+      final line = await seen.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => 'NOTHING (saw: $all)',
+      );
+
+      expect(
+        line,
+        startsWith('E:'),
+        reason: 'a failed handler must not arrive as info',
+      );
+
+      await sub.cancel();
+      await c.caller.close();
+      await c.bridge.close();
+    },
+    timeout: const Timeout(Duration(minutes: 8)),
+  );
+
+  testWidgets(
     'all four call shapes work against a real guest',
     (_) async {
       // Only unary and serverStream had ever run over this transport with real

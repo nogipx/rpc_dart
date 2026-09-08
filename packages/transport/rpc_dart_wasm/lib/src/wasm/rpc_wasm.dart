@@ -14,6 +14,9 @@ import '../rpc_wasm_transport.dart';
 @JS('_rpcWasmSendBytes')
 external void _sendBytes(JSUint8Array bytes);
 
+@JS('console.error')
+external void _consoleError(JSString message);
+
 /// Bootstrap for Dart code compiled to WASM.
 ///
 /// This installs the runtime byte callback expected by the native host,
@@ -56,6 +59,44 @@ abstract final class RpcWasm {
     }
     _initialized = true;
 
+    // Guest code runs in a guarded zone so an unawaited failing Future -- the
+    // way ordinary code drops an error by accident -- is reported as an ERROR.
+    //
+    // It was already reaching the host, but through dart2wasm's own uncaught
+    // handler, which prints. Measured on both an iOS 18.6 simulator and an
+    // Android 11 emulator, a handler scheduling a Future it never awaits:
+    //
+    //     before : I:Bad state: orphaned guest failure     <- info
+    //     after  : E:...                                   <- error
+    //
+    // An operator filtering the console stream for errors saw nothing at all
+    // when a handler inside the sandbox failed. The zone also carries the
+    // stack, which print alone did not.
+    late final RpcPeerEndpoint result;
+    runZonedGuarded(
+      () => result = _boot(
+        configure: configure,
+        isClient: isClient,
+        policy: policy,
+        debugLabel: debugLabel,
+        compressionEnabled: compressionEnabled,
+        logController: logController,
+      ),
+      (error, stack) {
+        _consoleError('Unhandled error in WASM guest: $error\n$stack'.toJS);
+      },
+    );
+    return result;
+  }
+
+  static RpcPeerEndpoint _boot({
+    required void Function(RpcPeerEndpoint endpoint) configure,
+    required bool isClient,
+    required RpcSecurityPolicy policy,
+    required String? debugLabel,
+    required bool compressionEnabled,
+    required LogController? logController,
+  }) {
     final bridge = _RpcWasmBridge();
     final transport = RpcWasmTransport.fromBridge(
       bridge: bridge,

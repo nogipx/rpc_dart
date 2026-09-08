@@ -58,6 +58,22 @@ final class _EchoService extends RpcResponderContract {
       },
     );
 
+    // Drops a failing Future on the floor, the way ordinary guest code does by
+    // accident. Nothing awaits it, so it can only surface as an unhandled
+    // async error.
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'Orphan',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (request, {RpcContext? context}) async {
+        Future<void>.delayed(
+          const Duration(milliseconds: 50),
+          () => throw StateError('orphaned guest failure'),
+        );
+        return 'scheduled'.rpc;
+      },
+    );
+
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'Produced',
       requestCodec: _codec,
