@@ -255,6 +255,17 @@ abstract class RpcResponderContract implements IRpcContract {
   ///
   /// Codecs provided → serialized mode; codecs omitted → zero-copy (requires
   /// zero-copy-capable transport).
+  ///
+  /// The `requests` stream a handler receives CARRIES ERRORS: a cancelled or
+  /// deadline-expired call is reported by adding
+  /// [RpcCancelledException] / [RpcDeadlineExceededException] to it, which is
+  /// how a handler learns to stop. `await for` handles that for you — the
+  /// error surfaces as a throw the pipeline catches. A handler that subscribes
+  /// with `requests.listen(...)` MUST pass an `onError`, or the delivery
+  /// becomes an uncaught async error, which Dart makes isolate-fatal. Measured:
+  /// `listen((_) {})` with no `onError` kills the process on the first cancel,
+  /// while the same handler with one logs it and the caller still gets its
+  /// `RpcCancelledException` in 6 ms.
   void
   addClientStreamMethod<TRequest extends Object, TResponse extends Object>({
     required String methodName,
@@ -322,6 +333,10 @@ abstract class RpcResponderContract implements IRpcContract {
   ///
   /// Codecs provided → serialized mode; codecs omitted → zero-copy (requires
   /// zero-copy-capable transport).
+  ///
+  /// The `requests` stream carries cancellation and deadline errors, same as
+  /// [addClientStreamMethod] — a handler that uses `requests.listen(...)`
+  /// instead of `await for` must pass an `onError`.
   void
   addBidirectionalMethod<TRequest extends Object, TResponse extends Object>({
     required String methodName,
