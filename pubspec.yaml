@@ -174,6 +174,18 @@ melos:
       description: Type-check the rpc_dart_wasm iOS/Android plugin sources.
       run: packages/transport/rpc_dart_wasm/tool/check_native.sh
 
+    # The only thing that EXECUTES the plugin's Swift/Kotlin. Needs a booted
+    # simulator or emulator; `flutter test` picks the connected device, so boot
+    # one first (`xcrun simctl boot <udid>` / `emulator -avd <name>`). Takes
+    # ~1 min per platform, most of it the Xcode/gradle build -- it is not part
+    # of the ordinary gate.
+    test:wasm:device:
+      description: Run the rpc_dart_wasm integration tests on a device.
+      run: |
+        cd packages/transport/rpc_dart_wasm/example
+        fvm flutter pub get
+        fvm flutter test integration_test
+
     # Cross-platform (dart2js/node + chrome) web regression guard. Web-relevant
     # packages MUST stay green on `node`; default VM runs miss dart2js bugs.
     test:web:

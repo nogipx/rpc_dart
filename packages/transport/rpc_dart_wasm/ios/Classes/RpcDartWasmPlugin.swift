@@ -108,7 +108,31 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         let plainJs = stripModuleSyntax(mjsCode)
 
         let bootHtml = """
-        <!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
+        <!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
+        <script>
+        // Boot is reported OUT OF BAND on iOS -- the guest's glue code is
+        // injected at top level, and a throw there aborts its <script> tag
+        // before the guarded IIFE below ever runs. Nothing then posts to
+        // rpcBoot and the 30 s watchdog is the only thing left: measured
+        // 30051 ms on an iOS 18.6 simulator for a module whose glue throws.
+        // Android cannot have this -- evaluateJavaScriptAsync rejects on any
+        // throw, top level included -- so the same failure is instant there.
+        //
+        // In its OWN tag on purpose: a SyntaxError in the glue kills the whole
+        // tag it is in, taking this handler with it if they were together.
+        var _rpcBootReported = false;
+        function _rpcReportBoot(msg) {
+          if (_rpcBootReported) return;
+          _rpcBootReported = true;
+          window.webkit.messageHandlers.rpcBoot.postMessage(msg);
+        }
+        window.onerror = function(message, source, lineno, colno, error) {
+          _rpcReportBoot('error:' + message +
+            (error && error.stack ? '\\n' + error.stack : ''));
+          return true;
+        };
+        </script>
+        <script>
         var _nativeSetTimeout = setTimeout;
         var _nativeClearTimeout = clearTimeout;
         var _microtaskQueue = [];
@@ -225,9 +249,9 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
             _startRecvLoop();
             app.invokeMain();
             _flushMicrotasks();
-            window.webkit.messageHandlers.rpcBoot.postMessage('ok');
+            _rpcReportBoot('ok');
           } catch(e) {
-            window.webkit.messageHandlers.rpcBoot.postMessage('error:' + e + (e && e.stack ? '\\n' + e.stack : ''));
+            _rpcReportBoot('error:' + e + (e && e.stack ? '\\n' + e.stack : ''));
           }
         })();
         </script></body></html>

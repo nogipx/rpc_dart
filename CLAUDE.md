@@ -55,6 +55,7 @@ melos run test           # tests (excludes generator, see below)
 melos run test:unit      # tests, no service-dependent packages
 melos run test:wasm      # the Flutter wasm package (separate)
 melos run analyze:native # the wasm plugin's Swift + Kotlin (see below)
+melos run test:wasm:device # RUNS that native code; needs a booted device
 melos run test:web       # dart2js/node web regression guard
 melos run format:check   # formatting gate
 melos run publish:dry    # validate publishable packages
@@ -191,6 +192,12 @@ on `Version X already exists`, after the other packages have gone out.
   type check, not a test: it proves the code compiles and that every platform API
   it calls exists — that is exactly the class of defect that shipped before it
   existed (iOS reported a dead runtime through `finishBoot`, a no-op after boot).
+  To actually EXECUTE the native code, `packages/transport/rpc_dart_wasm/example`
+  is a host app whose only purpose is to give `flutter build` something to
+  compile the plugin into. Boot a simulator/emulator, then
+  **`melos run test:wasm:device`** (~1 min, mostly the Xcode/gradle build; it is
+  deliberately NOT part of the ordinary gate). This is the only lens that sees
+  behaviour rather than types — it found a 30 s boot stall on its first run.
 - **infra tests**: `*_postgres`, `*_minio`, and the SQLCipher test in the sqlite
   packages need running services / a cipher-enabled native lib. Use
   `melos run test:unit` to skip them.

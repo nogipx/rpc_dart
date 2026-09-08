@@ -1,0 +1,28 @@
+PODS:
+  - Flutter (1.0.0)
+  - integration_test (0.0.1):
+    - Flutter
+  - rpc_dart_wasm (0.1.0):
+    - Flutter
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - integration_test (from `.symlinks/plugins/integration_test/ios`)
+  - rpc_dart_wasm (from `.symlinks/plugins/rpc_dart_wasm/ios`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  integration_test:
+    :path: ".symlinks/plugins/integration_test/ios"
+  rpc_dart_wasm:
+    :path: ".symlinks/plugins/rpc_dart_wasm/ios"
+
+SPEC CHECKSUMS:
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
+  rpc_dart_wasm: 29d952cec296d75ce14cc04ef479d7c5eb8129de
+
+PODFILE CHECKSUM: d26c6144652a46dc6df965dbf0dc268625270718
+
+COCOAPODS: 1.16.2

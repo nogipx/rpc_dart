@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# Same reason as the plugin's own pubspec_overrides.yaml: without this the
+# example (and so every integration test that runs on a device) resolves
+# rpc_dart from PUB.DEV, and the on-device gate would report on a core nobody
+# is releasing.
+dependency_overrides:
+  rpc_dart:
+    path: ../../../core/rpc_dart
