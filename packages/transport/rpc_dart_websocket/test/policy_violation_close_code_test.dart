@@ -87,6 +87,12 @@ Future<int> _startServer(StreamController<WebSocketChannel> connCtl) async {
   final server = RpcWebSocketServer.createWithContracts(
     connections: connCtl.stream,
     contracts: [_Svc()..setup()],
+    // Set EXPLICITLY: the flag defaults to false since round 190, because one
+    // metadata frame with 3000 headers -- inside maxMetadataBytes, so past
+    // every size check -- was enough for a peer to end the connection. What
+    // this file measures is the close CODE when a deployment does ask to
+    // close, and that is unchanged.
+    policy: const RpcSecurityPolicy(closeOnProtocolError: true),
   );
   await server.start();
   addTearDown(() async {

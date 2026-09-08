@@ -661,6 +661,19 @@ class RpcChannelTransport
   /// [RpcSecurityPolicy.closeOnProtocolError] is set the transport is torn
   /// down as well -- which is what that flag has always promised and, until
   /// now, never did anywhere in the codebase.
+  /// How many policy violations a connection may cost before it is treated as
+  /// hostile rather than misconfigured.
+  ///
+  /// [RpcSecurityPolicy.closeOnProtocolError] defaults to false, which says one
+  /// bad frame must not end the connection — it does NOT say a peer may grind
+  /// forever. Without a cap that is exactly what it said: measured over
+  /// websocket, 200k violating frames (5.9 MiB on the wire) cost the server
+  /// 100 MiB of RSS with the attacker's connection still open to repeat it.
+  /// 256 is far past any misconfiguration and bounds the hostile case.
+  static const int _maxPolicyViolations = 256;
+
+  int _policyViolations = 0;
+
   bool _validateInbound(RpcMetadata metadata, int streamId) {
     try {
       _policy.validateMetadata(metadata);
@@ -673,7 +686,8 @@ class RpcChannelTransport
       final ctl = _streamControllers[streamId];
       if (ctl != null && !ctl.isClosed) ctl.addError(violation);
       if (!_incoming.isClosed) _incoming.addError(violation);
-      if (_policy.closeOnProtocolError) {
+      if (_policy.closeOnProtocolError ||
+          ++_policyViolations > _maxPolicyViolations) {
         // Two separate jobs, and doing only the first one was a regression.
         //
         // (1) Tell the PEER it was its fault, like the framing path does. A

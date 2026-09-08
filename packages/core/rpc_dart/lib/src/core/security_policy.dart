@@ -137,7 +137,18 @@ final class RpcSecurityPolicy {
   /// Max length of `:path` / methodPath strings.
   final int maxMethodPathLength;
 
-  /// If true, transports should close the connection on protocol violations.
+  /// If true, transports close the whole connection on a protocol violation.
+  ///
+  /// Defaults to FALSE: the violation fails the CALL it arrived on and the
+  /// connection carries on. Measured against a hostile peer, one metadata frame
+  /// carrying 3000 headers -- or a single 32 KiB header value, both well inside
+  /// [maxMetadataBytes] and so past every size check -- was enough to terminate
+  /// the connection while this defaulted to true.
+  ///
+  /// That is too blunt a lever for the common case and matches what the framing
+  /// layer already decided: [RpcFrameMultiplexedChannel] fails the call for a
+  /// peer it must keep talking to and closes for one it need not. Setting this
+  /// to true restores the old behaviour for a deployment that wants it.
   final bool closeOnProtocolError;
 
   /// How long a peer-opened stream may sit half-open before it is reclaimed.
@@ -267,7 +278,7 @@ final class RpcSecurityPolicy {
     this.maxHeaderNameBytes = 128,
     this.maxHeaderValueBytes = 8 * 1024,
     this.maxMethodPathLength = 1024,
-    this.closeOnProtocolError = true,
+    this.closeOnProtocolError = false,
     this.halfOpenStreamTimeout = const Duration(seconds: 60),
     this.flowControlWindowBytes = 4 * 1024 * 1024,
     this.flowControlConnectionWindowBytes = 64 * 1024 * 1024,
@@ -333,7 +344,7 @@ final class RpcSecurityPolicy {
       maxHeaderNameBytes: readInt('maxHeaderNameBytes', 128),
       maxHeaderValueBytes: readInt('maxHeaderValueBytes', 8 * 1024),
       maxMethodPathLength: readInt('maxMethodPathLength', 1024),
-      closeOnProtocolError: readBool('closeOnProtocolError', true),
+      closeOnProtocolError: readBool('closeOnProtocolError', false),
       // Absent means the default; an explicit non-positive value disables it.
       halfOpenStreamTimeout: switch (map['halfOpenStreamTimeoutMs']) {
         final int ms when ms > 0 => Duration(milliseconds: ms),

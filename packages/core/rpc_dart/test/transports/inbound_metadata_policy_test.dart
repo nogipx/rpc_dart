@@ -80,8 +80,72 @@ void main() {
     await p.peer.close();
   });
 
-  test('closeOnProtocolError tears the transport down', () async {
+  test('the DEFAULT keeps the connection', () async {
+    // Owner's call, round 190. One metadata frame with 3000 headers -- or a
+    // single 32 KiB value, both inside maxMetadataBytes and so past every size
+    // check -- used to be enough for a peer to end the connection.
     final p = _pair(strict);
+    final errors = <Object>[];
+    p.server.incomingMessages.listen((_) {}, onError: errors.add);
+
+    await p.peer.send(
+      RpcTransportMessage.withMetadata(metadata: _hostile(), streamId: 1),
+    );
+    await _settle();
+
+    expect(errors.single, isA<RpcFrameException>());
+    expect(
+      p.server.isClosed,
+      isFalse,
+      reason: 'closeOnProtocolError defaults to false',
+    );
+
+    await p.peer.close();
+    await p.server.close();
+  });
+
+  test('but a peer that grinds is cut off anyway', () async {
+    // WITNESS. "One bad frame must not end the connection" does not mean "a
+    // peer may grind forever" -- the mistake round 189 made one round earlier
+    // with the malformed-metadata skip. Measured over websocket before the cap:
+    // 200k violating frames, 5.9 MiB on the wire, cost the server 100 MiB of
+    // RSS with the attacker's connection still open to do it again.
+    final p = _pair(strict);
+    p.server.incomingMessages.listen((_) {}, onError: (Object _) {});
+
+    for (var i = 0; i < 400; i++) {
+      if (p.server.isClosed) break;
+      await p.peer.send(
+        RpcTransportMessage.withMetadata(
+          metadata: _hostile(),
+          streamId: 1 + 2 * i,
+        ),
+      );
+    }
+    await _settle();
+
+    expect(
+      p.server.isClosed,
+      isTrue,
+      reason: 'a peer past the cap is hostile, not misconfigured',
+    );
+
+    await p.peer.close();
+  });
+
+  test('closeOnProtocolError tears the transport down', () async {
+    // Set EXPLICITLY: the flag defaults to false since round 190, because one
+    // metadata frame with 3000 headers -- inside maxMetadataBytes, so past
+    // every size check -- was enough for a peer to end the connection. What
+    // this test pins is that the flag still WORKS when a deployment asks for
+    // it, which is unchanged.
+    final p = _pair(
+      const RpcSecurityPolicy(
+        maxHeaders: 4,
+        maxHeaderValueBytes: 16,
+        closeOnProtocolError: true,
+      ),
+    );
     p.server.incomingMessages.listen((_) {}, onError: (Object _) {});
 
     await p.peer.send(
@@ -92,9 +156,7 @@ void main() {
     expect(
       p.server.isClosed,
       isTrue,
-      reason:
-          'closeOnProtocolError defaults to true but was never honoured '
-          'anywhere in the codebase before this fix',
+      reason: 'the flag must still tear the transport down when set',
     );
 
     await p.peer.close();
