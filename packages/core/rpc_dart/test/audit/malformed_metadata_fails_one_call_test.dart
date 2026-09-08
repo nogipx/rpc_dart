@@ -128,6 +128,51 @@ void main() {
     await channel.close();
   });
 
+  test('a flood of them is capped, not answered forever', () async {
+    // WITNESS for the SECOND half of this story. Skipping instead of aborting
+    // made each malformed frame cheap for the SENDER -- nine bytes in, a whole
+    // synthesized trailer out -- so the fix above turned "one frame kills the
+    // connection" into an amplifier. Measured on an iOS 18.6 simulator with
+    // 200k of them in one 1.8 MB buffer:
+    //
+    //   before the cap : 200000 synthesized, RSS 271 -> 1321 MiB, 81 s of CPU
+    //   after          : 64 synthesized, RSS +28 MiB
+    //
+    // A peer with a bug sends a handful; one sending hundreds is hostile, and
+    // gets the connection its behaviour asked for.
+    final fake = _FakeChannel();
+    final channel = RpcFrameMultiplexedChannel(
+      channel: fake,
+      closeOnOversizedFrame: false,
+    );
+    final seen = <RpcTransportMessage>[];
+    final errors = <Object>[];
+    final sub = channel.incoming.listen(seen.add, onError: errors.add);
+
+    const n = 500;
+    final flood = Uint8List(n * 9);
+    for (var i = 0; i < n; i++) {
+      flood.setRange(i * 9, i * 9 + 9, _header(2 + 2 * i, 2, 0));
+    }
+    fake.feed(flood);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(
+      seen.length,
+      lessThan(n),
+      reason: '${seen.length} of $n were answered; the cap did nothing',
+    );
+    expect(seen, isNotEmpty, reason: 'the first few are still answered');
+    expect(
+      errors.single,
+      isA<RpcFrameException>(),
+      reason: 'past the cap the peer is hostile and the connection goes',
+    );
+
+    await sub.cancel();
+    await channel.close();
+  });
+
   test('GUARD: a server still closes on one', () async {
     // closeOnOversizedFrame defaults to true for a server, and that judgement
     // is deliberately unchanged: a peer it does not have to keep talking to

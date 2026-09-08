@@ -291,8 +291,32 @@ class RpcFrameMultiplexedChannel
   /// this trailer is emitted INBOUND and validated like peer traffic, so a
   /// message longer than the cap would turn the refusal back into a
   /// connection kill.
+  /// How many undecodable metadata frames a connection may cost before it is
+  /// treated as hostile rather than buggy.
+  ///
+  /// Skipping instead of aborting made each one CHEAP FOR THE SENDER -- nine
+  /// bytes in, a whole synthesized trailer out. Measured on an iOS 18.6
+  /// simulator, 200k of them in one 1.8 MB buffer, before this cap:
+  ///
+  ///     1.8 MB in  ->  1050 MiB of RSS and 81 s of CPU
+  ///
+  /// Before the skip existed the connection died on the FIRST one, so the
+  /// attacker got nothing; the skip is still right for the realistic case of a
+  /// peer with a bug, and 64 is far more than that case ever produces.
+  static const int _maxMalformedMetadataFrames = 64;
+
+  int _malformedMetadata = 0;
+  bool _metadataFloodTripped = false;
+
   void _refuseMetadata(int streamId) {
     if (_incomingCtl.isClosed) return;
+    if (++_malformedMetadata > _maxMalformedMetadataFrames) {
+      // Checked here but ACTED ON after decodeAll returns: this runs inside the
+      // decode loop, and tearing the channel down from under it would leave the
+      // buffer half-consumed.
+      _metadataFloodTripped = true;
+      return;
+    }
     _incomingCtl.add(
       RpcTransportMessage(
         metadata: RpcMetadata.forTrailer(
@@ -407,6 +431,18 @@ class RpcFrameMultiplexedChannel
       // a connection we have decided to close for. The framing is not
       // trustworthy past that point, so tearing down is the only safe answer.
       _failChannel(error);
+      return;
+    }
+
+    if (_metadataFloodTripped) {
+      // A peer past the cap is not a peer with a bug. Fail here, once decodeAll
+      // has finished with the buffer.
+      _failChannel(
+        RpcFrameException(
+          'Too many undecodable metadata frames '
+          '(over $_maxMalformedMetadataFrames on this connection)',
+        ),
+      );
       return;
     }
 
