@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: decided by owner (round 230)
 round: 228
 commit: af64eeac
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
@@ -68,4 +68,28 @@ deliberate. So the two callers need splitting before the arithmetic is safe.
 
 ## Owner decision
 
-—
+**Candidate 1 — split the credit paths.** (Asked and answered after round 230.)
+
+Consumption on the owed path credits the connection THROUGH the ledger
+(`min(bytes, owed)`); frames the channel stepped over and the credit-on-arrival
+branch credit directly. `_fcForget` can then repay unconditionally with no
+double credit.
+
+Notes for the round that carries this out:
+
+- **`_fcSettleOwed`'s comment is the specification of what must not break.** It
+  records that settling is deliberately kept out of `_fcCredit` because
+  `onFrameDiscarded` frames were never routed to a consumer and were never
+  owed. The split has to preserve that, not delete it — those frames keep
+  crediting directly.
+- **Three callers of `_fcCredit` and they are not alike**: `_fcOnConsumed`
+  (owed), `returnFlowCredit` (owed, the `IRpcFlowControlled` path), and
+  `onFrameDiscarded` (never owed). The first two move to the ledger route, the
+  third does not.
+- **The witness is P-11's CASE C**, which must go from 4 calls / 1024 KiB to the
+  full 3072 KiB, with all three existing arms unmoved. Two canaries per L-01:
+  one for the repay half, one for the no-double-credit half — and the second
+  needs its own assertion, because over-crediting shows up as a pool LARGER
+  than configured, which no existing arm would notice.
+- Round 212 is the cautionary tale for anything keyed per stream that outlives
+  its stream; re-read it before adding state.
