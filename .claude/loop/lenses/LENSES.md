@@ -11,7 +11,7 @@ field format — `../../skills/improvement-loop/specs/lens.md`.
 - **[RPC-06](RPC-06-native-plugin-layers.md)** confirmed (180, off-journal) — a defect in Swift or Kotlin, where Dart greps never look; refines U-14, U-03
 - **[RPC-07](RPC-07-web-as-separate-runtime.md)** confirmed (090, off-journal) — green on the VM, broken on dart2js; refines U-03
 - **[RPC-08](RPC-08-policy-field-single-transport.md)** confirmed (119, off-journal), applied in 205 — a policy field inert at a neighbouring transport; refines U-19
-- **[RPC-09](RPC-09-deadline-below-write.md)** confirmed (168, off-journal) — the deadline sits below a blocking write; refines U-16
+- **[RPC-09](RPC-09-deadline-below-write.md)** swept here (210) — the deadline sits below a blocking write; the answer path is independent of the send, so it cannot arise; refines U-16
 - **[RPC-10](RPC-10-shared-layer-blast-radius.md)** confirmed (150, off-journal) — a shared-layer fix's blast radius is overstated; refines U-11
 - **[RPC-11](RPC-11-package-outside-workspace.md)** confirmed (186, off-journal) — a package outside the workspace is invisible to the gate; refines U-03
 - **[RPC-12](RPC-12-cancel-into-request-stream.md)** retracted (204), applied in 202, 203, 204 — a contract mistaken twice for a defect

@@ -14,4 +14,5 @@ order below is the rank.
 - **[B-09](B-09-unfiled-grpc-compat-items.md)** open — unfiled "documented, not fixed" items from private memory
 - **[B-10](B-10-layers-without-lenses.md)** open — data, notify and blob have no lens at all: 234 files
 - **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
+- **[B-13](B-13-parked-sender-outlives-its-call.md)** open, reason "bench" (round 210) — does an abandoned upload leave a sender parked forever? the call completes either way, so the observable is `waiters`, not the call
 - **[B-12](B-12-http2-cancel-kills-the-connection.md)** closed (round 208) — http2: one cancelled stalled call killed the connection for good; the owner chose "keep reading, fail the call", shipped in 208. The upstream package:http2 report is still open

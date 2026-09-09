@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[210](210-the-answer-does-not-wait-on-the-send.md)** CLEAN, rpc_dart and rpc_dart_http2 — the answer does not wait on the send
 - **[209](209-a-decorator-can-switch-the-bound-off.md)** FIXED, rpc_dart_http2 — a decorator that declares a capability can switch the bound off
 - **[208](208-refuse-instead-of-pausing.md)** FIXED, rpc_dart_http2 — refuse the stalled call instead of pausing the read
 - **[207](207-http2-cancel-kills-the-connection.md)** DEFERRED, rpc_dart_http2 — cancelling a stalled http2 call kills the connection for good

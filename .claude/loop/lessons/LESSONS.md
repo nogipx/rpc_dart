@@ -9,3 +9,4 @@ numbers, not a retelling.
 
 - **[L-01](L-01-half-a-fix-can-mask-the-other-half.md)** active (round 206), bench — when a fix has two halves, check whether one masks the other's witness
 - **[L-02](L-02-vary-the-event-not-the-setup.md)** active (round 207), bench — when the defect is an event, vary the event and not the setup
+- **[L-03](L-03-no-backticks-in-a-shell-argument.md)** active (round 210), toolchain — never put a backtick in a shell argument; substitution both mangles the text and defeats the allowlist
