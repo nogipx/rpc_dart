@@ -1286,7 +1286,11 @@ class RpcHttp2CallerTransport
     }
 
     // Конвертируем HTTP/2 headers в RPC метаданные (pseudo-headers отфильтрованы)
-    final metadata = http2HeadersToRpcMetadata(message.headers);
+    // A client is exposed to the same flood from the server it dialled.
+    final metadata = http2HeadersToRpcMetadata(
+      message.headers,
+      policy: _policy,
+    );
     _policy.validateMetadata(metadata);
 
     // Trailers-Only responses carry the status on the FIRST headers frame, so

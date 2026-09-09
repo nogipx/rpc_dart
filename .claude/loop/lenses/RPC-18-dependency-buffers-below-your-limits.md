@@ -3,8 +3,8 @@ refines: —
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: a dependency parses or reassembles the wire before this code sees a message
 breaks: DoS.
-applied: []
-status: confirmed (round 145, off-journal)
+applied: [237]
+status: confirmed (round 237)
 ---
 
 # RPC-18 — The dependency buffers below every limit you own
@@ -93,5 +93,31 @@ even with the guard OFF; starvation only reproduces cross-process. The
 deterministic in-process witness is CONNECTION RESET — with the guard a client
 write eventually throws, with the cap lifted all 4096 frames land buffered and
 nothing throws.
+
+**Round 237 applied it and the shape came back INVERTED**, which is worth as
+much as the fix. The detector asks where the dependency accumulates; here
+package:http2 accumulates nothing, because `HPackDecoder.decode()` returns
+thousands of POINTERS to one shared dynamic-table entry — measured
+`distinct: 1`, RSS +7 MiB for 60001 headers, against 229.3 MiB of "logical"
+size. Dart's reference semantics defuse the classic HPACK bomb.
+
+rpc_dart's own adapter paid it instead. `http2HeadersToRpcMetadata` calls
+`String.fromCharCodes` per header, so every shared reference became its own
+String, and it ran one line BEFORE `validateMetadata` — the limit that would
+refuse the request could only refuse a copy already made:
+
+    63 KiB on the wire, under the guard, one unauthenticated request
+      HPACK decode     RSS   +7 MiB    (distinct: 1)
+      the conversion   RSS +258 MiB    <- ~4100x
+      after                  +0 MiB, refused
+
+> **When a dependency hands you a cheap representation, the cost moves to
+> whoever materialises it.** The detector's question — "which of my limits could
+> see this?" — has a second half: my limit runs on the CONVERTED form, so the
+> conversion is the thing to bound, not the input. Ask where the representation
+> changes, and check that the guard is on the expensive side of it.
+
+Bench `../probes/P-16-hpack-reference-flood.md`; round
+`../rounds/237-the-dependency-shared-what-we-copied.md`.
 
 Imported from private memory in the curate pass after round 234.

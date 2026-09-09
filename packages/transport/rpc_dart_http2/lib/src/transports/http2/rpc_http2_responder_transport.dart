@@ -516,6 +516,9 @@ class RpcHttp2ResponderTransport
     final metadata = http2HeadersToRpcMetadata(
       message.headers,
       methodPath: methodPath,
+      // Enforced DURING the walk, not after it: see the converter. The
+      // validateMetadata below still runs and still owns every other rule.
+      policy: _policy,
     );
     _policy.validateMetadata(metadata);
 

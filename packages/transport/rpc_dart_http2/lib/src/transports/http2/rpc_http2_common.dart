@@ -337,16 +337,38 @@ List<http2.Header> rpcMetadataToHttp2TrailersOnly(RpcMetadata metadata) {
 /// true binary that is not valid UTF-8. Regular headers are kept as-is.
 ///
 /// Pass the `:path` value extracted from the raw headers as [methodPath].
+/// [policy], when given, is enforced on the RAW list as it is walked, before
+/// each value is copied. That ordering is the whole point: HPACK hands back a
+/// list of REFERENCES — an indexed-header flood is thousands of pointers to one
+/// shared dynamic-table entry, which costs the decoder almost nothing — and
+/// `String.fromCharCodes` turns every one of them into its own String. The
+/// expansion happens here, not in package:http2, and
+/// `RpcSecurityPolicy.validateMetadata` used to run one line AFTER this
+/// function, so `maxHeaders` could only refuse a copy that had already been
+/// made. Measured against the 64 KiB header-block guard, one request:
+///
+///     63 KiB on the wire -> 60001 headers
+///       HPACK decode      RSS +7 MiB     (distinct objects: 1)
+///       this conversion   RSS +258 MiB   <- ~4100x, before any limit ran
+///
+/// Counted after the pseudo-header filter and checked before the value copy, so
+/// the set of accepted requests is exactly what it was.
 RpcMetadata http2HeadersToRpcMetadata(
   List<http2.Header> headers, {
   String? methodPath,
+  RpcSecurityPolicy? policy,
 }) {
   final rpcHeaders = <RpcHeader>[];
+  final maxHeaders = policy?.maxHeaders;
 
   for (final header in headers) {
     final name = String.fromCharCodes(header.name);
     // Skip pseudo-headers — they belong to the HTTP/2 transport layer.
     if (name.startsWith(':')) continue;
+
+    if (maxHeaders != null && rpcHeaders.length >= maxHeaders) {
+      throw ArgumentError('Too many metadata headers: more than $maxHeaders');
+    }
 
     // Keep the wire value verbatim. For `-bin` headers this is the base64
     // string the metadata layer expects; base64-decoding it here would

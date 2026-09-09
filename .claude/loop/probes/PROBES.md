@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-16](P-16-hpack-reference-flood.md)** valid (round 237), http2 headers —
+  what does a header block cost once decoded? Attributes the decoder and the
+  adapter separately: +7 MiB vs +258 MiB for the same 63 KiB block, with
+  `distinct: 1` the number that refuted the first hypothesis
 - **[P-15](P-15-pending-queue-dimension.md)** valid (round 236), core buffering —
   which dimension does the unlistened queue bound? Same pendingCount at three
   payload sizes while the retained bytes scale 64 -> 256 -> 1024 MiB; +549 vs
