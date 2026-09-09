@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[244](244-the-parked-sender-still-wakes.md)** CLEAN, rpc_dart — RPC-09 re-swept over 6 moved files: close() still wakes every parked sender, and round 240's buffering turned out to have SHRUNK the hazard this round set out to attack
 - **[243](243-the-trailer-cap-held.md)** CLEAN, core and the three transports — RPC-02 re-swept over 10 moved files: every message-carrying trailer still capped, including both refusal paths added since
 - **[242](242-the-callback-that-ends-the-isolate.md)** FIXED, rpc_dart — a throwing `onStateChanged` reached the root zone AND aborted the connect loop before it built anything: unhandled 1 -> 0, transports 0 -> 2
 - **[241](241-the-discard-that-sometimes-does-not-land.md)** DEFERRED, rpc_dart_http2 — a sequential reconnect orphans a DISCARDED connection about 1.3% of the time; the candidate fix could not be witnessed, so it was reverted

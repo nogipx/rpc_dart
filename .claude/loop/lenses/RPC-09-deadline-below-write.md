@@ -3,8 +3,8 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210, 221]
-status: swept here (round 221, 7d06201c)
+applied: [210, 221, 244]
+status: swept here (round 244, 8d4d1e33)
 ---
 
 # RPC-09 — A call deadline that sits below the write
@@ -37,6 +37,18 @@ halves, each against a draining-handler control:
     core, handler answers with the client
       PARKED at the window (17 msgs, 68 KiB
       against 64 KiB), 0 consumed            completed in 0.4 s
+
+**Round 244 re-swept it over six moved files, including the two that rounds 240
+and 242 edited.** One parking site (`_fcAwaitCredit`), three wake paths — credit,
+the legacy grace timer, `close()` — and all three intact; `close()` walks
+`_fcSendWaiters` before it touches anything else, and round 240's
+`_idManager.releaseAll()` lands twelve lines later without reaching them.
+
+> **The round opened meaning to attack round 240's own buffering and found the
+> fix SMALLER than what it replaced.** A plain broadcast dropped everything that
+> arrived unlistened; the buffered one drops only past its bound. "Attack your
+> own fix" is worth doing precisely because the answer is sometimes that the
+> hazard shrank — one comparison to check, a whole round to assume.
 
 An ablation removing `_fcWake` from `_fcForget` moved neither number, which both
 confirms the independence and shows THAT ablation could not see a hang — so the
