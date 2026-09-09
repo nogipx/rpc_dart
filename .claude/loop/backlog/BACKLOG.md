@@ -15,5 +15,6 @@ order below is the rank.
 - **[B-10](B-10-layers-without-lenses.md)** open — data, notify and blob have no lens at all: 234 files
 - **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
 - **[B-13](B-13-parked-sender-outlives-its-call.md)** closed (round 211) — measured: the wake works, 0 waiters with it and 30 without
-- **[B-14](B-14-stale-sendcredit-per-abandoned-upload.md)** open, reason "cost" (round 211) — one stale `_fcSendCredit` entry per parked-then-abandoned upload; bounded by an existing cap, mechanism not pinned, one theory measured and disproven
+- **[B-14](B-14-stale-sendcredit-per-abandoned-upload.md)** closed (round 212) — the writer was a late `_fcOnGrant` after teardown; fixed
+- **[B-15](B-15-rpc-level-grants-on-http2.md)** decided by owner (round 212) — cooperative backpressure on http2 via rpc-level grants, instead of reverting 208; multi-round
 - **[B-12](B-12-http2-cancel-kills-the-connection.md)** closed (round 208) — http2: one cancelled stalled call killed the connection for good; the owner chose "keep reading, fail the call", shipped in 208. The upstream package:http2 report is still open

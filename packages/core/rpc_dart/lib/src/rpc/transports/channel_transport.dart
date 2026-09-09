@@ -932,11 +932,46 @@ class RpcChannelTransport
     final window = _fcWindow;
     if (window == null) return;
     if (!_fcCanTrack(_fcSendCredit, streamId)) return;
+    // A grant for a stream we no longer track must not resurrect its credit.
+    //
+    // [_fcForget] removes the entry when the call ends, and then a LATE grant
+    // for that id -- ordinary, not hostile: the peer credits what it consumed
+    // or discarded, and that can cross our own teardown -- put it straight
+    // back, where nothing would ever remove it again. Measured with a handler
+    // that consumes nothing, so the sender parks and the call is abandoned:
+    //
+    //   handler drains (sender never parks) : 30 calls -> sendCredit  0
+    //   handler consumes nothing            : 30 calls -> sendCredit 30
+    //
+    // one entry per call, linear. The map is capped by [_fcCanTrack], so this
+    // never grows without bound; what it does instead is quieter. Once the cap
+    // is full of dead ids, `_fcCanTrack` refuses NEW ones, so no later stream
+    // is seeded and [RpcSecurityPolicy.initialSendWindowBytes] stops applying
+    // to any of them -- and that seed is what bounds a sender before the peer's
+    // first grant, worth 156.25 MiB against 4.05 MiB over a 20 ms link. Round
+    // 145 attacked the cap and it holds; its story was a hostile ghost-id
+    // flood, and this is ordinary successful traffic reaching the same ceiling.
+    //
+    // Pinned by instrumenting both hops: `GRANT 1, GRANT 1, FORGET 1 x4,
+    // GRANT 1` -- the last one lands after the id is gone.
+    if (!_fcSendCredit.containsKey(streamId) && !_fcIsLive(streamId)) return;
     final granted = bytes > window ? window : bytes;
     final next = (_fcSendCredit[streamId] ?? 0) + granted;
     _fcSendCredit[streamId] = next > window ? window : next;
     _fcWake(streamId);
   }
+
+  /// Whether anything else still tracks [streamId].
+  ///
+  /// A stream this side opened is in [_activeStreams] until it is released; one
+  /// the PEER opened is in [_fcAdvertised] from the first frame we saw of it,
+  /// since that is where the window is advertised; either kind has a
+  /// per-stream controller while a consumer is bound. [_fcForget] clears all
+  /// three, so "none of them" means the call is over.
+  bool _fcIsLive(int streamId) =>
+      _activeStreams.contains(streamId) ||
+      _fcAdvertised.contains(streamId) ||
+      _streamControllers.containsKey(streamId);
 
   void _fcWake(int streamId) {
     final waiters = _fcSendWaiters.remove(streamId);

@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208]
-status: confirmed (round 208)
+applied: [206, 207, 208, 212]
+status: confirmed (round 212)
 ---
 
 # RPC-01 — Flow-control credit on the skip path
@@ -73,3 +73,15 @@ teardown is not yours to control. Prefer a bound you can account for yourself.
 The transport packages other than http2 delegate to the core transport, so 206
 covers them: `RpcChannelTransport` is the only `IRpcFlowControlled` under
 websocket and isolate.
+
+Round 212, the same lens pointed at bookkeeping rather than bytes. Credit state
+can outlive the stream it belongs to: `_fcForget` clears the entry at teardown
+and a LATE peer grant for that id writes it straight back, where nothing removes
+it again. One entry per abandoned upload, linear, zero for drained traffic.
+Capped, so not unbounded — the cost is that once the cap fills with dead ids no
+new stream is seeded and `initialSendWindowBytes` stops applying.
+
+> **Ask the question of the BOOKKEEPING as well as of the bytes.** "Does the
+> credit come back?" has a twin: "does the record of it go away?" Both hops
+> here — the grant and the forget — had to be instrumented before the order was
+> visible, and the first theory was wrong.

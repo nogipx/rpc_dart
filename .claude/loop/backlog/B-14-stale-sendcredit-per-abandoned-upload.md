@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 212) — mechanism pinned to a late grant, fixed
 round: 211
 commit: 0d071c55
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
@@ -55,6 +55,16 @@ Instrument `_fcOnGrant` the same way and re-run P-04 with one call. If the write
 lands after the forgets, the fix is to refuse a grant for a stream that is no
 longer tracked — which needs care, because `_fcOnGrant` legitimately creates the
 entry for a live stream that has not sent yet.
+
+## Answered — round 212
+
+`_fcOnGrant` was the writer, as suspected. Instrumenting both hops:
+
+    GRANT 1, GRANT 1, FORGET 1, FORGET 1, FORGET 1, FORGET 1, GRANT 1
+
+The last grant lands after every teardown of that id and puts the entry back.
+Fixed by refusing a grant for a stream nothing else still tracks; both arms of
+P-04 now read sendCredit 0.
 
 ## Owner decision
 
