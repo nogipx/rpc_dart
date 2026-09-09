@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 207) — take option 2, and report upstream
+status: closed (round 208) — option 2 shipped; the upstream report is still open
 round: 207
 commit: 1d5efdda
 paths: [packages/transport/rpc_dart_http2/lib/**]

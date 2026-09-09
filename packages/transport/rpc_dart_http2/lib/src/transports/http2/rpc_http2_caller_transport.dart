@@ -807,6 +807,7 @@ class RpcHttp2CallerTransport
     _halfClosedLocal.remove(streamId);
     _reservedStreams.remove(streamId);
     _statusReceived.remove(streamId);
+    _fcForget(streamId);
 
     return true;
   }
@@ -1435,30 +1436,108 @@ class RpcHttp2CallerTransport
     if (existing != null) return existing.stream;
     final ctl = StreamController<RpcTransportMessage>(
       onCancel: () => _streamControllers.remove(streamId),
-      // Demand hop. RpcChannelTransport meters this stream and withholds
-      // credit when its consumer stops; on HTTP/2 the equivalent lever is the
-      // h2 window, which only closes if we stop READING. Without these two
-      // lines package:http2 kept draining the socket and issuing WINDOW_UPDATE
-      // no matter what the application did, so a paused client never slowed the
-      // server down: measured with a server-stream handler and a client that
-      // paused after 5 items, the handler produced 33906 more (132.4 MiB) in 4s
-      // and was still climbing, against 1023 (4.0 MiB, flat) over websocket.
-      onPause: () => _streamSubscriptions[streamId]?.pause(),
-      onResume: () => _streamSubscriptions[streamId]?.resume(),
     );
     _streamControllers[streamId] = ctl;
-    return ctl.stream;
+    return _fcMetered(streamId, ctl.stream);
+  }
+
+  /// How much un-consumed response payload one call may hold.
+  int get _fcWindow =>
+      _policy.flowControlWindowBytes ??
+      const RpcSecurityPolicy().flowControlWindowBytes ??
+      4 * 1024 * 1024;
+
+  /// Bytes delivered to this call's consumer but not yet taken, per stream.
+  final Map<int, int> _fcOutstanding = {};
+
+  /// Streams already failed for overrunning [_fcWindow].
+  final Set<int> _fcRefused = {};
+
+  /// Bounds a response a consumer has stopped reading.
+  ///
+  /// This used to be a demand hop -- `onPause`/`onResume` forwarding to the
+  /// http2 subscription -- because on HTTP/2 the lever that slows a server is
+  /// the h2 window, which only closes if we stop READING. Without any bound at
+  /// all a paused client never slowed the server down: measured with a
+  /// server-stream handler and a client that paused after 5 items, the handler
+  /// produced 33906 more (132.4 MiB) in 4 s and was still climbing, against
+  /// 1023 (4.0 MiB, flat) over websocket.
+  ///
+  /// But pausing parks bytes in package:http2's connection-level queue, and a
+  /// reset then discards them without crediting the connection window -- so
+  /// cancelling a paused download killed the whole connection, measured, in
+  /// exactly the way it did on the responder side. See the responder's
+  /// `_fcWindow` for the mechanism and the numbers.
+  ///
+  /// So the budget is kept and the CALL is failed past it, while reading never
+  /// stops. `map` is lazy, so a consumer that stops pulling stops discharging.
+  Stream<RpcTransportMessage> _fcMetered(
+    int streamId,
+    Stream<RpcTransportMessage> source,
+  ) => source.map((message) {
+    _fcDischarge(streamId, message.payload?.length ?? 0);
+    return message;
+  });
+
+  void _fcDischarge(int streamId, int bytes) {
+    if (bytes <= 0) return;
+    final left = (_fcOutstanding[streamId] ?? 0) - bytes;
+    if (left <= 0) {
+      _fcOutstanding.remove(streamId);
+    } else {
+      _fcOutstanding[streamId] = left;
+    }
+  }
+
+  void _fcOnDelivered(int streamId, int bytes) {
+    if (bytes <= 0 || !_streamControllers.containsKey(streamId)) return;
+    final now = (_fcOutstanding[streamId] ?? 0) + bytes;
+    _fcOutstanding[streamId] = now;
+    if (now <= _fcWindow || !_fcRefused.add(streamId)) return;
+    _logger?.warning(
+      'Stream $streamId holds $now un-consumed response bytes '
+      '(window: $_fcWindow); failing the call',
+    );
+    // Order matters: the error goes out FIRST, because resetStream records the
+    // id in _resetStreams and _emitStreamError deliberately suppresses errors
+    // for a stream we reset ourselves.
+    _emitStreamError(
+      streamId,
+      RpcStatusException(
+        RpcStatus.resourceExhausted,
+        'Response exceeds the un-consumed window ($now > $_fcWindow bytes)',
+      ),
+    );
+    // Then RST_STREAM, or the server never learns and keeps producing for a
+    // consumer that is gone -- the same trap the responder's `onTerminated`
+    // comment records from the other side.
+    unawaited(
+      resetStream(
+        streamId,
+        reason: 'un-consumed response window exceeded',
+      ).catchError((Object _) => false),
+    );
+  }
+
+  void _fcForget(int streamId) {
+    _fcOutstanding.remove(streamId);
+    _fcRefused.remove(streamId);
   }
 
   /// Routes an incoming message to the shared broadcast and to the stream's
   /// dedicated controller, closing the latter on end-of-stream.
   void _emit(RpcTransportMessage message) {
+    // Charge before delivering: a consumer that takes it synchronously
+    // discharges immediately afterwards, and crediting a charge that has not
+    // happened yet would clamp the counter at zero.
+    _fcOnDelivered(message.streamId, message.payload?.length ?? 0);
     if (!_messageController.isClosed) _messageController.add(message);
     final ctl = _streamControllers[message.streamId];
     if (ctl != null && !ctl.isClosed) ctl.add(message);
     if (message.isEndOfStream) {
       final ended = _streamControllers.remove(message.streamId);
       if (ended != null && !ended.isClosed) unawaited(ended.close());
+      _fcForget(message.streamId);
     }
   }
 

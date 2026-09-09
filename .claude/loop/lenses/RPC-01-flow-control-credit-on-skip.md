@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207]
-status: confirmed (round 207)
+applied: [206, 207, 208]
+status: confirmed (round 208)
 ---
 
 # RPC-01 — Flow-control credit on the skip path
@@ -59,9 +59,16 @@ window as pending. Ending the stalled call by cancelling drops it uncredited:
     download, ended by resuming -> the connection recovers
     download, ended by cancel   -> every later call HUNG
 
-One cancel is enough (68 KiB, the HTTP/2 default window). Not fixed — the
-discard is inside package:http2; see `../backlog/B-12-http2-cancel-kills-the-connection.md`
-and bench `../probes/P-02-http2-aborted-call-pool.md`.
+One cancel is enough (68 KiB, the HTTP/2 default window). Round 208 fixed it by
+the owner's choice: never stop reading, keep `flowControlWindowBytes` as the
+budget, and FAIL a call past it. All four runs recover, and the bound still
+bites at 4171 KiB against 15291 KiB with no bound at all. Bench
+`../probes/P-02-http2-aborted-call-pool.md`; lead
+`../backlog/B-12-http2-cancel-kills-the-connection.md`.
+
+The lesson that generalises past http2: **a bound implemented by NOT READING is
+a bound held in the layer below**, and whatever that layer does with it on
+teardown is not yours to control. Prefer a bound you can account for yourself.
 
 The transport packages other than http2 delegate to the core transport, so 206
 covers them: `RpcChannelTransport` is the only `IRpcFlowControlled` under

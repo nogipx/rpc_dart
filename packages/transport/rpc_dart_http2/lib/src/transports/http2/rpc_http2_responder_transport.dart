@@ -69,15 +69,42 @@ class RpcHttp2ResponderTransport
   /// this path.
   final Set<int> _fcDeferred = {};
 
-  /// Bytes handed to the pipeline but not yet reported consumed, per stream.
+  /// Bytes handed to a consumer but not yet reported consumed, per stream.
   final Map<int, int> _fcOutstanding = {};
 
-  /// How much un-consumed request payload one stream may have in flight.
+  /// Streams already refused for overrunning [_fcWindow], so it is sent once.
+  final Set<int> _fcRefused = {};
+
+  /// How much un-consumed request payload one stream may hold.
   ///
   /// `flowControlWindowBytes` is the operator's existing knob for exactly this
   /// question. HTTP/2 carries its own windows, so this is not used to emit
-  /// rpc-level grants; it is the threshold at which we stop READING, which is
-  /// what makes the peer's own window close.
+  /// rpc-level grants; it is the threshold past which the CALL is refused.
+  ///
+  /// It used to be the threshold at which we stopped READING, which closes the
+  /// peer's window -- the obvious lever, and it made every cancelled slow call
+  /// destroy the connection. package:http2 credits the CONNECTION window only
+  /// for messages it can move into a stream's queue, and it will not move them
+  /// while that stream's consumer is paused, so a stalled call parks up to a
+  /// whole connection window in `_stream2pendingMessages`; when the stream is
+  /// then reset, `stream_handler._closeStreamAbnormally` drops that queue
+  /// through `removeStreamMessageQueue` without ever calling `dataProcessed`,
+  /// so no WINDOW_UPDATE is emitted for bytes the peer was charged for.
+  /// Measured over a real socket, one stalled call ended two ways:
+  ///
+  ///   ended by draining it  -> the connection recovers
+  ///   ended by cancelling   -> every later call on it HUNG, polled 20 s
+  ///
+  /// One cancel was enough (68 KiB, the HTTP/2 default connection window), in
+  /// the upload and the download direction alike, and the trigger is the most
+  /// ordinary client action there is. RFC 9113 6.9.1 requires the connection
+  /// window to be accounted for even when a stream is reset, so the discard is
+  /// a defect in package:http2 -- but rpc_dart's pause is what made it fatal.
+  ///
+  /// Refusing instead keeps reading, so the pool always flows, and bounds
+  /// memory by ending the offending call. The cost, accepted by the owner: a
+  /// handler that stops consuming kills its own call instead of being
+  /// throttled.
   int get _fcWindow =>
       _policy.flowControlWindowBytes ??
       const RpcSecurityPolicy().flowControlWindowBytes ??
@@ -87,31 +114,79 @@ class RpcHttp2ResponderTransport
   void deferFlowCredit(int streamId) => _fcDeferred.add(streamId);
 
   @override
-  void returnFlowCredit(int streamId, int bytes) {
-    if (bytes <= 0 || !_fcDeferred.contains(streamId)) return;
+  void returnFlowCredit(int streamId, int bytes) =>
+      _fcDischarge(streamId, bytes);
+
+  void _fcDischarge(int streamId, int bytes) {
+    if (bytes <= 0) return;
     final left = (_fcOutstanding[streamId] ?? 0) - bytes;
-    _fcOutstanding[streamId] = left < 0 ? 0 : left;
-    if (left <= _fcWindow) {
-      final sub = _streamSubscriptions[streamId];
-      if (sub != null && sub.isPaused) sub.resume();
+    if (left <= 0) {
+      _fcOutstanding.remove(streamId);
+    } else {
+      _fcOutstanding[streamId] = left;
     }
   }
 
-  /// Charges [bytes] against [streamId]'s budget and stops reading if it is
-  /// over. Only meaningful once the pipeline has claimed the stream.
+  /// Charges [bytes] against [streamId]'s budget and refuses the call past it.
+  ///
+  /// Only for a stream whose consumer reports back — the pipeline through
+  /// [returnFlowCredit], or a [getMessagesForStream] view through [_fcMetered].
+  /// Charging anything else would never discharge, and a single unary request
+  /// larger than the window would refuse itself.
   void _fcOnDelivered(int streamId, int bytes) {
-    if (bytes <= 0 || !_fcDeferred.contains(streamId)) return;
+    if (bytes <= 0) return;
+    if (!_fcDeferred.contains(streamId) &&
+        !_streamControllers.containsKey(streamId)) {
+      return;
+    }
     final now = (_fcOutstanding[streamId] ?? 0) + bytes;
     _fcOutstanding[streamId] = now;
-    if (now > _fcWindow) {
-      final sub = _streamSubscriptions[streamId];
-      if (sub != null && !sub.isPaused) sub.pause();
-    }
+    if (now > _fcWindow) _fcRefuseOverrun(streamId, now);
+  }
+
+  /// Ends a call whose consumer has stopped taking its request.
+  void _fcRefuseOverrun(int streamId, int outstanding) {
+    if (!_fcRefused.add(streamId)) return;
+    _logger?.warning(
+      'Stream $streamId holds $outstanding un-consumed request bytes '
+      '(window: $_fcWindow); refusing the call',
+    );
+    // The status goes out FIRST, through the same pump as everything else, so
+    // it is ordered ahead of the END_STREAM that teardown sends.
+    unawaited(
+      sendMetadata(
+        streamId,
+        RpcMetadata.forTrailer(
+          RpcStatus.resourceExhausted,
+          message:
+              'Request exceeds the un-consumed window '
+              '($outstanding > $_fcWindow bytes)',
+          maxMessageLength: _policy.maxHeaderValueBytes,
+        ),
+        endStream: true,
+      ).catchError((Object _) {}),
+    );
+    // Then tear the local call down through the same synthesized frame the
+    // RST_STREAM path uses, so the handler stops rather than serving nobody.
+    // Carries no payload, so it cannot re-enter _fcOnDelivered.
+    _emit(
+      RpcTransportMessage.withMetadata(
+        streamId: streamId,
+        metadata: RpcMetadata([
+          RpcHeader(RpcHeaders.xClientCancelled, 'true'),
+          RpcHeader(
+            RpcHeaders.xCancellationReason,
+            'un-consumed request window exceeded',
+          ),
+        ]),
+      ),
+    );
   }
 
   void _fcForget(int streamId) {
     _fcDeferred.remove(streamId);
     _fcOutstanding.remove(streamId);
+    _fcRefused.remove(streamId);
   }
 
   /// Подписки на входящие сообщения streams
@@ -775,22 +850,31 @@ class RpcHttp2ResponderTransport
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
     final existing = _streamControllers[streamId];
-    if (existing != null) return existing.stream;
+    if (existing != null) return _fcMetered(streamId, existing.stream);
     final ctl = StreamController<RpcTransportMessage>(
       onCancel: () => _streamControllers.remove(streamId),
-      // The OTHER half of the request-direction demand chain. Client-stream
-      // requests are fed by `_pipelineFedRequestStream`, which reports demand
-      // through IRpcFlowControlled above; bidirectional and server-stream ones
-      // are fed by `_stateBoundStream`, which subscribes HERE and never calls
-      // deferFlowCredit. Without this hop the bidi upload direction stayed
-      // unbounded (13.7 MiB on the wire at 12s and climbing) while
-      // client-stream was already bounded at 4.4 MiB.
-      onPause: () => _streamSubscriptions[streamId]?.pause(),
-      onResume: () => _streamSubscriptions[streamId]?.resume(),
     );
     _streamControllers[streamId] = ctl;
-    return ctl.stream;
+    return _fcMetered(streamId, ctl.stream);
   }
+
+  /// The OTHER half of the request-direction bound. Client-stream requests are
+  /// fed by `_pipelineFedRequestStream`, which reports consumption through
+  /// [IRpcFlowControlled]; bidirectional and server-stream ones are fed by
+  /// `_stateBoundStream`, which subscribes HERE and never calls
+  /// deferFlowCredit. Without a report from this side the bidi upload direction
+  /// was unbounded (13.7 MiB on the wire at 12s and climbing) while
+  /// client-stream was already bounded at 4.4 MiB.
+  ///
+  /// `map` is lazy, so a consumer that stops pulling stops discharging, which
+  /// is what lets the budget fill and the call be refused.
+  Stream<RpcTransportMessage> _fcMetered(
+    int streamId,
+    Stream<RpcTransportMessage> source,
+  ) => source.map((message) {
+    _fcDischarge(streamId, message.payload?.length ?? 0);
+    return message;
+  });
 
   /// Routes an incoming message to the broadcast and to the stream's dedicated
   /// controller, closing the latter on end-of-stream.

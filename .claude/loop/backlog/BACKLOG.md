@@ -14,4 +14,4 @@ order below is the rank.
 - **[B-09](B-09-unfiled-grpc-compat-items.md)** open — unfiled "documented, not fixed" items from private memory
 - **[B-10](B-10-layers-without-lenses.md)** open — data, notify and blob have no lens at all: 234 files
 - **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
-- **[B-12](B-12-http2-cancel-kills-the-connection.md)** awaiting owner (round 207) — http2: one cancelled stalled call kills the connection for good, both directions; the discard is inside package:http2 and every rpc_dart lever trades away the upload bound
+- **[B-12](B-12-http2-cancel-kills-the-connection.md)** closed (round 208) — http2: one cancelled stalled call killed the connection for good; the owner chose "keep reading, fail the call", shipped in 208. The upstream package:http2 report is still open

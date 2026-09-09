@@ -49,3 +49,19 @@ ablation, rpc_dart's throttle removed:
 68 KiB is the HTTP/2 default connection window (65535 + framing), which names
 the control under test: `flowControlWindowBytes` defaults to 4 MiB and
 `maxConcurrentHandlers` to none, so neither can produce that number.
+
+After the round-208 fix the same four runs read:
+
+```
+  upload   control : ping@stall pong, after pong,  4174 KiB on the wire
+  upload   case    : ping@stall pong, after pong,  4171 KiB on the wire
+  download control : ping@stall pong, after pong
+  download case    : ping@stall pong, after pong
+```
+
+Both arms recovering is the FIX, not a broken bench: the bench still
+discriminates, because reinstating either pause puts the corresponding arm back
+to HUNG (round 208's two canaries). The wire figure moving from 68 KiB to
+4171 KiB is the second thing to check — it is `flowControlWindowBytes`, and if
+it ever climbs toward the 15291 KiB of the round-207 ablation, the budget has
+stopped being enforced.
