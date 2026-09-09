@@ -14,6 +14,7 @@ order below is the rank.
 - **[B-08](B-08-decision-closed-transport-error-split.md)** closed (round 201) — the error-type split on a closed transport
 - **[B-09](B-09-unfiled-grpc-compat-items.md)** open — unfiled "documented, not fixed" items from private memory
 - **[B-10](B-10-layers-without-lenses.md)** open — data, notify and blob have no lens at all: 234 files
+- **[B-18](B-18-web-guard-is-a-census-not-a-sweep.md)** open, reason "cost" (round 219) — the web guard is a build-and-construct check for nine of twelve packages; ablate a dart2js bug class to find out what it would actually catch
 - **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
 - **[B-13](B-13-parked-sender-outlives-its-call.md)** closed (round 211) — measured: the wake works, 0 waiters with it and 30 without
 - **[B-14](B-14-stale-sendcredit-per-abandoned-upload.md)** closed (round 212) — the writer was a late `_fcOnGrant` after teardown; fixed
