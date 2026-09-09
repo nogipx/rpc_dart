@@ -47,4 +47,17 @@ the branch round 206 fixed, and it still passes; without it a red CASE C could
 be read as 206 having regressed, when in fact it is a different branch of the
 same `if`.
 
+## Blind spot, found in round 231
+
+**Every arm calls `getMessagesForStream`**, including "never binds a listener" —
+the probe binds the VIEW and only sometimes listens to it. So a controller
+always exists, and the inbound dispatch's `else` branch at
+`channel_transport.dart:1325` — credit-on-arrival, for a stream whose receiver
+never asked for the view — is never taken.
+
+A change that broke that branch would leave all four arms green. Round 231's
+candidate fix would have done exactly that. **A fifth arm that never calls
+`getMessagesForStream` is required before this bench can validate any change to
+the credit paths.**
+
 Lead: `../backlog/B-22-paused-consumer-never-repays-the-pool.md`.

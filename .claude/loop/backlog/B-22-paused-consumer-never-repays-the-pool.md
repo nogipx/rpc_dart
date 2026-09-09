@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 230)
+status: awaiting owner
 round: 228
 commit: af64eeac
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
@@ -66,7 +66,40 @@ deliberate. So the two callers need splitting before the arithmetic is safe.
 3. **Accept it.** The leak needs a consumer that stops permanently and never
    cancels. A merely slow handler drains eventually and settles correctly.
 
+## Round 231: candidate 1 cannot be built as written
+
+`_fcOnConsumed` has **two** callers, not one:
+
+```
+  _fcMetered (462)          the consumer takes a message   OWED
+  inbound dispatch (1325)   the else branch: no controller,
+                            not deferred                   NEVER OWED
+```
+
+The `else` is credit-on-arrival — ordinary traffic whose receiver never called
+`getMessagesForStream`, and whose bytes were never entered in the ledger.
+Routing that caller through `min(bytes, owed)` credits it
+`min(bytes, 0) = 0`, so the pool would only shrink. Worse than the defect: the
+wedge would no longer need a stuck consumer at all.
+
+So the split cannot key on the caller. It must key on whether a debt was ever
+entered, and an empty ledger cannot distinguish never-owed from
+already-repaid — that needs a per-stream mark.
+
+> **Candidate 1 collapses into candidate 2.** They are not alternatives; the
+> first needs the second to be correct. What is left to choose is where the mark
+> lives and how it is bounded.
+
+**And P-11 is blind to this**: every arm calls `getMessagesForStream`, so the
+1325 branch is never taken and all four arms would have stayed green while
+ordinary traffic lost its credit. A fifth arm is required before any fix here,
+whichever shape is chosen.
+
 ## Owner decision
+
+> **Superseded — round 231 measured this to be unbuildable as written.** Kept
+> below because the reasoning about `_fcSettleOwed` still holds; what changes is
+> that a mark is not optional.
 
 **Candidate 1 — split the credit paths.** (Asked and answered after round 230.)
 

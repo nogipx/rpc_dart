@@ -10,11 +10,7 @@ was taken. The blocker and the number age separately — see U-21.
 
 ## Awaiting an owner decision
 
-**Empty.**
-
-## Open — decided, ready to implement
-
-- **[B-22](B-22-paused-consumer-never-repays-the-pool.md)** decided (round 230) — **a wedged connection, ranks first.** A consumer that binds and never drains never repays the connection pool: 4 calls and 1024 KiB against a 1024 KiB pool, where all three controls reach 3072 KiB. Fix: split the credit paths so consumption credits through the ledger and `_fcForget` can repay unconditionally All four were answered in round 223: B-17 (refuse at attach), B-01
+- **[B-22](B-22-paused-consumer-never-repays-the-pool.md)** awaiting owner (round 231) — **a wedged connection.** 4 calls against a 1024 KiB pool where three controls reach 3072. Round 230's decision was measured unbuildable in 231: `_fcOnConsumed` has a second caller that was never owed, so routing it through the ledger would stop crediting ORDINARY traffic. The two candidates collapse into one — a per-stream mark is not optional All four were answered in round 223: B-17 (refuse at attach), B-01
 (out of the loop), B-02 (accepted, C-23), B-19 (close the gate). The three
 cost-gated leads were answered in the same pass — B-20 and B-18 approved, B-10
 deferred.
