@@ -23,7 +23,7 @@ C-04 round 106 and the rest), but the pre-201 defect SHAPES had no lens, so
 their own numbers returned nothing in the loop: `CONTINUATION`, `756 MiB`,
 `check before await`, `pre-ready`, all zero hits.
 
-- **[RPC-16](RPC-16-check-before-await.md)** derived — a lifecycle flag read before an await and never re-read; four fixed instances by sha, and the thing the factory returned was orphaned rather than closed; refines U-07
+- **[RPC-16](RPC-16-check-before-await.md)** confirmed (235) — a lifecycle flag read before an await and never re-read, and the failure path that drops rather than closes. Round 235 swept its 15 sites and found a fifth instance: one unguarded cancel between two guarded closes; refines U-07
 - **[RPC-17](RPC-17-limit-fires-after-residency.md)** confirmed (round 90, off-journal) — the limit exists and sits one layer too late, so the allocation already happened: 192 MiB body into 756 MiB RSS, 2071x through permessage-deflate, 470x through a gzip codec. No catalog shape covers it
 - **[RPC-18](RPC-18-dependency-buffers-below-your-limits.md)** confirmed (round 145, off-journal) — the dependency reassembles the wire before anything becomes a message, so every ceiling you set is structurally blind: 64 MiB of CONTINUATION frames starved every other client. Sibling of RPC-17, and the difference is whether the limit is late or absent
 - **[RPC-19](RPC-19-one-flag-two-lifecycle-meanings.md)** confirmed (round 176, off-journal) — one boolean meaning both "the caller closed us" and "the connection is gone"; the give-away is a recovery API that works exactly once; refines U-18

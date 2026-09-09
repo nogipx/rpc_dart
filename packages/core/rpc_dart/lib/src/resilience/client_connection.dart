@@ -190,7 +190,23 @@ final class _ReconnectingTransportProxy
     // forceReconnect() runs detach() and then reconnects, so this is the path
     // the watermark is most often collected on.
     _noteIdWatermark(_inner);
-    await _innerSub?.cancel();
+    // Guarded for the same reason the close below is, and it was the one hop
+    // here that was not. `incomingMessages` belongs to a transport the FACTORY
+    // built, so its onCancel is user code; a throw there used to reject detach()
+    // before the close ran, and this method owns both. Measured against a
+    // transport whose onCancel throws, with a plain one as the control:
+    //
+    //   control        built=2 closed=2 leaked=0 unhandled=0 disposeThrew=false
+    //   cancel throws  built=1 closed=0 leaked=1 unhandled=1 disposeThrew=true
+    //
+    // i.e. the transport was dropped rather than closed and nothing could
+    // reclaim it; forceReconnect() never reconnected, because it runs
+    // `detach().then(...)` with no onError, so the rejection went to the zone --
+    // the ROOT zone in an application, where it ends the isolate; and dispose()
+    // threw, leaving `_msgCtl` open.
+    try {
+      await _innerSub?.cancel();
+    } catch (_) {}
     _innerSub = null;
     try {
       await _inner?.close();

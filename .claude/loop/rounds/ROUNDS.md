@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[235](235-the-one-hop-nobody-guarded.md)** FIXED, rpc_dart — the one hop nobody guarded: an unguarded cancel between two guarded closes
 - **[234](234-the-reconnect-nobody-drives.md)** FIXED, rpc_dart and rpc_dart_websocket — the reconnect nobody drives: a peer-started drop rewound the stream-id cursor
 - **[233](233-websocket-rescan-the-first-third.md)** CLEAN, rpc_dart_websocket — websocket rescan, the first third
 - **[232](232-the-selector-read-an-archive-as-a-decision.md)** FIXED, rpc_dart — the selector read an archive as a decision

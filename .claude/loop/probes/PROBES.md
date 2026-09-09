@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-14](P-14-detach-with-a-throwing-cancel.md)** valid (round 235), core
+  resilience — does a throwing `onCancel` on a user-supplied transport abandon
+  it? One arm differs by that throw alone: leaked 0 vs 1, unhandled zone errors
+  0 vs 1, and the reconnect that never happened
 - **[P-13](P-13-ids-after-a-peer-started-reconnect.md)** valid (round 234), websocket
   and core reconnect — does the stream-id sequence survive a reconnect the PEER
   started? Two arms differing by one event: 1 then 3 when this side calls

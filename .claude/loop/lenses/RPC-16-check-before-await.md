@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/src/resilience/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: a lifecycle flag is read, then a slow external operation is awaited, then the result is installed
 breaks: a connection leak.
-applied: []
-status: derived
+applied: [235]
+status: confirmed (round 235)
 ---
 
 # RPC-16 — The guard read before the await
@@ -54,9 +54,35 @@ holds a reference to?
 
 ## Evidence
 
-— as a lens. No round in this journal has applied it; the four instances above
-predate the journal and are cited by sha, not by round number, because their
-round numbers are not recoverable from the commits.
+**Round 235 swept the 15-site instance list and found a fifth instance**, in the
+half of the detector that asks what happens on the failure path rather than
+whether the flag is re-read. `_ReconnectingTransportProxy.detach()` awaited
+`_innerSub!.cancel()` unguarded and only then closed `_inner` inside a
+`try/catch` — three lines apart from `_retire`, which guards its close with
+`.catchError`. `incomingMessages` belongs to a transport the FACTORY built, so
+that `onCancel` is user code:
+
+    control        built=2 closed=2 leaked=0 unhandled=0 disposeThrew=false
+    cancel THROWS  built=1 closed=0 leaked=1 unhandled=1 disposeThrew=true
+
+Three damages from one unguarded await: the transport dropped rather than closed
+with nothing able to reclaim it; `forceReconnect()` skipping the reconnect AND
+leaking the rejection to the zone (the ROOT zone in an application, where it
+ends the isolate); and `dispose()` throwing, leaving `_msgCtl` open. Bench
+`../probes/P-14-detach-with-a-throwing-cancel.md`.
+
+> **The guard STYLE around a hop is evidence about the hop.** Both neighbours of
+> that cancel were guarded, by two different idioms, which says the authors did
+> consider a throwing teardown — the cancel is simply the one they missed. When
+> a sweep finds one unguarded await between two guarded ones, that is a finding,
+> not a stylistic quibble.
+
+The rest of the list came back clean and is recorded in
+`../rounds/235-the-one-hop-nobody-guarded.md`; the isolate's VM and WEB `spawn`
+are both guarded and, unusually, symmetric.
+
+The four instances below predate the journal and are cited by sha, not by round
+number, because their round numbers are not recoverable from the commits.
 
 **Three measurement traps, each of which produced a wrong answer once. They are
 the reason this lens is worth a round rather than a grep:**
