@@ -11,6 +11,11 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-18](P-18-early-frames-through-the-proxy.md)** valid (round 240), core
+  resilience and transports — do frames that arrived before the app subscribed
+  survive a hop? Two controls, because one cannot tell "never existed" from
+  "dropped here": 0 late through the proxy against 1 early through it and 1
+  straight off the transport. Its first build measured nothing and says why
 - **[P-17](P-17-retry-until-the-peer-returns.md)** valid (round 238), reconnect —
   does the recovery API work more than ONCE? Server down, four failed attempts,
   server back, a real call — twice. Records both ways it lied first: the rig

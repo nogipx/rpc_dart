@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[240](240-the-buffer-drained-into-nothing.md)** FIXED, rpc_dart — the reconnect proxy drained every transport's inbound buffer into a controller nobody was listening to
 - **[239](239-finishing-what-234-opened.md)** CLEAN, no packages — finishing what 234 opened: six more memory dossiers into the journal, and the note graph repaired
 - **[238](238-the-recovery-api-works-more-than-once.md)** CLEAN, the four transports and core — no third instance of the conflated lifecycle flag; the ablation is what makes that mean something
 - **[237](237-the-dependency-shared-what-we-copied.md)** FIXED, rpc_dart_http2 — the dependency shared what we copied: 63 KiB of header block became 258 MiB in the adapter

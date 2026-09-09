@@ -3,8 +3,8 @@ refines: —
 paths: [packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/core/buffered_broadcast.dart, packages/transport/*/lib/**]
 applies: a producer starts before the consumer subscribes, and the carrier in between drops rather than buffers
 breaks: broken delivery.
-applied: []
-status: confirmed (round 168, off-journal)
+applied: [240]
+status: confirmed (round 240)
 ---
 
 # RPC-20 — The window before the first listener
@@ -72,3 +72,25 @@ rather than dropped.
 > A buffering carrier only helps at the hop it is on.
 
 Imported from private memory in the curate pass after round 234.
+
+## The same shape at the resilience hop (round 240)
+
+Its first application in this journal found the shape one layer up, in the class
+the docs recommend for auto-reconnect. `_ReconnectingTransportProxy._msgCtl` was
+a plain broadcast, and `attach()` is what DRAINS the inner transport's buffered
+controller — so the retained frames were forwarded into a controller the
+application had not subscribed to yet.
+
+    arm                                        before   after
+    A  late, through RpcClientConnection            0       1
+    B  early, through RpcClientConnection           1       1
+    C  late, straight off the transport             1       1
+
+Bench `../probes/P-18-early-frames-through-the-proxy.md`; the witness is
+`packages/core/rpc_dart/test/resilience/early_frames_survive_the_proxy_test.dart`.
+
+> **Ask who DRAINS a buffered controller, not just whether one is used.** Every
+> inbound controller in the library buffers except this one, and a survey that
+> stopped at "the transport buffers" would have called the whole thing clean.
+> The victim frame is the same one as in the isolate case — the connection-window
+> advertisement, whose absence reads as a peer that does not do flow control.

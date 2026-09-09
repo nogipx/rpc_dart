@@ -75,7 +75,15 @@ final class _ReconnectingTransportProxy
 
   IRpcTransport? _inner;
   StreamSubscription<RpcTransportMessage>? _innerSub;
-  final _msgCtl = StreamController<RpcTransportMessage>.broadcast();
+
+  /// Buffered, because [attach] is what DRAINS the inner transport's own
+  /// buffer. A plain broadcast here discards everything the peer sent before
+  /// the app subscribed — including the connection-window advertisement, whose
+  /// absence reads as "the peer does not do flow control" and leaves sends
+  /// unbounded for the life of the connection.
+  final _msgCtl = BufferedBroadcastController<RpcTransportMessage>(
+    sizeOf: (m) => m.bufferedBytes,
+  );
   bool _closed = false;
 
   /// Highest stream id any transport this proxy has owned handed out.

@@ -21,6 +21,7 @@ deferred.
 ## Open
 
 - **[B-23](B-23-pre-201-knowledge-outside-the-journal.md)** open, reason "cost" (curate after 234) — 52,203 words of pre-201 knowledge sit outside the journal, where nothing routes to or ages them. NOT duplication: `checked/` imported the negatives, the SHAPES and METHODS stayed out. Two lenses recovered (RPC-16, RPC-17); ~30 dossiers left, and the four METHOD entries are the highest value
+- **[B-24](B-24-frame-channel-buffer-is-an-ordering-coincidence.md)** open, reason "cost" (round 240) — the frame channel's inbound controller is a plain broadcast, and the only thing that saves it is that `fromChannel` builds channel and transport in ONE expression. No loss is reachable today, so a fix would ship with no witness; the sibling hop round 240 DID fix measured 0 frames against 1
 - **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
 - **[B-09](B-09-unfiled-grpc-compat-items.md)** open *(stale, 5bf4d34e)* — unfiled "documented, not fixed" items from private memory
 - **[B-03](B-03-wasm-no-package-swift.md)** open, not urgent (round 182) — wasm: no `Package.swift`, and under SPM there is no plugin at all

@@ -23,7 +23,7 @@ C-04 round 106 and the rest), but the pre-201 defect SHAPES had no lens, so
 their own numbers returned nothing in the loop: `CONTINUATION`, `756 MiB`,
 `check before await`, `pre-ready`, all zero hits.
 
-- **[RPC-20](RPC-20-the-window-before-the-first-listener.md)** confirmed (round 168, off-journal) — a broadcast controller discards what the peer sent before the first `listen()`, and it fails OPEN because the loss reads as "the peer does not support this". 200/200 chunks against an 8 KiB window, 8/200 after
+- **[RPC-20](RPC-20-the-window-before-the-first-listener.md)** confirmed (round 240) — a broadcast controller discards what the peer sent before the first `listen()`, and it fails OPEN because the loss reads as "the peer does not support this". 200/200 chunks against an 8 KiB window, 8/200 after. Round 240 found it one hop up, where a wrapper DRAINS a buffered controller into an unlistened one: 0 frames against 1
 - **[RPC-21](RPC-21-drive-the-lifecycle-twice.md)** confirmed (round 77, off-journal) — call every lifecycle API a second time, and once after a failure: four defects in four rounds, none visible to a green suite. The lens C-06 had been asking for; refines U-15
 
 ## Productive lately
