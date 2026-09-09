@@ -23,7 +23,6 @@ C-04 round 106 and the rest), but the pre-201 defect SHAPES had no lens, so
 their own numbers returned nothing in the loop: `CONTINUATION`, `756 MiB`,
 `check before await`, `pre-ready`, all zero hits.
 
-- **[RPC-19](RPC-19-one-flag-two-lifecycle-meanings.md)** confirmed (round 176, off-journal) — one boolean meaning both "the caller closed us" and "the connection is gone"; the give-away is a recovery API that works exactly once; refines U-18
 - **[RPC-20](RPC-20-the-window-before-the-first-listener.md)** confirmed (round 168, off-journal) — a broadcast controller discards what the peer sent before the first `listen()`, and it fails OPEN because the loss reads as "the peer does not support this". 200/200 chunks against an 8 KiB window, 8/200 after
 - **[RPC-21](RPC-21-drive-the-lifecycle-twice.md)** confirmed (round 77, off-journal) — call every lifecycle API a second time, and once after a failure: four defects in four rounds, none visible to a green suite. The lens C-06 had been asking for; refines U-15
 
@@ -38,6 +37,8 @@ their own numbers returned nothing in the loop: `CONTINUATION`, `756 MiB`,
 - **[RPC-15](RPC-15-remeasure-own-record.md)** confirmed (211) — re-measure the loop's own record, including what it claims its own FIXES are worth; refines U-21
 
 ## Swept and fresh
+
+- **[RPC-19](RPC-19-one-flag-two-lifecycle-meanings.md)** swept here (238) — one boolean meaning both "the caller closed us" and "the connection is gone"; no third instance, because a flag conflates two meanings only where two exist. The give-away is a recovery API that works exactly once; refines U-18
 
 - **[RPC-14](RPC-14-timeout-abandons-work.md)** swept here (223) — a timeout drops the wait but not the work; the isolate exception (B-04) swept and closed, all four sites guarded, none witnessed (L-04); refines U-17
 - **[RPC-13](RPC-13-unhandled-async-error.md)** swept here (222) — an abandoned future running user code kills the isolate; ~85 sites, all guarded, but the load-bearing guard has no witness (B-20); refines U-17

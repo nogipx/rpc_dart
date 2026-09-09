@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-17](P-17-retry-until-the-peer-returns.md)** valid (round 238), reconnect —
+  does the recovery API work more than ONCE? Server down, four failed attempts,
+  server back, a real call — twice. Records both ways it lied first: the rig
+  closing its own client, and an ablation aimed at the wrong observable
 - **[P-16](P-16-hpack-reference-flood.md)** valid (round 237), http2 headers —
   what does a header block cost once decoded? Attributes the decoder and the
   adapter separately: +7 MiB vs +258 MiB for the same 63 KiB block, with

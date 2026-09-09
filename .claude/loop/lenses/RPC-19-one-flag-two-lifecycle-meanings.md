@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
 applies: one object models both "the caller shut me down" and "the connection is gone"
 breaks: a hang.
-applied: []
-status: confirmed (round 176, off-journal)
+applied: [238]
+status: swept here (round 238, 9cbd2d47)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -81,5 +81,21 @@ inside `runZonedGuarded` and exists for this. Shared with
 > once while the peer was DOWN, exposed all three defects. A one-shot happy-path
 > test of a recovery API proves nothing. See
 > `../lessons/L-08-a-per-test-connection-hides-it.md`.
+
+**Round 238 swept it: no third instance.** Every lifecycle flag in these paths
+either belongs to an object with no recovery path — so there are not two
+meanings to conflate — or already carries the split. And the behavioural half,
+four failed reconnects into a dead peer then recovery then a real call, twice
+over, came back clean on the websocket caller.
+
+> **A flag conflates two meanings only where two meanings exist.** The static
+> sweep is therefore cheap: list the writers, and if `close()` is the only one,
+> stop. The classes worth the behavioural battery are exactly those with a
+> recovery API.
+
+Bench `../probes/P-17-retry-until-the-peer-returns.md`, whose ablation is what
+makes that CLEAN mean anything — and which took two attempts to aim: removing
+the `_disconnected` branch from `health()` moved nothing, because the bench
+reads what `reconnect()` returns. **Ablate the observable the bench samples.**
 
 Imported from private memory in the curate pass after round 234.
