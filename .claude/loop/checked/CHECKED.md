@@ -22,6 +22,7 @@ live here — [../LOOP.md](../LOOP.md).
 - **[C-17](C-17-message-level-gzip.md)** core — message-level gzip is bounded
 - **[C-18](C-18-leak-audit-coverage.md)** the whole repository — the full leak audit, one defect, everything else clean
 - **[C-19](C-19-http2-refuses-a-slow-consumer.md)** rounds 213-214, http2 — a consumer that falls behind is failed, by design and by owner decision
+- **[C-20](C-20-pre-method-budget-held-for-the-reclaim.md)** round 215, core — the pre-method budget is held until the reclaim, on purpose; looks like a leak, is not
 
 Large payloads with fragmentation (round 64) and server-side keepalive
 (round 63) live in `../backlog/B-06-websocket-lead-list-is-stale.md`: there they

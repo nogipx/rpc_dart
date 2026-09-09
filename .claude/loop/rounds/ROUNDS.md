@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[215](215-the-pre-method-budget-comes-back.md)** CLEAN, rpc_dart — the pre-method budget comes back
 - **[214](214-handler-slots-come-back.md)** CLEAN, rpc_dart — handler slots come back on every teardown path
 - **[213](213-a-slow-handler-is-killed-not-throttled.md)** DEFERRED, rpc_dart_http2 — a slow handler is killed, not throttled
 - **[212](212-a-late-grant-resurrects-a-dead-stream.md)** FIXED, rpc_dart — a late grant resurrects a dead stream's credit

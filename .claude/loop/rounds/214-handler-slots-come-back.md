@@ -89,6 +89,13 @@ state:
 - `halfOpenStreamTimeout` — round 205 measured 20 parked streams reclaimed to 0.
 - `maxBufferedBytes` / the pre-method byte budget — **not swept.**
 
+> **Corrected in round 215.** Those are two different things and only one is a
+> charge/release pair. `maxBufferedBytes` is the gRPC parser's reassembly
+> ceiling, a threshold read off the buffer's own occupancy, so it cannot suffer
+> this shape at all. The pre-method budget's ceiling is `maxMessageLengthBytes`.
+> Round 215 swept the budget and found it clean; see
+> `../checked/C-20-pre-method-budget-held-for-the-reclaim.md`.
+
 That last one is the gap, and it is the highest-severity one left: the budget's
 own comment records what it was built to stop — 250.7 MiB pushed at a stream id
 never opened with metadata cost a server 495.2 MiB of RSS, unauthenticated.

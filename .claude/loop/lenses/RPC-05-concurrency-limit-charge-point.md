@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**]
 applies: RpcSecurityPolicy has fields capping concurrency
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214]
-status: confirmed (round 214) — swept for every field that HOLDS state except the pre-method byte budget, see below
+applied: [214, 215]
+status: swept here (round 215, d0612f96) — every field that HOLDS state, see below
 ---
 
 # RPC-05 — Where a concurrency limit is charged
@@ -41,7 +41,14 @@ fields that HOLD state is most of the work.
     the four fc fields     rounds 206-213, exhaustively; 212 fixed a leak
     maxActiveStreams       round 212, every counter pinned back to zero
     halfOpenStreamTimeout  round 205, 20 parked streams reclaimed to 0
-    maxBufferedBytes       NOT SWEPT -- see B-16
+    the pre-method budget  round 215, clean, two controls (P-07); its ceiling
+                           is maxMessageLengthBytes
+
+**`maxBufferedBytes` is NOT one of these** — round 214 said it was, and that was
+wrong. It is the gRPC parser's reassembly ceiling in `parser.dart`,
+`if (_state.available > _maxBufferedBytes) throw`: a threshold read off the
+buffer's own occupancy, with no separate counter that can desync from it. It
+belongs with the pure predicates. Corrected in round 215.
 
 Round 214's result, six calls churned against a ceiling of three, then a burst
 of twelve:
@@ -53,3 +60,12 @@ of twelve:
 > limit is charged; the other question, and the one round 214 asked, is whether
 > every way a call can end gets back to the release. Enumerate the endings, not
 > the happy path.
+
+Round 215 adds the reading half of that. The pre-method budget's `endStream`
+ending holds its bytes and looks exactly like a leak, and is not one — it is the
+reorder deferral, bounded by `halfOpenStreamTimeout`. Two controls were needed to
+say so: the same run with a short timeout, and an ablation of the release.
+
+> **A held resource is not a leaked one.** Before calling a non-zero counter a
+> leak, find the bound that is supposed to release it and shorten THAT. If the
+> number goes to zero, you have found a policy, not a defect. Recorded as C-20.

@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 215) — swept, clean; the budget is released on every path
 round: 214
 commit: 359c79ad
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -45,6 +45,25 @@ Behavioural, like P-06 — do not read the private counter:
 Control: the ablation. Make `_releasePreMethodBytes` a no-op and the third
 iteration must already be refused — without that the bench has not been shown to
 see the defect, which is the trap round 210 recorded and round 214 avoided.
+
+## Answered — round 215
+
+Built as designed, including the ablation. The budget is released on every path;
+the one row that looks like a leak is the reorder deferral, bounded by
+`halfOpenStreamTimeout` and proven so by re-running with a 300 ms timeout.
+
+    KiB held after each of six rounds, 64 KiB parked, 256 KiB ceiling:
+      metadata arrives afterwards        [0, 0, 0, 0, 0, 0]
+      peer half-closes, 60 s reclaim     [64,128,192,256,256,256]
+      peer half-closes, 300 ms reclaim   [0, 0, 0, 0, 0, 0]
+      nothing more arrives, 300 ms       [0, 0, 0, 0, 0, 0]
+
+Recorded as `../checked/C-20-pre-method-budget-held-for-the-reclaim.md`, with
+the one condition that would make it matter: a shared or proxied connection,
+which nothing here builds.
+
+Also corrected: this lead inherited round 214's conflation of `maxBufferedBytes`
+with the pre-method budget. They are unrelated — see the RPC-05 lens.
 
 ## Owner decision
 

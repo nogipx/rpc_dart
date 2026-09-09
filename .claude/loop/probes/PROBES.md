@@ -14,6 +14,8 @@ skill after them, so nothing before 206 has a record here.
   does a transport bound survive `RpcHttp2Server.transportWrapper`?
 - **[P-04](P-04-parked-waiters-drain.md)** valid (round 211), core transports —
   does an abandoned upload leave its sender parked?
+- **[P-07](P-07-pre-method-budget-returns.md)** valid (round 215), core endpoint —
+  does the pre-method byte budget come back?
 - **[P-06](P-06-handler-slots-return.md)** valid (round 214), core endpoint —
   does a handler slot come back on every teardown path?
 - **[P-05](P-05-slow-consumer-is-throttled.md)** valid (round 213),
