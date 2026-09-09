@@ -1,28 +1,28 @@
 ---
-уточняет: U-11
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
-применима: несколько транспортов делят части одного слоя
-ломается: "неверный результат: заявление о радиусе фикса, не подтверждённое кодом. Дважды попадало в сообщения коммитов, а через них — в решение не проверять соседа."
-применена: []
-статус: подтверждена (раунд 150, вне журнала)
+refines: U-11
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
+applies: several transports share parts of one layer
+breaks: "wrong result: a claim about a fix's blast radius that the code does not support. It reached two commit messages, and through them the decision not to check the neighbour."
+applied: []
+status: confirmed (round 150, off-journal)
 ---
 
-# RPC-10 — Общий слой достаёт не всех соседей
+# RPC-10 — A shared layer does not reach every neighbour
 
-## Форма
+## Shape
 
-Фикс в общем слое кажется покрывающим все транспорты, а часть из них
-использует только его половину.
+A fix in a shared layer looks like it covers every transport, while some of them
+use only half of that layer.
 
-## Детектор
+## Detector
 
-Карта «какой транспорт использует какой слой»: `RpcChannelTransport`
-общий для канальных, но `RpcFrameMultiplexedChannel` — НЕ для isolate.
+The map «which transport uses which layer»: `RpcChannelTransport` is shared by
+the channel transports, but `RpcFrameMultiplexedChannel` is NOT used by isolate.
 
-## Спрашивать
+## Ask
 
-Какие пакеты РЕАЛЬНО проходят через изменённый класс?
+Which packages ACTUALLY go through the class that changed?
 
-## Улика
+## Evidence
 
-Радиус был переоценён в двух коммитах подряд.
+The radius was overstated in two commits in a row.

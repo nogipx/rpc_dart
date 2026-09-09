@@ -1,14 +1,15 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**]
-область: [ядро, websocket]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**]
+scope: [core, websocket]
 ---
 
-# C-02 — Кадровый кодек против враждебных кадров
+# C-02 — The frame codec against hostile frames
 
-Батарея из девяти битых кадров. Кодек чист.
+A battery of nine malformed frames. The codec is clean.
 
-## Контроль
+## Control
 
-Валидные кадры той же батареей: приняты, значит отказ вызван содержимым, а не самим кодеком
+Valid frames through the same battery: accepted, so the refusal comes from the
+content rather than from the codec itself.

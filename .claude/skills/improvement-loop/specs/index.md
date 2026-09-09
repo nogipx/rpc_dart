@@ -1,29 +1,29 @@
-# Схема: оглавление директории
+# Schema: a directory index
 
-Путь: `<DIR>/<DIR>.md` — имя совпадает с директорией, одним словом, большими
-буквами. Заводится вместе с директорией, сразу, пусть и пустым.
+Path: `<DIR>/<DIR>.md` — the name matches the directory, one word, upper case.
+Created together with the directory, immediately, even if empty.
 
-Состоит ровно из трёх частей, в этом порядке:
+It consists of exactly three parts, in this order:
 
-1. **Заголовок** — что это за директория, одной строкой.
-2. **Ссылка на `../LOOP.md`** за общими правилами и связями. Ничего из них не
-   пересказывать: оглавление, объясняющее модель, разойдётся с тремя своими
-   копиями.
-3. **Список записей, по строке на запись**, все строки одного вида:
+1. **A heading** — what this directory is, in one line.
+2. **A link to `../LOOP.md`** for the shared rules and links. Do not restate any
+   of them: an index that explains the model will diverge from its three copies.
+3. **A list of records, one line each**, all lines of one shape:
 
    ```
-   - **[<ID>](<файл>)** <статус или раунд> — <суть одной фразой>
+   - **[<ID>](<file>)** <status or round> — <the point in one phrase>
    ```
 
-Плюс оговорки, верные ровно для этой директории, если они есть. Общих здесь быть
-не должно.
+Plus any caveats true of this directory alone, if there are any. Shared ones do
+not belong here.
 
-**Следующего свободного номера в оглавлении нет.** Он вычисляется как максимум
-плюс один; спрашивать `loop.py status`.
+**The next free number is not in the index.** It is computed as the maximum plus
+one; ask `loop.py status`.
 
-**Порядок строк — это ранг.** У бэклога и у линз он значимый: что брать раньше,
-`loop.py next` читает его. У раундов, негативов, стендов и уроков — от нового к
-старому.
+**The line order is the rank.** For the backlog and the lenses it is
+meaningful — what to take first — and `loop.py next` reads it. For rounds,
+negatives, benches and lessons it runs newest first.
 
-**Источник истины — файлы, а не оглавление.** Файл без строки или строка без
-файла — дефект оглавления, `lint` его находит, чинится в том же раунде.
+**The files are the source of truth, not the index.** A file with no line, or a
+line with no file, is a defect in the index; `lint` finds it and it is fixed in
+the same round.

@@ -1,12 +1,12 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
-область: [wasm, обе платформы]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
+scope: [wasm, both platforms]
 ---
 
-# C-13 — wasm: 40 циклов load/close
+# C-13 — wasm: 40 load/close cycles
 
-## Контроль
+## Control
 
-Один цикл load/close как база: счётчики возвращаются к ней после 40
+A single load/close cycle as the baseline: the counters return to it after 40.

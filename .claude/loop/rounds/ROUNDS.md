@@ -1,13 +1,13 @@
-# Журнал раундов
+# Round journal
 
-Что такое раунд и как он связан с остальным — [../LOOP.md](../LOOP.md). Формат
-записи — `../../skills/improvement-loop/SKILL.md`.
+What a round is and how it links to the rest — [../LOOP.md](../LOOP.md). The
+record format — `../../skills/improvement-loop/specs/round.md`.
 
-**Номер следующего раунда есть максимальный здесь плюс один.** Это единственный
-источник: ни память, ни сообщение коммита, ни слова пользователя.
+**The next round's number is the highest here plus one.** That is the only
+source: not memory, not a commit message, not the user's words.
 
-- **[205](205-policy-limits-clean.md)** CLEAN, websocket и isolate — DoS-лимиты действительно кусают на канальных транспортах
-- **[204](204-retraction-listen-onerror.md)** RETRACTED, rpc_dart, `6ae31212` — поток запросов несёт отмену, поэтому `listen` нужен `onError`
-- **[203](203-failed-fix-attempt.md)** пересмотрен раундом 204, rpc_dart — попытка починить несуществующий дефект
-- **[202](202-clientstream-cancel-claim.md)** пересмотрен раундом 204, rpc_dart — заявление об убийстве процесса при отмене clientStream
-- **[201](201-cancel-told-server-first.md)** FIXED, rpc_dart, `fdab119f` — отменённый вызов сообщал серверу раньше, чем себе
+- **[205](205-policy-limits-clean.md)** CLEAN, websocket and isolate — DoS limits really do bite on the channel transports
+- **[204](204-retraction-listen-onerror.md)** RETRACTED, rpc_dart, `6ae31212` — the request stream carries cancellation, so listen needs onError
+- **[203](203-failed-fix-attempt.md)** revised by round 204, rpc_dart — an attempt to fix a defect that did not exist
+- **[202](202-clientstream-cancel-claim.md)** revised by round 204, rpc_dart — the claim that cancelling a clientStream kills the process
+- **[201](201-cancel-told-server-first.md)** FIXED, rpc_dart, `fdab119f` — a cancelled call told the server before telling itself

@@ -1,28 +1,28 @@
 ---
-уточняет: U-03
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
-применима: веб — реальная цель сборки (dart2js)
-ломается: "неверный результат: веб-набор молча не собирает файл целиком, и зелёный прогон ничего не доказывает. Дальше — что угодно, вплоть до падения на цели, которую никто не гонял."
-применена: []
-статус: подтверждена (раунд 090, вне журнала)
+refines: U-03
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
+applies: the web is a real build target (dart2js)
+breaks: "wrong result: the web suite silently fails to compile a whole file, and a green run proves nothing. After that, anything, up to a crash on a target nobody ran."
+applied: []
+status: confirmed (round 090, off-journal)
 ---
 
-# RPC-07 — Веб как отдельный рантайм
+# RPC-07 — The web as a separate runtime
 
-## Форма
+## Shape
 
-Код, зелёный на VM и сломанный на dart2js.
+Code that is green on the VM and broken on dart2js.
 
-## Детектор
+## Detector
 
-`melos run test:web`; литералы больше 2^53; отмена `async*`;
-`Random.secure`; кодеки, доступные только на VM; разрешение часов.
+`melos run test:web`; literals above 2^53; cancelling an `async*`;
+`Random.secure`; codecs available only on the VM; clock resolution.
 
-## Спрашивать
+## Ask
 
-Какие файлы веб-набор молча не собрал?
+Which files did the web suite silently fail to compile?
 
-## Улика
+## Evidence
 
-`int.parse` для литерала выше 2^53 выкидывает ВЕСЬ ФАЙЛ из веб-набора
-без единого сообщения.
+An `int.parse` of a literal above 2^53 throws THE WHOLE FILE out of the web
+suite without a single message.

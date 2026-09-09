@@ -1,8 +1,8 @@
-# Стенды
+# Benches
 
-Что такое стенд и когда он считается валидным — [../LOOP.md](../LOOP.md). Схема
-записи — `../../skills/improvement-loop/specs/probe.md`.
+What a bench is and when it counts as valid — [../LOOP.md](../LOOP.md). The
+record format — `../../skills/improvement-loop/specs/probe.md`.
 
-Пока ни одного: раунды 201-205 работали разовыми пробами, регистрация стендов
-появилась в скилле после них. Первый же раунд, построивший стенд и подтвердивший
-его контролем, заводит здесь `P-01`.
+None yet: rounds 201-205 worked with one-off probes, and bench registration
+appeared in the skill after them. The first round to build a bench and confirm
+it with a control files `P-01` here.

@@ -1,11 +1,11 @@
 ---
-применим: есть сеть, каналы, очереди или потоки с backpressure; две стороны, конфигурируемые независимо; лимиты на объём в полёте; чужой контролирует входные данные
-классы ущерба: DoS, неверный статус, нарушение порядка или доставки, заклинивание потока
-формы: U-07, U-08, U-09, U-10, U-11, U-13, U-16
-содержит: measure.md, canary.md, tests.md, review.md
+applies: there are networks, channels, queues or streams with backpressure; two sides configured independently; limits on bytes in flight; someone else controls the input
+damage classes: DoS, wrong status, broken ordering, broken delivery, wedged stream
+shapes: U-07, U-08, U-09, U-10, U-11, U-13, U-16
+contains: measure.md, canary.md, tests.md, review.md
 ---
 
-# async-io — две стороны, канал, лимиты, ожидания
+# async-io — two sides, a channel, limits, waits
 
-Всё здесь оплачено раундами на транспортной библиотеке; числа в историях —
-величина ловушки, а не привязка к тому коду.
+Everything here was paid for by rounds on a transport library; the numbers in
+the stories are the size of the trap, not a tie to that code.

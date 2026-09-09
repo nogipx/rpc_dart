@@ -1,27 +1,26 @@
 ---
-пакет: core
-применима: везде, где есть идемпотентные обёртки над обычными операциями.
-ломается: двойное действие, нарушенный инвариант.
-статус: подтверждена
+pack: core
+applies: anywhere there are idempotent wrappers around ordinary operations.
+breaks: a doubled action, a broken invariant.
+status: confirmed
 ---
 
-# U-12 — Перенаправленный путь теряет стражей старого
+# U-12 — A rerouted path drops the old one's guards
 
-## Форма
+## Shape
 
-Вызов A заменён вызовом B, а A проверял то, чего B не проверяет.
+Call A was replaced by call B, and A checked something B does not.
 
-## Детектор
+## Detector
 
-Грепать замены помощников, чьё имя кодирует предусловие
-(`...IfNeeded`, `...Once`, `ensure...`, `tryX`), на более простых
-собратьев.
+Grep replacements of helpers whose name encodes a precondition
+(`...IfNeeded`, `...Once`, `ensure...`, `tryX`) with their simpler siblings.
 
-## Спрашивать
+## Ask
 
-Что проверял A и не проверяет B?
+What did A check that B does not?
 
-## Улика
+## Evidence
 
-Замена помощника со стражем дала порядок, при котором уходили два
-терминальных сообщения там, где везде уходит одно.
+Replacing a guarded helper produced an ordering in which two terminal messages
+went out where everywhere else sends one.

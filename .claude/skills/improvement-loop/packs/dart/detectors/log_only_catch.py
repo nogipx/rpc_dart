@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Детектор U-06 для Dart: catch-блоки, единственное действие которых — лог.
+"""Detector for U-06 in Dart: catch blocks whose only action is a log call.
 
-Печатает путь:строка: заголовок catch. Эвристика: тело блока в фигурных скобках
-состоит только из вызовов, содержащих log/print/warning/severe/fine/info/debug.
-Запускается из корня репозитория; аргументы — директории (по умолчанию lib).
+Prints path:line: the catch header. Heuristic: the braced body consists only of
+calls containing log/print/warning/severe/fine/info/debug. Run from the
+repository root; the arguments are directories (lib by default).
 """
 import os
 import re
@@ -41,7 +41,7 @@ def main(roots):
                     stmts = [s.strip() for s in body.split(";") if s.strip()]
                     if stmts and all(LOG.search(s) and "rethrow" not in s and "throw" not in s for s in stmts):
                         line = text.count("\n", 0, m.start()) + 1
-                        print(f"{path}:{line}: catch ({m.group(1).strip()}) — только лог")
+                        print(f"{path}:{line}: catch ({m.group(1).strip()}) — log only")
     return 0
 
 if __name__ == "__main__":

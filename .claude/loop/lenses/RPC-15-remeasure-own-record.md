@@ -1,36 +1,35 @@
 ---
-уточняет: U-21
-пути: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
-применима: у цикла больше десятка раундов и есть записи старше нескольких из них.
-ломается: что угодно — за отсрочкой прячется настоящий дефект; в этом проекте так нашлась потеря данных.
-применена: [201]
-статус: подтверждена (раунд 201)
+refines: U-21
+paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
+applies: the loop has more than a dozen rounds and records older than several of them
+breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
+applied: [201]
+status: confirmed (round 201)
 ---
 
-# RPC-15 — Перемерить собственную запись цикла
+# RPC-15 — Re-measure the loop's own record
 
-Инстанцирование U-21 под этот проект: детектор здесь — `loop.py stale`, а не
-чтение записей глазами, и его вывод конечен.
+U-21 instantiated for this project: the detector here is `loop.py stale`, not
+reading records by eye, and its output is finite.
 
-## Форма
+## Shape
 
-Запись цикла — зацепка, негатив или статус «исчерпана здесь» —
-сделанная несколько раундов назад и с тех пор не проверявшаяся.
+A loop record — a lead, a negative, or a `swept here` status — made several
+rounds ago and never checked since.
 
-## Детектор
+## Detector
 
-`loop.py stale` целиком; отдельно записи с `Раунд: — (не
-перепроверено)` и свипы с пометкой «вне журнала», которые состарить
-не по чему вовсе.
+`loop.py stale` in full; separately, records with `round: — (not re-measured)`
+and sweeps marked «off-journal», which cannot be aged at all.
 
-## Спрашивать
+## Ask
 
-Держится ли ещё заявленный блокер, и мерит ли исходная проба то же,
-что мерила тогда?
+Does the stated blocker still hold, and does the original probe still measure
+what it measured then?
 
-## Улика
+## Evidence
 
-Перемер отсрочки о расщеплении типов ошибок добавил строку, которой
-в таблице никогда не было — wasm, — и там оказалась тихая обрезка
-потока: `items=11 events=[DONE]` вместо ошибки. Три отсрочки
-перемерены за прогон, все три записаны неверно.
+Re-measuring the deferral about the error-type split added a row the table had
+never had — wasm — and that row held a silent stream truncation:
+`items=11 events=[DONE]` instead of an error. Three deferrals re-measured in one
+run, all three recorded wrongly.

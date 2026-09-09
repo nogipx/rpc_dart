@@ -1,29 +1,29 @@
 ---
-статус: открыта
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_wasm/ios/**]
-проба: —
-причина: SPM во Flutter 3.38.3 — опциональное превью, CocoaPods по умолчанию; цена сейчас нулевая
+status: open
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_wasm/ios/**]
+probe: —
+reason: SPM in Flutter 3.38.3 is an optional preview with CocoaPods as the default; the cost right now is zero
 ---
 
-# B-03 — wasm: нет `Package.swift`
+# B-03 — wasm: no `Package.swift`
 
-Приложение, включившее поддержку Swift Package Manager во Flutter, не получает
-плагин вообще. В 3.38.3 SPM — опциональное превью
-(`enable-swift-package-manager: (Not set)`), CocoaPods по умолчанию, поэтому не
-срочно.
+An app that has turned on Swift Package Manager support in Flutter does not get
+the plugin at all. In 3.38.3 SPM is an optional preview
+(`enable-swift-package-manager: (Not set)`) with CocoaPods as the default, so
+this is not urgent.
 
-**Когда будет добавляться: privacy-манифест обязан быть объявлен в ОБОИХ
-манифестах**, иначе через второй путь вернётся тот же дефект, что уже ловили —
-`PrivacyInfo.xcprivacy` лежал в пакете, но podspec не объявлял
-`resource_bundles`, и он не попадал в сборку.
+**When it is added: the privacy manifest must be declared in BOTH manifests**,
+or the second path brings back the very defect already caught once —
+`PrivacyInfo.xcprivacy` was in the package, but the podspec did not declare
+`resource_bundles`, so it never reached the build.
 
-**Улика — собранное приложение, а не дерево исходников**: манифест в репозитории
-не доказывает ничего, и `pod install` надо перезапустить до пересборки.
+**The evidence is a built app, not a source tree**: a manifest in the repository
+proves nothing, and `pod install` must be re-run before rebuilding.
 
-Постоянное требование про публикуемость в сторах — в `../config.md`.
+The standing requirement about store publishability is in `../config.md`.
 
-## Решение владельца
+## Owner decision
 
 —

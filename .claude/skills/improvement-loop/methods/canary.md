@@ -1,155 +1,158 @@
-# Канарейка на каждый фикс
+# A canary for every fix
 
-## Чек-лист — до шага 5
+## Checklist — before step 5
 
-1. Выключить фикс на месте через `Edit` (`if (1 > 0) return;`, поднятый потолок,
-   перевёрнутый флаг). Никогда `git stash`. Если выключенное дерево не
-   компилируется — хирургическая канарейка: объявление остаётся, логика уходит.
-2. Прогнать новый тест. Свидетель падает с настоящим сообщением, а не с
-   таймаутом. Текст падения — в коммит и в запись раунда.
-3. Вернуть через `Edit`. Прогнать снова: зелёный.
-4. Назвать, кто свидетель, а кто страж. Тест, проходящий с обеих сторон, ничего
-   не доказывает про дефект.
-5. Фикс из двух половин (граница и освобождение, вход и выход) — две канарейки,
-   по одной на половину.
-6. У фикса есть флаг, режим или смещение, которое можно выставить неверно, —
-   канарить его, а не только отсутствие фикса.
-7. Канарейка неожиданно проходит — неверен тест, не код. Проверять количество
-   через метрику, а не косвенное следствие.
-8. Остальные тесты под канарейкой остались зелёными — это достоинство: новый
-   тест изолирует новый дефект.
-9. Существующий тест упал на фиксе — прочитать, какую ситуацию он мерил, прежде
-    чем трогать. Если называет сторону или направление — разделение, не замена.
-    Если держится только на том, что ты убираешь, — он закреплял дефект.
-10. Перед поставкой измерить достижимость: радиус поражения больше экспозиции —
-    владельцу, не продавливать.
-11. Каждая попытка получить падающего свидетеля — плюс один в `бюджет:`.
-    Бюджет из конфига («канарейки: N») исчерпан, а падающего свидетеля нет —
-    фикс не доказан: вердикт INCONCLUSIVE или DEFERRED с причиной «стенд».
-12. До вердикта — рецензия чистым контекстом (`references/review.md`); её
-    «нет» по канарейке возвращает на пункт 1 с тем же бюджетом.
+1. Switch the fix off IN PLACE with `Edit` (`if (1 > 0) return;`, a raised
+   ceiling, a flipped flag). Never `git stash`. If the switched-off tree does
+   not compile, do a surgical canary: keep the declaration, remove the logic.
+2. Run the new test. The witness fails with a real message, not with a timeout.
+   The failure text goes into the commit and into the round record.
+3. Restore it with `Edit`. Run again: green.
+4. Name which one is the witness and which is the guard. A test that passes on
+   both sides proves nothing about the defect.
+5. A fix in two halves (bound and release, entry and exit) needs two canaries,
+   one per half.
+6. If the fix has a flag, a mode or an offset that can be set wrongly, canary
+   THAT, not just the fix's absence.
+7. A canary that unexpectedly passes means the test is wrong, not the code.
+   Check the QUANTITY through a metric, not through an indirect consequence.
+8. The other tests staying green under the canary is a virtue: the new test
+   isolates the new defect.
+9. If an existing test fails on the fix, read which situation it measured before
+   touching it. If it names a side or a direction, the answer is a split, not a
+   replacement. If it stands only on what you are removing, it was pinning the
+   defect.
+10. Before shipping, measure reachability: if the blast radius exceeds the
+    exposure, that is for the owner — do not push it through.
+11. Every attempt to get a failing witness adds one to `budget:`. If the budget
+    from the config («canaries: N») is exhausted with no failing witness, the fix
+    is not proven: the verdict is INCONCLUSIVE, or DEFERRED with reason "bench".
+12. Before the verdict, a review by a clean context (`references/review.md`); a
+    "no" about the canary sends you back to item 1 with the same budget.
 
-Пункты подключённых пакетов `loop.py next` добавляет к этому списку. Ниже — за
-что заплачен каждый пункт.
+`loop.py next` adds the enabled packs' items to this list. Below is what paid
+for each item.
 
-**Протокол.** Выключить фикс НА МЕСТЕ через `Edit` (`if (1 > 0) return;`,
-поднятый потолок, перевёрнутый флаг) -> прогнать новый тест -> убедиться, что
-свидетели падают с НАСТОЯЩИМ сообщением, а не с таймаутом, который ты себе
-придумал -> вернуть через `Edit`. Текст падения кладётся в коммит и в запись
-раунда.
+**The protocol.** Switch the fix off IN PLACE with `Edit` (`if (1 > 0) return;`,
+a raised ceiling, a flipped flag) -> run the new test -> make sure the witnesses
+fail with a REAL message, not with a timeout you invented for yourself ->
+restore it with `Edit`. The failure text goes into the commit and into the round
+record.
 
-**Никогда `git stash`** (правило ноль: при сбое требуется вмешательство
-пользователя, а `git stash` не входит в allowlist). Если фикс добавляет новое API и выключенное дерево не
-компилируется, делать хирургическую канарейку: оставить новое объявление, убрать
-только логику фикса.
+**Never `git stash`** (rule zero: a failure there needs the user to intervene,
+and `git stash` is not on the allowlist). If the fix adds new API and the
+switched-off tree does not compile, do a surgical canary: keep the new
+declaration, remove only the fix's logic.
 
-## Свидетель и страж — разные вещи
+## A witness and a guard are different things
 
-- **Свидетель** ОБЯЗАН падать до фикса. Он и есть улика.
-- **Страж** проходит с обеих сторон. Он закрепляет поведение, которое не должно
-  регрессировать.
+- **The witness** MUST fail before the fix. It is the evidence.
+- **The guard** passes on both sides. It pins behaviour that must not regress.
 
-Говорить, кто из них кто. Тест, проходящий с обеих сторон, ничего не доказывает
-про дефект: либо изолировать его (выключить другой лимит, маскировавший
-нарушение), либо назвать стражем и перестать выдавать за улику.
+Say which is which. A test that passes on both sides proves nothing about the
+defect: either isolate it (switch off another limit that masked the violation)
+or call it a guard and stop presenting it as evidence.
 
-## Фиксу из двух половин нужны две канарейки
+## A fix in two halves needs two canaries
 
-Граница, которая добавлена, но никогда не ОСВОБОЖДАЕТСЯ, всё равно останавливает
-атаку: свидетель атаки остаётся зелёным, пока потолок молча зажимается на честном
-трафике. Канарить границу и освобождение по отдельности.
+A bound that is added but never RELEASED still stops the attack: the attack
+witness stays green while the ceiling silently squeezes honest traffic. Canary
+the bound and the release separately.
 
-Именно канарейка на освобождение вскрыла, что её собственный страж пустой:
-17-байтные полезные нагрузки, 670 байт за 40 итераций, ни разу близко к потолку в
-64 KiB — тест проходил с выключенным освобождением.
+It was the release canary that revealed its own guard was empty: 17-byte
+payloads, 670 bytes over 40 iterations, never anywhere near a 64 KiB ceiling —
+the test passed with the release switched off.
 
-> **Когда канарейка неожиданно проходит, неверен ТЕСТ, а не код.** Чинится
-> проверкой КОЛИЧЕСТВА через метрику, а не только его косвенного следствия.
+> **When a canary unexpectedly passes, the TEST is wrong, not the code.** The
+> fix is to check the QUANTITY through a metric, not just its indirect
+> consequence.
 
-## Стражу, способному ОТКРЫТЬСЯ при сбое, нужен атакующий свидетель
+## A guard that can FAIL OPEN needs an attacking witness
 
-Тест счастливого пути не отличает работающего стража от выключенного. Один и тот
-же страж дважды выходил нерабочим: сначала молчаливой заглушкой из-за неверной
-обработки преамбулы, потом из-за флага направления, неверное значение которого
-его отключало. В обоих случаях тест «обычный трафик всё ещё работает» проходил.
+A happy-path test cannot tell a working guard from a disabled one. The same
+guard came out non-functional twice: first as a silent no-op through mishandling
+the preamble, then through a direction flag whose wrong value switched it off.
+In both cases the test "ordinary traffic still works" passed.
 
-> **Если у фикса есть режим, флаг или смещение, которые можно выставить неверно,
-> канарить ИХ, а не только отсутствие фикса.**
+> **If the fix has a mode, a flag or an offset that can be set wrongly, canary
+> THOSE, not just the fix's absence.**
 
-## Канарейка, оставляющая ОСТАЛЬНЫЕ тесты зелёными, — это достоинство
+## A canary that leaves the OTHER tests green is a virtue
 
-Новый свидетель сработал на 151.9 MiB в клиенте, а четыре прежних теста под той
-же канарейкой продолжали проходить, потому что меряют другую сторону, уже
-починенную. Именно это разделение доказывает, что новый тест изолирует НОВЫЙ
-дефект, а не перепроверяет старый. Проверять это осознанно, добавляя тест в файл,
-где уже есть соседний баг.
+The new witness fired at 151.9 MiB in the client, while four earlier tests under
+the same canary kept passing, because they measure the other side, already
+fixed. That separation is exactly what proves the new test isolates a NEW
+defect rather than re-checking an old one. Check this deliberately when adding a
+test to a file that already holds a neighbouring bug.
 
-## Новый тест может быть пробой
+## A new test can be a probe
 
-Дважды находка приходила из ТАЙМАУТА теста, а не из запланированного
-эксперимента: контроль упёрся в 90-секундный потолок теста, хотя у его вызова был
-дедлайн в 3 с, и это локализовало зависание закрытия в teardown, куда не целилась
-ни одна проба.
+Twice a finding came from a test TIMEOUT rather than from a planned experiment:
+the control hit the test's 90-second ceiling even though its call had a 3 s
+deadline, and that localised a close hang in teardown that no probe was aiming
+at.
 
-> **Когда тест идёт куда дольше, чем позволяют его собственные дедлайны, этот
-> разрыв И ЕСТЬ измерение.** Разбираться с ним прежде, чем списывать на медленную
-> машину.
+> **When a test takes far longer than its own deadlines allow, that gap IS the
+> measurement.** Deal with it before blaming a slow machine.
 
-## Существующий тест, падающий на твоём изменении, может быть ПРАВ
+## An existing test that fails on your change may be RIGHT
 
-Прочитать его обоснование прежде, чем трогать. Изменение, заставившее
-негабаритный входящий кадр валить один вызов вместо закрытия соединения, уронило
-существующий тест с формулировкой «выжившее соединение — неограниченный источник
-пиков». Это было ИЗМЕРЕННОЕ возражение из более раннего раунда.
+Read its justification before touching it. A change that made an oversized
+inbound frame fail one call instead of closing the connection broke an existing
+test whose wording was "a surviving connection is an unbounded source of peaks".
+That was a MEASURED objection from an earlier round.
 
-Обе позиции были верны, потому что говорили о **разных сторонах**: старый тест
-гнал враждебного клиента в СЕРВЕР, новая батарея — легитимный сервер в КЛИЕНТА.
-Ответом стало привязать поведение к стороне, и ни один тест не пришлось ослаблять.
+Both positions were correct, because they spoke about **different sides**: the
+old test drove a hostile client into the SERVER, the new battery drove a
+legitimate server into the CLIENT. The answer was to bind the behaviour to the
+side, and no test had to be weakened.
 
-> **Когда существующий тест противоречит фиксу, сначала спросить, какую СИТУАЦИЮ
-> он мерил.** Если он называет действующее лицо, направление или отношение
-> доверия, фикс, скорее всего, относится к другому, и правильная форма поставки —
-> разделение, а не замена.
+> **When an existing test contradicts the fix, first ask which SITUATION it
+> measured.** If it names an actor, a direction or a trust relationship, the fix
+> probably concerns a different one, and the right shape to ship is a split, not
+> a replacement.
 
-**Но тест может и закреплять сам дефект.** Два теста покраснели на удалении
-ветки, из-за которой вызов пропускал объявленные кодеки. Ни у одного не было оси
-ситуации: один утверждал «никакой сериализации на этом транспорте», явно ПЕРЕДАВАЯ
-кодеки, а второй построил фикстуру на самом дефекте.
+**But a test can also be pinning the defect itself.** Two tests went red when a
+branch was removed that made a call skip the declared codecs. Neither had a
+situation axis: one claimed "no serialization on this transport" while
+explicitly PASSING codecs, and the other built its fixture on the defect itself.
 
-> **Не доверять тому тесту, чьё утверждение держится только на том, что ты
-> убираешь.** Обычно выдаёт фикстура: ей нужен сломанный путь, чтобы вообще
-> собрать сценарий.
+> **Do not trust a test whose claim stands only on what you are removing.** The
+> fixture usually gives it away: it needs the broken path to assemble the
+> scenario at all.
 
-## Перемерять собственные отсрочки
+## Re-measure your own deferrals
 
-Запись «открыто, сознательно не чиним» фиксирует состояние кода на день, когда
-она написана, а последующие несвязанные фиксы сдвигают это состояние, и никто не
-возвращается. Два раунда подряд нашли настоящие дефекты именно так: одна отсрочка
-уже сама рассосалась на двух реализациях из трёх, а другая неверно описывала, что
-делает код, И её блокер больше не держался, причём за отсрочкой пряталась тихая
-потеря данных.
+A record saying "open, deliberately not fixed" freezes the state of the code on
+the day it was written, later unrelated fixes move that state, and nobody comes
+back. Two rounds in a row found real defects exactly this way: one deferral had
+already dissolved on two implementations out of three, and another described
+what the code did incorrectly AND its blocker no longer held — with silent data
+loss hiding behind it.
 
-- **Проверять заявленный блокер.** Фикс, отложенный дважды под предлогом «сломает
-  соседнюю функцию», уехал в тот момент, когда один grep показал: у той функции
-  своя реализация, и она не трогает изменяемый код. Отсрочка с непроверенным
-  блокером — догадка в одежде причины.
-- **Проверка может и ПОДТВЕРДИТЬ блокер, и увеличить его.** Другой блокер
-  оказался настоящим и БОЛЬШЕ, чем записано. Оба исхода стоят раунда: смысл в
-  том, чтобы узнать, какой из них у тебя.
-- **Протухает не только блокер, но и ЧИСЛО**, и перезапуск исходной пробы может
-  ошибочно ЗАКРЫТЬ настоящий дефект — см. ловушку с задержкой в `measurement.md`.
-- **Отсрочка с обоснованием «больше это никому не нужно» истекает в момент, когда
-  становится нужна кому-то ещё.** Это утверждение о МНОЖЕСТВЕ, КОТОРОЕ РАСТЁТ.
-  Перепроверять её всякий раз, когда добавляешь к тому, от чего она зависит.
+- **Check the stated blocker.** A fix deferred twice on the excuse "it will
+  break the neighbouring feature" shipped the moment one grep showed that
+  feature has its own implementation and never touches the code being changed. A
+  deferral with an unchecked blocker is a guess dressed as a reason.
+- **The check can also CONFIRM the blocker, and enlarge it.** Another blocker
+  turned out to be real and BIGGER than recorded. Both outcomes are worth a
+  round: the point is to find out which one you have.
+- **It is not only the blocker that goes stale but the NUMBER**, and re-running
+  the original probe can wrongly CLOSE a real defect — see the latency trap in
+  `measurement.md`.
+- **A deferral justified by "nobody needs this any more" expires the moment
+  somebody else does.** It is a claim about a SET THAT GROWS. Re-check it
+  whenever you add to whatever it depends on.
 
-## Перед поставкой: измерить ДОСТИЖИМОСТЬ и быть готовым откатить
+## Before shipping: measure REACHABILITY and be ready to revert
 
-Настоящий фикс тихой обрезки был написан и выброшен: он достижим только с чужого
-пира приватного протокола библиотеки (когда библиотека с обеих сторон, серверная
-сторона всегда шлёт статус — измерено), а сам фикс переписывал путь, от которого
-зависит ядро. Тот же класс дефекта там, где пиры — чужие прокси и серверы,
-получил противоположный ответ.
+A real fix for a silent truncation was written and thrown away: it is reachable
+only from a foreign peer of the library's private protocol (with the library on
+both sides the server always sends a status — measured), and the fix itself
+rewrote a path core depends on. The same defect class, where the peers are
+third-party proxies and servers, got the opposite answer.
 
-> **Когда радиус поражения превышает экспозицию, записать это владельцу, а не
-> продавливать, редактируя несогласный тест.** Конфликт всплыл на полном прогоне
-> набора; прогон только своего пакета выпустил бы фикс наружу.
+> **When the blast radius exceeds the exposure, write it down for the owner
+> rather than pushing it through by editing the test that disagrees.** The
+> conflict surfaced on a full suite run; running only your own package would
+> have let the fix out.

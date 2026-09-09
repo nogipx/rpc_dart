@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Учёт цикла улучшений: .claude/loop/ проверяется скриптом, а не памятью.
+"""Improvement-loop bookkeeping: .claude/loop/ is checked by a script, not by memory.
 
-    loop.py init     развернуть .claude/loop/ (отказывается, если уже есть)
-    loop.py status   следующий номер раунда, последний раунд, зацепки, решения
-                     владельца, линзы, стенды, уроки, условие остановки
-    loop.py next     цель следующего раунда по правилам выбора: решение
-                     владельца -> линза без применений -> ранг -> устаревший
-                     свип; плюс список чтения, подходящие стенды и бюджет
-    loop.py lint     целостность данных по specs/: поля, ссылки в обе стороны,
-                     оглавления, коммиты раундов, покрытие гейта разрешениями
-    loop.py stale    что состарилось относительно кода: свипы, негативы, зацепки,
-                     стенды, уроки по их sha и путям; свипы со скриптовым
-                     детектором — по хешу списка экземпляров; директории, не
-                     покрытые ни одной линзой
-    loop.py catalog  формы каталога для подключённых пакетов (режим lenses)
-    loop.py review   промпт рецензента: core плюс вопросы подключённых пакетов
-    loop.py sweep ID прогнать скриптовый детектор линзы: экземпляры, счёт, хеш
+    loop.py init     lay out .claude/loop/ (refuses if it already exists)
+    loop.py status   next round number, last round, leads, owner decisions,
+                     lenses, benches, lessons, stop condition
+    loop.py next     the next round's target by the selection rules: owner
+                     decision -> lens never applied -> rank -> stale sweep;
+                     plus the reading list, matching benches and the budget
+    loop.py lint     data integrity per specs/: fields, links in both
+                     directions, indexes, round commits, gate permissions
+    loop.py stale    what has aged against the code: sweeps, negatives, leads,
+                     benches, lessons by their sha and paths; sweeps with a
+                     script detector by the hash of the instance list;
+                     directories no lens covers
+    loop.py catalog  catalog shapes for the enabled packs (lenses mode)
+    loop.py review   reviewer prompt: core plus the enabled packs' questions
+    loop.py sweep ID run a lens's script detector: instances, count, hash
 
-Только стандартная библиотека. Запускать из корня репозитория или с --root.
-Код выхода lint: 0 — чисто, 1 — есть ошибки.
+Standard library only. Run from the repository root, or pass --root.
+lint exit code: 0 clean, 1 errors found.
 """
 from __future__ import annotations
 
@@ -40,53 +40,53 @@ DIRS = {
 }
 VERDICTS = ("FIXED", "CLEAN", "DEFERRED", "INCONCLUSIVE", "RETRACTED")
 
-# Машинные поля живут во frontmatter, проза — в секциях `## Имя`. Ключи
-# frontmatter и заголовки секций сравниваются в нижнем регистре.
-ROUND_FRONT = ["раунд", "вердикт", "пакеты", "линза", "стенд", "бюджет",
-               "рецензия", "коммит"]
-ROUND_SECTIONS = ["цель", "гипотеза", "до", "механизм", "после", "канарейка",
-                  "гейт", "не чинил", "связи"]
-LENS_FRONT = ["уточняет", "пути", "применима", "ломается", "применена", "статус"]
-LENS_SECTIONS = ["форма", "детектор", "спрашивать", "улика"]
-LENS_OPTIONAL = ["детектор-скрипт"]
-BACKLOG_FRONT = ["статус", "раунд", "коммит", "пути", "проба", "причина"]
-BACKLOG_SECTIONS = ["решение владельца"]
-CHECKED_FRONT = ["раунд", "коммит", "пути", "область"]
-CHECKED_SECTIONS = ["контроль"]
-PROBE_FRONT = ["файл", "раунд", "коммит", "пути", "статус"]
-PROBE_SECTIONS = ["измеряет", "контроль"]
-LESSON_FRONT = ["раунд", "класс", "цена", "пути", "коммит", "статус"]
+# Machine fields live in frontmatter, prose in `## Section` blocks. Frontmatter
+# keys and section headings are compared lower-cased.
+ROUND_FRONT = ["round", "verdict", "packages", "lens", "bench", "budget",
+               "review", "commit"]
+ROUND_SECTIONS = ["target", "hypothesis", "before", "mechanism", "after",
+                  "canary", "gate", "not fixed", "links"]
+LENS_FRONT = ["refines", "paths", "applies", "breaks", "applied", "status"]
+LENS_SECTIONS = ["shape", "detector", "ask", "evidence"]
+LENS_OPTIONAL = ["detector-script"]
+BACKLOG_FRONT = ["status", "round", "commit", "paths", "probe", "reason"]
+BACKLOG_SECTIONS = ["owner decision"]
+CHECKED_FRONT = ["round", "commit", "paths", "scope"]
+CHECKED_SECTIONS = ["control"]
+PROBE_FRONT = ["file", "round", "commit", "paths", "status"]
+PROBE_SECTIONS = ["measures", "control"]
+LESSON_FRONT = ["round", "class", "cost", "paths", "commit", "status"]
 LESSON_SECTIONS: list[str] = []
-PACK_FRONT = ["применим", "классы ущерба", "формы", "содержит"]
-CATALOG_FRONT = ["пакет", "применима", "ломается", "статус"]
+PACK_FRONT = ["applies", "damage classes", "shapes", "contains"]
+CATALOG_FRONT = ["pack", "applies", "breaks", "status"]
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
-ID_RE = re.compile(r"^([A-ZА-ЯЁ]+-\d{2,})-[^/]+\.md$")
+ID_RE = re.compile(r"^([A-Z]+-\d{2,})-[^/]+\.md$")
 ROUND_FILE_RE = re.compile(r"^(\d{3})-[^/]+\.md$")
-ROUND_H1_RE = re.compile(r"^# Раунд (\d{3}) — (.+)$")
-ANY_ID_RE = re.compile(r"\b([A-ZА-ЯЁ]+-\d{2,})\b")
+ROUND_H1_RE = re.compile(r"^# Round (\d{3}) — (.+)$")
+ANY_ID_RE = re.compile(r"\b([A-Z]+-\d{2,})\b")
 SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
-# `вне журнала` — раунд, который был, но его записи не существует: setup.md
-# разрешает начинать журнал не с первого раунда. Такая ссылка не проверяется на
-# наличие файла, зато обязана быть НИЖЕ первого раунда журнала, иначе пометкой
-# можно замести пропавшую свежую запись.
+# `off-journal` — a round that happened but whose record does not exist:
+# setup.md allows starting the journal partway. Such a reference is not checked
+# for a file, but it must sit BELOW the journal's first round, or the marker
+# could bury a record that went missing recently.
 LENS_STATUS_RE = re.compile(
-    r"^(выведена|подтверждена \(раунд \d{3}(?:, вне журнала)?\)|"
-    r"исчерпана здесь \(раунд \d{3}, (?:[0-9a-f]{7,40}(?:, свип [0-9a-f]{8})?|вне журнала)\)|"
-    r"отозвана \(раунд \d{3}(?:, вне журнала)?\))")
-SWEPT_RE = re.compile(r"исчерпана здесь \(раунд (\d{3}), ([0-9a-f]{7,40})(?:, свип ([0-9a-f]{8}))?\)")
-SWEPT_OFF_RE = re.compile(r"исчерпана здесь \(раунд (\d{3}), вне журнала\)")
+    r"^(derived|confirmed \(round \d{3}(?:, off-journal)?\)|"
+    r"swept here \(round \d{3}, (?:[0-9a-f]{7,40}(?:, sweep [0-9a-f]{8})?|off-journal)\)|"
+    r"retracted \(round \d{3}(?:, off-journal)?\))")
+SWEPT_RE = re.compile(r"swept here \(round (\d{3}), ([0-9a-f]{7,40})(?:, sweep ([0-9a-f]{8}))?\)")
+SWEPT_OFF_RE = re.compile(r"swept here \(round (\d{3}), off-journal\)")
 SCRIPT_RE = re.compile(r"^(\S+)(.*)$")
 BACKLOG_STATUS_RE = re.compile(
-    r"^(открыта|ждёт владельца|закрыта \(раунд \d{3}\)|"
-    r"решена владельцем \(раунд \d{3}\))")
-PROBE_STATUS_RE = re.compile(r"^(валиден|устарел \([0-9a-f]{7,40}\)|сломан \(раунд \d{3}\))")
-LESSON_STATUS_RE = re.compile(r"^(действует|поднята в скилл \([^)]+\)|устарела \(раунд \d{3}\))")
-LESSON_CLASSES = ("стенд", "тулчейн", "фикстура", "метрика", "процесс")
-BUDGET_RE = re.compile(r"пробы (\d+)/(\d+), канарейки (\d+)/(\d+)")
-STAND_RE = re.compile(r"^(без стенда|(P-\d{2,}) — (переиспользован|новый))")
-REVIEW_RE = re.compile(r"^(субагент|сам|claude -p)\b")
-EMPTY = {"", "—", "-", "n/a", "нет"}
+    r"^(open|awaiting owner|closed \(round \d{3}\)|"
+    r"decided by owner \(round \d{3}\))")
+PROBE_STATUS_RE = re.compile(r"^(valid|stale \([0-9a-f]{7,40}\)|broken \(round \d{3}\))")
+LESSON_STATUS_RE = re.compile(r"^(active|promoted to skill \([^)]+\)|obsolete \(round \d{3}\))")
+LESSON_CLASSES = ("bench", "toolchain", "fixture", "metric", "process")
+BUDGET_RE = re.compile(r"probes (\d+)/(\d+), canaries (\d+)/(\d+)")
+BENCH_RE = re.compile(r"^(none|(P-\d{2,}) — (reused|new))")
+REVIEW_RE = re.compile(r"^(subagent|self|claude -p)\b")
+EMPTY = {"", "—", "-", "n/a", "none"}
 
 
 # ---------------------------------------------------------------- utilities
@@ -108,12 +108,12 @@ class Report:
 
     def dump(self) -> int:
         for m in self.errors:
-            print(f"ОШИБКА  {m}")
+            print(f"ERROR  {m}")
         for m in self.warnings:
-            print(f"предупр {m}")
+            print(f"warn   {m}")
         for m in self.infos:
-            print(f"инфо    {m}")
-        print(f"lint: {len(self.errors)} ошибок, {len(self.warnings)} предупреждений")
+            print(f"info   {m}")
+        print(f"lint: {len(self.errors)} errors, {len(self.warnings)} warnings")
         return 1 if self.errors else 0
 
 
@@ -138,12 +138,13 @@ def parse_scalar(value: str) -> str | list[str]:
 
 
 def parse_doc(text: str) -> dict:
-    """Frontmatter плюс секции `## Имя`.
+    """Frontmatter plus `## Section` blocks.
 
-    Frontmatter — подмножество YAML и только оно: `ключ: скаляр`,
-    `ключ: [a, b]`, либо `ключ:` со списком `- item` ниже. Ничего вложенного:
-    значение это строка или список строк. Всё остальное — проза в секциях,
-    и её структуру (таблицы, ``` с колонками чисел) парсер не трогает.
+    The frontmatter is a subset of YAML and nothing more: `key: scalar`,
+    `key: [a, b]`, or `key:` with a `- item` list below. Nothing nested: a
+    value is a string or a list of strings. Everything else is prose in
+    sections, and the parser does not touch its structure (fenced blocks with
+    columns of numbers).
     """
     front: dict[str, str | list[str]] = {}
     sections: dict[str, str] = {}
@@ -190,23 +191,23 @@ def parse_doc(text: str) -> dict:
 
 
 def require_fields(rep: "Report", kind: str, ent: dict, front: list[str],
-            sections: list[str]) -> None:
-    """Обязательные ключи frontmatter и обязательные секции."""
+                   sections: list[str]) -> None:
+    """Mandatory frontmatter keys and mandatory sections."""
     for name in front:
         if name not in ent["front"]:
-            rep.error(f"{kind}/{ent['path'].name}: нет ключа `{name}:` во frontmatter")
+            rep.error(f"{kind}/{ent['path'].name}: no `{name}:` key in the frontmatter")
     for name in sections:
         if name not in ent["sections"]:
-            rep.error(f"{kind}/{ent['path'].name}: нет секции `## {name.capitalize()}`")
+            rep.error(f"{kind}/{ent['path'].name}: no `## {name.capitalize()}` section")
         elif not ent["sections"][name].strip():
-            rep.error(f"{kind}/{ent['path'].name}: секция `## {name.capitalize()}` пуста")
+            rep.error(f"{kind}/{ent['path'].name}: section `## {name.capitalize()}` is empty")
 
 
 def unknown_front(rep: "Report", kind: str, ent: dict, allowed: list[str]) -> None:
     for name in ent["front"]:
         if name not in allowed:
-            rep.warn(f"{kind}/{ent['path'].name}: ключ frontmatter `{name}:` не из схемы "
-                     f"({', '.join(allowed)}) — опечатка или второй дом факта")
+            rep.warn(f"{kind}/{ent['path'].name}: frontmatter key `{name}:` is not in the schema "
+                     f"({', '.join(allowed)}) — a typo, or a second home for a fact")
 
 
 def h1(text: str) -> str:
@@ -223,7 +224,7 @@ def entity_files(dirpath: Path, index_name: str) -> list[Path]:
 
 
 def index_links(index_path: Path) -> dict[str, str]:
-    """ID -> имя файла по строкам `**[ID](file)**`."""
+    """ID -> file name, from `**[ID](file)**` lines."""
     if not index_path.exists():
         return {}
     return dict(re.findall(r"\*\*\[([^\]]+)\]\(([^)]+)\)\*\*", index_path.read_text()))
@@ -246,7 +247,7 @@ def round_numbers(loop: Path) -> list[int]:
 
 def parse_config(loop: Path) -> dict:
     cfg = {"unattended": None, "gate": [], "budget": {}, "packs": ["core"],
-           "classes": [], "after_commit": [], "commit_lang": "английский"}
+           "classes": [], "after_commit": [], "commit_lang": "English"}
     path = loop / "config.md"
     if not path.exists():
         return cfg
@@ -258,19 +259,19 @@ def parse_config(loop: Path) -> dict:
     if m:
         cfg["gate"] = [l.strip() for l in m.group(1).splitlines()
                        if l.strip() and not l.strip().startswith("#")]
-    for key in ("пробы", "канарейки", "потолок раундов"):
+    for key in ("probes", "canaries", "round cap"):
         km = re.search(rf"^{key}:\s*(\d+)\s*$", text, re.M | re.I)
         if km:
             cfg["budget"][key] = int(km.group(1))
-    m = re.search(r"^пакеты:[ \t]*(.*)$", text, re.M | re.I)
+    m = re.search(r"^packs:[ \t]*(.*)$", text, re.M | re.I)
     if m and m.group(1).strip():
         cfg["packs"] = split_list(m.group(1))
         if "core" not in cfg["packs"]:
             cfg["packs"].insert(0, "core")
-    m = re.search(r"^классы ущерба:[ \t]*(.*)$", text, re.M | re.I)
+    m = re.search(r"^damage classes:[ \t]*(.*)$", text, re.M | re.I)
     if m and m.group(1).strip():
         cfg["classes"] = split_list(m.group(1))
-    m = re.search(r"^язык коммитов:[ \t]*(.*)$", text, re.M | re.I)
+    m = re.search(r"^commit language:[ \t]*(.*)$", text, re.M | re.I)
     if m and m.group(1).strip():
         cfg["commit_lang"] = m.group(1).strip()
     m = re.search(r"```after-commit\n(.*?)```", text, re.S)
@@ -281,7 +282,7 @@ def parse_config(loop: Path) -> dict:
 
 
 def load_packs(loop: Path, cfg: dict) -> tuple[dict, list[str]]:
-    """Подключённые пакеты: сначала в скилле, потом приватные в .claude/loop/packs/."""
+    """Enabled packs: the skill's first, then private ones in .claude/loop/packs/."""
     packs: dict[str, dict] = {}
     missing: list[str] = []
     for name in cfg["packs"]:
@@ -304,13 +305,13 @@ def load_packs(loop: Path, cfg: dict) -> tuple[dict, list[str]]:
 def damage_classes(packs: dict, cfg: dict) -> list[str]:
     out: list[str] = []
     for pk in packs.values():
-        out += split_list(pk["fields"].get("классы ущерба", ""))
+        out += split_list(pk["fields"].get("damage classes", ""))
     out += cfg["classes"]
     return [c for c in out if c not in EMPTY]
 
 
 def catalog_forms(loop: Path, packs: dict) -> list[tuple[str, str, Path]]:
-    """(ID, пакет, файл) для форм каталога скилла и приватных пакетов."""
+    """(ID, pack, file) for the skill's catalog shapes and private packs' ones."""
     out = []
     dirs = [SKILL_ROOT / "catalog"] + [pk["path"] / "catalog" for pk in packs.values()
                                        if (pk["path"] / "catalog").is_dir()]
@@ -318,7 +319,7 @@ def catalog_forms(loop: Path, packs: dict) -> list[tuple[str, str, Path]]:
         for f in sorted(d.glob("U-*.md")):
             fields = parse_doc(f.read_text())["fields"]
             out.append((f.name[:4] if f.name[4] == "-" else f.name.split("-")[0] + "-" + f.name.split("-")[1],
-                        (fields.get("пакет") or "core").strip(), f))
+                        (fields.get("pack") or "core").strip(), f))
     return out
 
 
@@ -353,7 +354,7 @@ def covered(cmd: str, rules: list[str]) -> bool:
 
 
 def glob_match(path: str, pattern: str) -> bool:
-    """`**` — любые вложенные директории; `*` — внутри одного сегмента."""
+    """`**` — any nested directories; `*` — within one segment."""
     regex = re.escape(pattern)
     regex = regex.replace(r"\*\*/", "(?:.*/)?").replace(r"\*\*", ".*")
     regex = regex.replace(r"\*", "[^/]*").replace(r"\?", "[^/]")
@@ -382,7 +383,7 @@ def load(loop: Path) -> dict:
 
 
 def resolve_script(loop: Path, packs: dict, rel: str) -> Path | None:
-    """Путь скрипта детектора: относительно скилла, .claude/loop/, пакета или корня."""
+    """Detector script path: relative to the skill, .claude/loop/, a pack or the root."""
     cands = [SKILL_ROOT / rel, loop / rel, loop.parent.parent / rel]
     for pk in packs.values():
         cands.append(pk["path"] / rel)
@@ -397,136 +398,136 @@ def resolve_script(loop: Path, packs: dict, rel: str) -> Path | None:
 def cmd_lint(root: Path, loop: Path) -> int:
     rep = Report()
     if not loop.is_dir():
-        print(f"нет {loop} — режим setup: loop.py init")
+        print(f"no {loop} — setup mode: loop.py init")
         return 1
     for name in ("LOOP.md", "config.md"):
         if not (loop / name).exists():
-            rep.error(f"{name}: отсутствует")
+            rep.error(f"{name}: missing")
 
     data = load(loop)
     cfg = parse_config(loop)
     if cfg["unattended"] is None:
-        rep.error("config.md: нет строки `unattended: yes|no`")
+        rep.error("config.md: no `unattended: yes|no` line")
     if not cfg["gate"]:
-        rep.error("config.md: нет блока ```gate с командами гейта")
+        rep.error("config.md: no ```gate block with the gate commands")
     for cmd in cfg["gate"]:
         if "<" in cmd or ">" in cmd:
-            rep.error(f"config.md: в блоке gate заполнитель «{cmd}» — гейт не задан")
-    for key in ("пробы", "канарейки", "потолок раундов"):
+            rep.error(f"config.md: placeholder «{cmd}» in the gate block — the gate is not set")
+    for key in ("probes", "canaries", "round cap"):
         if key not in cfg["budget"]:
-            rep.error(f"config.md: в «Бюджет раунда» нет строки `{key}: N`")
+            rep.error(f"config.md: no `{key}: N` line under «Round budget»")
     packs, missing = load_packs(loop, cfg)
     for name in missing:
-        rep.error(f"config.md: пакет «{name}» не найден ни в {SKILL_ROOT / 'packs'}, ни в {loop / 'packs'}")
+        rep.error(f"config.md: pack «{name}» found neither in {SKILL_ROOT / 'packs'} nor in {loop / 'packs'}")
     for name, pk in packs.items():
         for fld in PACK_FRONT:
             if fld not in pk["fields"]:
-                rep.error(f"packs/{name}/PACK.md: нет ключа `{fld}:` во frontmatter")
+                rep.error(f"packs/{name}/PACK.md: no `{fld}:` key in the frontmatter")
     classes = damage_classes(packs, cfg)
 
-    # --- имена, заголовки, оглавления
+    # --- names, headings, indexes
     for kind, index_name in DIRS.items():
         dirpath = loop / kind
         if not dirpath.is_dir():
-            rep.error(f"{kind}/: директории нет")
+            rep.error(f"{kind}/: directory missing")
             continue
         index_path = dirpath / index_name
         if not index_path.exists():
-            rep.error(f"{kind}/{index_name}: оглавления нет")
+            rep.error(f"{kind}/{index_name}: index missing")
             links = {}
         else:
             links = index_links(index_path)
             itext = index_path.read_text()
             if "LOOP.md" not in itext:
-                rep.error(f"{kind}/{index_name}: нет ссылки на ../LOOP.md")
-            if re.search(r"^Следующий свободный номер", itext, re.M):
-                rep.error(f"{kind}/{index_name}: хранит «следующий свободный номер» — "
-                          "второй дом факта, номер вычисляет status")
+                rep.error(f"{kind}/{index_name}: no link to ../LOOP.md")
+            if re.search(r"^Next free number", itext, re.M):
+                rep.error(f"{kind}/{index_name}: keeps a «next free number» — "
+                          "a second home for a fact, status computes the number")
             for line in itext.splitlines():
                 if line.lstrip().startswith("|"):
-                    rep.warn(f"{kind}/{index_name}: таблица — запрещено схемой index.md")
+                    rep.warn(f"{kind}/{index_name}: table — forbidden by index.md")
                     break
         for lid, fname in links.items():
             if not (dirpath / fname).exists():
-                rep.error(f"{kind}/{index_name}: строка [{lid}]({fname}) без файла")
+                rep.error(f"{kind}/{index_name}: line [{lid}]({fname}) with no file")
         for key, ent in data[kind].items():
             p = ent["path"]
             fre = ROUND_FILE_RE if kind == "rounds" else ID_RE
             if not fre.match(p.name):
-                rep.error(f"{kind}/{p.name}: имя не по схеме "
+                rep.error(f"{kind}/{p.name}: name off schema "
                           f"({'NNN-slug.md' if kind == 'rounds' else 'ID-NN-slug.md'})")
                 continue
             if key not in links:
-                rep.error(f"{kind}/{p.name}: файл без строки в {index_name}")
+                rep.error(f"{kind}/{p.name}: file with no line in {index_name}")
             elif links[key] != p.name:
-                rep.error(f"{kind}/{index_name}: [{key}] указывает на {links[key]}, файл {p.name}")
+                rep.error(f"{kind}/{index_name}: [{key}] points at {links[key]}, the file is {p.name}")
             if not ent["has_front"]:
-                rep.error(f"{kind}/{p.name}: нет frontmatter — файл должен начинаться с `---`")
+                rep.error(f"{kind}/{p.name}: no frontmatter — the file must start with `---`")
             for line in ent["text"].splitlines():
                 if line.lstrip().startswith("|"):
-                    rep.warn(f"{kind}/{p.name}: таблица — запрещено схемой, числа идут в ```")
+                    rep.warn(f"{kind}/{p.name}: table — forbidden by the schema, numbers go in ```")
                     break
             if kind == "rounds":
                 m = ROUND_H1_RE.match(ent["h1"])
                 if not m:
-                    rep.error(f"rounds/{p.name}: заголовок не `# Раунд NNN — тема`")
+                    rep.error(f"rounds/{p.name}: heading is not `# Round NNN — topic`")
                 elif m.group(1) != key:
-                    rep.error(f"rounds/{p.name}: номер в заголовке {m.group(1)} != {key}")
-                verdict = str(ent["fields"].get("вердикт", "")).strip()
+                    rep.error(f"rounds/{p.name}: number in the heading {m.group(1)} != {key}")
+                verdict = str(ent["fields"].get("verdict", "")).strip()
                 if verdict not in VERDICTS:
-                    rep.error(f"rounds/{p.name}: `вердикт: {verdict or '—'}` не из {VERDICTS}")
-                if str(ent["fields"].get("раунд", "")).strip() != key:
-                    rep.error(f"rounds/{p.name}: `раунд:` не совпадает с номером в имени файла ({key})")
+                    rep.error(f"rounds/{p.name}: `verdict: {verdict or '—'}` is not one of {VERDICTS}")
+                if str(ent["fields"].get("round", "")).strip() != key:
+                    rep.error(f"rounds/{p.name}: `round:` does not match the number in the file name ({key})")
             else:
                 if not ent["h1"].startswith(f"# {key} — "):
-                    rep.error(f"{kind}/{p.name}: заголовок должен начинаться с `# {key} — `")
+                    rep.error(f"{kind}/{p.name}: heading must start with `# {key} — `")
 
-    # --- поля и ссылки
+    # --- fields and links
     lens_rounds: dict[str, set[str]] = {}
     for lid, ent in data["lenses"].items():
         f = ent["fields"]
         require_fields(rep, "lenses", ent, LENS_FRONT, LENS_SECTIONS)
         unknown_front(rep, "lenses", ent, LENS_FRONT + LENS_OPTIONAL)
-        st = f.get("статус", "")
+        st = f.get("status", "")
         if st and not LENS_STATUS_RE.match(st):
-            rep.error(f"lenses/{ent['path'].name}: статус «{st}» не по схеме lens.md")
-        if f.get("пути", "").strip() in EMPTY:
-            rep.error(f"lenses/{ent['path'].name}: `пути:` пусто — свип нельзя состарить")
-        lom = f.get("ломается", "").lower()
-        if lom and classes and not any(c.lower() in lom for c in classes):
-            rep.warn(f"lenses/{ent['path'].name}: `ломается:` «{f['ломается'][:60]}» не называет ни один класс "
-                     f"ущерба подключённых пакетов ({', '.join(classes)}) — добавить класс в config.md "
-                     "(`классы ущерба:`) или переформулировать")
-        det = f.get("детектор-скрипт", "").strip()
+            rep.error(f"lenses/{ent['path'].name}: status «{st}» is off the lens.md schema")
+        if f.get("paths", "").strip() in EMPTY:
+            rep.error(f"lenses/{ent['path'].name}: `paths:` empty — the sweep cannot be aged")
+        brk = f.get("breaks", "").lower()
+        if brk and classes and not any(c.lower() in brk for c in classes):
+            rep.warn(f"lenses/{ent['path'].name}: `breaks:` «{f['breaks'][:60]}» names no damage class "
+                     f"of the enabled packs ({', '.join(classes)}) — add the class to config.md "
+                     "(`damage classes:`) or rephrase")
+        det = f.get("detector-script", "").strip()
         sm_ = SCRIPT_RE.match(det) if det else None
         if sm_ and resolve_script(loop, packs, sm_.group(1)) is None:
-            rep.error(f"lenses/{ent['path'].name}: скрипт детектора {sm_.group(1)} не найден")
+            rep.error(f"lenses/{ent['path'].name}: detector script {sm_.group(1)} not found")
         first_round = min(data["rounds"], default=None)
 
         def check_round(num: str, marked: bool, where: str) -> None:
             if num in data["rounds"]:
                 return
             if not marked:
-                rep.error(f"lenses/{ent['path'].name}: {where} ссылается на раунд {num}, файла нет "
-                          "— либо завести запись, либо пометить «вне журнала»")
+                rep.error(f"lenses/{ent['path'].name}: {where} refers to round {num}, no file "
+                          "— either write the record or mark it «off-journal»")
             elif first_round is not None and num >= first_round:
-                rep.error(f"lenses/{ent['path'].name}: {where} помечает раунд {num} как «вне журнала», "
-                          f"но журнал начинается с {first_round} — записи не хватает, а не истории")
+                rep.error(f"lenses/{ent['path'].name}: {where} marks round {num} as «off-journal», "
+                          f"but the journal starts at {first_round} — that is a missing record, not history")
 
         applied = set()
-        for tok in split_list(f.get("применена", "")):
+        for tok in split_list(f.get("applied", "")):
             m = re.search(r"\d{3}", tok)
             if not m:
-                rep.error(f"lenses/{ent['path'].name}: в `применена:` не номер раунда: «{tok}»")
+                rep.error(f"lenses/{ent['path'].name}: `applied:` holds a non-round: «{tok}»")
                 continue
             applied.add(m.group(0))
-            check_round(m.group(0), "вне журнала" in tok, "`применена:`")
+            check_round(m.group(0), "off-journal" in tok, "`applied:`")
         lens_rounds[lid] = applied
-        m = re.search(r"раунд (\d{3})", st)
+        m = re.search(r"round (\d{3})", st)
         if m:
-            check_round(m.group(1), "вне журнала" in st, "статус")
-        if st.startswith("подтверждена") and f.get("улика", "").strip() in EMPTY:
-            rep.error(f"lenses/{ent['path'].name}: подтверждена, а `## Улика` пуста")
+            check_round(m.group(1), "off-journal" in st, "the status")
+        if st.startswith("confirmed") and f.get("evidence", "").strip() in EMPTY:
+            rep.error(f"lenses/{ent['path'].name}: confirmed, but `## Evidence` is empty")
 
     have_git = git(root, "rev-parse", "--git-dir") is not None
     for rn, ent in data["rounds"].items():
@@ -534,63 +535,67 @@ def cmd_lint(root: Path, loop: Path) -> int:
         pname = ent["path"].name
         require_fields(rep, "rounds", ent, ROUND_FRONT, ROUND_SECTIONS)
         unknown_front(rep, "rounds", ent, ROUND_FRONT)
-        verdict = f.get("вердикт", "").strip()
-        commit = f.get("коммит", "").strip().lower()
-        if commit and commit not in ("да", "нет"):
-            rep.error(f"rounds/{pname}: `коммит:` должен быть `да` или `нет`, не «{f.get('коммит')}»")
-        if verdict == "FIXED" and commit != "да":
-            rep.error(f"rounds/{pname}: FIXED, а `коммит:` не `да`")
+        verdict = f.get("verdict", "").strip()
+        commit = f.get("commit", "").strip().lower()
+        if commit and commit not in ("yes", "no"):
+            rep.error(f"rounds/{pname}: `commit:` must be `yes` or `no`, not «{f.get('commit')}»")
+        if verdict == "FIXED" and commit != "yes":
+            rep.error(f"rounds/{pname}: FIXED, but `commit:` is not `yes`")
         if verdict == "FIXED":
-            for name in ("после", "канарейка", "гейт"):
+            for name in ("after", "canary", "gate"):
                 if f.get(name, "").strip().lower() in EMPTY:
-                    rep.error(f"rounds/{pname}: FIXED, а `## {name.capitalize()}` пусто или n/a")
-        # Числа в `## До` должны пережить рендер: абзац склеит колонки в строку.
-        before = ent["sections"].get("до", "")
+                    rep.error(f"rounds/{pname}: FIXED, but `## {name.capitalize()}` is empty or n/a")
+        # Numbers in `## Before` have to survive rendering: a paragraph glues
+        # consecutive lines into one and the columns interleave.
+        before = ent["sections"].get("before", "")
         if len([l for l in before.splitlines() if l.strip()]) >= 2 and "```" not in before:
-            rep.warn(f"rounds/{pname}: `## До` длиннее строки, но без ``` — "
-                     "рендер склеит числа в один абзац")
-        bm = BUDGET_RE.search(f.get("бюджет", ""))
-        if f.get("бюджет") and not bm:
-            rep.error(f"rounds/{pname}: `бюджет:` не по форме `пробы n/N, канарейки n/N`")
+            rep.warn(f"rounds/{pname}: `## Before` is longer than a line but has no ``` — "
+                     "rendering will glue the numbers into one paragraph")
+        bm = BUDGET_RE.search(f.get("budget", ""))
+        if f.get("budget") and not bm:
+            rep.error(f"rounds/{pname}: `budget:` off the form `probes n/N, canaries n/N`")
         elif bm:
             pu, pb, cu, cb = (int(x) for x in bm.groups())
             cfg_b = cfg["budget"]
-            if "пробы" in cfg_b and pb != cfg_b["пробы"]:
-                rep.warn(f"rounds/{pname}: бюджет проб {pb} != {cfg_b['пробы']} из config.md")
-            if "канарейки" in cfg_b and cb != cfg_b["канарейки"]:
-                rep.warn(f"rounds/{pname}: бюджет канареек {cb} != {cfg_b['канарейки']} из config.md")
+            if "probes" in cfg_b and pb != cfg_b["probes"]:
+                rep.warn(f"rounds/{pname}: probe budget {pb} != {cfg_b['probes']} from config.md")
+            if "canaries" in cfg_b and cb != cfg_b["canaries"]:
+                rep.warn(f"rounds/{pname}: canary budget {cb} != {cfg_b['canaries']} from config.md")
             if (pu > pb or cu > cb) and verdict not in ("INCONCLUSIVE", "DEFERRED"):
-                rep.error(f"rounds/{pname}: бюджет превышен ({f['бюджет']}), а вердикт {verdict}, не INCONCLUSIVE")
-        sm_ = STAND_RE.match(f.get("стенд", "").strip())
-        if f.get("стенд") and not sm_:
-            rep.error(f"rounds/{pname}: `стенд:` должен быть `P-NN — переиспользован`, `P-NN — новый` или `без стенда`")
+                rep.error(f"rounds/{pname}: budget exceeded ({f['budget']}) with verdict {verdict}, not INCONCLUSIVE")
+        sm_ = BENCH_RE.match(f.get("bench", "").strip())
+        if f.get("bench") and not sm_:
+            rep.error(f"rounds/{pname}: `bench:` must be `P-NN — reused`, `P-NN — new` or `none`")
         elif sm_ and sm_.group(2) and sm_.group(2) not in data["probes"]:
-            rep.error(f"rounds/{pname}: стенд {sm_.group(2)} не найден в probes/")
-        if f.get("рецензия") and not REVIEW_RE.match(f["рецензия"].strip()):
-            rep.error(f"rounds/{pname}: `рецензия:` должна начинаться с `субагент`, `сам` или `claude -p`")
-        if commit == "да" and have_git:
-            found = git(root, "log", "--all", "--format=%h", f"--grep=Раунд {rn} ")
+            rep.error(f"rounds/{pname}: bench {sm_.group(2)} not found in probes/")
+        if f.get("review") and not REVIEW_RE.match(f["review"].strip()):
+            rep.error(f"rounds/{pname}: `review:` must start with `subagent`, `self` or `claude -p`")
+        if commit == "yes" and have_git:
+            # The alternation covers records written before the loop switched
+            # to English: those commit bodies say «Раунд NNN».
+            found = git(root, "log", "--all", "-E", "--format=%h",
+                        f"--grep=(Round|Раунд) {rn} ")
             if not (found or "").strip():
-                rep.warn(f"rounds/{pname}: `Коммит: да`, но `git log --grep \"Раунд {rn} \"` пуст "
-                         "(ещё не закоммичен?)")
-        lens_ref = f.get("линза", "")
+                rep.warn(f"rounds/{pname}: `commit: yes`, but `git log --grep \"Round {rn} \"` is empty "
+                         "(not committed yet?)")
+        lens_ref = f.get("lens", "")
         lm = ANY_ID_RE.search(lens_ref)
         if not lm:
-            rep.error(f"rounds/{pname}: в `линза:` нет ID")
+            rep.error(f"rounds/{pname}: no ID in `lens:`")
         else:
             lid = lm.group(1)
             if lid.startswith("U-"):
-                rep.warn(f"rounds/{pname}: линза {lid} — каталожная форма без инстанцирования в набор")
+                rep.warn(f"rounds/{pname}: lens {lid} is a catalog shape, not instantiated into the set")
             elif lid not in data["lenses"]:
-                rep.error(f"rounds/{pname}: линза {lid} не найдена в lenses/")
+                rep.error(f"rounds/{pname}: lens {lid} not found in lenses/")
             elif rn not in lens_rounds.get(lid, set()):
-                rep.error(f"lenses/{data['lenses'][lid]['path'].name}: раунд {rn} пользовался линзой, "
-                          f"а в её `применена:` его нет")
-        for tok in ANY_ID_RE.findall(f.get("связи", "")):
+                rep.error(f"lenses/{data['lenses'][lid]['path'].name}: round {rn} used this lens, "
+                          f"but its `applied:` does not list it")
+        for tok in ANY_ID_RE.findall(f.get("links", "")):
             if tok.startswith(("B-", "C-")):
                 kind = "backlog" if tok.startswith("B-") else "checked"
                 if tok not in data[kind]:
-                    rep.error(f"rounds/{pname}: `## Связи` ссылается на {tok}, файла нет")
+                    rep.error(f"rounds/{pname}: `## Links` refers to {tok}, no file")
 
     for kind, front, secs, status_re in (
             ("backlog", BACKLOG_FRONT, BACKLOG_SECTIONS, BACKLOG_STATUS_RE),
@@ -600,85 +605,85 @@ def cmd_lint(root: Path, loop: Path) -> int:
             pname = ent["path"].name
             require_fields(rep, kind, ent, front, secs)
             unknown_front(rep, kind, ent, front)
-            if status_re and f.get("статус") and not status_re.match(f["статус"]):
-                rep.error(f"{kind}/{pname}: статус «{f['статус']}» не по схеме")
-            rnd = f.get("раунд", "")
+            if status_re and f.get("status") and not status_re.match(f["status"]):
+                rep.error(f"{kind}/{pname}: status «{f['status']}» is off schema")
+            rnd = f.get("round", "")
             m = re.search(r"\d{3}", rnd)
             if m and m.group(0) not in data["rounds"]:
-                rep.error(f"{kind}/{pname}: `раунд: {m.group(0)}`, файла раунда нет")
-            if not m and "не перепроверено" not in rnd:
-                rep.error(f"{kind}/{pname}: `раунд:` без номера и без пометки «(не перепроверено)»")
-            if not SHA_RE.search(f.get("коммит", "")):
-                rep.error(f"{kind}/{pname}: `коммит:` без sha — старение не посчитать")
-            if f.get("пути", "").strip() in EMPTY:
-                rep.error(f"{kind}/{pname}: `пути:` пусто — старение не посчитать")
-            if kind == "checked" and f.get("контроль", "").strip() in EMPTY:
-                rep.error(f"checked/{pname}: негатив без контроля — это надежда, а не негатив")
-            if kind == "backlog" and f.get("причина", "").strip() in EMPTY:
-                rep.error(f"backlog/{pname}: `причина:` пуста")
+                rep.error(f"{kind}/{pname}: `round: {m.group(0)}`, no round file")
+            if not m and "not re-measured" not in rnd:
+                rep.error(f"{kind}/{pname}: `round:` with no number and no «(not re-measured)» marker")
+            if not SHA_RE.search(f.get("commit", "")):
+                rep.error(f"{kind}/{pname}: `commit:` with no sha — ageing cannot be computed")
+            if f.get("paths", "").strip() in EMPTY:
+                rep.error(f"{kind}/{pname}: `paths:` empty — ageing cannot be computed")
+            if kind == "checked" and f.get("control", "").strip() in EMPTY:
+                rep.error(f"checked/{pname}: a negative without a control is hope, not a negative")
+            if kind == "backlog" and f.get("reason", "").strip() in EMPTY:
+                rep.error(f"backlog/{pname}: `reason:` is empty")
 
     for pid, ent in data["probes"].items():
         f = ent["fields"]
         pname = ent["path"].name
         require_fields(rep, "probes", ent, PROBE_FRONT, PROBE_SECTIONS)
         unknown_front(rep, "probes", ent, PROBE_FRONT)
-        st = f.get("статус", "")
+        st = f.get("status", "")
         if st and not PROBE_STATUS_RE.match(st):
-            rep.error(f"probes/{pname}: статус «{st}» не по схеме probe.md")
-        m = re.search(r"\d{3}", f.get("раунд", ""))
+            rep.error(f"probes/{pname}: status «{st}» is off the probe.md schema")
+        m = re.search(r"\d{3}", f.get("round", ""))
         if m and m.group(0) not in data["rounds"]:
-            rep.error(f"probes/{pname}: `раунд: {m.group(0)}`, файла раунда нет")
-        if not SHA_RE.search(f.get("коммит", "")):
-            rep.error(f"probes/{pname}: `коммит:` без sha")
-        if f.get("пути", "").strip() in EMPTY:
-            rep.error(f"probes/{pname}: `пути:` пусто")
-        if f.get("контроль", "").strip() in EMPTY:
-            rep.error(f"probes/{pname}: стенд без контроля не валиден")
-        fpath = f.get("файл", "").strip()
+            rep.error(f"probes/{pname}: `round: {m.group(0)}`, no round file")
+        if not SHA_RE.search(f.get("commit", "")):
+            rep.error(f"probes/{pname}: `commit:` with no sha")
+        if f.get("paths", "").strip() in EMPTY:
+            rep.error(f"probes/{pname}: `paths:` empty")
+        if f.get("control", "").strip() in EMPTY:
+            rep.error(f"probes/{pname}: a bench without a control is not valid")
+        fpath = f.get("file", "").strip()
         if fpath in EMPTY:
-            rep.error(f"probes/{pname}: `Файл:` пуст")
-        elif st.startswith("валиден") and not (root / fpath).exists():
-            rep.warn(f"probes/{pname}: файл пробы {fpath} не найден на диске (проба вне git?)")
+            rep.error(f"probes/{pname}: `file:` is empty")
+        elif st.startswith("valid") and not (root / fpath).exists():
+            rep.warn(f"probes/{pname}: probe file {fpath} not found on disk (probe outside git?)")
 
     for lid_, ent in data["lessons"].items():
         f = ent["fields"]
         pname = ent["path"].name
         require_fields(rep, "lessons", ent, LESSON_FRONT, LESSON_SECTIONS)
         unknown_front(rep, "lessons", ent, LESSON_FRONT)
-        st = f.get("статус", "")
+        st = f.get("status", "")
         if st and not LESSON_STATUS_RE.match(st):
-            rep.error(f"lessons/{pname}: статус «{st}» не по схеме lesson.md")
-        if f.get("класс") and f["класс"].strip() not in LESSON_CLASSES:
-            rep.error(f"lessons/{pname}: `класс:` не из {LESSON_CLASSES}")
-        m = re.search(r"\d{3}", f.get("раунд", ""))
+            rep.error(f"lessons/{pname}: status «{st}» is off the lesson.md schema")
+        if f.get("class") and f["class"].strip() not in LESSON_CLASSES:
+            rep.error(f"lessons/{pname}: `class:` is not one of {LESSON_CLASSES}")
+        m = re.search(r"\d{3}", f.get("round", ""))
         if not m:
-            rep.error(f"lessons/{pname}: `раунд:` без номера — урок без раунда не оплачен")
+            rep.error(f"lessons/{pname}: `round:` with no number — a lesson with no round was not paid for")
         elif m.group(0) not in data["rounds"]:
-            rep.error(f"lessons/{pname}: `раунд: {m.group(0)}`, файла раунда нет")
-        if f.get("цена", "").strip() in EMPTY or not re.search(r"\d", f.get("цена", "")):
-            rep.error(f"lessons/{pname}: `цена:` без числа — без цены это не урок")
-        if not SHA_RE.search(f.get("коммит", "")):
-            rep.error(f"lessons/{pname}: `коммит:` без sha")
+            rep.error(f"lessons/{pname}: `round: {m.group(0)}`, no round file")
+        if f.get("cost", "").strip() in EMPTY or not re.search(r"\d", f.get("cost", "")):
+            rep.error(f"lessons/{pname}: `cost:` with no number — without a cost it is not a lesson")
+        if not SHA_RE.search(f.get("commit", "")):
+            rep.error(f"lessons/{pname}: `commit:` with no sha")
 
-    # --- нумерация раундов
+    # --- round numbering
     nums = round_numbers(loop)
     for a, b in zip(nums, nums[1:]):
         if b != a + 1:
-            rep.warn(f"rounds/: пропуск в нумерации между {a:03d} и {b:03d}")
+            rep.warn(f"rounds/: gap in the numbering between {a:03d} and {b:03d}")
 
-    # --- разрешения
+    # --- permissions
     rules = allow_rules(root)
     if cfg["unattended"]:
         for cmd in cfg["after_commit"]:
             if not covered(cmd, rules):
-                rep.error(f"unattended: команда after-commit «{cmd}» не покрыта permissions.allow")
+                rep.error(f"unattended: after-commit command «{cmd}» is not covered by permissions.allow")
         for cmd in cfg["gate"]:
             if not covered(cmd, rules):
-                rep.error(f"unattended: команда гейта «{cmd}» не покрыта permissions.allow "
-                          "в .claude/settings.json — она спросит разрешение и убьёт раунд")
+                rep.error(f"unattended: gate command «{cmd}» is not covered by permissions.allow "
+                          "in .claude/settings.json — it will ask for permission and kill the round")
         if not covered(f"python3 {Path(__file__).resolve()} status", rules):
-            rep.warn("unattended: нет правила, покрывающего `python3 .../scripts/loop.py` — "
-                     "status/lint/stale/next спросят разрешение")
+            rep.warn("unattended: no rule covers `python3 .../scripts/loop.py` — "
+                     "status/lint/stale/next will ask for permission")
     return rep.dump()
 
 
@@ -695,18 +700,18 @@ def changed_files(root: Path, sha: str, paths: list[str]) -> list[str] | None:
 
 
 def lens_rank(loop: Path, data: dict) -> list[str]:
-    """Порядок строк в LENSES.md — ранг; линзы без строки — в конец."""
+    """Line order in LENSES.md is the rank; lenses with no line go last."""
     order = list(index_links(loop / "lenses" / DIRS["lenses"]).keys())
     rest = [lid for lid in data["lenses"] if lid not in order]
     return [lid for lid in order if lid in data["lenses"]] + sorted(rest)
 
 
 def swept_stale(root: Path, ent: dict) -> list[str] | None:
-    """Для линзы `исчерпана здесь`: изменённые файлы по её путям с sha свипа."""
-    m = re.match(r"исчерпана здесь \(раунд \d{3}, ([0-9a-f]{7,40})\)", ent["fields"].get("статус", ""))
+    """For a `swept here` lens: files changed along its paths since the sweep sha."""
+    m = re.match(r"swept here \(round \d{3}, ([0-9a-f]{7,40})\)", ent["fields"].get("status", ""))
     if not m:
         return None
-    paths = split_list(ent["fields"].get("пути", ""))
+    paths = split_list(ent["fields"].get("paths", ""))
     return changed_files(root, m.group(1), paths) if paths else []
 
 
@@ -714,117 +719,120 @@ def pending_decisions(data: dict) -> list[str]:
     out = []
     for bid, ent in data["backlog"].items():
         f = ent["fields"]
-        if f.get("статус", "").startswith("ждёт владельца") and f.get("решение владельца", "").strip() not in EMPTY:
+        if f.get("status", "").startswith("awaiting owner") and f.get("owner decision", "").strip() not in EMPTY:
             out.append(bid)
     return out
 
 
 def select_target(root: Path, loop: Path, data: dict) -> tuple[str, str, str]:
-    """(вид, ID, причина) по правилам шага 1."""
+    """(kind, ID, why) by the step 1 rules."""
     dec = pending_decisions(data)
     if dec:
-        return ("решение владельца", dec[0], "решение владельца, не принятое в работу, идёт раньше любой линзы")
+        return ("owner decision", dec[0], "an owner decision not yet taken up comes before any lens")
     rank = lens_rank(loop, data)
     for lid in rank:
         f = data["lenses"][lid]["fields"]
-        if f.get("статус", "").startswith("выведена") and not split_list(f.get("применена", "")):
-            return ("линза", lid, "выведена и ни разу не применена — гипотеза, за которую ещё не платили")
+        if f.get("status", "").startswith("derived") and not split_list(f.get("applied", "")):
+            return ("lens", lid, "derived and never applied — a hypothesis nobody has paid for yet")
     for lid in rank:
-        st = data["lenses"][lid]["fields"].get("статус", "")
-        if st.startswith(("выведена", "подтверждена")):
-            return ("линза", lid, "первая по рангу среди не исчерпанных")
+        st = data["lenses"][lid]["fields"].get("status", "")
+        if st.startswith(("derived", "confirmed")):
+            return ("lens", lid, "first by rank among the un-swept")
     for lid in rank:
         ent = data["lenses"][lid]
         ch = swept_stale(root, ent)
         if ch:
-            return ("линза", lid, f"исчерпана, но по её путям изменилось {len(ch)} файл(ов) — перемер")
+            return ("lens", lid, f"swept, but {len(ch)} file(s) changed along its paths — re-measure")
     for bid, ent in data["backlog"].items():
-        if ent["fields"].get("статус", "").startswith("открыта"):
-            return ("зацепка", bid, "открытая зацепка при исчерпанном наборе — перемер (U-21)")
-    return ("нет", "", "")
+        if ent["fields"].get("status", "").startswith("open"):
+            return ("lead", bid, "an open lead with the set exhausted — re-measure (U-21)")
+    return ("none", "", "")
 
 
 def stop_condition(root: Path, loop: Path, data: dict, cfg: dict) -> tuple[bool, str]:
     n = len(data["rounds"])
-    cap = cfg["budget"].get("потолок раундов")
+    cap = cfg["budget"].get("round cap")
     if cap is not None and n >= cap:
-        return True, f"достигнут потолок раундов ({n} из {cap})"
+        return True, f"round cap reached ({n} of {cap})"
     if not data["lenses"]:
-        return False, "набора линз нет — режим lenses"
+        return False, "no lens set — lenses mode"
     kind, tid, why = select_target(root, loop, data)
-    if kind != "нет":
-        return False, f"есть цель: {kind} {tid}"
+    if kind != "none":
+        return False, f"there is a target: {kind} {tid}"
     waiting = [b for b, e in data["backlog"].items()
-               if e["fields"].get("статус", "").startswith("ждёт владельца")]
+               if e["fields"].get("status", "").startswith("awaiting owner")]
     if waiting:
-        return True, f"все линзы исчерпаны и свежи, работа ждёт владельца: {', '.join(waiting)}"
-    return True, "все линзы исчерпаны или отозваны, по их путям изменений нет, открытых зацепок нет"
+        return True, f"every lens is swept and fresh, the work awaits the owner: {', '.join(waiting)}"
+    return True, "every lens is swept or retracted, nothing changed along their paths, no open leads"
 
 
 # ---------------------------------------------------------------- status
 
 def cmd_status(root: Path, loop: Path) -> int:
     if not loop.is_dir():
-        print(f"нет {loop} — данные не развёрнуты: режим setup (loop.py init)")
+        print(f"no {loop} — data not laid out: setup mode (loop.py init)")
         return 1
     data = load(loop)
     nums = round_numbers(loop)
     nxt = (nums[-1] + 1) if nums else 1
-    print(f"Следующий раунд: {nxt:03d}")
+    print(f"Next round: {nxt:03d}")
     if nums:
         last = data["rounds"][f"{nums[-1]:03d}"]
-        print(f"Последний раунд: {last['h1'][2:]}")
-        print(f"  Не чинил: {last['fields'].get('не чинил', '—')}")
+        verdict = last["fields"].get("verdict", "?")
+        packages = last["fields"].get("packages", "")
+        print(f"Last round: {last['h1'][2:]} — {verdict}"
+              + (f" — {packages}" if packages else ""))
+        print(f"  Not fixed: {last['fields'].get('not fixed', '—')}")
     else:
-        print("Последний раунд: нет — цикл ещё не начинался")
+        print("Last round: none — the loop has not started")
 
     if not data["lenses"]:
-        print("Линзы: набора нет — режим lenses")
+        print("Lenses: no set — lenses mode")
     else:
-        by = {"выведена": [], "подтверждена": [], "исчерпана здесь": [], "отозвана": [],
-              "не по схеме": []}
+        by = {"derived": [], "confirmed": [], "swept here": [], "retracted": [],
+              "off schema": []}
         never = []
         for lid, ent in data["lenses"].items():
-            st = ent["fields"].get("статус", "")
-            key = next((k for k in by if st.startswith(k)), "не по схеме")
+            st = ent["fields"].get("status", "")
+            key = next((k for k in by if st.startswith(k)), "off schema")
             by[key].append(lid)
-            if not split_list(ent["fields"].get("применена", "")):
+            if not split_list(ent["fields"].get("applied", "")):
                 never.append(lid)
-        print("Линзы: " + ", ".join(f"{k} {len(v)}" for k, v in by.items() if v))
+        print("Lenses: " + ", ".join(f"{k} {len(v)}" for k, v in by.items() if v))
         if never:
-            print(f"  ни разу не применены: {', '.join(never)}")
+            print(f"  never applied: {', '.join(never)}")
 
     decisions, waiting, open_ = [], [], []
     for bid, ent in data["backlog"].items():
         f = ent["fields"]
-        st = f.get("статус", "")
+        st = f.get("status", "")
         title = ent["h1"][2:]
-        if st.startswith("ждёт владельца"):
-            if f.get("решение владельца", "").strip() not in EMPTY:
-                decisions.append(f"{title}: {f['решение владельца']}")
+        if st.startswith("awaiting owner"):
+            if f.get("owner decision", "").strip() not in EMPTY:
+                decisions.append(f"{title}: {f['owner decision']}")
             else:
                 waiting.append(title)
-        elif st.startswith("открыта"):
-            open_.append(f"{title} — {f.get('причина', '')}")
-    print(f"Решения владельца, не принятые в работу: {len(decisions)}"
-          + (" — ПЕРВАЯ ЦЕЛЬ РАУНДА" if decisions else ""))
+        elif st.startswith("open"):
+            open_.append(f"{title} — {f.get('reason', '')}")
+    print(f"Owner decisions not yet taken up: {len(decisions)}"
+          + (" — THE ROUND'S FIRST TARGET" if decisions else ""))
     for d in decisions:
         print(f"  {d}")
-    print(f"Ждёт владельца: {len(waiting)}")
+    print(f"Awaiting owner: {len(waiting)}")
     for w in waiting:
         print(f"  {w}")
-    print(f"Открытые зацепки: {len(open_)}")
+    print(f"Open leads: {len(open_)}")
     for o in open_:
         print(f"  {o}")
-    print(f"Негативы: {len(data['checked'])}")
-    valid = [pid for pid, e in data["probes"].items() if e["fields"].get("статус", "").startswith("валиден")]
-    print(f"Стенды: {len(data['probes'])}, валидных {len(valid)}"
+    print(f"Negatives: {len(data['checked'])}")
+    valid = [pid for pid, e in data["probes"].items() if e["fields"].get("status", "").startswith("valid")]
+    print(f"Benches: {len(data['probes'])}, valid {len(valid)}"
           + (f" ({', '.join(valid)})" if valid else ""))
-    active = [l for l, e in data["lessons"].items() if e["fields"].get("статус", "").startswith("действует")]
-    print(f"Уроки: {len(data['lessons'])}, действуют {len(active)} — читать lessons/LESSONS.md")
+    active = [l for l, e in data["lessons"].items() if e["fields"].get("status", "").startswith("active")]
+    print(f"Lessons: {len(data['lessons'])}, active {len(active)} — read lessons/LESSONS.md")
     cfg = parse_config(loop)
     stop, why = stop_condition(root, loop, data, cfg)
-    print(f"Остановка: {'ДА' if stop else 'нет'} — {why}")
+    print(f"Stop: {'YES' if stop else 'no'} — {why}")
     return 0
 
 
@@ -832,81 +840,81 @@ def cmd_status(root: Path, loop: Path) -> int:
 
 def cmd_next(root: Path, loop: Path) -> int:
     if not loop.is_dir():
-        print(f"нет {loop} — данные не развёрнуты: режим setup (loop.py init)")
+        print(f"no {loop} — data not laid out: setup mode (loop.py init)")
         return 1
     data = load(loop)
     cfg = parse_config(loop)
     nums = round_numbers(loop)
-    print(f"Раунд: {(nums[-1] + 1) if nums else 1:03d}")
+    print(f"Round: {(nums[-1] + 1) if nums else 1:03d}")
     if not data["lenses"]:
-        print("Цель: нет — набора линз нет, сначала режим lenses")
+        print("Target: none — there is no lens set, do lenses mode first")
         return 2
     stop, why = stop_condition(root, loop, data, cfg)
     if stop:
-        print(f"Остановка: ДА — {why}. Раунд не начинать; если запущено из /loop — снять задание.")
+        print(f"Stop: YES — {why}. Do not start a round; if launched from /loop, cancel the job.")
         return 2
     kind, tid, why = select_target(root, loop, data)
-    if kind == "нет":
-        print(f"Цель: нет — {why}")
+    if kind == "none":
+        print(f"Target: none — {why}")
         return 2
-    print(f"Цель: {kind} {tid} — {why}")
+    print(f"Target: {kind} {tid} — {why}")
     b = cfg["budget"]
-    print(f"Бюджет: пробы 0/{b.get('пробы', '?')}, канарейки 0/{b.get('канарейки', '?')}")
+    print(f"Budget: probes 0/{b.get('probes', '?')}, canaries 0/{b.get('canaries', '?')}")
     packs, missing = load_packs(loop, cfg)
-    print("Пакеты: " + ", ".join(packs) + (f" (не найдены: {', '.join(missing)})" if missing else ""))
-    print(f"Язык коммита: {cfg['commit_lang']}")
-    reading = ["methods/measurement.md (чек-лист)", "methods/canary.md (чек-лист)",
-               "methods/tests.md (чек-лист)", "specs/round.md"]
+    print("Packs: " + ", ".join(packs) + (f" (not found: {', '.join(missing)})" if missing else ""))
+    print(f"Commit language: {cfg['commit_lang']}")
+    reading = ["methods/measurement.md (checklist)", "methods/canary.md (checklist)",
+               "methods/tests.md (checklist)", "specs/round.md"]
     for name, pk in packs.items():
         for k in ("measure", "canary", "tests"):
             if k in pk["files"]:
                 reading.append(str(pk["files"][k].relative_to(SKILL_ROOT)) if SKILL_ROOT in pk["files"][k].parents
                                else str(pk["files"][k]))
-    reading.append("`loop.py review` — промпт рецензента с вопросами пакетов")
-    if kind == "линза":
+    reading.append("`loop.py review` — the reviewer prompt with the packs' questions")
+    if kind == "lens":
         ent = data["lenses"][tid]
         f = ent["fields"]
-        print(f"Линза: {ent['path'].relative_to(root)}")
-        print(f"  Статус: {f.get('статус', '')}")
-        print(f"  Пути: {f.get('пути', '')}")
-        print(f"  Детектор: {' '.join(f.get('детектор', '').split())[:200]}")
-        if f.get("детектор-скрипт", "").strip():
-            print(f"  Свип — скриптом: python3 scripts/loop.py sweep {tid}")
-        lens_paths = split_list(f.get("пути", ""))
+        print(f"Lens: {ent['path'].relative_to(root)}")
+        print(f"  Status: {f.get('status', '')}")
+        print(f"  Paths: {f.get('paths', '')}")
+        print(f"  Detector: {' '.join(f.get('detector', '').split())[:200]}")
+        if f.get("detector-script", "").strip():
+            print(f"  Sweep by script: python3 scripts/loop.py sweep {tid}")
+        lens_paths = split_list(f.get("paths", ""))
         matches = []
         for pid, pe in data["probes"].items():
-            if not pe["fields"].get("статус", "").startswith("валиден"):
+            if not pe["fields"].get("status", "").startswith("valid"):
                 continue
-            ppaths = split_list(pe["fields"].get("пути", ""))
+            ppaths = split_list(pe["fields"].get("paths", ""))
             if any(_overlap(a, b_) for a in lens_paths for b_ in ppaths):
-                matches.append(f"{pid} ({pe['fields'].get('файл', '')}) — {pe['h1'][2:]}")
+                matches.append(f"{pid} ({pe['fields'].get('file', '')}) — {pe['h1'][2:]}")
         if matches:
-            print("Валидные стенды по тем же путям — начинать с них, не строить новый:")
+            print("Valid benches along the same paths — start from them, do not build a new one:")
             for m_ in matches:
                 print(f"  {m_}")
         else:
-            print("Валидных стендов по этим путям нет — новый стенд регистрировать как P-NN после валидации контролем")
-        if f.get("уточняет", "").strip() not in EMPTY:
-            reading.append(f"catalog/{f['уточняет'].strip()}-*.md")
-    elif kind == "решение владельца":
+            print("No valid bench along these paths — register a new one as P-NN once a control validates it")
+        if f.get("refines", "").strip() not in EMPTY:
+            reading.append(f"catalog/{f['refines'].strip()}-*.md")
+    elif kind == "owner decision":
         ent = data["backlog"][tid]
-        print(f"Зацепка: {ent['path'].relative_to(root)}")
-        print(f"  Решение владельца: {ent['fields'].get('решение владельца', '')}")
-        print("  Линза для записи раунда — та, что породила зацепку (см. её ссылки)")
+        print(f"Lead: {ent['path'].relative_to(root)}")
+        print(f"  Owner decision: {ent['fields'].get('owner decision', '')}")
+        print("  The lens for the round record is the one that produced the lead (see its links)")
     else:
         ent = data["backlog"][tid]
-        print(f"Зацепка: {ent['path'].relative_to(root)}")
-        print(f"  Причина: {ent['fields'].get('причина', '')}")
+        print(f"Lead: {ent['path'].relative_to(root)}")
+        print(f"  Reason: {ent['fields'].get('reason', '')}")
         reading.append("catalog/U-21-remeasure-own-deferrals.md")
-    active = [l for l, e in data["lessons"].items() if e["fields"].get("статус", "").startswith("действует")]
+    active = [l for l, e in data["lessons"].items() if e["fields"].get("status", "").startswith("active")]
     if active:
-        print(f"Уроки, которые действуют ({len(active)}): lessons/LESSONS.md")
-    print("Читать: " + "; ".join(reading))
+        print(f"Lessons in force ({len(active)}): lessons/LESSONS.md")
+    print("Read: " + "; ".join(reading))
     return 0
 
 
 def _overlap(a: str, b: str) -> bool:
-    """Грубое пересечение двух глобов: общие первые два сегмента пути."""
+    """Rough overlap of two globs: the first two path segments in common."""
     sa = [s for s in a.split("/") if s and s not in ("**", "*")][:2]
     sb = [s for s in b.split("/") if s and s not in ("**", "*")][:2]
     return bool(sa) and bool(sb) and sa[: len(sb)] == sb[: len(sa)]
@@ -916,10 +924,10 @@ def _overlap(a: str, b: str) -> bool:
 
 def cmd_stale(root: Path, loop: Path) -> int:
     if not loop.is_dir():
-        print(f"нет {loop} — данные не развёрнуты")
+        print(f"no {loop} — data not laid out")
         return 1
     if git(root, "rev-parse", "--git-dir") is None:
-        print("нет git — старение не посчитать")
+        print("no git — ageing cannot be computed")
         return 1
     data = load(loop)
     rows: list[tuple[str, str, str, list[str] | None, str]] = []
@@ -927,39 +935,39 @@ def cmd_stale(root: Path, loop: Path) -> int:
     cfg = parse_config(loop)
     packs, _ = load_packs(loop, cfg)
     for lid, ent in data["lenses"].items():
-        st = ent["fields"].get("статус", "")
+        st = ent["fields"].get("status", "")
         m = SWEPT_RE.match(st)
         if not m:
             if SWEPT_OFF_RE.match(st):
-                rows.append(("свип", lid, "—", None,
-                             "свип вне журнала: код на момент свипа неизвестен, перемерить"))
+                rows.append(("sweep", lid, "—", None,
+                             "off-journal sweep: the code at sweep time is unknown, re-measure"))
             continue
-        paths = split_list(ent["fields"].get("пути", ""))
+        paths = split_list(ent["fields"].get("paths", ""))
         changed = changed_files(root, m.group(2), paths) if paths else []
         note = ""
         if m.group(3):
-            res = run_detector(root, loop, packs, ent["fields"].get("детектор-скрипт", ""))
+            res = run_detector(root, loop, packs, ent["fields"].get("detector-script", ""))
             if res is None:
-                note = "скрипт детектора не найден"
+                note = "detector script not found"
             elif res[1] != m.group(3):
-                note = f"список экземпляров изменился: свип {m.group(3)} -> {res[1]}, экземпляров {len(res[0])}"
-                changed = (changed or []) + [f"[детектор] {l}" for l in res[0][:3]]
+                note = f"the instance list changed: sweep {m.group(3)} -> {res[1]}, {len(res[0])} instances"
+                changed = (changed or []) + [f"[detector] {l}" for l in res[0][:3]]
             else:
-                note = "список экземпляров тот же"
-        rows.append(("свип", lid, m.group(2), changed, note))
-    for kind, label in (("backlog", "зацепка"), ("checked", "негатив"),
-                        ("probes", "стенд"), ("lessons", "урок")):
+                note = "the same instance list"
+        rows.append(("sweep", lid, m.group(2), changed, note))
+    for kind, label in (("backlog", "lead"), ("checked", "negative"),
+                        ("probes", "bench"), ("lessons", "lesson")):
         for iid, ent in data[kind].items():
             f = ent["fields"]
-            if kind == "backlog" and not f.get("статус", "").startswith(("открыта", "ждёт")):
+            if kind == "backlog" and not f.get("status", "").startswith(("open", "awaiting")):
                 continue
-            if kind == "probes" and not f.get("статус", "").startswith("валиден"):
+            if kind == "probes" and not f.get("status", "").startswith("valid"):
                 continue
-            if kind == "lessons" and (not f.get("статус", "").startswith("действует")
-                                      or f.get("пути", "").strip() in EMPTY):
+            if kind == "lessons" and (not f.get("status", "").startswith("active")
+                                      or f.get("paths", "").strip() in EMPTY):
                 continue
-            sm = SHA_RE.search(f.get("коммит", ""))
-            paths = split_list(f.get("пути", ""))
+            sm = SHA_RE.search(f.get("commit", ""))
+            paths = split_list(f.get("paths", ""))
             if not sm:
                 rows.append((label, iid, "—", None, ""))
                 continue
@@ -969,19 +977,19 @@ def cmd_stale(root: Path, loop: Path) -> int:
     for label, iid, sha, changed, note in rows:
         suffix = f" — {note}" if note else ""
         if changed is None:
-            print(f"{label:8} {iid:10} sha {sha}: не найден или не задан — старение не посчитать{suffix}")
+            print(f"{label:9} {iid:10} sha {sha}: not found or not set — ageing cannot be computed{suffix}")
         elif changed:
             stale_n += 1
             head = ", ".join(changed[:5]) + (" …" if len(changed) > 5 else "")
-            print(f"{label:8} {iid:10} УСТАРЕЛ: {len(changed)} с {sha[:8]}: {head}{suffix}")
+            print(f"{label:9} {iid:10} STALE: {len(changed)} since {sha[:8]}: {head}{suffix}")
         else:
-            print(f"{label:8} {iid:10} свеж: по путям изменений с {sha[:8]} нет{suffix}")
-    print(f"stale: {stale_n} из {len(rows)} записей устарели")
+            print(f"{label:9} {iid:10} fresh: nothing changed along its paths since {sha[:8]}{suffix}")
+    print(f"stale: {stale_n} of {len(rows)} records have aged")
 
-    # директории, не покрытые ни одной линзой
+    # directories no lens covers
     tracked = (git(root, "ls-files") or "").splitlines()
     globs = [p for ent in data["lenses"].values()
-             for p in split_list(ent["fields"].get("пути", ""))]
+             for p in split_list(ent["fields"].get("paths", ""))]
     if tracked and globs:
         dirs: dict[str, list[int]] = {}
         for f in tracked:
@@ -995,9 +1003,9 @@ def cmd_stale(root: Path, loop: Path) -> int:
             dirs[d][1] += int(cov)
         uncovered = [d for d, (n, c) in sorted(dirs.items()) if c == 0]
         if uncovered:
-            print("Директории без единой линзы (повод перепройти вывод набора):")
+            print("Directories with no lens at all (a reason to redo the set's derivation):")
             for d in uncovered:
-                print(f"  {d}/  ({dirs[d][0]} файл(ов))")
+                print(f"  {d}/  ({dirs[d][0]} file(s))")
     return 0
 
 
@@ -1007,18 +1015,18 @@ def cmd_catalog(root: Path, loop: Path) -> int:
     cfg = parse_config(loop)
     packs, missing = load_packs(loop, cfg)
     if missing:
-        print(f"не найдены пакеты: {', '.join(missing)}")
-    print("Пакеты: " + ", ".join(packs))
-    print("Классы ущерба: " + ", ".join(damage_classes(packs, cfg)))
+        print(f"packs not found: {', '.join(missing)}")
+    print("Packs: " + ", ".join(packs))
+    print("Damage classes: " + ", ".join(damage_classes(packs, cfg)))
     forms = catalog_forms(loop, packs)
     enabled = [(uid, pk, f) for uid, pk, f in forms if pk in packs]
     skipped = [(uid, pk) for uid, pk, f in forms if pk not in packs]
-    print(f"Формы для инстанцирования ({len(enabled)}):")
+    print(f"Shapes to instantiate ({len(enabled)}):")
     for uid, pk, f in enabled:
         h = h1(f.read_text())[2:]
         print(f"  {h}  [{pk}]  {f}")
     if skipped:
-        print("Вне подключённых пакетов: " + ", ".join(f"{u} ({p})" for u, p in skipped))
+        print("Outside the enabled packs: " + ", ".join(f"{u} ({p})" for u, p in skipped))
     return 0
 
 
@@ -1039,7 +1047,7 @@ def cmd_review(root: Path, loop: Path) -> int:
                 extra.append(f"# {name}\n{block}")
     if extra:
         lines = core.rstrip("\n").splitlines()
-        idx = next((i for i, l in enumerate(lines) if l.startswith("Итог")), len(lines))
+        idx = next((i for i, l in enumerate(lines) if l.startswith("Bottom line")), len(lines))
         lines[idx:idx] = ["", *extra, ""]
         core = "\n".join(lines) + "\n"
     print(core, end="")
@@ -1064,169 +1072,173 @@ def run_detector(root: Path, loop: Path, packs: dict, det: str) -> tuple[list[st
 
 def cmd_sweep(root: Path, loop: Path, lens_id: str | None) -> int:
     if not lens_id:
-        print("укажи ID линзы: loop.py sweep RPC-01")
+        print("name a lens ID: loop.py sweep RPC-01")
         return 1
     data = load(loop)
     cfg = parse_config(loop)
     packs, _ = load_packs(loop, cfg)
     ent = data["lenses"].get(lens_id)
     if not ent:
-        print(f"линза {lens_id} не найдена")
+        print(f"lens {lens_id} not found")
         return 1
-    det = ent["fields"].get("детектор-скрипт", "")
+    det = ent["fields"].get("detector-script", "")
     res = run_detector(root, loop, packs, det)
     if res is None:
-        print(f"{lens_id}: нет `детектор-скрипт:` во frontmatter или скрипт не найден — "
-              "свип вручную по секции `## Детектор`:")
-        print("  " + " ".join(ent["fields"].get("детектор", "").split()))
+        print(f"{lens_id}: no `detector-script:` in the frontmatter, or the script was not found — "
+              "sweep by hand from the `## Detector` section:")
+        print("  " + " ".join(ent["fields"].get("detector", "").split()))
         return 1
     lines, digest = res
     for l in lines:
         print(l)
-    print(f"экземпляров: {len(lines)}, свип {digest} — в статус линзы: "
-          f"`исчерпана здесь (раунд NNN, <sha>, свип {digest})`")
+    print(f"instances: {len(lines)}, sweep {digest} — into the lens status: "
+          f"`swept here (round NNN, <sha>, sweep {digest})`")
     return 0
 
 
 # ---------------------------------------------------------------- init
 
-CONFIG_TEMPLATE = """# Настройки цикла
+CONFIG_TEMPLATE = """# Loop settings
 
-Схема — `specs/config.md` в скилле. Три места ниже читает `loop.py`, их формат
-точный: строка `unattended:`, блок ```gate, три строки «Бюджета раунда».
+Schema — `specs/config.md` in the skill. Four places below are read by
+`loop.py` and their format is exact: the `unattended:` line, the ```gate block,
+the `commit language:` line, and the three «Round budget» lines.
 
-## Режим
+## Mode
 
 unattended: no
 
-## Пакеты
+## Packs
 
-Подключённые пакеты знаний из `packs/` скилла или `.claude/loop/packs/`;
-`core` подключён всегда. Свои классы ущерба — через запятую, необязательно.
+Enabled knowledge packs from the skill's `packs/` or from
+`.claude/loop/packs/`; `core` is always on. Own damage classes — comma
+separated, optional.
 
-пакеты: core
-классы ущерба:
+packs: core
+damage classes:
 
-## Язык
+## Language
 
-Язык заголовка и тела коммита раунда. Строку можно убрать — тогда английский.
+The language of the round commit's subject and body. Drop the line and it is
+English.
 
-язык коммитов: английский
+commit language: English
 
-## Тулчейн
+## Toolchain
 
-<чем запускать сборку и тесты; обёртки для закреплённой версии SDK; известные
-ловушки запуска и их безопасные формы>
+<what runs the build and the tests; wrappers for the pinned SDK version; known
+launch traps and their safe forms>
 
-## Гейт
+## Gate
 
-Точная последовательность до коммита, по одной команде на строку:
+The exact sequence before a commit, one command per line:
 
 ```gate
-<команда 1>
-<команда 2>
+<command 1>
+<command 2>
 ```
 
-## Пробы
+## Probes
 
-<куда класть и почему туда: разрешение импортов, исключение из анализа, игнор в git>
+<where they go and why: import resolution, exclusion from analysis, gitignore>
 
-## После коммита
+## After the commit
 
-Команды unattended-запуска после успешного коммита раунда (push, уведомление);
-пусто — ничего. Покрываются permissions.allow так же, как гейт.
+Commands for an unattended run after a successful round commit (push,
+notification); empty means nothing. Covered by permissions.allow like the gate.
 
 ```after-commit
 ```
 
-## Бюджет раунда
+## Round budget
 
-пробы: 3
-канарейки: 2
-потолок раундов: 30
+probes: 3
+canaries: 2
+round cap: 30
 
-## Цели, которые никто не гоняет
+## Targets nobody runs
 
-<другой компилятор, нативный слой, устройства, генераторы — команда и что находит>
+<another compiler, the native layer, devices, generators — the command and what
+it finds>
 
-## Планка серьёзности
+## Severity bar
 
-<какие классы ущерба достойны раунда сейчас>
+<which damage classes are worth a round right now>
 
-## Вне области
+## Out of scope
 
-<что не является целью цикла>
+<what the loop is not for>
 
-## Постоянные требования владельца
+## Standing owner requirements
 
-<то, что действует в каждом раунде>
+<what holds in every round>
 
-## Известные флейки
+## Known flakes
 
-<поимённо; пусто — так и написать>
+<by name; if none, say so>
 """
 
-LOOP_TEMPLATE = """# LOOP.md — карта данных цикла улучшений
+LOOP_TEMPLATE = """# LOOP.md — map of the improvement-loop data
 
-Данные измеряемого цикла поиска и починки дефектов; правила — в скилле
-`improvement-loop` (SKILL.md, specs/, methods/). Здесь только навигация.
+Data of a measured find-and-fix loop; the rules live in the `improvement-loop`
+skill (SKILL.md, specs/, methods/). Navigation only here.
 
-## Четыре сущности
+## Six entities
 
-- **Линза** — генератор гипотез: что искать и как. `lenses/`, оглавление `lenses/LENSES.md`.
-- **Раунд** — что было измерено, починено и с каким вердиктом. `rounds/`, оглавление `rounds/ROUNDS.md`.
-- **Зацепка** — недоделанное: отсрочка, ожидание владельца, стенд без числа. `backlog/`, оглавление `backlog/BACKLOG.md`.
-- **Негатив** — измерено, чисто, делать нечего. `checked/`, оглавление `checked/CHECKED.md`.
-- **Стенд** — проба, чей контроль доказал, что она видит дефект; переиспользуется. `probes/`, оглавление `probes/PROBES.md`.
-- **Урок** — правило работы с этим кодом, за которое раунд заплатил. `lessons/`, оглавление `lessons/LESSONS.md`.
+- **Lens** — a hypothesis generator: what to look for and how. `lenses/`, index `lenses/LENSES.md`.
+- **Round** — what was measured, fixed, and with which verdict. `rounds/`, index `rounds/ROUNDS.md`.
+- **Lead** — the unfinished: a deferral, a wait on the owner, a bench with no number. `backlog/`, index `backlog/BACKLOG.md`.
+- **Negative** — measured, clean, nothing to do. `checked/`, index `checked/CHECKED.md`.
+- **Bench** — a probe whose control proved it can see the defect; reused. `probes/`, index `probes/PROBES.md`.
+- **Lesson** — a rule for working with this code that a round paid for. `lessons/`, index `lessons/LESSONS.md`.
 
-## Кто на кого ссылается
+## Who points at whom
 
 ```mermaid
 flowchart LR
-    R[раунд] -->|линза:| L[линза]
-    L -->|применена:| R
-    R -->|стенд:| P[стенд]
-    B[зацепка] -->|раунд:| R
-    C[негатив] -->|раунд:| R
-    P -->|раунд:| R
-    S[урок] -->|раунд:| R
-    R -->|## Связи| B
-    R -->|## Связи| C
+    R[round] -->|lens:| L[lens]
+    L -->|applied:| R
+    R -->|bench:| P[bench]
+    B[lead] -->|round:| R
+    C[negative] -->|round:| R
+    P -->|round:| R
+    S[lesson] -->|round:| R
+    R -->|## Links| B
+    R -->|## Links| C
 ```
 
-## Куда идти с вопросом
+## Where to go with a question
 
-- Прогнать раунд — скилл, режим по умолчанию; сначала `loop.py status`.
-- Какой номер следующего раунда — `loop.py status` (максимум в `rounds/` плюс один).
-- Это уже проверяли? — `checked/CHECKED.md` и статусы линз `исчерпана здесь`.
-- Откуда взялось утверждение — по ID: `grep -rn "<ID>" .claude/loop/`.
-- Что ждёт владельца — `loop.py status`; ответить: вписать текст в поле
-  `Решение владельца:` файла зацепки, статус не менять.
-- Что устарело относительно кода — `loop.py stale`.
-- Какую цель взять следующему раунду — `loop.py next`.
-- Есть ли готовый стенд для этой поверхности — `probes/PROBES.md` или `loop.py next`.
-- Чему научились на этом коде — `lessons/LESSONS.md`.
+- Run a round — the skill, default mode; start with `loop.py status`.
+- The next round's number — `loop.py status` (the maximum in `rounds/` plus one).
+- Has this been checked? — `checked/CHECKED.md` and the `swept here` lens statuses.
+- Where a claim came from — by ID: `grep -rn "<ID>" .claude/loop/`.
+- What awaits the owner — `loop.py status`; to answer, write into the
+  `## Owner decision` section of the lead's file, leave the status alone.
+- What has aged against the code — `loop.py stale`.
+- Which target the next round should take — `loop.py next`.
+- Is there a ready bench for this surface — `probes/PROBES.md` or `loop.py next`.
+- What we learned on this code — `lessons/LESSONS.md`.
 
-## Чему верить с оглядкой
+## What to trust with care
 
-<заполнить при развёртывании: невосстановленная история, записи «не
-перепроверено», непрогнанные детекторы, набор линз не проверен раундом>
+<fill in at setup: unrecovered history, «not re-measured» records, detectors
+never run, a lens set no round has checked>
 """
 
 INDEX_TITLES = {
-    "lenses": "Набор линз проекта — что искать и как; порядок строк это ранг",
-    "rounds": "Журнал раундов — от нового к старому",
-    "backlog": "Зацепки — недоделанное; порядок строк это ранг",
-    "checked": "Негативы — измерено чисто, делать нечего",
-    "probes": "Стенды — пробы, чей контроль доказал, что они видят дефект",
-    "lessons": "Уроки — оплаченные раундом правила работы с этим кодом",
+    "lenses": "Lens set of the project — what to look for and how; line order is the rank",
+    "rounds": "Round journal — newest first",
+    "backlog": "Leads — the unfinished; line order is the rank",
+    "checked": "Negatives — measured clean, nothing to do",
+    "probes": "Benches — probes whose control proved they see the defect",
+    "lessons": "Lessons — rules for working with this code, paid for by a round",
 }
 
 
 def cmd_init(root: Path, loop: Path) -> int:
     if loop.exists():
-        print(f"{loop} уже есть — развёртывание поверх данных не делается")
+        print(f"{loop} already exists — no laying out on top of data")
         return 1
     loop.mkdir(parents=True)
     (loop / "LOOP.md").write_text(LOOP_TEMPLATE)
@@ -1234,10 +1246,10 @@ def cmd_init(root: Path, loop: Path) -> int:
     for kind, index_name in DIRS.items():
         (loop / kind).mkdir()
         (loop / kind / index_name).write_text(
-            f"# {INDEX_TITLES[kind]}\n\nПравила и связи — [../LOOP.md](../LOOP.md).\n\n")
-    print(f"развёрнуто: {loop}")
-    print("дальше: заполнить config.md по specs/config.md, разрешения в "
-          ".claude/settings.json, режим lenses, затем loop.py lint")
+            f"# {INDEX_TITLES[kind]}\n\nRules and links — [../LOOP.md](../LOOP.md).\n\n")
+    print(f"laid out: {loop}")
+    print("next: fill in config.md per specs/config.md, permissions in "
+          ".claude/settings.json, lenses mode, then loop.py lint")
     return 0
 
 
@@ -1247,9 +1259,9 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["init", "status", "next", "lint", "stale", "catalog", "review", "sweep"])
-    ap.add_argument("arg", nargs="?", help="ID линзы для sweep")
-    ap.add_argument("--root", default=".", help="корень репозитория (по умолчанию текущая директория)")
-    ap.add_argument("--loop", default=".claude/loop", help="путь к данным цикла относительно корня")
+    ap.add_argument("arg", nargs="?", help="lens ID for sweep")
+    ap.add_argument("--root", default=".", help="repository root (the current directory by default)")
+    ap.add_argument("--loop", default=".claude/loop", help="path to the loop data relative to the root")
     a = ap.parse_args(argv)
     root = Path(a.root).resolve()
     loop = (root / a.loop).resolve()

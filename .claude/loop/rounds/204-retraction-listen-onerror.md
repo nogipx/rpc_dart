@@ -1,87 +1,89 @@
 ---
-раунд: 204
-вердикт: RETRACTED
-пакеты: [rpc_dart]
-линза: RPC-12
-стенд: без стенда
-бюджет: пробы 0/3, канарейки 0/3
-рецензия: сам (запись мигрирована в схему; рецензии в раунде не было)
-коммит: да
+round: 204
+verdict: RETRACTED
+packages: [rpc_dart]
+lens: RPC-12
+bench: none
+budget: probes 0/3, canaries 0/3
+review: self (record migrated into the schema; the round itself had no review)
+commit: yes
 ---
 
-# Раунд 204 — поток запросов несёт отмену, поэтому `listen` нужен `onError`
+# Round 204 — the request stream carries cancellation, so listen needs onError
 
-## Цель
+## Target
 
-RPC-12 — отмена, доставляемая в поток запросов обработчика
+RPC-12 — cancellation delivered into the handler's request stream
 
-## Гипотеза
+## Hypothesis
 
-(раунда 202) отмена вызова `clientStream` убивает изолят.
+(from round 202) cancelling a `clientStream` call kills the isolate.
 
-## До
+## Before
 
 ```
-упорядоченная временная шкала с инструментированием обеих сторон:
-  0 мс  cancel()
-  6 мс  future ВЫЗЫВАЮЩЕГО -> RpcCancelledException
-  7 мс  ошибка в потоке ХЕНДЛЕРА RpcCancelledException
-Пробы: `cancel_zone_trace.dart`, `cancel_shape_matrix.dart` в
+an ordered timeline with both sides instrumented:
+
+  0 ms  cancel()
+  6 ms  the CALLER's future -> RpcCancelledException
+  7 ms  an error in the HANDLER's stream, RpcCancelledException
+```
+
+Probes: `cancel_zone_trace.dart`, `cancel_shape_matrix.dart` in
 rpc_dart_websocket.
-```
 
-## Механизм
+## Mechanism
 
-Дефекта библиотеки нет. В пробе обработчик делал
-`requests.listen((_) {})` без `onError`. Отмена доставляется в поток
-запросов обработчика НАМЕРЕННО, чтобы он узнал об исчезновении
-вызова; подписка без `onError` превращает эту доставку в
-необработанную ошибку, а Dart делает такую ошибку фатальной для
-изолята. Обычная семантика потоков, а не баг. Обработчики на
-`await for` не затронуты: ошибка приходит броском, который конвейер
-респондера уже ловит. Умирает только форма `listen`-без-`onError`.
+There is no library defect. In the probe, the handler did
+`requests.listen((_) {})` with no `onError`. Cancellation is delivered into the
+handler's request stream DELIBERATELY, so it learns the call is gone; a
+subscription without `onError` turns that delivery into an unhandled error, and
+Dart makes such an error fatal to the isolate. Ordinary stream semantics, not a
+bug. Handlers on `await for` are unaffected: the error arrives as a throw, which
+the responder pipeline already catches. Only the `listen`-without-`onError`
+shape dies.
 
-## После
+## After
 
-n/a — правок кода нет, добавлена строка в документацию контракта
-обработчика.
+n/a — no code changes; a line was added to the handler contract's documentation.
 
-## Канарейка
+## Canary
 
 n/a
 
-## Гейт
+## Gate
 
-n/a (документация)
+n/a (documentation)
 
-## Не чинил
+## Not fixed
 
-Ничего.
+Nothing.
 
-## Связи
+## Links
 
-Отзывает раунды `202-clientstream-cancel-claim.md` и
-`203-failed-fix-attempt.md`; форма записана линзой
-`../lenses/RPC-12-cancel-into-request-stream.md` со статусом
-«отозвана».
+Retracts rounds `202-clientstream-cancel-claim.md` and
+`203-failed-fix-attempt.md`; the shape is recorded by lens
+`../lenses/RPC-12-cancel-into-request-stream.md` with status `retracted`.
 
-## Четыре теории, опровергнутые измерением — не пробовать заново
+## Four theories disproven by measurement — do not try again
 
-1. Scope уже отменил подписку send-loop -> гейт на `hasListener` ничего не изменил
-   (значит, слушатель БЫЛ).
-2. У того подписчика нет `onError` -> есть, второй даёт ошибку компиляции.
-3. Пробрасывание потока запросов дублирует терминальную ошибку -> идемпотентность
-   ничего не изменила.
-4. Это регрессия раунда 201 -> нет, порядок до 201 падает идентично.
+1. The scope had already cancelled the send-loop subscription -> gating on
+   `hasListener` changed nothing (so a listener WAS there).
+2. That subscriber has no `onError` -> it does, and a second one is a compile
+   error.
+3. Forwarding the request stream duplicates the terminal error -> making it
+   idempotent changed nothing.
+4. It is a regression from round 201 -> no, the pre-201 order fails identically.
 
-## Что нашло причину
+## What found the cause
 
-`runZonedGuarded` вокруг КЛИЕНТА не ловил ошибку. Серверный эндпоинт создан вне
-этой зоны, поэтому утечка, принадлежащая респондеру, там пойматься не могла — одно
-измерение перенесло весь поиск с вызывающего на обработчик.
+`runZonedGuarded` around the CLIENT did not catch the error. The server endpoint
+is created outside that zone, so a leak belonging to the responder could never
+be caught there — one measurement moved the whole search from the caller to the
+handler.
 
-## Ловушка пробы
+## The probe's trap
 
-`RpcContext.withHeaders` НЕ создаёт токен отмены, поэтому
-`ctx.cancellationToken?.cancel()` — молчаливый no-op. Использовать
+`RpcContext.withHeaders` does NOT create a cancellation token, so
+`ctx.cancellationToken?.cancel()` is a silent no-op. Use
 `RpcContext.withCancellation(RpcCancellationToken())`.

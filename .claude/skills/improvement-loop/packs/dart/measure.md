@@ -1,23 +1,24 @@
-# dart: измерения и форензика
+# dart: measurements and forensics
 
-Идиомы Dart-рантайма к чек-листу `methods/measurement.md`.
+Dart runtime idioms for the `methods/measurement.md` checklist.
 
-D1. Необработанная ошибка с пустым стеком пришла не из броска, а из
-    `completeError`/`addError` без стека — искать место завершения.
-D2. Охраняемая зона (`runZonedGuarded`) ловит только ошибки своей стороны —
-    проверить, чей код бросил.
+D1. An unhandled error with an empty stack did not come from a throw but from
+    `completeError`/`addError` with no stack — look for the completion site.
+D2. A guarded zone (`runZonedGuarded`) catches only its own side's errors —
+    check whose code threw.
 
-Ниже — за что заплачен каждый пункт.
+Below is what paid for each item.
 
-## Форензика, быстро сужавшая поиск
+## Forensics that narrowed the search fast
 
-- **Необработанная ошибка с ПУСТЫМ стеком пришла не из броска, а из явного
-  «завершить ошибкой» с одним аргументом** (в Dart — `completeError`/`addError`
-  без стека). Одно это сузило поиск до конкретного места завершения.
-- **Падение, чей вывод обрывается раньше, чем что-либо напечатал твой
-  собственный `catch`, не проходило через future, который ты ждал.** Искать
-  оторванную доставку, а не перечитывать ожидаемый путь.
-- **Если охраняемая зона не ловит ожидаемое, проверить, какой СТОРОНЕ
-  принадлежит бросивший код.** Охраняемая зона вокруг клиента (в Dart —
-  `runZonedGuarded`) не могла поймать утечку исключения, принадлежащую серверной
-  стороне, — одно измерение перенесло весь поиск.
+- **An unhandled error with an EMPTY stack did not come from a throw but from an
+  explicit "complete with an error" with one argument** (in Dart:
+  `completeError`/`addError` with no stack). That alone narrowed the search to a
+  specific completion site.
+- **A crash whose output stops before your own `catch` printed anything did not
+  pass through the future you were awaiting.** Look for a detached delivery
+  rather than re-reading the expected path.
+- **If a guarded zone does not catch what you expect, check which SIDE the
+  throwing code belongs to.** A guarded zone around the client (in Dart,
+  `runZonedGuarded`) could not catch an exception leak belonging to the server
+  side — one measurement moved the entire search.

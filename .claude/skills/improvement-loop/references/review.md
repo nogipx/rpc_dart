@@ -1,51 +1,56 @@
-# Рецензия — чистый контекст до вердикта
+# Review — a clean context before the verdict
 
-Строитель стенда склонен оправдывать стенд. Самые дорогие ошибки в методах —
-общий конфиг сторон, число не с той стороны, канарейка, которая неожиданно
-прошла, — ошибки суждения, а не механики. Поэтому до вердикта запись раунда
-читает контекст, который стенд не строил.
+Whoever built the bench is inclined to defend it. The most expensive mistakes in
+these methods — a policy object shared by both sides, a number taken from the
+wrong side, a canary that unexpectedly passed — are errors of judgement, not of
+mechanics. So before the verdict, the round record is read by a context that did
+not build the bench.
 
-## Как запустить
+## How to run it
 
-Промпт собирает `python3 scripts/loop.py review`: ядро ниже плюс вопросы
-подключённых пакетов (`packs/<имя>/review.md`) перед итогом.
+`python3 scripts/loop.py review` assembles the prompt: the core below plus the
+enabled packs' questions (`packs/<name>/review.md`) before the bottom line.
 
-- **Claude Code**: субагент (`Agent`/`Task`) с собранным промптом; ему передаются
-  только запись раунда (черновик блока по `specs/round.md`), файл пробы, файл
-  стенда `P-NN`, если он есть, и этот файл. Не передавать историю раунда.
-- **Скилл запущен в fork** (субагенты недоступны): `claude -p` с тем же промптом,
-  если разрешён allowlist.
-- **Ничего из этого нет**: сам, с пометкой `Рецензия: сам — ...` и после явного
-  отказа от контекста: перечитать запись как чужую, отвечать по пунктам письменно.
+- **Claude Code**: a subagent (`Agent`/`Task`) with the assembled prompt; it
+  receives only the round record (the draft per `specs/round.md`), the probe
+  file, the bench file `P-NN` if there is one, and this file. Do not pass the
+  round's history.
+- **The skill is running in a fork** (subagents unavailable): `claude -p` with
+  the same prompt, if the allowlist permits it.
+- **None of the above**: do it yourself, marked `review: self — ...`, and only
+  after explicitly setting the context aside: re-read the record as a stranger's
+  and answer point by point in writing.
 
-Ответ рецензента — по пунктам «да / нет — почему». Любое «нет» возвращает раунд
-на шаг стенда с тем же бюджетом. Итог — в поле `Рецензия:` записи раунда:
-`субагент — 7/7` или `субагент — 8/10: <что перестроено>`; знаменатель —
-число вопросов собранного промпта.
+The reviewer answers point by point, "yes / no — why". Any "no" sends the round
+back to the bench step with the same budget. The outcome goes into the record's
+`review:` key: `subagent — 7/7` or `subagent — 8/10: <what was rebuilt>`; the
+denominator is the number of questions in the assembled prompt.
 
-## Промпт рецензента
+## The reviewer prompt
 
 ```
-Ты рецензируешь запись раунда цикла улучшений. Ты не строил этот стенд и не
-знаешь, что хотел показать автор. Отвечай на каждый вопрос «да» или «нет — почему»,
-цитируя строки записи или пробы. Не предлагай фиксов. Не хвали.
+You are reviewing the record of an improvement-loop round. You did not build
+this bench and you do not know what the author meant to show. Answer every
+question "yes" or "no — why", quoting lines from the record or the probe. Do not
+propose fixes. Do not praise.
 
-1. Контроль отличается от испытуемого случая ровно одним — убранным
-   предполагаемым механизмом? Назови, чем ещё они различаются.
-2. Контроль показал, что стенд СПОСОБЕН увидеть дефект (число, отличное от
-   испытуемого случая)? Если контроль и испытуемый случай показали одно и то
-   же — стенд не валиден.
-3. Число снято на стороне библиотеки, а не стенда? Назови, где именно
-   считается.
-4. Если ноль или «ограничено» — доказано, что механизм мог выдать хоть
-   что-нибудь и что окно наблюдения достаточно?
-5. Свидетель упал с настоящим сообщением при выключенном фиксе, а не с
-   таймаутом? Процитируй сообщение из записи.
-6. Если фикс из двух половин — канареек две?
-7. Вердикт следует из чисел, а не из ожидания? Для CLEAN: есть валидный
-   контроль. Для DEFERRED: причина — цена, риск или решение владельца, не
-   «было сломано и до нас». Для INCONCLUSIVE: бюджет исчерпан и это записано.
+1. Does the control differ from the case under test by exactly one thing — the
+   removed suspected mechanism? Name anything else that differs.
+2. Did the control show the bench is ABLE to see the defect (a number different
+   from the case under test)? If the control and the case showed the same
+   thing, the bench is not valid.
+3. Is the number taken on the library's side rather than the bench's? Name
+   where exactly it is counted.
+4. If it is zero or "bounded", is it proven that the mechanism could emit
+   anything at all and that the observation window is long enough?
+5. Did the witness fail with a real message when the fix was switched off,
+   rather than with a timeout? Quote the message from the record.
+6. If the fix has two halves, are there two canaries?
+7. Does the verdict follow from the numbers rather than from expectation? For
+   CLEAN: there is a valid control. For DEFERRED: the reason is cost, risk or an
+   owner decision, not "it was broken before us". For INCONCLUSIVE: the budget
+   is exhausted and that is recorded.
 
-Итог: «одобрено N из M» (M — число вопросов выше, включая вопросы пакетов) и
-список пунктов с «нет».
+Bottom line: "approved N of M" (M is the number of questions above, including
+the packs' questions) and the list of items answered "no".
 ```

@@ -1,20 +1,21 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_websocket/lib/**]
-область: [websocket]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_websocket/lib/**]
+scope: [websocket]
 ---
 
-# C-10 — Призрачные идентификаторы от враждебного СЕРВЕРА
+# C-10 — Ghost stream ids from a hostile SERVER
 
-Зеркало всех тестов про призрачные идентификаторы в этом репозитории — те
-атаковали серверы. 50000 кадров с идентификаторами, которых клиент никогда не
-выдавал: `streamControllers: 0`, здоров.
+The mirror of every ghost-id test in this repository — those attacked servers.
+50000 frames carrying ids the client never issued: `streamControllers: 0`,
+healthy.
 
-Держится потому, что контроллеры создаются только в `getMessagesForStream`, по
-локальной инициативе. Закреплено `ghost_stream_ids_from_peer_test.dart`; канарейка
-(`putIfAbsent` в `_onMessage`) даёт 20000 контроллеров, выделенных пиром.
+It holds because controllers are created only in `getMessagesForStream`, on
+local initiative. Pinned by `ghost_stream_ids_from_peer_test.dart`; the canary
+(`putIfAbsent` in `_onMessage`) yields 20000 peer-allocated controllers.
 
-## Контроль
+## Control
 
-Канарейка `putIfAbsent` в `_onMessage`: 20000 контроллеров, значит проба способна их увидеть
+The `putIfAbsent` canary in `_onMessage`: 20000 controllers, so the probe is
+able to see them.

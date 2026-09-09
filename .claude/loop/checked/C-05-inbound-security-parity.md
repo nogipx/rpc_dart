@@ -1,20 +1,21 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_http2/lib/**]
-область: [http2]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_http2/lib/**]
+scope: [http2]
 ---
 
-# C-05 — Паритет средств безопасности на входе
+# C-05 — Parity of the inbound security controls
 
-Респондер валидирует входящие метаданные: 200 заголовков против `maxHeaders: 4`
-→ grpc-status 3, обработчик не запускался.
+The responder validates inbound metadata: 200 headers against `maxHeaders: 4`
+→ grpc-status 3, the handler never ran.
 
-Ловушка, из-за которой это чуть не стало ложной находкой про безопасность: grep
-под `head -12` вернул 12 строк без респондера среди них. **Когда вывод grep
-обрезан, отсутствие совпадения не доказывает ничего** — grep прямо по файлу
-респондера показал вызов валидации на строке 412.
+The trap that almost made this a false security finding: a grep under `head -12`
+returned 12 lines with the responder not among them. **When grep output is
+truncated, the absence of a match proves nothing** — grepping the responder file
+directly showed the validation call on line 412.
 
-## Контроль
+## Control
 
-Запрос с 4 заголовками при потолке 4: обработчик запускается, значит отказ даёт лимит, а не путь
+A request with 4 headers against a ceiling of 4: the handler runs, so the
+refusal comes from the limit rather than from the path.

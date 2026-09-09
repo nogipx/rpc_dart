@@ -1,31 +1,30 @@
 ---
-пакет: async-io
-применима: есть валидация исходящих данных той же политикой, что и входящих.
-ломается: молчаливое проглатывание ответа ровно в строгих конфигурациях — единственных, где путь и выполняется.
-статус: подтверждена
+pack: async-io
+applies: outbound data is validated by the same policy as inbound.
+breaks: the reply is silently swallowed in exactly the strict configurations — the only ones where the path runs at all.
+status: confirmed
 ---
 
-# U-09 — Ответ отказа обязан пройти правило, по которому отказали
+# U-09 — A refusal must pass the rule it enforced
 
-Починено обрезкой ТЕКСТА в единственном месте сборки ответа: статус выживает,
-текст уступает.
+Fixed by truncating the TEXT at the single place the reply is assembled: the
+status survives, the text gives way.
 
-## Форма
+## Shape
 
-Путь ошибки выпускает объяснение обратно через тот же валидируемый
-канал, который только что отказал.
+The error path emits its explanation back through the same validated channel
+that has just refused.
 
-## Детектор
+## Detector
 
-Для каждого отказа по политике проследить, через что уходит ответ и
-какие проверки он проходит.
+For every policy refusal, trace what the reply goes out through and which checks
+it passes.
 
-## Спрашивать
+## Ask
 
-Может ли объяснение нарушить то самое ограничение, которое
-применяют?
+Can the explanation violate the very limit being enforced?
 
-## Улика
+## Evidence
 
-Длина объяснения решала, какой статус увидит клиент: осмысленный код
-с 70-символьным пояснением доезжал как общий внутренний сбой.
+The length of the explanation decided which status the client saw: a meaningful
+code with a 70-character note arrived as a generic internal failure.

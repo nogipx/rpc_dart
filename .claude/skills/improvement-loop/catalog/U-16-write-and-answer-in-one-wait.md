@@ -1,35 +1,34 @@
 ---
-пакет: async-io
-применима: "двусторонний канал с ограничением на объём в полёте: сеть, каналы к подпроцессу, очереди акторов, курсоры БД."
-ломается: вечное зависание при мёртвом дедлайне.
-статус: подтверждена
+pack: async-io
+applies: "a bidirectional channel with a bound on bytes in flight: networks, pipes to a subprocess, actor queues, database cursors."
+breaks: a hang that never ends, with a dead deadline.
+status: confirmed
 ---
 
-# U-16 — Запись и ответ в одном ожидании
+# U-16 — The write and the answer in one wait
 
-**Симптом, который надо узнавать: дедлайн, который доказуемо не срабатывает.**
-Значит, ожидание под ним стоит ниже другого, которое блокирует; баг не в дедлайне,
-а в его позиции.
+**A symptom worth recognising: a deadline that provably never fires.** It means
+the wait beneath it sits below another wait that blocks; the bug is not in the
+deadline but in its position.
 
-Правильная форма: начать запись, завести её ошибку в тот же completer, что и
-ответ, и ждать одну вещь.
+The right shape: start the write, feed its error into the same completer as the
+answer, and wait on one thing.
 
-## Форма
+## Shape
 
-`await write; await answer` там, где другая сторона может ответить
-ВМЕСТО того, чтобы дочитать.
+`await write; await answer` where the other side may answer INSTEAD of finishing
+the read.
 
-## Детектор
+## Detector
 
-Места, где отправка и ожидание ответа стоят последовательно, а канал
-один; плюс дедлайны, которые никогда не срабатывали.
+Places where the send and the wait for the answer are sequential over a single
+channel; plus deadlines that have never fired.
 
-## Спрашивать
+## Ask
 
-Может ли другая сторона перестать читать и ответить на том же
-канале?
+Can the other side stop reading and answer on the same channel?
 
-## Улика
+## Evidence
 
-Отправка парковалась в окне управления потоком, а отказ лежал
-непрочитанным в том же потоке.
+The send parked in the flow-control window while the refusal sat unread in the
+same stream.

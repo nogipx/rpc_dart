@@ -1,110 +1,116 @@
-# Схема: линза
+# Schema: a lens
 
-Путь: `.claude/loop/lenses/<ПРЕФИКС>-NN-slug.md`. Плюс строка в `lenses/LENSES.md`.
-Префикс свой у каждого набора (`RPC-`, `WEB-`), у универсального каталога `U-`.
+Path: `.claude/loop/lenses/<PREFIX>-NN-slug.md`. Plus a line in
+`lenses/LENSES.md`. Each set has its own prefix (`RPC-`, `WEB-`); the universal
+catalog uses `U-`.
 
-Линза — не правило и не совет. Это **генератор гипотез**: форма кода плюс способ
-найти её экземпляры плюс вопрос, отделяющий настоящий дефект от безобидного
-совпадения.
+A lens is not a rule and not advice. It is a **hypothesis generator**: a shape
+of code, plus a way to find its instances, plus the question that separates a
+real defect from a harmless coincidence.
 
-Линзы принадлежат проекту. Скилл владеет схемой, каталогом форм и порядком
-применения; конкретные детекторы знает только тот, кто знает код.
+Lenses belong to the project. The skill owns the schema, the catalog of shapes
+and the order of application; only somebody who knows the code knows the
+concrete detectors.
 
-## Обязательные поля
+## Mandatory fields
 
 ```
 ---
-уточняет: <ID универсальной формы>, если линза её инстанцирует; иначе «—»
-пути: [<глобы, которые покрывает детектор>]
-применима: <при каких свойствах проекта линза вообще имеет смысл>
-ломается: <класс ущерба>
-применена: [<номера раундов>]
-статус: выведена | подтверждена (раунд NNN) |
-        исчерпана здесь (раунд NNN, <sha>[, свип <хеш>]) | отозвана (раунд NNN)
-детектор-скрипт: <путь> [аргументы]        # необязательный
+refines: <ID of the universal shape> if the lens instantiates one; otherwise «—»
+paths: [<the globs the detector covers>]
+applies: <under which properties of the project the lens makes sense at all>
+breaks: <damage class>
+applied: [<round numbers>]
+status: derived | confirmed (round NNN) |
+        swept here (round NNN, <sha>[, sweep <hash>]) | retracted (round NNN)
+detector-script: <path> [arguments]        # optional
 ---
 
-# <ID> — <короткое имя>
+# <ID> — <short name>
 
-## Форма
+## Shape
 
-Что это за конструкция, описанная так, чтобы узнать её в незнакомом коде. Не
-«плохой код», а конкретная структура.
+What the construct is, described so it can be recognised in unfamiliar code. Not
+"bad code" but a concrete structure.
 
-## Детектор
+## Detector
 
-Как найти экземпляры в этом проекте: grep-шаблон, перечисление публичного API
-зависимости, список точек входа, поведенческая батарея. Конкретно, до символов
-и путей.
+How to find the instances in this project: a grep pattern, an enumeration of a
+dependency's public API, a list of entry points, a behavioural battery.
+Concretely, down to the symbols and paths.
 
-## Спрашивать
+## Ask
 
-Вопрос, отделяющий дефект от безобидного экземпляра. Должен иметь ответ,
-получаемый измерением, а не рассуждением.
+The question that separates a defect from a harmless instance. It must have an
+answer obtained by measurement rather than by reasoning.
 
-## Улика
+## Evidence
 
-Что линза нашла и какого размера. «—» у выведенной линзы.
+What the lens found and how big it was. «—» for a derived lens.
 ```
 
-Про отдельные ключи:
+On individual keys:
 
-- **`пути`** — по ним `stale` считает, изменился ли код с последнего свипа:
-  `[lib/src/transport/**, lib/src/flow/*.dart]`.
-- **`ломается`** — класс ущерба из подключённых пакетов и `классы ущерба:`
-  конфига (`loop.py catalog` печатает объединение); `lint` предупреждает о
-  классе вне словаря.
-- **`применена`** — обратная ссылка к ключу `линза:` раунда; их сверяет `lint`,
-  а шаг 1 по числу записей выбирает наименее исследованное.
-- **`детектор-скрипт`** — если детектор это скрипт, печатающий экземпляры по
-  строке. Путь — относительно скилла, пакета или `.claude/loop/`. Тогда свип
-  делает `loop.py sweep`, а `stale` сравнивает списки. Секция `## Детектор`
-  всё равно обязательна: скрипт говорит ГДЕ, а не ЧТО искать.
+- **`paths`** — `stale` uses them to tell whether the code changed since the
+  last sweep: `[lib/src/transport/**, lib/src/flow/*.dart]`.
+- **`breaks`** — a damage class from the enabled packs and the config's
+  `damage classes:` (`loop.py catalog` prints the union); `lint` warns about a
+  class outside that vocabulary.
+- **`applied`** — the back-reference to a round's `lens:` key; `lint` reconciles
+  them, and step 1 uses the number of entries to pick the least-explored one.
+- **`detector-script`** — when the detector is a script printing one instance
+  per line. The path is relative to the skill, a pack or `.claude/loop/`. Then
+  `loop.py sweep` performs the sweep and `stale` compares the lists. The
+  `## Detector` section is still mandatory: the script says WHERE, not WHAT to
+  look for.
 
-**Раунд вне журнала.** Если раунд был, но его записи не существует (журнал начат
-не с первого — см. `../methods/setup.md`), номер помечается: `подтверждена
-(раунд 162, вне журнала)`, `исчерпана здесь (раунд 121, вне журнала)` — там без
-sha, потому что состояние кода на тот момент неизвестно. То же в `применена:`:
-`[162 вне журнала, 189 вне журнала]`.
+**An off-journal round.** If a round happened but its record does not exist (the
+journal was not started at the first one — see `../methods/setup.md`), the
+number is marked: `confirmed (round 162, off-journal)`,
+`swept here (round 121, off-journal)` — with no sha there, because the state of
+the code at that moment is unknown. The same in `applied:`:
+`[162 off-journal, 189 off-journal]`.
 
-Пометка не отменяет проверку, а сужает её: `lint` требует, чтобы номер был НИЖЕ
-первого раунда журнала. Иначе ею можно было бы замести пропавшую свежую запись.
-Свип «вне журнала» `stale` всегда показывает как требующий перемера: состарить
-его не по чему.
+The marker does not remove the check, it narrows it: `lint` requires the number
+to be BELOW the journal's first round. Otherwise it could be used to bury a
+recent record that went missing. `stale` always shows an «off-journal» sweep as
+needing a re-measurement: there is nothing to age it against.
 
-## Планка качества
+## The quality bar
 
-Линза не принимается в набор, если:
+A lens is not accepted into the set if:
 
-- **нет детектора.** «Искать неверный учёт ресурсов» — гороскоп. Детектор обязан
-  давать конечный список мест, который можно пройти;
-- **нет путей.** Без них свип нельзя состарить, и «исчерпана здесь» будет верна
-  вечно, чего не бывает;
-- **вопрос не измеряется.** Если на «Спрашивать» отвечают чтением и мнением, это
-  не линза, а вкус;
-- **не назван класс ущерба.** Линза, чья находка не проходит планку серьёзности,
-  тратит раунд;
-- **она пересказывает другую.** Уточнение существующей формы оформляется ключом
-  `уточняет: <ID>`, а не новой записью.
+- **it has no detector.** "Look for wrong resource accounting" is a horoscope. A
+  detector must yield a finite list of places that can be walked;
+- **it has no paths.** Without them a sweep cannot be aged, and `swept here`
+  would be true forever, which never happens;
+- **the question is not measurable.** If `## Ask` is answered by reading and
+  opinion, it is taste, not a lens;
+- **no damage class is named.** A lens whose finding cannot clear the severity
+  bar wastes a round;
+- **it restates another one.** Refining an existing shape is expressed by the
+  `refines: <ID>` key, not by a new record.
 
-## Статусы и их смена
+## Statuses and how they change
 
-- **выведена** — гипотеза. Так помечается всё, что придумано анализом кода, а не
-  найденной находкой.
-- **подтверждена (раунд NNN)** — раунд нашёл через неё настоящий дефект. Только
-  тогда секция `## Улика` наполняется числами.
-- **исчерпана здесь (раунд NNN, sha[, свип хеш])** — свип по детектору прошёл
-  чисто на коде `sha`. Это не удаление: запись остаётся, чтобы следующий раунд
-  не повторил свип, а `loop.py stale` сказал, когда по путям линзы появился
-  новый код. У скриптового детектора статус хранит и хеш списка экземпляров
-  (его печатает `sweep`): тогда старение считается по списку, а не по путям —
-  новый экземпляр формы виден точно.
-  **Это единственный дом такого факта**: в `checked/` попадают только негативы,
-  не привязанные к форме.
-- **отозвана (раунд NNN)** — форма оказалась не дефектом. Причина записывается,
-  иначе линзу выведут заново.
+- **derived** — a hypothesis. Everything invented by analysing the code rather
+  than by a finding is marked this way.
+- **confirmed (round NNN)** — a round found a real defect through it. Only then
+  does the `## Evidence` section fill with numbers.
+- **swept here (round NNN, sha[, sweep hash])** — the sweep by its detector came
+  back clean on the code at `sha`. This is not a deletion: the record stays so
+  the next round does not repeat the sweep, and `loop.py stale` says when new
+  code appeared along the lens's paths. With a script detector the status also
+  stores the hash of the instance list (printed by `sweep`): then the ageing is
+  computed from the list rather than from the paths, and a new instance of the
+  shape is seen exactly.
+  **This is the only home of such a fact**: `checked/` holds only negatives that
+  are not tied to a shape.
+- **retracted (round NNN)** — the shape turned out not to be a defect. The
+  reason is recorded, or the lens will be derived again.
 
-INCONCLUSIVE статус не меняет, но раунд всё равно вписывается в `применена:`.
+INCONCLUSIVE does not change the status, but the round is still written into
+`applied:`.
 
-Как построить набор для незнакомого проекта, как выбирать линзу по данным и как
-обслуживать набор — `../methods/lens-derivation.md`.
+How to build a set for an unfamiliar project, how to pick a lens from the data,
+and how to maintain the set — `../methods/lens-derivation.md`.

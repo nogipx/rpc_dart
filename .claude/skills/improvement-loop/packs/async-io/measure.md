@@ -1,41 +1,39 @@
-# async-io: измерения
+# async-io: measurements
 
-Пункты к чек-листу `methods/measurement.md`; нумерация продолжается за
-универсальной.
+Items for the `methods/measurement.md` checklist; the numbering continues from
+the universal one.
 
-A1. Остальные лимиты выставить щедро: отказ — улика, только если он называет
-    проверяемый контроль.
-A2. Наблюдение противоречит модели — инструментировать все хопы сразу.
-    In-memory пара обнуляет любую гонку размером в round trip; разрыв, сделанный
-    из задержки, виден только с задержкой.
-A3. У атакующего и жертвы разные объекты политики и конфигурации — общий
-    объект делает самострел неотличимым от дыры.
+A1. Set every OTHER limit generously: a refusal is evidence only if it names the
+    control under test.
+A2. When an observation contradicts the model, instrument every hop at once. An
+    in-memory pair zeroes out any race the size of a round trip; a gap made of
+    latency is only visible with latency.
+A3. Give the attacker and the victim separate policy and configuration objects —
+    a shared object makes self-harm indistinguishable from a hole.
 
-Ниже — за что заплачен каждый пункт.
+Below is what paid for each item.
 
-## Как щупать матрицу лимитов
+## How to probe a matrix of limits
 
-**Все ОСТАЛЬНЫЕ лимиты выставить щедро.** Тесный лимит на размер сообщения
-заставляет первым срабатывать буфер кадров, и каждая строка читается как
-ОТКАЗАНО, хотя проверяемое поле ни разу не спросили: 8 строк из 9 были отказаны
-переполнением входящего буфера. **Отказ — улика, только если он называет тот
-контроль, который проверяется.**
+**Set every OTHER limit generously.** A tight message-size limit makes the frame
+buffer trip first, and every row reads as REFUSED even though the field under
+test was never asked: 8 rows out of 9 were refused by an inbound buffer
+overflow. **A refusal is evidence only if it names the control under test.**
 
-**Когда проба показывает ровно ноль, проверить, мог ли механизм выдать хоть
-что-нибудь.** Проба на возврат кредита показала 0 по двум независимым причинам:
-длина, объявленная первым кадром, поглотила следующие как свою полезную нагрузку,
-а одиночный подпороговый кредит вообще не доходит до провода, потому что гранты
-батчатся на половине окна. Ноль выглядел чистым и таким не был.
+**When a probe shows exactly zero, check whether the mechanism could emit
+anything at all.** A credit-return probe showed 0 for two independent reasons:
+the length declared by the first frame swallowed the following ones as its own
+payload, and a single sub-threshold credit never reaches the wire at all because
+grants are batched at half the window. Zero looked clean and was not.
 
-## Когда наблюдение противоречит модели
+## When an observation contradicts the model
 
-Инструментировать СРАЗУ ВСЕ хопы, а не спорить, какой из них врёт. Урок стоил
-трёх провалившихся переделок.
+Instrument EVERY hop at once rather than arguing about which one is lying. The
+lesson cost three failed rebuilds.
 
-**Разрыв, сделанный из ЗАДЕРЖКИ, исчезает на in-memory паре.** Перезапуск старой
-пробы дал ОГРАНИЧЕНО и с фиксом, и без — потому что несвязанное позднее изменение
-сделало так, что грант пира приходит первым на паре с нулевой задержкой. Дефект
-был настоящим; стенд перестал его видеть. **Спрашивать, из чего сделан
-проверяемый разрыв**: 20 мс односторонней задержки вернули 156.25 MiB против
-4.05 MiB. In-memory пара молча обнуляет любую гонку размером в round trip.
-
+**A gap made of LATENCY vanishes on an in-memory pair.** Re-running an old probe
+gave BOUNDED both with and without the fix — because an unrelated later change
+made the peer's grant arrive first on a zero-latency pair. The defect was real;
+the bench had stopped seeing it. **Ask what the gap under test is made of**:
+20 ms of one-way latency brought back 156.25 MiB against 4.05 MiB. An in-memory
+pair silently zeroes out any race the size of a round trip.

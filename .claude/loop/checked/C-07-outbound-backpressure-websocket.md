@@ -1,19 +1,20 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/**]
-область: [websocket, ядро]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/**]
+scope: [websocket, core]
 ---
 
-# C-07 — Исходящий backpressure на websocket
+# C-07 — Outbound backpressure on websocket
 
-`send()` без await не имеет значения: ограничивает кредитное окно. Приостановленный
-потребитель через websocket и через голую пару ядра тормозит продюсера в пределах
-настроенного попотокового окна — 256 KiB окна → 268 KiB в полёте.
+`send()` without an await does not matter: the credit window is what bounds it.
+A paused consumer over websocket and over a bare core pair slows the producer
+within the configured per-stream window — a 256 KiB window → 268 KiB in flight.
 
-Здесь же отозвана ложная тревога раунда 60 и записана ловушка интервала, которая
-её вызвала.
+This record also retracts the false alarm from round 60 and writes down the
+interval trap that caused it.
 
-## Контроль
+## Control
 
-Непаузящийся потребитель: продюсер не встаёт, значит остановку даёт именно окно
+A consumer that never pauses: the producer does not stall, so the stop comes
+from the window itself.

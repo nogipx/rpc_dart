@@ -1,150 +1,151 @@
-# Дисциплина измерений
+# Measurement discipline
 
-## Чек-лист — до постройки пробы и всякий раз, когда число удивляет
+## Checklist — before building a probe, and whenever a number surprises you
 
-1. Сначала `probes/`: валидный стенд по тем же путям (его называет `loop.py
-   next`) переиспользуется, и раунд начинает с повтора его контроля. Строить
-   новый — только если валидного нет или его контроль перестал отличаться от
-   испытуемого случая (тогда стенду — статус `сломан`).
-2. Проба измеряет одно число и лежит там, где сказано в `config.md` («Пробы»);
-   её имя попадает в запись раунда, иначе измерение невоспроизводимо.
-3. У пробы есть контроль: тот же стенд с убранным предполагаемым механизмом.
-   Без контроля число не значит ничего. Контроль показал, что стенд видит
-   дефект, — проба стала стендом: записать `P-NN` по `specs/probe.md`.
-4. Контроль показывает тот же симптом, что испытуемый случай, — неверен стенд, а
-   не библиотека. Чинить стенд, не выпускать фикс.
-5. Спросить, на какой стороне системы снято число. Если фикс «сильно ухудшил»
-   показатель — подозревать сначала метрику.
-6. Мерить то, что делает библиотека, а не стенд: реально отправленные байты,
-   прямой счётчик, ленивый генератор на входе.
-7. Рост RSS — не течь. Считать удельное «байт на единицу» на трёх масштабах и
-   читать кривую: полка — удержание, падение до конца — текучка. Гонять до
-   полки или до её отсутствия, смотреть дельту за интервал.
-8. Ноль — подозрителен: проверить, мог ли механизм выдать хоть что-нибудь.
-9. Производительность: базовая линия записана; медианы по прогонам, не внутри
-    одного; профиль до третьей догадки; границу на скорость не менять.
-10. Каждая перестройка стенда — плюс один в ключе `бюджет:` записи раунда.
-    Бюджет из конфига («пробы: N») исчерпан, а валидного числа нет — вердикт
-    INCONCLUSIVE, зацепка «стенд» с перечнем опробованного. Не CLEAN. Что стоило
-    перестройки — урок `L-NN` с ценой.
+1. `probes/` first: a valid bench along the same paths (named by `loop.py next`)
+   is reused, and the round starts by repeating its control. Build a new one
+   only if there is no valid bench, or its control has stopped differing from
+   the case under test (then the bench gets status `broken`).
+2. A probe measures one number and lives where `config.md` says ("Probes"); its
+   name goes into the round record, or the measurement is not reproducible.
+3. A probe has a control: the same bench with the suspected mechanism removed.
+   Without a control the number means nothing. Once a control has shown the
+   bench sees the defect, the probe has become a bench: record it as `P-NN` per
+   `specs/probe.md`.
+4. If the control shows the same symptom as the case under test, the bench is
+   wrong, not the library. Fix the bench, do not ship a fix.
+5. Ask which SIDE of the system the number was taken on. If a fix appears to
+   have made a metric much worse, suspect the metric first.
+6. Measure what the library does, not what the bench does: bytes actually sent,
+   a direct counter, a lazy generator on the input.
+7. RSS growth is not a leak. Compute "bytes per unit" at three scales and read
+   the curve: a plateau is retention, a fall all the way down is churn. Run to a
+   plateau or to its absence, and watch the delta per interval.
+8. Zero is suspicious: check whether the mechanism could emit anything at all.
+9. Performance: the baseline is recorded; medians across runs, not within one; a
+   profile before the third guess; never move a bound for speed.
+10. Every rebuild of the bench adds one to the round record's `budget:`. If the
+    budget from the config ("probes: N") is exhausted with no valid number, the
+    verdict is INCONCLUSIVE and a "bench" lead lists what was tried. Not CLEAN.
+    Whatever the rebuild cost becomes a lesson `L-NN` with its price.
 
-Пункты подключённых пакетов (`config.md`, строка `пакеты:`) `loop.py next`
-добавляет к этому списку; читать их вместе. Ниже — за что заплачен каждый пункт. Числа при них — величина ловушки, а не
-ссылка на конкретный случай: правило без размера легко заговорить, а размер
-переносится куда угодно.
+`loop.py next` adds the enabled packs' items (`config.md`, the `packs:` line) to
+this list; read them together. Below is what paid for each item. The numbers
+beside them are the size of the trap, not a reference to a particular case: a
+rule with no size is easy to talk away, while a size carries anywhere.
 
-## Где живут пробы
+## Where probes live
 
-Путь и соглашение — в `config.md`, раздел «Пробы». Общее правило: проба лежит
-внутри пакета, чтобы разрешались его импорты, не попадает в анализ и в git,
-перезаписывается, но не удаляется. **Файл пробы обязательно называть в записи
-раунда**, иначе измерение невоспроизводимо ни для кого другого.
+The path and the convention are in `config.md`, section "Probes". The general
+rule: a probe lives inside the package so its imports resolve, stays out of
+analysis and out of git, and is overwritten rather than deleted. **The probe's
+file name must be given in the round record**, or the measurement is
+reproducible for nobody else.
 
-## Два направления, в которых врёт неверная метрика
+## The two directions a wrong metric lies in
 
-**Она может ВЫДУМАТЬ дефект и заставить выпустить фикс на пустом месте.** Флуд
-мусорными идентификаторами выглядел как отключение попотокового flow control:
-88 KiB в чистом прогоне против 16 364 KiB под флудом, **разрыв 186x** — ровно
-форма настоящей дыры; фикс и объясняющий комментарий уже были написаны. Стенд
-выдал обоим концам ОДИН объект политики, поэтому флуд заполнял собственный
-кредит ОТПРАВИТЕЛЯ, и неограниченная отправка была самострелом.
+**It can INVENT a defect and make you ship a fix for nothing.** A flood of
+garbage identifiers looked like per-stream flow control being switched off:
+88 KiB on a clean run against 16 364 KiB under the flood, **a 186x gap** — the
+exact shape of a real hole; the fix and its explanatory comment were already
+written. The bench had given both ends ONE policy object, so the flood filled
+the SENDER's own credit, and the unbounded send was self-harm.
 
-> **Когда у атакующего и жертвы общий конфиг, невозможно понять, чей потолок
-> ограничил результат.** Дать им разные. После разделения разрыв исчез, а
-> канарейка показала, что старый код ограничивает ровно так же.
+> **When the attacker and the victim share a config, there is no way to tell
+> whose ceiling bounded the result.** Give them separate ones. After the split
+> the gap vanished, and a canary showed the old code bounds it exactly the same.
 
-**Она может ИНВЕРТИРОВАТЬ результат и заставить откатить верный фикс.**
-Счётчик на стороне отправителя дал 156 MiB «с фиксом» против 71 MiB без него, и
-работающее изменение откатили. Побайтовое реле показало правду: 4.4 MiB против
+**It can INVERT the result and make you revert a correct fix.** A sender-side
+counter gave 156 MiB "with the fix" against 71 MiB without it, and the working
+change was reverted. A byte-level relay showed the truth: 4.4 MiB against
 13.8 MiB.
 
-> **Прежде чем верить паре «до/после», спросить, на какой СТОРОНЕ системы снято
-> число.** Если фикс якобы сильно ухудшил показатель, подозревать сначала
-> метрику.
+> **Before believing a before/after pair, ask which SIDE the number was taken
+> on.** If a fix supposedly made a metric much worse, suspect the metric first.
 
-## Измерять то, что делает библиотека, а не то, что делает стенд
+## Measure what the library does, not what the bench does
 
-Срабатывавшие подмены: считали выход обработчика вместо реально отправленных
-байт; брали RSS там, где был доступен прямой счётчик (GC его забивает); писали в
-собственный буфер-контроллер, который неограничен и принимает всё подряд. Чтобы
-измерить, сколько библиотека ВЫТЯГИВАЕТ, скармливать ей ленивый генератор
-напрямую.
+Substitutions that have bitten: counting the handler's output instead of the
+bytes actually sent; taking RSS where a direct counter was available (GC drowns
+it); writing into your own buffering controller, which is unbounded and accepts
+anything. To measure how much the library PULLS, feed it a lazy generator
+directly.
 
-## Рост RSS — не улика течи
+## RSS growth is not evidence of a leak
 
-Настоящую течь от высокой воды GC отделяют две проверки, обе дешёвые.
+Two cheap checks separate a real leak from a GC high-water mark.
 
-1. **Линейность.** Посчитать «байт на единицу атаки» на 3+ масштабах. Удержание
-   держит это число ПОСТОЯННЫМ, аллокационная текучка — роняет. Флуд служебными
-   кадрами дал 207 -> 121 -> 74 байта на кадр на трёх масштабах: растущие итоги
-   (41 -> 97 -> 177 MiB) выглядели тревожно, пока удельная цифра не показала, что
-   это запас кучи.
-2. **Контроль, убирающий предполагаемый механизм.** Заставить атакующего
-   ВЫЧИТЫВАТЬ сокет — число почти не сдвинулось (96.7 -> 82.2 MiB), что прямо
-   опровергло теорию про очередь ответных кадров. Без контроля выпустили бы
-   защиту от механизма, который был ни при чём.
+1. **Linearity.** Compute "bytes per unit of attack" at 3+ scales. Retention
+   keeps that number CONSTANT; allocation churn makes it fall. A flood of
+   service frames gave 207 -> 121 -> 74 bytes per frame at three scales: the
+   growing totals (41 -> 97 -> 177 MiB) looked alarming until the per-unit
+   figure showed it was heap headroom.
+2. **A control that removes the suspected mechanism.** Making the attacker DRAIN
+   the socket barely moved the number (96.7 -> 82.2 MiB), which directly
+   refuted the reply-frame-queue theory. Without the control we would have
+   shipped a defence against a mechanism that had nothing to do with it.
 
-**Читать КРИВУЮ удельного значения, а не только её направление.** Падение с
-последующим ВЫХОДОМ НА ПОЛКУ — это удержание (31187 -> 14090 -> 8446 -> 8113
-байт на кадр, асимптота около 2x полезной нагрузки); падение до конца — текучка
-(744 -> 497 после фикса).
+**Read the CURVE of the per-unit value, not just its direction.** A fall
+followed by a PLATEAU is retention (31187 -> 14090 -> 8446 -> 8113 bytes per
+frame, asymptotic at about 2x the payload); a fall all the way down is churn
+(744 -> 497 after the fix).
 
-**Короткое окно превращает «медленно» в ложное ОГРАНИЧЕНО.** Загрузка показала
-6.4 MiB на 4-й секунде и выглядела упёршейся в потолок; на деле посекундная
-дельта просто затухала (1250/с -> 400/с) и на полку не выходила. К 12-й секунде
-было 24.2 MiB и рост продолжался. Смотреть ДЕЛЬТУ за интервал и гонять достаточно
-долго, чтобы она вышла на полку или не вышла.
+**A short window turns "slow" into a false BOUNDED.** A load showed 6.4 MiB at
+the 4th second and looked like it had hit a ceiling; in fact the per-second
+delta was merely decaying (1250/s -> 400/s) and never plateaued. By the 12th
+second it was 24.2 MiB and still growing. Watch the DELTA per interval and run
+long enough for it to plateau or fail to.
 
-Флуд кадрами любого типа аллоцирует похоже, поэтому «высокий RSS при высокой
-частоте кадров» — норма, и это дело rate limiting на уровне развёртывания. Не
-выпускать защиту по одному лишь растущему RSS.
+A flood of frames of any type allocates similarly, so "high RSS at a high frame
+rate" is normal, and that is a matter for rate limiting at the deployment level.
+Do not ship a defence on rising RSS alone.
 
-## Контроли
+## Controls
 
-- **Лучший контроль — часто уже прогнанный случай.** Клиент и сервер в одном
-  процессе делают RSS неоднозначным: очередь отправки самого стенда тоже
-  считается. Два режима, прогоняющие одинаковый объём через одинаковый сокет и
-  различающиеся только идентификатором потока, взаимно вычитают клиентскую
-  стоимость — именно это доказало, что разрыв в 8x лежит на серверной стороне.
-  Искать вариант, который держит стенд постоянным, прежде чем строить побайтовое
-  реле.
-- **Если контроль показывает тот же симптом, что и испытуемый случай, неверен
-  стенд, а не библиотека.** Так испарилась «подтверждённая» течь: обработчик
-  работал 100 x 100 мс = 10 с, а проба наблюдала 7 с, поэтому и случай с обрывом,
-  и контроль с нормальным завершением показывали «всё ещё работает». Укоротили до
-  3 с — стали идентичны, дефекта нет.
-- **Калибровать контроль по окну наблюдения** прежде, чем верить любой стороне.
-- **Аблация**: выключать по одной части фикса, подтверждая, что каждая несущая.
+- **The best control is often a case you have already run.** A client and a
+  server in one process make RSS ambiguous: the bench's own send queue counts
+  too. Two modes pushing the same volume through the same socket and differing
+  only in the stream id cancel out the client-side cost — that is exactly what
+  proved the 8x gap was on the server side. Look for the variant that holds the
+  bench constant before building a byte-level relay.
+- **If the control shows the same symptom as the case under test, the bench is
+  wrong, not the library.** That is how a "confirmed" leak evaporated: the
+  handler ran 100 x 100 ms = 10 s while the probe observed for 7 s, so both the
+  aborted case and the cleanly-finishing control reported "still running". Cut
+  to 3 s and they became identical: no defect.
+- **Calibrate the control against the observation window** before believing
+  either side.
+- **Ablation**: switch off one part of the fix at a time, confirming each is
+  load-bearing.
 
-## Раунды про производительность
+## Performance rounds
 
-Производительность — это СРАВНЕНИЕ, а на сравнениях ловушки кусают сильнее всего.
+Performance is a COMPARISON, and comparisons are where the traps bite hardest.
 
-- **Сначала базовая линия, и записать её.** Ускорение без числа «до» — не
-  утверждение.
-- **Канарейка нужна и оптимизации**: откатить и перемерить. Если её снятие не
-  двигает число, она ничего не делала.
-- **Одиночные замеры на машине разработчика — не улика.** Один и тот же бинарник
-  дал 67k -> 116k msg/s между прогонами. Брать медианы по ПРОГОНАМ, а не только
-  внутри одного, и смотреть загрузку машины: полный прогон набора загоняет
-  15-минутный load average за 16, и настенные часы там врут.
-- **Мерить то, за что платит пользователь**: сквозную задержку вызова и
-  устойчивую пропускную способность на настоящем транспорте. К микробенчмарку
-  переходить только после того, как профиль или сквозное число назвали
-  подозреваемого.
-- **Держать in-memory пару КОНТРОЛЕМ**: тот же стек без сокета. Разрыв между ней
-  и настоящим транспортом и есть цена транспорта.
-- **Никогда не менять границу на скорость.** Быстрый путь, потерявший лимит, —
-  регрессия. Компромисс безопасности ради пропускной способности — решение
-  владельца, а не раунда.
-- **Профилировать до третьей догадки.** Два измерения на отсев гипотез —
-  нормально; дальше перестать гадать и снять профиль одного вызова.
+- **Baseline first, and write it down.** A speed-up with no "before" number is
+  not a claim.
+- **An optimisation needs a canary too**: revert it and re-measure. If removing
+  it does not move the number, it was doing nothing.
+- **Single measurements on a developer machine are not evidence.** The same
+  binary gave 67k -> 116k msg/s between runs. Take medians across RUNS, not just
+  within one, and watch the machine's load: a full suite run drives the
+  15-minute load average past 16, and wall-clock lies there.
+- **Measure what the user pays for**: end-to-end call latency and sustained
+  throughput on a real transport. Move to a microbenchmark only after a profile
+  or an end-to-end number has named a suspect.
+- **Keep an in-memory pair as the CONTROL**: the same stack with no socket. The
+  gap between it and the real transport is the transport's cost.
+- **Never move a bound for speed.** A fast path that lost its limit is a
+  regression. Trading safety for throughput is the owner's decision, not a
+  round's.
+- **Profile before the third guess.** Two measurements to eliminate hypotheses
+  is fine; after that, stop guessing and take a profile of one call.
 
-## Форензика
+## Forensics
 
-- **Бисект говорит, кто участвует, а не кто виноват.** Отключение доставки
-  ошибки «чинило» падение, настоящей причиной которого был слушатель, не
-  обрабатывавший её.
+- **A bisect tells you who takes part, not who is at fault.** Switching off the
+  error delivery "fixed" a crash whose real cause was a listener that did not
+  handle it.
 
-Остальная форензика зависит от языка и рантайма и живёт в пакетах
-(`packs/dart/measure.md` и т. п.).
+The rest of the forensics depends on the language and the runtime and lives in
+the packs (`packs/dart/measure.md` and so on).

@@ -1,78 +1,81 @@
-# Как построить набор линз и как выбирать линзу
+# How to build a lens set, and how to pick a lens
 
-Схема линзы — `../specs/lens.md`. Универсальные формы — `../catalog/CATALOG.md`.
-Обслуживание уже построенного набора — `curate.md`.
+The lens schema — `../specs/lens.md`. The universal shapes —
+`../catalog/CATALOG.md`. Maintaining an existing set — `curate.md`.
 
-## Источники и порядок
+## Sources, in order
 
-1. **Решения владельца** — зацепки с заполненным `## Решение владельца` и статусом
-   `ждёт владельца`. Их показывает `loop.py status`; они идут раньше любой линзы.
-2. **Набор проекта** — `.claude/loop/lenses/`. Специфичен, у него настоящие
-   детекторы и настоящие числа.
-3. **Универсальный каталог** — `../catalog/`. Формы, которые держатся в любом
-   коде. **Напрямую не применяются**: у них нет детектора под этот код.
-4. **Вывод нового** — если у проекта набора нет, режим `lenses` строит стартовый.
-   Всё выведенное помечено как гипотеза.
+1. **Owner decisions** — leads with a filled-in `## Owner decision` and status
+   `awaiting owner`. `loop.py status` shows them; they come before any lens.
+2. **The project's set** — `.claude/loop/lenses/`. Specific, with real detectors
+   and real numbers.
+3. **The universal catalog** — `../catalog/`. Shapes that hold in any code.
+   **Not applied directly**: they have no detector for this code.
+4. **Deriving new ones** — if the project has no set, `lenses` mode builds a
+   starter. Everything derived is marked as a hypothesis.
 
-## Выбор линзы по данным, а не по ощущению
+## Pick a lens from the data, not from a feeling
 
-Эти правила исполняет `loop.py next`; здесь они записаны, чтобы отклонение от
-его ответа было осознанным и попало в ключ `линза:` раунда с причиной.
-«Наименее исследованная поверхность» измеряется ключом `применена:`:
+`loop.py next` implements these rules; they are written down here so that
+departing from its answer is deliberate and lands in the round's `lens:` key
+with a reason. "The least-explored surface" is measured by the `applied:` key:
 
-1. `выведена` с `применена: []` — раньше любой применённой: гипотеза, за которую
-   ещё не платили.
-2. Среди остальных — порядок строк в `LENSES.md`; это ранг, его расставляет
-   `curate`.
-3. `исчерпана здесь` берётся только с причиной: `loop.py stale` показал
-   изменения по её путям, или пришёл режим `verify`. Перепроверять исчерпанное
-   по умолчанию — тратить раунд.
-4. `отозвана` не берётся.
-5. Набор исчерпан и свеж — открытая зацепка как перемер (U-21); нет и её —
-   `status` говорит «Остановка: ДА».
+1. `derived` with `applied: []` — before any lens already applied: a hypothesis
+   nobody has paid for yet.
+2. Among the rest, the line order in `LENSES.md`; that is the rank, and `curate`
+   sets it.
+3. `swept here` is taken only with a reason: `loop.py stale` showed changes
+   along its paths, or `verify` mode asked for it. Re-checking what is swept by
+   default wastes a round.
+4. `retracted` is not taken.
+5. If the set is exhausted and fresh — an open lead as a re-measurement (U-21);
+   with none of those either, `status` says "Stop: YES".
 
-Цель внутри линзы — тот экземпляр из списка детектора, который достижим снаружи
-раньше достижимого только из собственного кода.
+Within a lens, the target is the instance from the detector's list that is
+reachable from outside, ahead of one reachable only from your own code.
 
-## Вывод набора для незнакомого проекта
+## Deriving a set for an unfamiliar project
 
-Это анализ, а не догадки по названию репозитория. Результат — стартовый набор
-гипотез, каждая со статусом `выведена`.
+This is analysis, not guesswork from the repository's name. The result is a
+starter set of hypotheses, each with status `derived`.
 
-1. **Карта обещаний.** Что проект гарантирует наружу и чем платит за нарушение:
-   порядок, доставка, целостность, изоляция, время ответа, потолки. Классы ущерба
-   берутся отсюда, а не из общего списка.
-2. **Перечислить поверхности:**
-   - границы доверия — что во входных данных контролирует чужой;
-   - учёт ресурсов — что считается, где освобождается, и что делает путь ошибки;
-   - жизненные циклы — что можно вызвать дважды, что переживает рестарт;
-   - общий код с разными потребителями — один производитель, много форм доставки;
-   - точки расширения зависимостей — колбэки и сеттеры чужого API;
-   - слои вне основного языка и цели вне основного гейта.
-3. **Прогнать каталог на применимость.** Список форм под подключённые пакеты
-   и словарь классов ущерба даёт `loop.py catalog`; форма чужого пакета не
-   предлагается — если она явно нужна, сначала подключить пакет в `config.md`.
-   Для каждой формы: поле `Применима` против свойств проекта. Применимую
-   инстанцировать — переписать детектор в терминах этого кода, с настоящими
-   символами, путями и глобами в `пути:`, и поставить `уточняет: <U-ID>`. Там,
-   где список экземпляров можно получить программно, детектор — скрипт
-   (`script: …`; готовые — в `packs/*/detectors/`). **Форма без инстанцирования
-   в набор не попадает.**
-4. **Добавить чисто локальные формы**, которых в каталоге нет: они и есть главная
-   ценность набора.
-5. **Ранжировать по «ущерб x достижимость»**, а не по элегантности. Дефект,
-   достижимый только из собственного кода библиотеки, стоит ниже достижимого
-   снаружи. Ранг — порядок строк в `LENSES.md`.
-6. **Записать** — файл на линзу плюс строка в `LENSES.md` — со статусом
-   `выведена`, `применена: []` и явной пометкой в `LOOP.md`, что набор не проверен
-   ни одним раундом. `loop.py lint` должен быть зелёным до конца режима.
+1. **A map of the promises.** What the project guarantees to the outside and
+   what it pays for a breach: ordering, delivery, integrity, isolation, response
+   time, ceilings. The damage classes come from here, not from a generic list.
+2. **Enumerate the surfaces:**
+   - trust boundaries — what in the input someone else controls;
+   - resource accounting — what is counted, where it is released, and what the
+     error path does;
+   - lifecycles — what can be called twice, what survives a restart;
+   - shared code with different consumers — one producer, many delivery shapes;
+   - dependency extension points — callbacks and setters of a foreign API;
+   - layers outside the main language, and targets outside the main gate.
+3. **Run the catalog for applicability.** `loop.py catalog` gives the shape list
+   for the enabled packs and the damage-class vocabulary; a shape from a
+   disabled pack is not offered — if it is clearly needed, enable the pack in
+   `config.md` first. For each shape: its `applies` against the project's
+   properties. Instantiate an applicable one — rewrite the detector in terms of
+   this code, with real symbols, paths and globs in `paths:`, and set
+   `refines: <U-ID>`. Where the instance list can be produced programmatically,
+   the detector is a script (`detector-script: …`; ready-made ones are in
+   `packs/*/detectors/`). **A shape that is not instantiated does not enter the
+   set.**
+4. **Add the purely local shapes** the catalog does not have: they are the set's
+   main value.
+5. **Rank by «damage x reachability»**, not by elegance. A defect reachable only
+   from the library's own code ranks below one reachable from outside. The rank
+   is the line order in `LENSES.md`.
+6. **Write it down** — one file per lens plus a line in `LENSES.md` — with
+   status `derived`, `applied: []`, and an explicit note in `LOOP.md` that no
+   round has checked the set. `loop.py lint` must be green by the end of the
+   mode.
 
-**Универсальная линза, скопированная без детектора, бесполезна.** Набор без
-конкретных символов, путей и команд — список благих намерений, по которому раунд
-ищет вслепую.
+**A universal lens copied without a detector is useless.** A set with no
+concrete symbols, paths and commands is a list of good intentions that a round
+searches blindly.
 
-## Когда перепройти вывод
+## When to redo the derivation
 
-Новая возможность в проекте — новая зависимость, новый слой, новая цель сборки —
-повод перепройти шаг 2: набор линз стареет вместе с кодом. Сигнал — раздел
-«Директории без единой линзы» в выводе `loop.py stale`.
+A new capability in the project — a new dependency, a new layer, a new build
+target — is a reason to redo step 2: the lens set ages along with the code. The
+signal is the "Directories with no lens at all" section of `loop.py stale`.

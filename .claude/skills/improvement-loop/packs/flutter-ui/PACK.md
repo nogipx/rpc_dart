@@ -1,12 +1,12 @@
 ---
-применим: Flutter-приложение с навигацией, состоянием экранов и вводом
-классы ущерба: джанк кадра, потерянный ввод, неверное состояние экрана после навигации, недоступность (a11y), краш при смене конфигурации
-формы: —
-содержит: ничего — пакет стартовый
+applies: a Flutter app with navigation, screen state and input
+damage classes: frame jank, lost input, wrong screen state, inaccessibility, configuration-change crash
+shapes: —
+contains: nothing — a starter pack
 ---
 
-# flutter-ui — приложение с экранами
+# flutter-ui — an app with screens
 
-Классы ущерба стартовые, ни один раунд за них не платил. Знание появляется
-только через `lessons/` и режим `curate`: урок, который держится в любом
-Flutter-приложении, поднимается сюда.
+The damage classes are a starter set; no round has paid for any of them.
+Knowledge arrives only through `lessons/` and `curate` mode: a lesson that holds
+in any Flutter app is promoted here.

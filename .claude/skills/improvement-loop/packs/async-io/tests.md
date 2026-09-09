@@ -1,32 +1,33 @@
-# async-io: тесты
+# async-io: tests
 
-Пункты к чек-листу `methods/tests.md`.
+Items for the `methods/tests.md` checklist.
 
-A1. Стороне, выдающей ресурс, — потолок выше проверяемой: иначе первым бросит
-    её собственный лимит, и про вторую сторону тест не скажет ничего.
-A2. Поддельный сервер или прокси внутри теста — продакшн-код на время теста:
-    `stop()`, охрана после каждого `await`, очистка и на пути отказа.
+A1. Give the side that issues the resource a higher ceiling than the side under
+    test: otherwise its own limit throws first and the test says nothing about
+    the other side.
+A2. A fake server or proxy built inside a test is production code for the
+    duration of that test: `stop()`, a guard after every `await`, and cleanup on
+    the failure path too.
 
-Ниже — за что заплачен каждый пункт.
+Below is what paid for each item.
 
-## Потолок стороны, выдающей ресурс
+## The ceiling of the side that issues the resource
 
-- Когда тест удерживает ресурсы, выдаваемые одной стороной, дать ЕЙ потолок выше,
-  чем проверяемой: иначе первым бросит её собственный лимит и про вторую сторону
-  тест не скажет ничего.
+- When a test holds resources issued by one side, give THAT side a higher
+  ceiling than the side under test: otherwise its own limit throws first and the
+  test says nothing about the other side.
 
-## Поддельные серверы и прокси внутри теста
+## Fake servers and proxies inside a test
 
-**Поддельный сервер или прокси, собранный внутри теста, на время этого теста
-является продакшн-кодом, и ему нужен `stop()`.** Тестовый прокси останавливался на
-400 мс с приостановленной подпиской и регулярно просыпался после `tearDown`, а
-соединение, которое он затем открывал, бросало НЕОБРАБОТАННУЮ асинхронную ошибку
-(`OS Error: Network is down`), убивавшую процесс целиком.
+**A fake server or proxy assembled inside a test is production code for the
+duration of that test, and it needs a `stop()`.** A test proxy paused for 400 ms
+with a suspended subscription and regularly woke after `tearDown`, and the
+connection it then opened threw an UNHANDLED async error
+(`OS Error: Network is down`) that killed the whole process.
 
-Любой помощник, который что-то ждёт внутри колбэка, обязан:
-(а) охранять каждый шаг после await,
-(б) отслеживать открытое, чтобы teardown мог это уничтожить,
-(в) выполнять шаг очистки и на пути отказа — там именно `resume()`, доставляющий
-`onDone`, уничтожает вышестоящий сокет, поэтому его пропуск течёт тем самым
-соединением, которое тест считает.
-
+Any helper that waits inside a callback must:
+(a) guard every step after an await,
+(b) track what it opened so teardown can destroy it,
+(c) run its cleanup step on the failure path too — there it is precisely the
+`resume()` delivering `onDone` that destroys the upstream socket, so skipping it
+leaks the very connection the test is counting.

@@ -1,25 +1,26 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_websocket/lib/**]
-область: [websocket]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_websocket/lib/**]
+scope: [websocket]
 ---
 
-# C-09 — Полузакрытие в гонке с трейлерами
+# C-09 — Half-close racing the trailers
 
-Может ли полузакрытие клиента в гонке с ответом сервера заставить УСПЕШНЫЙ вызов
-доложить UNAVAILABLE? Через обычный путь — нет: респондер кладёт статус и признак
-конца в ОДИН кадр. Свип полузакрытия по шести задержкам (0-5000 мкс), 60 итераций
-каждая: **360/360 OK**.
+Can a client's half-close, racing the server's reply, make a SUCCESSFUL call
+report UNAVAILABLE? Through the ordinary path, no: the responder puts the status
+and the end flag in ONE frame. A half-close sweep over six delays (0-5000 us),
+60 iterations each: **360/360 OK**.
 
-Расщеплённая форма ОТЧИТЫВАЕТСЯ об обрезке, и это верно: сырой пир, шлющий
-DATA-с-концом, а затем трейлеры, получает `status 14`; трейлеры-несущие-конец дают
-`OK`. gRPC согласен, а мягкость означала бы держать поток открытым после признака
-конца — ровно та ловушка порядка, которая один раз молча теряла данные.
+The split shape DOES report truncation, and that is correct: a raw peer sending
+DATA-with-end and then trailers gets `status 14`; trailers-carrying-end give
+`OK`. gRPC agrees, and being lenient would mean keeping the stream open after
+the end flag — exactly the ordering trap that silently lost data once.
 
-Принятая цена записана в тесте: пир расщеплённой формы получает повторяемый статус
-на завершившемся вызове.
+The accepted cost is written into the test: a peer using the split shape gets a
+repeatable status on a call that already finished.
 
-## Контроль
+## Control
 
-Расщеплённая форма даёт status 14, слитная — OK: различие в форме кадра, а не в гонке
+The split shape gives status 14 and the merged one gives OK: the difference is
+in the frame shape, not in a race.

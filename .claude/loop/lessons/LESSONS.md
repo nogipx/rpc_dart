@@ -1,8 +1,8 @@
-# Уроки
+# Lessons
 
-Что такое урок и как он поднимается в скилл — [../LOOP.md](../LOOP.md). Схема
-записи — `../../skills/improvement-loop/specs/lesson.md`.
+What a lesson is and how it is promoted into the skill — [../LOOP.md](../LOOP.md).
+The record format — `../../skills/improvement-loop/specs/lesson.md`.
 
-Пока ни одного: уроки раундов 1-205 живут в приватной памяти и в методах скилла,
-а не здесь. Заводить их задним числом нельзя — у урока обязана быть цена числом,
-а не пересказ.
+None yet: the lessons of rounds 1-205 live in private memory and in the skill's
+methods, not here. They cannot be filed after the fact — a lesson must have a
+cost in numbers, not a retelling.

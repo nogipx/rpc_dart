@@ -1,60 +1,65 @@
-# Как отчитываться
+# How to report
 
-Схема записи раунда — `../specs/round.md`, она одна на все три адресата: файл
-раунда, тело коммита, отчёт в чате. Здесь то, что не является файлом цикла.
+The round record's schema is `../specs/round.md`, and it is one schema for all
+three audiences: the round file, the commit body, the chat report. What is not a
+loop file lives here.
 
-**Frontmatter едет только в файл.** В коммит и в чат идут его значения строкой,
-а не `---`-блок: YAML в теле коммита не читает никто, а в чате он шум.
+**The frontmatter goes into the file only.** Its values travel to the commit and
+the chat as prose, not as a `---` block: nobody reads YAML in a commit body, and
+in chat it is noise.
 
-## Коммит
+## The commit
 
-**Язык — строка `язык коммитов:` в `config.md`, по умолчанию английский**
-(`loop.py next` её печатает). Он относится к заголовку и телу коммита, но не к
-данным цикла: если записи ведутся на другом языке, тело пересказывает их секции
-на языке коммитов, а не копирует.
+**The language is the `commit language:` line in `config.md`, English by
+default** (`loop.py next` prints it). It applies to the commit's subject and
+body, not to the loop data: if the records are kept in another language, the
+body restates their sections in the commit language rather than copying them.
 
-Соглашения о заголовке — в `CLAUDE.md` репозитория (тип, scope, один пакет на
-коммит, императив, стиль). Тело начинается со строки
-`Раунд NNN — <вердикт> — <тема>`: по ней `git log --grep "Раунд NNN "` находит
-коммит, а `loop.py lint` проверяет, что у раунда с `коммит: да` он есть. Тело
-несёт то, чего нет в диффе:
+The subject conventions are in the repository's `CLAUDE.md` (type, scope, one
+package per commit, imperative, style). The body starts with the line
+`Round NNN — <verdict> — <topic>`: `git log --grep "Round NNN "` finds the
+commit by it, and `loop.py lint` checks that a round with `commit: yes` has one.
+The body carries what the diff does not:
 
-- измерение: числа до и после, с названием пробы;
-- механизм: почему так происходило;
-- канарейка: что выключили и с каким настоящим текстом упал свидетель;
-- гейт: что прогнано;
-- не чинил: что осталось и по какой причине.
+- the measurement: the before and after numbers, with the probe's name;
+- the mechanism: why it happened;
+- the canary: what was switched off, and the real text the witness failed with;
+- the gate: what was run;
+- not fixed: what is left, and for what reason.
 
-Файл раунда, правки линзы, зацепок, негативов и оглавлений едут в тот же коммит,
-что и фикс: раунд виден в одном diff.
+The round file and the edits to the lens, the leads, the negatives and the
+indexes ride in the same commit as the fix: the round is visible in one diff.
 
-## Комментарии у кода
+## Comments beside the code
 
-Своё место у точки тонкого фикса зарабатывают: механизм одним предложением, числа
-до/после и ловушка, которую иначе выведут заново. Не зарабатывают: пересказ того,
-что код и так говорит, рассказ о ходе поиска, повтор обоснования, уже написанного
-у соседа, и одно и то же измерение в трёх файлах.
+What earns a place at the point of a subtle fix: the mechanism in one sentence,
+the before/after numbers, and the trap that would otherwise be rediscovered.
+What does not: restating what the code already says, the story of the search, a
+repeat of a justification already written next door, and the same measurement in
+three files.
 
-> **Длинная версия живёт в коммите и в файле раунда, у комментария — сжатая.**
+> **The long version lives in the commit and in the round file; the comment gets
+> the compressed one.**
 
-Предпочтения владельца по объёму документации — в `config.md` проекта.
+The owner's preferences on documentation volume are in the project's
+`config.md`.
 
-## Отчёт в чате
+## The chat report
 
-Те же секции, что в файле раунда, плюс две строки: вывод `loop.py lint` и
-«следующий раунд: цель из `loop.py next` или «Остановка: ДА — причина»». Если
-вызов пришёл из `/loop` и остановка — сказать, что задание снято. Ничего
-не приукрашивать: если гейт упал — сказать это с выводом; если шаг пропущен —
-сказать, что пропущен. Чистый раунд докладывается как чистый, с перечислением
-отрицательных результатов; INCONCLUSIVE — как INCONCLUSIVE, с перечнем того, что
-опробовано на стенде.
+The same sections as the round file, plus two lines: the output of
+`loop.py lint`, and "next round: the target from `loop.py next`", or
+"Stop: YES — reason". If the call came from `/loop` and it is a stop, say the
+job has been cancelled. Do not dress anything up: if the gate failed, say so
+with the output; if a step was skipped, say it was skipped. A clean round is
+reported as clean, listing the negative results; INCONCLUSIVE is reported as
+INCONCLUSIVE, listing what was tried on the bench.
 
-## Чего нельзя
+## What is not allowed
 
-- **Исправлять собственную запись только в чате, а не в исходнике**, если
-  раньше что-то преувеличено. Прозе у кода никто не верит задним числом, а она
-  переживает чат.
-- **Решения владельца оставлять владельцу**: значения политик по умолчанию,
-  изменения процесса, всё, что меняет безопасность на легитимный сценарий.
-  Докладывать с рекомендацией, а не делать: зацепка со статусом `ждёт владельца`
-  и пустым полем `## Решение владельца`. Что действует постоянно — в `config.md`.
+- **Correcting your own record in chat only, and not in the source**, when
+  something was overstated earlier. Nobody believes prose beside code after the
+  fact, and it outlives the chat.
+- **Leaving the owner's decisions to the owner**: default policy values, process
+  changes, anything that trades safety for a legitimate scenario. Report with a
+  recommendation rather than acting: a lead with status `awaiting owner` and an
+  empty `## Owner decision`. What holds permanently goes into `config.md`.

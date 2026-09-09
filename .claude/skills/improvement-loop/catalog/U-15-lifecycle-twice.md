@@ -1,33 +1,31 @@
 ---
-пакет: core
-применима: есть объекты с явным жизненным циклом.
-ломается: течь, зависание, осиротевший ресурс.
-статус: подтверждена
+pack: core
+applies: there are objects with an explicit lifecycle.
+breaks: a leak, a hang, an orphaned resource.
+status: confirmed
 ---
 
-# U-15 — Жизненный цикл дважды
+# U-15 — Drive the lifecycle twice
 
-Родственное: **дефекты уровня соединения прячутся от тестов, где на каждый тест
-своё соединение.** Одна сторона убивала своё соединение после четырёх вызовов при
-74 зелёных тестах. Недостающая форма теста — «продолжать работать в одном
-экземпляре».
+Related: **connection-level defects hide from tests that use one connection per
+test.** One side killed its own connection after four calls with 74 tests green.
+The missing test shape is "keep working on a single instance".
 
-## Форма
+## Shape
 
-API, вызванное второй раз: `close()` после `close()`, повторное
-подключение, старт после остановки, рестарт.
+An API called a second time: `close()` after `close()`, reconnecting, starting
+after stopping, restarting.
 
-## Детектор
+## Detector
 
-Перечислить публичные методы жизненного цикла и прогнать каждый
-дважды, в том числе конкурентно.
+Enumerate the public lifecycle methods and drive each one twice, concurrently
+included.
 
-## Спрашивать
+## Ask
 
-Какое состояние не вернулось в исходное после первого вызова?
+Which state did not return to where it started after the first call?
 
-## Улика
+## Evidence
 
-Пять дефектов за пять раундов. Один флаг, означавший одновременно
-«закрыт» и «отсоединён», сделал повторное подключение пригодным ровно
-один раз.
+Five defects in five rounds. One flag meaning both "closed" and "disconnected"
+made reconnecting usable exactly once.

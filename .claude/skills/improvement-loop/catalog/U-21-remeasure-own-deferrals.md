@@ -1,33 +1,32 @@
 ---
-пакет: core
-применима: начиная с десятка раундов.
-ломается: что угодно — за отсрочкой прячется настоящий дефект.
-статус: подтверждена
+pack: core
+applies: from about a dozen rounds on.
+breaks: anything — a real defect hides behind a deferral.
+status: confirmed
 ---
 
-# U-21 — Перемерить собственные отсрочки
+# U-21 — Re-measure your own deferrals
 
-Отсрочка с обоснованием «больше это никому не нужно» — утверждение о МНОЖЕСТВЕ,
-КОТОРОЕ РАСТЁТ, и истекает, как только появляется новый потребитель.
+A deferral justified by "nobody needs this any more" is a claim about a SET THAT
+GROWS, and it expires the moment a new consumer appears.
 
-Протокол перемера — `../methods/canary.md`, раздел «Перемерять собственные
-отсрочки».
+The re-measurement protocol — `../methods/canary.md`, the section
+"Re-measure your own deferrals".
 
-## Форма
+## Shape
 
-Запись «открыто, сознательно не чиним» или «проверено чисто»,
-сделанная несколько раундов назад.
+A record saying "open, deliberately not fixed" or "checked clean", made several
+rounds ago.
 
-## Детектор
+## Detector
 
-`backlog/` и `checked/` целиком; набор линз со статусом «исчерпана
-здесь».
+`backlog/` and `checked/` in full; the lens set with status `swept here`.
 
-## Спрашивать
+## Ask
 
-Держится ли ещё заявленный блокер, и мерит ли исходная проба то же,
-что мерила тогда?
+Does the stated blocker still hold, and does the original probe still measure
+what it measured then?
 
-## Улика
+## Evidence
 
-Шесть раундов находок пришли отсюда.
+Six rounds of findings came from here.

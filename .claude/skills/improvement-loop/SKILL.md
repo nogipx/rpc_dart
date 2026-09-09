@@ -1,114 +1,125 @@
 ---
 name: improvement-loop
-description: Один раунд измеряемого цикла поиска и починки дефектов — выбрать линзу, снять пробу, измерить в числах, починить, проверить канарейкой, отдать на рецензию, прогнать гейт, записать в журнал. Использовать, когда просят искать баги, течи, дыры в безопасности, зависания или проблемы производительности; продолжить или возобновить цикл улучшений; прогнать раунд, в том числе по расписанию из /loop; узнать статус цикла или где он остановился; перепроверить прежнюю находку, отсрочку или пометку «проверено»; вывести или обслужить набор линз; развернуть цикл в новом репозитории. Срабатывает и без слова «цикл» — по любой просьбе «найди, что сломано» в коде.
+description: One round of a measured find-and-fix loop — pick a lens, take a probe, measure in numbers, fix, check with a canary, send it for review, run the gate, write it into the journal. Use it when asked to hunt bugs, leaks, security holes, hangs or performance problems; to continue or resume the improvement loop; to run a round, including on a schedule from /loop; to report the loop's status or where it stopped; to re-measure an earlier finding, deferral or "checked" mark; to derive or maintain the lens set; to lay the loop out in a new repository. It also fires without the word "loop" — on any "find what is broken" request about code.
 allowed-tools: Read, Edit, Write, Glob, Grep, Agent, Task, CronList, CronDelete, Bash(python3:*), Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*)
 ---
 
-# Цикл улучшений
+# The improvement loop
 
-Один дефект за раунд, от начала до конца. **Утверждение без числа — не находка.
-Учёт проверяется скриптом, а не памятью.** Всё, что привязано к репозиторию,
-лежит в `.claude/loop/`; этот файл про конкретный проект не знает ничего.
+One defect per round, start to finish. **A claim with no number is not a
+finding. The bookkeeping is checked by a script, not by memory.** Everything
+bound to the repository lives in `.claude/loop/`; this file knows nothing about
+any particular project.
 
-## Аргументы и режим
+## Arguments and modes
 
-Аргументы вызова: `$ARGUMENTS`. Первое слово — режим; пусто — **раунд**.
+The invocation's arguments: `$ARGUMENTS`. The first word is the mode; empty
+means a **round**.
 
-- **раунд** — шаги 0–8 ниже.
-- **status** — доложить состояние ниже и ничего не менять.
-- **next** — назвать цель следующего раунда и ничего не менять.
-- **verify `<утверждение>`** — перемерить одну запись: находку, отсрочку,
-  негатив, свип или стенд. Полноценный раунд, линза — та, что породила запись.
-- **lenses** — вывести или дополнить набор линз: `methods/lens-derivation.md`;
-  формы каталога под подключённые пакеты даёт `loop.py catalog`.
-- **curate** — обслужить данные: `methods/curate.md`. Раз в десять раундов.
-- **setup** — развернуть цикл там, где нет `.claude/loop/`: `methods/setup.md`.
+- **round** — steps 0-8 below.
+- **status** — report the state below and change nothing.
+- **next** — name the next round's target and change nothing.
+- **verify `<claim>`** — re-measure one record: a finding, a deferral, a
+  negative, a sweep or a bench. A full round, with the lens that produced the
+  record.
+- **lenses** — derive or extend the lens set: `methods/lens-derivation.md`;
+  `loop.py catalog` gives the catalog shapes for the enabled packs.
+- **curate** — maintain the data: `methods/curate.md`. Once every ten rounds.
+- **setup** — lay the loop out where there is no `.claude/loop/`:
+  `methods/setup.md`.
 
-## Состояние на момент вызова
+## The state at invocation time
 
-!`python3 .claude/skills/improvement-loop/scripts/loop.py status 2>/dev/null || python3 ~/.claude/skills/improvement-loop/scripts/loop.py status 2>/dev/null || echo "loop.py не найден в .claude/skills/improvement-loop и ~/.claude/skills/improvement-loop — запустить status вручную по пути скилла"`
+!`python3 .claude/skills/improvement-loop/scripts/loop.py status 2>/dev/null || python3 ~/.claude/skills/improvement-loop/scripts/loop.py status 2>/dev/null || echo "loop.py not found in .claude/skills/improvement-loop or ~/.claude/skills/improvement-loop — run status by hand from the skill's path"`
 
-Если выше «нет .claude/loop» — режим `setup`. Если «набора линз нет» — сначала
-режим `lenses`. Если **«Остановка: ДА»** — раунд не начинать: доложить причину и,
-если вызов пришёл из `/loop`, снять задание (`CronList`, `CronDelete`).
+If the above says "no .claude/loop", the mode is `setup`. If it says "no lens
+set", do `lenses` mode first. If it says **"Stop: YES"**, do not start a round:
+report the reason and, if the call came from `/loop`, cancel the job
+(`CronList`, `CronDelete`).
 
-## Шаг 0 — прочитать состояние
+## Step 0 — read the state
 
-1. `python3 <скилл>/scripts/loop.py next` — цель раунда по правилам выбора,
-   валидные стенды по тем же путям, бюджет, список чтения. **Номер раунда — тот,
-   что назвал скрипт.** Не из памяти, не из коммита, не от пользователя.
-2. Отклониться от цели `next` можно — с причиной в секции `## Цель` раунда.
-3. Прочитать `config.md`, `LOOP.md`, `lessons/LESSONS.md` целиком; файлы
-   сущностей — по мере надобности. Оглавления нужны, чтобы выбрать, а не чтобы
-   знать.
+1. `python3 <skill>/scripts/loop.py next` — the round's target by the selection
+   rules, valid benches along the same paths, the budget, the reading list.
+   **The round number is the one the script named.** Not from memory, not from a
+   commit, not from the user.
+2. You may depart from `next`'s target — with the reason in the round's
+   `## Target` section.
+3. Read `config.md`, `LOOP.md` and `lessons/LESSONS.md` in full; the entity
+   files as needed. The indexes exist so you can choose, not so you can know.
 
-## Правило ноль — команда не смеет спрашивать разрешения
+## Rule zero — a command must never ask for permission
 
-При `unattended: yes` запрос разрешения останавливает раунд намертво.
-Механизм — allowlist, не память: `allowed-tools` этого скилла плюс
-`permissions.allow` в `.claude/settings.json`, куда режим `setup` вписывает
-тулчейн, гейт и `loop.py`; `loop.py lint` проверяет покрытие гейта. Всё, что
-allowlist не покрывает — переменные, подстановки, глобы, `| head`, `cd X &&`,
-`git stash`, `rm`, heredoc, shell-чтение файлов вместо `Read` — запрещено;
-список и причины — `references/rule-zero.md`.
+With `unattended: yes`, a permission prompt stops the round dead. The mechanism
+is the allowlist, not memory: this skill's `allowed-tools` plus
+`permissions.allow` in `.claude/settings.json`, where `setup` mode writes the
+toolchain, the gate and `loop.py`; `loop.py lint` checks the gate is covered.
+Anything the allowlist does not cover — variables, substitutions, globs,
+`| head`, `cd X &&`, `git stash`, `rm`, heredocs, reading files through the
+shell instead of `Read` — is forbidden; the list and the reasons are in
+`references/rule-zero.md`.
 
-## Правило один — код, не проза
+## Rule one — the code, not the prose
 
-Любая проза о коде — комментарии, README, CLAUDE.md, коммиты, этот файл,
-журнал — вторичный источник и протухает молча. Сначала реализация; прозу
-цитировать после того, как код её подтвердил; расхождение — дефект, чинить в том
-же раунде. Комментарий, объясняющий намеренность, — зацепка, не закрытая дверь
-(U-01). На данные цикла правило распространяется целиком: для этого есть `lint`
-и `stale`.
+Any prose about code — comments, READMEs, CLAUDE.md, commits, this file, the
+journal — is a secondary source and goes stale silently. The implementation
+first; quote the prose only after the code has confirmed it; a divergence is a
+defect, fixed in the same round. A comment justifying deliberateness is a lead,
+not a closed door (U-01). The rule applies to the loop's own data in full: that
+is what `lint` and `stale` are for.
 
-## Раунд
+## The round
 
-1. **Цель.** Из `next`: решение владельца, потом линза без применений, потом
-   ранг, потом устаревший свип. Каталог (`catalog/`) — только через
-   инстанцирование в набор. Перед свипом свериться с `checked/` и статусами.
-   Детектор-скрипт гоняется через `loop.py sweep <ID>`; хеш списка — в статус.
-2. **Стенд.** Сначала `probes/` — валидный стенд по тем же путям
-   переиспользуется, не строится. Новый стенд считается стендом, когда контроль
-   с убранным механизмом показал, что он способен увидеть дефект; тогда он
-   регистрируется как `P-NN` (`specs/probe.md`). Чек-листы — универсальный
-   `methods/measurement.md` плюс пункты пакетов из списка чтения `next`.
-   Каждая перестройка стенда — плюс один в ключе `бюджет:`; исчерпан — вердикт
-   INCONCLUSIVE, не CLEAN.
-3. **Измерить в числах.** Нет чисел — нет дефекта.
-4. **Починить.** Минимально, в точке, которая выносит неверный вердикт.
-5. **Перемерить** той же пробой на том же стенде.
-6. **Свидетель и канарейка.** `methods/canary.md`, `methods/tests.md`. Каждая
-   попытка получить падающего свидетеля — плюс один в `бюджет:`.
-7. **Рецензия — до вердикта.** Чистый контекст проверяет запись раунда, пробу и
-   контроль по промпту `loop.py review` (ядро из `references/review.md` плюс
-   вопросы пакетов): субагент (`Agent`/`Task`), из fork — `claude -p`, иначе
-   сам с явной пометкой. Любое «нет» — назад на шаг 2 с тем же бюджетом;
-   результат — в ключ `рецензия:`.
-8. **Гейт** полной последовательностью из конфига, **запись** по
-   `specs/round.md` со всеми правками из «Что раунд меняет», `loop.py lint`
-   зелёный, коммит с теми же секциями в теле, отчёт в чате теми же секциями
-   (`methods/reporting.md`). Урок, за который раунд заплатил, — `L-NN`
-   (`specs/lesson.md`); без цены числом это не урок.
+1. **Target.** From `next`: an owner decision, then a lens never applied, then
+   the rank, then a stale sweep. The catalog (`catalog/`) only through
+   instantiation into the set. Before a sweep, check `checked/` and the
+   statuses. A script detector is run through `loop.py sweep <ID>`; the list
+   hash goes into the status.
+2. **Bench.** `probes/` first — a valid bench along the same paths is reused,
+   not rebuilt. A new bench counts as a bench once a control with the mechanism
+   removed has shown it can see the defect; then it is registered as `P-NN`
+   (`specs/probe.md`). The checklists are the universal
+   `methods/measurement.md` plus the packs' items from `next`'s reading list.
+   Every rebuild of the bench adds one to the `budget:` key; exhausted means the
+   verdict is INCONCLUSIVE, not CLEAN.
+3. **Measure in numbers.** No numbers, no defect.
+4. **Fix.** Minimally, at the point that renders the wrong verdict.
+5. **Re-measure** with the same probe on the same bench.
+6. **Witness and canary.** `methods/canary.md`, `methods/tests.md`. Every
+   attempt to get a failing witness adds one to `budget:`.
+7. **Review — before the verdict.** A clean context checks the round record, the
+   probe and the control against the prompt from `loop.py review` (the core from
+   `references/review.md` plus the packs' questions): a subagent (`Agent`/
+   `Task`), `claude -p` from a fork, otherwise yourself with an explicit note.
+   Any "no" sends you back to step 2 with the same budget; the outcome goes into
+   the `review:` key.
+8. **Gate** with the full sequence from the config, **the record** per
+   `specs/round.md` with every edit from "What a round changes", `loop.py lint`
+   green, a commit with the same sections in its body, and a chat report with
+   the same sections (`methods/reporting.md`). A lesson the round paid for
+   becomes `L-NN` (`specs/lesson.md`); without a price in numbers it is not a
+   lesson.
 
-## Планка и остановка
+## The bar and the stop
 
-Планка серьёзности задана в конфиге и к концу цикла поднимается — серьёзность,
-не строгость. Остановку вычисляет `status`: потолок раундов, либо все линзы
-исчерпаны и свежи и нечего брать из бэклога. Рядом с потолком не открывать
-работу на несколько раундов: недоделанное дерево хуже неначатого.
+The severity bar is set in the config and rises towards the end of the loop —
+severity, not rigour. `status` computes the stop: the round cap, or every lens
+swept and fresh with nothing to take from the backlog. Near the cap, do not open
+work that spans several rounds: an unfinished tree is worse than one never
+started.
 
-## Справочники — по требованию
+## References — on demand
 
-- **`specs/`** — из чего состоит каждый файл в `.claude/loop/`; вердикты и что
-  каждый меняет — `specs/round.md`. Оглавление `specs/SPECS.md`.
-- **`methods/`** — как делать работу: чек-лист сверху, истории с числами ниже.
-  Оглавление `methods/METHODS.md`.
-- **`catalog/`** — формы дефектов по пакетам. Оглавление `catalog/CATALOG.md`.
-- **`packs/`** — знание по доменам и языкам: классы ущерба, пункты чек-листов,
-  вопросы рецензенту, детекторы, шаблоны проб. Что подключено — строка
-  `пакеты:` в `config.md`; собирает `loop.py`, агент пакеты не выбирает.
-  Схема — `specs/pack.md`.
-- **`references/`** — `model.md` (термины, диаграммы), `rule-zero.md`,
-  `review.md` (ядро промпта рецензента).
+- **`specs/`** — what each file in `.claude/loop/` consists of; the verdicts and
+  what each changes are in `specs/round.md`. Index: `specs/SPECS.md`.
+- **`methods/`** — how to do the work: a checklist at the top, stories with
+  numbers below. Index: `methods/METHODS.md`.
+- **`catalog/`** — defect shapes by pack. Index: `catalog/CATALOG.md`.
+- **`packs/`** — knowledge by domain and language: damage classes, checklist
+  items, reviewer questions, detectors, probe templates. What is enabled is the
+  `packs:` line in `config.md`; `loop.py` assembles them, the agent does not
+  choose. Schema: `specs/pack.md`.
+- **`references/`** — `model.md` (terms, diagrams), `rule-zero.md`, `review.md`
+  (the core of the reviewer prompt).
 - **`scripts/loop.py`** — `init`, `status`, `next`, `lint`, `stale`, `catalog`,
   `review`, `sweep`.

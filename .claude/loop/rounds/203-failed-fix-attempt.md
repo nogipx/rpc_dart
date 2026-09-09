@@ -1,57 +1,58 @@
 ---
-раунд: 203
-вердикт: INCONCLUSIVE
-пакеты: [rpc_dart]
-линза: RPC-12
-стенд: без стенда
-бюджет: пробы 0/3, канарейки 0/3
-рецензия: сам (запись мигрирована в схему; рецензии в раунде не было)
-коммит: нет
+round: 203
+verdict: INCONCLUSIVE
+packages: [rpc_dart]
+lens: RPC-12
+bench: none
+budget: probes 0/3, canaries 0/3
+review: self (record migrated into the schema; the round itself had no review)
+commit: no
 ---
 
-# Раунд 203 — попытка починить несуществующий дефект
+# Round 203 — an attempt to fix a defect that did not exist
 
-Вердикт INCONCLUSIVE, а не CLEAN: раунд не измерил ничего и потому ничего не
-доказал. Именно этот исход и есть цена работы от рассуждений вместо измерения —
-следующий раунд начал с инструментирования и закрыл вопрос за один заход.
+INCONCLUSIVE, not CLEAN: the round measured nothing and therefore proved
+nothing. This outcome is exactly the price of working from reasoning instead of
+measurement — the next round started by instrumenting and closed the question in
+one pass.
 
-Четыре опровергнутые теории перечислены в записи раунда 204, чтобы их не
-пробовали заново.
+The four disproven theories are listed in round 204's record so nobody tries
+them again.
 
-## Цель
+## Target
 
-RPC-12 — отмена, доставляемая в поток запросов обработчика
+RPC-12 — cancellation delivered into the handler's request stream
 
-## Гипотеза
+## Hypothesis
 
-Заявленное раундом 202 падение чинится одной из четырёх правок
+The crash claimed by round 202 is fixed by one of four edits
 
-## До
+## Before
 
-n/a — измерений раунд не снял, работал от рассуждений
+n/a — the round took no measurements, it worked from reasoning
 
-## Механизм
+## Mechanism
 
-Четыре теории подряд, ни одна не подтверждена; все правки откачены,
-дерево осталось байт-в-байт
+Four theories in a row, none confirmed; every edit reverted, the tree left
+byte-for-byte unchanged
 
-## После
-
-n/a
-
-## Канарейка
-
-n/a — падающего свидетеля получить не удалось
-
-## Гейт
+## After
 
 n/a
 
-## Не чинил
+## Canary
 
-Ничего; дефекта не существовало, что показал раунд 204
+n/a — no failing witness could be produced
 
-## Связи
+## Gate
 
-Пересмотрен раундом `204-retraction-listen-onerror.md`; форма —
+n/a
+
+## Not fixed
+
+Nothing; the defect did not exist, as round 204 showed
+
+## Links
+
+Revised by round `204-retraction-listen-onerror.md`; the shape is
 `../lenses/RPC-12-cancel-into-request-stream.md`

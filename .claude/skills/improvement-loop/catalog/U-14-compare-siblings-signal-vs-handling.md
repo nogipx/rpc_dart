@@ -1,34 +1,34 @@
 ---
-пакет: core
-применима: есть больше одной реализации общего контракта.
-ломается: тихое зависание, тихая обрезка.
-статус: подтверждена
+pack: core
+applies: there is more than one implementation of a shared contract.
+breaks: a silent hang, a silent truncation.
+status: confirmed
 ---
 
-# U-14 — Сравнение соседей; сигнал против обработки
+# U-14 — Compare siblings; the signal versus its handling
 
-**Отсутствие дефекта в обработке может означать, что вход никогда не приходит.**
+**The absence of a defect in the handling may mean the input never arrives.**
 
-Следствие: слои на других языках — часть реализации. Три свипа по основному языку
-не могли найти ни нативный колбэк, кормивший мёртвую completion, ни `log; break`
-в соседнем языке.
+A corollary: layers in other languages are part of the implementation. Three
+sweeps in the main language could find neither the native callback feeding a
+dead completion nor the `log; break` in the neighbouring language.
 
-## Форма
+## Shape
 
-Несколько реализаций одного интерфейса; батарея прогнана не по всем.
+Several implementations of one interface; the battery was not run against all of
+them.
 
-## Детектор
+## Detector
 
-Одна батарея по всем реализациям сразу; сравнить результаты между
-собой, а не с ожиданием.
+One battery across every implementation at once; compare the results with each
+other rather than with an expectation.
 
-## Спрашивать
+## Ask
 
-Кто выделяется? А если все чисты — существует ли вообще ВХОДНОЙ
-сигнал у той реализации, где его обработка не проверялась?
+Which one stands out? And if they are all clean — does the INPUT signal even
+exist in the implementation whose handling was never checked?
 
-## Улика
+## Evidence
 
-Две реализации пришли чистыми, а у третьей вообще не было сигнала о
-смерти другой стороны, поэтому уже работающий общий путь никогда не
-запускался.
+Two implementations came back clean, and the third had no signal at all that the
+other side had died, so the shared path — already working — never ran.

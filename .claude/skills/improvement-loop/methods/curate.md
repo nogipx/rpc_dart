@@ -1,47 +1,53 @@
-# Режим curate: обслуживание данных
+# curate mode: data maintenance
 
-Раз в десять раундов или по просьбе. Ничего не измеряет и не чинит: только
-приводит данные в порядок, чтобы следующий раунд выбирал по верным сведениям.
-Отдельный коммит с пометкой `curate` в теле, без файла раунда.
+Once every ten rounds, or on request. It measures nothing and fixes nothing: it
+only puts the data in order so the next round chooses on correct information. A
+separate commit marked `curate` in the body, with no round file.
 
-## Порядок
+## Order
 
-1. `loop.py lint` — красное чинится первым, это дефекты учёта.
-2. `loop.py stale` — прочитать, что состарилось:
-   - свип (`исчерпана здесь`) с изменениями по путям — не менять статус, а
-     поднять линзу в ранге: следующий раунд возьмёт её как перемер;
-   - негатив с изменениями — пометить в строке оглавления `(устарел, sha)`;
-     удалять нельзя, перемер — цель раунда;
-   - зацепка с изменениями — то же.
-3. **Ранг линз.** Линза, три раунда подряд не давшая находки, опускается.
-   Удалять нельзя: отсутствие находок — тоже результат, а удалённая линза будет
-   придумана заново. Линза с `применена: []` дольше десяти раундов — либо
-   поднять, либо записать в `LOOP.md`, почему её не берут.
-4. **Дубли.** Две линзы с одной формой — младшая получает `уточняет:` старшей и
-   статус `отозвана` с причиной «дубль». Две зацепки про один механизм —
-   сливаются в старшую, младшая закрывается с ссылкой.
-5. **Ранг зацепок.** Порядок в `BACKLOG.md`: сначала решения владельца, потом по
-   классу ущерба, потом по возрасту числа.
-6. **Стенды.** `валиден` со `stale` «УСТАРЕЛ» — статус `устарел (sha)`: следующий
-   раунд на этих путях обязан повторить контроль прежде, чем переиспользовать.
-   `сломан` старше десяти раундов без замены — оставить, это тоже негатив.
-7. **Уроки — конвейер в пакеты.** Каждый `действует`: держится ли правило вне
-   этого кода? Если да — куда именно: в любом коде — `methods/` (чек-лист и
-   история) или `catalog/` с `пакет: core`; в любом коде этого домена или
-   языка — `packs/<имя>/measure|canary|tests.md` или форма с `пакет: <имя>`;
-   только в этом репозитории, но шире одной линзы — приватный пакет
-   `.claude/loop/packs/<имя>/`. Уроку — `поднята в скилл (<файл>)`. Если правило принял владелец как постоянное — в `config.md`, уроку
-   `устарела (раунд NNN)` со ссылкой. Если два урока об одном — слить в старший.
-   Каталог и методы живут в скилле: правки в них — отдельный коммит скилла, не
-   проекта.
-8. **Каталог.** Форма, инстанцированная и подтверждённая в этом проекте, но
-   отсутствующая в `../catalog/` — кандидат туда же по тому же признаку:
-   держится вне этого кода.
-9. `loop.py lint` снова, коммит.
+1. `loop.py lint` — red is fixed first, those are bookkeeping defects.
+2. `loop.py stale` — read what has aged:
+   - a sweep (`swept here`) with changes along its paths — do not change the
+     status, raise the lens in the rank instead: the next round takes it as a
+     re-measurement;
+   - a negative with changes — mark its index line `(stale, sha)`; it must not
+     be deleted, and re-measuring it is a round's target;
+   - a lead with changes — the same.
+3. **Lens rank.** A lens that produced no finding three rounds running goes
+   down. It must not be deleted: no findings is a result too, and a deleted lens
+   will be reinvented. A lens with `applied: []` for more than ten rounds is
+   either raised or written into `LOOP.md` with the reason nobody takes it.
+4. **Duplicates.** Two lenses with one shape — the younger gets `refines:` the
+   older and status `retracted` with reason "duplicate". Two leads about one
+   mechanism merge into the older, and the younger closes with a link.
+5. **Lead rank.** The order in `BACKLOG.md`: owner decisions first, then by
+   damage class, then by the age of the number.
+6. **Benches.** A `valid` one that `stale` reports as STALE gets status
+   `stale (sha)`: the next round on those paths must repeat its control before
+   reusing it. A `broken` one older than ten rounds with no replacement stays —
+   that is a negative too.
+7. **Lessons — the conveyor into packs.** For each `active` one: does the rule
+   hold outside this code? If it does, where exactly: in any code —
+   `methods/` (a checklist item and a story) or `catalog/` with `pack: core`; in
+   any code of this domain or language — `packs/<name>/measure|canary|tests.md`
+   or a shape with `pack: <name>`; only in this repository but wider than one
+   lens — a private pack `.claude/loop/packs/<name>/`. The lesson gets
+   `promoted to skill (<file>)`. If the owner accepted the rule as standing, it
+   goes to `config.md` and the lesson gets `obsolete (round NNN)` with a link.
+   If two lessons say one thing, merge into the older. The catalog and the
+   methods live in the skill: edits to them are a separate skill commit, not a
+   project one.
+8. **The catalog.** A shape instantiated and confirmed in this project but
+   missing from `../catalog/` is a candidate for it, by the same test: does it
+   hold outside this code?
+9. `loop.py lint` again, then commit.
 
-## Чего curate не делает
+## What curate does not do
 
-- Не меняет статусы, требующие измерения: `исчерпана`, `подтверждена`, `закрыта`.
-- Не переписывает числа. Число, которое кажется неверным, — цель для `verify`.
-- Не валидирует стенды: статус `валиден` ставит только раунд с контролем.
-- Не трогает `config.md`: настройки — решение владельца.
+- It does not change statuses that require measurement: `swept`, `confirmed`,
+  `closed`.
+- It does not rewrite numbers. A number that looks wrong is a target for
+  `verify`.
+- It does not validate benches: only a round with a control sets `valid`.
+- It does not touch `config.md`: the settings are the owner's decision.

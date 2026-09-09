@@ -1,21 +1,22 @@
 ---
-статус: открыта
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_isolate/lib/**]
-проба: —
-причина: свип семейства сделан вне журнала и isolate в него не попал; цена — протёкший изолят, а не сокет
+status: open
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_isolate/lib/**]
+probe: —
+reason: the family sweep happened off-journal and isolate was not part of it; the price is a leaked isolate, not a socket
 ---
 
-# B-04 — isolate: непроверенные места `Future.timeout`
+# B-04 — isolate: unaudited `Future.timeout` sites
 
-Класс «таймаут бросает ожидание, а не работу» просвипан по семейству, но в
-`rpc_dart_isolate` места не проверялись. Цена здесь — **протёкший изолят, а не
-сокет**: изолят продолжает жить, держит порты и не даёт процессу выйти.
+The class "a timeout abandons the wait, not the work" has been swept across the
+family, but the sites in `rpc_dart_isolate` were never checked. The price here
+is **a leaked isolate rather than a socket**: the isolate lives on, holds ports
+and keeps the process from exiting.
 
-Линза: `../lenses/RPC-14-timeout-abandons-work.md` — её статус `исчерпана здесь`
-имеет исключение ровно из-за этой зацепки.
+Lens: `../lenses/RPC-14-timeout-abandons-work.md` — its `swept here` status has
+an exception for exactly this lead.
 
-## Решение владельца
+## Owner decision
 
 —

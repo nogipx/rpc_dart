@@ -1,28 +1,29 @@
-// Скелет пробы: одно число, флаг контроля, одинаковый стенд для обоих режимов.
+// A probe skeleton: one number, a control flag, the same bench in both modes.
 //
-// Запуск:  dart run tool/probe_<имя>.dart            — испытуемый случай
-//          dart run tool/probe_<имя>.dart --control  — контроль: тот же стенд,
-//                                                       убран предполагаемый механизм
-// Печатает одну строку `metric=<число>` — её и цитирует запись раунда.
-// Проба лежит там, где сказано в config.md («Пробы»), и не попадает в git.
+// Run:  dart run tool/probe_<name>.dart            — the case under test
+//       dart run tool/probe_<name>.dart --control  — the control: the same
+//                                                    bench with the suspected
+//                                                    mechanism removed
+// Prints one line, `metric=<number>` — that is what the round record quotes.
+// The probe lives where config.md says ("Probes") and stays out of git.
 
 import 'dart:io';
 
 Future<void> main(List<String> args) async {
   final control = args.contains('--control');
-  final scales = [1, 4, 16]; // три масштаба: удельное значение читается по кривой
+  final scales = [1, 4, 16]; // three scales: read the per-unit value as a curve
 
   for (final scale in scales) {
     final before = ProcessInfo.currentRss;
     final sw = Stopwatch()..start();
 
-    // 1. Поднять стенд. Стороны — с РАЗНЫМИ объектами конфигурации.
-    //    Никаких общих политик между атакующим и жертвой.
-    // 2. Прогнать нагрузку `scale` единиц. При `control` — тот же объём и тот же
-    //    путь, но без предполагаемого механизма (или с выключенным фиксом).
-    // 3. Дождаться полки: измерять дельту за интервал, а не одно число.
+    // 1. Stand the bench up. The two sides get SEPARATE configuration objects.
+    //    No policy is shared between the attacker and the victim.
+    // 2. Drive `scale` units of load. Under `control`, the same volume and the
+    //    same path, but without the suspected mechanism (or with the fix off).
+    // 3. Wait for the plateau: measure the delta per interval, not one number.
 
-    await Future<void>.delayed(Duration.zero); // заменить на нагрузку
+    await Future<void>.delayed(Duration.zero); // replace with the load
 
     sw.stop();
     final after = ProcessInfo.currentRss;
@@ -32,6 +33,6 @@ Future<void> main(List<String> args) async {
         'ms=${sw.elapsedMilliseconds}');
   }
 
-  // Число, которое идёт в запись раунда, — одно и названо по имени.
-  stdout.writeln('metric=<заполнить>');
+  // The number that goes into the round record is single and named.
+  stdout.writeln('metric=<fill in>');
 }

@@ -1,15 +1,16 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_http2/lib/**]
-область: [http2]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_http2/lib/**]
+scope: [http2]
 ---
 
-# C-16 — Входящие буферы вызывающего http2
+# C-16 — The http2 caller's inbound buffers
 
-Класс «лимит, срабатывающий слишком поздно, — не лимит» на этом пути не
-воспроизводится.
+The class "a limit that fires too late is not a limit" does not reproduce on
+this path.
 
-## Контроль
+## Control
 
-Тело в пределах лимита: читается целиком, значит отказ даёт именно граница
+A body within the limit: it is read in full, so the refusal comes from the bound
+itself.

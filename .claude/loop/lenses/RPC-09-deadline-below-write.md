@@ -1,29 +1,29 @@
 ---
-уточняет: U-16
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
-применима: клиент пишет запрос и ждёт ответ по одному каналу
-ломается: вечное зависание.
-применена: []
-статус: подтверждена (раунд 168, вне журнала)
+refines: U-16
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
+applies: the client writes the request and awaits the reply on one channel
+breaks: a hang that never ends.
+applied: []
+status: confirmed (round 168, off-journal)
 ---
 
-# RPC-09 — Дедлайн вызова ниже отправки
+# RPC-09 — A call deadline that sits below the write
 
-## Форма
+## Shape
 
-Клиент пишет запрос и ждёт ответ последовательно, а сервер,
-отказавший по размеру, перестаёт читать.
+The client writes the request and waits for the reply in sequence, while a
+server that refused on size stops reading.
 
-## Детектор
+## Detector
 
-Места, где `await` на отправке предшествует ожиданию ответа;
-дедлайны, охраняющие completer, до которого код может не дойти.
+Places where an `await` on the send precedes waiting for the reply; deadlines
+guarding a completer the code may never reach.
 
-## Спрашивать
+## Ask
 
-Срабатывает ли дедлайн вообще? Если нет — что блокирует раньше?
+Does the deadline fire at all? If not, what blocks earlier?
 
-## Улика
+## Evidence
 
-Отправка парковалась в окне flow control, а отказ лежал непрочитанным
-в том же потоке.
+The send parked in the flow-control window while the refusal sat unread in the
+same stream.

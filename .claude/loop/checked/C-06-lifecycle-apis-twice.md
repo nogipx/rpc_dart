@@ -1,16 +1,17 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/**]
-область: [транспорты, http2-сервер]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/**]
+scope: [transports, the http2 server]
 ---
 
-# C-06 — Свип по API жизненного цикла
+# C-06 — Sweep of the lifecycle APIs
 
-Свип чист. Это форма U-15, для которой в наборе ещё нет своей линзы — завести её
-тому раунду, который снова возьмётся за жизненные циклы, и перенести этот статус
-на неё.
+The sweep is clean. This is shape U-15, which has no lens of its own in the set
+yet — the round that takes lifecycles up again should create one and move this
+status onto it.
 
-## Контроль
+## Control
 
-Одиночный вызов каждого метода: состояние возвращается в исходное, значит дефект дал бы второй вызов
+A single call to each method: the state returns to where it started, so a defect
+would have to come from the second call.

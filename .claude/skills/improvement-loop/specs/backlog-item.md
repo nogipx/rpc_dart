@@ -1,54 +1,55 @@
-# Схема: зацепка
+# Schema: a lead
 
-Путь: `.claude/loop/backlog/B-NN-slug.md`. Плюс строка в `backlog/BACKLOG.md`,
-где порядок строк значим — это ранг.
+Path: `.claude/loop/backlog/B-NN-slug.md`. Plus a line in `backlog/BACKLOG.md`,
+where the line order is meaningful — it is the rank.
 
-Зацепка — то, что раунд оставил недоделанным, включая ожидание решения владельца
-и стенд, который не дал числа. С ней ещё надо что-то сделать; отвеченные вопросы
-живут в `checked/`.
+A lead is what a round left unfinished, including a wait on an owner decision
+and a bench that produced no number. Something still has to be done about it;
+answered questions live in `checked/`.
 
 ```
 ---
-статус: открыта | ждёт владельца | закрыта (раунд NNN) |
-        решена владельцем (раунд NNN)
-раунд: NNN — когда измерено; `— (не перепроверено)`, если запись перенесена
-       при развёртывании, а не снята заново
-коммит: <sha HEAD на момент измерения>
-пути: [<глобы кода, о котором утверждение>]
-проба: <файл пробы, если он есть; иначе «—»>
-причина: цена | риск | решение владельца | стенд — и в чём именно
+status: open | awaiting owner | closed (round NNN) |
+        decided by owner (round NNN)
+round: NNN — when it was measured; `— (not re-measured)` if the record was
+       carried over at setup rather than taken again
+commit: <the HEAD sha at the moment of measurement>
+paths: [<globs of the code the claim is about>]
+probe: <the probe file, if there is one; otherwise «—»>
+reason: cost | risk | owner decision | bench — and in what exactly
 ---
 
-# B-NN — <название>
+# B-NN — <title>
 
-<числа; механизм одним-двумя предложениями; ссылки на линзу и на раунд по ID>
+<the numbers; the mechanism in one or two sentences; links to the lens and the
+round by ID>
 
-## Решение владельца
+## Owner decision
 
 —
 ```
 
-**`## Решение владельца` идёт ПОСЛЕДНЕЙ секцией и хранит `—`, пока владелец не
-написал.** Владелец вписывает решение своими словами и ничего больше не
-трогает; следующий раунд берёт такие зацепки первыми, исполняет, ставит статус
-`решена владельцем (раунд NNN)` и называет раунд.
+**`## Owner decision` is the LAST section and holds `—` until the owner writes
+in it.** The owner writes the decision in their own words and touches nothing
+else; the next round takes such leads first, carries them out, sets the status
+`decided by owner (round NNN)` and names the round.
 
-Свободная проза идёт ЛИДОМ, до секций, а не после них: текст после последнего
-`##` становится частью ТОЙ секции. Проверено при миграции формата — описание
-зацепки, оказавшись под `## Решение владельца`, заставило `loop.py next`
-объявить целью раунда несуществующее решение владельца.
+Free prose goes FIRST, before the sections, not after them: text after the last
+`##` becomes part of THAT section. Checked during the format migration — a
+lead's description, having landed under `## Owner decision`, made `loop.py next`
+announce a non-existent owner decision as the round's target.
 
-**`причина` обязана быть ценой, риском, решением владельца или стендом.** «Было
-сломано и до нас» причиной не является: это говорит лишь о том, внесена ли
-регрессия, что меняет срочность и текст коммита, но не то, чинить ли вообще.
+**`reason` must be cost, risk, an owner decision or the bench.** "It was broken
+before us" is not a reason: it only says whether a regression was introduced,
+which changes the urgency and the commit text, not whether to fix it at all.
 
-**Зацепка протухает по частям.** Отдельно стареет её число и отдельно её блокер,
-и перезапуск исходной пробы может ошибочно закрыть настоящий дефект. Перемер —
-полноценная цель раунда, см. `../catalog/CATALOG.md`, форма U-21; когда пора —
-говорит `loop.py stale`.
+**A lead goes stale in parts.** Its number ages separately from its blocker, and
+re-running the original probe can wrongly close a real defect. A re-measurement
+is a full round target — see `../catalog/CATALOG.md`, shape U-21; `loop.py stale`
+says when it is due.
 
-**Протокол владельца.** Единственный канал решений в unattended-цикле — секция
-`## Решение владельца` в файле зацепки. Статус при этом не меняет владелец, а
-раунд, который решение исполнил: так `loop.py status` видит решения, ещё не
-принятые в работу. Постоянные требования, действующие в каждом раунде, живут не
-здесь, а в `config.md`.
+**The owner protocol.** The only channel for decisions in an unattended loop is
+the `## Owner decision` section of the lead's file. The status is changed not by
+the owner but by the round that carried the decision out: that is how
+`loop.py status` sees decisions not yet taken up. Standing requirements that
+hold in every round live in `config.md`, not here.

@@ -1,33 +1,35 @@
-# Схема: урок
+# Schema: a lesson
 
-Путь: `.claude/loop/lessons/L-NN-slug.md`. Плюс строка в `lessons/LESSONS.md`.
+Path: `.claude/loop/lessons/L-NN-slug.md`. Plus a line in `lessons/LESSONS.md`.
 
-Урок — правило работы с этим кодом, за которое раунд заплатил: перестроенной
-пробой, отозванным вердиктом, канарейкой со второго раза, гейтом, упавшим на
-известной ловушке. Планка та же, что у методов скилла: без цены числом это не
-урок, а мнение. Дневник, наблюдения «на будущее» и пересказ `CLAUDE.md` сюда не
-попадают.
+A lesson is a rule for working with this code that a round paid for: with a
+rebuilt probe, a retracted verdict, a canary that took two attempts, a gate that
+failed on a known trap. The bar is the same as for the skill's methods: without
+a price in numbers it is an opinion, not a lesson. A diary, observations "for
+the future" and restatements of `CLAUDE.md` do not belong here.
 
 ```
 ---
-раунд: NNN — где заплачено
-класс: стенд | тулчейн | фикстура | метрика | процесс
-цена: <что потеряно, числом: перестроек пробы, раундов, минут гейта>
-пути: [<глобы кода, о котором урок>]        # «—», если урок не про код
-коммит: <sha HEAD на момент раунда>
-статус: действует | поднята в скилл (<файл в скилле>) | устарела (раунд NNN)
+round: NNN — where it was paid for
+class: bench | toolchain | fixture | metric | process
+cost: <what was lost, in numbers: probe rebuilds, rounds, minutes of gate>
+paths: [<globs of the code the lesson is about>]     # «—» if not about code
+commit: <the HEAD sha at the moment of the round>
+status: active | promoted to skill (<file in the skill>) | obsolete (round NNN)
 ---
 
-# L-NN — <правило одной фразой, в повелительном наклонении>
+# L-NN — <the rule in one phrase, imperative>
 
-<что было, что оказалось, что делать иначе — три предложения>
+<what happened, what it turned out to be, what to do differently — three
+sentences>
 ```
 
-**Граница с другими домами.** Ловушка тулчейна, которую владелец принял как
-постоянную, переезжает в `config.md`; урок получает `устарела (раунд NNN)` со
-ссылкой. Правило, которое держится в любом коде, режим `curate` поднимает в
-`methods/` или `catalog/` скилла; урок получает `статус: поднята в скилл (<файл>)` и
-остаётся в проекте как ссылка — правило одного дома.
+**The boundary with the other homes.** A toolchain trap the owner accepted as
+permanent moves to `config.md`; the lesson gets `obsolete (round NNN)` with a
+link. A rule that holds in any code is promoted by `curate` mode into the
+skill's `methods/` or `catalog/`; the lesson gets
+`status: promoted to skill (<file>)` and stays in the project as a link — the
+one-home rule.
 
-**Читаются целиком на шаге 0** — по строке оглавления на урок. Уроков больше
-двадцати действующих — повод для `curate`: слить, поднять, состарить.
+**They are read in full at step 0** — one index line per lesson. More than
+twenty active lessons is a reason for `curate`: merge, promote, retire.

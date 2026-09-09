@@ -1,21 +1,22 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_http2/lib/**]
-область: [http2]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_http2/lib/**]
+scope: [http2]
 ---
 
-# C-03 — Флуд PING (CVE-2019-9512) — не дефект
+# C-03 — PING flood (CVE-2019-9512) is not a defect
 
-207 → 121 → 74 байта на ping на 200k/800k/2.4M. Растущие итоги
-(41 → 97 → 177 MiB) выглядели тревожно, пока удельная величина не показала запас
-кучи, а не удержание.
+207 → 121 → 74 bytes per ping at 200k/800k/2.4M. The growing totals
+(41 → 97 → 177 MiB) looked alarming until the per-unit figure showed heap
+headroom rather than retention.
 
-про очередь ответных кадров опровергнута прямо.
+The theory about a queue of reply frames was disproven directly.
 
-Флуд кадрами любого типа аллоцирует похоже: это дело rate limiting на уровне
-развёртывания, а не транспорта.
+A flood of frames of any type allocates similarly: that is a matter for rate
+limiting at the deployment level, not for the transport.
 
-## Контроль
+## Control
 
-Атакующий, ВЫЧИТЫВАЮЩИЙ сокет: 96.7 -> 82.2 MiB, теория очереди ответных кадров опровергнута
+An attacker that DRAINS the socket: 96.7 -> 82.2 MiB, which disproves the
+reply-frame-queue theory.

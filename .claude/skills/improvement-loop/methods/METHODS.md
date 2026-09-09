@@ -1,26 +1,28 @@
-# Методы
+# Methods
 
-Как делать работу. Схемы того, что писать, — в `../specs/`; универсальные формы
-дефектов — в `../catalog/`. У каждого метода сверху чек-лист на десяток строк,
-ниже — истории с числами, которые объясняют, почему пункт там стоит. Чек-лист
-читать всегда, истории — когда пункт непонятен или число удивляет.
+How to do the work. The schemas for what to write are in `../specs/`; the
+universal defect shapes are in `../catalog/`. Each method opens with a checklist
+of about a dozen lines, followed by the stories with numbers that explain why an
+item is there. Always read the checklist; read the stories when an item is
+unclear or a number surprises you.
 
-- **[measurement.md](measurement.md)** — дисциплина измерений: переиспользование
-  стендов, где живут пробы, два направления вранья метрики, RSS не улика течи,
-  контроли, производительность, бюджет и INCONCLUSIVE. Доменные пункты (лимиты,
-  задержки, форензика языка) — в `../packs/`. До шага 2.
-- **[canary.md](canary.md)** — протокол канарейки: свидетель против стража, фикс
-  из двух половин, страж, способный открыться при сбое, перемер собственных
-  отсрочек, достижимость перед поставкой. До шага 5.
-- **[tests.md](tests.md)** — как написать регрессионный тест, который не соврёт:
-  ожидания и время, фикстуры, состояние между тестами, поддельные серверы,
-  честность отчёта. Пока пишется тест.
-- **[reporting.md](reporting.md)** — коммит, комментарии у кода, отчёт в чате и
-  то, чего писать нельзя. На шаге 7.
-- **[lens-derivation.md](lens-derivation.md)** — как построить набор линз для
-  незнакомого проекта; правила выбора, которые исполняет `loop.py next`. Режим
-  `lenses` и шаг 1.
-- **[curate.md](curate.md)** — обслуживание данных: ранг, дубли, устаревшее,
-  стенды, подъём уроков в скилл. Режим `curate`.
-- **[setup.md](setup.md)** — развернуть цикл в репозитории, где его нет. Режим
-  `setup`.
+- **[measurement.md](measurement.md)** — measurement discipline: reusing
+  benches, where probes live, the two directions a metric lies in, RSS is not
+  evidence of a leak, controls, performance, the budget and INCONCLUSIVE. The
+  domain items (limits, latency, language forensics) are in `../packs/`. Before
+  step 2.
+- **[canary.md](canary.md)** — the canary protocol: witness versus guard, a fix
+  in two halves, a guard that can fail open, re-measuring your own deferrals,
+  reachability before shipping. Before step 5.
+- **[tests.md](tests.md)** — how to write a regression test that will not lie:
+  expectations and time, fixtures, state between tests, fake servers, honesty in
+  the report. While the test is being written.
+- **[reporting.md](reporting.md)** — the commit, comments beside the code, the
+  chat report, and what must not be written. At step 7.
+- **[lens-derivation.md](lens-derivation.md)** — how to build a lens set for an
+  unfamiliar project; the selection rules `loop.py next` implements. `lenses`
+  mode and step 1.
+- **[curate.md](curate.md)** — data maintenance: rank, duplicates, staleness,
+  benches, promoting lessons into the skill. `curate` mode.
+- **[setup.md](setup.md)** — lay the loop out in a repository that has none.
+  `setup` mode.

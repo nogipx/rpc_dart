@@ -1,23 +1,24 @@
-# async-io: канарейки
+# async-io: canaries
 
-Пункты к чек-листу `methods/canary.md`.
+Items for the `methods/canary.md` checklist.
 
-A1. У нового лимита оба соседа правильного момента списания обычно неверны —
-    канарить и их. Тесты должны падать по-разному на каждый неверный выбор.
-A2. Граница и освобождение канарятся по отдельности: граница, которая никогда
-    не освобождается, всё равно останавливает атаку, и свидетель атаки зелёный.
+A1. For a new limit, both neighbours of the right charge point are usually
+    wrong — canary those too. The tests must fail DIFFERENTLY for each wrong
+    choice.
+A2. The bound and the release are canaried separately: a bound that is never
+    released still stops the attack, and the attack witness stays green.
 
-Ниже — за что заплачен каждый пункт.
+Below is what paid for each item.
 
-## У нового лимита есть вопрос «КОГДА я списываю?»
+## A new limit raises the question "WHEN do I charge?"
 
-Оба соседа правильного ответа обычно неверны, поэтому канарить и их. Потолок
-конкурентности приземлялся дважды, прежде чем стал верным: списание при ВХОДЕ в
-обработчик оказалось заглушкой против всплеска (30 вызовов прошли мимо потолка 3,
-потому что в момент допуска пачки ещё ничего не выполняется), а списание при
-ДОПУСКЕ потока — отказом в обслуживании (8 кадров с одними метаданными отказывали
-всем вызовам на 60 с). Годится только середина — момент диспетчеризации.
+Both neighbours of the right answer are usually wrong, so canary them as well.
+The concurrency ceiling landed twice before it was right: charging at handler
+ENTRY turned out to be a no-op against a burst (30 calls sailed past a ceiling
+of 3, because nothing is running yet at the moment a batch is admitted), and
+charging at stream ADMISSION was a denial of service (8 metadata-only frames
+refused every call for 60 s). Only the middle works — the moment of dispatch.
 
-> **Тесты должны падать ПО-РАЗНОМУ на каждый неверный выбор.** Если одна
-> канарейка роняет несколько свидетелей, а другая ни одного, дизайн не закреплён.
-
+> **The tests must fail DIFFERENTLY for each wrong choice.** If one canary
+> takes down several witnesses and another takes down none, the design is not
+> pinned.

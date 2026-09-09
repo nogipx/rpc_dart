@@ -1,31 +1,31 @@
 ---
-пакет: async-io
-применима: есть две стороны, конфигурируемые независимо.
-ломается: зависание, молчание вместо ответа.
-статус: подтверждена
+pack: async-io
+applies: there are two sides configured independently.
+breaks: a hang, silence instead of a reply.
+status: confirmed
 ---
 
-# U-10 — Новая опция — новые комбинации
+# U-10 — A new option means new combinations
 
-Фиксу здесь часто нужны ДВЕ правки. **Если после первой симптом стал другим, но
-не лучше, вторая половина — путь доставки, а не ошибка диагноза.**
+A fix here often needs TWO edits. **If the symptom changed after the first one
+but did not improve, the second half is the delivery path, not a wrong
+diagnosis.**
 
-## Форма
+## Shape
 
-Добавлена ручка, а вторая сторона выбирает своё поведение
-независимо.
+A knob was added, and the other side picks its behaviour independently.
 
-## Детектор
+## Detector
 
-Для каждой опции, добавленной за последние раунды, выписать матрицу
-«наш выбор x выбор другой стороны» и прогнать её целиком.
+For every option added in recent rounds, write out the matrix «our choice x the
+other side's choice» and run all of it.
 
-## Спрашивать
+## Ask
 
-Какая клетка матрицы никогда не выполнялась?
+Which cell of the matrix was never executed?
 
-## Улика
+## Evidence
 
-Одна из четырёх комбинаций не отвечала ничего за 6 с, пока остальные
-отвечали за 10-21 мс. Молчание существовало и до ручки; новой была
-только достижимость — обычная форма таких находок.
+One of four combinations answered nothing for 6 s while the others answered in
+10-21 ms. The silence existed before the knob; all that was new was
+reachability — the usual shape of such findings.

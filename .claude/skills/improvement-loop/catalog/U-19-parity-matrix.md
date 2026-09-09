@@ -1,25 +1,24 @@
 ---
-пакет: core
-применима: есть больше одной оси вариативности.
-ломается: что угодно.
-статус: подтверждена
+pack: core
+applies: there is more than one axis of variation.
+breaks: anything.
+status: confirmed
 ---
 
-# U-19 — Матрица паритета
+# U-19 — The parity matrix
 
-## Форма
+## Shape
 
-Комбинация «форма x реализация x направление», на которую никто не
-написал теста.
+A combination of «shape x implementation x direction» nobody wrote a test for.
 
-## Детектор
+## Detector
 
-Построить список всех осей и отметить покрытые комбинации.
+Build the list of all the axes and mark the combinations that are covered.
 
-## Спрашивать
+## Ask
 
-Какая комбинация пуста и почему именно она?
+Which combination is empty, and why that one?
 
-## Улика
+## Evidence
 
-Дыры живут ровно в комбинациях, а не в отдельных значениях осей.
+The holes live in combinations, not in individual axis values.

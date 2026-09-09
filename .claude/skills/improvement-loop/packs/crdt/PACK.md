@@ -1,11 +1,11 @@
 ---
-применим: несколько реплик, слияние без координации, offline-first
-классы ущерба: нарушение сходимости, потеря причинности, расхождение реплик, неограниченный рост метаданных
-формы: —
-содержит: ничего — пакет стартовый
+applies: several replicas, coordination-free merge, offline-first
+damage classes: broken convergence, lost causality, replica divergence, unbounded metadata growth
+shapes: —
+contains: nothing — a starter pack
 ---
 
-# crdt — реплицируемые структуры и offline-first
+# crdt — replicated structures and offline-first
 
-Классы ущерба стартовые, ни один раунд за них не платил. Заполняется через
-`lessons/` и `curate`.
+The damage classes are a starter set; no round has paid for any of them. It
+fills up through `lessons/` and `curate`.

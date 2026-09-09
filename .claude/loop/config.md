@@ -1,45 +1,44 @@
-# Конфигурация цикла — rpc_dart
+# Loop settings — rpc_dart
 
-Только то, что привязано к этому репозиторию. Процесс — в
-`.claude/skills/improvement-loop/`. Структура пакетов, соглашения о коммитах и
-стиль — в корневом `CLAUDE.md`; здесь они не дублируются.
+Only what is bound to this repository. The process lives in
+`.claude/skills/improvement-loop/`. Package layout, commit conventions and
+style live in the root `CLAUDE.md` and are not duplicated here.
 
-## Режим
+## Mode
 
 unattended: yes
 
-Цикл идёт без человека за клавиатурой, поэтому правило ноль действует целиком:
-никаких команд, способных поднять запрос разрешения.
+The loop runs with nobody at the keyboard, so rule zero applies in full: no
+command that could raise a permission prompt.
 
-пакеты: core, dart, async-io, server
+packs: core, dart, async-io, server
 
-`crdt` не подключён — реплик и слияния без координации в проекте нет.
-`flutter-ui` не подключён — единственный Flutter-пакет это плагин без экранов,
-навигации и ввода.
+`crdt` is not enabled — there are no replicas and no coordination-free merge in
+this project. `flutter-ui` is not enabled — the only Flutter package is a plugin
+with no screens, navigation or input.
 
-## Язык
+## Language
 
-Заголовок и тело коммита раунда. Убрать строку — будет английский. На язык
-данных цикла (записи раунда, линзы, зацепки) не влияет: они на русском, и тело
-коммита пересказывает их секции на языке коммитов.
+The round commit's subject and body. Drop the line and it is English. It does
+not affect the language of the loop data.
 
-язык коммитов: английский
+commit language: English
 
-## Тулчейн
+## Toolchain
 
-`fvm dart` и `fvm flutter`, никогда голые `dart`/`flutter` (SDK закреплён через
-fvm). Melos — как `fvm dart run melos <cmd>` либо глобально установленным
-`melos`; его `exec:`-скрипты сами перевызывают `melos`, поэтому для них нужен
-глобальный исполняемый файл.
+`fvm dart` and `fvm flutter`, never bare `dart`/`flutter` (the SDK is pinned via
+fvm). Melos as `fvm dart run melos <cmd>` or through a globally installed
+`melos`; its `exec:` scripts re-invoke `melos` themselves, so those need the
+global executable.
 
-**Ловушка запуска:** `melos run <script>` для скрипта с `packageFilters`
-открывает интерактивный выбор пакетов и падает с
-`StdinException: Error getting terminal echo mode`. Всегда добавлять
-`--no-select`. `melos exec --scope=<pkg> -- ...` не спрашивает никогда.
+**Launch trap:** `melos run <script>` for a script with `packageFilters` opens
+an interactive package picker and dies with
+`StdinException: Error getting terminal echo mode`. Always add `--no-select`.
+`melos exec --scope=<pkg> -- ...` never asks.
 
-## Гейт перед каждым коммитом
+## Gate before every commit
 
-Обязательная последовательность по workspace — её гоняет каждый раунд:
+The mandatory workspace-wide sequence, run by every round:
 
 ```gate
 melos run analyze
@@ -47,91 +46,93 @@ melos run test:unit --no-select
 melos run format:check
 ```
 
-Сверх неё, в изменённом пакете, когда раунд трогает его напрямую:
+On top of that, in the changed package, when a round touches it directly:
 
     fvm dart analyze lib test
-    fvm dart test -j 8                  # 2-3 раза, с паузой 15-20 с
-    fvm dart test -p node               # dart2js, если задето ядро или веб
+    fvm dart test -j 8                  # 2-3 times, 15-20 s apart
+    fvm dart test -p node               # dart2js, if core or web is involved
     fvm dart format --output=none --set-exit-if-changed
 
-и каждый зависимый пакет — их список даёт `melos list`.
+and every dependent package — `melos list` gives the list.
 
-**Зависимые пакеты разрешают ядро из ЛОКАЛЬНОГО исходника** через pub workspace
-(корневой `.dart_tool/package_config.json`; у участников своего нет). Проверено,
-и доказано изменением ядра, сломавшим два из них. Исключения — `rpc_dart_wasm` и
-неучастник-генератор.
+**Dependent packages resolve core from LOCAL source** through the pub workspace
+(the root `.dart_tool/package_config.json`; members have none of their own).
+Checked, and proven by a core change that broke two of them. The exceptions are
+`rpc_dart_wasm` and the non-member generator.
 
-**Темп прогонов.** Наборы подряд загоняют 15-минутный load average за 20 и дают
-пачки падений, похожих на настоящие флейки. Смотреть `uptime` и называть любое
-падение поимённо, прежде чем считать его флейком.
+**Pace the runs.** Back-to-back suites drive the 15-minute load average past 20
+and produce batches of failures that look like real flakes. Check `uptime` and
+name any failure before calling it a flake.
 
-**Известный флейк:** `audit_frame_reassembly_linear_test` — настоящий флейк по
-настенным часам, существовавший до цикла.
+**Known flake:** `audit_frame_reassembly_linear_test` — a real wall-clock flake
+that predates the loop.
 
-## Пробы
+## Probes
 
     packages/<pkg>/.dart_tool/probe/*.dart
 
-В gitignore, исключены из анализа, лежат внутри пакета, чтобы разрешались
-импорты `package:`. Перезаписывать, не удалять (`rm` запрещён). Имя файла пробы
-обязано попасть в запись раунда.
+Gitignored, excluded from analysis, inside the package so that `package:`
+imports resolve. Overwrite, do not delete (`rm` is forbidden). The probe's file
+name must appear in the round record.
 
-## Цели, которые никто не гоняет
+## Targets nobody runs
 
-- `fvm dart test -p node`, он же `melos run test:web` — ловушки dart2js: cancel в
-  `async*`, int больше 2^53, разрешение часов, `Random.secure`, кодеки только для
-  VM.
-- `melos run test:wasm` — Flutter-пакет вне workspace; покрывает только Dart-мост.
-- `melos run analyze:native` — Swift и Kotlin плагина против настоящих
-  фреймворков. При отсутствии тулчейнов выходит с кодом 2, чтобы «ничего не
-  проверено» не читалось как успех.
-- `melos run test:wasm:device` — ЗАПУСКАЕТ нативный код; нужен загруженный
-  симулятор или эмулятор. Гонять на ОБЕИХ платформах: это два разных скрипта на
-  двух языках, и фикс одного не является фиксом другого.
-- `reuse lint` — лицензионные заголовки.
+- `fvm dart test -p node`, a.k.a. `melos run test:web` — dart2js traps: cancel
+  in `async*`, ints above 2^53, clock resolution, `Random.secure`, VM-only
+  codecs.
+- `melos run test:wasm` — the Flutter package outside the workspace; covers the
+  Dart bridge only.
+- `melos run analyze:native` — the plugin's Swift and Kotlin against the real
+  frameworks. With the toolchains missing it exits 2, so "nothing was checked"
+  can never read as success.
+- `melos run test:wasm:device` — actually RUNS the native code; needs a booted
+  simulator or emulator. Run it on BOTH platforms: two different scripts in two
+  languages, and a fix to one is not a fix to the other.
+- `reuse lint` — licence headers.
 
-Golden-тесты `rpc_dart_generator` из workspace запустить нельзя (`build_test`
-требует пакетного `package_config.json`). Скрипта `test:generator` НЕТ. Ручной
-способ описан в корневом `pubspec.yaml` рядом со скриптом `test`.
+The `rpc_dart_generator` golden tests cannot be run from the workspace
+(`build_test` needs a per-package `package_config.json`). There is NO
+`test:generator` script. The manual way is documented in the root `pubspec.yaml`
+next to the `test` script.
 
-## Постоянные требования владельца
+## Standing owner requirements
 
-Действуют в каждом раунде и не относятся к конкретной находке. Решения по
-отдельным находкам — в `backlog/`.
+They hold in every round and are not about any single finding. Decisions on
+individual findings live in `backlog/`.
 
-- **`rpc_dart_wasm` обязан оставаться публикуемым в App Store и Google Play.**
-  Это единственный пакет с нативным кодом и единственный, из-за которого
-  приложение могут отклонить. Проверяется в любом раунде, который трогает плагин,
-  а не откладывается до релиза.
-- **Спрашивать, прежде чем менять скорость на что-либо ещё.** Упоминание цены в
-  отчёте — это НЕ вопрос: однажды раунд убрал быстрый путь ради корректности, и
-  владелец возразил.
-- **Doc-комментарии — короче и плотнее.** Документация должна быть острой и по
-  делу, без раздутых объяснений; ход поиска идёт в коммит и в журнал, а не в
-  комментарий у кода.
-- **Никаких emoji** нигде: код, комментарии, коммиты, документация.
-- **Никаких упоминаний ассистента в коммитах** (`Co-Authored-By` и подобное).
+- **`rpc_dart_wasm` must stay publishable on the App Store and Google Play.** It
+  is the only package with native code and the only one that can get an app
+  rejected. Checked in any round that touches the plugin, not deferred to
+  release.
+- **Ask before trading speed for anything else.** Mentioning the cost in the
+  report is NOT asking: a round once removed a fast path for correctness and the
+  owner objected.
+- **Doc comments: shorter and denser.** Documentation should be sharp and to the
+  point, with no bloated explanations; the search narrative goes into the commit
+  and the journal, not into a comment beside the code.
+- **No emoji** anywhere: code, comments, commits, documentation.
+- **No mention of the assistant in commits** (`Co-Authored-By` and the like).
 
-## Планка серьёзности и потолок
+## Severity bar and cap
 
-С раунда 191 берутся **только очень критичные** вещи: потеря данных, падение,
-зависание, дыра в безопасности, неограниченно растущая течь. Не берутся: более
-точная диагностика, doc-комментарий, покрытие ради покрытия.
+From round 191 on, only **very critical** things are taken: data loss, a crash,
+a hang, a security hole, an unbounded leak. Not taken: sharper diagnostics, a
+doc comment, coverage for coverage's sake.
 
-Потолок — **раунд 230**. Это потолок, а не цель. Чистый раунд при такой планке —
-ожидаемый исход чаще, чем нет.
+The cap is **round 230**. That is a cap, not a target. At this bar a clean round
+is the expected outcome more often than not.
 
-## Бюджет раунда
+## Round budget
 
-Исчерпан — вердикт INCONCLUSIVE, а не CLEAN: стенд, который не смог увидеть
-дефект, не доказывает его отсутствия.
+Exhausted means the verdict is INCONCLUSIVE, not CLEAN: a bench that could not
+see the defect does not prove its absence.
 
-пробы: 3
-канарейки: 3
-потолок раундов: 230
+probes: 3
+canaries: 3
+round cap: 230
 
-## Вне области
+## Out of scope
 
-Публикация, версии, changelog, полы зависимостей, `publish:dry`, теги (владелец,
-раунд 150). Если всплывает попутно — не больше одной строки, и не на первом
-плане. Цель цикла — код.
+Publishing, versions, changelog, dependency floors, `publish:dry`, tags (the
+owner, round 150). If one comes up in passing — one line at most, and not up
+front. The loop's target is the code.

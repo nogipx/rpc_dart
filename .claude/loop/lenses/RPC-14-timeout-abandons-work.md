@@ -1,32 +1,30 @@
 ---
-уточняет: U-17
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
-применима: есть таймауты вокруг операций, удерживающих ресурс
-ломается: "неограниченный рост: удержанный ресурс не освобождается никогда. На этом проекте цена — протёкший изолят, а не сокет: он держит порты и не даёт процессу выйти."
-применена: []
-статус: исчерпана здесь (раунд 067, вне журнала)
+refines: U-17
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
+applies: there are timeouts around operations that hold a resource
+breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
+applied: []
+status: swept here (round 067, off-journal)
 ---
 
-# RPC-14 — Таймаут бросает ожидание, а не работу
+# RPC-14 — A timeout abandons the wait, not the work
 
-Непроверенные места в isolate — открытая зацепка
+The unaudited sites in isolate are the open lead
 `../backlog/B-04-isolate-future-timeout-unaudited.md`.
 
-## Форма
+## Shape
 
-`Future.timeout` вокруг операции, удерживающей ресурс: ожидающий
-освобождается, операция продолжает держать.
+`Future.timeout` around an operation that holds a resource: the waiter is
+released, the operation keeps holding.
 
-## Детектор
+## Detector
 
-Грепать `.timeout(` и сопоставлять с тем, что удерживает операция
-под ним.
+Grep `.timeout(` and match each hit against what the operation underneath holds.
 
-## Спрашивать
+## Ask
 
-Что продолжает жить после срабатывания таймаута, и кто это
-освободит?
+What lives on after the timeout fires, and who releases it?
 
-## Улика
+## Evidence
 
-Семейство просвипано.
+The family has been swept.

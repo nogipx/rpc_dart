@@ -1,28 +1,27 @@
 ---
-пакет: core
-применима: везде.
-ломается: потеря данных, действие над не тем объектом.
-статус: подтверждена
+pack: core
+applies: everywhere.
+breaks: data loss, acting on the wrong object.
+status: confirmed
 ---
 
-# U-18 — Тихое приятие ошибки программиста
+# U-18 — Silent acceptance of a programmer error
 
-## Форма
+## Shape
 
-Запись в map, затирающая прежнее значение; несоответствие, которое
-никто не отвергает; идентификатор, выданный дважды.
+A map write that overwrites the previous value; a mismatch nobody rejects; an
+identifier issued twice.
 
-## Детектор
+## Detector
 
-Присваивания в разделяемые коллекции без проверки существования;
-выдача идентификаторов, переживающая перезапуск компонента.
+Assignments into shared collections with no existence check; id issuance that
+outlives a component restart.
 
-## Спрашивать
+## Ask
 
-Что происходит, когда два разных объекта претендуют на один ключ?
+What happens when two different objects claim the same key?
 
-## Улика
+## Evidence
 
-Идентификаторы, начинающиеся заново после переподключения, дали
-очистку мёртвой операции, закрывающую наполовину ЖИВУЮ; оба очевидных
-фикса не сработали.
+Ids restarting after a reconnect made a dead operation's teardown half-close a
+LIVE one; both obvious fixes failed.

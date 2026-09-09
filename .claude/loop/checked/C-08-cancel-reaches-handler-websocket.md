@@ -1,18 +1,19 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_websocket/lib/**]
-область: [websocket]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_websocket/lib/**]
+scope: [websocket]
 ---
 
-# C-08 — Отмена доходит до обработчика на websocket
+# C-08 — Cancellation reaches the handler on websocket
 
-Проба:    `.dart_tool/probe/cancel_reaches_handler.dart`
+Probe: `.dart_tool/probe/cancel_reaches_handler.dart`
 
-Бесконечный серверный поток, считающий собственные выдачи: клиент взял 3 элемента
-и отменил, `finally` обработчика отработал, счётчик встал через тик и остался
-плоским 2 с. Уведомление `x-client-cancelled` делает свою работу.
+An infinite server stream counting its own yields: the client took 3 items and
+cancelled, the handler's `finally` ran, the counter stopped within a tick and
+stayed flat for 2 s. The `x-client-cancelled` notification does its job.
 
-## Контроль
+## Control
 
-Вызов без отмены: счётчик обработчика продолжает расти, значит остановку даёт отмена
+A call with no cancellation: the handler's counter keeps rising, so the stop
+comes from the cancellation.

@@ -1,30 +1,30 @@
 ---
-пакет: core
-применима: всегда, начиная со второго раунда.
-ломается: дыра в безопасности, неограниченный рост.
-статус: подтверждена
+pack: core
+applies: always, from the second round on.
+breaks: a security hole, unbounded growth.
+status: confirmed
 ---
 
-# U-02 — Атаковать собственный фикс
+# U-02 — Attack your own fix
 
-Атаковать не только в том же раунде, но и в следующем: свежий фикс читается
-по-другому, когда вышел из головы.
+Attack it not only in the same round but in the next one: a fresh fix reads
+differently once it has left your head.
 
-## Форма
+## Shape
 
-Свежая граница, проверенная только против честного участника.
+A fresh boundary tested only against an honest participant.
 
-## Детектор
+## Detector
 
-Последние N раундов журнала; для каждого фикса — какие значения и
-ключи в нём контролирует чужой.
+The last N rounds of the journal; for each fix, which values and keys in it are
+controlled by someone else.
 
-## Спрашивать
+## Ask
 
-Что если контролируемое ЗНАЧЕНИЕ экстремально? что если
-контролируемый КЛЮЧ называет то, чего не существует?
+What if the controlled VALUE is extreme? What if the controlled KEY names
+something that does not exist?
 
-## Улика
+## Evidence
 
-Три находки подряд пришли из атаки на фикс предыдущего раунда; один
-DoS — из перечитывания ручки, выпущенной раундом ранее.
+Three findings in a row came from attacking the previous round's fix; one DoS
+came from re-reading a knob shipped a round earlier.

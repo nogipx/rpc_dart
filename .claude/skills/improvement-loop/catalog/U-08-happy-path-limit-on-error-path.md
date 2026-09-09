@@ -1,28 +1,28 @@
 ---
-пакет: async-io
-применима: есть лимиты на размер входных данных.
-ломается: "потеря информации, неверный класс ошибки: повторяемая становится неповторяемой."
-статус: подтверждена
+pack: async-io
+applies: there are limits on the size of incoming data.
+breaks: "information loss, the wrong error class: a repeatable error becomes unrepeatable."
+status: confirmed
 ---
 
-# U-08 — Лимит счастливого пути на пути ошибки
+# U-08 — A happy-path limit on the error path
 
-## Форма
+## Shape
 
-Одна граница применяется и к данным, которые сейчас разберут, и к
-диагностике о том, почему разбирать нечего.
+One boundary applies both to data about to be parsed and to the diagnosis of why
+there is nothing to parse.
 
-## Детектор
+## Detector
 
-Места, где путь ошибки читает или собирает данные тем же кодом, что
-и успешный путь.
+Places where the error path reads or assembles data with the same code as the
+success path.
 
-## Спрашивать
+## Ask
 
-Для чего эта граница? Ограничивать декодируемое тело и ограничивать
-строку объяснения — разные задачи.
+What is this boundary for? Bounding a decodable body and bounding an explanation
+string are different jobs.
 
-## Улика
+## Evidence
 
-Код ошибки от чужой стороны подменялся собственной жалобой на размер
-страницы, которая его несла, хотя статус был известен ДО чтения.
+An error code from the other side was replaced by our own complaint about the
+size of the page carrying it, even though the status was known BEFORE the read.

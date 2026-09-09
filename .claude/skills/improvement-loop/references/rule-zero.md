@@ -1,34 +1,34 @@
-# Правило ноль — полный список
+# Rule zero — the full list
 
-Действует при `unattended: yes`. Запрос разрешения останавливает раунд намертво,
-и ответить некому. Команда, которая *может* спросить, — неправильная команда:
-искать путь до запуска, а не после.
+In force when `unattended: yes`. A permission prompt stops the round dead, and
+there is nobody to answer it. A command that *may* ask is the wrong command:
+find the path before running, not after.
 
-## Что покрыто allowlist
+## What the allowlist covers
 
-- `allowed-tools` скилла: `Read`, `Edit`, `Write`, `Glob`, `Grep`, субагенты,
-  `python3` (для `loop.py`), `git status|log|diff|add|commit`.
-- `permissions.allow` в `.claude/settings.json` проекта: тулчейн и гейт из
-  `config.md` правилами-префиксами (`Bash(dart test:*)`), плюс правило на
-  `loop.py`. Вписывает режим `setup`, проверяет `loop.py lint`.
+- The skill's `allowed-tools`: `Read`, `Edit`, `Write`, `Glob`, `Grep`,
+  subagents, `python3` (for `loop.py`), `git status|log|diff|add|commit`.
+- `permissions.allow` in the project's `.claude/settings.json`: the toolchain
+  and the gate from `config.md` as prefix rules (`Bash(dart test:*)`), plus a
+  rule for `loop.py`. `setup` mode writes them, `loop.py lint` checks them.
 
-## Что запрещено, каждый пункт выучен на своей ошибке
+## What is forbidden, every item learned the hard way
 
-- `$VAR`, `${...}`, `$(...)`, обратные кавычки, глобы, циклы `for` по
-  переменным. Правило-префикс их не покрывает, и они всегда спрашивают. Включая
-  `echo "EXIT=$?"` — инструмент Bash сам сообщает ненулевой код возврата.
-- `sed`, `head`, `tail`, `cat`, `awk` по файлу проекта. Это `Read` с
-  offset/limit. Правило про инструмент, а не только про раскрытие переменных:
-  буквальный `sed -n '150,200p'` тоже считается. Заодно `| head -N` на grep
-  прячет улику, опровергающую гипотезу.
-- Цепочки `cd X && ...`. Голый `cd /abs/path` целиком как команда — можно.
-- `git stash`, `git checkout -- <path>`, `rm`, heredoc: разрушающие или
-  интерактивные при сбое. Канарейка выключает фикс через `Edit` и возвращает
-  через `Edit`; пробы перезаписываются, но не удаляются.
-- Чтение чего-либо вне проекта через shell. Только `Read` с полным буквальным
-  абсолютным путём.
-- `claude -p` для рецензии — только если правило на него есть в allowlist;
-  иначе рецензент — субагент или сам.
+- `$VAR`, `${...}`, `$(...)`, backticks, globs, `for` loops over variables. A
+  prefix rule does not cover them and they always ask. Including
+  `echo "EXIT=$?"` — the Bash tool reports a non-zero exit code by itself.
+- `sed`, `head`, `tail`, `cat`, `awk` over a project file. That is `Read` with
+  offset/limit. The rule is about the tool, not only about variable expansion: a
+  literal `sed -n '150,200p'` counts too. And `| head -N` on a grep hides the
+  evidence that refutes the hypothesis.
+- `cd X && ...` chains. A bare `cd /abs/path` as the whole command is fine.
+- `git stash`, `git checkout -- <path>`, `rm`, heredocs: destructive or
+  interactive on failure. A canary switches the fix off with `Edit` and restores
+  it with `Edit`; probes are overwritten, never deleted.
+- Reading anything outside the project through the shell. Only `Read` with a
+  full, literal, absolute path.
+- `claude -p` for the review — only if a rule for it is on the allowlist;
+  otherwise the reviewer is a subagent or yourself.
 
-При `unattended: no` интерактивность разрешена, но `Read`/`Edit`/`Write` для
-файлов проекта остаются: это про качество, а не про промпты.
+When `unattended: no`, interactivity is allowed, but `Read`/`Edit`/`Write` for
+project files still stand: that is about quality, not about prompts.

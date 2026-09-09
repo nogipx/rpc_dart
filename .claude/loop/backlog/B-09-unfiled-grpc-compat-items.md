@@ -1,22 +1,22 @@
 ---
-статус: открыта
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/core/rpc_dart/lib/**]
-проба: —
-причина: пункты «documented, not fixed» лежат в приватной памяти; заводить их без чисел и пробы значит выдать догадку за знание
+status: open
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/core/rpc_dart/lib/**]
+probe: —
+reason: the "documented, not fixed" items live in private memory; filing them with no number and no probe would pass a guess off as knowledge
 ---
 
-# B-09 — Не сведённые пункты «documented, not fixed» из памяти
+# B-09 — Unfiled "documented, not fixed" items from memory
 
-В приватном корпусе памяти остались отдельные пункты «documented, not fixed» по
-совместимости с gRPC — среди них компромисс любого фикса против slowloris (часы
-первого байта). Файлами они не заведены.
+The private memory corpus still holds separate "documented, not fixed" items
+about gRPC compatibility — among them the trade-off any fix makes against
+slowloris (first-byte clocks). None of them exist as files.
 
-**Заводить по мере того, как раунд их касается.** Выдумывать содержание по
-заголовку нельзя: у такой записи не будет ни числа, ни пробы, а значит, она будет
-выглядеть как знание, не будучи им.
+**File them as a round touches them.** Inventing the content from the title is
+not allowed: such a record would have neither a number nor a probe, and would
+therefore look like knowledge without being it.
 
-## Решение владельца
+## Owner decision
 
 —

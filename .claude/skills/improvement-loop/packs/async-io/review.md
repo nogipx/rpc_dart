@@ -1,12 +1,13 @@
-# async-io: вопросы рецензенту
+# async-io: questions for the reviewer
 
-Добавляются к промпту из `references/review.md` перед итогом; `loop.py review`
-собирает их сам.
+Appended to the prompt from `references/review.md` before the bottom line;
+`loop.py review` assembles them itself.
 
 ```
-A1. У атакующего и жертвы разные объекты политики и конфигурации? Назови оба.
-A2. Разрыв, который проверяется, сделан из задержки или из объёма? Если из
-    задержки — стенд её вносит, а не in-memory пара?
-A3. Отказ, который считается уликой, называет именно проверяемый контроль, а не
-    соседний лимит, сработавший первым?
+A1. Do the attacker and the victim have separate policy and configuration
+    objects? Name both.
+A2. Is the gap under test made of latency or of volume? If of latency, does the
+    bench introduce it rather than an in-memory pair?
+A3. Does the refusal being treated as evidence name the control under test, and
+    not a neighbouring limit that fired first?
 ```

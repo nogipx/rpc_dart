@@ -4,78 +4,78 @@
     {
       "id": 1,
       "name": "round-number-from-journal-not-commit",
-      "prompt": "Продолжи цикл улучшений в этом репозитории — прогони следующий раунд. В последнем коммите написано «Раунд 12», но в rounds/ лежат файлы 001–009.",
-      "expected_output": "Агент запускает loop.py status, называет номер 010 и заводит rounds/010-*.md. Ни 012, ни 013 не появляются.",
+      "prompt": "Continue the improvement loop in this repository — run the next round. The last commit says «Round 12», but rounds/ holds files 001-009.",
+      "expected_output": "The agent runs loop.py status, names 010 and creates rounds/010-*.md. Neither 012 nor 013 appears.",
       "files": []
     },
     {
       "id": 2,
       "name": "control-shows-same-symptom-is-not-fixed",
-      "prompt": "Найди течь памяти в транспорте и почини. (В фикстуре стенд построен так, что контроль с убранным механизмом показывает тот же рост RSS, что и испытуемый случай.)",
-      "expected_output": "Вердикт не FIXED и не CLEAN: агент замечает, что контроль повторяет симптом, чинит стенд или, исчерпав бюджет «пробы: N», ставит INCONCLUSIVE с зацепкой «стенд» и перечнем опробованного.",
+      "prompt": "Find the memory leak in the transport and fix it. (In the fixture the bench is built so that the control with the mechanism removed shows the same RSS growth as the case under test.)",
+      "expected_output": "The verdict is neither FIXED nor CLEAN: the agent notices the control repeats the symptom and either fixes the bench or, having exhausted the «probes: N» budget, records INCONCLUSIVE with a «bench» lead listing what was tried.",
       "files": []
     },
     {
       "id": 3,
       "name": "owner-decision-is-first-target",
-      "prompt": "Прогони раунд. (В backlog/ есть зацепка со статусом «ждёт владельца» и заполненным полем «Решение владельца:».)",
-      "expected_output": "Раунд берёт эту зацепку первой, исполняет решение, ставит статус «решена владельцем (раунд NNN)», вписывает раунд в применена: использованной линзы, lint зелёный.",
+      "prompt": "Run a round. (backlog/ holds a lead with status «awaiting owner» and a filled-in «## Owner decision» section.)",
+      "expected_output": "The round takes that lead first, carries out the decision, sets the status «decided by owner (round NNN)», writes the round into the used lens's applied:, and lint is green.",
       "files": []
     },
     {
       "id": 4,
       "name": "setup-from-scratch-passes-verification",
-      "prompt": "Разверни цикл улучшений в этом репозитории, где его ещё нет. unattended: yes, гейт — dart analyze и dart test.",
-      "expected_output": "После loop.py init заполнен config.md с блоком gate и бюджетом; в .claude/settings.json добавлены Bash(dart analyze:*), Bash(dart test:*) и правило на loop.py; набор линз выведен с путями и статусом «выведена»; loop.py lint даёт 0 ошибок; четыре пункта «Проверки развёртывания» из setup.md выполнимы.",
+      "prompt": "Lay the improvement loop out in this repository, which does not have one yet. unattended: yes, and the gate is dart analyze and dart test.",
+      "expected_output": "After loop.py init, config.md is filled in with a gate block and a budget; .claude/settings.json gains Bash(dart analyze:*), Bash(dart test:*) and a rule for loop.py; the lens set is derived with paths and status «derived»; loop.py lint reports 0 errors; the four items of «Checking the setup» from setup.md can all be carried out.",
       "files": []
     },
     {
       "id": 5,
       "name": "swept-lens-not-retaken-without-reason",
-      "prompt": "Прогони раунд. (Одна линза «исчерпана здесь (раунд 004, sha)», loop.py stale говорит, что по её путям изменений нет; другая линза «выведена» и ни разу не применена.)",
-      "expected_output": "Агент берёт линзу «выведена», а не перезапускает исчерпанный свип.",
+      "prompt": "Run a round. (One lens is «swept here (round 004, sha)» and loop.py stale says nothing changed along its paths; another lens is «derived» and never applied.)",
+      "expected_output": "The agent takes the «derived» lens rather than re-running the swept sweep.",
       "files": []
     },
     {
       "id": 6,
       "name": "reviewer-catches-shared-policy-object",
-      "prompt": "Прогони раунд. (В фикстуре проба показывает разрыв 180x под флудом, но стенд выдаёт обоим сторонам один объект политики; контроль не строился.)",
-      "expected_output": "Рецензия отвечает «нет» на пункты 1–2 и 4; агент возвращается к стенду, разделяет конфиги сторон, повторяет замер; вердикт не FIXED на первом числе. В записи раунда `Рецензия:` содержит k/8 < 8 и что перестроено; `Бюджет:` пробы 1/N или больше.",
+      "prompt": "Run a round. (In the fixture the probe shows a 180x gap under a flood, but the bench gives both sides one policy object and no control was built.)",
+      "expected_output": "The review answers «no» to items 1-2 and 4; the agent returns to the bench, splits the two sides' configs and repeats the measurement; the verdict is not FIXED on the first number. In the round record `review:` holds k/8 < 8 and what was rebuilt; `budget:` shows probes 1/N or more.",
       "files": []
     },
     {
       "id": 7,
       "name": "valid-stand-is-reused-not-rebuilt",
-      "prompt": "Прогони раунд. (В probes/ есть валидный стенд P-01 по путям lib/src/flow/**; loop.py next называет его для выбранной линзы.)",
-      "expected_output": "Раунд начинает с повтора контроля P-01, не строит новую пробу; в записи `Стенд: P-01 — переиспользован`; если контроль P-01 перестал отличаться от испытуемого случая — P-01 получает `сломан (раунд NNN)` и строится новый стенд.",
+      "prompt": "Run a round. (probes/ holds a valid bench P-01 along the paths lib/src/flow/**; loop.py next names it for the chosen lens.)",
+      "expected_output": "The round starts by repeating P-01's control and does not build a new probe; the record says `bench: P-01 — reused`; if P-01's control has stopped differing from the case under test, P-01 gets `broken (round NNN)` and a new bench is built.",
       "files": []
     },
     {
       "id": 8,
       "name": "stop-condition-cancels-scheduled-loop",
-      "prompt": "/improvement-loop (вызов из задания /loop; все линзы «исчерпана здесь», stale пуст, бэклог пуст.)",
-      "expected_output": "Агент читает «Остановка: ДА» из строки состояния, раунд не начинает, докладывает причину и снимает задание через CronList/CronDelete. Новый файл в rounds/ не появляется.",
+      "prompt": "/improvement-loop (invoked from a /loop job; every lens is «swept here», stale is empty, the backlog is empty.)",
+      "expected_output": "The agent reads «Stop: YES» from the status block, does not start a round, reports the reason and cancels the job through CronList/CronDelete. No new file appears in rounds/.",
       "files": []
     },
     {
       "id": 9,
       "name": "lesson-requires-price",
-      "prompt": "Прогони раунд. (Раунд дважды перестраивает пробу из-за литерала управляющего символа в фикстуре и в итоге даёт FIXED.)",
-      "expected_output": "Появляется lessons/L-NN с `Класс: фикстура`, `Цена:` с числом (2 перестройки), `Раунд:` этого раунда; наблюдение без цены уроком не записывается; lint зелёный.",
+      "prompt": "Run a round. (The round rebuilds the probe twice because of a literal control character in the fixture, and ends in FIXED.)",
+      "expected_output": "A lessons/L-NN appears with `class: fixture`, a `cost:` containing a number (2 rebuilds) and this round's `round:`; an observation with no price is not recorded as a lesson; lint is green.",
       "files": []
     },
     {
       "id": 10,
       "name": "packs-shape-catalog-and-review",
-      "prompt": "Разверни цикл в этом Flutter-приложении и выведи набор линз. (В репозитории экраны и навигация, сетевого слоя со своими лимитами нет.)",
-      "expected_output": "config.md: `пакеты: core, dart, flutter-ui`, без async-io; режим lenses инстанцирует только формы из `loop.py catalog` (core), а не U-07/U-16; `Ломается:` линз использует классы из flutter-ui или core; `loop.py review` печатает промпт без вопросов A1–A3.",
+      "prompt": "Lay the loop out in this Flutter app and derive the lens set. (The repository has screens and navigation, and no network layer with its own limits.)",
+      "expected_output": "config.md says `packs: core, dart, flutter-ui` with no async-io; lenses mode instantiates only the shapes from `loop.py catalog` (core), not U-07/U-16; the lenses' `breaks:` uses classes from flutter-ui or core; `loop.py review` prints the prompt without questions A1-A3.",
       "files": []
     },
     {
       "id": 11,
       "name": "script-detector-sweep-and-hash",
-      "prompt": "Прогони раунд. (Цель по next — линза с `Детектор: script: packs/dart/detectors/log_only_catch.py lib`.)",
-      "expected_output": "Свип делается через `loop.py sweep <ID>`, не грепом вручную; при CLEAN статус линзы содержит `свип <хеш>` из вывода sweep; после появления нового catch-блока `loop.py stale` называет линзу устаревшей по списку экземпляров.",
+      "prompt": "Run a round. (next's target is a lens with `detector-script: packs/dart/detectors/log_only_catch.py lib`.)",
+      "expected_output": "The sweep is done through `loop.py sweep <ID>` rather than by hand-grepping; on CLEAN the lens status contains `sweep <hash>` from the sweep output; once a new catch block appears, `loop.py stale` names the lens stale by its instance list.",
       "files": []
     }
   ]

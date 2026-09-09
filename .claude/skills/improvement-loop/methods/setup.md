@@ -1,61 +1,65 @@
-# Развернуть цикл в другом репозитории
+# Lay the loop out in another repository
 
-Скилл — это процесс и спецификация; всё, что привязано к репозиторию, живёт в
-`.claude/loop/`. Схемы файлов — в `../specs/`; здесь только то, что надо решить
-при развёртывании, и в каком порядке.
+The skill is the process and the specification; everything bound to a repository
+lives in `.claude/loop/`. The file schemas are in `../specs/`; here is only what
+has to be decided at setup, and in what order.
 
-## Порядок
+## Order
 
-1. **`python3 <скилл>/scripts/loop.py init`** из корня репозитория. Создаёт
-   `LOOP.md`, `config.md` с обязательными разделами и подсказками, шесть
-   директорий с пустыми оглавлениями. Если `.claude/loop/` уже есть —
-   отказывается: развёртывание поверх данных не делается. Рядом может лежать
-   `.claude/loop.md` — это файл переопределения промпта бандл-скилла `/loop`
-   Claude Code, к данным цикла он отношения не имеет; не создавать его случайно.
-2. **Заполнить `config.md`** по `../specs/config.md`. Всё, что там перечислено,
-   решает владелец или агент, прочитавший репозиторий; машиночитаемые места
-   (`unattended:`, `пакеты:`, блоки `gate` и `after-commit`, «Бюджет раунда»)
-   — в точном формате. Не дублировать `CLAUDE.md` репозитория: ссылаться.
-   **Пакеты** — по `Применим:` каждого `packs/*/PACK.md` против того, что
-   есть в репозитории: язык, две стороны и лимиты, экраны, реплики, сервис.
-   Подключать по свойствам кода, не по названию проекта.
-3. **Разрешения** (при `unattended: yes`). В `.claude/settings.json`, в
-   `permissions.allow`, по правилу на каждую команду тулчейна и гейта в форме
-   префикса — `Bash(dart test:*)`, `Bash(dart analyze:*)` — плюс правило на
-   скрипт с абсолютным путём: `Bash(python3 /.../improvement-loop/scripts/loop.py:*)`.
-   Если файла нет — создать; если есть — дописать в массив, ничего не удаляя.
-   `loop.py lint` скажет, какая команда гейта не покрыта. Скилл ожидает себя в
-   `.claude/skills/improvement-loop` или `~/.claude/skills/improvement-loop` —
-   так его находит строка состояния в SKILL.md; при другом пути поправить её.
-4. **История.** Если раунды уже были, но их записи не восстановимы, — сказать это
-   в `LOOP.md` («Чему верить с оглядкой») и начать нумерацию с `001`, а не
-   выдумывать прошлое. Ссылки на невосстановленные раунды остаются голыми
-   номерами с пометкой.
-5. **Первый посев бэклога и негативов** — из того, что уже известно про проект.
-   Каждая запись, не перепроверенная в этой сессии, получает `раунд: — (не
-   перепроверено)` и `коммит: <текущий HEAD>`: старение с этого момента считает
-   `stale`. Различать по признаку «есть ли работа»: в бэклоге есть, в негативах
-   нет.
-6. **Первый набор линз** — режим `lenses` по `lens-derivation.md`. Все записи
-   `выведена`, `применена: []`; в `LOOP.md` пометка, что набор не проверен ни
-   одним раундом.
-7. **`loop.py lint`** зелёный. Коммит с пометкой `setup` в теле, без файла
-   раунда.
-8. **Запуск по расписанию** (Claude Code): `/loop /improvement-loop` без
-   интервала — Claude сам выбирает паузу между раундами по тому, что увидел;
-   или `/loop 45m /improvement-loop` с интервалом длиннее типичного раунда. Раунд
-   при «Остановка: ДА» сам снимает задание. Альтернатива — `/goal`: работать до
-   тех пор, пока `loop.py status` не скажет «Остановка: ДА».
+1. **`python3 <skill>/scripts/loop.py init`** from the repository root. It
+   creates `LOOP.md`, a `config.md` with the mandatory sections and hints, and
+   six directories with empty indexes. If `.claude/loop/` already exists it
+   refuses: no laying out on top of data. A `.claude/loop.md` may sit next to
+   it — that is the prompt override for Claude Code's bundled `/loop` skill and
+   has nothing to do with the loop data; do not create it by accident.
+2. **Fill in `config.md`** per `../specs/config.md`. Everything listed there is
+   decided by the owner or by an agent that has read the repository; the
+   machine-read places (`unattended:`, `packs:`, the `gate` and `after-commit`
+   blocks, the round budget) use the exact format. Do not duplicate the
+   repository's `CLAUDE.md`: link to it. **Packs** — by the `applies:` of each
+   `packs/*/PACK.md` against what the repository actually has: the language, two
+   sides and limits, screens, replicas, a service. Enable them by properties of
+   the code, not by the project's name.
+3. **Permissions** (when `unattended: yes`). In `.claude/settings.json`, under
+   `permissions.allow`, one prefix rule per toolchain and gate command —
+   `Bash(dart test:*)`, `Bash(dart analyze:*)` — plus a rule for the script with
+   an absolute path:
+   `Bash(python3 /.../improvement-loop/scripts/loop.py:*)`. If the file does not
+   exist, create it; if it does, append to the array without deleting anything.
+   `loop.py lint` will say which gate command is not covered. The skill expects
+   itself at `.claude/skills/improvement-loop` or
+   `~/.claude/skills/improvement-loop` — that is how the status block in
+   SKILL.md finds it; fix that line for another path.
+4. **History.** If there were earlier rounds whose records cannot be recovered,
+   say so in `LOOP.md` ("What to trust with care") and start numbering at `001`
+   rather than inventing a past. References to unrecovered rounds stay as bare
+   numbers with the marker.
+5. **The first seeding of the backlog and the negatives** — from what is already
+   known about the project. Every record not re-measured in this session gets
+   `round: — (not re-measured)` and `commit: <current HEAD>`: from that moment
+   `stale` computes the ageing. Tell them apart by "is there work to do": in the
+   backlog there is, in the negatives there is not.
+6. **The first lens set** — `lenses` mode per `lens-derivation.md`. Every record
+   `derived`, `applied: []`; a note in `LOOP.md` that no round has checked the
+   set.
+7. **`loop.py lint`** green. A commit marked `setup` in the body, with no round
+   file.
+8. **Scheduled runs** (Claude Code): `/loop /improvement-loop` with no interval —
+   Claude picks the pause between rounds from what it saw; or
+   `/loop 45m /improvement-loop` with an interval longer than a typical round. A
+   round cancels the job itself on "Stop: YES". The alternative is `/goal`: keep
+   working until `loop.py status` says "Stop: YES".
 
-## Проверка развёртывания
+## Checking the setup
 
-Развёртывание удалось, когда с нуля выполнимо:
+The setup succeeded when, from a standing start, you can:
 
-1. `loop.py status` называет номер следующего раунда — `001`;
-2. назвать команду гейта, не заглядывая в историю: она в блоке `gate`;
-3. назвать линзу, которую взял бы следующий раунд, вместе с её детектором и
-   путями — конкретно, до символов;
-4. назвать хотя бы один отрицательный результат, который не надо перезапускать.
+1. have `loop.py status` name the next round's number — `001`;
+2. name the gate command without looking into history: it is in the `gate`
+   block;
+3. name the lens the next round would take, with its detector and paths —
+   concretely, down to the symbols;
+4. name at least one negative result that must not be re-run.
 
-Если четвёртый пункт пуст, цикл ещё не начинался — это нормально, но так и надо
-написать в `LOOP.md`. Если пуст третий, развёртывание не закончено.
+If the fourth is empty, the loop has not started — that is fine, but write it in
+`LOOP.md`. If the third is empty, the setup is not finished.

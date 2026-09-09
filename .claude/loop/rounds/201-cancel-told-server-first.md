@@ -1,82 +1,79 @@
 ---
-раунд: 201
-вердикт: FIXED
-пакеты: [rpc_dart]
-линза: RPC-15
-стенд: без стенда
-бюджет: пробы 0/3, канарейки 0/3
-рецензия: сам (запись мигрирована в схему; рецензии в раунде не было)
-коммит: да
+round: 201
+verdict: FIXED
+packages: [rpc_dart]
+lens: RPC-15
+bench: none
+budget: probes 0/3, canaries 0/3
+review: self (record migrated into the schema; the round itself had no review)
+commit: yes
 ---
 
-# Раунд 201 — отменённый вызов сообщал серверу раньше, чем себе
+# Round 201 — a cancelled call told the server before telling itself
 
-## Цель
+## Target
 
-RPC-15 — перемерить собственную запись цикла. Запись про расщепление типов ошибок на
-закрытом транспорте утверждала, что вопрос рассосался; перезапуск
-добавил строку, которой в таблице никогда не было, — wasm, — и эта
-строка и оказалась дефектом. Три отсрочки перемерены за прогон, все
-три записаны неверно.
+RPC-15 — re-measure the loop's own record. The record about the error-type split
+on a closed transport claimed the question had dissolved; re-running it added a
+row the table had never had — wasm — and that row turned out to be the defect.
+Three deferrals re-measured in one run, all three recorded wrongly.
 
-## Гипотеза
+## Hypothesis
 
-Закрытие вызывающего во время серверного потока даёт одинаковый
-наблюдаемый результат на всех транспортах.
+Closing the caller during a server stream gives the same observable result on
+every transport.
 
-## До
+## Before
 
 ```
-что видит потребитель при закрытии вызывающего:
+what the consumer sees when the caller is closed:
 
   websocket, isolate -> RpcCancelledException: Endpoint closed
-  wasm               -> items=11 events=[DONE]   <- чистое завершение
+  wasm               -> items=11 events=[DONE]   <- a clean end
 ```
 
-## Механизм
+## Mechanism
 
-`_setupCancellationMonitoring` делал
-`await _sendCancellationToServer(reason);` — сетевой round trip — и
-только потом `addError` на локальных контроллерах. Отправка, которая
-никогда не завершается, уносит с собой локальную ошибку; `try` вокруг
-неё ловит БРОСОК, а не ЗАВИСАНИЕ. Поток, закончившийся чисто,
-неотличим от завершившегося, поэтому потребитель обрабатывал
-обрезанный поток и шёл дальше — тихая потеря данных. Достижимо только
-на wasm: только там отправка моста ждёт ответа платформенного канала,
-а `close()` разбирает транспорт прямо под этим await.
+`_setupCancellationMonitoring` did `await _sendCancellationToServer(reason);` — a
+network round trip — and only then `addError` on the local controllers. A send
+that never completes carries the local error away with it; the `try` around it
+catches a THROW, not a HANG. A stream that ended cleanly is indistinguishable
+from one that finished, so the consumer processed a truncated stream and moved
+on — silent data loss. Reachable only on wasm: only there does the bridge's send
+wait for the platform channel's reply, and `close()` tears the transport down
+right under that await.
 
-## После
+## After
 
 ```
   wasm -> items=11 events=[ERROR RpcCancelledException, DONE]
 ```
 
-## Канарейка
+## Canary
 
-Сработала со второго раза, и это важно. ПЕРВАЯ канарейка была
-неверной: подъём `_isActive = false` выше отправки заставлял
-`_sendCancellationToServer` выходить сразу, await завершался, и
-свидетель ПРОХОДИЛ. Честная канарейка — отправка первой, пока ещё
-активны — роняет его с `ended as [DONE]` и оставляет остальные семь
-зелёными.
-Свидетель ОПРАШИВАЕТ наблюдение, а не спит: ровные 4 с дважды ложно
-падали при load average 16 и проходили в одиночку — ждут того, что
-ПОТРЕБИТЕЛЬ заметит отмену, а нагрузка задерживает наблюдение, не
-производство.
+It worked on the second attempt, and that matters. The FIRST canary was wrong:
+hoisting `_isActive = false` above the send made `_sendCancellationToServer`
+return at once, the await completed, and the witness PASSED. The honest canary —
+send first, while still active — fails it with `ended as [DONE]` and leaves the
+other seven green.
 
-## Гейт
+The witness POLLS the observation rather than sleeping: a flat 4 s failed twice
+under load average 16 and passed on its own — it waits for something the
+CONSUMER notices, and load delays the observation, not the production.
 
-Reuse lint, melos analyze, format:check, test:unit --no-select,
-test:wasm, analyze:native (обе половины) — PASS; наборы ядра и
-транспорта на dart2js (407); устройства: iPhone 16 / iOS 18.6 (17/17)
-и emulator-5554 / Android 11 (15/17, 2 пропуска по платформе).
+## Gate
 
-## Не чинил
+reuse lint, melos analyze, format:check, test:unit --no-select, test:wasm,
+analyze:native (both halves) — PASS; the core and transport suites on dart2js
+(407); devices: iPhone 16 / iOS 18.6 (17/17) and emulator-5554 / Android 11
+(15/17, 2 platform skips).
 
-Ничего
+## Not fixed
 
-## Связи
+Nothing
 
-Линза `../lenses/RPC-09-deadline-below-write.md` — та же форма
-(«await write, потом отчёт локально») в другом месте;
-закрыл зацепку `../backlog/B-08-decision-closed-transport-error-split.md`.
+## Links
+
+Lens `../lenses/RPC-09-deadline-below-write.md` — the same shape ("await the
+write, then report locally") somewhere else; closed the lead
+`../backlog/B-08-decision-closed-transport-error-split.md`.

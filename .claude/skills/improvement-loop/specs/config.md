@@ -1,32 +1,32 @@
-# Схема: настройки проекта
+# Schema: the project settings
 
-Путь: `.claude/loop/config.md`. Единственный файл цикла, который пишется руками и
-редко. Машиночитаемые места — `unattended:`, `пакеты:`, `классы ущерба:`,
-`язык коммитов:`, блоки ```gate и ```after-commit, три строки бюджета — с
-точным форматом; остальное — проза для агента.
+Path: `.claude/loop/config.md`. The only loop file written by hand, and rarely.
+The machine-read places — `unattended:`, `packs:`, `damage classes:`,
+`commit language:`, the ```gate and ```after-commit blocks, and the three budget
+lines — use an exact format; the rest is prose for the agent.
 
-Обязательные разделы, в этом порядке:
+The mandatory sections, in this order:
 
-- **Режим** — строка `unattended: yes` или `unattended: no`. От неё зависит,
-  действует ли правило ноль целиком. При `no` интерактивность разрешена, но
-  требование читать и править файлы инструментами Read/Edit/Write остаётся.
-- **Пакеты** — строка `пакеты: core, async-io, dart` — какие пакеты знаний
-  подключены (`packs/` скилла или `.claude/loop/packs/`); `core` всегда.
-  Необязательная строка `классы ущерба:` добавляет проектные классы к классам
-  пакетов; `lint` проверяет `Ломается:` линз против объединения.
-- **Язык** — строка `язык коммитов: <язык>`. Необязательная; без неё язык
-  **английский**. Управляет заголовком и телом коммита раунда и больше ничем:
-  данные цикла остаются на своём языке. Если они на другом языке, тело коммита
-  пересказывает те же секции на языке коммитов, а не копирует их.
-  `loop.py next` печатает значение, чтобы раунд не узнавал о нём в последний
-  момент.
-- **Тулчейн** — чем запускать сборку и тесты, включая обёртки для закреплённой
-  версии SDK. Плюс известные ловушки запуска: команды, открывающие интерактивный
-  выбор, и их безопасные формы.
-- **Гейт** — точная последовательность до коммита, включая зависимые пакеты и
-  цели, отличные от основной. Гейт — последовательность, а не набор: порядок и
-  полнота важнее удобства. Команды — в блоке с языком `gate`, по одной на
-  строку, ровно в том виде, в каком их запускают:
+- **Mode** — the line `unattended: yes` or `unattended: no`. It decides whether
+  rule zero applies in full. With `no`, interactivity is allowed, but the
+  requirement to read and edit files with Read/Edit/Write stands.
+- **Packs** — the line `packs: core, async-io, dart` — which knowledge packs are
+  enabled (the skill's `packs/` or `.claude/loop/packs/`); `core` always is. The
+  optional `damage classes:` line adds project classes to the packs'; `lint`
+  checks the lenses' `breaks:` against the union.
+- **Language** — the line `commit language: <language>`. Optional; without it
+  the language is **English**. It governs the round commit's subject and body
+  and nothing else: the loop data stays in its own language. If that differs,
+  the commit body restates the same sections in the commit language rather than
+  copying them. `loop.py next` prints the value so a round does not learn it at
+  the last moment.
+- **Toolchain** — what runs the build and the tests, including wrappers for the
+  pinned SDK version. Plus the known launch traps: commands that open an
+  interactive picker, and their safe forms.
+- **Gate** — the exact sequence before a commit, including dependent packages
+  and targets other than the main one. The gate is a sequence, not a set: order
+  and completeness matter more than convenience. The commands go in a block
+  tagged `gate`, one per line, exactly as they are run:
 
   ````
   ```gate
@@ -35,33 +35,34 @@
   ```
   ````
 
-  Этот блок читают `lint` (покрытие правилами `permissions.allow` при
-  `unattended: yes`) и агент на шаге 6.
-- **Пробы** — куда класть и почему туда: разрешение импортов, исключение из
-  анализа, игнор в git.
-- **После коммита** — блок ```after-commit: команды unattended-запуска после
-  успешного коммита раунда (push, уведомление). Покрываются `permissions.allow`
-  так же, как гейт; пустой блок — ничего.
-- **Бюджет раунда** — три строки: `пробы: N` (сколько раз можно перестроить
-  стенд, прежде чем вердикт INCONCLUSIVE), `канарейки: N` (сколько попыток
-  получить падающего свидетеля), `потолок раундов: N`. Числители ведёт раунд в
-  поле `бюджет:`, `lint` сверяет знаменатели с этими строками и не даёт
-  превышению уйти под вердиктом FIXED или CLEAN.
-- **Цели, которые никто не гоняет** — другой компилятор, нативный слой,
-  устройства, генераторы, линтеры лицензий. У каждой команда и что она находит
-  сверх основного гейта.
-- **Планка серьёзности** — какие классы ущерба достойны раунда сейчас.
-- **Вне области** — явно: что не является целью цикла.
-- **Постоянные требования владельца** — то, что действует в каждом раунде и не
-  относится к конкретной находке. Решения по конкретным находкам живут в
-  `backlog/`, в поле `## Решение владельца`.
-- **Известные флейки** — поимённо, чтобы падение не списывали на «наверное,
-  флейк».
+  This block is read by `lint` (coverage by `permissions.allow` rules when
+  `unattended: yes`) and by the agent at step 6.
+- **Probes** — where they go and why: import resolution, exclusion from
+  analysis, gitignore.
+- **After the commit** — the ```after-commit block: commands for an unattended
+  run after a successful round commit (push, notification). Covered by
+  `permissions.allow` like the gate; an empty block means nothing.
+- **Round budget** — three lines: `probes: N` (how many times the bench may be
+  rebuilt before the verdict is INCONCLUSIVE), `canaries: N` (how many attempts
+  at a failing witness), `round cap: N`. The round keeps the numerators in its
+  `budget:` key; `lint` reconciles the denominators with these lines and does
+  not let an overrun pass under a FIXED or CLEAN verdict.
+- **Targets nobody runs** — another compiler, the native layer, devices,
+  generators, licence linters. Each with its command and what it finds beyond
+  the main gate.
+- **Severity bar** — which damage classes are worth a round right now.
+- **Out of scope** — explicitly: what the loop is not for.
+- **Standing owner requirements** — what holds in every round and is not about
+  any single finding. Decisions on individual findings live in `backlog/`, in
+  the `## Owner decision` section.
+- **Known flakes** — by name, so a failure is not written off as "probably a
+  flake".
 
-**Не дублировать `CLAUDE.md` репозитория**: структуру пакетов, соглашения о
-коммитах, стиль. Ссылаться, а не копировать — протухшая проза это дефект.
+**Do not duplicate the repository's `CLAUDE.md`**: package layout, commit
+conventions, style. Link to it rather than copying — stale prose is a defect.
 
-**Разрешения живут не здесь**, а в `.claude/settings.json` (`permissions.allow`):
-правила вида `Bash(dart test:*)` на каждую команду тулчейна и гейта плюс
-`Bash(python3 <абсолютный путь к скиллу>/scripts/loop.py:*)`. Режим `setup`
-их вписывает, `lint` проверяет, что гейт покрыт.
+**Permissions do not live here** but in `.claude/settings.json`
+(`permissions.allow`): rules like `Bash(dart test:*)` for every toolchain and
+gate command, plus
+`Bash(python3 <absolute path to the skill>/scripts/loop.py:*)`. `setup` mode
+writes them and `lint` checks the gate is covered.

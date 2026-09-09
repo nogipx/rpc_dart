@@ -1,15 +1,15 @@
-# Бэклог цикла
+# Loop backlog
 
-Что такое зацепка и как она связана с остальным — [../LOOP.md](../LOOP.md).
-Порядок строк ниже — это ранг.
+What a lead is and how it links to the rest — [../LOOP.md](../LOOP.md). The line
+order below is the rank.
 
-- **[B-01](B-01-response-metadata-dropped.md)** ждёт владельца, форма API (раунд 141) — метаданные ответа отбрасываются целиком
-- **[B-02](B-02-wasm-android-promise-rejection.md)** ждёт владельца — wasm: необработанное отклонение промиса теряется на Android
-- **[B-03](B-03-wasm-no-package-swift.md)** открыта, не срочно (раунд 182) — wasm: нет `Package.swift`, и при SPM плагина не будет вовсе
-- **[B-04](B-04-isolate-future-timeout-unaudited.md)** открыта (раунд 67) — isolate: непроверенные места `Future.timeout`, цена — протёкший изолят
-- **[B-05](B-05-isolate-null-credit-silent.md)** открыта — isolate: нулевой кредит неотличим от старого пира, сбой молчаливый
-- **[B-06](B-06-websocket-lead-list-is-stale.md)** открыта, методическая — websocket: старый список зацепок протух, пакет надо пересканировать
-- **[B-07](B-07-decision-close-on-protocol-error.md)** решена владельцем (раунд 190) — `closeOnProtocolError` по умолчанию `false` плюс крышка на количество нарушений
-- **[B-08](B-08-decision-closed-transport-error-split.md)** закрыта (раунд 201) — расщепление типов ошибок на закрытом транспорте
-- **[B-09](B-09-unfiled-grpc-compat-items.md)** открыта — не сведённые пункты «documented, not fixed» из приватной памяти
-- **[B-10](B-10-layers-without-lenses.md)** открыта — data, notify и blob не покрыты ни одной линзой: 234 файла
+- **[B-01](B-01-response-metadata-dropped.md)** awaiting owner, an API shape (round 141) — response metadata is dropped wholesale
+- **[B-02](B-02-wasm-android-promise-rejection.md)** awaiting owner — wasm: an unhandled promise rejection is lost on Android
+- **[B-03](B-03-wasm-no-package-swift.md)** open, not urgent (round 182) — wasm: no `Package.swift`, and under SPM there is no plugin at all
+- **[B-04](B-04-isolate-future-timeout-unaudited.md)** open (round 67) — isolate: unaudited `Future.timeout` sites, the price is a leaked isolate
+- **[B-05](B-05-isolate-null-credit-silent.md)** open — isolate: zero credit is indistinguishable from an old peer, the failure is silent
+- **[B-06](B-06-websocket-lead-list-is-stale.md)** open, methodological — websocket: the old lead list went stale, the package needs rescanning
+- **[B-07](B-07-decision-close-on-protocol-error.md)** decided by owner (round 190) — `closeOnProtocolError` defaults to `false`, plus a cap on the violation count
+- **[B-08](B-08-decision-closed-transport-error-split.md)** closed (round 201) — the error-type split on a closed transport
+- **[B-09](B-09-unfiled-grpc-compat-items.md)** open — unfiled "documented, not fixed" items from private memory
+- **[B-10](B-10-layers-without-lenses.md)** open — data, notify and blob have no lens at all: 234 files

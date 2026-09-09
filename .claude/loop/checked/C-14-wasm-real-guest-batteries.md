@@ -1,19 +1,20 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
-область: [wasm, настоящий гость на устройстве]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
+scope: [wasm, a real guest on a device]
 ---
 
-# C-14 — wasm: три батареи против настоящего гостя
+# C-14 — wasm: three batteries against a real guest
 
-Настоящий гость dart2wasm на устройстве: unary, серверный поток на 25 элементов и
-ответ на 4 MiB, пересобранный через слой кадрирования. Гость — `isClient: false`,
-поэтому хост обязан быть `isClient: true`.
+A real dart2wasm guest on a device: unary, a 25-item server stream, and a 4 MiB
+response reassembled through the framing layer. The guest is `isClient: false`,
+so the host must be `isClient: true`.
 
-Собранный `.wasm` намеренно НЕ коммитится: он протухает в момент изменения ядра и
-строится целью `test:wasm:device`.
+The built `.wasm` is deliberately NOT committed: it goes stale the moment core
+changes, and the `test:wasm:device` target builds it.
 
-## Контроль
+## Control
 
-Гость, отвечающий мусором: батарея краснеет, значит она смотрит на содержимое ответа
+A guest that replies with garbage: the battery goes red, so it does look at the
+content of the reply.

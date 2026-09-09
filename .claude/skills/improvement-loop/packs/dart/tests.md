@@ -1,17 +1,16 @@
-# dart: тесты
+# dart: tests
 
-Идиомы Dart к чек-листу `methods/tests.md`.
+Dart idioms for the `methods/tests.md` checklist.
 
-D1. Управляющий символ строить кодом: `String.fromCharCode(1)`, не литерал и не
-    escape.
-D2. Целочисленные литералы больше 2^53 под dart2js строить через разбор строки:
-    иначе целевой компилятор молча выкинет весь файл из набора.
+D1. Build a control character in code: `String.fromCharCode(1)`, not a literal
+    and not an escape.
+D2. Build integer literals above 2^53 for dart2js by parsing a string:
+    otherwise the target compiler silently drops the whole file from the suite.
 
-Ниже — за что заплачен каждый пункт.
+Below is what paid for each item.
 
-## Литералы, которые выкидывают файл
+## Literals that throw a file away
 
-- Литерал, который целевой компилятор не принимает, молча выкидывает ВЕСЬ ФАЙЛ
-  из набора для этой цели — не одну проверку (в Dart: целочисленные литералы
-  больше 2^53 под dart2js, поэтому их строят через разбор строки).
-
+- A literal the target compiler will not accept silently drops THE WHOLE FILE
+  from that target's suite — not just one check (in Dart: integer literals above
+  2^53 under dart2js, which is why they are built by parsing a string).

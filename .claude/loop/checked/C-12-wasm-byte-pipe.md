@@ -1,12 +1,13 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
-область: [wasm, обе платформы]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
+scope: [wasm, both platforms]
 ---
 
-# C-12 — wasm: байтовый канал
+# C-12 — wasm: the byte pipe
 
-## Контроль
+## Control
 
-Передача заведомо битых байт: отвергается, значит канал различает содержимое
+Sending deliberately malformed bytes: they are rejected, so the pipe does
+distinguish content.

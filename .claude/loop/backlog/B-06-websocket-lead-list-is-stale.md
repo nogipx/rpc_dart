@@ -1,28 +1,28 @@
 ---
-статус: открыта
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_websocket/lib/**]
-проба: —
-причина: "методическая: список зацепок в приватной памяти протух, работать надо пересканированием пакета"
+status: open
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_websocket/lib/**]
+probe: —
+reason: "methodological: the lead list in private memory went stale; the work is to rescan the package"
 ---
 
-# B-06 — websocket: старый список зацепок протух, пересканировать пакет
+# B-06 — websocket: the old lead list went stale, rescan the package
 
-Список открытых зацепок по websocket в корпусе памяти протух целиком: оба
-оставшихся пункта закрыты внутри того же файла.
+The list of open websocket leads in the memory corpus has gone stale in full:
+both remaining items are closed inside that same file.
 
-- Фрагментация больших сообщений — измерена чистой в раунде 64: 1 KiB → 16 MiB,
-  содержимое проверено ДАЙДЖЕСТОМ, а не длиной (баг переупорядочивания проходит
-  проверку длины); 16 MiB за 146 мс.
-- Серверный keepalive — выпущен в раунде 63:
-  `rpcWebSocketConnections(HttpServer, {pingInterval})` в
+- Fragmentation of large messages — measured clean in round 64: 1 KiB → 16 MiB,
+  the content checked by DIGEST rather than by length (a reordering bug passes a
+  length check); 16 MiB in 146 ms.
+- Server-side keepalive — shipped in round 63:
+  `rpcWebSocketConnections(HttpServer, {pingInterval})` in
   `package:rpc_dart_websocket/io.dart`.
 
-**По этому пакету работать не от списка, а пересканируя его.** Так был найден
-дефект с осиротевшим сокетом на каждую повторную попытку `reconnect()`: одна
-попытка — 0 живых, две — 1, три — 2.
+**On this package, work by rescanning it rather than from a list.** That is how
+the orphaned-socket defect on every `reconnect()` retry was found: one retry — 0
+alive, two — 1, three — 2.
 
-## Решение владельца
+## Owner decision
 
 —

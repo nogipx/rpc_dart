@@ -1,29 +1,28 @@
 ---
-уточняет: U-03
-пути: [packages/transport/rpc_dart_wasm/lib/**, packages/core/rpc_dart_generator/lib/**]
-применима: в репозитории есть пакеты вне pub workspace
-ломается: "неверный результат: гейт зелёный при сломанном пакете, потому что проверена опубликованная версия ядра, а не та, что вот-вот уедет."
-применена: []
-статус: подтверждена (раунд 186, вне журнала)
+refines: U-03
+paths: [packages/transport/rpc_dart_wasm/lib/**, packages/core/rpc_dart_generator/lib/**]
+applies: the repository has packages outside the pub workspace
+breaks: "wrong result: a green gate with the package broken, because what was checked is the published core rather than the one about to ship."
+applied: []
+status: confirmed (round 186, off-journal)
 ---
 
-# RPC-11 — Пакет вне workspace
+# RPC-11 — A package outside the workspace
 
-## Форма
+## Shape
 
-`rpc_dart_wasm` и `rpc_dart_generator` не участвуют в общем прогоне,
-поэтому обычный гейт их не видит.
+`rpc_dart_wasm` and `rpc_dart_generator` take no part in the common run, so the
+ordinary gate never sees them.
 
-## Детектор
+## Detector
 
-Список участников workspace против списка каталогов в `packages/`.
+The workspace member list against the list of directories under `packages/`.
 
-## Спрашивать
+## Ask
 
-Этот пакет резолвит ядро из локального исходника или из
-опубликованного?
+Does this package resolve core from local source or from the published version?
 
-## Улика
+## Evidence
 
-Без `pubspec_overrides.yaml` wasm-цель молча тестирует ОПУБЛИКОВАННОЕ
-ядро.
+Without `pubspec_overrides.yaml` the wasm target silently tests the PUBLISHED
+core.

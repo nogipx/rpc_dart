@@ -1,29 +1,26 @@
 ---
-пакет: core
-применима: есть наблюдаемые счётчики ресурсов.
-ломается: неограниченный рост.
-статус: подтверждена
+pack: core
+applies: there are observable resource counters.
+breaks: unbounded growth.
+status: confirmed
 ---
 
-# U-20 — Учёт течей к базовой линии
+# U-20 — Leak accounting against a baseline
 
-**Ждёшь падения до нуля — сначала дождись роста.**
+**If you are waiting for a drop to zero, first wait for the rise.**
 
-## Форма
+## Shape
 
-Метрика, которая обязана вернуться к нулю после N итераций, и не
-возвращается.
+A metric that must return to zero after N iterations, and does not.
 
-## Детектор
+## Detector
 
-Перечислить счётчики живых объектов; прогнать N циклов и сравнить с
-началом.
+Enumerate the live-object counters; run N cycles and compare against the start.
 
-## Спрашивать
+## Ask
 
-Вернулось ли ВСЁ, или только то, за чем мы следили?
+Did EVERYTHING come back, or only what we were watching?
 
-## Улика
+## Evidence
 
-Опрос сразу на ноль мгновенно «успешен» на счётчике, который никогда
-не поднимался.
+Polling straight for zero succeeds instantly on a counter that never rose.

@@ -1,31 +1,29 @@
 ---
-уточняет: U-07
-пути: [packages/core/rpc_dart/lib/**]
-применима: есть учёт кредита, освобождаемый по доставке сообщения
-ломается: заклинившее соединение — зависание.
-применена: []
-статус: подтверждена (раунд 162, вне журнала)
+refines: U-07
+paths: [packages/core/rpc_dart/lib/**]
+applies: there is credit accounting released on message delivery
+breaks: a wedged connection — a hang.
+applied: []
+status: confirmed (round 162, off-journal)
 ---
 
-# RPC-01 — Кредит flow control на пути пропуска
+# RPC-01 — Flow-control credit on the skip path
 
-## Форма
+## Shape
 
-Кадр отвергается или пропускается, не становясь сообщением, а
-возврат кредита висит на событии «сообщение доставлено».
+A frame is refused or skipped without becoming a message, while the credit
+return hangs on the "message delivered" event.
 
-## Детектор
+## Detector
 
-`_fcOnConsumed` и все его вызывающие; каждое место, где кадр
-отбрасывается до превращения в сообщение; `sendMessage` как
-единственный потребитель кредита.
+`_fcOnConsumed` and every one of its callers; every place a frame is dropped
+before it becomes a message; `sendMessage` as the sole consumer of credit.
 
-## Спрашивать
+## Ask
 
-Вернётся ли кредит, который отправитель себе уже списал?
+Will the credit the sender has already charged itself ever come back?
 
-## Улика
+## Evidence
 
-Окно 8 MiB / 2 MiB на отказ: заклинило ровно на четвёртом отказе.
-Кадры метаданных при этом вне flow control — проверено, а не
-предположено.
+An 8 MiB window with 2 MiB per refusal: it wedged on exactly the fourth refusal.
+Metadata frames are outside flow control — checked, not assumed.

@@ -1,15 +1,16 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**]
-область: [websocket, http2, isolate]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**]
+scope: [websocket, http2, isolate]
 ---
 
-# C-01 — Обычная длительная нагрузка ничего не удерживает
+# C-01 — Ordinary sustained load retains nothing
 
-Скучный случай, который крутится в каждом развёртывании весь день. Все три
-транспорта дают текучку и ничего не удерживают.
+The boring case every deployment runs all day. All three transports churn and
+retain nothing.
 
-## Контроль
+## Control
 
-Прогон без нагрузки на тех же счётчиках: рост тот же, значит считаем churn, а не удержание
+A run with no load on the same counters: the same growth, so what is being
+counted is churn rather than retention.

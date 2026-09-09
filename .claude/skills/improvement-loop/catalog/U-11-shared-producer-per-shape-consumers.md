@@ -1,29 +1,29 @@
 ---
-пакет: async-io
-применима: один общий слой обслуживает несколько форм вызова или типов клиента.
-ломается: молчание вместо ошибки.
-статус: подтверждена
+pack: async-io
+applies: one shared layer serves several call shapes or client types.
+breaks: silence instead of an error.
+status: confirmed
 ---
 
-# U-11 — Общий производитель, потребители по формам
+# U-11 — A shared producer with per-shape consumers
 
-**Общий производитель плюс потребители по формам — это матрица, а не один фикс.**
+**A shared producer plus per-shape consumers is a matrix, not one fix.**
 
-## Форма
+## Shape
 
-Сигнал добавлен в общий код, а доставляют его отдельные реализации
-для каждой формы вызова.
+The signal is added in shared code, while separate per-shape implementations
+deliver it.
 
-## Детектор
+## Detector
 
-От места, где сигнал рождается, пройти ВСЕ пути доставки; составить
-список «форма -> время до наблюдения».
+From where the signal is born, walk EVERY delivery path; build a list of
+«shape -> time to observation».
 
-## Спрашивать
+## Ask
 
-Какая форма не имеет, куда его положить?
+Which shape has nowhere to put it?
 
-## Улика
+## Evidence
 
-38 мс, 11 мс, 6 мс и МОЛЧАНИЕ 6 с у четвёртой формы, чья подписка
-логировала и выходила.
+38 ms, 11 ms, 6 ms — and SILENCE for 6 s from the fourth shape, whose
+subscription logged and returned.

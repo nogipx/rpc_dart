@@ -1,85 +1,85 @@
-# Как писать регрессионный тест, который не соврёт
+# How to write a regression test that will not lie
 
-## Чек-лист — пока пишется тест
+## Checklist — while the test is being written
 
-1. «Неограниченно» проверять опросом до порога, а не подсчётом после
-   фиксированного сна. Сон безопасен, только если ожидаемое делает твой процесс.
-2. Ждёшь нуля — сначала дождись роста.
-3. Два независимых прогона не сравнивать как отношение; оба против одной
-   абсолютной границы.
-4. Управляющий или невидимый байт в фикстуре строить кодом, не литералом
-   (идиома — в пакете языка).
-5. К каждому «этот вход отвергается» — парный «валидный вход не отвергается».
-6. Состояние теста — объект, захватываемый обработчиком, не глобальный счётчик.
-7. Не воспроизвёл сообщённое падение — сказать это и назвать путь для
-    инструментирования; укрепление измеренных дефектов не называть фиксом флейка.
-8. Обрезанный grep не доказывает отсутствия; «каждое место» значит каждый слой.
+1. Check "unbounded" by polling up to a threshold, not by counting after a fixed
+   sleep. A sleep is safe only when YOUR process does the thing you await.
+2. If you are waiting for zero, first wait for the rise.
+3. Never compare two independently measured runs as a ratio; check both against
+   one absolute bound.
+4. Build a control or invisible byte in a fixture in code, not as a literal (the
+   idiom is in the language pack).
+5. For every "this input is rejected", a paired "a valid input is not rejected".
+6. Test state is an object the handler captures, not a global counter.
+7. If you did not reproduce the reported failure, say so and name the path worth
+   instrumenting; hardening measured defects is not a flake fix.
+8. A truncated grep does not prove absence; "every place" means every layer.
 
-Пункты подключённых пакетов `loop.py next` добавляет к этому списку. Ниже — за
-что заплачен каждый пункт.
+`loop.py next` adds the enabled packs' items to this list. Below is what paid
+for each item.
 
-## Ожидания и время
+## Expectations and time
 
-- **«Неограниченно» проверять ОПРОСОМ до порога, а не подсчётом после
-  фиксированного сна** — иначе меряется скорость процессора.
-- Ограниченность допускала фиксированный сон (конкуренция только снижает
-  производство, ложного прохода не даст). **ПОПРАВКА: это послабление не
-  действует, когда ждёшь, что ПИР что-то ЗАМЕТИТ.** Тест спал ровно 4 с, пока
-  сигнал разрыва идёт клиент -> прокси -> сервер и срабатывает колбэк закрытия,
-  затем проверял «0 открытых соединений». Нагрузка задерживает НАБЛЮДЕНИЕ, а не
-  производство, поэтому тест ложно падал под полным прогоном набора, проходя 4/4
-  отдельно. Опрашивать до дедлайна: свидетель остаётся ровно таким же острым,
-  потому что по-настоящему осиротевшее соединение не закрывается никогда и
-  выбирает весь бюджет.
+- **Check "unbounded" by POLLING up to a threshold, not by counting after a
+  fixed sleep** — otherwise you are measuring the CPU.
+- Boundedness did allow a fixed sleep (contention only lowers production, so it
+  cannot pass falsely). **CORRECTION: that concession does not hold when you are
+  waiting for the PEER to NOTICE something.** A test slept a flat 4 s while the
+  disconnect signal travels client -> proxy -> server and fires a close
+  callback, then asserted "0 open connections". Load delays the OBSERVATION, not
+  the production, so the test failed falsely under a full suite run while
+  passing 4/4 on its own. Poll up to a deadline: the witness stays exactly as
+  sharp, because a genuinely orphaned connection never closes and consumes the
+  whole budget.
 
-  > **Фиксированный сон безопасен, только если ожидаемое делает ТВОЙ процесс.**
+  > **A fixed sleep is safe only when YOUR process does the thing you await.**
 
-- Ждёшь нуля — сначала дождись роста.
-- Никогда не сравнивать два независимо замеренных прогона как отношение;
-  проверять оба против одной абсолютной границы.
+- If you are waiting for zero, first wait for the rise.
+- Never compare two independently measured runs as a ratio; check both against
+  one absolute bound.
 
-## Фикстуры
+## Fixtures
 
-- **НИКОГДА не класть в фикстуру буквальный управляющий символ (и любой
-  невидимый байт) — СТРОИТЬ его.** В тесте лежал настоящий байт 0x01, невидимый в
-  исходнике. Новый случай напечатал значение как обычный текст `'ctrlchar'` —
-  печатный ASCII, полностью ВАЛИДНЫЙ, — сервер правильно не отказал, тест зависал
-  по таймауту и читался ровно как регрессия транспорта. Три пробы и почти весь
-  раунд ушли на бисект различия, которое было в ФИКСТУРЕ, а не в библиотеке.
-  Отсюда: строить символ из кода вместо литерала или escape — escape легко
-  потерять при правке; идиома языка — в пакете (`packs/dart/tests.md`).
-- **К каждому свидетелю «этот вход отвергается» — парный случай «валидный вход НЕ
-  отвергается».** Иначе опечатка в фикстуре делает свидетеля проходящим, но
-  ничего не доказывающим.
-## Состояние между тестами
+- **NEVER put a literal control character (or any invisible byte) in a fixture —
+  BUILD it.** A test held a real 0x01 byte, invisible in the source. A new case
+  typed the value as ordinary text `'ctrlchar'` — printable ASCII, entirely
+  VALID — the server correctly did not refuse, the test hung to its timeout, and
+  it read exactly like a transport regression. Three probes and most of a round
+  went into bisecting a difference that was in the FIXTURE, not in the library.
+  Hence: build the character from a code point rather than a literal or an
+  escape — an escape is easy to lose in an edit; the language idiom is in the
+  pack (`packs/dart/tests.md`).
+- **For every "this input is rejected" witness, a paired case "a valid input is
+  NOT rejected".** Otherwise a typo in the fixture makes the witness pass while
+  proving nothing.
 
-**Состояние теста должно быть ОБЪЕКТОМ, который обработчик захватывает, а не
-глобальным счётчиком, сбрасываемым в `setUp`.** Обработчик, протёкший из более
-раннего теста, продолжает работать и увеличивает общий счётчик — канарейка
-показала это как «получено 4290 из 4000». С объектом устаревший обработчик пишет
-в свой мёртвый экземпляр.
+## State between tests
 
-> **Выдаёт себя ФОРМА падения:** счётчик, который может только расти и никогда не
-> возвращается, — это устаревший писатель, а не медленное закрытие.
+**Test state must be an OBJECT the handler captures, not a global counter reset
+in `setUp`.** A handler leaked from an earlier test keeps running and increments
+the shared counter — the canary showed this as "received 4290 of 4000". With an
+object, the stale handler writes into its own dead instance.
 
-## Честность отчёта
+> **The SHAPE of the failure gives it away:** a counter that can only rise and
+> never returns is a stale writer, not a slow close.
 
-- **Говорить, когда механизм флейка НЕ закреплён.** Раунд укрепил два доказанных
-  дефекта и не смог воспроизвести сообщённое падение примерно за 10 попыток
-  (5/5 отдельно, два полных прогона пакета, полный прогон набора и свип смещения
-  гонки по всему окну — чисто везде). Это сказано в коммите, и там же назван
-  единственный путь, который стоит инструментировать следующим. Укреплять
-  измеренные дефекты стоит; называть это фиксом флейка — нет.
-- **`| head -N` на grep может спрятать улику, ОПРОВЕРГАЮЩУЮ гипотезу.** Grep по
-  валидации входящих метаданных вернул 12 строк под `head -12`, и серверной
-  стороны среди них не было — до ложной находки про безопасность оставался один
-  шаг. Grep прямо по нужному файлу показал вызов валидации, а поведенческая проба
-  подтвердила: 200 заголовков против потолка 4 отвергнуты, обработчик не
-  запускался. **Когда вывод grep обрезан, отсутствие совпадения не доказывает
-  ничего.**
-- **«Каждое место» означает каждый СЛОЙ, и свип одного слоя читается как
-  полный.** Раунд починил все пять мест сборки трейлеров в ядре; следующий нашёл
-  два в транспортах, и худшим оказался тот, где синтетический отказ выпускается
-  ВХОДЯЩИМ: транспорт валидирует его как трафик пира и отвечает на нарушение
-  ЗАКРЫТИЕМ СОЕДИНЕНИЯ. **Просвипав шаблон, грепнуть остальные пакеты на тот же
-  конструктор, прежде чем считать дело закрытым.**
+## Honesty in the report
+
+- **Say when a flake's mechanism is NOT pinned.** A round hardened two proven
+  defects and could not reproduce the reported failure in roughly 10 attempts
+  (5/5 alone, two full package runs, a full suite run, and a race-offset sweep
+  across the whole window — clean everywhere). That is stated in the commit,
+  which also names the one path worth instrumenting next. Hardening measured
+  defects is worth doing; calling it a flake fix is not.
+- **`| head -N` on a grep can hide the evidence that REFUTES the hypothesis.** A
+  grep for inbound metadata validation returned 12 lines under `head -12` with
+  the server side not among them — one step short of a false security finding.
+  Grepping the file directly showed the validation call, and a behavioural probe
+  confirmed it: 200 headers against a ceiling of 4 rejected, the handler never
+  ran. **When grep output is truncated, the absence of a match proves nothing.**
+- **"Every place" means every LAYER, and a sweep of one layer reads as
+  complete.** A round fixed all five trailer-assembly sites in core; the next
+  one found two in the transports, and the worst was where a synthetic refusal
+  is emitted INBOUND: the transport validates it as peer traffic and answers the
+  violation by CLOSING THE CONNECTION. **Having swept a pattern, grep the other
+  packages for the same constructor before calling it closed.**

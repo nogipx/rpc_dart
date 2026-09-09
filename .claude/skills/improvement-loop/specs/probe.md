@@ -1,47 +1,50 @@
-# Схема: стенд
+# Schema: a bench
 
-Путь: `.claude/loop/probes/P-NN-slug.md`. Плюс строка в `probes/PROBES.md`.
+Path: `.claude/loop/probes/P-NN-slug.md`. Plus a line in `probes/PROBES.md`.
 
-Стенд — самая дорогая вещь в раунде и единственная, которую скилл раньше
-выбрасывал. Проба становится стендом в момент, когда контроль с убранным
-предполагаемым механизмом показал, что она способна увидеть дефект. С этого
-момента у неё есть запись, и следующий раунд на тех же путях начинает с неё.
+A bench is the most expensive thing in a round and the only one the skill used
+to throw away. A probe becomes a bench the moment a control with the suspected
+mechanism removed shows it is able to see the defect. From then on it has a
+record, and the next round on the same paths starts from it.
 
 ````
 ---
-файл: <путь к файлу пробы в репозитории; проба вне git — так и есть>
-раунд: NNN — раунд валидации
-коммит: <sha HEAD на момент валидации>
-пути: [<глобы кода, который стенд гоняет>]
-статус: валиден | устарел (sha) | сломан (раунд NNN) — не видит дефект, причина
+file: <path to the probe file in the repository; a probe outside git is fine>
+round: NNN — the validating round
+commit: <the HEAD sha at the moment of validation>
+paths: [<globs of the code the bench exercises>]
+status: valid | stale (sha) | broken (round NNN) — does not see the defect, reason
 ---
 
-# P-NN — <что измеряет, коротко>
+# P-NN — <what it measures, briefly>
 
-<как запускать, что менять под другую гипотезу — три-пять строк>
+<how to run it, what to change for another hypothesis — three to five lines>
 
-## Измеряет
+## Measures
 
-Одно число, словами: что считается и на какой стороне.
+One number, in words: what is counted and on which side.
 
-## Контроль
+## Control
 
-Как убирается предполагаемый механизм и что контроль показал при валидации:
+How the suspected mechanism is removed and what the control showed at
+validation:
 
 ```
-<числа — этим стенд отличается от пробы>
+<numbers — this is what makes a bench different from a probe>
 ```
 ````
 
-По `пути` `next` подбирает стенд линзе, а `stale` считает старение.
+`next` matches a bench to a lens by `paths`, and `stale` computes the ageing
+from them.
 
-**Стенд без контроля — проба, а не стенд**, и записи не получает.
+**A bench without a control is a probe, not a bench**, and gets no record.
 
-**Стенд стареет** — та самая история, когда in-memory пара молча обнулила гонку:
-раунд, переиспользующий стенд, сначала повторяет его контроль. Контроль перестал
-отличаться от испытуемого случая — статус `сломан (раунд NNN)`, стенд строится
-заново, и это не наказание, а измерение. Файл пробы может пропасть вместе с
-рабочим деревом; запись остаётся, `lint` предупреждает.
+**A bench goes stale** — that is the story where an in-memory pair silently
+zeroed out a race: a round reusing a bench repeats its control first. Once the
+control stops differing from the case under test, the status becomes
+`broken (round NNN)`, the bench is rebuilt, and that is a measurement rather
+than a punishment. The probe file may vanish along with the working tree; the
+record stays and `lint` warns.
 
-**Один стенд — много гипотез.** Линза и стенд связаны путями, не один к одному:
-стенд про flow control служит всем линзам про flow control.
+**One bench, many hypotheses.** A lens and a bench are linked by paths, not one
+to one: a flow-control bench serves every flow-control lens.

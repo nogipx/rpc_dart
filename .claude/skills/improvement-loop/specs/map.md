@@ -1,24 +1,26 @@
-# Схема: карта данных
+# Schema: the data map
 
-Путь: `.claude/loop/LOOP.md` — имя совпадает с директорией по общему правилу.
+Path: `.claude/loop/LOOP.md` — the name matches the directory by the general
+rule.
 
-Вход для того, кто пришёл в данные без этого скилла: по нему должно быть понятно,
-что где искать и как одно связано с другим.
+The way in for someone who arrives at the data without this skill: it must make
+clear what to look for where, and how one thing links to another.
 
-Содержит:
+It contains:
 
-1. **Одну фразу о том, что это за данные**, и ссылку на скилл за правилами.
-2. **Шесть сущностей** — по строке на каждую: на какой вопрос отвечает, где лежит,
-   где её оглавление.
-3. **Схему связей** — маленькая диаграмма mermaid: кто на кого ссылается.
-4. **«Куда идти с вопросом»** — сценарии: хочу прогнать раунд, какой номер
-   следующего и какую цель брать (`loop.py status`, `loop.py next`), это уже
-   проверяли, есть ли готовый стенд, чему научились на этом коде, откуда взялось
-   утверждение, что ждёт владельца и как ответить (поле `## Решение владельца`).
-5. **«Чему верить с оглядкой»** — то, что верно для этих данных:
-   невосстановленная история, записи с пометкой «не перепроверено», непрогнанные
-   детекторы.
+1. **One sentence about what this data is**, and a link to the skill for the
+   rules.
+2. **The six entities** — one line each: which question it answers, where it
+   lives, where its index is.
+3. **The link diagram** — a small mermaid diagram: who points at whom.
+4. **"Where to go with a question"** — the scenarios: I want to run a round,
+   what the next number is and which target to take (`loop.py status`,
+   `loop.py next`), has this been checked, is there a ready bench, what we
+   learned on this code, where a claim came from, what awaits the owner and how
+   to answer (the `## Owner decision` section).
+5. **"What to trust with care"** — what is true of this data: unrecovered
+   history, records marked "not re-measured", detectors never run.
 
-**Только навигация, никаких правил.** Правила живут в скилле; карта, объясняющая
-модель, разойдётся с ней при первой же правке. `loop.py init` создаёт карту с
-пунктами 1–4 заполненными; пункт 5 пишется при развёртывании руками.
+**Navigation only, no rules.** The rules live in the skill; a map that explains
+the model will diverge from it at the first edit. `loop.py init` creates a map
+with items 1-4 filled in; item 5 is written by hand at setup.

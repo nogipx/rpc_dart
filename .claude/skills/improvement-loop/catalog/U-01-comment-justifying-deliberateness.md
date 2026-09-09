@@ -1,30 +1,29 @@
 ---
-пакет: core
-применима: везде, где комментарии переживают рефакторинги.
-ломается: что угодно, обычно молча — обоснование прикрывает и обычный путь.
-статус: подтверждена
+pack: core
+applies: anywhere comments outlive refactorings.
+breaks: anything, usually silently — the justification also shields the ordinary path.
+status: confirmed
 ---
 
-# U-01 — Комментарий, объясняющий намеренность
+# U-01 — A comment justifying deliberateness
 
-## Форма
+## Shape
 
-Комментарий обосновывает, почему ветка ведёт себя странно, и
-описывает при этом патологического актора.
+A comment explains why a branch behaves oddly, and describes a pathological
+actor while doing so.
 
-## Детектор
+## Detector
 
-Грепать комментарии со словами «намеренно», «иначе», «вместо того
-чтобы», «а не», описывающие поведение, а не реализацию; читать
-ветку, которую они охраняют.
+Grep comments with "deliberately", "otherwise", "instead of", "rather than"
+that describe behaviour rather than implementation; then read the branch they
+guard.
 
-## Спрашивать
+## Ask
 
-Покрывает ли заявленное обоснование КАЖДЫЙ случай, доходящий до
-этого кода, или только названный в комментарии?
+Does the stated justification cover EVERY case that reaches this code, or only
+the one the comment names?
 
-## Улика
+## Evidence
 
-Обоснование про «обработчик, который игнорирует свой поток», кроме
-него покрывало асинхронную преамбулу ЛЮБОГО обработчика: обычный код
-шёл без backpressure вообще.
+A justification about "a handler that ignores its own stream" also covered the
+async preamble of ANY handler: ordinary code ran with no backpressure at all.

@@ -1,27 +1,27 @@
 ---
-пакет: core
-применима: везде, где есть асинхронная очистка.
-ломается: зависание, течь ресурса.
-статус: подтверждена
+pack: core
+applies: anywhere there is asynchronous cleanup.
+breaks: a hang, a resource leak.
+status: confirmed
 ---
 
-# U-17 — Неограниченное ожидание и брошенная работа
+# U-17 — An unbounded wait and abandoned work
 
-## Форма
+## Shape
 
-`await` без границы на критическом пути (завершение, teardown), а
-также таймаут, снимающий ОЖИДАНИЕ, но не саму операцию.
+An `await` with no bound on a critical path (completion, teardown), and a
+timeout that drops the WAIT but not the operation itself.
 
-## Детектор
+## Detector
 
-Грепать `await` в путях остановки и очистки; грепать применения
-таймаута к операциям, держащим ресурс.
+Grep `await` on shutdown and cleanup paths; grep timeouts applied to operations
+that hold a resource.
 
-## Спрашивать
+## Ask
 
-Что продолжает жить после того, как мы перестали ждать?
+What lives on after we stopped waiting?
 
-## Улика
+## Evidence
 
-Один залипший колбэк держит владельца вечно; таймаут снимает
-ожидающего, а операция продолжает удерживать то, что удерживала.
+One stuck callback holds its owner forever; a timeout releases the waiter while
+the operation goes on holding what it held.

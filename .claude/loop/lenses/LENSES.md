@@ -1,24 +1,24 @@
-# Набор линз — rpc_dart
+# Lens set — rpc_dart
 
-Что такое линза и как она связана с остальным — [../LOOP.md](../LOOP.md). Формат
-полей — `../../skills/improvement-loop/specs/lens.md`.
+What a lens is and how it links to the rest — [../LOOP.md](../LOOP.md). The
+field format — `../../skills/improvement-loop/specs/lens.md`.
 
-- **[RPC-01](RPC-01-flow-control-credit-on-skip.md)** подтверждена (162, вне журнала) — кредит не возвращается на пути пропуска кадра; уточняет U-07
-- **[RPC-02](RPC-02-refusal-trailer-violates-policy.md)** подтверждена (153, вне журнала) — трейлер отказа не проходит политику, которой отказали; уточняет U-09
-- **[RPC-03](RPC-03-stream-ids-restart-on-reconnect.md)** подтверждена (100, вне журнала) — идентификаторы потоков начинаются заново после разрыва; уточняет U-18
-- **[RPC-04](RPC-04-capability-hidden-by-wrapper.md)** подтверждена (094, вне журнала) — обёртка не пробрасывает интерфейс-возможность; уточняет U-05
-- **[RPC-05](RPC-05-concurrency-limit-charge-point.md)** подтверждена (114, вне журнала) — лимит списывается не в той точке жизненного цикла; уточняет U-07
-- **[RPC-06](RPC-06-native-plugin-layers.md)** подтверждена (180, вне журнала) — дефект в Swift или Kotlin, куда Dart-грепы не смотрят; уточняет U-14, U-03
-- **[RPC-07](RPC-07-web-as-separate-runtime.md)** подтверждена (090, вне журнала) — зелено на VM, сломано на dart2js; уточняет U-03
-- **[RPC-08](RPC-08-policy-field-single-transport.md)** подтверждена (119, вне журнала), применена в 205 — поле политики инертно у соседнего транспорта; уточняет U-19
-- **[RPC-09](RPC-09-deadline-below-write.md)** подтверждена (168, вне журнала) — дедлайн стоит ниже блокирующей отправки; уточняет U-16
-- **[RPC-10](RPC-10-shared-layer-blast-radius.md)** подтверждена (150, вне журнала) — радиус фикса в общем слое переоценён; уточняет U-11
-- **[RPC-11](RPC-11-package-outside-workspace.md)** подтверждена (186, вне журнала) — пакет вне workspace не виден гейту; уточняет U-03
-- **[RPC-12](RPC-12-cancel-into-request-stream.md)** отозвана (204), применена в 202, 203, 204 — контракт, который дважды приняли за дефект
-- **[RPC-13](RPC-13-unhandled-async-error.md)** исчерпана здесь (121, вне журнала) — брошенный future с кодом пользователя убивает изолят; уточняет U-17
-- **[RPC-14](RPC-14-timeout-abandons-work.md)** исчерпана здесь (067, вне журнала), кроме isolate — таймаут снимает ожидание, но не работу; уточняет U-17
-- **[RPC-15](RPC-15-remeasure-own-record.md)** подтверждена (201) — перемерить собственную запись цикла; уточняет U-21
+- **[RPC-01](RPC-01-flow-control-credit-on-skip.md)** confirmed (162, off-journal) — credit is not returned on the frame-skip path; refines U-07
+- **[RPC-02](RPC-02-refusal-trailer-violates-policy.md)** confirmed (153, off-journal) — the refusal trailer fails the policy it enforced; refines U-09
+- **[RPC-03](RPC-03-stream-ids-restart-on-reconnect.md)** confirmed (100, off-journal) — stream ids restart after a reconnect; refines U-18
+- **[RPC-04](RPC-04-capability-hidden-by-wrapper.md)** confirmed (094, off-journal) — a wrapper does not forward a capability interface; refines U-05
+- **[RPC-05](RPC-05-concurrency-limit-charge-point.md)** confirmed (114, off-journal) — a limit is charged at the wrong point of the lifecycle; refines U-07
+- **[RPC-06](RPC-06-native-plugin-layers.md)** confirmed (180, off-journal) — a defect in Swift or Kotlin, where Dart greps never look; refines U-14, U-03
+- **[RPC-07](RPC-07-web-as-separate-runtime.md)** confirmed (090, off-journal) — green on the VM, broken on dart2js; refines U-03
+- **[RPC-08](RPC-08-policy-field-single-transport.md)** confirmed (119, off-journal), applied in 205 — a policy field inert at a neighbouring transport; refines U-19
+- **[RPC-09](RPC-09-deadline-below-write.md)** confirmed (168, off-journal) — the deadline sits below a blocking write; refines U-16
+- **[RPC-10](RPC-10-shared-layer-blast-radius.md)** confirmed (150, off-journal) — a shared-layer fix's blast radius is overstated; refines U-11
+- **[RPC-11](RPC-11-package-outside-workspace.md)** confirmed (186, off-journal) — a package outside the workspace is invisible to the gate; refines U-03
+- **[RPC-12](RPC-12-cancel-into-request-stream.md)** retracted (204), applied in 202, 203, 204 — a contract mistaken twice for a defect
+- **[RPC-13](RPC-13-unhandled-async-error.md)** swept here (121, off-journal) — an abandoned future running user code kills the isolate; refines U-17
+- **[RPC-14](RPC-14-timeout-abandons-work.md)** swept here (067, off-journal), except isolate — a timeout drops the wait but not the work; refines U-17
+- **[RPC-15](RPC-15-remeasure-own-record.md)** confirmed (201) — re-measure the loop's own record; refines U-21
 
-Свипы с пометкой «вне журнала» состарить не по чему: `stale` всегда показывает их
-как требующие перемера. Это верно — код с тех пор менялся, а sha того свипа
-неизвестен.
+Sweeps marked «off-journal» have nothing to age against: `stale` always shows
+them as needing a re-measurement. That is correct — the code has changed since,
+and the sha of that sweep is unknown.

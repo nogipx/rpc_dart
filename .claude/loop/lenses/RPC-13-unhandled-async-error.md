@@ -1,34 +1,33 @@
 ---
-уточняет: U-17
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
-применима: есть пути, выполняющие код пользователя без охраняемой зоны
-ломается: падение процесса.
-применена: []
-статус: исчерпана здесь (раунд 121, вне журнала)
+refines: U-17
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
+applies: there are paths that run user code outside a guarded zone
+breaks: a process crash.
+applied: []
+status: swept here (round 121, off-journal)
 ---
 
-# RPC-13 — Необработанная асинхронная ошибка фатальна для изолята
+# RPC-13 — An unhandled async error is fatal to the isolate
 
-Заметка:     всё, что добавляется в цикл приёма или в обработчик события потока,
-             выполняется в корневой зоне — спрашивать, что делает аксессор
-             платформы на битом входе, ДО того, как ставить его туда.
+Anything added to an accept loop or to a stream's event handler runs in the root
+zone — ask what a platform accessor does on malformed input BEFORE putting it
+there.
 
-## Форма
+## Shape
 
-Future, выполняющий пользовательский код, брошен без обработчика
-ошибки; в Dart это убивает изолят целиком.
+A future running user code is abandoned with no error handler; in Dart that
+kills the whole isolate.
 
-## Детектор
+## Detector
 
-Вызовы, порождающие future без `await` и без `.catchError`, в путях,
-где выполняется код пользователя: диспетчеризация, колбэки
-жизненного цикла, циклы приёма соединений.
+Calls that spawn a future without `await` and without `.catchError`, on paths
+that run user code: dispatch, lifecycle callbacks, connection accept loops.
 
-## Спрашивать
+## Ask
 
-Если этот код бросит, кто поймает? Есть ли зона, и та ли она?
+If this throws, who catches it? Is there a zone, and is it the right one?
 
-## Улика
+## Evidence
 
-Одна дыра найдена и закрыта; свип по всем пяти транспортным пакетам
-показал, что остальные места уже охраняются.
+One hole found and closed; a sweep across all five transport packages showed
+every other site was already guarded.

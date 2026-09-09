@@ -1,15 +1,16 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/core/rpc_dart/lib/**]
-область: [ядро]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/core/rpc_dart/lib/**]
+scope: [core]
 ---
 
-# C-17 — gzip уровня сообщения (`grpc-encoding: gzip`)
+# C-17 — Message-level gzip (`grpc-encoding: gzip`)
 
-Путь распаковки ограничен. Отдельно зафиксировано в документации: кодек
-распаковки ОБЯЗАН соблюдать `maxOutputBytes`, а не «желательно».
+The decompression path is bounded. Recorded separately in the documentation: a
+decompressing codec MUST honour `maxOutputBytes` — not "should".
 
-## Контроль
+## Control
 
-Поток, распакованный в пределах `maxOutputBytes`: проходит, значит отказ даёт лимит
+A stream that decompresses within `maxOutputBytes`: it passes, so the refusal
+comes from the limit.

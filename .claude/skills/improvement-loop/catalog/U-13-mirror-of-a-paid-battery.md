@@ -1,29 +1,27 @@
 ---
-пакет: async-io
-применима: есть асимметричные пары ролей.
-ломается: что угодно; стороны обычно написаны разными людьми в разное время.
-статус: подтверждена
+pack: async-io
+applies: there are asymmetric role pairs.
+breaks: anything; the two sides are usually written by different people at different times.
+status: confirmed
 ---
 
-# U-13 — Зеркало окупившейся батареи
+# U-13 — The mirror of a battery that paid off
 
-Зеркало стоит дёшево: правится, у какой стороны маленький лимит.
+The mirror is cheap: all that changes is which side has the small limit.
 
-## Форма
+## Shape
 
-Батарея, измерявшая одну сторону, никогда не прогонялась с обменом
-ролями.
+A battery that measured one side has never been run with the roles swapped.
 
-## Детектор
+## Detector
 
-Список уже написанных батарей; у каждой — можно ли поменять местами
-отправителя и получателя, клиента и сервер, читателя и писателя.
+The list of batteries already written; for each, whether sender and receiver,
+client and server, reader and writer can be swapped.
 
-## Спрашивать
+## Ask
 
-Тот же ли код исполняется на другой стороне?
+Is it the same code that runs on the other side?
 
-## Улика
+## Evidence
 
-Зеркало батареи нашло фатальный для процесса дефект в первую же
-минуту.
+Mirroring a battery found a process-fatal defect within the first minute.

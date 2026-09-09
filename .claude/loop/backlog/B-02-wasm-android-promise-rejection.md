@@ -1,24 +1,25 @@
 ---
-статус: ждёт владельца
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
-проба: —
-причина: единственный способ увидеть отклонение — обернуть Promise внутри гостя, что меняет семантику каждого промиса dart2wasm
+status: awaiting owner
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
+probe: —
+reason: the only way to see the rejection is to wrap Promise inside the guest, which changes the semantics of every dart2wasm promise
 ---
 
-# B-02 — wasm: необработанное отклонение промиса молча теряется на Android
+# B-02 — wasm: an unhandled promise rejection is silently lost on Android
 
-Ни события `unhandledrejection`, ни хостового колбэка. Единственный способ его
-увидеть — обернуть `Promise` внутри гостя, что меняет семантику для каждого
-промиса гостя dart2wasm и не проверяется без настоящей `.wasm`-фикстуры.
+There is neither an `unhandledrejection` event nor a host callback. The only way
+to see it is to wrap `Promise` inside the guest, which changes the semantics for
+every dart2wasm guest promise and cannot be checked without a real `.wasm`
+fixture.
 
-Область уже, чем записано изначально: ошибка Dart является ЗОННОЙ раньше, чем
-становится JS-отклонением, и бутстрап гостя — наш собственный код. Речь только о
-не-Dart коде гостя.
+The scope is narrower than first recorded: a Dart error is ZONAL before it ever
+becomes a JS rejection, and the guest bootstrap is our own code. This is only
+about non-Dart guest code.
 
-Линза: `../lenses/RPC-06-native-plugin-layers.md`.
+Lens: `../lenses/RPC-06-native-plugin-layers.md`.
 
-## Решение владельца
+## Owner decision
 
 —

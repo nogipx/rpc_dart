@@ -1,34 +1,33 @@
 ---
-пакет: core
-применима: любой проект больше одной цели сборки.
-ломается: что угодно, и обычно грубо — эти пути не проверял никто.
-статус: подтверждена
+pack: core
+applies: any project with more than one build target.
+breaks: anything, and usually crudely — nobody has checked these paths.
+status: confirmed
 ---
 
-# U-03 — Цель, которую никто не гоняет
+# U-03 — A target nobody runs
 
-**Зелено на основной цели — не значит зелено.** Если цель не запускается потому,
-что её нечем хостить, — это отсутствующее приложение-пример, а не факт про мир.
+**Green on the main target does not mean green.** If a target cannot be run
+because there is nothing to host it, that is a missing example app, not a fact
+about the world.
 
-## Форма
+## Shape
 
-Код, который основной гейт не выполняет: другой компилятор, другой
-рантайм, нативный слой, устройство, генератор.
+Code the main gate never executes: another compiler, another runtime, a native
+layer, a device, a generator.
 
-## Детектор
+## Detector
 
-Список целей в `config.md` проекта против того, что реально
-запускает гейт.
+The target list in the project's `config.md` against what the gate actually
+runs.
 
-## Спрашивать
+## Ask
 
-Что из этого никогда не исполнялось, а только читалось или
-компилировалось?
+Which of these was never executed, only read or compiled?
 
-## Улика
+## Evidence
 
-Порядок строгий — **чтение < компиляция < запуск**. Чтение пропустило
-отчёт через функцию, которая после старта ничего не делает;
-компиляция не поймала 30-секундное зависание загрузки; запуск
-показал, что страница без базового URL не может получить собственный
-модуль.
+The order is strict — **reading < compiling < running**. Reading let a report
+through a function that does nothing after boot; compiling did not catch a 30 s
+load stall; running showed that a page with no base URL cannot fetch its own
+module.

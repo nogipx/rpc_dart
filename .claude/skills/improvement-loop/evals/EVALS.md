@@ -1,7 +1,8 @@
-# Проверки самого скилла
+# Checks on the skill itself
 
-`evals.json` — одиннадцать сценариев, каждый выведен из правила, которое в методах
-помечено как оплаченное ошибкой, или из механики, добавленной в скилл (рецензия,
-стенды, уроки, остановка из `/loop`, пакеты, скриптовые детекторы). Запускать через skill-creator или руками:
-дать агенту скилл и репозиторий-фикстуру, сверить с `expected_output`. Скилл
-считается регрессировавшим, если хотя бы один сценарий даёт другой исход.
+`evals.json` holds eleven scenarios, each derived either from a rule the methods
+mark as paid for by a mistake, or from machinery added to the skill (the review,
+benches, lessons, stopping from `/loop`, packs, script detectors). Run them
+through skill-creator or by hand: give an agent the skill and a fixture
+repository, and compare against `expected_output`. The skill counts as
+regressed if even one scenario produces a different outcome.

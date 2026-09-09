@@ -1,30 +1,28 @@
 ---
-уточняет: U-18
-пути: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/**]
-применима: идентификаторы выдаются локально и переживают переподключение
-ломается: потеря данных на живом вызове.
-применена: []
-статус: подтверждена (раунд 100, вне журнала)
+refines: U-18
+paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/**]
+applies: identifiers are issued locally and outlive a reconnect
+breaks: data loss on a live call.
+applied: []
+status: confirmed (round 100, off-journal)
 ---
 
-# RPC-03 — Идентификаторы потоков, переживающие переподключение
+# RPC-03 — Stream ids that outlive a reconnect
 
-## Форма
+## Shape
 
-Менеджер идентификаторов начинает нумерацию заново, пока живы
-операции, выданные до разрыва.
+The id manager starts numbering from scratch while operations issued before the
+break are still alive.
 
-## Детектор
+## Detector
 
 `RpcStreamIdManager`, `resumeAfter`, `lastIssuedId`,
 `RpcChannelTransport.resumeStreamIdsAfter`, `lastIssuedStreamId`.
 
-## Спрашивать
+## Ask
 
-Может ли очистка мёртвой операции закрыть живую с тем же
-идентификатором?
+Can tearing down a dead operation close a live one that holds the same id?
 
-## Улика
+## Evidence
 
-Очистка мёртвого вызова полузакрывала ЖИВОЙ; оба очевидных фикса
-не сработали.
+A dead call's teardown half-closed a LIVE one; both obvious fixes failed.

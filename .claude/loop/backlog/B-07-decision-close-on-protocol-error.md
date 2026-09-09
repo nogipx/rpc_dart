@@ -1,21 +1,21 @@
 ---
-статус: решена владельцем (раунд 190)
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**]
-проба: —
-причина: "решение принято владельцем: нарушение политики валит вызов, соединение живёт, плюс крышка 256"
+status: decided by owner (round 190)
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**]
+probe: —
+reason: "decided by the owner: a policy violation fails the call, the connection lives, plus a cap of 256"
 ---
 
-# B-07 — Решение владельца: `closeOnProtocolError` по умолчанию `false`
+# B-07 — Owner decision: `closeOnProtocolError` defaults to `false`
 
-Нарушение политики валит ВЫЗОВ, а соединение живёт. Флаг продолжает работать,
-когда его выставляют явно.
+A policy violation fails the CALL and the connection lives on. The flag still
+works when it is set explicitly.
 
-В паре с крышкой `_maxPolicyViolations = 256`: «один плохой кадр не должен рвать
-соединение» не означает «пир может молотить вечно» — 200k нарушающих кадров
-стоили серверу websocket 100 MiB при всё ещё подключённом атакующем.
+Paired with the cap `_maxPolicyViolations = 256`: "one bad frame must not end
+the connection" does not mean "a peer may grind forever" — 200k violating frames
+cost a websocket server 100 MiB with the attacker still connected.
 
-## Решение владельца
+## Owner decision
 
-CloseOnProtocolError по умолчанию false
+closeOnProtocolError defaults to false

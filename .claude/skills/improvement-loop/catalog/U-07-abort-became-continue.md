@@ -1,38 +1,37 @@
 ---
-пакет: async-io
-применима: есть учёт ресурсов, освобождаемых по завершении операции.
-ломается: зависание, неограниченный рост, DoS.
-статус: подтверждена
+pack: async-io
+applies: there is accounting of resources released when an operation completes.
+breaks: a hang, unbounded growth, DoS.
+status: confirmed
 ---
 
-# U-07 — «Оборвать» стало «продолжить»
+# U-07 — "Abort" became "continue"
 
-Чек-лист после такого фикса: кредит, слоты, идентификаторы, таймеры И цена.
+The checklist after such a fix: credit, slots, identifiers, timers AND the price.
 
-Чистый негатив оттуда же, который стоит помнить: кадры метаданных были вообще вне
-flow control, поэтому обязанность про кредит к тому пропуску не относилась.
-Проверено, а не предположено.
+A clean negative from the same place worth remembering: metadata frames were
+outside flow control entirely, so the credit obligation did not apply to that
+skip. Checked, not assumed.
 
-## Форма
+## Shape
 
-Фикс, сделавший сбой переживаемым: раньше рвали всё, теперь
-пропускаем плохое и живём дальше.
+A fix that made a failure survivable: what used to tear everything down now
+skips the bad part and lives on.
 
-## Детектор
+## Detector
 
-Журнал и дифф на замены «прервать/закрыть/бросить» на
-«пропустить/продолжить»; для каждой — что делал путь обрыва.
+The journal and the diff for replacements of "abort/close/throw" with
+"skip/continue"; for each one, what the abort path used to do.
 
-## Спрашивать
+## Ask
 
-Что обрыв делал НЕНУЖНЫМ и теперь обязано случиться явно — кредит,
-освобождение слота, возврат идентификатора, таймер? И сколько теперь
-стоит атака за единицу?
+What did the abort make UNNECESSARY that must now happen explicitly — credit, a
+slot release, an id return, a timer? And what does an attack cost per unit now?
 
-## Улика
+## Evidence
 
-Пропуск кадра не возвращал кредит, который отправитель себе уже
-списал: соединение заклинило ровно на предсказанном отказе (окно
-8 MiB / 2 MiB на отказ = четвёртый). Он же по цене, раундом позже:
-**1.8 MB на входе -> 1050 MiB RSS и 81 с CPU**, тогда как обрыв давал
-атакующему ровно одну попытку.
+Skipping a frame did not return credit the sender had already charged itself:
+the connection wedged on exactly the predicted refusal (an 8 MiB window with
+2 MiB per refusal = the fourth). The same shape by price, a round later:
+**1.8 MB of input -> 1050 MiB RSS and 81 s of CPU**, whereas aborting gave the
+attacker exactly one attempt.

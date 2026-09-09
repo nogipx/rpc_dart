@@ -1,29 +1,31 @@
 ---
-уточняет: U-19
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
-применима: поля политики применяются каждым транспортом отдельно
-ломается: дыра в безопасности на невыбранном транспорте.
-применена: [205]
-статус: подтверждена (раунд 119, вне журнала) пики 30/3/1 против потолков с контролем без потолка, 20 полуоткрытых потоков → 0 за 3 с
+refines: U-19
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
+applies: policy fields are enforced by each transport separately
+breaks: a security hole on the transport nobody picked.
+applied: [205]
+status: confirmed (round 119, off-journal)
 ---
 
-# RPC-08 — Поле политики проверено на одном транспорте
+# RPC-08 — A policy field checked on one transport
 
-## Форма
+## Shape
 
-Новое поле `RpcSecurityPolicy` проверено там, где его писали, и
-инертно у соседей.
+A new `RpcSecurityPolicy` field is enforced where it was written and inert at
+its neighbours.
 
-## Детектор
+## Detector
 
-Матрица «поле политики x транспортный пакет»; для каждой клетки —
-поведенческая проба, а не греп упоминания.
+The matrix «policy field x transport package»; for each cell, a behavioural
+probe, not a grep for a mention.
 
-## Спрашивать
+## Ask
 
-Поле УПОМЯНУТО или ПРИМЕНЕНО? Отказ называет именно его?
+Is the field MENTIONED or ENFORCED? Does the refusal name that very field?
 
-## Улика
+## Evidence
 
-Проверка «поле где-то упоминается» дала полное покрытие, а
-поведенческая проба нашла инертность на целом транспорте.
+Checking that "the field is mentioned somewhere" gave full coverage, while a
+behavioural probe found a whole transport where it was inert. Round 205 then
+measured the channel transports: peaks of 30/3/1 against the ceilings with a
+no-ceiling control, and 20 half-open streams reclaimed to 0 in 3 s.

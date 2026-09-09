@@ -1,8 +1,8 @@
 ---
-применим: "код на Dart: pub-пакеты, dart2js/AOT цели, изоляты"
-классы ущерба: —
-формы: —
-содержит: "measure.md, tests.md, detectors/log_only_catch.py (экземпляры U-06 в .dart), assets/probe_template.dart (скелет пробы: одно число, флаг контроля, RSS)"
+applies: "Dart code: pub packages, dart2js/AOT targets, isolates"
+damage classes: —
+shapes: —
+contains: "measure.md, tests.md, detectors/log_only_catch.py (instances of U-06 in .dart), assets/probe_template.dart (a probe skeleton: one number, a control flag, RSS)"
 ---
 
-# dart — идиомы языка и рантайма
+# dart — language and runtime idioms

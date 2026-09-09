@@ -1,56 +1,56 @@
 ---
-раунд: 202
-вердикт: RETRACTED
-пакеты: [rpc_dart]
-линза: RPC-12
-стенд: без стенда
-бюджет: пробы 0/3, канарейки 0/3
-рецензия: сам (запись мигрирована в схему; рецензии в раунде не было)
-коммит: нет
+round: 202
+verdict: RETRACTED
+packages: [rpc_dart]
+lens: RPC-12
+bench: none
+budget: probes 0/3, canaries 0/3
+review: self (record migrated into the schema; the round itself had no review)
+commit: no
 ---
 
-# Раунд 202 — заявление об убийстве процесса при отмене clientStream
+# Round 202 — the claim that cancelling a clientStream kills the process
 
-Запись раунда предшествует схеме: поля стенда, бюджета и рецензии заполнены как
-«не было», а не восстановлены задним числом.
+This record predates the schema: the bench, budget and review fields say "there
+was none" rather than being reconstructed after the fact.
 
-Бисект тогда был совместим с настоящей причиной всё это время: **бисект говорит,
-кто участвует, а не кто виноват.**
+The bisect was compatible with the real cause the whole time: **a bisect tells
+you who takes part, not who is at fault.**
 
-## Цель
+## Target
 
-RPC-12 — отмена, доставляемая в поток запросов обработчика
+RPC-12 — cancellation delivered into the handler's request stream
 
-## Гипотеза
+## Hypothesis
 
-Отмена вызова `clientStream` убивает изолят
+Cancelling a `clientStream` call kills the isolate
 
-## До
+## Before
 
-Процесс падал при отмене; числа не сохранены
+The process died on cancellation; the numbers were not kept
 
-## Механизм
+## Mechanism
 
-Заявлен дефект библиотеки; на деле причина была в обработчике самой
-пробы — `requests.listen((_) {})` без `onError`
+A library defect was claimed; in fact the cause was in the probe's own handler —
+`requests.listen((_) {})` with no `onError`
 
-## После
+## After
 
-n/a — находка отозвана раундом 204
+n/a — the finding was retracted by round 204
 
-## Канарейка
-
-n/a
-
-## Гейт
+## Canary
 
 n/a
 
-## Не чинил
+## Gate
 
-Ничего — чинить было нечего
+n/a
 
-## Связи
+## Not fixed
 
-Отозван раундом `204-retraction-listen-onerror.md`; форма записана
-линзой `../lenses/RPC-12-cancel-into-request-stream.md`
+Nothing — there was nothing to fix
+
+## Links
+
+Retracted by round `204-retraction-listen-onerror.md`; the shape is recorded by
+lens `../lenses/RPC-12-cancel-into-request-stream.md`

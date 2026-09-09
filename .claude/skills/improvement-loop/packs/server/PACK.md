@@ -1,11 +1,11 @@
 ---
-применим: процесс с соединениями, хранилищем и рестартами
-классы ущерба: утечка соединений, неверный код ответа, потеря данных при рестарте, неограниченная очередь
-формы: —
-содержит: ничего — пакет стартовый
+applies: a process with connections, storage and restarts
+damage classes: connection leak, wrong response code, data loss on restart, unbounded queue
+shapes: —
+contains: nothing — a starter pack
 ---
 
-# server — долгоживущий сервис
+# server — a long-lived service
 
-Классы ущерба стартовые, ни один раунд за них не платил. Заполняется через
-`lessons/` и `curate`.
+The damage classes are a starter set; no round has paid for any of them. It
+fills up through `lessons/` and `curate`.

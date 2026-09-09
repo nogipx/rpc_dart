@@ -1,29 +1,28 @@
 ---
-пакет: core
-применима: есть обёртка над чужой библиотекой.
-ломается: зависание, течь, потеря данных.
-статус: подтверждена
+pack: core
+applies: there is a wrapper around a third-party library.
+breaks: a hang, a leak, data loss.
+status: confirmed
 ---
 
-# U-04 — Незарегистрированная точка расширения зависимости
+# U-04 — An unregistered extension point of a dependency
 
-В собственном коде ничего не выглядит неправильным: **дефект имеет форму
-пустоты.**
+Nothing looks wrong in your own code: **the defect has the shape of an absence.**
 
-## Форма
+## Shape
 
-Зависимость предоставляет колбэк или сеттер, обёртка его не ставит.
+The dependency offers a callback or a setter, and the wrapper never sets it.
 
-## Детектор
+## Detector
 
-Перечислить публичное API зависимости на колбэки, сеттеры и
-`on*`-поля; для каждого найти место регистрации в своём коде.
+Enumerate the dependency's public API for callbacks, setters and `on*` fields;
+for each one, find where your code registers it.
 
-## Спрашивать
+## Ask
 
-Какое событие мы из-за этого не узнаём никогда?
+Which event do we therefore never learn about?
 
-## Улика
+## Evidence
 
-Единственный способ узнать об обрыве со стороны пира не был подписан
-никем — отменённый вызов работал вечно.
+The only way to learn the peer had disconnected was subscribed by nobody — a
+cancelled call ran forever.

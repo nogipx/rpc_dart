@@ -1,41 +1,44 @@
-# Схема: негатив
+# Schema: a negative
 
-Путь: `.claude/loop/checked/C-NN-slug.md`. Плюс строка в `checked/CHECKED.md`.
+Path: `.claude/loop/checked/C-NN-slug.md`. Plus a line in `checked/CHECKED.md`.
 
-Негатив — отвеченный вопрос: измерено, ничего не сломано, делать нечего.
-Отдельная сущность, а не разновидность зацепки: путать их значит держать в списке
-дел то, что уже закрыто.
+A negative is an answered question: measured, nothing broken, nothing to do. It
+is a separate entity rather than a kind of lead: confusing them means keeping
+something already closed on the to-do list.
 
 ````
 ---
-раунд: NNN
-коммит: <sha HEAD на момент измерения>
-пути: [<глобы кода, который покрыт>]
-область: [<какие пакеты или подсистемы покрыты>]
+round: NNN
+commit: <the HEAD sha at the moment of measurement>
+paths: [<globs of the code that is covered>]
+scope: [<which packages or subsystems are covered>]
 ---
 
-# C-NN — <что проверялось>
+# C-NN — <what was checked>
 
-<что именно измерено>
+<what exactly was measured>
 
 ```
-<числа>
+<numbers>
 ```
 
-## Контроль
+## Control
 
-Каким контролем подтверждено, что стенд мог показать дефект.
+Which control confirmed the bench could have shown the defect.
 ````
 
-По `пути` `stale` считает старение.
+`stale` computes the ageing from `paths`.
 
-**Негатив без контроля — не негатив, а надежда.** Без контроля неизвестно, могла
-ли проба вообще что-нибудь показать: стенд, который не добивается нужного режима,
-покажет «чисто» и на сломанном коде. Поэтому `## Контроль` обязателен, а раунд
-без валидного контроля — INCONCLUSIVE, не CLEAN.
+**A negative without a control is not a negative but hope.** Without a control
+there is no telling whether the probe could have shown anything at all: a bench
+that fails to reach the required regime reports "clean" on broken code too. So
+`## Control` is mandatory, and a round with no valid control is INCONCLUSIVE,
+not CLEAN.
 
-**Свип по детектору линзы сюда не пишется** — его дом статус `исчерпана здесь`
-на самой линзе (правило одного дома). Здесь только то, что не привязано к форме.
+**A sweep by a lens detector is not written here** — its home is the
+`swept here` status on the lens itself (the one-home rule). Only what is not
+tied to a shape belongs here.
 
-**Негатив протухает** вместе с кодом: он верен для того, что существовало на sha
-измерения. Когда по его путям появился новый код, `loop.py stale` его назовёт.
+**A negative goes stale** along with the code: it is true for what existed at
+the sha of the measurement. When new code appears along its paths,
+`loop.py stale` will name it.

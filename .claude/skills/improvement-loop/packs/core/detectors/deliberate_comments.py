@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Детектор U-01: комментарии, оправдывающие намеренность.
+"""Detector for U-01: comments justifying deliberateness.
 
-Печатает экземпляры по одному на строку: путь:строка: текст. Запускается из
-корня репозитория; аргумент — директории для обхода (по умолчанию текущая).
-Протокол детектора: stdout — список экземпляров, код выхода 0. Пример; под
-конкретный проект детектор инстанцируют в линзе со своими словами и путями.
+Prints one instance per line: path:line: text. Run from the repository root; the
+argument is the directories to walk (the current one by default). The detector
+protocol: the instance list on stdout, exit code 0. This is an example; for a
+particular project the detector is instantiated in a lens with its own words and
+paths.
 """
 import os
 import re

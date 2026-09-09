@@ -1,77 +1,77 @@
-# Данные цикла улучшений
+# Improvement-loop data
 
-Вход в эти данные: что где лежит, как связано и куда идти с конкретным вопросом.
+The way into this data: what lives where, how it is linked, and where to go
+with a particular question.
 
-**Здесь только навигация.** Правила — в `../skills/improvement-loop/`: процесс в
-`SKILL.md`, схемы файлов в `specs/`, методы работы в `methods/`, универсальные
-формы дефектов в `catalog/`.
+**Navigation only.** The rules live in `../skills/improvement-loop/`: the
+process in `SKILL.md`, the file schemas in `specs/`, the working methods in
+`methods/`, the universal defect shapes in `catalog/`.
 
-## Шесть сущностей
+## Six entities
 
-- **Линза** — что искать и как найти экземпляры?
-  `lenses/RPC-NN-*.md`, оглавление [LENSES.md](lenses/LENSES.md)
-- **Раунд** — что было сделано, с какими числами и чем это доказано?
-  `rounds/NNN-*.md`, оглавление [ROUNDS.md](rounds/ROUNDS.md)
-- **Зацепка** — что ещё не сделано и почему?
-  `backlog/B-NN-*.md`, оглавление [BACKLOG.md](backlog/BACKLOG.md)
-- **Негатив** — что уже проверено и не надо перезапускать?
-  `checked/C-NN-*.md`, оглавление [CHECKED.md](checked/CHECKED.md)
-- **Стенд** — на чём мерили и чем доказано, что он способен увидеть дефект?
-  `probes/P-NN-*.md`, оглавление [PROBES.md](probes/PROBES.md)
-- **Урок** — за что раунд заплатил и куда это правило поднято?
-  `lessons/L-NN-*.md`, оглавление [LESSONS.md](lessons/LESSONS.md)
+- **Lens** — what to look for, and how to find instances of it?
+  `lenses/RPC-NN-*.md`, index [LENSES.md](lenses/LENSES.md)
+- **Round** — what was done, with which numbers, and what proves it?
+  `rounds/NNN-*.md`, index [ROUNDS.md](rounds/ROUNDS.md)
+- **Lead** — what has not been done yet, and why?
+  `backlog/B-NN-*.md`, index [BACKLOG.md](backlog/BACKLOG.md)
+- **Negative** — what has been checked and must not be re-run?
+  `checked/C-NN-*.md`, index [CHECKED.md](checked/CHECKED.md)
+- **Bench** — what the measurement ran on, and what proves it can see the defect?
+  `probes/P-NN-*.md`, index [PROBES.md](probes/PROBES.md)
+- **Lesson** — what a round paid for, and where that rule was promoted?
+  `lessons/L-NN-*.md`, index [LESSONS.md](lessons/LESSONS.md)
 
-Плюс [config.md](config.md) — настройки этого проекта: тулчейн, гейт, пробы,
-планка серьёзности, потолок раундов, область работ, постоянные требования
-владельца.
+Plus [config.md](config.md) — this project's settings: toolchain, gate, probes,
+severity bar, round cap, scope, standing owner requirements.
 
-## Как это связано
+## How it is linked
 
 ```mermaid
 flowchart LR
-    L["ЛИНЗА<br/>lenses/RPC-NN"]
-    R["РАУНД<br/>rounds/NNN"]
-    B["ЗАЦЕПКА<br/>backlog/B-NN"]
-    C["НЕГАТИВ<br/>checked/C-NN"]
+    L["LENS<br/>lenses/RPC-NN"]
+    R["ROUND<br/>rounds/NNN"]
+    B["LEAD<br/>backlog/B-NN"]
+    C["NEGATIVE<br/>checked/C-NN"]
 
-    L -->|"раунд взял линзу"| R
-    R -->|"обновил статус и улику"| L
-    R -->|"оставил недоделанным"| B
-    R -->|"закрыл вопрос"| C
-    B -->|"создана раундом"| R
-    C -->|"измерен раундом"| R
-    L -->|"исключение из свипа<br/>живёт зацепкой"| B
+    L -->|"a round took the lens"| R
+    R -->|"updated its status and evidence"| L
+    R -->|"left unfinished"| B
+    R -->|"closed the question"| C
+    B -->|"created by a round"| R
+    C -->|"measured by a round"| R
+    L -->|"an exclusion from a sweep<br/>lives on as a lead"| B
 ```
 
-Ссылки двусторонние, поэтому от любой записи можно вернуться к раунду, который её
-породил, а от раунда — к числам и пробе.
+The links run both ways, so from any record you can get back to the round that
+produced it, and from a round to the numbers and the probe.
 
-## Куда идти с вопросом
+## Where to go with a question
 
-- **«Хочу прогнать раунд»** — [LENSES.md](lenses/LENSES.md) за целью,
-  [BACKLOG.md](backlog/BACKLOG.md) за тем, что назрело,
-  [CHECKED.md](checked/CHECKED.md) чтобы не переделывать закрытое,
-  [config.md](config.md) за гейтом и планкой.
-- **«Какой номер у следующего раунда»** — [ROUNDS.md](rounds/ROUNDS.md), правило
-  написано там.
-- **«Это уже проверяли?»** — сначала статус линзы: `исчерпана здесь` значит свип
-  по её детектору прошёл чисто. Потом [CHECKED.md](checked/CHECKED.md) — там то,
-  что не привязано к форме.
-- **«Откуда взялось это утверждение»** — у каждой записи назван раунд; файл раунда
-  несёт числа, пробу и результат канарейки.
-- **«Что ждёт меня, а что владельца»** — [BACKLOG.md](backlog/BACKLOG.md), колонка
-  статуса.
+- **"I want to run a round"** — [LENSES.md](lenses/LENSES.md) for a target,
+  [BACKLOG.md](backlog/BACKLOG.md) for what is due,
+  [CHECKED.md](checked/CHECKED.md) so nothing closed gets redone,
+  [config.md](config.md) for the gate and the bar.
+- **"What number is the next round"** — [ROUNDS.md](rounds/ROUNDS.md), the rule
+  is written there.
+- **"Has this been checked?"** — the lens status first: `swept here` means the
+  sweep by its detector came back clean. Then
+  [CHECKED.md](checked/CHECKED.md) — that holds what is not tied to a shape.
+- **"Where did this claim come from"** — every record names its round; the round
+  file carries the numbers, the probe and the outcome.
+- **"What awaits me and what awaits the owner"** —
+  [BACKLOG.md](backlog/BACKLOG.md), the status column.
 
-## Чему здесь верить с оглядкой
+## What to trust with care
 
-- **Раунды до 201 файлами не существуют.** Их след — в истории git (около 55
-  коммитов за один сентябрьский прогон) и в приватной памяти. Ссылки на них
-  выглядят как голые номера, и это правильно: выдумывать несуществующий файл
-  нельзя.
-- **Записи с пометкой `(не перепроверено)`** перенесены из приватной памяти и в
-  текущей сессии не воспроизводились.
-- **Детекторы линз ни разу не прогонялись** — это рецепты поиска, а не
-  результаты. Первый раунд, взявший линзу, их уточняет.
-- **Всё стареет, и по отдельности**: у зацепки её ЧИСЛО и её БЛОКЕР, у линзы её
-  статус, у негатива его измерение. Перемер собственной записи — полноценная цель
-  раунда, а не рутина.
+- **Rounds before 201 do not exist as files.** Their trace is in the git history
+  (about 55 commits in one September run) and in private memory. References to
+  them look like bare numbers, and that is correct: inventing a file that does
+  not exist is not allowed.
+- **Records marked `(not re-measured)`** were carried over from private memory
+  and have not been reproduced in the current session.
+- **Lens detectors have never been run** — they are search recipes, not results.
+  The first round to take a lens sharpens them.
+- **Everything ages, and separately**: a lead has its NUMBER and its BLOCKER, a
+  lens has its status, a negative has its measurement. Re-measuring one's own
+  record is a full round target, not a chore.

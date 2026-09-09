@@ -1,22 +1,22 @@
 ---
-статус: закрыта (раунд 201)
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_wasm/lib/**]
-проба: —
-причина: перемер в раунде 199 нашёл тихую обрезку на wasm, починено раундом 201
+status: closed (round 201)
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_wasm/lib/**]
+probe: —
+reason: the re-measurement in round 199 found a silent truncation on wasm, fixed by round 201
 ---
 
-# B-08 — Расщепление типов ошибок на закрытом транспорте
+# B-08 — The error-type split on a closed transport
 
-Политическая половина была решена раньше. Перезамер в раунде 199 добавил строку,
-которой в таблице никогда не было — wasm, — и нашёл там тихую обрезку потока;
-починено раундом 201 (`../rounds/201-cancel-told-server-first.md`).
+The policy half was settled earlier. Re-measuring in round 199 added a row the
+table had never had — wasm — and found a silent stream truncation there; fixed
+by round 201 (`../rounds/201-cancel-told-server-first.md`).
 
-Ценность записи — в том, как она закрылась: **отсрочка, помеченная «рассосалось»,
-была перемерена и оказалась дефектом.** Три отсрочки перемерены за тот прогон,
-все три записаны неверно.
+The value of this record is how it closed: **a deferral marked "it dissolved"
+was re-measured and turned out to be a defect.** Three deferrals were
+re-measured in that run, all three recorded wrongly.
 
-## Решение владельца
+## Owner decision
 
 —

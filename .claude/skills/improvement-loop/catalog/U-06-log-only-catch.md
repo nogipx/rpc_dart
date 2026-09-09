@@ -1,38 +1,37 @@
 ---
-пакет: core
-применима: везде.
-ломается: тихая потеря данных.
-статус: подтверждена
+pack: core
+applies: everywhere.
+breaks: silent data loss.
+status: confirmed
 ---
 
-# U-06 — `catch`, который только логирует, на пути к успеху
+# U-06 — A log-only `catch` on the path to success
 
-Два следствия из того фикса:
+Two consequences of that fix:
 
-- чинить надо в точке, ВЫНОСЯЩЕЙ ВЕРДИКТ, а не в каждом месте отказа: одна правка
-  закрыла все четыре формы вызова;
-- сделать вместо этого `throw` выглядело чище и было неверно, потому что одна из
-  реализаций вызывает отправку и завершение внутри одного `try`, и бросок
-  пропускает завершение и вешает вызывающего. **Проверять все места вызова,
-  прежде чем превращать проглатывание в бросок.**
+- fix at the point that RENDERS THE VERDICT, not at every failure site: one edit
+  closed all four call shapes;
+- turning it into a `throw` instead looked cleaner and was wrong, because one
+  implementation calls the send and the completion inside a single `try`, so a
+  throw skips the completion and hangs the caller. **Check every call site
+  before turning a swallow into a throw.**
 
-## Форма
+## Shape
 
-`catch { log }`, а дальше в том же жизненном цикле — безусловный
-сигнал успеха.
+`catch { log }`, and then an unconditional success signal later in the same
+lifecycle.
 
-## Детектор
+## Detector
 
-Грепать блоки перехвата, чьё единственное действие — вызов логгера;
-читать, что код делает ПОСЛЕ.
+Grep catch blocks whose only action is a logger call; read what the code does
+AFTERWARDS.
 
-## Спрашивать
+## Ask
 
-Может ли вызывающий сделать неверный вывод из того, что следует за
-проглатыванием?
+Can the caller draw a wrong conclusion from what follows the swallow?
 
-## Улика
+## Evidence
 
-Неудачная отправка логировалась, а поток завершался успешным
-статусом: элемент, не покинувший процесс, доезжал до получателя как
-поток, в котором его просто нет.
+A failed send was logged while the stream ended with a success status: an item
+that never left the process arrived at the receiver as a stream it is simply not
+in.

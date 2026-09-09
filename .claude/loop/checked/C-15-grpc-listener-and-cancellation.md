@@ -1,18 +1,18 @@
 ---
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/transport/rpc_dart_http2/lib/**]
-область: [http2 против grpcurl]
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/transport/rpc_dart_http2/lib/**]
+scope: [http2 against grpcurl]
 ---
 
-# C-15 — Настоящий gRPC-клиент: устойчивость слушателя и отмена
+# C-15 — A real gRPC client: listener resilience and cancellation
 
-Раунды:   54 (слушатель), 55 (отмена)
-Драйвер:  grpcurl
+Rounds: 54 (the listener), 55 (cancellation). Driver: grpcurl.
 
-Удерживаемые открытыми сокеты и клиентская отмена — чисто. `grpcurl` и `go` в
-системе установлены, так что батарея воспроизводима.
+Sockets held open and client-side cancellation are clean. `grpcurl` and `go` are
+installed on this machine, so the battery is reproducible.
 
-## Контроль
+## Control
 
-Отмена без держания сокета: сервер закрывает поток сам, значит наблюдаемое поведение задаёт клиент
+Cancellation without holding the socket: the server closes the stream itself, so
+the observable behaviour is set by the client.

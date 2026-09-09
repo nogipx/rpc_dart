@@ -1,79 +1,76 @@
 ---
-раунд: 205
-вердикт: CLEAN
-пакеты: [rpc_dart_websocket, rpc_dart_isolate]
-линза: RPC-08
-стенд: без стенда
-бюджет: пробы 0/3, канарейки 0/3
-рецензия: сам (запись мигрирована в схему; рецензии в раунде не было)
-коммит: нет
+round: 205
+verdict: CLEAN
+packages: [rpc_dart_websocket, rpc_dart_isolate]
+lens: RPC-08
+bench: none
+budget: probes 0/3, canaries 0/3
+review: self (record migrated into the schema; the round itself had no review)
+commit: no
 ---
 
-# Раунд 205 — DoS-лимиты действительно кусают на канальных транспортах
+# Round 205 — DoS limits really do bite on the channel transports
 
-## Цель
+## Target
 
-RPC-08 (поле политики проверено на одном транспорте) плюс U-21. Раунд
-119 нашёл `maxConcurrentHandlers` рабочим на http2 и МЁРТВЫМ на
-HTTP/1.1; раунд 193 проверил лишь то, что каждое поле политики где-то
-УПОМЯНУТО. Ни то, ни другое не доказывало, что лимиты кусают на
-канальных транспортах.
+RPC-08 (a policy field checked on one transport only) plus U-21. Round 119 found
+`maxConcurrentHandlers` working on http2 and DEAD on HTTP/1.1; round 193 only
+checked that every policy field was MENTIONED somewhere. Neither proved the
+limits bite on the channel transports.
 
-## Гипотеза
+## Hypothesis
 
-`maxConcurrentHandlers` и `halfOpenStreamTimeout` инертны на websocket
-и isolate так же, как раньше на HTTP/1.1.
+`maxConcurrentHandlers` and `halfOpenStreamTimeout` are inert on websocket and
+isolate, the way they once were on HTTP/1.1.
 
-## До
+## Before
 
 ```
-maxConcurrentHandlers — пик одновременных обработчиков,
-каждый удерживается 900 мс:
+maxConcurrentHandlers — peak concurrent handlers,
+each one held for 900 ms:
 
-  websocket, потолок не задан, 30 вызовов -> пик 30   <- контроль
-  websocket, потолок 3,          30 вызовов -> пик 3
-  websocket, потолок 1,          10 вызовов -> пик 1
-  isolate,   потолок не задан, 30 вызовов -> пик 30   <- контроль
-  isolate,   потолок 3,          30 вызовов -> пик 3
+  websocket, no ceiling, 30 calls -> peak 30   <- control
+  websocket, ceiling 3,  30 calls -> peak 3
+  websocket, ceiling 1,  10 calls -> peak 1
+  isolate,   no ceiling, 30 calls -> peak 30   <- control
+  isolate,   ceiling 3,  30 calls -> peak 3
 
-halfOpenStreamTimeout — 20 потоков, открытых одним кадром
-метаданных, openStreams опрашивается до дедлайна:
+halfOpenStreamTimeout — 20 streams opened by a single metadata
+frame, openStreams polled until the deadline:
 
-  таймаут выключен -> 20 припарковано, через 20 с всё ещё 20  <- контроль
-  таймаут 3 с      -> 20 припарковано, после 0
+  timeout off  -> 20 parked, still 20 after 20 s   <- control
+  timeout 3 s  -> 20 parked, then 0
 ```
 
-Пробы: `handler_ceiling.dart` (websocket и isolate), `half_open_reclaim.dart`
+Probes: `handler_ceiling.dart` (websocket and isolate), `half_open_reclaim.dart`
 (websocket).
 
-## Механизм
+## Mechanism
 
-Гипотеза не подтвердилась. Оба лимита работают. Значение
-`halfOpenStreamTimeout` по умолчанию — 60 с, а не null, поэтому
-полуоткрытые потоки утилизируются из коробки; строка с выключенным
-таймаутом выше — это проба, намеренно снявшая границу, и её легко
-неверно прочитать как «по умолчанию течёт».
+The hypothesis did not hold. Both limits work. `halfOpenStreamTimeout` defaults
+to 60 s rather than null, so half-open streams are reclaimed out of the box; the
+timeout-off row above is a probe that deliberately removed the bound, and it is
+easy to misread as "it leaks by default".
 
-## После
+## After
 
 n/a
 
-## Канарейка
+## Canary
 
-n/a — строки без потолка и есть контроль: без них стенд, который не
-добивается конкурентности, показал бы «3» и выглядел бы как
-работающее ограничение.
+n/a — the no-ceiling rows are the control: without them a bench that fails to
+reach concurrency would have shown "3" and looked like a working limit.
 
-## Гейт
+## Gate
 
-n/a — правок нет
+n/a — no edits
 
-## Не чинил
+## Not fixed
 
-Ничего
+Nothing
 
-## Связи
+## Links
 
-Линза `../lenses/RPC-08-policy-field-single-transport.md` — статус
-обновлён, websocket и isolate закрыты. Негатива в `checked/` не
-заводил: это свип по детектору линзы, его дом — статус линзы.
+Lens `../lenses/RPC-08-policy-field-single-transport.md` — status updated,
+websocket and isolate closed. No negative was filed in `checked/`: this is a
+sweep by a lens detector, and its home is the lens status.

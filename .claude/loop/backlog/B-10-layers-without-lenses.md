@@ -1,30 +1,30 @@
 ---
-статус: открыта
-раунд: — (не перепроверено)
-коммит: 5bf4d34e
-пути: [packages/data/**, packages/notify/**, packages/blob/**]
-проба: —
-причина: набор линз выведен из истории раундов, а она почти целиком про ядро и транспорты; слои data, notify и blob в неё не попадали
+status: open
+round: — (not re-measured)
+commit: 5bf4d34e
+paths: [packages/data/**, packages/notify/**, packages/blob/**]
+probe: —
+reason: the lens set was derived from the round history, which is almost entirely about core and the transports; the data, notify and blob layers never entered it
 ---
 
-# B-10 — Три слоя проекта не покрыты ни одной линзой
+# B-10 — Three layers of the project have no lens at all
 
-`loop.py stale` считает покрытие путей линз против отслеживаемых файлов и называет
-директории, на которые не смотрит ни один детектор:
+`loop.py stale` counts lens path coverage against the tracked files and names
+the directories no detector looks at:
 
-    packages/data/     108 файлов
-    packages/blob/      76 файлов
-    packages/notify/    50 файлов
+    packages/data/     108 files
+    packages/blob/      76 files
+    packages/notify/    50 files
 
-Это не дефект кода, а дыра в наборе линз: 234 файла, по которым цикл никогда не
-искал. Закрывается режимом `lenses` — перепройти шаг «перечислить поверхности» по
-этим трём пакетам и инстанцировать применимые формы каталога, а не переносить
-транспортные линзы механически.
+This is not a code defect but a hole in the lens set: 234 files the loop has
+never searched. It closes in `lenses` mode — redo the "enumerate the surfaces"
+step over those three packages and instantiate the applicable catalog shapes,
+rather than carrying the transport lenses across mechanically.
 
-Отдельно проверить применимость пакета `crdt`: `packages/data` может подходить под
-`Применим: несколько реплик, слияние без координации, offline-first` — тогда к
-подключённым добавится и он.
+Check the `crdt` pack's applicability separately: `packages/data` may fit
+`applies: several replicas, coordination-free merge, offline-first` — in which
+case it joins the enabled packs.
 
-## Решение владельца
+## Owner decision
 
 —

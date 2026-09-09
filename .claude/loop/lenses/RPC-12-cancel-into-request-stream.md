@@ -1,30 +1,32 @@
 ---
-уточняет: —
-пути: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**]
-применима: отмена доставляется в поток запросов обработчика
-ломается: падение процесса у пользователя, выглядящее как баг библиотеки.
-применена: [202, 203, 204]
-статус: отозвана (раунд 204) принять за дефект снова
+refines: —
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**]
+applies: cancellation is delivered into the handler's request stream
+breaks: a process crash in user code that looks like a library bug.
+applied: [202, 203, 204]
+status: retracted (round 204)
 ---
 
-# RPC-12 — Отмена доставляется в поток запросов обработчика
+# RPC-12 — Cancellation delivered into the handler's request stream
 
-См. `../rounds/204-retraction-listen-onerror.md` и раунды 202, 203 там же.
+Do not mistake it for a defect again. See
+`../rounds/204-retraction-listen-onerror.md` and rounds 202, 203 alongside it.
 
-## Форма
+## Shape
 
-Не дефект библиотеки, а контракт: отмена приходит ошибкой в поток
-запросов, и подписка без `onError` делает её фатальной для изолята.
+Not a library defect but a contract: cancellation arrives as an error in the
+request stream, and a subscription without `onError` makes it fatal to the
+isolate.
 
-## Детектор
+## Detector
 
-В примерах и тестах — `requests.listen(` без `onError`.
+In examples and tests, `requests.listen(` with no `onError`.
 
-## Спрашивать
+## Ask
 
-Это код библиотеки или код пользователя? Ошибка в чьей зоне?
+Is this library code or user code? Whose zone is the error in?
 
-## Улика
+## Evidence
 
-Два раунда потрачены на несуществующий дефект; причина была в
-собственном обработчике пробы.
+Two rounds spent on a defect that did not exist; the cause was in the probe's
+own handler.
