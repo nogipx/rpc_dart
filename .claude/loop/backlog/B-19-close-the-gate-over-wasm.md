@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 223)
+status: closed (round 226)
 round: 220
 commit: 9ee285ca
 paths: [pubspec.yaml]
@@ -8,6 +8,11 @@ reason: decided by owner (round 223) — close the gate; ready to implement
 ---
 
 # B-19 — close the gate over rpc_dart_wasm
+
+> **Closed by round 226.** `analyze`, `format:check` and — not asked for, but
+> required for `prepare` to be able to fix what it checks — `format` are now
+> `run:` blocks covering the package explicitly. Verified on all four arms: a
+> planted violation goes red in wasm AND still goes red in a member.
 
 `analyze` and `format:check` never see `rpc_dart_wasm`, because both use melos's
 member-scoped `exec:` form and that package is deliberately outside the pub

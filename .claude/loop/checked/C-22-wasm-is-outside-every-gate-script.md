@@ -7,6 +7,12 @@ scope: [wasm]
 
 # C-22 — wasm is outside every gate script, and clean anyway
 
+> **Superseded for `analyze`, `format` and `format:check` by round 226**, which
+> converted all three from `exec:` to `run:` blocks that handle this package
+> explicitly. The hole below was real and is closed; the measurement is kept
+> because it is what the conversion was checked against. `test`/`test:unit`
+> still do not cover it — that is `test:wasm`, and it is by design.
+
 **Do not re-derive this package list.** Round 220 measured it.
 
     melos list          21 packages

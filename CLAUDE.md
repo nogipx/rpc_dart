@@ -36,6 +36,14 @@ them; the workspace already does that. After changing dependencies run
 Flutter package; including it would pin the whole lockfile to the Flutter SDK's
 transitive deps). It resolves standalone — test it separately.
 
+Because `melos exec` only ever sees members, that used to put its Dart source
+outside every gate: an unused import planted in its `lib/` left both
+`melos run analyze` and `melos run format:check` reporting SUCCESS over 21
+packages. `analyze`, `format` and `format:check` are therefore `run:` blocks
+that sweep the members and then handle this one package by hand — the shape
+`publish:dry` already used. **Its TESTS are still separate** (`melos run
+test:wasm`), and so is its native code (`analyze:native`).
+
 ## Common commands
 
 One-time setup (puts `melos` on PATH; its `exec:` scripts re-invoke `melos`, so

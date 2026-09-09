@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[226](226-close-the-gate-over-wasm.md)** FIXED, rpc_dart_wasm — close the gate over wasm
 - **[225](225-the-guard-nothing-reaches.md)** CLEAN, rpc_dart — the guard nothing reaches
 - **[224](224-refuse-a-transport-that-cannot-carry-the-watermark.md)** FIXED, rpc_dart — refuse a transport that cannot carry the watermark
 - **[223](223-the-isolate-exception-closed-and-a-pattern.md)** CLEAN, rpc_dart_isolate — the isolate exception closed, and a pattern

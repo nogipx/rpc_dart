@@ -67,12 +67,31 @@ melos:
   # the exact same commands run there (see .github/workflows).
   scripts:
     # --- Static analysis (all packages, strict like CI) ---
+    # A `run:` block, not melos's `exec:` form: exec only ever sees WORKSPACE
+    # MEMBERS, and rpc_dart_wasm is deliberately not one (the only Flutter
+    # package -- including it would pin the lockfile to the Flutter SDK's
+    # transitive deps). So the one package that ships Swift and Kotlin, and the
+    # only one that can get an application rejected from an app store, was
+    # analysed and format-checked by nothing at all.
+    #
+    # Measured at round 226, with an unused import and a format violation
+    # planted in packages/transport/rpc_dart_wasm/lib:
+    #
+    #   before   melos run analyze       SUCCESS over 21 packages
+    #            melos run format:check  SUCCESS over 21 packages
+    #   after    both FAILED, and still FAILED for a violation planted in a
+    #            member -- the strict gate did not become a permissive one
+    #
+    # Same shape publish:dry already uses for this same package. `set -e` plus
+    # a non-zero exit from `melos exec` is what fails the script; both were
+    # checked by ablation rather than assumed.
     analyze:
       description: Analyze every package (lib + test) with warnings/infos fatal.
-      run: fvm dart analyze --fatal-infos --fatal-warnings .
-      exec:
-        concurrency: 6
-        failFast: false
+      run: |
+        set -e
+        fvm dart run melos exec --concurrency 6 -- "fvm dart analyze --fatal-infos --fatal-warnings ."
+        echo "--- rpc_dart_wasm (outside the workspace) ---"
+        fvm dart analyze --fatal-infos --fatal-warnings packages/transport/rpc_dart_wasm
 
     # --- Tests ---
     # generator is excluded: its build_test golden tests are incompatible with
@@ -247,15 +266,24 @@ melos:
       run: mkdocs serve --strict
 
     # --- Formatting ---
+    # Both cover rpc_dart_wasm explicitly, for the reason spelled out at
+    # `analyze`. `format` needs it as much as `format:check` does: `prepare`
+    # runs format and then the checks, so a member-only `format` would leave it
+    # able to FAIL on wasm's formatting and unable to fix it.
     format:
       description: Format all Dart sources.
-      run: fvm dart format .
-      exec: {}
+      run: |
+        set -e
+        fvm dart run melos exec -- "fvm dart format ."
+        fvm dart format packages/transport/rpc_dart_wasm
 
     format:check:
       description: Verify formatting without writing (CI gate).
-      run: fvm dart format --output=none --set-exit-if-changed .
-      exec: {}
+      run: |
+        set -e
+        fvm dart run melos exec -- "fvm dart format --output=none --set-exit-if-changed ."
+        echo "--- rpc_dart_wasm (outside the workspace) ---"
+        fvm dart format --output=none --set-exit-if-changed packages/transport/rpc_dart_wasm
 
     # --- Licensing (REUSE / SPDX headers; needs the `reuse` CLI) ---
     # Single source of truth for the license text is the ROOT `LICENSE` file.
