@@ -498,6 +498,30 @@ def skill_index_for(p: Path) -> Path | None:
     return SKILL_ROOT / parts[0] / index
 
 
+# An interpreter allowed by NAME allows every program written on the command
+# line; allowed by PATH it allows one script. `-c` matches the first and not the
+# second, which is the whole difference.
+INTERPRETERS = ("python3", "python", "node", "dart", "perl", "ruby", "bash", "sh")
+
+
+def bare_interpreters(rules: list[str], where: str, rep: "Report") -> None:
+    """Reject `Bash(python3:*)` and friends: they permit `python3 -c "..."`.
+
+    Measured: with the bare rule in the skill's own `allowed-tools` an agent ran
+    inline Python about fifteen times in one session and was never prompted --
+    in a repository whose settings.json had carried the narrow path rule from
+    the start. A rule that reads like "the script may run" and means "any
+    program may run" is worse than no rule, because everyone believes it.
+    """
+    for rule in rules:
+        m = re.fullmatch(r"Bash\(([^\s:)]+)\s*:\s*\*\)", rule.strip())
+        if m and m.group(1) in INTERPRETERS:
+            rep.error(
+                f"{where}: rule `{rule}` allows ANY program on the command line "
+                f"(`{m.group(1)} -c ...`), not just the script — name the script's "
+                "path: Bash(python3 <path>/scripts/loop.py:*)")
+
+
 def script_names(rep: "Report") -> None:
     """Names loop.py READS that nothing in loop.py BINDS.
 
@@ -563,6 +587,14 @@ def skill_graph(rep: "Report") -> None:
     """
     files = sorted(SKILL_ROOT.rglob("*.md"))
     root_md = SKILL_ROOT / "SKILL.md"
+    if root_md.exists():
+        # `allowed-tools` grants permissions exactly like permissions.allow, and
+        # is the copy that travels with the skill into every repository.
+        for line in root_md.read_text().splitlines():
+            if line.startswith("allowed-tools:"):
+                entries = [t.strip() for t in line.split(":", 1)[1].split(",")]
+                bare_interpreters(entries, "SKILL.md allowed-tools", rep)
+                break
     if not root_md.exists():
         rep.error("SKILL.md: missing — the skill has no root")
         return
@@ -1020,6 +1052,7 @@ def cmd_lint(root: Path, loop: Path) -> int:
         if not covered(f"python3 {Path(__file__).resolve()} status", rules):
             rep.warn("unattended: no rule covers `python3 .../scripts/loop.py` — "
                      "status/lint/stale/next will ask for permission")
+    bare_interpreters(rules, ".claude/settings.json", rep)
 
     # --- the skill's own graph, and its own script
     skill_graph(rep)

@@ -31,7 +31,11 @@ has to be decided at setup, and in what order.
    an absolute path:
    `Bash(python3 /.../improvement-loop/scripts/loop.py:*)`. If the file does not
    exist, create it; if it does, append to the array without deleting anything.
-   `loop.py lint` will say which gate command is not covered. The skill expects
+   `loop.py lint` will say which gate command is not covered.
+   **Never `Bash(python3:*)`** — that grants every program typed on the command
+   line, `python3 -c "..."` included, and `lint` now rejects it here and in the
+   skill's own `allowed-tools`. Same for any other interpreter: allow the PATH,
+   not the name. The skill expects
    itself at `.claude/skills/improvement-loop` or
    `~/.claude/skills/improvement-loop` — that is how the status block in
    SKILL.md finds it; fix that line for another path.

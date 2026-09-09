@@ -1,7 +1,7 @@
 ---
 name: improvement-loop
 description: One round of a measured find-and-fix loop — pick a lens, take a probe, measure in numbers, fix, check the fix with a canary, run the gate, write it into the journal. Use it when asked to hunt bugs, leaks, security holes, hangs or performance problems; to continue or resume the improvement loop; to run a round, including on a schedule from /loop; to report the loop's status or where it stopped; to re-measure an earlier finding, deferral or "checked" mark; to derive or maintain the lens set; to lay the loop out in a new repository. It also fires without the word "loop" — on any "find what is broken" request about code.
-allowed-tools: Read, Edit, Write, Glob, Grep, Agent, Task, CronList, CronDelete, Bash(python3:*), Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*)
+allowed-tools: Read, Edit, Write, Glob, Grep, Agent, Task, CronList, CronDelete, Bash(python3 .claude/skills/improvement-loop/scripts/loop.py:*), Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*)
 ---
 
 # The improvement loop
@@ -65,6 +65,15 @@ Anything the allowlist does not cover — variables, substitutions, globs,
 `| head`, `cd X &&`, `git stash`, `rm`, heredocs, reading files through the
 shell instead of `Read` — is forbidden; the list and the reasons are in
 `references/rule-zero.md`.
+
+**No program written on the command line.** `python3` is allowlisted for
+`scripts/loop.py` and nothing else — never `python3 -c`, `-e`, `node -e`,
+`dart -e` or a heredoc. A one-liner in a shell argument is a script authored
+outside `Write`, unreviewable in the diff, and it is why the rule is enforced by
+a NARROW allowlist rather than by remembering: `lint` rejects a bare
+`Bash(python3:*)` wherever it finds one. Same for backgrounding (`cmd &`,
+`( … & )`) and redirecting output into a file: both prompt, and both hide the
+output the round is supposed to record.
 
 ## Rule one — the code, not the prose
 

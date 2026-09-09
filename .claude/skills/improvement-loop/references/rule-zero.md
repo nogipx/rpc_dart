@@ -12,16 +12,38 @@ find the path before running, not after.
 ## What the allowlist covers
 
 - The skill's `allowed-tools`: `Read`, `Edit`, `Write`, `Glob`, `Grep`,
-  subagents, `python3` (for `loop.py`), `git status|log|diff|add|commit`.
+  subagents, `python3` **for `scripts/loop.py` only**, and
+  `git status|log|diff|add|commit`.
 - `permissions.allow` in the project's `.claude/settings.json`: the toolchain
   and the gate from `config.md` as prefix rules (`Bash(dart test:*)`), plus a
-  rule for `loop.py`. `setup` mode writes them, `loop.py lint` checks them.
+  rule for `loop.py` **naming its path**. `setup` mode writes them, `loop.py
+  lint` checks them.
+
+**The interpreter rule is a PATH rule, and that is the whole point.**
+`Bash(python3:*)` reads like "the script may run" and actually means "any
+program I type may run" — `python3 -c "..."` matches it, silently. The rule is
+therefore written as
+`Bash(python3 <path>/scripts/loop.py:*)`, and `lint` rejects the bare form
+wherever it appears: in the project's settings, in the skill's own
+`allowed-tools`. Measured: with the bare rule in the skill, an agent ran inline
+Python roughly fifteen times across one session without a single prompt, in a
+repository whose own settings had the narrow rule all along.
 
 ## What is forbidden, every item learned the hard way
 
 - `$VAR`, `${...}`, `$(...)`, backticks, globs, `for` loops over variables. A
   prefix rule does not cover them and they always ask. Including
   `echo "EXIT=$?"` — the Bash tool reports a non-zero exit code by itself.
+- **A program written on the command line**: `python3 -c`, `python3 -`,
+  `node -e`, `dart -e`, `perl -e`, a heredoc. It is a script authored outside
+  `Write`, so it never appears in a diff and nobody can review it; and it is
+  how an interpreter rule gets used for something other than the one script it
+  was allowed for. Whatever it computes, compute it with `loop.py`, with `Read`,
+  or with a probe file the round records by name.
+- **Backgrounding and file redirection**: `cmd &`, `( cmd & )`, `cmd > out.txt`,
+  `nohup`. They prompt, and they move the output out of the transcript, so the
+  round's evidence ends up somewhere the record cannot quote. A long command
+  runs in the foreground with a timeout.
 - `sed`, `head`, `tail`, `cat`, `awk` over a project file. That is `Read` with
   offset/limit. The rule is about the tool, not only about variable expansion: a
   literal `sed -n '150,200p'` counts too. And `| head -N` on a grep hides the
