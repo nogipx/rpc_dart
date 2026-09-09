@@ -11,6 +11,9 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-10](P-10-parked-sender-learns.md)** valid (round 221), core transports —
+  does a parked sender learn its call is over? Written in 210, registered in 221
+  once an ablation showed it can see a credit hang
 - **[P-09](P-09-watermark-survives-a-decorator.md)** valid (round 217), core resilience —
   does the stream-id watermark survive a user's decorator?
 - **[P-08](P-08-refusal-survives-a-tight-cap.md)** valid (round 216), http2 and core —

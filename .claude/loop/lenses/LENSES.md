@@ -10,7 +10,6 @@ deleted — no findings is a result too, and a deleted lens gets reinvented.
 
 ## Due a re-measurement
 
-- **[RPC-09](RPC-09-deadline-below-write.md)** swept here (210), **STALE since beed83e5** — the deadline sits below a blocking write; `channel_transport.dart` has changed since the sweep, and round 212 changed exactly the credit path it reasoned about; refines U-16
 - **[RPC-13](RPC-13-unhandled-async-error.md)** swept here (121, off-journal) — an abandoned future running user code kills the isolate; refines U-17
 - **[RPC-14](RPC-14-timeout-abandons-work.md)** swept here (067, off-journal), except isolate — a timeout drops the wait but not the work; refines U-17
 
@@ -23,6 +22,7 @@ deleted — no findings is a result too, and a deleted lens gets reinvented.
 
 ## Swept and fresh
 
+- **[RPC-09](RPC-09-deadline-below-write.md)** swept here (221) — the deadline sits below a blocking write; the answer path is independent of the send, demonstrated by ablation, so it cannot arise; refines U-16
 - **[RPC-02](RPC-02-refusal-trailer-violates-policy.md)** swept here (216) — the refusal trailer fails the policy it enforced; only trailers crossing a validating hop are at risk; refines U-09
 - **[RPC-05](RPC-05-concurrency-limit-charge-point.md)** swept here (215) — a limit is charged, or released, at the wrong point of the lifecycle; every stateful field swept; refines U-07
 - **[RPC-11](RPC-11-package-outside-workspace.md)** confirmed (220) — a package outside the workspace is invisible to the gate; wasm's Dart is analysed and formatted by nothing, clean anyway; refines U-03

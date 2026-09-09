@@ -3,8 +3,8 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210]
-status: swept here (round 210, beed83e5)
+applied: [210, 221]
+status: swept here (round 221, 7d06201c)
 ---
 
 # RPC-09 — A call deadline that sits below the write
@@ -39,10 +39,25 @@ halves, each against a draining-handler control:
       against 64 KiB), 0 consumed            completed in 0.4 s
 
 An ablation removing `_fcWake` from `_fcForget` moved neither number, which both
-confirms the independence and shows the probes cannot see a hang — so they were
-NOT promoted to benches. What that ablation left open is a parked sender
+confirms the independence and shows THAT ablation could not see a hang — so the
+probes were not promoted to benches in 210. What it left open is a parked sender
 outliving its own call, which is a leaked completer rather than a hang:
 `../backlog/B-13-parked-sender-outlives-its-call.md`.
 
 > **When a sweep comes back clean, ask what the ablation proved was UNTESTED.**
 > Here it was the very wake a previous round added for this purpose.
+
+Round 221 re-measured, because round 212 gated `_fcOnGrant` on the stream still
+being tracked — a new way for a grant to be refused, and therefore a new way for
+a parked sender to hang. Both halves reproduce. And the ablation 210 was missing
+turned up by aiming at the CREDIT path instead of the wake:
+
+    _fcOnGrant refusing every grant:
+      handler drains (healthy)   HUNG, 20 s, 16 pulled
+      handler answers early      completed, 0.4 s
+
+> **Aim the ablation at the mechanism the CLAIM depends on.** 210 ablated the
+> wake, which the claim does not rest on, and concluded its rig was blind. It
+> was not: starving the credit path hangs the draining call while the answered
+> call still returns in 0.4 s — which is the independence claim, demonstrated
+> rather than argued. Bench `../probes/P-10-parked-sender-learns.md`.
