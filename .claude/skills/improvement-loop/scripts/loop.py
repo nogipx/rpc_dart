@@ -933,48 +933,74 @@ def pending_decisions(loop: Path, data: dict) -> list[str]:
     return out
 
 
-def select_target(root: Path, loop: Path, data: dict) -> tuple[str, str, str]:
-    """(kind, ID, why) by the step 1 rules."""
-    dec = pending_decisions(loop, data)
-    if dec:
-        return ("owner decision", dec[0], "an owner decision not yet carried out comes before any lens")
-    # A lead a round STARTED and stopped for scope, before opening new work.
-    #
-    # Leads used to be reachable only once every lens was swept and fresh, which
-    # made the loop structurally incapable of finishing a thread: a round would
-    # defer half its work to a lead, and the next invocation would take a
-    # never-applied lens instead, every time. Measured over rounds 234-238 --
-    # five rounds, five different lenses, while the migration opened at 234 sat
-    # at 27 unfinished files.
-    #
-    # Opt-in, not inferred: `continuation: yes` is a judgement the deferring
-    # round records, so a lead that is genuinely BLOCKED (an owner decision, a
-    # bench that cannot produce a number, a change held for the next major) does
-    # not starve the lens set by looking unfinished.
+def target_shortlist(root: Path, loop: Path, data: dict,
+                     limit: int = 5) -> list[tuple[str, str, str]]:
+    """Ranked candidates for this round, best first, each with its reason.
+
+    The script RANKS; the agent CHOOSES. One printed answer made the loop's
+    judgement invisible: over rounds 234-238 it named a never-applied lens five
+    times running, each answer defensible on its own, and nothing in the output
+    showed what was being passed over. A shortlist keeps the ordering
+    deterministic and auditable -- the reason for every entry is computed, not
+    remembered -- while leaving the pick to whoever can weigh severity and
+    context. Going off-list stays allowed, with the reason in `## Target`.
+
+    Tiers are appended cheapest-first and the expensive one (a git diff per
+    swept lens) runs only if the list is still short.
+    """
+    out: list[tuple[str, str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(kind: str, tid: str, why: str) -> None:
+        if (kind, tid) in seen or len(out) >= limit:
+            return
+        seen.add((kind, tid))
+        out.append((kind, tid, why))
+
+    for did in pending_decisions(loop, data):
+        add("owner decision", did,
+            "an owner decision not yet carried out comes before any lens")
+
     for bid in backlog_rank(loop, data):
-        ent = data["backlog"][bid]
-        f = ent["fields"]
+        f = data["backlog"][bid]["fields"]
         if f.get("status", "").startswith("open") and _is_continuation(f):
-            return ("lead", bid,
-                    "a lead a round started and did not finish — before opening new work")
+            add("lead", bid,
+                "a lead a round started and did not finish — before opening new work")
+
     rank = lens_rank(loop, data)
     for lid in rank:
         f = data["lenses"][lid]["fields"]
         if f.get("status", "").startswith("derived") and not split_list(f.get("applied", "")):
-            return ("lens", lid, "derived and never applied — a hypothesis nobody has paid for yet")
+            add("lens", lid, "derived and never applied — a hypothesis nobody has paid for yet")
+    for lid in rank:
+        f = data["lenses"][lid]["fields"]
+        if f.get("status", "").startswith("confirmed") and not split_list(f.get("applied", "")):
+            add("lens", lid, "confirmed off-journal, never applied here")
     for lid in rank:
         st = data["lenses"][lid]["fields"].get("status", "")
         if st.startswith(("derived", "confirmed")):
-            return ("lens", lid, "first by rank among the un-swept")
-    for lid in rank:
-        ent = data["lenses"][lid]
-        ch = swept_stale(root, ent)
-        if ch:
-            return ("lens", lid, f"swept, but {len(ch)} file(s) changed along its paths — re-measure")
-    for bid, ent in data["backlog"].items():
-        if ent["fields"].get("status", "").startswith("open"):
-            return ("lead", bid, "an open lead with the set exhausted — re-measure (U-21)")
-    return ("none", "", "")
+            add("lens", lid, "first by rank among the un-swept")
+
+    if len(out) < limit:
+        for lid in rank:
+            ch = swept_stale(root, data["lenses"][lid])
+            if ch:
+                add("lens", lid,
+                    f"swept, but {len(ch)} file(s) changed along its paths — re-measure")
+
+    for bid in backlog_rank(loop, data):
+        f = data["backlog"][bid]["fields"]
+        if f.get("status", "").startswith("open"):
+            why = f.get("reason", "").strip() or "open"
+            add("lead", bid, f"an open lead — re-measure (U-21); blocked on: {why[:60]}")
+
+    return out
+
+
+def select_target(root: Path, loop: Path, data: dict) -> tuple[str, str, str]:
+    """The shortlist's first entry — the default when nobody chooses."""
+    s = target_shortlist(root, loop, data, limit=1)
+    return s[0] if s else ("none", "", "")
 
 
 def stop_condition(root: Path, loop: Path, data: dict, cfg: dict) -> tuple[bool, str]:
@@ -1093,11 +1119,18 @@ def cmd_next(root: Path, loop: Path) -> int:
     if stop:
         print(f"Stop: YES — {why}. Do not start a round; if launched from /loop, cancel the job.")
         return 2
-    kind, tid, why = select_target(root, loop, data)
-    if kind == "none":
-        print(f"Target: none — {why}")
+    shortlist = target_shortlist(root, loop, data)
+    if not shortlist:
+        print("Target: none — nothing selectable")
         return 2
+    kind, tid, why = shortlist[0]
     print(f"Target: {kind} {tid} — {why}")
+    if len(shortlist) > 1:
+        print("Shortlist — the script RANKS, you CHOOSE. Name the one you took in")
+        print("`## Target`, and if you go off-list, say why there:")
+        for n, (k, i_, w) in enumerate(shortlist, 1):
+            mark = "->" if n == 1 else "  "
+            print(f"  {mark} {n}. {k} {i_} — {w}")
     b = cfg["budget"]
     print(f"Budget: probes 0/{b.get('probes', '?')}, canaries 0/{b.get('canaries', '?')}")
     packs, missing = load_packs(loop, cfg)

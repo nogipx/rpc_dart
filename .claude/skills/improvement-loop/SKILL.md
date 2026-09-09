@@ -43,8 +43,11 @@ report the reason and, if the call came from `/loop`, cancel the job
    rules, valid benches along the same paths, the budget, the reading list.
    **The round number is the one the script named.** Not from memory, not from a
    commit, not from the user.
-2. You may depart from `next`'s target — with the reason in the round's
-   `## Target` section.
+2. `next` gives a ranked shortlist, not an order. Take the top entry, another
+   entry, or something off the list entirely — the reason goes in the round's
+   `## Target` section either way. **If you override the same way twice, the
+   RULE is wrong, not the answer**: fix the ranking (a `continuation:` flag, a
+   line moved in an index) instead of overriding a third time.
 3. Read `config.md`, `LOOP.md` and `lessons/LESSONS.md` in full; the entity
    files as needed. The indexes exist so you can choose, not so you can know.
 
@@ -70,11 +73,15 @@ is what `lint` and `stale` are for.
 
 ## The round
 
-1. **Target.** From `next`: an owner decision, then a **continuation** (an open
-   lead a round started and did not finish, marked `continuation: yes`), then a
-   lens never applied, then the rank, then a stale sweep. The catalog (`catalog/`) only through
-   instantiation into the set. Before a sweep, check `checked/` and the
-   statuses. A script detector is run through `loop.py sweep <ID>`; the list
+1. **Target.** `next` prints a ranked SHORTLIST — an owner decision, then a
+   **continuation** (an open lead a round started and did not finish, marked
+   `continuation: yes`), then a lens never applied, then the rank, then a stale
+   sweep, then an open lead. **The script ranks; you choose.** Name the entry you
+   took in `## Target`; picking something off the list is allowed and needs its
+   reason there too. Choosing the top entry by default is fine — what is not fine
+   is choosing without looking at what you passed over.
+   The catalog (`catalog/`) only through instantiation into the set. Before a
+   sweep, check `checked/` and the statuses. A script detector is run through `loop.py sweep <ID>`; the list
    hash goes into the status.
 2. **Bench.** `probes/` first — a valid bench along the same paths is reused,
    not rebuilt. A new bench counts as a bench once a control with the mechanism
@@ -136,7 +143,7 @@ already say. Nothing checks it.
   [model.md](references/model.md) (terms, diagrams),
   [rule-zero.md](references/rule-zero.md),
   [review.md](references/review.md) (the core of the reviewer prompt).
-- **[evals/](evals/EVALS.md)** — twelve scenarios that check the skill itself,
+- **[evals/](evals/EVALS.md)** — thirteen scenarios that check the skill itself,
   each derived from a rule a mistake paid for or from machinery the skill added.
   Run them after changing this file, `methods/` or `references/`.
 - **`scripts/loop.py`** — `init`, `status`, `next`, `lint`, `stale`, `catalog`,

@@ -21,9 +21,19 @@ The lens schema — `../specs/lens.md`. The universal shapes —
 
 ## Pick a lens from the data, not from a feeling
 
-`loop.py next` implements these rules; they are written down here so that
-departing from its answer is deliberate and lands in the round's `lens:` key
-with a reason. "The least-explored surface" is measured by the `applied:` key:
+`loop.py next` implements these rules and prints them as a ranked SHORTLIST.
+**The script ranks; the agent chooses.** They are written down here so that the
+choice is deliberate and lands in the round's `## Target` with a reason —
+including when it is the top entry.
+
+One printed answer made the loop's judgement invisible: over rounds 234-238 it
+named a never-applied lens five times running, every answer defensible on its
+own, and nothing in the output showed what was being passed over. Ranking is
+still computed rather than remembered, which is what keeps an unattended run
+auditable; only the pick moved.
+
+The tiers, in the order `next` emits them. "The least-explored surface" is
+measured by the `applied:` key:
 
 0. **A CONTINUATION lead** — `status: open` with `continuation: yes`, i.e. work
    a round started and stopped for scope. It comes before any lens, because a

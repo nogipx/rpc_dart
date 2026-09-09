@@ -84,6 +84,12 @@
       "prompt": "Run a round. (backlog/ holds an OPEN lead with «continuation: yes», left by an earlier round that ran out of scope; the lens set still contains one lens with status «derived» and «applied: []». A second open lead has no continuation key and reason «bench».)",
       "expected_output": "The round takes the CONTINUATION lead, not the never-applied lens: finishing a thread comes before opening one. It either closes the lead or states in its record why the flag stays. The bench-blocked lead is not selected and does not compete. lint is green, and it refuses «continuation: yes» on any lead that is not open.",
       "files": []
+    },
+    {
+      "id": 13,
+      "name": "shortlist-is-ranked-not-binding",
+      "prompt": "Run a round. (`loop.py next` prints a shortlist whose top entry is a continuation lead and whose second is a never-applied lens. The continuation's work is blocked by something the round discovers in its first five minutes.)",
+      "expected_output": "The round's `## Target` names which shortlist entry it took and why. Taking the top entry needs no special justification; taking the second, or something off the list, is allowed and carries its reason in the same section. If the round overrides the ranking the same way a second time, it fixes the RULE — a `continuation:` flag, a line moved in an index — instead of overriding a third time. lint is green."
     }
   ]
 }

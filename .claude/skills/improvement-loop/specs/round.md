@@ -26,7 +26,9 @@ commit: yes | no
 
 ## Target
 
-<why this lens; if not the one from `next`, why you departed from it>
+<which entry of `next`'s shortlist was taken and why; if it was not the top
+entry, or not on the list at all, say so and why. "The top one, nothing above it"
+is a complete answer — the point is that the alternatives were looked at.>
 
 ## Hypothesis
 
