@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/conn_window_leak.dart
 round: 206 — the validating round
 commit: c48a14d8
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**]
-status: valid
+status: stale (c48a14d8) — channel_transport.dart changed since; repeat the control before reusing
 ---
 
 # P-01 — how much a sender gets out before the connection pool wedges

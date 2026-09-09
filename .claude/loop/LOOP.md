@@ -75,3 +75,23 @@ produced it, and from a round to the numbers and the probe.
 - **Everything ages, and separately**: a lead has its NUMBER and its BLOCKER, a
   lens has its status, a negative has its measurement. Re-measuring one's own
   record is a full round target, not a chore.
+
+## What the lens set does not cover — curate pass after round 220
+
+`loop.py stale` reports directories with no lens at all, and three whole layers
+are in that list:
+
+    packages/data/     108 files
+    packages/blob/      76 files
+    packages/notify/    50 files
+
+Twenty rounds have mined core and the transports; nothing has ever looked at
+these 234 files. That is not an accident of ranking — the lens set was derived
+from the round history, which is almost entirely core and transports, so the set
+cannot point at them. Deriving lenses for those layers is `B-10`, and it is a
+`lenses`-mode job rather than a round.
+
+Two lenses also have `applied: []` and a stated reason nobody takes them
+(RPC-06 needs native toolchains, RPC-10 sits below the severity bar). Both are
+written up in `lenses/LENSES.md` under "Nobody has taken these, and why", per
+the curate rule that such a lens is either raised or given a reason.

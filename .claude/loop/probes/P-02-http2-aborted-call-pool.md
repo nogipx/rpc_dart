@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/aborted_upload_pool.dar
 round: 207 — the validating round
 commit: 1d5efdda
 paths: [packages/transport/rpc_dart_http2/lib/**]
-status: valid
+status: stale (1d5efdda) — all three http2 transports changed since; repeat the control before reusing
 ---
 
 # P-02 — does an http2 connection survive a cancelled stalled call?

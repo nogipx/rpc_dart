@@ -9,6 +9,14 @@ review: self (record migrated into the schema; the round itself had no review)
 commit: yes
 ---
 
+> **`lint` warns about this round's commit, and the warning is a false
+> positive.** The commit exists — `6ae31212`, "docs(rpc_dart): the requests
+> stream carries cancellation, so listen needs onError", verified in the curate
+> pass after round 220. It predates the convention that a round's commit body
+> opens with `Round N — <verdict> — <topic>`, so `git log --grep "Round 204 "`
+> cannot find it. Left as it is rather than rewriting history for a grep; the
+> sha is recorded here and in `ROUNDS.md`.
+
 # Round 204 — the request stream carries cancellation, so listen needs onError
 
 ## Target

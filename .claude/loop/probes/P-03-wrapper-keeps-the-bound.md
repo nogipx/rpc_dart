@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/wrapper_keeps_the_bound
 round: 209 — the validating round
 commit: 906437a2
 paths: [packages/transport/rpc_dart_http2/lib/**]
-status: valid
+status: stale (906437a2) — rpc_http2_server.dart changed since; repeat the control before reusing
 ---
 
 # P-03 — does a transport bound survive `RpcHttp2Server.transportWrapper`?

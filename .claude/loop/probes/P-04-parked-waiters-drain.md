@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/parked_waiters_drain.dart
 round: 211 — the validating round
 commit: 0d071c55
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**]
-status: valid
+status: stale (0d071c55) — channel_transport.dart changed since; repeat the control before reusing
 ---
 
 # P-04 — does an abandoned upload leave its sender parked?
