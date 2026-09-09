@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[230](230-the-last-round.md)** CLEAN, rpc_dart — the last round; the swallowed grant failure is unreachable and load-bearing
 - **[229](229-a-zero-grant-is-not-silence.md)** FIXED, rpc_dart — a zero grant is not silence
 - **[228](228-the-branch-206-did-not-cover.md)** DEFERRED, rpc_dart — the branch round 206 did not cover
 - **[227](227-the-web-guard-does-catch-it.md)** CLEAN, rpc_dart and rpc_blob — the web guard does catch it
