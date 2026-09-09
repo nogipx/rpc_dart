@@ -448,6 +448,11 @@ def cmd_lint(root: Path, loop: Path) -> int:
             links = {}
         else:
             links = index_links(index_path)
+            # A journal written before the padding rule was dropped lists its
+            # rounds as `[001]` while the file key normalises to `1`. Without
+            # this, every old round reads as "file with no line in ROUNDS.md".
+            if kind == "rounds":
+                links = {(round_key(k) or k): v for k, v in links.items()}
             itext = index_path.read_text()
             if "LOOP.md" not in itext:
                 rep.error(f"{kind}/{index_name}: no link to ../LOOP.md")

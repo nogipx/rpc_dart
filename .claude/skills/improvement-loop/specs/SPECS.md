@@ -40,6 +40,15 @@ decoration.
   at nothing. Verified by canary: with the normaliser reduced to identity,
   `applied: [007]` against `7-seven.md` reports "no file" and the round's
   back-reference check fails too.
+
+  **Padding is no longer required, not forbidden.** A journal written under the
+  old rule keeps reading: `001-one.md` with an index line `[001]`, an
+  `applied: [001, 002]`, a `status: confirmed (round 002)` and a
+  `round: 001` all resolve. The index links are normalised for the same reason
+  the file keys are — measured on a padded fixture, without that step every old
+  round reported "file with no line in ROUNDS.md". The two spellings
+  interoperate, so a migrating journal may simply stop padding at its next
+  round and leave the old names alone.
 - **An identifier never changes** once created — things refer to it. Rank and
   order live in the index.
 - **The next free number is stored nowhere.** It is the maximum in the directory
