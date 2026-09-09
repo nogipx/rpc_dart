@@ -34,6 +34,8 @@ lint exit code: 0 clean, 1 errors found.
 from __future__ import annotations
 
 import argparse
+import ast
+import builtins
 import fnmatch
 import json
 import re
@@ -494,6 +496,61 @@ def skill_index_for(p: Path) -> Path | None:
     if rel.name == index:
         return SKILL_ROOT / "SKILL.md"
     return SKILL_ROOT / parts[0] / index
+
+
+def script_names(rep: "Report") -> None:
+    """Names loop.py READS that nothing in loop.py BINDS.
+
+    Python resolves a global when the line executes, so a name deleted from
+    under a caller survives the diff, the import, `lint` and every command that
+    does not reach that branch. It shipped twice in one commit: `res` in
+    cmd_stale, left behind when `run_detector` went, and three templates in
+    cmd_init -- which took `setup` mode, the entry point for a new repository,
+    from working to NameError on its first command.
+
+    Deliberately conservative about what counts as bound: every Store name
+    anywhere inside a function counts as that function's local, nested scopes
+    included. That under-reports (a name bound only on one branch reads as
+    bound) and never invents a defect, which is the trade a checker in a gate
+    wants -- a false error gets the whole check muted.
+    """
+    src = (SKILL_ROOT / "scripts" / "loop.py").read_text()
+    try:
+        tree = ast.parse(src)
+    except SyntaxError as exc:
+        rep.error(f"skill scripts/loop.py:{exc.lineno}: does not parse ({exc.msg})")
+        return
+
+    def bound_in(node: ast.AST) -> set[str]:
+        names: set[str] = set()
+        for n in ast.walk(node):
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
+                names.add(n.id)
+            elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.add(n.name)
+            elif isinstance(n, ast.arg):
+                names.add(n.arg)
+            elif isinstance(n, ast.ExceptHandler) and n.name:
+                names.add(n.name)
+            elif isinstance(n, ast.Import):
+                names.update((a.asname or a.name).split(".")[0] for a in n.names)
+            elif isinstance(n, ast.ImportFrom):
+                names.update(a.asname or a.name for a in n.names)
+            elif isinstance(n, (ast.Global, ast.Nonlocal)):
+                names.update(n.names)
+        return names
+
+    module = set(dir(builtins)) | {"__file__", "__name__", "__doc__"}
+    for stmt in tree.body:
+        module |= bound_in(stmt)
+
+    for fn in [n for n in ast.walk(tree)
+               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+        known = module | bound_in(fn)
+        for n in ast.walk(fn):
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id not in known:
+                rep.error(f"skill scripts/loop.py:{n.lineno}: `{fn.name}` reads `{n.id}`, "
+                          "which nothing in the file binds — NameError when that line runs")
 
 
 def skill_graph(rep: "Report") -> None:
@@ -964,8 +1021,9 @@ def cmd_lint(root: Path, loop: Path) -> int:
             rep.warn("unattended: no rule covers `python3 .../scripts/loop.py` — "
                      "status/lint/stale/next will ask for permission")
 
-    # --- the skill's own graph
+    # --- the skill's own graph, and its own script
     skill_graph(rep)
+    script_names(rep)
     return rep.dump()
 
 

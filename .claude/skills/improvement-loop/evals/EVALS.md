@@ -9,15 +9,23 @@
 
 ## The four checks, cheapest first
 
-1. **`loop.py lint`** — the project's data against the schemas, and the skill's
-   own link graph: every file reachable from `SKILL.md`, no dangling link, the
-   gate covered by `permissions.allow`, `evals.json` well-formed.
+1. **`loop.py lint`** — the project's data against the schemas, the skill's own
+   link graph (every file reachable from `SKILL.md`, no dangling link, no step
+   named by number), the gate covered by `permissions.allow`, `evals.json`
+   well-formed, and **`loop.py` itself parsed for names it reads but never
+   binds**. That last one exists because Python resolves a global when the line
+   executes: a name deleted from under a caller survives the diff, the import
+   and every command that does not reach that branch. Two such crashes shipped
+   in one commit — `cmd_stale` reading a `res` that had gone with
+   `run_detector`, and `cmd_init` calling three deleted templates, which left
+   `setup` mode dead on its first command. Canaried: renaming
+   `CONFIG_TEMPLATE`'s definition produces "`cmd_init` reads `CONFIG_TEMPLATE`,
+   which nothing in the file binds".
 2. **Run every command** — `status`, `next`, `stale`, `catalog`, `review`,
-   `yield` — against the live journal. Python resolves a global when the line
-   executes, so a name deleted from under a command is invisible to `lint`, to
-   an import, and to reading the diff; it surfaces only on the call. Two such
-   crashes shipped in one commit: `cmd_stale` read a `res` that no longer
-   existed, and `cmd_init` called three templates that had been deleted with it.
+   `yield` — against the live journal. Check 1 now catches the deleted-name
+   class statically; running catches what it cannot see: a wrong assumption
+   about the data's shape, a branch that only fires on real records, output that
+   contradicts what the docs say the command does.
 3. **`init` in a scratch root**, then `status`, `next` and `lint` there:
    `python3 loop.py --root /tmp/x --loop /tmp/x/.claude/loop init`. This is the
    only way to exercise `setup` mode — the live repository already has a
