@@ -111,7 +111,6 @@ LENS_STATUS_RE = re.compile(
     r"retracted \(round \d+(?:, off-journal)?\))")
 SWEPT_RE = re.compile(r"swept here \(round (\d+), ([0-9a-f]{7,40})(?:, sweep ([0-9a-f]{8}))?\)")
 SWEPT_OFF_RE = re.compile(r"swept here \(round (\d+), off-journal\)")
-SCRIPT_RE = re.compile(r"^(\S+)(.*)$")
 BACKLOG_STATUS_RE = re.compile(
     r"^(open|awaiting owner|closed \(round \d+\)|"
     r"decided by owner \(round \d+\))")
@@ -773,19 +772,25 @@ def cmd_lint(root: Path, loop: Path) -> int:
         if f.get("review") and not REVIEW_RE.match(f["review"].strip()):
             rep.error(f"rounds/{pname}: `review:` must start with `subagent`, `self` or `claude -p`")
         if commit == "yes" and have_git:
-            # The alternation covers records written before the loop switched
-            # to English: those commit bodies say «Раунд NNN».
-            # Case-INSENSITIVE and with no trailing space. Grepping for
-            # "Round NNN " matched neither this repo's own commit convention
-            # ("round 233 - ...") nor a body ending at the number, so eight
-            # warnings stood for ~35 rounds, all false. A checker that is
-            # stably wrong gets muted, and it was: every lint call in the
-            # session that found this piped the warnings away.
-            found = git(root, "log", "--all", "-i", "-E", "--format=%h",
-                        f"--grep=(round|раунд) {rn}")
+            # Ask whether the round's own FILE is committed, not whether some
+            # commit message mentions the number.
+            #
+            # Two grep versions failed here, in opposite directions. `--grep
+            # "Round NNN "` -- case-sensitive, trailing space -- matched neither
+            # this repo's `round 233 - ...` convention nor a body ending at the
+            # number, so eight false warnings stood for ~35 rounds and trained
+            # everyone to pipe the warning block away. Making it loose then
+            # broke the other way within minutes: a commit whose message merely
+            # DISCUSSED round 201 satisfied the check for round 201.
+            #
+            # The record and its round are committed together, so `git log` on
+            # the file answers the actual question exactly, with nothing to
+            # guess and no wording to depend on.
+            found = git(root, "log", "-1", "--format=%h", "--",
+                        str(ent["path"].relative_to(root)))
             if not (found or "").strip():
-                rep.warn(f"rounds/{pname}: `commit: yes`, but no commit mentions "
-                         f"round {rn} (not committed yet?)")
+                rep.warn(f"rounds/{pname}: `commit: yes`, but the record itself "
+                         "is not committed yet")
         lens_ref = f.get("lens", "")
         lm = ANY_ID_RE.search(lens_ref)
         if not lm:
