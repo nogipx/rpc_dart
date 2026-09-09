@@ -883,14 +883,24 @@ def pending_decisions(loop: Path, data: dict) -> list[str]:
     `closed (round N)` like any other.
 
     Ranked by BACKLOG.md, per the rule that order lives in the index.
+
+    The STATUS decides, not the section. `## Owner decision` is an archive: a
+    lead whose decision was measured unbuildable keeps the old text with a
+    "superseded" note above it, because the reasoning is still worth reading.
+    Matching on "the section is non-empty" therefore reads a retired decision as
+    a live one -- B-17 was named as the round's first target five rounds running
+    while its decision was known impossible, and B-22 repeated it at round 232.
+
+    So: `decided by owner` means answered and not yet carried out;
+    `awaiting owner` means waiting, whatever the section still holds.
     """
     out = []
     for bid in backlog_rank(loop, data):
         f = data["backlog"][bid]["fields"]
-        if not f.get("status", "").startswith(("awaiting owner", "decided by owner")):
+        if not f.get("status", "").startswith("decided by owner"):
             continue
         if f.get("owner decision", "").strip() in EMPTY:
-            continue                      # asked, not yet answered — nothing to do
+            continue                      # decided, but nobody wrote it down
         out.append(bid)
     return out
 

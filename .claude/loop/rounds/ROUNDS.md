@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[232](232-the-selector-read-an-archive-as-a-decision.md)** FIXED, rpc_dart — the selector read an archive as a decision
 - **[231](231-the-two-candidates-are-one.md)** DEFERRED, rpc_dart — the two candidates are one
 - **[230](230-the-last-round.md)** CLEAN, rpc_dart — the last round; the swallowed grant failure is unreachable and load-bearing
 - **[229](229-a-zero-grant-is-not-silence.md)** FIXED, rpc_dart — a zero grant is not silence
