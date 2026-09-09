@@ -14,6 +14,7 @@ numbers, not a retelling.
 - **[L-04](L-04-a-guard-with-no-witness.md)** active (rounds 222-223), bench — after a sweep says "every site is guarded", ablate a guard: twice in a row nothing went red, because a guard against a leak or a crash is witnessed by an absence
 - **[L-06](L-06-the-path-the-owner-drives.md)** active (round 234), bench — when a lifecycle event can be started from either side, test the one the PEER starts: five tests calling `reconnect()` themselves stayed green for seven rounds while the path that begins with the socket dying was broken
 - **[L-07](L-07-instrument-every-hop-at-once.md)** active (pre-201, imported after 234), bench — instrument every hop at once instead of arguing about which is wrong: three of four attempts at flow control were lost to diagnosing by argument, and one counter per hop found it in minutes
+- **[L-09](L-09-a-delete-has-an-inbound-half.md)** active (round 239), process — a delete has an INBOUND half, and an index that does not link is not an index: 19 dangling links, then 10 orphaned notes, both found by the owner
 - **[L-08](L-08-a-per-test-connection-hides-it.md)** active (pre-201, imported after 234), fixture — a per-test connection cannot see a per-connection defect: 74 green tests over a caller that killed its own connection after 4 calls. The reproduction is one loop on one connection
 
 ## Promotion candidacy — curate pass after round 220

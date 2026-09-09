@@ -16,11 +16,51 @@ released, the operation keeps holding.
 
 ## Detector
 
-Grep `.timeout(` and match each hit against what the operation underneath holds.
+Grep `.timeout(` and, for each hit, ask: **if this fires LATE and succeeds
+anyway, who owns what it produced?** Harmless when the value is data — a ping
+reply, a response body. A leak when it is a handle: a socket, an isolate, a
+subscription, a file handle.
+
+**The fix, since a `Future` cannot be cancelled, is to ADOPT the abandoned one**
+— `pending.then((r) => r.close()).catchError((_) {})` inside `onTimeout`. A
+source that then fails late, or never settles at all, costs nothing.
 
 ## Ask
 
 What lives on after the timeout fires, and who releases it?
+
+## The wider family — an await another path can interleave with
+
+Imported from private memory after round 239. The timeout is one member; the
+shape is "the loser of a race holds a resource nobody owns", and **fixing one
+interleaving is not evidence the other is safe** — both callers had the
+close-during-reconnect half fixed long before anyone asked about
+reconnect-during-reconnect.
+
+    RpcClientConnection connectTimeout   334b3337   the abandoned factory result
+    close() DURING reconnect, both       -          re-check after the await and
+      callers                                       close what would be abandoned
+    reconnect() during reconnect,        473789b9   each attempt opened a
+      websocket and http2                75fd517f   connection and the last
+                                                    assignment won: ONE ORPHAN
+                                                    PER EXTRA ATTEMPT (2 -> 1,
+                                                    3 -> 2). Fixed by
+                                                    SINGLE-FLIGHT, a second
+                                                    caller joining the first
+
+**The family is swept — do not re-hunt it** (round 67). `RpcClientConnection`
+measured clean: `_connectingGuard` refuses a second loop and the loop completes
+it synchronously after attach, so no window exists — 4x concurrent
+`forceReconnect`, a drop racing `forceReconnect`, and repeated drops all gave
+`created == closed`, orphans 0. Pinned by
+`test/resilience/client_connection_concurrency_test.dart`, because the behaviour
+was correct but untested and `_onTransportDropped` nulls the guard deliberately.
+`RpcChannelTransport.reconnect()` is documented unsupported and acquires no
+resource, so isolate and wasm have nothing to race.
+
+> **The load-bearing guards for a single-flight fix**, both easy to omit: a LATER
+> reconnect must still open a new connection (the in-flight marker has to clear),
+> and the transport must still SERVE a call afterwards.
 
 ## Evidence
 
@@ -42,6 +82,15 @@ clean. All four sites:
                                                   terminates the worker
   isolate_transport_web.dart:385 ready grace      onTimeout: () {} — DELIBERATE
 ```
+
+Round 223's verdict was reached by MEASURING, not reading: four spawns against a
+synchronously blocking entrypoint all raised `TimeoutException`, none of the
+workers reached their post-block marker — so every isolate really was killed,
+even mid-busy-loop — and the process exited promptly afterwards.
+
+> **Do not add a watchdog `Timer` to detect "the process is still alive".** A
+> pending Timer keeps the event loop alive by itself, so the check reports a hang
+> unconditionally. Let the process exit BE the observable and time the run.
 
 The fourth site is the one worth knowing about. Its empty `onTimeout` looks
 exactly like this lens's defect and is not: a worker built before the ready

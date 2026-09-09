@@ -69,6 +69,23 @@ not code, every transport except `rpc_dart_http`, a code-shape difference is a
 lead — which had been sitting in memory where no round would have found it, and
 which governs how the parity lens may be used at all.
 
+## Round 239 — six more, and the graph repaired
+
+The first round the selector routed here on its own, once `continuation: yes`
+and the shortlist existed. Closed: `leak_audit_coverage` -> C-18 (a 4-line stub
+that now carries the 2996-entry defect and the 38-case matrix),
+`which_transport_uses_which_layer` -> RPC-10, `web_dart2js` -> RPC-07,
+`future_timeout_abandons_work` -> RPC-14, `client_stream_cancel...` (already
+whole in rounds 202-204), `closed_transport_leniency_contract` -> the new C-30.
+`backlog_proto_contract_generator` was reclassified as roadmap and stays.
+
+    memory notes   41 -> 34      queue   27 -> 21
+    dangling links 19 -> 0       orphans 10 -> 0
+
+**The migration broke the note graph twice before anyone noticed** — see
+`../lessons/L-09-a-delete-has-an-inbound-half.md`. Any further pass must repoint
+inbound links after deleting, and count inbound edges after touching the index.
+
 ## What is left, and why it is a lead rather than a round
 
 **~30 memory dossiers still hold code knowledge with numbers**, each needing a
