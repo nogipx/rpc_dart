@@ -570,6 +570,33 @@ def skill_graph(rep: "Report") -> None:
                           "the numbering in SKILL.md drifts and nothing notices; "
                           "name the step instead")
 
+    # The evaluations are the skill's source of truth for whether it works, and
+    # there is no runner for them, so the least they must be is well-formed and
+    # present. Anthropic's authoring guidance asks for at least three.
+    evals = SKILL_ROOT / "evals" / "evals.json"
+    if not evals.exists():
+        rep.error("skill evals/evals.json: missing — a skill with no evaluations "
+                  "has no way to show it works")
+        return
+    try:
+        parsed = json.loads(evals.read_text())
+    except json.JSONDecodeError as exc:
+        rep.error(f"skill evals/evals.json: not valid JSON ({exc.msg} at line {exc.lineno})")
+        return
+    items = parsed if isinstance(parsed, list) else parsed.get("evals", [])
+    if len(items) < 3:
+        rep.error(f"skill evals/evals.json: {len(items)} scenario(s); "
+                  "the authoring guidance asks for at least three")
+    seen_ids: set[object] = set()
+    for e in items:
+        eid = e.get("id", "?")
+        for key in ("id", "name", "prompt", "expected_output"):
+            if not str(e.get(key, "")).strip():
+                rep.error(f"skill evals/evals.json: scenario {eid} has no `{key}`")
+        if eid in seen_ids:
+            rep.error(f"skill evals/evals.json: duplicate scenario id {eid}")
+        seen_ids.add(eid)
+
 
 def cmd_yield(root: Path, loop: Path) -> int:
     """What each lens has actually produced. A FACT, decided by nobody.

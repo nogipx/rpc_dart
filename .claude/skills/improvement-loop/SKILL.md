@@ -132,8 +132,11 @@ started.
 Each directory has an index; `loop.py lint` fails on anything unreachable from
 here or on a dangling link.
 
-- **[specs/](specs/SPECS.md)** — what each file in `.claude/loop/` consists of;
-  the verdicts and what each changes are in [round.md](specs/round.md).
+- **[specs/](specs/SPECS.md)** — what each file in `.claude/loop/` consists of,
+  one file per record type, opened when writing that record: the verdicts and
+  what each changes are in [round.md](specs/round.md); the others are
+  `specs/lens.md`, `probe.md`, `backlog-item.md`, `checked-item.md`,
+  `lesson.md`, `config.md`, `pack.md`.
 - **[methods/](methods/METHODS.md)** — how to do the work. **Checklist at the
   top of each file; the stories below it are read once, not once per round.**
   The three read every round are linked here directly rather than through the
@@ -141,9 +144,13 @@ here or on a dangling link.
   of read: [measurement.md](methods/measurement.md) (the Bench step),
   [canary.md](methods/canary.md) (Witness and canary),
   [tests.md](methods/tests.md) (writing the regression test).
-- **[catalog/](catalog/CATALOG.md)** — defect shapes by pack.
+- **[catalog/](catalog/CATALOG.md)** — defect shapes by pack, one file per
+  shape, consulted BY ID when a lens names one in `refines:`. Open it directly
+  (`catalog/U-07-*.md`) or search across them rather than reading the index
+  first: `grep -rl "abort" catalog/`.
 - **[packs/](packs/PACKS.md)** — knowledge by domain and language; the `packs:`
-  line in `config.md` selects them. Schema: [specs/pack.md](specs/pack.md).
+  line in `config.md` selects them, and `loop.py next` names the exact pack
+  files for the round. Schema: [specs/pack.md](specs/pack.md).
 - **[references/](references/REFERENCES.md)** —
   [model.md](references/model.md) (terms),
   [rule-zero.md](references/rule-zero.md),

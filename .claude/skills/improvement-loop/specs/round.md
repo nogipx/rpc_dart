@@ -10,6 +10,11 @@ This is the only home of the round record, of the verdict definitions, and of
 what each verdict changes in the other files. The same record goes into the
 round file, into the chat report, and (expanded) into the commit body.
 
+**Contents:** the template, then a note per section (Target, Hypothesis, Before,
+Mechanism, After, Canary, Gate, Not fixed, Links) · **The verdicts** — FIXED,
+CLEAN, DEFERRED, INCONCLUSIVE, RETRACTED · **What a round changes** in the other
+records, per verdict.
+
 ````
 ---
 round: N

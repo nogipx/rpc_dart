@@ -6,6 +6,11 @@
 
 Read this on first contact, and whenever a term in a round feels uncertain.
 
+**Contents:** *Terms of three kinds* — the six record types, the verdicts, and
+the words a measurement uses · *The links* — which record points at which, and
+which of those edges carry information a grep could not recover · *A lens's
+lifecycle* — derived to confirmed to swept, and what moves it.
+
 ## Terms of three kinds
 
 Confusing the kinds is the main source of misunderstanding. An **entity** lives
