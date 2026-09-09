@@ -17,6 +17,7 @@ was taken. The blocker and the number age separately — see U-21.
 
 ## Open
 
+- **[B-20](B-20-detached-guard-has-no-witness.md)** open, reason "cost" (round 222) — the guard that stops a client hanging up from killing the server has no test; removing it leaves the core suite green
 - **[B-04](B-04-isolate-future-timeout-unaudited.md)** open (round 67) — isolate: unaudited `Future.timeout` sites, the price is a leaked isolate
 - **[B-18](B-18-web-guard-is-a-census-not-a-sweep.md)** open, reason "cost" (round 219) — the web guard is a build-and-construct check for nine of twelve packages; ablate a dart2js bug class to find out what it would actually catch
 - **[B-10](B-10-layers-without-lenses.md)** open — data, notify and blob have no lens at all: 234 files, and `loop.py stale` still names those three directories
