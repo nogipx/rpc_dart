@@ -72,6 +72,9 @@ LENS_FRONT = ["refines", "paths", "applies", "breaks", "applied", "status"]
 LENS_SECTIONS = ["shape", "detector", "ask", "evidence"]
 LENS_OPTIONAL = ["detector-script"]
 BACKLOG_FRONT = ["status", "round", "commit", "paths", "probe", "reason"]
+# Optional, opt-in: marks a lead as work a round STARTED and did not finish,
+# which `select_target` takes before opening a new lens. See specs/backlog-item.md.
+BACKLOG_OPTIONAL = ["continuation"]
 BACKLOG_SECTIONS = ["owner decision"]
 CHECKED_FRONT = ["round", "commit", "paths", "scope"]
 CHECKED_SECTIONS = ["control"]
@@ -744,11 +747,20 @@ def cmd_lint(root: Path, loop: Path) -> int:
     for kind, front, secs, status_re in (
             ("backlog", BACKLOG_FRONT, BACKLOG_SECTIONS, BACKLOG_STATUS_RE),
             ("checked", CHECKED_FRONT, CHECKED_SECTIONS, None)):
+        optional = BACKLOG_OPTIONAL if kind == "backlog" else []
         for iid, ent in data[kind].items():
             f = ent["fields"]
             pname = ent["path"].name
             require_fields(rep, kind, ent, front, secs)
-            unknown_front(rep, kind, ent, front)
+            unknown_front(rep, kind, ent, front + optional)
+            if kind == "backlog" and f.get("continuation", "").strip():
+                if not _is_continuation(f) and f["continuation"].strip().lower() not in ("no", "false"):
+                    rep.error(f"backlog/{pname}: `continuation: {f['continuation']}` "
+                              "is not yes/no — it decides whether the loop takes this "
+                              "before a new lens")
+                if _is_continuation(f) and not f.get("status", "").startswith("open"):
+                    rep.error(f"backlog/{pname}: `continuation: yes` on a lead that is "
+                              f"«{f.get('status', '')}» — only an OPEN lead can be continued")
             if status_re and f.get("status") and not status_re.match(f["status"]):
                 rep.error(f"{kind}/{pname}: status «{f['status']}» is off schema")
             rnd = f.get("round", "")
@@ -853,6 +865,22 @@ def lens_rank(loop: Path, data: dict) -> list[str]:
     return [lid for lid in order if lid in data["lenses"]] + sorted(rest)
 
 
+def backlog_rank(loop: Path, data: dict) -> list[str]:
+    """Line order in BACKLOG.md is the rank; leads with no line go last."""
+    order = list(index_links(loop / "backlog" / DIRS["backlog"]).keys())
+    rest = [bid for bid in data["backlog"] if bid not in order]
+    return [bid for bid in order if bid in data["backlog"]] + sorted(rest)
+
+
+def _is_continuation(fields: dict) -> bool:
+    """Whether a lead is unfinished work rather than blocked work.
+
+    Opt-in and explicit. Absent means "not a continuation", so importing a
+    backlog cannot silently starve the lens set.
+    """
+    return fields.get("continuation", "").strip().lower() in ("yes", "true")
+
+
 def swept_stale(root: Path, ent: dict) -> list[str] | None:
     """For a `swept here` lens: files changed along its paths since the sweep sha."""
     m = re.match(r"swept here \(round \d+, ([0-9a-f]{7,40})\)", ent["fields"].get("status", ""))
@@ -910,6 +938,25 @@ def select_target(root: Path, loop: Path, data: dict) -> tuple[str, str, str]:
     dec = pending_decisions(loop, data)
     if dec:
         return ("owner decision", dec[0], "an owner decision not yet carried out comes before any lens")
+    # A lead a round STARTED and stopped for scope, before opening new work.
+    #
+    # Leads used to be reachable only once every lens was swept and fresh, which
+    # made the loop structurally incapable of finishing a thread: a round would
+    # defer half its work to a lead, and the next invocation would take a
+    # never-applied lens instead, every time. Measured over rounds 234-238 --
+    # five rounds, five different lenses, while the migration opened at 234 sat
+    # at 27 unfinished files.
+    #
+    # Opt-in, not inferred: `continuation: yes` is a judgement the deferring
+    # round records, so a lead that is genuinely BLOCKED (an owner decision, a
+    # bench that cannot produce a number, a change held for the next major) does
+    # not starve the lens set by looking unfinished.
+    for bid in backlog_rank(loop, data):
+        ent = data["backlog"][bid]
+        f = ent["fields"]
+        if f.get("status", "").startswith("open") and _is_continuation(f):
+            return ("lead", bid,
+                    "a lead a round started and did not finish — before opening new work")
     rank = lens_rank(loop, data)
     for lid in rank:
         f = data["lenses"][lid]["fields"]

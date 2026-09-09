@@ -70,8 +70,9 @@ is what `lint` and `stale` are for.
 
 ## The round
 
-1. **Target.** From `next`: an owner decision, then a lens never applied, then
-   the rank, then a stale sweep. The catalog (`catalog/`) only through
+1. **Target.** From `next`: an owner decision, then a **continuation** (an open
+   lead a round started and did not finish, marked `continuation: yes`), then a
+   lens never applied, then the rank, then a stale sweep. The catalog (`catalog/`) only through
    instantiation into the set. Before a sweep, check `checked/` and the
    statuses. A script detector is run through `loop.py sweep <ID>`; the list
    hash goes into the status.
@@ -135,7 +136,7 @@ already say. Nothing checks it.
   [model.md](references/model.md) (terms, diagrams),
   [rule-zero.md](references/rule-zero.md),
   [review.md](references/review.md) (the core of the reviewer prompt).
-- **[evals/](evals/EVALS.md)** — eleven scenarios that check the skill itself,
+- **[evals/](evals/EVALS.md)** — twelve scenarios that check the skill itself,
   each derived from a rule a mistake paid for or from machinery the skill added.
   Run them after changing this file, `methods/` or `references/`.
 - **`scripts/loop.py`** — `init`, `status`, `next`, `lint`, `stale`, `catalog`,

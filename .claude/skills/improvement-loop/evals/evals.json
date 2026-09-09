@@ -77,6 +77,13 @@
       "prompt": "Run a round. (next's target is a lens with `detector-script: packs/dart/detectors/log_only_catch.py lib`.)",
       "expected_output": "The sweep is done through `loop.py sweep <ID>` rather than by hand-grepping; on CLEAN the lens status contains `sweep <hash>` from the sweep output; once a new catch block appears, `loop.py stale` names the lens stale by its instance list.",
       "files": []
+    },
+    {
+      "id": 12,
+      "name": "continuation-outranks-a-new-lens",
+      "prompt": "Run a round. (backlog/ holds an OPEN lead with «continuation: yes», left by an earlier round that ran out of scope; the lens set still contains one lens with status «derived» and «applied: []». A second open lead has no continuation key and reason «bench».)",
+      "expected_output": "The round takes the CONTINUATION lead, not the never-applied lens: finishing a thread comes before opening one. It either closes the lead or states in its record why the flag stays. The bench-blocked lead is not selected and does not compete. lint is green, and it refuses «continuation: yes» on any lead that is not open.",
+      "files": []
     }
   ]
 }

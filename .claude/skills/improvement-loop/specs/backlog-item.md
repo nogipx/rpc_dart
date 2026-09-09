@@ -21,6 +21,7 @@ commit: <the HEAD sha at the moment of measurement>
 paths: [<globs of the code the claim is about>]
 probe: <the probe file, if there is one; otherwise «—»>
 reason: cost | risk | owner decision | bench — and in what exactly
+continuation: yes            # OPTIONAL. Work a round STARTED and did not finish
 ---
 
 # B-N — <title>
@@ -42,6 +43,24 @@ Free prose goes FIRST, before the sections, not after them: text after the last
 `##` becomes part of THAT section. Checked during the format migration — a
 lead's description, having landed under `## Owner decision`, made `loop.py next`
 announce a non-existent owner decision as the round's target.
+
+**`continuation: yes` means the loop takes this BEFORE opening a new lens.** It
+marks a lead whose work is understood and merely unfinished — a round ran out of
+scope, not out of ideas. It is opt-in and never inferred, because a lead that is
+genuinely BLOCKED (waiting on the owner, a bench that cannot produce a number, a
+change held for the next major) must not starve the lens set by looking
+unfinished. `lint` refuses it on a lead that is not `open`.
+
+Without it, leads sit last in the selection order and are reachable only once
+every lens is swept and fresh — which makes the loop structurally unable to
+finish a thread. Measured over rounds 234-238: five rounds, five different
+lenses, while a migration opened at 234 sat at 27 unfinished files the whole
+time. The round that defers work decides, there and then, whether it is leaving
+a continuation or a blocker.
+
+**The flag is a debt, not a parking space.** A round that takes a continuation
+either closes the lead or says in its record why the flag stays — otherwise one
+unfinishable lead would monopolise every future round.
 
 **`reason` must be cost, risk, an owner decision or the bench.** "It was broken
 before us" is not a reason: it only says whether a regression was introduced,

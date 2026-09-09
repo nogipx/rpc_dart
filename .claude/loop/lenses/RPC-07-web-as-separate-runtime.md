@@ -27,6 +27,38 @@ Which files did the web suite silently fail to compile?
 An `int.parse` of a literal above 2^53 throws THE WHOLE FILE out of the web
 suite without a single message.
 
+**The dart2js bug classes found across the monorepo in the June 2026 web sweep**,
+imported from private memory after round 238. `C-25` holds the cancel-deadlock's
+own measurement; these are the rest, and they are what the detector should look
+for:
+
+- **`async*` cancel-deadlock** — `await sub.cancel()` on a suspended
+  `async*`/`await for` generator NEVER resolves on dart2js. The trigger shape is
+  `yield` BEFORE `await for`; `await for`-first and `yield*` are safe. Fix by
+  bridging through a `StreamController` whose `onCancel` fires the inner cancel
+  WITHOUT awaiting it. (No longer reproduces on Dart 3.10.1 — see C-25.)
+- **int bit-shift overflow** — `1 << 32` overflows to 0 on dart2js, so
+  `Random().nextInt(0)` throws RangeError; fix with two 16-bit draws. Note
+  `<< 24` of a byte is FINE: dart2js `<<` keeps Dart int semantics, and the old
+  CBOR bug was specifically `ByteData.setUint64` / 8-byte accumulation.
+- **`DateTime.now()` is millisecond-resolution on JS** — the microsecond digits
+  are 0. Values stay valid; only precision drops, so no test may rely on
+  sub-millisecond margins.
+- **`String.hashCode` differs between the VM and dart2js** — never use it for
+  routing, bucketing or anything persisted that must match across platforms.
+- **`Random.secure()` fails on the bare `node` runner** (works on chrome and
+  real web): tag such tests `vm || chrome`, or fall back to `Random()` for
+  non-secret ids.
+- **VM-only codecs vanish on web** — core's built-in gzip is registered through a
+  `dart:io` conditional import, so on web only `identity` exists unless the app
+  registers `RpcGzipCodec` from `rpc_dart_compression`.
+
+Web is a real target for CLIENTS specifically (Flutter Web), including the
+SQLite ones via sqlite3mc-on-Wasm, where the app injects a `CommonDatabase`
+through `StorageAdapter(db)` / `SqliteBlobRepository.db(db)` and FFI/`dart:io`
+is gated behind `if (dart.library.io)`. The `postgres` and `minio` adapters ARE
+VM-only.
+
 Round 219 counted what the gate actually runs, which is the first thing to know
 before trusting it. `melos run test:web`, exit 0, twelve suites:
 

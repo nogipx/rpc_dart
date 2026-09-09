@@ -25,6 +25,13 @@ The lens schema — `../specs/lens.md`. The universal shapes —
 departing from its answer is deliberate and lands in the round's `lens:` key
 with a reason. "The least-explored surface" is measured by the `applied:` key:
 
+0. **A CONTINUATION lead** — `status: open` with `continuation: yes`, i.e. work
+   a round started and stopped for scope. It comes before any lens, because a
+   loop that opens a new thread every round never finishes one: measured over
+   rounds 234-238, five rounds took five different never-applied lenses while a
+   migration opened at 234 sat at 27 unfinished files. Blocked leads do NOT
+   carry the flag and do not compete here — see
+   [specs/backlog-item.md](../specs/backlog-item.md).
 1. `derived` with `applied: []` — before any lens already applied: a hypothesis
    nobody has paid for yet.
 2. Among the rest, the line order in `LENSES.md`; that is the rank, and `curate`

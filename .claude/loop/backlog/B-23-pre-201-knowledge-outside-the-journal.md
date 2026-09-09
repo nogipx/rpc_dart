@@ -5,6 +5,7 @@ commit: aba26aa3
 paths: [packages/**]
 probe: —
 reason: "cost: ~30 dossiers to compare file by file, and importing a claim with no number would pass a guess off as knowledge (the B-09 objection)"
+continuation: yes
 ---
 
 # B-23 — The pre-201 knowledge that never entered the journal
