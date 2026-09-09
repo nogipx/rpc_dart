@@ -62,6 +62,29 @@ produced it, and from a round to the numbers and the probe.
 - **"What awaits me and what awaits the owner"** —
   [BACKLOG.md](backlog/BACKLOG.md), the status column.
 
+## Where knowledge lives — one home per fact
+
+Measured after round 234, because the answer had drifted: private memory held
+52,203 words and this corpus 54,792 — two knowledge bases of the same size, and
+the boundary between them was nowhere written down. It is not duplication;
+`checked/` imported the pre-201 negatives, and the pre-201 SHAPES and METHODS
+stayed outside, where nothing lints or ages them.
+
+- **`.claude/loop/` owns everything measured about this code**: shapes (lenses),
+  findings (rounds), open questions (leads), "checked, do not re-run"
+  (negatives), benches, and lessons about working on this code. It is in git, it
+  is checked by `loop.py lint`, and `stale` ages it against the paths it names.
+  **A code fact that is not here cannot be routed to by `next`.**
+- **`config.md` owns standing owner decisions and toolchain traps** the loop must
+  obey — the gate, the cap, the severity bar, the launch traps.
+- **Private memory owns the user**: preferences, feedback, how to work with this
+  person. Nothing about what the code does.
+- **The repo's `CLAUDE.md` owns durable facts for any contributor**: layout,
+  commands, conventions.
+
+The test when a fact could go in two places: **would a round need it to choose a
+target or to measure?** Then it belongs here, whatever else also mentions it.
+
 ## What to trust with care
 
 - **Rounds before 201 do not exist as files.** Their trace is in the git history

@@ -14,6 +14,18 @@ Empty as of round 223 — the queue is drained. Every lens below has either been
 swept against a known sha or is on the "nobody has taken these" list with a
 reason. The next `curate` decides what ages back in.
 
+## Imported from private memory, never applied here — take these first
+
+Added in the curate pass after round 234, which measured the actual seam between
+the two corpora: `checked/` had imported the pre-201 NEGATIVES (C-02 round 46,
+C-04 round 106 and the rest), but the pre-201 defect SHAPES had no lens, so
+`loop.py next` could not route to them and `stale` could not age them. Greps for
+their own numbers returned nothing in the loop: `CONTINUATION`, `756 MiB`,
+`check before await`, `pre-ready`, all zero hits.
+
+- **[RPC-16](RPC-16-check-before-await.md)** derived — a lifecycle flag read before an await and never re-read; four fixed instances by sha, and the thing the factory returned was orphaned rather than closed; refines U-07
+- **[RPC-17](RPC-17-limit-fires-after-residency.md)** confirmed (round 90, off-journal) — the limit exists and sits one layer too late, so the allocation already happened: 192 MiB body into 756 MiB RSS, 2071x through permessage-deflate, 470x through a gzip codec. No catalog shape covers it
+
 ## Productive lately
 
 - **[RPC-01](RPC-01-flow-control-credit-on-skip.md)** confirmed (213) — credit is not returned for a frame nobody consumes, per level and per layer; refines U-07

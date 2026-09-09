@@ -1,0 +1,101 @@
+---
+refines: —
+paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
+applies: an inbound size limit exists, and something buffers before it is consulted
+breaks: DoS.
+applied: []
+status: confirmed (round 90, off-journal)
+---
+
+# RPC-17 — A limit that fires after the bytes are resident
+
+## Shape
+
+Distinct from "no limit at all", and it reads as safe in review: the limit
+**exists**, and it sits one layer too late, so the allocation it was meant to
+prevent has already happened when it fires. The reviewer's question "is there a
+length check?" is the wrong question. **The question is what runs BEFORE it.**
+
+## Detector
+
+Every inbound buffering site, read as an ORDER OF STATEMENTS rather than for the
+presence of a guard: `RpcFrameMultiplexedChannel._onData`, the caller and
+responder body readers in rpc_dart_http, every decompressor
+(`RpcGrpcCompression.decompress`, `compression_gzip_io.dart`, the
+`RpcGzipCodec` in rpc_dart_compression), and `bufferPreMethod` in core.
+For each: is the chunk appended to a buffer before the cap is consulted?
+
+Then the second, harder half — **which DIMENSION does each nearby limit
+measure?** `maxActiveStreams` counts streams (one is enough),
+`maxMessageLengthBytes` bounds ONE frame (each can be legal),
+`halfOpenStreamTimeout` bounds time, not volume. The class lives in the gap
+between the dimensions, where nothing measures TOTAL BYTES.
+
+Third: a peer-controlled amplification factor. Where the buffer is inside a
+dependency that cannot be patched, the only lever is whether to negotiate the
+FEATURE at all, and an untrusted-facing default must fail closed.
+
+## Ask
+
+Between the byte arriving and the limit firing, how much is resident? Measure
+`ProcessInfo.currentRss`/`maxRss` around one call — the differences here are
+40x, so no statistics are needed.
+
+## Evidence
+
+Confirmed repeatedly before the journal existed; every instance below is a real
+fix with a sha, and the numbers are why the shape ranks as DoS rather than
+untidiness.
+
+    RpcHttpCallerTransport          192 MiB body -> RSS +756 MiB, then the
+    (e8c5bc9f)                      parser's own error; +19 MiB after. Resident
+                                    three times over: the streamed copy, the
+                                    concatenated body, the parser's buffer
+    RpcFrameMultiplexedChannel      16 MiB limit, one 256 MiB chunk ->
+    (8a1282f0)                      256.2 MiB allocated, 0.1 MiB after. The cap
+                                    bounded what was RETAINED, not ALLOCATED
+    bufferPreMethod, core           250.7 MiB pushed -> RSS +495.2 MiB; +30.3 MiB
+    (a6440b9d, round 90)            after. Three hand-built frames on a plain
+                                    WebSocket reach it -- unauthenticated remote
+                                    memory exhaustion on every channel transport
+    permessage-deflate              ON: 0.25 MiB uploaded -> 516 MiB RSS (2071x);
+    (0af1eb44 / 948bd6da,           OFF: 256 MiB uploaded -> 682 MiB (2.7x).
+     rounds 74-75)                  Inside dart:io, which has no output bound --
+                                    so the fix is to stop OFFERING the extension
+    RpcGzipCodec on the VM          4.0 MiB of compressed zeros against a 16 MiB
+    (round 107)                     limit -> RSS +1873 MiB over 17.5 s, ~470x.
+                                    ISIZE is size MOD 2^32, so the pre-check
+                                    clears. +23.9 MiB / 8 ms after
+
+**The asymmetry to look for:** a server bounds what CLIENTS send it and forgets
+that it is also a client of its peers. `RpcHttpResponderTransport.readBody`
+bounded the request body correctly all along; the caller had no bound in the
+other direction and took no policy at all.
+
+**Measured CLEAN — do not re-hunt:** the http2 caller (round 52: same 192 MiB
+experiment, RpcException from the 5-byte header, RSS +0 MiB, structurally
+immune because each DATA frame goes straight to the parser); message-level gRPC
+gzip through core's dart:io codec (rounds 76 and 108: 0.5 MiB expanding to
+512 MiB against a 4 MiB cap -> status 13 in 48 ms, RSS +17.9 MiB, handler never
+ran); the compressed-flag variants (all three fail cleanly, connection intact).
+`../checked/C-16-http2-caller-inbound-buffers.md` and
+`../checked/C-17-message-level-gzip.md` hold the first two.
+
+**Known live residual, deliberate:** a large UNCOMPRESSED WebSocket message is
+buffered whole by dart:io before delivery, and dart:io exposes no
+`maxMessageSize` (searched `_http/websocket.dart` and `websocket_impl.dart`).
+Amplification is 1:1 — the attacker must actually send the bytes — which is what
+keeps it below the bar rather than merely hard.
+
+> **Two rules this class paid for.** In a regression test assert the error
+> MESSAGE where the two layers produce different ones (RSS in a shared runner is
+> noisy); where the message is identical by design, RSS is the only witness, so
+> give it a 4x margin and **page the source buffer in first** or the growth is
+> credited to the test's own allocation. And a bomb is defined by AMPLIFICATION
+> (RSS per wire byte), not absolute RSS: disabling compression made the client
+> send 256 MiB uncompressed, so a naive RSS probe read the fix as "no change".
+
+No catalog shape covers this; a candidate for `catalog/` at the next curate,
+by the usual test — it holds in any code that buffers untrusted input.
+
+Imported from private memory in the curate pass after round 234.
