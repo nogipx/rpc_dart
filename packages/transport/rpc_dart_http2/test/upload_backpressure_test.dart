@@ -42,6 +42,8 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 import 'package:test/test.dart';
 
+import 'settle_bytes.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
 /// Per-test state, so a handler left running by an earlier test cannot count
@@ -126,6 +128,10 @@ final class _Relay {
 const _messageBytes = 4 * 1024;
 const _target = 40000; // 156 MiB if nothing stops it
 
+/// The ceiling both upload assertions use, shared with [settleBytes] so its
+/// early exit stops at the same number the expectation does.
+const int _heldCeilingBytes = 8 * 1024 * 1024;
+
 void main() {
   tearDown(() {
     if (!_run.gate.isCompleted) _run.gate.complete();
@@ -177,12 +183,19 @@ void main() {
       );
       unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
 
-      await Future<void>.delayed(const Duration(seconds: 8));
+      // Settles on what is ASSERTED -- the bytes held in the client -- not on
+      // either counter alone. In the healthy case both climb in lockstep and
+      // their difference is flat, which is exactly the plateau. See
+      // settle_bytes.dart for why there is a floor under it.
+      await settleBytes(
+        () => pulled * _messageBytes - relay.bytes,
+        ceiling: _heldCeilingBytes,
+      );
 
       final held = pulled * _messageBytes - relay.bytes;
       expect(
         held,
-        lessThan(8 * 1024 * 1024),
+        lessThan(_heldCeilingBytes),
         reason:
             'client pulled ${(pulled * _messageBytes / 1024 / 1024).toStringAsFixed(1)} MiB '
             'but only ${(relay.bytes / 1024 / 1024).toStringAsFixed(1)} MiB '
@@ -251,15 +264,17 @@ void main() {
         }
 
         // Long enough that steady growth cannot be mistaken for a ceiling: the
-        // unfixed transport reached 13.8 MiB here and was still climbing.
-        await Future<void>.delayed(const Duration(seconds: 8));
+        // unfixed transport reached 13.8 MiB here and was still climbing. The
+        // budget is unchanged; it now ends early only on a settled plateau or
+        // on a breach of the very ceiling asserted below.
+        await settleBytes(() => relay.bytes, ceiling: _heldCeilingBytes);
 
         expect(run.consumed, 0, reason: 'the handler was to consume nothing');
         // Fixed: 4.4 MiB (client-stream) and 0.1 MiB (bidi). Unfixed at this
         // point: 10.2 and 10.5 MiB, still climbing. 8 MiB sits clear of both.
         expect(
           relay.bytes,
-          lessThan(8 * 1024 * 1024),
+          lessThan(_heldCeilingBytes),
           reason:
               '${(relay.bytes / 1024 / 1024).toStringAsFixed(1)} MiB reached the '
               'server for a handler consuming nothing',

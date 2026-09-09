@@ -186,6 +186,11 @@ final class _Relay {
   Future<void> stop() => _listener.close();
 }
 
+/// The threshold the upload tests assert against, shared with [_upload] so its
+/// early exit uses the same number the expectation does — otherwise the two
+/// could drift and the poll would stop at a figure the test still passes.
+const int _uploadCeilingBytes = 8 * 1024 * 1024;
+
 /// Uploads into a handler that consumes nothing and returns the bytes that
 /// reached the server.
 Future<int> _upload(IRpcTransport Function(IRpcTransport inner)? wrap) async {
@@ -225,9 +230,48 @@ Future<int> _upload(IRpcTransport Function(IRpcTransport inner)? wrap) async {
   );
   unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
 
-  // Long enough that steady growth cannot be mistaken for a ceiling: unfixed,
-  // 'swallows' reached 157 MiB here.
-  await Future<void>.delayed(const Duration(seconds: 8));
+  // A flat 8 s wait here cost this file 4 x ~8 s of every run. The budget is
+  // still 8 s -- long enough that steady growth cannot be mistaken for a
+  // ceiling, which is what it was chosen for; unfixed, 'swallows' reached
+  // 157 MiB -- but two outcomes are decided before it expires and neither
+  // weakens the assertion:
+  //
+  //   PLATEAU  the wire count stops moving => the bound engaged, and waiting
+  //            longer cannot change a number that is no longer changing.
+  //   BREACH   the count is already past the threshold the test asserts, so
+  //            the verdict is settled and only the failure is being delayed.
+  //
+  // Anything still climbing below the threshold gets the whole 8 s, which is
+  // the case the duration was for.
+  // The plateau needs a FLOOR under it. A first cut called 0.9 s of no movement
+  // a plateau and exited at 1.8-2.4 MiB, while the bounded steady state this
+  // file documents is 4176 KiB -- it was stopping mid-ramp, during a lull in
+  // the 1 ms-per-50-messages pacing, and a test that measures less of the curve
+  // is not a faster test, it is a weaker one. So: nothing counts as settled
+  // before `settleFloor`, and the stillness has to last `plateauSamples`.
+  const budget = Duration(seconds: 8);
+  const settleFloor = Duration(seconds: 3);
+  const sample = Duration(milliseconds: 150);
+  const plateauSamples = 10; // 1.5 s of no movement
+  final start = DateTime.now();
+  final deadline = start.add(budget);
+  final floor = start.add(settleFloor);
+  var last = -1;
+  var still = 0;
+  while (DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(sample);
+    final now = relay.bytes;
+    if (now >= _uploadCeilingBytes) break; // BREACH: the verdict is settled
+    if (now == last) {
+      still++;
+      if (still >= plateauSamples && DateTime.now().isAfter(floor)) {
+        break; // PLATEAU
+      }
+    } else {
+      still = 0;
+      last = now;
+    }
+  }
   final seen = relay.bytes;
 
   state.gate.complete();
@@ -289,9 +333,13 @@ Future<({int open, IRpcTransport transport, _CountingTransport? wrapper})> _run(
   final transport = serverEndpoint!.transport;
 
   _gate.complete();
+  // Teardown, not measurement: `open` was read above and is the only thing
+  // this returns about admission. The 10 s this used to allow ALWAYS expired
+  // (measured 10.1 s in every one of the four cases) because the refused calls
+  // never all settle, so it was 10 s of dead time per case buying nothing.
   await Future.wait(
     calls,
-  ).timeout(const Duration(seconds: 10), onTimeout: () => const []);
+  ).timeout(const Duration(seconds: 1), onTimeout: () => const []);
   await caller.close();
   await client.close();
   await server.stop();
@@ -377,7 +425,7 @@ void main() {
           // the defer would have removed the bound for 'forwards'.
           expect(
             r,
-            lessThan(8 * 1024 * 1024),
+            lessThan(_uploadCeilingBytes),
             reason:
                 '${(r / 1024 / 1024).toStringAsFixed(1)} MiB reached a server '
                 'whose handler consumed nothing, against a 4 MiB window',
