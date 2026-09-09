@@ -3,8 +3,8 @@ refines: U-09
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
-applied: [216]
-status: swept here (round 216, 10ba2a93)
+applied: [216, 243]
+status: swept here (round 243, 0a6e25d5)
 ---
 
 # RPC-02 — A refusal trailer that violates the policy it enforced
@@ -43,6 +43,14 @@ Grepping `forTrailer` is not the whole detector: five more sites build a
 `grpc-message` header by hand, and a grep for the constructor name misses every
 one of them. But they are all CALLER-side and all emitted locally through
 `_emit` into the caller's own controller, never through `sendMetadata`.
+
+**Round 243 re-swept it over ten moved files and it is still clean**: 12 sites
+pass a message and all 12 carry `maxMessageLength`, 4 pass none. Both refusal
+paths added since 216 — round 237's header-block refusal and round 240's
+`_fcRefuseOverrun` — cap their own diagnosis and guard the send, without anyone
+having consulted this lens. Note what that re-sweep is: a reading. Round 216's
+ablation is what gave "every site passes the cap" its meaning, and 243 did not
+repeat it.
 
 > **Only a trailer that passes through a validating hop is at risk.** Sort the
 > sites by that first — it cut the surface here from 21 to 12 — and check the
