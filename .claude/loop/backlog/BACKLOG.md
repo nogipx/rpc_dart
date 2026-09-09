@@ -17,7 +17,6 @@ deferred.
 
 ## Open — decided, ready to implement
 
-- **[B-20](B-20-detached-guard-has-no-witness.md)** approved (round 223) — the guard that stops a client hanging up from killing the server has no test; removing it leaves the core suite green. Do it with B-04's isolate half, same subprocess harness
 - **[B-19](B-19-close-the-gate-over-wasm.md)** decided (round 223) — `analyze` and `format:check` never see rpc_dart_wasm, the one package shipping Swift and Kotlin. Convert both from `exec:` to `run:`, and verify by ablation on BOTH arms
 - **[B-18](B-18-web-guard-is-a-census-not-a-sweep.md)** approved (round 223) — the web guard is a build-and-construct check for nine of twelve packages; plant `async*` cancellation first, it is the class with a history here
 
@@ -45,5 +44,6 @@ deferred.
 - **[B-13](B-13-parked-sender-outlives-its-call.md)** closed (round 211) — measured: the wake works, 0 waiters with it and 30 without
 - **[B-14](B-14-stale-sendcredit-per-abandoned-upload.md)** closed (round 212) — the writer was a late `_fcOnGrant` after teardown; fixed
 - **[B-15](B-15-rpc-level-grants-on-http2.md)** closed (round 214) — cooperative backpressure on http2 via rpc-level grants, not built; the behaviour that stands is accepted in [C-19](../checked/C-19-http2-refuses-a-slow-consumer.md)
+- **[B-20](B-20-detached-guard-has-no-witness.md)** closed (round 225) — the guard has no witness because nothing reaches it; 0 rejections across three scenarios, all 25 wrapped expressions internally guarded ([C-24](../checked/C-24-detached-guard-is-unreachable.md)). The isolate half stays open in B-04's closing note
 - **[B-17](B-17-watermark-lost-through-a-decorator.md)** closed (round 224) — the decorator that erased the stream-id watermark is refused at attach; `handlers ended` went `1 -> 0` with the control unchanged. The compile-time version is [B-21](B-21-reconnectable-transport-type.md)
 - **[B-16](B-16-pre-method-byte-budget-release.md)** closed (round 215) — swept, clean; the one row that looks like a leak is the reorder deferral, bounded by `halfOpenStreamTimeout` ([C-20](../checked/C-20-pre-method-budget-held-for-the-reclaim.md))

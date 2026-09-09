@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 223)
+status: closed (round 225)
 round: 222
 commit: b8d934a2
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -8,6 +8,15 @@ reason: owner approved the cost (round 223) — take it; the witness needs a sub
 ---
 
 # B-20 — the detached-future guard has no witness
+
+> **Closed by round 225, and the premise below is wrong.** The guard has no
+> witness because **nothing reaches it**: instrumented to print on rejection, it
+> fired 0 times across a throwing handler, a client hangup and a clean call, and
+> all 25 expressions it wraps are guarded from the inside. Round 222's green
+> ablation was an unreachable branch, not a coverage gap. Recorded as
+> [C-24](../checked/C-24-detached-guard-is-unreachable.md); keep the guard as a
+> backstop. The isolate half of the decision below is NOT answered by that and
+> stays open in B-04's closing note.
 
 `_detached` in the responder pipeline wraps every teardown future in
 `.catchError`, and its comment records what paid for it: a client abandoning a

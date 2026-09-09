@@ -1,7 +1,7 @@
 ---
-round: 223 — where it was paid for; the first half was round 222
+round: 223 — where it was paid for; the first half was round 222, and round 225 amended it
 class: bench
-cost: 2 rounds of ablation, each of which planted a real defect and got a green suite — 222 removed `_detached`'s `.catchError` (+1395 ~1, all other tests passed), 223 removed the isolate's startup `teardownStartup()` (+73, all tests passed)
+cost: 2 rounds of ablation, each of which planted a real defect and got a green suite — 222 removed `_detached`'s `.catchError` (+1395 ~1, all other tests passed), 223 removed the isolate's startup `teardownStartup()` (+73, all tests passed). Round 225 added the amendment below at the cost of 2 subprocess witnesses built and discarded
 paths: []
 commit: 0e7b984a
 status: active
@@ -39,6 +39,30 @@ After a sweep concludes a guard family is fully guarded, ablate one guard before
 writing the verdict. A green suite is a finding in its own right — file it — and
 the verdict's wording has to carry it: not "this class cannot arise" but "this
 class does not arise today, and nothing would notice if it started".
+
+## Amended by round 225: a green ablation has TWO explanations
+
+Round 225 set out to write the witness this lesson called for, and could not —
+because the guard is never reached. `_detached` was instrumented to print on
+rejection and driven through three scenarios; **not one handed it a rejected
+future**, because all 25 expressions it wraps are guarded from the inside.
+
+So "I removed the guard and nothing went red" means one of:
+
+1. **Untested** — the path is live and no test drives it. Write the witness.
+2. **Unreachable** — the path cannot produce the failure, because something
+   inner already handles it. There is nothing to witness, and trying costs
+   rounds.
+
+They look identical from the ablation alone. **Tell them apart before writing a
+witness, not after**: instrument the guard to report when it actually fires, and
+run the scenarios. If it never fires, stop — the answer is a negative
+([C-24](../checked/C-24-detached-guard-is-unreachable.md)), not a test.
+
+The cost of not doing this first was two subprocess witnesses built and thrown
+away, both aimed by reading the code rather than by measuring it — which is the
+older lesson this repository already learned as "measure every hop, don't reason
+about which one is wrong".
 
 ## The remedy, when the witness is worth writing
 
