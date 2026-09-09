@@ -9,7 +9,9 @@ scope: [wasm]
 
 > **Superseded for `analyze`, `format` and `format:check` by round 226**, which
 > converted all three from `exec:` to `run:` blocks that handle this package
-> explicitly. The hole below was real and is closed; the measurement is kept
+> explicitly. **Round 226's step was wrong on CI and was corrected in 231** —
+> it needed a resolve nobody ran and it analysed `example/`, whose assets are
+> build artefacts; see [L-05](../lessons/L-05-green-locally-is-not-green-clean.md). The hole below was real and is closed; the measurement is kept
 > because it is what the conversion was checked against. `test`/`test:unit`
 > still do not cover it — that is `test:wasm`, and it is by design.
 

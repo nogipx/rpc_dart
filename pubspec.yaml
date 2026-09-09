@@ -91,7 +91,20 @@ melos:
         set -e
         fvm dart run melos exec --concurrency 6 -- "fvm dart analyze --fatal-infos --fatal-warnings ."
         echo "--- rpc_dart_wasm (outside the workspace) ---"
-        fvm dart analyze --fatal-infos --fatal-warnings packages/transport/rpc_dart_wasm
+        # lib and test only, NOT the whole package. `example/` is a host app for
+        # `test:wasm:device` with its own pubspec, and its `assets/guest.wasm`
+        # and `guest.mjs` are BUILD ARTEFACTS that are not in the repository --
+        # analysing it reports asset_does_not_exist every time, on a green tree.
+        #
+        # This needs rpc_dart_wasm's own `flutter pub get` to have run; it is not
+        # a workspace member, so the root resolve does not reach it. CI does that
+        # in .github/workflows/rpc_dart_test.yml. Round 226 shipped this step
+        # without it and CI went red with 304 "Target of URI doesn't exist"
+        # errors while the same command was green locally, because a local tree
+        # already had the package resolved from an earlier run.
+        fvm dart analyze --fatal-infos --fatal-warnings \
+          packages/transport/rpc_dart_wasm/lib \
+          packages/transport/rpc_dart_wasm/test
 
     # --- Tests ---
     # generator is excluded: its build_test golden tests are incompatible with

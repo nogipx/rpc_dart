@@ -26,6 +26,13 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Resolve workspace
         run: fvm dart pub get
+      # rpc_dart_wasm is NOT a workspace member (the only Flutter package), so
+      # the root resolve above does not reach it -- and `melos run analyze`
+      # covers it explicitly. Without this the analyzer sees no Flutter and
+      # reports 304 "Target of URI doesn't exist" errors on a green tree.
+      - name: Resolve rpc_dart_wasm (outside the workspace)
+        run: fvm flutter pub get
+        working-directory: packages/transport/rpc_dart_wasm
       - name: Format check
         run: melos run format:check
       - name: Analyze (all packages, --fatal-infos --fatal-warnings)
