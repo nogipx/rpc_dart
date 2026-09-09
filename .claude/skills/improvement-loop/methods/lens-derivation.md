@@ -74,7 +74,8 @@ starter set of hypotheses, each with status `derived`.
    main value.
 5. **Rank by «damage x reachability»**, not by elegance. A defect reachable only
    from the library's own code ranks below one reachable from outside. The rank
-   is the line order in `LENSES.md`.
+   is the line order in `LENSES.md` — read by people, not by a command: `next`
+   prints the set by ID and names no target.
 6. **Write it down** — one file per lens plus a line in `LENSES.md` — with
    status `derived`, `applied: []`, and an explicit note in `LOOP.md` that no
    round has checked the set. `loop.py lint` must be green by the end of the

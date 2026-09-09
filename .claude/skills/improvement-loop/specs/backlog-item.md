@@ -5,7 +5,7 @@
 > [catalog/U-21](../catalog/U-21-remeasure-own-deferrals.md)
 
 Path: `.claude/loop/backlog/B-N-slug.md`. Plus a line in `backlog/BACKLOG.md`,
-where the line order is meaningful — it is the rank.
+where the line order is the rank — `loop.py status` prints the leads in it.
 
 A lead is what a round left unfinished, including a wait on an owner decision
 and a bench that produced no number. Something still has to be done about it;

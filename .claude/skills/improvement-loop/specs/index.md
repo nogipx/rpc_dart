@@ -24,9 +24,11 @@ not belong here.
 **The next free number is not in the index.** It is computed as the maximum plus
 one; ask `loop.py status`.
 
-**The line order is the rank.** For the backlog and the lenses it is
-meaningful — what to take first — and `loop.py next` reads it. For rounds,
-negatives, benches and lessons it runs newest first.
+**The line order carries a judgement.** In `BACKLOG.md` it is the rank — what to
+take first — and `loop.py status` prints the leads in it. In `LENSES.md` it is
+damage x reachability, for whoever reads the index; no command sorts by it,
+because ranking the round's target is the agent's job, not the script's. For
+rounds, negatives, benches and lessons the order runs newest first.
 
 **The files are the source of truth, not the index.** A file with no line, or a
 line with no file, is a defect in the index; `lint` finds it and it is fixed in

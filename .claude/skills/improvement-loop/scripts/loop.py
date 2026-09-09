@@ -981,20 +981,6 @@ def changed_files(root: Path, sha: str, paths: list[str]) -> list[str] | None:
     return [l for l in out.splitlines() if l.strip()]
 
 
-def lens_rank(loop: Path, data: dict) -> list[str]:
-    """Line order in LENSES.md is the rank; lenses with no line go last."""
-    order = list(index_links(loop / "lenses" / DIRS["lenses"]).keys())
-    rest = [lid for lid in data["lenses"] if lid not in order]
-    return [lid for lid in order if lid in data["lenses"]] + sorted(rest)
-
-
-def backlog_rank(loop: Path, data: dict) -> list[str]:
-    """Line order in BACKLOG.md is the rank; leads with no line go last."""
-    order = list(index_links(loop / "backlog" / DIRS["backlog"]).keys())
-    rest = [bid for bid in data["backlog"] if bid not in order]
-    return [bid for bid in order if bid in data["backlog"]] + sorted(rest)
-
-
 def _is_continuation(fields: dict) -> bool:
     """Whether a lead is unfinished work rather than blocked work.
 
@@ -1162,7 +1148,7 @@ def cmd_next(root: Path, loop: Path) -> int:
     nums = round_numbers(loop)
     print(f"Round: {(nums[-1] + 1) if nums else 1}")
     if not data["lenses"]:
-        print("Target: none — there is no lens set, do lenses mode first")
+        print("No lens set — do lenses mode first; a round has nothing to choose from")
         return 2
     stop, why = stop_condition(root, loop, data, cfg)
     if stop:
@@ -1215,7 +1201,8 @@ def cmd_next(root: Path, loop: Path) -> int:
         if pe["fields"].get("status", "").startswith("valid"):
             print(f"  {pid:6} {pe['fields'].get('paths', '')[:72]}")
     b = cfg["budget"]
-    print(f"Budget: probes 0/{b.get('probes', '?')}, canaries 0/{b.get('canaries', '?')}")
+    print(f"Budget (count them yourself; past either one the verdict is INCONCLUSIVE): "
+          f"{b.get('probes', '?')} bench rebuilds, {b.get('canaries', '?')} canary attempts")
     packs, missing = load_packs(loop, cfg)
     print("Packs: " + ", ".join(packs) + (f" (not found: {', '.join(missing)})" if missing else ""))
     print(f"Commit language: {cfg['commit_lang']}")
@@ -1375,6 +1362,154 @@ def cmd_review(root: Path, loop: Path) -> int:
     return 0
 
 
+
+
+# What `init` writes into a fresh `.claude/loop/`. Deleted by accident in the
+# September 2026 cut, which left cmd_init calling three names that no longer
+# existed: `setup` mode raised NameError on its very first command.
+CONFIG_TEMPLATE = """# Loop settings
+
+Schema — `specs/config.md` in the skill. The places below are read by
+`loop.py` and their format is exact: the `unattended:` line, the ```gate block,
+the `commit language:` and `reply language:` lines, and the three
+«Round budget» lines.
+
+## Mode
+
+unattended: no
+
+## Packs
+
+Enabled knowledge packs from the skill's `packs/` or from
+`.claude/loop/packs/`; `core` is always on. Own damage classes — comma
+separated, optional.
+
+packs: core
+damage classes:
+
+## Language
+
+Two independent settings. Drop either line and it is English.
+`commit language` is the round commit's subject and body; `reply language` is
+the round report in chat.
+
+commit language: English
+reply language: English
+
+## Toolchain
+
+<what runs the build and the tests; wrappers for the pinned SDK version; known
+launch traps and their safe forms>
+
+## Gate
+
+The exact sequence before a commit, one command per line:
+
+```gate
+<command 1>
+<command 2>
+```
+
+## Probes
+
+<where they go and why: import resolution, exclusion from analysis, gitignore>
+
+## After the commit
+
+Commands for an unattended run after a successful round commit (push,
+notification); empty means nothing. Covered by permissions.allow like the gate.
+
+```after-commit
+```
+
+## Round budget
+
+The first two are limits the round applies to itself — nothing counts them for
+you. Past them with no valid number the verdict is INCONCLUSIVE, not CLEAN.
+`round cap` is the one number the script enforces.
+
+probes: 3
+canaries: 2
+round cap: 30
+
+## Targets nobody runs
+
+<another compiler, the native layer, devices, generators — the command and what
+it finds>
+
+## Severity bar
+
+<which damage classes are worth a round right now>
+
+## Out of scope
+
+<what the loop is not for>
+
+## Standing owner requirements
+
+<what holds in every round>
+
+## Known flakes
+
+<by name; if none, say so>
+"""
+
+LOOP_TEMPLATE = """# LOOP.md — map of the improvement-loop data
+
+Data of a measured find-and-fix loop; the rules live in the `improvement-loop`
+skill (SKILL.md, specs/, methods/). Navigation only here.
+
+## Six entities
+
+- **Lens** — a hypothesis generator: what to look for and how. `lenses/`, index `lenses/LENSES.md`.
+- **Round** — what was measured, fixed, and with which verdict. `rounds/`, index `rounds/ROUNDS.md`.
+- **Lead** — the unfinished: a deferral, a wait on the owner, a bench with no number. `backlog/`, index `backlog/BACKLOG.md`.
+- **Negative** — measured, clean, nothing to do. `checked/`, index `checked/CHECKED.md`.
+- **Bench** — a probe whose control proved it can see the defect; reused. `probes/`, index `probes/PROBES.md`.
+- **Lesson** — a rule for working with this code that a round paid for. `lessons/`, index `lessons/LESSONS.md`.
+
+## Who points at whom
+
+```mermaid
+flowchart LR
+    R[round] -->|lens:| L[lens]
+    L -->|applied:| R
+    R -->|bench:| P[bench]
+    B[lead] -->|round:| R
+    C[negative] -->|round:| R
+    P -->|round:| R
+    S[lesson] -->|round:| R
+    R -->|## Links| B
+    R -->|## Links| C
+```
+
+## Where to go with a question
+
+- Run a round — the skill, default mode; start with `loop.py status`.
+- The next round's number — `loop.py status` (the maximum in `rounds/` plus one).
+- Has this been checked? — `checked/CHECKED.md` and the `swept here` lens statuses.
+- Where a claim came from — by ID: `grep -rn "<ID>" .claude/loop/`.
+- What awaits the owner — `loop.py status`; to answer, write into the
+  `## Owner decision` section of the lead's file, leave the status alone.
+- What has aged against the code — `loop.py stale`.
+- The state the next round chooses from — `loop.py next`. It names no target.
+- Is there a ready bench for this surface — `probes/PROBES.md` or `loop.py next`.
+- What we learned on this code — `lessons/LESSONS.md`.
+
+## What to trust with care
+
+<fill in at setup: unrecovered history, «not re-measured» records, sweeps never
+run, a lens set no round has checked>
+"""
+
+INDEX_TITLES = {
+    "lenses": "Lens set of the project — what to look for and how",
+    "rounds": "Round journal — newest first",
+    "backlog": "Leads — the unfinished; line order is the rank",
+    "checked": "Negatives — measured clean, nothing to do",
+    "probes": "Benches — probes whose control proved they see the defect",
+    "lessons": "Lessons — rules for working with this code, paid for by a round",
+}
 
 
 def cmd_init(root: Path, loop: Path) -> int:
