@@ -4,7 +4,7 @@ What a lens is and how it links to the rest — [../LOOP.md](../LOOP.md). The
 field format — `../../skills/improvement-loop/specs/lens.md`.
 
 - **[RPC-01](RPC-01-flow-control-credit-on-skip.md)** confirmed (208) — credit is not returned for a frame nobody consumes, per level and per layer; refines U-07
-- **[RPC-02](RPC-02-refusal-trailer-violates-policy.md)** confirmed (153, off-journal) — the refusal trailer fails the policy it enforced; refines U-09
+- **[RPC-02](RPC-02-refusal-trailer-violates-policy.md)** swept here (216) — the refusal trailer fails the policy it enforced; only trailers crossing a validating hop are at risk; refines U-09
 - **[RPC-03](RPC-03-stream-ids-restart-on-reconnect.md)** confirmed (100, off-journal) — stream ids restart after a reconnect; refines U-18
 - **[RPC-04](RPC-04-capability-hidden-by-wrapper.md)** confirmed (209) — a capability is dropped by a wrapper, or routed to one that cannot honour it; refines U-05
 - **[RPC-05](RPC-05-concurrency-limit-charge-point.md)** swept here (215) — a limit is charged, or released, at the wrong point of the lifecycle; every stateful field swept; refines U-07
