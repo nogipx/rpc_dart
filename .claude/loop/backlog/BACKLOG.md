@@ -16,5 +16,6 @@ order below is the rank.
 - **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
 - **[B-13](B-13-parked-sender-outlives-its-call.md)** closed (round 211) — measured: the wake works, 0 waiters with it and 30 without
 - **[B-14](B-14-stale-sendcredit-per-abandoned-upload.md)** closed (round 212) — the writer was a late `_fcOnGrant` after teardown; fixed
+- **[B-16](B-16-pre-method-byte-budget-release.md)** open, reason "cost" (round 214) — is the pre-method byte budget released on every teardown path? the last stateful field RPC-05 has not swept, and the one whose leak is unauthenticated remote memory exhaustion
 - **[B-15](B-15-rpc-level-grants-on-http2.md)** closed (round 214) — cooperative backpressure on http2 via rpc-level grants, not built; the behaviour that stands is accepted in [C-19](../checked/C-19-http2-refuses-a-slow-consumer.md)
 - **[B-12](B-12-http2-cancel-kills-the-connection.md)** closed (round 208) — http2: one cancelled stalled call killed the connection for good; the owner chose "keep reading, fail the call", shipped in 208. The upstream package:http2 report is still open
