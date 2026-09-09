@@ -11,6 +11,11 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-19](P-19-sequential-reconnect-orphan-rate.md)** valid (round 241),
+  rpc_dart_http2 — how often does a SEQUENTIAL reconnect orphan a connection?
+  5 in 390 direct cycles, 0 in 90 through the stalling proxy, and it names WHICH
+  of the three connections leaked, which is what separates this from the
+  concurrent defect. Underpowered for judging a fix: read its last paragraph
 - **[P-18](P-18-early-frames-through-the-proxy.md)** valid (round 240), core
   resilience and transports — do frames that arrived before the app subscribed
   survive a hop? Two controls, because one cannot tell "never existed" from

@@ -3,8 +3,8 @@ refines: U-15
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**]
 applies: an object has start/stop/close/reconnect and a suite that builds a fresh one per test
 breaks: a connection leak.
-applied: []
-status: confirmed (round 77, off-journal)
+applied: [241]
+status: confirmed (round 241)
 ---
 
 # RPC-21 — Drive the lifecycle twice
@@ -97,6 +97,20 @@ connection) and `../lenses/RPC-19-one-flag-two-lifecycle-meanings.md` (call
   `tcp=false` within one run, which nearly sold a fixed leak as still-leaking.
   Send a real HTTP request: that distinguishes "a server answered" from "some
   socket accepted".
+
+## Its first application in this journal (round 241)
+
+Driving `reconnect()` twice and asserting the SERVER's state — not the return
+value — found a connection leak the suite could not: 5 orphans in 390 cycles,
+about 1.3%, always a DISCARDED connection and never the live one. Bench
+`../probes/P-19-sequential-reconnect-orphan-rate.md`; deferred as B-25 because
+a 1.3% defect has no deterministic witness to canary.
+
+> **A rate is a state assertion too.** The lens says assert the state after the
+> second call; when the defect is probabilistic, "the state" is a rate over many
+> cycles, and the cheapest thing that turns an unreproducible bug report into a
+> finding is counting WHICH object leaked. Here the ordinal is what proved this
+> was not the concurrent defect already pinned by a test in the same file.
 
 The clean half of the same sweep is `../checked/C-06-lifecycle-apis-twice.md`.
 
