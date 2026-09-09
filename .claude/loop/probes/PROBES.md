@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-12](P-12-zero-grant-reads-as-legacy.md)** valid (round 229), core transports —
+  is a zero grant read as a peer that does not participate? A FOREIGN peer driven
+  at the channel level, which is the only way to reach the path: 800 KiB through
+  a 64 KiB window against 20 KiB in the control
 - **[P-11](P-11-connection-debt-with-a-paused-consumer.md)** valid (round 228), core transports —
   does the connection pool come back from a consumer that stops? Round 206's
   bench with a third arm; three controls reach 3072 KiB, the paused one wedges

@@ -22,7 +22,6 @@ deferred.
 
 ## Open
 
-- **[B-05](B-05-isolate-null-credit-silent.md)** open — isolate: zero credit is indistinguishable from an old peer, the failure is silent
 - **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
 - **[B-06](B-06-websocket-lead-list-is-stale.md)** open, methodological — websocket: the old lead list went stale, the package needs rescanning
 - **[B-09](B-09-unfiled-grpc-compat-items.md)** open *(stale, 5bf4d34e)* — unfiled "documented, not fixed" items from private memory
@@ -46,6 +45,7 @@ deferred.
 - **[B-15](B-15-rpc-level-grants-on-http2.md)** closed (round 214) — cooperative backpressure on http2 via rpc-level grants, not built; the behaviour that stands is accepted in [C-19](../checked/C-19-http2-refuses-a-slow-consumer.md)
 - **[B-18](B-18-web-guard-is-a-census-not-a-sweep.md)** closed (round 227) — premise corrected: for the cancel class the web smoke tests are a working detector, shown by ablation ([C-25](../checked/C-25-web-smoke-catches-a-cancel-deadlock.md)); and the `async*` class it named no longer reproduces on Dart 3.10.1
 - **[B-19](B-19-close-the-gate-over-wasm.md)** closed (round 226) — `analyze`, `format:check` and `format` now cover rpc_dart_wasm; verified on four arms, a planted violation goes red in wasm and still goes red in a member
+- **[B-05](B-05-isolate-null-credit-silent.md)** closed (round 229) — a peer whose first grant was ZERO was read as pre-flow-control and got flooded: 800 KiB through a 64 KiB window, 16 KiB after. The logging half is a diagnostic and stays unfixed
 - **[B-20](B-20-detached-guard-has-no-witness.md)** closed (round 225) — the guard has no witness because nothing reaches it; 0 rejections across three scenarios, all 25 wrapped expressions internally guarded ([C-24](../checked/C-24-detached-guard-is-unreachable.md)). The isolate half stays open in B-04's closing note
 - **[B-17](B-17-watermark-lost-through-a-decorator.md)** closed (round 224) — the decorator that erased the stream-id watermark is refused at attach; `handlers ended` went `1 -> 0` with the control unchanged. The compile-time version is [B-21](B-21-reconnectable-transport-type.md)
 - **[B-16](B-16-pre-method-byte-budget-release.md)** closed (round 215) — swept, clean; the one row that looks like a leak is the reorder deferral, bounded by `halfOpenStreamTimeout` ([C-20](../checked/C-20-pre-method-budget-held-for-the-reclaim.md))

@@ -1130,7 +1130,13 @@ class RpcChannelTransport
     if (connRaw != null) {
       final parsed = int.tryParse(connRaw);
       final window = _fcConnWindow;
-      if (parsed != null && parsed > 0) {
+      // Any well-formed grant proves the peer does flow control here, INCLUDING
+      // a zero one -- "I have no room right now" is participation, not silence.
+      // Gating this on `> 0` meant a peer whose first grant was 0 was never
+      // recorded, the legacy grace then expired, and the sender went unbounded
+      // against a peer that had just said it had no room: 800 KiB accepted
+      // through a 64 KiB window, against 20 KiB when the same peer granted 1.
+      if (parsed != null) {
         _fcNotePeerGranted(connection: true);
       }
       if (parsed != null && parsed > 0 && window != null) {
@@ -1147,10 +1153,12 @@ class RpcChannelTransport
     final raw = metadata.getHeaderValue(RpcHeaders.xWindowUpdate);
     if (raw == null) return false;
     final granted = int.tryParse(raw);
-    // A peer sending garbage credit must not move our window.
-    if (granted != null && granted > 0) {
+    // A peer sending garbage credit must not move our window -- but a
+    // well-formed zero still proves it participates. See the connection level
+    // above for the measurement.
+    if (granted != null) {
       _fcNotePeerGranted(connection: false);
-      _fcOnGrant(message.streamId, granted);
+      if (granted > 0) _fcOnGrant(message.streamId, granted);
     }
     return true;
   }

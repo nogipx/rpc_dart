@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212, 213, 228]
-status: confirmed (round 228)
+applied: [206, 207, 208, 212, 213, 228, 229]
+status: confirmed (round 229)
 ---
 
 # RPC-01 — Flow-control credit on the skip path
@@ -101,6 +101,25 @@ bench `../probes/P-11-connection-debt-with-a-paused-consumer.md`.
 > reachability.** 206 repaid at teardown "unless someone is still listening",
 > which is correct only while every listener eventually drains or cancels. The
 > branch that does neither is where the same defect came back.
+
+Round 229, the same lens at lead B-05, and rule one found it before any probe.
+`_fcNotePeerGranted`'s doc says "a grant frame at all is the proof; its value is
+not"; both call sites gated it on `parsed > 0`. So a peer whose first grant was
+ZERO was never recorded as participating, the legacy grace expired, and the
+level's credit went null:
+
+    peer grants 1     20 KiB accepted    <- control
+    peer grants 0    800 KiB accepted    <- 12.5x a 64 KiB window
+    peer grants 0     16 KiB accepted    <- fixed: the seeded window, no more
+
+> **The VALUE of a grant and the FACT of one answer different questions.** How
+> much may I send, versus does this peer speak flow control at all — and only
+> the second may switch the mechanism off. Conflating them made zero, the one
+> value that means *stop*, read as *this peer has never heard of stopping*.
+
+Bench `../probes/P-12-zero-grant-reads-as-legacy.md`. Reachable only from a
+FOREIGN peer: rpc_dart never sends a zero grant itself, so no bench built from
+two rpc_dart transports can see it.
 
 > **Ask the question of the BOOKKEEPING as well as of the bytes.** "Does the
 > credit come back?" has a twin: "does the record of it go away?" Both hops
