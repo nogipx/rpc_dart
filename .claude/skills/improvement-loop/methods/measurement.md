@@ -4,6 +4,18 @@
 > this checklist are in [packs/](../packs/PACKS.md) · what a bench file looks
 > like: [specs/probe.md](../specs/probe.md)
 
+**Contents.** The checklist is the operative part; each section below it is the
+story one item cost, and is worth opening when that item is the one biting.
+
+- Checklist — before building a probe, and whenever a number surprises you
+- Where probes live
+- The two directions a wrong metric lies in
+- Measure what the library does, not what the bench does
+- RSS growth is not evidence of a leak
+- Controls
+- Performance rounds
+- Forensics
+
 ## Checklist — before building a probe, and whenever a number surprises you
 
 1. `probes/` first: a valid bench along the same paths (named by `loop.py next`)

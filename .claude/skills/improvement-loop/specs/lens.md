@@ -16,6 +16,9 @@ Lenses belong to the project. The skill owns the schema, the catalog of shapes
 and the order of application; only somebody who knows the code knows the
 concrete detectors.
 
+**Contents:** Mandatory fields · Shape · Detector · Ask · Evidence · The quality
+bar · Statuses and how they change.
+
 ## Mandatory fields
 
 ```

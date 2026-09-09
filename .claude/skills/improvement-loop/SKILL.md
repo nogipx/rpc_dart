@@ -1,6 +1,6 @@
 ---
 name: improvement-loop
-description: One round of a measured find-and-fix loop — pick a lens, take a probe, measure in numbers, fix, check with a canary, send it for review, run the gate, write it into the journal. Use it when asked to hunt bugs, leaks, security holes, hangs or performance problems; to continue or resume the improvement loop; to run a round, including on a schedule from /loop; to report the loop's status or where it stopped; to re-measure an earlier finding, deferral or "checked" mark; to derive or maintain the lens set; to lay the loop out in a new repository. It also fires without the word "loop" — on any "find what is broken" request about code.
+description: One round of a measured find-and-fix loop — pick a lens, take a probe, measure in numbers, fix, check the fix with a canary, run the gate, write it into the journal. Use it when asked to hunt bugs, leaks, security holes, hangs or performance problems; to continue or resume the improvement loop; to run a round, including on a schedule from /loop; to report the loop's status or where it stopped; to re-measure an earlier finding, deferral or "checked" mark; to derive or maintain the lens set; to lay the loop out in a new repository. It also fires without the word "loop" — on any "find what is broken" request about code.
 allowed-tools: Read, Edit, Write, Glob, Grep, Agent, Task, CronList, CronDelete, Bash(python3:*), Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*)
 ---
 
@@ -136,6 +136,11 @@ here or on a dangling link.
   the verdicts and what each changes are in [round.md](specs/round.md).
 - **[methods/](methods/METHODS.md)** — how to do the work. **Checklist at the
   top of each file; the stories below it are read once, not once per round.**
+  The three read every round are linked here directly rather than through the
+  index, because a file reached through two hops tends to get previewed instead
+  of read: [measurement.md](methods/measurement.md) (the Bench step),
+  [canary.md](methods/canary.md) (Witness and canary),
+  [tests.md](methods/tests.md) (writing the regression test).
 - **[catalog/](catalog/CATALOG.md)** — defect shapes by pack.
 - **[packs/](packs/PACKS.md)** — knowledge by domain and language; the `packs:`
   line in `config.md` selects them. Schema: [specs/pack.md](specs/pack.md).

@@ -4,6 +4,19 @@
 > itself: [tests.md](tests.md) · the constraint on switching a fix off in place:
 > [references/rule-zero.md](../references/rule-zero.md)
 
+**Contents.** The checklist is the operative part; each section below it is the
+story one item cost, and is worth opening when that item is the one biting.
+
+- Checklist — at the Witness and canary step
+- A witness and a guard are different things
+- A fix in two halves needs two canaries
+- A guard that can FAIL OPEN needs an attacking witness
+- A canary that leaves the OTHER tests green is a virtue
+- A new test can be a probe
+- An existing test that fails on your change may be RIGHT
+- Re-measure your own deferrals
+- Before shipping: measure REACHABILITY and be ready to revert
+
 ## Checklist — at the Witness and canary step
 
 1. Switch the fix off IN PLACE with `Edit` (`if (1 > 0) return;`, a raised
