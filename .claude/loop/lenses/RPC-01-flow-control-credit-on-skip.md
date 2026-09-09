@@ -1,10 +1,10 @@
 ---
 refines: U-07
-paths: [packages/core/rpc_dart/lib/**]
+paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206]
-status: confirmed (round 206)
+applied: [206, 207]
+status: confirmed (round 207)
 ---
 
 # RPC-01 — Flow-control credit on the skip path
@@ -48,3 +48,21 @@ A 1 MiB pool, a 256 KiB stream window, 256 KiB per call, 12 sequential streams:
 teardown and nothing reclaimed the shared one; and every gate tested
 `flowControlWindowBytes` alone, so a pool-only policy metered nothing while
 still charging each send. Both fixed; bench `../probes/P-01-connection-window-debt.md`.
+
+Round 207, the same detector one LAYER down — the paths above were widened to
+the transports for it. On http2 the pool belongs to package:http2, and rpc_dart
+throttles by pausing its subscription, which parks up to a whole connection
+window as pending. Ending the stalled call by cancelling drops it uncredited:
+
+    upload,   ended by draining -> the connection recovers
+    upload,   ended by cancel   -> every later call HUNG, polled 20 s
+    download, ended by resuming -> the connection recovers
+    download, ended by cancel   -> every later call HUNG
+
+One cancel is enough (68 KiB, the HTTP/2 default window). Not fixed — the
+discard is inside package:http2; see `../backlog/B-12-http2-cancel-kills-the-connection.md`
+and bench `../probes/P-02-http2-aborted-call-pool.md`.
+
+The transport packages other than http2 delegate to the core transport, so 206
+covers them: `RpcChannelTransport` is the only `IRpcFlowControlled` under
+websocket and isolate.
