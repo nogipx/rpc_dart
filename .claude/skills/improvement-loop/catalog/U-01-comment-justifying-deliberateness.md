@@ -18,6 +18,14 @@ actor while doing so.
 
 ## Detector
 
+The instance list is a grep, not a program:
+
+    grep -rniE "deliberat|on purpose|intentional|by design|do not (change|remove)" <src>
+
+Each hit is a LEAD — a claim about the code that nobody has re-checked. Verify
+it against the implementation; a comment that is right costs one read, and one
+that is wrong is a defect with a signpost on it.
+
 Grep comments with "deliberately", "otherwise", "instead of", "rather than"
 that describe behaviour rather than implementation; then read the branch they
 guard.

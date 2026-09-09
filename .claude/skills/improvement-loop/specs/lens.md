@@ -26,8 +26,7 @@ applies: <under which properties of the project the lens makes sense at all>
 breaks: <damage class>
 applied: [<round numbers>]
 status: derived | confirmed (round N) |
-        swept here (round N, <sha>[, sweep <hash>]) | retracted (round N)
-detector-script: <path> [arguments]        # optional
+        swept here (round N, <sha>) | retracted (round N)
 ---
 
 # <ID> — <short name>
@@ -63,11 +62,6 @@ On individual keys:
 - **`applied`** — the back-reference to a round's `lens:` key; `lint` reconciles
   them, and the **Target** step uses the number of entries to pick the
   least-explored one.
-- **`detector-script`** — when the detector is a script printing one instance
-  per line. The path is relative to the skill, a pack or `.claude/loop/`. Then
-  `loop.py sweep` performs the sweep and `stale` compares the lists. The
-  `## Detector` section is still mandatory: the script says WHERE, not WHAT to
-  look for.
 
 **An off-journal round.** If a round happened but its record does not exist (the
 journal was not started at the first one — see `../methods/setup.md`), the

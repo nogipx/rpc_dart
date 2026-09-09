@@ -51,6 +51,9 @@ report the reason and, if the call came from `/loop`, cancel the job
    unattended agent asked "should we continue?" always says yes.
 3. Read `config.md`, `LOOP.md` and `lessons/LESSONS.md` in full; the entity
    files as needed. The indexes exist so you can choose, not so you can know.
+   **In `methods/`, read the checklist at the top of each file** — the stories
+   below it explain what each item cost and are worth reading once, not once per
+   round.
 
 ## Rule zero — a command must never ask for permission
 
@@ -74,35 +77,39 @@ is what `lint` and `stale` are for.
 
 ## The round
 
-1. **Target. THE SCRIPT DOES NOT CHOOSE.** `next` prints state — every lens
-   with its status and the rounds that applied it, which swept lenses have had
-   files change under them since, the open leads with their reasons, the valid
-   benches, any owner decision waiting. No order is implied and no target is
-   named. **You decide, and `## Target` records what you took and why.**
-   Judgement encoded as precedence is what cost rounds 234-238: five rounds
-   opening new threads while a started one sat unfinished, each answer
-   defensible, the alternatives never shown.
-   The catalog (`catalog/`) only through instantiation into the set. Before a
-   sweep, check `checked/` and the statuses. A script detector is run through
-   `loop.py sweep <ID>`; the list hash goes into the status.
+1. **Target. THE SCRIPT DOES NOT CHOOSE.** `next` prints state, in no order and
+   naming nothing: lenses with their status and `applied:` history, swept lenses
+   whose files have moved, open leads, valid benches, any owner decision.
+   **You decide; `## Target` records what you took and why.** Encoding that
+   judgement as precedence cost rounds 234-238 — five rounds opening new threads
+   while a started one sat unfinished. `loop.py yield` says which lenses have
+   ever paid. Before a sweep check `checked/`; the catalog only through
+   instantiation into the set.
 2. **Bench.** `probes/` first — a valid bench along the same paths is reused,
    not rebuilt. A new bench counts as a bench once a control with the mechanism
    removed has shown it can see the defect; then it is registered as `P-N`
    (`specs/probe.md`). The checklists are the universal
    `methods/measurement.md` plus the packs' items from `next`'s reading list.
-   Every rebuild of the bench adds one to the `budget:` key; exhausted means the
-   verdict is INCONCLUSIVE, not CLEAN.
+   **A bench that could not see the defect makes the verdict INCONCLUSIVE, not
+   CLEAN** — however many times it was rebuilt.
 3. **Measure in numbers.** No numbers, no defect.
 4. **Fix.** Minimally, at the point that renders the wrong verdict.
+   **The narrative does not go beside the code.** The round record and the commit
+   body already hold the measurement, the controls and the story; repeating them
+   in a comment inflates the file every round forever. A comment earns its place
+   by saying what BREAKS if this is undone — one or two lines. Measured on four
+   consecutive fixes that ignored this: 19-37% of every diff was comment,
+   including tables copied verbatim from the round record.
 5. **Re-measure** with the same probe on the same bench.
-6. **Witness and canary.** `methods/canary.md`, `methods/tests.md`. Every
-   attempt to get a failing witness adds one to `budget:`.
-7. **Review — before the verdict.** A clean context checks the round record, the
-   probe and the control against the prompt from `loop.py review` (the core from
-   `references/review.md` plus the packs' questions): a subagent (`Agent`/
-   `Task`), `claude -p` from a fork, otherwise yourself with an explicit note.
-   Any "no" sends you back to step 2 with the same budget; the outcome goes into
-   the `review:` key.
+6. **Witness and canary.** `methods/canary.md`, `methods/tests.md`. **No failing
+   witness, no fix**: if the fix cannot be switched off and shown to break
+   something, it is not proven.
+7. **Check the verdict.** Answer the seven questions from `loop.py review`
+   against your own record, probe and control; any "no" sends you back to
+   **Bench**. Q2 — *did the control show the bench can SEE the defect* — is the
+   one that catches things. (This once demanded "a clean context" and a
+   `review:` key; 39 of 39 rounds wrote `review: self`, so the ceremony went and
+   the questions stayed.)
 8. **Gate** with the full sequence from the config, **the record** per
    `specs/round.md` with every edit from "What a round changes", `loop.py lint`
    green, a commit with the same sections in its body, and a chat report with
@@ -122,37 +129,24 @@ started.
 
 ## References — on demand
 
-**Every directory has an index and this file links all six.** `loop.py lint`
-walks the skill from here and fails on anything it cannot reach and on any
-dangling link — measured absent before it was written: `evals/` was reachable
-from nothing, and two method cross-references pointed at steps that had moved.
-
-A file may open with a breadcrumb naming its index and what it relates to. That
-is a convenience for whoever lands there by grep, not a rule: unlike the
-journal, where a lens's `applied:` carries information a forward link does not,
-a leaf naming its own directory's index carries nothing the path does not
-already say. Nothing checks it.
+Each directory has an index; `loop.py lint` fails on anything unreachable from
+here or on a dangling link.
 
 - **[specs/](specs/SPECS.md)** — what each file in `.claude/loop/` consists of;
-  the verdicts and what each changes are in
-  [round.md](specs/round.md).
-- **[methods/](methods/METHODS.md)** — how to do the work: a checklist at the
-  top, stories with numbers below.
+  the verdicts and what each changes are in [round.md](specs/round.md).
+- **[methods/](methods/METHODS.md)** — how to do the work. **Checklist at the
+  top of each file; the stories below it are read once, not once per round.**
 - **[catalog/](catalog/CATALOG.md)** — defect shapes by pack.
-- **[packs/](packs/PACKS.md)** — knowledge by domain and language: damage
-  classes, checklist items, reviewer questions, detectors, probe templates. What
-  is enabled is the `packs:` line in `config.md`; `loop.py` assembles them, the
-  agent does not choose. Schema: [specs/pack.md](specs/pack.md).
+- **[packs/](packs/PACKS.md)** — knowledge by domain and language; the `packs:`
+  line in `config.md` selects them. Schema: [specs/pack.md](specs/pack.md).
 - **[references/](references/REFERENCES.md)** —
-  [model.md](references/model.md) (terms, diagrams),
+  [model.md](references/model.md) (terms),
   [rule-zero.md](references/rule-zero.md),
-  [review.md](references/review.md) (the core of the reviewer prompt).
-- **[evals/](evals/EVALS.md)** — thirteen scenarios that check the skill itself,
-  each derived from a rule a mistake paid for or from machinery the skill added.
-  Run them after changing this file, `methods/` or `references/`.
+  [review.md](references/review.md) (the seven questions).
+- **[evals/](evals/EVALS.md)** — scenarios that check the skill itself. Run them
+  after changing this file or `methods/`.
 - **`scripts/loop.py`** — `init`, `status`, `next`, `lint`, `stale`, `catalog`,
-  `review`, `sweep`.
+  `review`, `yield`. **Every one reports facts; only the round cap decides.**
 
-**Refer to a step by NAME, never by number.** The numbering here moves whenever a
-step is added, and a cross-reference elsewhere goes silently wrong; `lint`
-rejects `step <N>` in every file but this one.
+**Refer to a step by NAME, never by number** — the numbering moves, and `lint`
+rejects `step <N>` everywhere but here.

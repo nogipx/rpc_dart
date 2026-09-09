@@ -2,7 +2,7 @@
 applies: everywhere; always enabled
 damage classes: data loss, crash, hang, wrong result, security hole, unbounded growth, performance regression
 shapes: U-01, U-02, U-03, U-04, U-05, U-06, U-12, U-14, U-15, U-17, U-18, U-19, U-20, U-21
-contains: detectors/deliberate_comments.py — instances of U-01 (comments justifying deliberateness) across the tree
+contains: the universal shapes only; U-01's instance list is the grep written into that shape
 ---
 
 # core — what holds in any code

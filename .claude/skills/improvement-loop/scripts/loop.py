@@ -20,7 +20,6 @@
                      directories no lens covers
     loop.py catalog  catalog shapes for the enabled packs (lenses mode)
     loop.py review   reviewer prompt: core plus the enabled packs' questions
-    loop.py sweep ID run a lens's script detector: instances, count, hash
 
 Standard library only. Run from the repository root, or pass --root.
 lint exit code: 0 clean, 1 errors found.
@@ -64,13 +63,17 @@ SKILL_DIRS = {
 
 # Machine fields live in frontmatter, prose in `## Section` blocks. Frontmatter
 # keys and section headings are compared lower-cased.
-ROUND_FRONT = ["round", "verdict", "packages", "lens", "bench", "budget",
-               "review", "commit"]
+ROUND_FRONT = ["round", "verdict", "packages", "lens", "bench", "commit"]
+# Tolerated on rounds written before these were dropped, required on none.
+# `review:` said "self" in 39 of 39 rounds -- a step satisfied nominally every
+# time is worse than no step. `budget:` was self-reported from memory and
+# validated by nothing.
+ROUND_OPTIONAL = ["budget", "review"]
 ROUND_SECTIONS = ["target", "hypothesis", "before", "mechanism", "after",
                   "canary", "gate", "not fixed", "links"]
 LENS_FRONT = ["refines", "paths", "applies", "breaks", "applied", "status"]
 LENS_SECTIONS = ["shape", "detector", "ask", "evidence"]
-LENS_OPTIONAL = ["detector-script"]
+LENS_OPTIONAL: list[str] = []
 BACKLOG_FRONT = ["status", "round", "commit", "paths", "probe", "reason"]
 # Optional, opt-in: marks a lead as work a round STARTED and did not finish,
 # which `select_target` takes before opening a new lens. See specs/backlog-item.md.
@@ -545,6 +548,47 @@ def skill_graph(rep: "Report") -> None:
                           "name the step instead")
 
 
+def cmd_yield(root: Path, loop: Path) -> int:
+    """What each lens has actually produced. A FACT, decided by nobody.
+
+    `curate` used to re-rank the set by feel. This counts: how many rounds took
+    a lens, and how many of those ended FIXED. The first run of it made the
+    single most useful observation in the project's history -- the lenses mined
+    out of existing history found a defect on FIRST application three times out
+    of three, while several derived ones had been applied twice for nothing.
+    Rank on that, not on which shape feels clever.
+    """
+    if not loop.is_dir():
+        print(f"no {loop} — data not laid out: setup mode (loop.py init)")
+        return 1
+    data = load(loop)
+    took: dict[str, list[str]] = {}
+    for ent in data["rounds"].values():
+        f = ent["fields"]
+        m = ANY_ID_RE.search(f.get("lens", ""))
+        if m:
+            took.setdefault(m.group(0), []).append(f.get("verdict", "").strip())
+
+    rows = []
+    for lid in data["lenses"]:
+        vs = took.get(lid, [])
+        fixed = sum(1 for v in vs if v == "FIXED")
+        rows.append((fixed, len(vs), lid, data["lenses"][lid]["fields"].get("status", "")))
+    rows.sort(key=lambda r: (-r[0], r[1], r[2]))
+
+    print(f"{'lens':9} {'rounds':>6} {'FIXED':>6}   status")
+    for fixed, n, lid, st in rows:
+        note = "  <- never applied" if n == 0 else ""
+        print(f"{lid:9} {n:>6} {fixed:>6}   {st[:38]}{note}")
+    tot_f = sum(r[0] for r in rows)
+    tot_n = sum(r[1] for r in rows)
+    print(f"\n{len(rows)} lenses, {tot_n} applications, {tot_f} ended FIXED"
+          f" ({(100*tot_f//tot_n) if tot_n else 0}%)")
+    print("A lens applied repeatedly with no FIXED is a candidate for demotion,")
+    print("not proof the code is clean — say which in the curate pass.")
+    return 0
+
+
 def cmd_lint(root: Path, loop: Path) -> int:
     rep = Report()
     if not loop.is_dir():
@@ -653,10 +697,6 @@ def cmd_lint(root: Path, loop: Path) -> int:
             rep.warn(f"lenses/{ent['path'].name}: `breaks:` «{f['breaks'][:60]}» names no damage class "
                      f"of the enabled packs ({', '.join(classes)}) — add the class to config.md "
                      "(`damage classes:`) or rephrase")
-        det = f.get("detector-script", "").strip()
-        sm_ = SCRIPT_RE.match(det) if det else None
-        if sm_ and resolve_script(loop, packs, sm_.group(1)) is None:
-            rep.error(f"lenses/{ent['path'].name}: detector script {sm_.group(1)} not found")
         first_round = min(data["rounds"], key=int, default=None)
 
         def check_round(num: str, marked: bool, where: str) -> None:
@@ -689,7 +729,7 @@ def cmd_lint(root: Path, loop: Path) -> int:
         f = ent["fields"]
         pname = ent["path"].name
         require_fields(rep, "rounds", ent, ROUND_FRONT, ROUND_SECTIONS)
-        unknown_front(rep, "rounds", ent, ROUND_FRONT)
+        unknown_front(rep, "rounds", ent, ROUND_FRONT + ROUND_OPTIONAL)
         verdict = f.get("verdict", "").strip()
         commit = f.get("commit", "").strip().lower()
         if commit and commit not in ("yes", "no"):
@@ -728,11 +768,17 @@ def cmd_lint(root: Path, loop: Path) -> int:
         if commit == "yes" and have_git:
             # The alternation covers records written before the loop switched
             # to English: those commit bodies say «Раунд NNN».
-            found = git(root, "log", "--all", "-E", "--format=%h",
-                        f"--grep=(Round|Раунд) {rn} ")
+            # Case-INSENSITIVE and with no trailing space. Grepping for
+            # "Round NNN " matched neither this repo's own commit convention
+            # ("round 233 - ...") nor a body ending at the number, so eight
+            # warnings stood for ~35 rounds, all false. A checker that is
+            # stably wrong gets muted, and it was: every lint call in the
+            # session that found this piped the warnings away.
+            found = git(root, "log", "--all", "-i", "-E", "--format=%h",
+                        f"--grep=(round|раунд) {rn}")
             if not (found or "").strip():
-                rep.warn(f"rounds/{pname}: `commit: yes`, but `git log --grep \"Round {rn} \"` is empty "
-                         "(not committed yet?)")
+                rep.warn(f"rounds/{pname}: `commit: yes`, but no commit mentions "
+                         f"round {rn} (not committed yet?)")
         lens_ref = f.get("lens", "")
         lm = ANY_ID_RE.search(lens_ref)
         if not lm:
@@ -1110,8 +1156,16 @@ def cmd_next(root: Path, loop: Path) -> int:
     print("Packs: " + ", ".join(packs) + (f" (not found: {', '.join(missing)})" if missing else ""))
     print(f"Commit language: {cfg['commit_lang']}")
     print(f"Reply language: {cfg['reply_lang']}")
-    reading = ["methods/measurement.md (checklist)", "methods/canary.md (checklist)",
-               "methods/tests.md (checklist)", "specs/round.md"]
+    # THE CHECKLISTS, not the files. Each of these opens with the operative list
+    # and then spends most of its words on the stories that paid for each item.
+    # The stories are why the rules stick and are worth reading once; re-reading
+    # ~2400 words of them to reach ~600 words of checklist, every round, is the
+    # largest recurring cost in the loop. Read the checklist; open the story
+    # behind an item when that item is the one biting.
+    reading = ["methods/measurement.md — the checklist at the top",
+               "methods/canary.md — the checklist at the top",
+               "methods/tests.md — the checklist at the top",
+               "specs/round.md (the record's shape)"]
     for name, pk in packs.items():
         for k in ("measure", "canary", "tests"):
             if k in pk["files"]:
@@ -1161,7 +1215,6 @@ def cmd_stale(root: Path, loop: Path) -> int:
         changed = changed_files(root, m.group(2), paths) if paths else []
         note = ""
         if m.group(3):
-            res = run_detector(root, loop, packs, ent["fields"].get("detector-script", ""))
             if res is None:
                 note = "detector script not found"
             elif res[1] != m.group(3):
@@ -1269,189 +1322,6 @@ def cmd_review(root: Path, loop: Path) -> int:
     return 0
 
 
-def run_detector(root: Path, loop: Path, packs: dict, det: str) -> tuple[list[str], str] | None:
-    m = SCRIPT_RE.match(det.strip())
-    if not m:
-        return None
-    script = resolve_script(loop, packs, m.group(1))
-    if script is None:
-        return None
-    args = m.group(2).split()
-    cmd = ["python3", str(script), *args] if script.suffix == ".py" else [str(script), *args]
-    out = subprocess.run(cmd, cwd=root, capture_output=True, text=True, check=False)
-    lines = sorted(l for l in out.stdout.splitlines() if l.strip())
-    import hashlib
-    digest = hashlib.sha1("\n".join(lines).encode()).hexdigest()[:8]
-    return lines, digest
-
-
-def cmd_sweep(root: Path, loop: Path, lens_id: str | None) -> int:
-    if not lens_id:
-        print("name a lens ID: loop.py sweep RPC-01")
-        return 1
-    data = load(loop)
-    cfg = parse_config(loop)
-    packs, _ = load_packs(loop, cfg)
-    ent = data["lenses"].get(lens_id)
-    if not ent:
-        print(f"lens {lens_id} not found")
-        return 1
-    det = ent["fields"].get("detector-script", "")
-    res = run_detector(root, loop, packs, det)
-    if res is None:
-        print(f"{lens_id}: no `detector-script:` in the frontmatter, or the script was not found — "
-              "sweep by hand from the `## Detector` section:")
-        print("  " + " ".join(ent["fields"].get("detector", "").split()))
-        return 1
-    lines, digest = res
-    for l in lines:
-        print(l)
-    print(f"instances: {len(lines)}, sweep {digest} — into the lens status: "
-          f"`swept here (round N, <sha>, sweep {digest})`")
-    return 0
-
-
-# ---------------------------------------------------------------- init
-
-CONFIG_TEMPLATE = """# Loop settings
-
-Schema — `specs/config.md` in the skill. The places below are read by
-`loop.py` and their format is exact: the `unattended:` line, the ```gate block,
-the `commit language:` and `reply language:` lines, and the three
-«Round budget» lines.
-
-## Mode
-
-unattended: no
-
-## Packs
-
-Enabled knowledge packs from the skill's `packs/` or from
-`.claude/loop/packs/`; `core` is always on. Own damage classes — comma
-separated, optional.
-
-packs: core
-damage classes:
-
-## Language
-
-Two independent settings. Drop either line and it is English.
-`commit language` is the round commit's subject and body; `reply language` is
-the round report in chat.
-
-commit language: English
-reply language: English
-
-## Toolchain
-
-<what runs the build and the tests; wrappers for the pinned SDK version; known
-launch traps and their safe forms>
-
-## Gate
-
-The exact sequence before a commit, one command per line:
-
-```gate
-<command 1>
-<command 2>
-```
-
-## Probes
-
-<where they go and why: import resolution, exclusion from analysis, gitignore>
-
-## After the commit
-
-Commands for an unattended run after a successful round commit (push,
-notification); empty means nothing. Covered by permissions.allow like the gate.
-
-```after-commit
-```
-
-## Round budget
-
-probes: 3
-canaries: 2
-round cap: 30
-
-## Targets nobody runs
-
-<another compiler, the native layer, devices, generators — the command and what
-it finds>
-
-## Severity bar
-
-<which damage classes are worth a round right now>
-
-## Out of scope
-
-<what the loop is not for>
-
-## Standing owner requirements
-
-<what holds in every round>
-
-## Known flakes
-
-<by name; if none, say so>
-"""
-
-LOOP_TEMPLATE = """# LOOP.md — map of the improvement-loop data
-
-Data of a measured find-and-fix loop; the rules live in the `improvement-loop`
-skill (SKILL.md, specs/, methods/). Navigation only here.
-
-## Six entities
-
-- **Lens** — a hypothesis generator: what to look for and how. `lenses/`, index `lenses/LENSES.md`.
-- **Round** — what was measured, fixed, and with which verdict. `rounds/`, index `rounds/ROUNDS.md`.
-- **Lead** — the unfinished: a deferral, a wait on the owner, a bench with no number. `backlog/`, index `backlog/BACKLOG.md`.
-- **Negative** — measured, clean, nothing to do. `checked/`, index `checked/CHECKED.md`.
-- **Bench** — a probe whose control proved it can see the defect; reused. `probes/`, index `probes/PROBES.md`.
-- **Lesson** — a rule for working with this code that a round paid for. `lessons/`, index `lessons/LESSONS.md`.
-
-## Who points at whom
-
-```mermaid
-flowchart LR
-    R[round] -->|lens:| L[lens]
-    L -->|applied:| R
-    R -->|bench:| P[bench]
-    B[lead] -->|round:| R
-    C[negative] -->|round:| R
-    P -->|round:| R
-    S[lesson] -->|round:| R
-    R -->|## Links| B
-    R -->|## Links| C
-```
-
-## Where to go with a question
-
-- Run a round — the skill, default mode; start with `loop.py status`.
-- The next round's number — `loop.py status` (the maximum in `rounds/` plus one).
-- Has this been checked? — `checked/CHECKED.md` and the `swept here` lens statuses.
-- Where a claim came from — by ID: `grep -rn "<ID>" .claude/loop/`.
-- What awaits the owner — `loop.py status`; to answer, write into the
-  `## Owner decision` section of the lead's file, leave the status alone.
-- What has aged against the code — `loop.py stale`.
-- Which target the next round should take — `loop.py next`.
-- Is there a ready bench for this surface — `probes/PROBES.md` or `loop.py next`.
-- What we learned on this code — `lessons/LESSONS.md`.
-
-## What to trust with care
-
-<fill in at setup: unrecovered history, «not re-measured» records, detectors
-never run, a lens set no round has checked>
-"""
-
-INDEX_TITLES = {
-    "lenses": "Lens set of the project — what to look for and how; line order is the rank",
-    "rounds": "Round journal — newest first",
-    "backlog": "Leads — the unfinished; line order is the rank",
-    "checked": "Negatives — measured clean, nothing to do",
-    "probes": "Benches — probes whose control proved they see the defect",
-    "lessons": "Lessons — rules for working with this code, paid for by a round",
-}
 
 
 def cmd_init(root: Path, loop: Path) -> int:
@@ -1476,17 +1346,15 @@ def cmd_init(root: Path, loop: Path) -> int:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["init", "status", "next", "lint", "stale", "catalog", "review", "sweep"])
-    ap.add_argument("arg", nargs="?", help="lens ID for sweep")
+    ap.add_argument("command", choices=["init", "status", "next", "lint", "stale", "catalog", "review", "yield"])
+    ap.add_argument("arg", nargs="?", help=argparse.SUPPRESS)
     ap.add_argument("--root", default=".", help="repository root (the current directory by default)")
     ap.add_argument("--loop", default=".claude/loop", help="path to the loop data relative to the root")
     a = ap.parse_args(argv)
     root = Path(a.root).resolve()
     loop = (root / a.loop).resolve()
-    if a.command == "sweep":
-        return cmd_sweep(root, loop, a.arg)
     return {"init": cmd_init, "status": cmd_status, "next": cmd_next, "lint": cmd_lint,
-            "stale": cmd_stale, "catalog": cmd_catalog, "review": cmd_review}[a.command](root, loop)
+            "stale": cmd_stale, "catalog": cmd_catalog, "yield": cmd_yield, "review": cmd_review}[a.command](root, loop)
 
 
 if __name__ == "__main__":

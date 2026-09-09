@@ -32,17 +32,12 @@ separate commit marked `curate` in the body, with no round file.
    `stale (sha)`: the next round on those paths must repeat its control before
    reusing it. A `broken` one older than ten rounds with no replacement stays —
    that is a negative too.
-7. **Lessons — the conveyor into packs.** For each `active` one: does the rule
-   hold outside this code? If it does, where exactly: in any code —
-   `methods/` (a checklist item and a story) or `catalog/` with `pack: core`; in
-   any code of this domain or language — `packs/<name>/measure|canary|tests.md`
-   or a shape with `pack: <name>`; only in this repository but wider than one
-   lens — a private pack `.claude/loop/packs/<name>/`. The lesson gets
-   `promoted to skill (<file>)`. If the owner accepted the rule as standing, it
-   goes to `config.md` and the lesson gets `obsolete (round N)` with a link.
-   If two lessons say one thing, merge into the older. The catalog and the
-   methods live in the skill: edits to them are a separate skill commit, not a
-   project one.
+7. **Lessons.** Re-read each `active` one against the code it describes; retire
+   what no longer holds. **Do not promote them into `methods/` or `catalog/`** —
+   that conveyor existed for 39 rounds and moved exactly zero lessons, while
+   every promotion would have GROWN a skill whose binding constraint is already
+   the attention it costs to read. Lessons are a permanent project-local layer.
+   If two say one thing, merge into the older.
 8. **The catalog.** A shape instantiated and confirmed in this project but
    missing from `../catalog/` is a candidate for it, by the same test: does it
    hold outside this code?

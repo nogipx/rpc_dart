@@ -68,9 +68,7 @@ starter set of hypotheses, each with status `derived`.
    `config.md` first. For each shape: its `applies` against the project's
    properties. Instantiate an applicable one — rewrite the detector in terms of
    this code, with real symbols, paths and globs in `paths:`, and set
-   `refines: <U-ID>`. Where the instance list can be produced programmatically,
-   the detector is a script (`detector-script: …`; ready-made ones are in
-   `packs/*/detectors/`). **A shape that is not instantiated does not enter the
+   `refines: <U-ID>`. **A shape that is not instantiated does not enter the
    set.**
 4. **Add the purely local shapes** the catalog does not have: they are the set's
    main value.

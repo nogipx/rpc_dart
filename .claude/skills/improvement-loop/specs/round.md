@@ -17,8 +17,6 @@ verdict: FIXED | CLEAN | DEFERRED | INCONCLUSIVE | RETRACTED
 packages: [<the packages touched>]
 lens: <ID from the project's set>
 bench: P-N — reused | P-N — new | none
-budget: probes n/N, canaries n/N
-review: subagent | self | claude -p — k/N, <what was rebuilt on its "no">
 commit: yes | no
 ---
 
@@ -77,10 +75,6 @@ for chat from the frontmatter.
 rounds with no fix, "After", "Canary" and "Gate" read as `n/a`, and "Before"
 holds the negative result or a description of the bench that produced no number.
 
-**The budget is kept as you go**, not filled in at the end: the numerators grow
-with every rebuild of the bench and every attempt to get a failing witness, and
-the denominators come from `config.md`. A numerator above its denominator with a
-verdict other than INCONCLUSIVE or DEFERRED is a `lint` error.
 
 **Commit is `yes` or `no`, not a sha.** The round file rides in the same commit
 as the fix, and the sha is unknown while the record is written. The commit body

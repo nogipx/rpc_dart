@@ -23,7 +23,6 @@ packs/<name>/
   review.md        reviewer questions, in a ``` block — `loop.py review` inserts them
   catalog/         U-N shapes with a `pack:` key (private packs only; the
                    skill packs' shapes live in the shared catalog/)
-  detectors/       scripts: one instance per line on stdout, exit code 0
   assets/          probe and fixture templates for the toolchain
 ```
 
@@ -64,8 +63,6 @@ frontmatter.
   but say so.
 - **A detector is a script** when the instance list can be produced
   programmatically; the protocol: run from the repository root, instances on
-  stdout one per line (`path:line: text`), exit code 0. `loop.py sweep` hashes
-  the list and `stale` compares.
 - **A private pack** is for knowledge that makes no sense outside this
   repository but does not fit into one lens or lesson. Anything that holds
   outside the repository is promoted by `curate` into a skill pack.

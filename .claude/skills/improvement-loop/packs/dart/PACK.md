@@ -2,7 +2,7 @@
 applies: "Dart code: pub packages, dart2js/AOT targets, isolates"
 damage classes: —
 shapes: —
-contains: "measure.md, tests.md, detectors/log_only_catch.py (instances of U-06 in .dart), assets/probe_template.dart (a probe skeleton: one number, a control flag, RSS)"
+contains: "measure.md, tests.md, assets/probe_template.dart (a probe skeleton: one number, a control flag, RSS)"
 ---
 
 # dart — language and runtime idioms
@@ -18,7 +18,7 @@ the pack is enabled; the other two are run and copied, not read.
 
 - [measure.md](measure.md) — added to the measurement checklist
 - [tests.md](tests.md) — added to the regression-test rules
-- `detectors/log_only_catch.py` — instances of
-  [U-06](../../catalog/U-06-log-only-catch.md) in `.dart` sources
+- U-06 in Dart is a grep: `grep -rn "catch" -A 3 lib` and keep the blocks whose
+  body is only a log call — the failure is swallowed on the path to success.
 - `assets/probe_template.dart` — a probe skeleton: one number, a control flag,
   RSS
