@@ -10,6 +10,8 @@ wrong. A negative is never deleted; re-measuring one is a round's target, and
 where 20 of 50 records had aged — almost all of them because rounds 206-220
 rewrote `channel_transport.dart` and the three http2 transports.
 
+- **[C-27](C-27-keep-calling-on-one-connection.md)** pre-201, off-journal, websocket, isolate, http/1.1 — "keep calling on ONE connection" (60 sequential, 10 concurrent, 10 server-streams) is clean on the other three transports, and structurally so: none of them writes on the release path. Imported after round 234
+- **[C-28](C-28-sibling-batteries-that-came-back-clean.md)** rounds 40, 99, 106, 109 off-journal, http, wasm, websocket, http2 — the clean rows of the sibling battery: the CORS/CSRF gate (415/415/405 with the handler never running), the responder side of peer loss, wasm clean by construction, and three asymmetries that are NOT defects. Imported after round 234
 - **[C-01](C-01-sustained-load.md)** round 191, websocket, http2, isolate *(stale, 5bf4d34e)* — ordinary sustained load retains nothing
 - **[C-02](C-02-frame-codec-hostile-frames.md)** round 46, core and websocket *(stale, 5bf4d34e)* — the frame codec against nine hostile frames
 - **[C-03](C-03-ping-flood.md)** round 77, http2 *(stale, 5bf4d34e)* — a PING flood is not a defect, the per-unit figure falls

@@ -25,6 +25,10 @@ their own numbers returned nothing in the loop: `CONTINUATION`, `756 MiB`,
 
 - **[RPC-16](RPC-16-check-before-await.md)** derived — a lifecycle flag read before an await and never re-read; four fixed instances by sha, and the thing the factory returned was orphaned rather than closed; refines U-07
 - **[RPC-17](RPC-17-limit-fires-after-residency.md)** confirmed (round 90, off-journal) — the limit exists and sits one layer too late, so the allocation already happened: 192 MiB body into 756 MiB RSS, 2071x through permessage-deflate, 470x through a gzip codec. No catalog shape covers it
+- **[RPC-18](RPC-18-dependency-buffers-below-your-limits.md)** confirmed (round 145, off-journal) — the dependency reassembles the wire before anything becomes a message, so every ceiling you set is structurally blind: 64 MiB of CONTINUATION frames starved every other client. Sibling of RPC-17, and the difference is whether the limit is late or absent
+- **[RPC-19](RPC-19-one-flag-two-lifecycle-meanings.md)** confirmed (round 176, off-journal) — one boolean meaning both "the caller closed us" and "the connection is gone"; the give-away is a recovery API that works exactly once; refines U-18
+- **[RPC-20](RPC-20-the-window-before-the-first-listener.md)** confirmed (round 168, off-journal) — a broadcast controller discards what the peer sent before the first `listen()`, and it fails OPEN because the loss reads as "the peer does not support this". 200/200 chunks against an 8 KiB window, 8/200 after
+- **[RPC-21](RPC-21-drive-the-lifecycle-twice.md)** confirmed (round 77, off-journal) — call every lifecycle API a second time, and once after a failure: four defects in four rounds, none visible to a green suite. The lens C-06 had been asking for; refines U-15
 
 ## Productive lately
 

@@ -45,6 +45,29 @@ being written down (both are live, with in-code comments and regression tests):
 And the boundary is now written down in `../LOOP.md` ("Where knowledge lives"),
 which is what stops the two corpora drifting apart again.
 
+## Second pass, same session — the shapes and methods are in
+
+Six more records, each verified against current code before being written:
+
+    RPC-18  the dependency buffers below every limit you own (CONTINUATION
+            flood: 64 MiB starved every other client; the caller side worse
+            at +194.3 MiB)
+    RPC-19  one flag meaning both "closed" and "disconnected"; the give-away
+            is a recovery API that works exactly once
+    RPC-20  the window before the first listener (200/200 chunks against an
+            8 KiB window, 8/200 after)
+    RPC-21  drive the lifecycle twice -- the lens C-06 itself had been asking
+            for, since it recorded U-15 as having no lens
+    L-07    instrument every hop at once (3 of 4 attempts lost to arguing)
+    L-08    a per-test connection cannot see a per-connection defect
+    C-27    "keep calling on one connection", clean on the other three
+    C-28    the sibling battery's clean rows, incl. the CORS/CSRF gate
+
+`RPC-08` also gained the owner's round-101 parity qualifier — match BEHAVIOUR
+not code, every transport except `rpc_dart_http`, a code-shape difference is a
+lead — which had been sitting in memory where no round would have found it, and
+which governs how the parity lens may be used at all.
+
 ## What is left, and why it is a lead rather than a round
 
 **~30 memory dossiers still hold code knowledge with numbers**, each needing a
