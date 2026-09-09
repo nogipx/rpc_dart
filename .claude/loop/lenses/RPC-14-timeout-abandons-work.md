@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233]
-status: swept here (round 223, 0e7b984a)
+applied: [223, 233, 246]
+status: swept here (round 246, cd6ee68e)
 ---
 
 # RPC-14 — A timeout abandons the wait, not the work

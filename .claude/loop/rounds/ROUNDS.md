@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[246](246-no-new-timeouts-to-abandon.md)** CLEAN, rpc_dart — RPC-14 re-swept over its diff: zero new `.timeout(` sites, and the two awaits added on resource-holding paths are guarded, one of them being the lens's own adopt-the-abandoned-future fix
 - **[245](245-the-dimension-236-excluded.md)** FIXED, rpc_dart — metadata weighed zero against the unlistened queue's byte bound: 4096 frames retained 256 MiB against a 16 MiB cap, now 255 and 15.9 MiB
 - **[244](244-the-parked-sender-still-wakes.md)** CLEAN, rpc_dart — RPC-09 re-swept over 6 moved files: close() still wakes every parked sender, and round 240's buffering turned out to have SHRUNK the hazard this round set out to attack
 - **[243](243-the-trailer-cap-held.md)** CLEAN, core and the three transports — RPC-02 re-swept over 10 moved files: every message-carrying trailer still capped, including both refusal paths added since
