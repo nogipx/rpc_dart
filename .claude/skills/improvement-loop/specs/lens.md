@@ -1,6 +1,6 @@
 # Schema: a lens
 
-Path: `.claude/loop/lenses/<PREFIX>-NN-slug.md`. Plus a line in
+Path: `.claude/loop/lenses/<PREFIX>-N-slug.md`. Plus a line in
 `lenses/LENSES.md`. Each set has its own prefix (`RPC-`, `WEB-`); the universal
 catalog uses `U-`.
 
@@ -21,8 +21,8 @@ paths: [<the globs the detector covers>]
 applies: <under which properties of the project the lens makes sense at all>
 breaks: <damage class>
 applied: [<round numbers>]
-status: derived | confirmed (round NNN) |
-        swept here (round NNN, <sha>[, sweep <hash>]) | retracted (round NNN)
+status: derived | confirmed (round N) |
+        swept here (round N, <sha>[, sweep <hash>]) | retracted (round N)
 detector-script: <path> [arguments]        # optional
 ---
 
@@ -95,9 +95,9 @@ A lens is not accepted into the set if:
 
 - **derived** — a hypothesis. Everything invented by analysing the code rather
   than by a finding is marked this way.
-- **confirmed (round NNN)** — a round found a real defect through it. Only then
+- **confirmed (round N)** — a round found a real defect through it. Only then
   does the `## Evidence` section fill with numbers.
-- **swept here (round NNN, sha[, sweep hash])** — the sweep by its detector came
+- **swept here (round N, sha[, sweep hash])** — the sweep by its detector came
   back clean on the code at `sha`. This is not a deletion: the record stays so
   the next round does not repeat the sweep, and `loop.py stale` says when new
   code appeared along the lens's paths. With a script detector the status also
@@ -106,7 +106,7 @@ A lens is not accepted into the set if:
   shape is seen exactly.
   **This is the only home of such a fact**: `checked/` holds only negatives that
   are not tied to a shape.
-- **retracted (round NNN)** — the shape turned out not to be a defect. The
+- **retracted (round N)** — the shape turned out not to be a defect. The
   reason is recorded, or the lens will be derived again.
 
 INCONCLUSIVE does not change the status, but the round is still written into

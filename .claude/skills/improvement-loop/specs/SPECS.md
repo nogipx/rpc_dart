@@ -6,13 +6,13 @@ everything else in this skill. The schemas are not read by the agent alone:
 exactly these schemas, so the field format is part of the contract rather than
 decoration.
 
-- **[round.md](round.md)** — the round file, `rounds/NNN-slug.md`. Also the only
+- **[round.md](round.md)** — the round file, `rounds/N-slug.md`. Also the only
   home of the round record, the verdicts, and what each of them changes.
-- **[lens.md](lens.md)** — a lens, `lenses/<PREFIX>-NN-slug.md`
-- **[backlog-item.md](backlog-item.md)** — a lead, `backlog/B-NN-slug.md`
-- **[checked-item.md](checked-item.md)** — a negative, `checked/C-NN-slug.md`
-- **[probe.md](probe.md)** — a bench, `probes/P-NN-slug.md`
-- **[lesson.md](lesson.md)** — a lesson, `lessons/L-NN-slug.md`
+- **[lens.md](lens.md)** — a lens, `lenses/<PREFIX>-N-slug.md`
+- **[backlog-item.md](backlog-item.md)** — a lead, `backlog/B-N-slug.md`
+- **[checked-item.md](checked-item.md)** — a negative, `checked/C-N-slug.md`
+- **[probe.md](probe.md)** — a bench, `probes/P-N-slug.md`
+- **[lesson.md](lesson.md)** — a lesson, `lessons/L-N-slug.md`
 - **[index.md](index.md)** — a directory index, `<DIR>/<DIR>.md`
 - **[map.md](map.md)** — the data map, `LOOP.md`
 - **[config.md](config.md)** — the project's settings, `config.md`
@@ -23,10 +23,23 @@ decoration.
 
 - **One file per entity.** One big file for everything will not do: everything
   gets edited in one place, everything conflicts, and nothing can be found.
-- **The identifier in the file name and in the heading**, fixed width (`RPC-08`,
-  not `RPC-8`; rounds are `012`): the name gives sorting in `ls`, the heading
-  gives `grep -rn "RPC-08"`, which catches both the record and every reference
-  to it.
+- **The identifier in the file name and in the heading.** The name gives an
+  anchor for `ls`, the heading gives `grep -rn "RPC-8"`, which catches both the
+  record and every reference to it.
+
+  **Numbers are not padded.** `RPC-8` and `RPC-08` are both fine, `7-slug.md`
+  is a round file like any other, and nothing computes a width. What the
+  padding used to buy was lexicographic `ls` order; the indexes and
+  `loop.py status` are what the journal is actually read through, so the cost
+  was a rule to remember for a benefit nobody used. Two consequences worth
+  knowing: `ls` shows `10-` before `2-`, and `grep "B-1"` also matches `B-10`
+  — use `grep -w` or the file name when a reference has to be exact.
+
+  `loop.py` normalises a round number before comparing (`round_key`), so `007`,
+  `7` and `round 7` are one round and a cross-reference cannot silently point
+  at nothing. Verified by canary: with the normaliser reduced to identity,
+  `applied: [007]` against `7-seven.md` reports "no file" and the round's
+  back-reference check fails too.
 - **An identifier never changes** once created — things refer to it. Rank and
   order live in the index.
 - **The next free number is stored nowhere.** It is the maximum in the directory

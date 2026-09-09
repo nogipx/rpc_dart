@@ -1,6 +1,6 @@
 # Schema: a lead
 
-Path: `.claude/loop/backlog/B-NN-slug.md`. Plus a line in `backlog/BACKLOG.md`,
+Path: `.claude/loop/backlog/B-N-slug.md`. Plus a line in `backlog/BACKLOG.md`,
 where the line order is meaningful — it is the rank.
 
 A lead is what a round left unfinished, including a wait on an owner decision
@@ -9,9 +9,9 @@ answered questions live in `checked/`.
 
 ```
 ---
-status: open | awaiting owner | closed (round NNN) |
-        decided by owner (round NNN)
-round: NNN — when it was measured; `— (not re-measured)` if the record was
+status: open | awaiting owner | closed (round N) |
+        decided by owner (round N)
+round: N — when it was measured; `— (not re-measured)` if the record was
        carried over at setup rather than taken again
 commit: <the HEAD sha at the moment of measurement>
 paths: [<globs of the code the claim is about>]
@@ -19,7 +19,7 @@ probe: <the probe file, if there is one; otherwise «—»>
 reason: cost | risk | owner decision | bench — and in what exactly
 ---
 
-# B-NN — <title>
+# B-N — <title>
 
 <the numbers; the mechanism in one or two sentences; links to the lens and the
 round by ID>
@@ -32,7 +32,7 @@ round by ID>
 **`## Owner decision` is the LAST section and holds `—` until the owner writes
 in it.** The owner writes the decision in their own words and touches nothing
 else; the next round takes such leads first, carries them out, sets the status
-`decided by owner (round NNN)` and names the round.
+`decided by owner (round N)` and names the round.
 
 Free prose goes FIRST, before the sections, not after them: text after the last
 `##` becomes part of THAT section. Checked during the format migration — a

@@ -31,7 +31,7 @@ has to be decided at setup, and in what order.
    `~/.claude/skills/improvement-loop` — that is how the status block in
    SKILL.md finds it; fix that line for another path.
 4. **History.** If there were earlier rounds whose records cannot be recovered,
-   say so in `LOOP.md` ("What to trust with care") and start numbering at `001`
+   say so in `LOOP.md` ("What to trust with care") and start numbering at `1`
    rather than inventing a past. References to unrecovered rounds stay as bare
    numbers with the marker.
 5. **The first seeding of the backlog and the negatives** — from what is already
@@ -54,7 +54,7 @@ has to be decided at setup, and in what order.
 
 The setup succeeded when, from a standing start, you can:
 
-1. have `loop.py status` name the next round's number — `001`;
+1. have `loop.py status` name the next round's number — `1`;
 2. name the gate command without looking into history: it is in the `gate`
    block;
 3. name the lens the next round would take, with its detector and paths —

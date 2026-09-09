@@ -17,7 +17,7 @@ body restates their sections in the commit language rather than copying them.
 
 The subject conventions are in the repository's `CLAUDE.md` (type, scope, one
 package per commit, imperative, style). The body starts with the line
-`Round NNN — <verdict> — <topic>`: `git log --grep "Round NNN "` finds the
+`Round N — <verdict> — <topic>`: `git log --grep "Round N "` finds the
 commit by it, and `loop.py lint` checks that a round with `commit: yes` has one.
 The body carries what the diff does not:
 

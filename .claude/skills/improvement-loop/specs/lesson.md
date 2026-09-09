@@ -1,6 +1,6 @@
 # Schema: a lesson
 
-Path: `.claude/loop/lessons/L-NN-slug.md`. Plus a line in `lessons/LESSONS.md`.
+Path: `.claude/loop/lessons/L-N-slug.md`. Plus a line in `lessons/LESSONS.md`.
 
 A lesson is a rule for working with this code that a round paid for: with a
 rebuilt probe, a retracted verdict, a canary that took two attempts, a gate that
@@ -10,22 +10,22 @@ the future" and restatements of `CLAUDE.md` do not belong here.
 
 ```
 ---
-round: NNN — where it was paid for
+round: N — where it was paid for
 class: bench | toolchain | fixture | metric | process
 cost: <what was lost, in numbers: probe rebuilds, rounds, minutes of gate>
 paths: [<globs of the code the lesson is about>]     # «—» if not about code
 commit: <the HEAD sha at the moment of the round>
-status: active | promoted to skill (<file in the skill>) | obsolete (round NNN)
+status: active | promoted to skill (<file in the skill>) | obsolete (round N)
 ---
 
-# L-NN — <the rule in one phrase, imperative>
+# L-N — <the rule in one phrase, imperative>
 
 <what happened, what it turned out to be, what to do differently — three
 sentences>
 ```
 
 **The boundary with the other homes.** A toolchain trap the owner accepted as
-permanent moves to `config.md`; the lesson gets `obsolete (round NNN)` with a
+permanent moves to `config.md`; the lesson gets `obsolete (round N)` with a
 link. A rule that holds in any code is promoted by `curate` mode into the
 skill's `methods/` or `catalog/`; the lesson gets
 `status: promoted to skill (<file>)` and stays in the project as a link — the

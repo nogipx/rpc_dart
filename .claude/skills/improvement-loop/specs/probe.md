@@ -1,6 +1,6 @@
 # Schema: a bench
 
-Path: `.claude/loop/probes/P-NN-slug.md`. Plus a line in `probes/PROBES.md`.
+Path: `.claude/loop/probes/P-N-slug.md`. Plus a line in `probes/PROBES.md`.
 
 A bench is the most expensive thing in a round and the only one the skill used
 to throw away. A probe becomes a bench the moment a control with the suspected
@@ -10,13 +10,13 @@ record, and the next round on the same paths starts from it.
 ````
 ---
 file: <path to the probe file in the repository; a probe outside git is fine>
-round: NNN — the validating round
+round: N — the validating round
 commit: <the HEAD sha at the moment of validation>
 paths: [<globs of the code the bench exercises>]
-status: valid | stale (sha) | broken (round NNN) — does not see the defect, reason
+status: valid | stale (sha) | broken (round N) — does not see the defect, reason
 ---
 
-# P-NN — <what it measures, briefly>
+# P-N — <what it measures, briefly>
 
 <how to run it, what to change for another hypothesis — three to five lines>
 
@@ -42,7 +42,7 @@ from them.
 **A bench goes stale** — that is the story where an in-memory pair silently
 zeroed out a race: a round reusing a bench repeats its control first. Once the
 control stops differing from the case under test, the status becomes
-`broken (round NNN)`, the bench is rebuilt, and that is a measurement rather
+`broken (round N)`, the bench is rebuilt, and that is a measurement rather
 than a punishment. The probe file may vanish along with the working tree; the
 record stays and `lint` warns.
 

@@ -10,7 +10,7 @@
    name goes into the round record, or the measurement is not reproducible.
 3. A probe has a control: the same bench with the suspected mechanism removed.
    Without a control the number means nothing. Once a control has shown the
-   bench sees the defect, the probe has become a bench: record it as `P-NN` per
+   bench sees the defect, the probe has become a bench: record it as `P-N` per
    `specs/probe.md`.
 4. If the control shows the same symptom as the case under test, the bench is
    wrong, not the library. Fix the bench, do not ship a fix.
@@ -27,7 +27,7 @@
 10. Every rebuild of the bench adds one to the round record's `budget:`. If the
     budget from the config ("probes: N") is exhausted with no valid number, the
     verdict is INCONCLUSIVE and a "bench" lead lists what was tried. Not CLEAN.
-    Whatever the rebuild cost becomes a lesson `L-NN` with its price.
+    Whatever the rebuild cost becomes a lesson `L-N` with its price.
 
 `loop.py next` adds the enabled packs' items (`config.md`, the `packs:` line) to
 this list; read them together. Below is what paid for each item. The numbers

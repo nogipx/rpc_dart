@@ -1,7 +1,7 @@
 # Schema: the round file
 
-Path: `.claude/loop/rounds/NNN-slug.md`, the number fixed at three digits. Plus
-a line in `rounds/ROUNDS.md`.
+Path: `.claude/loop/rounds/N-slug.md`, the number unpadded. Plus a line in
+`rounds/ROUNDS.md`.
 
 This is the only home of the round record, of the verdict definitions, and of
 what each verdict changes in the other files. The same record goes into the
@@ -9,17 +9,17 @@ round file, into the chat report, and (expanded) into the commit body.
 
 ````
 ---
-round: NNN
+round: N
 verdict: FIXED | CLEAN | DEFERRED | INCONCLUSIVE | RETRACTED
 packages: [<the packages touched>]
 lens: <ID from the project's set>
-bench: P-NN — reused | P-NN — new | none
+bench: P-N — reused | P-N — new | none
 budget: probes n/N, canaries n/N
 review: subagent | self | claude -p — k/N, <what was rebuilt on its "no">
 commit: yes | no
 ---
 
-# Round NNN — <the topic in one line>
+# Round N — <the topic in one line>
 
 ## Target
 
@@ -78,8 +78,8 @@ verdict other than INCONCLUSIVE or DEFERRED is a `lint` error.
 
 **Commit is `yes` or `no`, not a sha.** The round file rides in the same commit
 as the fix, and the sha is unknown while the record is written. The commit body
-starts with the line `Round NNN — <verdict> — <topic>` and then repeats the
-record's sections; `git log --grep "Round NNN "` finds it (with the trailing
+starts with the line `Round N — <verdict> — <topic>` and then repeats the
+record's sections; `git log --grep "Round N "` finds it (with the trailing
 space — otherwise 204 also matches 2040), and `loop.py lint` checks that every
 round with `commit: yes` has one.
 
@@ -108,17 +108,17 @@ diff, not in somebody's private memory.
 ## What a round changes
 
 A file in `rounds/` always appears. Under any verdict: the round is written into
-the `applied:` of the lens it used; a new valid bench becomes `P-NN` in
+the `applied:` of the lens it used; a new valid bench becomes `P-N` in
 `probes/`; a reused bench that stopped seeing the defect gets status
-`broken (round NNN)`; a lesson with a price becomes `L-NN` in `lessons/`; every
+`broken (round N)`; a lesson with a price becomes `L-N` in `lessons/`; every
 edit drags a line in its directory's index; `loop.py lint` is green. Then, by
 verdict:
 
-- **FIXED** — a commit; the lens gets status `confirmed (round NNN)` and
+- **FIXED** — a commit; the lens gets status `confirmed (round N)` and
   evidence with numbers; the lead, if there was one, closes or gets
-  `decided by owner (round NNN)`.
+  `decided by owner (round N)`.
 - **CLEAN** — no code commit; for a detector sweep the lens gets
-  `swept here (round NNN, <sha>)`; for a check that is not about a shape, a new
+  `swept here (round N, <sha>)`; for a check that is not about a shape, a new
   negative in `checked/`.
 - **DEFERRED** — no commit; a new lead in `backlog/` with the reason: cost, risk
   or an owner decision.
@@ -126,7 +126,7 @@ verdict:
   `backlog/` with reason "bench" and a list of what was tried. A sweep that
   could not be carried out does not count as carried out.
 - **RETRACTED** — a commit if prose is being corrected; the lens gets
-  `retracted (round NNN)` with a reason; the record being retracted is edited in
+  `retracted (round N)` with a reason; the record being retracted is edited in
   `backlog/`, `checked/` or `probes/`.
 
 **A round that did not update what it used is not finished.**

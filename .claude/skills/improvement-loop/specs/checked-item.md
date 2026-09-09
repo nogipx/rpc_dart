@@ -1,6 +1,6 @@
 # Schema: a negative
 
-Path: `.claude/loop/checked/C-NN-slug.md`. Plus a line in `checked/CHECKED.md`.
+Path: `.claude/loop/checked/C-N-slug.md`. Plus a line in `checked/CHECKED.md`.
 
 A negative is an answered question: measured, nothing broken, nothing to do. It
 is a separate entity rather than a kind of lead: confusing them means keeping
@@ -8,13 +8,13 @@ something already closed on the to-do list.
 
 ````
 ---
-round: NNN
+round: N
 commit: <the HEAD sha at the moment of measurement>
 paths: [<globs of the code that is covered>]
 scope: [<which packages or subsystems are covered>]
 ---
 
-# C-NN — <what was checked>
+# C-N — <what was checked>
 
 <what exactly was measured>
 

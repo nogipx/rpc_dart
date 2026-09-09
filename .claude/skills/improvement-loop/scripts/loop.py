@@ -61,30 +61,30 @@ PACK_FRONT = ["applies", "damage classes", "shapes", "contains"]
 CATALOG_FRONT = ["pack", "applies", "breaks", "status"]
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
-ID_RE = re.compile(r"^([A-Z]+-\d{2,})-[^/]+\.md$")
-ROUND_FILE_RE = re.compile(r"^(\d{3})-[^/]+\.md$")
-ROUND_H1_RE = re.compile(r"^# Round (\d{3}) — (.+)$")
-ANY_ID_RE = re.compile(r"\b([A-Z]+-\d{2,})\b")
+ID_RE = re.compile(r"^([A-Z]+-\d+)-[^/]+\.md$")
+ROUND_FILE_RE = re.compile(r"^(\d+)-[^/]+\.md$")
+ROUND_H1_RE = re.compile(r"^# Round (\d+) — (.+)$")
+ANY_ID_RE = re.compile(r"\b([A-Z]+-\d+)\b")
 SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
 # `off-journal` — a round that happened but whose record does not exist:
 # setup.md allows starting the journal partway. Such a reference is not checked
 # for a file, but it must sit BELOW the journal's first round, or the marker
 # could bury a record that went missing recently.
 LENS_STATUS_RE = re.compile(
-    r"^(derived|confirmed \(round \d{3}(?:, off-journal)?\)|"
-    r"swept here \(round \d{3}, (?:[0-9a-f]{7,40}(?:, sweep [0-9a-f]{8})?|off-journal)\)|"
-    r"retracted \(round \d{3}(?:, off-journal)?\))")
-SWEPT_RE = re.compile(r"swept here \(round (\d{3}), ([0-9a-f]{7,40})(?:, sweep ([0-9a-f]{8}))?\)")
-SWEPT_OFF_RE = re.compile(r"swept here \(round (\d{3}), off-journal\)")
+    r"^(derived|confirmed \(round \d+(?:, off-journal)?\)|"
+    r"swept here \(round \d+, (?:[0-9a-f]{7,40}(?:, sweep [0-9a-f]{8})?|off-journal)\)|"
+    r"retracted \(round \d+(?:, off-journal)?\))")
+SWEPT_RE = re.compile(r"swept here \(round (\d+), ([0-9a-f]{7,40})(?:, sweep ([0-9a-f]{8}))?\)")
+SWEPT_OFF_RE = re.compile(r"swept here \(round (\d+), off-journal\)")
 SCRIPT_RE = re.compile(r"^(\S+)(.*)$")
 BACKLOG_STATUS_RE = re.compile(
-    r"^(open|awaiting owner|closed \(round \d{3}\)|"
-    r"decided by owner \(round \d{3}\))")
-PROBE_STATUS_RE = re.compile(r"^(valid|stale \([0-9a-f]{7,40}\)|broken \(round \d{3}\))")
-LESSON_STATUS_RE = re.compile(r"^(active|promoted to skill \([^)]+\)|obsolete \(round \d{3}\))")
+    r"^(open|awaiting owner|closed \(round \d+\)|"
+    r"decided by owner \(round \d+\))")
+PROBE_STATUS_RE = re.compile(r"^(valid|stale \([0-9a-f]{7,40}\)|broken \(round \d+\))")
+LESSON_STATUS_RE = re.compile(r"^(active|promoted to skill \([^)]+\)|obsolete \(round \d+\))")
 LESSON_CLASSES = ("bench", "toolchain", "fixture", "metric", "process")
 BUDGET_RE = re.compile(r"probes (\d+)/(\d+), canaries (\d+)/(\d+)")
-BENCH_RE = re.compile(r"^(none|(P-\d{2,}) — (reused|new))")
+BENCH_RE = re.compile(r"^(none|(P-\d+) — (reused|new))")
 REVIEW_RE = re.compile(r"^(subagent|self|claude -p)\b")
 EMPTY = {"", "—", "-", "n/a", "none"}
 
@@ -126,6 +126,17 @@ def git(root: Path, *args: str) -> str | None:
     if out.returncode != 0:
         return None
     return out.stdout
+
+
+def round_key(value: object) -> str | None:
+    """The canonical form of a round number: `007`, `7` and `round 7` are one.
+
+    Numbers are not zero-padded any more, so two spellings of the same round
+    would otherwise be two different keys and every cross-reference check would
+    pass while pointing at nothing.
+    """
+    m = re.search(r"\d+", str(value))
+    return str(int(m.group(0))) if m else None
 
 
 def parse_scalar(value: str) -> str | list[str]:
@@ -370,7 +381,7 @@ def load(loop: Path) -> dict:
             text = p.read_text()
             if kind == "rounds":
                 m = ROUND_FILE_RE.match(p.name)
-                key = m.group(1) if m else p.name
+                key = (round_key(m.group(1)) or p.name) if m else p.name
             else:
                 m = ID_RE.match(p.name)
                 key = m.group(1) if m else p.name
@@ -455,7 +466,7 @@ def cmd_lint(root: Path, loop: Path) -> int:
             fre = ROUND_FILE_RE if kind == "rounds" else ID_RE
             if not fre.match(p.name):
                 rep.error(f"{kind}/{p.name}: name off schema "
-                          f"({'NNN-slug.md' if kind == 'rounds' else 'ID-NN-slug.md'})")
+                          f"({'N-slug.md' if kind == 'rounds' else 'ID-N-slug.md'})")
                 continue
             if key not in links:
                 rep.error(f"{kind}/{p.name}: file with no line in {index_name}")
@@ -470,13 +481,13 @@ def cmd_lint(root: Path, loop: Path) -> int:
             if kind == "rounds":
                 m = ROUND_H1_RE.match(ent["h1"])
                 if not m:
-                    rep.error(f"rounds/{p.name}: heading is not `# Round NNN — topic`")
-                elif m.group(1) != key:
+                    rep.error(f"rounds/{p.name}: heading is not `# Round N — topic`")
+                elif round_key(m.group(1)) != key:
                     rep.error(f"rounds/{p.name}: number in the heading {m.group(1)} != {key}")
                 verdict = str(ent["fields"].get("verdict", "")).strip()
                 if verdict not in VERDICTS:
                     rep.error(f"rounds/{p.name}: `verdict: {verdict or '—'}` is not one of {VERDICTS}")
-                if str(ent["fields"].get("round", "")).strip() != key:
+                if round_key(ent["fields"].get("round", "")) != key:
                     rep.error(f"rounds/{p.name}: `round:` does not match the number in the file name ({key})")
             else:
                 if not ent["h1"].startswith(f"# {key} — "):
@@ -502,7 +513,7 @@ def cmd_lint(root: Path, loop: Path) -> int:
         sm_ = SCRIPT_RE.match(det) if det else None
         if sm_ and resolve_script(loop, packs, sm_.group(1)) is None:
             rep.error(f"lenses/{ent['path'].name}: detector script {sm_.group(1)} not found")
-        first_round = min(data["rounds"], default=None)
+        first_round = min(data["rounds"], key=int, default=None)
 
         def check_round(num: str, marked: bool, where: str) -> None:
             if num in data["rounds"]:
@@ -510,22 +521,22 @@ def cmd_lint(root: Path, loop: Path) -> int:
             if not marked:
                 rep.error(f"lenses/{ent['path'].name}: {where} refers to round {num}, no file "
                           "— either write the record or mark it «off-journal»")
-            elif first_round is not None and num >= first_round:
+            elif first_round is not None and int(num) >= int(first_round):
                 rep.error(f"lenses/{ent['path'].name}: {where} marks round {num} as «off-journal», "
                           f"but the journal starts at {first_round} — that is a missing record, not history")
 
         applied = set()
         for tok in split_list(f.get("applied", "")):
-            m = re.search(r"\d{3}", tok)
-            if not m:
+            rk = round_key(tok)
+            if rk is None:
                 rep.error(f"lenses/{ent['path'].name}: `applied:` holds a non-round: «{tok}»")
                 continue
-            applied.add(m.group(0))
-            check_round(m.group(0), "off-journal" in tok, "`applied:`")
+            applied.add(rk)
+            check_round(rk, "off-journal" in tok, "`applied:`")
         lens_rounds[lid] = applied
-        m = re.search(r"round (\d{3})", st)
+        m = re.search(r"round (\d+)", st)
         if m:
-            check_round(m.group(1), "off-journal" in st, "the status")
+            check_round(round_key(m.group(1)), "off-journal" in st, "the status")
         if st.startswith("confirmed") and f.get("evidence", "").strip() in EMPTY:
             rep.error(f"lenses/{ent['path'].name}: confirmed, but `## Evidence` is empty")
 
@@ -565,7 +576,7 @@ def cmd_lint(root: Path, loop: Path) -> int:
                 rep.error(f"rounds/{pname}: budget exceeded ({f['budget']}) with verdict {verdict}, not INCONCLUSIVE")
         sm_ = BENCH_RE.match(f.get("bench", "").strip())
         if f.get("bench") and not sm_:
-            rep.error(f"rounds/{pname}: `bench:` must be `P-NN — reused`, `P-NN — new` or `none`")
+            rep.error(f"rounds/{pname}: `bench:` must be `P-N — reused`, `P-N — new` or `none`")
         elif sm_ and sm_.group(2) and sm_.group(2) not in data["probes"]:
             rep.error(f"rounds/{pname}: bench {sm_.group(2)} not found in probes/")
         if f.get("review") and not REVIEW_RE.match(f["review"].strip()):
@@ -608,10 +619,10 @@ def cmd_lint(root: Path, loop: Path) -> int:
             if status_re and f.get("status") and not status_re.match(f["status"]):
                 rep.error(f"{kind}/{pname}: status «{f['status']}» is off schema")
             rnd = f.get("round", "")
-            m = re.search(r"\d{3}", rnd)
-            if m and m.group(0) not in data["rounds"]:
-                rep.error(f"{kind}/{pname}: `round: {m.group(0)}`, no round file")
-            if not m and "not re-measured" not in rnd:
+            rk = round_key(rnd)
+            if rk and rk not in data["rounds"]:
+                rep.error(f"{kind}/{pname}: `round: {rk}`, no round file")
+            if not rk and "not re-measured" not in rnd:
                 rep.error(f"{kind}/{pname}: `round:` with no number and no «(not re-measured)» marker")
             if not SHA_RE.search(f.get("commit", "")):
                 rep.error(f"{kind}/{pname}: `commit:` with no sha — ageing cannot be computed")
@@ -630,9 +641,9 @@ def cmd_lint(root: Path, loop: Path) -> int:
         st = f.get("status", "")
         if st and not PROBE_STATUS_RE.match(st):
             rep.error(f"probes/{pname}: status «{st}» is off the probe.md schema")
-        m = re.search(r"\d{3}", f.get("round", ""))
-        if m and m.group(0) not in data["rounds"]:
-            rep.error(f"probes/{pname}: `round: {m.group(0)}`, no round file")
+        rk = round_key(f.get("round", ""))
+        if rk and rk not in data["rounds"]:
+            rep.error(f"probes/{pname}: `round: {rk}`, no round file")
         if not SHA_RE.search(f.get("commit", "")):
             rep.error(f"probes/{pname}: `commit:` with no sha")
         if f.get("paths", "").strip() in EMPTY:
@@ -655,11 +666,11 @@ def cmd_lint(root: Path, loop: Path) -> int:
             rep.error(f"lessons/{pname}: status «{st}» is off the lesson.md schema")
         if f.get("class") and f["class"].strip() not in LESSON_CLASSES:
             rep.error(f"lessons/{pname}: `class:` is not one of {LESSON_CLASSES}")
-        m = re.search(r"\d{3}", f.get("round", ""))
-        if not m:
+        rk = round_key(f.get("round", ""))
+        if not rk:
             rep.error(f"lessons/{pname}: `round:` with no number — a lesson with no round was not paid for")
-        elif m.group(0) not in data["rounds"]:
-            rep.error(f"lessons/{pname}: `round: {m.group(0)}`, no round file")
+        elif rk not in data["rounds"]:
+            rep.error(f"lessons/{pname}: `round: {rk}`, no round file")
         if f.get("cost", "").strip() in EMPTY or not re.search(r"\d", f.get("cost", "")):
             rep.error(f"lessons/{pname}: `cost:` with no number — without a cost it is not a lesson")
         if not SHA_RE.search(f.get("commit", "")):
@@ -669,7 +680,7 @@ def cmd_lint(root: Path, loop: Path) -> int:
     nums = round_numbers(loop)
     for a, b in zip(nums, nums[1:]):
         if b != a + 1:
-            rep.warn(f"rounds/: gap in the numbering between {a:03d} and {b:03d}")
+            rep.warn(f"rounds/: gap in the numbering between {a} and {b}")
 
     # --- permissions
     rules = allow_rules(root)
@@ -708,7 +719,7 @@ def lens_rank(loop: Path, data: dict) -> list[str]:
 
 def swept_stale(root: Path, ent: dict) -> list[str] | None:
     """For a `swept here` lens: files changed along its paths since the sweep sha."""
-    m = re.match(r"swept here \(round \d{3}, ([0-9a-f]{7,40})\)", ent["fields"].get("status", ""))
+    m = re.match(r"swept here \(round \d+, ([0-9a-f]{7,40})\)", ent["fields"].get("status", ""))
     if not m:
         return None
     paths = split_list(ent["fields"].get("paths", ""))
@@ -775,9 +786,9 @@ def cmd_status(root: Path, loop: Path) -> int:
     data = load(loop)
     nums = round_numbers(loop)
     nxt = (nums[-1] + 1) if nums else 1
-    print(f"Next round: {nxt:03d}")
+    print(f"Next round: {nxt}")
     if nums:
-        last = data["rounds"][f"{nums[-1]:03d}"]
+        last = data["rounds"][str(nums[-1])]
         verdict = last["fields"].get("verdict", "?")
         packages = last["fields"].get("packages", "")
         print(f"Last round: {last['h1'][2:]} — {verdict}"
@@ -845,7 +856,7 @@ def cmd_next(root: Path, loop: Path) -> int:
     data = load(loop)
     cfg = parse_config(loop)
     nums = round_numbers(loop)
-    print(f"Round: {(nums[-1] + 1) if nums else 1:03d}")
+    print(f"Round: {(nums[-1] + 1) if nums else 1}")
     if not data["lenses"]:
         print("Target: none — there is no lens set, do lenses mode first")
         return 2
@@ -893,7 +904,7 @@ def cmd_next(root: Path, loop: Path) -> int:
             for m_ in matches:
                 print(f"  {m_}")
         else:
-            print("No valid bench along these paths — register a new one as P-NN once a control validates it")
+            print("No valid bench along these paths — register a new one as P-N once a control validates it")
         if f.get("refines", "").strip() not in EMPTY:
             reading.append(f"catalog/{f['refines'].strip()}-*.md")
     elif kind == "owner decision":
@@ -1092,7 +1103,7 @@ def cmd_sweep(root: Path, loop: Path, lens_id: str | None) -> int:
     for l in lines:
         print(l)
     print(f"instances: {len(lines)}, sweep {digest} — into the lens status: "
-          f"`swept here (round NNN, <sha>, sweep {digest})`")
+          f"`swept here (round N, <sha>, sweep {digest})`")
     return 0
 
 

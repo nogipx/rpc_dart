@@ -77,7 +77,7 @@ is what `lint` and `stale` are for.
    hash goes into the status.
 2. **Bench.** `probes/` first — a valid bench along the same paths is reused,
    not rebuilt. A new bench counts as a bench once a control with the mechanism
-   removed has shown it can see the defect; then it is registered as `P-NN`
+   removed has shown it can see the defect; then it is registered as `P-N`
    (`specs/probe.md`). The checklists are the universal
    `methods/measurement.md` plus the packs' items from `next`'s reading list.
    Every rebuild of the bench adds one to the `budget:` key; exhausted means the
@@ -97,7 +97,7 @@ is what `lint` and `stale` are for.
    `specs/round.md` with every edit from "What a round changes", `loop.py lint`
    green, a commit with the same sections in its body, and a chat report with
    the same sections (`methods/reporting.md`). A lesson the round paid for
-   becomes `L-NN` (`specs/lesson.md`); without a price in numbers it is not a
+   becomes `L-N` (`specs/lesson.md`); without a price in numbers it is not a
    lesson.
 
 ## The bar and the stop

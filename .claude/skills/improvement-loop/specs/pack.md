@@ -17,7 +17,7 @@ packs/<name>/
   canary.md        items for the canary.md checklist + stories
   tests.md         items for the tests.md checklist + stories
   review.md        reviewer questions, in a ``` block — `loop.py review` inserts them
-  catalog/         U-NN shapes with a `pack:` key (private packs only; the
+  catalog/         U-N shapes with a `pack:` key (private packs only; the
                    skill packs' shapes live in the shared catalog/)
   detectors/       scripts: one instance per line on stdout, exit code 0
   assets/          probe and fixture templates for the toolchain
@@ -43,7 +43,7 @@ will show the frontmatter as text.
 **Damage classes are matched as substrings** of a lens's `breaks:`, so write
 them as bare nouns without articles: `crash`, not `a crash`.
 
-## A catalog shape, `catalog/U-NN-slug.md`
+## A catalog shape, `catalog/U-N-slug.md`
 
 The same sections as a lens (`## Shape`, `## Detector`, `## Ask`,
 `## Evidence`), with `pack`, `applies`, `breaks` and `status` in the

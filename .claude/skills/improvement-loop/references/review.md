@@ -13,7 +13,7 @@ enabled packs' questions (`packs/<name>/review.md`) before the bottom line.
 
 - **Claude Code**: a subagent (`Agent`/`Task`) with the assembled prompt; it
   receives only the round record (the draft per `specs/round.md`), the probe
-  file, the bench file `P-NN` if there is one, and this file. Do not pass the
+  file, the bench file `P-N` if there is one, and this file. Do not pass the
   round's history.
 - **The skill is running in a fork** (subagents unavailable): `claude -p` with
   the same prompt, if the allowlist permits it.

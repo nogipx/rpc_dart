@@ -34,7 +34,7 @@ separate commit marked `curate` in the body, with no round file.
    or a shape with `pack: <name>`; only in this repository but wider than one
    lens — a private pack `.claude/loop/packs/<name>/`. The lesson gets
    `promoted to skill (<file>)`. If the owner accepted the rule as standing, it
-   goes to `config.md` and the lesson gets `obsolete (round NNN)` with a link.
+   goes to `config.md` and the lesson gets `obsolete (round N)` with a link.
    If two lessons say one thing, merge into the older. The catalog and the
    methods live in the skill: edits to them are a separate skill commit, not a
    project one.
