@@ -918,10 +918,17 @@ def select_target(root: Path, loop: Path, data: dict) -> tuple[str, str, str]:
 
 
 def stop_condition(root: Path, loop: Path, data: dict, cfg: dict) -> tuple[bool, str]:
-    n = len(data["rounds"])
+    # The HIGHEST round number, not how many round files there are. `round cap`
+    # is documented in config.md as a round number ("The cap is round 230"), and
+    # comparing it against the file COUNT made it unreachable for any journal
+    # that started partway -- which setup.md explicitly allows and this one did:
+    # 30 files numbered 201-230, so a cap of 230 would not have fired until
+    # round 430. Found at round 230, by the cap failing to fire.
+    nums = round_numbers(loop)
+    n = max(nums) if nums else 0
     cap = cfg["budget"].get("round cap")
     if cap is not None and n >= cap:
-        return True, f"round cap reached ({n} of {cap})"
+        return True, f"round cap reached (round {n} of {cap})"
     if not data["lenses"]:
         return False, "no lens set — lenses mode"
     kind, tid, why = select_target(root, loop, data)
