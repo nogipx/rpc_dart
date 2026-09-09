@@ -100,7 +100,13 @@ ID_RE = re.compile(r"^([A-Z]+-\d+)-[^/]+\.md$")
 ROUND_FILE_RE = re.compile(r"^(\d+)-[^/]+\.md$")
 ROUND_H1_RE = re.compile(r"^# Round (\d+) — (.+)$")
 ANY_ID_RE = re.compile(r"\b([A-Z]+-\d+)\b")
-SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
+# For a field that must hold an ID and nothing else. `ANY_ID_RE.search` on such
+# a field silently accepts trailing prose and takes the first ID it meets.
+ONLY_ID_RE = re.compile(r"([A-Z]+-\d+)")
+# `commit:` on a lead, negative, bench or lesson holds a sha and nothing else,
+# so it is fullmatch-ed. The unanchored `\b[0-9a-f]{7,40}\b` that used to be
+# searched for here would take the first hex-looking run out of any sentence.
+ONLY_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
 # `off-journal` — a round that happened but whose record does not exist:
 # setup.md allows starting the journal partway. Such a reference is not checked
 # for a file, but it must sit BELOW the journal's first round, or the marker
@@ -168,23 +174,34 @@ def git(root: Path, *args: str) -> str | None:
     return out.stdout
 
 
-def round_key(value: object) -> str | None:
-    """The canonical form of a round number: `007`, `7` and `round 7` are one.
+ROUND_FIELD_RE = re.compile(r"^(?:(?P<off>off-journal)\s+)?(?P<n>\d+)\b|^—")
 
-    Numbers are not zero-padded any more, so two spellings of the same round
-    would otherwise be two different keys and every cross-reference check would
-    pass while pointing at nothing.
+
+def round_key(value: object) -> str | None:
+    """The round a record belongs to, read from a DECLARED POSITION.
+
+    Grammar, anchored at the start of the field:
+
+        234                 a round with a file
+        234 — commentary    the same, with prose after the em dash
+        off-journal 77      a real round from before the journal; no file
+        —                   genuinely unknown
+
+    This used to be `re.search(r"\\d+")` over the whole field -- "find a digit
+    anywhere and hope it is the round". Two things came of that. It demanded a
+    file for any number it found, so 21 of 30 negatives were flattened to
+    "— (not re-measured)" to keep it quiet, losing a fact each. And on
+    `round: 213 measured, 214 accepted` it silently took 213 and dropped 214,
+    with nothing to say a second number had been ignored.
+
+    Anchoring is the whole fix: the number is where the grammar says it is, or
+    the field does not parse. Commentary after it is free text and is never
+    read.
     """
-    s = str(value)
-    # An OFF-JOURNAL round is a real number with no file behind it: rounds
-    # before the journal existed. Demanding a file for every digit cost 21 of
-    # 30 negatives their round number -- C-06 was measured in round 77, and the
-    # frontmatter could only say "not re-measured" because 77 would not resolve.
-    # The number is knowledge; the parser was destroying it to stay happy.
-    if "off-journal" in s or "not re-measured" in s:
+    m = ROUND_FIELD_RE.match(str(value).strip())
+    if not m or not m.group("n"):
         return None
-    m = re.search(r"\d+", s)
-    return str(int(m.group(0))) if m else None
+    return None if m.group("off") else str(int(m.group("n")))
 
 
 def parse_scalar(value: str) -> str | list[str]:
@@ -791,10 +808,14 @@ def cmd_lint(root: Path, loop: Path) -> int:
             if not (found or "").strip():
                 rep.warn(f"rounds/{pname}: `commit: yes`, but the record itself "
                          "is not committed yet")
-        lens_ref = f.get("lens", "")
-        lm = ANY_ID_RE.search(lens_ref)
+        # fullmatch, not search: `lens:` holds an ID and nothing else. `search`
+        # would accept "RPC-15 because the migration is its own record", quietly
+        # taking the first ID it met and ignoring whatever followed.
+        lens_ref = f.get("lens", "").strip()
+        lm = ONLY_ID_RE.fullmatch(lens_ref)
         if not lm:
-            rep.error(f"rounds/{pname}: no ID in `lens:`")
+            rep.error(f"rounds/{pname}: `lens:` must be exactly one ID "
+                      f"like `RPC-3`, not «{lens_ref[:40]}»")
         else:
             lid = lm.group(1)
             if lid.startswith("U-"):
@@ -804,11 +825,13 @@ def cmd_lint(root: Path, loop: Path) -> int:
             elif rn not in lens_rounds.get(lid, set()):
                 rep.error(f"lenses/{data['lenses'][lid]['path'].name}: round {rn} used this lens, "
                           f"but its `applied:` does not list it")
-        for tok in ANY_ID_RE.findall(f.get("links", "")):
-            if tok.startswith(("B-", "C-")):
-                kind = "backlog" if tok.startswith("B-") else "checked"
-                if tok not in data[kind]:
-                    rep.error(f"rounds/{pname}: `## Links` refers to {tok}, no file")
+        # The `## Links` section is NARRATIVE, and scanning it for IDs made every
+        # ID mentioned in a sentence a checked obligation -- a fact extracted
+        # from prose and then enforced. What a round actually used is already
+        # declared in `lens:` and `bench:`, both checked above; the section is
+        # for a human following the trail. Dropped rather than promoted to a
+        # frontmatter key: another key is ceremony, and this one caught nothing
+        # the declared fields did not.
 
     for kind, front, secs, status_re in (
             ("backlog", BACKLOG_FRONT, BACKLOG_SECTIONS, BACKLOG_STATUS_RE),
@@ -837,8 +860,9 @@ def cmd_lint(root: Path, loop: Path) -> int:
                 rep.error(f"{kind}/{pname}: `round:` needs a round number, "
                           "«off-journal N» for one that predates the journal, "
                           "or «(not re-measured)» when it is genuinely unknown")
-            if not SHA_RE.search(f.get("commit", "")):
-                rep.error(f"{kind}/{pname}: `commit:` with no sha — ageing cannot be computed")
+            if not ONLY_SHA_RE.fullmatch(f.get("commit", "").strip()):
+                rep.error(f"{kind}/{pname}: `commit:` must be exactly a sha — "
+                          "ageing is computed from it")
             if f.get("paths", "").strip() in EMPTY:
                 rep.error(f"{kind}/{pname}: `paths:` empty — ageing cannot be computed")
             if kind == "checked" and f.get("control", "").strip() in EMPTY:
@@ -857,8 +881,8 @@ def cmd_lint(root: Path, loop: Path) -> int:
         rk = round_key(f.get("round", ""))
         if rk and rk not in data["rounds"]:
             rep.error(f"probes/{pname}: `round: {rk}`, no round file")
-        if not SHA_RE.search(f.get("commit", "")):
-            rep.error(f"probes/{pname}: `commit:` with no sha")
+        if not ONLY_SHA_RE.fullmatch(f.get("commit", "").strip()):
+            rep.error(f"probes/{pname}: `commit:` must be exactly a sha")
         if f.get("paths", "").strip() in EMPTY:
             rep.error(f"probes/{pname}: `paths:` empty")
         if f.get("control", "").strip() in EMPTY:
@@ -889,8 +913,8 @@ def cmd_lint(root: Path, loop: Path) -> int:
             rep.error(f"lessons/{pname}: `round: {rk}`, no round file")
         if f.get("cost", "").strip() in EMPTY or not re.search(r"\d", f.get("cost", "")):
             rep.error(f"lessons/{pname}: `cost:` with no number — without a cost it is not a lesson")
-        if not SHA_RE.search(f.get("commit", "")):
-            rep.error(f"lessons/{pname}: `commit:` with no sha")
+        if not ONLY_SHA_RE.fullmatch(f.get("commit", "").strip()):
+            rep.error(f"lessons/{pname}: `commit:` must be exactly a sha")
 
     # --- round numbering
     nums = round_numbers(loop)
@@ -1246,7 +1270,7 @@ def cmd_stale(root: Path, loop: Path) -> int:
             if kind == "lessons" and (not f.get("status", "").startswith("active")
                                       or f.get("paths", "").strip() in EMPTY):
                 continue
-            sm = SHA_RE.search(f.get("commit", ""))
+            sm = ONLY_SHA_RE.fullmatch(f.get("commit", "").strip())
             paths = split_list(f.get("paths", ""))
             if not sm:
                 rows.append((label, iid, "—", None, ""))
