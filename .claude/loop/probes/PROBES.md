@@ -12,3 +12,5 @@ skill after them, so nothing before 206 has a record here.
   does an http2 connection survive a cancelled stalled call?
 - **[P-03](P-03-wrapper-keeps-the-bound.md)** valid (round 209), rpc_dart_http2 —
   does a transport bound survive `RpcHttp2Server.transportWrapper`?
+- **[P-04](P-04-parked-waiters-drain.md)** valid (round 211), core transports —
+  does an abandoned upload leave its sender parked?

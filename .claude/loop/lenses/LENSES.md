@@ -17,7 +17,7 @@ field format — `../../skills/improvement-loop/specs/lens.md`.
 - **[RPC-12](RPC-12-cancel-into-request-stream.md)** retracted (204), applied in 202, 203, 204 — a contract mistaken twice for a defect
 - **[RPC-13](RPC-13-unhandled-async-error.md)** swept here (121, off-journal) — an abandoned future running user code kills the isolate; refines U-17
 - **[RPC-14](RPC-14-timeout-abandons-work.md)** swept here (067, off-journal), except isolate — a timeout drops the wait but not the work; refines U-17
-- **[RPC-15](RPC-15-remeasure-own-record.md)** confirmed (201) — re-measure the loop's own record; refines U-21
+- **[RPC-15](RPC-15-remeasure-own-record.md)** confirmed (211) — re-measure the loop's own record, including what it claims its own FIXES are worth; refines U-21
 
 Sweeps marked «off-journal» have nothing to age against: `stale` always shows
 them as needing a re-measurement. That is correct — the code has changed since,

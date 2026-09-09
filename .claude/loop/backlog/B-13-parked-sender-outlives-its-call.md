@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 211) — measured, the wake works: 0 waiters with it, 30 without
 round: 210
 commit: beed83e5
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**]
@@ -41,6 +41,22 @@ valid the moment the two differ.
 One leaked completer per abandoned upload, on a long-lived connection, with a
 peer that chooses when to abandon. Bounded per call but unbounded in aggregate,
 and invisible: every call reports success.
+
+## Answered — round 211
+
+The second observable was the right one. 30 abandoned uploads, each parking its
+sender for real (17 messages against a 64 KiB window):
+
+    handler drains (never parks)   waiters  0
+    handler consumes nothing       waiters  0
+    same, _fcWake ablated          waiters 30
+
+So the wake IS load-bearing and round 206's claim holds; round 210's ablation
+looked clean only because it watched the call future, which resolves on the
+response path. Bench registered as `../probes/P-04-parked-waiters-drain.md`.
+
+The same run found a different entry that does NOT drain — one `_fcSendCredit`
+per abandoned upload — which is `B-14-stale-sendcredit-per-abandoned-upload.md`.
 
 ## Owner decision
 
