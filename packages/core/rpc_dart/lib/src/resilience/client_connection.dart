@@ -550,6 +550,43 @@ class RpcClientConnection {
           return;
         }
 
+        // Without [IRpcStreamIdSequence] the watermark in the proxy is a no-op
+        // in BOTH directions, and a dead call's teardown ends a live one: id 1
+        // is handed out twice and the first call's `finishSending(1)` half-closes
+        // the second. Measured, one forceReconnect between two calls:
+        //
+        //     factory returns          id after swap   handlers ended
+        //     the transport itself           3             0 -> 0
+        //     a plain decorator              1             0 -> 1
+        //
+        // The capability is discovered by an `is` check, so a decorator that
+        // forwards every IRpcTransport member and declares nothing else erases
+        // it in silence. Refusing costs nothing real: every first-party caller
+        // transport implements it -- isolate, wasm and websocket through
+        // RpcChannelTransport, http2 and http by declaration -- so what is
+        // refused is a hand-written decorator or mock, and those are not working
+        // today, they are losing a call on every reconnect.
+        //
+        // On EVERY attach, not only the reconnect: refusing later would hide it
+        // until it happened in production. Not thrown -- the catch below retries
+        // with backoff, and a programmer error is not transient, so this ends
+        // the loop the way an exhausted retry budget does.
+        if (inner is! IRpcStreamIdSequence) {
+          unawaited(inner.close().catchError((_) {}));
+          final error = ArgumentError.value(
+            inner.runtimeType.toString(),
+            'transportFactory',
+            'RpcClientConnection needs a transport implementing '
+                'IRpcStreamIdSequence to carry stream ids across a reconnect. '
+                'Forward resumeStreamIdsAfter and lastIssuedStreamId from the '
+                'transport being wrapped',
+          );
+          _logger?.call('error', '$error');
+          _emit(RpcClientDisconnected(reason: error));
+          guard.complete();
+          return;
+        }
+
         _proxy.attach(inner);
         _logger?.call('info', 'Connected (attempt ${_reconnectAttempts + 1})');
         _reconnectAttempts = 0;

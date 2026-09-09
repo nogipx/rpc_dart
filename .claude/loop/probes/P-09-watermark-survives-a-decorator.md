@@ -37,6 +37,24 @@ check finds the capability and the watermark is carried. At validation:
   a plain decorator            1           1          0 -> 1
 ```
 
+## Round 224 rewrote the decorated arm
+
+The fix refuses such a transport at attach, so there is no second call left to
+collide with and the old arm died at `createStream` with "transport not
+connected". It measures the REFUSAL now — did the connection stay offline, and
+does the reason name the missing capability:
+
+```
+  factory returns          came online   reason names it   handlers ended
+  the transport itself     yes, id 3     n/a               0 -> 0
+  a plain decorator        NO, refused   true              0
+```
+
+**The control arm is untouched, and that is the point**: it still reads id 3 and
+`0 -> 0`, which is what says the bench can still see the mechanism rather than
+having been blunted along with the defect. A rewritten probe whose control also
+moved would prove nothing.
+
 The decorator forwards every `IRpcTransport` member and declares nothing else —
 what a metrics or auth wrapper looks like written the obvious way, and the same
 shape round 209 found dropping `IRpcFlowControlled` on http2.

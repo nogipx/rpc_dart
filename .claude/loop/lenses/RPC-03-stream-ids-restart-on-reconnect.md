@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/**]
 applies: identifiers are issued locally and outlive a reconnect
 breaks: data loss on a live call.
-applied: [217, 218]
-status: confirmed (round 217) — one door still open, see B-17
+applied: [217, 218, 224]
+status: confirmed (round 224)
 ---
 
 # RPC-03 — Stream ids that outlive a reconnect
@@ -40,8 +40,18 @@ cannot arise there. What is NOT covered is the capability going missing:
     a plain decorator            1           1          0 -> 1
 
 The last column is a live bidi call half-closed by a dead call's teardown.
-Awaiting an owner decision as `../backlog/B-17-watermark-lost-through-a-decorator.md`;
-bench `../probes/P-09-watermark-survives-a-decorator.md`.
+Bench `../probes/P-09-watermark-survives-a-decorator.md`.
+
+**Round 224 closed that door**, by the only route the two failed attempts left:
+stop the collision rather than detect it. A transport that does not implement
+the capability is refused at attach, so the watermark is never silently absent.
+The decorated arm went `handlers ended 1 -> 0`, the control unchanged.
+
+> **A capability-guarded fix is only as good as what happens when the answer is
+> no**, and "return quietly" is the wrong answer when the capability is
+> load-bearing. Three outcomes are available — preserve it (round 209's
+> `_preserveCapabilities`), work without it (round 218, measured impossible
+> here), or refuse (round 224). Silence is not one of them.
 
 > **A capability-guarded fix has the capability's failure modes.** Round 209
 > found this for `IRpcFlowControlled` and round 217 for `IRpcStreamIdSequence`:

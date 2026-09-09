@@ -25,7 +25,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 /// A transport that records whether it was closed, and can be dropped on cue.
-final class _TrackedTransport implements IRpcTransport {
+final class _TrackedTransport implements IRpcTransport, IRpcStreamIdSequence {
   _TrackedTransport(this.id);
 
   final int id;
@@ -51,6 +51,17 @@ final class _TrackedTransport implements IRpcTransport {
       _incoming.stream.where((m) => m.streamId == streamId);
   @override
   int createStream() => _next += 2;
+
+  // See reconnect_stopped_during_connect_test.dart: the connection refuses a
+  // transport that cannot report its id cursor.
+  @override
+  int get lastIssuedStreamId => _next;
+  @override
+  void resumeStreamIdsAfter(int streamId) {
+    if (streamId <= _next) return;
+    _next = streamId.isOdd ? streamId : streamId + 1;
+  }
+
   @override
   bool releaseStreamId(int streamId) => true;
   @override

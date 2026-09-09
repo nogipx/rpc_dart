@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 223)
+status: closed (round 224)
 round: 217
 commit: 576f1815
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
@@ -8,6 +8,11 @@ reason: decided by owner (round 223) — refuse the transport at attach; ready t
 ---
 
 # B-17 — a decorator erases the stream-id watermark, and a live call dies
+
+> **Closed by round 224.** Such a transport is refused at attach, so the
+> collision cannot happen. P-09's decorated arm went `handlers ended 1 -> 0`,
+> the control unchanged at `0 -> 0`. The compile-time version of the same
+> requirement is `B-21-reconnectable-transport-type.md`.
 
 `RpcClientConnection` carries a stream-id watermark across transport swaps so a
 replacement cannot hand out an id a dead call still holds. Both hops guard on

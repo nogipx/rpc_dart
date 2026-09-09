@@ -39,7 +39,7 @@ import 'package:test/test.dart';
 
 /// A transport whose lifetime is observable, and which can be made to drop the
 /// way a real one does when its peer dies.
-final class _FakeTransport implements IRpcTransport {
+final class _FakeTransport implements IRpcTransport, IRpcStreamIdSequence {
   _FakeTransport(this._registry) {
     _registry.add(this);
   }
@@ -66,7 +66,19 @@ final class _FakeTransport implements IRpcTransport {
   @override
   bool get supportsZeroCopy => false;
   @override
-  int createStream() => 1;
+  int createStream() => _lastId = 1;
+
+  // See reconnect_stopped_during_connect_test.dart: the connection refuses a
+  // transport that cannot report its id cursor. This fake hands out one id, so
+  // the cursor is that id or nothing.
+  int _lastId = -1;
+  @override
+  int get lastIssuedStreamId => _lastId;
+  @override
+  void resumeStreamIdsAfter(int streamId) {
+    if (streamId > _lastId) _lastId = streamId;
+  }
+
   @override
   bool releaseStreamId(int streamId) => true;
   @override

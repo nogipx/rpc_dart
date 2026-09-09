@@ -28,7 +28,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 /// A transport that records whether it was closed.
-final class _Tracked implements IRpcTransport {
+final class _Tracked implements IRpcTransport, IRpcStreamIdSequence {
   _Tracked(this.id);
 
   final int id;
@@ -49,6 +49,19 @@ final class _Tracked implements IRpcTransport {
       _incoming.stream.where((m) => m.streamId == streamId);
   @override
   int createStream() => _next += 2;
+
+  // RpcClientConnection refuses a transport without this, so a fake needs it
+  // for the same reason a real transport does: the watermark is carried by an
+  // `is` check, and a double that cannot answer would be the very decorator
+  // the refusal exists to catch.
+  @override
+  int get lastIssuedStreamId => _next;
+  @override
+  void resumeStreamIdsAfter(int streamId) {
+    if (streamId <= _next) return;
+    _next = streamId.isOdd ? streamId : streamId + 1; // forward, parity intact
+  }
+
   @override
   bool releaseStreamId(int streamId) => true;
   @override
