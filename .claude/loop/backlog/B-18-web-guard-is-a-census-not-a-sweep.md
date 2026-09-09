@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 223)
+status: closed (round 227)
 round: 219
 commit: 201a2034
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/data/**, packages/blob/**]
@@ -8,6 +8,13 @@ reason: owner approved the cost (round 223) — take it; plant a bug class and f
 ---
 
 # B-18 — the web guard is a census, not a sweep
+
+> **Closed by round 227, premise corrected.** For the cancel class the guard is
+> a working detector, not a census: a hang planted in the hop `cancel()` awaits
+> turned `rpc_blob`'s smoke test red at exactly its own 3-second budget, and
+> green again when removed ([C-25](../checked/C-25-web-smoke-catches-a-cancel-deadlock.md)).
+> Separately, the `async*` class this decision named does not reproduce on Dart
+> 3.10.1 at all, so it could not have been planted.
 
 Round 219 counted what `melos run test:web` runs. Three packages run their whole
 suite on dart2js — core, compression, reflection. Nine contribute between one

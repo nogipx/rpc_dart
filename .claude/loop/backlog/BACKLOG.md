@@ -17,7 +17,6 @@ deferred.
 
 ## Open — decided, ready to implement
 
-- **[B-18](B-18-web-guard-is-a-census-not-a-sweep.md)** approved (round 223) — the web guard is a build-and-construct check for nine of twelve packages; plant `async*` cancellation first, it is the class with a history here
 
 ## Open
 
@@ -43,6 +42,7 @@ deferred.
 - **[B-13](B-13-parked-sender-outlives-its-call.md)** closed (round 211) — measured: the wake works, 0 waiters with it and 30 without
 - **[B-14](B-14-stale-sendcredit-per-abandoned-upload.md)** closed (round 212) — the writer was a late `_fcOnGrant` after teardown; fixed
 - **[B-15](B-15-rpc-level-grants-on-http2.md)** closed (round 214) — cooperative backpressure on http2 via rpc-level grants, not built; the behaviour that stands is accepted in [C-19](../checked/C-19-http2-refuses-a-slow-consumer.md)
+- **[B-18](B-18-web-guard-is-a-census-not-a-sweep.md)** closed (round 227) — premise corrected: for the cancel class the web smoke tests are a working detector, shown by ablation ([C-25](../checked/C-25-web-smoke-catches-a-cancel-deadlock.md)); and the `async*` class it named no longer reproduces on Dart 3.10.1
 - **[B-19](B-19-close-the-gate-over-wasm.md)** closed (round 226) — `analyze`, `format:check` and `format` now cover rpc_dart_wasm; verified on four arms, a planted violation goes red in wasm and still goes red in a member
 - **[B-20](B-20-detached-guard-has-no-witness.md)** closed (round 225) — the guard has no witness because nothing reaches it; 0 rejections across three scenarios, all 25 wrapped expressions internally guarded ([C-24](../checked/C-24-detached-guard-is-unreachable.md)). The isolate half stays open in B-04's closing note
 - **[B-17](B-17-watermark-lost-through-a-decorator.md)** closed (round 224) — the decorator that erased the stream-id watermark is refused at attach; `handlers ended` went `1 -> 0` with the control unchanged. The compile-time version is [B-21](B-21-reconnectable-transport-type.md)
