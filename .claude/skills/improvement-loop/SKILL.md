@@ -18,7 +18,8 @@ means a **round**.
 
 - **round** — steps 0-8 below.
 - **status** — report the state below and change nothing.
-- **next** — name the next round's target and change nothing.
+- **next** — print the state a round chooses from, and change nothing. It
+  names no target.
 - **verify `<claim>`** — re-measure one record: a finding, a deferral, a
   negative, a sweep or a bench. A full round, with the lens that produced the
   record.
@@ -39,15 +40,15 @@ report the reason and, if the call came from `/loop`, cancel the job
 
 ## Step 0 — read the state
 
-1. `python3 <skill>/scripts/loop.py next` — the round's target by the selection
-   rules, valid benches along the same paths, the budget, the reading list.
-   **The round number is the one the script named.** Not from memory, not from a
-   commit, not from the user.
-2. `next` gives a ranked shortlist, not an order. Take the top entry, another
-   entry, or something off the list entirely — the reason goes in the round's
-   `## Target` section either way. **If you override the same way twice, the
-   RULE is wrong, not the answer**: fix the ranking (a `continuation:` flag, a
-   line moved in an index) instead of overriding a third time.
+1. `python3 <skill>/scripts/loop.py next` — the lens set with its statuses and
+   `applied:` history, what git says moved under a swept lens, the open leads,
+   the valid benches, the budget, the reading list. **The round number is the one
+   the script named.** Not from memory, not from a commit, not from the user.
+2. `next` reports FACTS, not a recommendation — the script computes what memory
+   gets wrong (what git says moved, what is unreferenced, what was applied when)
+   and stops there. Weighing severity, reachability and what is worth finishing
+   is yours. **The one thing it still decides is the round cap**, because an
+   unattended agent asked "should we continue?" always says yes.
 3. Read `config.md`, `LOOP.md` and `lessons/LESSONS.md` in full; the entity
    files as needed. The indexes exist so you can choose, not so you can know.
 
@@ -73,16 +74,17 @@ is what `lint` and `stale` are for.
 
 ## The round
 
-1. **Target.** `next` prints a ranked SHORTLIST — an owner decision, then a
-   **continuation** (an open lead a round started and did not finish, marked
-   `continuation: yes`), then a lens never applied, then the rank, then a stale
-   sweep, then an open lead. **The script ranks; you choose.** Name the entry you
-   took in `## Target`; picking something off the list is allowed and needs its
-   reason there too. Choosing the top entry by default is fine — what is not fine
-   is choosing without looking at what you passed over.
+1. **Target. THE SCRIPT DOES NOT CHOOSE.** `next` prints state — every lens
+   with its status and the rounds that applied it, which swept lenses have had
+   files change under them since, the open leads with their reasons, the valid
+   benches, any owner decision waiting. No order is implied and no target is
+   named. **You decide, and `## Target` records what you took and why.**
+   Judgement encoded as precedence is what cost rounds 234-238: five rounds
+   opening new threads while a started one sat unfinished, each answer
+   defensible, the alternatives never shown.
    The catalog (`catalog/`) only through instantiation into the set. Before a
-   sweep, check `checked/` and the statuses. A script detector is run through `loop.py sweep <ID>`; the list
-   hash goes into the status.
+   sweep, check `checked/` and the statuses. A script detector is run through
+   `loop.py sweep <ID>`; the list hash goes into the status.
 2. **Bench.** `probes/` first — a valid bench along the same paths is reused,
    not rebuilt. A new bench counts as a bench once a control with the mechanism
    removed has shown it can see the defect; then it is registered as `P-N`
@@ -111,9 +113,11 @@ is what `lint` and `stale` are for.
 ## The bar and the stop
 
 The severity bar is set in the config and rises towards the end of the loop —
-severity, not rigour. `status` computes the stop: the round cap, or every lens
-swept and fresh with nothing to take from the backlog. Near the cap, do not open
-work that spans several rounds: an unfinished tree is worse than one never
+severity, not rigour. **The round cap is the only stop the script enforces**,
+and it exists for unattended runs: an agent asked "should we continue?" always
+says yes. Everything else — whether the set is worked out, whether a lead is
+worth taking — is your call from the state `next` prints. Near the cap, do not
+open work that spans several rounds: an unfinished tree is worse than one never
 started.
 
 ## References — on demand

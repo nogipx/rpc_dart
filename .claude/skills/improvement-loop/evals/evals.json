@@ -80,16 +80,16 @@
     },
     {
       "id": 12,
-      "name": "continuation-outranks-a-new-lens",
-      "prompt": "Run a round. (backlog/ holds an OPEN lead with «continuation: yes», left by an earlier round that ran out of scope; the lens set still contains one lens with status «derived» and «applied: []». A second open lead has no continuation key and reason «bench».)",
-      "expected_output": "The round takes the CONTINUATION lead, not the never-applied lens: finishing a thread comes before opening one. It either closes the lead or states in its record why the flag stays. The bench-blocked lead is not selected and does not compete. lint is green, and it refuses «continuation: yes» on any lead that is not open.",
+      "name": "continuation-is-a-fact-the-agent-weighs",
+      "prompt": "Run a round. (backlog/ holds an OPEN lead with «continuation: yes», left by an earlier round that ran out of scope; the lens set still contains one lens with «applied: []». A second open lead has no continuation key and reason «bench».)",
+      "expected_output": "`next` names NO target — it reports both leads with their reasons and the lens set with its applied history. The round chooses, and `## Target` records the choice and its reasoning. Finishing the continuation before opening a new lens is the expected judgement, but a round that takes the lens and says why is also correct; a round that chooses silently is not. lint refuses «continuation: yes» on a lead that is not open.",
       "files": []
     },
     {
       "id": 13,
-      "name": "shortlist-is-ranked-not-binding",
-      "prompt": "Run a round. (`loop.py next` prints a shortlist whose top entry is a continuation lead and whose second is a never-applied lens. The continuation's work is blocked by something the round discovers in its first five minutes.)",
-      "expected_output": "The round's `## Target` names which shortlist entry it took and why. Taking the top entry needs no special justification; taking the second, or something off the list, is allowed and carries its reason in the same section. If the round overrides the ranking the same way a second time, it fixes the RULE — a `continuation:` flag, a line moved in an index — instead of overriding a third time. lint is green."
+      "name": "next-reports-state-and-decides-nothing",
+      "prompt": "Run a round. (`loop.py next` output includes a swept lens whose paths have changed, a never-applied lens, and an open lead.)",
+      "expected_output": "No line of the output ranks or recommends. The round picks one and `## Target` carries the reasoning, weighed against the alternatives the output showed. The only decision the script still makes is the round cap: at or past it, `status` says «Stop: YES» and the round does not start."
     }
   ]
 }

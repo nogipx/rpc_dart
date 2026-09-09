@@ -21,37 +21,27 @@ The lens schema — `../specs/lens.md`. The universal shapes —
 
 ## Pick a lens from the data, not from a feeling
 
-`loop.py next` implements these rules and prints them as a ranked SHORTLIST.
-**The script ranks; the agent chooses.** They are written down here so that the
-choice is deliberate and lands in the round's `## Target` with a reason —
-including when it is the top entry.
+`loop.py next` prints the data and names nothing. **It used to rank, and the
+ranking was the problem**: over rounds 234-238 it named a never-applied lens
+five times running, every answer defensible on its own, while a migration
+opened at 234 sat unfinished — and nothing in the output showed what was being
+passed over. The facts it computes are still worth having, because they are the
+ones memory gets wrong: what git says moved under a swept lens, when each lens
+was last applied, which leads are unfinished rather than blocked.
 
-One printed answer made the loop's judgement invisible: over rounds 234-238 it
-named a never-applied lens five times running, every answer defensible on its
-own, and nothing in the output showed what was being passed over. Ranking is
-still computed rather than remembered, which is what keeps an unattended run
-auditable; only the pick moved.
+What to weigh, none of it mechanical:
 
-The tiers, in the order `next` emits them. "The least-explored surface" is
-measured by the `applied:` key:
-
-0. **A CONTINUATION lead** — `status: open` with `continuation: yes`, i.e. work
-   a round started and stopped for scope. It comes before any lens, because a
-   loop that opens a new thread every round never finishes one: measured over
-   rounds 234-238, five rounds took five different never-applied lenses while a
-   migration opened at 234 sat at 27 unfinished files. Blocked leads do NOT
-   carry the flag and do not compete here — see
-   [specs/backlog-item.md](../specs/backlog-item.md).
-1. `derived` with `applied: []` — before any lens already applied: a hypothesis
-   nobody has paid for yet.
-2. Among the rest, the line order in `LENSES.md`; that is the rank, and `curate`
-   sets it.
-3. `swept here` is taken only with a reason: `loop.py stale` showed changes
-   along its paths, or `verify` mode asked for it. Re-checking what is swept by
-   default wastes a round.
-4. `retracted` is not taken.
-5. If the set is exhausted and fresh — an open lead as a re-measurement (U-21);
-   with none of those either, `status` says "Stop: YES".
+- **A lead marked `continuation: yes`** is work a round started and stopped for
+  scope, not work that is blocked. Finishing a thread generally beats opening
+  one; that is a judgement, not a precedence rule.
+- **`applied: never`** means nobody has paid for the hypothesis yet — cheap to
+  try, and the imported lenses that had already cost someone something found a
+  defect on first application three times out of three.
+- **A swept lens with files changed under it** is due a re-measurement; `next`
+  lists these because `stale` can compute them and you cannot.
+- **`retracted`** is not taken. **`swept here` with nothing moved** is a waste.
+- Damage x reachability beats elegance: a defect reachable only from the
+  library's own code ranks below one reachable from outside.
 
 Within a lens, the target is the instance from the detector's list that is
 reachable from outside, ahead of one reachable only from your own code.

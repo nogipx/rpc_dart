@@ -166,7 +166,15 @@ def round_key(value: object) -> str | None:
     would otherwise be two different keys and every cross-reference check would
     pass while pointing at nothing.
     """
-    m = re.search(r"\d+", str(value))
+    s = str(value)
+    # An OFF-JOURNAL round is a real number with no file behind it: rounds
+    # before the journal existed. Demanding a file for every digit cost 21 of
+    # 30 negatives their round number -- C-06 was measured in round 77, and the
+    # frontmatter could only say "not re-measured" because 77 would not resolve.
+    # The number is knowledge; the parser was destroying it to stay happy.
+    if "off-journal" in s or "not re-measured" in s:
+        return None
+    m = re.search(r"\d+", s)
     return str(int(m.group(0))) if m else None
 
 
@@ -767,8 +775,10 @@ def cmd_lint(root: Path, loop: Path) -> int:
             rk = round_key(rnd)
             if rk and rk not in data["rounds"]:
                 rep.error(f"{kind}/{pname}: `round: {rk}`, no round file")
-            if not rk and "not re-measured" not in rnd:
-                rep.error(f"{kind}/{pname}: `round:` with no number and no «(not re-measured)» marker")
+            if not rk and "not re-measured" not in rnd and "off-journal" not in rnd:
+                rep.error(f"{kind}/{pname}: `round:` needs a round number, "
+                          "«off-journal N» for one that predates the journal, "
+                          "or «(not re-measured)» when it is genuinely unknown")
             if not SHA_RE.search(f.get("commit", "")):
                 rep.error(f"{kind}/{pname}: `commit:` with no sha — ageing cannot be computed")
             if f.get("paths", "").strip() in EMPTY:
@@ -813,7 +823,10 @@ def cmd_lint(root: Path, loop: Path) -> int:
             rep.error(f"lessons/{pname}: `class:` is not one of {LESSON_CLASSES}")
         rk = round_key(f.get("round", ""))
         if not rk:
-            rep.error(f"lessons/{pname}: `round:` with no number — a lesson with no round was not paid for")
+            if "off-journal" not in f.get("round", ""):
+                rep.error(f"lessons/{pname}: `round:` with no number — a lesson "
+                          "with no round was not paid for (use «off-journal N» "
+                          "for one paid before the journal)")
         elif rk not in data["rounds"]:
             rep.error(f"lessons/{pname}: `round: {rk}`, no round file")
         if f.get("cost", "").strip() in EMPTY or not re.search(r"\d", f.get("cost", "")):
@@ -933,101 +946,27 @@ def pending_decisions(loop: Path, data: dict) -> list[str]:
     return out
 
 
-def target_shortlist(root: Path, loop: Path, data: dict,
-                     limit: int = 5) -> list[tuple[str, str, str]]:
-    """Ranked candidates for this round, best first, each with its reason.
-
-    The script RANKS; the agent CHOOSES. One printed answer made the loop's
-    judgement invisible: over rounds 234-238 it named a never-applied lens five
-    times running, each answer defensible on its own, and nothing in the output
-    showed what was being passed over. A shortlist keeps the ordering
-    deterministic and auditable -- the reason for every entry is computed, not
-    remembered -- while leaving the pick to whoever can weigh severity and
-    context. Going off-list stays allowed, with the reason in `## Target`.
-
-    Tiers are appended cheapest-first and the expensive one (a git diff per
-    swept lens) runs only if the list is still short.
-    """
-    out: list[tuple[str, str, str]] = []
-    seen: set[tuple[str, str]] = set()
-
-    def add(kind: str, tid: str, why: str) -> None:
-        if (kind, tid) in seen or len(out) >= limit:
-            return
-        seen.add((kind, tid))
-        out.append((kind, tid, why))
-
-    for did in pending_decisions(loop, data):
-        add("owner decision", did,
-            "an owner decision not yet carried out comes before any lens")
-
-    for bid in backlog_rank(loop, data):
-        f = data["backlog"][bid]["fields"]
-        if f.get("status", "").startswith("open") and _is_continuation(f):
-            add("lead", bid,
-                "a lead a round started and did not finish — before opening new work")
-
-    rank = lens_rank(loop, data)
-    for lid in rank:
-        f = data["lenses"][lid]["fields"]
-        if f.get("status", "").startswith("derived") and not split_list(f.get("applied", "")):
-            add("lens", lid, "derived and never applied — a hypothesis nobody has paid for yet")
-    for lid in rank:
-        f = data["lenses"][lid]["fields"]
-        if f.get("status", "").startswith("confirmed") and not split_list(f.get("applied", "")):
-            add("lens", lid, "confirmed off-journal, never applied here")
-    for lid in rank:
-        st = data["lenses"][lid]["fields"].get("status", "")
-        if st.startswith(("derived", "confirmed")):
-            add("lens", lid, "first by rank among the un-swept")
-
-    if len(out) < limit:
-        for lid in rank:
-            ch = swept_stale(root, data["lenses"][lid])
-            if ch:
-                add("lens", lid,
-                    f"swept, but {len(ch)} file(s) changed along its paths — re-measure")
-
-    for bid in backlog_rank(loop, data):
-        f = data["backlog"][bid]["fields"]
-        if f.get("status", "").startswith("open"):
-            why = f.get("reason", "").strip() or "open"
-            add("lead", bid, f"an open lead — re-measure (U-21); blocked on: {why[:60]}")
-
-    return out
-
-
-def select_target(root: Path, loop: Path, data: dict) -> tuple[str, str, str]:
-    """The shortlist's first entry — the default when nobody chooses."""
-    s = target_shortlist(root, loop, data, limit=1)
-    return s[0] if s else ("none", "", "")
-
-
 def stop_condition(root: Path, loop: Path, data: dict, cfg: dict) -> tuple[bool, str]:
-    # The HIGHEST round number, not how many round files there are. `round cap`
-    # is documented in config.md as a round number ("The cap is round 230"), and
-    # comparing it against the file COUNT made it unreachable for any journal
-    # that started partway -- which setup.md explicitly allows and this one did:
-    # 30 files numbered 201-230, so a cap of 230 would not have fired until
-    # round 430. Found at round 230, by the cap failing to fire.
+    """The ONLY thing the script still decides, and only because unattended runs
+    need it: an agent asked "should we continue?" always says yes.
+
+    Everything else that used to stop or steer a round -- ranking targets,
+    "every lens is swept so the work is done" -- was judgement wearing a
+    script's authority, and it cost five rounds of opening new threads while a
+    started one sat unfinished. Facts belong here; choices do not.
+
+    The cap is a round NUMBER, not a file count. Comparing it against the count
+    made it unreachable for a journal that starts partway -- 30 files numbered
+    201-230 would not have tripped a cap of 230 until round 430. Found at round
+    230, by the cap failing to fire.
+    """
     nums = round_numbers(loop)
     n = max(nums) if nums else 0
     cap = cfg["budget"].get("round cap")
     if cap is not None and n >= cap:
         return True, f"round cap reached (round {n} of {cap})"
-    if not data["lenses"]:
-        return False, "no lens set — lenses mode"
-    kind, tid, why = select_target(root, loop, data)
-    if kind != "none":
-        return False, f"there is a target: {kind} {tid}"
-    waiting = [b for b, e in data["backlog"].items()
-               if e["fields"].get("status", "").startswith("awaiting owner")]
-    if waiting:
-        return True, f"every lens is swept and fresh, the work awaits the owner: {', '.join(waiting)}"
-    return True, "every lens is swept or retracted, nothing changed along their paths, no open leads"
-
-
-# ---------------------------------------------------------------- status
+    left = f"{cap - n} to the cap at {cap}" if cap is not None else "no cap set"
+    return False, f"round {n}, {left}. What to do next is the agent's call, not this script's"
 
 def cmd_status(root: Path, loop: Path) -> int:
     if not loop.is_dir():
@@ -1119,18 +1058,52 @@ def cmd_next(root: Path, loop: Path) -> int:
     if stop:
         print(f"Stop: YES — {why}. Do not start a round; if launched from /loop, cancel the job.")
         return 2
-    shortlist = target_shortlist(root, loop, data)
-    if not shortlist:
-        print("Target: none — nothing selectable")
-        return 2
-    kind, tid, why = shortlist[0]
-    print(f"Target: {kind} {tid} — {why}")
-    if len(shortlist) > 1:
-        print("Shortlist — the script RANKS, you CHOOSE. Name the one you took in")
-        print("`## Target`, and if you go off-list, say why there:")
-        for n, (k, i_, w) in enumerate(shortlist, 1):
-            mark = "->" if n == 1 else "  "
-            print(f"  {mark} {n}. {k} {i_} — {w}")
+    print("")
+    print("THE SCRIPT DOES NOT CHOOSE. Below is state, not a ranking: no order")
+    print("is implied and no target is named. Decide from it, and write what you")
+    print("took and why into the round's `## Target`.")
+    print("")
+
+    dec = pending_decisions(loop, data)
+    if dec:
+        print("OWNER DECISIONS written and not yet carried out:")
+        for d in dec:
+            print(f"  {d} — {data['backlog'][d]['h1'][2:]}")
+        print("")
+
+    print("LENSES — status, and the rounds that applied them:")
+    for lid in sorted(data["lenses"]):
+        f = data["lenses"][lid]["fields"]
+        ap = split_list(f.get("applied", ""))
+        print(f"  {lid:8} {f.get('status', ''):34} applied: {', '.join(ap) if ap else 'never'}")
+
+    aged = []
+    for lid in sorted(data["lenses"]):
+        ch = swept_stale(root, data["lenses"][lid])
+        if ch:
+            aged.append((lid, len(ch)))
+    if aged:
+        print("")
+        print("SWEPT LENSES WHOSE PATHS HAVE MOVED SINCE (git, not memory):")
+        for lid, n in aged:
+            print(f"  {lid:8} {n} file(s) changed")
+
+    leads = [(b, e) for b, e in sorted(data["backlog"].items())
+             if e["fields"].get("status", "").startswith(("open", "awaiting owner"))]
+    if leads:
+        print("")
+        print("OPEN LEADS — reason, and whether a round left them unfinished:")
+        for bid, e in leads:
+            f = e["fields"]
+            cont = " [continuation: unfinished, not blocked]" if _is_continuation(f) else ""
+            print(f"  {bid:6} {f.get('status', '')[:14]:15} {f.get('reason', '')[:58]}{cont}")
+
+    print("")
+    print("VALID BENCHES — reuse one on the same paths rather than rebuilding:")
+    for pid in sorted(data["probes"]):
+        pe = data["probes"][pid]
+        if pe["fields"].get("status", "").startswith("valid"):
+            print(f"  {pid:6} {pe['fields'].get('paths', '')[:72]}")
     b = cfg["budget"]
     print(f"Budget: probes 0/{b.get('probes', '?')}, canaries 0/{b.get('canaries', '?')}")
     packs, missing = load_packs(loop, cfg)
@@ -1145,41 +1118,9 @@ def cmd_next(root: Path, loop: Path) -> int:
                 reading.append(str(pk["files"][k].relative_to(SKILL_ROOT)) if SKILL_ROOT in pk["files"][k].parents
                                else str(pk["files"][k]))
     reading.append("`loop.py review` — the reviewer prompt with the packs' questions")
-    if kind == "lens":
-        ent = data["lenses"][tid]
-        f = ent["fields"]
-        print(f"Lens: {ent['path'].relative_to(root)}")
-        print(f"  Status: {f.get('status', '')}")
-        print(f"  Paths: {f.get('paths', '')}")
-        print(f"  Detector: {' '.join(f.get('detector', '').split())[:200]}")
-        if f.get("detector-script", "").strip():
-            print(f"  Sweep by script: python3 scripts/loop.py sweep {tid}")
-        lens_paths = split_list(f.get("paths", ""))
-        matches = []
-        for pid, pe in data["probes"].items():
-            if not pe["fields"].get("status", "").startswith("valid"):
-                continue
-            ppaths = split_list(pe["fields"].get("paths", ""))
-            if any(_overlap(a, b_) for a in lens_paths for b_ in ppaths):
-                matches.append(f"{pid} ({pe['fields'].get('file', '')}) — {pe['h1'][2:]}")
-        if matches:
-            print("Valid benches along the same paths — start from them, do not build a new one:")
-            for m_ in matches:
-                print(f"  {m_}")
-        else:
-            print("No valid bench along these paths — register a new one as P-N once a control validates it")
-        if f.get("refines", "").strip() not in EMPTY:
-            reading.append(f"catalog/{f['refines'].strip()}-*.md")
-    elif kind == "owner decision":
-        ent = data["backlog"][tid]
-        print(f"Lead: {ent['path'].relative_to(root)}")
-        print(f"  Owner decision: {ent['fields'].get('owner decision', '')}")
-        print("  The lens for the round record is the one that produced the lead (see its links)")
-    else:
-        ent = data["backlog"][tid]
-        print(f"Lead: {ent['path'].relative_to(root)}")
-        print(f"  Reason: {ent['fields'].get('reason', '')}")
-        reading.append("catalog/U-21-remeasure-own-deferrals.md")
+    # No per-lens reading here: the detector, the paths and the refined catalog
+    # shape all live in the lens's own file, and naming one would be choosing.
+    reading.append("the chosen lens's file, and the `refines:` shape it names")
     active = [l for l, e in data["lessons"].items() if e["fields"].get("status", "").startswith("active")]
     if active:
         print(f"Lessons in force ({len(active)}): lessons/LESSONS.md")

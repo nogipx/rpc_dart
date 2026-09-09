@@ -1,5 +1,5 @@
 ---
-round: — (not re-measured)
+round: off-journal 176
 commit: 54b4c5ab
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/transport/rpc_dart_isolate/lib/**]
 scope: [core, isolate]

@@ -26,9 +26,10 @@ commit: yes | no
 
 ## Target
 
-<which entry of `next`'s shortlist was taken and why; if it was not the top
-entry, or not on the list at all, say so and why. "The top one, nothing above it"
-is a complete answer — the point is that the alternatives were looked at.>
+<what was chosen and why, weighed against what `next` reported. The script names
+no target, so this section is the ONLY record of the judgement — "the oldest
+never-applied lens" or "finishing B-23 before opening anything" are complete
+answers; silence is not.>
 
 ## Hypothesis
 
