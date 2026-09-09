@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
 """Detector for U-06 in Dart: catch blocks whose only action is a log call.
 
 Prints path:line: the catch header. Heuristic: the braced body consists only of

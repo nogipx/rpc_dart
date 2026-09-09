@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // A probe skeleton: one number, a control flag, the same bench in both modes.
 //
 // Run:  dart run tool/probe_<name>.dart            — the case under test

@@ -16,6 +16,25 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
 SPDX-License-Identifier = "MIT"
 
+# Agent tooling: the improvement-loop skill and its settings. JSON admits no
+# comments and `.gitignore` has nowhere sensible to put one, so these are
+# annotated rather than headed. The skill's own `.py`/`.dart` DO carry inline
+# headers, per the rule above that source code heads itself.
+#
+# `reuse lint` had been failing on these since `87e9d2f4 add skill`, about
+# thirty commits and twenty rounds. CI reported it the whole time; what missed
+# it was the LOOP's gate, which is analyze + test:unit + format:check and does
+# not include the license step. Fixed in config.md at the same time.
+[[annotations]]
+path = [
+  ".claude/.gitignore",
+  ".claude/settings.json",
+  ".claude/skills/**/*.json",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
+SPDX-License-Identifier = "MIT"
+
 # Per-package LICENSE files (required by pub.dev) and the REUSE license store.
 [[annotations]]
 path = ["LICENSE", "**/LICENSE", "LICENSES/**"]

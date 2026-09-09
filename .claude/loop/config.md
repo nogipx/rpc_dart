@@ -48,7 +48,15 @@ The mandatory workspace-wide sequence, run by every round:
 melos run analyze
 melos run test:unit --no-select
 melos run format:check
+melos run license:check
 ```
+
+`license:check` joined the gate after round 231, and it is worth saying why: it
+had been RED on CI since `87e9d2f4 add skill` — about thirty commits and twenty
+rounds — while every one of those rounds reported a green gate. Both statements
+were true, because the loop's gate and CI's were different lists, and the
+difference was exactly this line. A gate that is a SUBSET of CI's will report
+success for work CI rejects.
 
 On top of that, in the changed package, when a round touches it directly:
 

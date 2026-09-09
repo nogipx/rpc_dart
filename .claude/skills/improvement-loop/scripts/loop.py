@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
 """Improvement-loop bookkeeping: .claude/loop/ is checked by a script, not by memory.
 
     loop.py init     lay out .claude/loop/ (refuses if it already exists)

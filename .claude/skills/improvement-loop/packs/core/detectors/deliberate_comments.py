@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
 """Detector for U-01: comments justifying deliberateness.
 
 Prints one instance per line: path:line: text. Run from the repository root; the

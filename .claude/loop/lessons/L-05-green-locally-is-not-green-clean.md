@@ -53,6 +53,22 @@ repository**, so `asset_does_not_exist` fires on a perfectly green tree. Scope
 the gate to what is published — `lib` and `test` — and leave the host app to
 `test:wasm:device`.
 
+## The third half, found when the first fix let CI reach the next step
+
+With `analyze` green again, CI failed on `license:check` — and `reuse lint` had
+been failing since `87e9d2f4 add skill`, about thirty commits and twenty rounds
+earlier. CI had reported it the entire time.
+
+**Every one of those rounds also reported a green gate, and both were true.**
+The loop's gate was `analyze` + `test:unit` + `format:check`; CI's has
+`license:check` as well. A gate that is a SUBSET of CI's will report success for
+work CI rejects, indefinitely, and no amount of care inside a round can notice
+it.
+
+So the rule has a second clause: **the loop's gate must be a superset of CI's,
+and that is a fact to check rather than assume.** `license:check` joined the
+gate in `config.md` when this was found.
+
 Related: [L-04](L-04-a-guard-with-no-witness.md), which is the same shape one
 level up — an ablation that answers the question asked and not the question that
 matters.
