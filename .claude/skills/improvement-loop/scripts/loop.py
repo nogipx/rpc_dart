@@ -258,7 +258,8 @@ def round_numbers(loop: Path) -> list[int]:
 
 def parse_config(loop: Path) -> dict:
     cfg = {"unattended": None, "gate": [], "budget": {}, "packs": ["core"],
-           "classes": [], "after_commit": [], "commit_lang": "English"}
+           "classes": [], "after_commit": [], "commit_lang": "English",
+           "reply_lang": "English"}
     path = loop / "config.md"
     if not path.exists():
         return cfg
@@ -285,6 +286,9 @@ def parse_config(loop: Path) -> dict:
     m = re.search(r"^commit language:[ \t]*(.*)$", text, re.M | re.I)
     if m and m.group(1).strip():
         cfg["commit_lang"] = m.group(1).strip()
+    m = re.search(r"^reply language:[ \t]*(.*)$", text, re.M | re.I)
+    if m and m.group(1).strip():
+        cfg["reply_lang"] = m.group(1).strip()
     m = re.search(r"```after-commit\n(.*?)```", text, re.S)
     if m:
         cfg["after_commit"] = [l.strip() for l in m.group(1).splitlines()
@@ -879,6 +883,7 @@ def cmd_next(root: Path, loop: Path) -> int:
     packs, missing = load_packs(loop, cfg)
     print("Packs: " + ", ".join(packs) + (f" (not found: {', '.join(missing)})" if missing else ""))
     print(f"Commit language: {cfg['commit_lang']}")
+    print(f"Reply language: {cfg['reply_lang']}")
     reading = ["methods/measurement.md (checklist)", "methods/canary.md (checklist)",
                "methods/tests.md (checklist)", "specs/round.md"]
     for name, pk in packs.items():
@@ -1116,9 +1121,10 @@ def cmd_sweep(root: Path, loop: Path, lens_id: str | None) -> int:
 
 CONFIG_TEMPLATE = """# Loop settings
 
-Schema — `specs/config.md` in the skill. Four places below are read by
+Schema — `specs/config.md` in the skill. The places below are read by
 `loop.py` and their format is exact: the `unattended:` line, the ```gate block,
-the `commit language:` line, and the three «Round budget» lines.
+the `commit language:` and `reply language:` lines, and the three
+«Round budget» lines.
 
 ## Mode
 
@@ -1135,10 +1141,12 @@ damage classes:
 
 ## Language
 
-The language of the round commit's subject and body. Drop the line and it is
-English.
+Two independent settings. Drop either line and it is English.
+`commit language` is the round commit's subject and body; `reply language` is
+the round report in chat.
 
 commit language: English
+reply language: English
 
 ## Toolchain
 

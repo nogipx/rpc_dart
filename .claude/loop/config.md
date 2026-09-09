@@ -19,10 +19,14 @@ with no screens, navigation or input.
 
 ## Language
 
-The round commit's subject and body. Drop the line and it is English. It does
-not affect the language of the loop data.
+Two independent settings; drop either line and it is English. Neither affects
+the language of the loop data, which is English here.
+
+- `commit language` — the round commit's subject and body.
+- `reply language` — the round report in chat.
 
 commit language: English
+reply language: Русский
 
 ## Toolchain
 

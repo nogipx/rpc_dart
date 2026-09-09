@@ -14,12 +14,20 @@ The mandatory sections, in this order:
   enabled (the skill's `packs/` or `.claude/loop/packs/`); `core` always is. The
   optional `damage classes:` line adds project classes to the packs'; `lint`
   checks the lenses' `breaks:` against the union.
-- **Language** — the line `commit language: <language>`. Optional; without it
-  the language is **English**. It governs the round commit's subject and body
-  and nothing else: the loop data stays in its own language. If that differs,
-  the commit body restates the same sections in the commit language rather than
-  copying them. `loop.py next` prints the value so a round does not learn it at
-  the last moment.
+- **Language** — two optional lines, each **English** without it:
+  `commit language: <language>` governs the round commit's subject and body,
+  and `reply language: <language>` governs the round report in chat. They are
+  separate on purpose: writing to a repository and talking to its owner are
+  different audiences, and the common case is an English commit reported in the
+  owner's language. Neither governs the loop data, which keeps its own
+  language; where they differ, the commit body and the report restate the
+  record's sections rather than copying them. `loop.py next` prints both values
+  so a round does not learn them at the last moment.
+
+  A standing instruction from the user outranks `reply language:` — the setting
+  is the project's default, not a licence to answer in a language the person
+  asking has told you not to use. When the two disagree, follow the user and
+  say which was followed.
 - **Toolchain** — what runs the build and the tests, including wrappers for the
   pinned SDK version. Plus the known launch traps: commands that open an
   interactive picker, and their safe forms.

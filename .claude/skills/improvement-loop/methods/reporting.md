@@ -46,6 +46,10 @@ The owner's preferences on documentation volume are in the project's
 
 ## The chat report
 
+**The language is the `reply language:` line in `config.md`, English by
+default** (`loop.py next` prints it, next to `commit language:`). A standing
+instruction from the user wins over it; say which you followed if they differ.
+
 The same sections as the round file, plus two lines: the output of
 `loop.py lint`, and "next round: the target from `loop.py next`", or
 "Stop: YES — reason". If the call came from `/loop` and it is a stop, say the
