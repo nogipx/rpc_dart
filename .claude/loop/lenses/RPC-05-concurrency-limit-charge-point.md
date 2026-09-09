@@ -28,6 +28,52 @@ it deny service to half-open streams?
 30 calls past a ceiling of 3 when charged at entry; 8 metadata-only frames
 refused every call for 60 s when charged at admission. Only dispatch works.
 
+**The origin, imported from private memory after round 235.**
+`maxActiveStreams` does not bound how many handlers RUN; it bounds live stream
+STATE, and the two coincide only while handlers cooperate. Dart cannot preempt a
+running `async` function, so a deadline cancels the token and then falls back to
+`_cleanupStream` after a 2 s grace — which frees the stream state AND the
+admission slot. For an uncooperative handler the first is right and the second is
+not: the work continues with its slot back in the pool. Against
+`maxActiveStreams: 4`, one call every 250 ms with a 40 ms deadline, **37
+concurrent handlers after 20 s and still growing linearly**, while
+`activeResponders` read 3-4 the whole time. Closed in round 114 by
+`maxConcurrentHandlers` (default null, opt-in, charged at dispatch): 37 -> 4 on
+the same attack.
+
+> **Saturating the connection HIDES it, and that is a trap for any admission
+> limit here.** With the table permanently full, later calls are rejected before
+> dispatch: 43,908 calls in 14 s produced exactly 8 handlers against
+> `maxActiveStreams: 8`, so a load test reports the ceiling holding. PACING past
+> the reclaim grace is what defeats it.
+
+**Both neighbours of the right charge point are measurably wrong, in opposite
+directions**, which is why this lens exists: handler ENTRY reads as the more
+precise semantic and is a no-op against a burst (found only over a REAL
+transport — the paced core test stayed green); stream ADMISSION is a denial of
+service, because a stream is half-open from its opening frame until dispatch, so
+8 metadata-only frames refuse every call for the whole `halfOpenStreamTimeout`.
+That second one was found by attacking the round's own fix one round later.
+
+**The matching WHERE question is the release wrapper's placement** (round 116).
+It sat on the innermost user handler, inside middleware and interceptors, so work
+OUTSIDE the handler was released with the stream: an interceptor parked on an
+auth lookup gave **2 interceptors live against a ceiling of 1**, accumulating
+exactly like the handler case. It now wraps the whole `handleUnary` /
+`handleClientStream` / `handleServerStream` / `handleBidirectionalStream` call at
+all 8 dispatch sites.
+
+> **Three separable halves, so three canaries, and each isolates cleanly:**
+> ceiling never refuses -> 3 witnesses fail; released with the stream -> only the
+> abandoned-call witness fails; never released -> the ATTACK witness stays green
+> while ordinary traffic fails ("call 2 was refused; a slot is leaking"). A
+> one-sided canary would have shipped that ratchet.
+
+> **When a new assertion fails, check the FIXTURE before the code.** The first
+> version of the interceptor test parked the interceptor and used a handler that
+> also parks, so the chain could not unwind and "the slot comes back" failed for
+> an unrelated reason.
+
 ## Which fields this detector actually covers
 
 Round 214 enumerated all sixteen. **Most cannot suffer this shape at all**:

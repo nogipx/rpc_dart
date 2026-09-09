@@ -114,5 +114,31 @@ as soon as the port is released (4 ms with a 2 s request running), so relying on
 it left the caller HUNG for 20 s — worse than the forceful close it replaced.
 **Measure the observable the user experiences, not the API you changed.**
 
+**A policy field the transport hands to a DEPENDENCY needs the dependency's
+DEFAULT checked** (06328514, round 139), which is a third way for a field to be
+inert. `ServerTransportConnection.viaStreams` was called with no
+`ServerSettings`, so every http2 connection advertised package:http2's default
+MAX_CONCURRENT_STREAMS of 1000 whatever the policy said — `maxActiveStreams`
+meant 4096 on websocket and isolate and 1000 on http2:
+
+    policy 7    -> advertised 1000: a conforming client paces by the
+                   announcement, opens streams it is refused, and retries
+                   (status 8 is retryable) into the same wall. grpc-go and
+                   grpc-java QUEUE above the limit and would have succeeded
+    policy 4096 -> 1100 concurrent calls gave 1000 dispatched, 100 refused,
+                   because package:http2 enforces its own advertisement
+
+> **Not passing a setting is not neutral; it means the dependency's opinion
+> silently overrides the library's.** Note the fix RAISED the effective ceiling
+> 1000 -> 4096, i.e. worst case per connection ~33 MB -> ~136 MB at the ~33
+> KiB/stream figure in `../checked/C-29-the-real-scope-of-the-stream-limits.md`.
+> Nothing was loosened, but anyone relying on the accidental 1000 must now set
+> the field explicitly.
+
+To read what a server actually advertises: raw socket, send the preface plus an
+empty SETTINGS frame, decode the server's SETTINGS at the byte level —
+package:http2 exposes no accessor. Kept as `advertised_stream_limit_test.dart`
+and `.dart_tool/probe/advertised_settings.dart`.
+
 The clean results from this battery are
 `../checked/C-28-sibling-batteries-that-came-back-clean.md`.
