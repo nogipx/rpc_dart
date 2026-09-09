@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[217](217-a-decorator-erases-the-stream-id-watermark.md)** DEFERRED, rpc_dart — a decorator erases the stream-id watermark
 - **[216](216-a-refusal-survives-its-own-policy.md)** CLEAN, rpc_dart and rpc_dart_http2 — a refusal survives its own policy
 - **[215](215-the-pre-method-budget-comes-back.md)** CLEAN, rpc_dart — the pre-method budget comes back
 - **[214](214-handler-slots-come-back.md)** CLEAN, rpc_dart — handler slots come back on every teardown path

@@ -14,6 +14,8 @@ skill after them, so nothing before 206 has a record here.
   does a transport bound survive `RpcHttp2Server.transportWrapper`?
 - **[P-04](P-04-parked-waiters-drain.md)** valid (round 211), core transports —
   does an abandoned upload leave its sender parked?
+- **[P-09](P-09-watermark-survives-a-decorator.md)** valid (round 217), core resilience —
+  does the stream-id watermark survive a user's decorator?
 - **[P-08](P-08-refusal-survives-a-tight-cap.md)** valid (round 216), http2 and core —
   does a refusal survive the policy it just enforced?
 - **[P-07](P-07-pre-method-budget-returns.md)** valid (round 215), core endpoint —
