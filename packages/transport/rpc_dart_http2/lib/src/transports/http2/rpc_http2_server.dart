@@ -797,9 +797,37 @@ class _CapabilityPreservingTransport
     return null;
   }
 
+  /// Always tells the INNER transport too, whatever the wrapper does with it.
+  ///
+  /// The wrapper can only ever report CONSUMPTION; the charge lives in the
+  /// transport that actually sees the bytes arrive, and that transport only
+  /// charges a stream it has been told is pipeline-fed. So a decorator that
+  /// declares [IRpcFlowControlled] and then swallows it left the inner
+  /// accounting switched off entirely -- exactly the shape this class exists to
+  /// prevent, arriving through the very capability it forwards. Measured with a
+  /// deaf client-stream handler and a 4 MiB window:
+  ///
+  ///   no wrapper                        4176 KiB on the wire
+  ///   plain decorator                   4177 KiB
+  ///   declares and forwards it          4177 KiB
+  ///   declares and SWALLOWS it        160900 KiB   <- 39x, and still climbing
+  ///
+  /// Deferring on both is safe because it is a set membership: a decorator that
+  /// forwards produces one entry, not two. `returnFlowCredit` is deliberately
+  /// NOT doubled the same way -- a forwarding decorator would then discharge
+  /// twice and the bound would vanish again, the other way round.
+  ///
+  /// A decorator that swallows the report now starves the budget instead of
+  /// removing it, so its calls are refused at the window rather than running
+  /// unbounded. That is the loud failure, which is the one to have.
   @override
-  void deferFlowCredit(int streamId) =>
-      _flowControlled?.deferFlowCredit(streamId);
+  void deferFlowCredit(int streamId) {
+    _flowControlled?.deferFlowCredit(streamId);
+    final source = inner;
+    if (source is IRpcFlowControlled) {
+      (source as IRpcFlowControlled).deferFlowCredit(streamId);
+    }
+  }
 
   @override
   void returnFlowCredit(int streamId, int bytes) =>

@@ -10,3 +10,5 @@ skill after them, so nothing before 206 has a record here.
   how much a sender gets out before the connection pool wedges
 - **[P-02](P-02-http2-aborted-call-pool.md)** valid (round 207), rpc_dart_http2 —
   does an http2 connection survive a cancelled stalled call?
+- **[P-03](P-03-wrapper-keeps-the-bound.md)** valid (round 209), rpc_dart_http2 —
+  does a transport bound survive `RpcHttp2Server.transportWrapper`?

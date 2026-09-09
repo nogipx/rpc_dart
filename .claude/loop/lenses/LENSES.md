@@ -6,7 +6,7 @@ field format — `../../skills/improvement-loop/specs/lens.md`.
 - **[RPC-01](RPC-01-flow-control-credit-on-skip.md)** confirmed (208) — credit is not returned for a frame nobody consumes, per level and per layer; refines U-07
 - **[RPC-02](RPC-02-refusal-trailer-violates-policy.md)** confirmed (153, off-journal) — the refusal trailer fails the policy it enforced; refines U-09
 - **[RPC-03](RPC-03-stream-ids-restart-on-reconnect.md)** confirmed (100, off-journal) — stream ids restart after a reconnect; refines U-18
-- **[RPC-04](RPC-04-capability-hidden-by-wrapper.md)** confirmed (094, off-journal) — a wrapper does not forward a capability interface; refines U-05
+- **[RPC-04](RPC-04-capability-hidden-by-wrapper.md)** confirmed (209) — a capability is dropped by a wrapper, or routed to one that cannot honour it; refines U-05
 - **[RPC-05](RPC-05-concurrency-limit-charge-point.md)** confirmed (114, off-journal) — a limit is charged at the wrong point of the lifecycle; refines U-07
 - **[RPC-06](RPC-06-native-plugin-layers.md)** confirmed (180, off-journal) — a defect in Swift or Kotlin, where Dart greps never look; refines U-14, U-03
 - **[RPC-07](RPC-07-web-as-separate-runtime.md)** confirmed (090, off-journal) — green on the VM, broken on dart2js; refines U-03

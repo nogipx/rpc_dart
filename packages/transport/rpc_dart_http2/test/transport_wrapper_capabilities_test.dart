@@ -22,6 +22,7 @@
 // nothing is an oversight, and restoring is what its author meant.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
@@ -100,6 +101,140 @@ class _OpinionatedTransport extends _CountingTransport
   @override
   RpcSecurityPolicy get securityPolicy =>
       const RpcSecurityPolicy(maxActiveStreams: 11);
+}
+
+/// Declares the flow-control capability and forwards it -- the well-behaved
+/// shape, and the one that would break if the DISCHARGE were doubled.
+class _ForwardingFlowTransport extends _CountingTransport
+    implements IRpcFlowControlled {
+  _ForwardingFlowTransport(super.inner);
+
+  @override
+  void deferFlowCredit(int streamId) =>
+      (inner as IRpcFlowControlled).deferFlowCredit(streamId);
+
+  @override
+  void returnFlowCredit(int streamId, int bytes) =>
+      (inner as IRpcFlowControlled).returnFlowCredit(streamId, bytes);
+}
+
+/// Declares the capability and swallows it -- "I meter this myself", which the
+/// capability-preserving wrapper documents as a supported intent.
+class _SwallowingFlowTransport extends _CountingTransport
+    implements IRpcFlowControlled {
+  _SwallowingFlowTransport(super.inner);
+
+  @override
+  void deferFlowCredit(int streamId) {}
+
+  @override
+  void returnFlowCredit(int streamId, int bytes) {}
+}
+
+final class _UploadRun {
+  final Completer<void> gate = Completer<void>();
+}
+
+final class _UploadContract extends RpcResponderContract {
+  _UploadContract(this.run) : super('Svc');
+  final _UploadRun run;
+
+  @override
+  void setup() {
+    addClientStreamMethod<RpcString, RpcString>(
+      methodName: 'Upload',
+      handler: (requests, {RpcContext? context}) async {
+        await run.gate.future; // consumes nothing
+        return 'done'.rpc;
+      },
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+  }
+}
+
+/// Counts client->server bytes by relaying raw TCP, so the HTTP/2 framing
+/// passes through untouched. Measure the WIRE, not the sender: the caller's
+/// sends are fire-and-forget, so counting what it produced hides the bound.
+final class _Relay {
+  int bytes = 0;
+  late final ServerSocket _listener;
+
+  Future<int> start(int targetPort) async {
+    _listener = await ServerSocket.bind('127.0.0.1', 0);
+    _listener.listen((client) async {
+      final upstream = await Socket.connect('127.0.0.1', targetPort);
+      client.listen(
+        (chunk) {
+          bytes += chunk.length;
+          upstream.add(chunk);
+        },
+        onDone: () => upstream.close().catchError((Object _) => null),
+        onError: (Object _) {},
+        cancelOnError: false,
+      );
+      upstream.listen(
+        client.add,
+        onDone: () => client.close().catchError((Object _) => null),
+        onError: (Object _) {},
+        cancelOnError: false,
+      );
+    });
+    return _listener.port;
+  }
+
+  Future<void> stop() => _listener.close();
+}
+
+/// Uploads into a handler that consumes nothing and returns the bytes that
+/// reached the server.
+Future<int> _upload(IRpcTransport Function(IRpcTransport inner)? wrap) async {
+  final state = _UploadRun();
+  final server = RpcHttp2Server(
+    host: '127.0.0.1',
+    port: 0,
+    transportWrapper: wrap == null ? null : (inner, _) => wrap(inner),
+    onEndpointCreated: (e) => e.registerServiceContract(_UploadContract(state)),
+  );
+  await server.start();
+  final relay = _Relay();
+  final port = await relay.start(server.port);
+  final client = await RpcHttp2CallerTransport.connect(
+    host: '127.0.0.1',
+    port: port,
+  );
+  final caller = RpcCallerEndpoint(transport: client);
+
+  final body = 'x' * (4 * 1024);
+  Stream<RpcString> requests() async* {
+    for (var i = 0; i < 40000; i++) {
+      yield body.rpc;
+      // Paced, so window updates have time to matter. Pacing can only reduce
+      // what is offered, never cause a false pass.
+      if (i % 50 == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+    }
+  }
+
+  final call = caller.clientStream<RpcString, RpcString>(
+    serviceName: 'Svc',
+    methodName: 'Upload',
+    requestCodec: _codec,
+    responseCodec: _codec,
+  );
+  unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
+
+  // Long enough that steady growth cannot be mistaken for a ceiling: unfixed,
+  // 'swallows' reached 157 MiB here.
+  await Future<void>.delayed(const Duration(seconds: 8));
+  final seen = relay.bytes;
+
+  state.gate.complete();
+  await client.close().catchError((Object _) {});
+  await server.stop();
+  await relay.stop();
+  return seen;
 }
 
 /// Runs 60 concurrent parked calls against a server capped at 3 and reports
@@ -210,5 +345,46 @@ void main() {
       11,
     );
     expect(r.open, greaterThan(3));
+  });
+
+  group('the upload bound survives the wrapper', () {
+    // The other capability, and the one with no ceiling behind it. The inner
+    // transport is the only object that sees bytes ARRIVE, so it is the only
+    // one that can charge them -- and it only charges a stream it has been told
+    // is pipeline-fed. Routing deferFlowCredit to a decorator that declares
+    // IRpcFlowControlled and then swallows it therefore left the inner
+    // accounting switched off, with nothing to see. Measured with a deaf
+    // client-stream handler against a 4 MiB window, bytes on the WIRE:
+    //
+    //   no wrapper                     4176 KiB
+    //   plain decorator                4177 KiB
+    //   declares and forwards it       4177 KiB
+    //   declares and SWALLOWS it     160900 KiB   <- 39x, and still climbing
+    //
+    // after:                           4187 KiB
+    for (final shape in const ['none', 'plain', 'forwards', 'swallows']) {
+      test(
+        '$shape: a deaf handler still bounds the upload',
+        () async {
+          final r = await _upload(switch (shape) {
+            'plain' => _CountingTransport.new,
+            'forwards' => _ForwardingFlowTransport.new,
+            'swallows' => _SwallowingFlowTransport.new,
+            _ => null,
+          });
+          // WITNESS for 'swallows'; GUARD for the other three, which were already
+          // bounded and must stay that way -- doubling the DISCHARGE instead of
+          // the defer would have removed the bound for 'forwards'.
+          expect(
+            r,
+            lessThan(8 * 1024 * 1024),
+            reason:
+                '${(r / 1024 / 1024).toStringAsFixed(1)} MiB reached a server '
+                'whose handler consumed nothing, against a 4 MiB window',
+          );
+        },
+        timeout: const Timeout(Duration(seconds: 120)),
+      );
+    }
   });
 }
