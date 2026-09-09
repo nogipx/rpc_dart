@@ -179,11 +179,13 @@ class RpcWebSocketCallerTransport
   /// Attaches a fresh socket, CONTINUING the id sequence rather than restarting
   /// it.
   ///
-  /// [resumeStreamIdsAfter] must be read from the outgoing transport BEFORE it
-  /// is closed: `RpcChannelTransport.close()` calls `_idManager.reset()`, so
-  /// asking a closed transport for its cursor gives the pre-first-call value
-  /// and the sequence starts over anyway. That is how the first version of this
-  /// fix managed to change nothing at all.
+  /// [resumeStreamIdsAfter] comes from the outgoing transport's cursor, which
+  /// must still be readable AFTER that transport has closed: on a peer-started
+  /// drop the inner transport closes itself, and that close is how this wrapper
+  /// finds out at all. While `RpcChannelTransport.close()` rewound the cursor,
+  /// the two paths measured differently for that reason alone — reconnect on a
+  /// live socket gave ids 1 then 3, reconnect after the peer dropped it gave 1
+  /// then 1, and a dead call's `finishSending` then ended the live one.
   ///
   /// The obvious wrapper-level guard is NOT enough on its own, which the probe
   /// established before this was written: tracking "ids minted on THIS
@@ -430,8 +432,9 @@ class RpcWebSocketCallerTransport
       );
     }
     try {
-      // Read BEFORE closing: close() resets the id manager, so afterwards this
-      // reads as "nothing issued yet" and the new connection restarts at 1.
+      // Read as early as possible, but the value must survive `_inner` being
+      // closed either way -- on a peer-started drop it closed itself before
+      // this method was ever called. See [_attach].
       final idCursor = _inner.lastIssuedStreamId;
       await _fwdSub?.cancel();
       await _inner.close();

@@ -1,9 +1,9 @@
 ---
-status: open
-round: — (not re-measured)
-commit: 5bf4d34e
+status: closed (round 234)
+round: 234
+commit: c327a2ce
 paths: [packages/transport/rpc_dart_websocket/lib/**]
-probe: —
+probe: P-13
 reason: "methodological: the lead list in private memory went stale; the work is to rescan the package"
 ---
 
@@ -45,6 +45,20 @@ Settled, with the reasons in round 233's record:
 
 **`websocket_caller_transport.dart` is where to start.** It is the largest file,
 it holds `reconnect()`, and this package's last two defects both lived there.
+
+## Round 234 read it, and it held a third — CLOSED
+
+The rescan is done: all nine `lib/` files have now been read or swept, and the
+one 233 named produced a defect of exactly the shape 233 predicted. `reconnect()`
+read the id cursor off a transport that, on a peer-started drop, had already
+rewound it as it closed itself — ids 1 then 1 instead of 1 then 3, and a dead
+call's `finishSending` ended a live one (handlers ended 1 -> 2). Fixed in core at
+the reset; see `../rounds/234-the-reconnect-nobody-drives.md` and lens RPC-03.
+
+The lead's own instruction is what worked and is worth keeping for the next
+package: **rescan rather than work from a list** — and, from
+`../lessons/L-06-the-path-the-owner-drives.md`, drive the lifecycle event from
+the PEER's side, where the convenient tests never go.
 
 ## Owner decision
 

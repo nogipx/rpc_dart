@@ -18,7 +18,7 @@ reason. The next `curate` decides what ages back in.
 
 - **[RPC-01](RPC-01-flow-control-credit-on-skip.md)** confirmed (213) — credit is not returned for a frame nobody consumes, per level and per layer; refines U-07
 - **[RPC-04](RPC-04-capability-hidden-by-wrapper.md)** confirmed (209) — a capability is dropped by a wrapper, or routed to one that cannot honour it; refines U-05
-- **[RPC-03](RPC-03-stream-ids-restart-on-reconnect.md)** confirmed (217) — stream ids restart after a reconnect; every swap site carries the watermark, but a decorator can erase it (B-17); refines U-18
+- **[RPC-03](RPC-03-stream-ids-restart-on-reconnect.md)** confirmed (234) — stream ids restart after a reconnect; every swap site carries the watermark, but a decorator can erase it (B-17) and a peer-started drop rewound it before it could be read (234); refines U-18
 - **[RPC-15](RPC-15-remeasure-own-record.md)** confirmed (211) — re-measure the loop's own record, including what it claims its own FIXES are worth; refines U-21
 
 ## Swept and fresh

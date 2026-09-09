@@ -16,10 +16,12 @@
 //     after                     -> A keeps 1, B gets 3
 //
 // The proxy now carries a WATERMARK across transports, via the
-// IRpcStreamIdSequence capability. Two things it must get right, both of which
+// IRpcStreamIdSequence capability. Three things it must get right, all of which
 // have already been got wrong once:
-//   - read the outgoing transport's cursor BEFORE closing it (closing resets
-//     the id manager, so a cursor read afterwards says "nothing issued yet");
+//   - read the outgoing transport's cursor as early as the path allows;
+//   - the cursor must OUTLIVE that transport's close, because on a drop the
+//     peer started the transport has already closed itself by the time the
+//     proxy hears about it (round 234);
 //   - the wrapper must FORWARD the capability, or the `is` check finds only
 //     IRpcTransport and the watermark is silently never carried.
 //
@@ -105,12 +107,14 @@ typedef _Fixture = ({
   RpcClientConnection connection,
   int Function() ended,
   int Function() built,
+  Future<void> Function() killPeer,
 });
 
 _Fixture _build() {
   var ended = 0;
   var built = 0;
   final responders = <RpcResponderEndpoint>[];
+  final peers = <RpcChannelTransport>[];
 
   Future<IRpcTransport> factory() async {
     built++;
@@ -119,6 +123,7 @@ _Fixture _build() {
     responder.registerServiceContract(_Svc(() => ended++));
     responder.start();
     responders.add(responder);
+    peers.add(server);
     return client;
   }
 
@@ -129,7 +134,21 @@ _Fixture _build() {
       await r.close();
     }
   });
-  return (connection: connection, ended: () => ended, built: () => built);
+  return (
+    connection: connection,
+    ended: () => ended,
+    built: () => built,
+    // The PEER goes away: closing the server end of the pair ends the client's
+    // input, so the client transport closes ITSELF -- and that self close is
+    // the only way this proxy is told the connection dropped.
+    killPeer: () async {
+      final live = List<RpcChannelTransport>.of(peers);
+      peers.clear();
+      for (final p in live) {
+        await p.close();
+      }
+    },
+  );
 }
 
 Future<void> _online(_Fixture f) async {
@@ -389,6 +408,75 @@ void main() {
       // Wrong parity for a client rounds UP, never down.
       client.resumeStreamIdsAfter(20);
       expect(client.createStream(), 23);
+    });
+
+    // Round 234. The cursor exists for reconnect, and close() used to rewind
+    // it -- destroying it on the one event that starts a reconnect. Nothing
+    // above can read it earlier, because a peer-started drop is REPORTED by
+    // this close.
+    test(
+      'survives close, which is when a reconnecting wrapper reads it',
+      () async {
+        final (client, server) = RpcChannelTransport.pair();
+        addTearDown(() async {
+          await server.close();
+        });
+
+        expect(client.createStream(), 1);
+        expect(client.createStream(), 3);
+
+        await client.close();
+
+        expect(
+          client.lastIssuedStreamId,
+          3,
+          reason:
+              'a closed transport reported "nothing issued yet", so the next '
+              'connection restarted at 1 and handed out an id a dead call held',
+        );
+      },
+    );
+  });
+
+  // Round 234. Every swap above goes through forceReconnect(), which detaches
+  // a transport that is still OPEN and can read its cursor first. A real
+  // reconnect begins with the peer going away, and then the transport has
+  // already closed itself before the proxy hears anything.
+  group('WITNESS: a drop the PEER started', () {
+    test('still carries the watermark into the new transport', () async {
+      final f = _build();
+      f.connection.connect();
+      await _online(f);
+
+      final idA = await _openCall(f.connection.transport);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      final before = f.built();
+      await f.killPeer();
+
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (DateTime.now().isBefore(deadline)) {
+        if (f.built() > before &&
+            f.connection.currentState is RpcClientOnline) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(
+        f.built(),
+        greaterThan(before),
+        reason: 'the connection never rebuilt its transport',
+      );
+
+      final idB = await _openCall(f.connection.transport);
+
+      expect(
+        idB,
+        isNot(idA),
+        reason:
+            'the dead transport rewound its cursor as it closed, so the proxy '
+            'read "nothing issued yet" and the new call got the dead one\'s id',
+      );
     });
   });
 }

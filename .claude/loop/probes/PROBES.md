@@ -11,6 +11,11 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-13](P-13-ids-after-a-peer-started-reconnect.md)** valid (round 234), websocket
+  and core reconnect — does the stream-id sequence survive a reconnect the PEER
+  started? Two arms differing by one event: 1 then 3 when this side calls
+  `reconnect()`, 1 then 1 when the socket dies first, and a dead call's
+  half-close then ended a live one
 - **[P-12](P-12-zero-grant-reads-as-legacy.md)** valid (round 229), core transports —
   is a zero grant read as a peer that does not participate? A FOREIGN peer driven
   at the channel level, which is the only way to reach the path: 800 KiB through

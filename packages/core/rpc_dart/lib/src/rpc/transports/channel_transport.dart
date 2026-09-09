@@ -330,6 +330,12 @@ class RpcChannelTransport
   ///
   /// Pass this into the replacement transport's [resumeStreamIdsAfter] and the
   /// two id spaces become disjoint.
+  ///
+  /// SURVIVES [close]. It has to: the wrapper above is told the connection
+  /// dropped by this transport closing itself, so "read the cursor before
+  /// closing" is advice it cannot follow on the path that matters. While close
+  /// rewound it, an explicit reconnect on a live socket produced ids 1 then 3
+  /// and the same reconnect after a peer-started drop produced 1 then 1.
   @override
   int get lastIssuedStreamId => _idManager.lastIssuedId;
 
@@ -614,7 +620,12 @@ class RpcChannelTransport
     _fcOwedConn.clear();
     _fcConnCredit = null;
     _fcConnPending = 0;
-    _idManager.reset();
+    // Frees the ids without rewinding the cursor: see [lastIssuedStreamId]. A
+    // full reset() here made this transport erase the one value a reconnecting
+    // wrapper needs, at the exact moment it needs it -- a peer-started drop is
+    // reported to the layer above BY this close, so there is no earlier moment
+    // to read the cursor at.
+    _idManager.releaseAll();
 
     try {
       await _channel.close();

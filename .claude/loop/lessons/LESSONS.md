@@ -12,6 +12,7 @@ numbers, not a retelling.
 - **[L-03](L-03-no-backticks-in-a-shell-argument.md)** active (round 210), toolchain — never put a backtick in a shell argument; substitution both mangles the text and defeats the allowlist
 - **[L-05](L-05-green-locally-is-not-green-clean.md)** active (round 226, billed on CI), toolchain — a gate ablation proves SENSITIVITY, not PORTABILITY; round 226's four arms were all correct and CI still went red with 304 errors, because the ablation varied the code and held the environment fixed
 - **[L-04](L-04-a-guard-with-no-witness.md)** active (rounds 222-223), bench — after a sweep says "every site is guarded", ablate a guard: twice in a row nothing went red, because a guard against a leak or a crash is witnessed by an absence
+- **[L-06](L-06-the-path-the-owner-drives.md)** active (round 234), bench — when a lifecycle event can be started from either side, test the one the PEER starts: five tests calling `reconnect()` themselves stayed green for seven rounds while the path that begins with the socket dying was broken
 
 ## Promotion candidacy — curate pass after round 220
 

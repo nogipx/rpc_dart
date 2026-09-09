@@ -95,11 +95,15 @@ final class _ReconnectingTransportProxy
   /// transport wholesale instead, so it has to carry the watermark across.
   int _idWatermark = -1;
 
-  /// Reads the cursor off [inner] before it is closed, and remembers the max.
+  /// Reads the cursor off [inner] and remembers the max.
   ///
-  /// BEFORE is load-bearing: closing a transport resets its id manager, so a
-  /// cursor read afterwards reports "nothing issued yet" and the sequence
-  /// restarts anyway. That mistake cost a whole wrong fix in round 142.
+  /// Read as early as the path allows, and on [_retire] that is already after
+  /// the transport closed itself — a peer-started drop is REPORTED by that
+  /// close. So the cursor has to outlive it, which is now part of
+  /// [IRpcStreamIdSequence]; while [RpcChannelTransport] rewound it at close,
+  /// this read returned "nothing issued yet" and the sequence restarted anyway.
+  /// Reading before an orderly close is still the safe order for a third-party
+  /// transport, and that mistake cost a whole wrong fix in round 142.
   void _noteIdWatermark(IRpcTransport? inner) {
     if (inner is! IRpcStreamIdSequence) return;
     final cursor = (inner as IRpcStreamIdSequence).lastIssuedStreamId;

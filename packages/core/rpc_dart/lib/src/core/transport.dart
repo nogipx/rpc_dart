@@ -164,9 +164,16 @@ abstract interface class IRpcSecurityPolicyAware {
 /// this for themselves, but `RpcClientConnection` builds a WHOLE NEW transport
 /// from its factory — which is the path applications are pointed at for
 /// auto-reconnect — so it needs the transport's cooperation. It reads
-/// [lastIssuedStreamId] from the outgoing transport BEFORE closing it (closing
-/// resets the sequence) and calls [resumeStreamIdsAfter] on the incoming one
-/// before any call can be made.
+/// [lastIssuedStreamId] from the outgoing transport and calls
+/// [resumeStreamIdsAfter] on the incoming one before any call can be made.
+///
+/// The cursor MUST survive [IRpcTransport.close]. A reconnect is most often
+/// started by the PEER, and a transport learns about that by closing itself —
+/// so a cursor destroyed at close is already gone by the time anything above can
+/// read it, and there is no earlier moment to read it at. Measured over
+/// websocket: an explicit reconnect on a live socket gave ids 1 then 3, while
+/// the same reconnect after the peer dropped the socket gave 1 then 1, and the
+/// dead call's late `finishSending` ended the live one.
 ///
 /// Kept separate from [IRpcTransport], like [IRpcStreamReset], so adding it
 /// does not break third-party transports that `implements IRpcTransport`. A
@@ -445,7 +452,21 @@ final class RpcStreamIdManager {
     _lastId = aligned > _maxAssignableId ? _maxAssignableId : aligned;
   }
 
-  /// Resets manager state (clears active IDs and counters).
+  /// Frees every active id, keeping the [lastIssuedId] cursor.
+  ///
+  /// What a transport wants at close: the ids are no longer in use, but the
+  /// sequence they came from is exactly what a reconnecting wrapper needs
+  /// afterwards. [reset] rewinds the cursor as well, and using it here meant a
+  /// transport that closed ITSELF — which is how every peer-started drop is
+  /// reported — erased the cursor before anything above could read it.
+  void releaseAll() {
+    _activeIds.clear();
+  }
+
+  /// Resets manager state (clears active IDs and rewinds the cursor).
+  ///
+  /// Starts the id space over, so anything holding an id from before now shares
+  /// a namespace with new calls. Use [releaseAll] to end the calls without that.
   void reset() {
     _activeIds.clear();
     _lastId = isClient ? -1 : 0;

@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/**]
 applies: identifiers are issued locally and outlive a reconnect
 breaks: data loss on a live call.
-applied: [217, 218, 224]
-status: confirmed (round 224)
+applied: [217, 218, 224, 234]
+status: confirmed (round 234)
 ---
 
 # RPC-03 — Stream ids that outlive a reconnect
@@ -18,9 +18,10 @@ break are still alive.
 
 `RpcStreamIdManager`, `resumeAfter`, `lastIssuedId`,
 `RpcChannelTransport.resumeStreamIdsAfter`, `lastIssuedStreamId` — and then the
-question those names do not ask: **at every swap site, can the capability be
-ABSENT?** Both hops in `RpcClientConnection` guard with `is` and return
-silently.
+two questions those names do not ask. **At every swap site, can the capability be
+ABSENT?** Both hops in `RpcClientConnection` guard with `is` and return silently.
+**And at every swap site, is the watermark still READABLE when it is read?**
+Follow who closes what first, on the path where the PEER starts the drop.
 
 ## Ask
 
@@ -69,3 +70,26 @@ the live call's own half-close instead.
 > because the id is the only thing the caller passes. The only capability-free
 > alternative is to stop handing the caller the transport's id at all — a
 > translation layer with its own id space, inbound direction included.
+
+**Round 234, the third instance, and the first one where the watermark was
+present and simply UNREADABLE.** 217 and 224 swept who carries it; nobody asked
+whether it still exists at the moment it is read. `RpcChannelTransport.close()`
+called `_idManager.reset()`, and on a drop the peer starts, that close is what
+TELLS the layer above — so the cursor was rewound before anything could look:
+
+    reconnect on a LIVE socket      idA=1 idB=3 disjoint   <- what every test drove
+    reconnect after the peer died   idA=1 idB=1 COLLIDE
+    A's late finishSending(idA)     handlers ended 1 -> 2  <- B ended
+
+Fixed at the reset: `releaseAll()` frees the ids and keeps the cursor. Both
+reconnect paths were broken by it and both are fixed by it — the websocket
+wrapper and `RpcClientConnection`, whose `_retire()` reads the watermark off a
+transport that has already closed itself. Bench
+`../probes/P-13-ids-after-a-peer-started-reconnect.md`; lesson
+`../lessons/L-06-the-path-the-owner-drives.md`.
+
+> **A value kept to survive an event must not be destroyed by that event.**
+> `lastIssuedStreamId` is documented "Exists for RECONNECT", and close — the one
+> event that starts a reconnect — deleted it. The doc that said "read it BEFORE
+> closing" made this look handled; it is advice the layer above cannot follow
+> when the close is not its own.

@@ -63,13 +63,19 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
-typedef _Rig = ({RpcWebSocketCallerTransport client, int Function() ended});
+typedef _Rig = ({
+  RpcWebSocketCallerTransport client,
+  int Function() ended,
+  Future<void> Function() killPeer,
+});
 
 Future<_Rig> _connect() async {
   var ended = 0;
+  final sockets = <WebSocket>[];
   final connCtl = StreamController<WebSocketChannel>();
   final http = await HttpServer.bind('127.0.0.1', 0);
   http.transform(WebSocketTransformer()).listen((ws) {
+    sockets.add(ws);
     if (!connCtl.isClosed) connCtl.add(IOWebSocketChannel(ws));
   });
   final server = RpcWebSocketServer.createWithContracts(
@@ -87,7 +93,24 @@ Future<_Rig> _connect() async {
     await connCtl.close();
     await http.close(force: true);
   });
-  return (client: client, ended: () => ended);
+  return (
+    client: client,
+    ended: () => ended,
+    killPeer: () async {
+      // A server restart or a dropped path, as seen from the client: the socket
+      // goes away with no reconnect() call of ours in between.
+      for (final ws in List<WebSocket>.of(sockets)) {
+        await ws.close(1001).catchError((_) {});
+      }
+      sockets.clear();
+      final deadline = DateTime.now().add(const Duration(seconds: 3));
+      while (DateTime.now().isBefore(deadline)) {
+        if (!(await client.health()).isHealthy) return;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      fail('the client never noticed the peer had gone');
+    },
+  );
 }
 
 /// Opens a call and leaves it OPEN for sending, the way a bidi call sits.
@@ -188,6 +211,71 @@ void main() {
       );
     },
   );
+
+  // Round 234. Every test above reconnects while the socket is still up, which
+  // is the ONE path where the wrapper closes `_inner` itself and can read its id
+  // cursor first. A reconnect is normally started by the PEER, and then the
+  // inner transport has already closed itself -- that close is how this wrapper
+  // learns it is disconnected at all -- so a cursor rewound at close was gone
+  // before anything could read it and the sequence restarted after all:
+  //
+  //   reconnect on a live socket      : idA=1 idB=3 disjoint
+  //   reconnect after the peer dropped: idA=1 idB=1 COLLIDE, and A's late
+  //                                     finishSending ended B (1 -> 2)
+  group('WITNESS: a drop the PEER started', () {
+    test('does not hand the new call a live id', () async {
+      final rig = await _connect();
+
+      final idA = await _openCall(rig.client);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      await rig.killPeer();
+      await rig.client.reconnect();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      final idB = await _openCall(rig.client);
+
+      expect(
+        idB,
+        isNot(idA),
+        reason:
+            'the transport rewound its id cursor when it closed itself, so the '
+            'reconnect resumed from "nothing issued yet"',
+      );
+    });
+
+    test(
+      "does not let a dead call's half-close end a live one",
+      () async {
+        final rig = await _connect();
+
+        final idA = await _openCall(rig.client);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+
+        await rig.killPeer();
+        await rig.client.reconnect();
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+
+        await _openCall(rig.client);
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        // A BASELINE, not zero: losing the first connection ends A's own
+        // handler server-side, which is correct and is not about B.
+        final baseline = rig.ended();
+
+        await rig.client.finishSending(idA);
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+
+        expect(
+          rig.ended(),
+          baseline,
+          reason:
+              "a dead call half-closed the live call's request stream and the "
+              'server finished serving it',
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 60)),
+    );
+  });
 
   group('GUARD: the ordinary paths still work', () {
     test(
