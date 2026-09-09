@@ -14,5 +14,6 @@ skill after them, so nothing before 206 has a record here.
   does a transport bound survive `RpcHttp2Server.transportWrapper`?
 - **[P-04](P-04-parked-waiters-drain.md)** valid (round 211), core transports —
   does an abandoned upload leave its sender parked?
-- **[P-05](P-05-slow-consumer-is-throttled.md)** valid but RED (round 213),
-  rpc_dart_http2 — is a slow consumer throttled, or failed? B-15's acceptance test
+- **[P-05](P-05-slow-consumer-is-throttled.md)** valid (round 213),
+  rpc_dart_http2 — a consumer that falls behind is failed; ACCEPTED behaviour,
+  see [C-19](../checked/C-19-http2-refuses-a-slow-consumer.md)

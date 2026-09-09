@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/slow_consumer_is_thrott
 round: 213 — the validating round
 commit: d2b3726b
 paths: [packages/transport/rpc_dart_http2/lib/**]
-status: valid — and currently RED; it is B-15's acceptance test
+status: valid — it documents ACCEPTED behaviour, see checked/C-19; not a failing test
 ---
 
 # P-05 — is a slow consumer throttled, or failed?
@@ -41,6 +41,11 @@ is not a stalled-consumer guard — nothing throttles the producer since round
 208, so the backlog grows at the rate GAP and any gap crosses the window given
 enough upload.
 
-**This bench is expected to be red until B-15 lands**, at which point `slow` must
-read "completed, consumed 3000" and take roughly the time its own rate implies.
-That is the witness B-15 records as the thing being bought.
+**These rows are the ACCEPTED behaviour, not a failing test.** B-15, which would
+have turned the `slow` row into "completed, consumed 3000", was withdrawn by the
+owner in round 214; `../checked/C-19-http2-refuses-a-slow-consumer.md` records
+the decision and the reasoning. Re-run this bench to confirm the numbers have
+not MOVED, not to watch it go green.
+
+The row to watch is `fast`: if it ever stops completing, the refusal has started
+biting consumers that keep up, which would be a real defect.

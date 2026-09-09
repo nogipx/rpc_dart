@@ -74,6 +74,13 @@ No code changed. `git diff` is empty; the gate is the one HEAD passed at 212.
 
 ## Not fixed
 
+> **Superseded by the owner, round 214.** B-15 was closed unbuilt: the benefit did not
+> justify porting core's flow control onto two transports. The behaviour this
+> round measured therefore STANDS, and is recorded as accepted in
+> `../checked/C-19-http2-refuses-a-slow-consumer.md`. The rest of this section is
+> what was true when it was written; P-05 is no longer an acceptance test waiting
+> to go green, it documents the accepted numbers.
+
 The fix is B-15, already decided by the owner and scoped there, and it is
 genuinely multi-round: rpc-level `x-window-update` grants emitted by the
 responder as it consumes, and a caller that parks on that credit, for both

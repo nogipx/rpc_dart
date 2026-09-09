@@ -21,6 +21,7 @@ live here — [../LOOP.md](../LOOP.md).
 - **[C-16](C-16-http2-caller-inbound-buffers.md)** round 52, http2 — the caller's inbound buffers
 - **[C-17](C-17-message-level-gzip.md)** core — message-level gzip is bounded
 - **[C-18](C-18-leak-audit-coverage.md)** the whole repository — the full leak audit, one defect, everything else clean
+- **[C-19](C-19-http2-refuses-a-slow-consumer.md)** rounds 213-214, http2 — a consumer that falls behind is failed, by design and by owner decision
 
 Large payloads with fragmentation (round 64) and server-side keepalive
 (round 63) live in `../backlog/B-06-websocket-lead-list-is-stale.md`: there they
