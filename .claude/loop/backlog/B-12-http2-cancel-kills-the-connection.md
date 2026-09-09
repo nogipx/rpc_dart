@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: decided by owner (round 207) — take option 2, and report upstream
 round: 207
 commit: 1d5efdda
 paths: [packages/transport/rpc_dart_http2/lib/**]
@@ -58,4 +58,27 @@ round-118 unbounded upload restored. So "just don't pause" is not available.
 
 ## Owner decision
 
-—
+**Option 2, and report upstream as well.** Asked and answered in round 207.
+
+Stop pausing the http2 subscription. Always read, so the connection pool keeps
+flowing; count un-consumed request payload per stream; and once a stalled stream
+is past its window, FAIL that call with RESOURCE_EXHAUSTED instead of throttling
+it. The owner accepted the cost explicitly: a handler that stops consuming kills
+its own call rather than being throttled.
+
+Implementation notes for the round that takes this:
+
+- The two pause sites are `_fcOnDelivered` and the `onPause`/`onResume` hop on
+  `getMessagesForStream` in `rpc_http2_responder_transport.dart`, plus the same
+  hop in `rpc_http2_caller_transport.dart` (the download direction, measured to
+  fail the same way).
+- `flowControlWindowBytes` is already the knob for "how much un-consumed payload
+  one stream may hold" — keep it as the threshold, only change what happens at
+  it.
+- The witness is P-02: after the change, "ping after a cancelled stalled call"
+  must be `pong`, and the ablation numbers (14286 / 15291 KiB on the wire) must
+  NOT come back — the stalled call has to be refused, not let through. Both
+  matter, so both need a canary.
+- `upload_backpressure_test` asserts the throttle: it will need to become an
+  assertion that the call is REFUSED past the window rather than throttled. Read
+  its situation axis before editing it (methods/canary.md item 9).
