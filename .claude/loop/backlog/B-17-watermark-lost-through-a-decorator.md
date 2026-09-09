@@ -32,6 +32,39 @@ decorator around a transport it still holds, whereas this factory returns the
 decorator with the real transport hidden inside it. There is nothing to fall
 back to.
 
+## Round 218: the chosen fix was tried and CANNOT work
+
+Generation-tagging was implemented in full — a counter bumped at every
+`attach`, a ledger written in `createStream`, a staleness guard on all seven
+stream-scoped forwards — and P-09 did not move: still `0 -> 1`.
+
+Not an implementation bug. When the ids genuinely collide the new call is issued
+**the same integer**, so remembering it at the new generation overwrites the
+dead call's entry and the stale `finishSending(1)` looks current. Refusing to
+overwrite drops the LIVE call's own half-close instead, which is what the guard
+"a half-close on the CURRENT transport is still sent" exists to catch.
+
+**An `int` does not carry enough to tell the dead caller's id 1 from the live
+caller's id 1.** Anything keyed on the id alone has this hole. The watermark
+works only because it stops the collision happening at all.
+
+The warning half was implemented too and never fired: the callback is wired
+after the first attach, so the branch ran with it null. Fixable, but a
+diagnostic nobody has seen fire is not worth shipping on the strength of
+reading it. Everything was reverted; the tree is at HEAD.
+
+## A third candidate, which would work
+
+**Id translation.** The proxy hands out ids from its OWN monotonic sequence and
+keeps proxy-id -> (generation, inner-id), translating on every stream-scoped
+call and on every inbound message's `streamId`. A retired proxy-id has no live
+mapping, so dropping it is unambiguous, and the new call gets a different
+proxy-id even when the inner reuses 1. Capability-independent and correct.
+
+Cost: a full translation layer over the transport interface, inbound direction
+included. Materially bigger than what was authorised, so it is not something to
+start without saying so.
+
 ## The two candidates
 
 1. **Generation-tag the ids.** The proxy issues every id through
@@ -52,6 +85,12 @@ Warning and carrying on is not a candidate: it leaves the data loss in place,
 and the config's bar rules out diagnostics as a round's product.
 
 ## Owner decision
+
+> **Superseded — round 218 measured this decision to be unimplementable.** The
+> tagging half cannot work for the reason recorded above, and the warning half
+> never fired. Nothing shipped. The decision below is kept as written; it needs
+> replacing with one of: id translation, refusing the transport at attach, or
+> accepting the behaviour as a negative.
 
 **Both: tag, and warn on attach.** (Asked and answered in round 217.)
 

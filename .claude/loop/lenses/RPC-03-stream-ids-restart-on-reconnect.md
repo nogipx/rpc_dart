@@ -3,7 +3,7 @@ refines: U-18
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/**]
 applies: identifiers are issued locally and outlive a reconnect
 breaks: data loss on a live call.
-applied: [217]
+applied: [217, 218]
 status: confirmed (round 217) — one door still open, see B-17
 ---
 
@@ -47,3 +47,15 @@ bench `../probes/P-09-watermark-survives-a-decorator.md`.
 > found this for `IRpcFlowControlled` and round 217 for `IRpcStreamIdSequence`:
 > whenever a fix reads `is ISomething`, ask what happens to the fix when the
 > answer is no, and whether anything says so out loud.
+
+Round 218 tried to replace the capability with a generation ledger inside the
+proxy and measured that it CANNOT work: once the ids collide, the new call is
+issued the same integer, so tagging by id cannot tell the dead caller's
+`finishSending(1)` from the live one's, and refusing to overwrite the tag drops
+the live call's own half-close instead.
+
+> **Prevention and detection are not interchangeable here.** The watermark works
+> by stopping the collision; nothing that runs AFTER the collision can undo it,
+> because the id is the only thing the caller passes. The only capability-free
+> alternative is to stop handing the caller the transport's id at all — a
+> translation layer with its own id space, inbound direction included.
