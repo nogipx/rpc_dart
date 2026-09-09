@@ -53,4 +53,25 @@ and the config's bar rules out diagnostics as a round's product.
 
 ## Owner decision
 
-—
+**Both: tag, and warn on attach.** (Asked and answered in round 217.)
+
+Generation-tag the ids so the data loss is gone regardless of the capability,
+AND log a warning at attach when the factory's transport does not implement
+`IRpcStreamIdSequence`, so the operator learns their decorator is dropping it.
+No breakage, and no silent degradation.
+
+Notes for the round that carries this out:
+
+- The tag is the load-bearing half and needs the witness; the warning is a
+  diagnostic and must not be mistaken for the fix. P-09's `handlers ended`
+  column has to go `0 -> 0` in BOTH rows.
+- Two canaries, one per half, per L-01 — and check the tagging half does not
+  mask the warning half's witness.
+- Watch the GUARDs in `client_connection_stream_ids_test.dart`: "calls still run
+  across repeated swaps" and "a half-close on the CURRENT transport is still
+  sent". Generation-tagging must not turn an ordinary id into a no-op, which is
+  exactly what that second guard exists to catch.
+- The map is keyed by ids the proxy itself issued, so it is bounded by our own
+  traffic — prune it on `releaseStreamId`, and read round 212 first: a late
+  arrival re-creating an entry after teardown is the trap that family has
+  already sprung once.
