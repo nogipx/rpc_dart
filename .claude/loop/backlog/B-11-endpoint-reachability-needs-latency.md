@@ -49,6 +49,22 @@ parks.
 Not urgent — the transport-level defect it would extend is already fixed — but
 until it is measured, "an endpoint client cannot hit this" is a guess.
 
+## Blocker re-checked, round 247
+
+Confirmed, not dissolved. Six `implements IRpcChannel` doubles exist in core's
+tests and NONE of them delays anything; there is no latency helper in `lib/` or
+`test/` at all. So the fourth attempt still has to build the link before it can
+build the bench.
+
+The cost is now concrete rather than a guess: a delayed paired channel is about
+twenty-five lines with `_ManualChannel`
+(`test/transports/receive_path_hardening_test.dart`) as the model — it already
+controls delivery frame by frame, and what is missing is a `Future.delayed` on
+the send side. The endpoint-level drive on top is what round 206 described.
+
+Round 247 did not attempt it. Three shapes tried, none valid, a fourth
+identified and not yet built.
+
 ## Owner decision
 
 —
