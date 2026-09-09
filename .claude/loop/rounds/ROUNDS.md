@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[236](236-the-bound-that-counted-the-wrong-thing.md)** FIXED, rpc_dart and the three transport packages — the pending queue counted events while the damage was bytes: 4096 x 16 MiB admitted
 - **[235](235-the-one-hop-nobody-guarded.md)** FIXED, rpc_dart — the one hop nobody guarded: an unguarded cancel between two guarded closes
 - **[234](234-the-reconnect-nobody-drives.md)** FIXED, rpc_dart and rpc_dart_websocket — the reconnect nobody drives: a peer-started drop rewound the stream-id cursor
 - **[233](233-websocket-rescan-the-first-third.md)** CLEAN, rpc_dart_websocket — websocket rescan, the first third

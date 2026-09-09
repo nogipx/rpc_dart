@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: an inbound size limit exists, and something buffers before it is consulted
 breaks: DoS.
-applied: []
-status: confirmed (round 90, off-journal)
+applied: [236]
+status: confirmed (round 236)
 ---
 
 # RPC-17 — A limit that fires after the bytes are resident
@@ -94,6 +94,28 @@ keeps it below the bar rather than merely hard.
 > credited to the test's own allocation. And a bomb is defined by AMPLIFICATION
 > (RSS per wire byte), not absolute RSS: disabling compression made the client
 > send 256 MiB uncompressed, so a naive RSS probe read the fix as "no change".
+
+**Round 236 applied it for the first time in the journal and found a sixth
+instance, through the DIMENSION clause rather than the ordering one.**
+`BufferedBroadcastController` — on the inbound path of every transport, six
+construction sites — bounded its unlistened queue by EVENT COUNT
+(`maxPendingEvents`, 4096) and by nothing else, while its doc claimed memory
+stayed bounded. The neighbour bounds one message at 16 MiB, so 4096 x 16 MiB =
+64 GiB was admitted:
+
+       16 KiB each   pending=4096   retained   64 MiB
+       64 KiB each   pending=4096   retained  256 MiB
+      256 KiB each   pending=4096   retained 1024 MiB
+
+The count never moves; the bytes scale linearly. Through a real transport,
++549 MiB with nothing subscribed against +2 MiB with a listener; +58 MiB after.
+Bench `../probes/P-15-pending-queue-dimension.md`.
+
+> **A bound whose units are not the units of the damage is not a bound.** Both
+> halves of this lens are really the same question asked twice — the ordering
+> half asks WHEN the limit runs, the dimension half asks WHAT it counts, and a
+> limit can pass one and fail the other. This one ran at exactly the right
+> moment and measured the wrong quantity.
 
 No catalog shape covers this; a candidate for `catalog/` at the next curate,
 by the usual test — it holds in any code that buffers untrusted input.

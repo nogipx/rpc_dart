@@ -141,7 +141,9 @@ class RpcHttpCallerTransport
   final Map<int, _PendingCall> _pending = {};
   final Set<int> _inFlight = {};
   final BufferedBroadcastController<RpcTransportMessage> _incoming =
-      BufferedBroadcastController<RpcTransportMessage>();
+      BufferedBroadcastController<RpcTransportMessage>(
+        sizeOf: (m) => m.bufferedBytes,
+      );
 
   /// Per-stream dedicated controllers for [getMessagesForStream], so each call
   /// is fed directly instead of every caller re-filtering the shared broadcast

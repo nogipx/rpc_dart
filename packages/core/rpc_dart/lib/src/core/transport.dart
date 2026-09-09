@@ -50,6 +50,18 @@ final class RpcTransportMessage {
   /// True when serialized bytes are present.
   bool get isSerialized => payload != null;
 
+  /// What this message weighs while it is held in a queue, in bytes.
+  ///
+  /// One home for the rule, because every transport buffers these and each
+  /// would otherwise repeat it. Counts the serialized payload only: metadata is
+  /// small and bounded by the policy's header limits, and a `directPayload` is
+  /// a reference to an object this process already owns, so queuing it costs a
+  /// pointer rather than its contents.
+  ///
+  /// Used by `BufferedBroadcastController.sizeOf`, whose bound was on event
+  /// COUNT alone — 4096 events of up to `maxMessageLengthBytes` each.
+  int get bufferedBytes => payload?.length ?? 0;
+
   /// Creates a transport message.
   RpcTransportMessage({
     this.payload,

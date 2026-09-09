@@ -68,7 +68,9 @@ class RpcHttp2CallerTransport
 
   /// Контроллер для входящих сообщений
   final BufferedBroadcastController<RpcTransportMessage> _messageController =
-      BufferedBroadcastController<RpcTransportMessage>();
+      BufferedBroadcastController<RpcTransportMessage>(
+        sizeOf: (m) => m.bufferedBytes,
+      );
 
   /// Per-stream dedicated controllers for [getMessagesForStream].
   ///

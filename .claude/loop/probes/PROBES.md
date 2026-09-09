@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-15](P-15-pending-queue-dimension.md)** valid (round 236), core buffering —
+  which dimension does the unlistened queue bound? Same pendingCount at three
+  payload sizes while the retained bytes scale 64 -> 256 -> 1024 MiB; +549 vs
+  +2 MiB through a real transport. Records the two RSS traps it was rebuilt for
 - **[P-14](P-14-detach-with-a-throwing-cancel.md)** valid (round 235), core
   resilience — does a throwing `onCancel` on a user-supplied transport abandon
   it? One arm differs by that throw alone: leaked 0 vs 1, unhandled zone errors

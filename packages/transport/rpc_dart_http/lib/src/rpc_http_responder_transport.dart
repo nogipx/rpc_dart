@@ -67,7 +67,9 @@ final class _PendingResponse {
 class RpcHttpResponderTransport
     implements IRpcTransport, IRpcSecurityPolicyAware {
   final BufferedBroadcastController<RpcTransportMessage> _incoming =
-      BufferedBroadcastController<RpcTransportMessage>();
+      BufferedBroadcastController<RpcTransportMessage>(
+        sizeOf: (m) => m.bufferedBytes,
+      );
 
   /// Per-stream dedicated controllers for [getMessagesForStream]; the broadcast
   /// above is still fed for the responder pipeline's new-stream dispatch.

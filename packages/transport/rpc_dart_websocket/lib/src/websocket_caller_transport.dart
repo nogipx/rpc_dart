@@ -34,7 +34,9 @@ class RpcWebSocketCallerTransport
   final RpcSecurityPolicy _policy;
 
   final BufferedBroadcastController<RpcTransportMessage> _incomingCtl =
-      BufferedBroadcastController<RpcTransportMessage>();
+      BufferedBroadcastController<RpcTransportMessage>(
+        sizeOf: (m) => m.bufferedBytes,
+      );
   StreamSubscription<RpcTransportMessage>? _fwdSub;
 
   late RpcChannelTransport _inner;

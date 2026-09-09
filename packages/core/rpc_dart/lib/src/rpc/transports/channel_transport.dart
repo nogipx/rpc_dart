@@ -66,7 +66,9 @@ class RpcChannelTransport
   /// window and flushes them on the first listen, so nothing is lost (e.g. a
   /// client-stream's leading chunk on a cold connection).
   final BufferedBroadcastController<RpcTransportMessage> _incoming =
-      BufferedBroadcastController<RpcTransportMessage>();
+      BufferedBroadcastController<RpcTransportMessage>(
+        sizeOf: (m) => m.bufferedBytes,
+      );
 
   /// Per-stream dedicated controllers for [getMessagesForStream].
   ///

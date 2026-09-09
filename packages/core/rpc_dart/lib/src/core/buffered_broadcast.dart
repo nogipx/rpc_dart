@@ -26,10 +26,26 @@ import 'dart:collection';
 ///
 /// Leak-safety:
 ///  * the pending queue is cleared on [close];
-///  * it never grows past [maxPendingEvents]. If that bound is hit while still
-///    unlistened — a producer feeding a controller nobody consumes, i.e. a
-///    misuse/abandoned transport — further events are dropped and [onOverflow]
-///    fires once, so memory stays bounded instead of growing without limit.
+///  * it never grows past [maxPendingEvents] events, NOR past
+///    [maxPendingBytes] when a [sizeOf] is supplied. If either bound is hit
+///    while still unlistened — a producer feeding a controller nobody consumes,
+///    i.e. a misuse/abandoned transport — further events are dropped and
+///    [onOverflow] fires once.
+///
+/// **Both dimensions are needed, and the count alone was the bug.** A bound on
+/// events says nothing about bytes: the neighbouring limit,
+/// `RpcSecurityPolicy.maxMessageLengthBytes`, bounds ONE message at 16 MiB by
+/// default, so 4096 events admitted up to 64 GiB of payload while this class's
+/// doc claimed memory stayed bounded. Measured with the queue's own counter,
+/// 4096 messages at three sizes:
+///
+///     16 KiB each   pending=4096   retained   64 MiB
+///     64 KiB each   pending=4096   retained  256 MiB
+///    256 KiB each   pending=4096   retained 1024 MiB
+///
+/// — the count never moves, the bytes scale linearly. Through a real transport
+/// with nothing subscribed: RSS +549 MiB against +2 MiB with a listener
+/// attached.
 ///
 /// Implements [StreamSink] (the writable half of a `StreamController`) so it
 /// can be used polymorphically as a sink and exposes [stream] like a controller
@@ -41,16 +57,39 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   /// Creates a buffered broadcast controller.
   ///
   /// [maxPendingEvents] bounds how many events are retained while no listener
-  /// is attached; [onOverflow] fires once if that bound is exceeded.
-  BufferedBroadcastController({this.maxPendingEvents = 4096, this.onOverflow}) {
+  /// is attached; [maxPendingBytes] bounds their total size, measured with
+  /// [sizeOf]. [onOverflow] fires once if either bound is exceeded.
+  ///
+  /// [sizeOf] is optional because this type is generic and cannot know how to
+  /// weigh a `T`. Without it the byte bound cannot be applied and only the
+  /// count applies — which is what every caller here used to get.
+  BufferedBroadcastController({
+    this.maxPendingEvents = 4096,
+    this.maxPendingBytes = 16 * 1024 * 1024,
+    this.sizeOf,
+    this.onOverflow,
+  }) {
     _controller = StreamController<T>.broadcast(onListen: _flush);
   }
 
   /// Upper bound on events buffered while no listener is attached.
   final int maxPendingEvents;
 
-  /// Called once when [maxPendingEvents] is first exceeded (diagnostics).
+  /// Upper bound on the total size of those events, when [sizeOf] is given.
+  ///
+  /// 16 MiB is generous for what this queue is FOR — the handful of leading
+  /// frames that arrive before the pipeline subscribes — and it caps the damage
+  /// at one message's worth rather than 4096 of them.
+  final int maxPendingBytes;
+
+  /// Weighs a pending event, in bytes. Null disables the byte bound.
+  final int Function(T event)? sizeOf;
+
+  /// Called once when either bound is first exceeded (diagnostics).
   final void Function()? onOverflow;
+
+  /// Total size of the buffered events, when [sizeOf] is given.
+  int _pendingBytes = 0;
 
   late final StreamController<T> _controller;
   final Queue<_BufferedItem<T>> _pending = Queue<_BufferedItem<T>>();
@@ -88,7 +127,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
     if (_controller.hasListener) {
       _controller.add(event);
     } else {
-      _enqueue(_BufferedItem<T>.data(event));
+      _enqueue(_BufferedItem<T>.data(event, sizeOf?.call(event) ?? 0));
     }
   }
 
@@ -147,7 +186,11 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   }
 
   void _enqueue(_BufferedItem<T> item) {
-    if (_pending.length >= maxPendingEvents) {
+    final bytes = item.bytes;
+    // EITHER bound. The count alone let 4096 events of up to
+    // maxMessageLengthBytes through -- 64 GiB at the defaults.
+    if (_pending.length >= maxPendingEvents ||
+        (bytes > 0 && _pendingBytes + bytes > maxPendingBytes)) {
       _droppedCount++;
       if (!_overflowed) {
         _overflowed = true;
@@ -155,6 +198,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
       }
       return; // bound memory: nobody is draining the queue
     }
+    _pendingBytes += bytes;
     _pending.add(item);
   }
 
@@ -163,6 +207,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
         _controller.hasListener &&
         !_controller.isClosed) {
       final item = _pending.removeFirst();
+      _pendingBytes -= item.bytes;
       if (item.isError) {
         _controller.addError(item.error!, item.stackTrace);
       } else {
@@ -201,6 +246,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
     }
     _closed = true;
     _pending.clear();
+    _pendingBytes = 0;
 
     // Cancel any in-flight addStream pipes and settle their futures, so an
     // `await sink.addStream(...)` that was still running returns instead of
@@ -218,16 +264,21 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
 }
 
 class _BufferedItem<T> {
-  _BufferedItem.data(this.data)
+  _BufferedItem.data(this.data, this.bytes)
     : isError = false,
       error = null,
       stackTrace = null;
   _BufferedItem.error(this.error, this.stackTrace)
     : isError = true,
-      data = null;
+      data = null,
+      bytes = 0;
 
   final bool isError;
   final T? data;
   final Object? error;
   final StackTrace? stackTrace;
+
+  /// What this item weighs against `maxPendingBytes`; 0 when unweighed, so
+  /// removing it is exact rather than a running estimate.
+  final int bytes;
 }
