@@ -1,5 +1,9 @@
 # Schema: a directory index
 
+> [Schemas](SPECS.md) · the rank an index carries is maintained by
+> [methods/curate.md](../methods/curate.md) · the map every index links back to
+> is [map.md](map.md)
+
 Path: `<DIR>/<DIR>.md` — the name matches the directory, one word, upper case.
 Created together with the directory, immediately, even if empty.
 

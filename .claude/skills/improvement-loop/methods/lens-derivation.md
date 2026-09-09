@@ -1,5 +1,10 @@
 # How to build a lens set, and how to pick a lens
 
+> [Methods](METHODS.md) · `lenses` mode, and the **Target** step of an ordinary
+> round · the shapes to instantiate from:
+> [catalog/](../catalog/CATALOG.md) · the field schema:
+> [specs/lens.md](../specs/lens.md)
+
 The lens schema — `../specs/lens.md`. The universal shapes —
 `../catalog/CATALOG.md`. Maintaining an existing set — `curate.md`.
 
@@ -77,5 +82,6 @@ searches blindly.
 ## When to redo the derivation
 
 A new capability in the project — a new dependency, a new layer, a new build
-target — is a reason to redo step 2: the lens set ages along with the code. The
+target — is a reason to redo the derivation: the lens set ages along with the
+code. The
 signal is the "Directories with no lens at all" section of `loop.py stale`.

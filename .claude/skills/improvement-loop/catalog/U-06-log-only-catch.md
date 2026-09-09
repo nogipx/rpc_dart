@@ -7,6 +7,10 @@ status: confirmed
 
 # U-06 — A log-only `catch` on the path to success
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 Two consequences of that fix:
 
 - fix at the point that RENDERS THE VERDICT, not at every failure site: one edit

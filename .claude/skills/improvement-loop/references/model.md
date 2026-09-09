@@ -1,5 +1,9 @@
 # The model: terms and how they relate
 
+> [References](REFERENCES.md) · the file schema behind each entity:
+> [specs/](../specs/SPECS.md) · the shapes the catalog holds:
+> [catalog/](../catalog/CATALOG.md)
+
 Read this on first contact, and whenever a term in a round feels uncertain.
 
 ## Terms of three kinds

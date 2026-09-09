@@ -7,6 +7,10 @@ status: confirmed
 
 # U-07 — "Abort" became "continue"
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 The checklist after such a fix: credit, slots, identifiers, timers AND the price.
 
 A clean negative from the same place worth remembering: metadata frames were

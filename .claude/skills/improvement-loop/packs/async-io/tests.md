@@ -1,5 +1,8 @@
 # async-io: tests
 
+> [async-io](PACK.md) · appended to the universal
+> [methods/tests.md](../../methods/tests.md) by `loop.py next`
+
 Items for the `methods/tests.md` checklist.
 
 A1. Give the side that issues the resource a higher ceiling than the side under

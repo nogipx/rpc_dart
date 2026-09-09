@@ -1,5 +1,9 @@
 # Universal catalog of shapes
 
+> Back to [SKILL.md](../SKILL.md) · the packs that make a shape available:
+> [packs/PACKS.md](../packs/PACKS.md) · how a shape becomes a lens:
+> [methods/lens-derivation.md](../methods/lens-derivation.md)
+
 Defect shapes by pack. The `pack:` key says which enabled pack makes a shape
 available to `lenses` mode (`loop.py catalog`). The field schema is
 `../specs/lens.md`; a catalog shape has no `paths:` and no `applied:` — those

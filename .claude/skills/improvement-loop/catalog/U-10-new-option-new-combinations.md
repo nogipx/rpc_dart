@@ -7,6 +7,10 @@ status: confirmed
 
 # U-10 — A new option means new combinations
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 A fix here often needs TWO edits. **If the symptom changed after the first one
 but did not improve, the second half is the delivery path, not a wrong
 diagnosis.**

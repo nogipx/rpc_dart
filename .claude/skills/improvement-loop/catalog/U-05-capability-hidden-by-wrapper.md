@@ -7,6 +7,10 @@ status: confirmed
 
 # U-05 — A capability hidden by a wrapper
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 ## Shape
 
 Behaviour is switched on by an `is IFoo` check, and the object arrives wrapped

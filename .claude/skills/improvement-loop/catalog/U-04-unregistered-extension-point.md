@@ -7,6 +7,10 @@ status: confirmed
 
 # U-04 — An unregistered extension point of a dependency
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 Nothing looks wrong in your own code: **the defect has the shape of an absence.**
 
 ## Shape

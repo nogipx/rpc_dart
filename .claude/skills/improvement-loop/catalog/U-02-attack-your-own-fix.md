@@ -7,6 +7,10 @@ status: confirmed
 
 # U-02 — Attack your own fix
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 Attack it not only in the same round but in the next one: a fresh fix reads
 differently once it has left your head.
 

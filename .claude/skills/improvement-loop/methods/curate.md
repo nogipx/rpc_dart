@@ -1,5 +1,10 @@
 # curate mode: data maintenance
 
+> [Methods](METHODS.md) · `curate` mode, once every ten rounds · what a promoted
+> lesson becomes: a [catalog](../catalog/CATALOG.md) shape or a
+> [pack](../packs/PACKS.md) item · the lesson schema:
+> [specs/lesson.md](../specs/lesson.md)
+
 Once every ten rounds, or on request. It measures nothing and fixes nothing: it
 only puts the data in order so the next round chooses on correct information. A
 separate commit marked `curate` in the body, with no round file.

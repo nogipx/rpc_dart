@@ -1,5 +1,10 @@
 # Rule zero — the full list
 
+> [References](REFERENCES.md) · the allowlist is written by
+> [methods/setup.md](../methods/setup.md) and declared in
+> [specs/config.md](../specs/config.md) · it binds the canary protocol too:
+> [methods/canary.md](../methods/canary.md)
+
 In force when `unattended: yes`. A permission prompt stops the round dead, and
 there is nobody to answer it. A command that *may* ask is the wrong command:
 find the path before running, not after.

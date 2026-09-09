@@ -1,5 +1,9 @@
 # How to write a regression test that will not lie
 
+> [Methods](METHODS.md) · while the test is being written · the protocol that
+> proves it is a witness and not a guard: [canary.md](canary.md) · language and
+> domain items: [packs/](../packs/PACKS.md)
+
 ## Checklist — while the test is being written
 
 1. Check "unbounded" by polling up to a threshold, not by counting after a fixed

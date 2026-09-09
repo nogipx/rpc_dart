@@ -7,6 +7,10 @@ status: confirmed
 
 # U-20 — Leak accounting against a baseline
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 **If you are waiting for a drop to zero, first wait for the rise.**
 
 ## Shape

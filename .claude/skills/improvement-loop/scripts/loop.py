@@ -8,7 +8,9 @@
                      decision -> lens never applied -> rank -> stale sweep;
                      plus the reading list, matching benches and the budget
     loop.py lint     data integrity per specs/: fields, links in both
-                     directions, indexes, round commits, gate permissions
+                     directions, indexes, round commits, gate permissions;
+                     and the skill's OWN graph — every file reachable from
+                     SKILL.md, no dangling link, no step named by number
     loop.py stale    what has aged against the code: sweeps, negatives, leads,
                      benches, lessons by their sha and paths; sweeps with a
                      script detector by the hash of the instance list;
@@ -39,6 +41,23 @@ DIRS = {
     "lessons": "LESSONS.md",
 }
 VERDICTS = ("FIXED", "CLEAN", "DEFERRED", "INCONCLUSIVE", "RETRACTED")
+
+# The skill's own directories, each with an index named after it: SKILL.md links
+# the indexes, an index lists its files, and the walk from SKILL.md must reach
+# everything. `packs/` is two levels — `packs/<name>/PACK.md` indexes its own
+# directory and is itself listed by `packs/PACKS.md`.
+#
+# Measured before this was written: 41 of 45 files had zero outbound links,
+# `evals/` was reachable from nothing, and two of seven method cross-references
+# pointed at a step of SKILL.md that had moved.
+SKILL_DIRS = {
+    "catalog": "CATALOG.md",
+    "methods": "METHODS.md",
+    "specs": "SPECS.md",
+    "references": "REFERENCES.md",
+    "evals": "EVALS.md",
+    "packs": "PACKS.md",
+}
 
 # Machine fields live in frontmatter, prose in `## Section` blocks. Frontmatter
 # keys and section headings are compared lower-cased.
@@ -85,6 +104,12 @@ LESSON_STATUS_RE = re.compile(r"^(active|promoted to skill \([^)]+\)|obsolete \(
 LESSON_CLASSES = ("bench", "toolchain", "fixture", "metric", "process")
 BUDGET_RE = re.compile(r"probes (\d+)/(\d+), canaries (\d+)/(\d+)")
 BENCH_RE = re.compile(r"^(none|(P-\d+) — (reused|new))")
+MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+# A cross-reference to a numbered step of SKILL.md. The numbering moves whenever
+# a step is added, and nothing notices: `methods/canary.md` said "before step 5"
+# while the canary was step 6, and `methods/reporting.md` said "at step 7" while
+# the report was step 8. Name the step instead.
+STEP_NUM_RE = re.compile(r"\bstep \d", re.IGNORECASE)
 REVIEW_RE = re.compile(r"^(subagent|self|claude -p)\b")
 EMPTY = {"", "—", "-", "n/a", "none"}
 
@@ -410,6 +435,102 @@ def resolve_script(loop: Path, packs: dict, rel: str) -> Path | None:
 
 # ---------------------------------------------------------------- lint
 
+def skill_index_for(p: Path) -> Path | None:
+    """The index that owns `p`, or None when nothing does (SKILL.md itself)."""
+    rel = p.relative_to(SKILL_ROOT)
+    parts = rel.parts
+    if len(parts) == 1:
+        return None                                  # SKILL.md is the root
+    if parts[0] == "packs":
+        if len(parts) == 2:                          # packs/PACKS.md
+            return SKILL_ROOT / "SKILL.md"
+        if rel.name == "PACK.md":                    # packs/<name>/PACK.md
+            return SKILL_ROOT / "packs" / "PACKS.md"
+        return SKILL_ROOT / "packs" / parts[1] / "PACK.md"
+    index = SKILL_DIRS.get(parts[0])
+    if index is None:
+        return None
+    if rel.name == index:
+        return SKILL_ROOT / "SKILL.md"
+    return SKILL_ROOT / parts[0] / index
+
+
+def skill_graph(rep: "Report") -> None:
+    """The skill's own files form ONE connected graph, and lint says so.
+
+    Three properties, one per defect this was written after measuring: every
+    link resolves, every file is reachable from SKILL.md (`evals/` was reachable
+    from nothing), and no cross-reference names a step by number (two had
+    drifted onto the wrong step).
+    """
+    files = sorted(SKILL_ROOT.rglob("*.md"))
+    root_md = SKILL_ROOT / "SKILL.md"
+    if not root_md.exists():
+        rep.error("SKILL.md: missing — the skill has no root")
+        return
+
+    edges: dict[Path, set[Path]] = {}
+    for p in files:
+        text = p.read_text()
+        out: set[Path] = set()
+        for raw in MD_LINK_RE.findall(text):
+            target = raw.split("#", 1)[0].strip()
+            # `<DIR>/<file>` in a schema is a placeholder, not a link.
+            if not target or "://" in target or "<" in target:
+                continue
+            try:
+                resolved = (p.parent / target).resolve()
+            except OSError:
+                continue
+            # Links into the project's own data (../../loop/...) are not the
+            # skill's graph and are not checked here.
+            if SKILL_ROOT not in resolved.parents:
+                continue
+            if not resolved.exists():
+                rep.error(f"skill {p.relative_to(SKILL_ROOT)}: dangling link «{target}»")
+                continue
+            out.add(resolved)
+        edges[p] = out
+
+    # Every directory has an index, because that is what SKILL.md links and what
+    # the reachability walk below descends through.
+    #
+    # NOT checked: that a leaf links BACK to its index. The journal's
+    # "links run both ways" rule earns its keep because the reverse edge carries
+    # information nothing else does — a lens's `applied:` would otherwise take a
+    # grep over every round. A leaf naming its own directory's index carries
+    # none: the path already says it. Leaves may still open with a breadcrumb,
+    # and most do, but as a convenience for whoever lands there by grep, not as
+    # a rule. An unenforceable convenience is not a lint error.
+    absent: set[Path] = set()
+    for p in files:
+        index = skill_index_for(p)
+        if index is None or index.exists() or index in absent:
+            continue
+        absent.add(index)
+        rep.error(f"skill {index.relative_to(SKILL_ROOT)}: index missing")
+
+    seen = {root_md}
+    stack = [root_md]
+    while stack:
+        for nxt in edges.get(stack.pop(), ()):
+            if nxt not in seen:
+                seen.add(nxt)
+                stack.append(nxt)
+    for p in files:
+        if p not in seen:
+            rep.error(f"skill {p.relative_to(SKILL_ROOT)}: unreachable from SKILL.md")
+
+    for p in files:
+        if p == root_md:
+            continue                                 # SKILL.md owns the numbering
+        for n, line in enumerate(p.read_text().splitlines(), 1):
+            if STEP_NUM_RE.search(line):
+                rep.error(f"skill {p.relative_to(SKILL_ROOT)}:{n}: a step named by NUMBER — "
+                          "the numbering in SKILL.md drifts and nothing notices; "
+                          "name the step instead")
+
+
 def cmd_lint(root: Path, loop: Path) -> int:
     rep = Report()
     if not loop.is_dir():
@@ -704,6 +825,9 @@ def cmd_lint(root: Path, loop: Path) -> int:
         if not covered(f"python3 {Path(__file__).resolve()} status", rules):
             rep.warn("unattended: no rule covers `python3 .../scripts/loop.py` — "
                      "status/lint/stale/next will ask for permission")
+
+    # --- the skill's own graph
+    skill_graph(rep)
     return rep.dump()
 
 

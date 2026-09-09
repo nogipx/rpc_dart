@@ -1,5 +1,9 @@
 # Review — a clean context before the verdict
 
+> [References](REFERENCES.md) · assembled with the enabled
+> [packs'](../packs/PACKS.md) questions by `loop.py review`, not read directly ·
+> what it checks is the record: [specs/round.md](../specs/round.md)
+
 Whoever built the bench is inclined to defend it. The most expensive mistakes in
 these methods — a policy object shared by both sides, a number taken from the
 wrong side, a canary that unexpectedly passed — are errors of judgement, not of

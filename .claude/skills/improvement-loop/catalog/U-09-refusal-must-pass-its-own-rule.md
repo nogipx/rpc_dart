@@ -7,6 +7,10 @@ status: confirmed
 
 # U-09 — A refusal must pass the rule it enforced
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 Fixed by truncating the TEXT at the single place the reply is assembled: the
 status survives, the text gives way.
 

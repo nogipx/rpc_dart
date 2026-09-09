@@ -1,5 +1,8 @@
 # Schema: the data map
 
+> [Schemas](SPECS.md) · written by [methods/setup.md](../methods/setup.md) ·
+> the indexes it points at: [index.md](index.md)
+
 Path: `.claude/loop/LOOP.md` — the name matches the directory by the general
 rule.
 

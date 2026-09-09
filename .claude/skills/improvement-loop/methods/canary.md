@@ -1,6 +1,10 @@
 # A canary for every fix
 
-## Checklist — before step 5
+> [Methods](METHODS.md) · at the **Witness and canary** step · writing the test
+> itself: [tests.md](tests.md) · the constraint on switching a fix off in place:
+> [references/rule-zero.md](../references/rule-zero.md)
+
+## Checklist — at the Witness and canary step
 
 1. Switch the fix off IN PLACE with `Edit` (`if (1 > 0) return;`, a raised
    ceiling, a flipped flag). Never `git stash`. If the switched-off tree does

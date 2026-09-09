@@ -1,5 +1,10 @@
 # Lay the loop out in another repository
 
+> [Methods](METHODS.md) · `setup` mode · what it writes is defined by
+> [specs/](../specs/SPECS.md), starting with
+> [config.md](../specs/config.md) and [map.md](../specs/map.md) · the allowlist
+> it must produce: [references/rule-zero.md](../references/rule-zero.md)
+
 The skill is the process and the specification; everything bound to a repository
 lives in `.claude/loop/`. The file schemas are in `../specs/`; here is only what
 has to be decided at setup, and in what order.

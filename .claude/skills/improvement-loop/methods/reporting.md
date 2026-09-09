@@ -1,5 +1,8 @@
 # How to report
 
+> [Methods](METHODS.md) · at the **Gate** step, with the record · the record's
+> own schema is [specs/round.md](../specs/round.md)
+
 The round record's schema is `../specs/round.md`, and it is one schema for all
 three audiences: the round file, the commit body, the chat report. What is not a
 loop file lives here.

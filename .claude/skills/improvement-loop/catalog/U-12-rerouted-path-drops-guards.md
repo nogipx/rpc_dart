@@ -7,6 +7,10 @@ status: confirmed
 
 # U-12 — A rerouted path drops the old one's guards
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 ## Shape
 
 Call A was replaced by call B, and A checked something B does not.

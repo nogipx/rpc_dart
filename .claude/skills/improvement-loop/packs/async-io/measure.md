@@ -1,5 +1,8 @@
 # async-io: measurements
 
+> [async-io](PACK.md) · appended to the universal
+> [methods/measurement.md](../../methods/measurement.md) by `loop.py next`
+
 Items for the `methods/measurement.md` checklist; the numbering continues from
 the universal one.
 

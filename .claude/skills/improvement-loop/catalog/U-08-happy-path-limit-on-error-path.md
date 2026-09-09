@@ -7,6 +7,10 @@ status: confirmed
 
 # U-08 — A happy-path limit on the error path
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 ## Shape
 
 One boundary applies both to data about to be parsed and to the diagnosis of why

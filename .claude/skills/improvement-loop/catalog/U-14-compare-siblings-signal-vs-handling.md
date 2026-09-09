@@ -7,6 +7,10 @@ status: confirmed
 
 # U-14 — Compare siblings; the signal versus its handling
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 **The absence of a defect in the handling may mean the input never arrives.**
 
 A corollary: layers in other languages are part of the implementation. Three

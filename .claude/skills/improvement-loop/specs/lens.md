@@ -1,5 +1,9 @@
 # Schema: a lens
 
+> [Schemas](SPECS.md) · instantiated from a
+> [catalog](../catalog/CATALOG.md) shape by
+> [methods/lens-derivation.md](../methods/lens-derivation.md)
+
 Path: `.claude/loop/lenses/<PREFIX>-N-slug.md`. Plus a line in
 `lenses/LENSES.md`. Each set has its own prefix (`RPC-`, `WEB-`); the universal
 catalog uses `U-`.
@@ -57,7 +61,8 @@ On individual keys:
   `damage classes:` (`loop.py catalog` prints the union); `lint` warns about a
   class outside that vocabulary.
 - **`applied`** — the back-reference to a round's `lens:` key; `lint` reconciles
-  them, and step 1 uses the number of entries to pick the least-explored one.
+  them, and the **Target** step uses the number of entries to pick the
+  least-explored one.
 - **`detector-script`** — when the detector is a script printing one instance
   per line. The path is relative to the skill, a pack or `.claude/loop/`. Then
   `loop.py sweep` performs the sweep and `stale` compares the lists. The

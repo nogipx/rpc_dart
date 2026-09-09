@@ -7,6 +7,10 @@ status: confirmed
 
 # U-15 — Drive the lifecycle twice
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 Related: **connection-level defects hide from tests that use one connection per
 test.** One side killed its own connection after four calls with 74 tests green.
 The missing test shape is "keep working on a single instance".

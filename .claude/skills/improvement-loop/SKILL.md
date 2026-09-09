@@ -110,16 +110,37 @@ started.
 
 ## References — on demand
 
-- **`specs/`** — what each file in `.claude/loop/` consists of; the verdicts and
-  what each changes are in `specs/round.md`. Index: `specs/SPECS.md`.
-- **`methods/`** — how to do the work: a checklist at the top, stories with
-  numbers below. Index: `methods/METHODS.md`.
-- **`catalog/`** — defect shapes by pack. Index: `catalog/CATALOG.md`.
-- **`packs/`** — knowledge by domain and language: damage classes, checklist
-  items, reviewer questions, detectors, probe templates. What is enabled is the
-  `packs:` line in `config.md`; `loop.py` assembles them, the agent does not
-  choose. Schema: `specs/pack.md`.
-- **`references/`** — `model.md` (terms, diagrams), `rule-zero.md`, `review.md`
-  (the core of the reviewer prompt).
+**Every directory has an index and this file links all six.** `loop.py lint`
+walks the skill from here and fails on anything it cannot reach and on any
+dangling link — measured absent before it was written: `evals/` was reachable
+from nothing, and two method cross-references pointed at steps that had moved.
+
+A file may open with a breadcrumb naming its index and what it relates to. That
+is a convenience for whoever lands there by grep, not a rule: unlike the
+journal, where a lens's `applied:` carries information a forward link does not,
+a leaf naming its own directory's index carries nothing the path does not
+already say. Nothing checks it.
+
+- **[specs/](specs/SPECS.md)** — what each file in `.claude/loop/` consists of;
+  the verdicts and what each changes are in
+  [round.md](specs/round.md).
+- **[methods/](methods/METHODS.md)** — how to do the work: a checklist at the
+  top, stories with numbers below.
+- **[catalog/](catalog/CATALOG.md)** — defect shapes by pack.
+- **[packs/](packs/PACKS.md)** — knowledge by domain and language: damage
+  classes, checklist items, reviewer questions, detectors, probe templates. What
+  is enabled is the `packs:` line in `config.md`; `loop.py` assembles them, the
+  agent does not choose. Schema: [specs/pack.md](specs/pack.md).
+- **[references/](references/REFERENCES.md)** —
+  [model.md](references/model.md) (terms, diagrams),
+  [rule-zero.md](references/rule-zero.md),
+  [review.md](references/review.md) (the core of the reviewer prompt).
+- **[evals/](evals/EVALS.md)** — eleven scenarios that check the skill itself,
+  each derived from a rule a mistake paid for or from machinery the skill added.
+  Run them after changing this file, `methods/` or `references/`.
 - **`scripts/loop.py`** — `init`, `status`, `next`, `lint`, `stale`, `catalog`,
   `review`, `sweep`.
+
+**Refer to a step by NAME, never by number.** The numbering here moves whenever a
+step is added, and a cross-reference elsewhere goes silently wrong; `lint`
+rejects `step <N>` in every file but this one.

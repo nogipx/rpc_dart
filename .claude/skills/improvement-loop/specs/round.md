@@ -1,5 +1,8 @@
 # Schema: the round file
 
+> [Schemas](SPECS.md) · written at the **Gate** step, per
+> [methods/reporting.md](../methods/reporting.md) · checked by `loop.py lint`
+
 Path: `.claude/loop/rounds/N-slug.md`, the number unpadded. Plus a line in
 `rounds/ROUNDS.md`.
 

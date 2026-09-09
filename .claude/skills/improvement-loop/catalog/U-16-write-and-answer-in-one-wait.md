@@ -7,6 +7,10 @@ status: confirmed
 
 # U-16 — The write and the answer in one wait
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 **A symptom worth recognising: a deadline that provably never fires.** It means
 the wait beneath it sits below another wait that blocks; the bug is not in the
 deadline but in its position.

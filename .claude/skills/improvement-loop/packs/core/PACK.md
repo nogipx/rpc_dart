@@ -7,6 +7,9 @@ contains: detectors/deliberate_comments.py — instances of U-01 (comments justi
 
 # core — what holds in any code
 
+> [Packs](../PACKS.md) · schema: [specs/pack.md](../../specs/pack.md) · its
+> shapes live in [catalog/](../../catalog/CATALOG.md)
+
 The universal methods (`methods/`) are core too, but they are always read and so
 do not live in a pack. Only what the script must be able to find by pack name
 belongs here.

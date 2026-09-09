@@ -7,6 +7,10 @@ status: confirmed
 
 # U-01 — A comment justifying deliberateness
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 ## Shape
 
 A comment explains why a branch behaves oddly, and describes a pathological

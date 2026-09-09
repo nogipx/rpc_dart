@@ -1,5 +1,9 @@
 # Schemas for the loop's files
 
+> Back to [SKILL.md](../SKILL.md) · how to DO the work rather than what to
+> write: [methods/](../methods/METHODS.md) · the vocabulary these schemas use:
+> [references/model.md](../references/model.md)
+
 What every file in `.claude/loop/` consists of. One schema per file, like
 everything else in this skill. The schemas are not read by the agent alone:
 `scripts/loop.py lint` checks the mandatory fields, names and links against

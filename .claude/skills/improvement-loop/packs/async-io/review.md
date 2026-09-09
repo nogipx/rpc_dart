@@ -1,5 +1,8 @@
 # async-io: questions for the reviewer
 
+> [async-io](PACK.md) · appended to the core prompt in
+> [references/review.md](../../references/review.md) by `loop.py review`
+
 Appended to the prompt from `references/review.md` before the bottom line;
 `loop.py review` assembles them itself.
 

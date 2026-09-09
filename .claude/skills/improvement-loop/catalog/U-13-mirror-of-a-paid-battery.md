@@ -7,6 +7,10 @@ status: confirmed
 
 # U-13 — The mirror of a battery that paid off
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 The mirror is cheap: all that changes is which side has the small limit.
 
 ## Shape

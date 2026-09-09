@@ -1,5 +1,9 @@
 # Schema: a lesson
 
+> [Schemas](SPECS.md) · promoted into the skill by
+> [methods/curate.md](../methods/curate.md), where it becomes a
+> [catalog](../catalog/CATALOG.md) shape or a [pack](../packs/PACKS.md) item
+
 Path: `.claude/loop/lessons/L-N-slug.md`. Plus a line in `lessons/LESSONS.md`.
 
 A lesson is a rule for working with this code that a round paid for: with a
@@ -31,5 +35,6 @@ skill's `methods/` or `catalog/`; the lesson gets
 `status: promoted to skill (<file>)` and stays in the project as a link — the
 one-home rule.
 
-**They are read in full at step 0** — one index line per lesson. More than
+**They are read in full when the round reads its state** — one index line per
+lesson. More than
 twenty active lessons is a reason for `curate`: merge, promote, retire.

@@ -7,6 +7,10 @@ status: confirmed
 
 # U-03 — A target nobody runs
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 **Green on the main target does not mean green.** If a target cannot be run
 because there is nothing to host it, that is a missing example app, not a fact
 about the world.

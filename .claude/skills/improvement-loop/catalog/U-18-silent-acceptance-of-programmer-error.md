@@ -7,6 +7,10 @@ status: confirmed
 
 # U-18 — Silent acceptance of a programmer error
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 ## Shape
 
 A map write that overwrites the previous value; a mismatch nobody rejects; an

@@ -7,6 +7,10 @@ status: confirmed
 
 # U-17 — An unbounded wait and abandoned work
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 ## Shape
 
 An `await` with no bound on a critical path (completion, teardown), and a

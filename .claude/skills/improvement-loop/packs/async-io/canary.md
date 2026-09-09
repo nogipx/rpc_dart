@@ -1,5 +1,8 @@
 # async-io: canaries
 
+> [async-io](PACK.md) · appended to the universal
+> [methods/canary.md](../../methods/canary.md) by `loop.py next`
+
 Items for the `methods/canary.md` checklist.
 
 A1. For a new limit, both neighbours of the right charge point are usually

@@ -1,5 +1,9 @@
 # Schema: a lead
 
+> [Schemas](SPECS.md) · produced by a DEFERRED or INCONCLUSIVE verdict, see
+> [round.md](round.md) · re-measuring one is a round of its own:
+> [catalog/U-21](../catalog/U-21-remeasure-own-deferrals.md)
+
 Path: `.claude/loop/backlog/B-N-slug.md`. Plus a line in `backlog/BACKLOG.md`,
 where the line order is meaningful — it is the rank.
 

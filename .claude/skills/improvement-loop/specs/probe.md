@@ -1,5 +1,8 @@
 # Schema: a bench
 
+> [Schemas](SPECS.md) · a probe becomes a bench once a control validates it:
+> [methods/measurement.md](../methods/measurement.md)
+
 Path: `.claude/loop/probes/P-N-slug.md`. Plus a line in `probes/PROBES.md`.
 
 A bench is the most expensive thing in a round and the only one the skill used

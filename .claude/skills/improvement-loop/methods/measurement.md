@@ -1,5 +1,9 @@
 # Measurement discipline
 
+> [Methods](METHODS.md) · at the **Bench** step · the domain items that extend
+> this checklist are in [packs/](../packs/PACKS.md) · what a bench file looks
+> like: [specs/probe.md](../specs/probe.md)
+
 ## Checklist — before building a probe, and whenever a number surprises you
 
 1. `probes/` first: a valid bench along the same paths (named by `loop.py next`)

@@ -1,5 +1,9 @@
 # Schema: a pack
 
+> [Schemas](SPECS.md) · the packs themselves: [packs/](../packs/PACKS.md) ·
+> where a pack sits in the model:
+> [references/model.md](../references/model.md)
+
 Path: `packs/<name>/` in the skill (shared across projects in a domain) or
 `.claude/loop/packs/<name>/` in the project (private). Enabled by the `packs:`
 line in `config.md`; `core` is always enabled.

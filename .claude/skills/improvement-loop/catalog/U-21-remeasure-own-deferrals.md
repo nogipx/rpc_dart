@@ -7,6 +7,10 @@ status: confirmed
 
 # U-21 — Re-measure your own deferrals
 
+> [Catalog](CATALOG.md) · instantiate before use:
+> [lens-derivation](../methods/lens-derivation.md) · schema:
+> [specs/lens.md](../specs/lens.md)
+
 A deferral justified by "nobody needs this any more" is a claim about a SET THAT
 GROWS, and it expires the moment a new consumer appears.
 

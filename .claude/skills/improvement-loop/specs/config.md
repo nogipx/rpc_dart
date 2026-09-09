@@ -1,5 +1,10 @@
 # Schema: the project settings
 
+> [Schemas](SPECS.md) · written by [methods/setup.md](../methods/setup.md) ·
+> the gate block must satisfy
+> [references/rule-zero.md](../references/rule-zero.md) · the packs it enables:
+> [packs/](../packs/PACKS.md)
+
 Path: `.claude/loop/config.md`. The only loop file written by hand, and rarely.
 The machine-read places — `unattended:`, `packs:`, `damage classes:`,
 `commit language:`, the ```gate and ```after-commit blocks, and the three budget
@@ -44,7 +49,7 @@ The mandatory sections, in this order:
   ````
 
   This block is read by `lint` (coverage by `permissions.allow` rules when
-  `unattended: yes`) and by the agent at step 6.
+  `unattended: yes`) and by the agent at the **Gate** step.
 - **Probes** — where they go and why: import resolution, exclusion from
   analysis, gitignore.
 - **After the commit** — the ```after-commit block: commands for an unattended

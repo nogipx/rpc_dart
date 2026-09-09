@@ -1,5 +1,9 @@
 # Schema: a negative
 
+> [Schemas](SPECS.md) · produced by a CLEAN verdict outside any shape, see
+> [round.md](round.md) · the control it must carry:
+> [methods/measurement.md](../methods/measurement.md)
+
 Path: `.claude/loop/checked/C-N-slug.md`. Plus a line in `checked/CHECKED.md`.
 
 A negative is an answered question: measured, nothing broken, nothing to do. It

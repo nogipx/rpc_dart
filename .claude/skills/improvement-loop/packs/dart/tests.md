@@ -1,5 +1,8 @@
 # dart: tests
 
+> [dart](PACK.md) · appended to the universal
+> [methods/tests.md](../../methods/tests.md) by `loop.py next`
+
 Dart idioms for the `methods/tests.md` checklist.
 
 D1. Build a control character in code: `String.fromCharCode(1)`, not a literal
