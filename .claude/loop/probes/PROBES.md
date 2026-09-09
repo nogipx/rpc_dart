@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-11](P-11-connection-debt-with-a-paused-consumer.md)** valid (round 228), core transports —
+  does the connection pool come back from a consumer that stops? Round 206's
+  bench with a third arm; three controls reach 3072 KiB, the paused one wedges
+  at the pool. Supersedes P-01, which is the same file before that arm
 - **[P-10](P-10-parked-sender-learns.md)** valid (round 221), core transports —
   does a parked sender learn its call is over? Written in 210, registered in 221
   once an ablation showed it can see a credit hang

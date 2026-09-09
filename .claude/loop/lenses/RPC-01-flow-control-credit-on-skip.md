@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212, 213]
-status: confirmed (round 213)
+applied: [206, 207, 208, 212, 213, 228]
+status: confirmed (round 228)
 ---
 
 # RPC-01 — Flow-control credit on the skip path
@@ -80,6 +80,27 @@ and a LATE peer grant for that id writes it straight back, where nothing removes
 it again. One entry per abandoned upload, linear, zero for drained traffic.
 Capped, so not unbounded — the cost is that once the cap fills with dead ids no
 new stream is seeded and `initialSendWindowBytes` stops applying.
+
+Round 228 swept the detector properly for the first time — the status had been
+`confirmed` with no sha since 213 — and found the branch 206 did not cover.
+`_fcForget` repays only when nothing is listening, otherwise deferring to the
+consumer's `onCancel`; a consumer that binds and then STOPS satisfies
+`hasListener` and never cancels, so neither runs:
+
+    receiver drains                  12 calls, 3072 KiB, never wedged
+    receiver never binds a listener  12 calls, 3072 KiB, never wedged
+    receiver drains, per-stream OFF  12 calls, 3072 KiB, never wedged
+    receiver BINDS and PAUSES         4 calls, 1024 KiB, wedged at call 4
+
+1024 KiB is the pool exactly. Deferred as
+`../backlog/B-22-paused-consumer-never-repays-the-pool.md`, because repaying
+unconditionally double-credits and the fix has to split the credit paths first;
+bench `../probes/P-11-connection-debt-with-a-paused-consumer.md`.
+
+> **A fix that hands responsibility to a callback inherits that callback's
+> reachability.** 206 repaid at teardown "unless someone is still listening",
+> which is correct only while every listener eventually drains or cancels. The
+> branch that does neither is where the same defect came back.
 
 > **Ask the question of the BOOKKEEPING as well as of the bytes.** "Does the
 > credit come back?" has a twin: "does the record of it go away?" Both hops

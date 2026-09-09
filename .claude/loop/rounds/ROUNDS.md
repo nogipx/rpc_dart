@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[228](228-the-branch-206-did-not-cover.md)** DEFERRED, rpc_dart — the branch round 206 did not cover
 - **[227](227-the-web-guard-does-catch-it.md)** CLEAN, rpc_dart and rpc_blob — the web guard does catch it
 - **[226](226-close-the-gate-over-wasm.md)** FIXED, rpc_dart_wasm — close the gate over wasm
 - **[225](225-the-guard-nothing-reaches.md)** CLEAN, rpc_dart — the guard nothing reaches
