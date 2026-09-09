@@ -6,8 +6,9 @@ Back to [SKILL.md](../SKILL.md). The schema for a pack is
 
 A pack is **not a loop entity**. It is a unit of knowledge: a damage vocabulary,
 checklist items appended to the universal [methods](../methods/METHODS.md),
-reviewer questions appended to [references/review.md](../references/review.md),
-catalog shapes, and runnable detectors. Which packs are live is the `packs:` line
+questions appended to the verdict check
+([references/review.md](../references/review.md)),
+and catalog shapes. Which packs are live is the `packs:` line
 in the project's `config.md`; `scripts/loop.py` assembles them and the agent does
 not choose.
 
@@ -16,14 +17,12 @@ script looks in both places, the project's copy first.
 
 ## Enabled by domain
 
-- **[core](core/PACK.md)** — holds in any code; always enabled. 14 shapes and the
-  `deliberate_comments.py` detector.
+- **[core](core/PACK.md)** — holds in any code; always enabled. 14 shapes.
 - **[async-io](async-io/PACK.md)** — two sides, a channel, limits, waits. 7
   shapes plus its own measure, canary, tests and review items. Everything in it
   was paid for by rounds on a transport library.
 - **[dart](dart/PACK.md)** — language and runtime idioms: pub packages,
-  dart2js/AOT targets, isolates. Measure and tests items, the
-  `log_only_catch.py` detector, and a probe skeleton.
+  dart2js/AOT targets, isolates. Measure and tests items, and a probe skeleton.
 - **[server](server/PACK.md)** — a long-lived process with connections, storage
   and restarts. A starter pack: damage classes only, no shape has been paid for
   yet.

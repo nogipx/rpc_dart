@@ -12,7 +12,7 @@ A pack is a unit of knowledge, not of process. The round protocol, the entity
 schemas, the verdicts, the stop condition and `lint` are the same in every
 project and do not go into a pack; what goes into a pack is what speaks about a
 domain or a language: a damage vocabulary, checklist items with their stories,
-reviewer questions, detectors, probe templates.
+questions for the verdict check, probe templates.
 
 ```
 packs/<name>/
@@ -20,7 +20,7 @@ packs/<name>/
   measure.md       items for the measurement.md checklist + stories
   canary.md        items for the canary.md checklist + stories
   tests.md         items for the tests.md checklist + stories
-  review.md        reviewer questions, in a ``` block — `loop.py review` inserts them
+  review.md        verdict-check questions, in a ``` block — `loop.py review` inserts them
   catalog/         U-N shapes with a `pack:` key (private packs only; the
                    skill packs' shapes live in the shared catalog/)
   assets/          probe and fixture templates for the toolchain
@@ -61,8 +61,10 @@ frontmatter.
   and a "starter" note; knowledge arrives from `lessons/` through `curate`.
 - **Damage classes are a vocabulary, not knowledge**: they may be set up front,
   but say so.
-- **A detector is a script** when the instance list can be produced
-  programmatically; the protocol: run from the repository root, instances on
+- **A detector is a search recipe, not a program.** A grep with its flags and
+  paths belongs in the shape itself, where whoever applies it will read it. Two
+  shipped detector scripts and their runner were deleted in September 2026: in
+  39 rounds no lens ever named one.
 - **A private pack** is for knowledge that makes no sense outside this
   repository but does not fit into one lens or lesson. Anything that holds
   outside the repository is promoted by `curate` into a skill pack.

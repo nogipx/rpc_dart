@@ -24,4 +24,4 @@ enabled; none is read on its own.
 - [measure.md](measure.md) — added to the measurement checklist
 - [canary.md](canary.md) — added to the canary protocol
 - [tests.md](tests.md) — added to the regression-test rules
-- [review.md](review.md) — added to the reviewer's questions
+- [review.md](review.md) — added to the verdict check's questions

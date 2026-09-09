@@ -31,8 +31,9 @@ program measuring one number; it becomes a bench once a control validates it), a
 number means nothing), **evidence** (a number; the only thing that outlives the
 round — it moves into the lens, the journal and the commit), a **fix**, a
 **witness** (a test that must fail before the fix), a **guard** (passes on both
-sides: it pins, it does not prove), a **review** (a clean context's answers to
-the questions in `review.md`), a **verdict**.
+sides: it pins, it does not prove), a **check** (the written answers to the
+seven questions in `review.md`, against the record rather than from memory), a
+**verdict**.
 
 Procedures: **instantiate** (rewrite a universal shape's detector in terms of
 this code), **sweep** (walk the whole list the detector produced), **canary**
@@ -41,13 +42,13 @@ sequence of checks before the commit).
 
 It reads as: **the catalog is not applied — a set is made from it; the set gives
 a lens; a lens plus a target gives a hypothesis; a probe on a bench checks the
-hypothesis; the bench is reused; the probe yields evidence; a review checks the
-evidence; the evidence yields a verdict; the verdict decides what is recorded
+hypothesis; the bench is reused; the probe yields evidence; the seven questions
+check the evidence; the evidence yields a verdict; the verdict decides what is recorded
 and where; what is recorded ages and comes back in a later round; the price of a
 mistake becomes a lesson.**
 
 A **pack** is not a loop entity but a unit of knowledge: a damage vocabulary,
-domain checklist items, reviewer questions, detectors. It lives in the skill
+domain checklist items, questions for the verdict check, detectors. It lives in the skill
 (`packs/`) or in the project (`.claude/loop/packs/`), is enabled by the config
 and assembled by the script. The schema is `specs/pack.md`.
 
@@ -78,7 +79,7 @@ flowchart TD
         HYP["HYPOTHESIS"]
         PROBE["PROBE on a bench<br/>plus a control"]
         EV["EVIDENCE"]
-        REV["REVIEW<br/>clean context"]
+        REV["CHECK<br/>the seven questions"]
         VER{"VERDICT"}
         FIX["FIX"]
         WIT["WITNESS"]

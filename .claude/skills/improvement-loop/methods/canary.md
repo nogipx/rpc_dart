@@ -41,11 +41,11 @@ story one item cost, and is worth opening when that item is the one biting.
    defect.
 10. Before shipping, measure reachability: if the blast radius exceeds the
     exposure, that is for the owner — do not push it through.
-11. Every attempt to get a failing witness adds one to `budget:`. If the budget
-    from the config («canaries: N») is exhausted with no failing witness, the fix
-    is not proven: the verdict is INCONCLUSIVE, or DEFERRED with reason "bench".
-12. Before the verdict, a review by a clean context (`references/review.md`); a
-    "no" about the canary sends you back to item 1 with the same budget.
+11. Count your own attempts at a failing witness. Past `canaries: N` from the
+    config the fix is not proven, whatever the code looks like: the verdict is
+    INCONCLUSIVE, or DEFERRED with reason "bench".
+12. Before the verdict, answer the seven questions (`references/review.md`)
+    against your own record; a "no" about the canary sends you back to item 1.
 
 `loop.py next` adds the enabled packs' items to this list. Below is what paid
 for each item.

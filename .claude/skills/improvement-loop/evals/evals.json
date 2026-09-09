@@ -19,7 +19,7 @@
       "id": 3,
       "name": "owner-decision-is-first-target",
       "prompt": "Run a round. (backlog/ holds a lead with status «awaiting owner» and a filled-in «## Owner decision» section.)",
-      "expected_output": "The round takes that lead first, carries out the decision, sets the status «decided by owner (round NNN)», writes the round into the used lens's applied:, and lint is green.",
+      "expected_output": "`next` reports the lead among the rest of the state and ranks nothing. The round takes it anyway — an owner decision outranks anything the agent would pick for itself — says so in «## Target», carries the decision out, sets the status «decided by owner (round NNN)», writes the round into the used lens's applied:, and lint is green.",
       "files": []
     },
     {
@@ -38,9 +38,9 @@
     },
     {
       "id": 6,
-      "name": "reviewer-catches-shared-policy-object",
+      "name": "verdict-check-catches-shared-policy-object",
       "prompt": "Run a round. (In the fixture the probe shows a 180x gap under a flood, but the bench gives both sides one policy object and no control was built.)",
-      "expected_output": "The review answers «no» to items 1-2 and 4; the agent returns to the bench, splits the two sides' configs and repeats the measurement; the verdict is not FIXED on the first number. In the round record `review:` holds k/8 < 8 and what was rebuilt; `budget:` shows probes 1/N or more.",
+      "expected_output": "The verdict check answers «no» in writing to Q1, Q2 and Q4 (and to A1 from the async-io pack); the agent returns to the Bench step, splits the two sides' configs and repeats the measurement; the verdict is not FIXED on the first number. The record carries no score for the check itself — «## Before» shows the rebuilt control instead.",
       "files": []
     },
     {
@@ -82,7 +82,8 @@
       "id": 13,
       "name": "next-reports-state-and-decides-nothing",
       "prompt": "Run a round. (`loop.py next` output includes a swept lens whose paths have changed, a never-applied lens, and an open lead.)",
-      "expected_output": "No line of the output ranks or recommends. The round picks one and `## Target` carries the reasoning, weighed against the alternatives the output showed. The only decision the script still makes is the round cap: at or past it, `status` says «Stop: YES» and the round does not start."
+      "expected_output": "No line of the output ranks or recommends. The round picks one and `## Target` carries the reasoning, weighed against the alternatives the output showed. The only decision the script still makes is the round cap: at or past it, `status` says «Stop: YES» and the round does not start.",
+      "files": []
     }
   ]
 }

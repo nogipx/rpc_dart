@@ -82,8 +82,9 @@ LENS_FRONT = ["refines", "paths", "applies", "breaks", "applied", "status"]
 LENS_SECTIONS = ["shape", "detector", "ask", "evidence"]
 LENS_OPTIONAL: list[str] = []
 BACKLOG_FRONT = ["status", "round", "commit", "paths", "probe", "reason"]
-# Optional, opt-in: marks a lead as work a round STARTED and did not finish,
-# which `select_target` takes before opening a new lens. See specs/backlog-item.md.
+# Optional, opt-in: marks a lead as work a round STARTED and did not finish, so
+# `next` can say so and the round can weigh it against opening a new lens. See
+# specs/backlog-item.md.
 BACKLOG_OPTIONAL = ["continuation"]
 BACKLOG_SECTIONS = ["owner decision"]
 CHECKED_FRONT = ["round", "commit", "paths", "scope"]
@@ -113,9 +114,9 @@ ONLY_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
 # could bury a record that went missing recently.
 LENS_STATUS_RE = re.compile(
     r"^(derived|confirmed \(round \d+(?:, off-journal)?\)|"
-    r"swept here \(round \d+, (?:[0-9a-f]{7,40}(?:, sweep [0-9a-f]{8})?|off-journal)\)|"
+    r"swept here \(round \d+, (?:[0-9a-f]{7,40}|off-journal)\)|"
     r"retracted \(round \d+(?:, off-journal)?\))")
-SWEPT_RE = re.compile(r"swept here \(round (\d+), ([0-9a-f]{7,40})(?:, sweep ([0-9a-f]{8}))?\)")
+SWEPT_RE = re.compile(r"swept here \(round (\d+), ([0-9a-f]{7,40})\)")
 SWEPT_OFF_RE = re.compile(r"swept here \(round (\d+), off-journal\)")
 BACKLOG_STATUS_RE = re.compile(
     r"^(open|awaiting owner|closed \(round \d+\)|"
@@ -1111,8 +1112,8 @@ def cmd_status(root: Path, loop: Path) -> int:
         if never:
             print(f"  never applied: {', '.join(never)}")
 
-    # One home for "which decisions are outstanding": `select_target` picks the
-    # round's target from this same list, so status cannot disagree with next.
+    # One home for "which decisions are outstanding": `next` reports from this
+    # same list, so status cannot disagree with it.
     outstanding = pending_decisions(loop, data)
     decisions = [f"{data['backlog'][b]['h1'][2:]}: "
                  f"{data['backlog'][b]['fields']['owner decision']}"
@@ -1234,7 +1235,7 @@ def cmd_next(root: Path, loop: Path) -> int:
             if k in pk["files"]:
                 reading.append(str(pk["files"][k].relative_to(SKILL_ROOT)) if SKILL_ROOT in pk["files"][k].parents
                                else str(pk["files"][k]))
-    reading.append("`loop.py review` — the reviewer prompt with the packs' questions")
+    reading.append("`loop.py review` — the verdict check, with the packs' questions")
     # No per-lens reading here: the detector, the paths and the refined catalog
     # shape all live in the lens's own file, and naming one would be choosing.
     reading.append("the chosen lens's file, and the `refines:` shape it names")
@@ -1264,8 +1265,6 @@ def cmd_stale(root: Path, loop: Path) -> int:
     data = load(loop)
     rows: list[tuple[str, str, str, list[str] | None, str]] = []
 
-    cfg = parse_config(loop)
-    packs, _ = load_packs(loop, cfg)
     for lid, ent in data["lenses"].items():
         st = ent["fields"].get("status", "")
         m = SWEPT_RE.match(st)
@@ -1276,16 +1275,7 @@ def cmd_stale(root: Path, loop: Path) -> int:
             continue
         paths = split_list(ent["fields"].get("paths", ""))
         changed = changed_files(root, m.group(2), paths) if paths else []
-        note = ""
-        if m.group(3):
-            if res is None:
-                note = "detector script not found"
-            elif res[1] != m.group(3):
-                note = f"the instance list changed: sweep {m.group(3)} -> {res[1]}, {len(res[0])} instances"
-                changed = (changed or []) + [f"[detector] {l}" for l in res[0][:3]]
-            else:
-                note = "the same instance list"
-        rows.append(("sweep", lid, m.group(2), changed, note))
+        rows.append(("sweep", lid, m.group(2), changed, ""))
     for kind, label in (("backlog", "lead"), ("checked", "negative"),
                         ("probes", "bench"), ("lessons", "lesson")):
         for iid, ent in data[kind].items():
@@ -1340,7 +1330,7 @@ def cmd_stale(root: Path, loop: Path) -> int:
     return 0
 
 
-# ---------------------------------------------------------------- catalog / review / sweep
+# ---------------------------------------------------------------- catalog / review
 
 def cmd_catalog(root: Path, loop: Path) -> int:
     cfg = parse_config(loop)

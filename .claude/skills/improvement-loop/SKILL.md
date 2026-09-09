@@ -104,12 +104,12 @@ is what `lint` and `stale` are for.
 6. **Witness and canary.** `methods/canary.md`, `methods/tests.md`. **No failing
    witness, no fix**: if the fix cannot be switched off and shown to break
    something, it is not proven.
-7. **Check the verdict.** Answer the seven questions from `loop.py review`
-   against your own record, probe and control; any "no" sends you back to
-   **Bench**. Q2 — *did the control show the bench can SEE the defect* — is the
-   one that catches things. (This once demanded "a clean context" and a
-   `review:` key; 39 of 39 rounds wrote `review: self`, so the ceremony went and
-   the questions stayed.)
+7. **Check the verdict.** Answer what `loop.py review` prints — seven questions
+   plus the enabled packs' — in writing, against your own record, probe and
+   control; any "no" sends you back to **Bench**. Q2 — *did the control show the
+   bench can SEE the defect* — is the one that catches things. (This once
+   demanded "a clean context" and a `review:` key; 39 of 39 rounds wrote
+   `review: self`, so the ceremony went and the questions stayed.)
 8. **Gate** with the full sequence from the config, **the record** per
    `specs/round.md` with every edit from "What a round changes", `loop.py lint`
    green, a commit with the same sections in its body, and a chat report with

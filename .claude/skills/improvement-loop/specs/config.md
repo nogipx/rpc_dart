@@ -57,9 +57,13 @@ The mandatory sections, in this order:
   `permissions.allow` like the gate; an empty block means nothing.
 - **Round budget** — three lines: `probes: N` (how many times the bench may be
   rebuilt before the verdict is INCONCLUSIVE), `canaries: N` (how many attempts
-  at a failing witness), `round cap: N`. The round keeps the numerators in its
-  `budget:` key; `lint` reconciles the denominators with these lines and does
-  not let an overrun pass under a FIXED or CLEAN verdict.
+  at a failing witness), `round cap: N`. `loop.py next` prints all three at the
+  start of the round. The first two are **stopping limits the round applies to
+  itself**: past them the honest verdict is INCONCLUSIVE, and the round says in
+  `## Before` what was tried. Nothing counts them for you — a `budget:` key
+  self-reported from memory was dropped as evidence nobody could check. `round
+  cap: N` is different: it is the one number the script enforces, because an
+  unattended agent asked "should we continue?" always says yes.
 - **Targets nobody runs** — another compiler, the native layer, devices,
   generators, licence linters. Each with its command and what it finds beyond
   the main gate.

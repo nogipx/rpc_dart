@@ -93,8 +93,8 @@ diff, not in somebody's private memory.
 
 ## The verdicts
 
-- **FIXED** — measured, fixed, re-measured, the canary did its job, the review
-  approved, the gate is green, committed.
+- **FIXED** — measured, fixed, re-measured, the canary did its job, the seven
+  verdict questions answered, the gate is green, committed.
 - **CLEAN** — measured with a control, nothing is broken. A full result, not a
   failure. Never pad out a clean round with cosmetics.
 - **DEFERRED** — the defect is real and was deliberately not fixed. The reason

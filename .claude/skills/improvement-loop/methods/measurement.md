@@ -40,10 +40,10 @@ story one item cost, and is worth opening when that item is the one biting.
 8. Zero is suspicious: check whether the mechanism could emit anything at all.
 9. Performance: the baseline is recorded; medians across runs, not within one; a
    profile before the third guess; never move a bound for speed.
-10. Every rebuild of the bench adds one to the round record's `budget:`. If the
-    budget from the config ("probes: N") is exhausted with no valid number, the
-    verdict is INCONCLUSIVE and a "bench" lead lists what was tried. Not CLEAN.
-    Whatever the rebuild cost becomes a lesson `L-N` with its price.
+10. Count your own rebuilds of the bench. Past `probes: N` from the config with
+    no valid number the verdict is INCONCLUSIVE, and a "bench" lead lists what
+    was tried. Not CLEAN. Whatever the rebuild cost becomes a lesson `L-N` with
+    its price.
 
 `loop.py next` adds the enabled packs' items (`config.md`, the `packs:` line) to
 this list; read them together. Below is what paid for each item. The numbers

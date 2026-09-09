@@ -32,8 +32,9 @@ find the path before running, not after.
   it with `Edit`; probes are overwritten, never deleted.
 - Reading anything outside the project through the shell. Only `Read` with a
   full, literal, absolute path.
-- `claude -p` for the review — only if a rule for it is on the allowlist;
-  otherwise the reviewer is a subagent or yourself.
+- Spawning another agent process from the shell (`claude -p`) — only if a rule
+  for it is on the allowlist. Delegation goes through the `Agent`/`Task` tool,
+  which is already covered.
 
 When `unattended: no`, interactivity is allowed, but `Read`/`Edit`/`Write` for
 project files still stand: that is about quality, not about prompts.

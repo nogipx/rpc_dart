@@ -99,13 +99,10 @@ A lens is not accepted into the set if:
   than by a finding is marked this way.
 - **confirmed (round N)** — a round found a real defect through it. Only then
   does the `## Evidence` section fill with numbers.
-- **swept here (round N, sha[, sweep hash])** — the sweep by its detector came
-  back clean on the code at `sha`. This is not a deletion: the record stays so
-  the next round does not repeat the sweep, and `loop.py stale` says when new
-  code appeared along the lens's paths. With a script detector the status also
-  stores the hash of the instance list (printed by `sweep`): then the ageing is
-  computed from the list rather than from the paths, and a new instance of the
-  shape is seen exactly.
+- **swept here (round N, sha)** — the sweep by its detector came back clean on
+  the code at `sha`. This is not a deletion: the record stays so the next round
+  does not repeat the sweep, and `loop.py stale` says when new code appeared
+  along the lens's paths.
   **This is the only home of such a fact**: `checked/` holds only negatives that
   are not tied to a shape.
 - **retracted (round N)** — the shape turned out not to be a defect. The

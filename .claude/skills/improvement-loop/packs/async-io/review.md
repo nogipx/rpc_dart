@@ -1,4 +1,4 @@
-# async-io: questions for the reviewer
+# async-io: questions for the verdict check
 
 > [async-io](PACK.md) · appended to the core prompt in
 > [references/review.md](../../references/review.md) by `loop.py review`
