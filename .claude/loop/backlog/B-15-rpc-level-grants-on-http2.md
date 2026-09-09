@@ -19,6 +19,22 @@ uncredited discard fatal: measured in round 207, ONE cancelled stalled call
 kills the connection permanently, in both directions, polled 20 s. A revert buys
 cooperative throttling and hands back a dead connection on the first `.take(n)`.
 
+## How urgent, measured — round 213
+
+The round-208 refusal was recorded as a guard against a consumer that STOPS.
+It is not. Nothing throttles the producer any more, so the un-consumed backlog
+grows at the RATE GAP and any gap crosses the window given enough upload.
+3000 x 4 KiB uploaded, 4 MiB window:
+
+    fast handler  : completed, consumed 3000 of 3000, 15.4 s   <- control
+    slow handler
+      (2 ms each) : FAILED RpcStatusException(8), 2.1 s, consumed 67 of 3000
+    deaf handler  : FAILED, same status, 1.8 s, consumed 0
+
+The slow handler does nothing wrong. So this is not a nicety: ordinary slow
+consumers lose their calls today, and the failure scales with upload size rather
+than with misbehaviour.
+
 ## What to build
 
 Stop borrowing HTTP/2's window as the backpressure signal, and carry the signal
@@ -45,9 +61,12 @@ same round that lands the grants — not before.
 
 P-02 must stay green: a cancelled stalled call must not touch the connection.
 And the bound must still hold — `upload_backpressure_test` and
-`slow_reader_backpressure_test` on their original numbers, plus a NEW witness
-that a slow consumer is now THROTTLED rather than failed, which is the thing
-being bought. Without that last one the change is unverified.
+`slow_reader_backpressure_test` on their original numbers.
+
+The witness that the change is worth anything is **P-05**, built in round 213 and
+deliberately left RED: its `slow` row must go from "FAILED after 2.1 s, consumed
+67" to "completed, consumed 3000", in roughly the time the handler's own rate
+implies. Its `fast` row is the control and must not move.
 
 ## Cost
 

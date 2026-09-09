@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212]
-status: confirmed (round 212)
+applied: [206, 207, 208, 212, 213]
+status: confirmed (round 213)
 ---
 
 # RPC-01 — Flow-control credit on the skip path

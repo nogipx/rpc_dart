@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[213](213-a-slow-handler-is-killed-not-throttled.md)** DEFERRED, rpc_dart_http2 — a slow handler is killed, not throttled
 - **[212](212-a-late-grant-resurrects-a-dead-stream.md)** FIXED, rpc_dart — a late grant resurrects a dead stream's credit
 - **[211](211-the-wake-is-load-bearing.md)** CLEAN, rpc_dart — the wake is load-bearing after all
 - **[210](210-the-answer-does-not-wait-on-the-send.md)** CLEAN, rpc_dart and rpc_dart_http2 — the answer does not wait on the send
