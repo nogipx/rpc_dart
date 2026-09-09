@@ -1,10 +1,10 @@
 ---
-status: awaiting owner
+status: open
 round: 220
 commit: 9ee285ca
 paths: [pubspec.yaml]
 probe: —
-reason: owner decision — it is surgery on the main gate to fix nothing currently broken, and the config's bar rules out coverage for coverage's sake
+reason: decided by owner (round 223) — close the gate; ready to implement
 ---
 
 # B-19 — close the gate over rpc_dart_wasm
@@ -44,4 +44,28 @@ commands.
 
 ## Owner decision
 
-—
+**Close the gate.** (Asked and answered in round 223.)
+
+Do the `exec:` → `run:` conversion above for both `analyze` and `format:check`.
+
+The "not proportionate, nothing is currently broken" objection was written
+before rounds 222 and 223 found the same shape twice over: a protection that is
+real today and unwitnessed tomorrow. Same argument here — the checks pass, and
+nothing would notice if they stopped covering the one package that ships Swift
+and Kotlin.
+
+Notes for the round that carries this out:
+
+- **The risk is a strict gate quietly becoming a permissive one while still
+  printing green.** `set -e` alone is not enough: `melos exec` and the trailing
+  `fvm dart analyze` both have to be able to fail the script.
+- So the verification is an ablation, not a run: plant a `--fatal-infos`-level
+  lint in a workspace MEMBER and confirm the converted `analyze` still goes red,
+  then plant one in `rpc_dart_wasm` and confirm it goes red too. Both arms, or
+  the conversion has not been checked.
+- The pattern already exists in this same file — `publish:dry` handles this same
+  package explicitly right after its melos step. Follow it rather than inventing
+  a second shape.
+- `format:check` needs the same treatment and the same two-arm ablation.
+- `melos run prepare` composes these two, so closing them closes the release
+  gate as well; confirm that rather than assuming it.

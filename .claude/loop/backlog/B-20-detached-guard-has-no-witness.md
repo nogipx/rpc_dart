@@ -4,7 +4,7 @@ round: 222
 commit: b8d934a2
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
 probe: —
-reason: cost — the witness needs a subprocess to assert the isolate survived, which is a round of its own
+reason: owner approved the cost (round 223) — take it; the witness needs a subprocess to assert the isolate survived
 ---
 
 # B-20 — the detached-future guard has no witness
@@ -51,4 +51,17 @@ which of the two it pins.
 
 ## Owner decision
 
-—
+**Take it — the cost is approved.** (Asked and answered in round 223.)
+
+Do it alongside the isolate half, which needs the identical harness and is
+recorded in `B-04-isolate-future-timeout-unaudited.md`'s closing note: fail the
+handshake in a child process, assert the child exits rather than hanging on a
+live isolate. Two witnesses, one shape, and the shape already exists in
+`close_releases_the_isolate_test.dart`.
+
+Say in each test which of the two things it pins — the guard deleted outright,
+or the guard narrowed. The cheap logger-hook version only catches the first, and
+a test that silently covers less than its name claims is the failure this whole
+lead is about.
+
+Generalised as `../lessons/L-04-a-guard-with-no-witness.md`.

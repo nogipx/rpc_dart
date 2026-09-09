@@ -1,10 +1,10 @@
 ---
-status: awaiting owner
+status: open
 round: 217
 commit: 576f1815
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/watermark_survives_a_decorator.dart
-reason: owner decision — both candidate fixes change behaviour in a resilience class, in opposite directions
+reason: decided by owner (round 223) — refuse the transport at attach; ready to implement, data loss, ranks first
 ---
 
 # B-17 — a decorator erases the stream-id watermark, and a live call dies
@@ -86,31 +86,75 @@ and the config's bar rules out diagnostics as a round's product.
 
 ## Owner decision
 
-> **Superseded — round 218 measured this decision to be unimplementable.** The
-> tagging half cannot work for the reason recorded above, and the warning half
-> never fired. Nothing shipped. The decision below is kept as written; it needs
-> replacing with one of: id translation, refusing the transport at attach, or
-> accepting the behaviour as a negative.
+> **Round 217's decision (tag + warn) was measured unimplementable in round 218
+> and is superseded.** It is preserved at the bottom of this file so the reason
+> is not lost. Nothing from it shipped.
 
-**Both: tag, and warn on attach.** (Asked and answered in round 217.)
+**Refuse the transport at attach.** (Asked and answered in round 223.)
 
-Generation-tag the ids so the data loss is gone regardless of the capability,
-AND log a warning at attach when the factory's transport does not implement
-`IRpcStreamIdSequence`, so the operator learns their decorator is dropping it.
-No breakage, and no silent degradation.
+If the factory's transport does not implement `IRpcStreamIdSequence`, fail
+loudly instead of connecting. Airtight, and impossible to get silently wrong.
 
-Notes for the round that carries this out:
+### The fact that makes it safe
 
-- The tag is the load-bearing half and needs the witness; the warning is a
-  diagnostic and must not be mistaken for the fix. P-09's `handlers ended`
-  column has to go `0 -> 0` in BOTH rows.
-- Two canaries, one per half, per L-01 — and check the tagging half does not
-  mask the warning half's witness.
-- Watch the GUARDs in `client_connection_stream_ids_test.dart`: "calls still run
-  across repeated swaps" and "a half-close on the CURRENT transport is still
-  sent". Generation-tagging must not turn an ordinary id into a no-op, which is
-  exactly what that second guard exists to catch.
-- The map is keyed by ids the proxy itself issued, so it is bounded by our own
-  traffic — prune it on `releaseStreamId`, and read round 212 first: a late
-  arrival re-creating an entry after teardown is the trap that family has
-  already sprung once.
+Checked at 0e7b984a — **every first-party caller transport already implements
+the capability**, so the refusal breaks no supported path:
+
+    isolate, native and web   returns a bare RpcChannelTransport
+                              (channel_transport.dart:36 implements it)
+    wasm                      RpcChannelTransport.fromChannel
+    websocket                 websocket_caller_transport.dart:32, declares it
+                              and forwards to its inner RpcChannelTransport
+    http2                     rpc_http2_caller_transport.dart:38
+    http                      rpc_http_caller_transport.dart:136
+
+The refusal therefore fires for exactly one population: hand-written decorators
+and mocks. That population is not "working today" — it is silently half-closing
+live calls on every reconnect, which is what P-09's `0 -> 1` row is. The break
+makes an existing silent failure visible, and the user-side remedy is two
+members forwarded.
+
+### Notes for the round that carries this out
+
+- Check on **every** `attach`, including the first. Refusing only on the
+  reconnect path would hide the error until it happens in production; refusing
+  at first connect surfaces it on the developer's first run.
+- The error must name the class, the missing interface and the two members
+  (`resumeStreamIdsAfter`, `lastIssuedStreamId`). A bare type error teaches
+  nothing.
+- **No opt-out flag.** Adding a switch pre-emptively for a legitimate case
+  nobody has reported is speculative, and a default that hides the hole is how
+  this defect got here.
+- P-09 is the witness: its second row must stop reading `0 -> 1` — by throwing,
+  not by passing. Expect to rewrite the probe's decorator arm to assert the
+  throw.
+- **Most of the diff is tests, not lib.** Files using `RpcClientConnection` with
+  hand-rolled fakes: 8 in `packages/core/rpc_dart/test/resilience/`, plus
+  `rpc_dart_http2/test/reconnect_close_race_test.dart`,
+  `rpc_dart_websocket/test/reconnect_close_race_test.dart`,
+  `rpc_dart_http/test/stream_ids_survive_swap_test.dart` and
+  `rpc_dart_log/test/reconnect_test.dart`. Each fake transport needs the
+  capability declared. Mechanical, but budget for it.
+- Watch the GUARDs in `client_connection_stream_ids_test.dart` — "calls still
+  run across repeated swaps" and "a half-close on the CURRENT transport is still
+  sent" — and `rpc_dart_framework/lib/src/rpc_app.dart`, which also builds one.
+- This is a **breaking change** for anyone with a decorator: a major bump, and a
+  CHANGELOG entry that states the remedy rather than just the break.
+
+### The follow-up this deliberately does NOT do
+
+The honest end state is compile-time, not runtime: an
+`IRpcReconnectableTransport implements IRpcTransport, IRpcStreamIdSequence` as
+the factory's return type, so a decorator author gets a red squiggle instead of
+a runtime exception. That is a bigger, separate breaking signature change and is
+not authorised here — file it as its own lead for the next major rather than
+smuggle it into this fix.
+
+## Superseded — round 217's decision, kept for the record
+
+**Both: tag, and warn on attach.** Generation-tag the ids so the data loss is
+gone regardless of the capability, AND log a warning at attach when the
+factory's transport does not implement `IRpcStreamIdSequence`. Round 218
+implemented both in full: the tag could not work (an `int` cannot distinguish
+the dead caller's id 1 from the live caller's id 1 — see above) and the warning
+never fired (the callback is wired after the first attach). Everything reverted.

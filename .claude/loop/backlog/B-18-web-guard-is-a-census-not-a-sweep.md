@@ -4,7 +4,7 @@ round: 219
 commit: 201a2034
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/data/**, packages/blob/**]
 probe: —
-reason: cost — the census is done and cheap; planting a bug class in nine packages to see whether anything goes red is a round of its own
+reason: owner approved the cost (round 223) — take it; plant a bug class and find out what the web gate actually catches
 ---
 
 # B-18 — the web guard is a census, not a sweep
@@ -38,4 +38,13 @@ says which ones.
 
 ## Owner decision
 
-—
+**Take it — the cost is approved.** (Asked and answered in round 223.)
+
+Start with `async*` cancellation. Of the five candidate classes it is the one
+with a confirmed history on this project (the dart2js cancel-deadlock in private
+memory), so a plant that survives undetected is a gap in a class known to
+occur here rather than a hypothetical one. Do the int-above-2^53 class second if
+budget allows.
+
+Every plant is reverted in place, per rounds 214-216 — `git diff` empty before
+the verdict is written.

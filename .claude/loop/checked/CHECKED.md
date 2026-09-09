@@ -32,6 +32,7 @@ rewrote `channel_transport.dart` and the three http2 transports.
 - **[C-20](C-20-pre-method-budget-held-for-the-reclaim.md)** round 215, core — the pre-method budget is held until the reclaim, on purpose; looks like a leak, is not
 - **[C-21](C-21-header-cap-has-a-floor.md)** round 216, core and http2 — `maxHeaderValueBytes` has a floor; below ~40 the server refuses its own headers and confounds any bench
 - **[C-22](C-22-wasm-is-outside-every-gate-script.md)** round 220, wasm — 21 members against 22 packages; wasm's Dart is analysed and formatted by no script, and clean anyway
+- **[C-23](C-23-wasm-guest-promise-rejection-accepted.md)** round 223, wasm — a guest promise rejection is lost on Android and stays lost; **the one record here with no number**, an owner decision to stop pursuing, not a measurement
 
 Large payloads with fragmentation (round 64) and server-side keepalive
 (round 63) live in `../backlog/B-06-websocket-lead-list-is-stale.md`: there they

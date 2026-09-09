@@ -1,10 +1,10 @@
 ---
-status: awaiting owner
-round: — (not re-measured)
+status: closed (round 223) — out of the loop, ordinary roadmap work
+round: 223
 commit: 5bf4d34e
 paths: [packages/core/rpc_dart/lib/**]
 probe: packages/core/rpc_dart/.dart_tool/probe/response_metadata_visibility.dart
-reason: "two features at once: reading response metadata and setting it on the responder; half of it helps almost nobody"
+reason: owner decided (round 223) — a missing feature, not a defect; leaves the loop and becomes ordinary roadmap work
 ---
 
 # B-01 — Response metadata is dropped wholesale
@@ -54,4 +54,18 @@ responder pipeline merges into the initial headers and the trailer.
 
 ## Owner decision
 
-—
+**Out of the loop — do it as ordinary work.** (Asked and answered in round 223.)
+
+The measurement stands and the shape above is the one to build, but this is a
+**missing capability, not a defect**, and the config's severity bar from round
+191 on is crash / hang / leak / data loss. Left in the backlog it would be
+declined as a target every round from here to the cap, which is a worse outcome
+than being scheduled honestly outside the loop.
+
+Both halves together, or neither: read-only is useless to the rpc_dart-on-both-
+ends majority, and set-only is useless against third-party servers. Either half
+alone leaves a whole population with nothing.
+
+Closed here so the loop stops re-reading it. The measurement, the probe path and
+the recommended API shape all stay on this page — this is the reference for
+whoever picks the feature up.

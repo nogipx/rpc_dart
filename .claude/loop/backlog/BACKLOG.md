@@ -1,34 +1,44 @@
 # Loop backlog
 
 What a lead is and how it links to the rest — [../LOOP.md](../LOOP.md). The line
-order below is the rank: **awaiting an owner decision first, then by damage
-class, then by the age of the number.** Re-ranked in the curate pass after
-round 220.
+order below is the rank: **decided-and-ready first, then by damage class, then by
+the age of the number.** Re-ranked in round 223, when the owner cleared the
+entire awaiting-decision queue.
 
 `(stale, sha)` means code under that lead's paths has changed since its number
 was taken. The blocker and the number age separately — see U-21.
 
 ## Awaiting an owner decision
 
-- **[B-17](B-17-watermark-lost-through-a-decorator.md)** awaiting owner (round 217) — **data loss.** A decorator erases the stream-id watermark and a dead call's teardown ends a live one. The decision on file was measured unimplementable in round 218; it needs replacing with id translation, refusing the transport at attach, or accepting it as a negative
-- **[B-01](B-01-response-metadata-dropped.md)** awaiting owner, an API shape (round 141) *(stale, 5bf4d34e)* — response metadata is dropped wholesale
-- **[B-02](B-02-wasm-android-promise-rejection.md)** awaiting owner — wasm: an unhandled promise rejection is lost on Android
-- **[B-19](B-19-close-the-gate-over-wasm.md)** awaiting owner (round 220) — `analyze` and `format:check` never see rpc_dart_wasm; closing it means restructuring both gate scripts to fix nothing currently broken
+**Empty.** All four were answered in round 223: B-17 (refuse at attach), B-01
+(out of the loop), B-02 (accepted, C-23), B-19 (close the gate). The three
+cost-gated leads were answered in the same pass — B-20 and B-18 approved, B-10
+deferred.
+
+## Open — decided, ready to implement
+
+- **[B-17](B-17-watermark-lost-through-a-decorator.md)** decided (round 223) — **data loss, ranks first.** A decorator erases the stream-id watermark and a dead call's teardown ends a live one. Fix: refuse the transport at attach. Every first-party transport already implements the capability, so nothing supported breaks; most of the diff is fakes in `test/resilience/`
+- **[B-20](B-20-detached-guard-has-no-witness.md)** approved (round 223) — the guard that stops a client hanging up from killing the server has no test; removing it leaves the core suite green. Do it with B-04's isolate half, same subprocess harness
+- **[B-19](B-19-close-the-gate-over-wasm.md)** decided (round 223) — `analyze` and `format:check` never see rpc_dart_wasm, the one package shipping Swift and Kotlin. Convert both from `exec:` to `run:`, and verify by ablation on BOTH arms
+- **[B-18](B-18-web-guard-is-a-census-not-a-sweep.md)** approved (round 223) — the web guard is a build-and-construct check for nine of twelve packages; plant `async*` cancellation first, it is the class with a history here
 
 ## Open
 
-- **[B-20](B-20-detached-guard-has-no-witness.md)** open, reason "cost" (round 222) — the guard that stops a client hanging up from killing the server has no test; removing it leaves the core suite green
-- **[B-04](B-04-isolate-future-timeout-unaudited.md)** open (round 67) — isolate: unaudited `Future.timeout` sites, the price is a leaked isolate
-- **[B-18](B-18-web-guard-is-a-census-not-a-sweep.md)** open, reason "cost" (round 219) — the web guard is a build-and-construct check for nine of twelve packages; ablate a dart2js bug class to find out what it would actually catch
-- **[B-10](B-10-layers-without-lenses.md)** open — data, notify and blob have no lens at all: 234 files, and `loop.py stale` still names those three directories
 - **[B-05](B-05-isolate-null-credit-silent.md)** open — isolate: zero credit is indistinguishable from an old peer, the failure is silent
 - **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
 - **[B-06](B-06-websocket-lead-list-is-stale.md)** open, methodological — websocket: the old lead list went stale, the package needs rescanning
 - **[B-09](B-09-unfiled-grpc-compat-items.md)** open *(stale, 5bf4d34e)* — unfiled "documented, not fixed" items from private memory
 - **[B-03](B-03-wasm-no-package-swift.md)** open, not urgent (round 182) — wasm: no `Package.swift`, and under SPM there is no plugin at all
 
+## Deferred by the owner
+
+- **[B-10](B-10-layers-without-lenses.md)** deferred (round 223) — data, notify and blob have no lens at all: 234 files. **Not to be taken up while core and transport still have work**, however loudly `loop.py stale` names those three directories
+
 ## Closed
 
+- **[B-01](B-01-response-metadata-dropped.md)** closed (round 223) — response metadata dropped wholesale; a missing feature, not a defect, so it leaves the loop and becomes ordinary roadmap work. The measurement and the API shape stay on the page
+- **[B-02](B-02-wasm-android-promise-rejection.md)** closed (round 223) — wasm guest promise rejection on Android, accepted as [C-23](../checked/C-23-wasm-guest-promise-rejection-accepted.md)
+- **[B-04](B-04-isolate-future-timeout-unaudited.md)** closed (round 223) — isolate `Future.timeout` sites swept, all four guarded; the guards are untested, which is [L-04](../lessons/L-04-a-guard-with-no-witness.md)
 - **[B-07](B-07-decision-close-on-protocol-error.md)** decided by owner (round 190) — `closeOnProtocolError` defaults to `false`, plus a cap on the violation count
 - **[B-08](B-08-decision-closed-transport-error-split.md)** closed (round 201) — the error-type split on a closed transport
 - **[B-12](B-12-http2-cancel-kills-the-connection.md)** closed (round 208) — one cancelled stalled call killed the connection; the owner chose "keep reading, fail the call". The upstream package:http2 report is still open

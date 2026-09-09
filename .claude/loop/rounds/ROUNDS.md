@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[223](223-the-isolate-exception-closed-and-a-pattern.md)** CLEAN, rpc_dart_isolate — the isolate exception closed, and a pattern
 - **[222](222-every-site-guarded-the-guard-untested.md)** CLEAN, all five transport packages — every site guarded, and the guard untested
 - **[221](221-the-sweep-that-could-not-see-a-hang.md)** CLEAN, rpc_dart and rpc_dart_http2 — the sweep that could not see a hang, now can
 - **[220](220-the-package-the-gate-cannot-see.md)** CLEAN, rpc_dart_wasm — the package the gate cannot see
