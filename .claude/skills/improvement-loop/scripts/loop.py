@@ -4,22 +4,29 @@
 # SPDX-License-Identifier: MIT
 """Improvement-loop bookkeeping: .claude/loop/ is checked by a script, not by memory.
 
+EVERY COMMAND REPORTS FACTS. The only judgement left in here is the round cap,
+kept because an unattended agent asked "should we continue?" always says yes.
+Ranking targets used to live here too, and it cost five rounds of opening new
+threads while a started one sat unfinished — the agent decides now.
+
     loop.py init     lay out .claude/loop/ (refuses if it already exists)
     loop.py status   next round number, last round, leads, owner decisions,
-                     lenses, benches, lessons, stop condition
-    loop.py next     the next round's target by the selection rules: owner
-                     decision -> lens never applied -> rank -> stale sweep;
-                     plus the reading list, matching benches and the budget
+                     lenses, benches, lessons, and whether the cap is reached
+    loop.py next     the state a round chooses FROM, in no order and naming no
+                     target: lenses with status and `applied:` history, swept
+                     lenses whose files have moved, open leads and their
+                     reasons, valid benches, the reading list
     loop.py lint     data integrity per specs/: fields, links in both
                      directions, indexes, round commits, gate permissions;
                      and the skill's OWN graph — every file reachable from
                      SKILL.md, no dangling link, no step named by number
     loop.py stale    what has aged against the code: sweeps, negatives, leads,
-                     benches, lessons by their sha and paths; sweeps with a
-                     script detector by the hash of the instance list;
+                     benches and lessons, by their sha and paths; plus
                      directories no lens covers
+    loop.py yield    rounds taken and rounds FIXED, per lens — so curate ranks
+                     the set on evidence instead of on feel
     loop.py catalog  catalog shapes for the enabled packs (lenses mode)
-    loop.py review   reviewer prompt: core plus the enabled packs' questions
+    loop.py review   the seven verdict questions, plus the enabled packs'
 
 Standard library only. Run from the repository root, or pass --root.
 lint exit code: 0 clean, 1 errors found.
