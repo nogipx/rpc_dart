@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 223)
 round: 222
 commit: b8d934a2
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]

@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 190)
+status: closed (round 190)
 round: — (not re-measured)
 commit: 5bf4d34e
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**]

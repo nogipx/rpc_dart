@@ -859,20 +859,44 @@ def swept_stale(root: Path, ent: dict) -> list[str] | None:
     return changed_files(root, m.group(1), paths) if paths else []
 
 
-def pending_decisions(data: dict) -> list[str]:
+def backlog_rank(loop: Path, data: dict) -> list[str]:
+    """Line order in BACKLOG.md is the rank; leads with no line go last."""
+    order = list(index_links(loop / "backlog" / DIRS["backlog"]).keys())
+    rest = [bid for bid in data["backlog"] if bid not in order]
+    return [bid for bid in order if bid in data["backlog"]] + sorted(rest)
+
+
+def pending_decisions(loop: Path, data: dict) -> list[str]:
+    """Leads the owner has answered and no round has carried out yet.
+
+    NOT just `awaiting owner`. Writing the decision is what ENDS that status, so
+    matching it alone meant a lead dropped out of the priority slot at the exact
+    moment it became actionable, and fell to the bottom of the rank behind every
+    lens. Measured at round 224: B-17 — a data loss with a decision, a bench and
+    a reproduction — was the one thing `next` could never point at.
+
+    A decision stays outstanding until the lead is `closed`. `decided by owner`
+    therefore means "answered, not yet carried out"; a lead whose work shipped is
+    `closed (round N)` like any other.
+
+    Ranked by BACKLOG.md, per the rule that order lives in the index.
+    """
     out = []
-    for bid, ent in data["backlog"].items():
-        f = ent["fields"]
-        if f.get("status", "").startswith("awaiting owner") and f.get("owner decision", "").strip() not in EMPTY:
-            out.append(bid)
+    for bid in backlog_rank(loop, data):
+        f = data["backlog"][bid]["fields"]
+        if not f.get("status", "").startswith(("awaiting owner", "decided by owner")):
+            continue
+        if f.get("owner decision", "").strip() in EMPTY:
+            continue                      # asked, not yet answered — nothing to do
+        out.append(bid)
     return out
 
 
 def select_target(root: Path, loop: Path, data: dict) -> tuple[str, str, str]:
     """(kind, ID, why) by the step 1 rules."""
-    dec = pending_decisions(data)
+    dec = pending_decisions(loop, data)
     if dec:
-        return ("owner decision", dec[0], "an owner decision not yet taken up comes before any lens")
+        return ("owner decision", dec[0], "an owner decision not yet carried out comes before any lens")
     rank = lens_rank(loop, data)
     for lid in rank:
         f = data["lenses"][lid]["fields"]
@@ -946,19 +970,24 @@ def cmd_status(root: Path, loop: Path) -> int:
         if never:
             print(f"  never applied: {', '.join(never)}")
 
-    decisions, waiting, open_ = [], [], []
+    # One home for "which decisions are outstanding": `select_target` picks the
+    # round's target from this same list, so status cannot disagree with next.
+    outstanding = pending_decisions(loop, data)
+    decisions = [f"{data['backlog'][b]['h1'][2:]}: "
+                 f"{data['backlog'][b]['fields']['owner decision']}"
+                 for b in outstanding]
+    waiting, open_ = [], []
     for bid, ent in data["backlog"].items():
+        if bid in outstanding:
+            continue
         f = ent["fields"]
         st = f.get("status", "")
         title = ent["h1"][2:]
         if st.startswith("awaiting owner"):
-            if f.get("owner decision", "").strip() not in EMPTY:
-                decisions.append(f"{title}: {f['owner decision']}")
-            else:
-                waiting.append(title)
+            waiting.append(title)
         elif st.startswith("open"):
             open_.append(f"{title} — {f.get('reason', '')}")
-    print(f"Owner decisions not yet taken up: {len(decisions)}"
+    print(f"Owner decisions not yet carried out: {len(decisions)}"
           + (" — THE ROUND'S FIRST TARGET" if decisions else ""))
     for d in decisions:
         print(f"  {d}")

@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 223)
 round: 217
 commit: 576f1815
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
