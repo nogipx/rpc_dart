@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223]
+applied: [223, 233]
 status: swept here (round 223, 0e7b984a)
 ---
 
@@ -51,6 +51,18 @@ paths, and a post-timeout error from the abandoned `Future.any` is swallowed by
 `timeout`'s own handler rather than reaching the root zone. U-01 applies: the
 comment justifying it was treated as a lead and checked against the code, not
 taken as a closed door.
+
+Round 233 pointed the same detector at `rpc_dart_websocket`, which is NOT in
+this lens's paths and never has been:
+
+```
+  .timeout( | Timer( | Timer. | Completer   whole package    0 hits
+```
+
+**Absent, not guarded** — a stronger result than a clean sweep, and the reason
+the paths above still do not list websocket: adding it would claim a sweep where
+there was nothing to sweep. The control is round 223's identical grep, which
+returned four sites in `rpc_dart_isolate`.
 
 ## What the sweep does NOT establish
 

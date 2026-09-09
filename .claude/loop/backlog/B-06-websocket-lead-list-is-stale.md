@@ -23,6 +23,29 @@ both remaining items are closed inside that same file.
 the orphaned-socket defect on every `reconnect()` retry was found: one retry — 0
 alive, two — 1, three — 2.
 
+## Round 233 did the first third — do not redo it
+
+```
+  read in full     rpc_websocket_channel.dart          251 lines
+                   rpc_websocket_server.dart (resources) 365
+  grep only        websocket_io_connections.dart        249
+  NOT READ         websocket_caller_transport.dart      493   <- start here
+```
+
+Settled, with the reasons in round 233's record:
+
+- **RPC-14 is absent, not guarded**: `.timeout(` / `Timer` / `Completer` return
+  **0 hits** across the whole package. The same grep found four sites in
+  `rpc_dart_isolate`, so the zero is real.
+- Channel `close()` and `closeForProtocolError()` are idempotent and both avoid
+  the measured `_incoming.close()` deadlock.
+- `_endpoints` is removed AND closed on disconnect, on both branches.
+- Every detached observability callback goes through `_notify`, which exists
+  because a throw there reaches the root zone.
+
+**`websocket_caller_transport.dart` is where to start.** It is the largest file,
+it holds `reconnect()`, and this package's last two defects both lived there.
+
 ## Owner decision
 
 —
