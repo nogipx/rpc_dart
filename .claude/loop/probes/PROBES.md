@@ -3,6 +3,8 @@
 What a bench is and when it counts as valid — [../LOOP.md](../LOOP.md). The
 record format — `../../skills/improvement-loop/specs/probe.md`.
 
-None yet: rounds 201-205 worked with one-off probes, and bench registration
-appeared in the skill after them. The first round to build a bench and confirm
-it with a control files `P-01` here.
+Rounds 201-205 worked with one-off probes: bench registration appeared in the
+skill after them, so nothing before 206 has a record here.
+
+- **[P-01](P-01-connection-window-debt.md)** valid (round 206), core transports —
+  how much a sender gets out before the connection pool wedges

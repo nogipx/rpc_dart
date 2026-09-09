@@ -130,11 +130,38 @@ class RpcChannelTransport
   /// Streams whose credit a higher layer returns (see [IRpcFlowControlled]).
   final Set<int> _fcDeferred = {};
 
+  /// Bytes handed to a consumer that credits on CONSUMPTION, per stream, still
+  /// outstanding against the connection pool.
+  ///
+  /// Per-stream credit is reclaimed when a call ends: [_fcForget] drops the
+  /// window and wakes anything parked on it. Connection credit is not, because
+  /// it is only ever returned by consumption -- so bytes buffered for a consumer
+  /// that never takes them were charged against the pool and never repaid, and
+  /// that loss is permanent and connection-WIDE. Measured with a 1 MiB pool and
+  /// a 256 KiB stream window, sending 256 KiB per call:
+  ///
+  ///   receiver drains the per-stream view : 12 calls, never wedged
+  ///   receiver binds it and never reads   : 4 calls, then every send parks
+  ///                                         forever -- exactly one pool
+  ///
+  /// This ledger is what [_fcRepayConnection] settles when those bytes become
+  /// unreachable. Keyed by a PEER-chosen id like the maps above, so capped the
+  /// same way.
+  final Map<int, int> _fcOwedConn = {};
+
   /// Streams whose peer has sent a gRPC status. Used on the CLIENT side to tell
   /// a completed response from a truncated one at end-of-stream; cleared there.
   final Set<int> _statusSeen = {};
 
   int? get _fcWindow => _policy.flowControlWindowBytes;
+
+  /// Whether flow control is on at EITHER level.
+  ///
+  /// Every gate here used to read [_fcWindow] alone, so a policy with only the
+  /// connection pool configured charged each send against it and credited
+  /// nothing back: metering was skipped, and the pool wedged after exactly one
+  /// window with a receiver that consumed everything.
+  bool get _fcEnabled => _fcWindow != null || _fcConnWindow != null;
 
   /// Sizes of the per-stream flow-control maps, for diagnostics and tests.
   ///
@@ -148,6 +175,7 @@ class RpcChannelTransport
     'advertised': _fcAdvertised.length,
     'waiters': _fcSendWaiters.length,
     'deferred': _fcDeferred.length,
+    'owedConn': _fcOwedConn.length,
   };
 
   // Connection-wide pool, shared by every stream. Per-stream windows bound one
@@ -408,7 +436,13 @@ class RpcChannelTransport
     final existing = _streamControllers[streamId];
     if (existing != null) return _fcMetered(streamId, existing.stream);
     final ctl = StreamController<RpcTransportMessage>(
-      onCancel: () => _streamControllers.remove(streamId),
+      onCancel: () {
+        _streamControllers.remove(streamId);
+        // Whatever is still buffered here dies with the controller, so the
+        // connection pool has to be told. Runs on an explicit cancel and again
+        // when a closed controller reaches `done`, and settling is idempotent.
+        _fcRepayConnection(streamId);
+      },
     );
     _streamControllers[streamId] = ctl;
     return _fcMetered(streamId, ctl.stream);
@@ -423,7 +457,7 @@ class RpcChannelTransport
     int streamId,
     Stream<RpcTransportMessage> source,
   ) {
-    if (_fcWindow == null) return source;
+    if (!_fcEnabled) return source;
     return source.map((message) {
       _fcOnConsumed(streamId, message);
       return message;
@@ -577,6 +611,7 @@ class RpcChannelTransport
     _fcSendCredit.clear();
     _fcPendingGrant.clear();
     _fcAdvertised.clear();
+    _fcOwedConn.clear();
     _fcConnCredit = null;
     _fcConnPending = 0;
     _idManager.reset();
@@ -916,11 +951,43 @@ class RpcChannelTransport
   /// Batched at half the window, so a steady stream costs one extra frame per
   /// half-window rather than one per message.
   void _fcOnConsumed(int streamId, RpcTransportMessage message) {
-    final window = _fcWindow;
-    if (window == null) return;
+    if (!_fcEnabled) return;
     final bytes = message.payload?.length ?? 0;
     if (bytes == 0) return;
+    _fcSettleOwed(streamId, bytes);
     _fcCredit(streamId, bytes);
+  }
+
+  /// Records [bytes] as outstanding against the connection pool: they have been
+  /// routed to a consumer that credits on consumption, not on arrival.
+  void _fcOweConnection(int streamId, int bytes) {
+    if (_fcConnWindow == null || bytes <= 0) return;
+    if (!_fcCanTrack(_fcOwedConn, streamId)) return;
+    _fcOwedConn[streamId] = (_fcOwedConn[streamId] ?? 0) + bytes;
+  }
+
+  /// Clears [bytes] of that debt as the consumer takes them.
+  ///
+  /// Deliberately NOT done inside [_fcCredit]: a frame the channel stepped over
+  /// arrives there too (see `onFrameDiscarded`), and it was never routed to a
+  /// consumer, so charging it against this ledger would leave a real debt
+  /// under-repaid at teardown.
+  void _fcSettleOwed(int streamId, int bytes) {
+    final owed = _fcOwedConn[streamId];
+    if (owed == null) return;
+    final left = owed - bytes;
+    if (left > 0) {
+      _fcOwedConn[streamId] = left;
+    } else {
+      _fcOwedConn.remove(streamId);
+    }
+  }
+
+  /// Repays what [streamId] still owes the pool, for bytes no consumer will
+  /// ever take.
+  void _fcRepayConnection(int streamId) {
+    final owed = _fcOwedConn.remove(streamId);
+    if (owed != null && owed > 0) _fcCreditConnection(owed);
   }
 
   /// Accumulates [bytes] of returned credit and grants at half the window.
@@ -1056,6 +1123,13 @@ class RpcChannelTransport
   /// Drops flow-control state for a finished stream, releasing any parked
   /// sender so a torn-down call can never leave one waiting forever.
   void _fcForget(int streamId) {
+    // Bytes still buffered for a LIVE consumer are not lost yet -- that
+    // subscription's onCancel repays whatever it declines to take. With nothing
+    // bound to drain them, this is the last moment anything runs for the id.
+    final consumer = _streamControllers[streamId];
+    if (consumer == null || !consumer.hasListener) {
+      _fcRepayConnection(streamId);
+    }
     _fcSendCredit.remove(streamId);
     _fcPendingGrant.remove(streamId);
     _fcAdvertised.remove(streamId);
@@ -1065,13 +1139,14 @@ class RpcChannelTransport
 
   @override
   void deferFlowCredit(int streamId) {
-    if (_fcWindow == null) return;
+    if (!_fcEnabled) return;
     _fcDeferred.add(streamId);
   }
 
   @override
   void returnFlowCredit(int streamId, int bytes) {
-    if (_fcWindow == null || bytes <= 0) return;
+    if (!_fcEnabled || bytes <= 0) return;
+    _fcSettleOwed(streamId, bytes);
     _fcCredit(streamId, bytes);
   }
 
@@ -1183,6 +1258,9 @@ class RpcChannelTransport
     // consumer binds, so route there directly.
     final ctl = _streamControllers[message.streamId];
     if (ctl != null && !ctl.isClosed) {
+      // Credited by _fcMetered when the consumer takes it; outstanding against
+      // the connection pool until then, and repaid if it never does.
+      _fcOweConnection(message.streamId, message.payload?.length ?? 0);
       if (!truncatedEnd) {
         ctl.add(message);
       } else if (message.payload != null || message.isDirect) {
@@ -1196,7 +1274,12 @@ class RpcChannelTransport
           ),
         );
       }
-    } else if (!_fcDeferred.contains(message.streamId)) {
+    } else if (_fcDeferred.contains(message.streamId)) {
+      // A higher layer claimed the metering (IRpcFlowControlled), so the same
+      // debt applies -- settled by returnFlowCredit as it consumes, repaid at
+      // teardown for whatever it does not.
+      _fcOweConnection(message.streamId, message.payload?.length ?? 0);
+    } else {
       // Nothing meters this one and no layer has claimed it, so it goes
       // straight into the pipeline's own buffers and is consumed as soon as it
       // is dispatched. Crediting on arrival keeps such a stream from stalling

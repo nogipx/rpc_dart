@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: []
-status: confirmed (round 162, off-journal)
+applied: [206]
+status: confirmed (round 206)
 ---
 
 # RPC-01 — Flow-control credit on the skip path
@@ -14,10 +14,18 @@ status: confirmed (round 162, off-journal)
 A frame is refused or skipped without becoming a message, while the credit
 return hangs on the "message delivered" event.
 
+Round 206 widened this: the frame does not have to be SKIPPED. It is enough that
+it is delivered to a consumer that never takes it, because the credit return
+hangs on the same event either way. And where there are two levels of
+accounting, ask the question once per level — a reclaim at one is not a reclaim
+at the other.
+
 ## Detector
 
 `_fcOnConsumed` and every one of its callers; every place a frame is dropped
-before it becomes a message; `sendMessage` as the sole consumer of credit.
+before it becomes a message; `sendMessage` as the sole consumer of credit. Then,
+per level: what reclaims credit at teardown, and is the RETURN path gated on a
+flag that belongs to the other level?
 
 ## Ask
 
@@ -26,4 +34,17 @@ Will the credit the sender has already charged itself ever come back?
 ## Evidence
 
 An 8 MiB window with 2 MiB per refusal: it wedged on exactly the fourth refusal.
-Metadata frames are outside flow control — checked, not assumed.
+Metadata frames are outside flow control — checked, not assumed (round 162,
+off-journal).
+
+Round 206, same detector over the CONNECTION pool, which did not exist in 162.
+A 1 MiB pool, a 256 KiB stream window, 256 KiB per call, 12 sequential streams:
+
+    receiver drains the per-stream view    12 calls, 3072 KiB, never wedged
+    receiver binds it and never reads       4 calls, 1024 KiB, then dead
+    receiver drains, per-stream window OFF  4 calls, 1024 KiB, then dead
+
+1024 KiB is exactly the pool. `_fcForget` reclaimed the per-stream window at
+teardown and nothing reclaimed the shared one; and every gate tested
+`flowControlWindowBytes` alone, so a pool-only policy metered nothing while
+still charging each send. Both fixed; bench `../probes/P-01-connection-window-debt.md`.

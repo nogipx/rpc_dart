@@ -55,9 +55,26 @@ void earlySenderEntrypoint(
   });
 }
 
-/// Deliberately inert: it must not read, so it must not credit anything back.
+/// Deliberately inert: a consumer that binds and then does not consume, so it
+/// must not credit anything back.
+///
+/// Binding is what makes it inert. A stream with NO consumer bound is credited
+/// on arrival by design (see `RpcChannelTransport._onMessage`: nothing meters
+/// it, so it is credited as it is dispatched, at the cost of not bounding it),
+/// which hands the window straight back. An entrypoint that does nothing at all
+/// therefore cannot show a bound -- it only used to look like one because a
+/// policy with `flowControlWindowBytes: null` credited NOTHING back, on any
+/// path, which is the wedge fixed in round 206.
+///
+/// The ids are pre-bound rather than bound on first sight: the host opens one
+/// stream and a view bound from inside the broadcast listener would arrive one
+/// frame late, crediting that frame on arrival.
 @pragma('vm:entry-point')
-void inertEntrypoint(IRpcTransport transport, Map<String, dynamic> params) {}
+void inertEntrypoint(IRpcTransport transport, Map<String, dynamic> params) {
+  for (var id = 1; id <= 9; id += 2) {
+    transport.getMessagesForStream(id);
+  }
+}
 
 void main() {
   test(
@@ -100,8 +117,9 @@ void main() {
   test(
     'the connection window the worker advertises actually bounds the host',
     () async {
-      // Per-stream window OFF, so the worker never returns connection credit
-      // either: whatever the host gets out is what the initial grant allowed.
+      // Per-stream window OFF, so the only bound in play is the connection
+      // one, and the worker never consumes: whatever the host gets out is what
+      // the initial grant allowed.
       const policy = RpcSecurityPolicy(
         flowControlConnectionWindowBytes: 8 * 1024,
         flowControlWindowBytes: null,
