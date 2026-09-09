@@ -667,6 +667,14 @@ class RpcClientConnection {
   void _emit(RpcClientConnectionState s) {
     _state = s;
     if (!_stateCtl.isClosed) _stateCtl.add(s);
-    _onStateChanged?.call(s);
+    // The callback is USER code and this runs inside futures nobody catches --
+    // forceReconnect()'s `detach().then(...)` has no onError. A throw here used
+    // to reach the root zone, which ends the isolate, and to abort the connect
+    // loop before it built anything: unhandled 1, transports built 0.
+    try {
+      _onStateChanged?.call(s);
+    } catch (e) {
+      _logger?.call('warning', 'onStateChanged threw and was ignored: $e');
+    }
   }
 }

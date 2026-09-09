@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-20](P-20-throwing-state-callback.md)** valid (round 242), core resilience —
+  what a throwing user callback costs on the reconnect path. Counts what the
+  throw PREVENTED as well as what it emitted: unhandled 1 and transports built 0
+  against a control's 0 and 2
 - **[P-19](P-19-sequential-reconnect-orphan-rate.md)** valid (round 241),
   rpc_dart_http2 — how often does a SEQUENTIAL reconnect orphan a connection?
   5 in 390 direct cycles, 0 in 90 through the stalling proxy, and it names WHICH

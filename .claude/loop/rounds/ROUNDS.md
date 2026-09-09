@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[242](242-the-callback-that-ends-the-isolate.md)** FIXED, rpc_dart — a throwing `onStateChanged` reached the root zone AND aborted the connect loop before it built anything: unhandled 1 -> 0, transports 0 -> 2
 - **[241](241-the-discard-that-sometimes-does-not-land.md)** DEFERRED, rpc_dart_http2 — a sequential reconnect orphans a DISCARDED connection about 1.3% of the time; the candidate fix could not be witnessed, so it was reverted
 - **[240](240-the-buffer-drained-into-nothing.md)** FIXED, rpc_dart — the reconnect proxy drained every transport's inbound buffer into a controller nobody was listening to
 - **[239](239-finishing-what-234-opened.md)** CLEAN, no packages — finishing what 234 opened: six more memory dossiers into the journal, and the note graph repaired

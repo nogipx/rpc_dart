@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone
 breaks: a process crash.
-applied: [222, 225]
-status: swept here (round 222, b8d934a2)
+applied: [222, 225, 242]
+status: confirmed (round 242)
 ---
 
 # RPC-13 — An unhandled async error is fatal to the isolate
@@ -46,6 +46,25 @@ one on a path the detector names is guarded, including all of the new ones:
 But the ablation found something the reading could not:
 
     _detached's .catchError removed, core suite   +1395 ~1, all passed
+
+## Round 242 — the re-sweep found the THROWER, not the site
+
+Ten files had moved under these paths since 222. Every `unawaited(...)` was
+still guarded, and the defect was one level in: `forceReconnect()` runs
+`detach().then((_) { _emit(...); ... })` with no `onError`, and `_emit` called
+the user's `onStateChanged` with no guard. Round 235 had made `detach()` unable
+to reject, so the call site was safe by a property of a different method — and
+that says nothing about what the callback inside it does.
+
+    arm                     unhandled  transports built
+    control                     0            2
+    onStateChanged throws       1            0     <- before
+    onStateChanged throws       0            2     <- after
+
+> **Ask who THROWS on the path, not only who catches.** A site with no handler
+> is only a defect if something on it can throw; a site whose thrower is USER
+> code is a defect the day the API is published. Bench
+> `../probes/P-20-throwing-state-callback.md`.
 
 > **A sweep proves the sites are guarded today; it says nothing about
 > tomorrow.** The guard here exists because a client hanging up killed two
