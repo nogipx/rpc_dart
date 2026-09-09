@@ -88,31 +88,36 @@ inbound links after deleting, and count inbound edges after touching the index.
 
 ## What is left, and why it is a lead rather than a round
 
-**~30 memory dossiers still hold code knowledge with numbers**, each needing a
-file-by-file comparison against this corpus before anything is deleted — memory
-is not in git, so a wrong judgement loses the knowledge outright. Known groups:
+**21 files**, each needing a comparison against this corpus before anything is
+deleted — memory is not in git, so a wrong judgement loses the knowledge
+outright. The live list is the "Still to move" section of the store's own
+`MEMORY.md`; the groups are:
 
     per-subsystem dossiers   websocket_transport, isolate_transport,
-                             wasm_transport, backpressure_flow_control,
-                             performance_work, parked_streams_and_limits
-    shapes with no lens yet  http2_continuation_flood (a DoS below every
-                             rpc_dart limit, in package:http2 itself),
-                             reconnect_state_confusion, isolate_pre_ready_window,
-                             max_active_streams_not_concurrency,
-                             release_gate_blind_spots
-    methods, not shapes      compare_siblings_not_just_code (used in round 234),
-                             lifecycle_apis_driven_twice, measure_dont_reason,
-                             per_connection_defects_hidden_by_tests
-                             -> these are skill `methods/` material, which is a
-                                SEPARATE skill commit, not a project one
-    partially migrated       unbounded_inbound_buffers: RPC-17 owns the shape;
+      (6)                    wasm_transport, backpressure_flow_control,
+                             performance_work, release_gate_blind_spots
+    have a loop home,        stream_ids_restart_on_reconnect (RPC-03),
+      needs a check (6)      capability_interfaces_hidden_by_wrappers (RPC-04),
+                             unhandled_async_error_class (RPC-13),
+                             closed_transport_error_type_split (B-08),
+                             response_metadata_is_dropped (B-01),
+                             real_grpc_client_interop (C-15)
+    no home yet (2)          unbounded_inbound_buffers -- RPC-17 owns the shape;
                              still unhomed are the by-side draining rule,
-                             `preMethodBufferedBytes`, and the "the platform
-                             could do what the dependency could not" lesson
+                             `preMethodBufferedBytes`, and "check whether the
+                             PLATFORM can do what the dependency cannot".
+                             Plus core_audit_2026-06-wip
+    architecture, not        core_types, core_design, transport_architecture,
+      measurement (6)        logger, rpc_dart_log, grpc_compat
 
-**The four "methods, not shapes" entries are the highest value left**: they are
-how this repo's defects get found at all, they generalise past this project, and
-`curate` rule 7 already routes them — `methods/` or a pack.
+**The architecture six are the ones to decide before touching**: they describe
+what the code IS rather than anything measured, which is the repo's own docs'
+job and not the journal's. Moving them into `.claude/loop/` would repeat the
+category error the first two passes spent their effort undoing. That is an
+owner's call, not a round's.
+
+The "methods, not shapes" group named here in earlier passes is DONE — U-14 and
+U-15 already held two of them, and L-07 and L-08 were filed for the other two.
 
 ## Owner decision
 
