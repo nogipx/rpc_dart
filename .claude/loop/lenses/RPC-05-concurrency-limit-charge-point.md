@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**]
 applies: RpcSecurityPolicy has fields capping concurrency
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215]
-status: swept here (round 215, d0612f96) — every field that HOLDS state, see below
+applied: [214, 215, 245]
+status: confirmed (round 245)
 ---
 
 # RPC-05 — Where a concurrency limit is charged
@@ -40,6 +40,24 @@ concurrent handlers after 20 s and still growing linearly**, while
 `activeResponders` read 3-4 the whole time. Closed in round 114 by
 `maxConcurrentHandlers` (default null, opt-in, charged at dispatch): 37 -> 4 on
 the same attack.
+
+## Round 245 — the limit that exempts a dimension
+
+`security_policy.dart` had not changed since the 215 sweep, so the field half of
+the detector had nothing to look at. The defect was in a limit that is not a
+policy field: `BufferedBroadcastController`'s byte bound weighs
+`RpcTransportMessage.bufferedBytes`, which counted the payload only.
+
+    arm        admitted  retained    bound that stopped it
+    payload      256      16.0 MiB   the byte bound
+    metadata    4096     256.0 MiB   the EVENT count     <- before
+    metadata     255      15.9 MiB   the byte bound      <- after
+
+> **Ask WHAT a limit charges, not only WHERE.** The exemption was justified in a
+> comment — metadata "is small and bounded by the policy's header limits" —
+> which is true per frame and false in aggregate at `maxMetadataBytes` x 4096.
+> A bound with a dimension the peer controls and the weigher ignores is not a
+> bound. Bench `../probes/P-21-metadata-escapes-the-byte-bound.md`.
 
 > **Saturating the connection HIDES it, and that is a trap for any admission
 > limit here.** With the table permanently full, later calls are rejected before

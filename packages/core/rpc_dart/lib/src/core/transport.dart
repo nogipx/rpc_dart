@@ -60,7 +60,23 @@ final class RpcTransportMessage {
   ///
   /// Used by `BufferedBroadcastController.sizeOf`, whose bound was on event
   /// COUNT alone — 4096 events of up to `maxMessageLengthBytes` each.
-  int get bufferedBytes => payload?.length ?? 0;
+  ///
+  /// Metadata is counted too, and used not to be. "Small and bounded by the
+  /// policy's header limits" is true per frame and false in aggregate:
+  /// `maxMetadataBytes` defaults to 64 KiB, so 4096 metadata-only frames
+  /// retained 256 MiB against this queue's 16 MiB bound — the same
+  /// count-versus-bytes hole round 236 closed for payloads, left open in the
+  /// dimension it excluded.
+  int get bufferedBytes {
+    var total = payload?.length ?? 0;
+    final m = metadata;
+    if (m != null) {
+      for (final h in m.headers) {
+        total += h.name.length + h.value.length;
+      }
+    }
+    return total;
+  }
 
   /// Creates a transport message.
   RpcTransportMessage({

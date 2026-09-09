@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-21](P-21-metadata-escapes-the-byte-bound.md)** valid (round 245), core
+  buffering — which dimension of a frame does the queue's byte bound see? The
+  same 64 KiB as payload stops at 256 frames / 16 MiB, as metadata ran to 4096 /
+  256 MiB. The unmoving payload arm is the control
 - **[P-20](P-20-throwing-state-callback.md)** valid (round 242), core resilience —
   what a throwing user callback costs on the reconnect path. Counts what the
   throw PREVENTED as well as what it emitted: unhandled 1 and transports built 0
