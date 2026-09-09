@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[220](220-the-package-the-gate-cannot-see.md)** CLEAN, rpc_dart_wasm — the package the gate cannot see
 - **[219](219-what-the-web-gate-actually-covers.md)** CLEAN, rpc_dart — what the web gate actually covers
 - **[218](218-generation-tagging-cannot-work.md)** DEFERRED, rpc_dart — generation tagging cannot work, and the measurement says so
 - **[217](217-a-decorator-erases-the-stream-id-watermark.md)** DEFERRED, rpc_dart — a decorator erases the stream-id watermark

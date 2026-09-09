@@ -13,7 +13,7 @@ field format — `../../skills/improvement-loop/specs/lens.md`.
 - **[RPC-08](RPC-08-policy-field-single-transport.md)** confirmed (119, off-journal), applied in 205 — a policy field inert at a neighbouring transport; refines U-19
 - **[RPC-09](RPC-09-deadline-below-write.md)** swept here (210) — the deadline sits below a blocking write; the answer path is independent of the send, so it cannot arise; refines U-16
 - **[RPC-10](RPC-10-shared-layer-blast-radius.md)** confirmed (150, off-journal) — a shared-layer fix's blast radius is overstated; refines U-11
-- **[RPC-11](RPC-11-package-outside-workspace.md)** confirmed (186, off-journal) — a package outside the workspace is invisible to the gate; refines U-03
+- **[RPC-11](RPC-11-package-outside-workspace.md)** confirmed (220) — a package outside the workspace is invisible to the gate; wasm's Dart is analysed and formatted by nothing, clean anyway; refines U-03
 - **[RPC-12](RPC-12-cancel-into-request-stream.md)** retracted (204), applied in 202, 203, 204 — a contract mistaken twice for a defect
 - **[RPC-13](RPC-13-unhandled-async-error.md)** swept here (121, off-journal) — an abandoned future running user code kills the isolate; refines U-17
 - **[RPC-14](RPC-14-timeout-abandons-work.md)** swept here (067, off-journal), except isolate — a timeout drops the wait but not the work; refines U-17

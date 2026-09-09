@@ -5,6 +5,7 @@ order below is the rank.
 
 - **[B-01](B-01-response-metadata-dropped.md)** awaiting owner, an API shape (round 141) — response metadata is dropped wholesale
 - **[B-02](B-02-wasm-android-promise-rejection.md)** awaiting owner — wasm: an unhandled promise rejection is lost on Android
+- **[B-19](B-19-close-the-gate-over-wasm.md)** awaiting owner (round 220) — `analyze` and `format:check` never see rpc_dart_wasm; closing it means restructuring both gate scripts to fix nothing currently broken
 - **[B-17](B-17-watermark-lost-through-a-decorator.md)** awaiting owner (round 217) — a decorator erases the stream-id watermark and a dead call's teardown ends a live one; two candidate fixes, opposite trade-offs
 - **[B-03](B-03-wasm-no-package-swift.md)** open, not urgent (round 182) — wasm: no `Package.swift`, and under SPM there is no plugin at all
 - **[B-04](B-04-isolate-future-timeout-unaudited.md)** open (round 67) — isolate: unaudited `Future.timeout` sites, the price is a leaked isolate
