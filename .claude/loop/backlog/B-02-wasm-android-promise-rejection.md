@@ -1,13 +1,13 @@
+---
+статус: ждёт владельца
+раунд: — (не перепроверено)
+коммит: 5bf4d34e
+пути: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
+проба: —
+причина: единственный способ увидеть отклонение — обернуть Promise внутри гостя, что меняет семантику каждого промиса dart2wasm
+---
+
 # B-02 — wasm: необработанное отклонение промиса молча теряется на Android
-
-Коммит:     5bf4d34e
-Пути:       packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**
-Проба:      —
-Причина:    единственный способ увидеть отклонение — обернуть Promise внутри гостя, что меняет семантику каждого промиса dart2wasm
-Решение владельца: —
-
-Статус:     ждёт владельца
-Раунд:      — (не перепроверено)
 
 Ни события `unhandledrejection`, ни хостового колбэка. Единственный способ его
 увидеть — обернуть `Promise` внутри гостя, что меняет семантику для каждого
@@ -18,3 +18,7 @@
 не-Dart коде гостя.
 
 Линза: `../lenses/RPC-06-native-plugin-layers.md`.
+
+## Решение владельца
+
+—

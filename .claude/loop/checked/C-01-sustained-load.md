@@ -1,11 +1,15 @@
+---
+раунд: — (не перепроверено)
+коммит: 5bf4d34e
+пути: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**]
+область: [websocket, http2, isolate]
+---
+
 # C-01 — Обычная длительная нагрузка ничего не удерживает
-
-Коммит:     5bf4d34e
-Пути:       packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**
-Контроль:   прогон без нагрузки на тех же счётчиках: рост тот же, значит считаем churn, а не удержание
-
-Раунд:      — (не перепроверено)
-Область:    websocket, http2, isolate
 
 Скучный случай, который крутится в каждом развёртывании весь день. Все три
 транспорта дают текучку и ничего не удерживают.
+
+## Контроль
+
+Прогон без нагрузки на тех же счётчиках: рост тот же, значит считаем churn, а не удержание

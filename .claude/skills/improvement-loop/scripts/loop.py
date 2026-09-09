@@ -40,24 +40,30 @@ DIRS = {
 }
 VERDICTS = ("FIXED", "CLEAN", "DEFERRED", "INCONCLUSIVE", "RETRACTED")
 
-ROUND_FIELDS = ["Линза", "Гипотеза", "Стенд", "До", "Механизм", "После",
-                "Канарейка", "Бюджет", "Рецензия", "Гейт", "Коммит", "Не чинил",
-                "Связи"]
-LENS_FIELDS = ["Уточняет", "Форма", "Детектор", "Пути", "Спрашивать",
-               "Ломается", "Применима", "Улика", "Применена", "Статус"]
-BACKLOG_FIELDS = ["Статус", "Раунд", "Коммит", "Пути", "Проба", "Причина",
-                  "Решение владельца"]
-CHECKED_FIELDS = ["Раунд", "Коммит", "Пути", "Область", "Контроль"]
-PROBE_FIELDS = ["Файл", "Измеряет", "Контроль", "Раунд", "Коммит", "Пути", "Статус"]
-LESSON_FIELDS = ["Раунд", "Класс", "Цена", "Пути", "Коммит", "Статус"]
-PACK_FIELDS = ["Применим", "Классы ущерба", "Формы", "Содержит"]
-ALL_FIELDS = set(ROUND_FIELDS + LENS_FIELDS + BACKLOG_FIELDS + CHECKED_FIELDS
-                 + PROBE_FIELDS + LESSON_FIELDS + PACK_FIELDS + ["Пакет"])
+# Машинные поля живут во frontmatter, проза — в секциях `## Имя`. Ключи
+# frontmatter и заголовки секций сравниваются в нижнем регистре.
+ROUND_FRONT = ["раунд", "вердикт", "пакеты", "линза", "стенд", "бюджет",
+               "рецензия", "коммит"]
+ROUND_SECTIONS = ["цель", "гипотеза", "до", "механизм", "после", "канарейка",
+                  "гейт", "не чинил", "связи"]
+LENS_FRONT = ["уточняет", "пути", "применима", "ломается", "применена", "статус"]
+LENS_SECTIONS = ["форма", "детектор", "спрашивать", "улика"]
+LENS_OPTIONAL = ["детектор-скрипт"]
+BACKLOG_FRONT = ["статус", "раунд", "коммит", "пути", "проба", "причина"]
+BACKLOG_SECTIONS = ["решение владельца"]
+CHECKED_FRONT = ["раунд", "коммит", "пути", "область"]
+CHECKED_SECTIONS = ["контроль"]
+PROBE_FRONT = ["файл", "раунд", "коммит", "пути", "статус"]
+PROBE_SECTIONS = ["измеряет", "контроль"]
+LESSON_FRONT = ["раунд", "класс", "цена", "пути", "коммит", "статус"]
+LESSON_SECTIONS: list[str] = []
+PACK_FRONT = ["применим", "классы ущерба", "формы", "содержит"]
+CATALOG_FRONT = ["пакет", "применима", "ломается", "статус"]
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
 ID_RE = re.compile(r"^([A-ZА-ЯЁ]+-\d{2,})-[^/]+\.md$")
 ROUND_FILE_RE = re.compile(r"^(\d{3})-[^/]+\.md$")
-ROUND_H1_RE = re.compile(r"^# Раунд (\d{3}) — (\w+) — ")
+ROUND_H1_RE = re.compile(r"^# Раунд (\d{3}) — (.+)$")
 ANY_ID_RE = re.compile(r"\b([A-ZА-ЯЁ]+-\d{2,})\b")
 SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
 # `вне журнала` — раунд, который был, но его записи не существует: setup.md
@@ -70,7 +76,7 @@ LENS_STATUS_RE = re.compile(
     r"отозвана \(раунд \d{3}(?:, вне журнала)?\))")
 SWEPT_RE = re.compile(r"исчерпана здесь \(раунд (\d{3}), ([0-9a-f]{7,40})(?:, свип ([0-9a-f]{8}))?\)")
 SWEPT_OFF_RE = re.compile(r"исчерпана здесь \(раунд (\d{3}), вне журнала\)")
-SCRIPT_RE = re.compile(r"^script:\s*(\S+)(.*)$")
+SCRIPT_RE = re.compile(r"^(\S+)(.*)$")
 BACKLOG_STATUS_RE = re.compile(
     r"^(открыта|ждёт владельца|закрыта \(раунд \d{3}\)|"
     r"решена владельцем \(раунд \d{3}\))")
@@ -122,22 +128,85 @@ def git(root: Path, *args: str) -> str | None:
     return out.stdout
 
 
-def parse_fields(text: str) -> dict[str, str]:
-    """Поля вида `Имя: значение` с продолжением на отступленных строках."""
-    fields: dict[str, str] = {}
-    current: str | None = None
-    for line in text.splitlines():
-        m = re.match(r"^([A-Za-zА-Яа-яЁё][^:\n]{0,40}):[ \t]*(.*)$", line)
-        if m and m.group(1).strip() in ALL_FIELDS:
-            current = m.group(1).strip()
-            fields[current] = m.group(2).strip()
-            continue
-        if current is not None:
-            if line.startswith((" ", "\t")) and line.strip():
-                fields[current] = (fields[current] + " " + line.strip()).strip()
+def parse_scalar(value: str) -> str | list[str]:
+    value = value.strip()
+    if value.startswith("[") and value.endswith("]"):
+        return [v.strip() for v in value[1:-1].split(",") if v.strip()]
+    if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
+def parse_doc(text: str) -> dict:
+    """Frontmatter плюс секции `## Имя`.
+
+    Frontmatter — подмножество YAML и только оно: `ключ: скаляр`,
+    `ключ: [a, b]`, либо `ключ:` со списком `- item` ниже. Ничего вложенного:
+    значение это строка или список строк. Всё остальное — проза в секциях,
+    и её структуру (таблицы, ``` с колонками чисел) парсер не трогает.
+    """
+    front: dict[str, str | list[str]] = {}
+    sections: dict[str, str] = {}
+    lines = text.splitlines()
+    i = 0
+    if lines and lines[0].strip() == "---":
+        i = 1
+        key: str | None = None
+        while i < len(lines) and lines[i].strip() != "---":
+            line = lines[i]
+            i += 1
+            if not line.strip():
                 continue
-            current = None
-    return fields
+            if key is not None and line.lstrip().startswith("- "):
+                cur = front.get(key)
+                items = cur if isinstance(cur, list) else ([] if cur in ("", None) else [cur])
+                items.append(line.lstrip()[2:].strip())
+                front[key] = items
+                continue
+            m = re.match(r"^([^:#\-\[\]{}][^:]{0,60}):[ \t]*(.*)$", line)
+            if not m:
+                continue
+            key = m.group(1).strip().lower()
+            front[key] = parse_scalar(m.group(2)) if m.group(2).strip() else []
+        i += 1
+    name: str | None = None
+    buf: list[str] = []
+    for line in lines[i:]:
+        m = re.match(r"^##\s+(.+?)\s*$", line)
+        if m:
+            if name is not None:
+                sections[name] = "\n".join(buf).strip()
+            name = m.group(1).strip().lower()
+            buf = []
+            continue
+        if name is not None:
+            buf.append(line)
+    if name is not None:
+        sections[name] = "\n".join(buf).strip()
+    fields = {k: (", ".join(v) if isinstance(v, list) else v) for k, v in front.items()}
+    fields.update(sections)
+    return {"front": front, "sections": sections, "fields": fields,
+            "has_front": bool(lines) and lines[0].strip() == "---"}
+
+
+def require_fields(rep: "Report", kind: str, ent: dict, front: list[str],
+            sections: list[str]) -> None:
+    """Обязательные ключи frontmatter и обязательные секции."""
+    for name in front:
+        if name not in ent["front"]:
+            rep.error(f"{kind}/{ent['path'].name}: нет ключа `{name}:` во frontmatter")
+    for name in sections:
+        if name not in ent["sections"]:
+            rep.error(f"{kind}/{ent['path'].name}: нет секции `## {name.capitalize()}`")
+        elif not ent["sections"][name].strip():
+            rep.error(f"{kind}/{ent['path'].name}: секция `## {name.capitalize()}` пуста")
+
+
+def unknown_front(rep: "Report", kind: str, ent: dict, allowed: list[str]) -> None:
+    for name in ent["front"]:
+        if name not in allowed:
+            rep.warn(f"{kind}/{ent['path'].name}: ключ frontmatter `{name}:` не из схемы "
+                     f"({', '.join(allowed)}) — опечатка или второй дом факта")
 
 
 def h1(text: str) -> str:
@@ -177,7 +246,7 @@ def round_numbers(loop: Path) -> list[int]:
 
 def parse_config(loop: Path) -> dict:
     cfg = {"unattended": None, "gate": [], "budget": {}, "packs": ["core"],
-           "classes": [], "after_commit": []}
+           "classes": [], "after_commit": [], "commit_lang": "английский"}
     path = loop / "config.md"
     if not path.exists():
         return cfg
@@ -201,6 +270,9 @@ def parse_config(loop: Path) -> dict:
     m = re.search(r"^классы ущерба:[ \t]*(.*)$", text, re.M | re.I)
     if m and m.group(1).strip():
         cfg["classes"] = split_list(m.group(1))
+    m = re.search(r"^язык коммитов:[ \t]*(.*)$", text, re.M | re.I)
+    if m and m.group(1).strip():
+        cfg["commit_lang"] = m.group(1).strip()
     m = re.search(r"```after-commit\n(.*?)```", text, re.S)
     if m:
         cfg["after_commit"] = [l.strip() for l in m.group(1).splitlines()
@@ -221,7 +293,7 @@ def load_packs(loop: Path, cfg: dict) -> tuple[dict, list[str]]:
         if not found:
             missing.append(name)
             continue
-        fields = parse_fields((found / "PACK.md").read_text())
+        fields = parse_doc((found / "PACK.md").read_text())["fields"]
         packs[name] = {"path": found, "fields": fields,
                        "files": {k: found / f"{k}.md" for k in ("measure", "canary", "tests", "review")
                                  if (found / f"{k}.md").exists()},
@@ -232,7 +304,7 @@ def load_packs(loop: Path, cfg: dict) -> tuple[dict, list[str]]:
 def damage_classes(packs: dict, cfg: dict) -> list[str]:
     out: list[str] = []
     for pk in packs.values():
-        out += split_list(pk["fields"].get("Классы ущерба", ""))
+        out += split_list(pk["fields"].get("классы ущерба", ""))
     out += cfg["classes"]
     return [c for c in out if c not in EMPTY]
 
@@ -244,9 +316,9 @@ def catalog_forms(loop: Path, packs: dict) -> list[tuple[str, str, Path]]:
                                        if (pk["path"] / "catalog").is_dir()]
     for d in dirs:
         for f in sorted(d.glob("U-*.md")):
-            fields = parse_fields(f.read_text())
+            fields = parse_doc(f.read_text())["fields"]
             out.append((f.name[:4] if f.name[4] == "-" else f.name.split("-")[0] + "-" + f.name.split("-")[1],
-                        fields.get("Пакет", "core").strip(), f))
+                        (fields.get("пакет") or "core").strip(), f))
     return out
 
 
@@ -301,8 +373,11 @@ def load(loop: Path) -> dict:
             else:
                 m = ID_RE.match(p.name)
                 key = m.group(1) if m else p.name
+            doc = parse_doc(text)
             data[kind][key] = {"path": p, "text": text, "h1": h1(text),
-                               "fields": parse_fields(text)}
+                               "fields": doc["fields"], "front": doc["front"],
+                               "sections": doc["sections"],
+                               "has_front": doc["has_front"]}
     return data
 
 
@@ -344,9 +419,9 @@ def cmd_lint(root: Path, loop: Path) -> int:
     for name in missing:
         rep.error(f"config.md: пакет «{name}» не найден ни в {SKILL_ROOT / 'packs'}, ни в {loop / 'packs'}")
     for name, pk in packs.items():
-        for fld in PACK_FIELDS:
+        for fld in PACK_FRONT:
             if fld not in pk["fields"]:
-                rep.error(f"packs/{name}/PACK.md: нет поля `{fld}:`")
+                rep.error(f"packs/{name}/PACK.md: нет ключа `{fld}:` во frontmatter")
     classes = damage_classes(packs, cfg)
 
     # --- имена, заголовки, оглавления
@@ -385,42 +460,45 @@ def cmd_lint(root: Path, loop: Path) -> int:
                 rep.error(f"{kind}/{p.name}: файл без строки в {index_name}")
             elif links[key] != p.name:
                 rep.error(f"{kind}/{index_name}: [{key}] указывает на {links[key]}, файл {p.name}")
+            if not ent["has_front"]:
+                rep.error(f"{kind}/{p.name}: нет frontmatter — файл должен начинаться с `---`")
+            for line in ent["text"].splitlines():
+                if line.lstrip().startswith("|"):
+                    rep.warn(f"{kind}/{p.name}: таблица — запрещено схемой, числа идут в ```")
+                    break
             if kind == "rounds":
                 m = ROUND_H1_RE.match(ent["h1"])
                 if not m:
-                    rep.error(f"rounds/{p.name}: заголовок не `# Раунд NNN — ВЕРДИКТ — пакет — тема`")
-                else:
-                    if m.group(1) != key:
-                        rep.error(f"rounds/{p.name}: номер в заголовке {m.group(1)} != {key}")
-                    if m.group(2) not in VERDICTS:
-                        rep.error(f"rounds/{p.name}: вердикт «{m.group(2)}» не из {VERDICTS}")
+                    rep.error(f"rounds/{p.name}: заголовок не `# Раунд NNN — тема`")
+                elif m.group(1) != key:
+                    rep.error(f"rounds/{p.name}: номер в заголовке {m.group(1)} != {key}")
+                verdict = str(ent["fields"].get("вердикт", "")).strip()
+                if verdict not in VERDICTS:
+                    rep.error(f"rounds/{p.name}: `вердикт: {verdict or '—'}` не из {VERDICTS}")
+                if str(ent["fields"].get("раунд", "")).strip() != key:
+                    rep.error(f"rounds/{p.name}: `раунд:` не совпадает с номером в имени файла ({key})")
             else:
                 if not ent["h1"].startswith(f"# {key} — "):
                     rep.error(f"{kind}/{p.name}: заголовок должен начинаться с `# {key} — `")
-            for line in ent["text"].splitlines():
-                if line.lstrip().startswith("|"):
-                    rep.warn(f"{kind}/{p.name}: таблица — запрещено схемой")
-                    break
 
     # --- поля и ссылки
     lens_rounds: dict[str, set[str]] = {}
     for lid, ent in data["lenses"].items():
         f = ent["fields"]
-        for name in LENS_FIELDS:
-            if name not in f:
-                rep.error(f"lenses/{ent['path'].name}: нет поля `{name}:`")
-        st = f.get("Статус", "")
+        require_fields(rep, "lenses", ent, LENS_FRONT, LENS_SECTIONS)
+        unknown_front(rep, "lenses", ent, LENS_FRONT + LENS_OPTIONAL)
+        st = f.get("статус", "")
         if st and not LENS_STATUS_RE.match(st):
             rep.error(f"lenses/{ent['path'].name}: статус «{st}» не по схеме lens.md")
-        if f.get("Пути", "").strip() in EMPTY:
-            rep.error(f"lenses/{ent['path'].name}: `Пути:` пусто — свип нельзя состарить")
-        lom = f.get("Ломается", "").lower()
+        if f.get("пути", "").strip() in EMPTY:
+            rep.error(f"lenses/{ent['path'].name}: `пути:` пусто — свип нельзя состарить")
+        lom = f.get("ломается", "").lower()
         if lom and classes and not any(c.lower() in lom for c in classes):
-            rep.warn(f"lenses/{ent['path'].name}: `Ломается:` «{f['Ломается'][:60]}» не называет ни один класс "
+            rep.warn(f"lenses/{ent['path'].name}: `ломается:` «{f['ломается'][:60]}» не называет ни один класс "
                      f"ущерба подключённых пакетов ({', '.join(classes)}) — добавить класс в config.md "
                      "(`классы ущерба:`) или переформулировать")
-        det = f.get("Детектор", "").strip()
-        sm_ = SCRIPT_RE.match(det)
+        det = f.get("детектор-скрипт", "").strip()
+        sm_ = SCRIPT_RE.match(det) if det else None
         if sm_ and resolve_script(loop, packs, sm_.group(1)) is None:
             rep.error(f"lenses/{ent['path'].name}: скрипт детектора {sm_.group(1)} не найден")
         first_round = min(data["rounds"], default=None)
@@ -436,41 +514,44 @@ def cmd_lint(root: Path, loop: Path) -> int:
                           f"но журнал начинается с {first_round} — записи не хватает, а не истории")
 
         applied = set()
-        for tok in split_list(f.get("Применена", "")):
+        for tok in split_list(f.get("применена", "")):
             m = re.search(r"\d{3}", tok)
             if not m:
-                rep.error(f"lenses/{ent['path'].name}: в `Применена:` не номер раунда: «{tok}»")
+                rep.error(f"lenses/{ent['path'].name}: в `применена:` не номер раунда: «{tok}»")
                 continue
             applied.add(m.group(0))
-            check_round(m.group(0), "вне журнала" in tok, "`Применена:`")
+            check_round(m.group(0), "вне журнала" in tok, "`применена:`")
         lens_rounds[lid] = applied
         m = re.search(r"раунд (\d{3})", st)
         if m:
             check_round(m.group(1), "вне журнала" in st, "статус")
-        if st.startswith("подтверждена") and f.get("Улика", "").strip() in EMPTY:
-            rep.error(f"lenses/{ent['path'].name}: подтверждена, а `Улика:` пуста")
+        if st.startswith("подтверждена") and f.get("улика", "").strip() in EMPTY:
+            rep.error(f"lenses/{ent['path'].name}: подтверждена, а `## Улика` пуста")
 
     have_git = git(root, "rev-parse", "--git-dir") is not None
     for rn, ent in data["rounds"].items():
         f = ent["fields"]
         pname = ent["path"].name
-        for name in ROUND_FIELDS:
-            if name not in f:
-                rep.error(f"rounds/{pname}: нет поля `{name}:`")
-        m = ROUND_H1_RE.match(ent["h1"])
-        verdict = m.group(2) if m else ""
-        commit = f.get("Коммит", "").strip().lower()
+        require_fields(rep, "rounds", ent, ROUND_FRONT, ROUND_SECTIONS)
+        unknown_front(rep, "rounds", ent, ROUND_FRONT)
+        verdict = f.get("вердикт", "").strip()
+        commit = f.get("коммит", "").strip().lower()
         if commit and commit not in ("да", "нет"):
-            rep.error(f"rounds/{pname}: `Коммит:` должен быть `да` или `нет`, не «{f.get('Коммит')}»")
+            rep.error(f"rounds/{pname}: `коммит:` должен быть `да` или `нет`, не «{f.get('коммит')}»")
         if verdict == "FIXED" and commit != "да":
-            rep.error(f"rounds/{pname}: FIXED, а `Коммит:` не `да`")
+            rep.error(f"rounds/{pname}: FIXED, а `коммит:` не `да`")
         if verdict == "FIXED":
-            for name in ("После", "Канарейка", "Гейт"):
+            for name in ("после", "канарейка", "гейт"):
                 if f.get(name, "").strip().lower() in EMPTY:
-                    rep.error(f"rounds/{pname}: FIXED, а `{name}:` пусто или n/a")
-        bm = BUDGET_RE.search(f.get("Бюджет", ""))
-        if f.get("Бюджет") and not bm:
-            rep.error(f"rounds/{pname}: `Бюджет:` не по форме `пробы n/N, канарейки n/N`")
+                    rep.error(f"rounds/{pname}: FIXED, а `## {name.capitalize()}` пусто или n/a")
+        # Числа в `## До` должны пережить рендер: абзац склеит колонки в строку.
+        before = ent["sections"].get("до", "")
+        if len([l for l in before.splitlines() if l.strip()]) >= 2 and "```" not in before:
+            rep.warn(f"rounds/{pname}: `## До` длиннее строки, но без ``` — "
+                     "рендер склеит числа в один абзац")
+        bm = BUDGET_RE.search(f.get("бюджет", ""))
+        if f.get("бюджет") and not bm:
+            rep.error(f"rounds/{pname}: `бюджет:` не по форме `пробы n/N, канарейки n/N`")
         elif bm:
             pu, pb, cu, cb = (int(x) for x in bm.groups())
             cfg_b = cfg["budget"]
@@ -479,23 +560,23 @@ def cmd_lint(root: Path, loop: Path) -> int:
             if "канарейки" in cfg_b and cb != cfg_b["канарейки"]:
                 rep.warn(f"rounds/{pname}: бюджет канареек {cb} != {cfg_b['канарейки']} из config.md")
             if (pu > pb or cu > cb) and verdict not in ("INCONCLUSIVE", "DEFERRED"):
-                rep.error(f"rounds/{pname}: бюджет превышен ({f['Бюджет']}), а вердикт {verdict}, не INCONCLUSIVE")
-        sm_ = STAND_RE.match(f.get("Стенд", "").strip())
-        if f.get("Стенд") and not sm_:
-            rep.error(f"rounds/{pname}: `Стенд:` должен быть `P-NN — переиспользован`, `P-NN — новый` или `без стенда`")
+                rep.error(f"rounds/{pname}: бюджет превышен ({f['бюджет']}), а вердикт {verdict}, не INCONCLUSIVE")
+        sm_ = STAND_RE.match(f.get("стенд", "").strip())
+        if f.get("стенд") and not sm_:
+            rep.error(f"rounds/{pname}: `стенд:` должен быть `P-NN — переиспользован`, `P-NN — новый` или `без стенда`")
         elif sm_ and sm_.group(2) and sm_.group(2) not in data["probes"]:
             rep.error(f"rounds/{pname}: стенд {sm_.group(2)} не найден в probes/")
-        if f.get("Рецензия") and not REVIEW_RE.match(f["Рецензия"].strip()):
-            rep.error(f"rounds/{pname}: `Рецензия:` должна начинаться с `субагент`, `сам` или `claude -p`")
+        if f.get("рецензия") and not REVIEW_RE.match(f["рецензия"].strip()):
+            rep.error(f"rounds/{pname}: `рецензия:` должна начинаться с `субагент`, `сам` или `claude -p`")
         if commit == "да" and have_git:
             found = git(root, "log", "--all", "--format=%h", f"--grep=Раунд {rn} ")
             if not (found or "").strip():
                 rep.warn(f"rounds/{pname}: `Коммит: да`, но `git log --grep \"Раунд {rn} \"` пуст "
                          "(ещё не закоммичен?)")
-        lens_ref = f.get("Линза", "")
+        lens_ref = f.get("линза", "")
         lm = ANY_ID_RE.search(lens_ref)
         if not lm:
-            rep.error(f"rounds/{pname}: в `Линза:` нет ID")
+            rep.error(f"rounds/{pname}: в `линза:` нет ID")
         else:
             lid = lm.group(1)
             if lid.startswith("U-"):
@@ -504,57 +585,56 @@ def cmd_lint(root: Path, loop: Path) -> int:
                 rep.error(f"rounds/{pname}: линза {lid} не найдена в lenses/")
             elif rn not in lens_rounds.get(lid, set()):
                 rep.error(f"lenses/{data['lenses'][lid]['path'].name}: раунд {rn} пользовался линзой, "
-                          f"а в её `Применена:` его нет")
-        for tok in ANY_ID_RE.findall(f.get("Связи", "")):
+                          f"а в её `применена:` его нет")
+        for tok in ANY_ID_RE.findall(f.get("связи", "")):
             if tok.startswith(("B-", "C-")):
                 kind = "backlog" if tok.startswith("B-") else "checked"
                 if tok not in data[kind]:
-                    rep.error(f"rounds/{pname}: `Связи:` ссылается на {tok}, файла нет")
+                    rep.error(f"rounds/{pname}: `## Связи` ссылается на {tok}, файла нет")
 
-    for kind, fields, status_re in (("backlog", BACKLOG_FIELDS, BACKLOG_STATUS_RE),
-                                    ("checked", CHECKED_FIELDS, None)):
+    for kind, front, secs, status_re in (
+            ("backlog", BACKLOG_FRONT, BACKLOG_SECTIONS, BACKLOG_STATUS_RE),
+            ("checked", CHECKED_FRONT, CHECKED_SECTIONS, None)):
         for iid, ent in data[kind].items():
             f = ent["fields"]
             pname = ent["path"].name
-            for name in fields:
-                if name not in f:
-                    rep.error(f"{kind}/{pname}: нет поля `{name}:`")
-            if status_re and f.get("Статус") and not status_re.match(f["Статус"]):
-                rep.error(f"{kind}/{pname}: статус «{f['Статус']}» не по схеме")
-            rnd = f.get("Раунд", "")
+            require_fields(rep, kind, ent, front, secs)
+            unknown_front(rep, kind, ent, front)
+            if status_re and f.get("статус") and not status_re.match(f["статус"]):
+                rep.error(f"{kind}/{pname}: статус «{f['статус']}» не по схеме")
+            rnd = f.get("раунд", "")
             m = re.search(r"\d{3}", rnd)
             if m and m.group(0) not in data["rounds"]:
-                rep.error(f"{kind}/{pname}: `Раунд: {m.group(0)}`, файла раунда нет")
+                rep.error(f"{kind}/{pname}: `раунд: {m.group(0)}`, файла раунда нет")
             if not m and "не перепроверено" not in rnd:
-                rep.error(f"{kind}/{pname}: `Раунд:` без номера и без пометки «(не перепроверено)»")
-            if not SHA_RE.search(f.get("Коммит", "")):
-                rep.error(f"{kind}/{pname}: `Коммит:` без sha — старение не посчитать")
-            if f.get("Пути", "").strip() in EMPTY:
-                rep.error(f"{kind}/{pname}: `Пути:` пусто — старение не посчитать")
-            if kind == "checked" and f.get("Контроль", "").strip() in EMPTY:
+                rep.error(f"{kind}/{pname}: `раунд:` без номера и без пометки «(не перепроверено)»")
+            if not SHA_RE.search(f.get("коммит", "")):
+                rep.error(f"{kind}/{pname}: `коммит:` без sha — старение не посчитать")
+            if f.get("пути", "").strip() in EMPTY:
+                rep.error(f"{kind}/{pname}: `пути:` пусто — старение не посчитать")
+            if kind == "checked" and f.get("контроль", "").strip() in EMPTY:
                 rep.error(f"checked/{pname}: негатив без контроля — это надежда, а не негатив")
-            if kind == "backlog" and f.get("Причина", "").strip() in EMPTY:
-                rep.error(f"backlog/{pname}: `Причина:` пуста")
+            if kind == "backlog" and f.get("причина", "").strip() in EMPTY:
+                rep.error(f"backlog/{pname}: `причина:` пуста")
 
     for pid, ent in data["probes"].items():
         f = ent["fields"]
         pname = ent["path"].name
-        for name in PROBE_FIELDS:
-            if name not in f:
-                rep.error(f"probes/{pname}: нет поля `{name}:`")
-        st = f.get("Статус", "")
+        require_fields(rep, "probes", ent, PROBE_FRONT, PROBE_SECTIONS)
+        unknown_front(rep, "probes", ent, PROBE_FRONT)
+        st = f.get("статус", "")
         if st and not PROBE_STATUS_RE.match(st):
             rep.error(f"probes/{pname}: статус «{st}» не по схеме probe.md")
-        m = re.search(r"\d{3}", f.get("Раунд", ""))
+        m = re.search(r"\d{3}", f.get("раунд", ""))
         if m and m.group(0) not in data["rounds"]:
-            rep.error(f"probes/{pname}: `Раунд: {m.group(0)}`, файла раунда нет")
-        if not SHA_RE.search(f.get("Коммит", "")):
-            rep.error(f"probes/{pname}: `Коммит:` без sha")
-        if f.get("Пути", "").strip() in EMPTY:
-            rep.error(f"probes/{pname}: `Пути:` пусто")
-        if f.get("Контроль", "").strip() in EMPTY:
+            rep.error(f"probes/{pname}: `раунд: {m.group(0)}`, файла раунда нет")
+        if not SHA_RE.search(f.get("коммит", "")):
+            rep.error(f"probes/{pname}: `коммит:` без sha")
+        if f.get("пути", "").strip() in EMPTY:
+            rep.error(f"probes/{pname}: `пути:` пусто")
+        if f.get("контроль", "").strip() in EMPTY:
             rep.error(f"probes/{pname}: стенд без контроля не валиден")
-        fpath = f.get("Файл", "").strip()
+        fpath = f.get("файл", "").strip()
         if fpath in EMPTY:
             rep.error(f"probes/{pname}: `Файл:` пуст")
         elif st.startswith("валиден") and not (root / fpath).exists():
@@ -563,23 +643,22 @@ def cmd_lint(root: Path, loop: Path) -> int:
     for lid_, ent in data["lessons"].items():
         f = ent["fields"]
         pname = ent["path"].name
-        for name in LESSON_FIELDS:
-            if name not in f:
-                rep.error(f"lessons/{pname}: нет поля `{name}:`")
-        st = f.get("Статус", "")
+        require_fields(rep, "lessons", ent, LESSON_FRONT, LESSON_SECTIONS)
+        unknown_front(rep, "lessons", ent, LESSON_FRONT)
+        st = f.get("статус", "")
         if st and not LESSON_STATUS_RE.match(st):
             rep.error(f"lessons/{pname}: статус «{st}» не по схеме lesson.md")
-        if f.get("Класс") and f["Класс"].strip() not in LESSON_CLASSES:
-            rep.error(f"lessons/{pname}: `Класс:` не из {LESSON_CLASSES}")
-        m = re.search(r"\d{3}", f.get("Раунд", ""))
+        if f.get("класс") and f["класс"].strip() not in LESSON_CLASSES:
+            rep.error(f"lessons/{pname}: `класс:` не из {LESSON_CLASSES}")
+        m = re.search(r"\d{3}", f.get("раунд", ""))
         if not m:
-            rep.error(f"lessons/{pname}: `Раунд:` без номера — урок без раунда не оплачен")
+            rep.error(f"lessons/{pname}: `раунд:` без номера — урок без раунда не оплачен")
         elif m.group(0) not in data["rounds"]:
-            rep.error(f"lessons/{pname}: `Раунд: {m.group(0)}`, файла раунда нет")
-        if f.get("Цена", "").strip() in EMPTY or not re.search(r"\d", f.get("Цена", "")):
-            rep.error(f"lessons/{pname}: `Цена:` без числа — без цены это не урок")
-        if not SHA_RE.search(f.get("Коммит", "")):
-            rep.error(f"lessons/{pname}: `Коммит:` без sha")
+            rep.error(f"lessons/{pname}: `раунд: {m.group(0)}`, файла раунда нет")
+        if f.get("цена", "").strip() in EMPTY or not re.search(r"\d", f.get("цена", "")):
+            rep.error(f"lessons/{pname}: `цена:` без числа — без цены это не урок")
+        if not SHA_RE.search(f.get("коммит", "")):
+            rep.error(f"lessons/{pname}: `коммит:` без sha")
 
     # --- нумерация раундов
     nums = round_numbers(loop)
@@ -624,10 +703,10 @@ def lens_rank(loop: Path, data: dict) -> list[str]:
 
 def swept_stale(root: Path, ent: dict) -> list[str] | None:
     """Для линзы `исчерпана здесь`: изменённые файлы по её путям с sha свипа."""
-    m = re.match(r"исчерпана здесь \(раунд \d{3}, ([0-9a-f]{7,40})\)", ent["fields"].get("Статус", ""))
+    m = re.match(r"исчерпана здесь \(раунд \d{3}, ([0-9a-f]{7,40})\)", ent["fields"].get("статус", ""))
     if not m:
         return None
-    paths = split_list(ent["fields"].get("Пути", ""))
+    paths = split_list(ent["fields"].get("пути", ""))
     return changed_files(root, m.group(1), paths) if paths else []
 
 
@@ -635,7 +714,7 @@ def pending_decisions(data: dict) -> list[str]:
     out = []
     for bid, ent in data["backlog"].items():
         f = ent["fields"]
-        if f.get("Статус", "").startswith("ждёт владельца") and f.get("Решение владельца", "").strip() not in EMPTY:
+        if f.get("статус", "").startswith("ждёт владельца") and f.get("решение владельца", "").strip() not in EMPTY:
             out.append(bid)
     return out
 
@@ -648,10 +727,10 @@ def select_target(root: Path, loop: Path, data: dict) -> tuple[str, str, str]:
     rank = lens_rank(loop, data)
     for lid in rank:
         f = data["lenses"][lid]["fields"]
-        if f.get("Статус", "").startswith("выведена") and not split_list(f.get("Применена", "")):
+        if f.get("статус", "").startswith("выведена") and not split_list(f.get("применена", "")):
             return ("линза", lid, "выведена и ни разу не применена — гипотеза, за которую ещё не платили")
     for lid in rank:
-        st = data["lenses"][lid]["fields"].get("Статус", "")
+        st = data["lenses"][lid]["fields"].get("статус", "")
         if st.startswith(("выведена", "подтверждена")):
             return ("линза", lid, "первая по рангу среди не исчерпанных")
     for lid in rank:
@@ -660,7 +739,7 @@ def select_target(root: Path, loop: Path, data: dict) -> tuple[str, str, str]:
         if ch:
             return ("линза", lid, f"исчерпана, но по её путям изменилось {len(ch)} файл(ов) — перемер")
     for bid, ent in data["backlog"].items():
-        if ent["fields"].get("Статус", "").startswith("открыта"):
+        if ent["fields"].get("статус", "").startswith("открыта"):
             return ("зацепка", bid, "открытая зацепка при исчерпанном наборе — перемер (U-21)")
     return ("нет", "", "")
 
@@ -676,7 +755,7 @@ def stop_condition(root: Path, loop: Path, data: dict, cfg: dict) -> tuple[bool,
     if kind != "нет":
         return False, f"есть цель: {kind} {tid}"
     waiting = [b for b, e in data["backlog"].items()
-               if e["fields"].get("Статус", "").startswith("ждёт владельца")]
+               if e["fields"].get("статус", "").startswith("ждёт владельца")]
     if waiting:
         return True, f"все линзы исчерпаны и свежи, работа ждёт владельца: {', '.join(waiting)}"
     return True, "все линзы исчерпаны или отозваны, по их путям изменений нет, открытых зацепок нет"
@@ -695,7 +774,7 @@ def cmd_status(root: Path, loop: Path) -> int:
     if nums:
         last = data["rounds"][f"{nums[-1]:03d}"]
         print(f"Последний раунд: {last['h1'][2:]}")
-        print(f"  Не чинил: {last['fields'].get('Не чинил', '—')}")
+        print(f"  Не чинил: {last['fields'].get('не чинил', '—')}")
     else:
         print("Последний раунд: нет — цикл ещё не начинался")
 
@@ -706,10 +785,10 @@ def cmd_status(root: Path, loop: Path) -> int:
               "не по схеме": []}
         never = []
         for lid, ent in data["lenses"].items():
-            st = ent["fields"].get("Статус", "")
+            st = ent["fields"].get("статус", "")
             key = next((k for k in by if st.startswith(k)), "не по схеме")
             by[key].append(lid)
-            if not split_list(ent["fields"].get("Применена", "")):
+            if not split_list(ent["fields"].get("применена", "")):
                 never.append(lid)
         print("Линзы: " + ", ".join(f"{k} {len(v)}" for k, v in by.items() if v))
         if never:
@@ -718,15 +797,15 @@ def cmd_status(root: Path, loop: Path) -> int:
     decisions, waiting, open_ = [], [], []
     for bid, ent in data["backlog"].items():
         f = ent["fields"]
-        st = f.get("Статус", "")
+        st = f.get("статус", "")
         title = ent["h1"][2:]
         if st.startswith("ждёт владельца"):
-            if f.get("Решение владельца", "").strip() not in EMPTY:
-                decisions.append(f"{title}: {f['Решение владельца']}")
+            if f.get("решение владельца", "").strip() not in EMPTY:
+                decisions.append(f"{title}: {f['решение владельца']}")
             else:
                 waiting.append(title)
         elif st.startswith("открыта"):
-            open_.append(f"{title} — {f.get('Причина', '')}")
+            open_.append(f"{title} — {f.get('причина', '')}")
     print(f"Решения владельца, не принятые в работу: {len(decisions)}"
           + (" — ПЕРВАЯ ЦЕЛЬ РАУНДА" if decisions else ""))
     for d in decisions:
@@ -738,10 +817,10 @@ def cmd_status(root: Path, loop: Path) -> int:
     for o in open_:
         print(f"  {o}")
     print(f"Негативы: {len(data['checked'])}")
-    valid = [pid for pid, e in data["probes"].items() if e["fields"].get("Статус", "").startswith("валиден")]
+    valid = [pid for pid, e in data["probes"].items() if e["fields"].get("статус", "").startswith("валиден")]
     print(f"Стенды: {len(data['probes'])}, валидных {len(valid)}"
           + (f" ({', '.join(valid)})" if valid else ""))
-    active = [l for l, e in data["lessons"].items() if e["fields"].get("Статус", "").startswith("действует")]
+    active = [l for l, e in data["lessons"].items() if e["fields"].get("статус", "").startswith("действует")]
     print(f"Уроки: {len(data['lessons'])}, действуют {len(active)} — читать lessons/LESSONS.md")
     cfg = parse_config(loop)
     stop, why = stop_condition(root, loop, data, cfg)
@@ -775,6 +854,7 @@ def cmd_next(root: Path, loop: Path) -> int:
     print(f"Бюджет: пробы 0/{b.get('пробы', '?')}, канарейки 0/{b.get('канарейки', '?')}")
     packs, missing = load_packs(loop, cfg)
     print("Пакеты: " + ", ".join(packs) + (f" (не найдены: {', '.join(missing)})" if missing else ""))
+    print(f"Язык коммита: {cfg['commit_lang']}")
     reading = ["methods/measurement.md (чек-лист)", "methods/canary.md (чек-лист)",
                "methods/tests.md (чек-лист)", "specs/round.md"]
     for name, pk in packs.items():
@@ -787,38 +867,38 @@ def cmd_next(root: Path, loop: Path) -> int:
         ent = data["lenses"][tid]
         f = ent["fields"]
         print(f"Линза: {ent['path'].relative_to(root)}")
-        print(f"  Статус: {f.get('Статус', '')}")
-        print(f"  Пути: {f.get('Пути', '')}")
-        print(f"  Детектор: {f.get('Детектор', '')[:200]}")
-        if SCRIPT_RE.match(f.get("Детектор", "").strip()):
+        print(f"  Статус: {f.get('статус', '')}")
+        print(f"  Пути: {f.get('пути', '')}")
+        print(f"  Детектор: {' '.join(f.get('детектор', '').split())[:200]}")
+        if f.get("детектор-скрипт", "").strip():
             print(f"  Свип — скриптом: python3 scripts/loop.py sweep {tid}")
-        lens_paths = split_list(f.get("Пути", ""))
+        lens_paths = split_list(f.get("пути", ""))
         matches = []
         for pid, pe in data["probes"].items():
-            if not pe["fields"].get("Статус", "").startswith("валиден"):
+            if not pe["fields"].get("статус", "").startswith("валиден"):
                 continue
-            ppaths = split_list(pe["fields"].get("Пути", ""))
+            ppaths = split_list(pe["fields"].get("пути", ""))
             if any(_overlap(a, b_) for a in lens_paths for b_ in ppaths):
-                matches.append(f"{pid} ({pe['fields'].get('Файл', '')}) — {pe['h1'][2:]}")
+                matches.append(f"{pid} ({pe['fields'].get('файл', '')}) — {pe['h1'][2:]}")
         if matches:
             print("Валидные стенды по тем же путям — начинать с них, не строить новый:")
             for m_ in matches:
                 print(f"  {m_}")
         else:
             print("Валидных стендов по этим путям нет — новый стенд регистрировать как P-NN после валидации контролем")
-        if f.get("Уточняет", "").strip() not in EMPTY:
-            reading.append(f"catalog/{f['Уточняет'].strip()}-*.md")
+        if f.get("уточняет", "").strip() not in EMPTY:
+            reading.append(f"catalog/{f['уточняет'].strip()}-*.md")
     elif kind == "решение владельца":
         ent = data["backlog"][tid]
         print(f"Зацепка: {ent['path'].relative_to(root)}")
-        print(f"  Решение владельца: {ent['fields'].get('Решение владельца', '')}")
+        print(f"  Решение владельца: {ent['fields'].get('решение владельца', '')}")
         print("  Линза для записи раунда — та, что породила зацепку (см. её ссылки)")
     else:
         ent = data["backlog"][tid]
         print(f"Зацепка: {ent['path'].relative_to(root)}")
-        print(f"  Причина: {ent['fields'].get('Причина', '')}")
+        print(f"  Причина: {ent['fields'].get('причина', '')}")
         reading.append("catalog/U-21-remeasure-own-deferrals.md")
-    active = [l for l, e in data["lessons"].items() if e["fields"].get("Статус", "").startswith("действует")]
+    active = [l for l, e in data["lessons"].items() if e["fields"].get("статус", "").startswith("действует")]
     if active:
         print(f"Уроки, которые действуют ({len(active)}): lessons/LESSONS.md")
     print("Читать: " + "; ".join(reading))
@@ -847,18 +927,18 @@ def cmd_stale(root: Path, loop: Path) -> int:
     cfg = parse_config(loop)
     packs, _ = load_packs(loop, cfg)
     for lid, ent in data["lenses"].items():
-        st = ent["fields"].get("Статус", "")
+        st = ent["fields"].get("статус", "")
         m = SWEPT_RE.match(st)
         if not m:
             if SWEPT_OFF_RE.match(st):
                 rows.append(("свип", lid, "—", None,
                              "свип вне журнала: код на момент свипа неизвестен, перемерить"))
             continue
-        paths = split_list(ent["fields"].get("Пути", ""))
+        paths = split_list(ent["fields"].get("пути", ""))
         changed = changed_files(root, m.group(2), paths) if paths else []
         note = ""
         if m.group(3):
-            res = run_detector(root, loop, packs, ent["fields"].get("Детектор", ""))
+            res = run_detector(root, loop, packs, ent["fields"].get("детектор-скрипт", ""))
             if res is None:
                 note = "скрипт детектора не найден"
             elif res[1] != m.group(3):
@@ -871,15 +951,15 @@ def cmd_stale(root: Path, loop: Path) -> int:
                         ("probes", "стенд"), ("lessons", "урок")):
         for iid, ent in data[kind].items():
             f = ent["fields"]
-            if kind == "backlog" and not f.get("Статус", "").startswith(("открыта", "ждёт")):
+            if kind == "backlog" and not f.get("статус", "").startswith(("открыта", "ждёт")):
                 continue
-            if kind == "probes" and not f.get("Статус", "").startswith("валиден"):
+            if kind == "probes" and not f.get("статус", "").startswith("валиден"):
                 continue
-            if kind == "lessons" and (not f.get("Статус", "").startswith("действует")
-                                      or f.get("Пути", "").strip() in EMPTY):
+            if kind == "lessons" and (not f.get("статус", "").startswith("действует")
+                                      or f.get("пути", "").strip() in EMPTY):
                 continue
-            sm = SHA_RE.search(f.get("Коммит", ""))
-            paths = split_list(f.get("Пути", ""))
+            sm = SHA_RE.search(f.get("коммит", ""))
+            paths = split_list(f.get("пути", ""))
             if not sm:
                 rows.append((label, iid, "—", None, ""))
                 continue
@@ -901,7 +981,7 @@ def cmd_stale(root: Path, loop: Path) -> int:
     # директории, не покрытые ни одной линзой
     tracked = (git(root, "ls-files") or "").splitlines()
     globs = [p for ent in data["lenses"].values()
-             for p in split_list(ent["fields"].get("Пути", ""))]
+             for p in split_list(ent["fields"].get("пути", ""))]
     if tracked and globs:
         dirs: dict[str, list[int]] = {}
         for f in tracked:
@@ -993,11 +1073,12 @@ def cmd_sweep(root: Path, loop: Path, lens_id: str | None) -> int:
     if not ent:
         print(f"линза {lens_id} не найдена")
         return 1
-    det = ent["fields"].get("Детектор", "")
+    det = ent["fields"].get("детектор-скрипт", "")
     res = run_detector(root, loop, packs, det)
     if res is None:
-        print(f"{lens_id}: детектор не скрипт (`script: путь`) или скрипт не найден — свип вручную по описанию:")
-        print("  " + det)
+        print(f"{lens_id}: нет `детектор-скрипт:` во frontmatter или скрипт не найден — "
+              "свип вручную по секции `## Детектор`:")
+        print("  " + " ".join(ent["fields"].get("детектор", "").split()))
         return 1
     lines, digest = res
     for l in lines:
@@ -1025,6 +1106,12 @@ unattended: no
 
 пакеты: core
 классы ущерба:
+
+## Язык
+
+Язык заголовка и тела коммита раунда. Строку можно убрать — тогда английский.
+
+язык коммитов: английский
 
 ## Тулчейн
 
@@ -1097,15 +1184,15 @@ LOOP_TEMPLATE = """# LOOP.md — карта данных цикла улучше
 
 ```mermaid
 flowchart LR
-    R[раунд] -->|Линза:| L[линза]
-    L -->|Применена:| R
-    R -->|Стенд:| P[стенд]
-    B[зацепка] -->|Раунд:| R
-    C[негатив] -->|Раунд:| R
-    P -->|Раунд:| R
-    S[урок] -->|Раунд:| R
-    R -->|Связи:| B
-    R -->|Связи:| C
+    R[раунд] -->|линза:| L[линза]
+    L -->|применена:| R
+    R -->|стенд:| P[стенд]
+    B[зацепка] -->|раунд:| R
+    C[негатив] -->|раунд:| R
+    P -->|раунд:| R
+    S[урок] -->|раунд:| R
+    R -->|## Связи| B
+    R -->|## Связи| C
 ```
 
 ## Куда идти с вопросом
