@@ -133,6 +133,15 @@ Future<int> _until(
 /// the sockets are opened one at a time and `bodyReadTimeout` can answer the
 /// first before the last one connects, so the count never reaches 4 at any
 /// single instant. A peak is what the guard actually means.
+///
+/// A peak is only meaningful over a window that CONTAINS the event, which is
+/// why the caller starts this before the aborts rather than after them. That
+/// second flake reads identically to the first -- `Actual: <0>` -- and has a
+/// different cause, so fixing the question without fixing the window left it
+/// live.
+///
+/// Starts by polling immediately, so a rise that has already happened when the
+/// budget opens is still seen.
 Future<int> _peak(Future<int> Function() read, Duration budget) async {
   final deadline = DateTime.now().add(budget);
   var peak = 0;
@@ -162,18 +171,28 @@ void main() {
       // RESOURCE_EXHAUSTED until the 60s half-open reclaim.
       final rig = await _serve();
 
+      // The observation starts BEFORE the aborts, and that ordering is the
+      // whole point. `_abortMidBody` destroys its socket the moment the headers
+      // are out, so a request can be answered by a read ERROR — promptly —
+      // rather than by bodyReadTimeout two seconds later. Which of the two
+      // happens is TCP and scheduling, so polling only after the loop makes the
+      // rise a coin toss: on a loaded machine all four can be answered before
+      // the first poll, and the guard reads 0 on a server that did everything
+      // right.
+      final peak = _peak(
+        () => _pendingRequests(rig.transport),
+        const Duration(seconds: 8),
+      );
+
       for (var i = 0; i < _maxActiveStreams; i++) {
         await _abortMidBody(rig.port);
       }
 
-      // Wait for the RISE first: without it, "openStreams == 0" would also pass
-      // on a server the aborted requests never reached. A PEAK, not a
-      // simultaneous count -- see [_peak] for what that cost.
+      // The RISE: without it, "openStreams == 0" would also pass on a server
+      // the aborted requests never reached. A PEAK, not a simultaneous count --
+      // see [_peak] for what that cost.
       expect(
-        await _peak(
-          () => _pendingRequests(rig.transport),
-          const Duration(seconds: 5),
-        ),
+        await peak,
         greaterThan(0),
         reason: 'the aborted requests must reach the transport at all',
       );
