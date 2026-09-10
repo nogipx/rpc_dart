@@ -162,6 +162,81 @@ Two facts the decision did not have:
   one-home rule exists to prevent — and worse in the repo than in private
   notes, because readers trust what is committed.
 
+### First cut of the inventory — round 268
+
+`docs/` is not a stub. It is a documentation set:
+
+```
+docs/architecture.md          522 lines
+docs/core-concepts.md         320 lines
+docs/getting-started.md, index.md
+docs/core/          rpc_dart.md, compression.md, generator.md, opentelemetry.md
+docs/transports/    http.md, http2.md, websocket.md, isolate.md, inmemory.md,
+                    turn-relay.md, index.md
+docs/guides/        rpc-lifecycle.md, streaming-patterns.md, error-handling.md,
+                    context-and-metadata.md, routing-and-composition.md,
+                    diagnostics.md, testing-and-debugging.md
+docs/ru/, docs/plans/, docs/assets/
+```
+
+**Provisional mapping of the six notes onto it**, to be confirmed note by note:
+
+```
+note                    the docs that already cover the ground
+core_types              docs/core/rpc_dart.md, core-concepts.md
+core_design             architecture.md, core-concepts.md
+transport_architecture  architecture.md, all of docs/transports/
+logger                  guides/diagnostics.md, core/opentelemetry.md
+rpc_dart_log            guides/diagnostics.md
+grpc_compat             nothing obvious — the likeliest genuine ADDITION
+```
+
+**`grpc_compat` confirmed as the genuine gap — round 269.** Measured against
+`docs/`:
+
+```
+files mentioning gRPC at all                        8
+files naming grpc-status / -message / -timeout      1  (transports/http.md, twice)
+files naming any x-rpc-* header of this library     0
+```
+
+Eight files say "gRPC"; exactly one names a wire header, twice, in passing; and
+NOTHING documents which `x-rpc-*` headers this library adds that gRPC does not
+know — which is precisely the question a user hits when they put rpc_dart behind
+a real gRPC proxy. That is the note's core subject and it is absent.
+
+**The verified core of that merge — round 270.** Taken from
+`core/rpc_headers.dart`, not from the note, per rule one:
+
+```
+x-trace-id              :53
+x-request-id            :56
+x-route-service         :59
+x-client-cancelled      :62
+x-cancellation-reason   :65
+x-rpc-window-update     :76    flow control, per stream
+x-rpc-conn-window-update:88    flow control, connection-wide
+```
+
+Seven headers gRPC does not define, none of them documented anywhere in
+`docs/`. Two of them carry the flow-control protocol that a plain gRPC peer
+knows nothing about, which is exactly the interop question — an intermediary
+that strips unknown metadata silently disables flow control rather than failing
+visibly.
+
+That list is the doc, and it is now checked against the implementation instead
+of against a 47-round-old note. What the note may still add is the REASONING for
+each, which is what needs reading when the merge is written.
+
+So the shape of the remaining work is confirmed: five deletions and one merge,
+and the merge is into `docs/transports/` rather than a new top-level file, since
+that is where the two existing mentions live.
+
+So the expected outcome is not six new files. Five of the six probably reduce to
+"already said, better, in a file with an audience" and get DELETED; `grpc_compat`
+is the one that may earn a place, and it is the 459-line one that needs its
+claims checked hardest.
+
 **What that changes:** the migration needs an inventory first — for each of the
 six, what does `docs/` already say, and is the note adding, contradicting, or
 repeating? A note that only repeats gets deleted, not moved. Nothing should be
