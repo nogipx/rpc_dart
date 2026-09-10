@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304]
 status: confirmed (round 293)
 ---
 
@@ -149,6 +149,14 @@ found by sweeping and none reachable block by block:
 - **A block duplicated verbatim.** Round 297: eight lines about timer-vs-
   microtask delivery appeared TWICE in a row in `getMessagesForStream`. Each
   copy is correct, which is why nothing caught it.
+
+  **Round 304 found the CAUSE of one: a doc left behind when its code MOVES.**
+  `RpcHttp2OutgoingPump` moved to `rpc_http2_common.dart` and took its doc; the
+  `typedef _OutgoingPump = RpcHttp2OutgoingPump;` left behind kept a 29-line
+  verbatim copy, ending in a line saying the real one is elsewhere. Both copies
+  correct, in two files, one attached to a one-line alias. Sweep for this around
+  any `typedef`, re-export or thin wrapper — those are what a move leaves
+  behind.
 - **The same measurement in two places.** The pre-method budget's 789 MiB and
   the deadline reclaim's `openStreams: 30` were each written once as a doc
   comment and once as an inline block a few hundred lines apart.
