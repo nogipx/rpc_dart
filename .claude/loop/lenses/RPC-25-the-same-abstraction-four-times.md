@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318]
 status: confirmed (round 308)
 ---
 
@@ -115,6 +115,23 @@ VALUE never is.
 
 So the diff has a second axis: compare each copy to the thing it READS, not only
 to its sibling.
+
+## Same code, different LIFETIME — do not merge
+
+Round 317: `RpcResponderContract` and `RpcCallerContract` open their methods with
+the same two calls, line for line. They are not the same thing. The responder
+resolves the codec mode once per REGISTRATION, to pick which map a handler lands
+in; the caller resolves it once per CALL, to decide what goes on the wire. The
+responder's preamble also refuses a duplicate name; the caller stores nothing,
+so it has no duplicate to refuse.
+
+Merging them would carry a registration rule onto a call path — dead at best,
+refusing a second call at worst.
+
+**Before merging two look-alikes, ask how long each one's result LIVES.** Same
+computation over different lifetimes is a coincidence, not a duplication. The
+genuinely shared part here was already extracted (`_RpcCodecMode`); what stayed
+apart is what differs.
 
 ## The exception: a duplicated RULE
 

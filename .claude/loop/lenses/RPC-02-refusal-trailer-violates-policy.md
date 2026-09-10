@@ -3,8 +3,8 @@ refines: U-09
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
-applied: [216, 243]
-status: swept here (round 243, 0a6e25d5)
+applied: [216, 243, 320]
+status: swept here (round 320, 3228c5de)
 ---
 
 # RPC-02 — A refusal trailer that violates the policy it enforced
@@ -51,6 +51,19 @@ paths added since 216 — round 237's header-block refusal and round 240's
 having consulted this lens. Note what that re-sweep is: a reading. Round 216's
 ablation is what gave "every site passes the cap" its meaning, and 243 did not
 repeat it.
+
+**Round 320 re-swept it over 51 moved files — 19 of them behavioural — and the
+count is unchanged: 16 sites, 12 with a message and all 12 carrying
+`maxMessageLength`, 4 with none.** Not one new trailer site appeared across
+rounds 244-319, which is the useful part of the result: the lens's surface is
+stable even while the code around it moves, so the risk is a NEW refusal path
+rather than an existing one rotting.
+
+Same caveat as 243, stated again because it keeps being the thing that matters:
+**this was a reading, not an ablation.** Round 216's cap-to-64 measurement is
+what gives "every site passes the cap" its meaning; 243 did not repeat it and
+neither did 320. A third consecutive reading is worth less than one re-ablation,
+and the next round to touch this lens should ablate rather than re-read.
 
 > **Only a trailer that passes through a validating hop is at risk.** Sort the
 > sites by that first — it cut the surface here from 21 to 12 — and check the
