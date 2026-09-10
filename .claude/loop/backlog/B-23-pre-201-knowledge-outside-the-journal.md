@@ -307,6 +307,39 @@ The note itself is therefore a third ADDITION rather than a deletion — after t
 guide is fixed, what remains of it (the pipeline order, the sealed `LogRecord`
 variants, the extension points) is the outline that fix should follow.
 
+**Round 276 did that fix** — `cb3d133f`, `docs/guides/diagnostics.md` rewritten
+against `lib/src/logger/` with every name checked at the source. So the `logger`
+note has now discharged its content and becomes a deletion after all.
+
+### `rpc_dart_log` — round 277, the only clean duplicate of the six
+
+`packages/core/rpc_dart_log/README.md` is 308 lines and names
+`LogCollectorOutput` / `LogCollector` nine times; `LogCollectorOutput` is
+exported from the package's own `lib/rpc_dart_log.dart`, so the API is current.
+The note's content — the client-side output, the collector prefix convention —
+is covered by a README that lives next to the code and ages with it.
+
+**Verdict: delete.** The first and only one of the six for which the inventory's
+guess was simply right.
+
+### B-23's inventory, complete
+
+```
+grpc_compat             partly moved (headers -> docs/transports/grpc-compat.md);
+                        the Dart<->Go constraint and round-101 story stay
+core_types              delete; left a docs gap behind it (RpcPeerEndpoint and
+                        IRpcMultiplexedChannel absent from the user reference)
+core_design             delete; journal-shaped findings, one already fixed
+transport_architecture  ADD — the 3-layer model, absent from architecture.md;
+                        drop its stale ChannelTransport sync-controller line
+logger                  discharged by round 276's fix; now delete
+rpc_dart_log            delete; covered by the package README
+```
+
+Prediction was five duplicates and one addition. Actual: one addition, one
+partial, four deletions — and along the way one shipped doc, one repaired doc,
+and one documentation defect that had nothing to do with private memory.
+
 Verdicts so far: `grpc_compat` partly moved, `core_types` and `core_design`
 deletions, `transport_architecture` to be merged into `docs/architecture.md`
 after its stale line is dropped. Neither of the two deletions is a straight
