@@ -762,31 +762,23 @@ def journal_commit_sprawl(root: Path, loop: Path, rep: "Report") -> None:
         return bool(c[2]) and all(f.startswith(str(rel)) for f in c[2])
 
     for newer, older in zip(commits, commits[1:]):
-        if not (journal_only(newer) and journal_only(older)):
-            continue
-        # Two journal-only commits in a row are not enough: two DIFFERENT rounds
-        # each committing once look exactly like that. What says "the same round
-        # committed twice" is the two commits editing the same record -- a note
-        # and then a correction to that note, which is what actually happened.
-        shared = (set(newer[2]) & set(older[2])) - {
-            str(rel / "rounds" / DIRS["rounds"]),
-            str(rel / "backlog" / DIRS["backlog"]),
-            str(rel / "lenses" / DIRS["lenses"]),
-            str(rel / "probes" / DIRS["probes"]),
-        }
-        if shared:
-            # An ERROR, not a warning, and that distinction was itself measured:
-            # as a warning this fired twice on consecutive rounds, was read both
-            # times, and was talked past both times ("leaving the warning
-            # visible rather than squashing it"). A rule whose enforcement is a
-            # line of advisory text depends on the judgement that already
-            # failed. As an error it fails the gate, and the round cannot report
-            # green until the commits are one.
+        # ANY two journal-only commits in a row, whatever they touch. A first
+        # version required them to edit the same record, on the reasoning that
+        # two different rounds each committing once look the same -- and the
+        # owner rejected that: consecutive journal commits are always one piece
+        # of work as far as a reader is concerned, and splitting them is what
+        # makes the journal unreadable. One round, one commit, no exceptions.
+        #
+        # An ERROR, not a warning, and that distinction was measured too: as a
+        # warning it fired twice on consecutive rounds, was read both times and
+        # reasoned past both times. Enforcement that depends on judgement
+        # depends on the thing that already failed.
+        if journal_only(newer) and journal_only(older):
             rep.error(
-                f"commits {older[0]} and {newer[0]} both edit "
-                f"{sorted(shared)[0]} and touch nothing outside {rel}/ — one "
-                "round, one commit: squash them with `git reset --soft` and "
-                "recommit, or amend if the older one is HEAD")
+                f"commits {older[0]} and {newer[0]} both touch nothing outside "
+                f"{rel}/ — consecutive journal commits are ALWAYS one commit: "
+                "squash with `git reset --soft` and recommit, or amend if the "
+                "older one is HEAD")
             return
 
 
