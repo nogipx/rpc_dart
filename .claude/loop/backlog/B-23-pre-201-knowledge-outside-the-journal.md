@@ -139,3 +139,24 @@ Two conditions the migration carries, both from this lead's own history:
 
 That leaves the per-subsystem dossiers as the rest of B-23; they split into
 negatives and lens evidence the way the earlier six did.
+
+### Scoped in round 261, and it is bigger than "move six files"
+
+Two facts the decision did not have:
+
+- **`grpc_compat` alone is 459 lines**, and the decision requires each claim
+  checked against the implementation before it lands — these were written
+  against a tree that has moved by 47 rounds. That is a round per note at least,
+  not six notes in a round, and the checking is the whole cost.
+- **`docs/` already exists and overlaps**: `architecture.md`,
+  `core-concepts.md`, `core/`. So this is a MERGE, not a move. Dropping
+  `transport_architecture.md` beside an existing `architecture.md` would leave
+  two documents answering the same question, which is the duplication the
+  one-home rule exists to prevent — and worse in the repo than in private
+  notes, because readers trust what is committed.
+
+**What that changes:** the migration needs an inventory first — for each of the
+six, what does `docs/` already say, and is the note adding, contradicting, or
+repeating? A note that only repeats gets deleted, not moved. Nothing should be
+written into `docs/` before that inventory exists, or the merge becomes a second
+cleanup job.
