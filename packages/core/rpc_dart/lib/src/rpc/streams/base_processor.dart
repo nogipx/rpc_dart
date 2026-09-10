@@ -7,10 +7,10 @@ part of '_index.dart';
 
 /// Returns true if [error] indicates the underlying transport is closed.
 ///
-/// Network transports (HTTP/1.1, HTTP/2, ...) signal a closed transport with
-/// `StateError('Transport is closed')`. We match the exact type and message
-/// instead of a broad `toString().contains('closed')`, which would otherwise
-/// swallow unrelated errors whose text merely contains "closed".
+/// Network transports signal this with `StateError('Transport is closed')`.
+/// Matched on exact type and message rather than a broad
+/// `toString().contains('closed')`, which would swallow unrelated errors whose
+/// text merely mentions "closed".
 bool _isTransportClosed(Object error) {
   return error is StateError && error.message == 'Transport is closed';
 }
@@ -18,9 +18,7 @@ bool _isTransportClosed(Object error) {
 /// Compresses [serialized] with [encoding] (null or `identity` = no
 /// compression), wraps it in the gRPC 5-byte frame, and sends it on [streamId].
 ///
-/// Shared by the request (client) and response (server) send paths, which were
-/// byte-for-byte identical here. [encoding] must already be resolved/validated
-/// by the caller.
+/// [encoding] must already be resolved and validated by the caller.
 Future<void> _frameAndSend(
   IRpcTransport transport,
   int streamId,
@@ -38,30 +36,14 @@ Future<void> _frameAndSend(
 
 /// The [RpcSecurityPolicy] [transport] was configured with, or the defaults.
 ///
-/// Every parser in this library used to be built with none of these limits, so
-/// it fell back to [RpcMessageParser]'s own defaults -- a hard-coded 64MB
-/// message ceiling -- and the policy the operator configured was simply not
-/// enforced on this path. That is invisible while messages are uncompressed,
-/// because the channel bounds the frame payload by the same policy before the
-/// parser ever sees it. It is NOT invisible once a payload is compressed: the
-/// channel bounds the compressed bytes, and the expansion was bounded only by
-/// that 64MB default.
-///
-/// Measured against a server configured `maxMessageLengthBytes: 1MB`, sending
-/// the same highly compressible payload both ways:
-///
-///   32MB uncompressed -> rejected (the policy works)
-///   32MB compressed   -> ACCEPTED, 32x the configured limit
-///   60MB compressed   -> ACCEPTED, 60x the configured limit
-///   70MB compressed   -> rejected at "max: 67108864" -- the 64MB default,
-///                        not the 1MB the operator asked for
-///
-/// The limit was wrong in both directions: a policy TIGHTER than 64MB was not
-/// enforced, and a policy LOOSER than 64MB was silently capped at 64MB.
-///
-/// [IRpcSecurityPolicyAware] exists for exactly this and the responder pipeline
-/// already reads `maxActiveStreams` and `halfOpenStreamTimeout` through it;
-/// the parsers just never asked.
+/// Every parser must be built from this rather than from [RpcMessageParser]'s
+/// own defaults. For an uncompressed message the two agree, because the channel
+/// bounds the frame payload by the same policy before the parser sees it. For a
+/// COMPRESSED payload they do not: the channel bounds the compressed bytes and
+/// the expansion is bounded here alone, so a parser left on the defaults
+/// enforces their hard-coded 64MB ceiling instead of the operator's policy --
+/// wrong in both directions, since a tighter policy is then not applied and a
+/// looser one is silently capped.
 RpcSecurityPolicy _policyOf(IRpcTransport transport) =>
     transport is IRpcSecurityPolicyAware
     ? (transport as IRpcSecurityPolicyAware).securityPolicy
@@ -87,15 +69,14 @@ RpcMessageParser _policyBoundParser({
 
 /// Tells the peer that [streamId] was cancelled, so its handler can stop.
 ///
-/// Prefers a transport-level reset. The metadata notice below rides on a frame
-/// with `endStream: true`, which is only legal while this side is still open —
-/// and by cancellation time it usually is not (every caller here half-closes
-/// once its request is sent). Sending it anyway is a protocol violation that
-/// HTTP/2 throws asynchronously out of its stream handler, corrupting the
-/// connection; transports without stream state accept it fine.
+/// Prefers a transport-level reset: the metadata fallback rides a frame with
+/// `endStream: true`, legal only while this side is still open, and by
+/// cancellation time it usually is not (every caller here half-closes once its
+/// request is sent). HTTP/2 throws that violation asynchronously out of its
+/// stream handler and corrupts the connection.
 ///
-/// Never throws: a best-effort courtesy to the peer must not turn a cancelled
-/// call into a failed teardown.
+/// Never throws: a courtesy to the peer must not turn a cancelled call into a
+/// failed teardown.
 Future<void> _notifyPeerOfCancellation(
   IRpcTransport transport,
   int streamId,
@@ -151,17 +132,15 @@ Future<void> _notifyPeerOfCancellation(
 
 /// Answers a peer whose payload SHAPE does not match this side's transfer mode.
 ///
-/// The two ends pick their mode from their OWN contract, so they can disagree —
+/// The two ends pick their mode from their OWN contract, so they can disagree:
 /// a caller in [RpcDataTransferMode.codec] sends bytes to a method registered
-/// zero-copy, which reads `directPayload` and finds none. Both sites used to
-/// log a warning and `return`, which meant the message never reached the
-/// handler AND nothing ever answered: measured over the isolate transport, that
-/// call produced no reply in 6 s while every other mode combination answered in
-/// 9–21 ms.
+/// zero-copy, which reads `directPayload` and finds none. Both sites must
+/// ANSWER. Logging and returning left the peer with no reply at all until its
+/// own deadline.
 ///
-/// An `RpcException` because it is a library diagnostic with no user data in
-/// it, so `wireStatusFor` forwards the text to the peer, which is the whole
-/// point — the peer is the side that can fix it.
+/// An [RpcException] because it is a library diagnostic with no user data in
+/// it, so `wireStatusFor` forwards the text to the peer -- the side that can
+/// fix it.
 void _reportTransferModeMismatch(
   StreamController<dynamic> controller,
   LogScope logger,
@@ -182,7 +161,11 @@ void _reportTransferModeMismatch(
   if (!controller.isClosed) controller.addError(error, StackTrace.current);
 }
 
-/// Shared stream processor: zero-copy when no codecs (zero-copy transport required), otherwise serialized.
+/// Responder side of one call: feeds requests to the handler, puts its
+/// responses, errors and trailer on the wire.
+///
+/// Zero-copy when both codecs are null (needs a zero-copy transport),
+/// serialized otherwise.
 final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final LogScope _logger;
   final IRpcTransport _transport;
@@ -192,27 +175,21 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   final IRpcCodec<TRequest>? _requestCodec;
   final IRpcCodec<TResponse>? _responseCodec;
 
-  /// RPC context with cancellation/metadata.
   final RpcContext? _context;
-
-  /// Call scope for automatic resource cleanup.
   final RpcCallScope _scope;
 
-  /// Parser for fragmented messages (serialization mode only).
+  /// Reassembles fragmented frames. Null in zero-copy mode.
   RpcMessageParser? _parser;
 
-  /// Whether zero-copy mode is active.
   final bool _isZeroCopy;
 
-  /// Incoming requests controller.
   final StreamController<TRequest> _requestController =
       StreamController<TRequest>();
-
-  /// Outgoing responses controller.
   final StreamController<TResponse> _responseController =
       StreamController<TResponse>();
 
-  /// Send sequence to preserve order and await completion before trailers.
+  /// Serialises the send path: each write chains onto the previous one, so
+  /// order is preserved and the trailer can wait for every response to leave.
   Future<void> _sendSequence = Future<void>.value();
 
   bool _trailerSent = false;
@@ -223,22 +200,18 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// call: [finishSending] answers with this instead of grpc-status 0.
   Object? _responseSendFailure;
 
-  /// Processor active flag.
   bool _isActive = true;
-
-  /// Indicates initial metadata sent.
   bool _initialMetadataSent = false;
 
-  /// Response encoding selected from client's grpc-accept-encoding.
-  /// Null means identity (no compression).
-  /// Initially set from server context; overridden by incoming client metadata.
+  /// Encoding for responses, picked from the peer's grpc-accept-encoding; null
+  /// means identity. Seeded from the server context, then overridden by the
+  /// peer's initial metadata when it arrives.
   String? _responseEncoding;
 
-  /// Request encoding advertised by the peer in grpc-encoding.
-  /// Set when the initial request metadata arrives; used by the decompressor.
+  /// Encoding the peer advertised in grpc-encoding, read by the decompressor.
   String? _requestEncoding;
 
-  /// Method path `/Service/Method`.
+  /// `/Service/Method`.
   late final String _methodPath;
 
   /// Creates a [StreamProcessor] for the given transport and stream.
@@ -261,7 +234,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
        _context = context,
        _scope = RpcCallScope(context: context),
        _logger = logger?.child('StreamProcessor') ?? LogScope.noop {
-    // Serialization requires codecs.
     if (!_isZeroCopy) {
       if (_requestCodec == null || _responseCodec == null) {
         throw ArgumentError(
@@ -289,7 +261,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         },
       );
     } else {
-      // Zero-copy requires transport support.
       if (!transport.supportsZeroCopy) {
         throw ArgumentError(
           'Zero-copy mode requires a transport with zero-copy support. '
@@ -305,7 +276,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
     );
 
-    // Register controller cleanup with scope.
     _scope.onDispose(() {
       if (!_requestController.isClosed) _requestController.close();
       if (!_responseController.isClosed) _responseController.close();
@@ -333,16 +303,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Zero-copy mode flag.
   bool get isZeroCopy => _isZeroCopy;
 
-  /// Configures outgoing response handling.
+  /// Consumes the response controller so errors pushed onto it are observed.
   ///
-  /// The actual transmission is queued synchronously by [send] onto
-  /// [_sendSequence]; this listener exists only so that the response
-  /// controller's stream is consumed (and any errors pushed onto it, e.g.
-  /// cancellation, are observed and logged). Data events are intentionally
-  /// ignored here: queuing them asynchronously would race with
-  /// [sendError]/[finishSending], which await [_sendSequence] and could
-  /// otherwise close the controller before a just-sent message was queued,
-  /// dropping the last message.
+  /// Data events are ignored on purpose: [send] queues transmission onto
+  /// [_sendSequence] synchronously, and queuing from this listener instead
+  /// would race with [sendError]/[finishSending], which await [_sendSequence]
+  /// and could close the controller before the last message was queued.
   void _setupResponseHandler() {
     _scope.listen<TResponse>(
       _responseController.stream,
@@ -375,7 +341,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       }
       try {
         if (_isZeroCopy) {
-          // Zero-copy path
           if (_logger.isInternal) {
             _logger.internal('Zero-copy send [streamId: $_streamId]');
           }
@@ -386,10 +351,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
             );
           }
         } else {
-          // Send initial metadata before the first response frame only when
-          // we need to advertise compression. Without compression the
-          // existing behaviour (no initial metadata for streaming) is kept
-          // so existing tests and in-memory transports are not affected.
+          // Only sent when there is compression to advertise. Streaming
+          // otherwise emits no initial metadata at all, and in-memory
+          // transports rely on that.
           if (_responseEncoding != null && !_initialMetadataSent) {
             await _transport.sendMetadata(
               _streamId,
@@ -398,7 +362,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
             _initialMetadataSent = true;
           }
 
-          // Serialization for network transports
           final serialized = _responseCodec!.serialize(response);
           if (_logger.isInternal) {
             _logger.internal(
@@ -419,10 +382,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           }
         }
       } catch (e, stackTrace) {
-        // Skip only when the transport itself is closed. Network transports
-        // signal this with StateError('Transport is closed'); match the
-        // exact type+message instead of a broad substring search so we do
-        // not swallow unrelated errors that merely mention "closed".
         if (_isTransportClosed(e)) {
           _logger.debug(
             'Transport closed, skipping response send [streamId: $_streamId]',
@@ -434,13 +393,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           error: e,
           stackTrace: stackTrace,
         );
-        // Logging alone let the call finish with grpc-status 0, so a response
-        // that never left the process read to the peer as a stream that simply
-        // did not contain it. Measured over the isolate transport with one
-        // unsendable item of five: the client received [0, 1, 3, 4], onDone,
-        // and no error. Everything reaching here is a genuine delivery failure
-        // -- an unsendable object, a codec that threw, a compressor that threw
-        // -- so the call must not be reported as complete.
+        // Anything else here is a genuine delivery failure -- an unsendable
+        // object, a codec or compressor that threw. Recording it is what stops
+        // finishSending answering grpc-status 0 for a response the peer never
+        // received, which reads as a stream that simply did not contain it.
         _responseSendFailure ??= e;
       }
     });
@@ -508,35 +464,22 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       },
     );
 
-    // Responder half of the demand chain, mirroring the caller-side hook in
-    // CallProcessor. The handler consumes _requestController; without this the
-    // bound message stream was drained at full speed regardless, so a slow
-    // handler never reached the peer. Measured with a bidi handler that
-    // consumed one message and stalled, against a 1 MB window: the client
-    // queued 2000 messages (32.8 MB) while the handler had consumed 1.
+    // Responder half of the demand chain, mirroring CallProcessor's caller-side
+    // hook. The handler consumes _requestController; without these the bound
+    // message stream is drained at full speed regardless, so a slow handler
+    // never throttles the peer.
     //
-    // NO SUBSCRIBER IS ALSO NO DEMAND. This used to resume unconditionally, on
-    // the reasoning that only a handler which actually listens can pause, so
-    // one that ignores its request stream should stay unthrottled rather than
-    // deadlock. But "ignores its request stream" is not the only way to have no
-    // subscriber -- EVERY handler has none during an async prelude, and
-    // `await auth(); await for (requests)` is ordinary code. Measured on a bare
-    // RpcChannelTransport pair, 4 KiB messages against the default 4 MiB
-    // window, handler consuming nothing yet:
+    // It starts PAUSED, and that is the load-bearing part. NO SUBSCRIBER IS
+    // ALSO NO DEMAND: resuming unconditionally covers only a handler that has
+    // already subscribed and then pauses, but every handler has no subscriber
+    // during an async prelude, and `await auth(); await for (requests)` is
+    // ordinary code. Starting paused makes "not yet listening" behave like
+    // "listening and paused", so the peer parks on the window instead of
+    // pushing its whole payload into responder memory.
     //
-    //   handler awaits 500ms, then drains : 156.3 MiB admitted  (both shapes)
-    //   handler never subscribes          : 156.3 MiB admitted
-    //   handler subscribes, then pauses   :   4.0 MiB admitted  <- worked
-    //
-    // So the one case the demand chain handled was the one where a subscriber
-    // existed. Starting paused makes "not yet listening" behave like "listening
-    // and paused", which is what the window is for: the peer parks at 4 MiB
-    // instead of pushing its whole payload into server memory.
-    //
-    // This does not reintroduce the deadlock the old comment guarded against. A
-    // handler that never reads is still free to return a response at any time,
-    // which completes the call; only the peer's SENDING is throttled, and the
-    // alternative to throttling it is unbounded memory.
+    // This cannot deadlock: a handler that never reads is still free to return
+    // a response at any time, which completes the call. Only the peer's
+    // SENDING is throttled, and the alternative is unbounded memory.
     _requestController.onListen = () => subscription.resume();
     _requestController.onPause = () => subscription.pause();
     _requestController.onResume = () => subscription.resume();
@@ -560,7 +503,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   void _handleMessage(RpcTransportMessage message) {
     if (!_isActive) return;
 
-    // Check cancellation before handling each message.
     try {
       _checkCancellation();
     } catch (e) {
@@ -594,16 +536,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       );
     }
 
-    // Zero-copy: direct object.
     if (message.isDirect && message.directPayload != null) {
       _processDirectMessage(message.directPayload!);
-    }
-    // Serialized payload.
-    else if (!message.isMetadataOnly && message.payload != null) {
+    } else if (!message.isMetadataOnly && message.payload != null) {
       _processDataMessage(message.payload!);
     }
 
-    // End of stream.
     if (message.isEndOfStream) {
       _logger.internal(
         'Stream finished: end_of_stream_received [methodPath: $_methodPath, streamId: $_streamId]',
@@ -641,17 +579,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Processes a serialized message (serialization mode only).
   void _processDataMessage(List<int> messageBytes) {
     if (_isZeroCopy) {
-      // Answered, not dropped. `return` here meant the request never reached
-      // the handler AND nothing ever answered the peer -- no status, no error,
-      // just silence until the caller's own deadline. Measured over the isolate
-      // transport, a caller in RpcDataTransferMode.codec against a method
-      // registered zero-copy: "HANG, no answer in 6 s", where every other
-      // combination replied in 9-21 ms.
-      //
-      // The mirror direction has never had this problem: a direct object
-      // arriving at a serialized processor is cast to TRequest and delivered,
-      // which is how a zero-copy CALLER talks to a codec-declared responder.
-      // Only this side dropped it.
+      // Answered, not dropped -- see _reportTransferModeMismatch. The mirror
+      // direction never had this problem: a direct object arriving at a
+      // serialized processor is cast to TRequest and delivered, which is how a
+      // zero-copy caller talks to a codec-declared responder.
       _reportTransferModeMismatch(
         _requestController,
         _logger,
@@ -667,7 +598,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     );
 
     try {
-      // Convert to Uint8List for parser.
       final uint8Message = messageBytes is Uint8List
           ? messageBytes
           : Uint8List.fromList(messageBytes);
@@ -715,7 +645,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       return;
     }
 
-    // Check cancellation before sending a response.
     try {
       _checkCancellation();
     } catch (e) {
@@ -726,23 +655,17 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     if (!_responseController.isClosed) {
-      // Queue the transmission synchronously so a subsequent
-      // sendError()/finishSending() that awaits _sendSequence always observes
-      // this write. Also forward to the controller so its stream keeps
-      // draining (and errors pushed onto it are observed).
+      // Queue synchronously so a later sendError()/finishSending() awaiting
+      // _sendSequence always observes this write; forward to the controller so
+      // its stream keeps draining and errors on it are observed.
       _transmitResponse(response);
       _responseController.add(response);
-      // Then WAIT for it to leave. Queueing alone made _sendSequence an
-      // unbounded buffer between the handler and the transport: the
-      // server-stream pump does `await _processor.send(...)` precisely so a
-      // slow transport throttles the handler, and this returned as soon as the
-      // write was enqueued, so an `async*` handler ran as fast as it could
-      // allocate. Measured with a paused consumer and a 1MB window, the
-      // transport parked on flow-control credit after ~2200 messages while the
-      // handler still reached 20,000.
-      //
-      // The queue is what preserves ordering; awaiting it here is what makes
-      // the queue depth one.
+      // Then WAIT for it to leave. The queue is what preserves ordering;
+      // awaiting it here is what keeps the queue depth at one. Returning as
+      // soon as the write was enqueued turned _sendSequence into an unbounded
+      // buffer between handler and transport, defeating the `await send(...)`
+      // the server-stream pump uses to let a slow transport throttle the
+      // handler.
       await _sendSequence;
     } else {
       _logger.warning('Attempted to send response to closed controller');
@@ -772,25 +695,20 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     try {
-      // If initial metadata was not sent, this becomes a Trailers-Only response.
-      // The transport layer handles adding :status: 200 for Trailers-Only.
+      // With no initial metadata this becomes a Trailers-Only response; the
+      // transport adds :status: 200 for that case and tells the two apart by
+      // whether initial headers went out. Both carry the same grpc-status and
+      // optional grpc-message.
       if (!_initialMetadataSent) {
         _logger.internal('Sending Trailers-Only error [streamId: $_streamId]');
         _initialMetadataSent = true;
       }
 
-      // Both Trailers-Only and post-data trailers use the same format:
-      // grpc-status + optional grpc-message. The transport distinguishes
-      // between the two based on whether initial headers were sent.
-      // Trimmed to the policy the trailer will be validated against. A refusal's
-      // own answer must satisfy the rule that refused, and `grpc-message` is a
-      // header value like any other: measured over the isolate transport with
-      // `maxHeaderValueBytes: 64`, a handler's deliberate
-      // `RpcStatusException(7, '<70 chars>')` reached the peer as
-      // `status 13 "Responder dispatch failed"`, and round 171's mode-mismatch
-      // diagnosis (~200 chars) reached it as SILENCE.
-      //
-      // The STATUS is what must survive; the text is what gives way.
+      // Trimmed to the policy the trailer will itself be validated against: a
+      // refusal's own answer must satisfy the rule that refused, and
+      // `grpc-message` is a header value like any other. Untrimmed, an
+      // over-long message turned the handler's status into a generic internal
+      // error, or into silence. The STATUS must survive; the text gives way.
       final trailers = RpcMetadata.forTrailer(
         statusCode,
         message: message,
@@ -802,7 +720,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       _logger.internal('Error sent to client [streamId: $_streamId]');
       _trailerSent = true;
     } catch (e, stackTrace) {
-      // Skip only when the transport is closed (see _isTransportClosed).
       if (_isTransportClosed(e)) {
         _logger.debug(
           'Transport closed, skipping error send [streamId: $_streamId]',
@@ -832,17 +749,15 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     // Whatever this method decides below, the call gets ONE terminal frame.
-    // `_sendOkTrailerIfNeeded` has always guarded on this; the failure branch
-    // calls `sendError` directly, which does not, so a stream that had already
-    // been answered got a second grpc-status -- a protocol violation on a
-    // transport with real stream state. Measured on the processor API,
-    // `send()` that fails -> `sendError()` -> `finishSending()`: trailers
-    // [5, 13], where every other ordering gives one.
+    // `_sendOkTrailerIfNeeded` guards on this; the failure branch calls
+    // `sendError` directly, which does not -- so an already-answered stream
+    // would take a second grpc-status, a protocol violation on any transport
+    // with real stream state.
     if (_trailerSent) return;
 
-    // A response that never reached the peer makes this call a failure, whatever
-    // the handler thinks. Routed through wireStatusFor so the cause stays on the
-    // server (it is already logged with its stack trace at the failure site).
+    // A response that never reached the peer makes this call a failure,
+    // whatever the handler thinks. Routed through wireStatusFor so the cause
+    // stays on the server; it is already logged at the failure site.
     final failure = _responseSendFailure;
     if (failure != null) {
       final wire = wireStatusFor(failure);
@@ -872,11 +787,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     await _scope.close();
   }
 
-  /// Sets up cancellation monitoring via the call scope.
+  /// Pushes an [RpcCancelledException] into both controllers on cancellation.
   ///
-  /// The scope already auto-closes on cancellation/deadline, but we
-  /// also need to push a [RpcCancelledException] into the controllers
-  /// so that handlers see the cancellation error.
+  /// The scope auto-closes on cancellation and deadline, but a close alone
+  /// leaves the handler unable to tell a cancelled call from a finished one.
   void _setupCancellationMonitoring() {
     if (_context?.cancellationToken == null) return;
 
@@ -892,10 +806,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
             _context.cancellationToken!.reason ?? 'Operation was cancelled';
         final cancelledException = RpcCancelledException(reason);
 
+        // Both are single-subscription controllers, so addError buffers for a
+        // late subscriber. Do NOT gate either on hasListener -- that drops the
+        // cancellation when it fires before the consumer subscribes.
         try {
-          // Single-subscription controller: addError buffers the error for a
-          // late subscriber. Do NOT gate on hasListener — that would drop the
-          // cancellation if it fires before the consumer subscribes.
           if (!_requestController.isClosed) {
             _requestController.addError(cancelledException);
           }
@@ -906,9 +820,6 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           );
         }
         try {
-          // Single-subscription controller: addError buffers the error for a
-          // late subscriber. Do NOT gate on hasListener — that would drop the
-          // cancellation if it fires before the consumer subscribes.
           if (!_responseController.isClosed) {
             _responseController.addError(cancelledException);
           }
@@ -930,19 +841,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   }
 }
 
-/// Shared processor for client RPC stream calls.
+/// Caller side of one call: sends requests, surfaces responses, and owns the
+/// stream id, the deadline and the cancellation wiring.
 ///
-/// Automatically selects mode:
-/// - Zero-copy for in-memory transport (codecs not needed)
-/// - Serialization for network transports (codecs required)
-///
-/// Benefits:
-/// - Reuse across stream call types
-/// - Avoids race conditions
-/// - Clear separation of concerns
-/// - Testable without out-of-process dependencies
-/// - Works with any object types, not just IRpcSerializable
-/// - Auto-optimized for in-memory transport
+/// Zero-copy when both codecs are null (needs a zero-copy transport),
+/// serialized otherwise.
 final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   final LogScope _logger;
   final IRpcTransport _transport;
@@ -952,38 +855,30 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   final IRpcCodec<TRequest>? _requestCodec;
   final IRpcCodec<TResponse>? _responseCodec;
 
-  /// RPC context for metadata, timeouts, and cancellation.
   final RpcContext? _context;
-
-  /// Call scope for automatic resource cleanup.
   final RpcCallScope _scope;
 
-  /// Parser for fragmented messages (serialization mode only).
+  /// Reassembles fragmented frames. Null in zero-copy mode.
   RpcMessageParser? _parser;
 
+  /// Encoding the peer advertised in grpc-encoding, read by the decompressor.
   String? _peerGrpcEncoding;
 
-  /// Processor mode flag.
   final bool _isZeroCopy;
 
-  /// Outgoing request controller.
   final StreamController<TRequest> _requestController =
       StreamController<TRequest>();
-
-  /// Incoming response controller.
   final StreamController<RpcMessage<TResponse>> _responseController =
       StreamController<RpcMessage<TResponse>>();
 
-  /// Send sequence to preserve order and await completion before finishing.
+  /// Serialises the send path: each write chains onto the previous one, so
+  /// order is preserved and the half-close waits for every request to leave.
   Future<void> _sendSequence = Future<void>.value();
 
-  /// Processor active flag.
   bool _isActive = true;
-
-  /// Whether initial metadata was sent.
   bool _initialMetadataSent = false;
 
-  /// Method path in /Service/Method format.
+  /// `/Service/Method`.
   late final String _methodPath;
 
   /// Creates a [CallProcessor] for the given transport and method.
@@ -1006,7 +901,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
        _scope = RpcCallScope(context: context),
        _logger = logger?.child('CallProcessor') ?? LogScope.noop {
     try {
-      // Validation: codecs are required for serialization mode.
       if (!_isZeroCopy) {
         if (_requestCodec == null || _responseCodec == null) {
           throw ArgumentError(
@@ -1033,7 +927,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           },
         );
       } else {
-        // Zero-copy mode requires transport support.
         if (!transport.supportsZeroCopy) {
           throw ArgumentError(
             'Zero-copy mode requires a transport with zero-copy support. '
@@ -1048,18 +941,15 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
       );
 
-      // Register controller cleanup and stream-id release with scope.
       _scope.onDispose(() {
-        // Free the transport stream id so a closed/aborted call (cancellation,
-        // deadline, error) releases its slot. The normal finishSending path
-        // releases it too, and releaseStreamId is idempotent, so a double
-        // release is harmless.
+        // Free the stream id so an aborted call (cancellation, deadline, error)
+        // releases its slot. The normal path releases it too; releaseStreamId
+        // is idempotent.
         _transport.releaseStreamId(_streamId);
         if (!_requestController.isClosed) _requestController.close();
         if (!_responseController.isClosed) _responseController.close();
       });
 
-      // Validate context before starting.
       _checkContextBeforeCall();
 
       _setupDeadlineMonitoring();
@@ -1068,9 +958,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       _setupResponseHandler();
     } catch (_) {
       // createStream() ran in the initializer list, so a throw in the body
-      // (invalid codecs, or an already-expired deadline tripping
-      // _checkContextBeforeCall) would leak the allocated stream id: the caller
-      // never receives an instance, so close() never runs. Release it here.
+      // hands the caller no instance and close() never runs. Without this the
+      // allocated stream id leaks.
       _transport.releaseStreamId(_streamId);
       rethrow;
     }
@@ -1091,13 +980,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Zero-copy mode flag.
   bool get isZeroCopy => _isZeroCopy;
 
-  /// Configures outgoing request handling.
+  /// Consumes the request controller and half-closes the stream after it.
   ///
-  /// The actual transmission is queued synchronously by [send] onto
-  /// [_sendSequence]; this listener only consumes the controller stream. When
-  /// the controller is closed via [finishSending], `onDone` awaits
-  /// [_sendSequence] before calling the transport's finishSending, guaranteeing
-  /// every queued request was sent first (the last request is never dropped).
+  /// Data events are ignored: [send] queues transmission onto [_sendSequence]
+  /// synchronously. `onDone` awaits that queue before the transport's
+  /// finishSending, so the last request is never dropped.
   void _setupRequestHandler() {
     _scope.listen<TRequest>(
       _requestController.stream,
@@ -1108,7 +995,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         if (!_isActive) return;
 
         try {
-          // Wait for any pending request sends to complete before finishing.
           await _sendSequence;
           await _transport.finishSending(_streamId);
           _logger.internal(
@@ -1145,7 +1031,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       if (!_isActive) return;
 
       try {
-        // Send initial metadata with the first request.
         if (!_initialMetadataSent) {
           await _sendInitialMetadata();
           _initialMetadataSent = true;
@@ -1156,7 +1041,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         );
 
         if (_isZeroCopy) {
-          // Zero-copy path.
           if (_logger.isInternal) {
             _logger.internal('Zero-copy request send [streamId: $_streamId]');
           }
@@ -1167,7 +1051,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             );
           }
         } else {
-          // Serialization for network transports.
           final serialized = _requestCodec!.serialize(request);
           if (_logger.isInternal) {
             _logger.internal(
@@ -1208,7 +1091,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           _responseController.addError(e, stackTrace);
         }
 
-        // Critical: on routing error stop immediately to prevent further sends.
+        // Close on the first send failure: the stream is no longer coherent,
+        // so further sends would put a gapped request sequence on the wire.
         if (!_requestController.isClosed) {
           _requestController.close();
         }
@@ -1236,39 +1120,27 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           'Response stream completed for $_methodPath [streamId: $_streamId]',
         );
         if (!_responseController.isClosed) {
-          // Our own deadline is authoritative over a bare close. The peer ends
-          // its stream when the same deadline passes, which closes this one at
-          // almost the same instant -- and as _setupDeadlineMonitoring already
-          // notes, a bare close is indistinguishable from the server having
-          // finished, so the consumer would get a silently truncated stream
-          // instead of DEADLINE_EXCEEDED. Which happened depended on who won
-          // the race.
-          // Tested with remainingTime, not isExpired. isExpired is
-          // `clock().isAfter(deadline)` — strict — so it is FALSE at the
-          // instant the deadline lands, while remainingTime is already
-          // Duration.zero. The two contradict each other on the boundary, and
-          // that is exactly where a peer closing on its own copy of the same
-          // deadline lands. See _setupDeadlineMonitoring for the flake this
-          // cost when the same strict test guarded it.
+          // Our own deadline is authoritative over a bare close: the peer ends
+          // its stream on the same deadline, closing this one at almost the
+          // same instant, and a bare close is indistinguishable from the server
+          // having finished. Which of the two the consumer saw was a race.
+          //
+          // Tested with remainingTime, NOT isExpired. isExpired is
+          // `clock().isAfter(deadline)` -- strict -- so it is false at the
+          // instant the deadline lands, while remainingTime is already zero,
+          // and that boundary is exactly where the peer's close arrives.
           final deadline = _context?.deadline;
           if (deadline != null && _context?.remainingTime == Duration.zero) {
             _responseController.addError(
               RpcDeadlineExceededException(deadline, Duration.zero),
             );
           } else {
-            // Reaching here with the controller still OPEN means the stream
-            // ended without an end-of-stream message: a normal finish, an
-            // error trailer, a cancellation and a deadline all close it before
-            // now (see _handleResponse and the scope disposers). So the RPC is
-            // incomplete — the transport went away mid-call — and gRPC calls a
-            // stream that ends without a trailer UNAVAILABLE.
-            //
-            // This used to close silently, so a server-stream or bidi consumer
-            // whose connection died mid-stream saw a clean end and could not
-            // tell a truncated result from a complete one. Measured by tearing
-            // the transport down under four in-flight calls: unary and
-            // client-stream reported an error, while server and bidi reported
-            // `ok`.
+            // Still OPEN here means the stream ended with no end-of-stream
+            // message: a normal finish, an error trailer, a cancellation and a
+            // deadline all close it before now. So the transport went away
+            // mid-call, and gRPC calls a stream that ends without a trailer
+            // UNAVAILABLE. Closing silently instead let a server-stream or bidi
+            // consumer read a truncated result as a complete one.
             _responseController.addError(
               RpcStatusException(
                 RpcStatus.unavailable,
@@ -1281,11 +1153,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       },
     );
 
-    // The caller-side half of the demand chain: without it the transport
-    // subscription kept feeding this controller at full speed even after every
-    // stage above it had stopped pulling, so a paused consumer still paid to
-    // decode every message. Pausing here stops the parse/decode work too, and
-    // leaves the frames undecoded in the transport's per-stream controller.
+    // Caller half of the demand chain. Without it the transport subscription
+    // keeps feeding this controller after every stage above has stopped
+    // pulling, so a paused consumer still pays to decode every message; pausing
+    // here leaves the frames undecoded in the transport's per-stream buffer.
     _responseController.onPause = () => subscription.pause();
     _responseController.onResume = () => subscription.resume();
   }
@@ -1301,8 +1172,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       _methodName,
     );
 
-    // Use a map so context headers naturally override base headers,
-    // preventing duplicates (e.g. grpc-accept-encoding).
+    // A map, so context headers override base headers rather than duplicating
+    // them (e.g. grpc-accept-encoding).
     final headerMap = <String, String>{
       for (final h in baseMetadata.headers) h.name: h.value,
     };
@@ -1351,32 +1222,23 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Surfaces deadline expiry as an error on the response stream.
   ///
-  /// [RpcCallScope] already closes itself when the context deadline fires, and
-  /// that closes the response controller — but a bare close is indistinguishable
-  /// from the server having finished. A server-stream call therefore ended
-  /// *normally* on deadline expiry, handing the consumer a silently truncated
-  /// stream, and a client-stream call reported UNAVAILABLE ("Stream closed
-  /// without receiving response") rather than the deadline it actually hit.
+  /// [RpcCallScope] closes itself when the deadline fires, and a bare close is
+  /// indistinguishable from the server having finished: a server-stream call
+  /// then ends *normally* on expiry, handing the consumer a truncated stream.
+  /// Registered AFTER the disposer that closes the controllers, so LIFO runs it
+  /// FIRST and the error reaches the stream while it is still open.
   ///
-  /// This disposer is registered AFTER the one that closes the controllers, so
-  /// LIFO ordering runs it FIRST — the error reaches the stream while it is
-  /// still open.
+  /// Reaching here means the deadline timer fired. The scope self-closes for
+  /// exactly two reasons; `_isActive` still true rules out an explicit [close],
+  /// and cancellation is surfaced by [_setupCancellationMonitoring].
   ///
-  /// It fires only when the scope closed ON ITS OWN, which [RpcCallScope] does
-  /// for exactly two reasons: the deadline timer, or the cancellation token.
-  /// `_isActive` still being true rules out an explicit [close], and a
-  /// cancelled token is surfaced by [_setupCancellationMonitoring] instead. So
-  /// reaching here means the deadline timer fired.
-  ///
-  /// It deliberately does NOT re-derive that from the clock. It used to check
-  /// `context.isExpired`, which is `clock().isAfter(deadline)` — STRICT — while
-  /// the scope's timer is armed for `deadline.difference(clock())`. When that
-  /// timer fires, `now` can be exactly the deadline, or a hair short of it:
-  /// Timer and DateTime do not share a clock source. `isExpired` was then
-  /// false, this disposer returned, and the controllers closed with no error at
-  /// all — handing the consumer a silently truncated stream, which is the exact
-  /// failure this disposer exists to prevent. It surfaced as a ~1-in-20
-  /// flake under load, always as `null after 500ms` for a 500ms deadline.
+  /// Do NOT re-derive that from the clock. `context.isExpired` is
+  /// `clock().isAfter(deadline)` -- STRICT -- while the scope's timer is armed
+  /// for `deadline.difference(clock())`, and Timer and DateTime do not share a
+  /// clock source, so on firing `now` can be a hair short of the deadline.
+  /// Guarding on it made this disposer return and the controllers close with no
+  /// error at all -- the exact failure it exists to prevent, as an intermittent
+  /// flake under load.
   void _setupDeadlineMonitoring() {
     final context = _context;
     final deadline = context?.deadline;
@@ -1395,7 +1257,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     });
   }
 
-  /// Sets up cancellation monitoring via the call scope.
+  /// Pushes an [RpcCancelledException] into both controllers on cancellation,
+  /// and tells the peer.
   void _setupCancellationMonitoring() {
     if (_context?.cancellationToken == null) return;
 
@@ -1413,22 +1276,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
         // Telling the SERVER is best-effort and must not gate telling OUR OWN
         // consumer: the cancellation is a local fact, the notice is a network
-        // round trip. This used to `await _sendCancellationToServer(...)` first
-        // and deliver the error afterwards, so a send that never completed took
-        // the local error with it -- and the `try` below catches a throw, not a
-        // hang.
-        //
-        // Only wasm could reach it, because only wasm's bridge send awaits a
-        // Flutter platform-channel reply, and `close()` tears the transport down
-        // underneath it. Measured, an unbounded server stream with
-        // caller.close() 400 ms in, watching every event for 4 s afterwards:
-        //
-        //   websocket / isolate : RpcCancelledException: Endpoint closed
-        //   wasm, before        : items=11 events=[DONE]   <- SILENT
-        //   wasm, after         : RpcCancelledException
-        //
-        // A stream that ends cleanly is indistinguishable from one that
-        // finished, so a consumer processed a truncated stream and moved on.
+        // round trip. Awaiting the notice first meant a send that never
+        // completed took the local error with it -- and the `try` below catches
+        // a throw, not a hang. Only a transport whose send awaits a platform
+        // reply can hang that way, and the consumer then saw a clean DONE,
+        // indistinguishable from a stream that finished.
         unawaited(
           _sendCancellationToServer(
             _context.cancellationToken!.reason ??
@@ -1442,10 +1294,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           }),
         );
 
+        // Both are single-subscription controllers, so addError buffers for a
+        // late subscriber. Do NOT gate either on hasListener -- that drops the
+        // cancellation when it fires before the consumer subscribes.
         try {
-          // Single-subscription controller: addError buffers the error for a
-          // late subscriber. Do NOT gate on hasListener — that would drop the
-          // cancellation if it fires before the consumer subscribes.
           if (!_requestController.isClosed) {
             _requestController.addError(cancelledException);
           }
@@ -1456,9 +1308,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           );
         }
         try {
-          // Single-subscription controller: addError buffers the error for a
-          // late subscriber. Do NOT gate on hasListener — that would drop the
-          // cancellation if it fires before the consumer subscribes.
           if (!_responseController.isClosed) {
             _responseController.addError(cancelledException);
           }
@@ -1485,32 +1334,24 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Tells the peer this call is being abandoned locally, so its handler stops.
   ///
-  /// [_sendCancellationToServer] is only reachable through a cancellation
-  /// token, so a call that ends because the local REQUEST STREAM failed had no
-  /// way to reach it: the caller tore itself down and the server was never
-  /// told. Its handler then sat in `await for (requests)` forever, holding a
-  /// responder-state entry and a transport stream controller.
-  ///
-  /// Measured over one connection, 50 calls whose request stream throws:
-  /// bidirectional left activeResponders=51 and streamControllers=51,
-  /// client-streaming left activeResponders=51. `activeStreams` stayed 0
-  /// throughout, so `maxActiveStreams` never noticed and the growth was
-  /// unbounded. The identical calls aborted through a cancellation token left
-  /// nothing behind, which is what isolated this to the notify step rather
-  /// than the responder's handling of it.
+  /// [_sendCancellationToServer] is reachable only through a cancellation
+  /// token, so a call that ends because its local REQUEST STREAM failed has no
+  /// way to reach it: the caller tears itself down and the peer is never told.
+  /// Its handler then sits in `await for (requests)` forever, holding a
+  /// responder-state entry and a transport stream controller -- and
+  /// `activeStreams` stays 0 throughout, so `maxActiveStreams` never notices
+  /// and the growth is unbounded.
   ///
   /// Never throws (see [_notifyPeerOfCancellation]).
   Future<void> notifyPeerOfAbort(String reason) =>
       _sendCancellationToServer(reason);
 
-  /// Validates context before making the call.
+  /// Refuses a call whose context is already cancelled or expired.
   void _checkContextBeforeCall() {
     if (_context == null) return;
 
-    // Check cancellation.
     _context.cancellationToken?.throwIfCancelled();
 
-    // Check deadline.
     if (_context.isExpired) {
       throw RpcDeadlineExceededException(_context.deadline!, Duration.zero);
     }
@@ -1531,7 +1372,6 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     try {
-      // Handle metadata.
       if (message.isMetadataOnly) {
         final encoding = message.metadata?.getHeaderValue(
           RpcHeaders.grpcEncoding,
@@ -1553,16 +1393,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       }
 
-      // Zero-copy: process direct object.
       if (message.isDirect && message.directPayload != null) {
         _processDirectResponse(message.directPayload!);
-      }
-      // Handle serialized payload.
-      else if (!message.isMetadataOnly && message.payload != null) {
+      } else if (!message.isMetadataOnly && message.payload != null) {
         _processResponseData(message.payload!);
       }
 
-      // Finish stream on END_STREAM.
       if (message.isEndOfStream) {
         _logger.internal(
           'END_STREAM received, closing response stream [streamId: $_streamId]',
@@ -1620,8 +1456,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Processes response data (serialization mode only).
   void _processResponseData(List<int> messageBytes) {
     if (_isZeroCopy) {
-      // See StreamProcessor._processDataMessage: dropping this left the call
-      // with no answer at all rather than a diagnosable one.
+      // Answered, not dropped -- see _reportTransferModeMismatch.
       _reportTransferModeMismatch(
         _responseController,
         _logger,
@@ -1702,19 +1537,16 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     if (!_requestController.isClosed) {
-      // Queue the transmission synchronously so a subsequent finishSending()
-      // (which closes the controller; its onDone awaits _sendSequence) always
-      // observes this write. Also forward to the controller so its stream keeps
-      // draining and onDone fires after the queued send.
+      // Queue synchronously so finishSending() -- which closes the controller,
+      // and whose onDone awaits _sendSequence -- always observes this write;
+      // forward to the controller so its stream keeps draining and onDone fires
+      // after the queued send.
       _transmitRequest(request);
       _requestController.add(request);
-      // Then WAIT for it to leave, exactly as the response side does. Queueing
-      // alone made _sendSequence an unbounded buffer between the request pump
-      // and the transport: the pump does `await caller.send(req)` so a blocked
-      // transport throttles the producer, and this returned as soon as the
-      // write was enqueued. Measured with a bidi handler that consumed one
-      // message and stalled, against a 1 MB window, the caller pulled all 2000
-      // messages (32.8 MB) from its request stream.
+      // Then WAIT for it to leave, exactly as the response side does.
+      // Otherwise _sendSequence is an unbounded buffer between the request pump
+      // and the transport, and the `await caller.send(req)` the pump uses to
+      // let a blocked transport throttle the producer does nothing.
       await _sendSequence;
     } else {
       _logger.warning('Attempted to send request to closed controller');
@@ -1730,11 +1562,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     );
 
     // A client stream may legitimately carry ZERO messages, and gRPC expects
-    // that to open the call anyway: HEADERS, then end-of-stream. The initial
-    // metadata was only ever sent by _transmitRequest, so a call that sent no
-    // request never announced itself at all -- no method path reached the
-    // responder, no handler ran, and the caller waited out its own timeout on
-    // a server that had no idea the call existed.
+    // that to open the call anyway: HEADERS, then end-of-stream. Initial
+    // metadata is otherwise sent only by _transmitRequest, so a call that sent
+    // no request never announces itself -- no method path reaches the
+    // responder, and the caller waits out its own timeout against a server that
+    // does not know the call exists.
     _queueInitialMetadataIfUnsent();
 
     if (!_requestController.isClosed) {

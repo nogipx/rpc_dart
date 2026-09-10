@@ -88,11 +88,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   ///
   /// Tearing a stream down does not stop the peer: its request payload races
   /// our error trailer, and a cancelled or completed call can be followed by
-  /// trailing frames. Those frames reached `_respStreams.obtain()` and
-  /// RESURRECTED state for a stream nothing would ever clean up again — the
-  /// revived entry has no method, so it just buffers the frame and sits there
-  /// forever. Calling an unregistered method leaked one such entry per call,
-  /// which any client (or a version-skewed one) could drive without bound.
+  /// trailing frames. Without this guard those frames reach
+  /// `_respStreams.obtain()` and RESURRECT state nothing will clean up again —
+  /// the revived entry has no method, so it buffers the frame and sits there,
+  /// one per call, driven by any peer that calls an unregistered method.
   ///
   /// Insertion-ordered, so evicting `first` drops the oldest; bounded so this
   /// guard cannot become a leak of its own.
@@ -104,9 +103,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   /// Cached concurrent-stream ceiling for streams the PEER opens.
   ///
-  /// `maxActiveStreams` used to be checked only in `createStream()`, which runs
-  /// for LOCALLY-initiated calls — so inbound streams, the only ones an
-  /// untrusted peer controls, were counted by nothing.
+  /// `createStream()` checks `maxActiveStreams` for LOCALLY-initiated calls
+  /// only, so without this the inbound streams — the only ones an untrusted
+  /// peer controls — are counted by nothing.
   ///
   /// Read through [IRpcSecurityPolicyAware] rather than a second knob, so a
   /// transport without that capability gets the safe default.
@@ -121,10 +120,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   /// Streams holding a handler-concurrency slot: dispatched, work not finished.
   ///
-  /// Deliberately NOT [_respStreams], which is the thing that goes away too
-  /// early. A handler that ignores its cancellation token cannot be preempted,
-  /// so when a stream is reclaimed after its deadline the state goes and the
-  /// work stays; counting streams reported 3 while 37 handlers ran. See
+  /// Deliberately NOT [_respStreams], which goes away too early. A handler that
+  /// ignores its cancellation token cannot be preempted, so a stream reclaimed
+  /// after its deadline takes the state and leaves the work — counting streams
+  /// then reports a small number while many handlers run. See
   /// [RpcSecurityPolicy.maxConcurrentHandlers].
   ///
   /// Bounded by the ceiling itself: an id is only added after the length check
@@ -361,26 +360,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       _log.warning('Already listening for incoming requests');
       return;
     }
-    // Claimed BEFORE the first await, not after the subscribe below.
-    //
-    // `start()` returns void and does not await this, so two synchronous
-    // start() calls both reached the guard while it was still false, both
-    // suspended on the cancel below, and both subscribed. The transport's
-    // incoming stream is a BROADCAST, so that is two live subscriptions
-    // delivering every frame twice -- and the first one is orphaned, since
-    // `_respIncomingSub` only remembers the second.
-    //
-    // Not hypothetical: RpcHttp2Server calls endpoint.start() itself right
-    // after onEndpointCreated, and both shipped reflection examples call
-    // start() inside that callback, so the framework's own documented wiring
-    // produced the double subscribe. Measured with grpcurl sending three
-    // client-stream messages, the handler received six:
-    //
-    //   before: cs:6:x|x|y|y|z|z
-    //   after : cs:3:x|y|z
-    //
-    // Unary and server-streaming hid it -- one request frame is deduplicated
-    // downstream -- so only a shape that ACCUMULATES requests exposed it.
+    // Claimed BEFORE the first await, not after the subscribe below. `start()`
+    // returns void and nobody awaits it, so two synchronous calls otherwise
+    // both pass the guard, both suspend on the cancel below, and both
+    // subscribe. The incoming stream is a BROADCAST, so that is two live
+    // subscriptions delivering every frame twice, the first of them orphaned --
+    // and only a call shape that ACCUMULATES requests shows it, since one
+    // request frame is deduplicated downstream.
     _respIsListening = true;
 
     final oldSub = _respIncomingSub;
@@ -408,27 +394,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   /// Aborts every in-flight stream after the connection is gone.
   ///
-  /// The incoming stream closing is the only notice a responder gets that the
-  /// peer is unreachable, and it used to be logged and otherwise ignored: the
-  /// handlers kept running with nowhere to send, their cancellation tokens
-  /// never fired, and their stream state was never reclaimed. Measured by
-  /// closing the transport under one in-flight call of each shape, against a
-  /// handler doing 1ms units of work:
-  ///
-  ///   unary  117 -> 415 units after teardown, token=false, openStreams=1
-  ///   server 111 -> 372                        token=false, openStreams=1
-  ///   client 132 -> 427                        token=false, openStreams=1
-  ///   bidi   123 -> 385                        token=false, openStreams=1
+  /// The incoming stream closing is the ONLY notice a responder gets that the
+  /// peer is unreachable. Log it and do nothing else, and the handlers keep
+  /// running with nowhere to send, their tokens never fire, and their stream
+  /// state is never reclaimed — one abandoned handler and one stream state per
+  /// dropped connection, which any peer can drive by opening streams against an
+  /// expensive method and disconnecting.
   ///
   /// Both directions reach here: closing either end of a paired transport
-  /// closes the channel, so the responder's own incoming stream ends either
-  /// way. That made a dropped connection a resource leak with no upper bound --
-  /// one abandoned handler plus one stream state per drop, which any peer can
-  /// drive by opening streams against an expensive method and disconnecting.
+  /// closes the channel.
   ///
-  /// Cancellation and deadlines already trip the token; this is the path that
-  /// did not. The token is cancelled first, so a handler polling it or awaiting
-  /// `cancelled` unwinds cooperatively, exactly as on those paths.
+  /// The token is cancelled first, so a handler polling it or awaiting
+  /// `cancelled` unwinds cooperatively, exactly as on the cancellation and
+  /// deadline paths.
   void _abortActiveStreams(String reason) {
     if (_respStreams.length == 0) return;
     _log.internal('Aborting ${_respStreams.length} active stream(s): $reason');
@@ -472,17 +450,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// Returns a [Future] that completes when all active streams have finished,
   /// or when [timeout] expires (whichever comes first).
   ///
-  /// Concurrent callers share one drain and all await the same completion.
-  /// This used to return immediately for every caller after the first, while
-  /// streams were still in flight -- measured at 1ms with a stream still
-  /// active, against 5015ms for the caller that actually did the draining. A
-  /// second caller then walked past the drain and tore down whatever it was
-  /// protecting, which is the one thing drain() exists to prevent.
-  /// [RpcApp.stop] reaches here through `Future.wait`, so re-entry needs only
-  /// two shutdown paths racing (a signal handler and an explicit stop).
+  /// Concurrent callers share one drain and ALL await the same completion.
+  /// Returning early for the later ones lets a second caller walk past the
+  /// drain and tear down what it was protecting, which is the one thing this
+  /// exists to prevent — and re-entry needs only two shutdown paths racing, a
+  /// signal handler and an explicit stop.
   ///
-  /// A later caller's [timeout] does not apply: the drain already in progress
-  /// keeps the deadline it started with, since one drain cannot honour two.
+  /// A later caller's [timeout] does not apply: the drain in progress keeps the
+  /// deadline it started with, since one drain cannot honour two.
   Future<void> drain({Duration timeout = const Duration(seconds: 30)}) {
     return _respDrainInFlight ??= _runDrain(timeout);
   }
@@ -574,35 +549,21 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
-    // Trailing frames for a stream we already tore down must not resurrect it
+    // Trailing frames for a stream we already tore down must not RESURRECT it
     // (see _respClosedStreams). A genuinely new call always opens with a
     // METADATA frame carrying methodPath, so that — and only that — clears the
     // id for reuse.
     //
-    // The metadata half is load-bearing and used to be missing: any frame with
-    // a methodPath cleared the guard, and some transports tag their DATA frames
-    // with the method path too. The HTTP/1.1 responder does
-    // (`_emit(RpcTransportMessage(streamId, payload: body, isEndOfStream: true,
-    // methodPath: methodPath))`), so a request refused at the metadata stage
-    // resurrected itself with its own body. Traced at the transport, for
-    // `grpc-encoding: snappy`:
+    // Both halves are load-bearing. On methodPath alone, a transport that tags
+    // its DATA frames with the path too (the HTTP/1.1 responder does; http2
+    // does not) lets a request refused at the metadata stage resurrect itself
+    // with its own body: the peer is told UNIMPLEMENTED and the handler runs
+    // anyway.
     //
-    //   sendMetadata(stream=4, endStream=true, grpc-status=12)  <- refused
-    //   releaseStreamId(4)                                       <- cleaned up
-    //   sendMetadata(stream=4, endStream=false)                  <- resurrected
-    //   >>> HANDLER RAN
-    //   sendMetadata(stream=4, endStream=true, grpc-status=0)    <- discarded
-    //
-    // So the peer was told UNIMPLEMENTED while the handler ran anyway: the
-    // caller sees a failed call, the server performed the work. Delaying the
-    // body by 300ms changed nothing, which is what ruled out a race and pointed
-    // here. The http2 sibling was correct all along -- it tags only its HEADERS
-    // frame -- and that asymmetry is what named the defect.
-    //
-    // Checking `metadata != null` rather than `isMetadataOnly` on purpose: a
-    // transport may legitimately open a call with metadata and payload in one
-    // frame, and that must still be able to reuse a released id. A frame with
-    // no metadata never opens a call on any transport.
+    // `metadata != null` rather than `isMetadataOnly`, because a transport may
+    // legitimately open a call with metadata and payload in one frame and that
+    // must still reuse a released id. A frame with no metadata opens a call on
+    // no transport.
     if (_respStreams[message.streamId] == null &&
         _respClosedStreams.contains(message.streamId)) {
       if (message.methodPath == null || message.metadata == null) {
@@ -752,10 +713,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
               'cross-platform codec (e.g. RpcGzipCodec.register() from '
               'package:rpc_dart_compression).',
           // Required by the gRPC spec: a peer refused for its choice of
-          // algorithm must be told which ones would work, otherwise
-          // UNIMPLEMENTED is a dead end it cannot retry out of. Measured on the
-          // wire against this server, `grpc-encoding: br` came back
-          // `grpc-status=12` with `grpc-accept-encoding` ABSENT.
+          // algorithm must be told which ones would work, or UNIMPLEMENTED is a
+          // dead end it cannot retry out of.
           extraHeaders: [
             RpcHeader(
               RpcHeaders.grpcAcceptEncoding,
@@ -861,28 +820,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final methodKey = state.methodKey;
     if (methodKey == null) {
-      // Payload arrived before the metadata (headers) frame was processed.
-      // On a broadcast transport (no replay) the first data frame of a stream
-      // can be observed before its headers right after a connection opens.
-      // Buffer instead of dropping — otherwise the leading frame (for the blob
-      // upload, the one carrying blobId/vaultId) is lost and the handler sees a
-      // metadata-less first chunk. Replayed once metadata resolves the method.
+      // Payload arrived before the metadata frame. On a broadcast transport
+      // the first data frame of a stream can be observed before its headers
+      // right after a connection opens; dropping it loses the leading chunk, so
+      // buffer and replay once metadata resolves the method.
       //
-      // Bounded: see [_respPreMethodBytes]. Nothing else limits this window.
-      //
-      // `bufferedBytes`, not `payload.length`. This charged the payload alone,
-      // so a frame carrying one payload byte and a large header block cost the
-      // budget ONE BYTE while retaining the whole block — and unlike the
-      // queue's bound there is no event ceiling behind it, because
-      // `_preMethodBufferedMessages` is a plain List. Measured, 4000 such
-      // frames of 2000 tiny headers each:
-      //
-      //     charged to the budget   0.00 MiB
-      //     resident               789.9 MiB
-      //     the ceiling             16.0 MiB
-      //
-      // against a payload arm that charged 15.63 MiB for 11.6 MiB resident.
-      // The budget did not bind at all. Must stay identical to what
+      // Bounded by [_respPreMethodBytes]. Nothing else limits this window, and
+      // there is no event ceiling behind it either -- the buffer is a plain
+      // List -- so `bufferedBytes`, NOT `payload.length`. Charging the payload
+      // alone lets a frame with one payload byte and a large header block cost
+      // the budget one byte while retaining the whole block, and the budget
+      // then does not bind at all. Must stay identical to what
       // `bufferPreMethod` accumulates, or the release desyncs from this total.
       final bytes = message.bufferedBytes;
       if (_respPreMethodBytes + bytes > _respMaxPreMethodBytes) {
@@ -928,23 +876,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     );
 
     // Every shape starts its responder on the first request frame, INCLUDING
-    // client-stream. That case used to be excluded, so the only thing that
-    // started a client-streaming handler was the peer's half-close: every
-    // request message piled up in `_clientBufferedMessages` until then and the
-    // handler received the whole call at once.
+    // client-stream. Exclude that one and the only thing that starts a
+    // client-streaming handler is the peer's half-close, which breaks the
+    // shape's whole purpose -- messages pile up in an unbounded List and arrive
+    // together at the end, so a peer that never half-closes makes the server
+    // buffer the entire request, each frame bounded and the count not.
     //
-    // Two problems, one cause. A client-streaming handler is supposed to
-    // consume incrementally -- that is the shape's entire purpose, and what an
-    // upload writing chunks as they arrive depends on. Measured with five
-    // chunks sent 120ms apart, the handler started at 698ms (6ms after the
-    // half-close) and saw all five within 4ms of each other. And because the
-    // pile-up is an unbounded List, a peer that opens a client-stream and never
-    // half-closes makes the server buffer the entire request in memory, with
-    // maxMessageSize bounding each frame and nothing bounding the count.
-    //
-    // _ensureResponder is idempotent (it returns early once state.responder is
-    // set) and reaches that assignment with no await, so the half-close path
-    // below still creates the responder for a call that carried no messages.
+    // _ensureResponder is idempotent and reaches that assignment with no await,
+    // so the half-close path below still creates the responder for a call that
+    // carried no messages.
     if (state.hasRequestSink) {
       state.pushRequest(message);
       return;
@@ -1841,47 +1781,32 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     return context;
   }
 
-  /// Called when a stream's deadline elapses: cancels the handler via its
-  /// cancellation token (same path [drain] uses), then ENDS the stream.
-  ///
-  /// Cancelling the token is only a request to stop, and Dart cannot preempt a
-  /// handler that ignores it. This used to be the whole of the deadline
-  /// response, so a handler still running when its deadline passed pinned its
-  /// stream state and its responder forever: 30 such calls left `openStreams:
-  /// 30, activeResponders: 30` on every call shape, and the counters never came
-  /// back down. With [RpcSecurityPolicy.maxActiveStreams] enforced, that turns
-  /// a slow handler into a hard outage once the leak reaches the ceiling.
-  ///
-  /// Reclamation is DEFERRED by this much past the deadline. See [_reclaimGrace]
-  /// and [RpcResponderStreamState.armReclaim] for why it cannot be immediate.
+  /// How long past the deadline reclamation waits. See
+  /// [RpcResponderStreamState.armReclaim] for why it cannot be immediate.
   static const Duration _reclaimGrace = Duration(seconds: 2);
 
-  /// Tearing the stream down releases the bookkeeping whether the handler
-  /// cooperates or not, but only after [_reclaimGrace]. A cooperative handler
-  /// normally unwinds long before that and cleans up through the usual path,
-  /// so this is a backstop, not the mechanism.
+  /// Cancels the handler via its cancellation token — the path [drain] uses —
+  /// and then ENDS the stream once [_reclaimGrace] has passed.
   ///
-  /// WHAT IT COSTS, measured: [_cleanupStream] frees two different resources at
-  /// once — the stream STATE, and the admission slot, via
-  /// `transport.releaseStreamId`. For an UNCOOPERATIVE handler the first is
-  /// correct and the second is not: the work is still running, but its slot is
-  /// back in the pool, so [RpcSecurityPolicy.maxActiveStreams] stops bounding
-  /// concurrent execution. Against a server set to 4, one call every 250ms with
-  /// a 40ms deadline reached 37 concurrent handlers in 20s and was still
-  /// climbing linearly, while `activeResponders` read 3-4 the whole time.
+  /// The teardown is a backstop, not the mechanism: a cooperative handler
+  /// unwinds long before the grace elapses and cleans up the usual way. What it
+  /// covers is the handler that ignores the token, which Dart cannot preempt
+  /// and which would otherwise pin its stream state and responder forever.
   ///
-  /// That is the price of not leaking, not a free win, and it is recorded on
-  /// [RpcSecurityPolicy.maxActiveStreams] where someone configuring a server
-  /// will read it. Charging the slot until the handler's future completes would
-  /// close it, at the cost of turning a slow server into a rejecting one.
+  /// WHAT THAT COSTS: [_cleanupStream] frees the stream STATE and the admission
+  /// slot together. For an uncooperative handler the first is right and the
+  /// second is not — the work is still running with its slot back in the pool,
+  /// so [RpcSecurityPolicy.maxActiveStreams] stops bounding concurrent
+  /// execution and `activeResponders` reads far below the real number. That is
+  /// the price of not leaking; charging the slot until the handler's future
+  /// completes would close it, at the cost of turning a slow server into a
+  /// rejecting one. Recorded on [RpcSecurityPolicy.maxActiveStreams] too, where
+  /// someone configuring a server will read it.
   ///
-  /// Deliberately does NOT answer with a DEADLINE_EXCEEDED trailer, though
-  /// gRPC would. The peer that set the deadline reaches it at the same moment
-  /// and reports [RpcDeadlineExceededException] locally; a trailer sent here
-  /// races that, and whichever landed first decided the exception type the
-  /// caller saw — observed as RpcStatusException(4) in place of the deadline
-  /// type every other shape reports. The peer is no worse off than before: it
-  /// received nothing then either, while the server also leaked.
+  /// Deliberately does NOT answer with a DEADLINE_EXCEEDED trailer, though gRPC
+  /// would: the peer reaches the same deadline at the same moment and reports
+  /// [RpcDeadlineExceededException] locally, so a trailer sent here races that
+  /// and the winner decides which exception type the caller sees.
   void _onDeadlineExceeded(RpcResponderStreamState state) {
     final token = state.cachedContext?.cancellationToken;
     if (token != null && !token.isCancelled) {
@@ -1891,12 +1816,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       'Stream ${state.id} exceeded its deadline — cancelling handler',
     );
 
-    // Cancelling the token is only a REQUEST to stop, and Dart cannot preempt
-    // a handler that ignores it. Without this backstop such a handler pinned
-    // its stream state and responder forever: 30 calls whose deadline passed
-    // mid-handler left `openStreams: 30, activeResponders: 30` on every call
-    // shape, and the counters never came back down. With maxActiveStreams
-    // enforced, that leak becomes a hard outage at the ceiling.
+    // Cancelling the token is only a REQUEST to stop, and Dart cannot preempt a
+    // handler that ignores it. Without this backstop such a handler pins its
+    // stream state and responder forever, on every call shape -- and with
+    // maxActiveStreams enforced that leak becomes a hard outage at the ceiling.
     state.armReclaim(_reclaimGrace, () {
       if (_respStreams[state.id] == null) return;
       _log.warning(
@@ -1925,24 +1848,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   }
 
   RpcContext _createContextFromMessage(RpcTransportMessage message) {
-    // Repeated keys are JOINED with a comma, not overwritten.
+    // Repeated keys are JOINED with a comma, not overwritten. gRPC allows
+    // Custom-Metadata keys to repeat and RFC 9110 s5.3 makes repeated field
+    // lines equivalent to one comma-separated line, so overwriting silently
+    // drops values -- and disagrees with RpcMetadata, which keeps both and
+    // whose getHeaderValue returns the FIRST.
     //
-    // gRPC allows Custom-Metadata keys to repeat, and HTTP semantics (RFC 9110
-    // s5.3) say repeated field lines are equivalent to one line carrying the
-    // values comma-separated. This map assignment kept only the LAST one, so a
-    // peer sending two values silently lost the first. Measured with grpcurl,
-    // `-H 'x-tag: first' -H 'x-tag: second'`:
-    //
-    //     handler saw : x-tag: second        <- 'first' gone
-    //
-    // and the two views of the same call disagreed, because RpcMetadata holds
-    // both and its getHeaderValue returns the FIRST while this returned the
-    // last.
-    //
-    // Joining keeps the data and lets an application split it back. A peer that
-    // duplicates a header rpc_dart parses as a single value -- grpc-timeout,
-    // grpc-encoding -- now yields something that fails to parse instead of one
-    // arbitrarily chosen value, which is the safer reading of malformed input:
+    // For a header rpc_dart parses as a single value (grpc-timeout,
+    // grpc-encoding) a duplicate then yields something that fails to parse
+    // rather than one arbitrarily chosen value, which is the safer reading:
     // it is not for us to pick which deadline the peer meant.
     final headers = <String, String>{};
     if (message.metadata != null) {
@@ -1958,18 +1872,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       }
     }
 
-    // Adopt the caller's request id, exactly as the trace id below is adopted,
-    // and adopt it AT CONSTRUCTION so no token is minted just to be replaced.
+    // Adopt the caller's request id as the trace id below is adopted, and AT
+    // CONSTRUCTION so no id is minted just to be replaced. Ignore it and the
+    // two sides log different ids for one call, which cannot then be joined.
     //
-    // The caller has been SENDING `x-request-id` all along and nothing read it,
-    // so the two sides logged different ids for one call and their logs could
-    // not be joined on it -- while `x-trace-id` could, which is the asymmetry
-    // that named this. Both are protocol-reserved, so an application cannot
-    // forge them through ordinary metadata, and both arrive already length- and
-    // charset-checked by validateMetadata.
-    //
-    // Used for correlation only; nothing keys state off it, so a peer repeating
-    // an id costs it nothing but confusing logs of its own.
+    // Both headers are protocol-reserved, so an application cannot forge them
+    // through ordinary metadata, and both arrive length- and charset-checked by
+    // validateMetadata. Correlation only: nothing keys state off this, so a
+    // peer repeating an id costs it nothing but its own confusing logs.
     final clientRequestId = headers[RpcHeaders.xRequestId];
     var context = RpcContext.withHeaders(
       headers,

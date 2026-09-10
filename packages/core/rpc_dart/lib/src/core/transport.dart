@@ -63,41 +63,24 @@ final class RpcTransportMessage {
   /// What this message weighs while it is held in a queue, in bytes.
   ///
   /// One home for the rule, because every transport buffers these and each
-  /// would otherwise repeat it. A `directPayload` is a reference to an object
-  /// this process already owns, so queuing it costs a pointer rather than its
-  /// contents.
+  /// would otherwise repeat it — notably `BufferedBroadcastController.sizeOf`.
   ///
-  /// Used by `BufferedBroadcastController.sizeOf`, whose bound was on event
-  /// COUNT alone — 4096 events of up to `maxMessageLengthBytes` each.
+  /// A `directPayload` weighs nothing: it is a reference to an object this
+  /// process already owns, so queuing it costs a pointer, not its contents.
   ///
-  /// Metadata is counted too, and used not to be. "Small and bounded by the
-  /// policy's header limits" is true per frame and false in aggregate:
-  /// `maxMetadataBytes` defaults to 64 KiB, so 4096 metadata-only frames
-  /// retained 256 MiB against this queue's 16 MiB bound — the same
-  /// count-versus-bytes hole round 236 closed for payloads, left open in the
-  /// dimension it excluded.
+  /// METADATA COUNTS. "Small and bounded by the header limits" holds per frame
+  /// and fails in aggregate — `maxMetadataBytes` defaults to 64 KiB, so a queue
+  /// bounded on event count alone admits thousands of metadata-only frames that
+  /// weigh nothing and retain hundreds of megabytes.
   int get bufferedBytes {
     var total = payload?.length ?? 0;
     final m = metadata;
     if (m != null) {
-      // Characters ALONE are not what a header costs. Round 245 stopped
-      // metadata weighing zero here; it then weighed `name.length +
-      // value.length`, which is right for a few large headers and wrong for
-      // many small ones -- and many small ones is the shape a peer picks.
-      // ["h1","v1"] weighs 4 and retains about a hundred bytes.
-      //
-      // Measured against this queue, one arm per process, maxRss:
-      //
-      //   arm      headers  admitted   wire  weighed     RSS   stopped by
-      //   payload        -       256   16.0     16.0    37.3   the byte bound
-      //   thin         500      4096   30.4     14.8   190.8   the EVENT count
-      //   thin        2000       943   30.4     16.0   186.4   the byte bound
-      //   thin        5000       351   29.4     16.0   186.3   the byte bound
-      //
-      // A plateau at ~186 MiB against a 16 MiB bound, at every scale, while the
-      // payload arm -- weighed correctly -- sits at 2.3x. At 500 headers the
-      // byte bound did not engage AT ALL: the event count stopped it, which is
-      // the hole round 236 closed for payloads reopening one dimension over.
+      // Characters alone are not what a header costs. `name.length +
+      // value.length` is right for a few large headers and badly wrong for many
+      // small ones -- ["h1","v1"] weighs 4 and retains about a hundred bytes --
+      // and many small ones is the shape a hostile peer picks, so each header
+      // carries a fixed retention charge on top of its text.
       for (final h in m.headers) {
         total += h.name.length + h.value.length + _perHeaderOverheadBytes;
       }
@@ -409,7 +392,7 @@ final class RpcStreamIdManager {
   ///
   /// Throws if the maximum ID is reached and no reusable IDs exist.
   int generateId() {
-    // Compute next ID based on role.
+    // +2, not +1: the two roles own opposite parities of the id space.
     final nextId = _lastId + 2;
 
     if (nextId <= _maxAssignableId) {
@@ -418,7 +401,7 @@ final class RpcStreamIdManager {
       return nextId;
     }
 
-    // If no active streams, safely restart the sequence.
+    // Nothing in flight, so the whole range is free again.
     if (_activeIds.isEmpty) {
       final restartId = _firstAssignableId;
       _lastId = restartId;

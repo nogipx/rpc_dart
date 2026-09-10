@@ -47,20 +47,12 @@ final class RpcSecurityPolicy {
   /// long-lived streams you expect, not just unary concurrency.
   final int? maxConcurrentHandlers;
 
-  // REMOVED, deliberately: maxWebSocketMessageBytes, maxChunkedMessageBytes and
-  // maxChunkCount. All three were documented "NOT CURRENTLY ENFORCED" and
-  // nothing outside this file ever read them, so setting one bought a belief
-  // and no behaviour. Measured with maxWebSocketMessageBytes: 1 MiB, a
-  // WebSocket server accepted four 15 MiB messages without complaint -- a 15x
-  // gap between the configured limit and the real one.
-  //
-  // A limit that does nothing is worse than an absent one: an operator
-  // hardening a deployment stops looking once the knob is set, and a map-driven
-  // config never shows the doc comment that admitted the truth. What actually
-  // bounds a WebSocket message is [maxMessageLengthBytes] via
-  // [effectiveMaxBufferedBytes] during frame reassembly -- a 64 MiB message
-  // closes the connection with 4400, and that is now pinned by a test in
-  // rpc_dart_websocket. Chunking is rpc_blob's, and it applies its own limits.
+  // Do NOT add a field here that nothing enforces. maxWebSocketMessageBytes,
+  // maxChunkedMessageBytes and maxChunkCount were all read by nobody, so
+  // setting one bought a belief and no behaviour -- and an operator hardening a
+  // deployment stops looking once the knob is set. A WebSocket message is
+  // bounded by maxMessageLengthBytes via effectiveMaxBufferedBytes during frame
+  // reassembly; chunking is rpc_blob's, with its own limits.
 
   /// Max encoded metadata payload size for transports that serialize metadata
   /// (for example, JSON over WebSocket).
@@ -211,8 +203,7 @@ final class RpcSecurityPolicy {
     'maxBufferedBytes': ?maxBufferedBytes,
     'maxMessagesPerChunk': maxMessagesPerChunk,
     'maxActiveStreams': maxActiveStreams,
-    // Omitted when unset: absent already means "no limit" here, unlike the
-    // windows above whose absence means a non-null default.
+    // Omitted when unset, because absent already means "no limit" for this one.
     'maxConcurrentHandlers': ?maxConcurrentHandlers,
     'maxMetadataBytes': maxMetadataBytes,
     'maxHeaders': maxHeaders,
@@ -220,14 +211,12 @@ final class RpcSecurityPolicy {
     'maxHeaderValueBytes': maxHeaderValueBytes,
     'maxMethodPathLength': maxMethodPathLength,
     'closeOnProtocolError': closeOnProtocolError,
-    // Explicit 0 rather than an omitted key: absent means "use the default",
-    // so omitting it for a disabled window would round-trip back to the
-    // 60s default and silently re-enable reclamation.
+    // Explicit 0 for the four below, never an omitted key: absent means "use
+    // the default", so omitting a disabled window would round-trip back to its
+    // default and silently switch the limit back on.
     'halfOpenStreamTimeoutMs': halfOpenStreamTimeout?.inMilliseconds ?? 0,
-    // Explicit 0 for disabled, same reason as above.
     'flowControlWindowBytes': flowControlWindowBytes ?? 0,
     'flowControlConnectionWindowBytes': flowControlConnectionWindowBytes ?? 0,
-    // Explicit 0 for disabled, same reason as above.
     'initialSendWindowBytes': initialSendWindowBytes ?? 0,
     'initialSendWindowGraceMs': initialSendWindowGrace?.inMilliseconds ?? 0,
   };
@@ -256,8 +245,6 @@ final class RpcSecurityPolicy {
         final int limit when limit > 0 => limit,
         _ => null,
       },
-      // The three removed keys are simply ignored if an old stored config still
-      // carries them, which is what should happen: they never did anything.
       maxMetadataBytes: readInt('maxMetadataBytes', 64 * 1024),
       maxHeaders: readInt('maxHeaders', 128),
       maxHeaderNameBytes: readInt('maxHeaderNameBytes', 128),
