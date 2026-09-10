@@ -22,35 +22,32 @@ import 'dart:typed_data';
 /// maxHeaders, maxHeaderValueBytes, halfOpenStreamTimeout): no stream is
 /// created and no handler is dispatched. This is the HTTP/2 CONTINUATION flood.
 ///
-/// Measured against RpcHttp2Server before this guard, one connection:
-///
-///   64 MiB in 4096 CONTINUATION frames -> +53.7 MiB RSS retained, and a
-///   concurrent ordinary call on ANOTHER connection timed out -- the O(N^2)
-///   recopy starved the event loop. 256 MiB pushed it to +92.5 MiB and the
-///   single 4x run took minutes of CPU.
+/// Unguarded, one connection can retain tens of MiB of RSS and starve the event
+/// loop for minutes of CPU, because the recopy is quadratic in the number of
+/// CONTINUATION frames.
 ///
 /// This transformer watches frame headers only -- it forwards every byte
 /// untouched -- and tears the connection down the moment an accumulating header
 /// block passes [maxHeaderBlockBytes]. A legitimate gRPC request's header block
 /// is well under a kilobyte, so the default bound (the policy's
 /// `maxMetadataBytes`, 64 KiB) never touches real traffic.
-/// [skipConnectionPreface] must be true for a SERVER reading from a client (the
-/// 24-octet preface opens that direction) and false for a CLIENT reading from a
-/// server (which sends frames immediately, no preface). Getting it backwards
-/// silently disables the guard in one direction and corrupts parsing in the
-/// other -- see [_HeaderBlockScanner._connectionPrefaceSize].
-/// [onGoaway], when given, fires the first time the peer sends a GOAWAY frame.
-/// [onPrefaceComplete], when given, fires once the peer has finished sending
-/// the 24-octet connection preface — i.e. the first evidence that an accepted
-/// socket is an HTTP/2 client at all. Only meaningful with
-/// [skipConnectionPreface] true.
 ///
+/// [skipConnectionPreface] must be TRUE for a server reading from a client (the
+/// 24-octet preface opens that direction) and FALSE for a client reading from a
+/// server (which sends frames immediately). Getting it backwards silently
+/// disables the guard in one direction and corrupts parsing in the other -- see
+/// [_HeaderBlockScanner._connectionPrefaceSize].
+///
+/// [onGoaway], when given, fires the first time the peer sends a GOAWAY frame.
 /// This scanner is the only place in the transport that sees raw frames, and
-/// package:http2 exposes no "the peer is draining" signal of its own —
-/// `ClientTransportConnection` offers a single `isOpen`, which folds GOAWAY
-/// together with "at MAX_CONCURRENT_STREAMS". Surfacing GOAWAY here is what
-/// lets the caller tell a DRAINING peer (reconnect elsewhere) from a merely
+/// package:http2 exposes no draining signal of its own -- `isOpen` folds GOAWAY
+/// together with "at MAX_CONCURRENT_STREAMS" -- so surfacing it here is what
+/// lets a caller tell a DRAINING peer (reconnect elsewhere) from a merely
 /// SATURATED one (wait for a slot).
+///
+/// [onPrefaceComplete], when given, fires once the peer has finished sending the
+/// preface: the first evidence that an accepted socket is an HTTP/2 client at
+/// all. Only meaningful with [skipConnectionPreface] true.
 Stream<List<int>> guardHttp2HeaderBlock(
   Stream<List<int>> incoming, {
   required int maxHeaderBlockBytes,

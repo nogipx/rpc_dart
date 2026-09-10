@@ -12,10 +12,10 @@ import 'http2_header_block_guard.dart';
 import 'rpc_http2_common.dart';
 import 'rpc_http2_responder_transport.dart';
 
-/// Высокоуровневый HTTP/2 RPC сервер
+/// HTTP/2 RPC server.
 ///
-/// Инкапсулирует создание HTTP/2 сервера и автоматическую настройку транспортов.
-/// Для каждого нового подключения создает отдельный RpcResponderEndpoint.
+/// Binds the listening socket and wires up a transport per connection, creating
+/// a separate [RpcResponderEndpoint] for each one.
 class RpcHttp2Server implements IRpcServer {
   final String _host;
   final int _port;
@@ -51,28 +51,24 @@ class RpcHttp2Server implements IRpcServer {
   final Map<RpcResponderEndpoint, http2.ServerTransportConnection>
   _connections = {};
 
-  /// Создает HTTP/2 RPC сервер
+  /// Creates an HTTP/2 RPC server.
   ///
-  /// [host] - хост для привязки (по умолчанию 'localhost')
-  /// [port] - порт для привязки
-  /// [logger] - логгер для отладки
-  /// [onEndpointCreated] - вызывается при создании нового RPC endpoint'а
-  /// [onConnectionError] - вызывается при ошибке соединения
-  /// [onConnectionOpened] - вызывается при открытии нового соединения
-  /// [onConnectionClosed] - вызывается при закрытии соединения
-  /// [securityPolicy] - bounds per-stream message size, buffered bytes, and the
-  ///   number of concurrent active streams per connection. Forwarded to every
-  ///   [RpcHttp2ResponderTransport]. Defaults to `const RpcSecurityPolicy()`
-  ///   so the built-in limits are enforced.
-  /// [securityContext] - when non-null, the server binds a TLS socket
-  ///   ([SecureServerSocket]) advertising ALPN `h2` instead of a plaintext
-  ///   ([ServerSocket]) `h2c` socket. Provide a [SecurityContext] with a
-  ///   certificate chain and private key to serve HTTP/2 over TLS. Defaults to
-  ///   `null` (plaintext h2c) for backward compatibility.
-  /// [pingInterval] - see the field docs; enables HTTP/2 PING keepalive so
-  ///   half-open connections are reclaimed instead of held forever.
-  /// [pingTimeout] - how long to wait for the PING ACK before declaring the
-  ///   connection dead. Defaults to [pingInterval] when omitted.
+  /// [onEndpointCreated] fires for each new connection's endpoint, which is
+  /// where an application registers its contracts. [onConnectionError],
+  /// [onConnectionOpened] and [onConnectionClosed] are observability hooks.
+  ///
+  /// [securityPolicy] bounds per-stream message size, buffered bytes, and the
+  /// number of concurrent active streams per connection. Forwarded to every
+  /// [RpcHttp2ResponderTransport]. Defaults to `const RpcSecurityPolicy()` so
+  /// the built-in limits are enforced.
+  ///
+  /// [securityContext], when non-null, binds a TLS socket ([SecureServerSocket])
+  /// advertising ALPN `h2` instead of a plaintext ([ServerSocket]) `h2c` one.
+  /// Provide a certificate chain and private key to serve HTTP/2 over TLS.
+  ///
+  /// [pingInterval] and [pingTimeout] configure PING keepalive; see the field
+  /// docs, which explain why the default is on. [prefaceTimeout] bounds an
+  /// accepted socket that never speaks HTTP/2.
   RpcHttp2Server({
     String host = 'localhost',
     required int port,
@@ -114,16 +110,11 @@ class RpcHttp2Server implements IRpcServer {
   /// [_handleConnection] is wired to the accept stream, so everything it builds
   /// — the transport, the endpoint, and [_onEndpointCreated], where the
   /// application registers its contracts — is built before the peer has sent a
-  /// byte. Every limit this server has is PER CONNECTION, so `maxActiveStreams`,
-  /// `maxConcurrentHandlers`, `halfOpenStreamTimeout` and the pre-method budget
-  /// are all downstream of a peer that has not opened a stream. Nothing counted
-  /// connections. Measured with 200 sockets sending zero bytes:
-  ///
-  ///     endpoints 200, contracts built 200      <- before
-  ///     endpoints   0, contracts built   0      <- after, at this deadline
-  ///
-  /// against 0 and 0 on the websocket server, which only builds an endpoint for
-  /// an ALREADY-UPGRADED connection.
+  /// byte. Every other limit this server has is PER CONNECTION, so
+  /// `maxActiveStreams`, `maxConcurrentHandlers`, `halfOpenStreamTimeout` and
+  /// the pre-method budget are all downstream of a peer that has not opened a
+  /// stream. Without this deadline nothing counts connections at all, and a TCP
+  /// SYN buys an endpoint plus a run of the application's callback.
   ///
   /// **What it is and is not for.** It bounds traffic that never speaks HTTP/2
   /// at all: port scanners, TLS probes, misdirected HTTP/1.1 clients, a stuck
@@ -145,39 +136,22 @@ class RpcHttp2Server implements IRpcServer {
   ///
   /// A NAT box, load balancer or mobile network that silently stops forwarding
   /// sends no FIN and no RST, so the server's socket still looks fine and the
-  /// connection — with its endpoint, and the application's contracts on it —
-  /// is held forever. Measured with a TCP relay frozen mid-flight and five
-  /// clients abandoned without closing:
+  /// connection — with its endpoint, and the application's contracts on it — is
+  /// held forever. A contract that is never disposed keeps whatever it owns:
+  /// database handles, caches, subscriptions. A fleet of mobile clients on
+  /// flaky networks accumulates them.
   ///
-  ///     no keepalive     : endpoints 5, contracts disposed 0 — unchanged at
-  ///                        t+30s, and nothing would ever reclaim them
-  ///     pingInterval 2s  : endpoints 0, contracts disposed 5
+  /// **On by default (30s), and it is the ONLY bound on a held endpoint.**
+  /// [_prefaceTimeout] deliberately does not cover this case — 24 preface bytes
+  /// buy past it — so a peer that speaks HTTP/2 and then goes silent is
+  /// reclaimed by nothing else.
   ///
-  /// The second number is the one that matters: an endpoint holds the
-  /// application's contracts, and a contract that is never disposed keeps
-  /// whatever it owns — database handles, caches, subscriptions — for the life
-  /// of the process. A fleet of mobile clients on flaky networks accumulates
-  /// them.
-  ///
-  /// **Defaults to 30s, and it used to default to `null`.** Off by default was
-  /// defensible while this read as a reliability feature for flaky networks. It
-  /// is not only that: it is the only thing that reclaims a connection from a
-  /// peer that has spoken HTTP/2 and then gone silent, and [_prefaceTimeout]
-  /// deliberately does not cover that case — 24 preface bytes buy past it.
-  ///
-  /// So the shipped default decided whether a server had any bound on held
-  /// endpoints at all, and the shipped default was none. Measured, 200 sockets
-  /// against this server:
-  ///
-  ///     pingInterval null : endpoints 200, held as long as the peer likes
-  ///     pingInterval on   : endpoints   0
-  ///
-  /// **This is a behaviour change.** An idle connection now carries a PING every
-  /// 30s and is dropped if no ACK arrives within [_pingTimeout]. Pass `null` to
-  /// restore the old behaviour; raise both on a fleet where radio wake-ups
-  /// matter. Too short wakes radios and wastes battery, too long leaves dead
-  /// connections resident — take the shortest idle timeout on the path (load
-  /// balancers commonly use 60s) and halve it, which is where 30s comes from.
+  /// An idle connection therefore carries a PING every 30s and is dropped if no
+  /// ACK arrives within [_pingTimeout]. Pass `null` to disable; raise both on a
+  /// fleet where radio wake-ups matter. Too short wakes radios and wastes
+  /// battery, too long leaves dead connections resident — take the shortest idle
+  /// timeout on the path (load balancers commonly use 60s) and halve it, which
+  /// is where 30s comes from.
   ///
   /// This is the same mechanism gRPC servers use
   /// (`GRPC_ARG_KEEPALIVE_TIME_MS`), so it is understood by foreign peers: a
@@ -188,12 +162,7 @@ class RpcHttp2Server implements IRpcServer {
   /// Defaults to [_pingInterval] when not given.
   final Duration? _pingTimeout;
 
-  /// Создает простой HTTP/2 сервер с автоматической регистрацией контрактов
-  ///
-  /// [port] - порт для привязки
-  /// [contracts] - список контрактов для регистрации на каждом endpoint'е
-  /// [host] - хост для привязки (по умолчанию 'localhost')
-  /// [logger] - логгер для отладки
+  /// An HTTP/2 server that registers [contracts] on every endpoint it creates.
   factory RpcHttp2Server.createWithContracts({
     required int port,
     required List<RpcResponderContract> contracts,
@@ -210,16 +179,16 @@ class RpcHttp2Server implements IRpcServer {
       logger: logger,
       onEndpointCreated: (endpoint) {
         logger?.debug(
-          'Регистрация ${contracts.length} контрактов на новом endpoint',
+          'Registering ${contracts.length} contract(s) on a new endpoint',
         );
         for (final contract in contracts) {
           endpoint.registerServiceContract(contract);
-          logger?.debug('Зарегистрирован контракт: ${contract.serviceName}');
+          logger?.debug('Registered contract: ${contract.serviceName}');
         }
       },
       onConnectionError: (error, stackTrace) {
         logger?.error(
-          'Ошибка соединения HTTP/2',
+          'HTTP/2 connection error',
           error: error,
           stackTrace: stackTrace,
         );
@@ -227,53 +196,28 @@ class RpcHttp2Server implements IRpcServer {
     );
   }
 
-  /// Хост сервера
+  /// The host this server is bound to.
   String get host => _host;
 
-  /// Порт сервера
+  /// The port this server is bound to.
   ///
   /// Returns the OS-assigned port once bound when constructed with port `0`;
   /// otherwise the requested port.
   int get port => _serverSocket?.port ?? _secureServerSocket?.port ?? _port;
 
-  /// Активные endpoints
+  /// The live endpoints, one per connection.
   @override
   List<RpcResponderEndpoint> get endpoints => List.unmodifiable(_endpoints);
 
-  /// Drops a disconnected connection's endpoint and closes it.
-  ///
-  /// Closing is what used to be missing: the disconnect handler only removed
-  /// the endpoint from [_endpoints]. An endpoint dropped without close() never
-  /// cancels its transport subscription, never tears down its still-open
-  /// responder streams, and never calls `dispose()` on its registered
-  /// contracts -- so whatever a contract holds (database handles, files,
-  /// subscriptions) stays held for the life of the process. One leak per
-  /// client disconnect. [stop] closed endpoints correctly; only this path did
-  /// not.
   /// Waits, up to [budget], for in-flight calls to finish.
-  ///
-  /// Without this, [stop] closed every endpoint the instant it was called, so a
-  /// rolling deploy dropped every call that happened to be running. Measured
-  /// with a 2s handler and stop() 300ms in:
-  ///
-  ///     stop()                       : the call failed UNAVAILABLE after 326ms
-  ///     stop(drainTimeout: 5s)       : the call RETURNED its real answer
-  ///
-  /// The failure was already reported correctly — a prompt, retryable
-  /// UNAVAILABLE — so this is a missing capability rather than a broken one:
-  /// the client had no way to be told "finish what you started".
   ///
   /// Accepting has already stopped by the time this runs, but an EXISTING
   /// connection can still open new streams — so the drain begins by sending
   /// GOAWAY on every live connection. That is the HTTP/2 signal for "no new
-  /// streams here", and it is what makes a gRPC graceful shutdown converge
-  /// rather than merely expire. Without it, measured with one slow call in
-  /// flight and a second issued 400ms AFTER shutdown began:
-  ///
-  ///     no GOAWAY : the late call was ACCEPTED and served in 6ms, so shutdown
-  ///                 was extended by work that arrived after it started
-  ///     GOAWAY    : the late call is refused UNAVAILABLE and shutdown
-  ///                 converges as soon as the in-flight call finishes
+  /// streams here", and it is what makes a gRPC graceful shutdown CONVERGE
+  /// rather than merely expire: without it a call issued after shutdown began
+  /// is still accepted and served, extending shutdown by work that arrived
+  /// after it started.
   ///
   /// GOAWAY does NOT cut the calls already running: it carries the last stream
   /// id the peer may assume was processed, so streams below it finish normally.
@@ -284,8 +228,8 @@ class RpcHttp2Server implements IRpcServer {
   ///
   /// `activeResponders` counts live responder streams. A handler that outlives
   /// its stream is not counted — the same caveat gRPC's own drain carries, and
-  /// the reason [maxActiveStreams] is documented as bounding stream state
-  /// rather than handler execution.
+  /// the reason [maxActiveStreams] bounds stream state rather than handler
+  /// execution.
   Future<void> _drain(Duration budget) async {
     // Send GOAWAY first, even if nothing is in flight: a peer that is about to
     // call deserves the signal, and finish() is what delivers it.
@@ -390,12 +334,20 @@ class RpcHttp2Server implements IRpcServer {
     });
   }
 
+  /// Drops a disconnected connection's endpoint and CLOSES it.
+  ///
+  /// Removing it from [_endpoints] is not enough. An endpoint dropped without
+  /// close() never cancels its transport subscription, never tears down its
+  /// still-open responder streams, and never calls `dispose()` on its registered
+  /// contracts — so whatever a contract holds (database handles, files,
+  /// subscriptions) stays held for the life of the process: one leak per client
+  /// disconnect.
   void _releaseEndpoint(RpcResponderEndpoint endpoint, Socket socket) {
     _endpoints.remove(endpoint);
     _connections.remove(endpoint);
     unawaited(
       endpoint.close().catchError((Object error) {
-        _logger?.warning('Ошибка при закрытии endpoint: $error');
+        _logger?.warning('Error closing an endpoint on disconnect: $error');
       }),
     );
     _notify('onConnectionClosed', () => _onConnectionClosed?.call(socket));
@@ -408,18 +360,13 @@ class RpcHttp2Server implements IRpcServer {
   /// then/catchError -- so a throw has no handler above it and reaches the root
   /// zone, where an unhandled async error kills the isolate.
   ///
-  /// Measured: a callback that throws from `onConnectionOpened` ended the
-  /// process outright --
-  ///   Unhandled exception: Bad state: user callback failed on open
-  ///   #1 RpcHttp2Server._handleConnection (rpc_http2_server.dart:260)
-  ///   #2 _RootZone.runUnaryGuarded
-  /// -- because that call sits outside the try below. `onConnectionClosed` is
-  /// conditionally fatal: a throw on the graceful `.then` path is absorbed by
-  /// the `.catchError` that follows it, but a throw on the `.catchError` path
-  /// has nothing after it and escapes the same way.
+  /// `onConnectionOpened` is unconditionally fatal without this, sitting outside
+  /// the try below. `onConnectionClosed` is conditionally so: a throw on the
+  /// graceful `.then` path is absorbed by the `.catchError` after it, but a
+  /// throw on the `.catchError` path has nothing after it and escapes.
   ///
-  /// Reaching this needs no misuse. A callback that reads `socket.remotePort`
-  /// on close throws `OS Error 22` by itself, because the peer is already gone.
+  /// Reaching this needs no misuse. A callback that reads `socket.remotePort` on
+  /// close throws `OS Error 22` by itself, because the peer is already gone.
   ///
   /// Deliberately NOT applied to [_onEndpointCreated]: that one registers the
   /// contracts, so if it fails the connection is useless. The surrounding
@@ -430,60 +377,46 @@ class RpcHttp2Server implements IRpcServer {
       body();
     } catch (error, stackTrace) {
       _logger?.error(
-        'Ошибка в пользовательском callback $what',
+        'User callback $what threw',
         error: error,
         stackTrace: stackTrace,
       );
     }
   }
 
-  /// Запущен ли сервер
   @override
   bool get isRunning => _isRunning;
 
-  /// Запускает HTTP/2 сервер
+  /// Binds the listening socket and starts accepting connections.
   @override
   Future<void> start() async {
     if (_isRunning) {
-      _logger?.warning('HTTP/2 сервер уже запущен');
+      _logger?.warning('HTTP/2 server is already running');
       return;
     }
 
     final scheme = isSecure ? 'h2 (TLS)' : 'h2c (plaintext)';
-    _logger?.info('Запуск HTTP/2 сервера ($scheme) на $_host:$_port');
+    _logger?.info('Starting HTTP/2 server ($scheme) on $_host:$_port');
 
     try {
       final Stream<Socket> connections;
       if (_securityContext != null) {
-        // Advertise 'h2' for ALPN. This is what the API asks for, but do NOT
-        // treat it as a filter: it is not one here.
+        // Advertise 'h2' for ALPN -- but do NOT treat it as a filter, because
+        // it is not one here. Measured against a bare SecureServerSocket given
+        // the same `supportedProtocols` as a control, the handshake completes
+        // whatever the client offers (h2, http/1.1, or no ALPN at all) and the
+        // server-side selectedProtocol comes back null. That is the platform's
+        // TLS/ALPN behaviour, not this server's.
         //
-        // The previous comment claimed "clients that do not offer 'h2' will
-        // fail ALPN negotiation, which is the desired behavior for an h2-only
-        // server". Measured, that is false in both directions. openssl against
-        // this server, and against a BARE SecureServerSocket given the same
-        // `supportedProtocols: ['h2']` as a control:
-        //
-        //   client offers h2        -> CONNECTION ESTABLISHED (TLSv1.3),
-        //                              "No ALPN negotiated",
-        //                              server-side selectedProtocol = null
-        //   client offers http/1.1  -> CONNECTION ESTABLISHED, same
-        //   client offers no ALPN   -> CONNECTION ESTABLISHED, same
-        //
-        // The control matters: the bare socket behaves identically, so nothing
-        // here causes it -- it is the platform's TLS/ALPN behaviour (measured
-        // on macOS, Dart 3.10.1, OpenSSL 3.x; other platforms unverified).
-        //
-        // Two consequences worth knowing before relying on this:
+        // Two consequences before relying on it:
         //  - No client is rejected for its protocol list. A browser, a health
-        //    checker or a scanner completes the handshake and is then handed
-        //    to the h2 parser, which is where it fails instead. ALPN is not an
+        //    checker or a scanner completes the handshake and is then handed to
+        //    the h2 parser, which is where it fails instead. ALPN is not an
         //    access control here.
-        //  - RFC 7540 requires ALPN for h2 over TLS, so a STRICT gRPC client
-        //    may refuse to proceed without a negotiated 'h2'. grpcurl (Go) is
-        //    lenient and interoperates fine over TLS -- verified, including
-        //    reflection, unary and server-streaming -- but that is the client
-        //    being forgiving, not a negotiated protocol.
+        //  - RFC 7540 requires ALPN for h2 over TLS, so a STRICT gRPC client may
+        //    refuse to proceed without a negotiated 'h2'. Lenient clients
+        //    (grpcurl) interoperate fine, but that is the client forgiving,
+        //    not a negotiated protocol.
         _secureServerSocket = await SecureServerSocket.bind(
           _host,
           _port,
@@ -497,14 +430,13 @@ class RpcHttp2Server implements IRpcServer {
       }
       _isRunning = true;
 
-      _logger?.info('HTTP/2 сервер запущен ($scheme) на $_host:$port');
+      _logger?.info('HTTP/2 server listening ($scheme) on $_host:$port');
 
-      // Слушаем входящие соединения
       final subscription = connections.listen(
         _handleConnection,
         onError: (error, stackTrace) {
           _logger?.error(
-            'Ошибка сервера',
+            'Server socket error',
             error: error,
             stackTrace: stackTrace,
           );
@@ -518,7 +450,7 @@ class RpcHttp2Server implements IRpcServer {
       _subscriptions.add(subscription);
     } catch (e, stackTrace) {
       _logger?.error(
-        'Не удалось запустить HTTP/2 сервер',
+        'Failed to start the HTTP/2 server',
         error: e,
         stackTrace: stackTrace,
       );
@@ -527,17 +459,16 @@ class RpcHttp2Server implements IRpcServer {
     }
   }
 
-  /// Останавливает HTTP/2 сервер
+  /// Stops the server, optionally letting in-flight calls finish first.
   @override
   Future<void> stop({Duration? drainTimeout}) async {
     if (!_isRunning) return;
 
-    _logger?.info('Остановка HTTP/2 сервера');
+    _logger?.info('Stopping the HTTP/2 server');
     _isRunning = false;
 
-    // Отменяем все подписки.
-    // This is what stops ACCEPTING, and it must happen before any drain:
-    // draining while still accepting is not a shutdown.
+    // Stop ACCEPTING before any drain: draining while still accepting is not a
+    // shutdown.
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
@@ -545,8 +476,7 @@ class RpcHttp2Server implements IRpcServer {
 
     if (drainTimeout != null) await _drain(drainTimeout);
 
-    // Закрываем все endpoints.
-    // Iterate over a snapshot: closing an endpoint can trigger socket.done,
+    // Iterate over a SNAPSHOT: closing an endpoint can trigger socket.done,
     // whose handler removes the endpoint from _endpoints, mutating the list
     // mid-iteration ("Concurrent modification during iteration").
     final endpointsToClose = List.of(_endpoints);
@@ -558,44 +488,33 @@ class RpcHttp2Server implements IRpcServer {
       try {
         await endpoint.close();
       } catch (e) {
-        _logger?.warning('Ошибка при закрытии endpoint: $e');
+        _logger?.warning('Error closing an endpoint: $e');
       }
     }
 
-    // Закрываем серверный сокет
     await _serverSocket?.close();
     _serverSocket = null;
     await _secureServerSocket?.close();
     _secureServerSocket = null;
 
-    _logger?.info('HTTP/2 сервер остановлен');
+    _logger?.info('HTTP/2 server stopped');
   }
 
   /// `maxActiveStreams` as an HTTP/2 SETTINGS value, clamped to what the field
   /// can actually carry.
   ///
   /// SETTINGS_MAX_CONCURRENT_STREAMS is a uint32 and [RpcSecurityPolicy] has no
-  /// assertions, so the policy field can hold anything an operator types. Once
-  /// it started going ON THE WIRE the out-of-range values stopped being merely
-  /// odd and became wrong in the one direction this must never be wrong in.
-  /// Read back at the byte level:
-  ///
-  ///     policy  -1        -> advertised 4294967295   <- "unlimited", while the
-  ///                                                     pipeline refuses EVERY
-  ///                                                     stream ("max: -1")
-  ///     policy  2^32      -> advertised 0            <- "open nothing", while
-  ///     policy  2^40      -> advertised 0               the server would serve
-  ///                                                     billions
-  ///
-  /// The first is the exact defect the advertisement was added to fix, back
-  /// again at the sign boundary; the second is a config typo (`1 << 32`) that
-  /// silently becomes a server a conforming client cannot call at all.
+  /// assertions, so the policy field can hold anything an operator types — and
+  /// unclamped, both ends of the range go ON THE WIRE inverted. A negative limit
+  /// wraps to 4294967295, announcing "unlimited" while the pipeline refuses
+  /// every stream; anything at or above 2^32 truncates to 0, announcing "open
+  /// nothing" while the server would happily serve billions.
   ///
   /// Clamping keeps the invariant that matters -- never announce MORE than will
   /// be honoured -- at both ends. A non-positive limit announces 0, which is
   /// exactly what "refuse everything" looks like on the wire; an over-large one
-  /// announces the maximum representable, which is HTTP/2's way of saying "no
-  /// limit" and is still less than what the pipeline would allow.
+  /// announces the maximum representable, HTTP/2's way of saying "no limit",
+  /// which is still less than what the pipeline would allow.
   ///
   /// Validating the field in `RpcSecurityPolicy` itself would be the other half
   /// of this, and it is a core semantics decision (is `0` a legitimate way to
@@ -603,10 +522,10 @@ class RpcHttp2Server implements IRpcServer {
   int get _advertisedStreamLimit =>
       _securityPolicy.maxActiveStreams.clamp(0, 0xFFFFFFFF);
 
-  /// Обрабатывает новое HTTP/2 соединение
+  /// Builds the transport, endpoint and lifecycle wiring for one connection.
   void _handleConnection(Socket socket) {
     final clientAddress = '${socket.remoteAddress}:${socket.remotePort}';
-    _logger?.debug('Новое HTTP/2 подключение от $clientAddress');
+    _logger?.debug('New HTTP/2 connection from $clientAddress');
 
     // See disableNagle: an RPC's write pattern is the one Nagle penalises, and
     // every socket this server accepted had it enabled.
@@ -618,16 +537,10 @@ class RpcHttp2Server implements IRpcServer {
 
     _notify('onConnectionOpened', () => _onConnectionOpened?.call(socket));
 
-    // See the assignment below. Measured on this server with a callback that
-    // throws on every connection, three connections:
-    //
-    //   endpoints held     : 3   (want 0)
-    //   contracts disposed : 0   (want 3)
-    //
-    // one permanent leak per failed connection, holding the application's
-    // contracts. Same defect and same ordering as the websocket server; a
-    // throwing onEndpointCreated is ordinary, because that callback is where
-    // the application registers its contracts.
+    // See the assignment below: without it a throwing user callback leaves one
+    // permanent leak per failed connection, holding the application's
+    // contracts. A throwing onEndpointCreated is ordinary rather than exotic,
+    // because that callback is where those contracts get registered.
     RpcResponderEndpoint? created;
     // Armed before anything is built, cancelled by the preface below and by the
     // release wiring. See [_prefaceTimeout]: without it a TCP SYN buys an
@@ -636,8 +549,6 @@ class RpcHttp2Server implements IRpcServer {
     Timer? prefaceDeadline;
 
     try {
-      // Создаем HTTP/2 соединение.
-      //
       // The incoming byte stream is passed through a header-block guard before
       // package:http2 sees it: that library concatenates a HEADERS frame and
       // its CONTINUATION frames with no bound (and O(N^2) recopy), so a peer
@@ -673,34 +584,22 @@ class RpcHttp2Server implements IRpcServer {
       final connection = http2.ServerTransportConnection.viaStreams(
         guardedIncoming,
         socket,
-        // Tell the peer the limit we will actually enforce.
+        // Tell the peer the limit we will actually enforce. Pass no settings
+        // and every connection advertises package:http2's default
+        // MAX_CONCURRENT_STREAMS of 1000, whatever the policy says, which is
+        // wrong in both directions:
         //
-        // No settings were passed at all, so every connection advertised
-        // package:http2's default MAX_CONCURRENT_STREAMS of 1000 regardless of
-        // the policy. Two things followed, both measured:
-        //
-        //   securityPolicy.maxActiveStreams : 7
-        //   advertised MAX_CONCURRENT_STREAMS: 1000   <- 143x what we honour
-        //
-        // A conforming client paces itself by the advertisement, so it opens
-        // streams it is then refused; RESOURCE_EXHAUSTED is retryable, so a
-        // retrying client re-sends and is refused again, against a server that
-        // told it there was room. Real gRPC clients (grpc-go, grpc-java) QUEUE
-        // above the advertised limit and would have succeeded.
-        //
-        // And above 1000 the knob was DEAD, because package:http2 enforces its
-        // own advertisement. With the default policy of 4096:
-        //
-        //   1100 concurrent calls -> 1000 dispatched, 100 refused status 8
-        //
-        // so `maxActiveStreams` meant 4096 on websocket and isolate and 1000
-        // here, silently. It now means the same thing on all of them.
+        // Below 1000, a conforming client paces itself by the advertisement, so
+        // it opens streams it is then refused -- and RESOURCE_EXHAUSTED is
+        // retryable, so it re-sends against a server that told it there was
+        // room. Above 1000 the knob is DEAD, because package:http2 enforces its
+        // own advertisement, so `maxActiveStreams` would mean one thing here and
+        // another on websocket and isolate.
         settings: http2.ServerSettings(
           concurrentStreamLimit: _advertisedStreamLimit,
         ),
       );
 
-      // Создаем серверный транспорт (правильный способ!)
       IRpcTransport transport = RpcHttp2ResponderTransport(
         connection: connection,
         policy: _securityPolicy,
@@ -716,7 +615,7 @@ class RpcHttp2Server implements IRpcServer {
           );
         } catch (error, stackTrace) {
           _logger?.error(
-            'Ошибка при обёртке транспорта',
+            'The transport wrapper threw',
             error: error,
             stackTrace: stackTrace,
           );
@@ -729,7 +628,6 @@ class RpcHttp2Server implements IRpcServer {
         }
       }
 
-      // Создаем RPC endpoint
       final endpoint = RpcResponderEndpoint(
         transport: transport,
         debugLabel: 'Http2Endpoint-$clientAddress',
@@ -759,31 +657,25 @@ class RpcHttp2Server implements IRpcServer {
         });
       }
 
-      // Уведомляем о создании endpoint'а
       _onEndpointCreated?.call(endpoint);
-
-      // Запускаем endpoint
       endpoint.start();
 
-      _logger?.debug('RPC endpoint создан для $clientAddress');
+      _logger?.debug('RPC endpoint created for $clientAddress');
 
       // Keepalive: the only thing that reclaims a HALF-OPEN connection. See
       // [_pingInterval]. Started only when configured, and always cancelled by
       // the release wiring below, so a closed connection stops pinging.
       final keepalive = _startKeepalive(connection, socket, clientAddress);
 
-      // Обрабатываем закрытие соединения
       socket.done
           .then((_) {
-            _logger?.debug('HTTP/2 соединение $clientAddress закрыто');
+            _logger?.debug('HTTP/2 connection $clientAddress closed');
             keepalive?.cancel();
             prefaceDeadline?.cancel();
             _releaseEndpoint(endpoint, socket);
           })
           .catchError((error) {
-            _logger?.warning(
-              'Ошибка при закрытии соединения $clientAddress: $error',
-            );
+            _logger?.warning('Error closing connection $clientAddress: $error');
             keepalive?.cancel();
             prefaceDeadline?.cancel();
             _releaseEndpoint(endpoint, socket);
@@ -791,7 +683,7 @@ class RpcHttp2Server implements IRpcServer {
     } catch (e, stackTrace) {
       prefaceDeadline?.cancel();
       _logger?.error(
-        'Ошибка при создании HTTP/2 RPC соединения',
+        'Failed to create an HTTP/2 RPC connection',
         error: e,
         stackTrace: stackTrace,
       );
@@ -813,13 +705,12 @@ class RpcHttp2Server implements IRpcServer {
 /// Keeps the capability interfaces the wrapper dropped.
 ///
 /// The endpoint layers find optional transport capabilities with `is` checks
-/// and fall back to a default when the check fails -- silently. So the obvious
+/// and fall back to a default when the check fails -- SILENTLY. So the obvious
 /// decorator (implement [IRpcTransport], forward every method) removes them:
 /// the responder pipeline then reads `const RpcSecurityPolicy()` instead of the
-/// policy this server was configured with. Measured with a plain counting
-/// wrapper against `maxActiveStreams: 3`, a peer opening 60 concurrent streams
-/// went from 3 admitted to 60 -- the ceiling was simply gone, and nothing said
-/// so: the wrapper compiles and every call works.
+/// policy this server was configured with, and a `maxActiveStreams` ceiling
+/// simply stops existing. Nothing says so -- the wrapper compiles and every
+/// call works.
 ///
 /// A decorator that wants to CHANGE the policy declares
 /// [IRpcSecurityPolicyAware] itself and is left alone; there is no other way to
@@ -882,15 +773,10 @@ class _CapabilityPreservingTransport
   /// The wrapper can only ever report CONSUMPTION; the charge lives in the
   /// transport that actually sees the bytes arrive, and that transport only
   /// charges a stream it has been told is pipeline-fed. So a decorator that
-  /// declares [IRpcFlowControlled] and then swallows it left the inner
-  /// accounting switched off entirely -- exactly the shape this class exists to
-  /// prevent, arriving through the very capability it forwards. Measured with a
-  /// deaf client-stream handler and a 4 MiB window:
-  ///
-  ///   no wrapper                        4176 KiB on the wire
-  ///   plain decorator                   4177 KiB
-  ///   declares and forwards it          4177 KiB
-  ///   declares and SWALLOWS it        160900 KiB   <- 39x, and still climbing
+  /// declares [IRpcFlowControlled] and then swallows it switches the inner
+  /// accounting off entirely, and the window stops bounding anything -- exactly
+  /// the shape this class exists to prevent, arriving through the very
+  /// capability it forwards.
   ///
   /// Deferring on both is safe because it is a set membership: a decorator that
   /// forwards produces one entry, not two. `returnFlowCredit` is deliberately

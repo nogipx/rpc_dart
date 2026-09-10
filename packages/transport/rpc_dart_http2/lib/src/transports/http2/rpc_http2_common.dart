@@ -16,32 +16,21 @@ const String kGrpcUserAgent = 'rpc-dart/1.0.0';
 /// Turns Nagle's algorithm off on [socket], as every gRPC stack does.
 ///
 /// Nagle holds a small outbound segment while earlier data is still
-/// unacknowledged, so it batches writes into fewer packets at the cost of up to
-/// one round trip. That trade is right for a bulk stream and wrong for an RPC,
-/// whose shape is exactly the one it penalises: a call writes a HEADERS frame
-/// and then a small DATA frame and then waits for a reply, so the second write
-/// can sit until the peer's (often DELAYED) ack for the first arrives.
+/// unacknowledged, batching writes into fewer packets at the cost of up to one
+/// round trip. That trade is right for a bulk stream and wrong for an RPC,
+/// whose shape is exactly the one it penalises: a call writes a HEADERS frame,
+/// then a small DATA frame, then waits for a reply — so the second write can
+/// sit until the peer's (often DELAYED) ack for the first arrives.
 ///
-/// Read back with `getRawOption`, dart:io leaves it off everywhere:
+/// dart:io leaves TCP_NODELAY off on every socket, accepted or connected, so
+/// this must be applied on every path into the transport.
 ///
-///     bare Socket.connect (dart:io default) : TCP_NODELAY false
-///     socket accepted by RpcHttp2Server     : TCP_NODELAY false
-///
-/// and exactly one path in this package used to set it -- `_connectH2ViaProxy`,
-/// on the raw socket before the CONNECT handshake. Two paths through the same
-/// class produced differently configured sockets, with the COMMON one as the
-/// odd one out.
-///
-/// **The benefit is NOT measurable on this machine and is not claimed as a
-/// number.** Loopback acks immediately, so Nagle never engages: the classic
-/// two-writes-then-wait shape measured 50us with it on and 49us with it off,
-/// and round 129's single-write test likewise found 200 vs 190us. The cost
-/// appears on a real network, where the delayed ack it waits for is tens of
-/// milliseconds away. Reproducing that needs kernel-level delay injection,
-/// which needs privileges this environment does not have.
+/// **The benefit does not show up on loopback**, which acks immediately so
+/// Nagle never engages; it appears on a real network, where the delayed ack is
+/// tens of milliseconds away. Do not expect a local measurement to justify it.
 ///
 /// Never throws: `setOption` can fail on a socket the peer has already reset,
-/// and this runs in the accept path -- the ROOT ZONE, where an uncaught error
+/// and this runs in the accept path — the ROOT ZONE, where an uncaught error
 /// kills the isolate.
 void disableNagle(Socket socket, {LogScope? logger, String? what}) {
   try {
@@ -58,15 +47,9 @@ void disableNagle(Socket socket, {LogScope? logger, String? what}) {
 /// package:http2 does apply flow control -- `_handleNewOutgoingMessage` pauses
 /// the stream's outgoing subscription as soon as its queue `wouldBuffer` -- but
 /// an `add` into the controller BEHIND that subscription simply enqueues, so
-/// the pause never reaches the producer.
-///
-/// Measured, a peer that stops reading:
-///
-///   responder side (round 92): a client paused after 5 items of a server
-///     stream let the handler produce +33906 items (132.4 MiB) in 4s
-///   caller side (round 95): a server whose handler consumed nothing let the
-///     client pull its whole 156.3 MiB request while only 4.4 MiB was on the
-///     wire -- the rest sat in package:http2's outgoing queue, in client memory
+/// the pause never reaches the producer. Against a peer that stops reading, both
+/// directions then buffer the whole stream in local memory: the wire stays idle
+/// while a handler or a request body runs to completion.
 ///
 /// Feeding the sink through `addStream` is what reconnects it: a
 /// StreamController pauses an active `addStream` source whenever its own
@@ -337,22 +320,17 @@ List<http2.Header> rpcMetadataToHttp2TrailersOnly(RpcMetadata metadata) {
 /// true binary that is not valid UTF-8. Regular headers are kept as-is.
 ///
 /// Pass the `:path` value extracted from the raw headers as [methodPath].
-/// [policy], when given, is enforced on the RAW list as it is walked, before
-/// each value is copied. That ordering is the whole point: HPACK hands back a
-/// list of REFERENCES — an indexed-header flood is thousands of pointers to one
-/// shared dynamic-table entry, which costs the decoder almost nothing — and
-/// `String.fromCharCodes` turns every one of them into its own String. The
-/// expansion happens here, not in package:http2, and
-/// `RpcSecurityPolicy.validateMetadata` used to run one line AFTER this
-/// function, so `maxHeaders` could only refuse a copy that had already been
-/// made. Measured against the 64 KiB header-block guard, one request:
 ///
-///     63 KiB on the wire -> 60001 headers
-///       HPACK decode      RSS +7 MiB     (distinct objects: 1)
-///       this conversion   RSS +258 MiB   <- ~4100x, before any limit ran
+/// [policy], when given, is enforced on the RAW list as it is walked, BEFORE
+/// each value is copied, and that ordering is the whole point: HPACK hands back
+/// a list of REFERENCES — an indexed-header flood is thousands of pointers to
+/// one shared dynamic-table entry, costing the decoder almost nothing — and
+/// `String.fromCharCodes` turns every one of them into its own String. The
+/// expansion happens HERE, not in package:http2, so a `maxHeaders` check placed
+/// after this function can only refuse a copy that has already been made.
 ///
 /// Counted after the pseudo-header filter and checked before the value copy, so
-/// the set of accepted requests is exactly what it was.
+/// the set of accepted requests is unchanged by the ordering.
 RpcMetadata http2HeadersToRpcMetadata(
   List<http2.Header> headers, {
   String? methodPath,
@@ -483,7 +461,7 @@ int? extractHttpStatus(List<http2.Header> headers) {
   return null;
 }
 
-/// Gárrantees that [data] is a valid gRPC frame (5-byte prefix + payload).
+/// Guarantees that [data] is a valid gRPC frame (5-byte prefix + payload).
 ///
 /// If [data] already has a valid 5-byte gRPC prefix the input is returned
 /// unchanged.  Otherwise an uncompressed frame is built around [data].

@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303]
 status: confirmed (round 293)
 ---
 
@@ -171,6 +171,16 @@ implementation first, and a divergence is a defect fixed in the same round.
 **Fixing one COSTS lines**, and that is correct. The stub went 5 comment lines
 to 9 while the package fell 221 to 192. A round that optimised the metric would
 have made the only false statement in the package worse.
+
+**The sweep is the only pass that READS every comment**, so it is also the only
+one that sees a comment wrong in a way no gate reads. Round 303 found three such
+things in one batch, none of them bloat: a declaration fusion, a misspelling in
+a public doc (`"Gárrantees"`), and an entire file — `rpc_http2_server.dart`,
+class doc, parameter list and every runtime log string — written in RUSSIAN,
+against the root `CLAUDE.md`'s "English for code, comments, and logs". The
+language check is cheap and worth running per package:
+`grep -rlE "[А-Яа-яЁё]" packages/*/*/lib`. It found 22 more files outside the
+mandate, filed as B-30.
 
 ## What NOT to cut
 
