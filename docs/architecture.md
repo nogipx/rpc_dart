@@ -55,6 +55,41 @@ responsibilities:
 └─────────────────────────────────────────┘
 ```
 
+## The transport stack, in three layers
+
+A transport is not one object. Understanding which layer a problem lives in is
+usually most of diagnosing it.
+
+```
+IRpcChannel               a raw byte pipe (WebSocket, TCP, an isolate port)
+IRpcMultiplexedChannel    a multiplexed MESSAGE channel
+  RpcFrameMultiplexedChannel   wraps IRpcChannel with the frame codec
+  RpcDirectMultiplexedChannel  zero-copy paired messages, in-memory
+RpcChannelTransport       wraps IRpcMultiplexedChannel into IRpcTransport
+                          (stream ids, security policy, flow control, health)
+```
+
+Where each lives:
+
+```
+core/channel.dart                          IRpcChannel
+core/multiplexed_channel.dart              IRpcMultiplexedChannel
+core/channel_frame.dart                    the 9-byte frame codec
+rpc/transports/frame_multiplexed_channel.dart
+rpc/transports/direct_multiplexed_channel.dart
+rpc/transports/channel_transport.dart
+```
+
+`RpcChannelTransport` has three factories, and the difference matters when
+writing tests: `pair()` builds a frame-based pair, so it exercises the frame
+codec; `memoryPair()` builds the zero-copy pair and skips it; `fromChannel()`
+wraps any `IRpcChannel` you already have.
+
+Two transports do not follow the stack. **HTTP/2** implements `IRpcTransport`
+directly, because the protocol already multiplexes. **The isolate transport**
+brings its own `IRpcMultiplexedChannel` over `SendPort`/`ReceivePort` rather
+than framing bytes.
+
 ## Core components
 
 ### 1. Contracts
