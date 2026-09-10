@@ -11,22 +11,14 @@ import 'frame_multiplexed_channel.dart';
 
 /// Full [IRpcTransport] built from an [IRpcMultiplexedChannel].
 ///
-/// Adds stream-ID management, security policy enforcement, and health checks
-/// on top of any multiplexed channel implementation.
+/// Adds stream-ID management, policy enforcement, flow control and health
+/// checks on top of any multiplexed channel.
 ///
-/// Usage:
 /// ```dart
-/// // From a raw byte channel (WebSocket, TCP, etc.)
-/// final transport = RpcChannelTransport.fromChannel(
-///   channel: myWebSocketChannel,
-///   isClient: true,
-/// );
-///
-/// // From a multiplexed channel directly
-/// final transport = RpcChannelTransport(
-///   channel: myMultiplexedChannel,
-///   isClient: true,
-/// );
+/// // from a raw byte channel (WebSocket, TCP, ...)
+/// RpcChannelTransport.fromChannel(channel: myByteChannel, isClient: true);
+/// // from a multiplexed one
+/// RpcChannelTransport(channel: myMuxChannel, isClient: true);
 /// ```
 class RpcChannelTransport
     implements
@@ -48,16 +40,11 @@ class RpcChannelTransport
   /// Upper bound on [_finishedStreams]. Matches the responder pipeline's
   /// `_maxRememberedClosedStreams`.
   ///
-  /// The claim here used to be that this is "far above the default
-  /// `maxActiveStreams` of 4096". It is not — 1024 is a QUARTER of it, and the
-  /// arithmetic had simply never been re-derived. What makes the size safe is
-  /// not headroom over the stream ceiling but what an entry is FOR: it marks an
-  /// id whose terminal frame has already gone out, so [finishSending] does not
-  /// send a second one. Entries are added at the moment of that frame and
-  /// removed as soon as the call is torn down, so the set tracks finishes still
-  /// in flight, not live streams — and eviction (oldest first, insertion order)
-  /// reaches the longest-idle marker. Losing one costs at most a duplicate
-  /// end-of-stream on an id whose call has since ended.
+  /// **Not headroom over `maxActiveStreams`** — 1024 is a quarter of its
+  /// default. What makes it safe is what an entry is FOR: added when the
+  /// terminal frame goes out, removed at teardown, so the set tracks finishes
+  /// in flight rather than live streams. Eviction is oldest-first, and losing
+  /// an entry costs at most a duplicate end-of-stream on a call that has ended.
   static const int _maxRememberedFinishedStreams = 1024;
 
   /// Global new-stream dispatch. The transport starts consuming the channel as
@@ -109,21 +96,15 @@ class RpcChannelTransport
 
   /// Ceiling on flow-control bookkeeping, per map.
   ///
-  /// These maps are keyed by stream id and the PEER chooses stream ids, while
-  /// the transport does its bookkeeping before the responder pipeline decides
-  /// whether an id is a legitimate stream at all. So ids that never become
-  /// streams still allocated: 50,000 grant frames for never-opened ids left
-  /// 50,000 send-credit entries, and 50,000 data frames left 50,000 pending
-  /// and 50,000 advertised entries -- plus 50,000 window-update frames sent
-  /// back, one per ghost id.
+  /// These maps are keyed by a stream id the PEER chooses, and the transport
+  /// books it before the pipeline decides the id is a real stream — so ghost
+  /// ids allocated. `maxActiveStreams` is the natural ceiling, since a
+  /// connection cannot hold more live streams than that.
   ///
-  /// A connection cannot have more live streams than [maxActiveStreams], so
-  /// that is the natural ceiling. New ids are REFUSED at the cap rather than
-  /// evicting existing ones: evicting would drop a live stream's credit, and a
-  /// flood of ghost ids could then push a real stream out of its own window.
-  /// A stream that arrives while the cap is full simply gets no flow-control
-  /// state, which leaves it unbounded rather than stalled -- failing open on
-  /// liveness, and bounded overall by the cap.
+  /// **Refuse at the cap, never evict.** Evicting drops a live stream's credit,
+  /// so a flood of ghost ids could push a real stream out of its own window. A
+  /// stream arriving at a full cap gets no flow-control state, which leaves it
+  /// unbounded rather than stalled — failing open on liveness.
   int get _fcTrackCap => _policy.maxActiveStreams;
 
   bool _fcCanTrack(Map<int, Object?> map, int streamId) =>
@@ -135,20 +116,14 @@ class RpcChannelTransport
   /// Bytes handed to a consumer that credits on CONSUMPTION, per stream, still
   /// outstanding against the connection pool.
   ///
-  /// Per-stream credit is reclaimed when a call ends: [_fcForget] drops the
-  /// window and wakes anything parked on it. Connection credit is not, because
-  /// it is only ever returned by consumption -- so bytes buffered for a consumer
-  /// that never takes them were charged against the pool and never repaid, and
-  /// that loss is permanent and connection-WIDE. Measured with a 1 MiB pool and
-  /// a 256 KiB stream window, sending 256 KiB per call:
+  /// Per-stream credit is reclaimed when a call ends — [_fcForget] drops the
+  /// window and wakes anything parked on it. **Connection credit is not**: it
+  /// is only ever returned by consumption, so bytes buffered for a consumer
+  /// that never takes them are charged against the pool and never repaid, and
+  /// the loss is permanent and connection-WIDE.
   ///
-  ///   receiver drains the per-stream view : 12 calls, never wedged
-  ///   receiver binds it and never reads   : 4 calls, then every send parks
-  ///                                         forever -- exactly one pool
-  ///
-  /// This ledger is what [_fcRepayConnection] settles when those bytes become
-  /// unreachable. Keyed by a PEER-chosen id like the maps above, so capped the
-  /// same way.
+  /// This ledger is what [_fcRepayConnection] settles once those bytes become
+  /// unreachable. Peer-chosen key, so capped like the maps above.
   final Map<int, int> _fcOwedConn = {};
 
   /// Streams whose peer has sent a gRPC status. Used on the CLIENT side to tell
@@ -328,27 +303,15 @@ class RpcChannelTransport
 
   /// The highest stream id this transport has handed out.
   ///
-  /// Exists for RECONNECT. A wrapper that survives a dropped connection builds
-  /// a NEW transport for the new socket, and a new transport starts its ids at
-  /// 1 — so the first call after a reconnect gets the id a dead call still
-  /// holds. The dead call's teardown then acts on the live one, and the id is
-  /// the only thing that teardown has to present, so nothing downstream can
-  /// tell them apart. Measured over websocket, one reconnect between two calls
-  /// that both received id 1:
+  /// Exists for RECONNECT: a replacement transport starts its ids at 1, so the
+  /// first call after a reconnect gets the id a dead call still holds — and
+  /// since the id is all a teardown presents, the dead call's release or
+  /// half-close lands on the live one. Pass this into the replacement's
+  /// [resumeStreamIdsAfter] and the two id spaces become disjoint.
   ///
-  ///     A's late releaseStreamId(1) : activeStreams 1 -> 0, B still open
-  ///     A's late finishSending(1)   : B's handler ENDED — the server saw B's
-  ///                                   request stream close and finished
-  ///                                   serving it
-  ///
-  /// Pass this into the replacement transport's [resumeStreamIdsAfter] and the
-  /// two id spaces become disjoint.
-  ///
-  /// SURVIVES [close]. It has to: the wrapper above is told the connection
-  /// dropped by this transport closing itself, so "read the cursor before
-  /// closing" is advice it cannot follow on the path that matters. While close
-  /// rewound it, an explicit reconnect on a live socket produced ids 1 then 3
-  /// and the same reconnect after a peer-started drop produced 1 then 1.
+  /// **Survives [close], and must.** The wrapper learns of a dropped connection
+  /// BY this transport closing itself, so "read the cursor first" is advice it
+  /// cannot follow on the path that matters.
   @override
   int get lastIssuedStreamId => _idManager.lastIssuedId;
 
@@ -712,27 +675,24 @@ class RpcChannelTransport
 
   // -- Internal ---------------------------------------------------------------
 
-  /// Checks peer-supplied [metadata] against the policy.
-  ///
-  /// Returns false when the frame must be dropped. The violation is surfaced
-  /// as a typed [RpcFrameException] on the stream's own controller (and the
-  /// broadcast) so the waiting caller fails fast instead of hanging, and when
-  /// [RpcSecurityPolicy.closeOnProtocolError] is set the transport is torn
-  /// down as well -- which is what that flag has always promised and, until
-  /// now, never did anywhere in the codebase.
   /// How many policy violations a connection may cost before it is treated as
   /// hostile rather than misconfigured.
   ///
-  /// [RpcSecurityPolicy.closeOnProtocolError] defaults to false, which says one
-  /// bad frame must not end the connection — it does NOT say a peer may grind
-  /// forever. Without a cap that is exactly what it said: measured over
-  /// websocket, 200k violating frames (5.9 MiB on the wire) cost the server
-  /// 100 MiB of RSS with the attacker's connection still open to repeat it.
-  /// 256 is far past any misconfiguration and bounds the hostile case.
+  /// `closeOnProtocolError` defaults to false, which says one bad frame must
+  /// not end the connection — not that a peer may grind forever. 200k violating
+  /// frames, 5.9 MiB on the wire, cost 100 MiB of RSS with the connection still
+  /// open to repeat it. 256 is far past any misconfiguration.
   static const int _maxPolicyViolations = 256;
 
   int _policyViolations = 0;
 
+  /// Checks peer-supplied [metadata] against the policy; false means drop the
+  /// frame.
+  ///
+  /// The violation is surfaced as a typed [RpcFrameException] on the stream's
+  /// own controller and on the broadcast, so a waiting caller fails fast rather
+  /// than hanging, and `closeOnProtocolError` additionally tears the transport
+  /// down.
   bool _validateInbound(RpcMetadata metadata, int streamId) {
     try {
       _policy.validateMetadata(metadata);
@@ -1104,21 +1064,15 @@ class RpcChannelTransport
   /// Advertises the initial window the first time a stream is seen. This is
   /// what tells the peer we participate.
   ///
-  /// Refusing at the cap was ATTACKED and holds (round 145). The worry was that
-  /// this set is pruned by [_fcForget], which runs on a TERMINAL frame that a
-  /// ghost id never sends — so a peer naming ids it never uses fills the set
-  /// permanently and no later stream is ever advertised a window. That much is
-  /// true; the harm is not. A sender that receives no grant is still bounded by
-  /// its own `initialSendWindowBytes`, so with the victim's set full a paused
-  /// consumer still saw only 64 KiB pushed against a 64 KiB window.
+  /// A ghost id can fill this set permanently — [_fcForget] prunes it on a
+  /// TERMINAL frame, which such an id never sends — and that is harmless: a
+  /// sender receiving no grant is still bounded by its own
+  /// `initialSendWindowBytes`.
   ///
-  /// **The number that said otherwise was measured on the wrong side.** A first
-  /// probe reported 88 KiB clean versus 16 364 KiB after a flood — 186x — with
-  /// ONE policy shared by both ends, so the flood had filled the SENDER's own
-  /// `_fcSendCredit` too and the unbounded send was self-inflicted. Split the
-  /// two ends onto separate policies (attacker uncapped, victim capped) and the
-  /// difference disappears. Do not re-derive this without checking which side
-  /// the ceiling is on.
+  /// **Measure that on the right side.** A probe using ONE policy for both ends
+  /// reports a 186x blow-up, because the flood filled the SENDER's own credit
+  /// map and the unbounded send is self-inflicted. Give attacker and victim
+  /// separate policies and the difference disappears.
   void _fcAdvertise(int streamId) {
     final window = _fcWindow;
     if (window == null) return;
@@ -1228,27 +1182,15 @@ class RpcChannelTransport
 
   /// Records [streamId] as finished, keeping [_finishedStreams] bounded.
   ///
-  /// [_finishedStreams] exists only to make [finishSending] idempotent, and
-  /// [releaseStreamId] prunes it at teardown -- but teardown can happen BEFORE
-  /// the terminal frame is sent, and then nothing removes the entry again.
+  /// [releaseStreamId] prunes [_finishedStreams] at teardown — but teardown can
+  /// happen BEFORE the terminal frame is sent, and then nothing removes the
+  /// entry again. A handler outliving its deadline does exactly that: the
+  /// reclaim removes, the late trailers re-add, and the entry is permanent.
   ///
-  /// A handler that outlives its deadline does exactly that. Measured with a
-  /// 4s handler against a 40ms client deadline, printing both sides:
-  ///
-  ///   normal call : ADD 1  then REMOVE 1        -> net empty
-  ///   aborted call: REMOVE 5 (at the 2s reclaim grace)
-  ///                 ADD 5    (at 4s, when the handler finally sends trailers)
-  ///                                              -> retained forever
-  ///
-  /// 15 deadline-aborted calls left `finishedStreams: 15` on both the frame and
-  /// the direct transport, growing one entry per call for the life of the
-  /// connection, and a peer chooses the deadline. Nothing distinguishes the two
-  /// cases at the moment of the add -- the stream is absent from
-  /// [_activeStreams] and [_streamControllers] either way -- so ordering cannot
-  /// be detected here; the set is bounded instead.
-  ///
-  /// The cap also limits how long a stale entry can shadow a REUSED id, where
-  /// it would make that stream's [finishSending] a silent no-op.
+  /// **Ordering cannot be detected here** — at the moment of the add the stream
+  /// is absent from [_activeStreams] and [_streamControllers] either way — so
+  /// the set is bounded instead. The cap also limits how long a stale entry can
+  /// shadow a REUSED id, where it would make `finishSending` a silent no-op.
   ///
   /// Same shape as `_rememberClosedStream` in the responder pipeline.
   void _rememberFinished(int streamId) {

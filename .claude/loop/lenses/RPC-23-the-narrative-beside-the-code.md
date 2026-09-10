@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295]
+applied: [293, 294, 295, 296]
 status: confirmed (round 293)
 ---
 
@@ -89,6 +89,13 @@ what deriving this lens required and is waste once it exists.
 Read the file whole, cut every comment in one pass, one gate, one commit. The
 `///`-against-total ranking gives the order; the two reader questions above give
 the rule. Neither needs re-deriving per block.
+
+**And the sweep sees what a block cannot: adjacency.** Round 296 found two doc
+comments fused with no declaration between them — `_validateInbound`'s ran into
+`_maxPolicyViolations`', and both were attached to the constant, so one member
+had no doc at all and the other's read as if the first half described it. Each
+half is coherent alone, which is exactly why block-by-block misses it. Sweep for
+`///` runs that span a blank line or change subject mid-block.
 
 ## What NOT to cut
 
