@@ -1364,11 +1364,9 @@ class RpcHttp2CallerTransport
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
       _fcMetered(streamId, _streams[streamId]);
 
-  /// How much un-consumed response payload one call may hold.
-  int get _fcWindow =>
-      _policy.flowControlWindowBytes ??
-      const RpcSecurityPolicy().flowControlWindowBytes ??
-      4 * 1024 * 1024;
+  /// How much un-consumed RESPONSE payload one call may hold; the responder's
+  /// `_fcWindow` bounds the request direction with the same number.
+  int get _fcWindow => unconsumedWindowFor(_policy);
 
   /// Bytes delivered to this call's consumer but not yet taken, per stream.
   final Map<int, int> _fcOutstanding = {};

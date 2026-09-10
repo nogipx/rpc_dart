@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310]
+applied: [308, 309, 310, 311]
 status: confirmed (round 308)
 ---
 
@@ -102,12 +102,32 @@ does not.
 
 The lens can legitimately not apply — but only after the grep returns nothing.
 
+## Identical copies can BOTH be wrong
+
+Step 3 compares the siblings to each other, which says nothing when they agree
+AND are both mistaken. Round 311: `_fcWindow` was byte-identical in the two
+http2 transports, so the drift test cleared it — and reading it against the
+POLICY instead of against its twin found a third `??` clause that can never
+evaluate, because `RpcSecurityPolicy`'s const default for the field is non-null.
+Two copies of dead code, each restating the default as a literal, invisible to
+`dead_null_aware_expression` because the FIELD is `int?` even though the const
+VALUE never is.
+
+So the diff has a second axis: compare each copy to the thing it READS, not only
+to its sibling.
+
 ## What a no-drift candidate earns
 
 Nothing. Round 309 left `_notify` — eight identical lines in two servers —
 unmerged, because step 3 found no divergence and merging would add a public
-promise to core to save eight lines. **The bar is the drift, not the line
-count.** Record the decision, or the next round reads it as oversight.
+promise to core to save eight lines. Round 311 left `RpcMessageParser(...)`,
+constructed byte-identically in both http2 transports, for the same reason:
+extracting it saves six lines and puts an indirection between a transport and
+the limits it applies. **The bar is the drift, not the line count.**
+
+**Most step-1 results are NOT findings, and a round that says so is applying the
+lens correctly.** Record each declined candidate with its reason, or the next
+round reads the silence as oversight and re-opens it.
 
 **Round 310, the isolate channels.** The remedy is NOT always extraction. The
 two variants compile on different platforms and speak different wire formats, so

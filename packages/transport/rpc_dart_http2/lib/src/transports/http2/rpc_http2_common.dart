@@ -143,6 +143,29 @@ final class RpcHttp2OutgoingPump {
   }
 }
 
+/// How much un-consumed payload ONE call may hold before it is refused.
+///
+/// Both HTTP/2 transports need this number and resolve it identically, so it
+/// lives here rather than twice.
+///
+/// `flowControlWindowBytes` is reused deliberately: it is the operator's
+/// existing knob for "how much may sit un-consumed", and HTTP/2 does not use it
+/// for its documented purpose — emitting rpc-level window grants — because it
+/// carries its own windows. Here it is the threshold past which the CALL ends.
+///
+/// **A null policy value does NOT disable this**, and that is the surprising
+/// part worth stating: [RpcSecurityPolicy.flowControlWindowBytes] documents null
+/// as "disable", and advises transports with native flow control to do exactly
+/// that. Disabling the rpc-level GRANTS is right for HTTP/2; leaving the
+/// un-consumed bound off is not, because the bytes still arrive and still have
+/// to go somewhere. So null falls back to the policy default.
+int unconsumedWindowFor(RpcSecurityPolicy policy) =>
+    policy.flowControlWindowBytes ??
+    // Not `?? 4 * 1024 * 1024`: the const default is non-null, so a third
+    // fallback is unreachable, and writing the number here a second time makes
+    // the transport claim a floor the policy alone decides.
+    const RpcSecurityPolicy().flowControlWindowBytes!;
+
 /// Wraps a stream-scoped error so it can travel through the shared broadcast
 /// [incomingMessages] controller without leaking onto unrelated streams.
 ///

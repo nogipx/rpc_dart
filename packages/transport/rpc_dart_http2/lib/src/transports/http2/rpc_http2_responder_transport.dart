@@ -88,10 +88,7 @@ class RpcHttp2ResponderTransport
   /// memory by ending the offending call. The cost, accepted by the owner: a
   /// handler that stops consuming kills its own call instead of being
   /// throttled.
-  int get _fcWindow =>
-      _policy.flowControlWindowBytes ??
-      const RpcSecurityPolicy().flowControlWindowBytes ??
-      4 * 1024 * 1024;
+  int get _fcWindow => unconsumedWindowFor(_policy);
 
   @override
   void deferFlowCredit(int streamId) => _fcDeferred.add(streamId);
