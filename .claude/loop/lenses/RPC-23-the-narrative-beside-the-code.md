@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294]
+applied: [293, 294, 295]
 status: confirmed (round 293)
 ---
 
@@ -36,6 +36,18 @@ code in it. Then, per doc comment, three questions:
 
 If this comment were deleted, what would the next caller get wrong?
 
+**On INTERNAL code the reader changes and so does the question.** A private
+field has no caller; it has a maintainer about to change it. Ask instead: *what
+would someone editing this break without knowing?* The keeper is the INVARIANT
+— why the charge point is dispatch and not entry, why the cursor must survive
+close, why this counter is per connection — because that is what a plausible
+edit destroys silently.
+
+The measurement that PROVED the invariant is still journal. "37 handlers against
+a ceiling of 4" belongs in the round; "charged at dispatch, released when the
+handler finishes, because a stream can die before its work does" belongs in the
+code. The first is evidence, the second is the rule the evidence bought.
+
 Whatever survives that question is the comment. It is usually three to six
 lines, and for a field it is usually: what it bounds, why the default is what it
 is, and the one case where the obvious value is wrong.
@@ -67,6 +79,16 @@ turning it on trades slow for refused — survives in a quarter of the space.
 
 Baseline for the mandate, `rpc_dart/lib/src`: **4430 doc lines in 24049 total,
 18.4%.**
+
+## The unit is a FILE
+
+Rounds 293-295 cut four comment blocks each and moved 149 lines against a
+baseline of 4430 — the owner stopped it, correctly. Judging block by block is
+what deriving this lens required and is waste once it exists.
+
+Read the file whole, cut every comment in one pass, one gate, one commit. The
+`///`-against-total ranking gives the order; the two reader questions above give
+the rule. Neither needs re-deriving per block.
 
 ## What NOT to cut
 

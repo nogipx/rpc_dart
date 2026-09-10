@@ -104,20 +104,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   /// Cached concurrent-stream ceiling for streams the PEER opens.
   ///
-  /// [RpcSecurityPolicy.maxActiveStreams] is documented as the max number of
-  /// simultaneously active streams, but it was only ever checked in
-  /// `createStream()` — which runs for LOCALLY-initiated calls. Inbound
-  /// streams, the only ones an untrusted peer controls, were never counted, so
-  /// the one limit that mattered for a server bounded nothing. Measured against
-  /// a server configured with `maxActiveStreams: 3`, a peer opened 500
-  /// concurrent streams and all 500 were accepted: 500 stream states, contexts,
-  /// call scopes and responders, each with its own controllers and reassembly
-  /// buffer. Unauthenticated memory exhaustion.
+  /// `maxActiveStreams` used to be checked only in `createStream()`, which runs
+  /// for LOCALLY-initiated calls — so inbound streams, the only ones an
+  /// untrusted peer controls, were counted by nothing.
   ///
-  /// Read through [IRpcSecurityPolicyAware] so the policy the application
-  /// already configured on its transport starts being honoured, rather than
-  /// adding a second knob for the same concept. A transport without the
-  /// capability gets the safe default.
+  /// Read through [IRpcSecurityPolicyAware] rather than a second knob, so a
+  /// transport without that capability gets the safe default.
   int? _respMaxStreamsCache;
 
   int get _respMaxStreams {
@@ -172,17 +164,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// Runs [work] as [streamId]'s server-side work, keeping its slot charged
   /// throughout.
   ///
-  /// The slot is charged at DISPATCH, not here: charging on handler entry lets
-  /// a simultaneous burst through, because nothing is running yet when the
-  /// whole batch is admitted (30 concurrent http2 calls all got in against a
-  /// ceiling of 3). What this adds is the other end -- the slot is not returned
-  /// when the stream is torn down, only when the work is actually over.
+  /// **Charged at DISPATCH, not here**, or a simultaneous burst walks through:
+  /// nothing is running yet when the batch is admitted. What this adds is the
+  /// other end — the slot is returned when the WORK ends, not when the stream
+  /// is torn down.
   ///
-  /// Wrapped around the WHOLE middleware+interceptor+handler chain, not the
-  /// user handler alone. With it on the handler only, work running outside the
-  /// handler was released with the stream: an interceptor parked on an auth
-  /// lookup, on either side of `next()`, left 2 calls live against a ceiling of
-  /// 1 -- the same defect this limit exists for, one layer out.
+  /// **Wrapped around the whole middleware+interceptor+handler chain**, not the
+  /// user handler alone: an interceptor parked on either side of `next()` is
+  /// work outside the handler, and releasing it with the stream reproduces the
+  /// exact defect this limit exists for, one layer out.
   Future<T> _withHandlerSlot<T>(int streamId, Future<T> Function() work) async {
     if (_respMaxHandlers == null) return work();
     _respHandlerLive.add(streamId);
@@ -210,34 +200,17 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }();
   }
 
-  /// Payload bytes parked across every stream whose method is still unknown.
+  /// Bytes parked across every stream whose method is still unknown.
   ///
-  /// A frame with no resolved method is buffered rather than dropped, because
-  /// on a broadcast transport the first DATA frame of a stream can be processed
-  /// before its metadata frame (see [RpcResponderStreamState.bufferPreMethod]).
-  /// That buffer had no size limit, and it sits in the one window where nothing
-  /// else bounds it either: until the responder is bound, no layer claims the
-  /// stream, so `RpcChannelTransport` credits flow control ON ARRIVAL and the
-  /// peer's window is replenished forever. `maxActiveStreams` does not apply
-  /// (one id is enough) and `maxMessageLengthBytes` does not either (every
-  /// frame is individually legal). Only [halfOpenStreamTimeout] bounded it, and
-  /// that bounds TIME, not VOLUME.
+  /// A frame with no resolved method is buffered rather than dropped, because a
+  /// broadcast transport can deliver a stream's first DATA frame before its
+  /// metadata. Nothing else bounds that window: until the responder is bound no
+  /// layer claims the stream, so flow control credits ON ARRIVAL and the peer's
+  /// window refills forever; `maxActiveStreams` sees one id, and
+  /// `maxMessageLengthBytes` sees frames that are each individually legal.
   ///
-  /// Measured against a websocket server, a raw client pushing 4 KiB DATA
-  /// frames at a single stream id it never opened with metadata:
-  ///
-  ///   pushed 250.7 MiB  ->  server RSS +495.2 MiB   (8113 B per 4 KiB frame)
-  ///
-  /// versus 28.8 MiB for the same volume pushed at a stream the server had
-  /// already answered, which is the drop path. Confirmed as the mechanism by
-  /// re-running with `halfOpenStreamTimeout: 300ms`, which lets the reclaim
-  /// tear the stream down mid-flood: +56.2 MiB (921 B per frame). No rpc_dart
-  /// client is needed -- three hand-built frames on a plain WebSocket do it --
-  /// so this is unauthenticated remote memory exhaustion for the default 60s
-  /// window.
-  ///
-  /// Counted per connection rather than per stream so inventing more stream ids
-  /// does not buy more budget.
+  /// **Counted per connection, not per stream** — otherwise inventing stream
+  /// ids buys more budget.
   int _respPreMethodBytes = 0;
 
   /// Ceiling for [_respPreMethodBytes].
@@ -284,25 +257,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   /// Bounds how long [state] may sit half-open before its slot is reclaimed.
   ///
-  /// A stream is half-open until a handler is dispatched, which needs a request
-  /// message or a half-close. Only the peer's optional `grpc-timeout` bounded
-  /// that window, so a peer that sent one opening frame and stopped parked
-  /// responder state permanently. Measured against `maxActiveStreams: 8`, eight
-  /// metadata-only frames left openStreams at 8 indefinitely and every later
-  /// call ON THAT CONNECTION failed RESOURCE_EXHAUSTED.
+  /// Half-open means dispatched-not-yet, and the peer's optional `grpc-timeout`
+  /// was the only other bound on it — which an attacker omits.
   ///
-  /// The stream table is per connection, so this does not reach other clients
-  /// -- verified with two connections, where the untouched one kept serving.
-  /// The cost that does cross connections is memory: about 33 KiB per parked
-  /// stream, so roughly maxActiveStreams x 33 KiB per connection a peer opens.
-  ///
-  /// Armed once per stream and cancelled at dispatch, so a running handler is
-  /// never affected however long it lives.
-  ///
-  /// That is also its limit: a peer that sends one request frame gets the same
-  /// parked stream for ~30 extra bytes, since the handler is then dispatched
-  /// and waits forever on a request stream that never half-closes. See
-  /// [RpcSecurityPolicy.halfOpenStreamTimeout].
+  /// **Armed once per stream and cancelled at dispatch**, so a running handler
+  /// is never affected however long it lives. That is also the limit: one
+  /// request frame gets the handler dispatched and then waiting forever on a
+  /// request stream that never half-closes, parking the same state for ~30
+  /// extra bytes. See [RpcSecurityPolicy.halfOpenStreamTimeout].
   void _armHalfOpenReclaim(RpcResponderStreamState state) {
     if (state.responder != null) return;
     final timeout = _respHalfOpenTimeout;
