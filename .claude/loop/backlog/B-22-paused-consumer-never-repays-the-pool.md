@@ -290,7 +290,33 @@ does not, the leak is in the ledger and the mark alone would not fix it.
 
 ## Owner decision
 
-**Expose the connection credit, then finish** (round 262). The owner authorised
+### Round 262 did that, and FOUR designs now fail to see an over-credit
+
+`RpcChannelTransport.flowControlConnectionCredit` exists (the owner's authorised
+diagnostics field). The arm was then written four ways, each canaried by
+applying the unconditional repay with no mark:
+
+1. throughput vs a draining control — passed (draining returns credit anyway);
+2. wedge point with non-draining consumers after the trigger — passed;
+3. read the RECEIVER's credit after forget — passed, and the design was wrong
+   twice over: the consumer drained BEFORE the forget, so the debt was already
+   settled and there was nothing to repay twice;
+4. same with the consumer PAUSED across the forget, reading the SENDER's credit
+   — passed.
+
+**Four independent attempts is no longer bad luck.** The likeliest reading now
+is that the second credit does not survive: `_fcCreditConnection` accumulates
+and grants at half a window, and if it clamps at the configured window the
+"double credit" simply cannot exceed it — which would make the mark unnecessary
+and the one-line fix (drop the `hasListener` guard) correct after all.
+
+**That is a claim about `_fcCreditConnection`, and it is unverified.** Reading
+it is the next step, and it is cheap. If it clamps, B-22 ships as one line with
+round 249's wedge measurement as its witness and no mark at all; if it does not,
+there is an over-credit that four observables cannot see, which is its own
+finding.
+
+**Expose the connection credit, then finish** (round 247/262 decision). The owner authorised
 adding the connection credit to `_buildHealthDetails`, beside `owedConn`, purely
 so the third canary arm can READ the number instead of inferring it — both
 inferring designs are disproved above. The diagnostics surface grows by one key

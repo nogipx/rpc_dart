@@ -180,6 +180,17 @@ class RpcChannelTransport
     'owedConn': _fcOwedConn.length,
   };
 
+  /// Connection-pool credit still available to send, or null when the peer has
+  /// not advertised a connection window.
+  ///
+  /// Diagnostics, and specifically so a test can READ this rather than infer it.
+  /// Every indirect observable tried for it — how much a fresh stream can push,
+  /// where a sender wedges — sits downstream of a negotiation that hides an
+  /// over-credit, and two witness designs were disproved on exactly that
+  /// (rounds 253 and 254). This value never exceeding the configured window is
+  /// the invariant those designs were trying to reach.
+  int? get flowControlConnectionCredit => _fcConnCredit;
+
   // Connection-wide pool, shared by every stream. Per-stream windows bound one
   // call; without this a peer just opens more of them -- 100 paused streams at
   // 1 MB each retained 361 MB, and the default ceiling puts the reachable
