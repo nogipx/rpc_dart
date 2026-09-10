@@ -11,6 +11,31 @@ loop file lives here.
 the chat as prose, not as a `---` block: nobody reads YAML in a commit body, and
 in chat it is noise.
 
+## The chat report — SHORT when nobody is watching
+
+**With `unattended: yes`, the chat report is a handful of lines, not the record
+again.** The round file and the commit body already hold the measurement, the
+mechanism, the canary text and what was left undone; a scheduled run has nobody
+reading chat as it happens, so restating all of it there costs tokens on every
+round and is read by no one. What the report is FOR in that mode is letting
+someone scanning later decide whether to open the record:
+
+    Round N — VERDICT — topic
+    the one number that carries the finding (before -> after)
+    what shipped, or why nothing did
+    the commit sha, and anything that needs the owner
+
+Four lines is a normal report. A round that ends DEFERRED or INCONCLUSIVE, or
+that wants an owner decision, is the one case worth a paragraph — because that
+is the round whose next step depends on a human.
+
+**With `unattended: no` the fuller shape below applies**: somebody is at the
+keyboard, following along, and the detail is the point.
+
+Measured on this loop's own output: rounds 240-249 averaged well over 200 words
+of chat each, restating records that were already committed and linted. None of
+it was read while the loop ran.
+
 ## The commit
 
 **ONE commit per round, and it is the last thing the round does.** Everything
