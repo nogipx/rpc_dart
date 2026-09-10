@@ -56,10 +56,32 @@ void main() {
     expect(_admit(asMetadata: false), lessThan(4096));
   });
 
-  test('the two dimensions agree within a frame of each other', () {
+  test('metadata never weighs LESS than the same bytes as payload', () {
+    // Was `(metadata - payload).abs() <= 2`, which passed in both directions --
+    // including the one this file exists to prevent, metadata weighing less
+    // than the payload it is standing in for.
+    //
+    // Round 279 made a header cost its characters PLUS a per-entry charge, for
+    // the RpcHeader and two Strings a queue retains: measured at 97, 103 and
+    // 111 bytes per header across three scales, charged at 64. That is 512
+    // bytes on this file's 8 x 8 KiB frame, 0.8% of it, and it moves admission
+    // from 255 to 253 against the payload arm's 256.
+    //
+    // So the assertion is now DIRECTIONAL, with a proportional tolerance: the
+    // metadata frame must be admitted no more often than the payload one, and
+    // not far less often either.
+    final metadata = _admit(asMetadata: true);
+    final payload = _admit(asMetadata: false);
+
     expect(
-      (_admit(asMetadata: true) - _admit(asMetadata: false)).abs(),
-      lessThanOrEqualTo(2),
+      metadata,
+      lessThanOrEqualTo(payload),
+      reason: 'metadata that retains more must not be admitted more freely',
+    );
+    expect(
+      payload - metadata,
+      lessThan(payload * 0.05),
+      reason: 'and the charge must stay a correction, not a re-pricing',
     );
   });
 }

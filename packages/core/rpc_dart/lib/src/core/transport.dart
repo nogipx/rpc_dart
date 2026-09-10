@@ -50,13 +50,22 @@ final class RpcTransportMessage {
   /// True when serialized bytes are present.
   bool get isSerialized => payload != null;
 
+  /// Charged per header on top of its characters — see [bufferedBytes].
+  ///
+  /// A header is an [RpcHeader] object plus two Strings, and a queue retains all
+  /// three. Measured at three scales, filling the queue with metadata frames of
+  /// 500, 2000 and 5000 tiny headers: 97, 103 and 111 bytes of resident memory
+  /// per header. 64 is under every one of them deliberately — a floor that holds
+  /// when a different runtime lays objects out differently — and it costs a
+  /// legitimate ten-header frame 640 bytes against a 16 MiB bound.
+  static const int _perHeaderOverheadBytes = 64;
+
   /// What this message weighs while it is held in a queue, in bytes.
   ///
   /// One home for the rule, because every transport buffers these and each
-  /// would otherwise repeat it. Counts the serialized payload only: metadata is
-  /// small and bounded by the policy's header limits, and a `directPayload` is
-  /// a reference to an object this process already owns, so queuing it costs a
-  /// pointer rather than its contents.
+  /// would otherwise repeat it. A `directPayload` is a reference to an object
+  /// this process already owns, so queuing it costs a pointer rather than its
+  /// contents.
   ///
   /// Used by `BufferedBroadcastController.sizeOf`, whose bound was on event
   /// COUNT alone — 4096 events of up to `maxMessageLengthBytes` each.
@@ -71,8 +80,26 @@ final class RpcTransportMessage {
     var total = payload?.length ?? 0;
     final m = metadata;
     if (m != null) {
+      // Characters ALONE are not what a header costs. Round 245 stopped
+      // metadata weighing zero here; it then weighed `name.length +
+      // value.length`, which is right for a few large headers and wrong for
+      // many small ones -- and many small ones is the shape a peer picks.
+      // ["h1","v1"] weighs 4 and retains about a hundred bytes.
+      //
+      // Measured against this queue, one arm per process, maxRss:
+      //
+      //   arm      headers  admitted   wire  weighed     RSS   stopped by
+      //   payload        -       256   16.0     16.0    37.3   the byte bound
+      //   thin         500      4096   30.4     14.8   190.8   the EVENT count
+      //   thin        2000       943   30.4     16.0   186.4   the byte bound
+      //   thin        5000       351   29.4     16.0   186.3   the byte bound
+      //
+      // A plateau at ~186 MiB against a 16 MiB bound, at every scale, while the
+      // payload arm -- weighed correctly -- sits at 2.3x. At 500 headers the
+      // byte bound did not engage AT ALL: the event count stopped it, which is
+      // the hole round 236 closed for payloads reopening one dimension over.
       for (final h in m.headers) {
-        total += h.name.length + h.value.length;
+        total += h.name.length + h.value.length + _perHeaderOverheadBytes;
       }
     }
     return total;

@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: an inbound size limit exists, and something buffers before it is consulted
 breaks: DoS.
-applied: [236]
-status: confirmed (round 236)
+applied: [236, 279]
+status: confirmed (round 279)
 ---
 
 # RPC-17 — A limit that fires after the bytes are resident
@@ -116,6 +116,33 @@ Bench `../probes/P-15-pending-queue-dimension.md`.
 > half asks WHEN the limit runs, the dimension half asks WHAT it counts, and a
 > limit can pass one and fail the other. This one ran at exactly the right
 > moment and measured the wrong quantity.
+
+**Round 279 found the SAME bound wrong a third time, in the same file.** The
+sequence is the point: 236 found it counting EVENTS while the damage was bytes;
+245 found metadata weighing ZERO; 279 found metadata weighing its CHARACTERS,
+which is the one thing about a header that is not its cost. `["h1","v1"]` weighs
+4 and retains an `RpcHeader` plus two Strings — measured at 97, 103 and 111
+bytes per header across three scales.
+
+    arm      headers  admitted   wire  weighed     RSS  stopped by
+    payload        -       256   16.0     16.0    37.3  the byte bound
+    thin         500      4096   30.4     14.8   190.8  the EVENT count  <- before
+    thin        2000       943   30.4     16.0   186.4  the byte bound
+    thin        5000       351   29.4     16.0   186.3  the byte bound
+    thin         500       468    3.5     16.0    20.8  the byte bound   <- after
+
+> **A dimension fixed is not a dimension closed.** Each of the three fixes was
+> correct and each left the next one open, because "what does this bound COUNT"
+> has as many wrong answers as the value has representations: how many, how many
+> characters, how many bytes on the wire, how much is retained. Only the last is
+> the damage. When you correct a bound's units, ask whether the new units are
+> the damage's units or merely closer to them.
+
+And note where the attacker's optimum sits: 500 headers per frame is exactly the
+point where the weighed total stays under the bound right up to the 4096-event
+ceiling. A shape that maximises damage per weighed byte is what to construct,
+not a shape that looks extreme. Bench
+`../probes/P-29-metadata-weighs-characters.md`.
 
 No catalog shape covers this; a candidate for `catalog/` at the next curate,
 by the usual test — it holds in any code that buffers untrusted input.

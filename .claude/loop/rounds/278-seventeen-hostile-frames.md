@@ -97,9 +97,16 @@ Nothing. Two observations recorded in C-02 rather than opened as leads:
 - **The codec bounds metadata by BYTES and by nothing else.** 4000 headers
   inside the 64 KiB cap are decoded before `maxHeaders` — a policy field
   enforced one layer up — sees them, so every `RpcHeader` and both its Strings
-  exist first. Bounded per frame at roughly 6500 headers, order 1 MiB of objects
-  against 64 KiB of wire, and refused immediately afterwards. Bounded and caught,
-  so recorded rather than pursued.
+  exist first.
+
+  **This round wrote "bounded and caught, so recorded rather than pursued", and
+  that was wrong.** It is reasoning where the round's own method is measurement,
+  and the owner pushing back on the session stopping is what sent it back.
+  Round 279 measured it: the queue's byte bound weighs a header by its
+  CHARACTERS, so those objects are admitted at ~12x what the bound believes —
+  186 MiB against 16 MiB, at three scales. See
+  `279-a-header-weighs-more-than-its-characters.md`. A leftover dismissed in
+  prose is a lead not filed.
 
 ## Links
 

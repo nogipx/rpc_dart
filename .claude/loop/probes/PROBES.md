@@ -11,6 +11,11 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-29](P-29-metadata-weighs-characters.md)** valid (round 279), core — P-21
+  extended with the shape P-21 lacks: many TINY headers, where characters and
+  cost diverge 12x. Two traps it had to survive — the metadata must be DECODED
+  from a wire frame or Dart interns the literals and the cost vanishes, and
+  `maxRss` one-arm-per-process because `currentRss` went negative
 - **[P-28](P-28-hostile-frames.md)** valid (round 278), core — seventeen named
   malformed frames through the real decoder, each with a hand-written header so
   the declared length can lie. Sorts outcomes into typed refusal / short-read /
