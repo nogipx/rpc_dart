@@ -11,27 +11,23 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// Turns an [HttpServer] into the `Stream<WebSocketChannel>` that
 /// `RpcWebSocketServer` consumes, applying server-side keepalive.
 ///
-/// This function exists because the dart:io [WebSocket] is only reachable
-/// between the upgrade and the wrap — `IOWebSocketChannel` hides it.
+/// Exists because the dart:io [WebSocket] is only reachable between the upgrade
+/// and the wrap — `IOWebSocketChannel` hides it.
 ///
-/// [pingInterval] defaults to 30s; it was `null`. Without it a peer that
-/// completes the upgrade and goes silent holds its endpoint, and the contracts
-/// on it, forever — `HttpServer.idleTimeout` does not reach an upgraded socket.
-/// Measured, 20 such peers: `endpoints 20 / disposed 0` against
-/// `endpoints 0 / disposed 20`.
-///
-/// BEHAVIOUR CHANGE: an idle connection is now pinged and closed if no pong
-/// comes. Pass `null` for the old behaviour; raise it where radio wake-ups
-/// matter.
+/// [pingInterval] defaults to 30s, and an idle connection is pinged and closed
+/// if no pong comes. Without it a peer that completes the upgrade and goes
+/// silent holds its endpoint, and the contracts on it, forever:
+/// `HttpServer.idleTimeout` does not reach an upgraded socket. Pass `null` to
+/// disable; raise it where radio wake-ups matter.
 ///
 /// [protocolSelector] is forwarded to [WebSocketTransformer] for subprotocol
 /// negotiation.
 ///
-/// [compression] defaults to OFF — dart:io's default is ON. dart:io inflates
-/// each message with no output limit, before rpc_dart sees it, so
-/// [RpcSecurityPolicy.maxMessageLengthBytes] cannot bound it. Measured, 256 MiB
-/// of zeros (a few hundred KiB on the wire) peaked at 383.8 MiB RSS against a
-/// 16 MiB limit. Turn it on only between peers you control.
+/// [compression] defaults to OFF where dart:io's default is ON. dart:io
+/// inflates each message with no output limit before rpc_dart sees it, so
+/// [RpcSecurityPolicy.maxMessageLengthBytes] cannot bound it and a few hundred
+/// KiB on the wire can peak at hundreds of MiB of RSS. Turn it on only between
+/// peers you control.
 ///
 /// [allowedOrigins] refuses cross-origin handshakes. WebSocket is not subject
 /// to the same-origin policy, so a browser page will open a socket anywhere and
@@ -74,16 +70,12 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
   final gated = allowedOrigins == null && allowUpgrade == null
       ? server
       : server.where((request) {
-          // The guard runs inside the accept loop's event handler, which is
-          // the ROOT ZONE: anything it throws is an unhandled async error and
-          // kills the isolate. That is not hypothetical -- reading the origin
-          // with `headers.value()` threw on a request carrying two Origin
-          // headers, so six lines of raw HTTP took the whole server process
-          // down, unauthenticated, in one request.
-          //
-          // The read is safe now, but [allowUpgrade] is USER code and cannot
-          // be. Failing closed here keeps a throwing predicate to a refused
-          // connection instead of a dead server.
+          // This runs inside the accept loop's event handler, which is the ROOT
+          // ZONE: anything thrown here is an unhandled async error and kills
+          // the isolate -- unauthenticated, in one request. The origin read is
+          // safe now, but [allowUpgrade] is USER code and cannot be, so failing
+          // closed keeps a throwing predicate to a refused connection instead
+          // of a dead server.
           bool allowed;
           try {
             allowed = _upgradeAllowed(request, allowedOrigins, allowUpgrade);
@@ -156,20 +148,13 @@ void _refuse(HttpRequest request) {
 /// is flushed if the request body is left unread, which turns a clean 403 into
 /// a SocketException at the peer.
 ///
-/// It is also the cheapest attack on this file, and it was unbounded. `_refuse`
-/// is `unawaited`, so the accept loop takes the next connection immediately and
-/// any number of these run at once, counted by nothing. Measured, 16 sockets
-/// promising a body and sending five bytes, against a server with an
-/// `allowedOrigins` allowlist:
-///
-///     upgrade-shaped, refused : 16 of 16 answered 403 in 3s
-///     plain POST, refused     :  0 of 16, all still draining   <- before
-///
-/// The two differ because dart:io hands a CONNECTION-UPGRADE request no body at
-/// all, while `_upgradeAllowed` gates EVERY request reaching this server. So the
-/// path is reachable exactly on the servers that turned the origin check on.
-/// Same defect as `rpc_http_responder_transport`'s `_reject`, which this comment
-/// used to cite for the draining half only.
+/// It is also the cheapest attack on this file, so the drain is BOUNDED:
+/// `_refuse` is `unawaited`, so the accept loop takes the next connection at
+/// once and any number of these run in parallel, counted by nothing. A socket
+/// that promises a body and then sends five bytes holds one for as long as it
+/// likes. Reachable exactly on the servers that turned the origin check on,
+/// because `_upgradeAllowed` gates EVERY request while an upgrade-shaped one
+/// carries no body to stall on.
 ///
 /// The subscription is CANCELLED on expiry: a `.timeout()` on the drain future
 /// would answer while the read loop kept running.

@@ -7,49 +7,25 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// [IRpcChannel] implementation wrapping a [WebSocketChannel].
-///
-/// Converts the WebSocket message stream into a raw byte pipe.
-/// Combine with [RpcChannelTransport.fromChannel] to get a full
-/// [IRpcTransport] with multiplexing, security, and health checks.
-///
-/// ```dart
-/// final wsChannel = WebSocketChannel.connect(uri);
-/// final transport = RpcChannelTransport.fromChannel(
-///   channel: RpcWebSocketChannel(wsChannel),
-///   isClient: true,
-/// );
-/// ```
 /// gRPC status for the WebSocket close code the peer hung up with.
 ///
-/// A close code is the only thing a WebSocket peer can say about WHY it went
-/// away, and it was previously discarded: every close produced the same
-/// `UNAVAILABLE: Stream closed without receiving response`, whatever the
-/// server meant. Measured against a real dart:io server closing mid-call, all
-/// of 1001, 1008, 1009 and 1011 were indistinguishable.
+/// The close code is the only thing a WebSocket peer can say about WHY it went
+/// away, and the split matters because UNAVAILABLE is RETRYABLE
+/// ([RpcRetryInterceptor] retries it): mapping every close to it retries
+/// failures that can never succeed.
 ///
-/// UNAVAILABLE is RETRYABLE ([RpcRetryInterceptor] retries it), so flattening
-/// everything to it meant retrying failures that cannot succeed: a server that
-/// hung up for a policy violation, or on its own internal error, was hammered
-/// maxAttempts times. The split below is mostly about that.
-///
-/// - 1000 normal, 1001 going away, 1005/1006 no-status/abnormal, and
-///   1012/1013/1014 restart / try-again / bad-gateway are CONNECTION-level and
-///   transient, so `unavailable` and retryable. 1001 and 1012/1013 are the
-///   WebSocket analogue of HTTP/2 GOAWAY — a shutdown or a draining load
-///   balancer.
-/// - 1008 policy violation is `permissionDenied`: deterministic, and retrying
-///   it is exactly the loop this fixes.
-/// - 1009 message too big is `resourceExhausted`, the gRPC code for a message
-///   over the limit. Note this one IS retried by the default interceptor, and
-///   re-sending the same oversized message will fail identically — bounded by
-///   maxAttempts, but wasteful. Set `retryOn` if that matters; the semantically
-///   correct code is preferred here over hiding it as INTERNAL.
-/// - 1002/1003/1007/1010/1011 are protocol or server faults: `internal`, which
-///   is NOT retried.
+/// - 1000/1001/1005/1006 and 1012/1013/1014 are CONNECTION-level and transient,
+///   so `unavailable`. 1001 and 1012/1013 are the WebSocket analogue of HTTP/2
+///   GOAWAY — a shutdown or a draining load balancer.
+/// - 1008 policy violation is `permissionDenied`: deterministic.
+/// - 1009 message too big is `resourceExhausted`. This one IS retried by the
+///   default interceptor and the resend fails identically; set `retryOn` if
+///   that matters. The semantically correct code is preferred over hiding it
+///   as INTERNAL.
+/// - 1002/1003/1007/1010/1011 are protocol or server faults: `internal`, NOT
+///   retried.
 /// - 3000-4999 are library/application codes with no fixed meaning, so
-///   `unknown` — the peer said something gRPC has no word for, which is what
-///   `unknown` means. Same rule as `grpcStatusFromHttpStatus`.
+///   `unknown`. Same rule as `grpcStatusFromHttpStatus`.
 int grpcStatusFromWebSocketCloseCode(int? closeCode) => switch (closeCode) {
   null => RpcStatus.unavailable,
   1000 || 1001 || 1005 || 1006 => RpcStatus.unavailable,
@@ -60,6 +36,18 @@ int grpcStatusFromWebSocketCloseCode(int? closeCode) => switch (closeCode) {
   _ => RpcStatus.unknown,
 };
 
+/// [IRpcChannel] over a [WebSocketChannel]: the WebSocket message stream as a
+/// raw byte pipe.
+///
+/// Combine with [RpcChannelTransport.fromChannel] for a full [IRpcTransport]
+/// with multiplexing, security and health checks.
+///
+/// ```dart
+/// final transport = RpcChannelTransport.fromChannel(
+///   channel: RpcWebSocketChannel(WebSocketChannel.connect(uri)),
+///   isClient: true,
+/// );
+/// ```
 class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
   final WebSocketChannel _ws;
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
@@ -75,24 +63,15 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
         } else if (data is List<int>) {
           _incoming.add(Uint8List.fromList(data));
         } else {
-          // Anything that is not binary -- in practice a WebSocket TEXT frame,
-          // which arrives as a String. This protocol is binary-only, so a text
-          // frame is a peer error.
+          // Not binary -- in practice a TEXT frame, arriving as a String. This
+          // protocol is binary-only, so it is a peer error, and it must not be
+          // dropped silently: with no error and no close, a call over this
+          // connection hangs to its deadline with nothing in a log and nothing
+          // on the wire.
           //
-          // It used to fall through both branches and vanish: measured against
-          // a real dart:io WebSocket server, sending a text frame left
-          // `connectionClosed=false error=none` and the peer got no signal at
-          // all, so a call made over that connection simply hung until its
-          // deadline. Silent loss is the worst of the options -- nothing to
-          // see in a log, nothing on the wire.
-          //
-          // Reported rather than fatal. The error travels
-          // RpcFrameMultiplexedChannel -> RpcChannelTransport -> the endpoint's
-          // incoming stream, where it is logged, and the connection stays
-          // usable for the binary frames around it. Closing instead would turn
-          // one stray frame -- an app-level keepalive from a proxy, say -- into
-          // a dropped connection, which is a bigger change than the defect
-          // being fixed here.
+          // Reported rather than fatal, so the connection stays usable for the
+          // binary frames around it: closing would turn one stray frame -- an
+          // app-level keepalive from a proxy, say -- into a dropped connection.
           _incoming.addError(
             RpcException(
               'RpcWebSocketChannel: expected a binary WebSocket message, got '
@@ -106,37 +85,20 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
         if (!_incoming.isClosed) _incoming.addError(e);
       },
       onDone: () {
-        // Report WHY the peer went away before tearing the pipe down.
+        // Report WHY the peer went away before tearing the pipe down. Without
+        // this the close code is lost and every close reaches the caller as the
+        // generic UNAVAILABLE core synthesizes for a stream ending with no
+        // status -- see [grpcStatusFromWebSocketCloseCode] for why that is
+        // worse than imprecise.
         //
-        // The close code is the only explanation a WebSocket peer can give,
-        // and it used to be dropped on the floor: every close, for every
-        // reason, reached the caller as the generic "Stream closed without
-        // receiving response" UNAVAILABLE that core synthesizes when a stream
-        // ends with no status. Measured against a real dart:io server closing
-        // mid-call, these four were byte-for-byte identical:
+        // Emitted as an error on `_incoming` because that is the path a
+        // transport-level failure already takes to the endpoint, so pending
+        // calls see this rather than the synthesized one.
         //
-        //   1001 going away      -> UNAVAILABLE Stream closed without ...
-        //   1008 policy violation-> UNAVAILABLE Stream closed without ...
-        //   1009 message too big -> UNAVAILABLE Stream closed without ...
-        //   1011 internal error  -> UNAVAILABLE Stream closed without ...
-        //
-        // UNAVAILABLE is retryable, so the flattening did not merely lose
-        // information -- it made the client RETRY a policy rejection and a
-        // server-side internal error, neither of which can ever succeed.
-        //
-        // Emitted as an error on `_incoming` rather than plumbed through
-        // close(): that is the path a transport-level failure already takes to
-        // the endpoint, so pending calls see this instead of the synthesized
-        // one. Only for codes that mean something went wrong; a clean 1000/1001
-        // shutdown still ends the stream normally so an idle connection closing
-        // is not reported as a call failure.
-        // Only when the peer actually SAID something. 1005 "no status
-        // received" and 1006 "abnormal closure" are the codes for "nothing was
-        // said" -- a socket that simply dropped -- and 1000/1001 are an
-        // orderly goodbye. All four must keep ending the stream normally:
-        // that is the path reconnect() re-attaches on, and the existing
-        // reconnect tests pin it. Raising an error for 1005 broke three of
-        // them, which is what narrowed this list.
+        // Only when the peer actually SAID something: 1005 "no status received"
+        // and 1006 "abnormal closure" mean nothing was said, and 1000/1001 are
+        // an orderly goodbye. All four MUST keep ending the stream normally --
+        // that is the path reconnect() re-attaches on.
         final code = _ws.closeCode;
         final saidNothing =
             code == null ||
@@ -167,39 +129,24 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
   @override
   Future<void> send(Uint8List data) async {
     if (_closed) return;
-    // NOT batched, and that was measured rather than assumed. Each `sink.add`
-    // costs 80-125us of dart:io time and a unary call makes seven of them, so
-    // coalescing frames into one WebSocket message looked like half the call --
-    // and `RpcChannelFrame.decodeAll` already accepts several frames per
-    // buffer, so no protocol change was needed.
-    //
-    // Buffering behind a microtask changed NOTHING (3 sent / 4 received per
-    // call before and after, 1242us vs 1316us): the sender awaits between
-    // frames, so the microtask drains before the next one arrives and there is
-    // never anything to merge. Making it a timer instead would merge them, at
-    // the price of delaying every lone frame by a full event-loop turn -- which
-    // is the wrong trade for a latency-sensitive unary path.
+    // NOT batched, though the wire format allows it: a microtask buffer merges
+    // nothing, because the sender awaits between frames and the microtask
+    // drains before the next one arrives. A timer WOULD merge them, at the
+    // price of delaying every lone frame a full event-loop turn -- the wrong
+    // trade on a latency-sensitive unary path.
     _ws.sink.add(data);
   }
 
   /// Close code for a framing violation by the peer.
   ///
-  /// 1002 "protocol error" is what this MEANS, and it cannot be used: an
-  /// application may only send 1000 or 3000-4999. Everything else, 1002/1008/
-  /// 1009/1011 included, is reserved for the WebSocket implementation itself,
-  /// and `package:web_socket` enforces it —
+  /// 1002 "protocol error" is what this MEANS and cannot be used: an application
+  /// may only send 1000 or 3000-4999, and `package:web_socket` throws on
+  /// anything else — here, on the teardown path, where the throw is unhandled.
   ///
-  ///     Invalid argument: 1002, close code must be 1000 or in the range
-  ///     3000-4999
-  ///
-  /// — which turned the first version of this into an unhandled exception on
-  /// the teardown path. So the private-use range is the only option.
-  ///
-  /// 4400 is chosen to echo HTTP 400: the peer's framing was bad. What matters
-  /// is that [grpcStatusFromWebSocketCloseCode] maps 3000-4999 to UNKNOWN,
-  /// which is NOT retried — so the peer stops resending the frame that got it
-  /// disconnected, which is the entire purpose. The reason string carries the
-  /// detail for a human; nothing keys off it.
+  /// 4400 echoes HTTP 400. What matters is that
+  /// [grpcStatusFromWebSocketCloseCode] maps 3000-4999 to UNKNOWN, which is NOT
+  /// retried, so the peer stops resending the frame that got it disconnected.
+  /// The reason string is for a human; nothing keys off it.
   static const int _protocolErrorCloseCode = 4400;
 
   @override
@@ -208,10 +155,10 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
     _closed = true;
     await _sub.cancel();
     try {
-      // WebSocket caps the close reason at 123 BYTES, and dart:io throws if it
-      // is longer -- which would turn a tidy protocol close into an exception
-      // on the teardown path. Frame-exception messages carry byte counts and
-      // limits and run past that easily, so truncate.
+      // WebSocket caps the close reason at 123 BYTES and dart:io throws past
+      // that, turning a tidy protocol close into an exception on the teardown
+      // path. Frame-exception messages carry byte counts and limits, so they
+      // run past it easily.
       final trimmed = reason.length > 100
           ? '${reason.substring(0, 97)}...'
           : reason;
@@ -228,24 +175,16 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
     try {
       await _ws.sink.close();
     } catch (_) {}
-    // NOT awaited. `_incoming` is single-subscription, and closing one that
-    // was never listened to returns a future that does not complete until
-    // someone listens -- so `await` here deadlocked close() outright.
+    // NOT awaited. `_incoming` is single-subscription, and closing one that was
+    // never listened to returns a future that never completes until someone
+    // listens -- so awaiting here deadlocks close() outright. Reachable
+    // whenever a channel is built but never wrapped (an aborted setup, an error
+    // between construction and use), which this class being public makes an
+    // ordinary path.
     //
-    // The normal path is safe because RpcFrameMultiplexedChannel subscribes in
-    // its constructor. The path that is not is closing a channel that was
-    // built but never wrapped: an aborted setup, or an error between
-    // construction and use -- exactly when cleanup has to work. This class is
-    // public and documented for direct construction, so that is reachable.
-    //
-    // Measured, with a listener as the control:
-    //   no listener : close() still pending after 3s, forever
-    //   listener    : close() returns
-    //
-    // Same fault as the CONNECT-proxy deadlock in dcc14f8c. Broadcast would
-    // also "fix" it and must NOT be used: a broadcast controller DROPS events
-    // that arrive before the frame channel subscribes, where this one buffers
-    // them.
+    // Broadcast would also "fix" it and must NOT be used: a broadcast
+    // controller DROPS events arriving before the frame channel subscribes,
+    // where this one buffers them.
     if (!_incoming.isClosed) unawaited(_incoming.close());
   }
 }

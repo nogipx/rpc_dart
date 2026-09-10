@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299]
+applied: [293, 294, 295, 296, 297, 298, 299, 300]
 status: confirmed (round 293)
 ---
 
@@ -114,10 +114,16 @@ found by sweeping and none reachable block by block:
   `_uniqueToken`'s description sat on `_strongRng`, so the function minting every
   request id had no doc at all — and the fact that `Random.secure()` THROWS on
   node, making those ids non-cryptographic, was buried under a heading about a
-  different member.
+  different member. Round 300 found it on the first package swept OUTSIDE core,
+  and on a PUBLIC declaration: `RpcWebSocketChannel`'s description and code
+  sample had fused onto `grpcStatusFromWebSocketCloseCode`, so the exported class
+  the library doc tells you to construct had no doc, and the close-code mapper
+  wore a `RpcChannelTransport.fromChannel` sample.
 
-  **Four files in four rounds — this is a property of the corpus, not a
-  coincidence. Sweep for it explicitly.**
+  **Five files in five rounds, in two packages — this is a property of the
+  corpus, not of core. Sweep for it explicitly.** A CLASS doc is the easiest to
+  lose this way: it and its declaration are separated by exactly the blank line
+  that hides the fusion, and it is the doc a user reads first.
 - **A block duplicated verbatim.** Round 297: eight lines about timer-vs-
   microtask delivery appeared TWICE in a row in `getMessagesForStream`. Each
   copy is correct, which is why nothing caught it.

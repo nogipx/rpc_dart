@@ -32,13 +32,11 @@ class RpcWebSocketServer implements IRpcServer {
 
   /// Every endpoint this server created, peer-mode included.
   ///
-  /// This used to be a `List<RpcResponderEndpoint>`, which a [RpcPeerEndpoint]
-  /// structurally cannot join — they are sibling subclasses of
-  /// [RpcEndpointBase]. So peer-mode endpoints were never tracked, and [stop]
-  /// (which closes what it finds here) never closed them: their transports
-  /// stayed open and their contracts never had `dispose()` called, so whatever
-  /// a contract holds — database handles, files, subscriptions — was never
-  /// released.
+  /// Typed [RpcEndpointBase] and not `RpcResponderEndpoint`, which a
+  /// [RpcPeerEndpoint] structurally cannot join — they are sibling subclasses.
+  /// Narrowing it drops peer endpoints out of [stop], which closes what it
+  /// finds here: their transports stay open and their contracts never have
+  /// `dispose()` called, so whatever a contract holds is never released.
   final List<RpcEndpointBase> _endpoints = [];
   int _connCounter = 0;
 
@@ -98,17 +96,11 @@ class RpcWebSocketServer implements IRpcServer {
   Future<void> start() async {
     if (_isRunning) return;
 
-    // `_isRunning = true` used to run BEFORE the listen below, so a listen that
-    // threw left the server claiming to be running with no subscription at all.
-    // Measured on a restart over a single-subscription connections stream --
-    // which is what `HttpServer.transform(WebSocketTransformer())` gives you:
-    //
-    //   start / stop / start  ->  StateError: Stream has already been listened
-    //                             to, isRunning == TRUE, and the next client
-    //                             call hung until its own timeout instead of
-    //                             failing
-    //
-    // A server that reports running while accepting nothing is worse than one
+    // `_isRunning = true` comes AFTER the listen, or a listen that throws
+    // leaves the server claiming to run with no subscription at all -- reached
+    // by start/stop/start over a single-subscription connections stream, which
+    // is what `HttpServer.transform(WebSocketTransformer())` gives you. A
+    // server that reports running while accepting nothing is worse than one
     // that failed: nothing upstream can tell there is anything to fix.
     final StreamSubscription<WebSocketChannel> subscription;
     try {
@@ -131,10 +123,10 @@ class RpcWebSocketServer implements IRpcServer {
         cancelOnError: false,
       );
     } on StateError catch (error) {
-      // The bare message ("Stream has already been listened to") names a Dart
-      // rule rather than the mistake. This server does not own the connections
-      // stream, so unlike RpcHttp2Server -- which rebinds its own socket -- it
-      // cannot restart on a source that only allows one listener.
+      // The bare message names a Dart rule rather than the mistake. This server
+      // does not own its connections stream, so unlike RpcHttp2Server -- which
+      // rebinds its own socket -- it cannot restart on a single-subscription
+      // source.
       throw StateError(
         'RpcWebSocketServer cannot be restarted: its `connections` stream has '
         'already been listened to. stop() cancels the subscription, and a '
@@ -150,31 +142,24 @@ class RpcWebSocketServer implements IRpcServer {
 
   /// Stops the server, optionally letting in-flight calls finish first.
   ///
-  /// With [drainTimeout] null (the default, and the behaviour before it
-  /// existed) every endpoint is closed at once, so a call running at that
-  /// moment dies. It dies CORRECTLY — measured with a 2s handler and stop()
-  /// 300ms in, the caller got a prompt, retryable `UNAVAILABLE` at 314ms — so
-  /// this is a missing capability rather than a broken one: a rolling deploy
-  /// had no way to say "finish what you started".
+  /// With [drainTimeout] null (the default) every endpoint is closed at once,
+  /// so a call running at that moment dies promptly with a retryable
+  /// `UNAVAILABLE` — correct, but no use to a rolling deploy.
   ///
   /// With a budget, shutdown stops accepting, waits for in-flight calls to
   /// drain, and only then closes. The budget is mandatory rather than optional
   /// because an EXISTING connection can still open new streams and this
-  /// transport has no way to forbid that, so a peer that keeps calling would
-  /// otherwise hold shutdown open forever.
+  /// transport cannot forbid that, so a peer that keeps calling would otherwise
+  /// hold shutdown open forever.
   @override
   Future<void> stop({Duration? drainTimeout}) async {
     if (!_isRunning) return;
     _isRunning = false;
 
-    // Stop ACCEPTING first.
-    //
-    // This used to run last, after the endpoints were closed and the list
-    // cleared. A connection arriving in that window was still handled: it built
-    // an endpoint and added it to `_endpoints` AFTER `_endpoints.clear()`, so
-    // nothing in this shutdown ever closed it and its contracts were never
-    // disposed. Narrow, but free to remove — and draining while still accepting
-    // would not be a shutdown at all.
+    // Stop ACCEPTING first. A connection arriving after the endpoints are
+    // closed still gets handled, and lands in `_endpoints` AFTER the clear
+    // below -- so nothing closes it and its contracts are never disposed.
+    // Draining while still accepting would not be a shutdown either.
     try {
       await _connectionsSub?.cancel();
     } catch (e) {
@@ -233,14 +218,12 @@ class RpcWebSocketServer implements IRpcServer {
 
   /// Drops a disconnected connection's endpoint and closes it.
   ///
-  /// Closing is the part that used to be missing on BOTH branches: the
-  /// responder branch merely removed the endpoint from the list, and the peer
-  /// branch did nothing at all. An endpoint that is dropped without
+  /// Removing it from the list is not enough. An endpoint dropped without
   /// [RpcEndpointBase.close] never cancels its transport subscription, never
   /// tears down its still-open responder streams, and — the part no garbage
-  /// collector can make up for — never calls `dispose()` on its registered
-  /// contracts, so anything a contract holds stays held for the life of the
-  /// process. On a server, one leak per client disconnect.
+  /// collector makes up for — never calls `dispose()` on its contracts, so
+  /// whatever they hold stays held for the life of the process: one leak per
+  /// client disconnect.
   void _releaseEndpoint(RpcEndpointBase endpoint, WebSocketChannel channel) {
     _endpoints.remove(endpoint);
     unawaited(
@@ -253,23 +236,15 @@ class RpcWebSocketServer implements IRpcServer {
 
   /// Invokes an observability callback without letting it take the process out.
   ///
-  /// These run on DETACHED paths -- [_handleConnection] off the connections
-  /// stream, [_releaseEndpoint] off `sink.done`'s then/catchError -- so a throw
+  /// These run on DETACHED paths — [_handleConnection] off the connections
+  /// stream, [_releaseEndpoint] off `sink.done`'s then/catchError — so a throw
   /// has no handler above it and reaches the root zone, where an unhandled
   /// async error kills the isolate.
   ///
-  /// Measured on the sibling HTTP/2 server, which has the identical shape: a
-  /// callback throwing from `onConnectionOpened` ended the process --
-  ///   Unhandled exception: Bad state: user callback failed on open
-  ///   #1 RpcHttp2Server._handleConnection
-  ///   #2 _RootZone.runUnaryGuarded
-  /// -- because that call sits outside the try below.
-  ///
   /// Deliberately NOT applied to [_onEndpointCreated] / [_onPeerEndpointCreated]:
   /// those register the contracts, so if one fails the connection is useless.
-  /// The surrounding try/catch already reports it and closes the socket, which
-  /// is the right outcome -- swallowing it would start an endpoint that serves
-  /// nothing.
+  /// The surrounding try/catch reports it and closes the socket, which is the
+  /// right outcome — swallowing it would start an endpoint that serves nothing.
   void _notify(String what, void Function() body) {
     try {
       body();
@@ -287,23 +262,11 @@ class RpcWebSocketServer implements IRpcServer {
 
     // Remembered so the catch below can release it. The endpoint is registered
     // in `_endpoints` BEFORE the user callback that can throw, and the
-    // `sink.done` release wiring is only installed AFTER it -- so a throwing
-    // callback used to leave the endpoint registered, never started, and with
-    // nothing able to reclaim it. The catch closed the socket, but the socket
-    // closing could not help: the hook that reacts to it had not been attached
-    // yet.
-    //
-    // Measured with a callback that throws on every connection, three
-    // connections:
-    //
-    //   endpoints held      : 3   (want 0)
-    //   contracts disposed  : 0   (want 3)
-    //
+    // `sink.done` release wiring only AFTER it -- so without this a throwing
+    // callback leaves the endpoint registered, never started, and unreclaimable:
     // one permanent leak per failed connection, holding the application's
-    // contracts. The PEER branch leaked identically; it merely looked clean
-    // because `endpoints` filters to RpcResponderEndpoint, so the leaked
-    // RpcPeerEndpoints were invisible to the getter -- `disposed` is what
-    // exposed them.
+    // contracts. Closing the socket cannot help, because the hook that reacts
+    // to it has not been attached yet.
     //
     // A throwing onEndpointCreated is ordinary rather than exotic: it is where
     // the application registers its contracts, so a DI failure, a duplicate
@@ -351,10 +314,9 @@ class RpcWebSocketServer implements IRpcServer {
         stackTrace: st,
       );
       _notify('onConnectionError', () => _onConnectionError?.call(e, st));
-      // Release what was already registered. _releaseEndpoint removes it,
-      // closes it -- which is what disposes the contracts -- and fires
-      // onConnectionClosed, balancing the onConnectionOpened that ran at the
-      // top of this method for a connection that is now being torn down.
+      // Release what was already registered: _releaseEndpoint closes it --
+      // which is what disposes the contracts -- and fires onConnectionClosed,
+      // balancing the onConnectionOpened at the top of this method.
       final orphan = created;
       if (orphan != null) _releaseEndpoint(orphan, channel);
       channel.sink.close();

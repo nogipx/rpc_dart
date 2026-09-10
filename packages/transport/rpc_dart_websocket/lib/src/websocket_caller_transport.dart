@@ -18,12 +18,11 @@ import 'ws_open_stub.dart' if (dart.library.io) 'ws_open_io.dart';
 ///
 /// Maintains a stable [incomingMessages] stream across reconnects.
 ///
-/// Forwards the inner transport's [IRpcSecurityPolicyAware] and
-/// [IRpcFlowControlled] capabilities. Both are discovered by `is` checks in the
-/// endpoint layers, so a wrapper that only implements [IRpcTransport] hides
-/// them: the configured policy would be ignored in favour of
-/// `const RpcSecurityPolicy()`, and flow credit would be returned on arrival
-/// rather than on consumption.
+/// Forwards the inner transport's capabilities. Each is discovered by an `is`
+/// check in the layer above, so a wrapper implementing [IRpcTransport] alone
+/// hides them: the configured policy gives way to `const RpcSecurityPolicy()`,
+/// flow credit is returned on arrival instead of on consumption, and the id
+/// cursor cannot cross a reconnect.
 class RpcWebSocketCallerTransport
     implements
         IRpcTransport,
@@ -44,51 +43,31 @@ class RpcWebSocketCallerTransport
 
   /// Stream ids minted on the CURRENT connection.
   ///
-  /// [reconnect] builds a whole new [RpcChannelTransport], and with it a new
-  /// [RpcStreamIdManager] — so ids RESTART at 1. Every caller releases its id
-  /// in a `finally` and half-closes with [finishSending], and nothing made
-  /// those operations connection-scoped: they went straight to whatever
-  /// `_inner` is NOW. A teardown that lands after a reconnect therefore acts on
-  /// somebody else's live call.
+  /// Every caller releases its id in a `finally` and half-closes by id, and
+  /// neither operation is connection-scoped on its own — both go to whatever
+  /// `_inner` is NOW. So a teardown landing after a reconnect acts on somebody
+  /// else's live call: a stale `finishSending` puts a real end-of-stream frame
+  /// on the wire for it, and a stale `releaseStreamId` frees its
+  /// `maxActiveStreams` slot, drops its flow-control credit (waking its parked
+  /// senders, which can then send past their window) and clears the
+  /// `_statusSeen` entry that tells a truncated response from a complete one.
   ///
-  /// Measured against a real server, one reconnect between two calls that both
-  /// got id 1:
+  /// Reachable with nothing exotic: an application that reconnects on drop and
+  /// cancels its old subscriptions afterwards produces exactly this ordering.
   ///
-  ///     A's late releaseStreamId(1) : activeStreams 1 -> 0 with B still open
-  ///     A's late finishSending(1)   : B's handler ENDED -- the server saw B's
-  ///                                   request stream close and finished
-  ///                                   serving it
-  ///
-  /// The second is the bad one: a dead call put a real end-of-stream frame on
-  /// the wire for a live one. The first quietly frees B's `maxActiveStreams`
-  /// slot, drops its flow-control credit (`_fcForget` also WAKES its parked
-  /// senders, so it can then send past its window) and clears its `_statusSeen`
-  /// entry, which is what tells a truncated response from a complete one.
-  ///
-  /// Reachable without anything exotic: an application that reconnects on drop
-  /// and cancels its old subscriptions afterwards does exactly this ordering.
-  /// A stale id is DROPPED rather than raised on: every one of these call sites
-  /// is a teardown path, and a `finally` that throws masks the error that got
-  /// it there. The connection that call lived on is gone, so doing nothing is
-  /// also the honest answer.
+  /// A stale id is DROPPED, never raised on — every call site here is a teardown
+  /// path, and a `finally` that throws masks the error that got it there.
   final Set<int> _idsOnThisConnection = {};
 
   /// No live socket, but recovery is expected.
   ///
-  /// [reconnect] closes `_inner` BEFORE calling the factory, so a failed
-  /// attempt leaves this wrapper reporting `isClosed == false` over an inner
-  /// transport that is closed. Every call then delegated into it, and
-  /// RpcChannelTransport answers a closed transport by returning quietly:
-  /// `sendMetadata` is a no-op and `getMessagesForStream` hands back
-  /// `Stream.empty()`. The caller pipeline saw a stream end with no response
-  /// and raised RpcStatusException(14) from a detached subscription -- into the
-  /// ROOT zone, where it killed the isolate. No try/catch around the call could
-  /// stop it.
-  ///
-  /// Measured: peer dies, reconnect() fails, one call ->
-  ///   "Unhandled exception: RpcStatusException(14): Stream closed without
-  ///    receiving response" and the process ended.
-  /// Without the failed reconnect in between, the same sequence survives.
+  /// [reconnect] closes `_inner` BEFORE calling the factory, so a failed attempt
+  /// leaves this wrapper reporting `isClosed == false` over a closed inner
+  /// transport. Delegate a call into that and `RpcChannelTransport` answers
+  /// quietly — `sendMetadata` a no-op, `getMessagesForStream` an empty stream —
+  /// so the caller pipeline sees a stream end with no response and raises
+  /// UNAVAILABLE from a DETACHED subscription, into the root zone, where it ends
+  /// the isolate. No try/catch around the call can stop that.
   bool _disconnected = false;
 
   /// Refuses work this transport cannot do, naming which state it is in.
@@ -121,30 +100,21 @@ class RpcWebSocketCallerTransport
   /// connection errors are reported through the transport factory rather than
   /// leaking as unhandled stream errors.
   ///
-  /// [pingInterval] enables WebSocket keepalive, and is the only way to detect
-  /// a HALF-OPEN connection: a NAT box, load balancer or mobile network that
+  /// [pingInterval] enables WebSocket keepalive, the ONLY way to detect a
+  /// half-open connection: a NAT box, load balancer or mobile network that
   /// silently stops forwarding, with no FIN and no RST, so both peers still
-  /// believe the socket is fine. On the VM, dart:io sends a ping every
-  /// interval and closes the connection if no pong returns within one.
+  /// believe the socket is fine. Without it a call on a dead path hangs
+  /// indefinitely while `health()` still reports healthy. On the VM, dart:io
+  /// pings every interval and closes if no pong returns within one.
   ///
-  /// Measured through a TCP relay that keeps both sockets open and stops
-  /// copying bytes — exactly what a dead path looks like:
+  /// Null (OFF) by default, because the right interval is a deployment
+  /// question: too short wastes battery and wakes mobile radios, too long
+  /// leaves calls hanging. Take the shortest idle timeout on the path — load
+  /// balancers commonly use 60s — and halve it.
   ///
-  ///     no keepalive      : the call HUNG past 12s, and health() still said
-  ///                         "healthy" while the path was dead
-  ///     pingInterval 2s   : RpcStatusException(14) after 4002ms,
-  ///                         health "closed"
-  ///     control, no freeze: returned in 5ms
-  ///
-  /// Defaults to null, i.e. OFF, so nothing changes for existing callers. It
-  /// is opt-in because the right interval is a deployment question: too short
-  /// wastes battery and wakes mobile radios, too long leaves calls hanging.
-  /// Pick it from the shortest idle timeout on the path (load balancers
-  /// commonly use 60s) and halve it.
-  ///
-  /// On the WEB it is accepted and ignored: browsers run ping/pong inside the
+  /// Accepted and IGNORED on the web: browsers run ping/pong inside the
   /// WebSocket implementation and expose no API for it. A web client is not
-  /// unprotected — the browser is doing it — but it cannot be tuned here.
+  /// unprotected, but it cannot be tuned here.
   static Future<RpcWebSocketCallerTransport> connect(
     Uri uri, {
     Iterable<String>? protocols,
@@ -152,18 +122,17 @@ class RpcWebSocketCallerTransport
     Duration? pingInterval,
     bool enableCompression = false,
   }) async {
-    // The reconnect factory carries the same keepalive AND the same compression
-    // choice, or a reconnected socket would come back with different settings --
-    // for keepalive, blind again after the first drop; for compression, silently
-    // re-offering the extension and re-opening the bomb the default closes.
+    // The reconnect factory carries the SAME keepalive and the SAME compression
+    // choice, or a reconnected socket comes back with different settings: blind
+    // again after the first drop, and silently re-offering an extension the
+    // default deliberately declines.
     //
-    // enableCompression defaults to false: the client no longer OFFERS
-    // permessage-deflate, so a hostile or compromised server cannot negotiate it
-    // and flood the client. dart:io inflates an incoming message with no output
-    // bound before rpc_dart sees it, so a server that answered a 256 MiB payload
-    // of zeros made 0.25 MiB on the wire become 248 MiB of client RSS -- 995x.
-    // The mirror of the server default in rpcWebSocketConnections. Enable it only
-    // against servers you control.
+    // enableCompression is false so the client does not OFFER
+    // permessage-deflate, which a hostile or compromised server could otherwise
+    // negotiate and flood it through: dart:io inflates an incoming message with
+    // no output bound before rpc_dart sees it, turning a fraction of a MiB on
+    // the wire into hundreds of MiB of client RSS. Mirrors the server default in
+    // rpcWebSocketConnections; enable it only against servers you control.
     Future<WebSocketChannel> openChannel() => openWebSocket(
       uri,
       protocols: protocols,
@@ -184,17 +153,14 @@ class RpcWebSocketCallerTransport
   /// [resumeStreamIdsAfter] comes from the outgoing transport's cursor, which
   /// must still be readable AFTER that transport has closed: on a peer-started
   /// drop the inner transport closes itself, and that close is how this wrapper
-  /// finds out at all. While `RpcChannelTransport.close()` rewound the cursor,
-  /// the two paths measured differently for that reason alone — reconnect on a
-  /// live socket gave ids 1 then 3, reconnect after the peer dropped it gave 1
-  /// then 1, and a dead call's `finishSending` then ended the live one.
+  /// finds out at all. A `close()` that rewound the cursor would make the two
+  /// paths differ for that reason alone.
   ///
-  /// The obvious wrapper-level guard is NOT enough on its own, which the probe
-  /// established before this was written: tracking "ids minted on THIS
-  /// connection" in a Set cannot help when the numbers COLLIDE — B legitimately
-  /// holds id 1 on the new connection, so a stale teardown for A's id 1 passes
-  /// any check the id alone can support. Disjoint id spaces are the only thing
-  /// that can tell them apart.
+  /// [_idsOnThisConnection] is NOT enough by itself. A Set of ids minted on this
+  /// connection cannot help when the numbers COLLIDE — a new call legitimately
+  /// holds id 1, so a stale teardown for the old id 1 passes any check the id
+  /// alone can support. Disjoint id spaces are what tells them apart; the Set
+  /// covers what the resume cannot.
   void _attach(WebSocketChannel ws, {int? resumeStreamIdsAfter}) {
     // Every id minted on the previous connection is stale, and with the resume
     // above they can no longer be confused with new ones.
@@ -213,33 +179,14 @@ class RpcWebSocketCallerTransport
         if (!_incomingCtl.isClosed) _incomingCtl.addError(e);
       },
       onDone: () {
-        // The underlying socket dropped. If a reconnect factory is configured,
-        // keep the stable [incomingMessages] controller open (and stay
-        // un-closed) so subscribers survive and reconnect() can re-attach to a
-        // fresh socket. This is a lower-level, transport-specific primitive
-        // (reuse this transport, swap the channel). For transport-agnostic
-        // auto-reconnect with observable state and backoff, prefer wrapping any
-        // transport in `RpcClientConnection` instead.
-        // Without a factory there is nothing to recover to, so close fully.
+        // The socket dropped. With a reconnect factory, keep the stable
+        // [incomingMessages] controller open and stay un-closed, so subscribers
+        // survive and reconnect() can re-attach. Without one there is nothing to
+        // recover to, so close fully.
         if (_closed) return;
         if (_reconnectFactory != null) {
-          // Staying un-closed is right; staying SILENT about it was not. The
-          // inner transport has closed itself, and RpcChannelTransport answers
-          // a closed transport quietly -- sendMetadata is a no-op,
-          // getMessagesForStream returns Stream.empty() -- so a call made after
-          // the peer died reached it and the pipeline raised
-          // RpcStatusException(14) from a detached subscription, into the ROOT
-          // zone, killing the isolate.
-          //
-          // Measured: peer dies, one call ->
-          //   Unhandled exception: RpcStatusException(14): Stream closed
-          //   without receiving response
-          // while isClosed reported false and health(), delegating to the
-          // closed inner transport, reported "Transport is closed".
-          //
-          // Same fault 3bfa7715 fixed on the FAILED-RECONNECT path; this is the
-          // plain peer-death path, which needs no reconnect call at all and so
-          // is reached by any server restart or dropped network.
+          // Un-closed but NOT silent: see [_disconnected]. Reached by any server
+          // restart or dropped network, with no reconnect call involved.
           _disconnected = true;
           return;
         }
@@ -253,11 +200,6 @@ class RpcWebSocketCallerTransport
   @override
   RpcSecurityPolicy get securityPolicy => _policy;
 
-  /// Forwarded like the other capabilities, and for the same reason: the
-  /// endpoint layers and `RpcClientConnection` find these with `is` checks, so
-  /// a wrapper that only implements [IRpcTransport] hides them. Without this
-  /// the proxy in `RpcClientConnection` cannot carry the id watermark across a
-  /// swapped transport, which is the whole point of the capability.
   @override
   int get lastIssuedStreamId => _inner.lastIssuedStreamId;
 
@@ -287,13 +229,12 @@ class RpcWebSocketCallerTransport
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
     _ensureUsable();
-    return
-    // Delegate to the inner transport's per-stream routing instead of
-    // re-filtering the outer broadcast (which exists only to keep
-    // [incomingMessages] stable across reconnects). A call's streamId is
-    // connection-scoped and never spans a reconnect, so this is safe and
-    // avoids the O(active-streams) broadcast+filter on the hot path.
-    _inner.getMessagesForStream(streamId);
+    // Delegated to the inner transport's per-stream routing, NOT re-filtered off
+    // the outer broadcast -- which exists only to keep [incomingMessages] stable
+    // across reconnects, and filtering it costs one predicate per active stream
+    // per message. Safe because a streamId is connection-scoped and never spans
+    // a reconnect.
+    return _inner.getMessagesForStream(streamId);
   }
 
   @override
@@ -377,41 +318,31 @@ class RpcWebSocketCallerTransport
     return _inner.health();
   }
 
-  /// Re-attaches this transport to a fresh channel from the configured
-  /// reconnect factory, reusing the same transport object and the stable
-  /// [incomingMessages] stream.
-  ///
-  /// This is a low-level primitive. For client auto-reconnect with backoff,
-  /// attempt limits and observable state, prefer wrapping a transport factory
-  /// in `RpcClientConnection` (transport-agnostic) rather than driving this
-  /// directly.
   /// The attempt currently in flight, so concurrent callers join it instead of
   /// starting their own. See [reconnect].
   Future<RpcHealthStatus>? _reconnecting;
 
+  /// Re-attaches this transport to a fresh channel from the configured
+  /// reconnect factory, reusing the same transport object and the stable
+  /// [incomingMessages] stream.
+  ///
+  /// A low-level primitive. For client auto-reconnect with backoff, attempt
+  /// limits and observable state, wrap a transport factory in
+  /// `RpcClientConnection` — transport-agnostic — rather than driving this.
+  ///
+  /// SINGLE-FLIGHT: overlapping callers join the attempt already running. Each
+  /// one asked for the same thing, a working connection, and they all learn the
+  /// outcome of the attempt that ran.
   @override
   Future<RpcHealthStatus> reconnect() {
-    // SINGLE-FLIGHT. Without this, two overlapping calls each closed `_inner`,
-    // each awaited the factory, and each called _attach -- so the second
-    // overwrote `_inner` and `_fwdSub` while the FIRST socket was already
-    // attached and live. Nothing referenced it afterwards, so nothing could
-    // ever close it.
+    // Without the single flight, two overlapping calls each close `_inner`,
+    // each await the factory, and each call _attach -- so the second overwrites
+    // `_inner` and `_fwdSub` while the FIRST socket is already attached and
+    // live. Nothing references it afterwards, so nothing can ever close it: one
+    // orphaned socket per extra attempt, each pinning an endpoint on the server.
     //
-    // Measured against a real server counting connections, with a 150ms
-    // factory, after close():
-    //
-    //   one reconnect (control) : opened=2 closed=2 live=0
-    //   two concurrent          : opened=3 closed=2 live=1
-    //   three concurrent        : opened=4 closed=2 live=2
-    //
-    // i.e. one orphan per extra attempt. On a server each of those also pins
-    // an endpoint and the contracts on it.
-    //
-    // The trigger is ordinary: a supervisor polling health() and calling
+    // The trigger is ordinary -- a supervisor polling health() and calling
     // reconnect() on a timer, where one slow handshake outlives the tick.
-    // Joining the attempt is the right answer rather than refusing: every
-    // caller asked for the same thing -- a working connection -- and now they
-    // all learn the outcome of the one that actually ran.
     final inFlight = _reconnecting;
     if (inFlight != null) return inFlight;
     final attempt = _reconnectOnce().whenComplete(() => _reconnecting = null);
@@ -442,23 +373,14 @@ class RpcWebSocketCallerTransport
       await _inner.close();
       final ws = await _reconnectFactory();
 
-      // Re-check AFTER the factory. The guard at the top of this method runs
-      // before these awaits, and opening a socket takes real time -- a
-      // handshake is tens to hundreds of ms -- so close() can land inside that
-      // window. Attaching anyway hands a live socket to a transport that is
-      // already closed: `_incomingCtl` is shut so nothing is delivered, and
-      // nothing holds the socket any more, so it can never be closed.
+      // Re-checked AFTER the factory. The guard at the top of this method runs
+      // before these awaits, and a handshake takes tens to hundreds of ms, so
+      // close() can land inside that window. Attach anyway and a live socket is
+      // handed to an already-closed transport: `_incomingCtl` is shut so nothing
+      // is delivered, and nothing holds the socket, so it can never be closed.
       //
-      // Measured against a real WebSocket server counting live connections,
-      // with a 150ms factory and close() 30ms in:
-      //
-      //   control, plain connect + close : opened=1 closed=1  (released)
-      //   close during reconnect         : opened=3 closed=2  (1 left open)
-      //
-      // Same defect as RpcClientConnection in core (commit 334b3337), whose
-      // loop also checked "stopped" before the await and not after. The
-      // transport owns what the factory returns, so abandoning it means
-      // closing it.
+      // The transport owns what the factory returns, so abandoning it means
+      // closing it. Same shape as RpcClientConnection's connect loop in core.
       if (_closed || _incomingCtl.isClosed) {
         unawaited(Future<void>.sync(ws.sink.close).catchError((_) {}));
         return RpcHealthStatus.closed(
