@@ -3,8 +3,8 @@ status: open
 round: 285
 commit: 9b82b12a
 paths: [packages/core/rpc_dart_compression/lib/**, packages/core/rpc_dart_compression/test/audit/isize_wrap_bomb_test.dart]
-probe: none yet — the design is below
-reason: "bench — established by reading two files; measuring it needs a dart2js run and a TIME observable rather than RSS, which node does not expose the way ProcessInfo does"
+probe: packages/core/rpc_dart_compression/test/audit/isize_understates_on_web_test.dart
+reason: "owner decision (round 286 measured it: 12 ms on the VM against 15980 ms on dart2js) — no fix is worth proposing, because a compressed-size heuristic would refuse ordinary traffic and package:archive exposes no incremental inflater on web; what is left is what the library PROMISES"
 ---
 
 # B-29 — the ISIZE bomb's mitigation does not exist on web
@@ -64,6 +64,28 @@ payload whose compressed size implies a possible wrap (compressed bytes times
 the maximum deflate ratio against the limit), or document the web residual where
 an operator configuring `maxDecompressedSize` will read it. The first is a real
 bound; the second is honest. Ask before choosing.
+
+## Round 286 measured it — CONFIRMED, 1332x
+
+    runtime        refused in   mechanism
+    VM                  12 ms   boundedInflate aborts at the limit
+    dart2js / node   15980 ms   no bounded inflater: 64 MiB inflated, then
+                                rejected on result.length
+
+Worse than predicted in the dimension that matters to an attacker: 64 MiB of
+zeros compresses to roughly 65 KiB, so ONE message of that size buys 64 MiB of
+allocation and sixteen seconds of a single-threaded event loop. The contract
+holds — it throws on both — but refusing is what costs.
+
+The fixture forges the ISIZE trailer rather than wrapping it, which is what let
+it run on web at all; see `../probes/P-34-isize-understates-on-web.md` and
+`../rounds/286-twelve-milliseconds-against-sixteen-seconds.md`.
+
+**No fix is worth proposing, and that is the finding's shape.** A compressed-size
+heuristic is useless at deflate's real 1032:1 ceiling — against a 16 MiB limit it
+would refuse every input over ~16 KiB. `package:archive` exposes no incremental
+inflater on web, which is why the stub returns null. A different web inflater is
+a dependency decision. What is left is a choice about what the library promises.
 
 ## Owner decision
 

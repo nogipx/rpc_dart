@@ -11,6 +11,11 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-34](P-34-isize-understates-on-web.md)** valid (round 286), core — **a bench
+  that is also the regression test**, because the thing measured is a platform
+  difference and the only honest way to show one is the identical code on both
+  runtimes. Forges the ISIZE trailer so the fixture builds without `dart:io`;
+  asserts the contract, PRINTS the time
 - **[P-33](P-33-hostile-reflection-requests.md)** valid (round 284), core —
   P-28's shape aimed at the OTHER hand-rolled parser here, the reflection
   service's request decoder. Prints the response SIZE and not just a verdict,

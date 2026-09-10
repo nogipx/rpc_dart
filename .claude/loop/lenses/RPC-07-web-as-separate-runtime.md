@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the web is a real build target (dart2js)
 breaks: "wrong result: the web suite silently fails to compile a whole file, and a green run proves nothing. After that, anything, up to a crash on a target nobody ran."
-applied: [219, 227, 285]
+applied: [219, 227, 285, 286]
 status: confirmed (round 090, off-journal)
 ---
 
@@ -26,6 +26,32 @@ Which files did the web suite silently fail to compile?
 
 An `int.parse` of a literal above 2^53 throws THE WHOLE FILE out of the web
 suite without a single message.
+
+**Round 286 is the sharpest instance the lens has, and it is not a red test.**
+The same gzip payload — ISIZE understating its real output — is refused on both
+runtimes, so every assertion passes everywhere. What differs is the COST of
+refusing:
+
+    runtime        refused in   mechanism
+    VM                  12 ms   boundedInflate aborts at the limit
+    dart2js / node   15980 ms   no bounded inflater: 64 MiB inflated, then
+                                rejected on result.length
+
+1332x, and ~65 KiB of wire buys 64 MiB plus sixteen seconds of a single-threaded
+event loop.
+
+> **A platform gap can hide behind a passing test.** The detector's usual
+> question is "does this go red on dart2js"; here the answer is no, forever, and
+> the defect is real. Ask instead what the guard COSTS on each runtime — and
+> note how it stayed hidden: `isize_wrap_bomb_test` is `@TestOn('vm')` because
+> its fixture needs `dart:io`, so the platform without the defence was the one
+> the test could not reach. **When a test is runtime-gated, ask whether the
+> FIXTURE forced that or the behaviour did.** Round 286 rebuilt the fixture to
+> forge the trailer instead of wrapping it, and the gate became unnecessary.
+
+Deferred as B-29 — no fix is worth proposing, since a compressed-size heuristic
+is useless at deflate's 1032:1 ceiling and `package:archive` has no incremental
+inflater on web. Bench `../probes/P-34-isize-understates-on-web.md`.
 
 **The dart2js bug classes found across the monorepo in the June 2026 web sweep**,
 imported from private memory after round 238. `C-25` holds the cancel-deadlock's
