@@ -164,7 +164,7 @@ see the defect does not prove its absence.
 
 probes: 3
 canaries: 3
-round cap: 300
+round cap: 350
 
 ## Out of scope
 
