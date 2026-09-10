@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 247)
+status: closed (round 266)
 round: 228
 commit: af64eeac
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]

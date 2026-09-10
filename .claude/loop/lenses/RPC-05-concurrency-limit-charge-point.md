@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**]
 applies: RpcSecurityPolicy has fields capping concurrency
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245]
+applied: [214, 215, 245, 266]
 status: confirmed (round 245)
 ---
 

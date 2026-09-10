@@ -1193,10 +1193,14 @@ class RpcChannelTransport
     // Bytes still buffered for a LIVE consumer are not lost yet -- that
     // subscription's onCancel repays whatever it declines to take. With nothing
     // bound to drain them, this is the last moment anything runs for the id.
-    final consumer = _streamControllers[streamId];
-    if (consumer == null || !consumer.hasListener) {
-      _fcRepayConnection(streamId);
-    }
+    // Repaid unconditionally. A consumer that is still attached may yet drain
+    // these bytes and credit them a second time -- and that is harmless: the
+    // receiving side clamps an incoming grant at its own window (":1166-1174",
+    // "a peer must not be able to raise our ceiling"), so the defence against a
+    // hostile peer absorbs our own double accounting. Guarding on hasListener
+    // instead left a PAUSED consumer -- one that never receives `done`, so its
+    // onCancel never runs -- owing the pool forever.
+    _fcRepayConnection(streamId);
     _fcSendCredit.remove(streamId);
     _fcPendingGrant.remove(streamId);
     _fcAdvertised.remove(streamId);

@@ -7,6 +7,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 source: not memory, not a commit message, not the user's words.
 
 - **[250](250-the-ordering-coincidence-becomes-an-invariant.md)** FIXED, rpc_dart — the frame channel's inbound controller buffers like the other six; shipped with NO canary, on the owner's decision, and the record says so
+- **[266](266-the-guard-that-owed-the-pool-forever.md)** FIXED, rpc_dart — a paused consumer never receives `done`, so it never repaid the connection pool; `_fcForget` now repays unconditionally. 1024 -> 3072 KiB, wedged at call 4 -> never. One line, after eighteen rounds proving the danger it guarded against does not exist
 - **[249](249-the-mark-works-and-was-reverted.md)** DEFERRED, rpc_dart — B-22's mark built and measured lifting the wedge (1024 -> 3072 KiB, suite green), then reverted: two of the three canary arms, and the missing one guards an inflating window
 - **[248](248-the-obvious-fix-for-b-22-is-wrong.md)** DEFERRED, rpc_dart — B-22's mechanism localised to one condition, and the one-line fix it suggests refuted: it would credit the connection twice
 - **[247](247-b-11s-blocker-still-holds.md)** DEFERRED, rpc_dart — B-11's blocker re-checked and CONFIRMED: no latency helper exists anywhere in the tree, so the fourth bench attempt must build the delayed link first (~25 lines, `_ManualChannel` as the model)
