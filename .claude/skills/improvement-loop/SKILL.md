@@ -121,8 +121,10 @@ is what `lint` and `stale` are for.
    `review: self`, so the ceremony went and the questions stayed.)
 8. **Gate** with the full sequence from the config, **the record** per
    `specs/round.md` with every edit from "What a round changes", `loop.py lint`
-   green, a commit with the same sections in its body, and a chat report with
-   the same sections (`methods/reporting.md`). A lesson the round paid for
+   green, **ONE commit** with the same sections in its body — everything the
+   round produced rides in it, and a correction to what this round already
+   committed is an `--amend`, not a second commit — and a chat report with the
+   same sections (`methods/reporting.md`). A lesson the round paid for
    becomes `L-N` (`specs/lesson.md`); without a price in numbers it is not a
    lesson.
 

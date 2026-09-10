@@ -13,6 +13,25 @@ in chat it is noise.
 
 ## The commit
 
+**ONE commit per round, and it is the last thing the round does.** Everything
+the round produced rides in it: the round file, the lens's `applied:`, a new
+bench, a new or edited lead, an owner decision captured mid-round, a correction
+to a note the round itself wrote ten minutes earlier. A round does not commit as
+it goes.
+
+Measured on round 247, which shipped five separate `docs(loop)` commits — the
+record, the decisions, a status fix, a note, and a correction to that note. Four
+of them were the same round still thinking. The journal reads as one commit per
+round or it stops being a journal, and a reader diffing "what did round 247
+learn" should get one diff.
+
+Two consequences worth naming:
+
+- **A correction to something uncommitted is an edit, not a commit.** Fix the
+  file and let the single commit carry the final state.
+- **A correction to something already committed in THIS round is an amend.**
+  `git commit --amend -F <file>` — same round, same commit.
+
 **The language is the `commit language:` line in `config.md`, English by
 default** (`loop.py next` prints it). It applies to the commit's subject and
 body, not to the loop data: if the records are kept in another language, the
