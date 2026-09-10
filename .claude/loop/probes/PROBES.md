@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-35](P-35-upgraded-then-silent.md)** valid (round 288), rpc_dart_websocket —
+  P-25's question one stage later: the peer COMPLETES the upgrade and then never
+  speaks websocket, so it answers no PING. A raw socket on purpose — a real
+  client would answer them, which is the one thing it must not do
 - **[P-34](P-34-isize-understates-on-web.md)** valid (round 286), core — **a bench
   that is also the regression test**, because the thing measured is a platform
   difference and the only honest way to show one is the identical code on both

@@ -86,6 +86,11 @@ defect, fixed in the same round. A comment justifying deliberateness is a lead,
 not a closed door (U-01). The rule applies to the loop's own data in full: that
 is what `lint` and `stale` are for.
 
+**NEVER rely on documentation. Only on the actual code.** No exceptions, and in
+particular none for prose that carries NUMBERS. A doc comment with a measured
+table in it reads exactly like evidence and is not: it is a record of a
+measurement someone took, on a tree that has since moved, and nothing checks it.
+
 ## The round
 
 1. **Target. THE SCRIPT DOES NOT CHOOSE.** `next` prints state, in no order and
