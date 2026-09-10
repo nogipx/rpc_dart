@@ -177,17 +177,37 @@ class RpcHttpResponderTransport
   ///
   /// Drained rather than bounded-and-abandoned for the same reason the body
   /// reader keeps consuming after an overflow: memory is safe because nothing
-  /// is retained, and wall-clock is bounded by [bodyReadTimeout] when set.
+  /// is retained, and wall-clock is bounded by [bodyReadTimeout] when set --
+  /// which used to be a claim rather than a fact. The drain ran with no
+  /// deadline and no counter, so a REFUSED request was the cheaper attack than
+  /// an accepted one. Sixteen sockets promising a body and sending five bytes,
+  /// same server, `bodyReadTimeout: 500ms`, one header different:
+  ///
+  ///     content-type: application/grpc  ->  16 of 16 answered 408 in 3s
+  ///     content-type: text/plain        ->   0 of 16 answered, all draining
+  ///
+  /// and `pendingRequests` read 0 in both, because a refusal happens before
+  /// the stream is registered. The subscription is CANCELLED on expiry: a
+  /// `.timeout()` on the drain future would return the status while the read
+  /// loop kept running.
   Future<Response> _reject(
     int statusCode,
     Request request, {
     String? body,
     Map<String, String> extraHeaders = const {},
   }) async {
+    StreamSubscription<List<int>>? sub;
     try {
-      await request.read().drain<void>();
+      sub = request.read().listen(null);
+      final drained = sub.asFuture<void>();
+      await (bodyReadTimeout == null
+          ? drained
+          : drained.timeout(bodyReadTimeout!));
     } catch (_) {
-      // The peer may have gone already; the status below is still worth trying.
+      // The peer may have gone already, or spent its budget; the status below
+      // is still worth trying.
+    } finally {
+      await sub?.cancel();
     }
     final headers = <String, String>{...extraHeaders};
     corsPolicy?.applyTo(headers, request.headers['origin']);

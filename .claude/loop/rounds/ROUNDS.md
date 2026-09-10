@@ -6,6 +6,7 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[272](272-refused-is-cheaper-than-accepted.md)** FIXED, rpc_dart_http — being REFUSED was cheaper than being accepted: `_reject` drains the body with no deadline and before any counter exists, so 16 sockets sending 5 bytes each held 16 endless read loops while `pendingRequests` read 0. New lens RPC-22
 - **[271](271-the-stream-opened-before-the-request-existed.md)** FIXED, rpc_dart_http — the responder announced a stream to the pipeline before reading the body, and its error path cleans up only its own map: 8 aborted requests parked 8 pipeline streams for 60 s WITH the documented `bodyReadTimeout` on, wedging a budget every client of that server shares
 - **[270](270-a-gate-that-cannot-fail-is-not-evidence.md)** RETRACTED, no packages — `test:wasm` resolves the LOCAL core after all; `pubspec_overrides.yaml` was one directory listing away. Filed retroactively in 271
 - **[269](269-what-test-wasm-actually-resolves.md)** RETRACTED by round 270, no packages — the claim 270 retracted, and B-23's dossier half sized at 1653 lines. Filed retroactively in 271

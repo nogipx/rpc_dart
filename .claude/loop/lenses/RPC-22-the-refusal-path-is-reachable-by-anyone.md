@@ -1,0 +1,71 @@
+---
+refines: U-08
+paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
+applies: a server-side entry point has rejection exits that run before the request is registered
+breaks: DoS.
+applied: [272]
+status: confirmed (round 272)
+---
+
+# RPC-22 — The path a peer reaches without being accepted
+
+## Shape
+
+Every guard on the accepted path — a deadline, a counter, a cap — has to be
+asked of the REFUSAL path separately. That path is reachable by anyone: no valid
+content-type, no valid method, no credentials, no stream. And it is where nobody
+looks, because "we already said no" reads like the end of the story rather than
+the start of an unaccounted piece of work.
+
+The catalog shape it refines names the opposite direction — U-08 is one limit
+applied to BOTH the body and the diagnosis of why there is no body. This is the
+same question the other way: a limit applied to the body and to nothing else.
+
+## Detector
+
+Enumerate the rejection EXITS of each server-side entry point, and for each ask
+which of the accept path's guards it inherits. In `rpc_dart_http` that is
+`_reject`'s five callers — transport closed (503), not POST (405), at the stream
+ceiling (503), wrong content-type (415), bad method path or metadata (400) —
+every one of them reached before `_pending[streamId]` exists, so before any
+counter and before any deadline.
+
+Then the second half: does the rejection still do WORK? Draining a body,
+building a page, logging, hashing. Work on a path with no admission control is
+work an unauthenticated peer commands directly.
+
+## Ask
+
+Which is cheaper for an attacker — being accepted, or being refused? If the
+answer is "refused", the refusal path is the attack surface.
+
+## Evidence
+
+**Round 272, `RpcHttpResponderTransport._reject`.** It drains the request body
+before answering — correctly, because dart:io tears down a connection whose body
+was left unread — and that drain had no deadline. `bodyReadTimeout` was applied
+around `readBody()` and nowhere else, while the method's own doc comment said
+wall-clock was bounded by it. Sixteen sockets promising a 100000-byte body and
+sending five bytes, same server, `bodyReadTimeout: 500ms`, one header different:
+
+    content-type: application/grpc  ->  16 of 16 answered 408 within 3s
+    content-type: text/plain        ->   0 of 16 answered, all 16 draining
+
+`pendingRequests` read 0 in both arms. So the server's own health check reported
+idle while sixteen handler invocations sat in a read loop with no end, and the
+attacker's cost was one socket and ~90 bytes each — cheaper than the accepted
+path, which is bounded twice over.
+
+> **A timeout that is written on the happy path is not a policy, it is a local
+> variable.** The knob was documented as the slowloris answer for this
+> transport; it covered the branch its author was looking at. Grep the knob, not
+> the intent: `bodyReadTimeout` appeared at exactly one call site.
+
+The fix cancels the subscription rather than merely timing out the future — a
+`.timeout()` on the drain returns the status while the read loop keeps running,
+which bounds the handler and nothing else. Delivering the status on expiry was
+already best-effort and is now given up: an over-budget refusal costs the peer
+its connection.
+
+Bench `../probes/P-23-the-refusal-path-has-no-deadline.md`; round
+`../rounds/272-refused-is-cheaper-than-accepted.md`.

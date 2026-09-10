@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-23](P-23-the-refusal-path-has-no-deadline.md)** valid (round 272),
+  rpc_dart_http — N slowloris sockets against a REJECTION exit, counting how many
+  the server lets go inside a window. The control is one header: `application/grpc`
+  reaches the guarded read, `text/plain` reaches the unguarded one
 - **[P-22](P-22-body-that-never-arrives.md)** valid (round 271), rpc_dart_http and
   the responder pipeline — what a body that never arrives costs, reported as TWO
   budgets: the transport's `pendingRequests` and the pipeline's `openStreams`.
