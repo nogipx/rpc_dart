@@ -7,6 +7,8 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 source: not memory, not a commit message, not the user's words.
 
 - **[250](250-the-ordering-coincidence-becomes-an-invariant.md)** FIXED, rpc_dart — the frame channel's inbound controller buffers like the other six; shipped with NO canary, on the owner's decision, and the record says so
+- **[249](249-the-mark-works-and-was-reverted.md)** DEFERRED, rpc_dart — B-22's mark built and measured lifting the wedge (1024 -> 3072 KiB, suite green), then reverted: two of the three canary arms, and the missing one guards an inflating window
+- **[248](248-the-obvious-fix-for-b-22-is-wrong.md)** DEFERRED, rpc_dart — B-22's mechanism localised to one condition, and the one-line fix it suggests refuted: it would credit the connection twice
 - **[247](247-b-11s-blocker-still-holds.md)** DEFERRED, rpc_dart — B-11's blocker re-checked and CONFIRMED: no latency helper exists anywhere in the tree, so the fourth bench attempt must build the delayed link first (~25 lines, `_ManualChannel` as the model)
 - **[246](246-no-new-timeouts-to-abandon.md)** CLEAN, rpc_dart — RPC-14 re-swept over its diff: zero new `.timeout(` sites, and the two awaits added on resource-holding paths are guarded, one of them being the lens's own adopt-the-abandoned-future fix
 - **[245](245-the-dimension-236-excluded.md)** FIXED, rpc_dart — metadata weighed zero against the unlistened queue's byte bound: 4096 frames retained 256 MiB against a 16 MiB cap, now 255 and 15.9 MiB
