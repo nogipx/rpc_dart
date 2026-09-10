@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'package:rpc_dart/rpc_dart.dart';
+import '../_internal.dart';
 
 part 'bool.dart';
 part 'list.dart';

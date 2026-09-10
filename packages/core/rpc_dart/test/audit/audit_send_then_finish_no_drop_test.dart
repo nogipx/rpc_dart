@@ -20,7 +20,8 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+// Pipeline machinery is off the public barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 /// A recording transport whose [sendMessage] is asynchronous, mirroring a real

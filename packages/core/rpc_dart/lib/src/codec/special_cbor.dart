@@ -6,7 +6,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:rpc_dart/rpc_dart.dart' show IRpcSerializable;
+import '../_internal.dart' show IRpcSerializable;
 
 /// Writes a 64-bit unsigned integer as 8 big-endian bytes.
 ///

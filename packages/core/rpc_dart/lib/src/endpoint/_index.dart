@@ -5,7 +5,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import '../_internal.dart';
 
 part 'base_endpoint.dart';
 part 'responder_pipeline.dart';

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'package:rpc_dart/rpc_dart.dart';
+import '../_internal.dart';
 
 /// Predicate that decides whether an error is retryable.
 typedef RpcRetryPredicate = bool Function(Object error);

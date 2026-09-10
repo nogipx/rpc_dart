@@ -22,7 +22,8 @@
 //  - the genuine StateError('Transport is closed') is NOT logged at error
 //    (swallowed as before).
 
-import 'package:rpc_dart/rpc_dart.dart';
+// Pipeline machinery is off the public barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 import '../utils/transport_wrappers.dart';

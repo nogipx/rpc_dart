@@ -5,7 +5,8 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+// StreamProcessor is off the public barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 /// Тесты StreamProcessor следуя принципам Unit Testing:

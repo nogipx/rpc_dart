@@ -4,7 +4,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import '../_internal.dart';
 
 /// gRPC status code for RESOURCE_EXHAUSTED (rate limit exceeded).
 const int _statusResourceExhausted = 8;

@@ -8,7 +8,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:rpc_dart/rpc_dart.dart'
+import '../_internal.dart'
     show
         IRpcCodec,
         IRpcSerializable,

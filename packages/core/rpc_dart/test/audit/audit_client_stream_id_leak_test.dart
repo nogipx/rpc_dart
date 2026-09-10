@@ -28,7 +28,8 @@
 // "Too many active streams". These tests use a cap of 1 so a single leak is
 // observable immediately.
 
-import 'package:rpc_dart/rpc_dart.dart';
+// Pipeline machinery is off the public barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 void main() {

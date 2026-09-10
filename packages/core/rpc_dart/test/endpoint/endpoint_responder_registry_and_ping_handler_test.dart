@@ -5,7 +5,8 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+// The registry and ping handler are off the public barrel; tests reach them here.
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 import '../utils/transport_wrappers.dart';

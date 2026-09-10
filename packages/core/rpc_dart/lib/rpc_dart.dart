@@ -9,9 +9,31 @@ export 'dart:typed_data';
 
 export 'logger.dart';
 
-// The public surface cannot be narrowed here yet. `lib/src/endpoint/_index.dart`
-// imports `package:rpc_dart/rpc_dart.dart` — core's own implementation depends
-// on core's public barrel — so a `hide` on this line breaks the library itself,
-// not only its consumers. Measured: 78 analyzer errors, 7 of them inside `lib/`.
-// See round 290; the internal imports have to be re-pointed first.
-export 'src/_index.dart';
+/// The public surface.
+///
+/// `src/_index.dart` re-exports nine subdirectory barrels wholesale, so without
+/// this `hide` "public" means "declared without an underscore".
+///
+/// What is hidden is machinery nothing outside this package uses — measured,
+/// not guessed. `RpcMessageParser`, `RpcMessageHeader` and
+/// `BufferedBroadcastController` are deliberately NOT hidden: all four
+/// transports build on them, which makes them the transport-authoring API.
+///
+/// Narrowing this was only possible once `lib/` stopped importing it; the
+/// implementation uses `src/_internal.dart`, and so do the tests that reach
+/// these types.
+export 'src/_index.dart'
+    hide
+        CallProcessor,
+        RpcCallerPipelineMixin,
+        RpcEndpointPingExchange,
+        RpcEndpointPingProtocol,
+        RpcEndpointPingResult,
+        RpcLongTimer,
+        RpcResponderMethodBinding,
+        RpcResponderMethodRegistry,
+        RpcResponderPingHandler,
+        RpcResponderPipelineMixin,
+        RpcResponderStreamState,
+        RpcResponderStreamStore,
+        StreamProcessor;

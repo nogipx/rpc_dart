@@ -5,7 +5,8 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+// CallProcessor is off the public barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 /// Тесты CallProcessor следуя принципам Unit Testing:

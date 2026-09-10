@@ -27,7 +27,8 @@
 @TestOn('vm')
 library;
 
-import 'package:rpc_dart/rpc_dart.dart';
+// RpcResponderStreamState is off the public barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 /// One payload byte, so the frame takes the pre-method path, plus a header

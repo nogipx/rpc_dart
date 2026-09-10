@@ -34,7 +34,8 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+// RpcLongTimer is off the public barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 /// Just past setTimeout's ceiling: the smallest duration that used to break.
