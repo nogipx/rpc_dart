@@ -729,6 +729,60 @@ def cmd_yield(root: Path, loop: Path) -> int:
     return 0
 
 
+def journal_commit_sprawl(root: Path, loop: Path, rep: "Report") -> None:
+    """Consecutive commits that touch ONLY the journal: a round committing as it goes.
+
+    One commit per round is the rule (methods/reporting.md); prose alone did not
+    hold it. Measured on this repository the day the rule was written: one lead
+    took four commits, two of them a note and a correction to that note fifteen
+    minutes apart, and an amend collapsed only the pair whose message was broken.
+
+    Only the LAST few commits are checked, because history before the rule
+    existed is not a defect anyone can act on.
+    """
+    rel = loop.relative_to(root) if loop.is_relative_to(root) else loop
+    out = git(root, "log", "-6", "--format=%h\t%s", "--name-only")
+    if out is None:
+        return
+    commits: list[tuple[str, str, list[str]]] = []
+    sha = subject = ""
+    files: list[str] = []
+    for line in out.splitlines():
+        if "\t" in line and not line.startswith(str(rel)):
+            if sha:
+                commits.append((sha, subject, files))
+            sha, subject = line.split("\t", 1)
+            files = []
+        elif line.strip():
+            files.append(line.strip())
+    if sha:
+        commits.append((sha, subject, files))
+
+    def journal_only(c: tuple[str, str, list[str]]) -> bool:
+        return bool(c[2]) and all(f.startswith(str(rel)) for f in c[2])
+
+    for newer, older in zip(commits, commits[1:]):
+        if not (journal_only(newer) and journal_only(older)):
+            continue
+        # Two journal-only commits in a row are not enough: two DIFFERENT rounds
+        # each committing once look exactly like that. What says "the same round
+        # committed twice" is the two commits editing the same record -- a note
+        # and then a correction to that note, which is what actually happened.
+        shared = (set(newer[2]) & set(older[2])) - {
+            str(rel / "rounds" / DIRS["rounds"]),
+            str(rel / "backlog" / DIRS["backlog"]),
+            str(rel / "lenses" / DIRS["lenses"]),
+            str(rel / "probes" / DIRS["probes"]),
+        }
+        if shared:
+            rep.warn(
+                f"commits {older[0]} and {newer[0]} both edit "
+                f"{sorted(shared)[0]} and touch nothing outside {rel}/ — one "
+                "round, one commit: a correction to what this round already "
+                "committed is an amend, not a second commit")
+            return
+
+
 def cmd_lint(root: Path, loop: Path) -> int:
     rep = Report()
     if not loop.is_dir():
@@ -1057,6 +1111,7 @@ def cmd_lint(root: Path, loop: Path) -> int:
     # --- the skill's own graph, and its own script
     skill_graph(rep)
     script_names(rep)
+    journal_commit_sprawl(root, loop, rep)
     return rep.dump()
 
 
