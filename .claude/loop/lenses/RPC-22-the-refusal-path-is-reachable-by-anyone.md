@@ -3,8 +3,8 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272, 274, 275]
-status: confirmed (round 275)
+applied: [272, 274, 275, 276]
+status: confirmed (round 276)
 ---
 
 # RPC-22 — The path a peer reaches without being accepted
@@ -110,3 +110,25 @@ Deferred as B-27; the owner chose the deadline and round 275 shipped it
 Bench `../probes/P-25-a-tcp-syn-builds-an-endpoint.md`; rounds
 `../rounds/274-work-before-the-peer-speaks.md` and
 `../rounds/275-a-deadline-on-saying-nothing.md`.
+
+**Round 276 found the identical defect in the websocket server**, whose
+`_refuse` drains with no deadline and is `unawaited`, so any number run at once
+with nothing counting them. Its comment already cited the HTTP/1.1 sibling — for
+the draining half, which is the half that existed when it was written.
+
+    arm       origin     shape    answered   first answer
+    accepted  allowed    upgrade  16 of 16   101 Switching Protocols
+    refused   rejected   upgrade  16 of 16   403 Forbidden
+    plain     rejected   POST      0 of 16   -                       <- before
+    plain     rejected   POST     16 of 16   closed                  <- after
+
+> **Attack the exit, not the feature.** The first attempt sent upgrade-shaped
+> requests and read 16 of 16 answered — clean. dart:io hands a
+> CONNECTION-UPGRADE request no body at all, and `_upgradeAllowed` gates EVERY
+> request, so the holding attack is a plain POST. When a rejection exit reads as
+> bounded, check that your input reached it in the shape the code takes.
+
+And note where it is reachable: only when `allowedOrigins` or `allowUpgrade` is
+configured. **Turning the security control on is what opened the path.** Round
+`../rounds/276-the-same-defect-in-the-sibling.md`, bench
+`../probes/P-26-refused-upgrade-has-no-deadline.md`.

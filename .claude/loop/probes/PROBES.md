@@ -11,6 +11,11 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-26](P-26-refused-upgrade-has-no-deadline.md)** valid (round 276),
+  rpc_dart_websocket — P-23's shape aimed at the origin gate. Three arms, and the
+  REQUEST SHAPE is the load-bearing one: dart:io hands a connection-upgrade
+  request no body, so the holding attack is a plain POST and the upgrade-shaped
+  one reads as clean
 - **[P-25](P-25-a-tcp-syn-builds-an-endpoint.md)** valid (round 274), http2 and
   websocket — what a connection that never speaks costs a server, counted on the
   library's own `endpoints` and a contract-construction counter (RSS moved by

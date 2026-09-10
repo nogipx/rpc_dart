@@ -226,24 +226,61 @@ bool _upgradeAllowed(
   return true;
 }
 
+/// How long a refused request's body is drained before the peer is cut off.
+///
+/// Not a knob: a client that has just been told 403 has no reason to be sending
+/// a slow body, so there is nothing here for an operator to tune. Generous
+/// enough that an ordinary body finishes.
+const Duration _refusalDrainBudget = Duration(seconds: 5);
+
 void _refuse(HttpRequest request) {
-  // Drained before answering: dart:io tears the connection down before the
-  // status is flushed if the request body is left unread, which turns a clean
-  // 403 into a SocketException at the peer. The HTTP/1.1 transport's _reject
-  // learned this the same way.
-  unawaited(
-    request
-        .drain<void>()
-        .then((_) {
-          request.response.statusCode = HttpStatus.forbidden;
-          request.response.headers.contentType = ContentType.text;
-          request.response.write('WebSocket upgrade refused');
-          return request.response.close();
-        })
-        .catchError((Object _) {
-          // The peer is gone, or the response was already committed. Either way
-          // there is nobody left to tell, and throwing here would land in the
-          // root zone and kill the isolate.
-        }),
-  );
+  unawaited(_drainThenRefuse(request));
+}
+
+/// Drains [request] under a deadline, then answers 403.
+///
+/// Draining is necessary: dart:io tears the connection down before the status
+/// is flushed if the request body is left unread, which turns a clean 403 into
+/// a SocketException at the peer.
+///
+/// It is also the cheapest attack on this file, and it was unbounded. `_refuse`
+/// is `unawaited`, so the accept loop takes the next connection immediately and
+/// any number of these run at once, counted by nothing. Measured, 16 sockets
+/// promising a body and sending five bytes, against a server with an
+/// `allowedOrigins` allowlist:
+///
+///     upgrade-shaped, refused : 16 of 16 answered 403 in 3s
+///     plain POST, refused     :  0 of 16, all still draining   <- before
+///
+/// The two differ because dart:io hands a CONNECTION-UPGRADE request no body at
+/// all, while `_upgradeAllowed` gates EVERY request reaching this server. So the
+/// path is reachable exactly on the servers that turned the origin check on.
+/// Same defect as `rpc_http_responder_transport`'s `_reject`, which this comment
+/// used to cite for the draining half only.
+///
+/// The subscription is CANCELLED on expiry: a `.timeout()` on the drain future
+/// would answer while the read loop kept running.
+Future<void> _drainThenRefuse(HttpRequest request) async {
+  // Object? rather than the element type, so this file needs no dart:typed_data
+  // import; StreamSubscription is covariant.
+  StreamSubscription<Object?>? sub;
+  try {
+    sub = request.listen(null);
+    await sub.asFuture<void>().timeout(_refusalDrainBudget);
+  } catch (_) {
+    // The peer is gone, or it spent its budget. The status below is still
+    // worth trying.
+  } finally {
+    await sub?.cancel();
+  }
+  try {
+    request.response.statusCode = HttpStatus.forbidden;
+    request.response.headers.contentType = ContentType.text;
+    request.response.write('WebSocket upgrade refused');
+    await request.response.close();
+  } catch (_) {
+    // The peer is gone, or the response was already committed. Either way there
+    // is nobody left to tell, and throwing here would land in the root zone and
+    // kill the isolate.
+  }
 }
