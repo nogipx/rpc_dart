@@ -26,6 +26,16 @@ their own numbers returned nothing in the loop: `CONTINUATION`, `756 MiB`,
 - **[RPC-20](RPC-20-the-window-before-the-first-listener.md)** confirmed (round 240) — a broadcast controller discards what the peer sent before the first `listen()`, and it fails OPEN because the loss reads as "the peer does not support this". 200/200 chunks against an 8 KiB window, 8/200 after. Round 240 found it one hop up, where a wrapper DRAINS a buffered controller into an unlistened one: 0 frames against 1
 - **[RPC-21](RPC-21-drive-the-lifecycle-twice.md)** confirmed (round 241) — call every lifecycle API a second time, and once after a failure: four defects in four rounds, none visible to a green suite. Round 241 added a fifth by driving reconnect twice and counting the SERVER's connections — 1.3% orphan rate, B-25. The lens C-06 had been asking for; refines U-15
 
+## The refactor mandate — derived after round 292
+
+The set above is entirely defect-shaped: every lens asks "what is broken". The
+owner's refactor mandate asks a different question, and without a lens for it a
+round reaches for the worst file it can see instead of auditing the whole
+surface. These two are that lens.
+
+- **[RPC-23](RPC-23-the-narrative-beside-the-code.md)** confirmed (293) — a doc comment that carries the SEARCH that produced the code, not what a caller must pass. Detector is `///` lines against total, then three questions per comment; the bar is "if this were deleted, what would the next caller get wrong". `RpcSecurityPolicy` went 236 -> 151 doc lines with nothing lost, because the tables live in rounds 205/213-215/245. Baseline for core: **4430 of 24049 lines, 18.4%**
+- **[RPC-24](RPC-24-public-by-omission.md)** confirmed (291) — the surface is not chosen: a barrel re-exports barrels, so a type is public because nobody wrote an underscore. Detector counts the surface, then measures WHO USES EACH candidate outside `lib/`, then checks whether `lib/` imports its own public barrel — that last is a prerequisite, and round 290 found it by breaking the build with 78 errors; refines U-05
+
 ## Productive lately
 
 - **[RPC-22](RPC-22-the-refusal-path-is-reachable-by-anyone.md)** confirmed (272) — every guard on the accepted path has to be asked of the REFUSAL path separately, because that is the path anyone reaches without a valid content-type, method or credential. `_reject` drained the body with no deadline and before any counter existed: 16 of 16 slowloris sockets answered on the accepted path, 0 of 16 on the refused one, `pendingRequests` reading 0 in both; refines U-08, in the other direction from the catalog's wording

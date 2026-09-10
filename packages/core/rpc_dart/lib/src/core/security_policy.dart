@@ -26,84 +26,25 @@ final class RpcSecurityPolicy {
   /// Max number of messages emitted from a single incoming chunk.
   final int maxMessagesPerChunk;
 
-  /// Max number of simultaneously active streams tracked by a transport.
+  /// Max simultaneously active streams, per connection.
   ///
-  /// LIMITATION, measured: this bounds live STREAM STATE, not concurrent
-  /// HANDLER EXECUTION. The two coincide only while handlers cooperate.
-  ///
-  /// A handler that ignores its cancellation token cannot be preempted — Dart
-  /// has no way to interrupt a running `async` function — so when a stream is
-  /// reclaimed after its deadline (see `_reclaimGrace` in the responder
-  /// pipeline, 2s) the bookkeeping is freed and the admission slot returns to
-  /// the pool while the handler is still running. A peer that paces its calls
-  /// past that grace therefore accumulates handlers without any bound.
-  ///
-  /// Measured against a server configured `maxActiveStreams: 4`, one call every
-  /// 250ms with a 40ms deadline against a handler that ignores cancellation:
-  ///
-  ///   t= 2.0s  running=4   peak=4   activeResponders=4
-  ///   t= 6.2s  running=12  peak=12  activeResponders=4
-  ///   t=12.3s  running=24  peak=24  activeResponders=4
-  ///   t=20.2s  running=37  peak=37  activeResponders=3
-  ///
-  /// 37 concurrent handlers against a ceiling of 4, growing linearly for as
-  /// long as the peer keeps knocking — and INVISIBLE: `activeResponders` and
-  /// `activeStreams` both read at or below the limit throughout, because by
-  /// then the streams really are gone. Only the work remains.
-  ///
-  /// Saturating the connection does NOT show this: with the table permanently
-  /// full every later call is rejected before dispatch, and 43,908 calls in 14s
-  /// produced exactly 8 handlers against `maxActiveStreams: 8`. Pacing is what
-  /// defeats it, so a load test will report the ceiling holding.
-  ///
-  /// Use [maxConcurrentHandlers] to bound the work rather than the state. This
-  /// field stays a bound on stream STATE, because the two want different
-  /// numbers: stream state is cheap and short-lived, a running handler is
-  /// neither.
+  /// Bounds live stream STATE, not running handlers. A handler that ignores
+  /// cancellation outlives the stream that carried it, so a peer pacing calls
+  /// past the reclaim grace accumulates handlers this does not see — 37 against
+  /// a ceiling of 4, while the counters read 4. Use [maxConcurrentHandlers] to
+  /// bound the work.
   final int maxActiveStreams;
 
-  /// Max handlers allowed to be RUNNING at once, or null for no limit.
+  /// Max handlers RUNNING at once, per connection; null for no limit.
   ///
-  /// [maxActiveStreams] bounds live stream state, and a handler that ignores
-  /// its cancellation token outlives that state: the stream is reclaimed after
-  /// its deadline, the admission slot returns to the pool, and the work carries
-  /// on. A peer pacing its calls past the reclaim grace therefore accumulates
-  /// handlers without any bound. Measured against `maxActiveStreams: 4`, one
-  /// call every 250ms with a 40ms deadline into a handler that ignores
-  /// cancellation:
+  /// The bound [maxActiveStreams] cannot give: a slot is charged at dispatch
+  /// and released when the handler finishes, not when its stream is torn down.
+  /// At the ceiling a call is refused RESOURCE_EXHAUSTED, which is retryable.
   ///
-  ///     unset : 37 concurrent handlers after 20s, still growing linearly
-  ///     4     :  4
-  ///
-  /// and INVISIBLE while it happens: `activeResponders` read 3 and
-  /// `activeStreams` 0 at the moment 37 handlers were running, because by then
-  /// the streams really are gone and only the work remains.
-  ///
-  /// A slot is charged at DISPATCH — the moment a handler is about to be
-  /// created — and released when that handler finishes, not when the stream is
-  /// torn down, so a call that outlives its deadline does not hand its slot
-  /// back to a handler that is still running. At the ceiling a call is refused
-  /// with RESOURCE_EXHAUSTED, which is retryable, so a legitimate client backs
-  /// off.
-  ///
-  /// Dispatch is the only correct charge point, and both neighbours were
-  /// measured to be wrong. Charging on handler ENTRY is one `await` too late: a
-  /// simultaneous burst is admitted before anything is running and the ceiling
-  /// never sees it (30 concurrent HTTP/2 calls got in against a limit of 3).
-  /// Charging at stream ADMISSION is too early and is a denial of service: a
-  /// stream is half-open from its opening metadata frame until dispatch, so 8
-  /// metadata-only frames — no payload, no handler — refused every call for the
-  /// 60s [halfOpenStreamTimeout]. A stream that never reaches dispatch, or that
-  /// bails after it, returns its slot at teardown.
-  ///
-  /// Default null, because turning it on converts "the server runs slowly" into
-  /// "the server rejects calls" and the right number is a capacity decision. A
+  /// Null by default, because turning it on converts "the server runs slowly"
+  /// into "the server rejects calls" and the number is a capacity decision. A
   /// streaming call holds its slot for the whole call, so size this above the
-  /// number of long-lived streams the service expects, not just its unary
-  /// concurrency.
-  ///
-  /// Per CONNECTION, like [maxActiveStreams] — a responder endpoint is created
-  /// per connection.
+  /// long-lived streams you expect, not just unary concurrency.
   final int? maxConcurrentHandlers;
 
   // REMOVED, deliberately: maxWebSocketMessageBytes, maxChunkedMessageBytes and
@@ -137,57 +78,31 @@ final class RpcSecurityPolicy {
   /// Max length of `:path` / methodPath strings.
   final int maxMethodPathLength;
 
-  /// If true, transports close the whole connection on a protocol violation.
+  /// Close the whole connection on a protocol violation, rather than the call.
   ///
-  /// Defaults to FALSE: the violation fails the CALL it arrived on and the
-  /// connection carries on. Measured against a hostile peer, one metadata frame
-  /// carrying 3000 headers -- or a single 32 KiB header value, both well inside
-  /// [maxMetadataBytes] and so past every size check -- was enough to terminate
-  /// the connection while this defaulted to true.
+  /// False by default: one malformed metadata frame — 3000 headers, or a single
+  /// 32 KiB value, both inside [maxMetadataBytes] and so past every size check
+  /// — used to terminate the connection, which is too blunt for the common
+  /// case. Set true where the peer is not one you must keep talking to.
   ///
-  /// That is too blunt a lever for the common case and matches what the framing
-  /// layer already decided: [RpcFrameMultiplexedChannel] fails the call for a
-  /// peer it must keep talking to and closes for one it need not. Setting this
-  /// to true restores the old behaviour for a deployment that wants it.
-  ///
-  /// Honoured by the channel transports (websocket, isolate, wasm) and by the
-  /// HTTP/2 responder. NOT by `rpc_dart_http`: HTTP/1.1 there is
-  /// request-scoped, so there is no connection outliving the refusal to end.
+  /// Honoured by the channel transports and the HTTP/2 responder. NOT by
+  /// `rpc_dart_http`, where HTTP/1.1 is request-scoped and there is no
+  /// connection to outlive the refusal.
   final bool closeOnProtocolError;
 
   /// How long a peer-opened stream may sit half-open before it is reclaimed.
   ///
-  /// A stream is half-open from the moment its opening metadata frame arrives
-  /// until a handler is dispatched, which needs a request message (or, for the
-  /// two streaming-request shapes, a half-close). A peer that sends only the
-  /// opening frame therefore parks responder state that nothing ever reclaimed:
-  /// `grpc-timeout` is the only other thing that bounds a stream's life, and it
-  /// is supplied by the peer, so an attacker simply omits it.
+  /// Half-open means "opening frame arrived, handler not yet dispatched". The
+  /// only other bound on that window is the peer's own `grpc-timeout`, which an
+  /// attacker omits: eight metadata-only frames pinned `openStreams: 8`
+  /// indefinitely and refused every later call on that connection. Per
+  /// connection, at roughly 33 KiB per parked stream. Null disables it.
   ///
-  /// Measured against a server configured with `maxActiveStreams: 8`, eight
-  /// metadata-only frames left `openStreams: 8` indefinitely and every
-  /// subsequent call ON THAT CONNECTION failed with RESOURCE_EXHAUSTED.
-  ///
-  /// Scope, stated precisely because an earlier version of this comment
-  /// overstated it: a responder endpoint is created per connection, so
-  /// [maxActiveStreams] and the stream table are per connection too. Wedging
-  /// one connection does not touch another -- verified with two connections,
-  /// where the untouched one kept serving. The cost that does cross
-  /// connections is memory: 2000 parked streams held 68.2 MB, about 33 KiB
-  /// each, so a peer can pin roughly [maxActiveStreams] x 33 KiB per
-  /// connection it opens.
-  ///
-  /// The window only covers dispatch, so it never applies to a running handler:
-  /// a long call, a slow client-stream, or an idle server-push subscription are
-  /// all unaffected once their handler has started. Set to null to disable.
-  ///
-  /// LIMITATION: because it covers dispatch only, one request frame buys a peer
-  /// the same parked stream at the cost of ~30 extra bytes -- the handler is
-  /// then dispatched and waits forever on a request stream that never
-  /// half-closes. Measured, that restores `openStreams: 8` exactly as before.
-  /// Bounding that needs an idle-stream timeout, which cannot be safe by
-  /// default: a stream idle in BOTH directions is also what a legitimate
-  /// rare-event subscription looks like.
+  /// LIMITATION: it covers dispatch only. One request frame — ~30 extra bytes —
+  /// gets the handler dispatched and then waiting forever on a request stream
+  /// that never half-closes, which parks the same state. Bounding that needs an
+  /// idle-stream timeout, and one cannot be safe by default: a stream idle in
+  /// both directions is also a legitimate rare-event subscription.
   final Duration? halfOpenStreamTimeout;
 
   /// Per-stream flow-control window in bytes, or null to disable.

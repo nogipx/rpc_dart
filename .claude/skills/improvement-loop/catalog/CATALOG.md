@@ -41,6 +41,8 @@ at the least-explored surface first.
 - **[U-19](U-19-parity-matrix.md)** — the parity matrix: holes live in combinations
 - **[U-20](U-20-leak-accounting-to-baseline.md)** — leak accounting against a baseline; wait for the rise first
 - **[U-21](U-21-remeasure-own-deferrals.md)** — re-measure your own deferrals and "checked" marks
+- **[U-22](U-22-narrative-beside-the-code.md)** *(refactor)* — a doc comment carrying the SEARCH that produced the code rather than what to pass; a comment cannot be aged, so it must not carry what ages
+- **[U-23](U-23-public-by-omission.md)** *(refactor)* — the public surface is whatever nobody underscored; check first whether the implementation imports its own public barrel, because nothing can be narrowed until that stops
 
 ## async-io — two sides, a channel, limits, waits
 

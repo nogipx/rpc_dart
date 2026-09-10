@@ -26,6 +26,12 @@ script looks in both places, the project's copy first.
 - **[server](server/PACK.md)** — a long-lived process with connections, storage
   and restarts. A starter pack: damage classes only, no shape has been paid for
   yet.
+- **[refactor](refactor/PACK.md)** — the target is the SHAPE of the code, not a
+  defect in it: doc comments, public surface, abstractions. 2 shapes. Enable it
+  for a refactor mandate — it is the only pack whose rounds take work the
+  severity bar would refuse, and the only one where a round records
+  `bench: none` legitimately, because its two numbers (doc lines against total,
+  public types against users) need no probe.
 - **[crdt](crdt/PACK.md)** — several replicas, coordination-free merge,
   offline-first. A starter pack.
 - **[flutter-ui](flutter-ui/PACK.md)** — an app with screens, navigation and

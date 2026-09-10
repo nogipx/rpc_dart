@@ -11,7 +11,7 @@ unattended: yes
 The loop runs with nobody at the keyboard, so rule zero applies in full: no
 command that could raise a permission prompt.
 
-packs: core, dart, async-io, server
+packs: core, dart, async-io, server, refactor
 
 `crdt` is not enabled — there are no replicas and no coordination-free merge in
 this project. `flutter-ui` is not enabled — the only Flutter package is a plugin
