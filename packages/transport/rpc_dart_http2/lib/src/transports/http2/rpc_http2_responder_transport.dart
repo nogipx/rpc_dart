@@ -32,10 +32,9 @@ class RpcHttp2ResponderTransport
         sizeOf: (m) => m.bufferedBytes,
       );
 
-  /// Per-stream dedicated controllers for [getMessagesForStream]. See the
-  /// caller transport for the rationale; the broadcast above is still fed so
-  /// the responder pipeline can dispatch new incoming streams.
-  final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
+  /// Per-stream delivery for [getMessagesForStream]. The broadcast above is
+  /// still fed so the responder pipeline can dispatch new incoming streams.
+  final RpcStreamRouter _streams = RpcStreamRouter();
 
   /// Next outgoing stream id. The server side of HTTP/2 uses EVEN ids.
   int _nextStreamId = 2;
@@ -119,8 +118,7 @@ class RpcHttp2ResponderTransport
   /// larger than the window would refuse itself.
   void _fcOnDelivered(int streamId, int bytes) {
     if (bytes <= 0) return;
-    if (!_fcDeferred.contains(streamId) &&
-        !_streamControllers.containsKey(streamId)) {
+    if (!_fcDeferred.contains(streamId) && !_streams.contains(streamId)) {
       return;
     }
     final now = (_fcOutstanding[streamId] ?? 0) + bytes;
@@ -766,15 +764,8 @@ class RpcHttp2ResponderTransport
   Stream<RpcTransportMessage> get incomingMessages => _messageController.stream;
 
   @override
-  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
-    final existing = _streamControllers[streamId];
-    if (existing != null) return _fcMetered(streamId, existing.stream);
-    final ctl = StreamController<RpcTransportMessage>(
-      onCancel: () => _streamControllers.remove(streamId),
-    );
-    _streamControllers[streamId] = ctl;
-    return _fcMetered(streamId, ctl.stream);
-  }
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
+      _fcMetered(streamId, _streams[streamId]);
 
   /// The OTHER half of the request-direction bound. Client-stream requests are
   /// fed by `_pipelineFedRequestStream`, which reports consumption through
@@ -793,27 +784,20 @@ class RpcHttp2ResponderTransport
     return message;
   });
 
-  /// Routes an incoming message to the broadcast and to the stream's dedicated
-  /// controller, closing the latter on end-of-stream.
+  /// Routes an incoming message to the broadcast and to its own stream.
   void _emit(RpcTransportMessage message) {
     // Charge before delivering: the pipeline may consume synchronously and
     // report the credit back, and crediting a charge that has not happened yet
     // would leave the counter permanently negative-then-clamped at zero.
     _fcOnDelivered(message.streamId, message.payload?.length ?? 0);
     if (!_messageController.isClosed) _messageController.add(message);
-    final ctl = _streamControllers[message.streamId];
-    if (ctl != null && !ctl.isClosed) ctl.add(message);
-    if (message.isEndOfStream) {
-      final ended = _streamControllers.remove(message.streamId);
-      if (ended != null && !ended.isClosed) unawaited(ended.close());
-    }
+    _streams.add(message);
   }
 
-  /// Routes a stream-scoped error: raw on the dedicated controller, enveloped
-  /// on the broadcast.
+  /// Routes a stream-scoped error: raw on its own stream, enveloped on the
+  /// broadcast.
   void _emitStreamError(int streamId, Object error, [StackTrace? stackTrace]) {
-    final ctl = _streamControllers[streamId];
-    if (ctl != null && !ctl.isClosed) ctl.addError(error, stackTrace);
+    _streams.addError(streamId, error, stackTrace);
     if (!_messageController.isClosed) {
       _messageController.addError(
         RpcHttp2StreamError(streamId, error, stackTrace),
@@ -921,10 +905,7 @@ class RpcHttp2ResponderTransport
     _fcDeferred.clear();
     _fcOutstanding.clear();
 
-    for (final ctl in _streamControllers.values) {
-      if (!ctl.isClosed) unawaited(ctl.close());
-    }
-    _streamControllers.clear();
+    _streams.closeAll();
 
     await _connection.finish();
 

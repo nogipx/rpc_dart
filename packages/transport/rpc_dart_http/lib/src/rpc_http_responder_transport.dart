@@ -67,9 +67,9 @@ class RpcHttpResponderTransport
         sizeOf: (m) => m.bufferedBytes,
       );
 
-  /// Per-stream dedicated controllers for [getMessagesForStream]; the broadcast
-  /// above is still fed for the responder pipeline's new-stream dispatch.
-  final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
+  /// Per-stream delivery for [getMessagesForStream]; the broadcast above is
+  /// still fed for the responder pipeline's new-stream dispatch.
+  final RpcStreamRouter _streams = RpcStreamRouter();
   final Map<int, _PendingResponse> _pending = {};
   final RpcStreamIdManager _idManager = RpcStreamIdManager(isClient: false);
   bool _isClosed = false;
@@ -480,26 +480,13 @@ class RpcHttpResponderTransport
   Stream<RpcTransportMessage> get incomingMessages => _incoming.stream;
 
   @override
-  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
-    final existing = _streamControllers[streamId];
-    if (existing != null) return existing.stream;
-    final ctl = StreamController<RpcTransportMessage>(
-      onCancel: () => _streamControllers.remove(streamId),
-    );
-    _streamControllers[streamId] = ctl;
-    return ctl.stream;
-  }
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
+      _streams[streamId];
 
-  /// Routes a message to the broadcast and the stream's dedicated controller,
-  /// closing the latter on end-of-stream.
+  /// Routes a message to the broadcast and to its own stream.
   void _emit(RpcTransportMessage message) {
     if (!_incoming.isClosed) _incoming.add(message);
-    final ctl = _streamControllers[message.streamId];
-    if (ctl != null && !ctl.isClosed) ctl.add(message);
-    if (message.isEndOfStream) {
-      final ended = _streamControllers.remove(message.streamId);
-      if (ended != null && !ended.isClosed) unawaited(ended.close());
-    }
+    _streams.add(message);
   }
 
   @override
@@ -539,10 +526,7 @@ class RpcHttpResponderTransport
     }
     _pending.clear();
 
-    for (final ctl in _streamControllers.values) {
-      if (!ctl.isClosed) unawaited(ctl.close());
-    }
-    _streamControllers.clear();
+    _streams.closeAll();
 
     if (!_incoming.isClosed) {
       await _incoming.close();

@@ -71,10 +71,10 @@ class RpcHttp2CallerTransport
   /// Per-stream dedicated controllers for [getMessagesForStream].
   ///
   /// HTTP/2 already demultiplexes by stream natively, so routing each message
-  /// straight to its own controller avoids re-filtering the shared broadcast
-  /// once per active stream per message. The broadcast is still fed for global
+  /// straight to its own stream avoids re-filtering the shared broadcast once
+  /// per active stream per message. The broadcast is still fed for global
   /// consumers, and keeps the [RpcHttp2StreamError] envelope semantics.
-  final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
+  final RpcStreamRouter _streams = RpcStreamRouter();
 
   /// Next outgoing stream id. The client side of HTTP/2 uses ODD ids.
   int _nextStreamId = 1;
@@ -902,7 +902,7 @@ class RpcHttp2CallerTransport
     _halfClosedLocal.remove(streamId);
     _reservedStreams.remove(streamId);
     _statusReceived.remove(streamId);
-    final controller = _streamControllers.remove(streamId);
+    final controller = _streams.remove(streamId);
     if (controller != null && !controller.isClosed) {
       unawaited(controller.close());
     }
@@ -1353,16 +1353,16 @@ class RpcHttp2CallerTransport
   @override
   Stream<RpcTransportMessage> get incomingMessages => _messageController.stream;
 
+  /// Always METERED, on the first call and on a repeat.
+  ///
+  /// Wrapping only the freshly-created controller and handing an existing one
+  /// back raw is the shape to avoid: the second consumer of a stream then never
+  /// discharges its budget, so [_fcOutstanding] only climbs and the call is
+  /// refused at the window for bytes it did in fact consume. The responder
+  /// sibling meters both paths.
   @override
-  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
-    final existing = _streamControllers[streamId];
-    if (existing != null) return existing.stream;
-    final ctl = StreamController<RpcTransportMessage>(
-      onCancel: () => _streamControllers.remove(streamId),
-    );
-    _streamControllers[streamId] = ctl;
-    return _fcMetered(streamId, ctl.stream);
-  }
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
+      _fcMetered(streamId, _streams[streamId]);
 
   /// How much un-consumed response payload one call may hold.
   int get _fcWindow =>
@@ -1413,7 +1413,7 @@ class RpcHttp2CallerTransport
   }
 
   void _fcOnDelivered(int streamId, int bytes) {
-    if (bytes <= 0 || !_streamControllers.containsKey(streamId)) return;
+    if (bytes <= 0 || !_streams.contains(streamId)) return;
     final now = (_fcOutstanding[streamId] ?? 0) + bytes;
     _fcOutstanding[streamId] = now;
     if (now <= _fcWindow || !_fcRefused.add(streamId)) return;
@@ -1447,21 +1447,15 @@ class RpcHttp2CallerTransport
     _fcRefused.remove(streamId);
   }
 
-  /// Routes an incoming message to the shared broadcast and to the stream's
-  /// dedicated controller, closing the latter on end-of-stream.
+  /// Routes an incoming message to the shared broadcast and to its own stream.
   void _emit(RpcTransportMessage message) {
     // Charge before delivering: a consumer that takes it synchronously
     // discharges immediately afterwards, and crediting a charge that has not
     // happened yet would clamp the counter at zero.
     _fcOnDelivered(message.streamId, message.payload?.length ?? 0);
     if (!_messageController.isClosed) _messageController.add(message);
-    final ctl = _streamControllers[message.streamId];
-    if (ctl != null && !ctl.isClosed) ctl.add(message);
-    if (message.isEndOfStream) {
-      final ended = _streamControllers.remove(message.streamId);
-      if (ended != null && !ended.isClosed) unawaited(ended.close());
-      _fcForget(message.streamId);
-    }
+    _streams.add(message);
+    if (message.isEndOfStream) _fcForget(message.streamId);
   }
 
   /// Routes a stream-scoped error: raw on the dedicated controller, enveloped
@@ -1476,8 +1470,7 @@ class RpcHttp2CallerTransport
       );
       return;
     }
-    final ctl = _streamControllers[streamId];
-    if (ctl != null && !ctl.isClosed) ctl.addError(error, stackTrace);
+    _streams.addError(streamId, error, stackTrace);
     if (!_messageController.isClosed) {
       _messageController.addError(
         RpcHttp2StreamError(streamId, error, stackTrace),
@@ -1823,10 +1816,7 @@ class RpcHttp2CallerTransport
     _reservedStreams.clear();
     _statusReceived.clear();
 
-    for (final ctl in _streamControllers.values) {
-      if (!ctl.isClosed) unawaited(ctl.close());
-    }
-    _streamControllers.clear();
+    _streams.closeAll();
 
     if (!_messageController.isClosed) {
       try {

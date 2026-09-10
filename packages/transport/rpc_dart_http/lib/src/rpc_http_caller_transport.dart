@@ -138,11 +138,10 @@ class RpcHttpCallerTransport
         sizeOf: (m) => m.bufferedBytes,
       );
 
-  /// Per-stream dedicated controllers for [getMessagesForStream], so each call
-  /// is fed directly instead of every caller re-filtering the shared broadcast
-  /// (O(active-streams) per message). Also keeps a stream-scoped error from
-  /// leaking onto other concurrent calls' subscribers.
-  final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
+  /// Per-stream delivery for [getMessagesForStream], so each call is fed
+  /// directly instead of re-filtering the shared broadcast, and a stream-scoped
+  /// error cannot leak onto other concurrent calls' subscribers.
+  final RpcStreamRouter _streams = RpcStreamRouter();
   bool _isClosed = false;
   final LogScope? _logger;
 
@@ -489,34 +488,19 @@ class RpcHttpCallerTransport
   Stream<RpcTransportMessage> get incomingMessages => _incoming.stream;
 
   @override
-  Stream<RpcTransportMessage> getMessagesForStream(int streamId) {
-    final existing = _streamControllers[streamId];
-    if (existing != null) return existing.stream;
-    final ctl = StreamController<RpcTransportMessage>(
-      onCancel: () => _streamControllers.remove(streamId),
-    );
-    _streamControllers[streamId] = ctl;
-    return ctl.stream;
-  }
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
+      _streams[streamId];
 
-  /// Routes a message to the shared broadcast and the stream's dedicated
-  /// controller, closing the latter on end-of-stream.
+  /// Routes a message to the shared broadcast and to its own stream.
   void _emit(RpcTransportMessage message) {
     if (!_incoming.isClosed) _incoming.add(message);
-    final ctl = _streamControllers[message.streamId];
-    if (ctl != null && !ctl.isClosed) ctl.add(message);
-    if (message.isEndOfStream) {
-      final ended = _streamControllers.remove(message.streamId);
-      if (ended != null && !ended.isClosed) unawaited(ended.close());
-    }
+    _streams.add(message);
   }
 
-  /// Routes a stream-scoped error to the dedicated controller (so it does not
-  /// leak onto other calls) while preserving the broadcast for global
-  /// consumers.
+  /// Routes a stream-scoped error to its own stream (so it does not leak onto
+  /// other calls) while preserving the broadcast for global consumers.
   void _emitError(int streamId, Object error, StackTrace stackTrace) {
-    final ctl = _streamControllers[streamId];
-    if (ctl != null && !ctl.isClosed) ctl.addError(error, stackTrace);
+    _streams.addError(streamId, error, stackTrace);
     if (!_incoming.isClosed) _incoming.addError(error, stackTrace);
   }
 
@@ -537,7 +521,7 @@ class RpcHttpCallerTransport
         // all three must return to a baseline once calls finish.
         'pendingCalls': _pending.length,
         'inFlight': _inFlight.length,
-        'streamControllers': _streamControllers.length,
+        'streamControllers': _streams.length,
       },
     );
   }
@@ -557,15 +541,11 @@ class RpcHttpCallerTransport
     _isClosed = true;
     _pending.clear();
     _httpClient.close();
-    for (final entry in _streamControllers.entries) {
-      final ctl = entry.value;
-      if (ctl.isClosed) continue;
-      if (_inFlight.contains(entry.key)) {
-        ctl.addError(_closedDuringCall());
-      }
-      unawaited(ctl.close());
-    }
-    _streamControllers.clear();
+    // Only the calls actually in flight are told why they ended; the rest just
+    // close. See [_closedDuringCall].
+    _streams.closeAll(
+      error: (id) => _inFlight.contains(id) ? _closedDuringCall() : null,
+    );
     if (!_incoming.isClosed) {
       if (_inFlight.isNotEmpty) {
         _incoming.addError(_closedDuringCall());

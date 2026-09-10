@@ -18,4 +18,5 @@ export 'parser.dart';
 export 'protocol.dart';
 export 'rpc_headers.dart';
 export 'security_policy.dart';
+export 'stream_router.dart';
 export 'transport.dart';

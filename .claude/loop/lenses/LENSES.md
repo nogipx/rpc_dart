@@ -31,10 +31,13 @@ their own numbers returned nothing in the loop: `CONTINUATION`, `756 MiB`,
 The set above is entirely defect-shaped: every lens asks "what is broken". The
 owner's refactor mandate asks a different question, and without a lens for it a
 round reaches for the worst file it can see instead of auditing the whole
-surface. These two are that lens.
+surface. These three are that lens — one per clause of the mandate: the doc
+comments (RPC-23), the boundary and the API (RPC-24), the code and its
+abstractions (RPC-25).
 
 - **[RPC-23](RPC-23-the-narrative-beside-the-code.md)** confirmed (293) — a doc comment that carries the SEARCH that produced the code, not what a caller must pass. Detector is `///` lines against total, then three questions per comment; the bar is "if this were deleted, what would the next caller get wrong". `RpcSecurityPolicy` went 236 -> 151 doc lines with nothing lost, because the tables live in rounds 205/213-215/245. Baseline for core: **4430 of 24049 lines, 18.4%**
 - **[RPC-24](RPC-24-public-by-omission.md)** confirmed (291) — the surface is not chosen: a barrel re-exports barrels, so a type is public because nobody wrote an underscore. Detector counts the surface, then measures WHO USES EACH candidate outside `lib/`, then checks whether `lib/` imports its own public barrel — that last is a prerequisite, and round 290 found it by breaking the build with 78 errors; refines U-05
+- **[RPC-25](RPC-25-the-same-abstraction-four-times.md)** confirmed (308) — sibling implementations of one interface each hand-roll the same helper, and the copies DRIFT where nothing can see it: four packages, one of them on screen. The defect is not the duplication, it is the divergence. Detector finds a field every sibling declares, then reads the METHODS around it side by side. Four per-stream routers, 121 lines -> 57, and the diff exposed a real one: the http2 caller returned an existing stream unmetered where its own responder metered both paths, so a second consumer never discharged its flow-control budget; refines U-24
 
 ## Productive lately
 
