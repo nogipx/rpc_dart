@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 247)
 round: 241
 commit: aaa5806d
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
