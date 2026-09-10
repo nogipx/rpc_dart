@@ -93,12 +93,23 @@ name must appear in the round record.
   in `async*`, ints above 2^53, clock resolution, `Random.secure`, VM-only
   codecs.
 - `melos run test:wasm` — the Flutter package outside the workspace; covers the
-  Dart bridge only. **And it tests the PUBLISHED core, not this tree.**
-  `rpc_dart_wasm` is not a workspace member and declares
-  `rpc_dart: '>=5.0.0 <6.0.0'` with no `dependency_overrides`, so pub resolves
-  rpc_dart from pub.dev. A core change that breaks the wasm bridge passes this
-  command green until the core is released. Verified round 269 against
-  `packages/transport/rpc_dart_wasm/pubspec.yaml:32`.
+  Dart bridge only. **It resolves the LOCAL core**, via
+  `packages/transport/rpc_dart_wasm/pubspec_overrides.yaml`, which round 122
+  added for exactly this reason — the package is not a workspace member, so
+  without that file pub would take rpc_dart from pub.dev and the suite could be
+  green while the core about to ship breaks it.
+
+  The blind spot is now the INVERSE, and it is smaller: wasm is never tested
+  against an older published 5.x, which its `>=5.0.0 <6.0.0` constraint allows.
+  `publish:dry` says so as a hint, not a warning, so the release flow's "0
+  warnings" still holds. To test that combination, remove the overrides file for
+  one run — do not delete it, or the gate goes blind again.
+
+  **A gate that cannot fail is not evidence: check what it RESOLVES.** Round 269
+  claimed the opposite of all this after reading `pubspec.yaml` alone and never
+  looking for the overrides file. The observable that settles it is pub's own
+  resolution line, `rpc_dart 5.0.1 from path ../../core/rpc_dart (overridden
+  in ./pubspec_overrides.yaml)`.
 - `melos run analyze:native` — the plugin's Swift and Kotlin against the real
   frameworks. With the toolchains missing it exits 2, so "nothing was checked"
   can never read as success.
