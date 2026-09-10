@@ -336,6 +336,33 @@ logger                  discharged by round 276's fix; now delete
 rpc_dart_log            delete; covered by the package README
 ```
 
+**Executed so far:** `grpc_compat` pointer (271), `transport_architecture` merged
+into `docs/architecture.md` (278, commit `585f927f`), `logger` discharged by the
+`diagnostics.md` repair (276, `cb3d133f`), `rpc_dart_log` retired (279).
+
+Round 279 also shows what a retirement costs, since L-09 is not optional: two
+inbound references existed — `MEMORY.md`'s index line and a sentence in
+`logger.md` — and both were repointed at the package README in the same pass.
+The note itself is left as a pointer rather than removed, because deleting the
+file would break those links rather than redirect them.
+
+`core_types` and `core_design` retired the same way in round 280, with their
+four inbound references repointed: `MEMORY.md` twice, `response_metadata_is_
+dropped.md` and `grpc_compat.md`.
+
+`logger` retired in round 281, its one inbound reference repointed. Its note
+records what the reading bought — the `RpcLogger` defect — and what was
+deliberately NOT carried over: the claim that the logger API is frozen as of
+3.2.1 is a decision, and a decision belongs in the repository if it still holds.
+
+**All six are now discharged.** What remains of B-23 is not the six architecture
+notes at all: it is the per-subsystem dossiers, which split into negatives and
+lens evidence the way the first six did in the curate pass.
+
+**Still owed from this half:** file the docs gap `core_types` exposed. That gap narrowed in
+round 278 — `IRpcMultiplexedChannel` is now in `architecture.md` — leaving
+`RpcPeerEndpoint`, the bidirectional endpoint, documented nowhere a user reads.
+
 Prediction was five duplicates and one addition. Actual: one addition, one
 partial, four deletions — and along the way one shipped doc, one repaired doc,
 and one documentation defect that had nothing to do with private memory.
