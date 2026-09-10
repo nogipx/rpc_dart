@@ -5,8 +5,6 @@
 
 library;
 
-export 'dart:typed_data';
-
 export 'logger.dart';
 
 /// The public surface.
