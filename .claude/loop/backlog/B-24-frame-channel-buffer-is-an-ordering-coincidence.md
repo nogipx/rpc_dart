@@ -45,7 +45,16 @@ No await between them, so no byte can land in the gap.
 
 ## Owner decision
 
-None yet.
+**Ship the buffered controller anyway** (round 247). Make `_incomingCtl` a
+`BufferedBroadcastController` with the transport's own `sizeOf`, like every
+other inbound controller in the library, accepting that it lands on a hot path
+with no test that would go red without it.
+
+The canary rule is not waived, it is answered honestly in the record: there is
+no witness because the loss is unreachable today, and the change buys the
+invariant instead of the ordering coincidence. The round that carries this out
+says so in `## Canary` rather than inventing one, and must still show the other
+tests green under the change.
 
 ## What would close it
 

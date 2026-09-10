@@ -97,6 +97,16 @@ whichever shape is chosen.
 
 ## Owner decision
 
+**Build the per-stream mark** (round 247). The owner accepted round 231's
+finding that it is not optional: mark each stream's owed bytes so the ledger can
+tell owed from never-owed, instead of routing `_fcOnConsumed` through it
+wholesale and de-crediting ordinary traffic.
+
+The round that carries this out reuses P-11 as its bench — three controls reach
+3072 KiB where the paused arm wedges at the pool — and needs a canary on the
+ORDINARY-traffic path as well as on the wedge, because round 231's whole finding
+was that the obvious fix breaks the former while fixing the latter.
+
 > **Superseded — round 231 measured this to be unbuildable as written.** Kept
 > below because the reasoning about `_fcSettleOwed` still holds; what changes is
 > that a mark is not optional.

@@ -121,4 +121,21 @@ U-15 already held two of them, and L-07 and L-08 were filed for the other two.
 
 ## Owner decision
 
-—
+**The six architecture notes go into the repository as docs** (round 247) —
+core_types, core_design, transport_architecture, logger, rpc_dart_log,
+grpc_compat. They describe what the code IS, which is documentation's job rather
+than the journal's, and in the repo they become reviewable in diffs and age
+visibly instead of silently.
+
+Two conditions the migration carries, both from this lead's own history:
+
+- **Check each against the implementation before it lands.** Rule one applies
+  in full: prose about code is a secondary source, and these were written
+  against a tree that has moved by 47 rounds. What the code contradicts is
+  edited or dropped, not transcribed.
+- **The delete has an inbound half** (L-09). After each file moves, grep the
+  remaining notes for its name in double brackets and repoint every link at the
+  new path.
+
+That leaves the per-subsystem dossiers as the rest of B-23; they split into
+negatives and lens evidence the way the earlier six did.

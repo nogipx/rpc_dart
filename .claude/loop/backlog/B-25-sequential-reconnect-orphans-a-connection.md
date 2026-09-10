@@ -67,7 +67,14 @@ probabilistic defect cannot produce one.
 
 ## Owner decision
 
-None yet.
+**Hunt the mechanism first** (round 247). Do NOT spend 2000 cycles an arm on a
+rate comparison. Find what makes the outgoing sink's close fail to reach the
+peer in ~1.3% of discards; a deterministic reproduction gives a real canary and
+makes the powered rate measurement unnecessary.
+
+That reorders what the "what would close it" section lists: the mechanism hunt
+is now the first move, and the 75-minutes-per-arm measurement is the fallback if
+the hunt comes back empty.
 
 ## What would close it
 
