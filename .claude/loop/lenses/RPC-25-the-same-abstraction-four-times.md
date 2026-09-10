@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312]
+applied: [308, 309, 310, 311, 312, 313]
 status: confirmed (round 308)
 ---
 
@@ -146,6 +146,26 @@ The first is the defect the VM copy was fixed away from, still live on the other
 platform — and its comment says why: unsendable payload is one message's
 problem, and closing makes it the whole connection's. The second silently
 diverged on which frames are legal on the reserved stream.
+
+## "This cannot be tested" needs the API check
+
+The twin of the rule above. Round 312 closed with three fixes it called
+unwitnessed and gave each a reason; round 313 checked and **two were wrong**:
+
+    309 log unification   "nothing reads log levels"   LogController.stream is public
+    311 dead clause       "no runtime witness"          the FUNCTION's contract has one
+    310 isolate web send  "needs a browser"             correct — filed as B-31
+
+The two that dissolved were asserted from the SHAPE of the fix ("logs aren't
+testable", "dead code isn't testable") rather than from what the APIs expose. A
+log controller with a record stream makes levels assertable; a resolver extracted
+into a function makes its contract assertable even when the clause it removed
+cannot be.
+
+And note where the real one bit: not the platform, but Dart's per-LIBRARY
+privacy. `src/`-importing reaches a public symbol in an internal file (round
+307) and does nothing for an underscore. That distinction is worth knowing before
+declaring a route closed.
 
 ## A drift is TESTABLE, by definition
 
