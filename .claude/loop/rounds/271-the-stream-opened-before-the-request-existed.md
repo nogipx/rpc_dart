@@ -97,8 +97,22 @@ back where it was, the witness failed with
     and it must leave nothing parked in the pipeline either
 
 at 2s, an assertion rather than a timeout, while the GUARD test kept passing.
-The witness waits for the RISE (`pendingRequests` reaching 4) before asserting
-zero, so it cannot pass on a server the aborted requests never reached.
+The witness waits for the RISE before asserting zero, so it cannot pass on a
+server the aborted requests never reached.
+
+**The rise-check as first written was FLAKY, and the owner caught it in a full
+suite run**: `Expected: <4> Actual: <0>`. It demanded `pendingRequests` reach 4
+SIMULTANEOUSLY, which is a stronger question than the guard needs — the sockets
+are opened one at a time, and under load `bodyReadTimeout` can answer the first
+before the last one connects, so the count never reaches 4 at any single
+instant. It now takes the PEAK over the window and asserts it rose above zero.
+Re-canaried after the change: the real witness still fails 4-versus-0 with the
+fix off, so the de-flaking did not weaken it.
+
+> **A guard that asserts more than it means will flake, and the extra strictness
+> buys nothing.** "Did these requests reach the transport at all" is the
+> question; "were all four in flight at once" is an implementation detail of how
+> the bench opens sockets.
 
 ## Gate
 
