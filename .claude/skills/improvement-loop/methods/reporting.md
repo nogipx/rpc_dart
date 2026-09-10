@@ -57,6 +57,23 @@ Two consequences worth naming:
 - **A correction to something already committed in THIS round is an amend.**
   `git commit --amend -F <file>` — same round, same commit.
 
+**READ THE COMMIT BACK. Every time.** `git log --oneline -3` plus
+`git status --short`, and for anything with punctuation in it,
+`git log -1 --format=%B`. A commit is the round's only durable output and there
+are four ways it silently is not what you meant:
+
+- **the message was mangled** — backticks in a shell argument get SUBSTITUTED
+  (L-03), so `read \`owedConn\` out of ...` committed as `read  out of ...` and
+  the failed substitution printed to stderr while the commit succeeded anyway;
+- **the commit did not happen** — an `&&` chain whose earlier link failed, or
+  nothing staged;
+- **it took more than intended** — a `git add` broader than the round;
+- **the amend hit the wrong commit**, or amended when a new commit was meant.
+
+Reporting "committed as <sha>" without having read it back is a claim about
+work rather than a record of it. This was written after an owner had to point
+out, twice, that what was reported as done was not what had landed.
+
 **The language is the `commit language:` line in `config.md`, English by
 default** (`loop.py next` prints it). It applies to the commit's subject and
 body, not to the loop data: if the records are kept in another language, the
