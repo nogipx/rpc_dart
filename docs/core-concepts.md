@@ -71,6 +71,27 @@ responder.registerServiceContract(CalculatorResponder());
 responder.start();
 ```
 
+### RpcPeerEndpoint (both at once)
+
+When **either side** may start a call — a device and a desktop tool, two nodes,
+an app and a worker that pushes as well as answers — use one peer endpoint
+instead of pairing a caller with a responder:
+
+```dart
+final peer = RpcPeerEndpoint(transport: transport);
+peer.registerServiceContract(NotificationsPeer());
+peer.start();
+```
+
+It is a caller and a responder in one object, and it accepts either transport
+role without validation. Collisions are avoided by **stream-id parity**: a
+transport built with `isClient: true` issues odd ids for its own calls and sees
+even ids arrive from the peer, and `isClient: false` is the mirror. So the two
+ends must disagree about `isClient` — give one side `true` and the other
+`false`, exactly as with a caller/responder pair.
+
+Contracts for this shape extend `RpcPeerContract`.
+
 ## Transports
 
 Transports define **how** messages are sent between endpoints. RPC Dart is
