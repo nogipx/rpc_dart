@@ -56,43 +56,55 @@ The result includes:
 Ping uses the same transport pipeline as regular calls, so you can detect routing
 issues, TLS problems, or degraded links in real time.
 
-## Logging with `RpcLogger`
+## Logging with `LogController` and `LogScope`
 
-`RpcLogger` is a pluggable logging facade with structured metadata support. Each
-endpoint exposes a logger and you can create child loggers for subcomponents.
-
-```dart
-final logger = RpcLogger('BillingService');
-logger.info('Responder started', data: responder.collectEndpointMetrics());
-```
-
-Customise logging globally:
+Two objects. **`LogController`** is the dispatcher: every record passes through
+level filter, sampling, enrichers, redaction, then outputs. **`LogScope`** is a
+cheap handle bound to a controller and a name, and it is what you actually call.
 
 ```dart
-RpcLogger.setDefaultMinLogLevel(RpcLoggerLevel.debug);
-RpcLogger.setLoggerFactory((name, {colors, label, context}) {
-  return MyJsonLogger(name, label: label, context: context);
-});
+final controller = LogController(LogConfig(minLevel: RpcLogLevel.debug));
+final log = LogScope(controller, 'BillingService');
+
+log.info('Responder started', data: {'endpoints': 3});
 ```
 
-Per-message calls accept contextual data, trace IDs, and request IDs so you can
-ship logs to observability pipelines without losing correlation.
+`LogScope.noop` is a zero-cost handle for when logging is off — it implements the
+same interface and does nothing, so call sites need no null checks.
 
-## Colour-coding and formatting
+A scope carries correlation for you: `traceId`, `requestId` and `parentSpanId`
+are constructor parameters, and the responder pipeline attaches a scope with the
+service and method name already bound.
 
-Use `RpcLoggerColors` to differentiate client and server logs in the terminal:
+## Spans
+
+`startSpan` returns a `LogSpanHandle` for timing a unit of work; the handle can
+emit events and open child spans, and produces a `LogSpan` record when ended.
 
 ```dart
-final callerLogger = RpcLogger(
-  'CheckoutCaller',
-  colors: const RpcLoggerColors.bright(),
-);
-callerLogger.debug('Prepared context', data: context.headers);
+final span = log.startSpan('charge-card', data: {'attempt': 1});
+span.event('gateway accepted');
+span.end();
 ```
 
-Formatters and filters let you integrate with any logging backend. Implement
-`IRpcLoggerFormatter` to change the output structure or `IRpcLoggerFilter` to
-suppress noisy categories.
+**Spans bypass the level filter** — they are telemetry rather than logs. Turn
+them off with `spansEnabled` in `LogConfig` if you do not want them.
+
+## Outputs, enrichment and redaction
+
+`LogOutput` is the sink interface, with `write()` and `writeAsync()` plus an
+`isAsync` flag, so an HTTP or database backend is a normal implementation rather
+than a special case. `ConsoleOutput` (pretty, json or compact) and
+`RingBufferOutput` ship with the library.
+
+Three hooks, all changeable at runtime: `addEnricher()` / `removeEnricher()` to
+attach fields to every record, `setRedactor()` to swap a `LogRedactor` (which
+matches `field=value` patterns inside messages and errors, not just data
+fields), and `LogController(clock: () => myTime)` for deterministic timestamps in
+tests — the clock propagates through scopes and spans.
+
+Applied log tooling — remote collection, shipping logs over RPC — lives in the
+separate `rpc_dart_log` package.
 
 ## Transport diagnostics
 
